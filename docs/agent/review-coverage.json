@@ -1,5 +1,5 @@
 {
-  "$comment": "What has actually been READ by a named role, as opposed to what a gate asserts. scripts/check-review-coverage.mjs prints the percentage on every run and fails only on incoherence — a claim naming a path that does not exist, or a claim with no reviewer, date or depth. Seeded honestly on 2026-08-19: the number is small on purpose, because the alternative was leaving it invisible. depth: read = opened and understood; audited = read adversarially against a specific question; verified-live = checked against a real running system.",
+  "$comment": "What has actually been READ by a named role, as opposed to what a gate asserts. scripts/check-review-coverage.mjs prints the percentage on every run and fails only on incoherence \u2014 a claim naming a path that does not exist, or a claim with no reviewer, date or depth. Seeded honestly on 2026-08-19: the number is small on purpose, because the alternative was leaving it invisible. depth: read = opened and understood; audited = read adversarially against a specific question; verified-live = checked against a real running system.",
   "version": 1,
   "reviews": [
     {
@@ -7,7 +7,7 @@
       "reviewedBy": "qa-engineer",
       "date": "2026-08-19",
       "depth": "audited",
-      "note": "WebSocket campaign collector — found the resolved report still being mutated by late frames, and duplicate host frames double-counting rows."
+      "note": "WebSocket campaign collector \u2014 found the resolved report still being mutated by late frames, and duplicate host frames double-counting rows."
     },
     {
       "path": "lib/integrations/src/integrations/network-nac/types.ts",
@@ -49,7 +49,7 @@
       "reviewedBy": "principal-engineer",
       "date": "2026-08-19",
       "depth": "audited",
-      "note": "Role/permission table — found tenant:admin granted and required by nothing."
+      "note": "Role/permission table \u2014 found tenant:admin granted and required by nothing."
     },
     {
       "path": "artifacts/api-server/src/middlewares/rateLimit.ts",
@@ -63,7 +63,7 @@
       "reviewedBy": "web-engineer",
       "date": "2026-08-19",
       "depth": "audited",
-      "note": "Full site sweep: 14 findings, 8 applied — router-base 404s, invisible signal dots, contrast, reduced motion, worker-PWA claims."
+      "note": "Full site sweep: 14 findings, 8 applied \u2014 router-base 404s, invisible signal dots, contrast, reduced motion, worker-PWA claims."
     },
     {
       "path": ".github/workflows",
@@ -119,7 +119,7 @@
       "reviewedBy": "api-contract-architect",
       "date": "2026-08-20",
       "depth": "read",
-      "note": "The collection is hand-authored and checked against the spec, not generated from it — so a new spec path needs a matching item added by hand."
+      "note": "The collection is hand-authored and checked against the spec, not generated from it \u2014 so a new spec path needs a matching item added by hand."
     },
     {
       "path": "scripts/src/verify-ledger-cli.ts",
@@ -140,7 +140,7 @@
       "reviewedBy": "data-persistence-engineer",
       "date": "2026-08-20",
       "depth": "verified-live",
-      "note": "16/16 on real Postgres. Refutes the roster claim that the restore path was only described — flipped byte, truncated archive and missing manifest all refused, and a good archive accepted as the negative control."
+      "note": "16/16 on real Postgres. Refutes the roster claim that the restore path was only described \u2014 flipped byte, truncated archive and missing manifest all refused, and a good archive accepted as the negative control."
     },
     {
       "path": "docs/BACKUP_AND_RESTORE.md",
@@ -168,7 +168,7 @@
       "reviewedBy": "iam-domain",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "Normalizes report.freshness through oneOf with an unknown fallback rather than deriving it from a token — the one place the exp trap could have entered, and it does not."
+      "note": "Normalizes report.freshness through oneOf with an unknown fallback rather than deriving it from a token \u2014 the one place the exp trap could have entered, and it does not."
     },
     {
       "path": "lib/integrations/src/integrations/sso-session/evaluate.ts",
@@ -196,14 +196,14 @@
       "reviewedBy": "network-domain",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "Read against the fail-closed invariant after the sweep's counterexample. Both grant exits returned none whether or not nacCompliant and freshness were reported — unknown graded identical to known-good. Fixed: verified-good none, unreported monitor (AUTHENTICATED_POSTURE_UNVERIFIED), reported-bad step_up. Negative control confirmed the new checks fail on the old code."
+      "note": "Read against the fail-closed invariant after the sweep's counterexample. Both grant exits returned none whether or not nacCompliant and freshness were reported \u2014 unknown graded identical to known-good. Fixed: verified-good none, unreported monitor (AUTHENTICATED_POSTURE_UNVERIFIED), reported-bad step_up. Negative control confirmed the new checks fail on the old code."
     },
     {
       "path": "lib/integrations/src/integrations/identity-risk/evaluate.ts",
       "reviewedBy": "iam-domain",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "riskState unknown + riskLevel unknown + zero detections graded trusted/NO_RISK/none, and the normalizer had no arm for Entra's clean value 'none' — so parse failure and a clean tenant were the same state, graded trusted. Fixed both halves together; a real detection still outranks the new monitor floor."
+      "note": "riskState unknown + riskLevel unknown + zero detections graded trusted/NO_RISK/none, and the normalizer had no arm for Entra's clean value 'none' \u2014 so parse failure and a clean tenant were the same state, graded trusted. Fixed both halves together; a real detection still outranks the new monitor floor."
     },
     {
       "path": "lib/integrations/src/integrations/identity-risk/identity-connector.ts",
@@ -217,35 +217,35 @@
       "reviewedBy": "security-engineer",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "The shared enumeration harness read end to end before extending its reach — self-proof carries both too-strict and too-loose negative controls, so a predicate error in either direction is caught."
+      "note": "The shared enumeration harness read end to end before extending its reach \u2014 self-proof carries both too-strict and too-loose negative controls, so a predicate error in either direction is caught."
     },
     {
       "path": "scripts/src/local-authority-proof.ts",
       "reviewedBy": "security-engineer",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "Already fully enumerated by hand (360 combinations, granting set pinned by equality) — the symbol-grep coverage count under-reported it. The launch family is covered."
+      "note": "Already fully enumerated by hand (360 combinations, granting set pinned by equality) \u2014 the symbol-grep coverage count under-reported it. The launch family is covered."
     },
     {
       "path": "lib/integrations/src/integrations/vuln-scan/evaluate.ts",
       "reviewedBy": "security-engineer",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "Shift-1 sweep: found wedge #14 — a finding whose severity failed to parse fell to the low/info residual and graded low_risk/LOW_SEVERITY_ONLY. Now unknown/SEVERITY_UNVERIFIED/monitor; grant pinned by enumeration to the attested-empty scan only."
+      "note": "Shift-1 sweep: found wedge #14 \u2014 a finding whose severity failed to parse fell to the low/info residual and graded low_risk/LOW_SEVERITY_ONLY. Now unknown/SEVERITY_UNVERIFIED/monitor; grant pinned by enumeration to the attested-empty scan only."
     },
     {
       "path": "scripts/src/uem-proof.ts",
       "reviewedBy": "security-engineer",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "Coverage audit: already fully enumerated by hand (2160 states, granting set pinned exactly, ZERO unjustified grants). Counted toward the shift-1 covered tier without modification — symbol-grep undercounts hand-rolled sweeps."
+      "note": "Coverage audit: already fully enumerated by hand (2160 states, granting set pinned exactly, ZERO unjustified grants). Counted toward the shift-1 covered tier without modification \u2014 symbol-grep undercounts hand-rolled sweeps."
     },
     {
       "path": "lib/integrations/src/integrations/location-services/evaluate.ts",
       "reviewedBy": "security-engineer",
       "date": "2026-08-20",
       "depth": "audited",
-      "note": "Shift-1 sweep: wedges #12/#13 — unknown freshness (null/unparseable capturedAt) skipped the stale guard and granted on_premises; a future-dated capture read as fresh. Both now UNVERIFIED_LOCATION_FRESHNESS/monitor; enumeration pins the single granting state."
+      "note": "Shift-1 sweep: wedges #12/#13 \u2014 unknown freshness (null/unparseable capturedAt) skipped the stale guard and granted on_premises; a future-dated capture read as fresh. Both now UNVERIFIED_LOCATION_FRESHNESS/monitor; enumeration pins the single granting state."
     },
     {
       "path": "lib/persistence/src/role-split.ts",
@@ -259,28 +259,28 @@
       "reviewedBy": "data-persistence-engineer",
       "date": "2026-08-20",
       "depth": "verified-live",
-      "note": "Executed against a local PostgreSQL 16 before CI: 61/61, three consecutive runs (idempotent from a used cluster). Positive direction, seven denial classes (all 42501), admin non-vacuity, the backup → posture-destroyed → restore round trip, and the Codex-review guard set: migrations/restore refuse UP FRONT without CREATEROLE (database untouched, proven by row counts), the split refuses to adopt a preexisting SUPERUSER/owning/member role, all three durable components (decision, session, ledger) refuse readiness on missing grants; PUBLIC/column/sequence/schema/database grant wedges staged and proven converged; owner-rights paths (SECURITY DEFINER routines, writable views) staged and REFUSED until the administrator locks them down; partial connection caps, non-relation ownership, SECURITY DEFINER triggers, rewrite rules, and PUBLIC-inherited schema CREATE refused; bare-database apply proven (guarded relation lookups); forbidden-privilege readiness (negative probe) proven; restore re-locks archived definer routines (pg_restore default-ACL artifact); grants outside the canonical set refused (pg_shdepend allowlist) staged and proven converged; NOLOGIN, CONNECTION LIMIT 0, expired VALID UNTIL, schema/database ownership, and cross-database ownership (pg_shdepend) refused; db:migrate proven as the repair command on an already-current database; runtime connects via its direct CONNECT grant on a hardened cluster; a restore credential without grant authority (owns tables, not the database) is refused before pg_restore, and role loss recovers to the same posture. Destructive runs are gated behind SIGNALGRID_DB_DISPOSABLE=1 (loud refusal, never a silent skip)."
+      "note": "Executed against a local PostgreSQL 16 before CI: 61/61, three consecutive runs (idempotent from a used cluster). Positive direction, seven denial classes (all 42501), admin non-vacuity, the backup \u2192 posture-destroyed \u2192 restore round trip, and the Codex-review guard set: migrations/restore refuse UP FRONT without CREATEROLE (database untouched, proven by row counts), the split refuses to adopt a preexisting SUPERUSER/owning/member role, all three durable components (decision, session, ledger) refuse readiness on missing grants; PUBLIC/column/sequence/schema/database grant wedges staged and proven converged; owner-rights paths (SECURITY DEFINER routines, writable views) staged and REFUSED until the administrator locks them down; partial connection caps, non-relation ownership, SECURITY DEFINER triggers, rewrite rules, and PUBLIC-inherited schema CREATE refused; bare-database apply proven (guarded relation lookups); forbidden-privilege readiness (negative probe) proven; restore re-locks archived definer routines (pg_restore default-ACL artifact); grants outside the canonical set refused (pg_shdepend allowlist) staged and proven converged; NOLOGIN, CONNECTION LIMIT 0, expired VALID UNTIL, schema/database ownership, and cross-database ownership (pg_shdepend) refused; db:migrate proven as the repair command on an already-current database; runtime connects via its direct CONNECT grant on a hardened cluster; a restore credential without grant authority (owns tables, not the database) is refused before pg_restore, and role loss recovers to the same posture. Destructive runs are gated behind SIGNALGRID_DB_DISPOSABLE=1 (loud refusal, never a silent skip)."
     },
     {
       "path": "scripts/src/lib/db-guard.ts",
       "reviewedBy": "data-persistence-engineer",
       "date": "2026-08-20",
       "depth": "verified-live",
-      "note": "The disposable-cluster declaration (SIGNALGRID_DB_DISPOSABLE=1) every destructive Postgres proof now requires. DATABASE_URL alone is not consent: the proofs DROP the tables they test and the role-split proof re-passwords the cluster-wide runtime role. Refusal is exit 1 and loud — a silent skip in CI would leave the gate green while testing nothing. Refusal path executed locally."
+      "note": "The disposable-cluster declaration (SIGNALGRID_DB_DISPOSABLE=1) every destructive Postgres proof now requires. DATABASE_URL alone is not consent: the proofs DROP the tables they test and the role-split proof re-passwords the cluster-wide runtime role. Refusal is exit 1 and loud \u2014 a silent skip in CI would leave the gate green while testing nothing. Refusal path executed locally."
     },
     {
       "path": "lib/signalgrid-core/src/continuity.ts",
       "reviewedBy": "verdict-core-reader",
       "date": "2026-08-23",
       "depth": "audited",
-      "note": "Prototype-key outcomes passed `in OUTCOME_RANK` and stuck as the reduce accumulator (rank undefined loses every > as NaN), erasing a genuine deny and making the answer order-dependent — falsifying the module's own headline law. FIXED: Set membership in validateRecord and in the exported mostRestrictiveOutcome. Also read: the standing bound cannot expire an ONLINE record (continuity.ts:276) — tested and intended, recorded so nobody re-finds it as a bug."
+      "note": "Prototype-key outcomes passed `in OUTCOME_RANK` and stuck as the reduce accumulator (rank undefined loses every > as NaN), erasing a genuine deny and making the answer order-dependent \u2014 falsifying the module's own headline law. FIXED: Set membership in validateRecord and in the exported mostRestrictiveOutcome. Also read: the standing bound cannot expire an ONLINE record (continuity.ts:276) \u2014 tested and intended, recorded so nobody re-finds it as a bug."
     },
     {
       "path": "lib/signalgrid-core/src/evidence.ts",
       "reviewedBy": "verdict-core-reader",
       "date": "2026-08-23",
       "depth": "audited",
-      "note": "Per-signal `freshness` is computed and stamped by dock.ts but buildEvidence never reads it — only category/value/observedAt. A year-old tamper_state:'none' is indistinguishable from a fresh one, and a dock that honestly reports sensor_unavailable steps up while a silent dock does not. OPEN, not fixed here. Also: deriveCriticalSignalsPresent omits osSupported and counts postureFreshness 'expired' as present."
+      "note": "Per-signal `freshness` is computed and stamped by dock.ts but buildEvidence never reads it \u2014 only category/value/observedAt. A year-old tamper_state:'none' is indistinguishable from a fresh one, and a dock that honestly reports sensor_unavailable steps up while a silent dock does not. OPEN, not fixed here. Also: deriveCriticalSignalsPresent omits osSupported and counts postureFreshness 'expired' as present."
     },
     {
       "path": "lib/signalgrid-core/src/policy.ts",
@@ -301,70 +301,70 @@
       "reviewedBy": "verdict-core-reader",
       "date": "2026-08-23",
       "depth": "read",
-      "note": "The decision loop — resolve, gather, derive, evaluate, snapshot, persist, audit, remediate, webhook. No fail-closed inversion found."
+      "note": "The decision loop \u2014 resolve, gather, derive, evaluate, snapshot, persist, audit, remediate, webhook. No fail-closed inversion found."
     },
     {
       "path": "lib/signalgrid-core/src/resolution.ts",
       "reviewedBy": "verdict-core-reader",
       "date": "2026-08-23",
       "depth": "read",
-      "note": "Turns reason codes into ordered routed steps and can project a re-evaluation. Three fields written and never read: summaryForOperator, projectedReasonCodes, clears — while the sibling summaryForWorker IS rendered twice."
+      "note": "Turns reason codes into ordered routed steps and can project a re-evaluation. Three fields written and never read: summaryForOperator, projectedReasonCodes, clears \u2014 while the sibling summaryForWorker IS rendered twice."
     },
     {
       "path": "lib/signalgrid-simulator/src/decisionEngine.ts",
       "reviewedBy": "verdict-core-reader",
       "date": "2026-08-23",
       "depth": "audited",
-      "note": "The remediation allow (lines 220-227) does not carry the `outcomes.size === 0` guard the base allow requires, so remediation.verified plus a non-suppressing outcome (api.integration_failed, low_battery, health_degraded) yields allow where the same evidence without it does not. OPEN — deliberately not fixed: this file is the byte-faithful source of the Swift port and changing it breaks parity. Also confirmed: SignalGridDecision.confidence has zero readers anywhere."
+      "note": "The remediation allow (lines 220-227) does not carry the `outcomes.size === 0` guard the base allow requires, so remediation.verified plus a non-suppressing outcome (api.integration_failed, low_battery, health_degraded) yields allow where the same evidence without it does not. OPEN \u2014 deliberately not fixed: this file is the byte-faithful source of the Swift port and changing it breaks parity. Also confirmed: SignalGridDecision.confidence has zero readers anywhere."
     },
     {
       "path": "lib/posture-composition/src/compose.ts",
       "reviewedBy": "verdict-core-reader",
       "date": "2026-08-23",
       "depth": "read",
-      "note": "Strongest action wins, tier follows, drivers most-severe-first. Zero signals compose to ok/none — handled downstream by signalCount and pinned by two proofs, so not a defect."
+      "note": "Strongest action wins, tier follows, drivers most-severe-first. Zero signals compose to ok/none \u2014 handled downstream by signalCount and pinned by two proofs, so not a defect."
     },
     {
       "path": "lib/posture-composition/src/adapters.ts",
       "reviewedBy": "verdict-core-reader",
       "date": "2026-08-23",
       "depth": "read",
-      "note": "40 one-line mappings plus fromDevicePosture, the only one with real logic (13 conditions over five Graph fields; 3 of 900 input states grant). All 40 cast recommendedAction with no runtime check — every member is on the ladder today, so safe by construction, but it is a load-bearing invariant with no guard."
+      "note": "40 one-line mappings plus fromDevicePosture, the only one with real logic (13 conditions over five Graph fields; 3 of 900 input states grant). All 40 cast recommendedAction with no runtime check \u2014 every member is on the ladder today, so safe by construction, but it is a load-bearing invariant with no guard."
     },
     {
       "path": "nginx.conf",
       "reviewedBy": "sre",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read in full, 47 lines. Two findings. (1) `nginx_certs` is mounted at /etc/nginx/certs by docker-compose.yml and NOTHING reads it — the config has `listen 80` only and no ssl_certificate directive. A TLS volume wired in and consumed by nothing is the same shape as the tenant:admin precedent this repo was founded on: a control that reads as protection and is not. (2) X-Forwarded-Proto and X-Forwarded-For are set only on /api/; /app/ and / set X-Real-IP alone, so the app behind them cannot learn the original scheme. Both are LOCAL-STACK ONLY — prod does not run nginx at all, which is finding 3 in backlog row 64 and matters more than either."
+      "note": "Read in full, 47 lines. Two findings. (1) `nginx_certs` is mounted at /etc/nginx/certs by docker-compose.yml and NOTHING reads it \u2014 the config has `listen 80` only and no ssl_certificate directive. A TLS volume wired in and consumed by nothing is the same shape as the tenant:admin precedent this repo was founded on: a control that reads as protection and is not. (2) X-Forwarded-Proto and X-Forwarded-For are set only on /api/; /app/ and / set X-Real-IP alone, so the app behind them cannot learn the original scheme. Both are LOCAL-STACK ONLY \u2014 prod does not run nginx at all, which is finding 3 in backlog row 64 and matters more than either."
     },
     {
       "path": "docker-compose.yml",
       "reviewedBy": "sre",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Local stack: api + web + nginx, and NO database. Mounts nginx.conf read-only, plus an nginx_certs volume nothing consumes. Compared against docker-compose.prod.yml, which is db + api with no web tier and no proxy — the two stacks are not the same product."
+      "note": "Local stack: api + web + nginx, and NO database. Mounts nginx.conf read-only, plus an nginx_certs volume nothing consumes. Compared against docker-compose.prod.yml, which is db + api with no web tier and no proxy \u2014 the two stacks are not the same product."
     },
     {
       "path": "docker-compose.prod.yml",
       "reviewedBy": "sre",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Prod stack: db + api only. The API is exposed DIRECTLY on 8080 with no reverse proxy — zero nginx mentions in the file. db has a healthcheck and api waits on it. So every routing, path-prefix and forwarded-header behaviour exercised through the local nginx tier is absent in production, and docs/RUN_AND_GO_LIVE.md never mentions nginx either."
+      "note": "Prod stack: db + api only. The API is exposed DIRECTLY on 8080 with no reverse proxy \u2014 zero nginx mentions in the file. db has a healthcheck and api waits on it. So every routing, path-prefix and forwarded-header behaviour exercised through the local nginx tier is absent in production, and docs/RUN_AND_GO_LIVE.md never mentions nginx either."
     },
     {
       "path": "Dockerfile.api",
       "reviewedBy": "sre",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read end to end earlier this session for the corepack/CVE work. npm and the corepack cache are removed from the shipping image with a build-time assertion. Finding recorded as row 59: `corepack enable pnpm` runs in BOTH stages, so each build makes an un-retried network fetch of pnpm from registry.npmjs.org; one of them died mid-download on 2026-08-24 (undici assert(!this.paused)) and failed the job. The obvious fix — carry the builder's corepack cache forward — is exactly what lines 97-111 deliberately strip for CVE reasons, so it needs a retry, not a cache."
+      "note": "Read end to end earlier this session for the corepack/CVE work. npm and the corepack cache are removed from the shipping image with a build-time assertion. Finding recorded as row 59: `corepack enable pnpm` runs in BOTH stages, so each build makes an un-retried network fetch of pnpm from registry.npmjs.org; one of them died mid-download on 2026-08-24 (undici assert(!this.paused)) and failed the job. The obvious fix \u2014 carry the builder's corepack cache forward \u2014 is exactly what lines 97-111 deliberately strip for CVE reasons, so it needs a retry, not a cache."
     },
     {
       "path": "lib/integrations/src/integrations/itsm/resolve.ts",
       "reviewedBy": "itsm-ops-domain",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read end to end. The live-call gate for the emitter family. Strongest property in the family: ItsmFixtureRecord types `delivered` as the literal `false` and `mode` as the literal \"fixture\", so a fixture record that claims delivery is UNREPRESENTABLE rather than merely absent — the syslog family's status:'sent' lie cannot recur here by construction. ItsmFixtureEmitter is deterministic: no clock, no randomness, seq derived from log length. No live transport ships in this repository, so the live path's failure mode is 'there is no code'."
+      "note": "Read end to end. The live-call gate for the emitter family. Strongest property in the family: ItsmFixtureRecord types `delivered` as the literal `false` and `mode` as the literal \"fixture\", so a fixture record that claims delivery is UNREPRESENTABLE rather than merely absent \u2014 the syslog family's status:'sent' lie cannot recur here by construction. ItsmFixtureEmitter is deterministic: no clock, no randomness, seq derived from log length. No live transport ships in this repository, so the live path's failure mode is 'there is no code'."
     },
     {
       "path": "lib/integrations/src/integrations/itsm/index.ts",
@@ -378,49 +378,49 @@
       "reviewedBy": "itsm-ops-domain",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read the credential half end to end (schemas, encryption utilities, the five config accessors); the ticket-template half from line ~488 down was NOT read — itsm-template-proof covers it. Credential separation is structurally sound: getITSMConfig returns `{ id, ...stored.base }` and credentials live in a separate encrypted field, so the plain getter cannot leak them. FINDING (row 66, fixed here): getEncryptionKey() derived the AES-256 key by `slice(0,32).padEnd(32,'0')` — truncate-and-pad. The only createCipheriv site in the repository, with zero test coverage of any kind, and an outlier: the sibling webhooks/store.ts in the same package derives with createHash('sha256'). Latent rather than live — no api-server route reaches this store and itsm/index.ts exports only resolve+adapter."
+      "note": "Read the credential half end to end (schemas, encryption utilities, the five config accessors); the ticket-template half from line ~488 down was NOT read \u2014 itsm-template-proof covers it. Credential separation is structurally sound: getITSMConfig returns `{ id, ...stored.base }` and credentials live in a separate encrypted field, so the plain getter cannot leak them. FINDING (row 66, fixed here): getEncryptionKey() derived the AES-256 key by `slice(0,32).padEnd(32,'0')` \u2014 truncate-and-pad. The only createCipheriv site in the repository, with zero test coverage of any kind, and an outlier: the sibling webhooks/store.ts in the same package derives with createHash('sha256'). Latent rather than live \u2014 no api-server route reaches this store and itsm/index.ts exports only resolve+adapter."
     },
     {
       "path": "lib/integrations/src/integrations/device-attestation/evaluate.ts",
       "reviewedBy": "endpoint-uem-domain",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read end to end (182 lines) and probed for defects; NONE FOUND, recorded as a clean read rather than left silent. Fail-closed throughout: every unknown pushes step_up, the worst-concern-wins fold seeds at {action:'none'} and replaces only on strictly-greater severity, and only an explicit `attestable === false` abstains while a self-contradictory report (declares incapable yet carries attestation) is floored at step_up. ACTION_SEVERITY is Record<AttestationRecommendedAction, number>, so a new action cannot be added to the union without a compile error — the extension-direction fail-open is closed by the type. TWO HYPOTHESES TESTED AND REFUTED: (1) six of eleven reason codes appear in no proof by grep — but the proof asserts on posture/recommendedAction/criticalFindings, and those branches are covered; (2) ATTESTED_SECUREBOOT_REDUCED and ATTESTED_KEXT_ALLOWED share an identical posture+action pair, so their distinct reason codes looked unpinned — swapping one for the other KILLS proof:device-attestation (77/77 baseline). The grep was the weaker instrument in both cases."
+      "note": "Read end to end (182 lines) and probed for defects; NONE FOUND, recorded as a clean read rather than left silent. Fail-closed throughout: every unknown pushes step_up, the worst-concern-wins fold seeds at {action:'none'} and replaces only on strictly-greater severity, and only an explicit `attestable === false` abstains while a self-contradictory report (declares incapable yet carries attestation) is floored at step_up. ACTION_SEVERITY is Record<AttestationRecommendedAction, number>, so a new action cannot be added to the union without a compile error \u2014 the extension-direction fail-open is closed by the type. TWO HYPOTHESES TESTED AND REFUTED: (1) six of eleven reason codes appear in no proof by grep \u2014 but the proof asserts on posture/recommendedAction/criticalFindings, and those branches are covered; (2) ATTESTED_SECUREBOOT_REDUCED and ATTESTED_KEXT_ALLOWED share an identical posture+action pair, so their distinct reason codes looked unpinned \u2014 swapping one for the other KILLS proof:device-attestation (77/77 baseline). The grep was the weaker instrument in both cases."
     },
     {
       "path": "lib/integrations/src/integrations/telemetry/store.ts",
       "reviewedBy": "endpoint-uem-domain",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read end to end (163 lines). FINDING (row 68, fixed here): a WRITE-ONLY posture cache. setPostureForHost runs live on every Fleet posture fetch (fleetdm.ts:270, 300s TTL); the store's getPostureForHost had no caller anywhere; and `expiresAt` was written at two sites and read at ZERO. The in-memory half — the default path whenever REDIS_URL is unset and the fallback whenever Redis throws — returned `inMemoryPosture.get(key) ?? null` with no expiry check, so it would serve indefinitely stale device posture. Redis's own EX covered the Redis half. Second defect in the same family: the Map was never pruned, gaining an entry per host UUID and emptied only by an explicit clearPostureCache()."
+      "note": "Read end to end (163 lines). FINDING (row 68, fixed here): a WRITE-ONLY posture cache. setPostureForHost runs live on every Fleet posture fetch (fleetdm.ts:270, 300s TTL); the store's getPostureForHost had no caller anywhere; and `expiresAt` was written at two sites and read at ZERO. The in-memory half \u2014 the default path whenever REDIS_URL is unset and the fallback whenever Redis throws \u2014 returned `inMemoryPosture.get(key) ?? null` with no expiry check, so it would serve indefinitely stale device posture. Redis's own EX covered the Redis half. Second defect in the same family: the Map was never pruned, gaining an entry per host UUID and emptied only by an explicit clearPostureCache()."
     },
     {
       "path": "lib/integrations/src/integrations/device-management-health/evaluate.ts",
       "reviewedBy": "endpoint-uem-domain",
       "date": "2026-08-24",
       "depth": "read",
-      "note": "Read the fail-open surface rather than the whole file: every branch touching unknown/null/absent inputs, the unknownSignals pushes, and the ordering comments. NO defect found on that surface — each unknown raises the bar and the worst-concern-wins ordering carries a measured justification in-comment (the managementReachable case was moved earlier after its cost was measured). Recorded at depth 'read', not 'audited': the normalization half and the type surface were not examined."
+      "note": "Read the fail-open surface rather than the whole file: every branch touching unknown/null/absent inputs, the unknownSignals pushes, and the ordering comments. NO defect found on that surface \u2014 each unknown raises the bar and the worst-concern-wins ordering carries a measured justification in-comment (the managementReachable case was moved earlier after its cost was measured). Recorded at depth 'read', not 'audited': the normalization half and the type surface were not examined."
     },
     {
       "path": "lib/integrations/src/integrations/credential-exposure/evaluate.ts",
       "reviewedBy": "secops-domain",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read end to end (130 lines). NO defect found; recorded as a clean read rather than left silent. Worst-concern-wins fold seeded at clean/none, replaced only on strictly-greater severity. The null-vs-[] distinction is carried deliberately (`findingsObserved`): a feed never read yields SECRET_SCAN_UNOBSERVED/monitor, which beats the clean default and loses to any observed problem. scannerEnrolled === null is handled separately from === false, with an in-comment record of the wedge where `=== false` alone let null fall through to a full clean grant. HYPOTHESIS TESTED AND REFUTED: the escalate branch reads `exposed.some(f => f.highValue)` while its comment promises escalation for 'a critical/high-severity secret' too, and highestSeverity is computed but never gates — that looked like prose outrunning code. It is not: credential-connector.ts:160 folds severity INTO highValue (`HIGH_VALUE_KINDS.has(kind) || severity === 'critical' || severity === 'high'`), so a critical secret does escalate. The comment is accurate and the code implements it one layer up."
+      "note": "Read end to end (130 lines). NO defect found; recorded as a clean read rather than left silent. Worst-concern-wins fold seeded at clean/none, replaced only on strictly-greater severity. The null-vs-[] distinction is carried deliberately (`findingsObserved`): a feed never read yields SECRET_SCAN_UNOBSERVED/monitor, which beats the clean default and loses to any observed problem. scannerEnrolled === null is handled separately from === false, with an in-comment record of the wedge where `=== false` alone let null fall through to a full clean grant. HYPOTHESIS TESTED AND REFUTED: the escalate branch reads `exposed.some(f => f.highValue)` while its comment promises escalation for 'a critical/high-severity secret' too, and highestSeverity is computed but never gates \u2014 that looked like prose outrunning code. It is not: credential-connector.ts:160 folds severity INTO highValue (`HIGH_VALUE_KINDS.has(kind) || severity === 'critical' || severity === 'high'`), so a critical secret does escalate. The comment is accurate and the code implements it one layer up."
     },
     {
       "path": "lib/integrations/src/integrations/credential-exposure/credential-connector.ts",
       "reviewedBy": "secops-domain",
       "date": "2026-08-24",
       "depth": "read",
-      "note": "Read the normalization surface, not the whole 309-line file: isExposed(), normalizeLocation(), and the highValue derivation. isExposed is correctly fail-safe — `!(remediation === 'remediated' || validity === 'revoked')` — so every unknown or unmapped state normalizes to EXPOSED rather than contained. Depth 'read', not 'audited': the transport, request shaping and error paths were not examined."
+      "note": "Read the normalization surface, not the whole 309-line file: isExposed(), normalizeLocation(), and the highValue derivation. isExposed is correctly fail-safe \u2014 `!(remediation === 'remediated' || validity === 'revoked')` \u2014 so every unknown or unmapped state normalizes to EXPOSED rather than contained. Depth 'read', not 'audited': the transport, request shaping and error paths were not examined."
     },
     {
       "path": "lib/integrations/src/integrations/vuln-scan/evaluate.ts",
       "reviewedBy": "secops-domain",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read end to end (97 lines). NO defect found. `scanned` is DERIVED (`options.scanned ?? findings.length > 0`) rather than depending on a caller flag, with the reason recorded in-comment: a safety property that depends on the caller remembering an out-of-band flag is not a safety property. The unreadable-severity branch sits ABOVE the medium branch deliberately — an in-comment record of wedge #14 plus an ordering correction from review on #221, where a co-present medium finding re-made an unsupported low-risk claim. An unknown severity forecloses a calm posture without inventing an escalation beyond what was observed."
+      "note": "Read end to end (97 lines). NO defect found. `scanned` is DERIVED (`options.scanned ?? findings.length > 0`) rather than depending on a caller flag, with the reason recorded in-comment: a safety property that depends on the caller remembering an out-of-band flag is not a safety property. The unreadable-severity branch sits ABOVE the medium branch deliberately \u2014 an in-comment record of wedge #14 plus an ordering correction from review on #221, where a co-present medium finding re-made an unsupported low-risk claim. An unknown severity forecloses a calm posture without inventing an escalation beyond what was observed."
     },
     {
       "path": "lib/integrations/src/integrations/ot-posture/evaluate.ts",
@@ -434,28 +434,28 @@
       "reviewedBy": "physical-ot-domain",
       "date": "2026-08-24",
       "depth": "read",
-      "note": "Read the decision surface (the covered gate, the unknown collection, every candidate branch and the fold), not the type definitions. NO defect found. Custody is granted only when positively confirmed; zone-unknown fails closed BY REACHABILITY (dark -> restrict, otherwise step_up) rather than resolving to a single middling answer. reportIntegrity is guarded as `!== 'clean'` — the fail-closed form, which catches a new bad state without enumerating it, rather than testing for known-bad values. An in-comment note records a prior fix where a backstop covered only `unknown` and was widened to be complete. Depth 'read', not 'audited': types.ts and the connector were not examined."
+      "note": "Read the decision surface (the covered gate, the unknown collection, every candidate branch and the fold), not the type definitions. NO defect found. Custody is granted only when positively confirmed; zone-unknown fails closed BY REACHABILITY (dark -> restrict, otherwise step_up) rather than resolving to a single middling answer. reportIntegrity is guarded as `!== 'clean'` \u2014 the fail-closed form, which catches a new bad state without enumerating it, rather than testing for known-bad values. An in-comment note records a prior fix where a backstop covered only `unknown` and was widened to be complete. Depth 'read', not 'audited': types.ts and the connector were not examined."
     },
     {
       "path": "docs/agent/EVIDENCE.md",
       "reviewedBy": "records-archivist",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "FINDING (row 69, fixed here): the file sat at its seeded-empty 2026-08-22 template — 14 lines, a format spec, and the sentence 'the first review writes the first entry' — while the signalgrid-reviewer role had run. It is one of that role's only two write paths, and the only one with nothing watching it (FALSE_CLAIMS.json is enforced by check-known-false-claims.mjs). Now carries 8 entries covering every verification behind rows 65-68, each with the exact command and its verbatim output, including three of my OWN hypotheses recorded as REFUTED so a later session does not re-raise them, and an explicit NOT VERIFIED HERE section (iOS/Swift, the macOS harness, the Pages API which 403s through this proxy)."
+      "note": "FINDING (row 69, fixed here): the file sat at its seeded-empty 2026-08-22 template \u2014 14 lines, a format spec, and the sentence 'the first review writes the first entry' \u2014 while the signalgrid-reviewer role had run. It is one of that role's only two write paths, and the only one with nothing watching it (FALSE_CLAIMS.json is enforced by check-known-false-claims.mjs). Now carries 8 entries covering every verification behind rows 65-68, each with the exact command and its verbatim output, including three of my OWN hypotheses recorded as REFUTED so a later session does not re-raise them, and an explicit NOT VERIFIED HERE section (iOS/Swift, the macOS harness, the Pages API which 403s through this proxy)."
     },
     {
       "path": "docs/agent/FALSE_CLAIMS.json",
       "reviewedBy": "records-archivist",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read end to end. 6 claims, all with structured refutations. Genuinely maintained, not a fossil: check-known-false-claims.mjs re-verifies every refutation against the tree AND fails if any tracked document re-states one (442 documents scanned, 0 re-assertions). The proof-gate-count entry carries its own correction — it originally pinned the literal count 132 as evidence and broke the first time a proof was added, so it now pins the MECHANISM (a gate-bound published figure exists) rather than a value of it. That is the anti-fossil pattern working on the registry itself."
+      "note": "Read end to end. 6 claims, all with structured refutations. Genuinely maintained, not a fossil: check-known-false-claims.mjs re-verifies every refutation against the tree AND fails if any tracked document re-states one (442 documents scanned, 0 re-assertions). The proof-gate-count entry carries its own correction \u2014 it originally pinned the literal count 132 as evidence and broke the first time a proof was added, so it now pins the MECHANISM (a gate-bound published figure exists) rather than a value of it. That is the anti-fossil pattern working on the registry itself."
     },
     {
       "path": "docs/agent/CONTINUITY.md",
       "reviewedBy": "records-archivist",
       "date": "2026-08-24",
       "depth": "read",
-      "note": "Read end to end (9 lines). Still the seeded 2026-08-22 template with no entries. Recorded but NOT filed as a defect, unlike EVIDENCE.md: this file is explicitly self-described as a buffer that should be EMPTY when its content has landed in real documents, and this session's context did land — in COMPANY_BUILD_PLAN rows 65-69, the review ledger, and a lane message. An empty buffer is its correct resting state; an empty evidence log is not."
+      "note": "Read end to end (9 lines). Still the seeded 2026-08-22 template with no entries. Recorded but NOT filed as a defect, unlike EVIDENCE.md: this file is explicitly self-described as a buffer that should be EMPTY when its content has landed in real documents, and this session's context did land \u2014 in COMPANY_BUILD_PLAN rows 65-69, the review ledger, and a lane message. An empty buffer is its correct resting state; an empty evidence log is not."
     },
     {
       "path": "docs/agent/LOOP_COVERAGE.md",
@@ -476,7 +476,7 @@
       "reviewedBy": "solutions-architect",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read end to end. Three services: api (8080), web (3000), nginx (80/443, nginx.conf + nginx_certs volume). No database, deliberately — the header says so in its first three lines. The two local-only nginx findings from the sre read stand: nginx_certs is mounted and nothing reads it (no ssl_certificate directive, listen 80 only), and X-Forwarded-Proto/For are set only on /api/ while /app/ and / set X-Real-IP alone."
+      "note": "Read end to end. Three services: api (8080), web (3000), nginx (80/443, nginx.conf + nginx_certs volume). No database, deliberately \u2014 the header says so in its first three lines. The two local-only nginx findings from the sre read stand: nginx_certs is mounted and nothing reads it (no ssl_certificate directive, listen 80 only), and X-Forwarded-Proto/For are set only on /api/ while /app/ and / set X-Real-IP alone."
     },
     {
       "path": "docker-compose.prod.yml",
@@ -490,105 +490,105 @@
       "reviewedBy": "solutions-architect",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read end to end, with dev.env.example alongside for the diff. Fail-closed by default: SIGNALGRID_LIVE_INTEGRATIONS=false even in the prod example. The profile fence is documented as a fence — unset resolves to review-demo, which serves demo credentials and the unauthenticated simulator — and the five OIDC variables are marked hard-required with the consequence stated plainly: unset means enterprise auth stays disabled and EVERY request is 401, i.e. the deployment has no usable API rather than an open one."
+      "note": "Read end to end, with dev.env.example alongside for the diff. Fail-closed by default: SIGNALGRID_LIVE_INTEGRATIONS=false even in the prod example. The profile fence is documented as a fence \u2014 unset resolves to review-demo, which serves demo credentials and the unauthenticated simulator \u2014 and the five OIDC variables are marked hard-required with the consequence stated plainly: unset means enterprise auth stays disabled and EVERY request is 401, i.e. the deployment has no usable API rather than an open one."
     },
     {
       "path": "docs/RELIABILITY_SLO.md",
       "reviewedBy": "performance-engineer",
       "date": "2026-08-24",
       "depth": "verified-live",
-      "note": "Read end to end AND re-measured, discharging this role's own standing nextAction. All four quoted figures re-run on the current head: decision core p95 1.0458 ms (mean 0.6228, p99 1.3859, 5,000 iterations after 200 warmup); 750 ms pilot gate passing with ~717x margin on p95; 240 req/min per key re-confirmed live by test:load (60 of 300 burst requests throttled, and a malformed limit falls back to exactly 240 rather than 0); parallel scaling 1,529/sec single core and 5,370/sec aggregate on 4 workers, 3.51x (88% of linear), identical verdicts on every worker. Table re-dated 2026-08-19 -> 2026-08-24. The prior column is kept for SHAPE, not subtraction — a different runner, so this is a fresh measurement and not a regression comparison, and that is stated in the doc so nobody computes a percentage across incomparable runs."
+      "note": "Read end to end AND re-measured, discharging this role's own standing nextAction. All four quoted figures re-run on the current head: decision core p95 1.0458 ms (mean 0.6228, p99 1.3859, 5,000 iterations after 200 warmup); 750 ms pilot gate passing with ~717x margin on p95; 240 req/min per key re-confirmed live by test:load (60 of 300 burst requests throttled, and a malformed limit falls back to exactly 240 rather than 0); parallel scaling 1,529/sec single core and 5,370/sec aggregate on 4 workers, 3.51x (88% of linear), identical verdicts on every worker. Table re-dated 2026-08-19 -> 2026-08-24. The prior column is kept for SHAPE, not subtraction \u2014 a different runner, so this is a fresh measurement and not a regression comparison, and that is stated in the doc so nobody computes a percentage across incomparable runs."
     },
     {
       "path": "scripts/src/latency-bench.ts",
       "reviewedBy": "performance-engineer",
       "date": "2026-08-24",
       "depth": "verified-live",
-      "note": "Run on the current head, not merely read. 5,000 iterations after 200 warmup against the in-memory core. Gates only the 750 ms pilot threshold and reports the distribution — the deliberate GATED/REPORTED split, because a latency threshold on a shared runner is a flaky gate and a flaky gate gets switched off."
+      "note": "Run on the current head, not merely read. 5,000 iterations after 200 warmup against the in-memory core. Gates only the 750 ms pilot threshold and reports the distribution \u2014 the deliberate GATED/REPORTED split, because a latency threshold on a shared runner is a flaky gate and a flaky gate gets switched off."
     },
     {
       "path": "scripts/src/throughput-bench.ts",
       "reviewedBy": "performance-engineer",
       "date": "2026-08-24",
       "depth": "verified-live",
-      "note": "Run on the current head. Gates what is machine-independent — a throughput floor derived from the pilot gate, no parallel collapse, and identical verdicts across workers — and reports absolute rates as hardware-specific. Its own output says so on every run, which is why the figure it produces cannot be quoted as a capacity promise by accident."
+      "note": "Run on the current head. Gates what is machine-independent \u2014 a throughput floor derived from the pilot gate, no parallel collapse, and identical verdicts across workers \u2014 and reports absolute rates as hardware-specific. Its own output says so on every run, which is why the figure it produces cannot be quoted as a capacity promise by accident."
     },
     {
       "path": ".claude/skills/VENDORED.md",
       "reviewedBy": "agent-platform-engineer",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "FINDING (row 72, fixed here): said owner-comms was the ONE first-party skill and 'everything else describes the other 14'. True when written 2026-08-20; the five signalgrid-* skills landed 08-22 in fa0e32e and nothing updated it. A re-vendor operator following it literally would have destroyed the skills defining four of the org's executors. Now names all six with authored dates. Verified separately: no vendored skill has been modified in place — git log over the 14 vendored dirs returns exactly one commit, the 2026-08-20 vendoring."
+      "note": "FINDING (row 72, fixed here): said owner-comms was the ONE first-party skill and 'everything else describes the other 14'. True when written 2026-08-20; the five signalgrid-* skills landed 08-22 in fa0e32e and nothing updated it. A re-vendor operator following it literally would have destroyed the skills defining four of the org's executors. Now names all six with authored dates. Verified separately: no vendored skill has been modified in place \u2014 git log over the 14 vendored dirs returns exactly one commit, the 2026-08-20 vendoring."
     },
     {
       "path": "scripts/publication-boundary.mjs",
       "reviewedBy": "agent-platform-engineer",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "FINDING (row 72, fixed here): classed all of .claude/agents as third_party_intake under another author's MIT grant. cmp against third_party/everything-claude-code/agents/ shows nine byte-identical and FOUR first-party. In a public repo this published this company's work under someone else's licence. Carve-outs added for the four agents and the five first-party skills. The gate passed throughout because it audits coverage — is every path classified — never the truth of the reason text."
+      "note": "FINDING (row 72, fixed here): classed all of .claude/agents as third_party_intake under another author's MIT grant. cmp against third_party/everything-claude-code/agents/ shows nine byte-identical and FOUR first-party. In a public repo this published this company's work under someone else's licence. Carve-outs added for the four agents and the five first-party skills. The gate passed throughout because it audits coverage \u2014 is every path classified \u2014 never the truth of the reason text."
     },
     {
       "path": "docs/agent/agent-tiers.json",
       "reviewedBy": "agent-platform-engineer",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read end to end. Registered agent-platform-steward here after check-agent-roster.mjs correctly FAILED the build on it — I had hired an agent without registering it, which is precisely what that gate exists to catch. writeScope is a single flat string and overlap is rejected without a declared carve-out, so the steward writes .claude/ only: artifacts/mcp-server/ sits inside build-error-resolver's registered artifacts/ scope, and CLAUDE.md/AGENTS.md are read by every role at once. Review surface wider than write surface, the same shape signalgrid-reviewer uses."
+      "note": "Read end to end. Registered agent-platform-steward here after check-agent-roster.mjs correctly FAILED the build on it \u2014 I had hired an agent without registering it, which is precisely what that gate exists to catch. writeScope is a single flat string and overlap is rejected without a declared carve-out, so the steward writes .claude/ only: artifacts/mcp-server/ sits inside build-error-resolver's registered artifacts/ scope, and CLAUDE.md/AGENTS.md are read by every role at once. Review surface wider than write surface, the same shape signalgrid-reviewer uses."
     },
     {
       "path": "artifacts/signalgrid-app/src/main.tsx",
       "reviewedBy": "web-engineer",
       "date": "2026-08-24",
       "depth": "verified-live",
-      "note": "FINDING (row 70, fixed here): this app is SHIPPED — Dockerfile.web:58 serves its build at /app/ — and loaded fonts from a third-party CDN via three index.html link tags plus an index.css @import, handing every visitor's IP to that vendor. Migrated to @fontsource, the same seven faces, replicating what signalgrid-web already did. VERIFIED by building, not assumed: 43 .woff2 files now bundled locally and no vendor host appears anywhere in dist/."
+      "note": "FINDING (row 70, fixed here): this app is SHIPPED \u2014 Dockerfile.web:58 serves its build at /app/ \u2014 and loaded fonts from a third-party CDN via three index.html link tags plus an index.css @import, handing every visitor's IP to that vendor. Migrated to @fontsource, the same seven faces, replicating what signalgrid-web already did. VERIFIED by building, not assumed: 43 .woff2 files now bundled locally and no vendor host appears anywhere in dist/."
     },
     {
       "path": "scripts/review-invariants.mjs",
       "reviewedBy": "web-engineer",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "FINDING (row 70, fixed here): the public-safe-web check printed 'no third-party vendor host in any published web artifact' while scanning 19 files in one tree. Six files across five other web trees carried a Google font host. Scope widened to every web tree under artifacts/ — 19 files to 503 — with a GATED/REPORTED split following what Dockerfile.web actually serves. On its first run the widened gate flagged my own explanatory comment for containing the literal hostname; the comment was reworded rather than the gate weakened, because matching a literal string without parsing comments is correct fail-closed behaviour for a security check."
+      "note": "FINDING (row 70, fixed here): the public-safe-web check printed 'no third-party vendor host in any published web artifact' while scanning 19 files in one tree. Six files across five other web trees carried a Google font host. Scope widened to every web tree under artifacts/ \u2014 19 files to 503 \u2014 with a GATED/REPORTED split following what Dockerfile.web actually serves. On its first run the widened gate flagged my own explanatory comment for containing the literal hostname; the comment was reworded rather than the gate weakened, because matching a literal string without parsing comments is correct fail-closed behaviour for a security check."
     },
     {
       "path": "artifacts/signalgrid-review/src/index.css",
       "reviewedBy": "accessibility-specialist",
       "date": "2026-08-24",
       "depth": "verified-live",
-      "note": "FINDING (row 75, fixed here): declared --destructive and --chart-4 as `0 28% 49%` — #A05A5A, the pre-DR-005 fork of deny. Measured with the ratified gate's OWN exported hslToHex/contrast: 3.14:1 on card, below the 4.5:1 AA floor DR-005 ratifies and worse than the 3.18:1 CLAUDE.md records as this system's historic worst. Same defect in signalgrid-desktop and signalgrid-mobile-pwa; web and app had already migrated. Now 0 43% 60.8% (#C67070, 4.55:1). Also removed maximum-scale=1 from its viewport meta, which blocked pinch-zoom on the public review hub."
+      "note": "FINDING (row 75, fixed here): declared --destructive and --chart-4 as `0 28% 49%` \u2014 #A05A5A, the pre-DR-005 fork of deny. Measured with the ratified gate's OWN exported hslToHex/contrast: 3.14:1 on card, below the 4.5:1 AA floor DR-005 ratifies and worse than the 3.18:1 CLAUDE.md records as this system's historic worst. Same defect in signalgrid-desktop and signalgrid-mobile-pwa; web and app had already migrated. Now 0 43% 60.8% (#C67070, 4.55:1). Also removed maximum-scale=1 from its viewport meta, which blocked pinch-zoom on the public review hub."
     },
     {
       "path": "scripts/check-decision-palette.mjs",
       "reviewedBy": "accessibility-specialist",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "FINDING (row 75, fixed here): this gate's self-test asserts it would reject #A05A5A and names that exact hex, while the identical value sat one line away in three trees under --destructive. THE EXTRACTOR WAS THE BOUNDARY, not the audit: cssBlocks() matched `--(decision-…|background|card)` and never collected --destructive, so widening the canonical table alone changed nothing — verified by doing exactly that and watching the falsification still pass. A token the extractor does not see can never be wrong. `destructive` added to the extractor pattern. --chart-* deliberately NOT pinned: its semantics vary by tree (mobile-pwa used --chart-4 for restrict, not deny), so a blanket rule would assert something untrue."
+      "note": "FINDING (row 75, fixed here): this gate's self-test asserts it would reject #A05A5A and names that exact hex, while the identical value sat one line away in three trees under --destructive. THE EXTRACTOR WAS THE BOUNDARY, not the audit: cssBlocks() matched `--(decision-\u2026|background|card)` and never collected --destructive, so widening the canonical table alone changed nothing \u2014 verified by doing exactly that and watching the falsification still pass. A token the extractor does not see can never be wrong. `destructive` added to the extractor pattern. --chart-* deliberately NOT pinned: its semantics vary by tree (mobile-pwa used --chart-4 for restrict, not deny), so a blanket rule would assert something untrue."
     },
     {
       "path": "native/ios/EnterpriseShell/Views/HostAppViewController.swift",
       "reviewedBy": "mobile-native-engineer",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read for the audit behind row 78. This file IS the embedded Assist gate — it renders the verdict, the reason and the step-up copy. 16 raw .systemFont(ofSize:) call sites at fixed 9-12pt, so the screen that explains a block does not scale at accessibility text sizes. CLAUDE.md's own stated grep for this rule (`UIFont.systemFont`) returns ZERO against this file because Swift's implicit-member form is used — the documented verification method reports a false clean. Also carries two stacked permissive defaults feeding the gate's staleness input (line 189, backlog row 58, confirmed still live)."
+      "note": "Read for the audit behind row 78. This file IS the embedded Assist gate \u2014 it renders the verdict, the reason and the step-up copy. 16 raw .systemFont(ofSize:) call sites at fixed 9-12pt, so the screen that explains a block does not scale at accessibility text sizes. CLAUDE.md's own stated grep for this rule (`UIFont.systemFont`) returns ZERO against this file because Swift's implicit-member form is used \u2014 the documented verification method reports a false clean. Also carries two stacked permissive defaults feeding the gate's staleness input (line 189, backlog row 58, confirmed still live)."
     },
     {
       "path": "native/ios/EnterpriseShell/Services/DecisionEngine.swift",
       "reviewedBy": "mobile-native-engineer",
       "date": "2026-08-24",
       "depth": "audited",
-      "note": "Read end to end against lib/signalgrid-simulator/src/decisionEngine.ts. The byte-faithful port claim HOLDS on structure: fourteen rule blocks in identical order, identical reason-code emission order, identical outcome unions, identical empty-outcomes base-trust arm, both ALLOW_REMOVED subtraction rules in order, identical 10-element ordering array. THREE divergences found, all in attribute predicates: lines 57, 69 and 70 test == \"true\" (string) where the TS tests === true (boolean). Latent — no Swift producer sets those attributes today — and live the moment anything decodes /v1 signal JSON into [String: String] on device. The parity gate cannot see this: it compares reason-code vocabulary and wiring, and says of itself that it cannot prove behavioural equivalence."
+      "note": "Read end to end against lib/signalgrid-simulator/src/decisionEngine.ts. The byte-faithful port claim HOLDS on structure: fourteen rule blocks in identical order, identical reason-code emission order, identical outcome unions, identical empty-outcomes base-trust arm, both ALLOW_REMOVED subtraction rules in order, identical 10-element ordering array. THREE divergences found, all in attribute predicates: lines 57, 69 and 70 test == \"true\" (string) where the TS tests === true (boolean). Latent \u2014 no Swift producer sets those attributes today \u2014 and live the moment anything decodes /v1 signal JSON into [String: String] on device. The parity gate cannot see this: it compares reason-code vocabulary and wiring, and says of itself that it cannot prove behavioural equivalence."
     },
     {
       "path": "native/desktop/core/src/assist.rs",
       "reviewedBy": "desktop-engineer",
       "date": "2026-08-25",
       "depth": "verified-live",
-      "note": "Read end to end AND executed — cargo 1.94.1 is available in this lane, contrary to the assumption in the task that framed this read. 36 unit + 2 conformance tests pass, fmt and clippy -D warnings clean. NO DEFECT. Unrecognised outcome maps to DENY via the catch-all arm; None is returned only for genuine absence; proceeds_without_further_action() is Allow-only. Answers the roster's standing open question for the Rust half, which had been left open when the Kotlin half was answered on 2026-08-24."
+      "note": "Read end to end AND executed \u2014 cargo 1.94.1 is available in this lane, contrary to the assumption in the task that framed this read. 36 unit + 2 conformance tests pass, fmt and clippy -D warnings clean. NO DEFECT. Unrecognised outcome maps to DENY via the catch-all arm; None is returned only for genuine absence; proceeds_without_further_action() is Allow-only. Answers the roster's standing open question for the Rust half, which had been left open when the Kotlin half was answered on 2026-08-24."
     },
     {
       "path": "native/desktop/core/src/wire.rs",
       "reviewedBy": "desktop-engineer",
       "date": "2026-08-25",
       "depth": "verified-live",
-      "note": "Read end to end and exercised. NO DEFECT. Every failure mode fails closed with a NAMED reason: non-2xx, empty/whitespace body, malformed JSON, valid-JSON-that-is-not-an-object, missing assist field, and present-but-non-string assist (bool/number/array/object/null all treated as present-and-unreadable, not as missing). 401/403 are not rescued by an allow body. Unknown RESPONSE fields are tolerated deliberately — deny_unknown_fields there would flip a legitimate allow to deny the moment a newer server adds a field, which is fail-closed in the wrong place."
+      "note": "Read end to end and exercised. NO DEFECT. Every failure mode fails closed with a NAMED reason: non-2xx, empty/whitespace body, malformed JSON, valid-JSON-that-is-not-an-object, missing assist field, and present-but-non-string assist (bool/number/array/object/null all treated as present-and-unreadable, not as missing). 401/403 are not rescued by an allow body. Unknown RESPONSE fields are tolerated deliberately \u2014 deny_unknown_fields there would flip a legitimate allow to deny the moment a newer server adds a field, which is fail-closed in the wrong place."
     },
     {
       "path": "native/desktop/core/src/endpoint.rs",
@@ -602,21 +602,21 @@
       "reviewedBy": "desktop-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "FINDING (row 79, fixed here): painted all four verdicts from raw Tailwind hex, invisible to check-decision-palette through TWO independent holes — the verdict sat in a JSX attribute value and an object-literal data value (neither key- nor comparison-anchored), and #eab308 was missing from the ramp list entirely. Deny at #EF4444 measures 4.26:1 on card. Repointed onto the ratified tokens; restrict uses the deny tone with a dash pattern rather than an invented fourth colour, since only three tones are ratified. Chart chrome moved off a third (slate) palette."
+      "note": "FINDING (row 79, fixed here): painted all four verdicts from raw Tailwind hex, invisible to check-decision-palette through TWO independent holes \u2014 the verdict sat in a JSX attribute value and an object-literal data value (neither key- nor comparison-anchored), and #eab308 was missing from the ramp list entirely. Deny at #EF4444 measures 4.26:1 on card. Repointed onto the ratified tokens; restrict uses the deny tone with a dash pattern rather than an invented fourth colour, since only three tones are ratified. Chart chrome moved off a third (slate) palette."
     },
     {
       "path": "scripts/check-decision-palette.mjs",
       "reviewedBy": "desktop-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "FINDING (row 79, fixed here): two independent holes, and the ORDER of the fixes is the evidence for that. Widening the ramp list alone left the gate at exit 0; adding an attribute/data-value anchor took it to exit 1 naming BOTH signalgrid-desktop and signalgrid-app. Either hole alone would have kept the defect invisible. Self-tests 14 to 17, anchored VERBATIM to the two Dashboard files that were evading it rather than written against the new regex — a self-test anchored to the regex it tests proves only that the regex is itself."
+      "note": "FINDING (row 79, fixed here): two independent holes, and the ORDER of the fixes is the evidence for that. Widening the ramp list alone left the gate at exit 0; adding an attribute/data-value anchor took it to exit 1 naming BOTH signalgrid-desktop and signalgrid-app. Either hole alone would have kept the defect invisible. Self-tests 14 to 17, anchored VERBATIM to the two Dashboard files that were evading it rather than written against the new regex \u2014 a self-test anchored to the regex it tests proves only that the regex is itself."
     },
     {
       "path": "lib/webauthn/src/webauthn/verify.ts",
       "reviewedBy": "security-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Full file. CBOR reader, COSE-to-JWK conversion and authData field offsets traced against the WebAuthn spec layout; assertion signature verification (ES256 DER / RS256), rpIdHash and UP/UV flag checks, and attestation-statement verification for none/packed/fido-u2f, all fail-closed on parse error, unknown format or bad signature. NOT independently re-verified: the CBOR decoder against adversarial malformed input beyond its fail-closed try/catch — proof:webauthn-verify (48/48, executed) covers that."
+      "note": "Full file. CBOR reader, COSE-to-JWK conversion and authData field offsets traced against the WebAuthn spec layout; assertion signature verification (ES256 DER / RS256), rpIdHash and UP/UV flag checks, and attestation-statement verification for none/packed/fido-u2f, all fail-closed on parse error, unknown format or bad signature. NOT independently re-verified: the CBOR decoder against adversarial malformed input beyond its fail-closed try/catch \u2014 proof:webauthn-verify (48/48, executed) covers that."
     },
     {
       "path": "lib/webauthn/src/webauthn/server.ts",
@@ -651,7 +651,7 @@
       "reviewedBy": "security-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Full file. Its expiry check is Number.isFinite-guarded and correct. FINDING (row 82, note): hasValidStepUpSession is a hardcoded `return false` stub whose docstring implies a real check. It fails CLOSED and is unreachable — verified two ways that no api-server route imports it — but it is a second, parallel step-up implementation sitting unused beside the live one."
+      "note": "Full file. Its expiry check is Number.isFinite-guarded and correct. FINDING (row 82, note): hasValidStepUpSession is a hardcoded `return false` stub whose docstring implies a real check. It fails CLOSED and is unreachable \u2014 verified two ways that no api-server route imports it \u2014 but it is a second, parallel step-up implementation sitting unused beside the live one."
     },
     {
       "path": "lib/enterprise-auth/src/jwt.ts",
@@ -770,14 +770,14 @@
       "reviewedBy": "principal-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Simulated sink, no HTTP. Retry loop seeds status=dead_letter and only moves to delivered on real success — the permissive value is not the seed. maxAttempts<=0 yields dead_letter. Clock is injected."
+      "note": "Simulated sink, no HTTP. Retry loop seeds status=dead_letter and only moves to delivered on real success \u2014 the permissive value is not the seed. maxAttempts<=0 yields dead_letter. Clock is injected."
     },
     {
       "path": "lib/signalgrid-core/src/audit.ts",
       "reviewedBy": "principal-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Hash-chained tenant-scoped ledger. appendAudit and verifyAuditChain build byte-identical canonical bodies from two hand-written literals — the same two-copies shape evidence.ts warns about; diffed field-by-field, they agree today. Verification fails closed on both a chain break and a digest mismatch. Did NOT test tamper detection empirically."
+      "note": "Hash-chained tenant-scoped ledger. appendAudit and verifyAuditChain build byte-identical canonical bodies from two hand-written literals \u2014 the same two-copies shape evidence.ts warns about; diffed field-by-field, they agree today. Verification fails closed on both a chain break and a digest mismatch. Did NOT test tamper detection empirically."
     },
     {
       "path": "lib/signalgrid-core/src/shift.ts",
@@ -791,7 +791,7 @@
       "reviewedBy": "principal-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "fixedClock rejects unparseable ISO. classifyFreshness returns missing on null and unknown on NaN or a future timestamp — checked the ordering explicitly, the Number.isNaN guards precede the comparisons so no NaN fall-through. canonicalJson is depth-bounded. constantTimeEquals folds the length difference into diff. digest is FNV-1a and documented non-cryptographic."
+      "note": "fixedClock rejects unparseable ISO. classifyFreshness returns missing on null and unknown on NaN or a future timestamp \u2014 checked the ordering explicitly, the Number.isNaN guards precede the comparisons so no NaN fall-through. canonicalJson is depth-bounded. constantTimeEquals folds the length difference into diff. digest is FNV-1a and documented non-cryptographic."
     },
     {
       "path": "lib/signalgrid-core/src/dock.ts",
@@ -812,7 +812,7 @@
       "reviewedBy": "principal-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Approval-gated, simulated-only; allow decisions produce none. Walked the whole reason-code switch: real default arm, and six policy reason codes fall to it and produce no RemediationAction (they do have resolution.ts descriptors, so a worker still gets a served path — a gap in the remediation ledger only). Fallthrough direction is safe."
+      "note": "Approval-gated, simulated-only; allow decisions produce none. Walked the whole reason-code switch: real default arm, and six policy reason codes fall to it and produce no RemediationAction (they do have resolution.ts descriptors, so a worker still gets a served path \u2014 a gap in the remediation ledger only). Fallthrough direction is safe."
     },
     {
       "path": "lib/signalgrid-core/src/store.ts",
@@ -826,14 +826,14 @@
       "reviewedBy": "principal-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "All 861 lines including doctrine comments. Checked SIGNAL_CATEGORIES (17) and EVIDENCE_FIELDS (20) against consumers in policy.ts and evidence.ts — every field wired, no orphan. RuleCondition's union is exhaustively covered by the matches() switch. Cross-checked the category count against docs (row 92)."
+      "note": "All 861 lines including doctrine comments. Checked SIGNAL_CATEGORIES (17) and EVIDENCE_FIELDS (20) against consumers in policy.ts and evidence.ts \u2014 every field wired, no orphan. RuleCondition's union is exhaustively covered by the matches() switch. Cross-checked the category count against docs (row 92)."
     },
     {
       "path": "lib/signalgrid-core/src/seed.ts",
       "reviewedBy": "principal-engineer",
       "date": "2026-08-25",
       "depth": "read",
-      "note": "All 1066 lines. Reasoned in full about seedPolicy, all 23 seedPolicyTests cases, the Northwind fixtures and the id-minting helpers. Did NOT individually re-derive the expected outcome for each of the ~20 near-identical subject records — checked the shape, not each verdict. Did not verify the CIVIC tenant end to end."
+      "note": "All 1066 lines. Reasoned in full about seedPolicy, all 23 seedPolicyTests cases, the Northwind fixtures and the id-minting helpers. Did NOT individually re-derive the expected outcome for each of the ~20 near-identical subject records \u2014 checked the shape, not each verdict. Did not verify the CIVIC tenant end to end."
     },
     {
       "path": "artifacts/api-server/src/index.ts",
@@ -882,7 +882,7 @@
       "reviewedBy": "api-contract-architect",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Whole file. Dependency-free Prometheus exposition; Counter/Gauge/Histogram are plain unbounded Maps keyed by label tuple. fmt() escapes so exposition-format injection is not possible. normalizeRoute collapses ONLY known id prefixes and UUIDs — everything else becomes its own label verbatim. Row 93; verified the absence of any eviction three differently-shaped ways then by live measurement."
+      "note": "Whole file. Dependency-free Prometheus exposition; Counter/Gauge/Histogram are plain unbounded Maps keyed by label tuple. fmt() escapes so exposition-format injection is not possible. normalizeRoute collapses ONLY known id prefixes and UUIDs \u2014 everything else becomes its own label verbatim. Row 93; verified the absence of any eviction three differently-shaped ways then by live measurement."
     },
     {
       "path": "artifacts/api-server/src/lib/profile.ts",
@@ -931,7 +931,7 @@
       "reviewedBy": "api-contract-architect",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Whole file (16 lines). Records count and latency on finish. The route label comes from normalizeRoute(req.originalUrl) — caller-controlled. This file plus its registration position is the mechanism behind row 93."
+      "note": "Whole file (16 lines). Records count and latency on finish. The route label comes from normalizeRoute(req.originalUrl) \u2014 caller-controlled. This file plus its registration position is the mechanism behind row 93."
     },
     {
       "path": "artifacts/api-server/src/routes/control-plane.ts",
@@ -952,14 +952,14 @@
       "reviewedBy": "api-contract-architect",
       "date": "2026-08-25",
       "depth": "read",
-      "note": "PARTIAL and specifically: audited only the 30 lines of executable code (2003-2042). The 2007-line INTEGRATIONS literal was NOT read line by line; verified structurally instead — 149 entries, uniform 12-key shape, zero code constructs, zero secret-shaped strings under two patterns, zero non-https URLs. Did not check the 149 vendor descriptions for factual accuracy."
+      "note": "PARTIAL and specifically: audited only the 30 lines of executable code (2003-2042). The 2007-line INTEGRATIONS literal was NOT read line by line; verified structurally instead \u2014 149 entries, uniform 12-key shape, zero code constructs, zero secret-shaped strings under two patterns, zero non-https URLs. Did not check the 149 vendor descriptions for factual accuracy."
     },
     {
       "path": "artifacts/api-server/src/routes/monitoring.ts",
       "reviewedBy": "api-contract-architect",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Whole file. Six read-only fixture routes over module-scope arrays fixed at process start. clampLimit floors at a fallback and caps at 200. No auth and no tenant by construction — every byte is synthetic and identical for all callers, so there is no tenant data to leak."
+      "note": "Whole file. Six read-only fixture routes over module-scope arrays fixed at process start. clampLimit floors at a fallback and caps at 200. No auth and no tenant by construction \u2014 every byte is synthetic and identical for all callers, so there is no tenant data to leak."
     },
     {
       "path": "artifacts/api-server/src/routes/radar.ts",
@@ -980,14 +980,560 @@
       "reviewedBy": "api-contract-architect",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Whole file. Five unauthenticated routes over a ring-buffered ledger capped at 500 entries. POST /simulator/reset lets any anonymous caller wipe the demo ledger — fenced off in the gateway profile. Its envelope() mints a FRESH uuid instead of reusing req.requestId (row 99, verified live)."
+      "note": "Whole file. Five unauthenticated routes over a ring-buffered ledger capped at 500 entries. POST /simulator/reset lets any anonymous caller wipe the demo ledger \u2014 fenced off in the gateway profile. Its envelope() mints a FRESH uuid instead of reusing req.requestId (row 99, verified live)."
     },
     {
       "path": "artifacts/api-server/src/routes/v1.ts",
       "reviewedBy": "api-contract-architect",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "All 923 lines and all 31 routes — the primary target. Verified the tenant invariant holds at every call site: no route reads a tenant from a header, body field or query param. The durable-path authorization fix is present on all three store branches. Walked the whole WebAuthn step-up chain: role gate, out-of-band secret with timingSafeEqual, enroller-binding on verify, challenge bound at mint with guarded values read from the STORED record, fresh re-evaluation after verification. Nothing in a request body can set stepUpSatisfied. Verified cross-tenant reads return the SAME 404 as a nonexistent id, serially and at concurrency 32 (0/40 leaks). Did NOT exercise a real WebAuthn ceremony."
+      "note": "All 923 lines and all 31 routes \u2014 the primary target. Verified the tenant invariant holds at every call site: no route reads a tenant from a header, body field or query param. The durable-path authorization fix is present on all three store branches. Walked the whole WebAuthn step-up chain: role gate, out-of-band secret with timingSafeEqual, enroller-binding on verify, challenge bound at mint with guarded values read from the STORED record, fresh re-evaluation after verification. Nothing in a request body can set stepUpSatisfied. Verified cross-tenant reads return the SAME 404 as a nonexistent id, serially and at concurrency 32 (0/40 leaks). Did NOT exercise a real WebAuthn ceremony."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Services/AppWorkflows.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Lines 1-260 diffed against lib/app-workflows/src/index.ts:113-240. Found the scoped-step-up divergence (row 101). NOT checked: the integration catalog past line 240 was skimmed, not compared against catalog.ts."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Services/SignalContext.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 135 lines. LocationGate fails closed on nil/empty detected zone; AccessDecision runs the zone pre-gate BEFORE the engine \u2014 the documented around-not-inside pattern working as designed. NOT checked: whether every caller routes through AccessDecision (traced HostAppViewController only)."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Services/DecisionService.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "~172 lines. Remote/plan outcome conflict resolution, both-must-parse guard, local-risk clamp, catch-path fail-closed default. localSignals deliberately not sent in the HTTP body and the clamp compensates. No network call made."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Models/SessionData.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Lines 1-60. Audited isExpired and timeUntilExpiration for nil-expiry; found the fail-open (row 100). Past line 60 not read."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Services/IdentityProvider.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 415-450 (MDMIdentityProvider.authenticate) plus a grep of all expiresAt sites, confirming a real producer returns expiresAt: nil. OIDCIdentityProvider and the rest of ~560 lines NOT read."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Services/SessionStateManager.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 320-340 (session construction) plus expiry-check sites at 796-855. State machine, idle-timeout and teardown paths NOT read."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Views/ActiveSessionViewController.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Layout and color only: all label/button declarations, profile header and status bar constraints, showToast, plus greps for every heightAnchor and SG.primary use. Collection-view data sources and session lifecycle NOT read."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Views/ManagedAppViewController.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 40-95 (viewDidLoad, top bar, constraints). 2 raw font calls and a fixed 48pt bar. WKWebView allowlist and navigation-delegate logic NOT read."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Services/DesignSystem.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 155 lines. Independently recomputed WCAG ratios for all 7 tokens against background and card in both appearances, plus onDeny/onAllow on their fills, and re-derived every historical figure in the comments \u2014 the method reproduces the repo's own accepted numbers exactly. NOT rendered."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Services/KioskController.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-90 for platform-honesty claims (ASAM vs Guided Access, the explicit 'an app cannot start Guided Access' statement, fail-safe on unsupervised devices). NO over-claim found. releaseLock tail and KioskConfig NOT read."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Info.plist",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. CONFIRMED no UIUserInterfaceStyle key. Checked ATS scope, FaceID/Bluetooth usage strings, UIRequiresFullScreen, external-accessory protocols. Flagged the armv7 required-capability (row 105)."
+    },
+    {
+      "path": "native/ios/SignalGridMobile/SignalGridOperator/Info.plist",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. No UIUserInterfaceStyle key. ATS and orientation keys checked."
+    },
+    {
+      "path": "native/ios/SignalGridMobile/WardlinkDemo/Info.plist",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. No UIUserInterfaceStyle key. FaceID usage string and orientations checked."
+    },
+    {
+      "path": "native/ios/SignalGridMobile/SignalGridOperator/Theme.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Lines 1-60. Decoded every Color(red:green:blue:) triple back to hex and checked each against the canonical token; verified both contrast figures asserted in its comments. Found sgBackground drift (row 104). Past line 60 NOT read."
+    },
+    {
+      "path": "native/ios/SignalGridMobile/SignalGridOperator/SignalGridOperatorApp.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 14 lines. Found the preferredColorScheme(.dark) pin at the app root (row 103)."
+    },
+    {
+      "path": "native/ios/SignalGridMobile/SignalGridMobileCore/Sources/SignalGridMobileCore/StepUpAuthenticator.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 120 lines. Verified the fail-closed rule \u2014 only .satisfied permits; refused and unavailable both withhold \u2014 and that restrict/deny are correctly excluded from challenge. No defect."
+    },
+    {
+      "path": "native/ios/mdm/README.md",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 45-65 (managed-app-config keys and the simulator can/can't list) for platform-honesty cross-check. Found one under-claim (row 106). Rest NOT read."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Traced all four chart series fills to their CSS tokens and computed resolved hexes and pairwise contrast; confirmed no Legend/Tooltip/XAxis/YAxis. Source of row 107. NOT rendered in a browser."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/index.css",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Resolved every decision/chart/ground token to hex, byte-compared the .bg-status-restrict and .bg-status-deny rules, and checked every declared utility for a referencing file. Found 4 dead colour utilities (row 111). Did not verify Tailwind v4 emits --color-chart-* as used."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/components/LiveDecisionPanel.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Executed the TONE-lookup and all three render guards against in-range and out-of-range outcomes. Found the fail-silent (row 109). NOT run in React or against a live api-server."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/components/OutcomeBadge.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Executed the if/else chain against both wire spellings and unknown values; computed the fallback's contrast over its own tint on card = 3.00:1 (row 110). NOT checked at accessibility text sizes."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/index.css",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Resolved all tokens to hex and compared the .bg-status-* rule set against the PWA's; confirmed no Google Fonts import. Sidebar and elevate-* token families NOT audited."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Read fully; checked the AreaChart legend/dash fix and tested the LAUNCH_FAMILIES 'profile gate fails the build' claim with four searches \u2014 the claim is false (row 112). Did not compute contrast for every raw ramp in the Integration Health card."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/index.html",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Checked every external host reference and the manifest link path. Found 3 Google Fonts references (row 108). OG/twitter meta NOT validated against a published URL."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/public/manifest.json",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Checked every icon src against git ls-files and the on-disk public dir, and start_url against any deploy path \u2014 both icons are missing (row 113). NOT validated against the W3C schema."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/package.json",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Diffed the dependency set against signalgrid-app's specifically for @fontsource \u2014 absent. Version drift on the other ~50 deps NOT audited."
+    },
+    {
+      "path": "artifacts/signalgrid-app/package.json",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Used as the control for the @fontsource comparison. Versions NOT audited."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/main.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Read the loopback-only base-URL clamp and confirmed no font imports. URL parser NOT fuzzed against exotic loopback forms."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/lib/v1.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Every exported type and call site; confirmed V1Outcome uses step_up and located all three fetch() targets, all relative to BASE. Line 78 is a bare cast with no runtime validation. Responses NOT verified at runtime."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/components/StatusBadge.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All three badge switches including default branches and the dual step-up/step_up handling \u2014 this file handles both wire spellings and says so. Contrast for bg-signal-* NOT computed."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/components/SignalBadge.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Compared its four handled branches against the six-value SignalType enum and the six filters Signals.tsx offers (row 114); computed the zinc-400 fallback contrast at 5.28:1, which clears AA."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/components/StatusDot.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full switch including the unknown/default branch; computed each ramp against card. Whether animate-ping respects prefers-reduced-motion NOT checked."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/pages/Decisions.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Checked the filter spelling against the api-client enum, the badge call sites, and the absence of any fixture label (row 115). BottomSheet detail fetch NOT exercised."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/pages/AccessSupport.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All four scenarios and the Outcome union; checked embedded-UX-law compliance and honesty labelling \u2014 the most honest page in either tree. Outcome union omits deny (row 116)."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/pages/Signals.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Read fully; confirmed it is the ONLY PWA page carrying a rendered fixture label, and cross-checked its six filters against SignalBadge's four branches."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/App.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Cross-checked every route against AppLayout's three nav lists for preview()-wrapper drift \u2014 found NONE. Recorded as checked-and-clean. Deep-link and BASE_URL handling NOT tested."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/components/AssuranceBadge.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Read the fixture/live branch and the title attribute. Did NOT verify /v1/context returns the assurance shape it destructures."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/App.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Tab layout, lazy boundaries and ErrorBoundary placement; confirmed NO assurance or fixture surface exists in this tree. Tab-button keyboard/aria semantics NOT assessed."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/components/layout/AppLayout.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-90: the three nav lists and NavSection. Footer, health-check rendering and the rest of the file NOT read."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/pages/decisions/DecisionDetail.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-120: outcome badge, routing guard, matched rules. Evidence-snapshot and signals-used sections below line 120 NOT read."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/pages/decisions/DecisionList.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-80: CSV export, query, filter select. Table body rendering NOT read."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/pages/Intelligence.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-80: the projected-basis guards on coverage wording and the STATUS_DOT/COV_DOT ramp maps. Recommendations and signal-discovery sections NOT read."
+    },
+    {
+      "path": "artifacts/signalgrid-app/src/pages/GridOverview.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-90: caveat accumulation and hero status logic. Pillar cards NOT read."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/pages/Integrations.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-60: the hand-maintained 16-entry category list and the sort. Detail sheet NOT read; the category list NOT verified against the API's category values."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/components/ErrorBoundary.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Full file; the fallback copy makes no capability claim. Boundary NOT tested."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/src/components/BottomSheet.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Full file; Drawer.Title is always rendered with an sr-only fallback. Focus trapping NOT tested."
+    },
+    {
+      "path": "artifacts/signalgrid-app/tsconfig.json",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Checked noEmit and incremental settings before running typecheck. Base config NOT reviewed."
+    },
+    {
+      "path": "artifacts/signalgrid-mobile-pwa/tsconfig.json",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Confirmed noEmit true so typecheck writes nothing. Base config NOT reviewed."
+    },
+    {
+      "path": "artifacts/signalgrid-app/index.html",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Checked for external hosts and manifest links \u2014 none. Meta content NOT reviewed."
+    },
+    {
+      "path": "scripts/src/lib/live-gate.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. Checked the isolation shape (knock out one key from a fully-armed env, require refusal) and the NON-VACUITY assertion guarding it; checkDefaultTransport restores globalThis.fetch in a finally. Did NOT check which families call these helpers, nor that every gated family's `full` env contains every gate variable."
+    },
+    {
+      "path": "scripts/src/unsafe-claim-classifier.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file, executed against synthetic inputs. Checked clause scoping, negation prefix-scoping, global-regex lastIndex reset, and the unparseable-line fail-closed path. Found the trailing-negation false positive (row 118). Did NOT enumerate the full 16-alternative denylist against docs."
+    },
+    {
+      "path": "scripts/src/unsafe-claim-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file, ran it (40/40, exit 0). Section 3 deliberately pins trailing-negation-as-affirmative; section 6 is the non-vacuity floor. Found NO assertion covering `replaces <negator>` word order."
+    },
+    {
+      "path": "scripts/src/phase-gate.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file, ran it live: exit 0 while printing unsafeClaims=ASSERTED (row 117). Checked lane escalation arithmetic, gitOrEmpty swallowing git grep's exit code, and the requiredValidation doc check. Did NOT test the PR-diff branch (needs GITHUB_BASE_REF)."
+    },
+    {
+      "path": "scripts/src/emit-gate-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file, ran it (82/82, exit 0). Checked gateBeforeFirstCall ordering, stripComments, the OUTBOUND_CALL lookbehind, and the nac non-vacuity floor. Flagged the unguarded indexOf slice (row 121). The six ROUTED files are checked textually by design, not at runtime."
+    },
+    {
+      "path": "scripts/src/emitter-discipline-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. Each of the 4 gate clauses is flipped from a fully-armed env (correct isolation) and a live non-vacuity case exists. Header says 'five families' while FAMILIES has six, and figures= publishes gateClausesPerFamily=4 as a literal. NOT run (needs @workspace/integrations built)."
+    },
+    {
+      "path": "scripts/src/self-audit-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. The exhaustive heal-transition sweep genuinely asserts refusals in the else branch rather than only counting the legal route; reserved-id collision control and fail-closed unknown-status arms present. NOT run."
+    },
+    {
+      "path": "scripts/src/launch-profile-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. Coherence loop (duplicate ids, empty ids, unreasoned entries), restrictiveness ratio, and machine-checkable closedWhen conditions on GAPS. NOT run; did NOT check that check-launch-profile.mjs actually evaluates those conditions."
+    },
+    {
+      "path": "scripts/src/sim-requests-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full file. Argv-allowlist assertions, spawnTargets property check at 3 sites, and that refusals/skips never close a request. NOT run (it spawns the Mac runner)."
+    },
+    {
+      "path": "scripts/src/lane-messages-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 170 lines. Identity derivation, self-ack refusal, read-only CLI probes, and the spawn-based helper failing closed on spawn error. NOT run."
+    },
+    {
+      "path": "scripts/src/operating-method-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Lines 1-80 in full, ran the proof (31/31, exit 0), then executed its link extractor against the real doc and a control probe. Found the [^)#http] character-class blind spot (row 120). Intake-ledger section past line 80 NOT read."
+    },
+    {
+      "path": "scripts/src/response-accountability-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Audited the vendor-call scanner (540-570) and ran the proof (82/82, exit 0). Executed both regex lists against planted calls and confirmed the permissive drift (row 119). The other ~535 lines NOT read."
+    },
+    {
+      "path": "scripts/src/level-10-audit.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 102 lines. Table parser's Number.isFinite filter, empty-scores throw, missingAreas throw. expectedAreas is a hand-maintained 16-entry list with no bijection check, so an ADDED area is silently averaged in. NOT run \u2014 it writes artifacts/level-10/."
+    },
+    {
+      "path": "scripts/src/live-glpi-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 167 lines. CAPTURE_DIR anchoring, fail-loudly-on-404, capture written before the exit check. Found it is UNREACHABLE from the path that invokes it (row 122). NOT run (needs live GLPI)."
+    },
+    {
+      "path": "scripts/src/nac-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Vendor-call scanner region (160-220) only, to diff the banned list against its four siblings. Other ~300 lines NOT read."
+    },
+    {
+      "path": "scripts/src/entitlement-binding-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Vendor-call scanner region (355-405) only, for the banned-list diff. Other ~370 lines NOT read."
+    },
+    {
+      "path": "scripts/src/service-lifecycle-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 690-811: recursive vendor-call scanner, clock scanner, both self-tests, composition-adapter section. Its walk() has no .ts filter (stricter, fine) and no files.length>0 floor. First ~690 lines NOT read."
+    },
+    {
+      "path": "scripts/src/session-readiness-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Section 8 (420-500): the no-network/no-clock source scan and its two-way comment-stripping self-test \u2014 the strongest self-test on this surface. No sources.length>0 floor. Other ~420 lines NOT read."
+    },
+    {
+      "path": "scripts/src/mcp-answer-discipline-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "The 65-line rationale header and client scaffold to ~line 90. It explicitly records its own uncovered scope. Assertions NOT read; NOT run."
+    },
+    {
+      "path": "scripts/src/evidence-coverage-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-120: rationale, the DERIVED ALL_PLANES (not hand-listed), and the day-one-quiet setup with its two non-vacuity anchors. Power-set sweep and monotonicity section NOT read."
+    },
+    {
+      "path": "scripts/src/absent-collection-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-140: three-vendor rationale, passkey/edr/vuln-scan sections. Each conservative verdict is derived from data rather than a caller flag, with a non-vacuity counter-case. Remaining ~270 lines NOT read."
+    },
+    {
+      "path": "scripts/src/self-audit-run.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-80: PROBE_COMMANDS and runProbe. An unmapped probe key and a spawn error both resolve to `unknown`, never healthy \u2014 fail-closed but invisible. Did NOT check every DEFAULT_CHECKLIST probeKey has a PROBE_COMMANDS entry."
+    },
+    {
+      "path": "scripts/src/verdict-attestation-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 40-95: LADDER/rank helper and forgery-degradation assertions. rank() returns -1 for any action outside the 8-rung ladder and the proof has NO case for an unrecognised action. Tampering section NOT read."
+    },
+    {
+      "path": "scripts/src/grid-config-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 125-155 only, to check the indexOf('warning') use \u2014 correctly guarded with firstWarn === -1. Rest NOT read."
+    },
+    {
+      "path": "scripts/src/telemetry-posture-cache-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 40-80. NaN/Infinity expiry assertions use the correct Number.isFinite shape; the one Date.now() at :56 is a justified FAR_FUTURE probe, not a decision-path clock read. Bounded-map section NOT read."
+    },
+    {
+      "path": "scripts/src/intune-entra-posture-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 230-275: the normalizers. normalizeComplianceState has an explicit default arm returning 'unknown'. Other ~950 lines NOT read."
+    },
+    {
+      "path": "scripts/src/graph-wire-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 40-80: fault-injection HTTP server and its switch on mode.kind \u2014 a closed discriminated union in a test double, not a decision path. Past line 80 NOT read."
+    },
+    {
+      "path": "scripts/src/decision-store-pg-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 14-32; executed with DATABASE_URL unset -> exit 0 on SKIP. Assertions NOT read."
+    },
+    {
+      "path": "scripts/src/dual-control-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Only the figures= line (316) plus a grep for a ladder definition: ladderRungs=3 is a literal with no in-file ladder (row 124). Other 315 lines NOT read."
     }
   ]
 }

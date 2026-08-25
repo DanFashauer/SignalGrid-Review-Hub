@@ -2073,6 +2073,24 @@ earlier — that is the loop working, not a reason to soften the record.
     exists to put in it" as the reason not to create a web skill. That reason was
     false when written.
 
+    CORRECTION, 2026-08-25, from an independent read of both web trees. The TITLE of
+    this row overstates what its own body says, and the overstatement was repeated
+    verbally to the owner. What exists is narrower than "a standard" and wider than
+    "nothing": DR-005 and DR-006 ratify a WCAG AA 4.5:1 floor for decision colours,
+    `docs/BRAND_CONTRAST_FINDING.md` records the analysis, and
+    `check-decision-palette.mjs` ENFORCES that floor in CI across five web trees.
+    `check:absence accessibility` returns INCONCLUSIVE with 31 mentions, not
+    CORROBORATED — and the matches were read rather than counted. What genuinely does
+    not exist is anything BEYOND decision colours: searching `scripts/` and `.github/`
+    for `aria-|wcag|a11y|axe-core|accessib` yields two e2e specs asserting
+    `aria-pressed`/`aria-live` on specific widgets, and NEITHER targets
+    `signalgrid-app` or `signalgrid-mobile-pwa`. No axe-core, no keyboard or focus
+    standard, no non-text-contrast rule — which is precisely what row 107 needs — and
+    no colour-blind separation rule. The accurate claim is: **the web side has a
+    ratified, enforced decision-colour floor and no other accessibility standard.**
+    Read the body, not the title; the title is left in place so the correction stays
+    legible rather than being quietly overwritten.
+
 78. **What the first iOS execution found — including that CLAUDE.md's own way of
     checking one of its rules returns a false clean.** — OPEN,
     mobile-native-engineer. That role had read 0 of 129 files.
@@ -2548,6 +2566,306 @@ earlier — that is the loop working, not a reason to soften the record.
     repo whose stated position is "provenance is the product", a caller-chosen
     provenance field is worth closing. Accept the header only when it matches
     `^[A-Za-z0-9._-]{1,128}$`, else mint a uuid.
+
+100. **iOS: an unknown session expiry renders as "fresh", and a shipping identity
+    provider produces exactly that.** — OPEN, mobile-native-engineer. BLOCKING.
+    `SessionData.swift:44-47`: `guard let expiresAt = expiresAt else { return false }`.
+    `expiresAt == nil` means "we do not know when this session expires", and the code
+    answers "then it has not expired" — the permissive branch. It is reachable, not
+    theoretical: `MDMIdentityProvider.authenticate` returns `expiresAt: nil`
+    (`IdentityProvider.swift:442`), passed straight through at
+    `SessionStateManager.swift:333`. Both server-side expiry checks (`:842`, `:853`)
+    are `if let`, so they no-op on nil too.
+    CONSEQUENCE: for any session created through the MDM provider, `sessionStale` is
+    permanently false, so `device.stale_checkin` is never emitted, `POSTURE_STALE`
+    never fires, and the session is never stepped up on freshness grounds. It also
+    never triggers the token-expiry audit event or the refresh.
+    This is the same NaN/nil fail-open family already fixed on the TypeScript auth
+    surface, surviving on iOS. It is conspicuous because the neighbouring code is
+    scrupulous: `HostAppViewController.swift:288-293` defaults `detectedZone` to nil
+    precisely so the zone gate DENIES.
+    FIX: keep `isExpired` for real expiry (it also drives teardown) and add a
+    separate `freshnessUnknown` (true when `expiresAt == nil`) feeding `sessionStale`,
+    so unknown freshness produces a STEP-UP rather than a session kill. Separately,
+    have `MDMIdentityProvider` supply a bounded default expiry instead of nil.
+
+101. **iOS: `AppWorkflows.swift` is missing the scoped step-up release the TS planner
+    has, so one gesture releases every held action.** — OPEN, mobile-native-engineer.
+    `AppWorkflows.swift:122` has only `let stepUpDone = input.outcome == .step_up &&
+    input.stepUpSatisfied`; `lib/app-workflows/src/index.ts:124-137` computes
+    `releasedKeys`/`heldKeys`/`allHeldReleased` and a per-action `actionReleased`.
+    The TS comment at `:118-122` records this as a review finding — "a gesture for one
+    action must never release the rest of the integration." The port omits it.
+    HONESTLY SCOPED: latent, not live. The one shipping caller
+    (`HostAppViewController.swift:631`) reads exactly one action out of the returned
+    plan, and `plan.mode`/`plan.summary` are read nowhere in EnterpriseShell. But the
+    control plane already speaks the scoped form (`v1.ts:723`), so the two sides can
+    disagree today about what a step-up released.
+    FIX: port the missing block — add `stepUpSatisfiedActionKeys` to `AppPlanInput`,
+    compute the per-action `eff`, and switch on it rather than `effective`. Do not
+    change the caller in the same commit.
+
+102. **iOS: white text on the brand header fill fails WCAG AA, one label in both
+    appearances.** — OPEN, mobile-native-engineer. `ActiveSessionViewController.swift:43`
+    sets the header to `SG.primary`; four labels sit on it in hardcoded white at three
+    alphas. Computed: `userRoleLabel` 5.08 light / **3.47 dark**; `departmentLabel`
+    **4.39 light / 3.08 dark** — both under the 4.5 floor.
+    The method is calibrated: it reproduces every figure `DesignSystem.swift` already
+    asserts (deny dark 5.05/4.55, allow light 5.41/6.11, and the historical 3.72)
+    exactly. This is the class the repo fixed twice — `onDeny` and `onAllow` exist
+    because "white on the dark allow fill sat at 3.72:1" — but the lesson was never
+    generalised to the brand fill, and there is no `onPrimary` token. Compounding it,
+    `:611` lets a persona override the header with an arbitrary hex, so contrast there
+    is unbounded.
+    FIX: add an `onPrimary` token shaped like `onDeny`/`onAllow`, use it for all four
+    labels, drop the alpha de-emphasis, and gate the persona override on a computed
+    contrast check. Per DR-005 the token change lands in `index.css` in the same commit.
+
+103. **iOS: `SignalGridOperator` pins dark mode at the app root.** — OPEN,
+    mobile-native-engineer. `SignalGridOperatorApp.swift:11` calls
+    `.preferredColorScheme(.dark)` — the SwiftUI equivalent of pinning
+    `UIUserInterfaceStyle`, which CLAUDE.md forbids by name. System UI it presents
+    inherits the forced scheme.
+    IMPORTANT ORDERING: the pin is currently PROTECTING the app. `Theme.swift:5-21`
+    defines every token as a single fixed dark value, so removing the pin alone would
+    produce exactly the self-contradicting screen mix the rule exists to prevent. Make
+    the tokens adaptive FIRST, then remove line 11.
+    ALSO CORRECTS CLAUDE.md: its exemption says "SignalGridMobile is pure SwiftUI with
+    semantic colors and needs none of this." That is true of `WardlinkDemo` and NOT of
+    `SignalGridOperator`. The sentence should name the target. Not a UIKit conversion —
+    fixable entirely in SwiftUI.
+
+104. **iOS: one stray colour value forks the palette.** — OPEN, mobile-native-engineer. NOTE.
+    `Theme.swift:5` decodes to `#13171A`; canonical Warm Charcoal 950 is `#15181B` in
+    both `DesignSystem.swift:25` and `index.css:73`. Every OTHER token in the file
+    decodes exactly and both asserted contrast figures verify, so this is one stray
+    value in an otherwise carefully aligned file.
+
+105. **iOS: `armv7` declared as a required device capability.** — OPEN,
+    mobile-native-engineer. NOTE. `EnterpriseShell/Info.plist:53-55`. iOS has been 64-bit-only
+    since iOS 11; the correct value is `arm64` or omission. NOT VERIFIED that this
+    blocks installation — that needs a device or a build, neither of which exists in
+    the cloud lane.
+
+106. **iOS: `mdm/README.md` under-claims what the app can do alone.** — OPEN,
+    mobile-native-engineer. NOTE. `:58` lists "forced full screen" as requiring supervision,
+    but `UIRequiresFullScreen` is an app-declarable key needing no MDM, and the plist
+    comment correctly presents it as such. Errs CONSERVATIVE — the opposite of the
+    platform-honesty failure mode — but it is still inaccurate.
+
+107. **Web: `restrict` and `deny` are the same pixel in the PWA's only chart, which
+    has no legend, tooltip or axis.** — OPEN, web-engineer. BLOCKING. This confirms
+    rows 76/77 by execution.
+    `Overview.tsx:47-48` paints `restrict` from `--chart-4` and `deny` from
+    `--destructive`. Both resolve to `hsl(0 43 60.8)` = **#C67070**. Adjacent stacked
+    segment contrast = **1.0000:1** — no rendered boundary at all. A 40%-restrict /
+    10%-deny bar is indistinguishable from its inverse.
+    COLOURBLIND HALF: under simulated protanopia `allow` and `restrict` sit 7.98 dE
+    apart — commonly treated as confusable — while restrict and deny are identical for
+    everyone.
+    The operator console's equivalent chart already carries that remedy (`Dashboard.tsx:83-87` added a
+    `<Legend />` and a `strokeDasharray` on restrict). The PWA received neither half.
+    FIX: give the chart a second channel (Legend + Tooltip at minimum, and a pattern
+    or dash for restrict), and point all four `<Bar fill>` at the ratified
+    `--decision-*` tokens so the palette gate can reach them.
+
+108. **Web: the PWA still fetches fonts from Google on every cold load.** — OPEN,
+    web-engineer. The @fontsource migration was applied to `signalgrid-app` and never
+    to the PWA: 3 references in `index.html:19-21` plus an `@import` at `index.css:1`,
+    and neither `@fontsource` package in its `package.json`.
+    `review-invariants.mjs:384` lists only two SHIPPED_TREES, so the PWA falls into the
+    REPORTED-not-gated branch — whose own message names the fix. CI does build this
+    tree, so the remote fetch ships into the bundle.
+    WHY IT MATTERS MORE HERE: a PWA is the one surface where a third-party font blocks
+    first paint on bad hospital wifi, which is the exact condition it exists for.
+
+109. **Web: an unrecognised verdict renders as NOTHING in the console's live decision
+    panel.** — OPEN, web-engineer. `LiveDecisionPanel.tsx:50` indexes
+    `TONE[decision.outcome]` unguarded; the same file guards the identical lookup 66
+    lines later at `:116`. For an out-of-union outcome, `tone` is undefined, the verdict
+    block is skipped, and the empty-state is ALSO skipped because `decision` is truthy —
+    so the panel renders the preset buttons and no result.
+    `"step-up"` is not hypothetical: `lib/api-zod` uses that spelling while
+    `signalgrid-core` uses `step_up`, and `StatusBadge.tsx:8-9` handles both and says
+    so. TypeScript cannot catch it — `v1.ts:78` is a bare cast across a fetch boundary.
+    LATENT: `/v1` emits `step_up` today, so all four keys currently hit.
+    WHY IT MATTERS: an unknown verdict produces NO signal — strictly worse than the
+    restrictive tone. The blank card is indistinguishable from "nothing happened",
+    which is the most permissive reading available.
+    FIX: `TONE[...] ?? UNKNOWN_TONE` rendering the restrictive tone with the raw
+    outcome as its label, and validate at the `v1.ts:78` boundary.
+
+110. **Web: the PWA's outcome badge falls back to grey at 3.00:1 on any unrecognised
+    verdict.** — OPEN, web-engineer. `OutcomeBadge.tsx:5` initialises to a zinc palette
+    and only overwrites on four exact matches. Computed contrast of that fallback,
+    composited the way the gate composites chips: **3.00:1**, below the 4.5 floor —
+    the worst-contrast verdict rendering in the PWA, and the same shape as the historic
+    3.18:1 deny finding, one state over.
+    TWO doctrine violations in one line: the unknown verdict renders in the NEUTRAL
+    tone rather than the restrictive one, and in text a reader may not be able to read.
+    FIX: initialise to the restrictive class and render the raw outcome as the label.
+
+111. **Web: four dead colour utilities in the PWA, two below AA, one a second red.** —
+    OPEN, web-engineer. NOTE. `index.css:150-153` declares `.text-nominal`,
+    `.text-anomalous`, `.text-critical` (#ef4444, **4.26:1**) and `.text-unknown`
+    (#6b7280, **3.32:1**); zero uses anywhere. Someone reaching for a "critical" colour
+    finds #ef4444 instead of the ratified #C67070 and nothing objects. Four
+    `.text-status-*` rules are dead too.
+
+112. **Web: a hand-maintained list claims a gate protects it; no gate reads that
+    file.** — OPEN, web-engineer. NOTE. `Dashboard.tsx:310-313` pins the three launch
+    connector families and asserts "the profile gate fails the build if this set
+    changes." Four differently-shaped searches say otherwise: `launch-profile.mjs`
+    never reads the app tree, and nothing in `scripts/` or `.github/` references
+    `Dashboard.tsx`. The list is NOT yet stale — all three ids match today — but the
+    claim about the gate is false. FIX: make it true (parse and diff, as
+    `check-it-layer-model.mjs` already does for `route-owner.ts`) or delete the sentence.
+
+113. **Web: the PWA manifest points at two icons that do not exist.** — OPEN,
+    web-engineer. `manifest.json:10-11` declares 192px and 512px icons; neither file is
+    tracked or on disk. Without them the PWA cannot be installed to a home screen,
+    which is the only reason a manifest exists. Related: `start_url` is `/mobile/` and
+    no Dockerfile or workflow serves that prefix, and there is NO service worker
+    anywhere in the tree — so this "PWA" is a manifest and a viewport tag with no
+    offline capability. No user-visible copy claims otherwise, so this is an
+    expectation gap rather than a false claim.
+    FIX: add the icons and wire the deploy, or trim the manifest to what is real. A
+    small gate asserting every tracked manifest's `icons[].src` resolves to a tracked
+    file would stop the recurrence.
+
+114. **Web: the PWA's signal badge covers four of six signal types.** — OPEN,
+    web-engineer. NOTE. `SignalBadge.tsx` branches on four values; the `SignalType`
+    enum has six and `Signals.tsx:17` offers all six as filters, so the
+    `network-posture` and `physical-access` filters yield all-grey screens. The
+    fallback clears AA (5.28:1), so this is semantics-poor rather than illegible.
+    Physical access is a first-class signal family for this product. FIX: derive the
+    colour map from the enum keys so a new value fails typecheck instead of falling
+    through to grey.
+
+115. **Web: the PWA presents fixture decisions with no fixture label.** — OPEN,
+    web-engineer. Overview (metrics, chart, integration health) and Decisions (list
+    AND detail sheet) render synthetic data unlabelled; only `Signals.tsx:22-23`
+    carries a rendered label. The console labels ten equivalents and carries an
+    `AssuranceBadge` the PWA has no equivalent of.
+    WHY IT MATTERS: the PWA is the surface most likely to be held up in a room, and
+    "Allow Rate 94.2%" with no qualifier is a claim about a deployment.
+
+116. **Web: the PWA's support triage surface has no `deny` scenario.** — OPEN,
+    web-engineer. NOTE. `AccessSupport.tsx:22` types `Outcome` as
+    `"allow" | "step-up" | "restrict"` — a deliberate narrowing of the four-verdict
+    vocabulary at the type level. The one screen a support lead opens first cannot show
+    the outcome they most need guidance for. The page is otherwise the most honest in
+    either tree.
+
+117. **The unsafe-claim gate reports ASSERTED and exits 0 — it can never fail CI.** —
+    OPEN, devex-tooling-engineer. BLOCKING. INDEPENDENTLY VERIFIED before filing.
+    `phase-gate.ts:153-160` escalates an affirmatively-asserted unsafe claim only to
+    YELLOW, and `:194` sets a failing exit code only for RED, which is reachable solely
+    from `redFilePattern`. Confirmed by running it: `unsafeClaims=ASSERTED`,
+    `phaseLane=YELLOW`, `EXIT=0`. CI wires it as a plain `run:` step
+    (`phase-pr-evidence.yml:40-41`), so the exit code is the only thing the job reads.
+    CONSEQUENCE: a genuine "SignalGrid is MFi certified" merged into `docs/` today
+    would print ASSERTED and the PR would go green. `missingValidation` at `:161-170`
+    has the identical shape, despite its own comment saying drift "must actually move
+    the lane, not just log a reason."
+    This is the whole point of the negation-aware classifier defeated at the last step:
+    the signal varies, and nothing consumes the variance.
+    FIX: decide whether YELLOW fails CI. Either make the two CODE-DETECTED reasons
+    (affirmative claim, missing validation) set a failing exit code while leaving the
+    touch-based reasons informational, or promote an affirmative claim to RED. Either
+    way the CI step must read something other than "not RED". Fix row 118 first or the
+    gate turns permanently red on a disclaimer and gets switched off.
+
+118. **The unsafe-claim classifier reads a DISCLAIMER as an affirmative claim.** —
+    OPEN, devex-tooling-engineer. `unsafe-claim-classifier.ts:143-144` scopes negation
+    to the text BEFORE the match, so `"SignalGrid replaces no system of record"` — where
+    the negator is the verb's direct object — classifies as affirmative. Both live hits
+    pinning `unsafeClaims=ASSERTED` are citations of exactly that disclaimer.
+    WHY IT MATTERS: it restores the defect the classifier was built to remove — a
+    signal that reads the same on every run — inverted from constant-noisy to
+    constant-alarming. It is invisible while row 117 stands; the moment 117 is fixed
+    this becomes a permanently red gate someone will switch off.
+    FIX: when the matched phrase ends in `replaces`, extend the negation window to the
+    following token (`no|nothing|none`). Add BOTH directions to the proof — the
+    disclaimer must clear and `"replaces Jamf, no exceptions"` must still flag (that
+    case exists at `:92-93` and must not regress).
+
+119. **Five copies of the no-vendor-call scanner; one drifted permissive, and its
+    self-test tests the pattern that survived.** — OPEN, devex-tooling-engineer.
+    `response-accountability-proof.ts:546-553` carries 6 patterns where `nac-proof.ts`,
+    `uem-proof.ts`, `entitlement-binding-proof.ts` and `service-lifecycle-proof.ts`
+    each carry 9 byte-identical ones. Executed against planted lines: a static
+    `import axios`, a `superagent` import, an aliased `const send = fetch`, a
+    `net.connect`, and a dynamic `import("pg")` are ALL caught by the other four and
+    ALL missed by this one.
+    THE DANGEROUS PART: its non-vacuity self-test asserts `banned.some(...)` over a
+    single planted `fetch(...)` — the one pattern that survived — so the guard reports
+    "the scan can actually fire" while three classes of vendor call walk past.
+    This is verbatim the failure `emit-gate-proof.ts:13-15` warns about: "four copies
+    of a policy is four chances for one to drift permissive, and the drifted one is the
+    one that ships." It has now happened, to the policy guaranteeing a connector family
+    reaches no network.
+    FIX: extract the pattern list into `scripts/src/lib/` beside `live-gate.ts` and
+    have all five import it; change each self-test to assert one planted control PER
+    PATTERN CLASS. Independently, add a `files.length > 0` floor to all five —
+    `emit-gate-proof.ts:207` already applies exactly that floor and none of the five has it.
+
+120. **A character class where alternation was intended makes the link checker skip
+    every relative link starting with h, t or p.** — OPEN, devex-tooling-engineer.
+    `operating-method-proof.ts:63` uses `[^)#http]`, which excludes the CHARACTERS
+    h/t/p, not the string `http`. Executed against a control probe: `handbook.md` and
+    `proofs.md` are silently dropped while the proof reports 31/31.
+    The extractor-vs-audit boundary exactly: the per-link `existsSync` is perfectly
+    correct about the links it receives and structurally blind to an alphabet slice.
+    The `links.length >= 4` non-vacuity floor does not help — four good links satisfy it
+    while a broken `handbook.md` sits unseen. Correct today by luck, not construction.
+    FIX: match `\]\(([^)#][^)]*\.md)\)` and filter `^https?:` in code. Add a self-test
+    asserting a `handbook.md`-shaped link is picked up.
+
+121. **An unguarded `indexOf` slice can turn two targeted assertions into whole-file
+    greps.** — OPEN, devex-tooling-engineer. NOTE. `emit-gate-proof.ts:238-241`: if
+    `"\n  }"` is not found, `indexOf` returns -1, `slice(0,-1)` yields nearly the whole
+    file, and the two following tests match anywhere in `mde.ts`. The FIRST `indexOf`
+    fails safe (both checks fail); only the second is fail-open. The same file guards
+    this correctly 116 lines earlier at `:124`, so the idiom is known here. Reported by
+    reading, not by execution — the mutation guard was off-limits during a concurrent
+    preflight.
+
+122. **`proof:live-glpi` has never been executable from the path that invokes it.** —
+    OPEN, devex-tooling-engineer. Registered only in `scripts/package.json`, never at
+    the repo root, while `run-live-lanes.sh:387` invokes it after `cd` to the root.
+    Verified: `pnpm run proof:live-glpi` -> `ERR_PNPM_NO_SCRIPT`. All seven sibling
+    live proofs ARE registered at root; this is the sole scripts-only key.
+    `validate-sim-macos.sh:176` enumerates `proof:*` from the ROOT manifest, so the
+    harness never sees it either. Fails closed, but a 167-line proof that has never
+    been runnable is not a proof — and if a Mac stands GLPI up, the failure will look
+    like GLPI misbehaving.
+    FIX: add the root registration, then add a gate asserting the two `proof:*` key
+    sets are equal. That bijection is what would have caught this and nothing checks it.
+
+123. **Five Postgres proofs exit 0 when skipped, and the local harness counts exit 0 as
+    PASS.** — OPEN, devex-tooling-engineer. Executed all five with `DATABASE_URL`
+    unset: each prints SKIPPED and exits 0. `validate-sim-macos.sh`'s `gate()` judges on
+    exit code alone, so a Mac run reports five green proofs it never executed. CI does
+    provision `DATABASE_URL`, so this is a LOCAL-HARNESS gap, not a CI one.
+    `db-guard.ts:12-15` states the doctrine for exactly this case — "a proof that
+    silently skipped would leave the gate green while testing nothing, which is the one
+    outcome worse than red" — and applies it only to the disposable-cluster flag, not to
+    the missing-URL branch three lines above.
+    FIX: give the five a distinguishable skip exit code (the repo already uses 2 for
+    refusals) and route it to the harness's existing `skip()` counter. Do NOT make it a
+    hard failure — that breaks every developer without Postgres, which is how gates get
+    switched off.
+
+124. **`ladderRungs` is published as a derived figure by twelve proofs, is a literal in
+    all twelve, and they disagree.** — OPEN, devex-tooling-engineer. NOTE. Ten publish
+    6, one publishes 5, one publishes 3, and `verdict-attestation-proof.ts:53` defines
+    an eight-rung ladder. Nothing reads the value. Inert today because the figure guard
+    only holds docs to comma-formatted numbers >= 1,000 — but it sits on the same line
+    as genuinely derived values, which makes it read as measured. That is the
+    "fossil that looks precise" the figure guard's own header was written about. Same
+    for `gateClausesPerFamily=4` in `emitter-discipline-proof.ts:140`, whose header
+    still says "five families" against six entries in the array.
 
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —

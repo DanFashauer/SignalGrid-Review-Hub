@@ -18,9 +18,16 @@ through.
 Lean IT teams (75–1,000 employees, 1–10 IT staff) run fleets of shared
 scanners, carts, and terminals. Their management console shows the last
 state it recorded — not whether that answer is still true when a worker
-picks the device up. In our lab, every live wire check ever run (10 of 10)
-found the system of record diverging from device reality. "Green" is just
-the last thing anyone recorded.
+picks the device up. "Green" is just the last thing anyone recorded.
+
+We keep meeting that gap in our own lab, on real servers. Standing up GLPI,
+its web root answered HTTP 200 while the product was not installed at all —
+the 200 was the setup wizard, and any readiness check watching for one would
+have called it healthy. Standing up Headwind, the shape a real server emits
+differed from the vendor-documented shape in two fields. Neither was
+findable from documentation; both took a wire capture. Committed at
+`artifacts/live-captures/`, reproducible with `pnpm run proof:live-glpi` and
+`proof:live-headwind`.
 
 ## Why now / why us
 

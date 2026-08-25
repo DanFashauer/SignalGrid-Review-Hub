@@ -3896,6 +3896,75 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+177. **The evidence contract advertised six sources and implemented two.** —
+    FIXED 2026-08-25, principal-engineer. Found while building the source registry
+    the owner asked for, which is the registry earning its place before it shipped.
+    `EvidenceSourceSystem` in `lib/integration-bridge/src/evidence.ts` names six
+    members. `fleet` and `headwind` have product converters. `intune` and `nanomdm`
+    are constructed INLINE INSIDE `scripts/src/evidence-adapter-proof.ts` and
+    produced by no product code — the Graph production path reaches the
+    device-management-health connector through `graph-transport.ts`, which does not
+    emit this contract at all. `jamf` appears in twelve files as a vendor SignalGrid
+    reads ABOUT and produces evidence in none of them. `omnissa` appears only in its
+    own type declaration. None of the four was named in the launch profile's
+    declared gaps.
+    NOTHING WAS BROKEN BY THIS, and the row says so plainly: a union is a
+    vocabulary, not a promise, and no caller could have obtained evidence from an
+    unimplemented source. But a type member nobody implements READS as a
+    capability, and this repository fails builds over that shape elsewhere — a
+    launcher cited as deployment evidence (row 175), a field asserting attestation
+    it never checked (row 174). The same defect, in the source vocabulary.
+    `docs/agent/evidence-sources.json` now declares all six with an honest status —
+    `converter`, `proof_only`, `vocabulary_only` — and
+    `scripts/check-evidence-sources.mjs` enforces the bijection BOTH directions:
+    every union member has an entry, every entry is a union member, a `converter`
+    entry's named function must actually be exported from its named module, and a
+    weaker status may not name a converter and launder itself into the stronger
+    one. Registered in preflight and CI. Self-test 9/9, and falsified twice against
+    the real tree — adding `kandji` to the union without registering it fails, and
+    renaming the Fleet converter while the registry still claims it fails.
+    WHAT THIS IS NOT, stated so the owner's larger ask is not reported as done: it
+    does not make adding a source a no-code act. The converter is still a function
+    somebody writes, and row 176 measured that at ~26 lines. This makes adding one
+    a DECLARED act a gate can see, which is the precondition for a
+    configuration-driven registry rather than the thing itself.
+
+176. **"Adding a signal to the grid" is already the architecture, and I recommended
+    against it on a mis-framing.** — MEASURED 2026-08-25, principal-engineer. The
+    owner, asked whether to build live lanes for Velociraptor, Zeek and OpenVAS,
+    rejected the question: "it's a signal and it can be added to the grid for easier
+    overall smart automation orchestrator that just makes things work without having
+    to know how they do it." Measuring before arguing, he is describing something
+    that largely EXISTS.
+    `pnpm run proof:evidence-adapter` measures sourceSystems=3 and swapScenarios=2,
+    passes every assertion, and prints its own verdict: "source-agnostic: the engine
+    could not tell fleet from headwind from intune — only the provenance can."
+    `pnpm run proof:signal-discovery` passes over classify, auto-pull with an API,
+    admin-gate without one, and lifecycle. The central claim was ratified by
+    owner redirect on 2026-08-11 (intake row 77): the product must not care which
+    source produced the evidence so long as the adapter emits the same normalized
+    model.
+    THE PER-SOURCE COST, measured rather than estimated:
+    `fleetHostToDeviceManagementEvidence` is **26 lines** and
+    `headwindLabToDeviceManagementEvidence` is **28**, both in
+    `lib/integration-bridge/src/evidence.ts`. That is what a new source costs at the
+    seam. What is expensive is the LAB LANE around it — the container, the auth
+    archaeology, the wire capture — which is where the GLPI and Headwind bring-ups
+    actually spent their time.
+    WHERE MY RECOMMENDATION WAS WRONG. I advised holding all three on the ground
+    that they touch families frozen under DR-005. The freeze governs LAUNCH SCOPE —
+    which families are in Limited GA — not whether a deferred family may gain an
+    evidence source. A deferred family gaining a source stays deferred; it gains
+    evidence that it works, which is precisely what DR-013 blesses. Velociraptor,
+    Zeek and OpenVAS map to `edr-threat`, `network-nac` and `vuln-scan`, all of
+    which already exist. None of the three requires a new family.
+    WHAT IS ACTUALLY MISSING, stated narrowly so it is not confused with the vision:
+    the converters are hand-written functions in one file with no catalog and no
+    declarative registration. Adding a source is cheap but not yet a configuration
+    act, which is the gap between "26 lines" and "just build the workflow and the
+    process takes it". Whether to close that gap is a product call and is NOT
+    assumed here.
+
 175. **Four deployment claims cited the script that could deploy them.** — FIXED
     2026-08-25, secops-domain. `docs/agent/open-source-lab-registry.json` carries six
     entries claiming `deployedInLab: true`, and `check-lab-registry.mjs` gates every

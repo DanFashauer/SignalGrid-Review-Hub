@@ -935,8 +935,10 @@ such a case today.
 
 ## DR-018 — The skill that speaks for this repository lives outside it (2026-08-25)
 
-**Status: PROPOSED. This one is the owner's call, and it is the only open item
-from backlog row 169.**
+**Status: RATIFIED by the owner, 2026-08-25.** Asked as a direct choice — copy it
+in, leave it, or defer — the owner chose to copy it in. Vendored the same day to
+`.claude/skills/signalgrid-master/`, with the seventh row added to the
+first-party exception table in `.claude/skills/VENDORED.md`.
 
 **The question.** `signalgrid-master` is a 378-line skill in the owner's synced
 skills, at `~/.claude/skills/synced/signalgrid-master/`. It describes itself as
@@ -1002,6 +1004,13 @@ anything it asserts.
 a vendored copy becomes nameable the moment it lands and a deleted one becomes a
 FATAL dangling pointer — no new gate needed for that half. `scan:agent-plane`
 reports the synced original alongside it.
+
+**What ratification changed, concretely.** `check-org-roster.mjs` derives
+dispatchable executors from disk and now counts 34, `skill:signalgrid-master`
+among them — so a role may name it, and deleting the file becomes a FATAL
+dangling pointer rather than a silent gap. The synced original is untouched and
+still loads; `VENDORED.md` records that it is now a MIRROR and that the committed
+copy wins if the two disagree.
 
 **Reversal.** Delete `.claude/skills/signalgrid-master/` and remove its row from
 the `VENDORED.md` table. The synced original is untouched by this record and keeps

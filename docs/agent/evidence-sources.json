@@ -1,0 +1,64 @@
+{
+  "$comment": "Every evidence source the DeviceManagementEvidence contract can name, and what actually stands behind it. Never hand-drift this from lib/integration-bridge/src/evidence.ts — scripts/check-evidence-sources.mjs enforces the bijection in both directions and will fail the build. Adding a source means adding an entry here AND the converter it names; the gate refuses either one alone.",
+  "statuses": {
+    "converter": "A product converter exists and is exported from the named module. This is the only status that means SignalGrid can ingest this source.",
+    "proof_only": "The id is constructed inline inside a proof to exercise source-agnosticism. NOT ingestible — no product code produces it.",
+    "vocabulary_only": "The id is a member of the union with nothing behind it anywhere. Typeable, never produced. Kept because the union is a vocabulary, recorded because a type member nobody implements reads as a capability."
+  },
+  "sources": [
+    {
+      "id": "fleet",
+      "status": "converter",
+      "converter": "fleetHostToDeviceManagementEvidence",
+      "module": "lib/integration-bridge/src/evidence.ts",
+      "labRegistryRepo": "fleetdm/fleet",
+      "liveEvidence": "artifacts/sim-results/2026-08-22-source-independence-queue.json",
+      "note": "osquery-backed MDM. The open-source engineering lab source named in the launch criterion."
+    },
+    {
+      "id": "headwind",
+      "status": "converter",
+      "converter": "headwindLabToDeviceManagementEvidence",
+      "module": "lib/integration-bridge/src/evidence.ts",
+      "labRegistryRepo": null,
+      "liveEvidence": "artifacts/live-captures/headwind.json",
+      "note": "Rugged/shared-Android shape mirroring Headwind CE. Deliberately a shape and an adapter rather than a 52nd connector family — the breadth freeze stands and the contract is the point."
+    },
+    {
+      "id": "intune",
+      "status": "proof_only",
+      "converter": null,
+      "module": "scripts/src/evidence-adapter-proof.ts",
+      "labRegistryRepo": "microsoftgraph/msgraph-sdk-javascript",
+      "liveEvidence": null,
+      "note": "Constructed inline by proof:evidence-adapter to prove the engine cannot distinguish sources. The Graph PRODUCTION path reaches the device-management-health connector through graph-transport.ts instead, which does not emit this contract — so nothing in product code produces sourceSystem: \"intune\" today."
+    },
+    {
+      "id": "nanomdm",
+      "status": "proof_only",
+      "converter": null,
+      "module": "scripts/src/evidence-adapter-proof.ts",
+      "labRegistryRepo": "micromdm/nanomdm",
+      "liveEvidence": null,
+      "note": "Constructed inline in the same proof. Registered in the lab registry as REFERENCE_ARCHITECTURE, never deployed."
+    },
+    {
+      "id": "jamf",
+      "status": "vocabulary_only",
+      "converter": null,
+      "module": null,
+      "labRegistryRepo": null,
+      "liveEvidence": null,
+      "note": "Named in twelve files as a vendor SignalGrid reads ABOUT (uem, entitlement-binding, provisioning-order), and in none of them does it produce DeviceManagementEvidence. A commercial MDM with no adapter."
+    },
+    {
+      "id": "omnissa",
+      "status": "vocabulary_only",
+      "converter": null,
+      "module": null,
+      "labRegistryRepo": null,
+      "liveEvidence": null,
+      "note": "Appears only in the union declaration itself. Nothing else in the tree references it."
+    }
+  ]
+}

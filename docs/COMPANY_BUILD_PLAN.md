@@ -3482,6 +3482,136 @@ earlier — that is the loop working, not a reason to soften the record.
     an exact tracked file. Falsified — planting a directory claim back produces
     "a DIRECTORY standing in for 78 file(s)" and exit 1.
 
+160. **The published "independent" review is dated twelve months later than its
+    source, renumbered, and internally contradicts itself on a score.** — OPEN,
+    docs-writer. BLOCKING for anything public-facing. Found by reading the source
+    PDF in the founder's Drive and diffing it against the shipped deck; the shipped
+    values were then verified directly in the tree.
+    · SOURCE: "SignalGrid Second-Opinion Review", **v0.1, May 2025**.
+    · SHIPPED (`reviewData.ts:1-3`): `REVIEW_DATE = "May 2026"`,
+      `REVIEW_VERSION = "v0.3 — Intune / Entra Posture Proof + Live Tracker"`.
+    · The deck carries **TWO DIFFERENT Demo Readiness scores**: the scorecard block
+      reads **8**, a later block reads **7**. The source says 7. So one was raised,
+      and the deck now disagrees with itself in two places on the same page.
+    · The 8 is justified in its own rationale by "rc:smoke workflow is complete and
+      passing" — the gate row 157 proves does not exist.
+    · A dimension the outside reviewer never wrote — "Integration Surface Coverage",
+      3/10 — was added to a document presented as theirs.
+    · `index.html:7,10,14` still describes it as an **"independent"** review and
+      `:8` sets `robots: index, follow`, so it is publicly indexable.
+    WHY THIS IS THE MOST SERIOUS ITEM ON THE PUBLIC SURFACE: every other overclaim in
+    this repo is our own claim about our own work, and can be corrected by softening
+    it. This one attributes edited content to a third party. The date, the version,
+    the added dimension and the raised score are each defensible as an internal
+    working document; none of them is defensible under the word "independent" on an
+    indexable page.
+    FIX (docs-writer, and this is an owner-visible decision): either restore the
+    source's date, version and scores and mark every addition as SignalGrid's own
+    annotation, clearly separated from the reviewer's text — or drop the word
+    "independent", relabel the page as an internal self-assessment derived from a
+    May 2025 external review, and set `robots: noindex`. Resolve the 7-versus-8
+    contradiction either way. Row 157's `rc:smoke` removal is a prerequisite, not a
+    separate task.
+
+161. **Biometric and location privacy law is absent from the repo entirely.** —
+    OPEN, security-engineer. The founder's own architecture research names three
+    regimes that bear directly on a badge-plus-biometric custody product, and
+    `docs/` has zero hits for the operative ones: Illinois **BIPA** written notice
+    and release (0), **CCPA precise geolocation as sensitive personal information**
+    (0), GDPR Art. 9 special-category framing (1 file, in passing).
+    The source's operative rule is the part worth importing: **legal review precedes
+    DESIGN FREEZE, not go-live.** A product that fuses badge identity, physical
+    location and device custody can be architecturally committed to a position it
+    cannot lawfully ship before anyone asks.
+    NOTE THE BOUNDARY: this is a prompt to get human legal review, not a substitute
+    for it. CLAUDE.md already says Claude Code does not guarantee HIPAA or SOC 2 and
+    a human compliance review is required.
+
+162. **The buyer's own program document describes the ICP in vocabulary the repo
+    does not contain — and asks for the one thing the core refuses to do.** — OPEN,
+    positioning-messaging (primary), product/principal-engineer (the guardrail half).
+    `Enterprise_Mobility_Modernization` is a 200K+ device health-system mobility
+    transformation deck. `docs/` returns ZERO hits for: "mobility modernization",
+    "Access Central", "eSAF", "rogue tenant", "app consolidation", "Managed Apple
+    ID", "ABM domain federation", "Microsoft Tunnel", "Cisco NAC".
+    THE VALUABLE HALF: named pains (fragmented MDM estates and rogue tenants, a
+    legacy access process blocking automation, clinical app sprawl, support overhead
+    above benchmark), the IAM / Network-SASE / Mobility ownership split a
+    solutions-architect must design against, and the explicit leadership approval
+    gates a champion has to clear.
+    THE DANGEROUS HALF, and it must be recorded as a NEGATIVE requirement: the deck
+    asks for "AI triage and automated decision engines", "predictive routing &
+    anomaly detection", and "auto-remediation". That is probabilistic decisioning
+    plus autonomous remediation — precisely what `review:invariants` exists to keep
+    out of the decision path. This language WILL arrive from buyers, not just from
+    this document, so the guardrail belongs in
+    `docs/PUBLIC_MESSAGING_GUARDRAILS.md` before it is needed.
+    TWO FIGURES THAT MUST NEVER MIGRATE: "200K+ devices" is the CUSTOMER'S estate,
+    not SignalGrid's scale, and "40-50% app reduction" is that program's target, not
+    a result.
+    HANDLING: this reads as an employer-internal program document. Treat as
+    SOURCE-ONLY — it should not reach GitHub Pages or the website in any form.
+
+163. **The Gartner exposure already filed is worse than when it was filed.** —
+    OPEN, security-engineer. `docs/PUBLICATION_BOUNDARY.md:91` already records two
+    Gartner Peer Insights reports reproduced whole in `attached_assets/` in a public
+    repository, `OWNER_PENDING`, with no licence recorded. The Drive scan found what
+    is almost certainly that same pair. The material is genuinely useful — a
+    mandatory-feature list that draws the cleanest available line between IGA and
+    what SignalGrid is, four peer lessons usable as objection-handling, and an
+    install-base ordering for connector prioritisation — which is exactly why the
+    licence question needs answering rather than deferring.
+    RULE FOR EVERY TEAM UNTIL IT IS ANSWERED: extract facts and vendor names, never
+    reproduce passages, never cite ratings or "Customers' Choice" marks on any
+    public surface, and never add a third copy to the repo.
+
+164. **Five IGA vendors the competitive surface has never mentioned.** — OPEN,
+    competitive-analyst. `docs/research/IGA_ADJACENCY.md` names four vendors. The
+    Gartner category listing shows 115 products, and these have ZERO mentions
+    anywhere in `docs/`: Radiant Logic, Oracle Identity Governance, Symantec IGA
+    (Broadcom), OpenText NetIQ, IBM Security Verify Governance. Thinly covered:
+    Veza, Pathlock, One Identity, Netwrix, Lumos.
+    ALSO, and it sharpens the boundary rather than widening it: "provisioning via
+    integration to ITSM/ticketing to trigger manual fulfilment" is a MANDATORY IGA
+    feature. That sits close to our orchestration story, so `IGA_ADJACENCY.md`
+    should state explicitly that SignalGrid does not do entitlement fulfilment.
+
+165. **`tamperState` is an enum where the source material describes a graph.** —
+    OPEN, product/principal-engineer. `docs/EVENT_CONTRACT.md` carries
+    `tamperState ∈ {none, suspected, confirmed}` with no notion of HOW "suspected"
+    is reached. The architecture research names the constituent signals: latch
+    forced, unexpected bay open, device absent while charge negotiation is unstable,
+    repeated undock/redock within seconds, motion after closure, and tracker
+    movement with no matching PACS event. "tamper" appears in 62 files; "tamper
+    graph" in none.
+    This matters beyond modelling: row 83 proved that a tamper state arriving from
+    two sources could be silently overwritten. A derivation with named constituent
+    signals is auditable in a way a bare enum is not.
+
+166. **Two iOS CI workflows are documented that do not exist.** — OPEN,
+    mobile-native-engineer. NOTE. The Drive copy of `CODE_REVIEW.md` cites
+    `ios-code-quality.yml` and `swift-code-review.yml`; the repo has `ios-ci.yml`
+    with a `lint-and-security` job. Every path it gives is `ios/…` rather than
+    `native/ios/…`, against CLAUDE.md's rule. Importing it as-is would assert two CI
+    workflows that are not there.
+    WORTH TAKING FROM IT: the human-facing PR checklist for the iOS surface, which
+    the repo does not have — the seven custom SwiftLint rules it documents ALL exist
+    already in `native/ios/.swiftlint.yml`, so only the checklist is new.
+    ALSO: it states "certificate pinning: enable for production" and "ALL API
+    requests signed with HMAC" as present-tense guarantees; pinning is an env-var
+    opt-in (`CERT_PINNING_ENABLED`), off unless set.
+
+167. **The Fleet tradeoff is decided but never written down.** — OPEN,
+    product/principal-engineer. NOTE. CLAUDE.md names Fleet as "the chosen MDM". The
+    founder's own architecture research rates Fleet as better suited to
+    organisations valuing openness and infrastructure-as-code over the deepest
+    traditional mobile-workflow features, and names Jamf or Intune as the
+    conservative choice for Apple estates. Fleet also does not appear in the Gartner
+    endpoint-management listing — stated carefully, that listing showed 40 of 78
+    products with a region filter, so it is corroboration and NOT proof of absence.
+    The choice may well be right. What is missing is the tradeoff written beside it,
+    so it reads as a decision rather than an assumption.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

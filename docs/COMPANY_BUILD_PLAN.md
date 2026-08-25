@@ -3896,6 +3896,90 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+178. **Four roles switched on for the first time, and the first shift of each found
+    something the gates do not see.** — FIXED in part 2026-08-25, program-manager.
+    `check-surface-ownership.mjs` reports 0 unowned files of 2,347 and
+    `check-review-coverage.mjs` reports 389 read. Both true at once, and the gap
+    between them was invisible because "assigned" reads as "handled".
+    `scripts/role-work-queue.mjs` (`pnpm run role:queue`) derives, per role, the
+    files it owns that nobody has read, ordered by consequence. Reported, never
+    fatal — a queue that fails the build would make declaring a new surface a red
+    build, which teaches a repository to declare less.
+    THE QUEUE'S FIRST VERSION WAS WRONG in the way this document keeps recording:
+    it ranked by path prefix, so `.gitkeep` and a tsconfig sat at the top of
+    qa-engineer's list and a PNG at the top of docs-writer's. Ranking a real
+    property, answering a different question. It now asks whether a file carries
+    logic at all, reusing `isReviewable` from the coverage gate rather than
+    restating it.
+    FOUR SHIFTS RAN. qa-engineer, security-engineer, agent-platform-engineer and
+    docs-writer — the last three had never been activated. What each found is
+    recorded in rows 179-181; the pattern across them is that every finding was a
+    claim outrunning its evidence, and not one was catchable by an existing gate.
+    FIXED IN THIS PASS: the benchmark-selection fail-open (row 179), the
+    permission-enforcement claim and its tautological control (row 180), the
+    publication-boundary misclassification and the absent mirror-drift check (row
+    181), and the Graph permission boundary's fifteen invented scopes.
+    STILL OPEN and deliberately not fixed here, each needing its own decision: the
+    passkey substitution guard sitting on the wrapper rather than the primitive;
+    device-attestation being the only connector of five with no report-integrity
+    axis; `mutation-guard.mjs` registering `device-attestation` index-only so the
+    file granting its top assurance tier is never mutated; and the two structural
+    gate gaps docs-writer measured — `check-launch-claims.mjs` reads zero
+    `docs/*.md` in a PUBLIC repository, and `check-proof-figures.mjs` cannot see a
+    figure below 1,000, which is why every fossil it found survived.
+
+179. **A malformed version erased the not-in-catalog finding.** — FIXED 2026-08-25,
+    qa-engineer. `lib/integrations/src/integrations/benchmark-selection/benchmark-selection-connector.ts`
+    read
+    `versionShapeBad ? "unknown" : deriveRecognition(...)`, skipping the catalog
+    lookup whenever the cited version was not a numeric triple. But
+    `not_in_catalog` falls out of `versions.size === 0` — a TITLE-only test that
+    never consults the version. So a report citing an unknown title AND an
+    unparseable version lost the title finding, dropping the action from `alert` to
+    `step_up` and deleting `benchmark_not_in_catalog` from the evidence.
+    Adding a SECOND defect to a report made the answer softer. Measured rather than
+    reasoned, and falsified side by side: with the bug, version `9.9.9` gives
+    `not_in_catalog` while `3.0` on the same report gives `unknown`; fixed, both
+    give `not_in_catalog` and `reportIntegrity` still reports `malformed`
+    independently. `pnpm run proof:benchmark-selection` stays 95/95 throughout — which is the point
+    worth noting: the proof never covered this, so a green proof was not evidence
+    either way.
+
+180. **The permission gate credits a call inside `if (false)`.** — MITIGATED
+    2026-08-25, security-engineer. `check-permission-enforcement.mjs` matches
+    `authorize(principal, "scope")` with a regex over file text. It has no call
+    graph and no reachability analysis, so a syntactically-present call in an
+    unreachable branch of an unimported function satisfies it — proven by planting
+    exactly that in a scratch copy. Its header claimed the scope was "required by a
+    surface", which is more than a regex can establish.
+    The header now states the measurement and its ceiling, and says plainly that
+    closing the reachability half needs a real parser — the same conclusion
+    `check-module-init-order.mjs` already reached and declined.
+    Its self-test was also tautological: `!enforced.has("nonexistent:scope")` is
+    true for any string nobody typed and never reached the reporting path. The
+    verdict is now a pure exported function the self-test drives over a synthetic
+    corpus, asserting all four arms. Falsified twice; each mutation caught.
+
+181. **The org published its own skill under another author's licence, and named a
+    drift check that did not exist.** — FIXED 2026-08-25, agent-platform-engineer,
+    on this role's first ever shift. Both defects were introduced the same day, by
+    the DR-018 vendoring, and both survived a green build.
+    `scripts/publication-boundary.mjs` classifies `.claude/skills` as
+    `third_party_intake` — "obra/superpowers, 14 skills vendored unmodified under
+    MIT © 2025 Jesse Vincent". Six first-party skills carry carve-outs;
+    `signalgrid-master`, added hours earlier, did not. So this repository published
+    its own orchestration skill under Jesse Vincent's grant. The gate stayed green
+    because it proves every path is CLASSIFIED, never that a path is classified
+    CORRECTLY — the same distinction as row 175's launcher.
+    Separately, `.claude/skills/VENDORED.md` said `scan:agent-plane` "will say so
+    when the two disagree". It did not: the scanner read three roots under the home
+    directory and never opened the committed copy. The two were byte-identical at
+    the time, so nothing had drifted — the control was simply absent, which is the
+    harder half to notice. Now implemented and falsified by planting a divergence.
+    The shift also verified what was RIGHT, which is why the finding is credible:
+    all 51 vendored skill files hash byte-identical to obra/superpowers at the
+    pinned commit, and all 9 vendored agents match their source.
+
 177. **The evidence contract advertised six sources and implemented two.** —
     FIXED 2026-08-25, principal-engineer. Found while building the source registry
     the owner asked for, which is the registry earning its place before it shipped.

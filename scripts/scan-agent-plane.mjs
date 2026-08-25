@@ -87,7 +87,9 @@ export function scanSkillRoot(root, io) {
     skills.push({
       name, path: md, readable: true, cites, local, missing, unresolved,
       namesRepo: /SignalGrid-Review-Hub/.test(body),
-      lines: body.split("\n").length,
+      // `wc -l` semantics: a trailing newline terminates the last line rather than
+      // starting an empty one. split("\n").length reported 379 for a 378-line file.
+      lines: body.replace(/\n$/, "").split("\n").length,
     });
   }
   return { root, scanned: true, skills };
@@ -177,6 +179,44 @@ function selfTest() {
 
 if (process.argv.includes("--self-test")) process.exit(selfTest());
 
+/**
+ * Skills that exist BOTH here and in the user's synced set, per DR-018. The
+ * repository copy is authoritative; the synced one is a mirror.
+ *
+ * `.claude/skills/VENDORED.md` claimed this scanner "will say so when the two
+ * disagree" from the day the mirror landed. It did not — the scanner read three
+ * roots under the home directory and never opened the in-repo copy, so the
+ * safeguard named in the document did not exist. Found by the first
+ * agent-platform-engineer shift, 2026-08-25, on the same day the sentence was
+ * written. The two were byte-identical at the time, so nothing had drifted; the
+ * control was simply absent, which is the harder half to notice.
+ */
+const MIRRORED = [
+  { id: "signalgrid-master", inRepo: ".claude/skills/signalgrid-master/SKILL.md", synced: join(homedir(), ".claude/skills/synced/signalgrid-master/SKILL.md") },
+];
+
+function reportMirrorDrift() {
+  console.log("\nMirrored skills — the repository copy is authoritative (DR-018):");
+  for (const m of MIRRORED) {
+    const here = existsSync(join(repo, m.inRepo)) ? readFileSync(join(repo, m.inRepo), "utf8") : null;
+    const there = existsSync(m.synced) ? readFileSync(m.synced, "utf8") : null;
+    if (here === null) {
+      console.log(`  NOT IN REPO   ${m.id} — the authoritative copy is missing; the mirror cannot be checked against it`);
+      continue;
+    }
+    if (there === null) {
+      console.log(`  no mirror     ${m.id} — nothing synced on this machine to compare against`);
+      continue;
+    }
+    if (here === there) {
+      console.log(`  identical     ${m.id} (${here.replace(/\n$/, "").split("\n").length} lines)`);
+    } else {
+      console.log(`  DIVERGED      ${m.id} — the synced copy differs from the committed one.`);
+      console.log("                The committed copy wins. Correct the synced copy, not this file.");
+    }
+  }
+}
+
 const ROOTS = [
   join(homedir(), ".claude", "skills"),
   join(homedir(), ".claude", "skills", "synced"),
@@ -210,6 +250,8 @@ for (const root of ROOTS) {
     for (const u of s.unresolved) console.log(`      unresolved: ${u} (extensionless — may be prose)`);
   }
 }
+
+reportMirrorDrift();
 
 console.log(`\n${claiming} out-of-repo skill(s) speak for this repository. ${stale} stale citation(s). ${unscanned} root(s) NOT SCANNED.`);
 if (claiming > 0) {

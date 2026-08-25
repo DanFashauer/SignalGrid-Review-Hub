@@ -3896,6 +3896,59 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+172. **An evidence artifact asserts six safety properties that nothing measures.** —
+    OPEN, qa-engineer. `.github/workflows/connector-emulator-smoke.yml` generates an
+    evidence manifest — uploaded as a build artifact, never committed, so it is not
+    a path in this tree — carrying a `publicSafety` array that states, as literal
+    data: synthetic fixtures only, no live vendor calls, no secrets, no tenant IDs,
+    no customer data, no PHI/PII.
+    `fetch`, no URL and no socket — and not one of them is measured. They are a
+    string literal in a workflow file, written once and re-emitted on every run.
+    Why it matters more here than in prose: this is an EVIDENCE file, uploaded as a
+    build artifact, and this repository's whole position is that provenance is the
+    product. A reader downstream cannot distinguish a property that was checked from
+    a sentence somebody typed, because the artifact presents both identically. If
+    the harness ever grew a live call — the exact change this repo's connector work
+    keeps making elsewhere, deliberately — the manifest would keep saying there
+    isn't one, and would say it with a run id and a commit sha beside it.
+    THE CHEAP FIX IS NOT "delete the claims", because the claims are the useful
+    part. It is to derive them: a static assertion that the harness and its
+    scenario modules contain no network primitive is decidable and is the one that
+    matters most, since the other five follow from a fixture-only run. Emit the
+    result of that check rather than a literal, and emit it as a checked property
+    with the check named, so the artifact says what was verified rather than what
+    was intended.
+
+171. **The daily rot check watches a hand-picked tenth of the gate suite, and its
+    own header called that the full suite.** — OPEN, sre. Found by reading
+    `.github/` rather than by a gate. `scripts/preflight.mjs` registers 179 gates
+    and `review-hub-ci.yml` runs every one per PR, kept in step by
+    `check-preflight-ci-parity.mjs`. `scheduled-verification.yml` — the only thing
+    watching the default branch BETWEEN pull requests — runs about ten named
+    proofs plus the breadth lane, and never invokes preflight.
+    The header claim is now corrected: it said "Runs the full deterministic gate
+    suite" and now says what it runs. Worth noting how it survived — the JOB was already
+    renamed for exactly this reason ("Full gate suite" while running about ten), and
+    the prose four lines above the rename outlived it. The visible label got
+    corrected and the comment did not.
+    THE SELECTION ITSELF IS THE OPEN PART, and the obvious fix is wrong twice over.
+    Adding `node scripts/preflight.mjs` to the daily job would fail every night:
+    `check-ci-liveness.mjs` is deliberately FATAL in CI when it cannot reach the
+    Actions API, and this workflow's permissions are `contents: read` and
+    `issues: write` with no `actions: read` — so the change would open a fresh
+    tracking issue every morning, which is the fastest way to teach everyone to
+    ignore the tracking issue. And it would be mostly redundant even if it worked:
+    the large majority of the 179 are deterministic over the tree and cannot rot
+    without a commit, so running them nightly repeats what the PR lane already did
+    on the same commit.
+    WHAT THE SELECTION SHOULD BE DERIVED FROM, since a hand-picked list is the
+    fossil shape this repo derives scope to avoid everywhere else: the gates that
+    can go red WITHOUT a commit. Those are the time-dependent ones (expiring pins,
+    freshness windows, figure guards reading generated artifacts) and the
+    externally-dependent ones (vulnerability data, licence policy, the liveness
+    check itself). Deriving that set needs a way for a gate to declare which kind it
+    is, which is the actual work here and is why this is filed rather than done.
+
 170. **A row's status can be WRONG in either direction, and no gate can tell.** —
     OPEN, program-manager. This session produced both failures. Four rows (83, 89,
     134, 135) read `open` for fixes that had already merged in PRs #309-#312; row 107

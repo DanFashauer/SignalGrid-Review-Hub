@@ -1,9 +1,27 @@
 name: Scheduled Verification
 
-# Report-only "continuous verification" bot. Runs the full deterministic gate
-# suite on a schedule (and on demand) and, if anything regresses, opens or
+# Report-only "continuous verification" bot. Runs a SELECTED set of deterministic
+# gates on a schedule (and on demand) and, if anything regresses, opens or
 # updates a single tracking issue. It NEVER pushes code or changes the repo —
 # it only reports, so a green main stays trustworthy between PRs.
+#
+# NOT the full suite, and this line used to say it was. `scripts/preflight.mjs`
+# registers 179 gates and `review-hub-ci.yml` runs every one of them per PR, kept
+# in step by `check-preflight-ci-parity.mjs`. This workflow runs the named steps
+# below and nothing else. The job was already renamed once for the same reason —
+# it read "Full gate suite" while running about ten — and this header outlived
+# that correction, which is how a fossil survives: the visible label gets fixed
+# and the prose above it does not.
+#
+# Whether the selection is the RIGHT one is an open question, filed as backlog
+# row 171. Most of the 179 are deterministic over the tree and cannot rot without
+# a commit, so running them daily would mostly repeat what the PR lane already
+# did; the ones that genuinely rot are the time-dependent and
+# externally-dependent ones. The selection below is hand-picked rather than
+# derived from that distinction. Note also that simply adding preflight here
+# would fail every night: `check-ci-liveness.mjs` is FATAL in CI when it cannot
+# reach the Actions API, and this workflow's permissions do not include
+# `actions: read`.
 #
 # Note: GitHub runs `schedule` triggers only on the repository's default branch,
 # so this fires once merged to the default branch. Use "Run workflow"

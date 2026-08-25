@@ -1,6 +1,6 @@
 {
   "note": "DEBT CEILING, not a high-water mark: closed backlog rows citing nothing checkable. A RISE is fatal; a drop is recorded here automatically. Never hand-edit; the gate writes it.",
-  "closedRowsWithoutEvidence": 25,
+  "closedRowsWithoutEvidence": 24,
   "rows": [
     "10",
     "13",
@@ -24,7 +24,6 @@
     "125",
     "126",
     "133",
-    "136",
     "160",
     "51"
   ]

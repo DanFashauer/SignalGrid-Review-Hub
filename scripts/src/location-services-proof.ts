@@ -19,8 +19,9 @@ import {
   type LocationFixRaw,
   type LocationVerdict,
   type NormalizedLocationSignal,
+  type LocationTransport,
 } from "@workspace/integrations/location-services";
-import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { checkLiveGateIsolated, checkCollectionRefusals } from "./lib/live-gate.js";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
@@ -187,6 +188,18 @@ checkLiveGateIsolated({
     LOCATION_ACCESS_TOKEN: "t",
   },
 });
+
+
+// COLLECTION SHAPE and PAGE-CAP REFUSAL — both survived mutation until 2026-08-25.
+// Shared helper, one statement of a rule nine families implement identically.
+await checkCollectionRefusals({
+  check,
+  family: "location-services",
+  listWith: (t, pageLimit) => () =>
+    new LocationServicesConnector({ accessToken: "t", baseUrl: BASE_URL, pageLimit }, t as unknown as LocationTransport).listFixes(),
+  codeOf: (e) => (e instanceof LocationConnectorError ? e.code : undefined),
+});
+
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

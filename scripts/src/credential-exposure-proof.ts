@@ -25,8 +25,9 @@ import {
   normalizeFinding,
   resolveCredentialExposureConnector,
   type CredentialExposureRaw,
+  type CredentialTransport,
 } from "@workspace/integrations/credential-exposure";
-import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { checkLiveGateIsolated, checkCollectionRefusals } from "./lib/live-gate.js";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
@@ -246,6 +247,17 @@ checkLiveGateIsolated({
     SIGNALGRID_LIVE_INTEGRATIONS: "true",
     CREDENTIAL_EXPOSURE_ACCESS_TOKEN: "t",
   },
+});
+
+
+// COLLECTION SHAPE and PAGE-CAP REFUSAL — both survived mutation until 2026-08-25.
+// Shared helper, one statement of a rule nine families implement identically.
+await checkCollectionRefusals({
+  check,
+  family: "credential-exposure",
+  listWith: (t, pageLimit) => () =>
+    new CredentialExposureConnector({ accessToken: "t", baseUrl: BASE_URL, pageLimit }, t as unknown as CredentialTransport).listDevices(),
+  codeOf: (e) => (e instanceof CredentialConnectorError ? e.code : undefined),
 });
 
 const total = passed + failures.length;

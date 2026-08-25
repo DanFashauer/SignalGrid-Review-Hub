@@ -19,8 +19,9 @@ import {
   normalizeEndpoint,
   resolveEdrThreatConnector,
   type EndpointThreatRaw,
+  type EdrTransport,
 } from "@workspace/integrations/edr-threat";
-import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { checkLiveGateIsolated, checkCollectionRefusals } from "./lib/live-gate.js";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
@@ -263,6 +264,17 @@ checkLiveGateIsolated({
     SIGNALGRID_LIVE_INTEGRATIONS: "true",
     EDR_ACCESS_TOKEN: "t",
   },
+});
+
+
+// COLLECTION SHAPE and PAGE-CAP REFUSAL — both survived mutation until 2026-08-25.
+// Shared helper, one statement of a rule nine families implement identically.
+await checkCollectionRefusals({
+  check,
+  family: "edr-threat",
+  listWith: (t, pageLimit) => () =>
+    new EdrThreatConnector({ accessToken: "t", baseUrl: BASE_URL, pageLimit }, t as unknown as EdrTransport).listEndpoints(),
+  codeOf: (e) => (e instanceof EdrConnectorError ? e.code : undefined),
 });
 
 const total = passed + failures.length;

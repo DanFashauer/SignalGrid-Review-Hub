@@ -185,3 +185,60 @@ export async function checkDefaultTransport(probe: TransportProbe): Promise<void
     typeof ok === "object" && ok !== null && (ok as Record<string, unknown>)["ok"] === true,
   );
 }
+
+/** A paging connector's two REFUSALS, which every family in this fabric implements
+ *  identically and which — measured 2026-08-25 — nine of them had no test for.
+ *
+ *  Both branches are places where a READ FAILURE would otherwise read as a CLEAN
+ *  DEVICE, and for a posture fabric that is the worst available direction to be
+ *  wrong in. A device missing from a truncated inventory looks like a device with
+ *  no findings; a collection whose `value` is not an array spreads to nothing and
+ *  looks like a device with no findings. Neither is a device with no findings.
+ *
+ *  THIS IS A HELPER RATHER THAN NINE COPIES ON PURPOSE. The rule is one rule, so it
+ *  gets one statement; nine hand-written copies are nine things to drift, and this
+ *  repository fixed a bug earlier the same day whose whole cause was a guard kept in
+ *  two places. Pass an adapter naming your family's connector and list method.
+ */
+export async function checkCollectionRefusals(probe: {
+  check: (name: string, ok: boolean) => void;
+  family: string;
+  /** Build the family's connector over the supplied transport and page limit, and
+   *  return a thunk that performs its paging list call. */
+  listWith: (transport: FetchLikeTransport, pageLimit: number) => () => Promise<unknown[]>;
+  codeOf: (err: unknown) => string | undefined;
+}): Promise<void> {
+  const { check, family, listWith, codeOf } = probe;
+  const respond = (body: unknown, status = 200) =>
+    Promise.resolve({ status, ok: status < 400, json: async () => body });
+
+  const codeFrom = async (run: () => Promise<unknown[]>): Promise<string | undefined> => {
+    try {
+      await run();
+      return undefined;
+    } catch (err) {
+      return codeOf(err);
+    }
+  };
+
+  check(
+    `${family}: a collection whose \`value\` is not an array is refused, never read as zero results`,
+    (await codeFrom(listWith(() => respond({ value: { not: "an array" } }), 50))) === "bad_response",
+  );
+  check(
+    `${family}: hitting the page cap with a cursor still in hand refuses, never returns a partial inventory`,
+    (await codeFrom(listWith(() => respond({ value: [], nextPageToken: "always-more" }), 2))) === "incomplete_read",
+  );
+  // NON-VACUITY. Without this, a connector that refused every input would satisfy
+  // both assertions above and look maximally safe.
+  let clean = false;
+  try {
+    clean = (await listWith(() => respond({ value: [] }), 2)()).length === 0;
+  } catch {
+    clean = false;
+  }
+  check(`${family}: ...and a well-formed terminating collection still reads clean, so those are refusals`, clean);
+}
+
+/** The transport shape every paging connector in this fabric accepts. */
+export type FetchLikeTransport = (req: never) => Promise<{ status: number; ok: boolean; json: () => Promise<unknown> }>;

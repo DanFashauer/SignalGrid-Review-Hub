@@ -411,6 +411,61 @@ await checkDefaultTransport({
   codeOf: (err) => (err instanceof MacosPostureConnectorError ? err.code : undefined),
 });
 
+
+// SYSTEM-EXTENSION TRUSTWORTHINESS — two branches survived mutation until
+// 2026-08-25, and the first is a fail-open in the direction this fabric cares
+// about most.
+//
+// (1) `available !== true || reliable !== true`. A macOS system-extension section
+// that reports ITSELF unavailable or unreliable must raise the bar, not be read as
+// a trustworthy count. With the guard gone, a source saying "do not trust these
+// numbers" has its numbers believed, and a device with unreadable extension state
+// grades as a device with clean extension state.
+const sysext = (block: unknown) =>
+  normalizeReport("d", { system_extensions: block } as never);
+for (const [label, blk] of [
+  ["available:false", { available: false, reliable: true, residual_count: 0, extensions: [] }],
+  ["reliable:false", { available: true, reliable: false, residual_count: 0, extensions: [] }],
+  ["both false", { available: false, reliable: false, residual_count: 0, extensions: [] }],
+  ["available missing", { reliable: true, residual_count: 0, extensions: [] }],
+] as const) {
+  const v = sysext(blk);
+  check(`macos: a system-extension section reporting ${label} is unreliable, and yields no counts`,
+    v.sysextUnreliable === true && v.sysextResidual === null && v.sysextConflict === null);
+}
+// NON-VACUITY: an affirmatively available AND reliable section must still produce
+// real counts, or the four checks above would pass for a normalizer that distrusts
+// everything.
+const trusted = sysext({ available: true, reliable: true, residual_count: 0, extensions: [] });
+check("macos: ...while an available and reliable section does produce counts",
+  trusted.sysextUnreliable === false && trusted.sysextResidual === 0 && trusted.sysextConflict === false);
+
+// (2) `typeof x.category === "string"`. Without it, a non-string category reaches
+// `.toLowerCase()` and the whole read throws — a malformed extension entry taking
+// down the entire posture report rather than being skipped as unrecognisable.
+const oddCategories = sysext({
+  available: true, reliable: true, residual_count: 0,
+  extensions: [
+    { category: 42, status: "active", enabled: true },
+    { category: null, status: "active", enabled: true },
+    { category: { nested: "endpoint_security" }, status: "active", enabled: true },
+    { status: "active", enabled: true },
+  ],
+});
+check("macos: a non-string extension category is skipped, not thrown on",
+  oddCategories.sysextUnreliable === false && oddCategories.sysextConflict === false);
+// NON-VACUITY: two genuine endpoint-security extensions must still register as a conflict.
+const twoReal = sysext({
+  available: true, reliable: true, residual_count: 0,
+  extensions: [
+    { category: "endpoint_security", status: "active", enabled: true },
+    { category: "ENDPOINT_SECURITY_extra", status: "Active", enabled: true },
+  ],
+});
+check("macos: ...while two active endpoint-security extensions are still a conflict",
+  twoReal.sysextConflict === true);
+
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

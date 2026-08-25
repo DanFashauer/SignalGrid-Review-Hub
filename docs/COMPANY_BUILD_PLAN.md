@@ -4077,10 +4077,14 @@ earlier — that is the loop working, not a reason to soften the record.
     `session-start-hook` skill instructs against `.claude/settings.json` and
     `.claude/hooks/session-start.sh`, neither of which exists in this tree.
     WHAT IS STILL OPEN: the reporter makes the plane visible; it does not put it
-    under review. Vendoring `signalgrid-master` into `.claude/skills/` would —
-    at the cost of a second copy that can diverge from the synced original, which
-    is the failure `VENDORED.md` already documents once. That tradeoff is the
-    owner's call and is not made here.
+    under review. That tradeoff is now written up as **DR-018 (PROPOSED)** in
+    `docs/DECISION_RECORDS.md`, with both options, what was measured, a
+    recommendation and a reversal condition. It recommends vendoring, on the
+    ground that vendoring moves which copy is AUTHORITATIVE rather than creating
+    the divergence risk: drift between two copies is detectable and
+    `scan:agent-plane` already watches for it, while unreviewability is not
+    detectable from inside the repository at all. The call itself is the owner's
+    and has not been made.
 
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —

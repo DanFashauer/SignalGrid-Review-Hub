@@ -932,3 +932,80 @@ condition becomes a review rather than a commit note. The collision log in
 such a case today.
 
 **Status: owner-directed, 2026-08-23.**
+
+## DR-018 — The skill that speaks for this repository lives outside it (2026-08-25)
+
+**Status: PROPOSED. This one is the owner's call, and it is the only open item
+from backlog row 169.**
+
+**The question.** `signalgrid-master` is a 378-line skill in the owner's synced
+skills, at `~/.claude/skills/synced/signalgrid-master/`. It describes itself as
+"SignalGrid's first-party orchestration layer", publishes an authority order for
+this exact repository, and every Claude session in this account loads it. It is
+not in the repository. Should it be?
+
+**What was measured, on 2026-08-25, before any of the argument below.** All 18
+repository-relative paths it cites resolve in this tree. It pins no figure — every
+reference to a decision record is written as a conditional ("unless superseded by
+a later record"), which is why it has not gone stale. It repeats none of the six
+entries in `docs/agent/FALSE_CLAIMS.json`. It ranks itself SEVENTH in its own
+authority order, below `AGENTS.md`, `CLAUDE.md` and the ratified decision records.
+Its frontmatter declares `license: MIT` and `author: SignalGrid`, so it is
+first-party and carries a grant this public repository can republish.
+
+**So the content is not the problem, and that is the whole point.** It is accurate
+today and nothing in this tree established that — the audit did, by hand, once.
+`scripts/check-org-roster.mjs` derives every dispatchable executor from disk and
+reads exactly two directories under the repository root, `.claude/agents` and
+`.claude/skills`. That scope is deliberate and correct: a roster may only name an
+executor that is committed and reviewable. It also means this file cannot be seen
+from here. It changes with no diff, no review, and no gate. `CLAUDE.md` could be
+edited tomorrow to contradict it and both documents would read as correct in
+isolation.
+
+The asymmetry matters more than it first sounds: **21 of the 42 roles in
+`docs/agent/org-roster.json` already name a `skill:` executor.** Skills are
+first-class authority in this org, and every other one of them is a committed
+file.
+
+**Option A — vendor it into `.claude/skills/signalgrid-master/`.**
+It becomes reviewable, diffable, and nameable as an executor. The cost is a second
+copy that can drift from the synced original, and `VENDORED.md` documents that
+exact failure happening here already: its "one exception" note was true the day it
+was written, silently became false when five first-party skills landed two days
+later, and a re-vendor following it literally would have overwritten four of the
+org's executors.
+
+**Option B — leave it where it is.**
+One copy, no drift. `pnpm run scan:agent-plane` (added with row 169) reports it and
+any other out-of-repo skill that speaks for this repository, including citations
+that stop resolving. But a reporter is not a review, and it is local-only — CI has
+no `~/.claude`, so no build can ever depend on it.
+
+**The recommendation, and the reason it is not a coin flip.** Take Option A.
+Vendoring does not create the divergence risk so much as move which copy is
+AUTHORITATIVE. Today the unreviewable copy is authoritative and the repository has
+no say. After vendoring, the reviewable copy is authoritative and the synced one
+becomes a convenience mirror — which `scan:agent-plane` already watches and will
+report when the two disagree. Drift between them is detectable; unreviewability is
+not detectable from inside the repository at all, which is the property that
+actually bites. Add the row to `VENDORED.md`'s first-party exception table in the
+same commit, making seven, because that table is what a future re-vendor reads.
+
+**What this does NOT decide.** Nothing about the skill's content. If it is
+vendored it is vendored as it stands, and any change to what it says is a separate,
+reviewable commit. It also does not promote the skill's authority: it stays seventh
+in its own order, below `CLAUDE.md`, and vendoring must not be read as ratifying
+anything it asserts.
+
+**Mechanical verification.** `check-org-roster.mjs` derives executors from disk, so
+a vendored copy becomes nameable the moment it lands and a deleted one becomes a
+FATAL dangling pointer — no new gate needed for that half. `scan:agent-plane`
+reports the synced original alongside it.
+
+**Reversal.** Delete `.claude/skills/signalgrid-master/` and remove its row from
+the `VENDORED.md` table. The synced original is untouched by this record and keeps
+working, so reversal costs one commit and loses nothing. Reverse it if the two
+copies are found to have diverged twice without anyone noticing, which would mean
+the mirror is being edited in preference to the committed file and the vendored
+copy has become the fiction rather than the source.

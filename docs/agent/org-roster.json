@@ -16,7 +16,7 @@
       ],
       "activated": "2026-08-19",
       "produced": "docs/DECISION_RECORDS.md DR-001..DR-003",
-      "nextAction": "Row 73: qa-engineer's surface is lib/** plus api-server plus tests — 570 files — while its executor skill:signalgrid-reviewer is forbidden to write source. Both ownership gates count those files as owned, so they read as covered while no writer can touch them. Decide: mark the surface review-only in the roster schema, or move the write half to a role that can discharge it."
+      "nextAction": "Row 81 (NEW, and the higher-value item): decide the disposition of declared-versus-observed divergence as a first-class signal. The gap is measured — decisionEngine.ts:120 reads declaredState and fails closed on stale, but observedState matches ZERO files in the core, so the engine cannot express that a declaration and an observation DISAGREE. device-attestation/evaluate.ts already does exactly this in one dimension and calls the contradiction malformed-or-tampered. Question to settle: is divergence a general signal shape, or does it stay per-family? Doctrine hint: a contradiction should tighten at least as hard as an absence. THEN row 73: qa-engineer's surface is 570 files its executor is forbidden to write."
     },
     {
       "id": "qa-engineer",

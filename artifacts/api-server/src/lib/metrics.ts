@@ -18,14 +18,55 @@ function fmt(labels: Labels): string {
   return `{${parts.join(",")}}`;
 }
 
+/**
+ * The single bucket every unlabelable route collapses into.
+ *
+ * Exported so the middleware and the proof name the SAME string — a second
+ * literal would be a second thing to drift.
+ */
+export const OTHER_ROUTE = "other";
+
+/**
+ * Hard ceiling on distinct label tuples per metric.
+ *
+ * A SECOND NET, deliberately. The middleware now labels from the route Express
+ * matched, so unbounded growth should be impossible at the source — but the source
+ * is one caller, and these are exported instruments any future caller can reach.
+ * The docblock on `normalizeRoute` below CLAIMED the label stayed bounded and
+ * nothing enforced it; 150 unauthenticated requests grew the exposition 88x.
+ *
+ * When the ceiling is reached a new tuple is folded into a single overflow series
+ * rather than dropped, so the count stays truthful and the overflow is VISIBLE in
+ * the exposition instead of silently missing. 512 is far above any real route x
+ * method x status product this server can produce and far below anything that
+ * threatens memory.
+ */
+const MAX_SERIES_PER_METRIC = 512;
+const OVERFLOW_LABELS: Labels = { route: OTHER_ROUTE, overflow: "true" };
+
+/**
+ * Fold a label set into the overflow series once a metric is at its ceiling.
+ * Returns the key to use and the labels to store under it.
+ */
+function boundLabels(
+  values: Map<string, { labels: Labels; v: number }> | Map<string, unknown>,
+  labels: Labels,
+): { k: string; labels: Labels } {
+  const k = key(labels);
+  if (values.has(k) || values.size < MAX_SERIES_PER_METRIC) {
+    return { k, labels };
+  }
+  return { k: key(OVERFLOW_LABELS), labels: OVERFLOW_LABELS };
+}
+
 class Counter {
   private values = new Map<string, { labels: Labels; v: number }>();
   constructor(readonly name: string, readonly help: string) {}
   inc(labels: Labels = {}, by = 1): void {
-    const k = key(labels);
-    const cur = this.values.get(k) ?? { labels, v: 0 };
+    const bound = boundLabels(this.values, labels);
+    const cur = this.values.get(bound.k) ?? { labels: bound.labels, v: 0 };
     cur.v += by;
-    this.values.set(k, cur);
+    this.values.set(bound.k, cur);
   }
   render(): string {
     const out = [`# HELP ${this.name} ${this.help}`, `# TYPE ${this.name} counter`];
@@ -52,11 +93,19 @@ class Histogram {
   private data = new Map<string, { labels: Labels; counts: number[]; sum: number; count: number }>();
   constructor(readonly name: string, readonly help: string, readonly buckets: number[]) {}
   observe(labels: Labels, value: number): void {
-    const k = key(labels);
-    let entry = this.data.get(k);
+    // Same ceiling as Counter. The histogram is the more expensive of the two —
+    // each new series retains an 11-element bucket array — so it is the one that
+    // grew the exposition fastest when the label was caller-controlled.
+    const bound = boundLabels(this.data, labels);
+    let entry = this.data.get(bound.k);
     if (!entry) {
-      entry = { labels, counts: new Array(this.buckets.length).fill(0), sum: 0, count: 0 };
-      this.data.set(k, entry);
+      entry = {
+        labels: bound.labels,
+        counts: new Array(this.buckets.length).fill(0),
+        sum: 0,
+        count: 0,
+      };
+      this.data.set(bound.k, entry);
     }
     entry.sum += value;
     entry.count += 1;

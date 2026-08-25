@@ -92,7 +92,7 @@ pnpm run verify:breadth          # 47 deferred families + 8 doctrine proofs, its
   do that dance, restore the manifests FIRST and regenerate the lockfile after.
   Bypass with `git push --no-verify` when you mean to.
 - **Touched the api-server?** `pnpm --filter @workspace/api-server run test:api`
-  must pass **with every assertion green** (the suite prints `N/N`; 301/301 at the
+  must pass **with every assertion green** (the suite prints `N/N`; 305/305 at the
   time of writing — the printed total grows as coverage does, so compare passed
   against total, not against a number quoted here). Adding a route near others:
   verify you didn't drop the neighbors (a real regression this file exists to

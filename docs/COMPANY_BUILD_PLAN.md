@@ -2473,8 +2473,32 @@ earlier — that is the loop working, not a reason to soften the record.
     enumerable now, but the doc still restates it by hand.
 
 93. **Any unauthenticated caller can grow the metrics registry without bound, and
-    the rate limiter provably does not stop it.** — OPEN, api-contract-architect.
-    BLOCKING. Reproduced by live measurement.
+    the rate limiter provably does not stop it.** — FIXED 2026-08-25,
+    api-contract-architect. Was BLOCKING.
+    THE FIX, two independent defences:
+    · The route label now comes from the route Express MATCHED (`req.route.path`
+      plus `req.baseUrl`), never from the URL the caller sent. `req.route` is set
+      only when a layer actually matched and is undefined on a 404 — that is the
+      discriminator. A real route contributes its PATTERN, already id-free by
+      construction; anything unmatched contributes one shared `other` bucket.
+    · A hard ceiling of 512 distinct label tuples per metric, in the registry
+      itself. A SECOND NET on purpose: the middleware is one caller, and these are
+      exported instruments any future caller can reach. Past the ceiling a new
+      tuple folds into a visible overflow series rather than being dropped, so the
+      count stays truthful. The docblock on `normalizeRoute` CLAIMED the label
+      stayed bounded and nothing enforced it — that is the shape being closed.
+    MEASURED, same probe as the original finding: 150 unauthenticated junk URLs now
+    add **ONE** label series instead of 150. The exposition goes 2,119 -> 4,433
+    bytes rather than 2,119 -> 185,583, and histogram bucket lines 36 rather than
+    1,824. Zero series name a junk URL.
+    FALSIFIED: restoring `normalizeRoute(req.originalUrl)` fails exactly the two
+    targeted assertions (302/304); restored, 304/304. The suite also carries a
+    NON-VACUITY check, because every other assertion here asserts an ABSENCE and a
+    /metrics that errored would satisfy them all.
+    INCIDENTALLY RECONFIRMED, and left open as its own row: the first attempt to
+    measure this got a **429 from /metrics itself** — the global limiter throttles
+    the metrics endpoint, which is row 94.
+    ORIGINAL FINDING FOLLOWS.
     · The route label is `normalizeRoute(req.originalUrl)`, which collapses only
       RECOGNISED id shapes. Every other path becomes its own label, verbatim, in two
       unbounded `Map`s that never evict. Absence of any bound confirmed three

@@ -289,6 +289,84 @@ async function run() {
     metricsRes.status === 200);
   check("/metrics → carries NO tenant label — the aggregate can never become a cross-tenant side channel",
     metricsText.length > 0 && !metricsText.includes("tenant"));
+  // ── Metric cardinality is bounded by the ROUTE MATCHED, not the URL sent ──────
+  //
+  // The route label used to be `normalizeRoute(req.originalUrl)`, which collapsed
+  // only recognised id shapes and let every other path become its own label in two
+  // Maps that never evict. Measured before the fix: 150 unauthenticated GETs to
+  // /api/junk-N created 150 label series and grew this exposition from 2,119 to
+  // 185,583 bytes — 88x — with 1,824 histogram bucket lines. Reachable with no
+  // credential under both profiles, because this middleware and GET /metrics sit
+  // above the /api GA fence.
+  //
+  // Throttling could not cap it: 51 of those series were minted by requests the
+  // limiter had ALREADY rejected with a 429, since metricsMiddleware is registered
+  // above globalRateLimiter — deliberately, so throttled requests are still
+  // counted. Counting them is right; letting each mint a permanent label is not.
+  //
+  // 40 distinct junk paths here rather than 150: enough that an unbounded label
+  // would show unmistakably, few enough to keep this suite fast.
+  const OTHER_ROUTE_LABEL = "other";
+  const junkPaths = 40;
+  const seriesLine = /^signalgrid_http_requests_total\{/;
+  const countSeries = (text) => text.split("\n").filter((l) => seriesLine.test(l)).length;
+
+  // Exercise the ERROR-HANDLER path FIRST, so its (legitimate) series is part of
+  // the baseline rather than counted as junk growth. It has to happen before the
+  // baseline is taken: it is the only way the mount-prefix assertion further down
+  // is reachable, and it adds a real label of its own.
+  await req("GET", "/v1/decisions/dec_does_not_exist", { token: KEYS.operator });
+  const baselineText = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+  const seriesBefore = countSeries(baselineText);
+
+  for (let i = 0; i < junkPaths; i += 1) {
+    await fetch(`${BASE}/cardinality-probe-${i}`);
+  }
+  const afterText = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+  const seriesAfter = countSeries(afterText);
+
+  check(
+    `/metrics → ${junkPaths} unmatched paths add at most ONE label series (was one per path)`,
+    seriesAfter - seriesBefore <= 1,
+  );
+  check(
+    "/metrics → no unmatched path appears in a label, verbatim or otherwise",
+    !afterText.includes("cardinality-probe-"),
+  );
+  // NON-VACUITY. Every check above asserts an ABSENCE, and a /metrics that returned
+  // an error, or a server that stopped recording, would satisfy all of them. This
+  // asserts the instrument is still LIVE and still labelling real routes.
+  // EVERY route label is app-absolute, however the response was produced.
+  //
+  // The first version of the matched-route fix read `req.baseUrl`, and Express
+  // restores that as the router stack unwinds — so a response produced by the
+  // app-level error handler had already lost the mount while one produced inside
+  // the router still had it. `/api/healthz` came out fully qualified and
+  // `/api/v1/decisions/:id` came out as `/v1/decisions/:id`: two labels for one
+  // mount, depending on HOW the response was made rather than which route matched.
+  // The prefix is now derived from `originalUrl`, which is never rewritten.
+  //
+  // `proof:observability` pins the error-handler side (it asserts the by-id 404
+  // label). This pins the direct side and the invariant they share.
+  const routeLabels = [...afterText.matchAll(/route="([^"]*)"/g)].map((m) => m[1]);
+  const mountedLabels = routeLabels.filter((r) => r !== OTHER_ROUTE_LABEL && r.length > 0);
+  // NOT "every label starts with /api/" — that was the first draft of this
+  // assertion and it is FALSE: `/metrics` and the demo console are mounted at the
+  // app root and correctly label as `/metrics`. The true invariant is narrower:
+  // anything under the /api mount must CARRY that mount. That is precisely the bug
+  // above, and it stays catchable without asserting something untrue about the
+  // root-level routes.
+  const apiSurfaceLabels = mountedLabels.filter((r) => r.includes("/v1/") || r.endsWith("/healthz"));
+  check(
+    "/metrics → labels under the /api mount carry it, however the response was produced",
+    apiSurfaceLabels.length > 0 && apiSurfaceLabels.every((r) => r.startsWith("/api/")),
+  );
+
+  check(
+    "/metrics → still records matched routes, so the checks above are not passing on silence",
+    seriesAfter >= 1 && /route="\/api\/healthz"|route="\/healthz"/.test(afterText),
+  );
+
   check(
     "signal catalog → battery_health is evaluated, not novel",
     (catalog.json?.evaluated ?? []).includes("battery_health"),

@@ -1,0 +1,67 @@
+{
+  "note": "DEBT CEILING for docs/**/*.md, not a high-water mark: the COUNT OF unhedged deferred-capability mentions, not the count of files carrying them — a new claim in an already-listed document must fail, and counting files hid exactly that. A RISE is fatal; a drop is recorded automatically. Never hand-edit; the gate writes it.",
+  "unhedgedDeferredMentions": 511,
+  "filesCarryingThem": 121,
+  "worst": [
+    {
+      "file": "docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md",
+      "blocks": 45
+    },
+    {
+      "file": "docs/research/LINKEDIN_POST_DRAFTS.md",
+      "blocks": 18
+    },
+    {
+      "file": "docs/DOCKBRIDGE_PRODUCT_CONNECTOR.md",
+      "blocks": 13
+    },
+    {
+      "file": "docs/INTEGRATION_CATALOG.md",
+      "blocks": 13
+    },
+    {
+      "file": "docs/HARDWARE_PARTNER_MATRIX.md",
+      "blocks": 12
+    },
+    {
+      "file": "docs/KONTAKT_RTLS_INTEGRATION_NOTES.md",
+      "blocks": 12
+    },
+    {
+      "file": "docs/OPERATIONAL_TRUST_ORCHESTRATION.md",
+      "blocks": 12
+    },
+    {
+      "file": "docs/ZERO_COST_LIVE_TEST_MATRIX.md",
+      "blocks": 12
+    },
+    {
+      "file": "docs/research/MARKET_LANDSCAPE.md",
+      "blocks": 12
+    },
+    {
+      "file": "docs/TRACCAR_LIVE_INTEGRATION.md",
+      "blocks": 11
+    },
+    {
+      "file": "docs/PRODUCT_CORE_THREAT_MODEL.md",
+      "blocks": 10
+    },
+    {
+      "file": "docs/inspiration/OT_ICS_SCADA_API_CATALOG.md",
+      "blocks": 10
+    },
+    {
+      "file": "docs/research/COMPETITIVE_BATTLECARD.md",
+      "blocks": 10
+    },
+    {
+      "file": "docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md",
+      "blocks": 9
+    },
+    {
+      "file": "docs/SIGNALGRID_SMARTDOCK.md",
+      "blocks": 9
+    }
+  ]
+}

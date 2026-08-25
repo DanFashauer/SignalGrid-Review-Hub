@@ -291,7 +291,32 @@ export function normalizeReport(
     enumMalformed(raw["alignment"], ALIGNMENTS);
   const reportIntegrity: ReportIntegrity = malformed ? "malformed" : "clean";
 
-  const recognition = versionShapeBad ? "unknown" : deriveRecognition(catalog, citedTitle, citedVersion);
+  // A MALFORMED VERSION MUST NOT ERASE THE TITLE FINDING, and it used to.
+  //
+  // This line read `versionShapeBad ? "unknown" : deriveRecognition(...)`, which
+  // skipped the catalog lookup entirely whenever the cited version was not a
+  // numeric triple. But `not_in_catalog` falls out of `versions.size === 0` — a
+  // TITLE-only test that never consults the version. So a report citing a title
+  // the catalog does not carry AND an unparseable version lost the title finding
+  // and graded `unknown`, dropping the recommended action from `alert` to
+  // `step_up` and deleting `benchmark_not_in_catalog` from the evidence.
+  //
+  // Adding a second defect to a report made the answer softer. That is the
+  // fail-closed doctrine inverted, and it was measured rather than reasoned:
+  // version "9.9.9" gave alert/BENCHMARK_NOT_IN_CATALOG, version "3.0" on the
+  // same report gave step_up/REPORT_MALFORMED.
+  //
+  // Now the title lookup always runs. When the version is unreadable we keep a
+  // title verdict that does not depend on it — `not_in_catalog` — and otherwise
+  // fall back to `unknown`, because a version we could not parse cannot support
+  // `version_unlisted` or `version_superseded`, both of which assert something
+  // about the version itself. `reportIntegrity` goes `malformed` independently,
+  // so the malformedness is still reported; it is no longer reported INSTEAD of
+  // the title finding.
+  const titleRecognition = deriveRecognition(catalog, citedTitle, citedVersion);
+  const recognition = versionShapeBad
+    ? (titleRecognition === "not_in_catalog" ? "not_in_catalog" : "unknown")
+    : titleRecognition;
   const row = citedTitle !== null && citedVersion !== null ? catalog.rowFor(citedTitle, citedVersion) : null;
 
   return {

@@ -35,7 +35,8 @@
 //
 // SELF-TEST FIRST: each rule must flag a synthetic violation, or the gate
 // refuses to conclude anything.
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOTS = ["artifacts/signalgrid-web/src"];
@@ -375,12 +376,92 @@ for (const f of files) {
   }
 }
 
+// ── docs/**/*.md — REPORTED against a ceiling, never fatal ───────────────────
+//
+// This gate reads the website, the Pages-derived HTML, the outreach surface and
+// anything carrying the public contact address. It read ZERO of the 281 markdown
+// files under docs/, in a repository whose own NOTICE calls it a public reference
+// surface. The first docs-writer shift (2026-08-25) found the pitch-deck defect
+// reproduced there: a table headed "SignalGrid surface (today)" listing 23
+// deferred connector families, with the freeze disclaimer 180 lines below it.
+//
+// WHY A CEILING AND NOT A GATE, measured before deciding. Bringing docs/ into the
+// fatal scope fails 120 of 285 files on day one, and reading what is flagged says
+// why that is wrong: docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md at 45
+// blocks, docs/research/MARKET_LANDSCAPE.md, KONTAKT_RTLS_INTEGRATION_NOTES.md.
+// Those say "RTLS" and "geofence" because that is their SUBJECT. This file argues
+// three times that a gate which cries wolf gets switched off, and reddening the
+// build over honest research notes is exactly that.
+//
+// THE UNIT IS MENTIONS, NOT FILES, and the first version got it wrong. Counting
+// files answers "did a document acquire its FIRST unhedged claim" — not "did a
+// new unhedged claim appear". Falsifying it exposed that at once: a fresh
+// deferred claim planted in a document already on the list left the count
+// unchanged and the gate passed, so a new overclaim in any of the 119 worst
+// documents was invisible.
+const DOCS_CEILING_FILE = "docs/agent/launch-claims-docs-ceiling.json";
+let docsMentions = 0;
+let docsFiles = 0;
+const docsWorst = [];
+{
+  const docFiles = execSync("git ls-files docs", { encoding: "utf8" })
+    .trim().split("\n").filter((f) => f.endsWith(".md"));
+  for (const f of docFiles) {
+    const n = violationsIn(f, readFileSync(f, "utf8")).length;
+    if (n > 0) { docsFiles += 1; docsMentions += n; docsWorst.push([f, n]); }
+  }
+  docsWorst.sort((a, b) => b[1] - a[1]);
+}
+
 console.log(
   `launch-claims: ${files.length} buyer-facing files scanned ` +
     `(${publishedPages.length} derived from the Pages deploy, ${outreachScanned} from the outreach surface ` +
     `and the documents it cites, ${contactScanned} from carrying the public contact address), ` +
     `${problems} violation(s); self-test green`,
 );
+{
+  // READ, DON'T CHECK-THEN-READ. `existsSync(f) ? readFileSync(f) : {}` is a
+  // time-of-check/time-of-use race: the file can vanish between the two calls and
+  // the read throws out of a gate that was about to report cleanly. CodeQL flagged
+  // exactly this shape here as high severity, and the same pattern was fixed in
+  // check-backlog-evidence.mjs earlier today — one attempt, catch the absence.
+  //
+  // A read that fails for ANY reason yields no baseline, which means the ceiling
+  // is treated as unset and the current count is recorded. That is the safe
+  // direction: an unreadable ceiling can never silently authorise a rise.
+  let prior = {};
+  try {
+    prior = JSON.parse(readFileSync(DOCS_CEILING_FILE, "utf8"));
+  } catch {
+    prior = {};
+  }
+  const ceiling = prior.unhedgedDeferredMentions;
+  console.log(
+    `  docs/**/*.md (REPORTED, not gated): ${docsMentions} unhedged deferred-capability mention(s) across ${docsFiles} file(s)` +
+      (typeof ceiling === "number" ? ` (ceiling ${ceiling})` : " (no baseline yet)"),
+  );
+  for (const [f, n] of docsWorst.slice(0, 5)) console.log(`      ${String(n).padStart(3)}  ${f}`);
+  if (typeof ceiling === "number" && docsMentions > ceiling) {
+    console.error(
+      `\n  \u2717 ${docsMentions - ceiling} MORE unhedged mention(s) than the recorded ceiling of ${ceiling}.\n` +
+        "    A new unhedged deferred claim reached a public document. Hedge it WHERE THE CLAIM IS —\n" +
+        "    a disclaimer elsewhere in the file does not cover it.",
+    );
+    problems += 1;
+  } else if (typeof ceiling !== "number" || docsMentions < ceiling) {
+    writeFileSync(
+      DOCS_CEILING_FILE,
+      JSON.stringify({
+        note: "DEBT CEILING for docs/**/*.md, not a high-water mark: the COUNT OF unhedged deferred-capability mentions, not the count of files carrying them — a new claim in an already-listed document must fail, and counting files hid exactly that. A RISE is fatal; a drop is recorded automatically. Never hand-edit; the gate writes it.",
+        unhedgedDeferredMentions: docsMentions,
+        filesCarryingThem: docsFiles,
+        worst: docsWorst.slice(0, 15).map(([f, n]) => ({ file: f, blocks: n })),
+      }, null, 2) + "\n",
+    );
+    console.log(typeof ceiling !== "number" ? `      baseline recorded at ${docsMentions}` : `      ceiling lowered ${ceiling} \u2192 ${docsMentions}`);
+  }
+}
+
 if (problems > 0) {
   console.error(
     "\nLaunch-claims gate FAILED — buyer-facing copy asserts deferred capability as current.\n" +

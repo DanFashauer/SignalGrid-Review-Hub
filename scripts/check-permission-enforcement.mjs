@@ -10,17 +10,45 @@
 // ever demands. Ten of eleven permissions are genuinely enforced; the
 // eleventh has been ambient authority since it was declared.
 //
+// WHAT IT MEASURES, stated before what it is for, because the two are not the
+// same and a reader who conflates them will trust this further than it goes:
+// every member of the `Permission` union is NAMED in the text of at least one
+// `authorize(<principal>, "<permission>")` call somewhere in shipping source.
+//
+// IT IS A TEXT SEARCH. It has no call graph, no import graph and no reachability
+// analysis, so it cannot tell a live call site from a dead one. A security review
+// on 2026-08-25 proved that by planting
+//
+//     export function neverCalled(p: any) { if (false) { authorize(p, "widget:delete"); } }
+//
+// in a file nothing imports — the gate reported the permission "required by a
+// surface" and passed. That is the honest ceiling of a regex, and the header used
+// to claim enforcement, which is more than a regex can establish.
+//
+// It is still worth having at exactly that strength: the defect DR-002 named — a
+// scope declared in the union, granted by the role table, and demanded by no code
+// anywhere — leaves no textual trace at all, so this catches it. What it cannot
+// catch is a scope whose only demand sits on a path nothing reaches. Closing THAT
+// needs real reachability analysis, which this repository has already declined
+// once for `check-module-init-order.mjs` on the grounds that doing it properly
+// needs a parser with scope analysis rather than a regex. Recorded, not pretended
+// away.
+//
 // What it checks:
 //   1. Every member of the `Permission` union in lib/signalgrid-core/src/types.ts
-//      appears in at least one `authorize(<principal>, "<permission>")` call in
+//      is NAMED in at least one `authorize(<principal>, "<permission>")` call in
 //      shipping source (dist/, tests and this file excluded) — OR carries a
 //      DECLARED reason below, with the surface that will require it.
 //   2. The declared list itself cannot rot: a declaration whose permission has
 //      SINCE become enforced fails, so the exemption comes out when the fix
 //      lands rather than quietly outliving it.
-//   3. SELF-TEST: the extraction must find both the union and the call sites
-//      on the real tree (floors), and a synthetic unenforced permission must
-//      be flagged — a gate that cannot fail proves nothing.
+//   3. SELF-TEST: the extraction must find both the union and the call sites on
+//      the real tree (floors), AND the reporting path must actually fire on a
+//      synthetic corpus with a genuinely unenforced permission. The previous
+//      control asserted `!enforced.has("nonexistent:scope")` — true by
+//      construction for any string nobody typed, and it never reached the code
+//      that reports. A control that cannot fail is the thing this gate exists to
+//      complain about.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -77,19 +105,59 @@ for (const f of files) {
   const CALLSITE_FLOOR = 6;
   const synthetic = 'authorize(principal, "decision:read");';
   const extracts = [...synthetic.matchAll(/authorize\(\s*[A-Za-z0-9_.]+\s*,\s*"([a-z]+:[a-z]+)"\s*\)/g)].length === 1;
-  const fakeUnenforced = !enforced.has("nonexistent:scope");
-  if (permissions.length < UNION_FLOOR || enforced.size < CALLSITE_FLOOR || !extracts || !fakeUnenforced) {
+  // THE CONTROL THAT ACTUALLY FIRES. The previous one was
+  // `!enforced.has("nonexistent:scope")` — true for any string nobody typed, and
+  // it never touched the verdict. This drives the real function with a synthetic
+  // corpus and asserts each arm, so "self-test green" means the reporting path
+  // has been shown to work rather than merely not been run.
+  const noExempt = new Map();
+  const missingReported = auditPermissions(["a:read", "b:write"], new Set(["a:read"]), noExempt).problems.some((x) => x.startsWith("b:write"));
+  const cleanIsClean = auditPermissions(["a:read"], new Set(["a:read"]), noExempt).problems.length === 0;
+  const staleExemptionReported = auditPermissions(["a:read"], new Set(["a:read"]), new Map([["a:read", "reason"]])).problems.some((x) => x.includes("outlived"));
+  const exemptionSuppresses = auditPermissions(["a:read"], new Set(), new Map([["a:read", "reason"]])).problems.length === 0;
+  const verdictWorks = missingReported && cleanIsClean && staleExemptionReported && exemptionSuppresses;
+  if (permissions.length < UNION_FLOOR || enforced.size < CALLSITE_FLOOR || !extracts || !verdictWorks) {
     console.error(
       "✗ SELF-TEST FAILED — " +
         `union=${permissions.length} (floor ${UNION_FLOOR}), enforced=${enforced.size} (floor ${CALLSITE_FLOOR}), ` +
-        `extractor=${extracts}, negative=${fakeUnenforced}. The extraction has drifted from the codebase's idiom; ` +
+        `extractor=${extracts}, verdict=${verdictWorks}. The extraction has drifted from the codebase's idiom; ` +
         "a gate scanning nothing is green about nothing.",
     );
     process.exit(1);
   }
 }
 
-console.log("Permission enforcement — every declared scope must be required by a surface (DR-002)\n");
+/**
+ * Pure verdict over (declared permissions, permissions NAMED in an authorize
+ * call, declared-unenforced exemptions). Extracted so the self-test can drive
+ * the REPORTING path over a synthetic corpus instead of asserting a tautology
+ * beside it — sibling gates (auditOrgRoster, auditLabRegistry) already have this
+ * shape, and the reason is the same: a verdict that cannot be called with made-up
+ * inputs cannot be shown to fail.
+ */
+export function auditPermissions(declared, named, exemptions) {
+  const problems = [];
+  const ok = [];
+  const exempt = [];
+  for (const p of declared) {
+    if (named.has(p)) {
+      if (exemptions.has(p)) {
+        problems.push(`${p}: now enforced, but still carries a declared-unenforced entry — remove the exemption, it has outlived its reason`);
+      } else {
+        ok.push(p);
+      }
+      continue;
+    }
+    if (exemptions.has(p)) {
+      exempt.push(p);
+      continue;
+    }
+    problems.push(`${p}: declared in the Permission union and granted by the role table, but NO surface names it`);
+  }
+  return { problems, ok, exempt };
+}
+
+console.log("Permission enforcement — every declared scope must be named by a surface (DR-002)\n");
 let problems = 0;
 
 for (const p of permissions) {

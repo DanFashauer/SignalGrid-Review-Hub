@@ -11,8 +11,12 @@ Third-party work, copied in unmodified. **Not ours.**
 > MIRROR, not an original.** The owner's synced copy at
 > `~/.claude/skills/synced/signalgrid-master/` still exists and still loads. What
 > changed is which copy is AUTHORITATIVE: this one, because it is the one that can
-> be reviewed. `pnpm run scan:agent-plane` reports the synced copy and will say so
-> when the two disagree. If they diverge, this file wins and the synced copy is the
+> `pnpm run scan:agent-plane` reports the synced copy AND compares it byte-for-byte
+> against this one, printing `identical` or `DIVERGED`. That comparison did not
+> exist when this sentence was first written on 2026-08-25 — the scanner read only
+> the home directory and never opened the committed copy, so the safeguard named
+> here was a claim with nothing behind it. Implemented the same day, once the first
+> agent-platform-engineer shift caught it.
 > one to correct.
 >
 > | Skill | Authored | What it defines |

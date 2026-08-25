@@ -3896,6 +3896,162 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+183. **The org automated on a clock and never on an event.** — FIXED 2026-08-25,
+    agent-platform-engineer. The owner asked for an assistant that acts "when x
+    event or task plus function happens", and asked first whether something already
+    built does this. It does, and researching before building is the whole finding.
+    WHAT ALREADY EXISTED: `docs/agent/scheduled-routines.json` declares four
+    routines on cron — steward duty cycle, live-sync keeper, nightly build agent,
+    hygiene sweep — each gated on an authorizing human, a write scope and an
+    escalation boundary. That is a TIME layer: "at 09:40 daily". There was no EVENT
+    layer at all. `.claude/settings.json` and `.claude/hooks/` did not exist, so
+    Claude Code's own hook system — SessionStart, Stop, PreToolUse, PostToolUse,
+    which ships with the harness and needed building by nobody — was entirely
+    unused. Nothing to invent; something to connect.
+    WHAT THE HOOK DOES, chosen from one day's evidence rather than from a list of
+    what hooks CAN do. Three things cost real time on 2026-08-25 and all three are
+    now automatic: the container silently reverted to a day-old snapshot TWICE, so
+    committed work read as missing and the instinctive response — redo it — would
+    have been wrong both times; `@fontsource/inter` was declared and not installed,
+    reddening a build in a package the session never opened; and `CLAUDE.md` says
+    "Run this first, every session" about the lane inbox while nothing made that
+    true, so it ran when somebody remembered.
+    IT REPORTS AND NEVER BLOCKS, and that inversion is deliberate. This repository
+    is fail-closed everywhere, and a session start is the one place where failing
+    closed is wrong: a blocked session cannot be used to fix the thing that blocked
+    it. Every path exits 0. Nothing here gates — preflight's 180-odd gates do that,
+    after there is something to gate.
+    THE DEPENDENCY INSTALL IS REMOTE-ONLY, and the exclusion is load-bearing rather
+    than lazy. `CLAUDE.md` records that local macOS builds add darwin platform
+    binaries and restore the manifests afterwards, re-diverging the lockfile AFTER
+    it was correctly regenerated. A hook running `pnpm install` on the Mac would
+    manufacture exactly the drift `.githooks/pre-push` exists to catch.
+    Falsified: reset one commit back and the hook names the drift and prints the
+    recovery command; pointed at a directory that is not a repository it still
+    exits 0.
+    NOT DONE, and worth stating because the hook system offers it: no PreToolUse or
+    PostToolUse hooks. A PostToolUse hook on Edit could have caught the
+    check-then-read race committed twice in one day (rows 175, 182) at the moment
+    of writing rather than in CodeQL hours later. That is a real candidate and it
+    needs its own decision — a hook that fires on every edit is a tax on every edit.
+
+182. **The claims gate read zero of 281 public documents.** — MITIGATED 2026-08-25,
+    positioning-messaging. `scripts/check-launch-claims.mjs` reads the website, the
+    Pages-derived HTML, the outreach surface and anything carrying the public
+    contact address — 95 files. It read NO markdown under `docs/`, in a repository
+    whose own `NOTICE` calls it a public reference surface. The first docs-writer
+    shift found the pitch-deck defect reproduced there: a table headed "SignalGrid
+    surface (today)" listing 23 deferred connector families, with the freeze
+    disclaimer 180 lines below it.
+    WHY A CEILING AND NOT A GATE, measured before deciding rather than after.
+    Bringing `docs/` into the fatal scope fails 120 of 285 files on day one, and
+    reading what is flagged says why that is wrong:
+    `docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md` at 45 blocks,
+    `docs/research/MARKET_LANDSCAPE.md`, `KONTAKT_RTLS_INTEGRATION_NOTES.md`. Those
+    say "RTLS" and "geofence" because that is their SUBJECT — engineering and
+    research notes, not copy promising anything. The gate's own header argues three
+    separate times that a gate which cries wolf gets switched off.
+    So `docs/agent/launch-claims-docs-ceiling.json` records the debt on the pattern
+    row 170 established: a ceiling that may fall and may not rise. Baseline 511
+    mentions across 121 files. The buyer-facing arm stays FATAL and unchanged.
+    THE FIRST VERSION COUNTED THE WRONG THING, and falsifying it is the only reason
+    that surfaced. It counted FILES — which answers "did a document acquire its
+    first unhedged claim", not "did a new unhedged claim appear". A fresh deferred
+    claim planted in a document already on the list left the count unchanged and
+    the gate passed, so a new overclaim in any of the 121 worst documents was
+    invisible. The unit is now MENTIONS. Three falsifications now fire: a new claim
+    in an already-listed file, one in a previously clean file, and the original
+    fatal arm on the website. Gate runs in 196 ms.
+    WHAT IS STILL NOT DONE: narrowing the fatal scope to genuinely buyer-facing
+    prose. `public_review` in the publication boundary answers "is this safe to
+    publish", not "does a buyer read this as a promise", and covers all of `docs`,
+    so it does not derive the answer. That is an editorial judgement nobody has
+    made, and it is not pretended here.
+
+178. **Four roles switched on for the first time, and the first shift of each found
+    something the gates do not see.** — FIXED in part 2026-08-25, program-manager.
+    `check-surface-ownership.mjs` reports 0 unowned files of 2,347 and
+    `check-review-coverage.mjs` reports 389 read. Both true at once, and the gap
+    between them was invisible because "assigned" reads as "handled".
+    `scripts/role-work-queue.mjs` (`pnpm run role:queue`) derives, per role, the
+    files it owns that nobody has read, ordered by consequence. Reported, never
+    fatal — a queue that fails the build would make declaring a new surface a red
+    build, which teaches a repository to declare less.
+    THE QUEUE'S FIRST VERSION WAS WRONG in the way this document keeps recording:
+    it ranked by path prefix, so `.gitkeep` and a tsconfig sat at the top of
+    qa-engineer's list and a PNG at the top of docs-writer's. Ranking a real
+    property, answering a different question. It now asks whether a file carries
+    logic at all, reusing `isReviewable` from the coverage gate rather than
+    restating it.
+    FOUR SHIFTS RAN. qa-engineer, security-engineer, agent-platform-engineer and
+    docs-writer — the last three had never been activated. What each found is
+    recorded in rows 179-181; the pattern across them is that every finding was a
+    claim outrunning its evidence, and not one was catchable by an existing gate.
+    FIXED IN THIS PASS: the benchmark-selection fail-open (row 179), the
+    permission-enforcement claim and its tautological control (row 180), the
+    publication-boundary misclassification and the absent mirror-drift check (row
+    181), and the Graph permission boundary's fifteen invented scopes.
+    STILL OPEN and deliberately not fixed here, each needing its own decision: the
+    passkey substitution guard sitting on the wrapper rather than the primitive;
+    device-attestation being the only connector of five with no report-integrity
+    axis; `mutation-guard.mjs` registering `device-attestation` index-only so the
+    file granting its top assurance tier is never mutated; and the two structural
+    gate gaps docs-writer measured — `check-launch-claims.mjs` reads zero
+    `docs/*.md` in a PUBLIC repository, and `check-proof-figures.mjs` cannot see a
+    figure below 1,000, which is why every fossil it found survived.
+
+179. **A malformed version erased the not-in-catalog finding.** — FIXED 2026-08-25,
+    qa-engineer. `lib/integrations/src/integrations/benchmark-selection/benchmark-selection-connector.ts`
+    read
+    `versionShapeBad ? "unknown" : deriveRecognition(...)`, skipping the catalog
+    lookup whenever the cited version was not a numeric triple. But
+    `not_in_catalog` falls out of `versions.size === 0` — a TITLE-only test that
+    never consults the version. So a report citing an unknown title AND an
+    unparseable version lost the title finding, dropping the action from `alert` to
+    `step_up` and deleting `benchmark_not_in_catalog` from the evidence.
+    Adding a SECOND defect to a report made the answer softer. Measured rather than
+    reasoned, and falsified side by side: with the bug, version `9.9.9` gives
+    `not_in_catalog` while `3.0` on the same report gives `unknown`; fixed, both
+    give `not_in_catalog` and `reportIntegrity` still reports `malformed`
+    independently. `pnpm run proof:benchmark-selection` stays 95/95 throughout — which is the point
+    worth noting: the proof never covered this, so a green proof was not evidence
+    either way.
+
+180. **The permission gate credits a call inside `if (false)`.** — MITIGATED
+    2026-08-25, security-engineer. `check-permission-enforcement.mjs` matches
+    `authorize(principal, "scope")` with a regex over file text. It has no call
+    graph and no reachability analysis, so a syntactically-present call in an
+    unreachable branch of an unimported function satisfies it — proven by planting
+    exactly that in a scratch copy. Its header claimed the scope was "required by a
+    surface", which is more than a regex can establish.
+    The header now states the measurement and its ceiling, and says plainly that
+    closing the reachability half needs a real parser — the same conclusion
+    `check-module-init-order.mjs` already reached and declined.
+    Its self-test was also tautological: `!enforced.has("nonexistent:scope")` is
+    true for any string nobody typed and never reached the reporting path. The
+    verdict is now a pure exported function the self-test drives over a synthetic
+    corpus, asserting all four arms. Falsified twice; each mutation caught.
+
+181. **The org published its own skill under another author's licence, and named a
+    drift check that did not exist.** — FIXED 2026-08-25, agent-platform-engineer,
+    on this role's first ever shift. Both defects were introduced the same day, by
+    the DR-018 vendoring, and both survived a green build.
+    `scripts/publication-boundary.mjs` classifies `.claude/skills` as
+    `third_party_intake` — "obra/superpowers, 14 skills vendored unmodified under
+    MIT © 2025 Jesse Vincent". Six first-party skills carry carve-outs;
+    `signalgrid-master`, added hours earlier, did not. So this repository published
+    its own orchestration skill under Jesse Vincent's grant. The gate stayed green
+    because it proves every path is CLASSIFIED, never that a path is classified
+    CORRECTLY — the same distinction as row 175's launcher.
+    Separately, `.claude/skills/VENDORED.md` said `scan:agent-plane` "will say so
+    when the two disagree". It did not: the scanner read three roots under the home
+    directory and never opened the committed copy. The two were byte-identical at
+    the time, so nothing had drifted — the control was simply absent, which is the
+    harder half to notice. Now implemented and falsified by planting a divergence.
+    The shift also verified what was RIGHT, which is why the finding is credible:
+    all 51 vendored skill files hash byte-identical to obra/superpowers at the
+    pinned commit, and all 9 vendored agents match their source.
+
 177. **The evidence contract advertised six sources and implemented two.** —
     FIXED 2026-08-25, principal-engineer. Found while building the source registry
     the owner asked for, which is the registry earning its place before it shipped.

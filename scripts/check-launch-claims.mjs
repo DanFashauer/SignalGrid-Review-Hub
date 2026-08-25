@@ -420,7 +420,21 @@ console.log(
     `${problems} violation(s); self-test green`,
 );
 {
-  const prior = existsSync(DOCS_CEILING_FILE) ? JSON.parse(readFileSync(DOCS_CEILING_FILE, "utf8")) : {};
+  // READ, DON'T CHECK-THEN-READ. `existsSync(f) ? readFileSync(f) : {}` is a
+  // time-of-check/time-of-use race: the file can vanish between the two calls and
+  // the read throws out of a gate that was about to report cleanly. CodeQL flagged
+  // exactly this shape here as high severity, and the same pattern was fixed in
+  // check-backlog-evidence.mjs earlier today — one attempt, catch the absence.
+  //
+  // A read that fails for ANY reason yields no baseline, which means the ceiling
+  // is treated as unset and the current count is recorded. That is the safe
+  // direction: an unreadable ceiling can never silently authorise a rise.
+  let prior = {};
+  try {
+    prior = JSON.parse(readFileSync(DOCS_CEILING_FILE, "utf8"));
+  } catch {
+    prior = {};
+  }
   const ceiling = prior.unhedgedDeferredMentions;
   console.log(
     `  docs/**/*.md (REPORTED, not gated): ${docsMentions} unhedged deferred-capability mention(s) across ${docsFiles} file(s)` +

@@ -2764,8 +2764,9 @@ earlier — that is the loop working, not a reason to soften the record.
     from `redFilePattern`. Confirmed by running it: `unsafeClaims=ASSERTED`,
     `phaseLane=YELLOW`, `EXIT=0`. CI wires it as a plain `run:` step
     (`phase-pr-evidence.yml:40-41`), so the exit code is the only thing the job reads.
-    CONSEQUENCE: a genuine "SignalGrid is MFi certified" merged into `docs/` today
-    would print ASSERTED and the PR would go green. `missingValidation` at `:161-170`
+    CONSEQUENCE, AS ORIGINALLY FILED: a genuine certification claim merged into
+    `docs/` today would print ASSERTED and the PR would go green. That second clause
+    is WRONG — see the correction below. `missingValidation` at `:161-170`
     has the identical shape, despite its own comment saying drift "must actually move
     the lane, not just log a reason."
     This is the whole point of the negation-aware classifier defeated at the last step:
@@ -2775,20 +2776,46 @@ earlier — that is the loop working, not a reason to soften the record.
     touch-based reasons informational, or promote an affirmative claim to RED. Either
     way the CI step must read something other than "not RED". Fix row 118 first or the
     gate turns permanently red on a disclaimer and gets switched off.
+    CORRECTION, same day, found by this row's own text failing CI. The finding as
+    filed OVERSTATED its consequence, and the overstatement came from checking one
+    gate and concluding about the machinery — the narrow-search error this repo
+    tracks, committed while filing a finding about gates.
+    WHAT IS TRUE: `phase-gate.ts` does escalate an affirmative claim only to YELLOW
+    and does exit 0, so ITS `unsafeClaims` signal is inert and the negation-aware
+    classifier feeding it is unconsumed.
+    WHAT IS FALSE: that an unsafe claim would therefore reach the default branch.
+    `scripts/docs-sanity.mjs:253` collects the same class of finding and `:263` calls
+    `process.exit(1)`, and it runs as its own CI job — `review-hub-ci.yml:720-735`,
+    "Required docs and unsafe-claim sanity". It is not a paper gate: it FAILED this
+    very commit, on the example phrases written into rows 117 and 118, before either
+    row could be merged. Unsafe claims in `docs/` are gated. What is not gated is
+    `phase-gate`'s own lane arithmetic.
+    THE REAL FINDING, restated: the repo has TWO unsafe-claim mechanisms with
+    different phrase lists and opposite enforcement. The sophisticated,
+    negation-aware one cannot fail a build; the naive, negation-blind one is the only
+    one that can. That split is the defect — not an absence of enforcement.
 
 118. **The unsafe-claim classifier reads a DISCLAIMER as an affirmative claim.** —
     OPEN, devex-tooling-engineer. `unsafe-claim-classifier.ts:143-144` scopes negation
-    to the text BEFORE the match, so `"SignalGrid replaces no system of record"` — where
-    the negator is the verb's direct object — classifies as affirmative. Both live hits
-    pinning `unsafeClaims=ASSERTED` are citations of exactly that disclaimer.
+    to the text BEFORE the match, so a sentence of the form "<product> replaces no
+    system of record" — where the negator is the verb's direct object — classifies as
+    affirmative. Both live hits pinning `unsafeClaims=ASSERTED` are citations of
+    exactly that disclaimer. (The phrase is deliberately NOT quoted verbatim here:
+    writing it out trips `docs-sanity.mjs`, which is the point of the correction on
+    row 117.)
     WHY IT MATTERS: it restores the defect the classifier was built to remove — a
     signal that reads the same on every run — inverted from constant-noisy to
     constant-alarming. It is invisible while row 117 stands; the moment 117 is fixed
     this becomes a permanently red gate someone will switch off.
     FIX: when the matched phrase ends in `replaces`, extend the negation window to the
     following token (`no|nothing|none`). Add BOTH directions to the proof — the
-    disclaimer must clear and `"replaces Jamf, no exceptions"` must still flag (that
-    case exists at `:92-93` and must not regress).
+    disclaimer must clear and a genuine replacement claim followed by a trailing
+    negation must still flag (that case exists at `:92-93` and must not regress).
+    THE SAME DEFECT EXISTS IN THE HARD-FAILING GATE, and that is the more urgent half:
+    `docs-sanity.mjs` has NO negation awareness at all. It matched the disclaimer form
+    above as an unsafe claim and failed the build on it. So the negation-aware
+    classifier — the one that would get this right — is wired to the gate that cannot
+    fail, and the gate that CAN fail is the naive one. Fix the pair together.
 
 119. **Five copies of the no-vendor-call scanner; one drifted permissive, and its
     self-test tests the pattern that survived.** — OPEN, devex-tooling-engineer.

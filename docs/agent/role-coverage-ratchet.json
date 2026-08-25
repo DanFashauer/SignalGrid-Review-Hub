@@ -2,7 +2,7 @@
   "note": "Per-role files-read high-water mark. Never hand-edit; the gate writes it.",
   "read": {
     "principal-engineer": 20,
-    "qa-engineer": 13,
+    "qa-engineer": 18,
     "security-engineer": 17,
     "product-manager": 0,
     "web-engineer": 60,

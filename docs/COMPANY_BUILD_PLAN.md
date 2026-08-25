@@ -3260,6 +3260,26 @@ earlier — that is the loop working, not a reason to soften the record.
     proof printed "pass (48/48)" while 18 checks failed and it exited 1. Moved above
     the summary — a figure that does not count the checks beneath it is the defect
     class this repo keeps a figure guard for.
+    RESIDUE, recorded 2026-08-25 rather than fixed, and the reason is scope. The
+    block matches LITERAL address ranges. A hostname is not resolved, so
+    `internal.example.com` pointing at 10.0.0.5, or any of the public
+    resolve-to-loopback services, walks straight through every rule above. The naive
+    case is covered; the deliberate one is not.
+    WHY IT IS NOT BEING FIXED NOW: `webhooks` sits in the DEFERRED list in
+    `scripts/launch-profile.mjs`, and DR-005 froze breadth — a deferred family does
+    not earn launch-scope engineering because a gap in it is real. The exposure is
+    also narrower than it first reads: webhook delivery is fire-and-forget, so an
+    operator who aims one at internal infrastructure gets blind SSRF (timing, and
+    whatever an unauthenticated internal POST does) rather than a response body, and
+    the URL is set by a tenant admin rather than an anonymous caller.
+    WHAT WOULD ACTUALLY CLOSE IT, so the next person does not re-derive it: resolve
+    the hostname at dispatch time and apply the SAME range rules to every returned
+    address, A and AAAA both. That is defence in depth, not a proof — resolution and
+    connection are two separate lookups, so a record that changes between them
+    (classic DNS rebinding) defeats it. Closing THAT means connecting to the
+    validated address directly and carrying the hostname in the Host header, which
+    is a custom agent and a materially bigger change than the check itself. State
+    which of the two is being bought before building either.
     ORIGINAL FINDING FOLLOWS. `webhooks/dispatch.ts:32`
     reads `IS_PRODUCTION` from `NODE_ENV` AT MODULE LOAD and uses it at `:96,101`,
     while `resolveWebhookDelivery` at `:75-86` reads `SIGNALGRID_TIER` and

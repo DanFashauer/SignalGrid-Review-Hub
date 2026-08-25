@@ -18,6 +18,7 @@
  */
 import {
   buildEvidence,
+  runDockSync,
   foldIdentityEnabled,
   deriveCriticalSignalsPresent,
   FRESHNESS_VALUES,
@@ -163,7 +164,21 @@ for (const scenario of scenarios) {
 // digest FUNCTION is unchanged and each row is verified against its own stored body —
 // this constant is the canary that makes an evidence-shape change loud instead of
 // silent, and the normalization-version bump records the same change as provenance.
-const LEGACY_SNAPSHOT_DIGEST = "6ab07be9ec3cdddc";
+// Re-pinned 2026-08-25 (was 6ab07be9ec3cdddc): signal ids now carry the minting
+// CONNECTOR's id, so `signalsUsed` — which is inside the digest body — moved, and
+// with it the canonical body of a FRESH unstamped snapshot. The reason for the id
+// change is a reproduced fail-open: without the connector in the key, two connectors
+// reporting the same category for one device minted the SAME id, `putSignal`
+// overwrote in place with no freshness comparison, and a reading observed 55 minutes
+// EARLIER erased a confirmed tamper — flipping the outcome from deny to allow.
+// SAME REASONING AS THE TWO RE-PINS BELOW, and it is the reason this is a re-pin
+// rather than a defect: the digest FUNCTION is untouched, and every durable row is
+// verified against ITS OWN stored body, so real pre-change rows in Postgres still
+// verify true. This constant is the canary for a body-shape change, and it fired
+// exactly as designed — it caught this on the first run instead of letting it ship
+// quietly. CORE_NORMALIZATION_VERSION goes 8 -> 9 to record the same change as
+// provenance.
+const LEGACY_SNAPSHOT_DIGEST = "9347fb8f9ad49d31";
 const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
 
 // The exact shape a pre-stamp row deserializes into: every field the same, no stamp.
@@ -1706,6 +1721,110 @@ for (const [fromRow, fromSignal, want, why] of [
     got === want,
     `row=${String(fromRow)} signal=${String(fromSignal)} -> ${String(got)}, expected ${String(want)}`,
   );
+}
+
+
+// ── Row 83: two connectors, one device, one category ──────────────────────────
+//
+// WHY THIS EXISTS, and it was reproduced before it was fixed. Signal ids were
+// minted as (tenant, subjectType, subjectId, category) with NO connector, so two
+// connectors reporting the same category for the same device minted the SAME id.
+// `store.putSignal` keys its bucket by that id and overwrites in place with no
+// freshness comparison, so the second sync ERASED the first. A dock feed carrying
+// a reading observed 55 minutes EARLIER wiped a confirmed tamper and the outcome
+// went deny -> allow, with the signal count unchanged because nothing was added.
+//
+// `groupLatest` in evidence.ts exists to arbitrate exactly this by greatest
+// observedAt, and it never got the chance: only one row survived the store.
+//
+// The shipped seed cannot catch this — Northwind's two dock connectors cover
+// DISJOINT device sets, so no fixture has a two-connectors-one-device case. This
+// block constructs one.
+{
+  const seeded = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+  const dockStore = seeded.store;
+  const dockConnector = dockStore
+    .listConnectors(seeded.tenants.northwind)
+    .find((c) => c.kind === "dockbridge-custody");
+  const baseRecords = dockConnector
+    ? seeded.dockRecords[dockConnector.id]
+    : undefined;
+  const baseRecord = baseRecords?.[0];
+
+  check(
+    "row 83 setup: a dockbridge connector and a custody record exist to build the case from",
+    Boolean(dockConnector) && Boolean(baseRecord),
+  );
+
+  if (dockConnector && baseRecord) {
+    const device = dockStore.findDeviceByRef(
+      dockConnector.tenantId,
+      baseRecord.deviceRef,
+    );
+    check("row 83 setup: the record resolves to a real device", Boolean(device));
+
+    // Two connectors differing ONLY in id — the same tenant, the same device.
+    const connectorA = { ...dockConnector, id: "conn_dock_alpha" };
+    const connectorB = { ...dockConnector, id: "conn_dock_beta" };
+
+    // A observes a CONFIRMED tamper at 14:55. B reports "none" — observed at
+    // 14:00, fifty-five minutes EARLIER. B must not be able to erase A.
+    const fresherWorse = {
+      ...baseRecord,
+      tamperState: "confirmed" as const,
+      observedAt: "2026-07-13T14:55:00.000Z",
+    };
+    const stalerBetter = {
+      ...baseRecord,
+      tamperState: "none" as const,
+      observedAt: "2026-07-13T14:00:00.000Z",
+    };
+
+    const clk = fixedClock("2026-07-13T15:00:00.000Z");
+    runDockSync(dockStore, clk, connectorA, [fresherWorse]);
+    runDockSync(dockStore, clk, connectorB, [stalerBetter]);
+
+    const tamperRows = device
+      ? dockStore
+          .listSignalsForSubject(dockConnector.tenantId, "device", device.id)
+          .filter((s) => s.category === "tamper_state")
+      : [];
+
+    // NOT pinned to a literal count: the seed already carries a tamper row from
+    // the tenant's own dockbridge connector, so the total is seed-dependent and a
+    // fixed number would fossilise. What must hold is that BOTH new connectors'
+    // rows survive alongside it — before the fix they collapsed onto one id.
+    const survivingIds = new Set(tamperRows.map((s2) => s2.connectorId));
+    check(
+      "row 83: both connectors' tamper rows SURVIVE — the second no longer overwrites the first",
+      survivingIds.has("conn_dock_alpha") && survivingIds.has("conn_dock_beta"),
+      `connectorIds present: ${[...survivingIds].join(", ")}`,
+    );
+    check(
+      "row 83: the two rows carry DIFFERENT ids, and the id is what differs",
+      new Set(tamperRows.map((s) => s.id)).size === tamperRows.length,
+      `ids: ${tamperRows.map((s) => s.id).join(", ")}`,
+    );
+    check(
+      "row 83: every surviving row is attributable to a DISTINCT connector",
+      survivingIds.size === tamperRows.length,
+      `${tamperRows.length} rows, ${survivingIds.size} distinct connectors`,
+    );
+
+    // The point of keeping both: the FRESHER observation must win the fold. This
+    // asserts the input `groupLatest` now receives — the greatest-observedAt row
+    // among the survivors is the CONFIRMED tamper, not the older "none". Before
+    // the fix there was exactly one row, so there was nothing to arbitrate at all.
+    const winner = tamperRows.reduce(
+      (best, s2) => (best && best.observedAt >= s2.observedAt ? best : s2),
+      tamperRows[0],
+    );
+    check(
+      'row 83: the greatest-observedAt survivor is the CONFIRMED tamper, so the fold cannot pick the older "none"',
+      winner?.value === "confirmed",
+      `winner observedAt=${String(winner?.observedAt)} value=${String(winner?.value)}`,
+    );
+  }
 }
 
 

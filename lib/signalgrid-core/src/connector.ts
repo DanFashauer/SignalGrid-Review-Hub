@@ -201,6 +201,14 @@ function buildSignal(
     id: deterministicId(
       "sig",
       connector.tenantId,
+      // The connector id is PART OF THE KEY, and that is the whole point.
+      // Without it, two connectors reporting the same category for the same
+      // device mint the SAME id, and `store.putSignal` overwrites in place with
+      // no freshness comparison — so a second source carrying an OLDER reading
+      // silently erased a newer one and the outcome flipped deny -> allow.
+      // Per-connector rows now coexist, which lets `groupLatest` in evidence.ts
+      // do the greatest-observedAt arbitration it was always written to do.
+      connector.id,
       subjectType,
       subjectId,
       category,

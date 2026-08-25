@@ -66,7 +66,15 @@ export function runShiftSync(
       SHIFT_STALE_WINDOW_HOURS,
     );
     const signal: NormalizedSignal = {
-      id: deterministicId("sig", connector.tenantId, "device", device.id, "shift_context"),
+      // connector.id is in the key; see the note in connector.ts buildSignal.
+      id: deterministicId(
+        "sig",
+        connector.tenantId,
+        connector.id,
+        "device",
+        device.id,
+        "shift_context",
+      ),
       tenantId: connector.tenantId,
       connectorId: connector.id,
       subjectType: "device",

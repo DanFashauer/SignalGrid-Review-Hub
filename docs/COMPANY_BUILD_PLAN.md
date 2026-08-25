@@ -3896,6 +3896,53 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+173. **A fix can add a branch no proof looks at, and the only thing that notices
+    runs once a day.** — FIXED 2026-08-25, qa-engineer. Every pull request in this
+    repository was red for two days and the cause was three of this lane's own
+    fixes.
+    WHAT HAPPENED, in order. The row 126 negative-age guards and the row 134/135
+    readiness work added branches. The proofs for those families assert `standing`
+    and never read `ageDays`, so the code computing the age could have been deleted
+    with nothing failing. The daily mutation sweep noticed on 2026-08-24 and
+    reported four survivors. `check-ci-liveness.mjs` is deliberately fatal in CI and
+    reported-only off it, so once the last successful sweep aged past 48 hours every
+    CI run went red — while `node scripts/preflight.mjs` stayed green locally,
+    because that is precisely the asymmetry the gate is built on.
+    THE GATES ALL WORKED. The sweep caught unfalsifiable guards; the liveness gate
+    caught the sweep going dark; the liveness gate's local-versus-CI split is why a
+    green preflight said nothing. Nothing here is a gate defect.
+    THE LANE'S FAILURE WAS OBSERVATIONAL. Seven consecutive failures of the same CI
+    job went unread because this lane kept querying check-run LISTS, which showed
+    jobs still in flight, and never read the completions. Seven pushes landed on top
+    of a red build. The check that would have caught it is not a gate — it is
+    reading the exit state instead of the progress state, which is the same
+    distinction this document records under other names in rows 107, 159 and 168.
+    THE FIX. Six assertions added to `proof:credential-rotation` (22 -> 27), each
+    mutation now dropping it by a different count (26/27, 25/27, 26/27) so they fail
+    for distinct reasons rather than one shared check. One was subtler than it
+    looked: the existing unreadable-reference assertion feeds both a policy and a
+    lastRotatedAt, so removing the `now === null` arm lets the record fall through
+    to the negative-age guard, which answers "unknown" as well — two guards, one
+    verdict, either one removable. The new case poses no policy, which returns the
+    arm to sole possession of the answer.
+    THE FOURTH SURVIVOR WAS DELETED RATHER THAN EXEMPTED, and that is the part worth
+    keeping. `state.budget !== null` in `session-readiness/evaluate.ts` sat beside a
+    `budgetThreshold !== null` test whose value is derived from `state.budget` one
+    line above, so the second implied the first and no mutation could kill it. The
+    documented disposition for a genuinely inert term is an ALLOWED entry, and this
+    one could not have one: `scripts/mutation-guard.mjs` matches exemptions by
+    SUBSTRING against the trimmed source line, and the identical text appears in the
+    READINESS_BUDGET_UNREADABLE branch nine lines up, which is real behaviour. A
+    single entry would have covered both — a fail-open inside the control that
+    exists to catch fail-opens.
+    WHAT IS STILL OPEN, and it is the general form: the ALLOWED registry's
+    substring matching means ANY exemption can silently reach a second, unrelated
+    line that happens to share its text. Nothing warns about it. Keying an entry to
+    a line NUMBER as well as a string, or refusing an entry whose string matches
+    more than one line in the file, would close it; the second is cheaper and needs
+    no maintenance when code moves. Filed rather than built, because it changes a
+    registry every mutation target depends on and deserves its own falsification.
+
 172. **An evidence artifact asserts six safety properties that nothing measures.** —
     OPEN, qa-engineer. `.github/workflows/connector-emulator-smoke.yml` generates an
     evidence manifest — uploaded as a build artifact, never committed, so it is not

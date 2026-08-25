@@ -256,7 +256,35 @@ export interface AttestationResult {
   ok: boolean;
   /** The attestation format that was present. */
   fmt: AttestationFormat;
-  /** True when a cryptographic statement was actually verified (not `none`). */
+  /**
+   * True when a statement's SIGNATURE verified — and read the next paragraph
+   * before treating that as authenticator provenance, because it is not.
+   *
+   * For `packed` with an `x5c` and for `fido-u2f`, the key that checks the
+   * signature is taken straight from the leaf certificate the CLIENT supplied.
+   * Nothing validates that certificate: no trust anchor, no issuer check, no
+   * validity period, no basicConstraints, no AAGUID match against the
+   * authenticator metadata. So `true` means "whoever sent this holds the private
+   * key for the certificate they also sent" — a self-signed certificate the
+   * caller minted a second ago satisfies it exactly as well as a Yubico one.
+   *
+   * It does NOT mean the credential came from a genuine hardware authenticator,
+   * which is the only thing anybody wants attestation FOR.
+   *
+   * WHY THIS IS NOT CURRENTLY A HOLE, stated so nobody relaxes on it: nothing
+   * reads this field. `registerCredential` gates on `ok` (the signature checked
+   * out) and never consults `attested`, and registration independently enforces
+   * the rpId hash, user presence and user verification. A forged statement buys
+   * an attacker `true` in a value with no consumers. The defect is that the field
+   * asserts more than it can back — which is exactly the class this repository
+   * fails builds over elsewhere — not that a decision currently turns on it.
+   *
+   * DO NOT gate anything on this until real chain validation exists: root
+   * certificates for the authenticator vendors, or FIDO Metadata Service lookup
+   * by AAGUID. That is a real piece of work for a capability nothing uses today,
+   * so it is filed rather than built, and this comment is the guard in the
+   * meantime.
+   */
   attested: boolean;
   error?: string;
 }
@@ -317,8 +345,11 @@ function ecUncompressedPoint(cose: Map<unknown, unknown>): Buffer | null {
 
 /**
  * Verify a registration's attestation statement against the clientDataJSON.
- * `none` is accepted (self-attested); `packed` and `fido-u2f` are cryptographically
- * verified; anything else fails closed.
+ * `none` is accepted (self-attested); `packed` and `fido-u2f` have their
+ * SIGNATURES cryptographically verified; anything else fails closed.
+ *
+ * "Signature verified" is the honest ceiling here — the certificate carrying the
+ * verifying key is never itself validated. See `AttestationResult.attested`.
  */
 export function verifyAttestation(params: {
   attestationObjectB64: string;

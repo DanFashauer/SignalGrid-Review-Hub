@@ -411,6 +411,45 @@ function findSwitchBlocks(code) {
   else ok(`Public-safe web: no third-party vendor host in any SERVED web artifact (${scan.length} files scanned across every web tree)`);
 }
 
+// ── An unearned attestation claim may not become load-bearing ────────────────
+//
+// `AttestationResult.attested` in lib/webauthn reports that a statement's
+// SIGNATURE verified. It does not mean the credential came from a genuine
+// authenticator: for `packed` with an x5c and for `fido-u2f`, the verifying key
+// is taken from the leaf certificate the CLIENT supplied, and nothing validates
+// that certificate — no trust anchor, no issuer, no validity window, no AAGUID
+// match. A self-signed certificate minted a second ago satisfies it.
+//
+// That is survivable ONLY because nothing reads the field. Registration gates on
+// `ok` and independently enforces the rpId hash, user presence and user
+// verification. The day something branches on `attested`, a forged statement
+// becomes a real bypass — so this rule fails the build at that moment rather
+// than after it ships. The field's own doc comment says the same thing, and a
+// comment has never once stopped this drift on its own.
+//
+// TO LIFT THIS: implement real chain validation (vendor roots, or FIDO Metadata
+// Service lookup by AAGUID) and delete this rule in the same commit.
+{
+  const PRODUCER = "lib/webauthn/src/webauthn/verify.ts";
+  const consumers = [];
+  for (const f of tracked) {
+    if (!isTs(f) || f === PRODUCER) continue;
+    const src = stripComments(read(f));
+    // A READ of the field — `x.attested` — not the declaration or a key named
+    // `attested:` in an unrelated object literal.
+    if (/\.attested\b/.test(src)) consumers.push(f);
+  }
+  if (consumers.length) {
+    bad(
+      `Unearned claim: ${consumers.join(", ")} reads \`.attested\`, which only proves the caller ` +
+        "holds the key for a certificate it supplied itself. Validate the certificate chain before " +
+        `branching on it, then remove this rule. Producer: ${PRODUCER}`,
+    );
+  } else {
+    ok("Unearned claim: nothing branches on WebAuthn `attested` (signature-verified != authenticator-attested)");
+  }
+}
+
 console.log("");
 if (failures.length) {
   console.error(`Invariant review FAILED (${failures.length} issue${failures.length > 1 ? "s" : ""}).`);

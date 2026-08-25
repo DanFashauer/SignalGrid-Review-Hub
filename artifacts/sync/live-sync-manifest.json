@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 41,
-  "fingerprint": "ed0665b07a05ee8f10b3b9a29c63bfcc7492163696899779175024439c5e5121",
+  "manifestVersion": 42,
+  "fingerprint": "cc62e6918fcdce852546ea010d1c4b8e46efef4f985cde0263c1e11fe3e78dc0",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -112,7 +112,7 @@
       "challenge-capability": 51,
       "change-window": 76,
       "config-scope": 58,
-      "credential-exposure": 38,
+      "credential-exposure": 41,
       "custody-beacon": 56,
       "decision-continuity": 75,
       "device-attestation": 77,
@@ -132,7 +132,7 @@
       "mcp-server": 11,
       "mobile-app-catalog": 19,
       "nac": 34,
-      "network-nac": 56,
+      "network-nac": 59,
       "oauth-consent": 74,
       "ot-posture": 46,
       "pacs-access": 103,

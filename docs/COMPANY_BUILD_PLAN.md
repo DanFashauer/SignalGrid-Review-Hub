@@ -436,7 +436,8 @@ earlier — that is the loop working, not a reason to soften the record.
     (`missing`: no dock hardware is a deployment shape, a missing posture answer
     is the absence of the thing being asked about) is written down instead of
     left implicit in two chains of `!==`.
-    The core proof now runs 225 assertions. Falsified by exit code, not by eye:
+    The core proof ran 225 assertions at the time of that change (239 today; the
+    figure guard holds every doc to the derived value). Falsified by exit code, not by eye:
     removing the one-line fix drops the proof to exit 1; restoring it, exit 0.
     Four documents cited the superseded figure. A plain grep found only one of
     them — the others read "invariant assertions" rather than "assertions" — and
@@ -2893,6 +2894,304 @@ earlier — that is the loop working, not a reason to soften the record.
     "fossil that looks precise" the figure guard's own header was written about. Same
     for `gateClausesPerFamily=4` in `emitter-discipline-proof.ts:140`, whose header
     still says "five families" against six entries in the array.
+
+125. **The Graph connector reports a device MANAGED when the tenant never said
+    so.** — OPEN, endpoint-uem-domain. BLOCKING. Reproduced end to end.
+    `graph/posture-connector.ts:239-241` infers the affirmative state `managed`
+    from a MISSING `managementState`, on the strength of any non-empty
+    `managementAgent` string: `if (s === "" && a !== "") return "managed";`. Its
+    four sibling normalizers in the same file — identity status, user risk,
+    compliance, registration — all fall through to `unknown` on silence. This is
+    the one that drifted.
+    REPRODUCED through the real connector and the real composer. With
+    `managementState` absent and `managementAgent` set to `eas` or `msSense` —
+    both REAL Microsoft Graph values that specifically mean the device is NOT
+    MDM-managed — the result is `deviceManagementState: managed` and a composed
+    verdict of `compliant / none / COMPLIANT_MANAGED`. A typo string
+    (`zzz-typo`) does the same. With the agent ALSO absent, the sibling behaviour
+    kicks in: `unknown` -> `step_up / MANAGEMENT_STATE_UNKNOWN`.
+    So adding an arbitrary string to one optional field flips a device from
+    "challenge the worker" to "let them through".
+    The author knew agent strings need vetting: `agent === "unknown"` is caught
+    one line earlier and correctly returns `unmanaged`. The fallthrough just never
+    got the same treatment. `graph` is one of only two families addressing a real
+    `graph.microsoft.com` tenant, so this is on the shipped read path.
+    `proof:graph-connector` is green (20/20) and no proof ever feeds a
+    `managementAgent` into `normalizeManagement`.
+    FIX: delete the two lines and fall to `return "unknown"`. If the inference is
+    genuinely wanted it must be an ALLOWLIST of the agent values that actually
+    denote MDM enrollment (`mdm`, `easMdm`, `intuneClient`,
+    `configurationManagerClientMdm`), never `a !== ""`. Add a proof case feeding an
+    unrecognised agent with no `managementState`.
+
+126. **A rotation dated in the FUTURE grades as current, and the record says so
+    while carrying a negative age.** — OPEN, iam-domain. BLOCKING. Reproduced.
+    `credential-rotation/normalize.ts:90-91` computes `ageDays` and compares it to
+    the policy bound with no check that the timestamp is in the past. A future
+    `lastRotatedAt` yields a negative age, trivially `<= maxAgeDays`, so the record
+    grades `within_policy` -> `rotation_current` / `none` /
+    `rotationConfirmed: true`.
+    REPRODUCED, same record past-dated then future-dated: the past-dated one gives
+    `rotation_overdue / step_up / CREDENTIAL_ROTATION_OVERDUE`; the future-dated one
+    gives `{"standing":"within_policy","ageDays":-3653}` and a verdict of
+    `rotation_current / none / ROTATION_WITHIN_POLICY` with
+    `rotationConfirmed: true` and the summary "Within its rotation policy and held
+    in the managed vault."
+    THE ASYMMETRY IS THE FINDING. Four families in the same range guard this
+    explicitly, each with a comment saying why — `local-authority/normalize.ts:127`
+    ("Issued in the future relative to the reference — an unreadable clock, not the
+    freshest grant ever minted"), `access-governance/evaluate.ts:90`,
+    `carrier/evaluate.ts:136` and `location-services/evaluate.ts:79` (both via
+    FUTURE_SKEW_TOLERANCE_MS), and `device-management-health/graph-transport.ts:93`.
+    `credential-rotation` has none. Absence corroborated three differently-shaped
+    ways plus `check:absence` (CORROBORATED across 4 probes).
+    `proof:credential-rotation` is green (18/18) because it enumerates the
+    NORMALIZED enum space and feeds only four hand-written past-dated instants —
+    the wire-level temporal edge is outside what it enumerates by construction.
+    WHY IT MATTERS: clock skew, a bad timezone conversion on a bridge, or anyone who
+    can write that field gets a permanent clean bill on a static secret that has
+    never been rotated — and `rotationConfirmed: true` is an affirmative other
+    surfaces read as fact.
+    FIX: treat a negative age as `unknown`, matching `local-authority`'s shape — NOT
+    `overdue`, which would assert a lapse nobody established. The `no_policy` branch
+    needs the same. Add a proof case feeding a future `lastRotatedAt`.
+
+127. **`edr-threat` reports full protection from an unreadable signature age,
+    contradicting its own comment.** — OPEN, secops-domain. `evaluate.ts:87-88`
+    guards only `null` then bare-compares with `>=`. A NaN on either side is false,
+    so an unreadable freshness reads as FRESH, `protectionHealthy` goes true, and
+    the verdict is `protected / NO_THREATS_HEALTHY / none`. The caller-posed
+    `staleSignatureHours` at `:65` has no validation at all.
+    REPRODUCED on an endpoint whose signatures are more than a decade out of
+    date: the default bound gives `degraded_protection / step_up`; a NaN bound, a
+    string bound, and `signatureAgeHours = NaN` all give `protected / none`.
+    `NaN` is type-legal — `types.ts:70` declares `number | null`.
+    The file's own comment at `:84-86` asserts the opposite of what it does: "We
+    never report protection as fresh when its freshness cannot be confirmed."
+    The correct pattern is two files over: `app-update/evaluate.ts:86` guards its
+    caller-posed bound with `typeof` + `Number.isFinite` + `< 0`.
+    SCOPED HONESTLY: should-fix, not blocking, because the shipped
+    `edr-connector.ts` DOES guard the field with `Number.isFinite`. But the guard
+    lives in one of two paths into the evaluator, and `evaluateThreatPosture` is
+    re-exported from the public entry point, so any lane can call it with a record
+    it built itself. `proof:edr-threat` is green (36/36) and the option has zero
+    callers, zero tests and zero proof cases.
+    FIX: make the value guard positive — stale unless
+    `Number.isFinite(x) && x < staleHours` — and validate the bound with the
+    `app-update` shape.
+
+128. **The ITSM aggregate reports `unhealthy` for a call the gate never let it
+    make.** — OPEN, itsm-ops-domain. When the emit gate suppresses, all eight
+    adapters' `healthCheck()` return `false` without touching the network, and
+    `adapter.ts:266-274` records that as `'unhealthy'`. The `ITSMAdapterHealth` type
+    carries `'unchecked'` for exactly this case and the aggregate already uses it
+    correctly for a DIFFERENT flavour of the same ignorance.
+    REPRODUCED, both flavours side by side: gate suppressed with zero network
+    traffic gives `{"zendesk":"unhealthy"}`; an adapter that exposes no healthCheck
+    gives `{"jira":"unchecked"}`. Same ignorance, two answers.
+    The docstring immediately above that loop names the principle it breaks: "'we
+    never asked' and 'we asked and it is fine' arrived at the caller as the same
+    value… the unearned affirmative this repository keeps finding." Reporting
+    `unhealthy` for a call never made is that fabrication with the sign flipped.
+    LOWER STAKES than 125/126 because it fabricates a NEGATIVE, not a grant — but it
+    sends an operator chasing eight simultaneous vendor outages that are not
+    happening, and the third state that would tell the truth is already in the type.
+    FIX: widen `healthCheck()` to return `ITSMAdapterHealth` and have each adapter
+    return `'unchecked'` with the suppression reason.
+
+129. **Two more families accept an unvalidated staleness bound.** — OPEN,
+    network-domain (carrier) and physical-ot-domain (location-services). NOTE.
+    Both read `options.staleAfterMs ?? DEFAULT` with no finiteness check. They fail
+    CLOSED on NaN but OPEN on Infinity: reproduced against a 7.5-year-old fix, an
+    Infinity bound turns `off_premises_stale / STALE_LOCATION_FIX / locate` into
+    `on_premises / INSIDE_AUTHORIZED_GEOFENCE / none`. Infinity is a less likely
+    accident than NaN, which is why this is a note — but it is the same missing
+    guard as row 127 and the three sites are one change.
+
+130. **`deviceResolver`'s class docstring names a source that does not exist.** —
+    OPEN, endpoint-uem-domain. NOTE. `deviceResolver.ts:52-60` lists four
+    aggregation sources; the fourth, "FleetDM (posture/telemetry)", has no code
+    path — `resolve()` and `aggregate()` try registry, UEM and NAC only, and
+    `DeviceIdentity.source` cannot even represent a FleetDM result. Same class as
+    the `registerVerifiedPrincipal` docstring in row 86: prose asserting a check or
+    a source the code does not have.
+
+131. **The empty-candidate backstop is present in five families and absent in
+    ten.** — OPEN, secops-domain (to arbitrate, as the largest holder). NOTE, and
+    recorded so the divergence is a decision rather than an accident. Five families
+    end with an explicit "not positively confirmed and nothing objected -> force
+    step_up" guard, each with its own reason code so a firing is visible. Ten do
+    not. No reachable hole was found in the ten — their normalizers coerce every
+    unrecognised value into an enum member that pushes a candidate — so this is a
+    generational difference, not a live defect. It rests on a real split: the
+    hardened connectors carry `oneOf` allowlists, `ownValue` own-property reads and
+    a `hasUnrecognizedKey` prototype walk; seven others carry none of the three.
+    Rows 125 and 127 are both instances of a non-confirmed input reaching a grant,
+    which is exactly what this guard exists to catch late.
+
+132. **`createTicketTemplate` mints ids at millisecond resolution.** — OPEN,
+    itsm-ops-domain. NOTE. `itsm/store.ts:780` uses `custom-${Date.now()}`; two
+    templates created in the same millisecond collide and `getTicketTemplate`
+    resolves by `find`, returning the first. Not a decision path and not a doctrine
+    violation — but `generateId()` using `crypto.randomUUID()` sits sixty lines
+    above and is what every other id in the file uses.
+
+133. **The syslog adapter reports the collector reachable without opening a
+    socket — in a family that has no transport at all.** — OPEN, secops-domain.
+    `syslog/transport.ts:173-179` is `return !!(this.config.host &&
+    this.config.port)`. `port` is defaulted in the constructor and `host` is
+    required, so this returns TRUE for every adapter that can be constructed —
+    including this one, whose own comment at `:121` reads "THERE IS NO TRANSPORT,
+    AND THIS NO LONGER CLAIMS OTHERWISE" and whose `sendEvent` throws on the live
+    path.
+    REPRODUCED at dev tier, no live flag, no credential, a hostname that does not
+    resolve: `syslog healthCheck() = true` while `splunk`, `webhook` and
+    `sentinel` all return `false`. In the same process `sendEvent()` returns
+    `{"status":"suppressed"}`.
+    WHY IT MATTERS: the docstring says "verify syslog server is reachable"; it
+    verifies that a config object was populated. A SIEM forwarder reporting itself
+    healthy while it cannot send anything defeats the audit trail it exists to
+    produce — and does so most convincingly during an incident. This is the same
+    unearned-affirmative shape as row 128, in the opposite direction.
+    WHY NO GATE CAUGHT IT, checked three ways: `check-ungated-fetch.mjs`
+    short-circuits on files with no fetch-like callee and this file has none;
+    `check-read-error-swallowing.mjs` explicitly excludes `healthCheck()` on
+    reasoning that covers a false, not a true; `emit-gate-proof.ts` asserts syslog
+    opens no socket and throws when live, but asserts nothing about `healthCheck`.
+    FIX: gate first (`resolveEmission()`, return false when not live), then either
+    probe for real or — given there is no transport — return false with the reason.
+    Add the assertion to `emit-gate-proof.ts` so a fifth instance cannot arrive
+    quietly.
+
+134. **A GARBLED readiness budget grades strictly better than no budget at all.** —
+    OPEN, iam-domain. `session-readiness/evaluate.ts:93-113`, root cause at
+    `index.ts:107,136` where `budget: opts.budget ?? null` passes through
+    unvalidated while `elapsedToUsableSeconds` beside it goes through `asSeconds`.
+    REPRODUCED, identical record each time (42s elapsed, usable, measured,
+    critical risk):
+    · budget 30 (honest)      -> `not_ready / restrict / READINESS_BUDGET_EXCEEDED`
+    · budget null (unposed)   -> `degraded / monitor / READINESS_BUDGET_UNPOSED`
+    · budget NaN              -> `ready / none / SESSION_READY`
+    · budget Infinity         -> `ready / none / SESSION_READY`
+    · budget `{}` (typo key)  -> `ready / none / SESSION_READY`
+    MECHANISM: `elapsed > threshold` is false for NaN, Infinity and undefined, so
+    no EXCEEDED candidate fires — AND because `budget !== null`, the honest
+    UNPOSED monitor arm is skipped too. Both the finding and its fallback are
+    switched off at once, and the seed grant survives.
+    The comment at `:107-113` states the intent exactly — the unposed rung "must
+    NOT be suppressible by omitting the budget" — and an unreadable threshold
+    suppresses it just as completely. The `{}` case is the realistic one: a config
+    with a misspelled key satisfies `ReadinessBudget` structurally.
+    FIX: validate the pose where it enters, as `pacs-access` does. A budget whose
+    `thresholdSeconds` is not a finite positive number is a GARBLED pose and needs
+    its own raising rung, not the seed grant. Validating in the normalizer alone is
+    not enough — `evaluateSessionReadiness` is exported and callable directly.
+
+135. **A non-finite caller threshold turns an abandoned device into a full custody
+    grant.** — OPEN, physical-ot-domain. `rtls-custody/evaluate.ts:56-57,102,107,109`.
+    REPRODUCED, identical badge-less record in an authorized clinical zone with a
+    fix age and dwell of 99,999s: defaults give `abandoned / alert / ABANDONED`;
+    `staleFixSeconds` of NaN or Infinity both give `in_zone / none / CUSTODY_OK`.
+    THE CROSS-FAMILY ASYMMETRY IS THE FINDING. Of the five numeric evaluator
+    options in the m-z range, exactly one validates:
+    · `pacs-access` `maxEventAgeSeconds` — GUARDED; executed, NaN/Infinity/0/-1 all
+      yield `unknown`. Its comment states the rule: "a garbled pose is a question we
+      cannot read — never answered optimistically."
+    · `rtls-custody` `staleFixSeconds` / `abandonDwellSeconds` — FAIL OPEN.
+    · `network-nac` `staleAfterMs` — accidentally safe (NaN still yields step_up).
+    · `passkey-assurance` `expectedCredentialCount` — accidentally safe
+      (`size !== NaN` is always true).
+    The two safe ones are safe by ARITHMETIC ACCIDENT, not by a guard, so they will
+    drift the moment a comparison changes shape.
+    WHY IT MATTERS: this family's header says "a device we can't physically see is
+    never mistaken for one in good custody." Every internal fail-safe in the file is
+    careful, and all of it is defeated by one unreadable option from the caller.
+    FIX: give all four options `pacs-access`'s treatment, ideally as one shared
+    helper so the next family inherits the guard rather than the accident.
+
+136. **The webhook URL safety guard keys off `NODE_ENV` while the delivery gate
+    keys off `SIGNALGRID_TIER`.** — OPEN, secops-domain. `webhooks/dispatch.ts:32`
+    reads `IS_PRODUCTION` from `NODE_ENV` AT MODULE LOAD and uses it at `:96,101`,
+    while `resolveWebhookDelivery` at `:75-86` reads `SIGNALGRID_TIER` and
+    `SIGNALGRID_LIVE_INTEGRATIONS` at call time.
+    REPRODUCED in two processes, both with `SIGNALGRID_TIER=prod` and
+    `SIGNALGRID_LIVE_INTEGRATIONS=true`. With `NODE_ENV=production` a
+    `http://127.0.0.1:9/hook` target is rejected before delivery is recorded. With
+    `NODE_ENV` UNSET the same URL passes the guard and reaches the signing step —
+    as do `http://localhost:9/hook` and `http://192.168.0.5/hook`.
+    WHY IT MATTERS: two gates guard one outbound path and disagree about what
+    "production" means. A deployment that sets the repo's OWN tier vocabulary to
+    prod and turns live integrations on has done everything this codebase asks, and
+    still gets plain-HTTP delivery of an HMAC-signed payload to loopback or RFC1918
+    — an SSRF surface pointed at whatever runs beside the process. Reading it at
+    module load makes it unvariable per call, which is the very defect the comment
+    at `:70-73` names while leaving the constant two lines above it.
+    `webhooks-proof.ts` only exercises `resolveWebhookDelivery` and never calls
+    `dispatchToEndpoint`, so nothing covers this.
+    FIX: key the URL rules off the same call-time resolution the delivery gate uses
+    and delete the module-load constant. Consider making the loopback/RFC1918 block
+    unconditional — there is no tier in which posting a signed customer payload at
+    127.0.0.1 is intended.
+
+137. **A delivery the gate deliberately withheld is retried to exhaustion and
+    dead-lettered as a failure.** — OPEN, secops-domain.
+    `webhooks/dispatch.ts:253-298` — `isPermanentError` does not recognise
+    `suppressed`.
+    REPRODUCED at dev tier with a shortened 4-attempt config: `dispatchEvent`
+    returns `{"dispatched":1,"succeeded":0,"failed":1}`, four delivery rows all
+    reading `suppressed`, and one DLQ entry whose `lastError` is the suppression
+    reason itself. Under the SHIPPED defaults the jittered backoff sums to ~33.6
+    seconds of sleeping before dead-lettering.
+    The `suppressed` field's own docstring at `:55-61` says a caller that cannot
+    tell suppression from failure "would report 'webhook failed' for a tier that is
+    never supposed to send". `dispatchWithRetry` is that caller. In dev and alpha —
+    the tiers developers actually run — every event sleeps ~33s, writes six rows,
+    reports a failure, and dead-letters a payload that was never meant to leave. The
+    DLQ is what an operator reads during an incident, and it fills with entries
+    describing policy working correctly.
+    FIX: check `result.suppressed === true` explicitly and return before the loop
+    with no DLQ write; count suppressed separately from failed.
+
+138. **`addToDLQ` hardcodes an attempt count it did not observe.** — OPEN,
+    secops-domain. NOTE. `webhooks/store.ts:357` is `attempts: 6, // After max
+    retries`. Reproduced: with `maxAttempts: 4` and four attempts actually made, the
+    DLQ entry still reads 6. Small, but it is a record asserting a number nobody
+    counted, in the artefact an operator reads to reconstruct what happened.
+
+139. **A dead safety-shaped constant sits beside two "unvalidated" warnings.** —
+    OPEN, secops-domain. NOTE. `webhooks/store.ts:24` declares `IS_PRODUCTION` and
+    never uses it — the only uses are in `dispatch.ts`. A reader scanning that file
+    for guards will count it as one.
+
+140. **`vuln-scan` lets a non-finite CVSS into the evidence field while a sibling
+    guards the same shape.** — OPEN, secops-domain. NOTE, and NOT a fail-open on
+    the decision path — that was checked rather than assumed. `vuln-connector.ts:131`
+    uses a bare `typeof === "number"`, so NaN and Infinity pass; but
+    `normalizeSeverity`'s CVSS fallback tests `>=9`, `>=7`, `>=4`, `>0`, all false
+    for NaN, so it lands on `unknown` and the evaluator's SEVERITY_UNVERIFIED arm
+    handles it. Infinity maps to `critical`, which tightens.
+    Still worth recording: `cvssScore` travels into the normalized finding and out
+    to whatever renders evidence, carrying NaN or Infinity as if it were a reading,
+    and `rtls-connector.ts:139-146` guards the identical shape one directory away.
+
+141. **CHECKED AND CLEAN, recorded so it is not re-litigated: every m-z family
+    raises on total ignorance.** — CLOSED, secops-domain. A maximally-unknown
+    normalized input was built for all 21 evaluators in the m-z range and called
+    with NO options. Every one raised — `step_up` or `monitor`, never a grant:
+    macos-posture, ot-posture, peripheral-control, vuln-scan, rtls-custody,
+    oauth-consent, token-binding, sso-session, pacs-access, platform-sso,
+    policy-binding, shift-context, passkey-assurance, task-exception, sse-egress,
+    uem, network-nac, observability-integrity, session-readiness,
+    service-lifecycle, response-accountability. ZERO grants.
+    The cross-family suspicion that opened that read — that `covered ?? true` (17
+    occurrences) defaults a coverage flag to the permissive value — DOES NOT HOLD.
+    Also verified: all 26 families in range carry a tier + live-integrations gate,
+    so no ungated live vendor call exists there; and the two `switch` statements
+    without a `default:` on a decision path (`response-accountability:246`,
+    `service-lifecycle:291`) are compiler-enforced exhaustive over closed unions,
+    which is STRONGER than a default arm, not weaker.
+    A clean read is a result. This row exists because "nobody checked" and "checked,
+    nothing found" are different states and only the ledger tells them apart.
 
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —

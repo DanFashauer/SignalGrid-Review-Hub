@@ -1534,6 +1534,608 @@
       "date": "2026-08-25",
       "depth": "read",
       "note": "Only the figures= line (316) plus a grep for a ladder definition: ladderRungs=3 is a literal with no in-file ladder (row 124). Other 315 lines NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/adapters/emit-gate.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + traced every a-l caller. Tier/flag conjunction, call-time env read, EMIT_SUPPRESSED as a third state. m-z callers NOT checked."
+    },
+    {
+      "path": "lib/integrations/src/integrations/adapters/types.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Tri-state UEMDeviceState/ITSMAdapterHealth doctrine; its own docstring is NOT honoured by itsm/adapter.ts in the suppressed case (row 128). AdapterConfig consumers NOT checked."
+    },
+    {
+      "path": "lib/integrations/src/integrations/access-governance/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Number.isFinite bound guard, <=0 reject, future-dated->unknown, strict INSTANT_RE, worst-concern-wins seed. Executed on a future instant. Connector normalizer NOT checked."
+    },
+    {
+      "path": "lib/integrations/src/integrations/access-governance/index.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read as the template live-gate. Executed the resolver on empty and tier+flag-only envs. Fetch transport NOT exercised."
+    },
+    {
+      "path": "lib/integrations/src/integrations/agent-behavior/evaluate.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Every unknown arm pushes a candidate. No positivelyX empty-list backstop (row 131). Connector NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/agent-identity/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Human-seeds-monitor asymmetry; actorType 'unknown' pushes step_up. Connector NOT read, so an out-of-union actorType is unconfirmed."
+    },
+    {
+      "path": "lib/integrations/src/integrations/app-update/evaluate.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. The caller-posed bound IS guarded (typeof + Number.isFinite + <0) \u2014 the correct pattern edr-threat lacks. Connector NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Verified the docstring's EIGHT-affirmative-clauses claim against positivelySelected \u2014 it holds. catalog.ts NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Traced whether a non-enumerated credentialClass could reach the seed grant; ruled out via the connector's oneOf allowlist."
+    },
+    {
+      "path": "lib/integrations/src/integrations/bootstrap-credential/types.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-140 for the CredentialClass/LifetimeStanding unions. Verdict/reason-code tail NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/bootstrap-credential/bootstrap-credential-connector.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read as the reference hardened normalizer: oneOf allowlist, ownValue, hasUnrecognizedKey prototype walk, strict Zulu regex. An asserted-but-unparseable expires_at yields 'unbounded' rather than 'unknown', masked today by instantShapeBad->malformed."
+    },
+    {
+      "path": "lib/integrations/src/integrations/break-glass/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Alert ceiling holds on every branch; justification has no 'unknown' member so its absence from the disjunction is correct. index.ts NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/break-glass/types.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. BreakGlassReportIntegrity is binary, so evaluate's === 'malformed' is complete within the type."
+    },
+    {
+      "path": "lib/integrations/src/integrations/caep-events/format.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Every field refuses rather than defaults; strict Zulu regex; '@' pseudonym tripwire; no signed token produced."
+    },
+    {
+      "path": "lib/integrations/src/integrations/caep-events/resolve.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Four-condition gate + injected transport; executed on empty and tier+flag envs."
+    },
+    {
+      "path": "lib/integrations/src/integrations/carrier/evaluate.ts",
+      "reviewedBy": "network-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Number.isNaN guard and FUTURE_SKEW_TOLERANCE_MS present. Executed with staleAfterMs NaN (fails closed) and Infinity (fails OPEN \u2014 row 129)."
+    },
+    {
+      "path": "lib/integrations/src/integrations/carrier/types.ts",
+      "reviewedBy": "network-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-60 for the Freshness/ReachabilitySignal unions. Verdict tail NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/challenge-capability/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Unposed early-return ordering; the alert requires EVERY method positively broken. Connector NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/change-window/evaluate.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Five-clause affirmative grant and the GRANT_BACKSTOP. Connector read only for its instantOf helper."
+    },
+    {
+      "path": "lib/integrations/src/integrations/credential-rotation/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. The short_lived exemption is reachable only by the enumerated value; the docstring's no-!==-bad claim holds. The defect is upstream in normalize.ts."
+    },
+    {
+      "path": "lib/integrations/src/integrations/credential-rotation/normalize.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed. Found the missing future-date guard (row 126). Three differently-shaped searches plus check:absence confirm no such guard exists in the family."
+    },
+    {
+      "path": "lib/integrations/src/integrations/data-protection/evaluate.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Structurally identical to credential-exposure; violations null-vs-[] and dlpPolicyEnforced null->monitor. Connector NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/device-management-health/graph-transport.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read as the deliberate contrast to graph/posture-connector.ts: mapCheckInFreshness HAS a future guard, and both other mappers fall to unknown. Fetch path NOT exercised."
+    },
+    {
+      "path": "lib/integrations/src/integrations/deviceResolver.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Actuator-method refusal at both entry points; UEM/NAC faults reported not swallowed. The class docstring names a FleetDM source with no code path (row 130). ../deviceRegistry NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/edr-threat/evaluate.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed five NaN/bound cases (row 127). Confirmed by grep that staleSignatureHours has zero test or proof callers repo-wide."
+    },
+    {
+      "path": "lib/integrations/src/integrations/edr-threat/types.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 25-90 confirming signatureAgeHours is number|null so NaN is type-legal. Posture tail NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/edr-threat/edr-connector.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-120 plus normalizeEndpoint field mapping. The connector DOES guard signatureAgeHours with Number.isFinite, which is why row 127 is should-fix not blocking."
+    },
+    {
+      "path": "lib/integrations/src/integrations/entitlement-binding/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Coherence short-circuit, null-guarded nestingDepth compare, and a default-less switch that is the deliberate exhaustive kind tsc enforces."
+    },
+    {
+      "path": "lib/integrations/src/integrations/graph/posture-connector.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed against a mock transport. Found normalizeManagement inferring 'managed' from a MISSING managementState (row 125) while its four siblings in the same file all fall to unknown."
+    },
+    {
+      "path": "lib/integrations/src/integrations/graph/types.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. DeviceManagementState carries 'unknown', so the union CAN express the ignorance normalizeManagement declines to use."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/adapter.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed. Factory gate correct; the aggregate healthCheck fabricates 'unhealthy' from a suppressed call (row 128). getDefaultAdapter's '(first enabled)' docstring does no enabled filtering."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/servicenow.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "healthCheck block only. Gate precedes ensureAuthenticated, correctly. createTicket and OAuth body NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/generic-webhook.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "healthCheck block only; the 404/410 handling is correct and deliberately not `status < 500`. Templating and signing NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/jira.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "healthCheck block only. Gated, returns false when suppressed. createTicket NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/zendesk.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "healthCheck block only. Gated. createTicket NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/freshservice.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "healthCheck block only. Gated. createTicket NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/manageengine.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "healthCheck block only. Gated. createTicket NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/bmc-helix.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "healthCheck block only. Gated before ensureAuthenticated. createTicket NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/itsm/ivanti.ts",
+      "reviewedBy": "itsm-ops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "healthCheck block only. Gated before ensureAuthenticated. createTicket NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/link-usability/evaluate.ts",
+      "reviewedBy": "network-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Both contradiction relations, the disbelieved-half guards, and the six-way grant. Connector NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/local-authority/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. The clockConfidence !== 'trusted' gate precedes every standing check."
+    },
+    {
+      "path": "lib/integrations/src/integrations/local-authority/normalize.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed. This is the family that DOES guard a future-dated instant \u2014 the direct contrast making row 125 an asymmetry rather than a design choice."
+    },
+    {
+      "path": "lib/integrations/src/integrations/macos-posture/evaluate.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed all-unknown probe (step_up/HARDENING_STATE_UNKNOWN). Covered default, unknown collection, severity fold, sysextResidual null guard. apple-schema.ts NOT checked."
+    },
+    {
+      "path": "lib/integrations/src/integrations/macos-posture/index.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. 4-clause live gate (tier/flag/token), 401+403 auth mapping, non-JSON and null/array body rejection."
+    },
+    {
+      "path": "lib/integrations/src/integrations/network-nac/network-connector.ts",
+      "reviewedBy": "network-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 130-161 (normalizeAuthState + row normalization). Default falls to 'unknown'; nacCompliant is tri-state. Pagination and error mapping NOT checked."
+    },
+    {
+      "path": "lib/integrations/src/integrations/rtls-custody/evaluate.ts",
+      "reviewedBy": "physical-ot-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed the NaN/Infinity threshold reproduction that is row 135. Tracked default, present tri-state, zone/fix/badge fail-safes."
+    },
+    {
+      "path": "lib/integrations/src/integrations/rtls-custody/types.ts",
+      "reviewedBy": "physical-ot-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read confirming atEgress is boolean and present is boolean|null, so the evaluator's `if (loc.atEgress)` is total."
+    },
+    {
+      "path": "lib/integrations/src/integrations/rtls-custody/rtls-connector.ts",
+      "reviewedBy": "physical-ot-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 130-189. Number.isFinite AND >=0 on both durations \u2014 the guard the evaluator lacks. Transport NOT checked."
+    },
+    {
+      "path": "lib/integrations/src/integrations/vuln-scan/types.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read confirming the VulnSeverity union is closed."
+    },
+    {
+      "path": "lib/integrations/src/integrations/vuln-scan/vuln-connector.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 130-165. Hand-traced NaN through normalizeSeverity's CVSS fallback: all four bands false for NaN so it lands on 'unknown' (safe). Bare typeof on cvssScore noted (row 140)."
+    },
+    {
+      "path": "lib/integrations/src/integrations/oauth-consent/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed all-unknown probe (step_up). Grants-unknown short circuit, riskyGrantCount conflict gate, idpReachable !== true on the clean path."
+    },
+    {
+      "path": "lib/integrations/src/integrations/token-binding/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed all-unknown probe (step_up). Locally-known facts hoisted above the bridge downgrade; every !== true positive-confirmation arm."
+    },
+    {
+      "path": "lib/integrations/src/integrations/sse-egress/evaluate.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed all-unknown mandated probe (step_up/BRIDGE_UNREACHABLE). The switch HAS a default arm; malformed precedes the bridge check."
+    },
+    {
+      "path": "lib/integrations/src/integrations/sse-egress/sse-egress-connector.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Lines 30-140, the whole normalization half: boolOrNull/boolMalformed/enumMalformed, own-property reads, prototype-chain scan with depth cap. Transport half NOT checked."
+    },
+    {
+      "path": "lib/integrations/src/integrations/peripheral-control/evaluate.ts",
+      "reviewedBy": "physical-ot-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed peripherals:null probe (monitor/PERIPHERAL_FEED_UNOBSERVED). null-vs-[] distinction, isWritable failing safe on unknown access."
+    },
+    {
+      "path": "lib/integrations/src/integrations/peripheral-control/peripheral-connector.ts",
+      "reviewedBy": "physical-ot-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 130-228. Both switch defaults land on 'unknown'; `peripherals == null ? null` preserves absence."
+    },
+    {
+      "path": "lib/integrations/src/integrations/platform-sso/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed all-unknown probe (step_up/REGISTRATION_UNKNOWN). Method/policy compatibility guard scoped to KNOWN methods; positivelyConfirmed backstop."
+    },
+    {
+      "path": "lib/integrations/src/integrations/policy-binding/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed all-unknown probe (step_up/BINDING_UNKNOWN). Every axis has an unknown arm; positivelyBound backstop."
+    },
+    {
+      "path": "lib/integrations/src/integrations/shift-context/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed all-unknown probe (step_up/SCHEDULE_UNKNOWN). Schedule x punch matrix complete; positivelyOnDuty backstop uses no !== bad clause."
+    },
+    {
+      "path": "lib/integrations/src/integrations/shift-context/shift-context-connector.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 90-180: strict Zulu-only instantOf, deriveScheduleStanding null/inverted-window arms, compareSites unassessed-vs-unknown split."
+    },
+    {
+      "path": "lib/integrations/src/integrations/pacs-access/evaluate.ts",
+      "reviewedBy": "physical-ot-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed deriveEventFreshness against 3600/NaN/Infinity/0/-1 \u2014 ALL four bad poses yield 'unknown'. This is the family that GUARDS its caller-posed bound and is the comparator for row 135. Also hand-traced an unrecognised technology floor -> undefined -> below_floor (fails closed)."
+    },
+    {
+      "path": "lib/integrations/src/integrations/passkey-assurance/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read of both exported evaluators + all-unknown probe (step_up/REGISTRATION_UNKNOWN). GRANT_BACKSTOP distinct code; verified by hand that expectedCredentialCount:NaN forces countMismatch (fails closed)."
+    },
+    {
+      "path": "lib/integrations/src/integrations/session-readiness/evaluate.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed the budget matrix that is row 134 (30 -> restrict, null -> monitor, NaN/Infinity/{} -> GRANT). Specificity tie-break and the labelled-inert null term."
+    },
+    {
+      "path": "lib/integrations/src/integrations/session-readiness/index.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Lines 60-180 \u2014 the root cause of row 134: elapsedToUsableSeconds goes through asSeconds (isInteger, >=0) while `budget: opts.budget ?? null` passes through UNVALIDATED beside it."
+    },
+    {
+      "path": "lib/integrations/src/integrations/session-readiness/types.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Extracted the ReadinessBudget interface only \u2014 thresholdSeconds is a bare number with no runtime schema anywhere."
+    },
+    {
+      "path": "lib/integrations/src/integrations/observability-integrity/evaluate.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + all-unknown probe (step_up). The final evidence_sound fall-through is reachable only after every other union member is excluded, cross-checked against the four unions in types.ts; load_bearing only ever moves severity UP."
+    },
+    {
+      "path": "lib/integrations/src/integrations/observability-integrity/normalize.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Trusted allowlists; asInstant/asPositiveNumber/asFraction all use Number.isFinite; future-dated datapoint -> unknown not current. Noted asInstant accepts any Date.parse-able string unlike the strict-Zulu siblings \u2014 a consistency point, not a fail-open."
+    },
+    {
+      "path": "lib/integrations/src/integrations/observability-integrity/types.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Extracted the four state unions to prove the evaluator's fall-through is exhaustive."
+    },
+    {
+      "path": "lib/integrations/src/integrations/uem/evaluate.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + all-unknown probe (step_up/ENROLLMENT_STATE_UNKNOWN). Malformed short circuit, supervision-read-through-ownership, the deliberate ownership omission."
+    },
+    {
+      "path": "lib/integrations/src/integrations/uem/jamf.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Verified the historical hardcoded `compliant: true` is GONE and compliance is now the literal 'not_evaluated'; asBool is strict; ownership honestly 'unknown'."
+    },
+    {
+      "path": "lib/integrations/src/integrations/uem/intune.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. All three normalizers default to 'unknown'; cellularHardwareFrom is affirmative-only (.some(present), never .every(absent))."
+    },
+    {
+      "path": "lib/integrations/src/integrations/uem/workspace-one.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Same three normalizers default to 'unknown'; 'U' ownership does not become 'personal'. cellularHardware hardcoded 'unknown' here and in jamf while intune reads it \u2014 the fail-safe direction, so an honesty-preserving asymmetry."
+    },
+    {
+      "path": "lib/integrations/src/integrations/task-exception/evaluate.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Lines 60-326 + all-unknown probe (step_up/TASK_STATE_UNKNOWN). All four coherence relations, the do-not-judge-a-disbelieved-claim guards, reachable=false hoisted above reachable=null. Lines 1-59 NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/service-lifecycle/evaluate.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Lines 80-330 + all-unknown probe. Four short-circuits and their order; the defaultless postureFor switch is COMPILER-ENFORCED exhaustive, not a fail-open. Lines 1-79 including REASON_PRECEDENCE NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/response-accountability/evaluate.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + all-unknown probe (step_up/OWNER_STATE_UNKNOWN). The earned-affirmative guard on the seed; verified by hand that Number.isInteger rejects NaN/Infinity in both derive helpers."
+    },
+    {
+      "path": "lib/integrations/src/integrations/nac/aruba-clearpass.ts",
+      "reviewedBy": "network-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. clearPassStatus is total with an 'unknown' default; asString is finiteness-guarded on the number branch."
+    },
+    {
+      "path": "lib/integrations/src/integrations/nac/identifier.ts",
+      "reviewedBy": "network-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Allowlist regexes for mac/serial/cert, length bound, refusal never echoes input. No injection surface left in the filter builders."
+    },
+    {
+      "path": "lib/integrations/src/integrations/siem/resolve.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read. Four-clause gate; SiemFixtureRecord.delivered is TYPED false so a fixture record cannot claim delivery."
+    },
+    {
+      "path": "lib/integrations/src/integrations/siem/splunk.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-140 + executed healthCheck() (false when suppressed). The CORRECT sibling shape for row 133."
+    },
+    {
+      "path": "lib/integrations/src/integrations/siem/sentinel.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 150-180 (healthCheck) + executed it (false when suppressed). Token cache and DCR/DCE paths NOT read \u2014 relied on grep showing the emit paths are gated."
+    },
+    {
+      "path": "lib/integrations/src/integrations/siem/webhook.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 100-140 (healthCheck + signPayload) + executed healthCheck() (false when suppressed). sendEvent NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/syslog/transport.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed both sendEvent() and healthCheck(). Row 133 lives at lines 173-179. The gate-first sendEvent, the loud live-path throw, all four formatters and both sanitizers checked."
+    },
+    {
+      "path": "lib/integrations/src/integrations/webhooks/dispatch.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed BOTH row 136 (NODE_ENV-keyed URL guard vs SIGNALGRID_TIER delivery gate) and row 137 (suppressed deliveries retried and dead-lettered)."
+    },
+    {
+      "path": "lib/integrations/src/integrations/webhooks/retry.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Full read + executed getRetrySchedule() to price row 137 (~33s of sleeping before dead-lettering). The Math.random jitter is declared and pinned by review:invariants, so not a determinism violation."
+    },
+    {
+      "path": "lib/integrations/src/integrations/webhooks/store.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 95-205 and 340-395 plus grepped IS_PRODUCTION. Rows 138 and 139 come from here. parseWebhookFromRedis, updateWebhook and the zod schemas NOT read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/webhooks/index.ts",
+      "reviewedBy": "secops-domain",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 9 lines. Confirms ./dispatch is on the PUBLIC surface, so dispatchEvent \u2014 carrying rows 136 and 137 \u2014 is exported from the family."
     }
   ]
 }

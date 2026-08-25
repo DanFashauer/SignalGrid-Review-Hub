@@ -49,6 +49,9 @@ const CLASSIFICATIONS = new Set([
 // two alternatives catch the non-SPDX shapes this registry actually holds
 // (SigmaHQ's Detection Rule License, n8n's Sustainable Use License) plus any
 // future entry honest enough to label itself custom or LicenseRef-.
+/** The two artifact families that exist ONLY as the residue of something running. */
+const EXECUTION_RECORD = /^artifacts\/(sim-results|live-captures)\//;
+
 const CAUTION_FAMILY = /GPL|SSPL|sustainable use|detection rule|custom|LicenseRef-/i;
 
 /**
@@ -115,6 +118,25 @@ export function auditLabRegistry(registry, mdText, pathExists, rosterRoles) {
         fatal.push(`${name}: deployedInLab with no deployedEvidence — "it runs" without a citation is exactly the claim this repo forbids`);
       } else if (!pathExists(e.deployedEvidence)) {
         fatal.push(`${name}: deployedEvidence ${e.deployedEvidence} does not exist on disk — the deployment claim cites nothing`);
+      } else if (!EXECUTION_RECORD.test(e.deployedEvidence)) {
+        // A LAUNCHER IS NOT A RUN, and existing-on-disk could never tell them apart.
+        //
+        // Four of the six deployedInLab entries cited `scripts/run-live-lanes.sh`:
+        // the script that CAN stand these services up. It exists, so the check above
+        // passed, and would pass forever for every entry whether or not anything ever
+        // ran — the deployment claim was resting on the deployability of the tooling.
+        // All four claims happened to be true (each traced to a recorded PASS), which
+        // is exactly why nobody noticed: the citation was wrong while the fact was
+        // right, and only the fact was ever checked.
+        //
+        // `configured != emitted` is this repo's own first evidence distinction. An
+        // execution record — a committed sim-result or live-capture — is the artifact
+        // that can carry it, because it exists only if something ran.
+        fatal.push(
+          `${name}: deployedEvidence ${e.deployedEvidence} is not an execution record — ` +
+            "a launcher proves the service is DEPLOYABLE, never that it was deployed. " +
+            "Cite artifacts/sim-results/… or artifacts/live-captures/… instead.",
+        );
       }
     }
     if (e.licence && CAUTION_FAMILY.test(e.licence) && e.licenceCaution !== true) {
@@ -142,7 +164,7 @@ function selfTest() {
     transcribedFrom: "owner research directive, 2026-08-21",
     rule: { boundary: "adapter → evidence → policy → verdict", neverRule: "no code reuse before licence review" },
     entries: [
-      { repo: "a/one", ownerRanked: 1, classification: "LAB_SOURCE", licence: "Apache-2.0", licenceCaution: false, role: "r", deployedInLab: true, deployedEvidence: "scripts/run-live-lanes.sh", ownerRole: "endpoint-uem-domain", priorityTier: "P0", credentialClass: "read_only", mutationsAllowed: false, lastReviewed: "2026-08-21" },
+      { repo: "a/one", ownerRanked: 1, classification: "LAB_SOURCE", licence: "Apache-2.0", licenceCaution: false, role: "r", deployedInLab: true, deployedEvidence: "artifacts/sim-results/fixture-run.json", ownerRole: "endpoint-uem-domain", priorityTier: "P0", credentialClass: "read_only", mutationsAllowed: false, lastReviewed: "2026-08-21" },
       { repo: "b/two", ownerRanked: 2, classification: "DEFERRED_RESEARCH", licence: "AGPL-3.0", licenceCaution: true, role: "r", deployedInLab: false, deployedEvidence: null, ownerRole: "secops-domain", priorityTier: "P2", credentialClass: "lab_isolated", mutationsAllowed: false, lastReviewed: "2026-08-21" },
     ],
   };
@@ -156,6 +178,26 @@ function selfTest() {
   checks.push(["a classification outside the enum is FATAL", r.fatal.some((x) => x.includes("outside the declared enum"))]);
   r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], deployedEvidence: null }] }, mdFor(["a/one"]), onDisk, roster);
   checks.push(["deployedInLab without evidence is FATAL — 'it runs' needs a citation", r.fatal.some((x) => x.includes("no deployedEvidence"))]);
+
+  // Added 2026-08-25 with its own negative control. Four real entries cited
+  // `scripts/run-live-lanes.sh` — a launcher, which exists on disk forever and so
+  // satisfied the existence check above for any entry, whether or not anything ever
+  // ran. All four claims happened to be TRUE, which is exactly why it went
+  // unnoticed: the citation was wrong while the fact was right, and only the fact
+  // was ever checked.
+  r = auditLabRegistry(
+    { ...good, entries: [{ ...good.entries[0], deployedEvidence: "scripts/run-live-lanes.sh" }] },
+    mdFor(["a/one"]), onDisk, roster,
+  );
+  checks.push(["a LAUNCHER as deployedEvidence is FATAL — deployable is not deployed", r.fatal.some((x) => x.includes("not an execution record"))]);
+
+  // The positive control beside it, so the rule cannot pass by rejecting everything:
+  // a live-capture is an execution record too, not only a sim-result.
+  r = auditLabRegistry(
+    { ...good, entries: [{ ...good.entries[0], deployedEvidence: "artifacts/live-captures/glpi.json" }] },
+    mdFor(["a/one"]), onDisk, roster,
+  );
+  checks.push(["a live-capture IS an execution record — both families accepted", !r.fatal.some((x) => x.includes("not an execution record"))]);
   r = auditLabRegistry({ ...good, entries: [{ ...good.entries[1], licenceCaution: false }] }, mdFor(["b/two"]), onDisk, roster);
   checks.push(["an AGPL licence without licenceCaution is FATAL", r.fatal.some((x) => x.includes("caution family"))]);
   r = auditLabRegistry({ ...good, entries: [{ ...good.entries[1], licence: "Sustainable Use License", licenceCaution: false }] }, mdFor(["b/two"]), onDisk, roster);

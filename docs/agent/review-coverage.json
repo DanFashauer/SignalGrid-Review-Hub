@@ -2717,6 +2717,41 @@
       "date": "2026-08-25",
       "depth": "read",
       "note": "Pure type and constant declarations — no functions, no branches, nothing to fail open."
+    },
+    {
+      "path": "lib/audit/src/backend.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "NO DEFECT. The best control read today: assertPrivileges checks the FORBIDDEN direction — that the runtime credential holds no UPDATE (table or column), DELETE, TRUNCATE, or sequence UPDATE — and refuses readiness if it does. Asserting what a credential must NOT have is what turns append-only from an aspiration into a checked claim, and it re-runs on every ping so readyz flips when posture regresses mid-flight. Appends serialize under pg_advisory_xact_lock so the chain cannot fork; a rejected first init is retried single-flight rather than cached forever (a named prior finding); TIMESTAMPTZ is re-serialized to the exact ISO string the hash was computed over so verification recomputes equal across a database round-trip."
+    },
+    {
+      "path": "lib/audit/src/types.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Shared record and event-type declarations, extracted to break a circular import between the ledger and its backends. No logic."
+    },
+    {
+      "path": "lib/posture-composition/src/index.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Re-export barrel; eight lines, no logic."
+    },
+    {
+      "path": "lib/posture-composition/src/types.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Type declarations for the fused posture model. No branching, nothing that can fail open."
+    },
+    {
+      "path": "lib/orchestration/src/index.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "NO DEFECT. The Trust->Action planner. Its disposition switch carries a `default:` arm that blocks on any unrecognized outcome, and deriveMode independently returns \"deny\" for the same case — two fail-closed arms rather than one. Sensitive actions are ALWAYS human-confirmed on an allow, never silently auto. TRACED RATHER THAN ASSUMED: `confirmedActionIds` is caller-supplied and turns a sensitive action's disposition to \"applied\", which reads like a self-confirmation hole. It is not: the only route accepting it is /api/sim/room-entry, a demo surface (demo: true, public-safe tokens) that is not in the published /v1 contract, and the module is a PLANNER that actuates nothing — connector discipline separately proves no connector acts on a device."
     }
   ]
 }

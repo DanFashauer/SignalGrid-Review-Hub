@@ -123,7 +123,19 @@ export function evaluateSessionReadiness(state: NormalizedSessionReadiness): Ses
     candidates.push({ action: "monitor", reason: "READINESS_BUDGET_UNREADABLE" });
   }
   if (
-    state.budget !== null &&
+    // A `state.budget !== null` term stood here and was REMOVED on 2026-08-25,
+    // not exempted. `budgetThreshold` is computed directly above as
+    // `state.budget === null ? null : posedBound(...)`, so a null budget forces a
+    // null threshold and the test below already implied it — which is exactly why
+    // the daily mutation sweep could not kill it.
+    //
+    // The obvious disposition was to keep it for intent and add an ALLOWED entry,
+    // the way the `elapsedToUsableSeconds` term below is handled. That would have
+    // been WRONG here: the guard matches an exemption by substring against the
+    // trimmed source line, and `state.budget !== null &&` also appears in the
+    // READINESS_BUDGET_UNREADABLE branch nine lines up — which is real, load-bearing
+    // behaviour. One exemption would have silently covered both, putting a
+    // fail-open inside the control that exists to catch fail-opens.
     budgetThreshold !== null &&
     // `elapsedToUsableSeconds !== null` is INERT and kept deliberately: JS coerces
     // `null > 30` to false, so removing it changes no outcome. It states the intent —

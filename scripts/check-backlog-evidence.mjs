@@ -37,7 +37,7 @@
 // reading OPEN beside unmerged work. That direction needs a periodic re-read
 // by someone who can check the tree, and this gate is not a substitute for it.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLOSED_MARKERS, PARTIAL_MARKERS, auditBacklogOwnership, marks, parseRows, rosterIds, statusText } from "./check-backlog-ownership.mjs";
@@ -184,7 +184,27 @@ if (total === 0) {
   process.exit(1);
 }
 const ratchetPath = join(repo, RATCHET);
-const prior = existsSync(ratchetPath) ? JSON.parse(readFileSync(ratchetPath, "utf8")) : {};
+// Read once and treat "not there" as a read failure, rather than asking whether
+// the file exists and then reading it. The two-step form is a time-of-check /
+// time-of-use race — CodeQL flagged it as a high on this very file — and it is
+// also just wrong on its own terms: between the check and the read the file can
+// be removed by a concurrent run, and the `existsSync` answer would have said
+// otherwise. One syscall cannot disagree with itself.
+//
+// A malformed file is deliberately NOT swallowed with the missing case. An
+// unparseable ratchet means the ceiling is unknown, and an unknown ceiling must
+// stop the gate rather than silently reset the baseline to today's debt — which
+// is precisely how a ratchet quietly stops ratcheting.
+let prior = {};
+try {
+  prior = JSON.parse(readFileSync(ratchetPath, "utf8"));
+} catch (err) {
+  if (err.code !== "ENOENT") {
+    console.error(`✗ ${RATCHET} exists but could not be read as JSON: ${err.message}`);
+    console.error("  Refusing to treat an unreadable ceiling as no ceiling.");
+    process.exit(1);
+  }
+}
 const breach = overCeiling(prior.closedRowsWithoutEvidence, bare.length);
 
 console.log(`Backlog evidence — ${closed} closed row(s) of ${total}; ${bare.length} cite nothing checkable.`);

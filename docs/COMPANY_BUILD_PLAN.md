@@ -3211,7 +3211,36 @@ earlier — that is the loop working, not a reason to soften the record.
 
 142. **Seven "approval gate" assertions and their violation counter are computed
     from a literal the proof writes itself, and none of the seven gates exists.** —
-    OPEN, devex-tooling-engineer. BLOCKING.
+    FIXED 2026-08-25, devex-tooling-engineer. Was BLOCKING.
+    THE FIX derives everything from the actions the simulator actually ROUTED —
+    938 of them across the baseline and 231 mutations — and publishes those instead
+    of the invented array. Assertions 783 -> 773: fourteen fabricated ones deleted,
+    four derived ones added.
+    WHAT IS ASSERTED NOW, and each was MEASURED before it was claimed:
+    · Non-vacuity first — the routed set is non-empty across 7 distinct kinds.
+      Without this the rest passes trivially on an empty set, which is how the old
+      version proved nothing while reporting success.
+    · No routed action is a device-mutating kind. THIS IS THE REAL CONTENT of the
+      old literal: quarantine, lock, revoke, disable and push-remediation are
+      emitted NOWHERE, and that absence is now checkable rather than asserted.
+    · Every routed action is simulated-only — 0 violations, measured across all 938.
+    · `request_remediation` is approval-gated — 62 emitted, all true.
+    WHAT IS DELIBERATELY **NOT** ASSERTED, because it is false: "high severity
+    implies approval". Of 674 actions at high or critical severity, **405 carry
+    `approvalRequired: false`** — create_ticket, queue_retry and route_to_owner are
+    notification and bookkeeping, not changes to a device. Asserting the tidier
+    invariant would have replaced a fabricated gate with a wrong one.
+    THE PER-ACTION CHECK, which used to read `typeof action.approvalRequired ===
+    "boolean"` and therefore passed for `false`, now pins the VALUE against the
+    kind's contract.
+    FALSIFIED BOTH WAYS. Planting `simulatedOnly: false` fails 31 assertions and
+    drives the violation counter from a structural 0 to **938** — it counts real
+    actions now. Dropping approval from the remediation request fails 8. Restored,
+    773 pass and the proof exits 0.
+    THE EVIDENCE FILE no longer carries the fabricated array; it publishes
+    `routedActionKinds`, `deviceMutatingKindsEmitted` (empty) and
+    `routedActionCount` — observations rather than a claim the proof wrote itself.
+    ORIGINAL FINDING FOLLOWS.
     `signalgrid-grid-proof.ts:102-109` builds `highRiskActionGates` by `.map`-ing a
     list of seven action NAMES and stamping `{simulatedOnly: true, approvalRequired:
     true}` on every element. `:247-249` then filters that same array for any element

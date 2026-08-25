@@ -52,6 +52,7 @@
     "phase:summary-check": "pnpm --filter @workspace/scripts run phase:summary-check",
     "preflight": "node scripts/preflight.mjs",
     "scan:estate": "node scripts/scan-estate-citations.mjs",
+    "scan:agent-plane": "node scripts/scan-agent-plane.mjs",
     "preinstall": "node scripts/enforce-pnpm.cjs",
     "prepare": "test -f scripts/install-git-hooks.mjs && node scripts/install-git-hooks.mjs || exit 0",
     "proof:absent-collection": "pnpm --filter @workspace/scripts run proof:absent-collection",

@@ -3844,6 +3844,43 @@ earlier — that is the loop working, not a reason to soften the record.
     legend; (c) pin the verdict-to-token mapping itself in one registry the gate
     reads. Start with (a).
 
+169. **A skill outside the repository speaks with authority over it, and no gate
+    can see it.** — MITIGATED 2026-08-25 (reported, not gated), agent-platform-engineer.
+    `check-org-roster.mjs` derives the set of dispatchable executors from disk and
+    reads exactly two directories, both under the repository root:
+    `.claude/agents` and `.claude/skills`. That scope is correct — a roster may
+    only name an executor that is committed and reviewable — and it is not the
+    whole plane. Claude also loads skills from the user's home directory.
+    An audit of that layer on 2026-08-25 found `signalgrid-master` in
+    `~/.claude/skills/synced/`: 379 lines, generated from `SignalGrid_Alpha@08eecbe`,
+    describing itself as "SignalGrid's first-party orchestration layer" and
+    publishing an authority order for THIS repository.
+    **It is accurate today** — all 18 repository paths it cites exist, it carries
+    no pinned figure (every reference to a decision record is written as a
+    conditional: "unless superseded by a later record"), it repeats none of the six
+    entries in `docs/agent/FALSE_CLAIMS.json`, and it correctly ranks itself
+    SEVENTH, below `CLAUDE.md` and the ratified decision records. The defect is not
+    its content. The defect is that none of that was checkable from here, and
+    nothing in this tree would notice if it stopped being true: the file never
+    appears in a diff, no review sees it, and `CLAUDE.md` can be edited to
+    contradict it with both documents still reading as correct in isolation.
+    WHAT WAS DONE: `scripts/scan-agent-plane.mjs` (`pnpm run scan:agent-plane`)
+    reports the out-of-repo plane — which user-level skills speak for this
+    repository, which of them NAME it, and which of their citations no longer
+    resolve. REPORTED, never fatal, and deliberately NOT registered in preflight
+    or CI, for the same reason `scan:estate` is not: a CI runner has no
+    `~/.claude`, so a gate asserting on it would pass vacuously every run, which
+    is worse than no gate. It is fail-closed in the direction it can be — a root
+    that cannot be read is NOT SCANNED and never counted clean.
+    Its first live run found a second one and two real gaps: the generic
+    `session-start-hook` skill instructs against `.claude/settings.json` and
+    `.claude/hooks/session-start.sh`, neither of which exists in this tree.
+    WHAT IS STILL OPEN: the reporter makes the plane visible; it does not put it
+    under review. Vendoring `signalgrid-master` into `.claude/skills/` would —
+    at the cost of a second copy that can diverge from the synced original, which
+    is the failure `VENDORED.md` already documents once. That tradeoff is the
+    owner's call and is not made here.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

@@ -3896,6 +3896,42 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+176. **"Adding a signal to the grid" is already the architecture, and I recommended
+    against it on a mis-framing.** — MEASURED 2026-08-25, principal-engineer. The
+    owner, asked whether to build live lanes for Velociraptor, Zeek and OpenVAS,
+    rejected the question: "it's a signal and it can be added to the grid for easier
+    overall smart automation orchestrator that just makes things work without having
+    to know how they do it." Measuring before arguing, he is describing something
+    that largely EXISTS.
+    `pnpm run proof:evidence-adapter` measures sourceSystems=3 and swapScenarios=2,
+    passes every assertion, and prints its own verdict: "source-agnostic: the engine
+    could not tell fleet from headwind from intune — only the provenance can."
+    `pnpm run proof:signal-discovery` passes over classify, auto-pull with an API,
+    admin-gate without one, and lifecycle. The central claim was ratified by
+    owner redirect on 2026-08-11 (intake row 77): the product must not care which
+    source produced the evidence so long as the adapter emits the same normalized
+    model.
+    THE PER-SOURCE COST, measured rather than estimated:
+    `fleetHostToDeviceManagementEvidence` is **26 lines** and
+    `headwindLabToDeviceManagementEvidence` is **28**, both in
+    `lib/integration-bridge/src/evidence.ts`. That is what a new source costs at the
+    seam. What is expensive is the LAB LANE around it — the container, the auth
+    archaeology, the wire capture — which is where the GLPI and Headwind bring-ups
+    actually spent their time.
+    WHERE MY RECOMMENDATION WAS WRONG. I advised holding all three on the ground
+    that they touch families frozen under DR-005. The freeze governs LAUNCH SCOPE —
+    which families are in Limited GA — not whether a deferred family may gain an
+    evidence source. A deferred family gaining a source stays deferred; it gains
+    evidence that it works, which is precisely what DR-013 blesses. Velociraptor,
+    Zeek and OpenVAS map to `edr-threat`, `network-nac` and `vuln-scan`, all of
+    which already exist. None of the three requires a new family.
+    WHAT IS ACTUALLY MISSING, stated narrowly so it is not confused with the vision:
+    the converters are hand-written functions in one file with no catalog and no
+    declarative registration. Adding a source is cheap but not yet a configuration
+    act, which is the gap between "26 lines" and "just build the workflow and the
+    process takes it". Whether to close that gap is a product call and is NOT
+    assumed here.
+
 175. **Four deployment claims cited the script that could deploy them.** — FIXED
     2026-08-25, secops-domain. `docs/agent/open-source-lab-registry.json` carries six
     entries claiming `deployedInLab: true`, and `check-lab-registry.mjs` gates every

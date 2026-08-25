@@ -2,10 +2,18 @@
 
 Third-party work, copied in unmodified. **Not ours.**
 
-> **SIX exceptions in this directory — read this before any re-vendor.** These are
+> **SEVEN exceptions in this directory — read this before any re-vendor.** These are
 > FIRST-PARTY, written in this repository and NOT part of the upstream set. They live
 > here because the harness loads skills from this directory. Everything else below
 > describes the other 14.
+>
+> **The seventh, `signalgrid-master/`, arrived 2026-08-25 under DR-018 and is a
+> MIRROR, not an original.** The owner's synced copy at
+> `~/.claude/skills/synced/signalgrid-master/` still exists and still loads. What
+> changed is which copy is AUTHORITATIVE: this one, because it is the one that can
+> be reviewed. `pnpm run scan:agent-plane` reports the synced copy and will say so
+> when the two disagree. If they diverge, this file wins and the synced copy is the
+> one to correct.
 >
 > | Skill | Authored | What it defines |
 > | --- | --- | --- |
@@ -15,6 +23,7 @@ Third-party work, copied in unmodified. **Not ours.**
 > | `signalgrid-native/` | 2026-08-22 | executor for mobile, desktop, firmware and the Mac lane |
 > | `signalgrid-reviewer/` | 2026-08-22 | executor for qa-engineer |
 > | `signalgrid-scribe/` | 2026-08-22 | executor for docs, compliance, release, archivist, positioning |
+> | `signalgrid-master/` | 2026-08-25 | the orchestration layer — vendored from the owner's synced skills per DR-018 |
 >
 > **This note said "one exception" until 2026-08-24, and it was true when written on
 > 08-20.** The five `signalgrid-*` skills landed on 08-22, after it, and nothing

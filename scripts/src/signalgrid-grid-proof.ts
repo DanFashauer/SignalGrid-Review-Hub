@@ -99,15 +99,33 @@ const allowedSeverity = new Set<SignalGridSignal["severity"]>([
 ]);
 
 const malformedResults: SafeMalformedResult[] = [];
-const highRiskActionGates = [
+/**
+ * Action kinds that would CHANGE something on a device or an account.
+ *
+ * WHY THIS IS A DENYLIST AND NOT A GATE LIST. This was an array of seven names
+ * `.map`ped to `{ simulatedOnly: true, approvalRequired: true }` — the flags were
+ * stamped on by the proof itself, and the violation counter then filtered that same
+ * array for an element where either flag was `false`. It was structurally zero.
+ * Fourteen assertions read the same two literals, and the fabricated array was
+ * serialised into the published evidence file, so a reader was told seven named
+ * high-risk gates had been checked when nothing had been.
+ *
+ * Worse, the names corresponded to nothing: across the baseline plus every
+ * mutation, the simulator emits only alert_operator, create_ticket, queue_retry,
+ * record_audit, request_remediation, route_to_owner and verify_remediation. Not one
+ * of the seven appears.
+ *
+ * That absence IS the real claim, and it is checkable. The assertions below derive
+ * everything from the actions actually routed, and each one can fail.
+ */
+const DEVICE_MUTATING_KINDS = new Set([
   "quarantine",
-  "lock device",
-  "revoke session",
-  "disable account",
-  "push remediation",
-  "create or change security rule",
-  "high-risk remediation action",
-].map((name) => ({ name, simulatedOnly: true, approvalRequired: true }));
+  "lock_device",
+  "revoke_session",
+  "disable_account",
+  "push_remediation",
+  "change_security_rule",
+]);
 const custodyAllowBlockedMutations = new Set([
   "rtls-wrong-zone",
   "location-unknown",
@@ -183,17 +201,66 @@ for (const scenario of scenarios) {
   }
 }
 
-for (const gate of highRiskActionGates) {
-  assertions.push(
-    assertion(`approval gate: ${gate.name} is simulated`, gate.simulatedOnly),
-  );
-  assertions.push(
-    assertion(
-      `approval gate: ${gate.name} requires approval`,
-      gate.approvalRequired,
-    ),
-  );
-}
+// ── What the routed actions actually are, derived rather than declared ────────
+//
+// Every assertion in this block reads the actions the simulator emitted during
+// this run. Nothing is stamped on by the proof.
+const routedActionsAll = [...baselineResults, ...mutationResults].flatMap(
+  (result) => result.routedActions,
+);
+const emittedKinds = new Set(routedActionsAll.map((action) => action.kind));
+
+// NON-VACUITY FIRST. Without this the three checks below pass trivially on an
+// empty set, which is exactly how the version this replaced managed to prove
+// nothing while reporting success.
+assertions.push(
+  assertion(
+    `routed actions: the set is non-empty (${routedActionsAll.length} across ${emittedKinds.size} kinds)`,
+    routedActionsAll.length > 0 && emittedKinds.size > 0,
+  ),
+);
+
+// THE CLAIM THE FABRICATED LIST WAS GESTURING AT, now checkable: this simulator
+// never routes an action that would change a device or an account.
+const mutatingEmitted = [...emittedKinds].filter((kind) =>
+  DEVICE_MUTATING_KINDS.has(kind),
+);
+assertions.push(
+  assertion(
+    "no routed action is a device-mutating kind",
+    mutatingEmitted.length === 0,
+  ),
+);
+
+// THE INVARIANT THAT ACTUALLY HOLDS ACROSS EVERY ACTION. Measured before it was
+// asserted: 0 violations across every routed action in the baseline and all
+// mutations.
+const notSimulated = routedActionsAll.filter(
+  (action) => action.simulatedOnly !== true,
+);
+assertions.push(
+  assertion(
+    "every routed action is marked simulated-only",
+    notSimulated.length === 0,
+  ),
+);
+
+// APPROVAL, STATED HONESTLY. "High severity implies approval" is NOT true here and
+// is deliberately not asserted: of the routed actions at high or critical severity,
+// well over half carry approvalRequired: false — create_ticket, queue_retry and
+// route_to_owner are notification and bookkeeping, not changes to a device. What IS
+// true is that the one kind which ASKS for a change is approval-gated, and that is
+// the assertion worth having.
+const remediationRequests = routedActionsAll.filter(
+  (action) => action.kind === "request_remediation",
+);
+assertions.push(
+  assertion(
+    `request_remediation is approval-gated (${remediationRequests.length} emitted)`,
+    remediationRequests.length > 0 &&
+      remediationRequests.every((action) => action.approvalRequired === true),
+  ),
+);
 
 for (const malformed of malformedInputs()) {
   const result = safeMalformedRun(
@@ -237,16 +304,23 @@ const proofOutput = {
   baseline: baselineResults.map(toEvidenceRecord),
   mutations: mutationResults.map(toEvidenceRecord),
   malformed: malformedResults,
-  highRiskActionGates,
+  // The fabricated `highRiskActionGates` array used to be serialised here, so the
+  // invented result left the proof as published evidence. Replaced by what was
+  // actually observed.
+  routedActionKinds: [...emittedKinds].sort(),
+  deviceMutatingKindsEmitted: mutatingEmitted.sort(),
+  routedActionCount: routedActionsAll.length,
 };
 
 assertPublicSafety(JSON.stringify({ scenarios, proofOutput }, null, 2));
 
 const failed = assertions.filter((item) => !item.passed);
 const unsafeAllowCount = mutationResults.filter(isPlainAllow).length;
-const approvalGateViolations = highRiskActionGates.filter(
-  (gate) => !gate.approvalRequired || !gate.simulatedOnly,
-).length;
+// Counted from the actions the simulator ROUTED, not from a literal this file
+// wrote. A device-mutating kind appearing at all, or any action not marked
+// simulated-only, is a violation.
+const approvalGateViolations =
+  mutatingEmitted.length + notSimulated.length;
 
 mkdirSync(path.dirname(evidencePath), { recursive: true });
 writeFileSync(evidencePath, `${stableStringify(proofOutput)}\n`);
@@ -400,8 +474,13 @@ function assertRouteOwnership(result: SimulatorRunResult): void {
     );
     assertions.push(
       assertion(
-        `${result.scenario.id}/${action.id}: approval requirement present`,
-        typeof action.approvalRequired === "boolean",
+        // `typeof action.approvalRequired === "boolean"` was the old test, and
+        // `false` is a boolean — an action that dropped its approval requirement
+        // passed it. Pin the VALUE against the kind's own contract instead.
+        `${result.scenario.id}/${action.id}: approval requirement matches its kind`,
+        action.approvalRequired ===
+          (action.kind === "request_remediation" ||
+            action.kind === "alert_operator"),
       ),
     );
     assertions.push(

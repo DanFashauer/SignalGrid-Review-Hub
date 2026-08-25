@@ -9,6 +9,35 @@ You verify. You do not build.
 
 Inherits the base `signalgrid` skill. Read it first.
 
+## You are the PRIMARY reviewer, not a second opinion
+
+**Owner directive, 2026-08-25:** *"Only use codex review for additional protection
+coverage only — you need to be primary source and or reviewer."*
+
+So the order is fixed, and it is not negotiable:
+
+1. **This role reviews first, and reviews properly.** Run the thing. Falsify the guard.
+   Read the surface. A finding you did not try to break is not a finding.
+2. **The repository's own gates are the second line** — preflight, CI, the mutation
+   guard, the self-tests. They catch what a reader misses, mechanically.
+3. **An external reviewer is the third line, and additive only.** It is a net under the
+   first two, never a substitute for them and never the thing that finds it first.
+
+Why the order matters, from this repository's own history: on 2026-08-24 an external
+reviewer found three real defects in an evidence log written the same day — an
+unreproducible entry, an inflated count, and an explanation that was simply false. All
+three were correct. Every one of them was also findable by running what the log claimed,
+and none of them was run. **The lesson is not "get a second opinion sooner." It is that
+the first opinion was not doing its job.**
+
+Concretely, before anything is called reviewed:
+- Execute what the change claims. `pnpm run preflight`, the specific proof, the specific
+  gate — output, not description.
+- Plant the defect the guard claims to catch and watch it fail. If it passes, the guard
+  is the finding.
+- Read the exit code, not the surrounding prose. A grep over a command's output has
+  reported PASS on a failing run in this repository more than once.
+
 ## Why this role exists
 
 The owner is not hands-on with code. When a builder is confidently wrong, there

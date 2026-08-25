@@ -140,6 +140,26 @@ const truncate = (s) => (s.length > 58 ? `${s.slice(0, 55)}...` : s);
 // A registry is a coverage CLAIM. Zero survivors over the wrong population is not
 // coverage, and this was the fourth time the right rule was found attached to the wrong
 // set. When a family moves code between files, re-check what this list still reaches.
+// THREE FILES WERE REGISTERED HERE ON 2026-08-25 AND REMOVED THE SAME DAY, because
+// the sweep proved the registration was a false coverage claim rather than coverage:
+//
+//   macos-posture/apple-schema.ts — genuinely has no falsifiable logic. 127 lines,
+//   zero conditional lines; it is Apple's canonical vocabulary expressed as
+//   constants. Protect it with a shape/completeness pin, not a mutator.
+//
+//   nac/cisco-ise.ts and nac/aruba-clearpass.ts — DO have logic, and this is the
+//   uncomfortable one. Their guards are brace-less clauses (`if (!v.ok) return
+//   null;`) and ternaries, and every mutator here is line-oriented and requires
+//   `if (...) {`. So the mutator cannot reach them, and leaving them registered
+//   would report "every registered guard is falsifiable" over files it never
+//   touched.
+//
+// MEASURED, not estimated: 417 brace-less guard clauses sit in registered files
+// across 49 of the 53 targets — a whole class this harness cannot currently
+// falsify, and a ~31% increase in mutations (1,367 -> ~1,784) once a mutator for
+// that shape exists. That is its own piece of work with its own triage cycle, and
+// it is filed rather than smuggled into this change. Re-register these two the
+// moment the mutator lands.
 export const TARGETS = [
   // `posture-composition` was registered here and REMOVED in the same session. The sweep
   // returned `mutations=0`: `compose.ts` is a sort plus a table lookup and `adapters.ts`
@@ -539,7 +559,6 @@ export const TARGETS = [
   {
     proof: "proof:macos-posture",
     files: [
-      "lib/integrations/src/integrations/macos-posture/apple-schema.ts",
       "lib/integrations/src/integrations/macos-posture/evaluate.ts",
       "lib/integrations/src/integrations/macos-posture/index.ts",
       "lib/integrations/src/integrations/macos-posture/macos-connector.ts",
@@ -548,8 +567,6 @@ export const TARGETS = [
   {
     proof: "proof:nac",
     files: [
-      "lib/integrations/src/integrations/nac/aruba-clearpass.ts",
-      "lib/integrations/src/integrations/nac/cisco-ise.ts",
       "lib/integrations/src/integrations/nac/identifier.ts",
       "lib/integrations/src/integrations/nac/index.ts",
       "lib/integrations/src/integrations/nac/store.ts",

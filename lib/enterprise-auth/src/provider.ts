@@ -2,7 +2,7 @@ import { CoreError } from "@workspace/signalgrid-core";
 import { mapClaimsToPrincipal, type PrincipalInput } from "./claims";
 import { looksLikeJwt, type EnterpriseAuthConfig } from "./config";
 import { createJwksCache, type JwksCache, type JwksFetch } from "./jwks";
-import { verifyJwtRs256 } from "./jwt";
+import { peekJwtKid, verifyJwtRs256 } from "./jwt";
 
 /**
  * End-to-end enterprise bearer authentication: fetch (and cache) the IdP's
@@ -52,7 +52,9 @@ export function createEnterpriseAuthenticator(
       }
       let keys;
       try {
-        keys = await jwks.get(nowMs);
+        // Pass the token's kid so a rotated signing key is fetched rather than
+        // 401ing for the rest of the TTL. Unverified hint only — see peekJwtKid.
+        keys = await jwks.get(nowMs, peekJwtKid(token));
       } catch (err) {
         return { ok: false, reason: `could not load signing keys: ${(err as Error).message}` };
       }

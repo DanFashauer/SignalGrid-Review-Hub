@@ -66,6 +66,32 @@ export type VerifyResult =
 
 const SUPPORTED_ALG = "RS256";
 
+/**
+ * Read the `kid` out of a token's header WITHOUT verifying anything.
+ *
+ * This is deliberately unverified input and is safe for exactly one purpose:
+ * telling the JWKS cache which key a caller is about to ask for, so a rotated
+ * signing key can be fetched instead of 401ing for the length of the TTL. The
+ * value selects WHICH key to try; it never decides whether the token is good.
+ * `verifyJwtRs256` still runs the algorithm gate, the signature check and every
+ * claim check afterwards, and an attacker naming a `kid` they like gains only
+ * the ability to have a different public key fail to verify their signature.
+ *
+ * Returns undefined for anything malformed — a caller that cannot parse a header
+ * has no hint to offer, which is the same position as a token with no `kid`.
+ */
+export function peekJwtKid(token: string): string | undefined {
+  if (typeof token !== "string") return undefined;
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts.some((p) => p.length === 0)) return undefined;
+  try {
+    const header = decodeJsonSegment<JwtHeader>(parts[0]);
+    return typeof header.kid === "string" ? header.kid : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult {
   if (typeof token !== "string") {
     return fail("token is not a string");

@@ -18,6 +18,7 @@ import {
 } from "node:crypto";
 import {
   createEnterpriseAuthenticator,
+  createJwksCache,
   type EnterpriseAuthConfig,
   type JwksFetch,
   type Jwks,
@@ -226,6 +227,59 @@ if (!accepted.ok) {
     denied = err instanceof CoreError && (err.code === "not_found" || err.code === "cross_tenant_denied");
   }
   check("cross-tenant read of the OIDC identity's decision is denied", denied);
+}
+
+// ── JWKS ROTATION SURVIVAL ───────────────────────────────────────────────────
+//
+// The suite above proves an unknown kid is REJECTED, which is right for a forged
+// token and was silently also the behaviour for a LEGITIMATE rotated one. The
+// cache refreshed on its TTL alone, so when an IdP rotated its signing key —
+// something Entra ID and Okta do on their own schedule, with no notice — every
+// request 401'd for up to the full ten-minute window. A total authentication
+// outage, from a routine vendor action, with no code change on our side.
+//
+// These four assertions pin both halves: rotation must survive, and a forged kid
+// must not become an outbound-request amplifier against the customer's IdP.
+{
+  const jwksOf = (...kids: string[]) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      keys: kids.map((kid) => ({ kty: "RSA", kid, n: "x", e: "AQAB", alg: "RS256", use: "sig" })),
+    }),
+  });
+
+  let served = ["old"];
+  let fetches = 0;
+  const cache = createJwksCache("https://idp.example/jwks", async () => {
+    fetches += 1;
+    return jwksOf(...served);
+  }, 10 * 60 * 1000);
+
+  const T = 1_000_000;
+  await cache.get(T, "old");
+  const firstFetch = fetches;
+  await cache.get(T + 1_000, "old");
+  check("a KNOWN kid inside the TTL is served from cache — no needless IdP traffic", fetches === firstFetch);
+
+  served = ["old", "new"];
+  const rotated = await cache.get(T + 2_000, "new");
+  check(
+    "a rotated (UNKNOWN) kid refetches even though the TTL is fresh — the outage is closed",
+    fetches === firstFetch + 1 && rotated.keys.some((k) => k.kid === "new"),
+  );
+
+  const beforeForged = fetches;
+  for (let i = 0; i < 50; i += 1) {
+    await cache.get(T + 3_000 + i, `forged-${i}`);
+  }
+  check(
+    "50 forged kids inside the cooldown cause ZERO extra IdP fetches — not an amplifier",
+    fetches === beforeForged,
+  );
+
+  await cache.get(T + 2_000 + 61_000, "still-unknown");
+  check("after the cooldown lapses, exactly ONE more refetch is allowed", fetches === beforeForged + 1);
 }
 
 function check(name: string, condition: boolean): void {

@@ -27,8 +27,12 @@ import {
   type CredentialRotationAction,
   type NormalizedCredentialRotation,
   type RotationStanding,
+  resolveCredentialRotationConnector,
+  makeDefaultCredentialRotationTransport,
+  CredentialRotationConnectorError,
 } from "@workspace/integrations/credential-rotation";
 
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 let passed = 0;
 const failures: string[] = [];
 const check = (name: string, ok: boolean): void => {
@@ -296,6 +300,29 @@ check(
 console.log(
   `\nfigures=inputs=${space.length},granting=${grantShapes.size},kinds=${KINDS.length},standings=${STANDINGS.length}`,
 );
+
+// LIVE GATE and DEFAULT TRANSPORT — five branches here survived mutation until
+// 2026-08-25: the tier test, the live-integrations flag, the missing-token refusal,
+// the non-OK response, and the "a JSON body must be a record" check. Each is a place
+// where a MISCONFIGURED or FAILING call could be mistaken for a real reading.
+// The `full` env deliberately omits the BASE_URL key: it has a default, so it is not
+// a gate, and asserting that removing it blocks the live call would assert something
+// false.
+checkLiveGateIsolated({
+  check,
+  family: "credential-rotation",
+  resolve: (env) => resolveCredentialRotationConnector(env),
+  full: { SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", CREDENTIAL_ROTATION_TOKEN: "t" },
+});
+await checkDefaultTransport({
+  check,
+  family: "credential-rotation",
+  transport: makeDefaultCredentialRotationTransport("https://vendor.invalid/credential-rotation") as (a: never) => Promise<unknown>,
+  arg: { subjectRef: "ref-1", token: "t" },
+  codeOf: (err) => (err instanceof CredentialRotationConnectorError ? err.code : undefined),
+});
+
+
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length > 0) {
   console.error("FAILED:");

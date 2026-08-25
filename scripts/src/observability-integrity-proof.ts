@@ -33,8 +33,12 @@ import {
   type ObservabilityIntegrityAction,
   type SignalFreshness,
   type StreamFidelity,
+  resolveObservabilityIntegrityConnector,
+  makeDefaultObservabilityIntegrityTransport,
+  ObservabilityIntegrityConnectorError,
 } from "@workspace/integrations/observability-integrity";
 
+import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 let passed = 0;
 const failures: string[] = [];
 const check = (name: string, ok: boolean): void => {
@@ -286,6 +290,29 @@ check(
 console.log(
   `\nfigures=inputs=${space.length},granting=${grantShapes.size},collection=${COLLECTION.length},fidelity=${FIDELITY.length},freshness=${FRESHNESS.length},staleAfterIntervals=${STALE_AFTER_INTERVALS}`,
 );
+
+// LIVE GATE and DEFAULT TRANSPORT — five branches here survived mutation until
+// 2026-08-25: the tier test, the live-integrations flag, the missing-token refusal,
+// the non-OK response, and the "a JSON body must be a record" check. Each is a place
+// where a MISCONFIGURED or FAILING call could be mistaken for a real reading.
+// The `full` env deliberately omits the BASE_URL key: it has a default, so it is not
+// a gate, and asserting that removing it blocks the live call would assert something
+// false.
+checkLiveGateIsolated({
+  check,
+  family: "observability-integrity",
+  resolve: (env) => resolveObservabilityIntegrityConnector(env),
+  full: { SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true", OBSERVABILITY_INTEGRITY_TOKEN: "t" },
+});
+await checkDefaultTransport({
+  check,
+  family: "observability-integrity",
+  transport: makeDefaultObservabilityIntegrityTransport("https://vendor.invalid/observability-integrity") as (a: never) => Promise<unknown>,
+  arg: { streamRef: "ref-1", token: "t" },
+  codeOf: (err) => (err instanceof ObservabilityIntegrityConnectorError ? err.code : undefined),
+});
+
+
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length > 0) {
   console.error("FAILED:");

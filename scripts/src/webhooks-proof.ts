@@ -17,7 +17,7 @@
 // Pure and offline: the gate is a function of the environment, so this asserts it
 // without a network, a server, or a fixture endpoint.
 
-import { resolveWebhookDelivery } from "@workspace/integrations/webhooks";
+import { resolveWebhookDelivery, validateWebhookUrl } from "@workspace/integrations/webhooks";
 
 let passed = 0;
 const failures: string[] = [];
@@ -81,6 +81,70 @@ check(
 );
 const live = resolveWebhookDelivery({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" });
 check("live and suppressed are different modes", live.mode !== suppressed.mode);
+
+// ── The URL guard reads the SAME resolution as the delivery gate ─────────────
+//
+// This proof only ever exercised `resolveWebhookDelivery`, and never the URL
+// validator — which is why nothing covered the defect it now pins.
+//
+// `validateWebhookUrl` used to be gated on a MODULE-LOAD constant read from
+// NODE_ENV, while the delivery gate read SIGNALGRID_TIER at CALL time. Two gates
+// on one outbound path, disagreeing about what "production" means: a deployment
+// that set the repo's own tier vocabulary to prod and turned live integrations on
+// had done everything this codebase asks, and still got plain-HTTP delivery of an
+// HMAC-signed payload to loopback or an internal address whenever NODE_ENV
+// happened to be unset. Being read at module load also made it unvariable per
+// call — and a gate that cannot be varied per call cannot be proven.
+//
+// Worse, the block it guarded covered only four loopback spellings. Every RFC1918
+// address passed even when the guard DID fire.
+//
+// Two rules now, deliberately different in kind, and both are asserted in both
+// directions so neither can be satisfied by refusing everything.
+
+// 1. THE SSRF BLOCK IS UNCONDITIONAL — asserted in a LIVE tier and a SUPPRESSED
+//    one, because "we are not sending anyway" is not a reason to accept an
+//    internal target.
+for (const [label, isLive] of [["live", true], ["suppressed", false]] as ReadonlyArray<readonly [string, boolean]>) {
+  for (const host of [
+    "https://127.0.0.1/hook",
+    "https://localhost/hook",
+    "https://[::1]/hook",
+    "https://0.0.0.0/hook",
+    "https://10.0.0.7/hook",
+    "https://192.168.0.5/hook",
+    "https://172.16.0.3/hook",
+    "https://169.254.169.254/latest/meta-data",
+  ]) {
+    check(
+      `${label}: ${host} is refused as an internal target`,
+      validateWebhookUrl(host, { live: isLive }).valid === false,
+    );
+  }
+  // NON-VACUITY for this loop. Without it, a validator that refused EVERYTHING
+  // would satisfy all sixteen assertions above.
+  check(
+    `${label}: a public HTTPS target is still accepted`,
+    validateWebhookUrl("https://hooks.example.test/x", { live: isLive }).valid === true,
+  );
+}
+
+// 2. THE HTTPS RULE IS GATED ON LIVE DELIVERY, taken from the same resolution the
+//    delivery gate returns — not from a separate environment variable.
+check(
+  "live delivery refuses a plain-HTTP target",
+  validateWebhookUrl("http://hooks.example.test/x", { live: true }).valid === false,
+);
+check(
+  "a suppressed tier may still point a fixture at a plain-HTTP mock",
+  validateWebhookUrl("http://mock.example.test/x", { live: false }).valid === true,
+);
+check(
+  "the URL guard's live flag comes from resolveWebhookDelivery, so the two cannot disagree",
+  validateWebhookUrl("http://hooks.example.test/x", {
+    live: resolveWebhookDelivery({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "live",
+  }).valid === false,
+);
 
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);

@@ -115,6 +115,34 @@ check("syslog opens no socket (still unimplemented)", !/dgram|net\.Socket|tls\.c
 check("syslog does not report status 'sent'", !/status:\s*'sent'/.test(syslogSrc));
 check("syslog refuses loudly when live: throws rather than reporting a status", /throw new Error\(\s*\n?\s*["']syslog: no transport is implemented/.test(syslogSrc));
 
+// ── syslog's HEALTH CHECK does not claim reachability either ─────────────────
+//
+// This is the half the block above missed for as long as it existed. It asserted
+// that syslog opens no socket, never reports 'sent', and throws when live — all
+// true — and said NOTHING about `healthCheck`, which returned
+// `!!(this.config.host && this.config.port)`. `port` is defaulted in the
+// constructor and `host` is required, so it was `true` for every adapter that can
+// be constructed. Measured at dev tier against a hostname that does not resolve:
+// healthCheck() true, sendEvent() suppressed, same process.
+//
+// A forwarder that reports itself healthy while it cannot deliver defeats the
+// audit trail it exists to produce, and does so most convincingly during an
+// incident — which is what the `status: 'sent'` line one assertion above was
+// written about. The lie moved rather than left.
+//
+// Two assertions, because one alone would pass on the wrong thing: the gate must
+// be consulted (matching splunk/sentinel/webhook), AND the config-truthiness
+// shortcut must be gone. A future gate-then-probe implementation keeps the first
+// and is free to change the second.
+check(
+  "syslog healthCheck consults the emit gate before answering",
+  /async healthCheck\(\)[\s\S]{0,400}?resolveEmission\(\)/.test(syslogSrc),
+);
+check(
+  "syslog healthCheck no longer answers from config truthiness alone",
+  !/async healthCheck\(\)[\s\S]{0,400}?return !!\(this\.config\.host/.test(syslogSrc),
+);
+
 // itsm gates at the FACTORY, which every one of its eight vendor adapters passes
 // through. Assert the gate runs BEFORE the pre-existing "no credentials" branch:
 // placed after it, a fully-configured dev process would still build an adapter.

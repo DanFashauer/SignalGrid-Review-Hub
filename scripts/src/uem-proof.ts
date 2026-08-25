@@ -26,6 +26,9 @@ import {
   normalizeUemDevice,
   resolveUemConnector,
   UEM_FIXTURES,
+  getUEMConfig,
+  setUEMConfig,
+  __resetUemConfigForTests,
 } from "@workspace/integrations/uem";
 import type {
   NormalizedUemDeviceState,
@@ -606,6 +609,35 @@ check("no fixture carries a wall-clock timestamp — ages are durations supplied
     differing === 0 && compared > 0,
   );
 }
+
+
+// REDIS FAULT IS AUDIBLE — both `if (redis)` guards in uem/store.ts survived
+// mutation until 2026-08-25. The store's own header says "a Redis fault is
+// reported, not swallowed", and describes the bug that sentence was written to fix:
+// a deployment could serve a stale process-local config indefinitely while Redis was
+// down and nothing anywhere said so. Nothing tested it, because the proofs run with
+// no REDIS_URL, so the client is always null and the branch never executes.
+// A closed port makes the connection fail fast (~70ms) without needing a server.
+const priorRedisUrl = process.env["REDIS_URL"];
+process.env["REDIS_URL"] = "redis://127.0.0.1:1";
+const redisFaults: string[] = [];
+__resetUemConfigForTests();
+await getUEMConfig("tenant-fault", (m) => redisFaults.push(m));
+await setUEMConfig("tenant-fault", { provider: "jamf", enabled: true }, (m) => redisFaults.push(m));
+check("a Redis READ fault is reported, never silently swallowed",
+  redisFaults.some((f) => f.startsWith("read failed")));
+check("a Redis WRITE fault is reported too",
+  redisFaults.some((f) => f.startsWith("write failed")));
+check("...and the config still falls back to the process-local value, so the fault is audible WITHOUT being fatal",
+  (await getUEMConfig("tenant-fault", () => undefined))?.provider === "jamf");
+if (priorRedisUrl === undefined) delete process.env["REDIS_URL"];
+else process.env["REDIS_URL"] = priorRedisUrl;
+// NON-VACUITY: with no REDIS_URL there is nothing to fault, and silence is correct.
+const quietFaults: string[] = [];
+await getUEMConfig("tenant-fault", (m) => quietFaults.push(m));
+check("with no REDIS_URL configured there is no fault to report, so the checks above are not vacuous",
+  quietFaults.length === 0);
+
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length) {

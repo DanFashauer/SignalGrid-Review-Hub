@@ -3396,23 +3396,40 @@ earlier — that is the loop working, not a reason to soften the record.
     `outcomeTone` helper for this tree, typed as a total Record, so the three
     ternaries cannot drift again.
 
-152. **`signalgrid-desktop` asserts in rendered copy and chrome that it is a native
-    app on three platforms.** — OPEN, desktop-engineer. The status bar reads
-    "SignalGrid Desktop · macOS / Windows / Linux", the title bar draws simulated
-    macOS traffic-light controls, and the stylesheet carries `-webkit-app-region:
-    drag` — an Electron/Tauri-only property, inert in a browser, whose only function
-    here is to make the page look like window chrome.
-    There is NO Electron, Tauri or native shell anywhere in the repository —
-    established three ways, including the repo's own words at `desktop.yml:5-6`:
-    "there is no Windows or Linux binary in this repository."
-    The marketing site already gets this right — "Delivered today as a desktop-chromed
-    web app; native shells are a documented next step, not shipped" — which makes the
-    artifact the outlier rather than the policy. The three sources also disagree on
-    the platform list.
-    FIX: state what it is in the status bar, matching the wording already agreed on
-    the download page; drop or qualify the traffic lights; delete the inert drag rule.
-    The tree already knows how to label itself honestly — it carries a FIXTURE DATA
-    chip globally.
+152. **`artifacts/signalgrid-desktop` dresses a web app as a native window, and
+    the repo has a REAL desktop shell somewhere else entirely.** — OPEN,
+    desktop-engineer.
+    CORRECTED BEFORE IT SHIPPED, and the correction is the more useful half. The
+    reading that produced this row concluded from a keyword sweep that the
+    repository contained no native desktop shell of any kind. That is FALSE, and
+    `scripts/check-known-false-claims.mjs` refused the commit citing
+    `tauri-desktop-absent` — a claim already disproven on 2026-08-08, when the same
+    absence was asserted from a stale document hours before `native/desktop/` landed
+    in PR #199. A narrow-search absence error, made twice, caught by a registry that
+    exists because it was made the first time.
+    WHAT IS ACTUALLY THERE: `native/desktop/app/tauri.conf.json` is a Tauri 2 config
+    for **"SignalGrid Assist — reference host shell"**
+    (`com.signalgrid.assist.desktop`), with `Cargo.toml`, `build.rs`, `native/desktop/app/src/main.rs`
+    and a full icon set, and `.github/workflows/desktop.yml` builds
+    `native/desktop/core` in CI.
+    WHAT SURVIVES OF THE FINDING, narrower and still worth fixing: the tree named
+    `signalgrid-desktop` is a Vite WEB app, and it dresses itself as a native window
+    — a status bar reading "SignalGrid Desktop · macOS / Windows / Linux", simulated
+    macOS traffic-light controls, and `-webkit-app-region: drag` in `index.css:104`,
+    a property that only does anything inside a native shell and is inert in a
+    browser. `docs/DELIVERY_GAP_ANALYSIS.md:114` already calls that tree a
+    "MISLEADING NAME — not a desktop app", and `desktop.yml:5-6` says plainly there
+    is no Windows or Linux BINARY in the repository.
+    SO THE REAL DEFECT IS NAME COLLISION, not a bare overclaim: one artifact is a
+    web mockup wearing native chrome, another is a genuine Tauri host shell, and
+    they are both called "desktop". A reader cannot tell from the names which is
+    which, and the web one is the one that renders a platform claim.
+    FIX: rename or relabel so the two are distinguishable; state what the web tree
+    is in its status bar rather than naming three operating systems; drop or comment
+    the inert drag rule. Then re-check `Downloads.tsx`'s "native shells are a
+    documented next step, not shipped" — with a Tauri config and a CI job present,
+    that line may now UNDERSTATE what exists, which is the opposite failure and
+    equally worth correcting.
 
 153. **Four `.bg-status-*` utilities are declared in the desktop stylesheet and used
     nowhere in that tree.** — OPEN, desktop-engineer. NOTE. Zero references, verified

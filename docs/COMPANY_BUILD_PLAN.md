@@ -3209,6 +3209,279 @@ earlier — that is the loop working, not a reason to soften the record.
     A clean read is a result. This row exists because "nobody checked" and "checked,
     nothing found" are different states and only the ledger tells them apart.
 
+142. **Seven "approval gate" assertions and their violation counter are computed
+    from a literal the proof writes itself, and none of the seven gates exists.** —
+    OPEN, devex-tooling-engineer. BLOCKING.
+    `signalgrid-grid-proof.ts:102-109` builds `highRiskActionGates` by `.map`-ing a
+    list of seven action NAMES and stamping `{simulatedOnly: true, approvalRequired:
+    true}` on every element. `:247-249` then filters that same array for any element
+    where either flag is `false`. The count is structurally zero. Fourteen assertions
+    read the same two literals.
+    THE NAMES CORRESPOND TO NOTHING. Across baseline plus 231 mutations the simulator
+    emitted only: alert_operator, create_ticket, queue_retry, record_audit,
+    request_remediation, route_to_owner, verify_remediation. No `quarantine`, no
+    `lock device`, no `revoke session`, no `disable account`, no `push remediation`,
+    no security-rule action.
+    The one place REAL actions are checked reads
+    `typeof action.approvalRequired === "boolean"` — and `false` is a boolean, so an
+    action that dropped its approval requirement passes.
+    The fabricated array is also serialised into `artifacts/proof/signalgrid-grid-proof.json`
+    under `highRiskActionGates`, so the invented result LEAVES the proof as published
+    evidence. The run prints "approval-gate violations: 0" and exits 0.
+    FIX: delete the literal. Derive the gate set from the routed actions the simulator
+    actually emits, classify by kind/severity, and assert every high-risk action
+    carries both flags true — plus a non-vacuity assertion that the class is non-empty,
+    so an empty classification fails instead of passing. Change the real-action check
+    from a typeof test to the value the risk class demands. Stop writing the literal
+    into the evidence file.
+
+143. **`phase:summary-check` always reads the static template, so a CI gate verifies
+    that a committed file contains its own bullet list.** — OPEN,
+    devex-tooling-engineer. `phase-summary-check.ts:8-11` resolves
+    `process.env.PHASE_SUMMARY_FILE ?? "docs/AUTOMATION_PHASE_TEMPLATE.md"`, and that
+    variable is set NOWHERE in the repo — verified across workflows and both
+    package manifests. The template's own bullets are exactly the sections the gate
+    requires, so it passes on every pull request, forever, regardless of what the PR
+    says. A PR with no summary, no validation section and no public-safety note
+    passes it.
+    FIX: have the workflow point it at the actual summary under review, and make the
+    script REFUSE when the resolved path is the template, so falling back can never
+    read as a pass.
+
+144. **The PR risk report computes `block_merge` and exits 0; nothing reads it.** —
+    OPEN, devex-tooling-engineer. `phase-pr-report.ts` contains no `process.exit` and
+    no `exitCode` assignment anywhere — it is the only gate-shaped script on the
+    surface with no exit path. The workflow generates the report and uploads it as an
+    artifact; no step reads `risk_lane` or `merge_recommendation`.
+    WORSE, AND THIS IS THE PART THAT BITES: its `unsafeClaimPattern` is a hand-copied
+    duplicate carrying 16 alternatives, while `docs-sanity.mjs`'s DENYLIST — the copy
+    that actually fails a build (row 117's correction) — carries 45. The extras are
+    the regulated-framework attestation claims — the four naming a health-privacy
+    regime, a service-organisation audit, an international security standard and a
+    federal authorisation programme. The phase lane MISSES all four. (Named
+    obliquely on purpose: writing them out trips `docs-sanity.mjs`, which is the
+    whole point of this row — the gate that CAN fail carries the phrases, and the
+    lane that cannot does not.)
+    Third defect in the same file: `unsafeClaimScan` uses a helper returning `""` on
+    ANY git failure, so "git grep found nothing" and "git grep failed" both read as
+    clean.
+    FIX: export the pattern once and import it in all three consumers, with a proof
+    asserting every consumer sees the same list length; make a RED lane fail; and
+    distinguish git exit 1 from any other exit.
+
+145. **The grid proof's secret-scan regex cannot fire on the JSON it is given.** —
+    OPEN, devex-tooling-engineer. `signalgrid-grid-proof.ts:946-951` matches
+    `(api[_-]?key|secret|token|password)\s*[:=]\s*[a-z0-9_\-.]{12,}` against
+    `JSON.stringify(...)`. In JSON a key is followed by `"` before the colon and a
+    value begins with `"` — neither is `\s`, `[:=]`, nor a member of the value class.
+    Executed: three plainly-leaked credentials in exactly the serialisation shape this
+    proof produces, and the check returns false. It fires only if `key: value` appears
+    INSIDE a single string literal — the least likely leak shape.
+    This is one of two gates standing between the fixtures and a published
+    public-safe evidence file, it is aimed at the highest-severity leak class, and it
+    has always passed.
+    FIX: walk the parsed object rather than regexing the serialised text, and add a
+    negative control — a synthetic object carrying a fake credential must make the
+    check FAIL — since without one this is invisible again the moment it recurs.
+
+146. **The SBOM's maven half collects direct quoted coordinates only, and it is the
+    one ecosystem with no completeness guard.** — OPEN, devex-tooling-engineer.
+    `generate-sbom.ts:256-258`. Executed against real Gradle forms: it COLLECTS a
+    quoted `implementation("group:artifact:version")` and MISSES version-catalog
+    references, `compileOnly`, `ksp`, `androidTestImplementation`, `classpath`, and
+    every `plugins {}` entry. The committed SBOM carries 875 npm and 418 cargo
+    components against SEVEN maven — the seven quoted lines, no transitives, no
+    plugins — while five third-party Gradle plugins are declared across the two build
+    files and reach the document not at all.
+    The generator HAS a fail-closed completeness guard and it is pointed at the
+    ecosystem it does not parse: `assertSwiftHasNoExternalPackages` exits 1 if a
+    Swift package appears. No maven twin exists — corroborated three ways plus
+    `check:absence` (CORROBORATED across 4 probes).
+    WHY IT MATTERS: an SBOM is read by whoever is deciding whether to accept the
+    software, and this one presents the Android surface as having seven third-party
+    dependencies. It passes its own staleness gate byte-for-byte, so nothing signals
+    incompleteness.
+    FIX: add a `assertGradleFullyParsed()` twin that fails on any dependency-like
+    call the regex did not collect, anchor the configuration alternation, and either
+    resolve transitives from a committed Gradle lock or state "direct declarations
+    only" in the ecosystems-covered property.
+
+147. **Three e2e specs abort external requests without asserting none were
+    attempted; the fourth documents exactly why that is wrong.** — OPEN,
+    devex-tooling-engineer. NOTE. `admin-console`, `review-console` and `website`
+    call `route.abort()` and stop there. `evidence-coverage-page.spec.ts:56-61`
+    records the lesson in its own words — "a page that grew a webfont, a logo or an
+    analytics beacon would be silently neutered by the test and ship green to a
+    public marketing domain. Aborting is the setup; this assertion is the test" — and
+    the lesson stayed in the file it was learned in. `website.spec.ts` is the public
+    marketing site, the surface that sentence names.
+    FIX: an allowlist assertion rather than `toEqual([])` (these pages do legitimately
+    use font hosts), in a shared helper so the next spec inherits it.
+
+148. **The e2e README states a test count 18 behind, in the section whose own lesson
+    is that hand-maintained test claims go stale.** — OPEN, devex-tooling-engineer.
+    NOTE. It says the suite "has since grown to 35"; `playwright test --list` reports
+    53 tests in 10 files. Two lines below, the same section says "a README describing
+    a test's live state is a hand-maintained claim, and the test itself is the only
+    version of that claim that cannot go stale."
+    FIX: drop the parenthetical or point at `--list`. A number in a README that no
+    gate reads has two stable states: absent, or wrong.
+
+149. **1,700 lines and 239 assertions of the decision core's own proof are
+    unreviewed.** — OPEN, devex-tooling-engineer. The reader executed
+    `signalgrid-core-proof.ts` and read only the reporting tail and the check helper.
+    This is the largest unexamined block left on the scripts surface and it guards the
+    decision path. Recorded as a coverage gap rather than a defect: nobody has looked,
+    and the ledger now says so.
+
+150. **`ladderRungs=5` in the agent-behavior proof matches nothing in its source of
+    truth.** — OPEN, devex-tooling-engineer. NOTE. The family's action type has 6
+    members, the unified ladder has 8, its postures have 9, and the proof exercises 4
+    distinct actions. Five is none of them. The proof IS registered in the figure
+    guard, so this literal is what documentation about agent-behavior gets validated
+    against — a doc correctly stating "six" would be FAILED by the guard.
+    CONTEXT, not a separate row: eight other proofs publish `ladderRungs=6` and all
+    eight are correct today, but every one is a hand-typed literal restating a bare
+    TypeScript union with no runtime value. `agent-behavior` is the copy that already
+    drifted.
+    FIX: convert each family's action union to a const array and emit
+    `${X_ACTIONS.length}` — for all nine, not just the one that drifted.
+
+151. **The desktop Policies page paints `fail-closed` as danger and `fail-open` as
+    healthy — the product's first invariant, inverted in pixels.** — OPEN,
+    desktop-engineer. BLOCKING.
+    `Policies.tsx:30-36` is a two-branch ternary: `fail-closed` gets red, everything
+    else gets green. The enum is closed to two values, so the green branch is reached
+    by `fail-open` and nothing else. REACHABLE WITH THE SHIPPED FIXTURE — the served
+    three-policy fixture's third entry is `failMode: "fail-open"`, so the rendered
+    page shows two red FAIL-CLOSED badges and one green FAIL-OPEN badge, with no
+    legend to say the colours mean anything else.
+    The repo's own position, verbatim: "fail-closed integrity is zero-tolerance — one
+    fail-open exhausts it and can never be bought back."
+    WHY IT MATTERS: red means problem and green means fine to every viewer without
+    instruction. This page tells an operator the two correctly-configured policies are
+    the problem and the one dangerous policy is fine — and styles the policy a
+    reviewer should ask about to be scrolled past.
+    TWO SIBLINGS IN THE SAME TREE, filed here because they are one fix:
+    · `Handoff.tsx:118-121` sends `restrict` to the STEP-UP tone via an else branch —
+      colouring a more-restrictive verdict with a less-restrictive tone. `Policies.tsx`
+      itself gets this right four lines later, so two files in one tree default
+      opposite ways.
+    · `Dashboard.tsx:69` gives RESTRICT and DENY the identical legend swatch:
+      `hsl(0 43% 60.8%)` = #C67070 for both, a computed 1.0000:1. The chart BANDS
+      differentiate by dash and opacity; the legend — the only thing mapping colour to
+      name — does not.
+    `check-decision-palette.mjs` exits 0 on all three: it asserts a verdict is painted
+    from a RATIFIED TOKEN and has no concept of WHICH verdict maps to which token, nor
+    of a legend.
+    FIX: swap the fail-mode branches and take the tone from the ratified tokens; make
+    Handoff a four-branch chain terminating in `text-status-restrict`; give the
+    RESTRICT legend swatch the chart's own dash treatment. Then extract ONE
+    `outcomeTone` helper for this tree, typed as a total Record, so the three
+    ternaries cannot drift again.
+
+152. **`signalgrid-desktop` asserts in rendered copy and chrome that it is a native
+    app on three platforms.** — OPEN, desktop-engineer. The status bar reads
+    "SignalGrid Desktop · macOS / Windows / Linux", the title bar draws simulated
+    macOS traffic-light controls, and the stylesheet carries `-webkit-app-region:
+    drag` — an Electron/Tauri-only property, inert in a browser, whose only function
+    here is to make the page look like window chrome.
+    There is NO Electron, Tauri or native shell anywhere in the repository —
+    established three ways, including the repo's own words at `desktop.yml:5-6`:
+    "there is no Windows or Linux binary in this repository."
+    The marketing site already gets this right — "Delivered today as a desktop-chromed
+    web app; native shells are a documented next step, not shipped" — which makes the
+    artifact the outlier rather than the policy. The three sources also disagree on
+    the platform list.
+    FIX: state what it is in the status bar, matching the wording already agreed on
+    the download page; drop or qualify the traffic lights; delete the inert drag rule.
+    The tree already knows how to label itself honestly — it carries a FIXTURE DATA
+    chip globally.
+
+153. **Four `.bg-status-*` utilities are declared in the desktop stylesheet and used
+    nowhere in that tree.** — OPEN, desktop-engineer. NOTE. Zero references, verified
+    two search shapes; they are live in three sibling trees, so this one copied the
+    stylesheet without the components that consume it. It matters mainly because the
+    comment above them documents measured contrast ratios for chips this tree never
+    renders — inviting a reader to trust a verification with no rendered subject.
+
+154. **Two demo trees declare a large social card and ship an image nothing
+    references.** — OPEN, desktop-engineer and web-engineer. NOTE.
+    `signalgrid-review` and `signalgrid-desktop` both set
+    `twitter:card="summary_large_image"` with no `og:image` and no `twitter:image`,
+    while each ships an unreferenced `public/opengraph.jpg`. `signalgrid-web` is the
+    control and does it correctly including a base-path rewrite. This is the mirror of
+    the missing-manifest-icons defect: here the file exists and the markup that would
+    use it does not.
+
+155. **An unguarded status lookup in desktop Integrations emits a literal
+    `undefined` class.** — OPEN, desktop-engineer. NOTE. `Integrations.tsx:65` has no
+    fallback, so an unrecognised status yields `className="... undefined"`, which
+    Tailwind does not match — the cell inherits ordinary foreground and reads as a
+    normal, healthy row. The map is typed `Record<string, string>` so TypeScript will
+    not complain. The sibling `Signals.tsx:66` guards the same pattern with `?? ""`.
+    FIX: type the map against the spec enum so an unmapped status is a typecheck
+    failure, and give the lookup a RESTRICTIVE fallback plus a visible UNKNOWN marker
+    — an unknown state must be stated, not styled away.
+
+156. **`Partial<Record<DecisionOutcome, …>>` disables the exhaustiveness check that
+    would catch a new verdict.** — OPEN, web-engineer. NOTE, and a REFUTED hypothesis
+    recorded honestly: the reader expected an unmapped outcome and there is not one —
+    all ten members are present, so the fallback is currently unreachable. What
+    remains is that `Partial` is the annotation making an unmapped verdict LEGAL, and
+    the fallback it enables is a neutral stone chip byte-identical to the tone already
+    assigned to `record_audit`, the most benign outcome in the set. A future
+    restrictive outcome would arrive looking like an audit note.
+    FIX: drop `Partial` so an unhandled outcome is a compile error, and change the
+    fallback to the restrictive tone.
+
+157. **Six rendered assertions of a passing CI gate that does not exist.** — OPEN,
+    web-engineer. The Review Hub scorecard cites `rc:smoke` as a passing workflow six
+    times, and those citations are load-bearing for two of the eight published scores.
+    Absence established three ways: `check:absence` returns INCONCLUSIVE with four
+    word-mentions, all of which are the claim itself or the record of the claim — no
+    script, no workflow, no gate; a grep across `package.json`, `.github/workflows/`
+    and `scripts/` returns NOTHING.
+    It was registered in the claim inventory on 2026-08-21 with action `remove`. It is
+    still rendering four days later.
+    WHY IT MATTERS: these sentences tell a reader a named CI gate is green. There is
+    no such gate. A prospect who asks to see the run gets no answer, and everything
+    else on the page becomes suspect at that moment.
+    FIX: replace each with a gate that exists and can be linked, then RE-DERIVE the
+    two scores that leaned on it — the substitution changes what they claim.
+
+158. **52 claims marked for removal are still in the tree, and no gate reads the
+    register.** — OPEN, docs-writer. `docs/agent/CLAIM_INVENTORY.json` prescribes an
+    action for each of 1,023 rendered claims. Three scripts name the file: one
+    GENERATES markdown from it, and two name it only to EXCLUDE it from their own
+    scans. None asks whether a prescribed action was taken.
+    Measured mechanically by taking the longest quoted span from each `remove`-actioned
+    row and testing whether it is still present: 151 remove-rows on the read surface,
+    **52 still present verbatim**, 68 no-longer-matching, 31 untestable.
+    STATED HONESTLY: 52 is a lower bound and the 68 is NOT evidence of 68 fixes — many
+    rows paraphrase rather than quote, so a non-match can mean the row was never
+    testable this way. The load-bearing number is the zero: zero gates check.
+    Row 157 is the concrete demonstration.
+    FIX: a gate asserting that every `remove` row with a quotable span no longer
+    matches its named file, ratcheting the still-present count downward rather than
+    demanding zero on day one.
+
+159. **MY OWN LEDGER WAS INFLATING ITS NUMBER, and the gate permitted it.** —
+    FIXED 2026-08-25, devex-tooling-engineer. Found by a reader auditing the web
+    trees, in the ledger rather than in the code.
+    `docs/agent/review-coverage.json` carried TWO directory entries —
+    `artifacts/signalgrid-web/src` and `.github/workflows` — and
+    `check-review-coverage.mjs` treated a prefix claim as covering everything beneath
+    it. Two lines therefore counted **93 files** as read. `docs/agent/REVIEW_CYCLE.md`
+    already required "FILE-level ledger entries (never directory prefixes)"; the gate
+    simply did not enforce the rule written beside it.
+    Reported coverage was 17.3%. With the two entries removed it is 13.2%. **The
+    4-point difference was never real** — the number this entire effort exists to make
+    true was being inflated by its own checker.
+    FIXED: the two entries are deleted and the gate now FAILS on any claim that is not
+    an exact tracked file. Falsified — planting a directory claim back produces
+    "a DIRECTORY standing in for 78 file(s)" and exit 1.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

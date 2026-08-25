@@ -492,6 +492,65 @@ console.log("");
 console.log(
   `figures=states=${SPACE},clean=${clean.length},cleanShapes=${cleanShapes.size},fixtures=${Object.keys(SESSION_READINESS_FIXTURES).length}`,
 );
+// ── A garbled budget may not outscore an unasked one ──────────────────────────
+//
+// `elapsed > NaN` and `elapsed > undefined` are both false, so no EXCEEDED
+// candidate fired — AND because `budget !== null`, the honest UNPOSED arm was
+// skipped too. Both the finding and its fallback switched off at once, and a
+// garbled budget graded STRICTLY BETTER than no budget: `ready / none` against the
+// `degraded / monitor` an absent one produces. A malformed question outscored an
+// unasked one.
+//
+// The `{}` case is the realistic one: a config with a misspelled key satisfies
+// `ReadinessBudget` structurally and arrives as `undefined`. It was ALSO the case a
+// first pass at this fix left open — `posedBound` treats `undefined` as "not posed"
+// by contract, which is right at its own boundary and wrong inside a budget object
+// where the threshold is not optional. The probe caught it; these cases pin it.
+{
+  const readyBase = {
+    subjectRef: "dev-b1",
+    appRef: "emr",
+    appReadiness: "usable" as const,
+    measurement: "measured" as const,
+    sessionOrigin: "fresh" as const,
+    workflowRisk: "critical" as const,
+    elapsedToUsableSeconds: 42,
+    covered: true,
+    source: "probe",
+    observedAt: "2026-07-13T12:00:00.000Z",
+  };
+
+  const honest = evaluateSessionReadiness({ ...readyBase, budget: { thresholdSeconds: 30 } } as never);
+  check(
+    "budget control: a readable 30s budget over 42s elapsed still restricts",
+    honest.reasonCode === "READINESS_BUDGET_EXCEEDED",
+  );
+
+  const unposed = evaluateSessionReadiness({ ...readyBase, budget: null } as never);
+  check(
+    "budget control: an ABSENT budget is the unposed finding, and still raises",
+    unposed.reasonCode === "READINESS_BUDGET_UNPOSED" && unposed.recommendedAction !== "none",
+  );
+
+  for (const [label, budget] of [
+    ["NaN", { thresholdSeconds: Number.NaN }],
+    ["Infinity", { thresholdSeconds: Number.POSITIVE_INFINITY }],
+    ["zero", { thresholdSeconds: 0 }],
+    ["a missing threshold (the misspelled-key case)", {}],
+  ] as ReadonlyArray<readonly [string, unknown]>) {
+    const v = evaluateSessionReadiness({ ...readyBase, budget } as never);
+    check(
+      `a budget of ${label} does NOT grant`,
+      v.recommendedAction !== "none",
+    );
+    check(
+      `...and is reported as UNREADABLE, kept distinct from UNPOSED`,
+      v.reasonCode === "READINESS_BUDGET_UNREADABLE",
+    );
+  }
+}
+
+
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length > 0) {
   console.error("FAILED:");

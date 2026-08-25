@@ -59,20 +59,6 @@
       "note": "IPv6 fallback keyed raw addresses; now subnet-bucketed via the library key generator."
     },
     {
-      "path": "artifacts/signalgrid-web/src",
-      "reviewedBy": "web-engineer",
-      "date": "2026-08-19",
-      "depth": "audited",
-      "note": "Full site sweep: 14 findings, 8 applied \u2014 router-base 404s, invisible signal dots, contrast, reduced motion, worker-PWA claims."
-    },
-    {
-      "path": ".github/workflows",
-      "reviewedBy": "security-engineer",
-      "date": "2026-08-19",
-      "depth": "audited",
-      "note": "All 15 workflows: permissions, injection, action pinning, timeouts, concurrency, and the SBOM token split."
-    },
-    {
       "path": "scripts/check-assist-conformance.mjs",
       "reviewedBy": "devex-tooling-engineer",
       "date": "2026-08-19",
@@ -2136,6 +2122,489 @@
       "date": "2026-08-25",
       "depth": "audited",
       "note": "All 9 lines. Confirms ./dispatch is on the PUBLIC surface, so dispatchEvent \u2014 carrying rows 136 and 137 \u2014 is exported from the family."
+    },
+    {
+      "path": "scripts/src/signalgrid-grid-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 1067 lines read and executed (exit 0, 783/783). Traced every assertion source: baseline/evidence/route-ownership loops, the 21-mutation sweep, malformed-input guards, assertPublicSafety, riskScore, determinism hash. Found the fabricated approval-gate counter (row 142) and the secret-scan regex that cannot fire on JSON (row 145). NOT checked: the simulator package itself, so whether the 11 scenarios cover the outcome space is unestablished; did not mutation-sweep the file."
+    },
+    {
+      "path": "scripts/src/signalgrid-core-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Executed (exit 0, 239 assertions) and read ONLY the reporting tail and the check() helper. Lines 80-1820 \u2014 roughly 1,700 lines and 239 assertions of decision-core logic \u2014 are UNREVIEWED. This is the largest unexamined block left on the surface and is re-tasked as row 149."
+    },
+    {
+      "path": "scripts/src/phase-summary-check.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 32 lines read and executed. Traced the required-section regex, the default file path, and the CI invocation \u2014 PHASE_SUMMARY_FILE is set nowhere in the repo (row 143). Also noted the regex cannot match a markdown heading because '#' is neither whitespace nor '-'; not currently reachable since the template uses bullets."
+    },
+    {
+      "path": "scripts/src/phase-pr-report.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 112 lines. Traced every branch: the prDiffFiles/localFiles fallback, the touches_* classifiers, the risk-lane ternary, the unsafe-claim scan, the output path. Confirmed against the workflow that NOTHING consumes the report (row 144). NOT checked: whether GITHUB_BASE_REF is set on real PR runs."
+    },
+    {
+      "path": "scripts/src/generate-sbom.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 391 lines. Tested the maven coordinate regex against seven real Gradle declaration forms, cross-checked both build.gradle.kts files, and counted the committed SBOM by ecosystem (875 npm / 418 cargo / 7 maven). Found the half-parsed maven half (row 146). NOT checked: the npm walk against a corrupted pnpm ls payload."
+    },
+    {
+      "path": "scripts/src/lib/backup.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 270 lines. Traced createBackup/verifyBackup/restoreBackup/describeDatabase and BOTH refusal orderings (role-split provisionability checked BEFORE pg_restore; definer lockdown before applyRoleSplit). NOT executed \u2014 no DATABASE_URL here \u2014 so the pg_dump/pg_restore paths are read-only review."
+    },
+    {
+      "path": "scripts/src/connector-emulator-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 246 lines plus the fixture tree (15 scenarios across 5 groups, 2 proposed+highRisk so the remediation loop is non-vacuous). NOTED: result.route/approvalRequired/simulatedFirst are COPIED from scenario.expected, so those assertions lint the fixture rather than a computed routing. NOT executed."
+    },
+    {
+      "path": "scripts/src/connector-emulator-harness.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 140 lines. Traced decide()'s full precedence chain; confirmed fail-closed on non-healthy apiHealth and on ambiguous credential-reader evidence. NOT checked: whether every branch is reached by some fixture \u2014 no coverage instrumentation."
+    },
+    {
+      "path": "scripts/src/bench-workload.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 33 lines. percentile()'s index clamp handles p=0 and p=100 without going out of range. Did NOT verify the five scenarios span allow/step-up/restrict as the comment claims."
+    },
+    {
+      "path": "scripts/src/e2e/README.md",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 123 lines, compared against reality: enumerated the suite with `playwright test --list` (53 tests in 10 files) against the README's stated 35 (row 148). NOT checked: the ~40-second runtime claim and the six webServer builds."
+    },
+    {
+      "path": "scripts/src/e2e/route-sweep.spec.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 55 lines. The 404-fallthrough guard, the >50-char body floor, the three request listeners. NOT executed. Noted the api listeners key on the substring '/api/', so traffic on another prefix is invisible to the counters."
+    },
+    {
+      "path": "scripts/src/e2e/decision-matrix.spec.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 47 lines. Asserts the POST status, then the core's reason codes, then the rendered verdict \u2014 no 'something rendered' looseness. NOT executed."
+    },
+    {
+      "path": "scripts/src/e2e/client-surfaces.spec.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 67 lines. Both tests require ok.length > 0 as well as zero 4xx/5xx, so a client making no calls at all fails. NOT executed."
+    },
+    {
+      "path": "scripts/src/e2e/workflow-safety.spec.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 76 lines. Each test pins the api-server answer before checking the render; the prototype-pollution case asserts plan.matched === false. NOT executed."
+    },
+    {
+      "path": "scripts/src/e2e/grid-coverage-basis.spec.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 79 lines. NOTED: the third test's assertions sit entirely inside an `if (basis === 'projected_from_sourcing')`, so any other basis makes it pass with ZERO assertions \u2014 the second test has an else branch, the third does not. NOT executed."
+    },
+    {
+      "path": "scripts/src/e2e/step-up-webauthn.spec.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 177 lines including the in-page evaluate body. Traced enroll -> challenge -> complete and the scoped-release assertions. Flagged that `expect(held?.disposition).not.toBe('step_up')` PASSES when held is undefined. NOT executed (needs a booted api-server and a CDP virtual authenticator)."
+    },
+    {
+      "path": "scripts/src/e2e/evidence-coverage-page.spec.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 211 lines \u2014 the strongest spec on the surface: it asserts the off-page request list is EMPTY rather than only aborting, pins visible captions as well as data attributes, and derives the denominator from the rendered row count. NOT executed."
+    },
+    {
+      "path": "scripts/src/e2e/admin-console.spec.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-120 of 206. Found blockExternal aborts without asserting (row 147). NOT read: lines 120-206. NOT executed."
+    },
+    {
+      "path": "scripts/src/e2e/review-console.spec.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-30 and 195-347. NOT read: lines 30-195, which hold the decision-list and evidence-trace tests. NOT executed."
+    },
+    {
+      "path": "scripts/src/agent-behavior-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 55-215: ladder checks, worst-concern-wins, the unknown-field fail-closed loop, the connector surface, the figures= line. Cross-checked ladderRungs=5 against the family's own types (6 action members, 9 postures) \u2014 row 150. NOT read: lines 1-55 and 215-end."
+    },
+    {
+      "path": "scripts/src/mcp-server-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-110. Confirmed the `check(..., true)` at :72 is a reached-here marker after client.connect() (which throws on failure), NOT a tautology. NOT read: lines 110-end."
+    },
+    {
+      "path": "scripts/src/observability-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-90. sampleValue() is correctly guarded by Number.isFinite and returns null rather than a number. NOT read: the teardown tail."
+    },
+    {
+      "path": "scripts/src/export-ledger-cli.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-70. --batch-size is Number.isFinite-guarded with a <1 floor; the three documented refusals verified (no DATABASE_URL -> 2, broken chain -> 1, existing file -> 2 via an atomic 'wx' open). NOT read: lines 70-end."
+    },
+    {
+      "path": "scripts/src/live-headwind-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-90. The no-HMDM_URL path is process.exit(3) with the bring-up command named \u2014 a REFUSAL, not a skip. NOT read: lines 90-165."
+    },
+    {
+      "path": "scripts/src/live-idp-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-80 and 470-492. It needs no env \u2014 it boots oidc-provider in-process \u2014 so there is no skip path to abuse. NOT read: lines 80-470, the actual token minting and the six rejection cases."
+    },
+    {
+      "path": "scripts/src/mobile-app-catalog-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-60 and 120-155. The never-skip python3 rule holds, and the hardcoded findings=6 is pinned in the same run by an assertion, so it cannot drift silently. NOT read: lines 60-120."
+    },
+    {
+      "path": "scripts/src/launch-seam-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 265-295 only \u2014 the determinism check, the zero-network check, and the hardcoded figures=launchFamilies=3,scenarios=3. Could NOT confirm whether those two literals are pinned elsewhere in the file. NOT read: lines 1-265."
+    },
+    {
+      "path": "scripts/src/evidence-adapter-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 305-334, executed (exit 0, 30/30). The hardcoded figures match the run's own output today but are literals, not derivations. Noted the capture-absent branch still emits sourceSystems=3. NOT read: lines 1-305."
+    },
+    {
+      "path": "scripts/src/policy-binding-proof.ts",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "SHALLOW: only the figures= line and the unified-ladder check, cross-checked against PolicyBindingAction (6 members \u2014 the literal is correct for this family). The body is UNREAD."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/package.json",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Confirmed the dependency set is Vite/React/Radix/recharts/wouter only \u2014 NO electron, NO tauri, NO electron-builder. Version drift NOT audited."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/vite.config.ts",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "API_PROXY_TARGET is hard-refused unless loopback (throws at config load); fs.strict on. Noted host:'0.0.0.0' + allowedHosts:true on server and preview \u2014 dev-server only, not shipped. NOT built."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/index.html",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Every external host, the meta card set, asset references. Remote Google Fonts (already REPORTED by review:invariants) and a large-image twitter card with no image meta while public/opengraph.jpg ships unreferenced (row 154). No CSP present."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/src/App.tsx",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Routing, the wouter base derivation from BASE_URL, the hardcoded dark class. All six lazy routes reachable from NAV; no dead route. Base-path behaviour NOT tested in a build."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/src/main.tsx",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "The VITE_API_BASE_URL boundary: non-loopback hosts are silently dropped, so a public bundle cannot be pointed at a live API. Correct."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/src/index.css",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Every token and utility; computed contrast for all decision tokens against background and card \u2014 all pass AA. Found four .bg-status-* utilities with zero references in this tree (row 153) and .titlebar's inert -webkit-app-region."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Read in full against fixture-labelling and platform honesty. Fixture labelling here is GOOD and global. Found the platform claim and the simulated macOS window controls (row 152). Keyboard focus and ARIA NOT audited."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/src/pages/Decisions.tsx",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Traced the outcome filter and every rendered field against the control-plane OpenAPI spec and the serving route. Two hypothesised bugs REFUTED: the 'step-up' casing and `evaluatedAt` are both spec-correct, and the filter IS honoured server-side. CSV export quoting NOT checked (fixture-only input)."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/src/pages/Signals.tsx",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All four spec enum values are mapped so the fallback is unreachable for conformant data. Raw Tailwind ramp colours used instead of tokens; contrast computed, all pass AA."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/src/pages/Policies.tsx",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Read in full against the fail-closed doctrine. Found the fail-mode colour INVERSION (row 151). The verdict ternary falls through to text-status-restrict, which is doctrine-correct."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/src/pages/Integrations.tsx",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Found the unguarded STATUS_COLOR lookup emitting a literal `undefined` class (row 155). Did NOT verify the served fixture's status vocabulary matches the four keys \u2014 which is exactly why the missing fallback matters."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/src/pages/Handoff.tsx",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Read in full. Fixture labelling explicit and good. Found the verdict ternary painting `restrict` with the step-up tone (row 151b). Date.now() here is a UI mock, not a decision path."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/src/pages/not-found.tsx",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Ten lines, no logic, no claims. Clean."
+    },
+    {
+      "path": "artifacts/signalgrid-review/index.html",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Same audit as the desktop index: remote Google Fonts, and a large-image twitter card with no image meta while public/opengraph.jpg ships unreferenced. No CSP."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/App.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Single-page mount of ReviewDashboard; no router, so no dead route is possible. Clean."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/main.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Five lines, no API client, no base-URL wiring \u2014 this tree makes NO network calls at all. Clean."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/pages/ReviewDashboard.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Section wiring, the REVIEW_DATE/REVIEW_VERSION render sites, the statusLabel lookups (verified total over the declared union), and the scope footer. Did NOT read all 1026 lines; scroll-spy nav, print layout and section ordering NOT audited."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/components/ScoreBar.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Both dynamic class lookups are total over a closed union, so neither can yield undefined. Bar-fill contrast NOT computed (decorative, no text)."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/components/TagBadge.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Has a proper ?? defaultStyle guard. Found defaultStyle is byte-identical to two real entries, so an unrecognised tag is visually indistinguishable from them \u2014 mitigated because the tag text renders."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/components/sections/SignalGridSimulatorSection.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Checked the outcomeTone map against the real 10-member DecisionOutcome union \u2014 all mapped, so the neutral fallback is currently unreachable. Flagged the Partial<Record<>> annotation that removes the exhaustiveness check (row 156)."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/components/sections/OperatorConsoleSection.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "The header contract, the SCENARIOS list, both total outcome maps, and the reconciliation panel. NOT read: ~500 lines covering evidence snapshot, audit chain, metrics and webhook panels."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/components/sections/CompetitiveSection.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "The threatMeta lookup against a closed union \u2014 total map. Expanded-card body and competitor copy NOT audited."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/components/sections/IntegrationTrackerSection.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "The status-cycling control: a viewer can click a connector to 'sandbox-validated'/'demo-ready' with NO 'locally edited' marker. Already registered in the claim inventory, so recorded as known rather than new."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/data/reviewData.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Audited the header constants and the scorecard against the current tree. REVIEW_DATE is still 'May 2026'; rc:smoke is asserted SIX times with no referent anywhere (row 157). Did NOT re-derive every one of the 12 inventory rows."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/data/demoData.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Grepped only: rc:smoke persists alongside 'Demo environment connected to Intune sandbox tenant'. The 477-line demo script NOT read."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/data/competitiveData.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "The CompetitorRow interface and the first entry, to confirm the threat union. Competitor prose NOT audited."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/data/integrationData.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Audited specifically for an external fetch from a served artifact. Every one of ~40 vendor URLs and every fetch( occurrence sits inside a template literal rendered as a LABELLED code sample \u2014 none executes. Hypothesis REFUTED. The 1156 lines of vendor copy NOT audited for accuracy."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/lib/simulator/types.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Pure type re-export; followed through to the real union. Clean."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/lib/simulator/decisionEngine.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Five-line re-export stub, no logic. Clean."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/lib/simulator/audit.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "One-line re-export. Clean."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/lib/simulator/routing.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "One-line re-export. Clean."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/data/simulatorScenarios.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "One-line re-export. Clean."
+    },
+    {
+      "path": "artifacts/signalgrid-review/src/hooks/useWorkspaceState.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "The localStorage schema and the status cycles; viewer edits persist locally and feed the tracker badges. NOT read: the reducer/merge logic."
+    },
+    {
+      "path": "artifacts/mockup-sandbox/index.html",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "25 Google Font families from two vendor hosts plus a duplicate noscript copy. Established the tree is NON-SHIPPING and gated before judging it (row 158)."
+    },
+    {
+      "path": "artifacts/mockup-sandbox/src/App.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Read in full. The /preview/* renderer resolves against the generated module map; Gallery is the only other page. The map is EMPTY, so every preview route errors."
+    },
+    {
+      "path": "artifacts/mockup-sandbox/src/main.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Five lines. Clean."
+    },
+    {
+      "path": "artifacts/mockup-sandbox/src/.generated/mockup-components.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Five lines, ZERO module entries. Cross-checked: the mockups directory has 0 tracked files and does not exist on disk. Regenerated at dev-server start by the plugin, so an empty committed map is a correct steady state."
+    },
+    {
+      "path": "artifacts/mockup-sandbox/mockupPreviewPlugin.ts",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Lines 1-60: the plugin globs the mockups tree and regenerates the map on watch. NOT read: the middleware/HMR half including the 127.0.0.1 reference."
+    },
+    {
+      "path": "artifacts/signalgrid-web/index.html",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Used as the CONTROL for the font and og:image comparison \u2014 the one tree with the @fontsource comment and both image metas. Confirms the other trees' gap is drift, not policy."
+    },
+    {
+      "path": "artifacts/signalgrid-web/src/components/sections/ComplianceSection.tsx",
+      "reviewedBy": "web-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Read in full against the overclaim brief. The framework grid is correctly and repeatedly hedged ('not certifications held'; 'no attestation is held' inline on SOC 2 and HIPAA). NO FINDING. Noted the FedRAMP/DISA/CMMC rows lean entirely on the section-level disclaimer."
     }
   ]
 }

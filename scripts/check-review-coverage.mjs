@@ -77,10 +77,26 @@ export function auditReviewCoverage(files, entries) {
     }
     if (typeof e?.path !== "string") continue;
 
-    // A prefix claim covers everything beneath it; an exact claim covers one file.
+    // An exact claim covers one file. A PREFIX claim used to cover everything
+    // beneath it, and that was the hole: two directory entries —
+    // `artifacts/signalgrid-web/src` and `.github/workflows` — silently counted 93
+    // files as read on the strength of two lines. `docs/agent/REVIEW_CYCLE.md`
+    // already required "FILE-level ledger entries (never directory prefixes)"; the
+    // gate simply did not enforce the rule it was written beside, so the number
+    // this whole effort exists to make true was inflated by its own checker.
+    //
+    // Found by a reader auditing the web trees, in the ledger rather than in the
+    // code — which is the point of having one.
     const matched = files.filter((f) => f === e.path || f.startsWith(e.path.endsWith("/") ? e.path : `${e.path}/`));
     if (matched.length === 0) {
       problems.push(`${LEDGER}: review claims \`${e.path}\`, which matches no reviewable file in this checkout — the ledger rotted, or the claim was always wrong`);
+    } else if (matched.length > 1 || !files.includes(e.path)) {
+      problems.push(
+        `${LEDGER}: review claims \`${e.path}\`, a DIRECTORY standing in for ${matched.length} file(s) — ` +
+          `a prefix is not a file-level read. Record one entry per file actually opened, ` +
+          `each with a note naming what was and was NOT examined (REVIEW_CYCLE.md).`,
+      );
+      continue;
     }
     for (const f of matched) covered.add(f);
   }

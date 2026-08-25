@@ -603,6 +603,35 @@ export const TARGETS = [
 // moved and nobody re-derived whether the justification still holds.
 const ALLOWED = [
   {
+    file: "lib/integrations/src/integrations/edr-threat/edr-connector.ts",
+    line: 'typeof endpoint.signatureAgeHours === "number" &&',
+    reason:
+      "REDUNDANT BY CONSTRUCTION, and checkable in one line: `Number.isFinite` on the very " +
+      "next conjunct performs NO coercion and returns true only for number primitives, so " +
+      "there exists no value for which this typeof test changes the result. Executed across " +
+      "5, 0, -1, Infinity, -Infinity, NaN, the string \"5\", null and undefined: identical " +
+      "output with and without it. Kept because it states the intended domain at the point " +
+      "of use, and because the SIBLING conjunct is emphatically not inert — dropping " +
+      "`Number.isFinite` lets Infinity through as a reported age, which the proof now pins " +
+      "with explicit Infinity/-Infinity/NaN assertions plus a finite-age non-vacuity control.",
+  },
+  {
+    file: "lib/integrations/src/integrations/identity-risk/evaluate.ts",
+    line: 'if (detectionsObserved && principal.riskLevel === "none") {',
+    reason:
+      "The EARNED terminal grant inside the remediated/dismissed/confirmed_safe block. " +
+      "Genuinely inert at current severities, verified rather than asserted: the whole block " +
+      "was removed and all 1,680 enumerated states (5 risk levels x 7 risk states x 3 mfa " +
+      "values x 4 detection grades x observed/unobserved feed x covered/uncovered) were " +
+      "diffed — ZERO verdicts changed. Whenever it fires, the ladder below reaches the same " +
+      "trusted/NO_RISK/none by another route: riskLevel \"none\" contributes no candidate and " +
+      "an observed-and-empty feed contributes no monitor floor, so the candidate list is empty " +
+      "and the earned grant falls out regardless. Kept as defence in depth — the last thing " +
+      "standing between a future weakening of the ladder and an unearned terminal grant. The " +
+      "counterexamples its own comment cites (2026-08-20) were real when they were executed; " +
+      "what changed is that the ladder now covers them too.",
+  },
+  {
     file: "lib/signalgrid-core/src/continuity.ts",
     line: "if (!VALID_OUTCOMES.has(record.outcome)) {",
     reason:

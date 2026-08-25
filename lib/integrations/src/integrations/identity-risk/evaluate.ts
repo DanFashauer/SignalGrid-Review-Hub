@@ -98,6 +98,17 @@ export function evaluateIdentityRisk(
     // reading. Anything less than fully-verified falls through to the ladder,
     // which grades the level at face value, floors the unobserved feed at
     // monitor, and lets the strongest concern win.
+    // INERT TODAY, verified rather than asserted (2026-08-25): the whole block was
+    // removed and all 1,680 enumerated states (5 levels x 7 states x 3 mfa x 4
+    // detection grades x observed/unobserved x covered/uncovered) were diffed —
+    // ZERO verdicts changed. When this guard fires, the ladder below reaches the
+    // same trusted/NO_RISK/none by another route: riskLevel "none" adds no
+    // candidate, an observed-and-empty feed adds no floor, so the candidate list is
+    // empty and the earned grant falls out anyway.
+    // KEPT because it is the last thing standing between a future weakening of the
+    // ladder and a terminal grant. The counterexamples in the paragraph above were
+    // real when they were executed; what changed is that the ladder now covers them
+    // too, and defence in depth means both cover them.
     if (detectionsObserved && principal.riskLevel === "none") {
       return { ...base, posture: "trusted", reasonCode: "NO_RISK", recommendedAction: "none" };
     }

@@ -1,5 +1,6 @@
 import React from "react";
 import { useListPolicies } from "@workspace/api-client-react";
+import { failModeTone, outcomeTone } from "@/lib/outcome-tone";
 
 export default function PoliciesPage() {
   const { data, isLoading } = useListPolicies();
@@ -27,11 +28,7 @@ export default function PoliciesPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <span className={`text-xs font-mono px-2 py-0.5 rounded border ${
-                  p.failMode === "fail-closed"
-                    ? "border-red-500/20 bg-red-500/5 text-red-400"
-                    : "border-green-500/20 bg-green-500/5 text-green-400"
-                }`}>
+                <span className={`text-xs font-mono px-2 py-0.5 rounded border ${failModeTone(p.failMode)}`}>
                   {p.failMode.toUpperCase()}
                 </span>
                 <span className={`text-xs font-mono ${p.active ? "text-green-400" : "text-muted-foreground"}`}>
@@ -50,9 +47,7 @@ export default function PoliciesPage() {
                   <span className="text-foreground/70">{r.condition}</span>
                   <span className="text-foreground/40">→</span>
                   <span className={`font-semibold ${
-                    r.outcome === "allow" ? "text-status-allow" :
-                    r.outcome === "deny" ? "text-status-deny" :
-                    r.outcome === "step-up" ? "text-status-step-up" : "text-status-restrict"
+                    outcomeTone(r.outcome)
                   }`}>{r.outcome.toUpperCase()}</span>
                 </div>
               ))}

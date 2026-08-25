@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useListDecisions, useListLatestSignals } from "@workspace/api-client-react";
 import { CheckCircle2, AlertTriangle, Clock, GitBranch } from "lucide-react";
+import { outcomeTone } from "@/lib/outcome-tone";
 
 const SHIFT_ZONES = ["ICU", "ZONE 3B", "ZONE 1A", "ER", "PHARMACY", "LAB", "FLOOR 4", "DOCK A"];
 const DEVICE_IDS = [
@@ -115,10 +116,7 @@ export default function HandoffPage() {
         <div className="space-y-1.5">
           {recentDecisions?.decisions.slice(0, 4).map(d => (
             <div key={d.id} className="flex items-center gap-3 px-3 py-2 bg-card border border-border rounded text-xs font-mono">
-              <span className={`font-semibold w-14 ${
-                d.outcome === "allow" ? "text-status-allow" :
-                d.outcome === "deny" ? "text-status-deny" : "text-status-step-up"
-              }`}>{d.outcome.toUpperCase()}</span>
+              <span className={`font-semibold w-14 ${outcomeTone(d.outcome)}`}>{d.outcome.toUpperCase()}</span>
               <span className="text-foreground/70 flex-1">{d.identityId}</span>
               <span className="text-muted-foreground">{d.deviceId}</span>
               <span className="text-muted-foreground">{d.latencyMs}ms</span>

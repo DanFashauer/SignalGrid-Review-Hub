@@ -3348,8 +3348,24 @@ earlier — that is the loop working, not a reason to soften the record.
     `${X_ACTIONS.length}` — for all nine, not just the one that drifted.
 
 151. **The desktop Policies page paints `fail-closed` as danger and `fail-open` as
-    healthy — the product's first invariant, inverted in pixels.** — OPEN,
-    desktop-engineer. BLOCKING.
+    healthy — the product's first invariant, inverted in pixels.** — FIXED
+    2026-08-25, desktop-engineer. Was BLOCKING.
+    THE FIX, all three sub-items together: a new
+    `artifacts/signalgrid-desktop/src/lib/outcome-tone.ts` holds one TOTAL
+    `Record<Outcome, string>` plus `failModeTone`, and all three call sites now route
+    through it. `fail-open` carries the warning tone and `fail-closed` the allow
+    tone; an unrecognised verdict OR an unrecognised fail mode resolves to the
+    RESTRICTIVE tone, never a neutral one — a fail mode we cannot read is not one we
+    can vouch for. The RESTRICT legend swatch now carries the chart's own dash
+    pattern instead of reproducing deny's colour without its differentiator.
+    Because the maps are total over closed unions, a new verdict is now a TYPECHECK
+    failure rather than a silent fallthrough to whatever the final `else` happened
+    to be — which is what let these three drift apart in the first place.
+    STILL TRUE, and left open as its own row: `check-decision-palette.mjs` exits 0
+    both before and after this fix. It asserts a verdict is painted from a ratified
+    TOKEN and has no concept of which verdict maps to which token, nor of a legend.
+    The mis-mapping was, and remains, structurally invisible to it — see row 168.
+    ORIGINAL FINDING FOLLOWS.
     `Policies.tsx:30-36` is a two-branch ternary: `fail-closed` gets red, everything
     else gets green. The enum is closed to two values, so the green branch is reached
     by `fail-open` and nothing else. REACHABLE WITH THE SHIPPED FIXTURE — the served
@@ -3611,6 +3627,25 @@ earlier — that is the loop working, not a reason to soften the record.
     products with a region filter, so it is corroboration and NOT proof of absence.
     The choice may well be right. What is missing is the tradeoff written beside it,
     so it reads as a decision rather than an assumption.
+
+168. **The palette gate cannot see a verdict painted with the WRONG ratified
+    token.** — OPEN, devex-tooling-engineer. Row 151 was three real defects —
+    fail-closed shown as danger, restrict wearing the step-up tone, and two verdicts
+    sharing one legend swatch — and `check-decision-palette.mjs` exited 0 before the
+    fix and exits 0 after it. It asserts that a verdict is painted from a RATIFIED
+    TOKEN, which all three were. It has no concept of WHICH verdict maps to which
+    token, and no concept of a legend at all.
+    So the gate is correct about the property it measures and blind to the one that
+    matters — the extractor-versus-audit boundary again, this time on the palette.
+    WHAT WOULD ACTUALLY HOLD IT, in increasing order of cost: (a) assert that no
+    `.tsx` in a decision-bearing tree contains an inline `outcome === "…"` ternary
+    assigning a `text-status-*` class, forcing every tone decision through a total
+    `Record` the compiler checks — this is cheap and statically decidable, and
+    `artifacts/signalgrid-desktop/src/lib/outcome-tone.ts` is now the reference
+    shape; (b) collect every verdict-labelled fill/stroke and assert each verdict
+    resolves to a DISTINCT rendered value, which is what would have caught the
+    legend; (c) pin the verdict-to-token mapping itself in one registry the gate
+    reads. Start with (a).
 
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —

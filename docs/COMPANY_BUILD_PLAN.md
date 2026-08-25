@@ -3844,6 +3844,55 @@ earlier — that is the loop working, not a reason to soften the record.
     legend; (c) pin the verdict-to-token mapping itself in one registry the gate
     reads. Start with (a).
 
+170. **A row's status can be WRONG in either direction, and no gate can tell.** —
+    OPEN, program-manager. This session produced both failures. Four rows (83, 89,
+    134, 135) read `open` for fixes that had already merged in PRs #309-#312; row 107
+    earlier read `closed` for work that had not. A ledger wrong in both directions is
+    not a ledger. (Status words are written in lower-case backticks throughout this
+    row on purpose — see the last paragraph.)
+    The obvious control was built and discarded before shipping: "a row may not read
+    `open` while naming a merged pull request" is decidable offline from
+    `git log --merges`, and it fires ZERO times against the four rows that motivated
+    it, because none of them named a PR at all. It would have been a gate measuring
+    a real property and answering a different question than the one asked — the
+    defect class this document keeps recording under other names.
+    What shipped instead is the precondition, not the check:
+    `scripts/check-backlog-evidence.mjs` requires a `closed` row to cite something a
+    stranger could run or open — a PR, a commit, a command, or a file path. A debt
+    ceiling of 28 bare closures is recorded in
+    `docs/agent/backlog-evidence-ratchet.json`; a rise is fatal, a drop is recorded
+    automatically. Note the polarity is inverted from `role-coverage-ratchet.json`,
+    which is a high-water mark.
+    WHAT IS STILL UNCOVERED, and will stay uncovered: nothing in a row's TEXT
+    distinguishes "`open` beside unmerged work" from "`open` beside a merged fix". That
+    direction needs someone who can read the tree, on a cadence, and no gate
+    substitutes for it. The evidence ratchet makes that re-read cheap — every newly
+    closed row now hands the reader the command — but it does not perform it. Until
+    a standing re-read exists, treat a green backlog-evidence run as saying only
+    that closures are checkable, never that they are true.
+    ONE MORE THING THIS ROW LEARNED ABOUT ITSELF, and it is a correction. The first
+    draft classified as `closed` by the new gate, on the commit that added it, off a
+    marker string the row had reproduced while explaining the classifier. The first
+    diagnosis written here blamed `check-backlog-ownership.mjs` for reading a quoted
+    word as a claim. That was wrong, and the sibling gate deserves the retraction:
+    it already strips quoted and code spans before reading status, on the stated
+    grounds that "a quotation reproduces a word without meaning it". The new gate
+    simply had not reused that step.
+    Reading further turned one divergence into four. The new gate had re-implemented
+    the sibling's classification instead of importing it, and got it wrong three
+    ways: it scanned raw text rather than the stripped status span; it did not test
+    partial markers first, though a partial marker contains a closed one; and it
+    carried a hand-written copy of the marker list that invented two markers the
+    sibling does not honour and omitted two that it does. The two gates disagreed
+    about five rows of the same document while this file's own header claimed they
+    could not disagree at all.
+    Both now import the sibling's extraction, its partial list and its marker list,
+    and the new gate's self-test classifies the REAL document with both and fails if
+    any row buckets differently — falsified by re-forking the list, which drops it to
+    13/14. The general lesson is the one this document keeps re-learning under new
+    names: a second copy of a rule is a second source of truth, and the copy is
+    wrong long before anybody looks.
+
 169. **A skill outside the repository speaks with authority over it, and no gate
     can see it.** — MITIGATED 2026-08-25 (reported, not gated), agent-platform-engineer.
     `check-org-roster.mjs` derives the set of dispatchable executors from disk and

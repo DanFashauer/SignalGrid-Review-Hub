@@ -70,8 +70,10 @@ const PLAN = "docs/COMPANY_BUILD_PLAN.md";
 const ROSTER = "docs/agent/org-roster.json";
 
 // Order matters: PARTIAL is tested first, because "HALF DONE" contains "DONE".
-const PARTIAL = ["HALF DONE", "ONE THIRD DONE", "TWO THIRDS DONE", "PARTIALLY DONE", "PARTIALLY ANSWERED", "MOSTLY DONE"];
-const CLOSED = ["DONE", "FIXED", "DECIDED", "SUPERSEDED", "WITHDRAWN", "DISPOSITION OF ROW", "NOT DOING"];
+export const PARTIAL_MARKERS = ["HALF DONE", "ONE THIRD DONE", "TWO THIRDS DONE", "PARTIALLY DONE", "PARTIALLY ANSWERED", "MOSTLY DONE"];
+const PARTIAL = PARTIAL_MARKERS;
+export const CLOSED_MARKERS = ["DONE", "FIXED", "DECIDED", "SUPERSEDED", "WITHDRAWN", "DISPOSITION OF ROW", "NOT DOING"];
+const CLOSED = CLOSED_MARKERS;
 
 // A negation immediately before a marker cancels it. The window is deliberately
 // short: this looks at the text right before the marker, not the whole sentence,
@@ -98,7 +100,7 @@ const NEGATION_WINDOW = 28;
  * requiring an owner that is already named, and failing toward more ownership
  * is the safe direction. Status is the one that hides work when it is wrong.
  */
-function statusText(text) {
+export function statusText(text) {
   return text
     .replace(/`[^`]*`/g, " ")
     .replace(/"[^"]*"/g, " ")

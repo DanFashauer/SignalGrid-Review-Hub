@@ -336,6 +336,10 @@ jobs:
         run: node scripts/check-backlog-ownership.mjs
       - name: Backlog ownership self-test (the gate can fail)
         run: node scripts/check-backlog-ownership.mjs --self-test
+      - name: Backlog evidence (a row that says DONE says how you'd check)
+        run: node scripts/check-backlog-evidence.mjs
+      - name: Backlog evidence self-test (the gate can fail)
+        run: node scripts/check-backlog-evidence.mjs --self-test
       - name: Surface-ownership self-test (the gate must be able to fail)
         run: node scripts/check-surface-ownership.mjs --self-test
       - name: Surface ownership (every file is somebody's)

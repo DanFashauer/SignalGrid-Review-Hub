@@ -28,8 +28,15 @@ import {
 } from './store';
 import { fetchWithTimeout, TIMEOUT_PRESETS } from '../../utils/fetchWithTimeout';
 
-// Environment checks
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+// NOTE: there is deliberately NO module-load environment constant here any more.
+// `IS_PRODUCTION = process.env.NODE_ENV === 'production'` used to live at this
+// line and gate the URL rules below, while `resolveWebhookDelivery` read
+// SIGNALGRID_TIER at CALL time. Two gates on one outbound path, disagreeing about
+// what "production" means: a deployment that set the repo's own tier vocabulary to
+// prod and turned live integrations on had done everything this codebase asks, and
+// still got plain-HTTP delivery of an HMAC-signed payload to loopback or an
+// internal address, because NODE_ENV happened to be unset. Being read at module
+// load made it unvariable per call as well.
 
 /** Dispatcher configuration */
 export interface DispatcherConfig {
@@ -68,9 +75,10 @@ export interface DeliveryResult {
  *
  * Same policy as every other live vendor path in this repo: dev/alpha NEVER send;
  * beta/prod may, and only with SIGNALGRID_LIVE_INTEGRATIONS=true. Env is read at
- * CALL TIME, not captured at module load like IS_PRODUCTION above — a gate that
- * cannot be varied per call cannot be proven, which is part of why this family
- * went unproven for so long.
+ * CALL TIME, never captured at module load — a gate that cannot be varied per
+ * call cannot be proven, which is part of why this family went unproven for so
+ * long. The URL validator below now reads the SAME resolution, passed in by the
+ * caller, so the two cannot disagree about what "live" means.
  */
 export function resolveWebhookDelivery(
   env: NodeJS.ProcessEnv = process.env,
@@ -86,30 +94,61 @@ export function resolveWebhookDelivery(
 }
 
 /**
- * Validate webhook URL for security
+ * Validate a webhook target.
+ *
+ * TWO RULES, and they are deliberately different in kind.
+ *
+ * THE SSRF BLOCK IS UNCONDITIONAL. Loopback, link-local, and RFC1918 private
+ * ranges are refused in every tier, because there is no tier in which posting a
+ * signed customer payload at 127.0.0.1 — or at a neighbour on the internal
+ * network — is the intended behaviour. It was previously gated on production AND
+ * covered only four loopback spellings: 192.168.0.5, 10.0.0.7 and every other
+ * RFC1918 address passed the guard even when it fired.
+ *
+ * THE HTTPS RULE IS GATED ON LIVE DELIVERY, passed in by the caller from the same
+ * `resolveWebhookDelivery` result that decides whether to send at all. One
+ * resolution, read once, per call. A suppressed tier may legitimately point a
+ * fixture at a plain-HTTP mock; a live one may not.
  */
-function validateWebhookUrl(url: string): { valid: boolean; error?: string } {
+export function validateWebhookUrl(
+  url: string,
+  opts: { live: boolean },
+): { valid: boolean; error?: string } {
   try {
     const parsed = new URL(url);
-    
-    // Must be HTTPS in production
-    if (IS_PRODUCTION && parsed.protocol !== 'https:') {
-      return { valid: false, error: 'HTTPS required in production' };
+
+    if (opts.live && parsed.protocol !== 'https:') {
+      return { valid: false, error: 'HTTPS required for live webhook delivery' };
     }
-    
-    // Block localhost/127.0.0.1 in production
-    if (IS_PRODUCTION) {
-      const hostname = parsed.hostname.toLowerCase();
-      if (
-        hostname === 'localhost' ||
-        hostname === '127.0.0.1' ||
-        hostname === '0.0.0.0' ||
-        hostname === '::1'
-      ) {
-        return { valid: false, error: 'Localhost not allowed in production' };
-      }
+
+    const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+
+    // Loopback and unspecified, in both families.
+    if (
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname === '0.0.0.0' ||
+      hostname === '::' ||
+      hostname === '::1' ||
+      /^127\./.test(hostname)
+    ) {
+      return { valid: false, error: 'Loopback and unspecified addresses are never valid webhook targets' };
     }
-    
+
+    // RFC1918 private ranges, RFC6598 shared address space, and link-local —
+    // including IPv6 unique-local (fc00::/7) and link-local (fe80::/10).
+    if (
+      /^10\./.test(hostname) ||
+      /^192\.168\./.test(hostname) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+      /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(hostname) ||
+      /^169\.254\./.test(hostname) ||
+      /^f[cd][0-9a-f]{2}:/.test(hostname) ||
+      /^fe[89ab][0-9a-f]:/.test(hostname)
+    ) {
+      return { valid: false, error: 'Private and link-local addresses are never valid webhook targets' };
+    }
+
     return { valid: true };
   } catch {
     return { valid: false, error: 'Invalid URL' };
@@ -161,7 +200,7 @@ async function dispatchToEndpoint(
     return { success: false, suppressed: true, error: delivery.reason };
   }
 
-  const urlValidation = validateWebhookUrl(webhook.url);
+  const urlValidation = validateWebhookUrl(webhook.url, { live: delivery.mode === 'live' });
   if (!urlValidation.valid) {
     return {
       success: false,

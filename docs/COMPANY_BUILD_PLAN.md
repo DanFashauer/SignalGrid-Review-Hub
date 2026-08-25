@@ -3077,7 +3077,25 @@ earlier — that is the loop working, not a reason to soften the record.
     above and is what every other id in the file uses.
 
 133. **The syslog adapter reports the collector reachable without opening a
-    socket — in a family that has no transport at all.** — OPEN, secops-domain.
+    socket — in a family that has no transport at all.** — FIXED 2026-08-25,
+    secops-domain.
+    REPRODUCED FIRST: at dev tier against a hostname that does not resolve,
+    `healthCheck()` returned **true** while `sendEvent()` returned **suppressed**
+    in the same process.
+    THE FIX: the gate comes first, matching splunk/sentinel/webhook and the ITSM
+    set — a health check is still a live call. But even when policy DOES permit
+    emission there is nothing here to probe, so the answer stays `false`. That is
+    not a failure report; it is "this cannot deliver", which is true. When a real
+    transport lands this becomes gate-then-probe like its siblings.
+    GATED by two assertions in `emit-gate-proof` (83 -> 84): the gate must be
+    consulted, AND the config-truthiness shortcut must be gone. Two rather than one
+    because either alone passes on the wrong thing, and a future gate-then-probe
+    implementation should keep the first while changing the second.
+    FALSIFIED: restoring the original one-liner fails both (82/84); restored, 84/84.
+    NOTE, and it is the session's recurring shape: my own docstring explaining the
+    old delivery-status lie CONTAINED the literal string the proof scans for, and
+    failed the assertion that exists to keep it out of the code. Named obliquely now.
+    ORIGINAL FINDING FOLLOWS.
     `syslog/transport.ts:173-179` is `return !!(this.config.host &&
     this.config.port)`. `port` is defaulted in the constructor and `host` is
     required, so this returns TRUE for every adapter that can be constructed —
@@ -3150,7 +3168,36 @@ earlier — that is the loop working, not a reason to soften the record.
     helper so the next family inherits the guard rather than the accident.
 
 136. **The webhook URL safety guard keys off `NODE_ENV` while the delivery gate
-    keys off `SIGNALGRID_TIER`.** — OPEN, secops-domain. `webhooks/dispatch.ts:32`
+    keys off `SIGNALGRID_TIER`.** — FIXED 2026-08-25, secops-domain.
+    TWO DEFECTS, and the second was not in the original finding: the guard was
+    gated on the wrong variable AND, even when it fired, it blocked only four
+    loopback spellings. **Every RFC1918 address passed regardless.**
+    THE FIX, two rules deliberately different in kind:
+    · The SSRF BLOCK IS NOW UNCONDITIONAL — loopback, IPv6 loopback and
+      unspecified, RFC1918, RFC6598 shared space, and IPv4/IPv6 link-local are
+      refused in EVERY tier. There is no tier in which posting a signed customer
+      payload at 127.0.0.1, or at a neighbour on the internal network, is intended.
+      "We are not sending anyway" is not a reason to accept an internal target.
+    · The HTTPS RULE is gated on live delivery, and the flag is passed in from the
+      SAME `resolveWebhookDelivery` result that decides whether to send at all. One
+      resolution, read once, per call — the two can no longer disagree. A suppressed
+      tier may still point a fixture at a plain-HTTP mock.
+    The module-load `IS_PRODUCTION` constant is deleted. A gate that cannot be
+    varied per call cannot be proven, which is why this went uncovered.
+    MEASURED in both tiers: with tier=prod, live=true and NODE_ENV unset — the exact
+    reachable case — every internal target is refused and a public HTTPS target is
+    still accepted. Same in a suppressed tier.
+    GATED by 21 assertions in `webhooks-proof` (48 -> 69), including a NON-VACUITY
+    check per tier, because a validator that refused EVERYTHING would otherwise
+    satisfy all sixteen SSRF assertions.
+    FALSIFIED: restoring the original guard fails 18 of them (51/69); restored,
+    69/69. That proof previously exercised ONLY `resolveWebhookDelivery` and never
+    the URL validator, which is exactly why nothing covered this.
+    NOTE: my first placement of those assertions sat AFTER the summary line, so the
+    proof printed "pass (48/48)" while 18 checks failed and it exited 1. Moved above
+    the summary — a figure that does not count the checks beneath it is the defect
+    class this repo keeps a figure guard for.
+    ORIGINAL FINDING FOLLOWS. `webhooks/dispatch.ts:32`
     reads `IS_PRODUCTION` from `NODE_ENV` AT MODULE LOAD and uses it at `:96,101`,
     while `resolveWebhookDelivery` at `:75-86` reads `SIGNALGRID_TIER` and
     `SIGNALGRID_LIVE_INTEGRATIONS` at call time.

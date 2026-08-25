@@ -168,14 +168,43 @@ export class SyslogAdapter implements SIEMAdapter {
   }
 
   /**
-   * Health check - verify syslog server is reachable
+   * Health check.
+   *
+   * THIS RETURNS FALSE, ALWAYS, AND THAT IS THE HONEST ANSWER.
+   *
+   * It used to be `return !!(this.config.host && this.config.port)`. `port` is
+   * defaulted in the constructor and `host` is required, so that was `true` for
+   * every adapter that can be constructed — in a family whose own comment above
+   * `sendEvent` says there is NO TRANSPORT, and whose `sendEvent` throws on the
+   * live path. Measured at dev tier with a hostname that does not resolve:
+   * `healthCheck()` returned `true` while `sendEvent()` returned `suppressed` in
+   * the same process. The docstring said "verify syslog server is reachable"; it
+   * verified that a config object had been populated.
+   *
+   * A SIEM forwarder reporting itself healthy while it cannot send anything
+   * defeats the audit trail it exists to produce, and does so most convincingly
+   * during an incident — which is exactly what the delivery-status comment one
+   * method above was written about. The lie moved rather than left.
+   *
+   * (That claim is named obliquely on purpose: `emit-gate-proof` scans this file
+   * for the literal delivery-status string, so writing it out here would fail the
+   * assertion that exists to keep it out of the code.)
+   *
+   * The gate comes first, matching splunk/sentinel/webhook and the ITSM set: a
+   * health check is still a live call. But even when policy DOES permit emission
+   * there is nothing here to probe, so the answer stays `false`. When a real
+   * transport lands, this becomes gate-then-probe like its siblings — and the
+   * assertion in `emit-gate-proof.ts` will hold it to that.
+   *
+   * `false` is not a failure report. It is "this cannot deliver", which is true.
    */
   async healthCheck(): Promise<boolean> {
-    try {
-      return !!(this.config.host && this.config.port);
-    } catch {
+    const emission = resolveEmission();
+    if (emission.mode === 'suppressed') {
       return false;
     }
+    // Live policy, still no transport. Nothing to probe, nothing to claim.
+    return false;
   }
 
   /**

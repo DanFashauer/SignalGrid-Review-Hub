@@ -222,6 +222,71 @@ check(
   ).standing === "unknown",
 );
 
+// ── 7b. THE THREE BRANCHES THE MUTATION SWEEP FOUND UNFALSIFIABLE ───────────
+//
+// Added 2026-08-25 after the daily sweep reported them as survivors for two
+// consecutive days, which drove `check-ci-liveness.mjs` past its 48h threshold
+// and turned every pull request in the repository red. All three are the same
+// omission: the assertions above pin `standing` and never look at `ageDays`, so
+// the code that computes the age could be deleted without a single check
+// noticing.
+//
+// The assertion directly above this block is a fourth instance and is subtler.
+// It feeds an unreadable reference AND a policy AND a lastRotatedAt, so when the
+// `now === null` arm is removed the record falls through to the final `else`,
+// where the negative-age guard added for row 126 catches it and ALSO returns
+// "unknown". Two guards, one verdict, so disabling either leaves the assertion
+// green. The case below removes the second guard's reach by posing no policy at
+// all: without the `now === null` arm the record grades `no_policy`, which is a
+// different answer, so the arm becomes the only thing that can produce the
+// expected one.
+const unreadableNoPolicy = normalizeCredentialRotation(
+  { kind: "static_secret", custody: "managed_vault", lastRotatedAt: "2025-12-20T00:00:00.000Z" },
+  "not-a-date",
+);
+check(
+  "an unreadable reference beats a missing policy — unknown, not no_policy (isolates the `now === null` arm)",
+  unreadableNoPolicy.standing === "unknown" && unreadableNoPolicy.ageDays === null,
+);
+
+// no_policy still REPORTS an age. The standing says nothing was posed; the age
+// says how long it has been anyway, and an operator needs both. Deleting the
+// computation leaves standing correct and the number silently absent.
+const noPolicyAged = normalizeCredentialRotation(
+  { kind: "static_secret", custody: "managed_vault", lastRotatedAt: "2025-12-20T00:00:00.000Z" }, REF);
+check(
+  "no policy posed, but the age is still measured and reported",
+  noPolicyAged.standing === "no_policy" && noPolicyAged.ageDays === 12,
+);
+
+// ...and it falls back to createdAt when nothing was ever rotated, which is a
+// second, independent route into the same branch.
+const noPolicyFromCreated = normalizeCredentialRotation(
+  { kind: "static_secret", custody: "managed_vault", createdAt: "2025-12-20T00:00:00.000Z" }, REF);
+check(
+  "no policy and never rotated → the age is measured from createdAt",
+  noPolicyFromCreated.standing === "no_policy" && noPolicyFromCreated.ageDays === 12,
+);
+
+// never_rotated likewise reports how long the credential has existed unrotated.
+// This is the number that makes the standing actionable — "never rotated" for
+// nine days and "never rotated" for two years are not the same finding.
+const neverRotatedAged = normalizeCredentialRotation(
+  { kind: "static_secret", custody: "managed_vault", createdAt: "2024-01-01T00:00:00.000Z", maxAgeDays: 90 }, REF);
+check(
+  "never rotated against a live policy → the age since creation is reported",
+  neverRotatedAged.standing === "never_rotated" && neverRotatedAged.ageDays === 731,
+);
+
+// The negative-age guard from row 126 on the never_rotated path. The no_policy
+// twin is already pinned above; this route into the same guard was not.
+const futureCreated = normalizeCredentialRotation(
+  { kind: "static_secret", custody: "managed_vault", createdAt: "2027-01-01T00:00:00.000Z", maxAgeDays: 90 }, REF);
+check(
+  "a future-dated createdAt reports NO age, never a negative one",
+  futureCreated.standing === "never_rotated" && futureCreated.ageDays === null,
+);
+
 // ── 8. DETERMINISM ──────────────────────────────────────────────────────────
 check(
   "the same inputs grade identically across repeated evaluation (no clock, no randomness)",

@@ -2338,9 +2338,22 @@ earlier — that is the loop working, not a reason to soften the record.
     surface; logging carries IDs only, never tokens or key material.
 
 83. **An OLDER, more permissive reading from a second connector silently erases a
-    newer one — and the outcome flips deny to allow.** — OPEN, principal-engineer.
-    BLOCKING. Found by the first line-by-line read of the decision core, and
-    reproduced by execution before filing.
+    newer one — and the outcome flips deny to allow.** — FIXED 2026-08-25,
+    principal-engineer. Was BLOCKING. Shipped in #309.
+    THE FIX: `connector.id` is now part of the signal id at all three mint sites, so
+    per-connector rows coexist and `groupLatest` does the greatest-observedAt
+    arbitration it was always written for. Six assertions in
+    `signalgrid-core-proof` (233 -> 239) construct the case the shipped seed cannot,
+    because Northwind's two dock connectors cover disjoint devices.
+    FALSIFIED: removing `connector.id` fails them with the original symptom — only
+    one connector's row survives and the winner becomes `observedAt=14:00
+    value=none`. `CORE_NORMALIZATION_VERSION` 8 -> 9 and the canary re-pinned with
+    its reasoning, as the two prior re-pins did.
+    HEADER CORRECTED 2026-08-25: this row said OPEN for several hours after the fix
+    merged. A backlog that under-reports finished work sends someone to redo it —
+    the mirror of the false-CLOSED that hides work, and worth naming rather than
+    quietly flipping.
+    ORIGINAL FINDING FOLLOWS.
     · Signal ids are minted as
       `deterministicId("sig", tenantId, subjectType, subjectId, category)` at all
       three sites (`dock.ts:107`, `shift.ts:69`, `connector.ts:201`). **The
@@ -2430,8 +2443,18 @@ earlier — that is the loop working, not a reason to soften the record.
     rates while `outcomesCovered()` — which only checks key presence — stays true.
 
 89. **The connector's `identity_state` signal is normalized, recorded as "used",
-    and never read: a disabled account allows.** — OPEN, principal-engineer.
-    BLOCKING. Reproduced before filing.
+    and never read: a disabled account allows.** — FIXED 2026-08-25,
+    principal-engineer. Was BLOCKING. Shipped in #309.
+    THE FIX: `foldIdentityEnabled` folds the identity row and the connector's
+    signal worst-wins. An affirmative `false` from EITHER source wins, and SILENCE
+    CHANGES NOTHING in either direction — an absent signal cannot loosen a disabled
+    row and cannot promote an `"unknown"` row to `true`. That silence half is what
+    made it safe to land: with no identity connector present the behaviour is
+    byte-identical to before, which is why all 225 pre-existing assertions passed
+    untouched. Eight assertions added; falsified by restoring the defect, which
+    fails exactly the two that target it.
+    HEADER CORRECTED 2026-08-25, same reason as row 83.
+    ORIGINAL FINDING FOLLOWS.
     · Emitted at `connector.ts:150-163`. The only producer of
       `evidence.identityEnabled` is `evidence.ts:50-55`, which reads the STATIC
       `identity.state` store row instead.
@@ -2519,18 +2542,36 @@ earlier — that is the loop working, not a reason to soften the record.
     and collapse everything unmatched to a single `route="other"`. Failing that, cap
     distinct label tuples with the same FIFO shape `idempotency.ts:99-102` uses.
 
-94. **The global limiter throttles `/healthz`, `/readyz` and `/metrics`.** — OPEN,
-    api-contract-architect. After 150 requests, `/api/healthz` returns **429** and so
-    does `/metrics`. `lib/profile.ts:118-121` allowlists `/readyz` on the explicit
-    reasoning that an orchestrator "would treat a fenced 404 as a dead instance and
-    restart a working server" — the limiter reintroduces that same failure by a
-    different route, and the Prometheus scraper goes blind exactly when it matters.
-    SECOND HALF: `trust proxy` is never set (confirmed two ways). Leaving it false is
-    the right call against XFF spoofing, but behind an ingress every caller keys to
-    one socket peer and shares a single 600/min bucket.
-    FIX: `skip` the three operational paths in `globalRateLimiter` and gate
-    `/metrics` on `METRICS_TOKEN` instead. If deployed behind a known proxy, set
-    `trust proxy` to that specific hop count or CIDR — never `true`.
+94. **The global limiter throttles `/healthz`, `/readyz` and `/metrics`.** — FIXED
+    2026-08-25, api-contract-architect. Reproduced first, with
+    `SIGNALGRID_GLOBAL_RATE_LIMIT=5`: `/api/healthz`, `/api/readyz` and `/metrics`
+    all returned 429 inside twelve requests. `artifacts/api-server/src/lib/profile.ts` already keeps the two
+    probes outside the GA fence on the reasoning that an orchestrator "would treat a
+    fenced 404 as a dead instance and restart a working server" — a 429 lands in the
+    same place, and it lands under load, which is when a false unhealthy verdict is
+    most expensive.
+    `globalRateLimiter` now takes a `skip`. The two probes are exempt
+    unconditionally and by EXACT path match, never by prefix, so
+    `/api/healthz-and-something-expensive` inherits nothing.
+    `/metrics` is deliberately NOT unconditional. It is a data surface rather than a
+    liveness signal, so its exemption is conditional on `METRICS_TOKEN` being set:
+    authenticated, the scrape is exempt; unconfigured, the endpoint is open and the
+    limiter is the only protection it has left, so the limit stays. The unknown case
+    keeps the restriction. The token is read per request, not captured at module
+    load — the defect already fixed once in `webhooks/dispatch.ts`.
+    Nine assertions in `pnpm --filter @workspace/api-server run test:api` (305 → 314),
+    including a positive control proving the limiter is still engaged on ordinary
+    routes, so "not throttled" cannot pass against a limiter that was accidentally
+    switched off. Falsified three ways, each hitting only its own assertions:
+    removing the skip fails 4, making `/metrics` unconditionally exempt fails 1,
+    prefix-matching instead of exact fails 1.
+    SECOND HALF, dispositioned rather than coded. `trust proxy` stays unset — that
+    is the correct posture against `X-Forwarded-For` spoofing, and turning it on
+    would convert the per-address limit into no limit. The shared-bucket cost behind
+    an ingress is real and is now blunted at both ends: `/v1` is keyed per bearer,
+    and the probes can no longer be throttled into looking dead. `docs/DEPLOYMENT.md`
+    carries the operator guidance, including that a proxy hop must be named by count
+    or CIDR and never by `true`.
 
 95. **`HEAD` on an allowlisted route 404s under the gateway profile.** — OPEN,
     api-contract-architect. Express auto-serves `HEAD` from a `GET` handler, but
@@ -3122,7 +3163,17 @@ earlier — that is the loop working, not a reason to soften the record.
     quietly.
 
 134. **A GARBLED readiness budget grades strictly better than no budget at all.** —
-    OPEN, iam-domain. `session-readiness/evaluate.ts:93-113`, root cause at
+    FIXED 2026-08-25, iam-domain. Shipped in #309.
+    THE FIX: a distinct `READINESS_BUDGET_UNREADABLE` rung, kept SEPARATE from
+    UNPOSED because "you did not ask" and "your question is unreadable" have
+    different owners and different fixes. Reads through the shared
+    `utils/posed-bound.ts`.
+    A FIRST PASS WAS INCOMPLETE and a probe caught it: `posedBound` treats
+    `undefined` as "not posed" by contract, which is right at its own boundary and
+    wrong inside a budget object where the threshold is not optional — so the
+    misspelled-key case still granted. Closed, and pinned by its own assertion.
+    HEADER CORRECTED 2026-08-25, same reason as row 83.
+    ORIGINAL FINDING FOLLOWS. `session-readiness/evaluate.ts:93-113`, root cause at
     `index.ts:107,136` where `budget: opts.budget ?? null` passes through
     unvalidated while `elapsedToUsableSeconds` beside it goes through `asSeconds`.
     REPRODUCED, identical record each time (42s elapsed, usable, measured,
@@ -3146,7 +3197,19 @@ earlier — that is the loop working, not a reason to soften the record.
     not enough — `evaluateSessionReadiness` is exported and callable directly.
 
 135. **A non-finite caller threshold turns an abandoned device into a full custody
-    grant.** — OPEN, physical-ot-domain. `rtls-custody/evaluate.ts:56-57,102,107,109`.
+    grant.** — FIXED 2026-08-25, physical-ot-domain. Shipped in #309.
+    THE FIX: both bounds read through `utils/posed-bound.ts`, where a garbled pose
+    yields `null` and each comparison treats null exactly as it treats an
+    unconfirmable MEASUREMENT — it raises. The helper exists so the next family
+    inherits the guard rather than the accident.
+    MY FIRST ASSERTIONS PASSED FOR THE WRONG REASON: they asserted "does not grant"
+    on a record where the ABANDONMENT axis fired independently, so they passed with
+    the fix-age guard removed. Each axis is now isolated, and the proof records
+    WHICH cases discriminate — NaN and Infinity do; zero and negative pass either
+    way, because any positive age satisfies `>= 0`. Four falsifiable, two
+    intentional.
+    HEADER CORRECTED 2026-08-25, same reason as row 83.
+    ORIGINAL FINDING FOLLOWS. `rtls-custody/evaluate.ts:56-57,102,107,109`.
     REPRODUCED, identical badge-less record in an authorized clinical zone with a
     fix age and dwell of 99,999s: defaults give `abandoned / alert / ABANDONED`;
     `staleFixSeconds` of NaN or Infinity both give `in_zone / none / CUSTODY_OK`.
@@ -3197,6 +3260,26 @@ earlier — that is the loop working, not a reason to soften the record.
     proof printed "pass (48/48)" while 18 checks failed and it exited 1. Moved above
     the summary — a figure that does not count the checks beneath it is the defect
     class this repo keeps a figure guard for.
+    RESIDUE, recorded 2026-08-25 rather than fixed, and the reason is scope. The
+    block matches LITERAL address ranges. A hostname is not resolved, so
+    `internal.example.com` pointing at 10.0.0.5, or any of the public
+    resolve-to-loopback services, walks straight through every rule above. The naive
+    case is covered; the deliberate one is not.
+    WHY IT IS NOT BEING FIXED NOW: `webhooks` sits in the DEFERRED list in
+    `scripts/launch-profile.mjs`, and DR-005 froze breadth — a deferred family does
+    not earn launch-scope engineering because a gap in it is real. The exposure is
+    also narrower than it first reads: webhook delivery is fire-and-forget, so an
+    operator who aims one at internal infrastructure gets blind SSRF (timing, and
+    whatever an unauthenticated internal POST does) rather than a response body, and
+    the URL is set by a tenant admin rather than an anonymous caller.
+    WHAT WOULD ACTUALLY CLOSE IT, so the next person does not re-derive it: resolve
+    the hostname at dispatch time and apply the SAME range rules to every returned
+    address, A and AAAA both. That is defence in depth, not a proof — resolution and
+    connection are two separate lookups, so a record that changes between them
+    (classic DNS rebinding) defeats it. Closing THAT means connecting to the
+    validated address directly and carrying the hostname in the Host header, which
+    is a custom agent and a materially bigger change than the check itself. State
+    which of the two is being bought before building either.
     ORIGINAL FINDING FOLLOWS. `webhooks/dispatch.ts:32`
     reads `IS_PRODUCTION` from `NODE_ENV` AT MODULE LOAD and uses it at `:96,101`,
     while `resolveWebhookDelivery` at `:75-86` reads `SIGNALGRID_TIER` and
@@ -3246,9 +3329,12 @@ earlier — that is the loop working, not a reason to soften the record.
     counted, in the artefact an operator reads to reconstruct what happened.
 
 139. **A dead safety-shaped constant sits beside two "unvalidated" warnings.** —
-    OPEN, secops-domain. NOTE. `webhooks/store.ts:24` declares `IS_PRODUCTION` and
-    never uses it — the only uses are in `dispatch.ts`. A reader scanning that file
-    for guards will count it as one.
+    FIXED 2026-08-25, secops-domain. `webhooks/store.ts` declared an environment
+    constant and never read it, directly above two warnings about unvalidated input,
+    so a reader scanning that file for guards counted one that did not exist. Removed,
+    with a comment saying why nothing replaces it: the real environment decision lives
+    in `dispatch.ts`, is passed in rather than captured at module load, and belongs in
+    exactly one place. `pnpm run typecheck` clean.
 
 140. **`vuln-scan` lets a non-finite CVSS into the evidence field while a sibling
     guards the same shape.** — OPEN, secops-domain. NOTE, and NOT a fail-open on
@@ -3781,23 +3867,224 @@ earlier — that is the loop working, not a reason to soften the record.
     so it reads as a decision rather than an assumption.
 
 168. **The palette gate cannot see a verdict painted with the WRONG ratified
-    token.** — OPEN, devex-tooling-engineer. Row 151 was three real defects —
-    fail-closed shown as danger, restrict wearing the step-up tone, and two verdicts
-    sharing one legend swatch — and `check-decision-palette.mjs` exited 0 before the
-    fix and exits 0 after it. It asserts that a verdict is painted from a RATIFIED
-    TOKEN, which all three were. It has no concept of WHICH verdict maps to which
-    token, and no concept of a legend at all.
-    So the gate is correct about the property it measures and blind to the one that
-    matters — the extractor-versus-audit boundary again, this time on the palette.
-    WHAT WOULD ACTUALLY HOLD IT, in increasing order of cost: (a) assert that no
-    `.tsx` in a decision-bearing tree contains an inline `outcome === "…"` ternary
-    assigning a `text-status-*` class, forcing every tone decision through a total
-    `Record` the compiler checks — this is cheap and statically decidable, and
-    `artifacts/signalgrid-desktop/src/lib/outcome-tone.ts` is now the reference
-    shape; (b) collect every verdict-labelled fill/stroke and assert each verdict
-    resolves to a DISTINCT rendered value, which is what would have caught the
-    legend; (c) pin the verdict-to-token mapping itself in one registry the gate
-    reads. Start with (a).
+    token.** — MITIGATED 2026-08-25 by option (a), devex-tooling-engineer. Row 151
+    was three real defects — fail-closed shown in the danger tone, `restrict`
+    wearing the step-up tone, and two verdicts sharing one legend swatch — and
+    `check-decision-palette.mjs` exited 0 before the fix and exits 0 after it. It
+    asserts that a verdict is painted from a RATIFIED TOKEN, which all three were.
+    It has no concept of WHICH verdict maps to which token, and none of a legend.
+    OPTION (a) SHIPPED: `scripts/check-verdict-tone-source.mjs` fails on any inline
+    expression that compares a verdict and picks a status class in the same breath,
+    forcing every tone decision through a total `Record` the compiler checks.
+    Registered in preflight and CI. A fourth independent ternary had survived in
+    `artifacts/signalgrid-desktop/src/pages/Dashboard.tsx`; it now calls
+    `outcomeTone`, and the tree scans clean across 231 files.
+    Falsified by restoring the ternary — one finding, exit 1.
+    TWO THINGS THE GATE GOT WRONG FIRST, both found by running it against the real
+    file rather than only against fixtures. It scanned sliding windows and reported
+    the WINDOW'S first line, which pointed at an innocent `<div>` four lines above
+    the defect — a finding that names the wrong line gets checked, found blameless,
+    and disbelieved, which is worse than a vague one. And it reported one chained
+    ternary as two findings, because each arm matched its own window. It now anchors
+    on the comparison line and coalesces the arms; both behaviours are pinned by
+    assertions, one of which asserts the exact line number.
+    WHAT IT STILL CANNOT DO, and this is why the row reads mitigated rather than
+    fixed: a total `Record` with the WRONG colours in it passes. Centralising the
+    decision does not make it correct — it makes it reviewable, and makes the next
+    drift a typecheck failure instead of a silent fourth opinion. Options (b) —
+    assert each verdict resolves to a DISTINCT rendered value, which is what would
+    have caught the legend — and (c), pinning the mapping in one registry the gate
+    reads, remain open and are the ones that would close it.
+
+173. **A fix can add a branch no proof looks at, and the only thing that notices
+    runs once a day.** — FIXED 2026-08-25, qa-engineer. Every pull request in this
+    repository was red for two days and the cause was three of this lane's own
+    fixes.
+    WHAT HAPPENED, in order. The row 126 negative-age guards and the row 134/135
+    readiness work added branches. The proofs for those families assert `standing`
+    and never read `ageDays`, so the code computing the age could have been deleted
+    with nothing failing. The daily mutation sweep noticed on 2026-08-24 and
+    reported four survivors. `check-ci-liveness.mjs` is deliberately fatal in CI and
+    reported-only off it, so once the last successful sweep aged past 48 hours every
+    CI run went red — while `node scripts/preflight.mjs` stayed green locally,
+    because that is precisely the asymmetry the gate is built on.
+    THE GATES ALL WORKED. The sweep caught unfalsifiable guards; the liveness gate
+    caught the sweep going dark; the liveness gate's local-versus-CI split is why a
+    green preflight said nothing. Nothing here is a gate defect.
+    THE LANE'S FAILURE WAS OBSERVATIONAL. Seven consecutive failures of the same CI
+    job went unread because this lane kept querying check-run LISTS, which showed
+    jobs still in flight, and never read the completions. Seven pushes landed on top
+    of a red build. The check that would have caught it is not a gate — it is
+    reading the exit state instead of the progress state, which is the same
+    distinction this document records under other names in rows 107, 159 and 168.
+    THE FIX. Six assertions added to `proof:credential-rotation` (22 -> 27), each
+    mutation now dropping it by a different count (26/27, 25/27, 26/27) so they fail
+    for distinct reasons rather than one shared check. One was subtler than it
+    looked: the existing unreadable-reference assertion feeds both a policy and a
+    lastRotatedAt, so removing the `now === null` arm lets the record fall through
+    to the negative-age guard, which answers "unknown" as well — two guards, one
+    verdict, either one removable. The new case poses no policy, which returns the
+    arm to sole possession of the answer.
+    THE FOURTH SURVIVOR WAS DELETED RATHER THAN EXEMPTED, and that is the part worth
+    keeping. `state.budget !== null` in `session-readiness/evaluate.ts` sat beside a
+    `budgetThreshold !== null` test whose value is derived from `state.budget` one
+    line above, so the second implied the first and no mutation could kill it. The
+    documented disposition for a genuinely inert term is an ALLOWED entry, and this
+    one could not have one: `scripts/mutation-guard.mjs` matches exemptions by
+    SUBSTRING against the trimmed source line, and the identical text appears in the
+    READINESS_BUDGET_UNREADABLE branch nine lines up, which is real behaviour. A
+    single entry would have covered both — a fail-open inside the control that
+    exists to catch fail-opens.
+    WHAT IS STILL OPEN, and it is the general form: the ALLOWED registry's
+    substring matching means ANY exemption can silently reach a second, unrelated
+    line that happens to share its text. Nothing warns about it. Keying an entry to
+    a line NUMBER as well as a string, or refusing an entry whose string matches
+    more than one line in the file, would close it; the second is cheaper and needs
+    no maintenance when code moves. Filed rather than built, because it changes a
+    registry every mutation target depends on and deserves its own falsification.
+
+172. **An evidence artifact asserts six safety properties that nothing measures.** —
+    OPEN, qa-engineer. `.github/workflows/connector-emulator-smoke.yml` generates an
+    evidence manifest — uploaded as a build artifact, never committed, so it is not
+    a path in this tree — carrying a `publicSafety` array that states, as literal
+    data: synthetic fixtures only, no live vendor calls, no secrets, no tenant IDs,
+    no customer data, no PHI/PII.
+    `fetch`, no URL and no socket — and not one of them is measured. They are a
+    string literal in a workflow file, written once and re-emitted on every run.
+    Why it matters more here than in prose: this is an EVIDENCE file, uploaded as a
+    build artifact, and this repository's whole position is that provenance is the
+    product. A reader downstream cannot distinguish a property that was checked from
+    a sentence somebody typed, because the artifact presents both identically. If
+    the harness ever grew a live call — the exact change this repo's connector work
+    keeps making elsewhere, deliberately — the manifest would keep saying there
+    isn't one, and would say it with a run id and a commit sha beside it.
+    THE CHEAP FIX IS NOT "delete the claims", because the claims are the useful
+    part. It is to derive them: a static assertion that the harness and its
+    scenario modules contain no network primitive is decidable and is the one that
+    matters most, since the other five follow from a fixture-only run. Emit the
+    result of that check rather than a literal, and emit it as a checked property
+    with the check named, so the artifact says what was verified rather than what
+    was intended.
+
+171. **The daily rot check watches a hand-picked tenth of the gate suite, and its
+    own header called that the full suite.** — OPEN, sre. Found by reading
+    `.github/` rather than by a gate. `scripts/preflight.mjs` registers 179 gates
+    and `review-hub-ci.yml` runs every one per PR, kept in step by
+    `check-preflight-ci-parity.mjs`. `scheduled-verification.yml` — the only thing
+    watching the default branch BETWEEN pull requests — runs about ten named
+    proofs plus the breadth lane, and never invokes preflight.
+    The header claim is now corrected: it said "Runs the full deterministic gate
+    suite" and now says what it runs. Worth noting how it survived — the JOB was already
+    renamed for exactly this reason ("Full gate suite" while running about ten), and
+    the prose four lines above the rename outlived it. The visible label got
+    corrected and the comment did not.
+    THE SELECTION ITSELF IS THE OPEN PART, and the obvious fix is wrong twice over.
+    Adding `node scripts/preflight.mjs` to the daily job would fail every night:
+    `check-ci-liveness.mjs` is deliberately FATAL in CI when it cannot reach the
+    Actions API, and this workflow's permissions are `contents: read` and
+    `issues: write` with no `actions: read` — so the change would open a fresh
+    tracking issue every morning, which is the fastest way to teach everyone to
+    ignore the tracking issue. And it would be mostly redundant even if it worked:
+    the large majority of the 179 are deterministic over the tree and cannot rot
+    without a commit, so running them nightly repeats what the PR lane already did
+    on the same commit.
+    WHAT THE SELECTION SHOULD BE DERIVED FROM, since a hand-picked list is the
+    fossil shape this repo derives scope to avoid everywhere else: the gates that
+    can go red WITHOUT a commit. Those are the time-dependent ones (expiring pins,
+    freshness windows, figure guards reading generated artifacts) and the
+    externally-dependent ones (vulnerability data, licence policy, the liveness
+    check itself). Deriving that set needs a way for a gate to declare which kind it
+    is, which is the actual work here and is why this is filed rather than done.
+
+170. **A row's status can be WRONG in either direction, and no gate can tell.** —
+    OPEN, program-manager. This session produced both failures. Four rows (83, 89,
+    134, 135) read `open` for fixes that had already merged in PRs #309-#312; row 107
+    earlier read `closed` for work that had not. A ledger wrong in both directions is
+    not a ledger. (Status words are written in lower-case backticks throughout this
+    row on purpose — see the last paragraph.)
+    The obvious control was built and discarded before shipping: "a row may not read
+    `open` while naming a merged pull request" is decidable offline from
+    `git log --merges`, and it fires ZERO times against the four rows that motivated
+    it, because none of them named a PR at all. It would have been a gate measuring
+    a real property and answering a different question than the one asked — the
+    defect class this document keeps recording under other names.
+    What shipped instead is the precondition, not the check:
+    `scripts/check-backlog-evidence.mjs` requires a `closed` row to cite something a
+    stranger could run or open — a PR, a commit, a command, or a file path. A debt
+    ceiling of 28 bare closures is recorded in
+    `docs/agent/backlog-evidence-ratchet.json`; a rise is fatal, a drop is recorded
+    automatically. Note the polarity is inverted from `role-coverage-ratchet.json`,
+    which is a high-water mark.
+    WHAT IS STILL UNCOVERED, and will stay uncovered: nothing in a row's TEXT
+    distinguishes "`open` beside unmerged work" from "`open` beside a merged fix". That
+    direction needs someone who can read the tree, on a cadence, and no gate
+    substitutes for it. The evidence ratchet makes that re-read cheap — every newly
+    closed row now hands the reader the command — but it does not perform it. Until
+    a standing re-read exists, treat a green backlog-evidence run as saying only
+    that closures are checkable, never that they are true.
+    ONE MORE THING THIS ROW LEARNED ABOUT ITSELF, and it is a correction. The first
+    draft classified as `closed` by the new gate, on the commit that added it, off a
+    marker string the row had reproduced while explaining the classifier. The first
+    diagnosis written here blamed `check-backlog-ownership.mjs` for reading a quoted
+    word as a claim. That was wrong, and the sibling gate deserves the retraction:
+    it already strips quoted and code spans before reading status, on the stated
+    grounds that "a quotation reproduces a word without meaning it". The new gate
+    simply had not reused that step.
+    Reading further turned one divergence into four. The new gate had re-implemented
+    the sibling's classification instead of importing it, and got it wrong three
+    ways: it scanned raw text rather than the stripped status span; it did not test
+    partial markers first, though a partial marker contains a closed one; and it
+    carried a hand-written copy of the marker list that invented two markers the
+    sibling does not honour and omitted two that it does. The two gates disagreed
+    about five rows of the same document while this file's own header claimed they
+    could not disagree at all.
+    Both now import the sibling's extraction, its partial list and its marker list,
+    and the new gate's self-test classifies the REAL document with both and fails if
+    any row buckets differently — falsified by re-forking the list, which drops it to
+    13/14. The general lesson is the one this document keeps re-learning under new
+    names: a second copy of a rule is a second source of truth, and the copy is
+    wrong long before anybody looks.
+
+169. **A skill outside the repository speaks with authority over it, and no gate
+    can see it.** — MITIGATED 2026-08-25 (reported, not gated), agent-platform-engineer.
+    `check-org-roster.mjs` derives the set of dispatchable executors from disk and
+    reads exactly two directories, both under the repository root:
+    `.claude/agents` and `.claude/skills`. That scope is correct — a roster may
+    only name an executor that is committed and reviewable — and it is not the
+    whole plane. Claude also loads skills from the user's home directory.
+    An audit of that layer on 2026-08-25 found `signalgrid-master` in
+    `~/.claude/skills/synced/`: 379 lines, generated from `SignalGrid_Alpha@08eecbe`,
+    describing itself as "SignalGrid's first-party orchestration layer" and
+    publishing an authority order for THIS repository.
+    **It is accurate today** — all 18 repository paths it cites exist, it carries
+    no pinned figure (every reference to a decision record is written as a
+    conditional: "unless superseded by a later record"), it repeats none of the six
+    entries in `docs/agent/FALSE_CLAIMS.json`, and it correctly ranks itself
+    SEVENTH, below `CLAUDE.md` and the ratified decision records. The defect is not
+    its content. The defect is that none of that was checkable from here, and
+    nothing in this tree would notice if it stopped being true: the file never
+    appears in a diff, no review sees it, and `CLAUDE.md` can be edited to
+    contradict it with both documents still reading as correct in isolation.
+    WHAT WAS DONE: `scripts/scan-agent-plane.mjs` (`pnpm run scan:agent-plane`)
+    reports the out-of-repo plane — which user-level skills speak for this
+    repository, which of them NAME it, and which of their citations no longer
+    resolve. REPORTED, never fatal, and deliberately NOT registered in preflight
+    or CI, for the same reason `scan:estate` is not: a CI runner has no
+    `~/.claude`, so a gate asserting on it would pass vacuously every run, which
+    is worse than no gate. It is fail-closed in the direction it can be — a root
+    that cannot be read is NOT SCANNED and never counted clean.
+    Its first live run found a second one and two real gaps: the generic
+    `session-start-hook` skill instructs against `.claude/settings.json` and
+    `.claude/hooks/session-start.sh`, neither of which exists in this tree.
+    WHAT IS STILL OPEN: the reporter makes the plane visible; it does not put it
+    under review. That tradeoff is now written up as **DR-018 (PROPOSED)** in
+    `docs/DECISION_RECORDS.md`, with both options, what was measured, a
+    recommendation and a reversal condition. It recommends vendoring, on the
+    ground that vendoring moves which copy is AUTHORITATIVE rather than creating
+    the divergence risk: drift between two copies is detectable and
+    `scan:agent-plane` already watches for it, while unreviewability is not
+    detectable from inside the repository at all. The call itself is the owner's
+    and has not been made.
 
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —

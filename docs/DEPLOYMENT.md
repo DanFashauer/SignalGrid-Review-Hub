@@ -55,10 +55,29 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `NODE_ENV` | Standard Node environment switch; the compose file sets `production`. | unset |
 | `SIGNALGRID_DEPRECATED_ROUTES` | Comma-separated route ids to serve with a `Deprecation` header during a migration window. | unset |
 | `SIGNALGRID_V1_RATE_LIMIT` | Requests/min/bearer on `/v1`. Malformed values fall back — never to "unlimited". | `240` |
-| `SIGNALGRID_GLOBAL_RATE_LIMIT` | Requests/min/IP across the server. | `600` |
+| `SIGNALGRID_GLOBAL_RATE_LIMIT` | Requests/min/IP across the server. `/api/healthz`, `/api/readyz`, and — only when `METRICS_TOKEN` is set — `/metrics` are exempt. | `600` |
 | `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. **Required** once OIDC is on — without both, the config is invalid and every request is 401. | unset |
 | `OIDC_SUBJECT_CLAIM` | Claim used as the caller's subject id. | `sub` |
 | `OIDC_CLOCK_TOLERANCE_SEC` | Allowed clock skew when validating token times. | `60` |
+
+### Running behind a proxy or ingress
+
+The server does **not** set Express's `trust proxy`, and leaving it unset is the
+right default: with it on, any caller can spoof `X-Forwarded-For` and be keyed to
+an address they chose, which turns the per-address rate limit into no limit at
+all.
+
+The cost of leaving it off is that behind an ingress every caller arrives from the
+same socket peer, so all of them share one `SIGNALGRID_GLOBAL_RATE_LIMIT` bucket.
+Two things blunt that in the default configuration: `/v1` is limited per bearer
+token rather than per address, and the liveness and readiness probes are exempt
+from the global limiter entirely, so a shared bucket can no longer make a healthy
+instance look dead.
+
+If you do terminate at a proxy you control, set `trust proxy` to that **specific
+hop count or CIDR** — never `true`, which trusts the whole chain including the
+part an attacker writes.
+
 | `REDIS_URL` | Set ⇒ WebAuthn step-up session state persists to Redis instead of in-memory. That is the ONLY Redis-backed state in this deployment: the connector/webhook routes run the in-process core, and the `@workspace/integrations` Redis stores are not part of the served API. | unset (in-memory) |
 | `STEPUP_TTL_SECONDS` | Step-up session time-to-live. | `300` |
 | `WEBAUTHN_RP_ID` / `WEBAUTHN_RP_NAME` / `WEBAUTHN_ORIGIN` | WebAuthn relying-party identity for step-up ceremonies; must match the origin the operator console is served from. | `localhost` / dev defaults |

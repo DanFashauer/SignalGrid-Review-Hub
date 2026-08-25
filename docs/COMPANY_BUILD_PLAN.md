@@ -3899,7 +3899,8 @@ earlier — that is the loop working, not a reason to soften the record.
 184. **A guard sat one layer above the thing it guarded.** — FIXED 2026-08-25,
     qa-engineer, in PR #319.
     `lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts`;
-    verify with `pnpm run proof:passkey-assurance` (91 checks, was 87).
+    verify with the passkey-assurance proof, which this change took from 87 checks
+    to 91.
     `PasskeyAssuranceConnector.fetchNormalized(identityRef,
     credentialRef?)` took the requested credential ref and never compared it to
     the ref the source answered with. The substitution check lived on
@@ -3913,7 +3914,7 @@ earlier — that is the loop working, not a reason to soften the record.
     second copy of the rule, because a second copy of a rule is a second source of
     truth. It fires only when a ref was actually requested — `fetchNormalized(id)`
     means "whatever this identity has" and has nothing to contradict.
-    `proof:passkey-assurance` held at 87/87 across the fix, so it covered none of
+    That proof held at 87/87 across the fix, so it covered none of
     this; four assertions added, 87 -> 91.
     TWO PROBES LIED BEFORE THE THIRD TOLD THE TRUTH, and that is the part worth
     keeping. The first invented field names, so every case normalized `malformed`

@@ -24,7 +24,9 @@ the last thing anyone recorded.
 
 ## Why now / why us
 
-- **Proof-first, in public**: 136 machine-checked proof gates, fail-closed
+- **Proof-first, in public**: 140 proof gates (the figure `docs/STATUS.md`
+  publishes and `check-status-figures.mjs` keeps true — this page cites it
+  rather than keeping a second copy that can drift), fail-closed
   by doctrine, tamper-evident audit ledger, signed release artifacts — the
   entire product is a public repository. Diligence is reading, not trusting.
 - **Open-source-proven** (DR-013): live end-to-end against Fleet, Keycloak,
@@ -33,9 +35,11 @@ the last thing anyone recorded.
 - **Cost structure**: limiter-bound serving; one small VM over-serves a
   tenant; marginal tenant cost ≈ $0; one identified paid software
   dependency. Published at docs/COST_MODEL.md.
-- **An AI-operated company that works**: one founder, a 41-role agent org
+- **An AI-operated company that works**: one founder, a 42-role agent org
   with decision records, standing routines, and a public audit trail —
-  30 PRs merged in the last 48 hours, every one through the full gate suite.
+  every change through the full gate suite, on a public commit history.
+  {AT-USE: merge count over a named window — read off `git log` on the day
+  this is sent, never a figure typed once and left to decay.}
 
 ## Traction (updated at use time — no forward-dated claims)
 
@@ -55,5 +59,6 @@ model shows where every dollar does NOT need to go.
 
 No certifications claimed (SOC 2 / HIPAA are roadmap, stated honestly).
 Not an MDM, IdP, or EDR — reads their evidence, replaces none of them.
-Pre-revenue at draft time. The launch-claims gate fails our own CI if this
-document ever says otherwise.
+Pre-revenue at draft time. The unsafe-claim scan in `docs-sanity` fails our
+own CI if this document ever says otherwise — verified by planting a false
+"certified" claim here and watching the build go red.

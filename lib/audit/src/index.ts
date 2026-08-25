@@ -62,29 +62,66 @@ function redactSecrets<T extends Record<string, unknown>>(meta: T): T {
 // noise. No caller had passed that shape yet, so the fix lands before the trap
 // springs — primitives inside arrays keep their exact prior serialization
 // (JSON.stringify), so every already-possible hash is unchanged.
-function canonicalValue(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalValue).join(",")}]`;
-  if (value !== null && typeof value === "object") return canonicalize(value as Record<string, unknown>);
+function canonicalValue(value: unknown, depth = 0): string {
+  if (Array.isArray(value)) return `[${value.map((v) => canonicalValue(v, depth + 1)).join(",")}]`;
+  if (value !== null && typeof value === "object") return canonicalize(value as Record<string, unknown>, depth + 1);
   // Primitives serialize exactly as before; a bare undefined inside an array
   // becomes null — which is also what a JSON round-trip makes of it.
   return JSON.stringify(value) ?? "null";
 }
 
-function canonicalize(obj: Record<string, unknown>): string {
+// KEYS ARE ESCAPED, and this was a real collision rather than a tidiness point.
+//
+// Every branch below used to interpolate `key` raw. Keys reach here from
+// caller-supplied `meta`, and a key containing a quote closed the string early
+// and re-opened it, so a crafted key forged the framing of neighbouring fields.
+// Demonstrated on 2026-08-25, in this exact serializer:
+//
+//   canonicalize({ 'x":1,"y': 2 })  ->  {"x":1,"y":2}
+//   canonicalize({ x: 1, y: 2 })    ->  {"x":1,"y":2}
+//
+// Two DIFFERENT records, one hash input — in the chain whose only job is to
+// make two different records hash differently. Values were already escaped
+// correctly (backslash before quote, in that order); only keys were not.
+//
+// The fix did not need inventing: `lib/verdict-attestation/src/canonical.ts`
+// and `lib/signalgrid-core/src/util.ts` both already escape keys. It simply
+// never propagated to the one guarding the ledger, which is the failure mode a
+// third copy of a rule always has.
+//
+// A DEPTH BOUND, for the same reason the siblings carry one: `meta` is
+// caller-supplied and recursion here is unbounded, so a deeply nested object
+// overflows the stack inside a ledger append. Refusing is the fail-closed
+// answer — an append that cannot be canonicalized must not be written with a
+// hash computed over something else.
+const MAX_CANONICAL_DEPTH = 32;
+
+function escapeJsonString(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function canonicalize(obj: Record<string, unknown>, depth = 0): string {
+  if (depth > MAX_CANONICAL_DEPTH) {
+    throw new Error(
+      `audit: refusing to canonicalize beyond depth ${MAX_CANONICAL_DEPTH} — ` +
+        "a record that cannot be serialized must not be appended with a hash over something else",
+    );
+  }
   const keys = Object.keys(obj).sort();
   const parts: string[] = [];
   for (const key of keys) {
+    const k = escapeJsonString(key);
     const value = obj[key];
     if (value === null || value === undefined) {
-      parts.push(`"${key}":null`);
+      parts.push(`"${k}":null`);
     } else if (typeof value === "string") {
-      parts.push(`"${key}":"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
+      parts.push(`"${k}":"${escapeJsonString(value)}"`);
     } else if (typeof value === "number" || typeof value === "boolean") {
-      parts.push(`"${key}":${value}`);
+      parts.push(`"${k}":${value}`);
     } else if (Array.isArray(value)) {
-      parts.push(`"${key}":${canonicalValue(value)}`);
+      parts.push(`"${k}":${canonicalValue(value, depth + 1)}`);
     } else if (typeof value === "object") {
-      parts.push(`"${key}":${canonicalize(value as Record<string, unknown>)}`);
+      parts.push(`"${k}":${canonicalize(value as Record<string, unknown>, depth + 1)}`);
     }
   }
   return `{${parts.join(",")}}`;

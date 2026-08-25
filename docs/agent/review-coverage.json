@@ -2640,6 +2640,83 @@
       "date": "2026-08-25",
       "depth": "audited",
       "note": "The only thing watching the default branch between PRs. Ran ~10 named proofs plus the breadth lane while its header claimed 'the full deterministic gate suite'; preflight registers 179. Header corrected, selection filed as row 171. Adding preflight here would fail nightly — check-ci-liveness.mjs is fatal in CI without Actions API reach and this workflow has no actions:read."
+    },
+    {
+      "path": "lib/integrations/src/integrations/device-management-health/device-management-health-connector.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Largest launch-connector file. NO DEFECT FOUND. Prototype-pollution defence is real and load-bearing: reads are own-property only, and `report !== Object.prototype` closes a genuine hole where the key-scan's stop condition meant a report that IS the prototype was never scanned and normalized to clean-and-granting. Redundant clauses are LABELLED as redundant, established by mutation testing rather than asserted. The NOTE rejecting a consistency guard is exemplary: it was measured over the full raw space (zero action changes, zero grant changes, eight reason codes degraded to generic, and it made MDM_CHECKIN_NEVER unreachable) and dropped on the evidence. healthCheck returns status:null on success rather than an invented 200, and says why."
+    },
+    {
+      "path": "lib/integrations/src/integrations/device-management-health/index.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Gated resolution; each gate returns fixture independently. Transport selection defaults to `bridge` deliberately — flipping it to graph would silently repoint every existing beta/prod deployment — and an UNRECOGNIZED value falls back to fixture, which is fail-closed. Matches the launch profile's declared `device-management-health` gap exactly, including its machine-checkable close condition. Live transport: 10s AbortSignal timeout, encodeURIComponent on the path, non-JSON and non-object bodies both refused, 401/403 mapped to auth_failed vs upstream_error."
+    },
+    {
+      "path": "lib/integrations/src/integrations/device-management-health/types.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Type declarations plus DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS. The enum allowlists the normalizer fails safe against live in the connector, not here; each carries `unknown` as its fallback and none contains a value that should not be there."
+    },
+    {
+      "path": "lib/integrations/src/integrations/device-management-health/mock-transport.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Mirrors a real bridge's failure surface: bad token -> auth_failed(401), unknown device -> upstream_error(404). Never invents a healthy report for an absent device, which is the fail-open a test double most easily introduces."
+    },
+    {
+      "path": "lib/integrations/src/integrations/device-management-health/fixtures.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Three synthetic devices covering managed_healthy / step_up / restrict. The agent-channel field is `not_applicable` on all three with the platform reason stated (iPadOS has no Intune Management Extension) — silence would have normalized to `unknown` and denied a healthy device, so asserting absence is the honest answer rather than the convenient one."
+    },
+    {
+      "path": "lib/integrations/src/integrations/graph/index.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "The one launch connector's resolution gate. NO DEFECT. Tier, SIGNALGRID_LIVE_INTEGRATIONS and token are checked independently so removing any one falls back to fixtures. Default transport is GET with a 10s timeout. Passes req.method through, so this family's read-only guard is one of the eleven that can actually fire."
+    },
+    {
+      "path": "lib/integrations/src/integrations/graph/mock-transport.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Serves real Graph shapes including @odata.nextLink paging and a 401 for a bad token, so paging and error mapping are exercised offline. A malformed $skiptoken coerces to page 0 rather than throwing; harmless because the connector's loop/DoS guard (proof:graph-wire) stops it following nextLink forever."
+    },
+    {
+      "path": "lib/integrations/src/integrations/graph/fixtures.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Seven synthetic cases mirroring the JSON fixture of record case for case, with proof:launch-seam asserting the two do not drift. Page size 3 on purpose so every fixture-mode fetch exercises real pagination. Includes Graph's wire spelling `complianceState: \"unknown\"` so the normalizer's mapping to `missing` is covered."
+    },
+    {
+      "path": "lib/integrations/src/integrations/local-authority/index.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "NO DEFECT. Same independent-gate shape. Live transport bounds the request at 10s, encodeURIComponents the deviceRef, refuses non-JSON and non-object bodies, and distinguishes auth_failed from upstream_error. Fixture records include the headline case — everything healthy while the device cannot read its own credentials — and the decay case where only the grant's own arithmetic restricts."
+    },
+    {
+      "path": "lib/integrations/src/integrations/local-authority/mock-transport.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Bad token -> auth_failed(401), unknown device -> upstream_error(404). The docstring states what the caller does with a 404 (normalizes as NOT COVERED, which steps up) so the honest hole is traceable from the test double to the verdict."
+    },
+    {
+      "path": "lib/integrations/src/integrations/local-authority/types.ts",
+      "reviewedBy": "qa-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "Pure type and constant declarations — no functions, no branches, nothing to fail open."
     }
   ]
 }

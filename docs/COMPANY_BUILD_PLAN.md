@@ -3896,6 +3896,43 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+174. **`attested` claims authenticator provenance and proves only that the caller
+    holds a key it supplied itself.** — MITIGATED 2026-08-25, security-engineer.
+    Found by the resourcefulness sweep. In `lib/webauthn/src/webauthn/verify.ts`,
+    both the `packed`-with-x5c and `fido-u2f` branches take the verifying key
+    straight from the leaf certificate the CLIENT sent
+    (`new X509Certificate(x5c[0]).publicKey`) and check the signature with it.
+    Nothing validates that certificate: no trust anchor, no issuer check, no
+    validity window, no `basicConstraints`, no AAGUID match against authenticator
+    metadata. A self-signed certificate minted a second earlier satisfies it
+    exactly as well as a vendor one, and the result is reported as
+    `attested: true` — a field documented as meaning a cryptographic statement
+    was actually verified.
+    SEVERITY, MEASURED RATHER THAN ASSUMED, and it is milder than it first reads.
+    The review that found this called it the cleanest library swap in the repo.
+    Checking who consumes the field first: NOBODY does. `registerCredential`
+    gates on `ok` — the signature checked out — and never consults `attested`;
+    the only other occurrence in the tree is a generated `.d.ts`. Registration
+    independently enforces the rpId hash, user presence and user verification.
+    So a forged statement buys an attacker `true` in a value with no readers.
+    This is an unearned CLAIM, not an authorization bypass, and the difference
+    decides the fix.
+    WHAT WAS DONE, and what was deliberately NOT. Not done: adopting
+    `@simplewebauthn/server`. Real attestation means vendor root certificates or
+    FIDO Metadata Service lookup — a genuine piece of work for a capability
+    nothing in this product uses, against a breadth freeze. Done instead: the
+    field now states precisely what it proves and what it does not, and
+    `scripts/review-invariants.mjs` FAILS THE BUILD if any file outside the
+    producing module reads `.attested`. Falsified by planting a
+    `if (!attestation.attested)` gate in `server.ts` — exit 1, named file, named
+    remedy; restored, exit 0.
+    The comment alone was not enough. This document records the same lesson under
+    several other numbers: prose does not stop drift, and the thing that turns a
+    latent hole into a shipped one is somebody reasonably trusting a field that
+    reads as trustworthy.
+    TO CLOSE IT: implement chain validation and delete the invariant rule in the
+    same commit. Until then the rule is the guard.
+
 173. **A fix can add a branch no proof looks at, and the only thing that notices
     runs once a day.** — FIXED 2026-08-25, qa-engineer. Every pull request in this
     repository was red for two days and the cause was three of this lane's own

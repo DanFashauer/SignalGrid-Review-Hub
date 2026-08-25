@@ -80,7 +80,14 @@ class Gauge {
   private values = new Map<string, { labels: Labels; v: number }>();
   constructor(readonly name: string, readonly help: string) {}
   set(v: number, labels: Labels = {}): void {
-    this.values.set(key(labels), { labels, v });
+    // Bounded like Counter.inc and Histogram.observe. It was NOT, and the file
+    // above claims the cap is applied — an incomplete fix that reads as a
+    // complete one. Latent today because both gauges are set unlabelled from
+    // inside this module, so no caller can currently mint a series here; the
+    // guard is applied anyway, because "no caller does this yet" is the state
+    // the labelled-route cardinality bug was in right before it happened.
+    const bound = boundLabels(this.values, labels);
+    this.values.set(bound.k, { labels: bound.labels, v });
   }
   render(): string {
     const out = [`# HELP ${this.name} ${this.help}`, `# TYPE ${this.name} gauge`];

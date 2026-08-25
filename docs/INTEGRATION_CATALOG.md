@@ -618,7 +618,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   the equal-rank tie-break unfalsifiable (the more specific candidate was also pushed
   first — the same `service-lifecycle` defect, fixed by pushing the less specific one
   first) and a three-field malformed guard with only one control.
-- **`proof:uem` (67 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
+- **`proof:uem` (75 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
   and Workspace ONE. Includes a **1,440-state exhaustive sweep** whose grant path is
   pinned to *exactly 9* fully-confirmed states, four isolated live-call-gate refusals,
   and a source scan asserting no vendor-API call. `personal` ownership on an
@@ -648,7 +648,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   model catalog, neither of which is a UEM read. The axis is also proved **carried, not
   graded** — swapping only `cellularHardware` across all 1,440 swept states changes no
   verdict, because a device's radio is not a management-posture fact.
-- **`proof:nac` (34 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
+- **`proof:nac` (45 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
   read-only. Hostile-identifier cases are asserted against the **filter builder**, not
   merely the validator, and fixture lookups are scoped to the identifier kind so a
   certificate query cannot be answered by a MAC match. The normalizers now take **no
@@ -658,7 +658,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   by *nothing*: reverting the fix left this proof passing at the identical count. The
   dead parameters are removed so the echo is unrepresentable rather than merely absent,
   and the reads-from-the-response property is now asserted for both vendors.
-- **`proof:entitlement-binding` (57 checks)** — whether a grant is *reviewable*, not
+- **`proof:entitlement-binding` (59 checks)** — whether a grant is *reviewable*, not
   merely correct. Includes a **1,200-state sweep** with the clean path pinned to
   *exactly 18*, plus coherence checks that reject a report contradicting itself.
 - **`proof:service-lifecycle` (82 checks)** — whether the *service* plane still agrees

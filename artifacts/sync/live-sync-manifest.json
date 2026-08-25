@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 42,
-  "fingerprint": "cc62e6918fcdce852546ea010d1c4b8e46efef4f985cde0263c1e11fe3e78dc0",
+  "manifestVersion": 43,
+  "fingerprint": "5ea9cb89c6da84172b78cc5239603988db8d832706264786fc108b959d4de1be",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -120,7 +120,7 @@
       "device-resolver": 14,
       "dual-control": 58,
       "emitter-discipline": 51,
-      "entitlement-binding": 57,
+      "entitlement-binding": 59,
       "evidence-coverage": 25,
       "factory-flows": 16,
       "handoff-sim": 55,
@@ -131,7 +131,7 @@
       "mcp-answer-discipline": 55,
       "mcp-server": 11,
       "mobile-app-catalog": 19,
-      "nac": 34,
+      "nac": 45,
       "network-nac": 59,
       "oauth-consent": 74,
       "ot-posture": 46,
@@ -152,7 +152,7 @@
       "sso-session": 97,
       "task-exception": 204,
       "token-binding": 61,
-      "uem": 67,
+      "uem": 75,
       "unsafe-claim": 40,
       "verdict-attestation": 76,
       "work-context": 50

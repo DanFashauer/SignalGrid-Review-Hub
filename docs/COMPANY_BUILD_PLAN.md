@@ -3896,6 +3896,38 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+175. **Four deployment claims cited the script that could deploy them.** — FIXED
+    2026-08-25, secops-domain. `docs/agent/open-source-lab-registry.json` carries six
+    entries claiming `deployedInLab: true`, and `check-lab-registry.mjs` gates every
+    one on citing evidence that exists on disk. Four of the six cited
+    `scripts/run-live-lanes.sh` — the launcher. It exists, so the check passed, and
+    would pass forever for every entry whether or not anything ever ran. The
+    deployment claim was resting on the deployability of the tooling.
+    THE REASON IT SURVIVED IS THE INTERESTING PART: all four claims were TRUE. Each
+    traces to a recorded pass — `proof:live-edr` and `proof:live-keycloak` in
+    `artifacts/sim-results/2026-08-12-fleet-lab-real-source.json`, fleet and osquery in
+    `artifacts/sim-results/2026-08-22-source-independence-queue.json`. The citation was
+    wrong while the fact was right, and only the fact was ever checked, so nothing
+    ever presented as broken. `configured != emitted` is this repository's own first
+    evidence distinction and the gate could not make it.
+    A NEAR-MISS WORTH RECORDING. Two later sim-results list `proof:live-edr` under
+    "skipped (NOT verified by this run)", and there is no `wazuh.json` in
+    `artifacts/live-captures/`. Reading only those, the conclusion is that Wazuh was
+    claimed deployed and never verified — a much sharper finding, and false. The
+    2026-08-12 record shows it passing. This is the third time in one session that
+    checking one more source reversed the answer, and the second time the reversal
+    was away from the more dramatic claim.
+    THE FIX, both halves. The four citations now point at the run that proved them,
+    matching what `opentelemetry-collector` and `prometheus` already did. And the gate
+    now REFUSES a citation that is not an execution record — `artifacts/sim-results/`
+    or `artifacts/live-captures/`, the two artifact families that exist only as the
+    residue of something running. Without the second half the data fix rots at the
+    next entry.
+    Two self-test assertions, 15 -> 17: a launcher is FATAL, and a live-capture is
+    accepted, so the rule cannot pass by rejecting everything. Falsified by removing
+    the rule — the negative control drops to 16/17 while the positive control
+    correctly holds, since acceptance still obtains when nothing is rejected.
+
 174. **`attested` claims authenticator provenance and proves only that the caller
     holds a key it supplied itself.** — MITIGATED 2026-08-25, security-engineer.
     Found by the resourcefulness sweep. In `lib/webauthn/src/webauthn/verify.ts`,

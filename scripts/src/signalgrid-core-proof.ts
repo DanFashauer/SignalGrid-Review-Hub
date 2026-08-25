@@ -18,6 +18,7 @@
  */
 import {
   buildEvidence,
+  foldIdentityEnabled,
   deriveCriticalSignalsPresent,
   FRESHNESS_VALUES,
   canonicalJson,
@@ -1673,6 +1674,40 @@ if (pending) {
 }
 
 // ── Report ────────────────────────────────────────────────────────────────────
+
+// ── identity_state: two sources, folded worst-wins ────────────────────────────
+//
+// WHY THIS EXISTS. The identity connector emits an `identity_state` signal.
+// `buildEvidence` normalized it, `decision.ts` counted it into `signalsUsed`,
+// and NOTHING EVER READ IT — the enabled/disabled verdict came from the static
+// identity row alone. A connector reporting a DISABLED account therefore
+// produced `identityEnabled: true` and an ALLOW, while the evidence snapshot
+// recorded the signal as an input to a decision it had not influenced.
+//
+// The fold's asymmetry is the invariant, so both halves are asserted: an
+// affirmative `false` from either source must win, and SILENCE must change
+// nothing in either direction — it may not loosen a disabled row, and it may
+// not promote an `"unknown"` row to `true`. The silence cases are what make
+// this safe to land: with no identity connector present the behaviour is
+// byte-identical to before the fold existed.
+for (const [fromRow, fromSignal, want, why] of [
+  [true, "unknown", true, "row enabled + no signal -> unchanged"],
+  [true, true, true, "both sources agree enabled"],
+  [true, false, false, "connector reports DISABLED -> wins over an enabled row"],
+  [false, "unknown", false, "row disabled + no signal -> stays disabled"],
+  [false, true, false, "row disabled + signal enabled -> disabled still wins"],
+  ["unknown", "unknown", "unknown", "both silent -> unknown, never true"],
+  ["unknown", true, "unknown", "a signal alone may NEVER promote unknown to true"],
+  ["unknown", false, false, "affirmative disabled from the signal alone wins"],
+] as [boolean | "unknown", boolean | "unknown", boolean | "unknown", string][]) {
+  const got = foldIdentityEnabled(fromRow, fromSignal);
+  check(
+    `identity fold: ${why}`,
+    got === want,
+    `row=${String(fromRow)} signal=${String(fromSignal)} -> ${String(got)}, expected ${String(want)}`,
+  );
+}
+
 
 const failed = assertions.filter((a) => !a.passed);
 

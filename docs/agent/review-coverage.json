@@ -575,6 +575,41 @@
       "date": "2026-08-24",
       "depth": "audited",
       "note": "Read end to end against lib/signalgrid-simulator/src/decisionEngine.ts. The byte-faithful port claim HOLDS on structure: fourteen rule blocks in identical order, identical reason-code emission order, identical outcome unions, identical empty-outcomes base-trust arm, both ALLOW_REMOVED subtraction rules in order, identical 10-element ordering array. THREE divergences found, all in attribute predicates: lines 57, 69 and 70 test == \"true\" (string) where the TS tests === true (boolean). Latent — no Swift producer sets those attributes today — and live the moment anything decodes /v1 signal JSON into [String: String] on device. The parity gate cannot see this: it compares reason-code vocabulary and wiring, and says of itself that it cannot prove behavioural equivalence."
+    },
+    {
+      "path": "native/desktop/core/src/assist.rs",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "verified-live",
+      "note": "Read end to end AND executed — cargo 1.94.1 is available in this lane, contrary to the assumption in the task that framed this read. 36 unit + 2 conformance tests pass, fmt and clippy -D warnings clean. NO DEFECT. Unrecognised outcome maps to DENY via the catch-all arm; None is returned only for genuine absence; proceeds_without_further_action() is Allow-only. Answers the roster's standing open question for the Rust half, which had been left open when the Kotlin half was answered on 2026-08-24."
+    },
+    {
+      "path": "native/desktop/core/src/wire.rs",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "verified-live",
+      "note": "Read end to end and exercised. NO DEFECT. Every failure mode fails closed with a NAMED reason: non-2xx, empty/whitespace body, malformed JSON, valid-JSON-that-is-not-an-object, missing assist field, and present-but-non-string assist (bool/number/array/object/null all treated as present-and-unreadable, not as missing). 401/403 are not rescued by an allow body. Unknown RESPONSE fields are tolerated deliberately — deny_unknown_fields there would flip a legitimate allow to deny the moment a newer server adds a field, which is fail-closed in the wrong place."
+    },
+    {
+      "path": "native/desktop/core/src/endpoint.rs",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "verified-live",
+      "note": "Read end to end and exercised against ~20 hostile inputs. NO DEFECT. Plaintext refused off-loopback and credentials refused in the authority, matching Kotlin's GateEndpoint.validate in order, parsing and messages. Loopback is exact-match, so localhost.attacker.com, 127.0.0.1.attacker.com, 127.1, 2130706433 and [::ffff:127.0.0.1] all refuse. ONE deliberate divergence from Kotlin, in the safe direction and documented in a test: 10.0.2.2 (the Android emulator host alias) is omitted, because on a desktop that is a routable address. Both unwrap_or instances resolve the unknown to the TIGHTER side; no unwrap_or_default anywhere in the tree."
+    },
+    {
+      "path": "artifacts/signalgrid-desktop/src/pages/Dashboard.tsx",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "FINDING (row 79, fixed here): painted all four verdicts from raw Tailwind hex, invisible to check-decision-palette through TWO independent holes — the verdict sat in a JSX attribute value and an object-literal data value (neither key- nor comparison-anchored), and #eab308 was missing from the ramp list entirely. Deny at #EF4444 measures 4.26:1 on card. Repointed onto the ratified tokens; restrict uses the deny tone with a dash pattern rather than an invented fourth colour, since only three tones are ratified. Chart chrome moved off a third (slate) palette."
+    },
+    {
+      "path": "scripts/check-decision-palette.mjs",
+      "reviewedBy": "desktop-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "FINDING (row 79, fixed here): two independent holes, and the ORDER of the fixes is the evidence for that. Widening the ramp list alone left the gate at exit 0; adding an attribute/data-value anchor took it to exit 1 naming BOTH signalgrid-desktop and signalgrid-app. Either hole alone would have kept the defect invisible. Self-tests 14 to 17, anchored VERBATIM to the two Dashboard files that were evading it rather than written against the new regex — a self-test anchored to the regex it tests proves only that the regex is itself."
     }
   ]
 }

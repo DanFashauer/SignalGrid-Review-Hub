@@ -148,7 +148,13 @@ function walk(dir) {
 }
 
 // ── the audit ──────────────────────────────────────────────────────────────
-const RAMP = /\b(?:red|amber|orange|green|emerald|yellow|teal|sky|lime|rose)-\d{2,3}\b|#(?:ef4444|f59e0b|f97316|22c55e|34d399|fbbf24|fb923c|f87171)\b/i;
+// Tailwind ramp hexes. `eab308` (yellow-500, the step-up colour) joined this list on
+// 2026-08-25 after it was found MISSING while artifacts/signalgrid-desktop painted
+// step_up with it — so even a properly verdict-KEYED use of that hex passed. That hole
+// was independent of the anchoring hole below: fixing the anchors alone still let
+// step-up through. The 400/500 pairs are now filled in for every hue in the class
+// list, because a half-populated blocklist reads as a blocklist.
+const RAMP = /\b(?:red|amber|orange|green|emerald|yellow|teal|sky|lime|rose)-\d{2,3}\b|#(?:ef4444|f87171|f59e0b|fbbf24|f97316|fb923c|22c55e|4ade80|34d399|10b981|eab308|facc15|14b8a6|2dd4bf|84cc16|a3e635|f43f5e|fb7185)\b/i;
 const VERDICT_KEY = /\b(allow|step_up|restrict|deny)\s*:|["'](allow|step-up|step_up|restrict|deny)["']\s*:|case\s+["'](allow|step-up|step_up|restrict|deny)["']|(?:outcome|Outcome)\s*(?:===|==)\s*[^?\n]{0,60}/;
 
 export function audit(files) {
@@ -316,6 +322,29 @@ export function audit(files) {
         break;
       }
     }
+    // ATTRIBUTE/DATA-VALUE ANCHORED, added 2026-08-25. The two anchors above both
+    // require the verdict to sit in a KEY or a COMPARISON position. A charting library
+    // puts it in neither: `<Area dataKey="allow" stroke="#22c55e" />` carries the
+    // verdict as a JSX ATTRIBUTE VALUE, and `{ c: "#22c55e", l: "ALLOW" }` carries it
+    // as a plain DATA value keyed on something else entirely. Neither opened a window,
+    // so artifacts/signalgrid-desktop/src/pages/Dashboard.tsx painted all four verdicts
+    // from raw hex — deny at 4.26:1 on card — under a green gate.
+    //
+    // Scoped to ONE JSX element or ONE object literal, not a line window, so a verdict
+    // string and an unrelated colour elsewhere in the file cannot be joined by accident.
+    if (!flagged) {
+      const VERDICT_VALUE = /["'](allow|step[-_ ]?up|restrict|deny)["']/i;
+      // Each `<Tag ... />` element, and each `{ ... }` object literal on one line.
+      const units = [...src.matchAll(/<[A-Za-z][^<>]*\/?>/g), ...src.matchAll(/\{[^{}\n]*\}/g)];
+      for (const u of units) {
+        if (!VERDICT_VALUE.test(u[0]) || !RAMP.test(u[0])) continue;
+        const line = src.slice(0, u.index).split("\n").length;
+        problems.push(`${path}:${line} paints a verdict from a raw Tailwind ramp (or ramp hex) instead of the decision tokens`);
+        flagged = true;
+        break;
+      }
+    }
+
     // Comparison-anchored (ternaries, if/else): the assignment usually sits
     // on the following line, so keep a forward window here.
     if (!flagged) {
@@ -363,6 +392,16 @@ function selfTest() {
       'export const map = { deny: "text-red-300" };'],
     ["a ramp HEX behind a verdict key fails", "artifacts/signalgrid-app/src/FAKE5.tsx",
       'const m = { deny: "#ef4444" };'],
+    // The three shapes below are VERBATIM from the files that were evading this gate on
+    // 2026-08-25 — artifacts/signalgrid-{app,desktop}/src/pages/Dashboard.tsx — not
+    // invented against the new regex. Anchoring a self-test to the regex it is meant to
+    // test proves only that the regex is itself.
+    ["a JSX ATTRIBUTE ramp fails — the verdict is an attribute VALUE, not a key", "artifacts/signalgrid-desktop/src/FAKE6.tsx",
+      '<Area type="monotone" dataKey="stepUp" stroke="#eab308" fillOpacity={0.4} fill="#eab308" stackId="1" />'],
+    ["an OBJECT-LITERAL legend ramp fails — the verdict is a data value keyed on something else", "artifacts/signalgrid-desktop/src/FAKE7.tsx",
+      '{ c: "#22c55e", l: "ALLOW" }'],
+    ["yellow-500 (#eab308) is IN the ramp list — it was missing, so a verdict-keyed step-up passed", "artifacts/signalgrid-app/src/FAKE8.tsx",
+      'const m = { step_up: "#eab308" };'],
   ];
   for (const [label, path, code] of cases) {
     const r = audit({ ...files, [path]: code });

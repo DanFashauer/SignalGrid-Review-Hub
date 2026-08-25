@@ -43,22 +43,22 @@ export default function DashboardPage() {
               <AreaChart data={series.series}>
                 <defs>
                   <linearGradient id="ga" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                    <stop offset="5%" stopColor="hsl(var(--decision-allow))" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(var(--decision-allow))" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gd" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                    <stop offset="5%" stopColor="hsl(var(--decision-deny))" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(var(--decision-deny))" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey="timestamp" tickFormatter={t => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} stroke="#334155" fontSize={10} />
-                <YAxis stroke="#334155" fontSize={10} />
-                <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#1e293b", fontSize: 12 }} labelFormatter={t => new Date(t).toLocaleString()} />
-                <Area type="monotone" dataKey="allow" stroke="#22c55e" fillOpacity={1} fill="url(#ga)" stackId="1" />
-                <Area type="monotone" dataKey="stepUp" stroke="#eab308" fillOpacity={0.4} fill="#eab308" stackId="1" />
-                <Area type="monotone" dataKey="restrict" stroke="#f97316" fillOpacity={0.4} fill="#f97316" stackId="1" />
-                <Area type="monotone" dataKey="deny" stroke="#ef4444" fillOpacity={1} fill="url(#gd)" stackId="1" />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="timestamp" tickFormatter={t => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--popover))", borderColor: "hsl(var(--border))", fontSize: 12 }} labelFormatter={t => new Date(t).toLocaleString()} />
+                <Area type="monotone" dataKey="allow" stroke="hsl(var(--decision-allow))" fillOpacity={1} fill="url(#ga)" stackId="1" />
+                <Area type="monotone" dataKey="stepUp" stroke="hsl(var(--decision-review))" fillOpacity={0.4} fill="hsl(var(--decision-review))" stackId="1" />
+                <Area type="monotone" dataKey="restrict" stroke="hsl(var(--decision-deny))" strokeDasharray="4 2" fillOpacity={0.25} fill="hsl(var(--decision-deny))" stackId="1" />
+                <Area type="monotone" dataKey="deny" stroke="hsl(var(--decision-deny))" fillOpacity={1} fill="url(#gd)" stackId="1" />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
@@ -66,7 +66,7 @@ export default function DashboardPage() {
           )}
         </div>
         <div className="flex gap-4 mt-2">
-          {[{ c: "#22c55e", l: "ALLOW" }, { c: "#eab308", l: "STEP-UP" }, { c: "#f97316", l: "RESTRICT" }, { c: "#ef4444", l: "DENY" }].map(({ c, l }) => (
+          {[{ c: "hsl(var(--decision-allow))", l: "ALLOW" }, { c: "hsl(var(--decision-review))", l: "STEP-UP" }, { c: "hsl(var(--decision-deny))", l: "RESTRICT" }, { c: "hsl(var(--decision-deny))", l: "DENY" }].map(({ c, l }) => (
             <div key={l} className="flex items-center gap-1.5">
               <div className="w-2 h-2 rounded-sm" style={{ background: c }} />
               <span className="text-xs font-mono text-muted-foreground">{l}</span>

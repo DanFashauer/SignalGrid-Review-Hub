@@ -205,7 +205,7 @@
       ],
       "activated": "2026-08-20",
       "produced": "docs/API_CONTRACT_AUDIT.md — the published contract asserted \"every route is tenant-scoped: the tenant is derived from the authenticated bearer token\", which is the inverse of what 21 of its own 55 operations do (/cp/v1/* carries no principal and is scoped only by a client-supplied ?tenant=); nothing said the whole /cp/v1 surface and GET /v1/keys are registered only under the review-demo profile and 404 elsewhere; three served routes (self-audit, reliability, iac) had drifted out of the spec, the Postman collection and the launch profile at once. The cause was that proof:api-contract read one route file and compared only /v1 while printing \"Contract holds\" — widened to the whole served surface, plus a zero-routes-parsed guard, self-test 7/7. Also fixed scripts/safety-check.mjs reporting Postman drift with an EMPTY reason.",
-      "nextAction": "Status codes and response shapes — the deeper half. Nothing compares documented 400/403/404/429 against the handlers that declare them, and test:api is not driven from the spec, so a documented status nobody implemented passes both."
+      "nextAction": "Row 80: native/shared/assist-wire-conformance.json is 100% ASCII across all 42 cases, while the two clients case-fold with DIFFERENT functions — Rust to_ascii_lowercase(), Kotlin full-Unicode lowercase(). Nothing pins the difference. The direction is favourable (Kotlin can only be equal or more permissive), so this is a hole in the shared vectors rather than a client defect. Add NBSP-, U+3000- and ZWSP-padded 'allow' plus a Cyrillic homoglyph, and both clients are obliged at once. By the file's own doctrine, a shared expectation nobody is forced to satisfy is a document, not a gate."
     },
     {
       "id": "devex-tooling-engineer",
@@ -279,7 +279,7 @@
       "activated": null,
       "produced": null,
       "priority": 3,
-      "nextAction": "Waits for desktop code or its CI lane to change. Note check-assist-conformance moved to every-PR on 2026-08-19, so the Rust client's binding is now continuously enforced."
+      "nextAction": "FIRST EXECUTION DONE 2026-08-25 (rows 79-80). The Rust Assist client came back CLEAN and is the strongest of the three implementations of this vocabulary — verified by execution, not reading, since cargo IS available in the cloud lane. The web half's raw-hex dashboard is fixed. STILL OPEN: the Tauri app itself was never built (needs WebKitGTK), so main.rs's three tests are read and not executed — that needs a lane that can install system deps or a CI job that already does."
     },
     {
       "id": "firmware-hardware-engineer",

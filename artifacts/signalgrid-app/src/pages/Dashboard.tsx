@@ -10,7 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getContextV1, listConnectorsV1, listDecisionsV1 } from "@/lib/v1";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { OutcomeBadge, IntegrationStatusBadge, SignalStatusBadge } from "@/components/StatusBadge";
 import { LiveDecisionPanel } from "@/components/LiveDecisionPanel";
 import { formatTimeAgo, formatDate } from "@/lib/format";
@@ -56,31 +56,35 @@ export function Dashboard() {
               <AreaChart data={seriesData.series}>
                 <defs>
                   <linearGradient id="colorAllow" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="hsl(var(--decision-allow))" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="hsl(var(--decision-allow))" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorDeny" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="hsl(var(--decision-deny))" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="hsl(var(--decision-deny))" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis 
                   dataKey="timestamp" 
                   tickFormatter={(t) => new Date(t).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} 
-                  stroke="#666" 
+                  stroke="hsl(var(--muted-foreground))" 
                   fontSize={12}
                   tickMargin={10}
                 />
-                <YAxis stroke="#666" fontSize={12} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }}
+                  contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }}
                   labelFormatter={(t) => new Date(t).toLocaleString()}
                 />
-                <Area type="monotone" dataKey="allow" stroke="#22c55e" fillOpacity={1} fill="url(#colorAllow)" stackId="1" />
-                <Area type="monotone" dataKey="stepUp" stroke="#eab308" fillOpacity={0.5} fill="#eab308" stackId="1" />
-                <Area type="monotone" dataKey="restrict" stroke="#f97316" fillOpacity={0.5} fill="#f97316" stackId="1" />
-                <Area type="monotone" dataKey="deny" stroke="#ef4444" fillOpacity={1} fill="url(#colorDeny)" stackId="1" />
+                <Area type="monotone" dataKey="allow" stroke="hsl(var(--decision-allow))" fillOpacity={1} fill="url(#colorAllow)" stackId="1" />
+                <Area type="monotone" dataKey="stepUp" stroke="hsl(var(--decision-review))" fillOpacity={0.5} fill="hsl(var(--decision-review))" stackId="1" />
+                <Area type="monotone" dataKey="restrict" stroke="hsl(var(--decision-deny))" strokeDasharray="4 2" fillOpacity={0.3} fill="hsl(var(--decision-deny))" stackId="1" />
+                {/* Legend added 2026-08-25: this chart had none, so colour was the SOLE channel
+                    distinguishing four verdicts — and restrict/deny share the ratified deny
+                    tone, distinguished by a dash rather than an invented fourth colour. */}
+                <Area type="monotone" dataKey="deny" stroke="hsl(var(--decision-deny))" fillOpacity={1} fill="url(#colorDeny)" stackId="1" />
+                <Legend />
               </AreaChart>
             </ResponsiveContainer>
           ) : (

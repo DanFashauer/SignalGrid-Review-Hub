@@ -227,6 +227,27 @@ function normalizeCompliance(state: string | undefined): DeviceComplianceState {
   }
 }
 
+/**
+ * Microsoft Graph `managementAgent` values that establish MDM enrollment.
+ *
+ * Deliberately an ALLOWLIST, and deliberately conservative: an agent this set does
+ * not name yields "unknown" rather than "managed", which `posture-composition`
+ * grades as step_up. Being wrong in that direction costs a challenge; being wrong
+ * the other way admits an unmanaged device. Notably ABSENT and absent on purpose —
+ * `eas` (ActiveSync only), `msSense` (Defender sensor) and `configurationManagerClient`
+ * (SCCM without an MDM channel), none of which mean the device is MDM-managed.
+ */
+const MDM_ENROLLMENT_AGENTS = new Set([
+  "mdm",
+  "easmdm",
+  "intuneclient",
+  "configurationmanagerclientmdm",
+  "configurationmanagerclientmdmeas",
+  "microsoft365managedmdm",
+  "googleclouddevicepolicycontroller",
+  "jamf",
+]);
+
 function normalizeManagement(
   state: string | undefined,
   agent: string | undefined,
@@ -236,8 +257,17 @@ function normalizeManagement(
   if (s === "retirepending" || s === "retire_pending") return "retire_pending";
   if (s === "unmanaged" || a === "unknown") return "unmanaged";
   if (s === "managed") return "managed";
-  // No explicit state, but a real MDM agent is present ⇒ managed.
-  if (s === "" && a !== "") return "managed";
+  // No explicit state. An agent NAME may still establish MDM enrollment — but only
+  // if it is one of the agents that actually denotes it.
+  //
+  // This was `if (s === "" && a !== "") return "managed"`, and any non-empty string
+  // earned the affirmative. Graph's own vocabulary makes that unsound: `eas` is
+  // ActiveSync only and `msSense` is the Defender sensor — BOTH mean the device is
+  // NOT MDM-managed — and a typo qualified just as well. Adding one arbitrary
+  // string to one optional field moved a device from step_up to allow. The four
+  // sibling normalizers in this file all fall through to "unknown" on silence;
+  // this was the one that did not.
+  if (s === "" && MDM_ENROLLMENT_AGENTS.has(a)) return "managed";
   return "unknown";
 }
 

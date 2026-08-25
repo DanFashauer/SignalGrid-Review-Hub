@@ -81,14 +81,40 @@ export function normalizeCredentialRotation(
   } else if (maxAgeDays === null) {
     standing = "no_policy";
     const basis = lastRotated ?? created;
-    if (basis !== null) ageDays = Math.floor((now - basis) / DAY_MS);
+    if (basis !== null) {
+      const age = Math.floor((now - basis) / DAY_MS);
+      // A future-dated basis is an unreadable clock, not a fresh credential.
+      // Report no age rather than a negative one, so nothing downstream renders
+      // "-3653 days" as if it were a reading.
+      ageDays = age < 0 ? null : age;
+    }
   } else if (lastRotated === null) {
     // A policy exists and nothing has ever been rotated against it.
     standing = created === null ? "unknown" : "never_rotated";
-    if (created !== null) ageDays = Math.floor((now - created) / DAY_MS);
+    if (created !== null) {
+      const age = Math.floor((now - created) / DAY_MS);
+      ageDays = age < 0 ? null : age;
+    }
   } else {
-    ageDays = Math.floor((now - lastRotated) / DAY_MS);
-    standing = ageDays > maxAgeDays ? "overdue" : "within_policy";
+    const age = Math.floor((now - lastRotated) / DAY_MS);
+    if (age < 0) {
+      // Rotated in the FUTURE relative to the reference — an unreadable clock,
+      // not the most recently rotated secret possible.
+      //
+      // Without this the negative age was trivially <= maxAgeDays, so the record
+      // graded "within_policy" and the verdict was rotation_current / none with
+      // rotationConfirmed: true — a permanent clean bill for a static secret that
+      // may never have been rotated at all, from clock skew, a bad timezone
+      // conversion on a bridge, or anyone able to write the field.
+      //
+      // "unknown", NOT "overdue": a lapse nobody established must not be asserted
+      // either. This is the shape local-authority/normalize.ts already uses for
+      // a future-dated grant.
+      standing = "unknown";
+    } else {
+      ageDays = age;
+      standing = age > maxAgeDays ? "overdue" : "within_policy";
+    }
   }
 
   return { subjectRef, kind, custody, standing, covered: true, ageDays, maxAgeDays, source, observedAt };

@@ -2896,7 +2896,16 @@ earlier — that is the loop working, not a reason to soften the record.
     still says "five families" against six entries in the array.
 
 125. **The Graph connector reports a device MANAGED when the tenant never said
-    so.** — OPEN, endpoint-uem-domain. BLOCKING. Reproduced end to end.
+    so.** — FIXED 2026-08-25, endpoint-uem-domain. Was BLOCKING. Reproduced end to
+    end before the fix, and the fix was FALSIFIED rather than assumed: restoring the
+    old inference fails exactly the three defect cases (`eas`, `msSense`, a typo)
+    while the three legitimate ones (no agent, `mdm`, `intuneClient`) still pass.
+    THE FIX: `MDM_ENROLLMENT_AGENTS`, a conservative allowlist of the agent values
+    that actually establish MDM enrollment. An agent the set does not name yields
+    "unknown" — step_up — rather than "managed". `eas`, `msSense` and
+    `configurationManagerClient` are absent on purpose. Six new assertions in
+    `graph-connector-proof` (21 -> 27) pin BOTH directions, so the fix cannot
+    degrade into "always unknown".
     `graph/posture-connector.ts:239-241` infers the affirmative state `managed`
     from a MISSING `managementState`, on the strength of any non-empty
     `managementAgent` string: `if (s === "" && a !== "") return "managed";`. Its
@@ -2925,7 +2934,14 @@ earlier — that is the loop working, not a reason to soften the record.
     unrecognised agent with no `managementState`.
 
 126. **A rotation dated in the FUTURE grades as current, and the record says so
-    while carrying a negative age.** — OPEN, iam-domain. BLOCKING. Reproduced.
+    while carrying a negative age.** — FIXED 2026-08-25, iam-domain. Was BLOCKING.
+    Reproduced before the fix and FALSIFIED after: removing the guard fails exactly
+    the three new assertions.
+    THE FIX: a negative age yields `standing = "unknown"` and `ageDays = null` — not
+    `overdue`, because a lapse nobody established must not be asserted either. The
+    `no_policy` and `never_rotated` branches got the same treatment so no branch can
+    emit a negative age as if it were a reading. Four new assertions in
+    `credential-rotation-proof` (18 -> 22).
     `credential-rotation/normalize.ts:90-91` computes `ageDays` and compares it to
     the policy bound with no check that the timestamp is in the past. A future
     `lastRotatedAt` yields a negative age, trivially `<= maxAgeDays`, so the record

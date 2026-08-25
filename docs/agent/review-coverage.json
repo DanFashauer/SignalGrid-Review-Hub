@@ -701,6 +701,293 @@
       "date": "2026-08-25",
       "depth": "audited",
       "note": "Full file, 10 lines, barrel export only."
+    },
+    {
+      "path": "lib/signalgrid-simulator/src/index.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "5-line barrel re-exporting audit/decisionEngine/routing/scenarios/types. Confirmed every sibling module is exported (unlike the core barrel)."
+    },
+    {
+      "path": "lib/signalgrid-simulator/src/audit.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "createAuditEvidence returns an unconditional 2-element array; its routing_trace references derive from the routedActions argument itself, which is what makes the caller's evidenceCoversRouting check a constant (row 85). No fail-open, no clock read. Did NOT examine consumers outside the simulator."
+    },
+    {
+      "path": "lib/signalgrid-simulator/src/types.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Pure type declarations: 26 event types, 10 layers, 10 decision outcomes, 7 action kinds. DecisionOutcome includes deny though evaluateScenario never emits it; SignalGridSignal.attributes is a loose Record, which is why the engine's attribute probes are untyped string matches."
+    },
+    {
+      "path": "lib/signalgrid-simulator/src/routing.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Deterministic outcome-to-action mapping, fixed action ids, all simulatedOnly. ownerCategoryFor is substring-based and order-dependent; checked against every expectedOwnerTeam in scenarios.ts, no misclassification today, but a team named 'Security platform ops' would classify as security not operations. severityFor and verificationExpectationFor both have real default arms."
+    },
+    {
+      "path": "lib/signalgrid-simulator/src/scenarios.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 11 scenarios; traced each one's startingSignals through evaluateScenario to confirm its expectedOutcomes are earned rather than asserted. Cross-checked fixture attribute keys against engine branches: 12 of 21 keys the engine branches on are never set by any scenario (row 84). Did NOT verify against the iOS port's fixture copies."
+    },
+    {
+      "path": "lib/signalgrid-core/src/core-normalization-version.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "3-line generated constant, version 8, consumed only by evidence.ts buildSnapshot. Did NOT run the generator with --check to confirm the value is current."
+    },
+    {
+      "path": "lib/signalgrid-core/src/index.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "19-line barrel exporting 18 of 19 core modules; shift.ts is the sole omission (row 87), verified two ways."
+    },
+    {
+      "path": "lib/signalgrid-core/src/simulate.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "35 lines. Replays a stored decision's immutable snapshot against a chosen PolicyVersion; mutates nothing, reads no clock, uses the same evaluatePolicy so the fail-closed backstop applies to the replay. Clean."
+    },
+    {
+      "path": "lib/signalgrid-core/src/metrics.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Deterministic aggregation. percentile() guards empty and clamps the index; rate() guards divide-by-zero. byOutcome accumulator is unguarded against out-of-union outcomes from durable rows (row 88, reporting path only). Did NOT exercise against the durable Postgres store."
+    },
+    {
+      "path": "lib/signalgrid-core/src/webhooks.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Simulated sink, no HTTP. Retry loop seeds status=dead_letter and only moves to delivered on real success — the permissive value is not the seed. maxAttempts<=0 yields dead_letter. Clock is injected."
+    },
+    {
+      "path": "lib/signalgrid-core/src/audit.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Hash-chained tenant-scoped ledger. appendAudit and verifyAuditChain build byte-identical canonical bodies from two hand-written literals — the same two-copies shape evidence.ts warns about; diffed field-by-field, they agree today. Verification fails closed on both a chain break and a digest mismatch. Did NOT test tamper detection empirically."
+    },
+    {
+      "path": "lib/signalgrid-core/src/shift.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Fixture WFM sync. Only the two affirmative states are representable; unverified is expressed by record ABSENCE, which is the correct shape. Refuses non-fixture connectors. One of three signal-id collision sites (row 83). Not re-exported from index.ts (row 87)."
+    },
+    {
+      "path": "lib/signalgrid-core/src/util.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "fixedClock rejects unparseable ISO. classifyFreshness returns missing on null and unknown on NaN or a future timestamp — checked the ordering explicitly, the Number.isNaN guards precede the comparisons so no NaN fall-through. canonicalJson is depth-bounded. constantTimeEquals folds the length difference into diff. digest is FNV-1a and documented non-cryptographic."
+    },
+    {
+      "path": "lib/signalgrid-core/src/dock.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Fixture custody sync. Verified the deliberate absence handling: batteryHealth and badgeBinding emit NO signal when undefined, so evidence reads unknown rather than a fabricated healthy. Second collision site in row 83, and the one reproduced end-to-end."
+    },
+    {
+      "path": "lib/signalgrid-core/src/connector.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Fixture posture sync. baseline/managementHealth/localAuthority all emit nothing when absent so readers default to unknown. Device signals stamp observedAt at sync time while freshness is computed from lastSyncAt. The identity_state signal at 150-163 is normalized, counted, and never read by any consumer (row 89, reproduced)."
+    },
+    {
+      "path": "lib/signalgrid-core/src/remediation.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Approval-gated, simulated-only; allow decisions produce none. Walked the whole reason-code switch: real default arm, and six policy reason codes fall to it and produce no RemediationAction (they do have resolution.ts descriptors, so a worker still gets a served path — a gap in the remediation ledger only). Fallthrough direction is safe."
+    },
+    {
+      "path": "lib/signalgrid-core/src/store.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Tenant isolation held throughout: every by-id accessor goes through scoped(), every composite index key is tenant-prefixed. findApiKeyByToken scans without early return. Established row 83: putSignal keys the bucket by signal.id, and signal ids are minted without connectorId, so a second connector reporting the same category silently overwrites the first with no freshness comparison."
+    },
+    {
+      "path": "lib/signalgrid-core/src/types.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 861 lines including doctrine comments. Checked SIGNAL_CATEGORIES (17) and EVIDENCE_FIELDS (20) against consumers in policy.ts and evidence.ts — every field wired, no orphan. RuleCondition's union is exhaustively covered by the matches() switch. Cross-checked the category count against docs (row 92)."
+    },
+    {
+      "path": "lib/signalgrid-core/src/seed.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "All 1066 lines. Reasoned in full about seedPolicy, all 23 seedPolicyTests cases, the Northwind fixtures and the id-minting helpers. Did NOT individually re-derive the expected outcome for each of the ~20 near-identical subject records — checked the shape, not each verdict. Did not verify the CIVIC tenant end to end."
+    },
+    {
+      "path": "artifacts/api-server/src/index.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file (25 lines). Boot shim: PORT required, NaN or <=0 rejected, listen-error exits 1. No auth, no routing, no tenant surface."
+    },
+    {
+      "path": "artifacts/api-server/src/app.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file. Middleware ORDER is the substance: pino-http, cors, metrics(75), requestContext(82), deprecation(87), globalRateLimiter(90), json 64kb, demo console, GET /metrics(110), /api router(124), errorHandler(127). x-powered-by disabled; CORS is an explicit allow-list defaulting to deny-all; METRICS_TOKEN uses constantTimeEquals. Established by execution that metrics sits BEFORE the limiter (rows 93/94) and that /metrics and the demo console sit OUTSIDE the /api GA fence."
+    },
+    {
+      "path": "artifacts/api-server/src/console-html.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file including inline browser JS. Checked every innerHTML sink: all dynamic values pass through esc(). No dynamic origin, no token handling, same-origin fetch only. Did NOT test in a browser; no CSP is set."
+    },
+    {
+      "path": "artifacts/api-server/src/lib/assurance.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file. Every field of AssurancePosture is derived, none configurable, so a deployment cannot assert a posture it lacks. Confirmed live that /v1/context returns profile=review-demo, signalSource=fixtures, verdictEffect=advisory."
+    },
+    {
+      "path": "artifacts/api-server/src/lib/core.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file. Process-wide demo core; 6 boot decision seeds run through the real evaluate loop inside try/catch so a missing subject cannot block boot; DEMO_KEYS exposes the raw bearer, consumed only by the profile-gated /v1/keys route. Treated SignalGridCore as the trust boundary and tested it from the wire."
+    },
+    {
+      "path": "artifacts/api-server/src/lib/logger.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file (23 lines). Redacts authorization, cookie and set-cookie. Confirmed by reading server logs during probes that bearer tokens never appear. Did NOT enumerate every other field pino might emit."
+    },
+    {
+      "path": "artifacts/api-server/src/lib/metrics.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file. Dependency-free Prometheus exposition; Counter/Gauge/Histogram are plain unbounded Maps keyed by label tuple. fmt() escapes so exposition-format injection is not possible. normalizeRoute collapses ONLY known id prefixes and UUIDs — everything else becomes its own label verbatim. Row 93; verified the absence of any eviction three differently-shaped ways then by live measurement."
+    },
+    {
+      "path": "artifacts/api-server/src/lib/profile.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file. resolveProfile: unset to review-demo, explicit garbage throws and refuses to boot (verified: exit=1). GA_ALLOWED_ROUTES is a 14-entry method+path allowlist; pathMatcher anchors both ends. Found the HEAD side-effect (row 95). Did NOT run check-launch-profile.mjs."
+    },
+    {
+      "path": "artifacts/api-server/src/lib/tier.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file (28 lines). Unknown or unset tier fails safe to dev; live vendor calls require tier in {beta,prod} AND a strict 'true' string compare. Correct fail direction throughout."
+    },
+    {
+      "path": "artifacts/api-server/src/middlewares/context.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "THE AUTH SEAM. extractBearer is regex-free, case-insensitive, empty token to 401. Two mutually exclusive modes chosen by SERVER config, never by the caller: OIDC configured means no demo fallback and the raw JWT is replaced by a server-minted opaque id before any handler; unconfigured means demo keys only under review-demo, else a hard 401. Verified by execution including test:oidc 14/14 (wrong aud, wrong iss, expired, unmapped tenant, alg:none, unknown kid each refused). Found no input producing a MORE permissive answer."
+    },
+    {
+      "path": "artifacts/api-server/src/middlewares/deprecation.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file. Registry empty; env-injected entries filtered by shape; any JSON error yields [] (silence, not a guess); unparseable dates serve NO header rather than a half-formed one."
+    },
+    {
+      "path": "artifacts/api-server/src/middlewares/errors.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file. CoreError to its own status; body-parser errors classified to 413/400 with FIXED messages that never echo body bytes; everything else to a generic 500 with the real error going only to req.log. Verified on the wire: malformed JSON 400, 70KB body 413. No stack trace, SQL, hostname or credential in any body I could produce. The 500 branch is read, not executed."
+    },
+    {
+      "path": "artifacts/api-server/src/middlewares/idempotency.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file. Key = verified principal + method + originalUrl + Idempotency-Key + sha256(body); only 2xx stored; 5-min TTL; FIFO cap at 10k. Verified: repeat POST replays the identical decisionId, and the SAME key from a different tenant did NOT replay. Documented gaps are stated honestly in the file. Did NOT test TTL expiry or the 10k eviction."
+    },
+    {
+      "path": "artifacts/api-server/src/middlewares/metrics.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file (16 lines). Records count and latency on finish. The route label comes from normalizeRoute(req.originalUrl) — caller-controlled. This file plus its registration position is the mechanism behind row 93."
+    },
+    {
+      "path": "artifacts/api-server/src/routes/control-plane.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 558 lines and all 26 routes. 25 are read-only over module-scope fixtures. ?planes= refuses unknown planes rather than dropping them; ?serial= uses a hasOwnProperty-guarded lookup; self-audit validates the on-disk payload SHAPE and writes provenance LAST. The one WRITE, POST /cp/v1/telemetry, is row 97 and was executed. There is NO principal anywhere in this router."
+    },
+    {
+      "path": "artifacts/api-server/src/routes/health.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file. /healthz is liveness only, deliberately DB-free. /readyz fails closed in both stated directions (unreachable store 503; store with no ping() 503) and probes with allSettled so no rejection is abandoned. Body detail is profile-gated while the STATUS CODE is identical in both. Did NOT exercise the postgres branch."
+    },
+    {
+      "path": "artifacts/api-server/src/routes/integrations.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "read",
+      "note": "PARTIAL and specifically: audited only the 30 lines of executable code (2003-2042). The 2007-line INTEGRATIONS literal was NOT read line by line; verified structurally instead — 149 entries, uniform 12-key shape, zero code constructs, zero secret-shaped strings under two patterns, zero non-https URLs. Did not check the 149 vendor descriptions for factual accuracy."
+    },
+    {
+      "path": "artifacts/api-server/src/routes/monitoring.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file. Six read-only fixture routes over module-scope arrays fixed at process start. clampLimit floors at a fallback and caps at 200. No auth and no tenant by construction — every byte is synthetic and identical for all callers, so there is no tenant data to leak."
+    },
+    {
+      "path": "artifacts/api-server/src/routes/radar.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file (33 lines). Two unauthenticated deterministic routes. POST /signals/radar coerces every field defensively so no malformed input reaches scanSignals. Nothing is stored. Did NOT audit @workspace/signal-radar's own bounds."
+    },
+    {
+      "path": "artifacts/api-server/src/routes/sim.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file. Demo-only. Confirmed the hazard its own comments name: the tenant is derived from a CLIENT-SUPPLIED scenarioId and the route then mints that tenant's token and performs real writes. Two envelope defects are row 99 (raw library err.message echoed; both error bodies omit requestId)."
+    },
+    {
+      "path": "artifacts/api-server/src/routes/simulator.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "Whole file. Five unauthenticated routes over a ring-buffered ledger capped at 500 entries. POST /simulator/reset lets any anonymous caller wipe the demo ledger — fenced off in the gateway profile. Its envelope() mints a FRESH uuid instead of reusing req.requestId (row 99, verified live)."
+    },
+    {
+      "path": "artifacts/api-server/src/routes/v1.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-08-25",
+      "depth": "audited",
+      "note": "All 923 lines and all 31 routes — the primary target. Verified the tenant invariant holds at every call site: no route reads a tenant from a header, body field or query param. The durable-path authorization fix is present on all three store branches. Walked the whole WebAuthn step-up chain: role gate, out-of-band secret with timingSafeEqual, enroller-binding on verify, challenge bound at mint with guarded values read from the STORED record, fresh re-evaluation after verification. Nothing in a request body can set stepUpSatisfied. Verified cross-tenant reads return the SAME 404 as a nonexistent id, serially and at concurrency 32 (0/40 leaks). Did NOT exercise a real WebAuthn ceremony."
     }
   ]
 }

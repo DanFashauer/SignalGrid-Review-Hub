@@ -1,7 +1,7 @@
 {
   "note": "Per-role files-read high-water mark. Never hand-edit; the gate writes it.",
   "read": {
-    "principal-engineer": 1,
+    "principal-engineer": 20,
     "qa-engineer": 2,
     "security-engineer": 16,
     "product-manager": 0,
@@ -12,7 +12,7 @@
     "performance-engineer": 3,
     "release-engineer": 0,
     "data-persistence-engineer": 2,
-    "api-contract-architect": 2,
+    "api-contract-architect": 24,
     "devex-tooling-engineer": 1,
     "docs-writer": 0,
     "accessibility-specialist": 1,

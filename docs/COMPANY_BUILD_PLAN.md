@@ -2318,6 +2318,237 @@ earlier — that is the loop working, not a reason to soften the record.
     secret, plaintext-password comparison or unparameterised query exists on this
     surface; logging carries IDs only, never tokens or key material.
 
+83. **An OLDER, more permissive reading from a second connector silently erases a
+    newer one — and the outcome flips deny to allow.** — OPEN, principal-engineer.
+    BLOCKING. Found by the first line-by-line read of the decision core, and
+    reproduced by execution before filing.
+    · Signal ids are minted as
+      `deterministicId("sig", tenantId, subjectType, subjectId, category)` at all
+      three sites (`dock.ts:107`, `shift.ts:69`, `connector.ts:201`). **The
+      connector id is not in the key.** Confirmed structurally: zero mint sites
+      anywhere derive an id from `connector.id`.
+    · `store.ts:210-221` then does `bucket.set(signal.id, signal)` with no
+      freshness comparison. Its own comment says a re-put "overwrites in place",
+      which is correct for a re-put from the SAME source and wrong for a second one.
+    · `evidence.ts:228-237` `groupLatest` exists to pick the greatest `observedAt`
+      per category. It never gets the chance — only one row survives the store.
+    REPRODUCED, one device, two dock connectors: a SmartDock observed
+    `tamperState = confirmed` at 14:55 and the decision was **deny**. A second dock
+    feed then reported `none` observed at **14:00 — 55 minutes EARLIER** — and the
+    decision became **allow**. Signal count stayed at 9: nothing was added, the
+    confirmed tamper was erased.
+    WHY IT MATTERS: this is the repo's canonical defect class, in the decision core
+    itself. A less-informed, older input made the answer strictly more permissive,
+    and the worst-wins fold one layer up was bypassed entirely. The shipped seed
+    hides it because Northwind's two dock connectors cover disjoint device sets, so
+    no gate has a two-connectors-one-device case.
+    FIX: include `connector.id` in the signal id at all three mint sites so
+    per-connector rows coexist and `groupLatest` does the arbitration it was
+    written for. If single-row-per-category is deliberate instead, `putSignal` must
+    refuse to replace a row with a strictly older `observedAt` — and that rule needs
+    a proof either way. `CORE_NORMALIZATION_VERSION` needs regenerating.
+
+84. **The simulator never compares `zone` against `expectedZone`; 12 of 21
+    attribute branches are unreachable from any fixture.** — OPEN,
+    principal-engineer. `decisionEngine.ts:125-132` tests
+    `attributes["zone"] === "wrong"` — a literal string match — and otherwise fires
+    only on pre-classified event types. The `expectedZone` every location fixture
+    carries is never read.
+    REPRODUCED: a device honestly reported in `imaging` when it belongs in
+    `east-unit` returns **allow**, unless the upstream already labelled the event as
+    the exception. Same shape as `device.low_battery` firing on the event type while
+    `batteryPct: 8` goes unread — the engine trusts the source's classification and
+    never reads the measurement.
+    COVERAGE HALF: 12 of the 21 attribute keys the engine branches on are never set
+    by any scenario — including all of `hasWorkflowRoutingFailure` — while
+    `proof:signalgrid-simulator` reports 43/43 assertions passed.
+    FIX: add a `zone !== expectedZone` comparison, plus fixtures for the 12
+    uncovered keys. **Golden rule 1 applies** — this file is byte-ported to
+    `native/ios/EnterpriseShell/Services/DecisionEngine.swift`, so the port and the
+    parity check move together. Coordinate with the Mac lane before touching it.
+
+85. **A comment claims four falsifiable conjuncts; a 1024-case sweep shows two are
+    constants.** — OPEN, principal-engineer. `decisionEngine.ts:38-66` says "the
+    evidence must actually COVER what was routed… which diverges the moment routing
+    and evidence disagree." They cannot disagree: `createAuditEvidence` builds
+    `routing_trace.references` FROM the same `routedActions` array that line 57
+    turns into `routedIds`.
+    REPRODUCED by sweeping all 2^10 outcome subsets through the real routing and
+    evidence functions: `evidenceCoversRouting === false` in **0** cases;
+    `evidenceReferences.has(decision.id) === false` in **0** cases. The
+    `expectedOutcomes` half IS genuinely falsifiable and does real work.
+    WHY IT MATTERS: low blast radius, but a comment asserting falsifiability that a
+    sweep refutes is the self-certifying shape this repo has been closing.
+    FIX: derive the evidence references independently, or delete the two constant
+    conjuncts and correct the comment. Deleting is honest and cheaper.
+
+86. **`registerVerifiedPrincipal` does not validate the role its docstring says it
+    validates.** — OPEN, principal-engineer. `engine.ts:147-174`; the docstring at
+    `:138-146` states "the target tenant must exist and the role must be known — and
+    fails closed otherwise." The tenant check is there. There is no role check.
+    REPRODUCED: roles `superuser`, `constructor`, `__proto__` and `toString` are all
+    ACCEPTED, and the next authorized call dies with an untyped `TypeError`.
+    NOT A GRANT PATH, stated honestly: every `Object.prototype` key was probed and
+    none resolves to an array, so `roleHasPermission` always throws rather than
+    returning true. The defect is that a bad role claim from the enterprise OIDC
+    path becomes a 500 on every subsequent call instead of a clean refusal — and
+    that the docstring asserts a check that does not exist.
+    FIX: validate `input.role` against the five known roles and throw a
+    `CoreError("validation", …, 400)`. Independently, make `roleHasPermission` use
+    `Object.hasOwn` and return `false` for an unknown role.
+
+87. **`shift.ts` is the only core module missing from the barrel.** — OPEN,
+    principal-engineer. 18 of 19 exported from `index.ts`; verified two ways. An
+    external consumer can construct a `DockCustodyRecord` but not a
+    `ShiftContextRecord`, though both are fixture-connector inputs of the same kind.
+    Internal callers use relative imports, so nothing is broken today.
+
+88. **`metrics.ts` accumulates an out-of-union outcome into a NaN that
+    `outcomesCovered()` still reports as covered.** — OPEN, principal-engineer.
+    NOTE severity, reporting path only. `metrics.ts:14` does
+    `byOutcome[decision.outcome] += 1` unguarded, and `types.ts:559` documents that
+    durable snapshot rows are cast with an unchecked `as`. A poisoned key gives NaN
+    rates while `outcomesCovered()` — which only checks key presence — stays true.
+
+89. **The connector's `identity_state` signal is normalized, recorded as "used",
+    and never read: a disabled account allows.** — OPEN, principal-engineer.
+    BLOCKING. Reproduced before filing.
+    · Emitted at `connector.ts:150-163`. The only producer of
+      `evidence.identityEnabled` is `evidence.ts:50-55`, which reads the STATIC
+      `identity.state` store row instead.
+    · Confirmed independently: `identity_state` appears in exactly two places in the
+      whole package — the emit site and the `SIGNAL_CATEGORIES` declaration. **No
+      reader anywhere.**
+    REPRODUCED: with the store row saying `enabled` and the connector reporting
+    `identityEnabled: false`, evidence reads `true`, `criticalSignalsPresent` stays
+    true, and the outcome is **allow** with reason `TRUST_ESTABLISHED`.
+    WORSE FOR THE AUDIT STORY: `decision.ts:94` puts identity signals into
+    `signalsUsed`, which flows into `buildSnapshot` — so the evidence snapshot
+    records `identity_state: false` as an input to a decision it did not influence.
+    `docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md:115` describes the intended model as
+    connector-sourced; the docs and the code disagree about where this fact
+    comes from.
+    FIX: have `buildEvidence` fold the signal with `identity.state` worst-wins —
+    either disagreeing yields `"unknown"` (already a step-up), or an affirmative
+    `false` from either source wins. Do NOT simply switch to the signal: silence
+    must stay `"unknown"`, never `true`.
+
+90. **`groupLatest` orders timestamps with `localeCompare` on a decision path.** —
+    OPEN, principal-engineer. NOTE. `evidence.ts:232` uses ICU collation, not
+    code-point ordering, to pick the latest signal. Correct today because every
+    `observedAt` is the identical ISO shape, but a source emitting `+00:00` instead
+    of `Z`, or omitting milliseconds, would misorder. Use `<` or `Date.parse`.
+
+91. **`activatePolicyVersion` does not require the version's own tests to pass.** —
+    OPEN, principal-engineer. NOTE, governance gap not a fail-open. `engine.ts:311-351`
+    never runs the pinned `PolicyTest` fixtures and does not reject a `superseded`
+    target, so an owner can activate a version that fails its own tests. The
+    `criticalSignalsPresent` backstop still holds.
+
+92. **`docs/PRODUCT_DATA_MODEL.md` lists 13 signal categories; the code has 17.** —
+    OPEN, docs-writer. Missing: `benchmark_selection`, `shift_context`,
+    `device_management_health`, `local_authority`. `check-proof-figures.mjs` exits 0
+    and its own output explains why it cannot see this: a hand-written list of
+    backticked names is out of shape for `FIGURE_RE`. This is the fossil-list
+    failure the `SIGNAL_CATEGORIES` comment says was designed out — the array is
+    enumerable now, but the doc still restates it by hand.
+
+93. **Any unauthenticated caller can grow the metrics registry without bound, and
+    the rate limiter provably does not stop it.** — OPEN, api-contract-architect.
+    BLOCKING. Reproduced by live measurement.
+    · The route label is `normalizeRoute(req.originalUrl)`, which collapses only
+      RECOGNISED id shapes. Every other path becomes its own label, verbatim, in two
+      unbounded `Map`s that never evict. Absence of any bound confirmed three
+      differently-shaped ways; the only hits are the docblock CLAIMING boundedness.
+    · 150 unauthenticated GETs to `/api/junk-N` created **150 label series**, grew
+      the histogram to 1,824 bucket lines, and grew the `/metrics` body from 2,119
+      to 185,583 bytes — **88× in 150 requests.**
+    · **51 of those 150 series were created by requests the limiter had already
+      rejected with a 429.** `metricsMiddleware` is registered at `app.ts:75` and
+      `globalRateLimiter` at `:90`, and the comment at `:73-74` says that ordering is
+      deliberate so throttled requests are still counted — which is exactly what
+      removes the bound. Throttling cannot cap registry growth.
+    REACHABLE WITH NO CREDENTIAL UNDER BOTH PROFILES: `metricsMiddleware` and
+    `GET /metrics` are app-level, above the `/api` mount, so the GA fence never
+    sees them.
+    FIX: resolve the label from the MATCHED route pattern rather than the raw URL —
+    under the gateway profile `routeServedByGateway` already computes exactly that —
+    and collapse everything unmatched to a single `route="other"`. Failing that, cap
+    distinct label tuples with the same FIFO shape `idempotency.ts:99-102` uses.
+
+94. **The global limiter throttles `/healthz`, `/readyz` and `/metrics`.** — OPEN,
+    api-contract-architect. After 150 requests, `/api/healthz` returns **429** and so
+    does `/metrics`. `lib/profile.ts:118-121` allowlists `/readyz` on the explicit
+    reasoning that an orchestrator "would treat a fenced 404 as a dead instance and
+    restart a working server" — the limiter reintroduces that same failure by a
+    different route, and the Prometheus scraper goes blind exactly when it matters.
+    SECOND HALF: `trust proxy` is never set (confirmed two ways). Leaving it false is
+    the right call against XFF spoofing, but behind an ingress every caller keys to
+    one socket peer and shares a single 600/min bucket.
+    FIX: `skip` the three operational paths in `globalRateLimiter` and gate
+    `/metrics` on `METRICS_TOKEN` instead. If deployed behind a known proxy, set
+    `trust proxy` to that specific hop count or CIDR — never `true`.
+
+95. **`HEAD` on an allowlisted route 404s under the gateway profile.** — OPEN,
+    api-contract-architect. Express auto-serves `HEAD` from a `GET` handler, but
+    `profile.ts:171-175` compares the method against an allowlist containing only
+    `GET`, so it 404s before the handler is reached. Verified: `HEAD /api/healthz`
+    -> 404 while `GET` -> 200. `HEAD` is a common load-balancer liveness default, so
+    the consequence is row 94's again — a healthy instance reporting 404 to its probe.
+    FIX: treat `HEAD` as `GET` in `routeServedByGateway`. Do NOT drop the method
+    check; the comment at `:157-166` documents a real hole it closes.
+
+96. **The `/v1` limiter keys on the raw bearer string, not the principal — the
+    exact class `idempotency.ts` already fixed.** — OPEN, api-contract-architect.
+    NOTE. `rateLimit.ts:59-67` uses `tok:${token}`; the principal is never consulted.
+    `idempotency.ts:56-62` spells out the reasoning for the mirror-image bug: under
+    enterprise OIDC the context middleware mints a fresh opaque credential per
+    request. Consequence here: an IdP rotating short-lived JWTs hands each new token
+    a fresh 240/min bucket. Established by reading, not execution.
+    CONSTRAINT: the limiter must run before authentication, so it cannot use
+    `req.principal`. A second, principal-keyed limiter after `requireTenantContext`
+    is the workable shape, leaving the pre-auth one as coarse DoS protection.
+
+97. **`POST /cp/v1/telemetry` is an unauthenticated, unbounded, cross-tenant
+    WRITE that the profile documentation does not name as a write.** — OPEN,
+    api-contract-architect. Reproduced: one anonymous POST rewrote another tenant's
+    rollup, moving the top hotspot to `edge_nw_general` with 9,000,000 decisions and
+    a denyRate of 1. A second probe sent 200 batches with 60KB `nodeId` values and
+    grew RSS from 102,864 kB to 146,128 kB — the route validates only
+    `typeof nodeId === "string"`, with no length bound, format check or entry cap.
+    NOT A PRODUCTION HOLE: the gateway profile does not mount this router (verified
+    404). It is live on the public review deployment. Both `routes/index.ts:47-53`
+    and `lib/profile.ts:20-30` enumerate the demo hazards and characterise `/cp/v1`
+    purely as a read-scoping problem — the write is not written down anywhere.
+    FIX: constrain `nodeId` to `cp.listEdgeNodes()` membership and refuse anything
+    else, which closes both the poisoning and the growth. Then correct the two audit
+    comments to name the write.
+
+98. **Under the gateway profile, unknown ROOT paths return Express's default HTML
+    error page.** — OPEN, api-contract-architect. NOTE. The JSON catch-all is scoped
+    to `/api` on the stated reasoning that "the root serves human surfaces (demo
+    console, /metrics) whose defaults stand" — but under the gateway profile the demo
+    console is not mounted, so that premise is false. The path IS escaped (no XSS, no
+    stack trace); it is the same class of framework disclosure that
+    `app.disable("x-powered-by")` was added to remove.
+
+99. **Two demo routers break the response-envelope contract.** — OPEN,
+    api-contract-architect. NOTE. `/api/simulator/*` mints a FRESH uuid as
+    `requestId` instead of reusing `req.requestId` (verified: header
+    `x-request-id: CALLER-ID-123` against a body `requestId` of an unrelated uuid),
+    and `/api/sim/*` omits `requestId` entirely while forwarding a raw library
+    `err.message`. Nothing sensitive leaks today, but it is the one place on the
+    surface where an unfiltered library string reaches a response body, and
+    `routes/index.ts:25-28` records that a single deviant envelope here has already
+    been treated as a defect worth fixing.
+    RELATED, filed here rather than as its own row: the client picks the audit
+    correlation id. `x-request-id` is accepted unvalidated and unbounded, reflected
+    verbatim at 900 characters, and lands in the durable ledger's correlation field
+    via `v1.ts:749-762`. Not XSS — the API answers JSON with `nosniff` — but in a
+    repo whose stated position is "provenance is the product", a caller-chosen
+    provenance field is worth closing. Accept the header only when it matches
+    `^[A-Za-z0-9._-]{1,128}$`, else mint a uuid.
+
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —
     `lib/location` is KEPT. Nothing is outstanding on this row.

@@ -272,6 +272,21 @@ check("with no REDIS_URL configured there is no fault to report, so the checks a
   quietFaults.length === 0);
 
 
+
+// CERTIFICATE-SERIAL FORMAT — the `cert` arm's format check survived mutation
+// until 2026-08-25: every identifier test here used `mac` or `serial`, so the cert
+// branch was never driven with a malformed value. An identifier that reaches a NAC
+// lookup unvalidated is the injection surface this validator exists to close.
+for (const bad of ["zz:xx", "not a serial", "ab:", ":ab", "0123456789abcdefg", "ab cd"]) {
+  const v = validateNacIdentifier(bad, "cert");
+  check(`nac: certificate serial ${JSON.stringify(bad)} is refused`, v.ok === false);
+}
+// NON-VACUITY, and it also pins the documented lowercase normalization.
+const goodCert = validateNacIdentifier("AB:cd:0F", "cert");
+check("nac: ...while a well-formed certificate serial is accepted and lower-cased",
+  goodCert.ok === true && goodCert.normalized === "ab:cd:0f");
+
+
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length) {
   console.error("\nFAILED:");

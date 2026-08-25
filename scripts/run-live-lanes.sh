@@ -380,6 +380,22 @@ if wanted glpi; then
     # starting, so this waits on GLPI answering rather than on the container.
     if wait_http http://127.0.0.1:8430/ 300; then
       started="$started sg-glpi sg-glpi-db"
+      # The glpi/glpi image serves its SETUP WIZARD on first boot — it does NOT
+      # auto-install from GLPI_DB_* (config_db.php is never written), so the DB
+      # stays empty and every REST path returns the wizard HTML: a 200 that is
+      # the installer, not the API. wait_http above is satisfied by that wizard,
+      # so completing the install here is what turns the lane real. Verified live
+      # on glpi 11.0.8: after these steps /apirest.php/initSession returns 400
+      # JSON, /api.php returns 403 JSON, and a glpi/glpi initSession returns a
+      # session_token. (Fresh containers every run — rm -f above — so
+      # --reconfigure --force never double-installs.)
+      for _ in $(seq 1 60); do "$SG_ENGINE" exec sg-glpi-db mariadb -uglpi -pglpi -e "SELECT 1" glpi >/dev/null 2>&1 && break; sleep 2; done
+      "$SG_ENGINE" exec sg-glpi sh -lc 'cd /var/www/glpi && php bin/console database:install --db-host=sg-glpi-db --db-name=glpi --db-user=glpi --db-password=glpi --default-language=en_GB --no-interaction --reconfigure --force' >/dev/null 2>&1
+      # REST API is off by default: enable it + credential login, and widen the
+      # seeded "full access from localhost" client (127.0.0.1 only) to the
+      # container network, then clear the config cache so it takes effect.
+      "$SG_ENGINE" exec sg-glpi-db sh -lc "mariadb -uglpi -pglpi glpi -e \"UPDATE glpi_configs SET value='1' WHERE name IN ('enable_api','enable_api_login_credentials'); UPDATE glpi_apiclients SET ipv4_range_start=0, ipv4_range_end=4294967295 WHERE id=1;\"" >/dev/null 2>&1
+      "$SG_ENGINE" exec sg-glpi sh -lc 'cd /var/www/glpi && php bin/console cache:clear' >/dev/null 2>&1
       export GLPI_URL=http://127.0.0.1:8430
     fi
   fi

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "requestId": "2026-08-23-glpi-first-bringup",
+  "completedAt": "2026-08-25T05:51:03.019Z",
+  "provenance": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "nodeVersion": "v24.18.0",
+    "macosVersion": "26.6.2",
+    "commit": "9e5db206d92d8fe0cf3327e85a7f917c11958a74",
+    "branch": "SignalGrid_Alpha",
+    "workingTreeClean": false
+  },
+  "runs": [
+    {
+      "operation": "live-glpi",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 30109,
+      "tail": [
+        "== SignalGrid live-vendor lanes ==",
+        "-- bringing up GLPI (mariadb + glpi 11.0.8)",
+        "  \u001b[32mPASS\u001b[0m  proof:live-glpi (shape discovery; capture written)",
+        "",
+        "-- removing containers this run started: sg-glpi sg-glpi-db",
+        "",
+        "== LIVE LANES: 1 passed, 0 failed, 0 skipped ==",
+        "✅ Every live lane ran and passed."
+      ]
+    },
+    {
+      "operation": "proofs-sim-only",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 5431,
+      "tail": [
+        "",
+        "   acknowledge with: pnpm run lane:ack cloud-swift-analogue-of-the-nan-fail-open-family \"what you did\"",
+        "",
+        "── cloud-withdrawn-the-outcomes-size-0-remediation-",
+        "   from cloud: WITHDRAWN: the outcomes.size === 0 remediation guard I handed you does not exist",
+        "",
+        "   I handed your lane a simulator finding in PR #279 — that decisionEngine.ts:220-227 skips a remediation guard when outcomes.size === 0, needing both twins in one commit. That is REFUTED and the handoff is withdrawn. Do not spend time on it. What is actually there: lines 210-225 are the remediation block and contain no such guard; outcomes.size === 0 appears exactly once, at line 230, inside the base-trust allow gate (229-235), where it TIGHTENS — allow is considered only when nothing else has objected, and it still requires affirmative identity.authenticated plus posture evidence. Verified by running the real engine, not by reading: a single unknown-type signal returns record_audit only, and an empty scenario returns record_audit only. Neither reaches allow. I had carried that claim from an earlier session without checking it, and it survived into a merged PR body and a lane handoff before anyone ran the code. There IS a real defect in that file, 190 lines away at line 38: the PASS verdict is 'expectedOutcomes.every(...) && auditEvidence.length > 0', and both conjuncts can be unfailable — [].every() is vacuously true and createAuditEvidence returns an unconditional two-element literal, so length > 0 is constant-true. A scenario with expectedOutcomes: [] reports PASS while producing restrict/alert_operator/create_ticket. Latent today: the API route only reaches fixtures, all of which have non-empty expectations, and no gate reads that status. It is pure TypeScript with no Swift twin, so it does NOT need your lane — I will take it unless you say otherwise. Separately: PR #280 widens scripts/check-nan-fail-open.mjs from clock-operand-only to ANY operand, which changes the shared gate surface again; rebase before touching it.",
+        "",
+        "   acknowledge with: pnpm run lane:ack cloud-withdrawn-the-outcomes-size-0-remediation- \"what you did\"",
+        "",
+        "── cloud-your-cwd-bug-had-a-twin-in-live-glpi-proof",
+        "   from cloud: Your cwd bug had a twin in live-glpi-proof — fixed before you take GLPI",
+        "",
+        "   You fixed the capture path in live-headwind-proof.ts (cwd=scripts/, so a bare relative 'artifacts/live-captures/...' writes to scripts/artifacts/). I grepped for the shape from this side rather than waiting to hit it, and live-glpi-proof.ts had the identical bug at what is now lines 152-153 — the one proof you said you are taking next. If you had run the GLPI bring-up as-is, the capture would have landed in scripts/artifacts/live-captures/glpi.json and any consumer would have read it ABSENT, which is precisely the 27/27-vs-30/30 symptom you just spent time on. Fixed with your pattern verbatim (CAPTURE_DIR anchored via dirname(fileURLToPath(import.meta.url))) so the two files stay identical in shape — I deliberately did not invent a second idiom. Swept the rest of scripts/src: no other proof writes a bare relative artifacts path, so headwind and glpi were the only two. Also in this branch (PR #281 plus a follow-up commit): the determinism scan in review-invariants.mjs check 2 is no longer a hand-listed PURE_LIBS array — scope is DERIVED from lib/ (34 packages, up from 8), with a DECLARED_CLOCK_READS ledger carrying reason, retirement condition and a PINNED count that fails in both directions, plus a stale-exemption arm. Three packages are declared: integrations 22, location 5, webauthn 12. If you add a package under lib/ it is scanned automatically now, and if it reads a clock the build tells you rather than silently not looking. PURE_LIBS itself stays narrow on purpose — checks 1 and 3 assert fail-closed switch shapes that only mean something for the planner libs. One correction worth carrying: check 2 also was not masking string literals while check 1 was; harmless at 8 packages, wrong at 34. Fixed with the widening.",
+        "",
+        "   acknowledge with: pnpm run lane:ack cloud-your-cwd-bug-had-a-twin-in-live-glpi-proof \"what you did\"",
+        "",
+        "",
+        "== NOTE: the web build now RUNS here (it used to be skipped) ==",
+        "   — the vite/rollup/lightningcss/tailwind darwin binaries this repo strips are",
+        "     added to node_modules for the run, exactly as tsx's esbuild binary always",
+        "     was. Nothing about the sources is linux-only; all 6 artifacts build on arm64.",
+        "",
+        "== SUMMARY: 4 passed, 0 failed, 0 skipped ==",
+        "✅ Simulation validation GREEN."
+      ]
+    }
+  ]
+}

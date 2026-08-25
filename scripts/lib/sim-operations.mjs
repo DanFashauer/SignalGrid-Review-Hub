@@ -148,6 +148,12 @@ export const SIM_OPERATIONS = {
     needs: "a container engine; pulls the pinned otel-collector-contrib + prometheus images on first run",
     what: "the opt-in telemetry transport (api /metrics -> OTel collector -> Prometheus, asserted via the Prometheus query API)",
   },
+  "live-glpi": {
+    argv: ["./scripts/run-live-lanes.sh", "--only", "glpi"],
+    platform: "any",
+    needs: "a container engine; pulls glpi/glpi:11.0.8 + mariadb:11 on first run (the lane completes GLPI's CLI install and enables the REST API itself)",
+    what: "the live ITSM source: GLPI 11 stood up and installed, its REST v1/v2 shapes discovered and a capture written",
+  },
   "live-fleet": {
     argv: ["./scripts/run-live-lanes.sh", "--only", "fleet"],
     platform: "any",

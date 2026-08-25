@@ -1,0 +1,40 @@
+{
+  "source": "glpi",
+  "capturedFrom": "http://127.0.0.1:8430",
+  "provenance": {
+    "proof": "proof:live-glpi",
+    "kind": "shape-discovery",
+    "note": "Records what the server answered. It does NOT assert a v2 request/response contract, because this repository has never driven one and asserting it from memory is forbidden. Once this capture exists, the next proof may assert against it.",
+    "fixtureTimestamp": "2026-08-23T00:00:00.000Z"
+  },
+  "probes": [
+    {
+      "path": "/",
+      "purpose": "does GLPI serve at all",
+      "status": 200,
+      "contentType": "text/html; charset=UTF-8",
+      "bodyPrefix": "\n   \n   \n            \n\n\n\n<!DOCTYPE html>\n<html lang=\"en\"\n                    data-glpi-theme=\"auror\"\n        data-glpi-theme-dark=\"0\"\n        >\n<head>\n   <title>Authentication - GLPI</title>\n\n   <meta charset=\"utf-8\" />\n\n      <meta http-eq"
+    },
+    {
+      "path": "/apirest.php",
+      "purpose": "REST v1 root — the long-standing endpoint",
+      "status": 200,
+      "contentType": "text/html; charset=UTF-8",
+      "bodyPrefix": "\n<!DOCTYPE html>\n<html lang=\"en\"\n                    data-glpi-theme=\"auror\"\n        data-glpi-theme-dark=\"0\"\n        >\n<head>\n   <title>API Documentation - GLPI</title>\n\n   <meta charset=\"utf-8\" />\n\n      <meta http-equiv=\"X-UA-Compatible\""
+    },
+    {
+      "path": "/apirest.php/initSession",
+      "purpose": "REST v1 session init (expected to REFUSE without tokens; the refusal SHAPE is the evidence)",
+      "status": 400,
+      "contentType": "application/json; charset=UTF-8",
+      "bodyPrefix": "[\"ERROR_LOGIN_PARAMETERS_MISSING\",\"parameter(s) login, password or user_token are missing; view documentation in your browser at http://localhost/api.php/v1/#ERROR_LOGIN_PARAMETERS_MISSING\"]"
+    },
+    {
+      "path": "/api.php",
+      "purpose": "REST v2 root candidate — unverified, which is why this is a probe",
+      "status": 403,
+      "contentType": "application/json",
+      "bodyPrefix": "{\"status\":\"ERROR_RIGHT_MISSING\",\"title\":\"You don't have permission to perform this action.\",\"detail\":\"The High-Level API is disabled\"}"
+    }
+  ]
+}

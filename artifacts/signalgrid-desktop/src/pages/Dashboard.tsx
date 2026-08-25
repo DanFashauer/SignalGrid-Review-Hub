@@ -66,9 +66,34 @@ export default function DashboardPage() {
           )}
         </div>
         <div className="flex gap-4 mt-2">
-          {[{ c: "hsl(var(--decision-allow))", l: "ALLOW" }, { c: "hsl(var(--decision-review))", l: "STEP-UP" }, { c: "hsl(var(--decision-deny))", l: "RESTRICT" }, { c: "hsl(var(--decision-deny))", l: "DENY" }].map(({ c, l }) => (
+          {/*
+            RESTRICT and DENY are both painted from `--decision-deny` on purpose —
+            only three decision tones are ratified, and the chart separates the two
+            bands with a dash pattern rather than inventing a fourth colour.
+
+            The legend used to reproduce the COLOUR and drop the PATTERN, so the two
+            swatches were byte-identical: a computed 1.0000:1, no rendered boundary,
+            on the only key the chart has. A reader could not tell which band was
+            which, and restrict and deny are different operational outcomes.
+
+            `dashed: true` gives RESTRICT the chart's own differentiator, so the key
+            reproduces what the chart does instead of contradicting it.
+          */}
+          {[
+            { c: "hsl(var(--decision-allow))", l: "ALLOW", dashed: false },
+            { c: "hsl(var(--decision-review))", l: "STEP-UP", dashed: false },
+            { c: "hsl(var(--decision-deny))", l: "RESTRICT", dashed: true },
+            { c: "hsl(var(--decision-deny))", l: "DENY", dashed: false },
+          ].map(({ c, l, dashed }) => (
             <div key={l} className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-sm" style={{ background: c }} />
+              <div
+                className="w-2 h-2 rounded-sm"
+                style={
+                  dashed
+                    ? { border: `1px dashed ${c}`, background: "transparent" }
+                    : { background: c }
+                }
+              />
               <span className="text-xs font-mono text-muted-foreground">{l}</span>
             </div>
           ))}

@@ -45,7 +45,7 @@
         ".github/workflows/**",
         "scripts/**",
         "lib/webauthn/**",
-        "lib/api-auth/**",
+        "lib/enterprise-auth/**",
         "tests/security-reference/**",
         ".gitleaks.toml",
         ".gitleaksignore",
@@ -53,7 +53,7 @@
       ],
       "activated": "2026-08-19",
       "produced": "SBOM token split; third-party actions pinned + check-action-pinning.mjs",
-      "nextAction": "Row 71: triage tests/security-reference/** — five of eight specs cannot fail against broken code (verified by two independent agents). Mark which are worth porting (admin-auth-hardening, fail-closed-fallbacks, webauthn-request-identity carry real falsifiable assertions) and which are tautologies that must never be ported as coverage. Then row 73: the roster gives this role lib/api-auth/**, which matches no file in the tree — likely lib/enterprise-auth/**."
+      "nextAction": "Row 82, in order: (1) removeCredential in lib/webauthn/src/webauthn/store.ts:241-277 has no lock while addCredential has SET NX PX and advanceCredentialCounter has WATCH/MULTI — a revocation racing an enrolment can write a stale snapshot last and RESTORE the revoked credential, which is exactly what addCredential's own comment says its lock prevents. Latent only because no live route calls it. Give it the same lock and add an add/remove concurrency proof. (2) Comment the attestation:'none' assumption at verify.ts:348 so tightening to direct/indirect cannot silently inherit unchained leaf-cert trust. (3) Delete or deprecate stepUpStore.ts — a parallel step-up implementation whose hasValidStepUpSession is a hardcoded return false under a docstring claiming otherwise. The lib/api-auth dead glob is already fixed."
     },
     {
       "id": "product-manager",
@@ -88,7 +88,7 @@
       ],
       "activated": "2026-08-19",
       "produced": "14 findings; 8 applied incl. router-base 404s and invisible signal dots",
-      "nextAction": "Row 70: four demo-only web trees still load remote fonts and are REPORTED by review-invariants on every run (signalgrid-review, signalgrid-mobile-pwa, signalgrid-desktop, mockup-sandbox). Same @fontsource fix already proven twice, on signalgrid-web and signalgrid-app. Then row 70's siblings from the same read: the PWA's <link rel=manifest> resolves to a 404 at every mount point, its Decision Volume chart renders restrict and deny in the identical colour (--chart-4 and --destructive are the same triple), and its decision detail drops the assurance label, reason codes, matched rules, evidence digest and freshness that make signalgrid-app the console."
+      "nextAction": "PAGES, and this is now THIS ROLE'S item rather than the owner's — it had been raised to him repeatedly, which was wrong. Established 2026-08-25: it is not a link and not content. .github/workflows/pages.yml already uses actions/upload-pages-artifact and actions/deploy-pages@v5, which ONLY run when the repository's Pages source is set to 'GitHub Actions'. The site is serving README instead, so the source is set to 'Deploy from a branch'. The workflow is correct; the setting points elsewhere. Neither an agent nor a workflow can change it — the Pages REST path is blocked at this environment's proxy (verified: HTTP 403, 'Access to this GitHub API path is not permitted through this proxy'), and it is a repository-settings toggle in any case. ACTION: whoever holds repo admin sets Settings -> Pages -> Source to 'GitHub Actions', once. Then this role verifies the deploy ran and the served page is the built site rather than README. Until that toggle happens, do not re-raise it as a finding — it is a known, single, admin-gated step with a named owner. THEN: Row 70: four demo-only web trees still load remote fonts and are REPORTED by review-invariants on every run (signalgrid-review, signalgrid-mobile-pwa, signalgrid-desktop, mockup-sandbox). Same @fontsource fix already proven twice, on signalgrid-web and signalgrid-app. Then row 70's siblings from the same read: the PWA's <link rel=manifest> resolves to a 404 at every mount point, its Decision Volume chart renders restrict and deny in the identical colour (--chart-4 and --destructive are the same triple), and its decision detail drops the assurance label, reason codes, matched rules, evidence digest and freshness that make signalgrid-app the console."
     },
     {
       "id": "sre",

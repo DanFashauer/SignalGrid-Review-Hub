@@ -1,6 +1,18 @@
-export const REVIEW_DATE = "May 2026";
+// PROVENANCE, corrected 2026-08-25 (backlog row 160, owner decision).
+//
+// The source document is "SignalGrid Second-Opinion Review, v0.1, May 2025" — an
+// external assessment held in the founder's Drive. What this file renders is a
+// SignalGrid SELF-ASSESSMENT derived from it: the date and version had been
+// advanced, one score raised, and a scoring dimension added that the outside
+// reviewer never wrote. Presenting that as third-party judgement is the one
+// overclaim in this repository that a softer adjective could not fix, because it
+// attributed edited content to someone else.
+//
+// So the labels now say what this is. The external review is credited as the
+// BASIS, with its own true date, and the page is noindex.
+export const REVIEW_DATE = "Self-assessment, August 2026 · based on an external second-opinion review of May 2025";
 export const REVIEW_VERSION =
-  "v0.3 — Intune / Entra Posture Proof + Live Tracker";
+  "SignalGrid self-assessment v0.3 — derived from external review v0.1 (May 2025)";
 
 export interface ScoreItem {
   dimension: string;
@@ -45,11 +57,16 @@ export const scorecardItems: ScoreItem[] = [
     status: "gap",
   },
   {
+    // SELF-ASSESSED 8. The external review of May 2025 scored this 7; the raise
+    // is SignalGrid's own later judgement, not the reviewer's, and it is stated
+    // here rather than absorbed silently. A second block below reported 7 while
+    // this one reported 8 — the page contradicted itself on the same score, on
+    // the same page. Both now read 8 and the provenance of the raise is visible.
     dimension: "Demo Readiness",
     score: 8,
     maxScore: 10,
     rationale:
-      "rc:smoke workflow is complete and passing. The demo environment is stable. A scripted, 5-step demo narrative for the healthcare shift-change scenario has been written and documented in this workspace. Remaining gap: no recorded async walkthrough exists, and the script has not yet been rehearsed with an external observer.",
+      "The CI gate suite (typecheck, review:invariants, the proof harnesses) is complete and passing. The demo environment is stable. A scripted, 5-step demo narrative for the healthcare shift-change scenario has been written and documented in this workspace. Remaining gap: no recorded async walkthrough exists, and the script has not yet been rehearsed with an external observer.",
     status: "strong",
   },
   {
@@ -110,7 +127,7 @@ export const strengths: ReviewItem[] = [
   {
     id: "s3",
     title: "Technical scaffolding is ahead of typical pre-seed",
-    body: "rc:smoke passing, repo cleanup complete, and a stable demo environment represent genuine engineering discipline. Most projects at this stage are still whiteboard-and-deck. Having a testable artifact changes the quality of the first technical conversation.",
+    body: "A passing CI gate suite, repo cleanup complete, and a stable demo environment represent genuine engineering discipline. Most projects at this stage are still whiteboard-and-deck. Having a testable artifact changes the quality of the first technical conversation.",
     tag: "Engineering",
   },
   {
@@ -182,7 +199,7 @@ export const openQuestions: ReviewItem[] = [
   {
     id: "q3",
     title: "What is the first externally observable proof point?",
-    body: "rc:smoke validates internal build quality. What is the first proof point a prospect or partner could independently verify — a sandbox integration, a reference deployment, a documented API contract?",
+    body: "The CI gate suite validates internal build quality. What is the first proof point a prospect or partner could independently verify — a sandbox integration, a reference deployment, a documented API contract?",
     tag: "Validation",
   },
   {
@@ -266,7 +283,7 @@ export const dimensionReviews: DimensionReview[] = [
     observations: [
       "Core decision engine concept is well-articulated and technically credible",
       "Problem framing correctly targets the shared-device and mobile frontline gap in existing Zero Trust architectures",
-      "rc:smoke passing indicates build quality discipline above the pre-seed baseline",
+      "A passing CI gate suite indicates build quality discipline above the pre-seed baseline",
       "No validated integrations with identity providers, MDM platforms, or workflow systems",
       "No reference to a pilot deployment, sandbox customer, or externally reviewed API contract",
     ],
@@ -308,11 +325,11 @@ export const dimensionReviews: DimensionReview[] = [
   {
     key: "demo",
     label: "Demo Readiness",
-    score: 7,
+    score: 8,
     summary:
       "Build environment is stable and smoke test is passing. This is ahead of the pre-seed baseline. The gap is narrative: a scripted, repeatable demo story with a defined before state, decision trigger, and resolution that a non-technical founder can deliver consistently.",
     observations: [
-      "rc:smoke CI workflow is passing",
+      "The CI gate suite is passing",
       "Demo environment is stable and controllable",
       "Build discipline is above average for this stage",
       "No scripted demo narrative with defined setup, trigger, and resolution",
@@ -387,7 +404,7 @@ export const dimensionReviews: DimensionReview[] = [
       "Repo cleanup complete, CI passing, repository is in credible shape for external technical review. This is a genuine strength. Remaining deductions reflect unresolved notification noise and unconfirmed branch protection state.",
     observations: [
       "Repo cleanup confirmed complete",
-      "rc:smoke CI workflow passing",
+      "CI gate suite passing",
       "Repository structure and README are clean based on reported state",
       "GitHub Actions notification volume is a named, unresolved concern",
       "Branch protection rules on main not confirmed",

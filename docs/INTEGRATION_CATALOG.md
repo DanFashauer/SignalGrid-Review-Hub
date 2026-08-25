@@ -599,7 +599,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   proof rather than the source: the clean set was pinned by negative conditions
   (`scope !== "broad"`), which `unknown` satisfies, and is now pinned by EQUALITY to one
   enumerated shape.
-- **`proof:session-readiness` (52 checks)** — the DEX/EUC readiness dimension, from the
+- **`proof:session-readiness` (62 checks)** — the DEX/EUC readiness dimension, from the
   IGEL + ControlUp tap-to-app work (intake ledger row 57). A **1,728-state exhaustive
   sweep** whose clean set is pinned to exact SHAPES rather than a count. The headline law
   is that SILENCE IS NEVER READINESS: an endpoint nobody instrumented, a DEX plane that

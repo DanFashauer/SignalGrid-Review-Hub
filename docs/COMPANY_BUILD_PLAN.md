@@ -436,7 +436,8 @@ earlier — that is the loop working, not a reason to soften the record.
     (`missing`: no dock hardware is a deployment shape, a missing posture answer
     is the absence of the thing being asked about) is written down instead of
     left implicit in two chains of `!==`.
-    The core proof now runs 225 assertions. Falsified by exit code, not by eye:
+    The core proof ran 225 assertions at the time of that change (239 today; the
+    figure guard holds every doc to the derived value). Falsified by exit code, not by eye:
     removing the one-line fix drops the proof to exit 1; restoring it, exit 0.
     Four documents cited the superseded figure. A plain grep found only one of
     them — the others read "invariant assertions" rather than "assertions" — and
@@ -2073,6 +2074,24 @@ earlier — that is the loop working, not a reason to soften the record.
     exists to put in it" as the reason not to create a web skill. That reason was
     false when written.
 
+    CORRECTION, 2026-08-25, from an independent read of both web trees. The TITLE of
+    this row overstates what its own body says, and the overstatement was repeated
+    verbally to the owner. What exists is narrower than "a standard" and wider than
+    "nothing": DR-005 and DR-006 ratify a WCAG AA 4.5:1 floor for decision colours,
+    `docs/BRAND_CONTRAST_FINDING.md` records the analysis, and
+    `check-decision-palette.mjs` ENFORCES that floor in CI across five web trees.
+    `check:absence accessibility` returns INCONCLUSIVE with 31 mentions, not
+    CORROBORATED — and the matches were read rather than counted. What genuinely does
+    not exist is anything BEYOND decision colours: searching `scripts/` and `.github/`
+    for `aria-|wcag|a11y|axe-core|accessib` yields two e2e specs asserting
+    `aria-pressed`/`aria-live` on specific widgets, and NEITHER targets
+    `signalgrid-app` or `signalgrid-mobile-pwa`. No axe-core, no keyboard or focus
+    standard, no non-text-contrast rule — which is precisely what row 107 needs — and
+    no colour-blind separation rule. The accurate claim is: **the web side has a
+    ratified, enforced decision-colour floor and no other accessibility standard.**
+    Read the body, not the title; the title is left in place so the correction stays
+    legible rather than being quietly overwritten.
+
 78. **What the first iOS execution found — including that CLAUDE.md's own way of
     checking one of its rules returns a false clean.** — OPEN,
     mobile-native-engineer. That role had read 0 of 129 files.
@@ -2260,6 +2279,1425 @@ earlier — that is the loop working, not a reason to soften the record.
     placement and per-platform applicability are open — the diagram is macOS, and
     whether the same seam has the same shape on iOS, Android and Windows is
     unexamined. principal-engineer and solutions-architect own the disposition.
+
+82. **A credential REVOCATION can be silently undone by a concurrent enrolment —
+    the one mutator in the store without the lock its neighbours carry.** — OPEN,
+    security-engineer. Found by the first read of `lib/webauthn/**` and
+    `lib/enterprise-auth/**`, and INDEPENDENTLY CONFIRMED before filing.
+    · `addCredential` (`store.ts:166-239`) takes a per-user `SET NX PX` Redis lock
+      before its read-modify-write, and carries a long comment explaining exactly
+      why: "each read the user, append a credential, and each write the whole
+      thing back. The later SET erases the earlier." It even records that a
+      WATCH/MULTI version "persisted 7 of 12 concurrent enrollments".
+    · `advanceCredentialCounter` (`:301-357`) uses WATCH/MULTI, correctly — the
+      counter must fail closed on a lost race.
+    · `removeCredential` (`:241-277`) does neither. Plain `getUser()` -> splice ->
+      save. Verified by reading it: no lock, no CAS.
+    THE CONSEQUENCE, in the ordering that matters: a revocation reads the
+    credential list, a concurrent enrolment takes the lock and writes, then the
+    unlocked revocation writes its stale snapshot last — **restoring the
+    credential that was just revoked.** That is precisely the outcome
+    `addCredential`'s comment says the lock exists to make impossible, and the
+    guarantee simply is not held on the removal side.
+    SEVERITY, STATED HONESTLY: LATENT. No live API route calls `removeCredential`
+    — established two differently-shaped ways (a repo-wide symbol search, and
+    reading the v1 route file). Only `webauthn-enrollment-race-proof.ts` exercises
+    it. It becomes live and security-relevant the moment an admin credential-revoke
+    endpoint is wired, which is a normal thing to add and would not obviously
+    require touching this file.
+    FIX: give it the same per-user lock, or fold both into one lock-guarded mutate
+    helper, and add a proof case exercising add/remove concurrency the way
+    `proof:enrollment-race` exercises add/add.
+    ALSO FOUND, same read, both should-fix or lower:
+    · `packed` and `fido-u2f` full attestation verify only the LEAF certificate's
+      signature (`verify.ts:348-352`, `:386`) — no chain to a trusted root, no
+      validity period, no revocation. Mitigated because
+      `generateRegistrationOptions` requests `attestation: 'none'`, so a conformant
+      authenticator does not return a full statement in this product's own flow.
+      It matters the moment attestation is tightened to direct/indirect, and the
+      assumption should be commented at the call site so that change cannot
+      silently inherit unchecked trust.
+    · `stepUpStore.ts:251-258` — `hasValidStepUpSession` is a hardcoded
+      `return false` under a docstring claiming it performs a real check. It fails
+      CLOSED and is unreachable, but it is a SECOND, parallel step-up
+      implementation with its own Redis client and session shape sitting unused
+      beside the live one. A future integrator wiring the wrong one inherits an
+      always-deny stub. Remove it or mark it deprecated in a header.
+    AND A DEAD SURFACE, FIXED IN PASSING: the roster gave security-engineer
+    `lib/api-auth/**`, which matches NO file in the tree (confirmed two ways).
+    The intent was `lib/enterprise-auth/**`. Corrected — and the symptom was
+    concrete rather than cosmetic: seven genuinely-read files did not count
+    toward coverage until the glob pointed at something real.
+    CLEAN, and recorded so it is not re-litigated: every expiry and freshness
+    comparison across both directories now uses the `Number.isFinite`-guarded
+    form, verified by two independently-shaped searches — no sibling of the
+    original NaN fail-open family remains on this surface. `proof:webauthn-verify`
+    (48/48) and `proof:enterprise-auth` (21/21, including alg-confusion,
+    clock-tolerance boundary and cross-tenant denial) both executed clean. No
+    secret, plaintext-password comparison or unparameterised query exists on this
+    surface; logging carries IDs only, never tokens or key material.
+
+83. **An OLDER, more permissive reading from a second connector silently erases a
+    newer one — and the outcome flips deny to allow.** — OPEN, principal-engineer.
+    BLOCKING. Found by the first line-by-line read of the decision core, and
+    reproduced by execution before filing.
+    · Signal ids are minted as
+      `deterministicId("sig", tenantId, subjectType, subjectId, category)` at all
+      three sites (`dock.ts:107`, `shift.ts:69`, `connector.ts:201`). **The
+      connector id is not in the key.** Confirmed structurally: zero mint sites
+      anywhere derive an id from `connector.id`.
+    · `store.ts:210-221` then does `bucket.set(signal.id, signal)` with no
+      freshness comparison. Its own comment says a re-put "overwrites in place",
+      which is correct for a re-put from the SAME source and wrong for a second one.
+    · `evidence.ts:228-237` `groupLatest` exists to pick the greatest `observedAt`
+      per category. It never gets the chance — only one row survives the store.
+    REPRODUCED, one device, two dock connectors: a SmartDock observed
+    `tamperState = confirmed` at 14:55 and the decision was **deny**. A second dock
+    feed then reported `none` observed at **14:00 — 55 minutes EARLIER** — and the
+    decision became **allow**. Signal count stayed at 9: nothing was added, the
+    confirmed tamper was erased.
+    WHY IT MATTERS: this is the repo's canonical defect class, in the decision core
+    itself. A less-informed, older input made the answer strictly more permissive,
+    and the worst-wins fold one layer up was bypassed entirely. The shipped seed
+    hides it because Northwind's two dock connectors cover disjoint device sets, so
+    no gate has a two-connectors-one-device case.
+    FIX: include `connector.id` in the signal id at all three mint sites so
+    per-connector rows coexist and `groupLatest` does the arbitration it was
+    written for. If single-row-per-category is deliberate instead, `putSignal` must
+    refuse to replace a row with a strictly older `observedAt` — and that rule needs
+    a proof either way. `CORE_NORMALIZATION_VERSION` needs regenerating.
+
+84. **The simulator never compares `zone` against `expectedZone`; 12 of 21
+    attribute branches are unreachable from any fixture.** — OPEN,
+    principal-engineer. `decisionEngine.ts:125-132` tests
+    `attributes["zone"] === "wrong"` — a literal string match — and otherwise fires
+    only on pre-classified event types. The `expectedZone` every location fixture
+    carries is never read.
+    REPRODUCED: a device honestly reported in `imaging` when it belongs in
+    `east-unit` returns **allow**, unless the upstream already labelled the event as
+    the exception. Same shape as `device.low_battery` firing on the event type while
+    `batteryPct: 8` goes unread — the engine trusts the source's classification and
+    never reads the measurement.
+    COVERAGE HALF: 12 of the 21 attribute keys the engine branches on are never set
+    by any scenario — including all of `hasWorkflowRoutingFailure` — while
+    `proof:signalgrid-simulator` reports 43/43 assertions passed.
+    FIX: add a `zone !== expectedZone` comparison, plus fixtures for the 12
+    uncovered keys. **Golden rule 1 applies** — this file is byte-ported to
+    `native/ios/EnterpriseShell/Services/DecisionEngine.swift`, so the port and the
+    parity check move together. Coordinate with the Mac lane before touching it.
+
+85. **A comment claims four falsifiable conjuncts; a 1024-case sweep shows two are
+    constants.** — OPEN, principal-engineer. `decisionEngine.ts:38-66` says "the
+    evidence must actually COVER what was routed… which diverges the moment routing
+    and evidence disagree." They cannot disagree: `createAuditEvidence` builds
+    `routing_trace.references` FROM the same `routedActions` array that line 57
+    turns into `routedIds`.
+    REPRODUCED by sweeping all 2^10 outcome subsets through the real routing and
+    evidence functions: `evidenceCoversRouting === false` in **0** cases;
+    `evidenceReferences.has(decision.id) === false` in **0** cases. The
+    `expectedOutcomes` half IS genuinely falsifiable and does real work.
+    WHY IT MATTERS: low blast radius, but a comment asserting falsifiability that a
+    sweep refutes is the self-certifying shape this repo has been closing.
+    FIX: derive the evidence references independently, or delete the two constant
+    conjuncts and correct the comment. Deleting is honest and cheaper.
+
+86. **`registerVerifiedPrincipal` does not validate the role its docstring says it
+    validates.** — OPEN, principal-engineer. `engine.ts:147-174`; the docstring at
+    `:138-146` states "the target tenant must exist and the role must be known — and
+    fails closed otherwise." The tenant check is there. There is no role check.
+    REPRODUCED: roles `superuser`, `constructor`, `__proto__` and `toString` are all
+    ACCEPTED, and the next authorized call dies with an untyped `TypeError`.
+    NOT A GRANT PATH, stated honestly: every `Object.prototype` key was probed and
+    none resolves to an array, so `roleHasPermission` always throws rather than
+    returning true. The defect is that a bad role claim from the enterprise OIDC
+    path becomes a 500 on every subsequent call instead of a clean refusal — and
+    that the docstring asserts a check that does not exist.
+    FIX: validate `input.role` against the five known roles and throw a
+    `CoreError("validation", …, 400)`. Independently, make `roleHasPermission` use
+    `Object.hasOwn` and return `false` for an unknown role.
+
+87. **`shift.ts` is the only core module missing from the barrel.** — OPEN,
+    principal-engineer. 18 of 19 exported from `index.ts`; verified two ways. An
+    external consumer can construct a `DockCustodyRecord` but not a
+    `ShiftContextRecord`, though both are fixture-connector inputs of the same kind.
+    Internal callers use relative imports, so nothing is broken today.
+
+88. **`metrics.ts` accumulates an out-of-union outcome into a NaN that
+    `outcomesCovered()` still reports as covered.** — OPEN, principal-engineer.
+    NOTE severity, reporting path only. `metrics.ts:14` does
+    `byOutcome[decision.outcome] += 1` unguarded, and `types.ts:559` documents that
+    durable snapshot rows are cast with an unchecked `as`. A poisoned key gives NaN
+    rates while `outcomesCovered()` — which only checks key presence — stays true.
+
+89. **The connector's `identity_state` signal is normalized, recorded as "used",
+    and never read: a disabled account allows.** — OPEN, principal-engineer.
+    BLOCKING. Reproduced before filing.
+    · Emitted at `connector.ts:150-163`. The only producer of
+      `evidence.identityEnabled` is `evidence.ts:50-55`, which reads the STATIC
+      `identity.state` store row instead.
+    · Confirmed independently: `identity_state` appears in exactly two places in the
+      whole package — the emit site and the `SIGNAL_CATEGORIES` declaration. **No
+      reader anywhere.**
+    REPRODUCED: with the store row saying `enabled` and the connector reporting
+    `identityEnabled: false`, evidence reads `true`, `criticalSignalsPresent` stays
+    true, and the outcome is **allow** with reason `TRUST_ESTABLISHED`.
+    WORSE FOR THE AUDIT STORY: `decision.ts:94` puts identity signals into
+    `signalsUsed`, which flows into `buildSnapshot` — so the evidence snapshot
+    records `identity_state: false` as an input to a decision it did not influence.
+    `docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md:115` describes the intended model as
+    connector-sourced; the docs and the code disagree about where this fact
+    comes from.
+    FIX: have `buildEvidence` fold the signal with `identity.state` worst-wins —
+    either disagreeing yields `"unknown"` (already a step-up), or an affirmative
+    `false` from either source wins. Do NOT simply switch to the signal: silence
+    must stay `"unknown"`, never `true`.
+
+90. **`groupLatest` orders timestamps with `localeCompare` on a decision path.** —
+    OPEN, principal-engineer. NOTE. `evidence.ts:232` uses ICU collation, not
+    code-point ordering, to pick the latest signal. Correct today because every
+    `observedAt` is the identical ISO shape, but a source emitting `+00:00` instead
+    of `Z`, or omitting milliseconds, would misorder. Use `<` or `Date.parse`.
+
+91. **`activatePolicyVersion` does not require the version's own tests to pass.** —
+    OPEN, principal-engineer. NOTE, governance gap not a fail-open. `engine.ts:311-351`
+    never runs the pinned `PolicyTest` fixtures and does not reject a `superseded`
+    target, so an owner can activate a version that fails its own tests. The
+    `criticalSignalsPresent` backstop still holds.
+
+92. **`docs/PRODUCT_DATA_MODEL.md` lists 13 signal categories; the code has 17.** —
+    OPEN, docs-writer. Missing: `benchmark_selection`, `shift_context`,
+    `device_management_health`, `local_authority`. `check-proof-figures.mjs` exits 0
+    and its own output explains why it cannot see this: a hand-written list of
+    backticked names is out of shape for `FIGURE_RE`. This is the fossil-list
+    failure the `SIGNAL_CATEGORIES` comment says was designed out — the array is
+    enumerable now, but the doc still restates it by hand.
+
+93. **Any unauthenticated caller can grow the metrics registry without bound, and
+    the rate limiter provably does not stop it.** — OPEN, api-contract-architect.
+    BLOCKING. Reproduced by live measurement.
+    · The route label is `normalizeRoute(req.originalUrl)`, which collapses only
+      RECOGNISED id shapes. Every other path becomes its own label, verbatim, in two
+      unbounded `Map`s that never evict. Absence of any bound confirmed three
+      differently-shaped ways; the only hits are the docblock CLAIMING boundedness.
+    · 150 unauthenticated GETs to `/api/junk-N` created **150 label series**, grew
+      the histogram to 1,824 bucket lines, and grew the `/metrics` body from 2,119
+      to 185,583 bytes — **88× in 150 requests.**
+    · **51 of those 150 series were created by requests the limiter had already
+      rejected with a 429.** `metricsMiddleware` is registered at `app.ts:75` and
+      `globalRateLimiter` at `:90`, and the comment at `:73-74` says that ordering is
+      deliberate so throttled requests are still counted — which is exactly what
+      removes the bound. Throttling cannot cap registry growth.
+    REACHABLE WITH NO CREDENTIAL UNDER BOTH PROFILES: `metricsMiddleware` and
+    `GET /metrics` are app-level, above the `/api` mount, so the GA fence never
+    sees them.
+    FIX: resolve the label from the MATCHED route pattern rather than the raw URL —
+    under the gateway profile `routeServedByGateway` already computes exactly that —
+    and collapse everything unmatched to a single `route="other"`. Failing that, cap
+    distinct label tuples with the same FIFO shape `idempotency.ts:99-102` uses.
+
+94. **The global limiter throttles `/healthz`, `/readyz` and `/metrics`.** — OPEN,
+    api-contract-architect. After 150 requests, `/api/healthz` returns **429** and so
+    does `/metrics`. `lib/profile.ts:118-121` allowlists `/readyz` on the explicit
+    reasoning that an orchestrator "would treat a fenced 404 as a dead instance and
+    restart a working server" — the limiter reintroduces that same failure by a
+    different route, and the Prometheus scraper goes blind exactly when it matters.
+    SECOND HALF: `trust proxy` is never set (confirmed two ways). Leaving it false is
+    the right call against XFF spoofing, but behind an ingress every caller keys to
+    one socket peer and shares a single 600/min bucket.
+    FIX: `skip` the three operational paths in `globalRateLimiter` and gate
+    `/metrics` on `METRICS_TOKEN` instead. If deployed behind a known proxy, set
+    `trust proxy` to that specific hop count or CIDR — never `true`.
+
+95. **`HEAD` on an allowlisted route 404s under the gateway profile.** — OPEN,
+    api-contract-architect. Express auto-serves `HEAD` from a `GET` handler, but
+    `profile.ts:171-175` compares the method against an allowlist containing only
+    `GET`, so it 404s before the handler is reached. Verified: `HEAD /api/healthz`
+    -> 404 while `GET` -> 200. `HEAD` is a common load-balancer liveness default, so
+    the consequence is row 94's again — a healthy instance reporting 404 to its probe.
+    FIX: treat `HEAD` as `GET` in `routeServedByGateway`. Do NOT drop the method
+    check; the comment at `:157-166` documents a real hole it closes.
+
+96. **The `/v1` limiter keys on the raw bearer string, not the principal — the
+    exact class `idempotency.ts` already fixed.** — OPEN, api-contract-architect.
+    NOTE. `rateLimit.ts:59-67` uses `tok:${token}`; the principal is never consulted.
+    `idempotency.ts:56-62` spells out the reasoning for the mirror-image bug: under
+    enterprise OIDC the context middleware mints a fresh opaque credential per
+    request. Consequence here: an IdP rotating short-lived JWTs hands each new token
+    a fresh 240/min bucket. Established by reading, not execution.
+    CONSTRAINT: the limiter must run before authentication, so it cannot use
+    `req.principal`. A second, principal-keyed limiter after `requireTenantContext`
+    is the workable shape, leaving the pre-auth one as coarse DoS protection.
+
+97. **`POST /cp/v1/telemetry` is an unauthenticated, unbounded, cross-tenant
+    WRITE that the profile documentation does not name as a write.** — OPEN,
+    api-contract-architect. Reproduced: one anonymous POST rewrote another tenant's
+    rollup, moving the top hotspot to `edge_nw_general` with 9,000,000 decisions and
+    a denyRate of 1. A second probe sent 200 batches with 60KB `nodeId` values and
+    grew RSS from 102,864 kB to 146,128 kB — the route validates only
+    `typeof nodeId === "string"`, with no length bound, format check or entry cap.
+    NOT A PRODUCTION HOLE: the gateway profile does not mount this router (verified
+    404). It is live on the public review deployment. Both `routes/index.ts:47-53`
+    and `lib/profile.ts:20-30` enumerate the demo hazards and characterise `/cp/v1`
+    purely as a read-scoping problem — the write is not written down anywhere.
+    FIX: constrain `nodeId` to `cp.listEdgeNodes()` membership and refuse anything
+    else, which closes both the poisoning and the growth. Then correct the two audit
+    comments to name the write.
+
+98. **Under the gateway profile, unknown ROOT paths return Express's default HTML
+    error page.** — OPEN, api-contract-architect. NOTE. The JSON catch-all is scoped
+    to `/api` on the stated reasoning that "the root serves human surfaces (demo
+    console, /metrics) whose defaults stand" — but under the gateway profile the demo
+    console is not mounted, so that premise is false. The path IS escaped (no XSS, no
+    stack trace); it is the same class of framework disclosure that
+    `app.disable("x-powered-by")` was added to remove.
+
+99. **Two demo routers break the response-envelope contract.** — OPEN,
+    api-contract-architect. NOTE. `/api/simulator/*` mints a FRESH uuid as
+    `requestId` instead of reusing `req.requestId` (verified: header
+    `x-request-id: CALLER-ID-123` against a body `requestId` of an unrelated uuid),
+    and `/api/sim/*` omits `requestId` entirely while forwarding a raw library
+    `err.message`. Nothing sensitive leaks today, but it is the one place on the
+    surface where an unfiltered library string reaches a response body, and
+    `routes/index.ts:25-28` records that a single deviant envelope here has already
+    been treated as a defect worth fixing.
+    RELATED, filed here rather than as its own row: the client picks the audit
+    correlation id. `x-request-id` is accepted unvalidated and unbounded, reflected
+    verbatim at 900 characters, and lands in the durable ledger's correlation field
+    via `v1.ts:749-762`. Not XSS — the API answers JSON with `nosniff` — but in a
+    repo whose stated position is "provenance is the product", a caller-chosen
+    provenance field is worth closing. Accept the header only when it matches
+    `^[A-Za-z0-9._-]{1,128}$`, else mint a uuid.
+
+100. **iOS: an unknown session expiry renders as "fresh", and a shipping identity
+    provider produces exactly that.** — OPEN, mobile-native-engineer. BLOCKING.
+    `SessionData.swift:44-47`: `guard let expiresAt = expiresAt else { return false }`.
+    `expiresAt == nil` means "we do not know when this session expires", and the code
+    answers "then it has not expired" — the permissive branch. It is reachable, not
+    theoretical: `MDMIdentityProvider.authenticate` returns `expiresAt: nil`
+    (`IdentityProvider.swift:442`), passed straight through at
+    `SessionStateManager.swift:333`. Both server-side expiry checks (`:842`, `:853`)
+    are `if let`, so they no-op on nil too.
+    CONSEQUENCE: for any session created through the MDM provider, `sessionStale` is
+    permanently false, so `device.stale_checkin` is never emitted, `POSTURE_STALE`
+    never fires, and the session is never stepped up on freshness grounds. It also
+    never triggers the token-expiry audit event or the refresh.
+    This is the same NaN/nil fail-open family already fixed on the TypeScript auth
+    surface, surviving on iOS. It is conspicuous because the neighbouring code is
+    scrupulous: `HostAppViewController.swift:288-293` defaults `detectedZone` to nil
+    precisely so the zone gate DENIES.
+    FIX: keep `isExpired` for real expiry (it also drives teardown) and add a
+    separate `freshnessUnknown` (true when `expiresAt == nil`) feeding `sessionStale`,
+    so unknown freshness produces a STEP-UP rather than a session kill. Separately,
+    have `MDMIdentityProvider` supply a bounded default expiry instead of nil.
+
+101. **iOS: `AppWorkflows.swift` is missing the scoped step-up release the TS planner
+    has, so one gesture releases every held action.** — OPEN, mobile-native-engineer.
+    `AppWorkflows.swift:122` has only `let stepUpDone = input.outcome == .step_up &&
+    input.stepUpSatisfied`; `lib/app-workflows/src/index.ts:124-137` computes
+    `releasedKeys`/`heldKeys`/`allHeldReleased` and a per-action `actionReleased`.
+    The TS comment at `:118-122` records this as a review finding — "a gesture for one
+    action must never release the rest of the integration." The port omits it.
+    HONESTLY SCOPED: latent, not live. The one shipping caller
+    (`HostAppViewController.swift:631`) reads exactly one action out of the returned
+    plan, and `plan.mode`/`plan.summary` are read nowhere in EnterpriseShell. But the
+    control plane already speaks the scoped form (`v1.ts:723`), so the two sides can
+    disagree today about what a step-up released.
+    FIX: port the missing block — add `stepUpSatisfiedActionKeys` to `AppPlanInput`,
+    compute the per-action `eff`, and switch on it rather than `effective`. Do not
+    change the caller in the same commit.
+
+102. **iOS: white text on the brand header fill fails WCAG AA, one label in both
+    appearances.** — OPEN, mobile-native-engineer. `ActiveSessionViewController.swift:43`
+    sets the header to `SG.primary`; four labels sit on it in hardcoded white at three
+    alphas. Computed: `userRoleLabel` 5.08 light / **3.47 dark**; `departmentLabel`
+    **4.39 light / 3.08 dark** — both under the 4.5 floor.
+    The method is calibrated: it reproduces every figure `DesignSystem.swift` already
+    asserts (deny dark 5.05/4.55, allow light 5.41/6.11, and the historical 3.72)
+    exactly. This is the class the repo fixed twice — `onDeny` and `onAllow` exist
+    because "white on the dark allow fill sat at 3.72:1" — but the lesson was never
+    generalised to the brand fill, and there is no `onPrimary` token. Compounding it,
+    `:611` lets a persona override the header with an arbitrary hex, so contrast there
+    is unbounded.
+    FIX: add an `onPrimary` token shaped like `onDeny`/`onAllow`, use it for all four
+    labels, drop the alpha de-emphasis, and gate the persona override on a computed
+    contrast check. Per DR-005 the token change lands in `index.css` in the same commit.
+
+103. **iOS: `SignalGridOperator` pins dark mode at the app root.** — OPEN,
+    mobile-native-engineer. `SignalGridOperatorApp.swift:11` calls
+    `.preferredColorScheme(.dark)` — the SwiftUI equivalent of pinning
+    `UIUserInterfaceStyle`, which CLAUDE.md forbids by name. System UI it presents
+    inherits the forced scheme.
+    IMPORTANT ORDERING: the pin is currently PROTECTING the app. `Theme.swift:5-21`
+    defines every token as a single fixed dark value, so removing the pin alone would
+    produce exactly the self-contradicting screen mix the rule exists to prevent. Make
+    the tokens adaptive FIRST, then remove line 11.
+    ALSO CORRECTS CLAUDE.md: its exemption says "SignalGridMobile is pure SwiftUI with
+    semantic colors and needs none of this." That is true of `WardlinkDemo` and NOT of
+    `SignalGridOperator`. The sentence should name the target. Not a UIKit conversion —
+    fixable entirely in SwiftUI.
+
+104. **iOS: one stray colour value forks the palette.** — OPEN, mobile-native-engineer. NOTE.
+    `Theme.swift:5` decodes to `#13171A`; canonical Warm Charcoal 950 is `#15181B` in
+    both `DesignSystem.swift:25` and `index.css:73`. Every OTHER token in the file
+    decodes exactly and both asserted contrast figures verify, so this is one stray
+    value in an otherwise carefully aligned file.
+
+105. **iOS: `armv7` declared as a required device capability.** — OPEN,
+    mobile-native-engineer. NOTE. `EnterpriseShell/Info.plist:53-55`. iOS has been 64-bit-only
+    since iOS 11; the correct value is `arm64` or omission. NOT VERIFIED that this
+    blocks installation — that needs a device or a build, neither of which exists in
+    the cloud lane.
+
+106. **iOS: `mdm/README.md` under-claims what the app can do alone.** — OPEN,
+    mobile-native-engineer. NOTE. `:58` lists "forced full screen" as requiring supervision,
+    but `UIRequiresFullScreen` is an app-declarable key needing no MDM, and the plist
+    comment correctly presents it as such. Errs CONSERVATIVE — the opposite of the
+    platform-honesty failure mode — but it is still inaccurate.
+
+107. **Web: `restrict` and `deny` are the same pixel in the PWA's only chart, which
+    has no legend, tooltip or axis.** — OPEN, web-engineer. BLOCKING. This confirms
+    rows 76/77 by execution.
+    `Overview.tsx:47-48` paints `restrict` from `--chart-4` and `deny` from
+    `--destructive`. Both resolve to `hsl(0 43 60.8)` = **#C67070**. Adjacent stacked
+    segment contrast = **1.0000:1** — no rendered boundary at all. A 40%-restrict /
+    10%-deny bar is indistinguishable from its inverse.
+    COLOURBLIND HALF: under simulated protanopia `allow` and `restrict` sit 7.98 dE
+    apart — commonly treated as confusable — while restrict and deny are identical for
+    everyone.
+    The operator console's equivalent chart already carries that remedy (`Dashboard.tsx:83-87` added a
+    `<Legend />` and a `strokeDasharray` on restrict). The PWA received neither half.
+    FIX: give the chart a second channel (Legend + Tooltip at minimum, and a pattern
+    or dash for restrict), and point all four `<Bar fill>` at the ratified
+    `--decision-*` tokens so the palette gate can reach them.
+
+108. **Web: the PWA still fetches fonts from Google on every cold load.** — OPEN,
+    web-engineer. The @fontsource migration was applied to `signalgrid-app` and never
+    to the PWA: 3 references in `index.html:19-21` plus an `@import` at `index.css:1`,
+    and neither `@fontsource` package in its `package.json`.
+    `review-invariants.mjs:384` lists only two SHIPPED_TREES, so the PWA falls into the
+    REPORTED-not-gated branch — whose own message names the fix. CI does build this
+    tree, so the remote fetch ships into the bundle.
+    WHY IT MATTERS MORE HERE: a PWA is the one surface where a third-party font blocks
+    first paint on bad hospital wifi, which is the exact condition it exists for.
+
+109. **Web: an unrecognised verdict renders as NOTHING in the console's live decision
+    panel.** — OPEN, web-engineer. `LiveDecisionPanel.tsx:50` indexes
+    `TONE[decision.outcome]` unguarded; the same file guards the identical lookup 66
+    lines later at `:116`. For an out-of-union outcome, `tone` is undefined, the verdict
+    block is skipped, and the empty-state is ALSO skipped because `decision` is truthy —
+    so the panel renders the preset buttons and no result.
+    `"step-up"` is not hypothetical: `lib/api-zod` uses that spelling while
+    `signalgrid-core` uses `step_up`, and `StatusBadge.tsx:8-9` handles both and says
+    so. TypeScript cannot catch it — `v1.ts:78` is a bare cast across a fetch boundary.
+    LATENT: `/v1` emits `step_up` today, so all four keys currently hit.
+    WHY IT MATTERS: an unknown verdict produces NO signal — strictly worse than the
+    restrictive tone. The blank card is indistinguishable from "nothing happened",
+    which is the most permissive reading available.
+    FIX: `TONE[...] ?? UNKNOWN_TONE` rendering the restrictive tone with the raw
+    outcome as its label, and validate at the `v1.ts:78` boundary.
+
+110. **Web: the PWA's outcome badge falls back to grey at 3.00:1 on any unrecognised
+    verdict.** — OPEN, web-engineer. `OutcomeBadge.tsx:5` initialises to a zinc palette
+    and only overwrites on four exact matches. Computed contrast of that fallback,
+    composited the way the gate composites chips: **3.00:1**, below the 4.5 floor —
+    the worst-contrast verdict rendering in the PWA, and the same shape as the historic
+    3.18:1 deny finding, one state over.
+    TWO doctrine violations in one line: the unknown verdict renders in the NEUTRAL
+    tone rather than the restrictive one, and in text a reader may not be able to read.
+    FIX: initialise to the restrictive class and render the raw outcome as the label.
+
+111. **Web: four dead colour utilities in the PWA, two below AA, one a second red.** —
+    OPEN, web-engineer. NOTE. `index.css:150-153` declares `.text-nominal`,
+    `.text-anomalous`, `.text-critical` (#ef4444, **4.26:1**) and `.text-unknown`
+    (#6b7280, **3.32:1**); zero uses anywhere. Someone reaching for a "critical" colour
+    finds #ef4444 instead of the ratified #C67070 and nothing objects. Four
+    `.text-status-*` rules are dead too.
+
+112. **Web: a hand-maintained list claims a gate protects it; no gate reads that
+    file.** — OPEN, web-engineer. NOTE. `Dashboard.tsx:310-313` pins the three launch
+    connector families and asserts "the profile gate fails the build if this set
+    changes." Four differently-shaped searches say otherwise: `launch-profile.mjs`
+    never reads the app tree, and nothing in `scripts/` or `.github/` references
+    `Dashboard.tsx`. The list is NOT yet stale — all three ids match today — but the
+    claim about the gate is false. FIX: make it true (parse and diff, as
+    `check-it-layer-model.mjs` already does for `route-owner.ts`) or delete the sentence.
+
+113. **Web: the PWA manifest points at two icons that do not exist.** — OPEN,
+    web-engineer. `manifest.json:10-11` declares 192px and 512px icons; neither file is
+    tracked or on disk. Without them the PWA cannot be installed to a home screen,
+    which is the only reason a manifest exists. Related: `start_url` is `/mobile/` and
+    no Dockerfile or workflow serves that prefix, and there is NO service worker
+    anywhere in the tree — so this "PWA" is a manifest and a viewport tag with no
+    offline capability. No user-visible copy claims otherwise, so this is an
+    expectation gap rather than a false claim.
+    FIX: add the icons and wire the deploy, or trim the manifest to what is real. A
+    small gate asserting every tracked manifest's `icons[].src` resolves to a tracked
+    file would stop the recurrence.
+
+114. **Web: the PWA's signal badge covers four of six signal types.** — OPEN,
+    web-engineer. NOTE. `SignalBadge.tsx` branches on four values; the `SignalType`
+    enum has six and `Signals.tsx:17` offers all six as filters, so the
+    `network-posture` and `physical-access` filters yield all-grey screens. The
+    fallback clears AA (5.28:1), so this is semantics-poor rather than illegible.
+    Physical access is a first-class signal family for this product. FIX: derive the
+    colour map from the enum keys so a new value fails typecheck instead of falling
+    through to grey.
+
+115. **Web: the PWA presents fixture decisions with no fixture label.** — OPEN,
+    web-engineer. Overview (metrics, chart, integration health) and Decisions (list
+    AND detail sheet) render synthetic data unlabelled; only `Signals.tsx:22-23`
+    carries a rendered label. The console labels ten equivalents and carries an
+    `AssuranceBadge` the PWA has no equivalent of.
+    WHY IT MATTERS: the PWA is the surface most likely to be held up in a room, and
+    "Allow Rate 94.2%" with no qualifier is a claim about a deployment.
+
+116. **Web: the PWA's support triage surface has no `deny` scenario.** — OPEN,
+    web-engineer. NOTE. `AccessSupport.tsx:22` types `Outcome` as
+    `"allow" | "step-up" | "restrict"` — a deliberate narrowing of the four-verdict
+    vocabulary at the type level. The one screen a support lead opens first cannot show
+    the outcome they most need guidance for. The page is otherwise the most honest in
+    either tree.
+
+117. **The unsafe-claim gate reports ASSERTED and exits 0 — it can never fail CI.** —
+    OPEN, devex-tooling-engineer. BLOCKING. INDEPENDENTLY VERIFIED before filing.
+    `phase-gate.ts:153-160` escalates an affirmatively-asserted unsafe claim only to
+    YELLOW, and `:194` sets a failing exit code only for RED, which is reachable solely
+    from `redFilePattern`. Confirmed by running it: `unsafeClaims=ASSERTED`,
+    `phaseLane=YELLOW`, `EXIT=0`. CI wires it as a plain `run:` step
+    (`phase-pr-evidence.yml:40-41`), so the exit code is the only thing the job reads.
+    CONSEQUENCE, AS ORIGINALLY FILED: a genuine certification claim merged into
+    `docs/` today would print ASSERTED and the PR would go green. That second clause
+    is WRONG — see the correction below. `missingValidation` at `:161-170`
+    has the identical shape, despite its own comment saying drift "must actually move
+    the lane, not just log a reason."
+    This is the whole point of the negation-aware classifier defeated at the last step:
+    the signal varies, and nothing consumes the variance.
+    FIX: decide whether YELLOW fails CI. Either make the two CODE-DETECTED reasons
+    (affirmative claim, missing validation) set a failing exit code while leaving the
+    touch-based reasons informational, or promote an affirmative claim to RED. Either
+    way the CI step must read something other than "not RED". Fix row 118 first or the
+    gate turns permanently red on a disclaimer and gets switched off.
+    CORRECTION, same day, found by this row's own text failing CI. The finding as
+    filed OVERSTATED its consequence, and the overstatement came from checking one
+    gate and concluding about the machinery — the narrow-search error this repo
+    tracks, committed while filing a finding about gates.
+    WHAT IS TRUE: `phase-gate.ts` does escalate an affirmative claim only to YELLOW
+    and does exit 0, so ITS `unsafeClaims` signal is inert and the negation-aware
+    classifier feeding it is unconsumed.
+    WHAT IS FALSE: that an unsafe claim would therefore reach the default branch.
+    `scripts/docs-sanity.mjs:253` collects the same class of finding and `:263` calls
+    `process.exit(1)`, and it runs as its own CI job — `review-hub-ci.yml:720-735`,
+    "Required docs and unsafe-claim sanity". It is not a paper gate: it FAILED this
+    very commit, on the example phrases written into rows 117 and 118, before either
+    row could be merged. Unsafe claims in `docs/` are gated. What is not gated is
+    `phase-gate`'s own lane arithmetic.
+    THE REAL FINDING, restated: the repo has TWO unsafe-claim mechanisms with
+    different phrase lists and opposite enforcement. The sophisticated,
+    negation-aware one cannot fail a build; the naive, negation-blind one is the only
+    one that can. That split is the defect — not an absence of enforcement.
+
+118. **The unsafe-claim classifier reads a DISCLAIMER as an affirmative claim.** —
+    OPEN, devex-tooling-engineer. `unsafe-claim-classifier.ts:143-144` scopes negation
+    to the text BEFORE the match, so a sentence of the form "<product> replaces no
+    system of record" — where the negator is the verb's direct object — classifies as
+    affirmative. Both live hits pinning `unsafeClaims=ASSERTED` are citations of
+    exactly that disclaimer. (The phrase is deliberately NOT quoted verbatim here:
+    writing it out trips `docs-sanity.mjs`, which is the point of the correction on
+    row 117.)
+    WHY IT MATTERS: it restores the defect the classifier was built to remove — a
+    signal that reads the same on every run — inverted from constant-noisy to
+    constant-alarming. It is invisible while row 117 stands; the moment 117 is fixed
+    this becomes a permanently red gate someone will switch off.
+    FIX: when the matched phrase ends in `replaces`, extend the negation window to the
+    following token (`no|nothing|none`). Add BOTH directions to the proof — the
+    disclaimer must clear and a genuine replacement claim followed by a trailing
+    negation must still flag (that case exists at `:92-93` and must not regress).
+    THE SAME DEFECT EXISTS IN THE HARD-FAILING GATE, and that is the more urgent half:
+    `docs-sanity.mjs` has NO negation awareness at all. It matched the disclaimer form
+    above as an unsafe claim and failed the build on it. So the negation-aware
+    classifier — the one that would get this right — is wired to the gate that cannot
+    fail, and the gate that CAN fail is the naive one. Fix the pair together.
+
+119. **Five copies of the no-vendor-call scanner; one drifted permissive, and its
+    self-test tests the pattern that survived.** — OPEN, devex-tooling-engineer.
+    `response-accountability-proof.ts:546-553` carries 6 patterns where `nac-proof.ts`,
+    `uem-proof.ts`, `entitlement-binding-proof.ts` and `service-lifecycle-proof.ts`
+    each carry 9 byte-identical ones. Executed against planted lines: a static
+    `import axios`, a `superagent` import, an aliased `const send = fetch`, a
+    `net.connect`, and a dynamic `import("pg")` are ALL caught by the other four and
+    ALL missed by this one.
+    THE DANGEROUS PART: its non-vacuity self-test asserts `banned.some(...)` over a
+    single planted `fetch(...)` — the one pattern that survived — so the guard reports
+    "the scan can actually fire" while three classes of vendor call walk past.
+    This is verbatim the failure `emit-gate-proof.ts:13-15` warns about: "four copies
+    of a policy is four chances for one to drift permissive, and the drifted one is the
+    one that ships." It has now happened, to the policy guaranteeing a connector family
+    reaches no network.
+    FIX: extract the pattern list into `scripts/src/lib/` beside `live-gate.ts` and
+    have all five import it; change each self-test to assert one planted control PER
+    PATTERN CLASS. Independently, add a `files.length > 0` floor to all five —
+    `emit-gate-proof.ts:207` already applies exactly that floor and none of the five has it.
+
+120. **A character class where alternation was intended makes the link checker skip
+    every relative link starting with h, t or p.** — OPEN, devex-tooling-engineer.
+    `operating-method-proof.ts:63` uses `[^)#http]`, which excludes the CHARACTERS
+    h/t/p, not the string `http`. Executed against a control probe: `handbook.md` and
+    `proofs.md` are silently dropped while the proof reports 31/31.
+    The extractor-vs-audit boundary exactly: the per-link `existsSync` is perfectly
+    correct about the links it receives and structurally blind to an alphabet slice.
+    The `links.length >= 4` non-vacuity floor does not help — four good links satisfy it
+    while a broken `handbook.md` sits unseen. Correct today by luck, not construction.
+    FIX: match `\]\(([^)#][^)]*\.md)\)` and filter `^https?:` in code. Add a self-test
+    asserting a `handbook.md`-shaped link is picked up.
+
+121. **An unguarded `indexOf` slice can turn two targeted assertions into whole-file
+    greps.** — OPEN, devex-tooling-engineer. NOTE. `emit-gate-proof.ts:238-241`: if
+    `"\n  }"` is not found, `indexOf` returns -1, `slice(0,-1)` yields nearly the whole
+    file, and the two following tests match anywhere in `mde.ts`. The FIRST `indexOf`
+    fails safe (both checks fail); only the second is fail-open. The same file guards
+    this correctly 116 lines earlier at `:124`, so the idiom is known here. Reported by
+    reading, not by execution — the mutation guard was off-limits during a concurrent
+    preflight.
+
+122. **`proof:live-glpi` has never been executable from the path that invokes it.** —
+    OPEN, devex-tooling-engineer. Registered only in `scripts/package.json`, never at
+    the repo root, while `run-live-lanes.sh:387` invokes it after `cd` to the root.
+    Verified: `pnpm run proof:live-glpi` -> `ERR_PNPM_NO_SCRIPT`. All seven sibling
+    live proofs ARE registered at root; this is the sole scripts-only key.
+    `validate-sim-macos.sh:176` enumerates `proof:*` from the ROOT manifest, so the
+    harness never sees it either. Fails closed, but a 167-line proof that has never
+    been runnable is not a proof — and if a Mac stands GLPI up, the failure will look
+    like GLPI misbehaving.
+    FIX: add the root registration, then add a gate asserting the two `proof:*` key
+    sets are equal. That bijection is what would have caught this and nothing checks it.
+
+123. **Five Postgres proofs exit 0 when skipped, and the local harness counts exit 0 as
+    PASS.** — OPEN, devex-tooling-engineer. Executed all five with `DATABASE_URL`
+    unset: each prints SKIPPED and exits 0. `validate-sim-macos.sh`'s `gate()` judges on
+    exit code alone, so a Mac run reports five green proofs it never executed. CI does
+    provision `DATABASE_URL`, so this is a LOCAL-HARNESS gap, not a CI one.
+    `db-guard.ts:12-15` states the doctrine for exactly this case — "a proof that
+    silently skipped would leave the gate green while testing nothing, which is the one
+    outcome worse than red" — and applies it only to the disposable-cluster flag, not to
+    the missing-URL branch three lines above.
+    FIX: give the five a distinguishable skip exit code (the repo already uses 2 for
+    refusals) and route it to the harness's existing `skip()` counter. Do NOT make it a
+    hard failure — that breaks every developer without Postgres, which is how gates get
+    switched off.
+
+124. **`ladderRungs` is published as a derived figure by twelve proofs, is a literal in
+    all twelve, and they disagree.** — OPEN, devex-tooling-engineer. NOTE. Ten publish
+    6, one publishes 5, one publishes 3, and `verdict-attestation-proof.ts:53` defines
+    an eight-rung ladder. Nothing reads the value. Inert today because the figure guard
+    only holds docs to comma-formatted numbers >= 1,000 — but it sits on the same line
+    as genuinely derived values, which makes it read as measured. That is the
+    "fossil that looks precise" the figure guard's own header was written about. Same
+    for `gateClausesPerFamily=4` in `emitter-discipline-proof.ts:140`, whose header
+    still says "five families" against six entries in the array.
+
+125. **The Graph connector reports a device MANAGED when the tenant never said
+    so.** — FIXED 2026-08-25, endpoint-uem-domain. Was BLOCKING. Reproduced end to
+    end before the fix, and the fix was FALSIFIED rather than assumed: restoring the
+    old inference fails exactly the three defect cases (`eas`, `msSense`, a typo)
+    while the three legitimate ones (no agent, `mdm`, `intuneClient`) still pass.
+    THE FIX: `MDM_ENROLLMENT_AGENTS`, a conservative allowlist of the agent values
+    that actually establish MDM enrollment. An agent the set does not name yields
+    "unknown" — step_up — rather than "managed". `eas`, `msSense` and
+    `configurationManagerClient` are absent on purpose. Six new assertions in
+    `graph-connector-proof` (21 -> 27) pin BOTH directions, so the fix cannot
+    degrade into "always unknown".
+    `graph/posture-connector.ts:239-241` infers the affirmative state `managed`
+    from a MISSING `managementState`, on the strength of any non-empty
+    `managementAgent` string: `if (s === "" && a !== "") return "managed";`. Its
+    four sibling normalizers in the same file — identity status, user risk,
+    compliance, registration — all fall through to `unknown` on silence. This is
+    the one that drifted.
+    REPRODUCED through the real connector and the real composer. With
+    `managementState` absent and `managementAgent` set to `eas` or `msSense` —
+    both REAL Microsoft Graph values that specifically mean the device is NOT
+    MDM-managed — the result is `deviceManagementState: managed` and a composed
+    verdict of `compliant / none / COMPLIANT_MANAGED`. A typo string
+    (`zzz-typo`) does the same. With the agent ALSO absent, the sibling behaviour
+    kicks in: `unknown` -> `step_up / MANAGEMENT_STATE_UNKNOWN`.
+    So adding an arbitrary string to one optional field flips a device from
+    "challenge the worker" to "let them through".
+    The author knew agent strings need vetting: `agent === "unknown"` is caught
+    one line earlier and correctly returns `unmanaged`. The fallthrough just never
+    got the same treatment. `graph` is one of only two families addressing a real
+    `graph.microsoft.com` tenant, so this is on the shipped read path.
+    `proof:graph-connector` is green (20/20) and no proof ever feeds a
+    `managementAgent` into `normalizeManagement`.
+    FIX: delete the two lines and fall to `return "unknown"`. If the inference is
+    genuinely wanted it must be an ALLOWLIST of the agent values that actually
+    denote MDM enrollment (`mdm`, `easMdm`, `intuneClient`,
+    `configurationManagerClientMdm`), never `a !== ""`. Add a proof case feeding an
+    unrecognised agent with no `managementState`.
+
+126. **A rotation dated in the FUTURE grades as current, and the record says so
+    while carrying a negative age.** — FIXED 2026-08-25, iam-domain. Was BLOCKING.
+    Reproduced before the fix and FALSIFIED after: removing the guard fails exactly
+    the three new assertions.
+    THE FIX: a negative age yields `standing = "unknown"` and `ageDays = null` — not
+    `overdue`, because a lapse nobody established must not be asserted either. The
+    `no_policy` and `never_rotated` branches got the same treatment so no branch can
+    emit a negative age as if it were a reading. Four new assertions in
+    `credential-rotation-proof` (18 -> 22).
+    `credential-rotation/normalize.ts:90-91` computes `ageDays` and compares it to
+    the policy bound with no check that the timestamp is in the past. A future
+    `lastRotatedAt` yields a negative age, trivially `<= maxAgeDays`, so the record
+    grades `within_policy` -> `rotation_current` / `none` /
+    `rotationConfirmed: true`.
+    REPRODUCED, same record past-dated then future-dated: the past-dated one gives
+    `rotation_overdue / step_up / CREDENTIAL_ROTATION_OVERDUE`; the future-dated one
+    gives `{"standing":"within_policy","ageDays":-3653}` and a verdict of
+    `rotation_current / none / ROTATION_WITHIN_POLICY` with
+    `rotationConfirmed: true` and the summary "Within its rotation policy and held
+    in the managed vault."
+    THE ASYMMETRY IS THE FINDING. Four families in the same range guard this
+    explicitly, each with a comment saying why — `local-authority/normalize.ts:127`
+    ("Issued in the future relative to the reference — an unreadable clock, not the
+    freshest grant ever minted"), `access-governance/evaluate.ts:90`,
+    `carrier/evaluate.ts:136` and `location-services/evaluate.ts:79` (both via
+    FUTURE_SKEW_TOLERANCE_MS), and `device-management-health/graph-transport.ts:93`.
+    `credential-rotation` has none. Absence corroborated three differently-shaped
+    ways plus `check:absence` (CORROBORATED across 4 probes).
+    `proof:credential-rotation` is green (18/18) because it enumerates the
+    NORMALIZED enum space and feeds only four hand-written past-dated instants —
+    the wire-level temporal edge is outside what it enumerates by construction.
+    WHY IT MATTERS: clock skew, a bad timezone conversion on a bridge, or anyone who
+    can write that field gets a permanent clean bill on a static secret that has
+    never been rotated — and `rotationConfirmed: true` is an affirmative other
+    surfaces read as fact.
+    FIX: treat a negative age as `unknown`, matching `local-authority`'s shape — NOT
+    `overdue`, which would assert a lapse nobody established. The `no_policy` branch
+    needs the same. Add a proof case feeding a future `lastRotatedAt`.
+
+127. **`edr-threat` reports full protection from an unreadable signature age,
+    contradicting its own comment.** — OPEN, secops-domain. `evaluate.ts:87-88`
+    guards only `null` then bare-compares with `>=`. A NaN on either side is false,
+    so an unreadable freshness reads as FRESH, `protectionHealthy` goes true, and
+    the verdict is `protected / NO_THREATS_HEALTHY / none`. The caller-posed
+    `staleSignatureHours` at `:65` has no validation at all.
+    REPRODUCED on an endpoint whose signatures are more than a decade out of
+    date: the default bound gives `degraded_protection / step_up`; a NaN bound, a
+    string bound, and `signatureAgeHours = NaN` all give `protected / none`.
+    `NaN` is type-legal — `types.ts:70` declares `number | null`.
+    The file's own comment at `:84-86` asserts the opposite of what it does: "We
+    never report protection as fresh when its freshness cannot be confirmed."
+    The correct pattern is two files over: `app-update/evaluate.ts:86` guards its
+    caller-posed bound with `typeof` + `Number.isFinite` + `< 0`.
+    SCOPED HONESTLY: should-fix, not blocking, because the shipped
+    `edr-connector.ts` DOES guard the field with `Number.isFinite`. But the guard
+    lives in one of two paths into the evaluator, and `evaluateThreatPosture` is
+    re-exported from the public entry point, so any lane can call it with a record
+    it built itself. `proof:edr-threat` is green (36/36) and the option has zero
+    callers, zero tests and zero proof cases.
+    FIX: make the value guard positive — stale unless
+    `Number.isFinite(x) && x < staleHours` — and validate the bound with the
+    `app-update` shape.
+
+128. **The ITSM aggregate reports `unhealthy` for a call the gate never let it
+    make.** — OPEN, itsm-ops-domain. When the emit gate suppresses, all eight
+    adapters' `healthCheck()` return `false` without touching the network, and
+    `adapter.ts:266-274` records that as `'unhealthy'`. The `ITSMAdapterHealth` type
+    carries `'unchecked'` for exactly this case and the aggregate already uses it
+    correctly for a DIFFERENT flavour of the same ignorance.
+    REPRODUCED, both flavours side by side: gate suppressed with zero network
+    traffic gives `{"zendesk":"unhealthy"}`; an adapter that exposes no healthCheck
+    gives `{"jira":"unchecked"}`. Same ignorance, two answers.
+    The docstring immediately above that loop names the principle it breaks: "'we
+    never asked' and 'we asked and it is fine' arrived at the caller as the same
+    value… the unearned affirmative this repository keeps finding." Reporting
+    `unhealthy` for a call never made is that fabrication with the sign flipped.
+    LOWER STAKES than 125/126 because it fabricates a NEGATIVE, not a grant — but it
+    sends an operator chasing eight simultaneous vendor outages that are not
+    happening, and the third state that would tell the truth is already in the type.
+    FIX: widen `healthCheck()` to return `ITSMAdapterHealth` and have each adapter
+    return `'unchecked'` with the suppression reason.
+
+129. **Two more families accept an unvalidated staleness bound.** — OPEN,
+    network-domain (carrier) and physical-ot-domain (location-services). NOTE.
+    Both read `options.staleAfterMs ?? DEFAULT` with no finiteness check. They fail
+    CLOSED on NaN but OPEN on Infinity: reproduced against a 7.5-year-old fix, an
+    Infinity bound turns `off_premises_stale / STALE_LOCATION_FIX / locate` into
+    `on_premises / INSIDE_AUTHORIZED_GEOFENCE / none`. Infinity is a less likely
+    accident than NaN, which is why this is a note — but it is the same missing
+    guard as row 127 and the three sites are one change.
+
+130. **`deviceResolver`'s class docstring names a source that does not exist.** —
+    OPEN, endpoint-uem-domain. NOTE. `deviceResolver.ts:52-60` lists four
+    aggregation sources; the fourth, "FleetDM (posture/telemetry)", has no code
+    path — `resolve()` and `aggregate()` try registry, UEM and NAC only, and
+    `DeviceIdentity.source` cannot even represent a FleetDM result. Same class as
+    the `registerVerifiedPrincipal` docstring in row 86: prose asserting a check or
+    a source the code does not have.
+
+131. **The empty-candidate backstop is present in five families and absent in
+    ten.** — OPEN, secops-domain (to arbitrate, as the largest holder). NOTE, and
+    recorded so the divergence is a decision rather than an accident. Five families
+    end with an explicit "not positively confirmed and nothing objected -> force
+    step_up" guard, each with its own reason code so a firing is visible. Ten do
+    not. No reachable hole was found in the ten — their normalizers coerce every
+    unrecognised value into an enum member that pushes a candidate — so this is a
+    generational difference, not a live defect. It rests on a real split: the
+    hardened connectors carry `oneOf` allowlists, `ownValue` own-property reads and
+    a `hasUnrecognizedKey` prototype walk; seven others carry none of the three.
+    Rows 125 and 127 are both instances of a non-confirmed input reaching a grant,
+    which is exactly what this guard exists to catch late.
+
+132. **`createTicketTemplate` mints ids at millisecond resolution.** — OPEN,
+    itsm-ops-domain. NOTE. `itsm/store.ts:780` uses `custom-${Date.now()}`; two
+    templates created in the same millisecond collide and `getTicketTemplate`
+    resolves by `find`, returning the first. Not a decision path and not a doctrine
+    violation — but `generateId()` using `crypto.randomUUID()` sits sixty lines
+    above and is what every other id in the file uses.
+
+133. **The syslog adapter reports the collector reachable without opening a
+    socket — in a family that has no transport at all.** — OPEN, secops-domain.
+    `syslog/transport.ts:173-179` is `return !!(this.config.host &&
+    this.config.port)`. `port` is defaulted in the constructor and `host` is
+    required, so this returns TRUE for every adapter that can be constructed —
+    including this one, whose own comment at `:121` reads "THERE IS NO TRANSPORT,
+    AND THIS NO LONGER CLAIMS OTHERWISE" and whose `sendEvent` throws on the live
+    path.
+    REPRODUCED at dev tier, no live flag, no credential, a hostname that does not
+    resolve: `syslog healthCheck() = true` while `splunk`, `webhook` and
+    `sentinel` all return `false`. In the same process `sendEvent()` returns
+    `{"status":"suppressed"}`.
+    WHY IT MATTERS: the docstring says "verify syslog server is reachable"; it
+    verifies that a config object was populated. A SIEM forwarder reporting itself
+    healthy while it cannot send anything defeats the audit trail it exists to
+    produce — and does so most convincingly during an incident. This is the same
+    unearned-affirmative shape as row 128, in the opposite direction.
+    WHY NO GATE CAUGHT IT, checked three ways: `check-ungated-fetch.mjs`
+    short-circuits on files with no fetch-like callee and this file has none;
+    `check-read-error-swallowing.mjs` explicitly excludes `healthCheck()` on
+    reasoning that covers a false, not a true; `emit-gate-proof.ts` asserts syslog
+    opens no socket and throws when live, but asserts nothing about `healthCheck`.
+    FIX: gate first (`resolveEmission()`, return false when not live), then either
+    probe for real or — given there is no transport — return false with the reason.
+    Add the assertion to `emit-gate-proof.ts` so a fifth instance cannot arrive
+    quietly.
+
+134. **A GARBLED readiness budget grades strictly better than no budget at all.** —
+    OPEN, iam-domain. `session-readiness/evaluate.ts:93-113`, root cause at
+    `index.ts:107,136` where `budget: opts.budget ?? null` passes through
+    unvalidated while `elapsedToUsableSeconds` beside it goes through `asSeconds`.
+    REPRODUCED, identical record each time (42s elapsed, usable, measured,
+    critical risk):
+    · budget 30 (honest)      -> `not_ready / restrict / READINESS_BUDGET_EXCEEDED`
+    · budget null (unposed)   -> `degraded / monitor / READINESS_BUDGET_UNPOSED`
+    · budget NaN              -> `ready / none / SESSION_READY`
+    · budget Infinity         -> `ready / none / SESSION_READY`
+    · budget `{}` (typo key)  -> `ready / none / SESSION_READY`
+    MECHANISM: `elapsed > threshold` is false for NaN, Infinity and undefined, so
+    no EXCEEDED candidate fires — AND because `budget !== null`, the honest
+    UNPOSED monitor arm is skipped too. Both the finding and its fallback are
+    switched off at once, and the seed grant survives.
+    The comment at `:107-113` states the intent exactly — the unposed rung "must
+    NOT be suppressible by omitting the budget" — and an unreadable threshold
+    suppresses it just as completely. The `{}` case is the realistic one: a config
+    with a misspelled key satisfies `ReadinessBudget` structurally.
+    FIX: validate the pose where it enters, as `pacs-access` does. A budget whose
+    `thresholdSeconds` is not a finite positive number is a GARBLED pose and needs
+    its own raising rung, not the seed grant. Validating in the normalizer alone is
+    not enough — `evaluateSessionReadiness` is exported and callable directly.
+
+135. **A non-finite caller threshold turns an abandoned device into a full custody
+    grant.** — OPEN, physical-ot-domain. `rtls-custody/evaluate.ts:56-57,102,107,109`.
+    REPRODUCED, identical badge-less record in an authorized clinical zone with a
+    fix age and dwell of 99,999s: defaults give `abandoned / alert / ABANDONED`;
+    `staleFixSeconds` of NaN or Infinity both give `in_zone / none / CUSTODY_OK`.
+    THE CROSS-FAMILY ASYMMETRY IS THE FINDING. Of the five numeric evaluator
+    options in the m-z range, exactly one validates:
+    · `pacs-access` `maxEventAgeSeconds` — GUARDED; executed, NaN/Infinity/0/-1 all
+      yield `unknown`. Its comment states the rule: "a garbled pose is a question we
+      cannot read — never answered optimistically."
+    · `rtls-custody` `staleFixSeconds` / `abandonDwellSeconds` — FAIL OPEN.
+    · `network-nac` `staleAfterMs` — accidentally safe (NaN still yields step_up).
+    · `passkey-assurance` `expectedCredentialCount` — accidentally safe
+      (`size !== NaN` is always true).
+    The two safe ones are safe by ARITHMETIC ACCIDENT, not by a guard, so they will
+    drift the moment a comparison changes shape.
+    WHY IT MATTERS: this family's header says "a device we can't physically see is
+    never mistaken for one in good custody." Every internal fail-safe in the file is
+    careful, and all of it is defeated by one unreadable option from the caller.
+    FIX: give all four options `pacs-access`'s treatment, ideally as one shared
+    helper so the next family inherits the guard rather than the accident.
+
+136. **The webhook URL safety guard keys off `NODE_ENV` while the delivery gate
+    keys off `SIGNALGRID_TIER`.** — OPEN, secops-domain. `webhooks/dispatch.ts:32`
+    reads `IS_PRODUCTION` from `NODE_ENV` AT MODULE LOAD and uses it at `:96,101`,
+    while `resolveWebhookDelivery` at `:75-86` reads `SIGNALGRID_TIER` and
+    `SIGNALGRID_LIVE_INTEGRATIONS` at call time.
+    REPRODUCED in two processes, both with `SIGNALGRID_TIER=prod` and
+    `SIGNALGRID_LIVE_INTEGRATIONS=true`. With `NODE_ENV=production` a
+    `http://127.0.0.1:9/hook` target is rejected before delivery is recorded. With
+    `NODE_ENV` UNSET the same URL passes the guard and reaches the signing step —
+    as do `http://localhost:9/hook` and `http://192.168.0.5/hook`.
+    WHY IT MATTERS: two gates guard one outbound path and disagree about what
+    "production" means. A deployment that sets the repo's OWN tier vocabulary to
+    prod and turns live integrations on has done everything this codebase asks, and
+    still gets plain-HTTP delivery of an HMAC-signed payload to loopback or RFC1918
+    — an SSRF surface pointed at whatever runs beside the process. Reading it at
+    module load makes it unvariable per call, which is the very defect the comment
+    at `:70-73` names while leaving the constant two lines above it.
+    `webhooks-proof.ts` only exercises `resolveWebhookDelivery` and never calls
+    `dispatchToEndpoint`, so nothing covers this.
+    FIX: key the URL rules off the same call-time resolution the delivery gate uses
+    and delete the module-load constant. Consider making the loopback/RFC1918 block
+    unconditional — there is no tier in which posting a signed customer payload at
+    127.0.0.1 is intended.
+
+137. **A delivery the gate deliberately withheld is retried to exhaustion and
+    dead-lettered as a failure.** — OPEN, secops-domain.
+    `webhooks/dispatch.ts:253-298` — `isPermanentError` does not recognise
+    `suppressed`.
+    REPRODUCED at dev tier with a shortened 4-attempt config: `dispatchEvent`
+    returns `{"dispatched":1,"succeeded":0,"failed":1}`, four delivery rows all
+    reading `suppressed`, and one DLQ entry whose `lastError` is the suppression
+    reason itself. Under the SHIPPED defaults the jittered backoff sums to ~33.6
+    seconds of sleeping before dead-lettering.
+    The `suppressed` field's own docstring at `:55-61` says a caller that cannot
+    tell suppression from failure "would report 'webhook failed' for a tier that is
+    never supposed to send". `dispatchWithRetry` is that caller. In dev and alpha —
+    the tiers developers actually run — every event sleeps ~33s, writes six rows,
+    reports a failure, and dead-letters a payload that was never meant to leave. The
+    DLQ is what an operator reads during an incident, and it fills with entries
+    describing policy working correctly.
+    FIX: check `result.suppressed === true` explicitly and return before the loop
+    with no DLQ write; count suppressed separately from failed.
+
+138. **`addToDLQ` hardcodes an attempt count it did not observe.** — OPEN,
+    secops-domain. NOTE. `webhooks/store.ts:357` is `attempts: 6, // After max
+    retries`. Reproduced: with `maxAttempts: 4` and four attempts actually made, the
+    DLQ entry still reads 6. Small, but it is a record asserting a number nobody
+    counted, in the artefact an operator reads to reconstruct what happened.
+
+139. **A dead safety-shaped constant sits beside two "unvalidated" warnings.** —
+    OPEN, secops-domain. NOTE. `webhooks/store.ts:24` declares `IS_PRODUCTION` and
+    never uses it — the only uses are in `dispatch.ts`. A reader scanning that file
+    for guards will count it as one.
+
+140. **`vuln-scan` lets a non-finite CVSS into the evidence field while a sibling
+    guards the same shape.** — OPEN, secops-domain. NOTE, and NOT a fail-open on
+    the decision path — that was checked rather than assumed. `vuln-connector.ts:131`
+    uses a bare `typeof === "number"`, so NaN and Infinity pass; but
+    `normalizeSeverity`'s CVSS fallback tests `>=9`, `>=7`, `>=4`, `>0`, all false
+    for NaN, so it lands on `unknown` and the evaluator's SEVERITY_UNVERIFIED arm
+    handles it. Infinity maps to `critical`, which tightens.
+    Still worth recording: `cvssScore` travels into the normalized finding and out
+    to whatever renders evidence, carrying NaN or Infinity as if it were a reading,
+    and `rtls-connector.ts:139-146` guards the identical shape one directory away.
+
+141. **CHECKED AND CLEAN, recorded so it is not re-litigated: every m-z family
+    raises on total ignorance.** — CLOSED, secops-domain. A maximally-unknown
+    normalized input was built for all 21 evaluators in the m-z range and called
+    with NO options. Every one raised — `step_up` or `monitor`, never a grant:
+    macos-posture, ot-posture, peripheral-control, vuln-scan, rtls-custody,
+    oauth-consent, token-binding, sso-session, pacs-access, platform-sso,
+    policy-binding, shift-context, passkey-assurance, task-exception, sse-egress,
+    uem, network-nac, observability-integrity, session-readiness,
+    service-lifecycle, response-accountability. ZERO grants.
+    The cross-family suspicion that opened that read — that `covered ?? true` (17
+    occurrences) defaults a coverage flag to the permissive value — DOES NOT HOLD.
+    Also verified: all 26 families in range carry a tier + live-integrations gate,
+    so no ungated live vendor call exists there; and the two `switch` statements
+    without a `default:` on a decision path (`response-accountability:246`,
+    `service-lifecycle:291`) are compiler-enforced exhaustive over closed unions,
+    which is STRONGER than a default arm, not weaker.
+    A clean read is a result. This row exists because "nobody checked" and "checked,
+    nothing found" are different states and only the ledger tells them apart.
+
+142. **Seven "approval gate" assertions and their violation counter are computed
+    from a literal the proof writes itself, and none of the seven gates exists.** —
+    OPEN, devex-tooling-engineer. BLOCKING.
+    `signalgrid-grid-proof.ts:102-109` builds `highRiskActionGates` by `.map`-ing a
+    list of seven action NAMES and stamping `{simulatedOnly: true, approvalRequired:
+    true}` on every element. `:247-249` then filters that same array for any element
+    where either flag is `false`. The count is structurally zero. Fourteen assertions
+    read the same two literals.
+    THE NAMES CORRESPOND TO NOTHING. Across baseline plus 231 mutations the simulator
+    emitted only: alert_operator, create_ticket, queue_retry, record_audit,
+    request_remediation, route_to_owner, verify_remediation. No `quarantine`, no
+    `lock device`, no `revoke session`, no `disable account`, no `push remediation`,
+    no security-rule action.
+    The one place REAL actions are checked reads
+    `typeof action.approvalRequired === "boolean"` — and `false` is a boolean, so an
+    action that dropped its approval requirement passes.
+    The fabricated array is also serialised into `artifacts/proof/signalgrid-grid-proof.json`
+    under `highRiskActionGates`, so the invented result LEAVES the proof as published
+    evidence. The run prints "approval-gate violations: 0" and exits 0.
+    FIX: delete the literal. Derive the gate set from the routed actions the simulator
+    actually emits, classify by kind/severity, and assert every high-risk action
+    carries both flags true — plus a non-vacuity assertion that the class is non-empty,
+    so an empty classification fails instead of passing. Change the real-action check
+    from a typeof test to the value the risk class demands. Stop writing the literal
+    into the evidence file.
+
+143. **`phase:summary-check` always reads the static template, so a CI gate verifies
+    that a committed file contains its own bullet list.** — OPEN,
+    devex-tooling-engineer. `phase-summary-check.ts:8-11` resolves
+    `process.env.PHASE_SUMMARY_FILE ?? "docs/AUTOMATION_PHASE_TEMPLATE.md"`, and that
+    variable is set NOWHERE in the repo — verified across workflows and both
+    package manifests. The template's own bullets are exactly the sections the gate
+    requires, so it passes on every pull request, forever, regardless of what the PR
+    says. A PR with no summary, no validation section and no public-safety note
+    passes it.
+    FIX: have the workflow point it at the actual summary under review, and make the
+    script REFUSE when the resolved path is the template, so falling back can never
+    read as a pass.
+
+144. **The PR risk report computes `block_merge` and exits 0; nothing reads it.** —
+    OPEN, devex-tooling-engineer. `phase-pr-report.ts` contains no `process.exit` and
+    no `exitCode` assignment anywhere — it is the only gate-shaped script on the
+    surface with no exit path. The workflow generates the report and uploads it as an
+    artifact; no step reads `risk_lane` or `merge_recommendation`.
+    WORSE, AND THIS IS THE PART THAT BITES: its `unsafeClaimPattern` is a hand-copied
+    duplicate carrying 16 alternatives, while `docs-sanity.mjs`'s DENYLIST — the copy
+    that actually fails a build (row 117's correction) — carries 45. The extras are
+    the regulated-framework attestation claims — the four naming a health-privacy
+    regime, a service-organisation audit, an international security standard and a
+    federal authorisation programme. The phase lane MISSES all four. (Named
+    obliquely on purpose: writing them out trips `docs-sanity.mjs`, which is the
+    whole point of this row — the gate that CAN fail carries the phrases, and the
+    lane that cannot does not.)
+    Third defect in the same file: `unsafeClaimScan` uses a helper returning `""` on
+    ANY git failure, so "git grep found nothing" and "git grep failed" both read as
+    clean.
+    FIX: export the pattern once and import it in all three consumers, with a proof
+    asserting every consumer sees the same list length; make a RED lane fail; and
+    distinguish git exit 1 from any other exit.
+
+145. **The grid proof's secret-scan regex cannot fire on the JSON it is given.** —
+    OPEN, devex-tooling-engineer. `signalgrid-grid-proof.ts:946-951` matches
+    `(api[_-]?key|secret|token|password)\s*[:=]\s*[a-z0-9_\-.]{12,}` against
+    `JSON.stringify(...)`. In JSON a key is followed by `"` before the colon and a
+    value begins with `"` — neither is `\s`, `[:=]`, nor a member of the value class.
+    Executed: three plainly-leaked credentials in exactly the serialisation shape this
+    proof produces, and the check returns false. It fires only if `key: value` appears
+    INSIDE a single string literal — the least likely leak shape.
+    This is one of two gates standing between the fixtures and a published
+    public-safe evidence file, it is aimed at the highest-severity leak class, and it
+    has always passed.
+    FIX: walk the parsed object rather than regexing the serialised text, and add a
+    negative control — a synthetic object carrying a fake credential must make the
+    check FAIL — since without one this is invisible again the moment it recurs.
+
+146. **The SBOM's maven half collects direct quoted coordinates only, and it is the
+    one ecosystem with no completeness guard.** — OPEN, devex-tooling-engineer.
+    `generate-sbom.ts:256-258`. Executed against real Gradle forms: it COLLECTS a
+    quoted `implementation("group:artifact:version")` and MISSES version-catalog
+    references, `compileOnly`, `ksp`, `androidTestImplementation`, `classpath`, and
+    every `plugins {}` entry. The committed SBOM carries 875 npm and 418 cargo
+    components against SEVEN maven — the seven quoted lines, no transitives, no
+    plugins — while five third-party Gradle plugins are declared across the two build
+    files and reach the document not at all.
+    The generator HAS a fail-closed completeness guard and it is pointed at the
+    ecosystem it does not parse: `assertSwiftHasNoExternalPackages` exits 1 if a
+    Swift package appears. No maven twin exists — corroborated three ways plus
+    `check:absence` (CORROBORATED across 4 probes).
+    WHY IT MATTERS: an SBOM is read by whoever is deciding whether to accept the
+    software, and this one presents the Android surface as having seven third-party
+    dependencies. It passes its own staleness gate byte-for-byte, so nothing signals
+    incompleteness.
+    FIX: add a `assertGradleFullyParsed()` twin that fails on any dependency-like
+    call the regex did not collect, anchor the configuration alternation, and either
+    resolve transitives from a committed Gradle lock or state "direct declarations
+    only" in the ecosystems-covered property.
+
+147. **Three e2e specs abort external requests without asserting none were
+    attempted; the fourth documents exactly why that is wrong.** — OPEN,
+    devex-tooling-engineer. NOTE. `admin-console`, `review-console` and `website`
+    call `route.abort()` and stop there. `evidence-coverage-page.spec.ts:56-61`
+    records the lesson in its own words — "a page that grew a webfont, a logo or an
+    analytics beacon would be silently neutered by the test and ship green to a
+    public marketing domain. Aborting is the setup; this assertion is the test" — and
+    the lesson stayed in the file it was learned in. `website.spec.ts` is the public
+    marketing site, the surface that sentence names.
+    FIX: an allowlist assertion rather than `toEqual([])` (these pages do legitimately
+    use font hosts), in a shared helper so the next spec inherits it.
+
+148. **The e2e README states a test count 18 behind, in the section whose own lesson
+    is that hand-maintained test claims go stale.** — OPEN, devex-tooling-engineer.
+    NOTE. It says the suite "has since grown to 35"; `playwright test --list` reports
+    53 tests in 10 files. Two lines below, the same section says "a README describing
+    a test's live state is a hand-maintained claim, and the test itself is the only
+    version of that claim that cannot go stale."
+    FIX: drop the parenthetical or point at `--list`. A number in a README that no
+    gate reads has two stable states: absent, or wrong.
+
+149. **1,700 lines and 239 assertions of the decision core's own proof are
+    unreviewed.** — OPEN, devex-tooling-engineer. The reader executed
+    `signalgrid-core-proof.ts` and read only the reporting tail and the check helper.
+    This is the largest unexamined block left on the scripts surface and it guards the
+    decision path. Recorded as a coverage gap rather than a defect: nobody has looked,
+    and the ledger now says so.
+
+150. **`ladderRungs=5` in the agent-behavior proof matches nothing in its source of
+    truth.** — OPEN, devex-tooling-engineer. NOTE. The family's action type has 6
+    members, the unified ladder has 8, its postures have 9, and the proof exercises 4
+    distinct actions. Five is none of them. The proof IS registered in the figure
+    guard, so this literal is what documentation about agent-behavior gets validated
+    against — a doc correctly stating "six" would be FAILED by the guard.
+    CONTEXT, not a separate row: eight other proofs publish `ladderRungs=6` and all
+    eight are correct today, but every one is a hand-typed literal restating a bare
+    TypeScript union with no runtime value. `agent-behavior` is the copy that already
+    drifted.
+    FIX: convert each family's action union to a const array and emit
+    `${X_ACTIONS.length}` — for all nine, not just the one that drifted.
+
+151. **The desktop Policies page paints `fail-closed` as danger and `fail-open` as
+    healthy — the product's first invariant, inverted in pixels.** — FIXED
+    2026-08-25, desktop-engineer. Was BLOCKING.
+    THE FIX, all three sub-items together: a new
+    `artifacts/signalgrid-desktop/src/lib/outcome-tone.ts` holds one TOTAL
+    `Record<Outcome, string>` plus `failModeTone`, and all three call sites now route
+    through it. `fail-open` carries the warning tone and `fail-closed` the allow
+    tone; an unrecognised verdict OR an unrecognised fail mode resolves to the
+    RESTRICTIVE tone, never a neutral one — a fail mode we cannot read is not one we
+    can vouch for. The RESTRICT legend swatch now carries the chart's own dash
+    pattern instead of reproducing deny's colour without its differentiator.
+    Because the maps are total over closed unions, a new verdict is now a TYPECHECK
+    failure rather than a silent fallthrough to whatever the final `else` happened
+    to be — which is what let these three drift apart in the first place.
+    STILL TRUE, and left open as its own row: `check-decision-palette.mjs` exits 0
+    both before and after this fix. It asserts a verdict is painted from a ratified
+    TOKEN and has no concept of which verdict maps to which token, nor of a legend.
+    The mis-mapping was, and remains, structurally invisible to it — see row 168.
+    ORIGINAL FINDING FOLLOWS.
+    `Policies.tsx:30-36` is a two-branch ternary: `fail-closed` gets red, everything
+    else gets green. The enum is closed to two values, so the green branch is reached
+    by `fail-open` and nothing else. REACHABLE WITH THE SHIPPED FIXTURE — the served
+    three-policy fixture's third entry is `failMode: "fail-open"`, so the rendered
+    page shows two red FAIL-CLOSED badges and one green FAIL-OPEN badge, with no
+    legend to say the colours mean anything else.
+    The repo's own position, verbatim: "fail-closed integrity is zero-tolerance — one
+    fail-open exhausts it and can never be bought back."
+    WHY IT MATTERS: red means problem and green means fine to every viewer without
+    instruction. This page tells an operator the two correctly-configured policies are
+    the problem and the one dangerous policy is fine — and styles the policy a
+    reviewer should ask about to be scrolled past.
+    TWO SIBLINGS IN THE SAME TREE, filed here because they are one fix:
+    · `Handoff.tsx:118-121` sends `restrict` to the STEP-UP tone via an else branch —
+      colouring a more-restrictive verdict with a less-restrictive tone. `Policies.tsx`
+      itself gets this right four lines later, so two files in one tree default
+      opposite ways.
+    · `Dashboard.tsx:69` gives RESTRICT and DENY the identical legend swatch:
+      `hsl(0 43% 60.8%)` = #C67070 for both, a computed 1.0000:1. The chart BANDS
+      differentiate by dash and opacity; the legend — the only thing mapping colour to
+      name — does not.
+    `check-decision-palette.mjs` exits 0 on all three: it asserts a verdict is painted
+    from a RATIFIED TOKEN and has no concept of WHICH verdict maps to which token, nor
+    of a legend.
+    FIX: swap the fail-mode branches and take the tone from the ratified tokens; make
+    Handoff a four-branch chain terminating in `text-status-restrict`; give the
+    RESTRICT legend swatch the chart's own dash treatment. Then extract ONE
+    `outcomeTone` helper for this tree, typed as a total Record, so the three
+    ternaries cannot drift again.
+
+152. **`artifacts/signalgrid-desktop` dresses a web app as a native window, and
+    the repo has a REAL desktop shell somewhere else entirely.** — OPEN,
+    desktop-engineer.
+    CORRECTED BEFORE IT SHIPPED, and the correction is the more useful half. The
+    reading that produced this row concluded from a keyword sweep that the
+    repository contained no native desktop shell of any kind. That is FALSE, and
+    `scripts/check-known-false-claims.mjs` refused the commit citing
+    `tauri-desktop-absent` — a claim already disproven on 2026-08-08, when the same
+    absence was asserted from a stale document hours before `native/desktop/` landed
+    in PR #199. A narrow-search absence error, made twice, caught by a registry that
+    exists because it was made the first time.
+    WHAT IS ACTUALLY THERE: `native/desktop/app/tauri.conf.json` is a Tauri 2 config
+    for **"SignalGrid Assist — reference host shell"**
+    (`com.signalgrid.assist.desktop`), with `Cargo.toml`, `build.rs`, `native/desktop/app/src/main.rs`
+    and a full icon set, and `.github/workflows/desktop.yml` builds
+    `native/desktop/core` in CI.
+    WHAT SURVIVES OF THE FINDING, narrower and still worth fixing: the tree named
+    `signalgrid-desktop` is a Vite WEB app, and it dresses itself as a native window
+    — a status bar reading "SignalGrid Desktop · macOS / Windows / Linux", simulated
+    macOS traffic-light controls, and `-webkit-app-region: drag` in `index.css:104`,
+    a property that only does anything inside a native shell and is inert in a
+    browser. `docs/DELIVERY_GAP_ANALYSIS.md:114` already calls that tree a
+    "MISLEADING NAME — not a desktop app", and `desktop.yml:5-6` says plainly there
+    is no Windows or Linux BINARY in the repository.
+    SO THE REAL DEFECT IS NAME COLLISION, not a bare overclaim: one artifact is a
+    web mockup wearing native chrome, another is a genuine Tauri host shell, and
+    they are both called "desktop". A reader cannot tell from the names which is
+    which, and the web one is the one that renders a platform claim.
+    FIX: rename or relabel so the two are distinguishable; state what the web tree
+    is in its status bar rather than naming three operating systems; drop or comment
+    the inert drag rule. Then re-check `Downloads.tsx`'s "native shells are a
+    documented next step, not shipped" — with a Tauri config and a CI job present,
+    that line may now UNDERSTATE what exists, which is the opposite failure and
+    equally worth correcting.
+
+153. **Four `.bg-status-*` utilities are declared in the desktop stylesheet and used
+    nowhere in that tree.** — OPEN, desktop-engineer. NOTE. Zero references, verified
+    two search shapes; they are live in three sibling trees, so this one copied the
+    stylesheet without the components that consume it. It matters mainly because the
+    comment above them documents measured contrast ratios for chips this tree never
+    renders — inviting a reader to trust a verification with no rendered subject.
+
+154. **Two demo trees declare a large social card and ship an image nothing
+    references.** — OPEN, desktop-engineer and web-engineer. NOTE.
+    `signalgrid-review` and `signalgrid-desktop` both set
+    `twitter:card="summary_large_image"` with no `og:image` and no `twitter:image`,
+    while each ships an unreferenced `public/opengraph.jpg`. `signalgrid-web` is the
+    control and does it correctly including a base-path rewrite. This is the mirror of
+    the missing-manifest-icons defect: here the file exists and the markup that would
+    use it does not.
+
+155. **An unguarded status lookup in desktop Integrations emits a literal
+    `undefined` class.** — OPEN, desktop-engineer. NOTE. `Integrations.tsx:65` has no
+    fallback, so an unrecognised status yields `className="... undefined"`, which
+    Tailwind does not match — the cell inherits ordinary foreground and reads as a
+    normal, healthy row. The map is typed `Record<string, string>` so TypeScript will
+    not complain. The sibling `Signals.tsx:66` guards the same pattern with `?? ""`.
+    FIX: type the map against the spec enum so an unmapped status is a typecheck
+    failure, and give the lookup a RESTRICTIVE fallback plus a visible UNKNOWN marker
+    — an unknown state must be stated, not styled away.
+
+156. **`Partial<Record<DecisionOutcome, …>>` disables the exhaustiveness check that
+    would catch a new verdict.** — OPEN, web-engineer. NOTE, and a REFUTED hypothesis
+    recorded honestly: the reader expected an unmapped outcome and there is not one —
+    all ten members are present, so the fallback is currently unreachable. What
+    remains is that `Partial` is the annotation making an unmapped verdict LEGAL, and
+    the fallback it enables is a neutral stone chip byte-identical to the tone already
+    assigned to `record_audit`, the most benign outcome in the set. A future
+    restrictive outcome would arrive looking like an audit note.
+    FIX: drop `Partial` so an unhandled outcome is a compile error, and change the
+    fallback to the restrictive tone.
+
+157. **Six rendered assertions of a passing CI gate that does not exist.** — OPEN,
+    web-engineer. The Review Hub scorecard cites `rc:smoke` as a passing workflow six
+    times, and those citations are load-bearing for two of the eight published scores.
+    Absence established three ways: `check:absence` returns INCONCLUSIVE with four
+    word-mentions, all of which are the claim itself or the record of the claim — no
+    script, no workflow, no gate; a grep across `package.json`, `.github/workflows/`
+    and `scripts/` returns NOTHING.
+    It was registered in the claim inventory on 2026-08-21 with action `remove`. It is
+    still rendering four days later.
+    WHY IT MATTERS: these sentences tell a reader a named CI gate is green. There is
+    no such gate. A prospect who asks to see the run gets no answer, and everything
+    else on the page becomes suspect at that moment.
+    FIX: replace each with a gate that exists and can be linked, then RE-DERIVE the
+    two scores that leaned on it — the substitution changes what they claim.
+
+158. **52 claims marked for removal are still in the tree, and no gate reads the
+    register.** — OPEN, docs-writer. `docs/agent/CLAIM_INVENTORY.json` prescribes an
+    action for each of 1,023 rendered claims. Three scripts name the file: one
+    GENERATES markdown from it, and two name it only to EXCLUDE it from their own
+    scans. None asks whether a prescribed action was taken.
+    Measured mechanically by taking the longest quoted span from each `remove`-actioned
+    row and testing whether it is still present: 151 remove-rows on the read surface,
+    **52 still present verbatim**, 68 no-longer-matching, 31 untestable.
+    STATED HONESTLY: 52 is a lower bound and the 68 is NOT evidence of 68 fixes — many
+    rows paraphrase rather than quote, so a non-match can mean the row was never
+    testable this way. The load-bearing number is the zero: zero gates check.
+    Row 157 is the concrete demonstration.
+    FIX: a gate asserting that every `remove` row with a quotable span no longer
+    matches its named file, ratcheting the still-present count downward rather than
+    demanding zero on day one.
+
+159. **MY OWN LEDGER WAS INFLATING ITS NUMBER, and the gate permitted it.** —
+    FIXED 2026-08-25, devex-tooling-engineer. Found by a reader auditing the web
+    trees, in the ledger rather than in the code.
+    `docs/agent/review-coverage.json` carried TWO directory entries —
+    `artifacts/signalgrid-web/src` and `.github/workflows` — and
+    `check-review-coverage.mjs` treated a prefix claim as covering everything beneath
+    it. Two lines therefore counted **93 files** as read. `docs/agent/REVIEW_CYCLE.md`
+    already required "FILE-level ledger entries (never directory prefixes)"; the gate
+    simply did not enforce the rule written beside it.
+    Reported coverage was 17.3%. With the two entries removed it is 13.2%. **The
+    4-point difference was never real** — the number this entire effort exists to make
+    true was being inflated by its own checker.
+    FIXED: the two entries are deleted and the gate now FAILS on any claim that is not
+    an exact tracked file. Falsified — planting a directory claim back produces
+    "a DIRECTORY standing in for 78 file(s)" and exit 1.
+
+160. **The published "independent" review is dated twelve months later than its
+    source, renumbered, and internally contradicts itself on a score.** — FIXED
+    2026-08-25, docs-writer. Was BLOCKING for anything public-facing.
+    OWNER DECISION, 2026-08-25: relabel as SignalGrid's own self-assessment rather
+    than restore the source's numbers. Applied:
+    · `index.html` — every meta description now reads "SignalGrid self-assessment …
+      derived from a May 2025 external second-opinion review". The word
+      "independent" is gone from the page's own description.
+    · `robots` is now `noindex, nofollow`, with the reason in a comment beside it:
+      indexing a self-assessment as though it were third-party judgement is not
+      something a disclaimer repairs.
+    · `REVIEW_DATE` and `REVIEW_VERSION` now name both things — that this is a
+      self-assessment, and that the external review it derives from is v0.1, May
+      2025 — with the full provenance recorded in a comment above them.
+    · The 7-versus-8 contradiction is resolved to 8 in BOTH places, with the delta
+      from the external review's 7 stated inline as SignalGrid's own later
+      judgement rather than absorbed silently.
+    · `rc:smoke` is gone from every rendered string in `reviewData.ts` and
+      `demoData.ts` — seven sites — replaced by the CI gate suite that actually
+      exists. Row 157 is closed by the same change. The only surviving occurrences
+      are in gitignored `dist/` build output, which regenerates.
+    ORIGINAL FINDING FOLLOWS. Found by reading the source
+    PDF in the founder's Drive and diffing it against the shipped deck; the shipped
+    values were then verified directly in the tree.
+    · SOURCE: "SignalGrid Second-Opinion Review", **v0.1, May 2025**.
+    · SHIPPED (`reviewData.ts:1-3`): `REVIEW_DATE = "May 2026"`,
+      `REVIEW_VERSION = "v0.3 — Intune / Entra Posture Proof + Live Tracker"`.
+    · The deck carries **TWO DIFFERENT Demo Readiness scores**: the scorecard block
+      reads **8**, a later block reads **7**. The source says 7. So one was raised,
+      and the deck now disagrees with itself in two places on the same page.
+    · The 8 is justified in its own rationale by "rc:smoke workflow is complete and
+      passing" — the gate row 157 proves does not exist.
+    · A dimension the outside reviewer never wrote — "Integration Surface Coverage",
+      3/10 — was added to a document presented as theirs.
+    · `index.html:7,10,14` still describes it as an **"independent"** review and
+      `:8` sets `robots: index, follow`, so it is publicly indexable.
+    WHY THIS IS THE MOST SERIOUS ITEM ON THE PUBLIC SURFACE: every other overclaim in
+    this repo is our own claim about our own work, and can be corrected by softening
+    it. This one attributes edited content to a third party. The date, the version,
+    the added dimension and the raised score are each defensible as an internal
+    working document; none of them is defensible under the word "independent" on an
+    indexable page.
+    FIX (docs-writer, and this is an owner-visible decision): either restore the
+    source's date, version and scores and mark every addition as SignalGrid's own
+    annotation, clearly separated from the reviewer's text — or drop the word
+    "independent", relabel the page as an internal self-assessment derived from a
+    May 2025 external review, and set `robots: noindex`. Resolve the 7-versus-8
+    contradiction either way. Row 157's `rc:smoke` removal is a prerequisite, not a
+    separate task.
+
+161. **Biometric and location privacy law is absent from the repo entirely.** —
+    OPEN, security-engineer. The founder's own architecture research names three
+    regimes that bear directly on a badge-plus-biometric custody product, and
+    `docs/` has zero hits for the operative ones: Illinois **BIPA** written notice
+    and release (0), **CCPA precise geolocation as sensitive personal information**
+    (0), GDPR Art. 9 special-category framing (1 file, in passing).
+    The source's operative rule is the part worth importing: **legal review precedes
+    DESIGN FREEZE, not go-live.** A product that fuses badge identity, physical
+    location and device custody can be architecturally committed to a position it
+    cannot lawfully ship before anyone asks.
+    NOTE THE BOUNDARY: this is a prompt to get human legal review, not a substitute
+    for it. CLAUDE.md already says Claude Code does not guarantee HIPAA or SOC 2 and
+    a human compliance review is required.
+
+162. **The buyer's own program document describes the ICP in vocabulary the repo
+    does not contain — and asks for the one thing the core refuses to do.** — OPEN,
+    positioning-messaging (primary), product/principal-engineer (the guardrail half).
+    `Enterprise_Mobility_Modernization` is a 200K+ device health-system mobility
+    transformation deck. `docs/` returns ZERO hits for: "mobility modernization",
+    "Access Central", "eSAF", "rogue tenant", "app consolidation", "Managed Apple
+    ID", "ABM domain federation", "Microsoft Tunnel", "Cisco NAC".
+    THE VALUABLE HALF: named pains (fragmented MDM estates and rogue tenants, a
+    legacy access process blocking automation, clinical app sprawl, support overhead
+    above benchmark), the IAM / Network-SASE / Mobility ownership split a
+    solutions-architect must design against, and the explicit leadership approval
+    gates a champion has to clear.
+    THE DANGEROUS HALF, and it must be recorded as a NEGATIVE requirement: the deck
+    asks for "AI triage and automated decision engines", "predictive routing &
+    anomaly detection", and "auto-remediation". That is probabilistic decisioning
+    plus autonomous remediation — precisely what `review:invariants` exists to keep
+    out of the decision path. This language WILL arrive from buyers, not just from
+    this document, so the guardrail belongs in
+    `docs/PUBLIC_MESSAGING_GUARDRAILS.md` before it is needed.
+    TWO FIGURES THAT MUST NEVER MIGRATE: "200K+ devices" is the CUSTOMER'S estate,
+    not SignalGrid's scale, and "40-50% app reduction" is that program's target, not
+    a result.
+    HANDLING — OWNER DECISION 2026-08-25: **background reading only, never
+    published.** The team may learn the buyer's vocabulary and named pains from it;
+    nothing from it goes on the website, into the repo as content, or into any
+    customer-facing material. It does not reach GitHub Pages in any form. Treat the
+    ICP brief built from it (item 4 of the Drive synthesis) as written in our own
+    words about a problem space, never as an excerpt.
+
+163. **WITHDRAWN — the Gartner exposure was already closed, and I said the
+    opposite.** — CLOSED 2026-08-25, security-engineer. This row asserted that two
+    Gartner Peer Insights reports sat reproduced whole in `attached_assets/` and
+    that the exposure was "worse than when it was filed". BOTH HALVES WERE WRONG.
+    THE FACTS: the files were added 2026-08-03 (`4a170db`) and REMOVED 2026-08-06
+    by `9143d73`, "chore(licensing): remove four republished third-party files and
+    gate the class (#171)". They are absent from HEAD, absent from disk, and
+    `attached_assets/` holds four pasted text files and nothing else.
+    HOW THE ERROR HAPPENED, because the mechanism matters more than the row: I did
+    not check the tree. I read `docs/PUBLICATION_BOUNDARY.md`, which still described
+    the exposure in the PRESENT TENSE nineteen days after the fix, and repeated it —
+    then a Drive scan found the same two documents in the founder's own Drive and I
+    treated that as corroboration that they were still in the repo. Two independent
+    sources agreeing, neither of them the tree. The stale doc has been corrected.
+    WHAT REMAINS TRUE: the files are still in git HISTORY, which the boundary doc
+    always said and which removal from HEAD never addressed. Purging that needs a
+    history rewrite — the owner's call alone, and `NOTICE` argues against it for the
+    provenance record. Recorded as a standing accepted condition, not a task.
+    STILL WORTH DOING, and unaffected: the extracted facts are genuinely useful — a
+    mandatory-feature list that draws the cleanest line between IGA and what
+    SignalGrid is, four peer lessons usable as objection-handling, and an
+    install-base ordering for connector prioritisation. Use facts and vendor names,
+    never reproduce passages, never cite ratings or "Customers' Choice" marks on a
+    public surface, and do not re-add a copy.
+
+164. **Five IGA vendors the competitive surface has never mentioned.** — OPEN,
+    competitive-analyst. `docs/research/IGA_ADJACENCY.md` names four vendors. The
+    Gartner category listing shows 115 products, and these have ZERO mentions
+    anywhere in `docs/`: Radiant Logic, Oracle Identity Governance, Symantec IGA
+    (Broadcom), OpenText NetIQ, IBM Security Verify Governance. Thinly covered:
+    Veza, Pathlock, One Identity, Netwrix, Lumos.
+    ALSO, and it sharpens the boundary rather than widening it: "provisioning via
+    integration to ITSM/ticketing to trigger manual fulfilment" is a MANDATORY IGA
+    feature. That sits close to our orchestration story, so `IGA_ADJACENCY.md`
+    should state explicitly that SignalGrid does not do entitlement fulfilment.
+
+165. **`tamperState` is an enum where the source material describes a graph.** —
+    OPEN, product/principal-engineer. `docs/EVENT_CONTRACT.md` carries
+    `tamperState ∈ {none, suspected, confirmed}` with no notion of HOW "suspected"
+    is reached. The architecture research names the constituent signals: latch
+    forced, unexpected bay open, device absent while charge negotiation is unstable,
+    repeated undock/redock within seconds, motion after closure, and tracker
+    movement with no matching PACS event. "tamper" appears in 62 files; "tamper
+    graph" in none.
+    This matters beyond modelling: row 83 proved that a tamper state arriving from
+    two sources could be silently overwritten. A derivation with named constituent
+    signals is auditable in a way a bare enum is not.
+
+166. **Two iOS CI workflows are documented that do not exist.** — OPEN,
+    mobile-native-engineer. NOTE. The Drive copy of `CODE_REVIEW.md` cites
+    `ios-code-quality.yml` and `swift-code-review.yml`; the repo has `ios-ci.yml`
+    with a `lint-and-security` job. Every path it gives is `ios/…` rather than
+    `native/ios/…`, against CLAUDE.md's rule. Importing it as-is would assert two CI
+    workflows that are not there.
+    WORTH TAKING FROM IT: the human-facing PR checklist for the iOS surface, which
+    the repo does not have — the seven custom SwiftLint rules it documents ALL exist
+    already in `native/ios/.swiftlint.yml`, so only the checklist is new.
+    ALSO: it states "certificate pinning: enable for production" and "ALL API
+    requests signed with HMAC" as present-tense guarantees; pinning is an env-var
+    opt-in (`CERT_PINNING_ENABLED`), off unless set.
+
+167. **The Fleet tradeoff is decided but never written down.** — OPEN,
+    product/principal-engineer. NOTE. CLAUDE.md names Fleet as "the chosen MDM". The
+    founder's own architecture research rates Fleet as better suited to
+    organisations valuing openness and infrastructure-as-code over the deepest
+    traditional mobile-workflow features, and names Jamf or Intune as the
+    conservative choice for Apple estates. Fleet also does not appear in the Gartner
+    endpoint-management listing — stated carefully, that listing showed 40 of 78
+    products with a region filter, so it is corroboration and NOT proof of absence.
+    The choice may well be right. What is missing is the tradeoff written beside it,
+    so it reads as a decision rather than an assumption.
+
+168. **The palette gate cannot see a verdict painted with the WRONG ratified
+    token.** — OPEN, devex-tooling-engineer. Row 151 was three real defects —
+    fail-closed shown as danger, restrict wearing the step-up tone, and two verdicts
+    sharing one legend swatch — and `check-decision-palette.mjs` exited 0 before the
+    fix and exits 0 after it. It asserts that a verdict is painted from a RATIFIED
+    TOKEN, which all three were. It has no concept of WHICH verdict maps to which
+    token, and no concept of a legend at all.
+    So the gate is correct about the property it measures and blind to the one that
+    matters — the extractor-versus-audit boundary again, this time on the palette.
+    WHAT WOULD ACTUALLY HOLD IT, in increasing order of cost: (a) assert that no
+    `.tsx` in a decision-bearing tree contains an inline `outcome === "…"` ternary
+    assigning a `text-status-*` class, forcing every tone decision through a total
+    `Record` the compiler checks — this is cheap and statically decidable, and
+    `artifacts/signalgrid-desktop/src/lib/outcome-tone.ts` is now the reference
+    shape; (b) collect every verdict-labelled fill/stroke and assert each verdict
+    resolves to a DISTINCT rendered value, which is what would have caught the
+    legend; (c) pin the verdict-to-token mapping itself in one registry the gate
+    reads. Start with (a).
 
 51. **`lib/location` remains an undispositioned orphan** — VERIFIED and
     MEASURED 2026-08-23, and now DECIDED: the disposition is row 51a below —

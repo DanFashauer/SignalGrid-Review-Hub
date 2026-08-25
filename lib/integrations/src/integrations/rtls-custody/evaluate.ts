@@ -5,6 +5,7 @@ import type {
   CustodyVerdict,
   NormalizedAssetLocation,
 } from "./types";
+import { posedBound } from "../../utils/posed-bound";
 
 /**
  * Pure, deterministic RTLS / badge-dwell custody evaluator. Turns a device's
@@ -53,8 +54,14 @@ export function evaluateCustodyPosture(
   options: EvaluateCustodyOptions = {},
 ): CustodyVerdict {
   const tracked = options.tracked ?? true;
-  const staleFix = options.staleFixSeconds ?? STALE_FIX_SECONDS_DEFAULT;
-  const abandonDwell = options.abandonDwellSeconds ?? ABANDON_DWELL_SECONDS_DEFAULT;
+  // A garbled bound yields null, NOT the default — see utils/posed-bound.ts. A
+  // null here means the axis cannot be evaluated, and each comparison below treats
+  // that exactly as it treats an unconfirmable MEASUREMENT: it raises.
+  const staleFix = posedBound(options.staleFixSeconds, STALE_FIX_SECONDS_DEFAULT);
+  const abandonDwell = posedBound(
+    options.abandonDwellSeconds,
+    ABANDON_DWELL_SECONDS_DEFAULT,
+  );
 
   const base = {
     zoneId: loc.zoneId,
@@ -99,14 +106,14 @@ export function evaluateCustodyPosture(
   }
   // Fail-safe: an unconfirmable fix age (null) is treated as stale — we never
   // report good custody when the location's freshness can't be confirmed.
-  if (loc.fixAgeSeconds === null || loc.fixAgeSeconds >= staleFix) {
+  if (loc.fixAgeSeconds === null || staleFix === null || loc.fixAgeSeconds >= staleFix) {
     candidates.push({ posture: "stale_fix", action: "locate", reason: "STALE_FIX" });
   }
   // Abandonment: no associated badge AND a long dwell (or an unconfirmable dwell,
   // fail-safe) — a device sitting unattended without its checkout badge.
-  if (loc.badgeAssociated === false && (loc.dwellSeconds === null || loc.dwellSeconds >= abandonDwell)) {
+  if (loc.badgeAssociated === false && (loc.dwellSeconds === null || abandonDwell === null || loc.dwellSeconds >= abandonDwell)) {
     candidates.push({ posture: "abandoned", action: "alert", reason: "ABANDONED" });
-  } else if (loc.badgeAssociated === null && (loc.dwellSeconds === null || loc.dwellSeconds >= abandonDwell)) {
+  } else if (loc.badgeAssociated === null && (loc.dwellSeconds === null || abandonDwell === null || loc.dwellSeconds >= abandonDwell)) {
     // Badge association UNREPORTED over an abandonment-length (or unconfirmable)
     // dwell (wedge #11, caught by the shift-1 sweep): `=== false` alone let null
     // fall through, so a device sitting for hours with an unverifiable badge

@@ -174,6 +174,41 @@ const within = normalizeCredentialRotation(
   { kind: "static_secret", custody: "managed_vault", lastRotatedAt: "2025-12-20T00:00:00.000Z", maxAgeDays: 90 }, REF);
 check("12 days against a 90-day policy → within_policy", within.standing === "within_policy" && within.ageDays === 12);
 
+// A rotation dated in the FUTURE is an unreadable clock, not a fresh credential.
+//
+// Without a guard the negative age was trivially <= maxAgeDays, so the record
+// graded "within_policy" and the verdict was rotation_current / none with
+// rotationConfirmed: true — a permanent clean bill for a static secret that may
+// never have been rotated, reachable from clock skew, a bad timezone conversion on
+// a bridge, or anyone able to write the field. The evidence even carried the
+// negative age as if it were a reading.
+//
+// "unknown", NOT "overdue": a lapse nobody established must not be asserted either.
+// This is the shape local-authority/normalize.ts already uses for a future grant.
+const future = normalizeCredentialRotation(
+  { kind: "static_secret", custody: "managed_vault", lastRotatedAt: "2036-01-01T00:00:00.000Z", maxAgeDays: 90 }, REF);
+check(
+  "a rotation dated in the FUTURE → unknown, never within_policy",
+  future.standing === "unknown",
+);
+check(
+  "...and reports NO age rather than a negative one",
+  future.ageDays === null,
+);
+check(
+  "...so the verdict does not grant, and does not claim rotation was confirmed",
+  (() => {
+    const v = evaluateCredentialRotation(future);
+    return v.action !== "none" && v.rotationConfirmed === false;
+  })(),
+);
+const futureNoPolicy = normalizeCredentialRotation(
+  { kind: "static_secret", custody: "managed_vault", lastRotatedAt: "2036-01-01T00:00:00.000Z" }, REF);
+check(
+  "the no_policy branch reports no age for a future basis either",
+  futureNoPolicy.ageDays === null,
+);
+
 check("a null record is UNCOVERED, not clean", normalizeCredentialRotation(null, REF).covered === false);
 check(
   "an unlisted kind spelling normalizes to unknown, never to short_lived",

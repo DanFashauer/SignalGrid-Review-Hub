@@ -104,7 +104,16 @@ export function runDockSync(
     }
     for (const pair of pairs) {
       store.putSignal({
-        id: deterministicId("sig", connector.tenantId, "device", device.id, pair.category),
+        // connector.id is in the key so a second dock feed cannot overwrite this
+        // row; see the note in connector.ts buildSignal.
+        id: deterministicId(
+          "sig",
+          connector.tenantId,
+          connector.id,
+          "device",
+          device.id,
+          pair.category,
+        ),
         tenantId: connector.tenantId,
         connectorId: connector.id,
         subjectType: "device",

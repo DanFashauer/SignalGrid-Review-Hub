@@ -31,7 +31,7 @@ export const demoScenarios: DemoScenario[] = [
     environment: "400-bed regional hospital, shared iOS medication cart devices, Intune + Entra ID deployment",
     totalDuration: "10–12 minutes",
     prerequisite:
-      "rc:smoke passing. Demo environment connected to Intune sandbox tenant. Two test user identities: Nurse A (on-shift, compliant device) and Nurse B (off-shift, device with open compliance incident).",
+      "CI gate suite passing. Demo environment connected to Intune sandbox tenant. Two test user identities: Nurse A (on-shift, compliant device) and Nurse B (off-shift, device with open compliance incident).",
     openingFrame:
       "You manage 200 nurses across three shifts. They share 40 medication cart iPads. Your existing Conditional Access policy was written for knowledge workers with persistent devices. This morning, a nurse from the previous shift left a device in a non-compliant state, another nurse started their shift and picked it up, and a third device has an open Intune incident from last week. Your EHR workflow doesn't know any of this. SignalGrid does.",
     steps: [

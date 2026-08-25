@@ -127,3 +127,74 @@ surface, not the creation of a missing one.
    compiled 2026-07-14. Re-verify those briefs against today and add IGEL's
    Imprivata Web SSO move, which postdates them. Check what exists before
    writing that it does not: `pnpm run check:absence <topic>`.
+
+---
+
+## Finding 8 — the audience the founder's public writing actually reaches, measured
+
+**Added 2026-08-25.** Source: a LinkedIn creator analytics export for
+**3 April – 1 July 2026**, supplied by the owner from his own Drive with explicit
+permission to use it for the company. The underlying posts are already public;
+what is new here is the measured composition of who saw them.
+
+**This is a new evidence shape for this file, and it needs its own weight.** The
+three tiers above rank what a SOURCE is worth. This is neither a primary document
+nor an organisation's operational statement — it is a **demand-side signal**: who
+chose to read a founder writing about this problem, unprompted, with no product
+being sold. Treat it as corroboration for a vertical, never as pipeline.
+
+### What it does NOT establish, stated first
+
+- **It is small.** ~14.6k impressions and ~6.5k members reached across 90 days,
+  from an account with a few hundred followers. That is a signal about
+  composition, not reach.
+- **An audience is not a buyer.** Nobody in this dataset asked for a demo,
+  entered a pipeline, or spent anything. Reading is not intent.
+- **Engagement is thin in absolute terms.** The best-performing post drew roughly
+  1.3% engagement against its impressions.
+- **Named companies are deliberately absent below.** The export identifies
+  specific employers in the audience, including one health system and one device
+  management vendor. Those names stay in the owner's private Drive per the
+  standing rule that the named target list never enters this public repository —
+  and naming an employer whose staff merely read a post would imply a
+  relationship that does not exist. That is the overclaim this file exists to
+  prevent.
+
+### What it does establish — composition
+
+| Dimension | Measured | Why it matters here |
+| --- | --- | --- |
+| **Industry** | IT services & consulting 28%; software development 10%; **hospitals and health care 8%**; technology/internet 6%; financial services 6%; computer & network security 4% | Healthcare arrives at 8% ORGANICALLY, against writing that is mostly about endpoint management generally. The vertical this repo chose is over-represented relative to a generic IT audience. |
+| **Seniority** | Senior 47%; entry 20%; **director 7%, CXO 4%, VP 3%** | The champion tier — senior individual contributors who have walked the failure themselves — is the bulk. The economic-buyer tier is present at ~14% but thin. `WHY_THIS_EXISTS.md` predicted exactly this split; this is the first measurement of it. |
+| **Company size** | 10,001+ employees 20%; 1,001–5,000 11%; 5,001–10,000 4% | Roughly a third of the audience sits in enterprise-scale estates — the only size where shared-device custody is a program rather than a preference. |
+| **Geography** | One metropolitan area accounts for 28% | Heavily concentrated in the founder's own region. Read as a network effect, not as market demand. |
+
+### The two posts that actually travelled
+
+Both are already public, and both are cited by `WHY_THIS_EXISTS.md` from their
+titles alone. This export adds the measurement:
+
+- A post on how much enterprise IT work is repetitive rather than novel —
+  ~2.5k impressions, the highest engagement count in the period.
+- **"What managing 200k devices taught me"** — ~1.8k impressions, the
+  second-highest engagement.
+
+The observation worth keeping: the two best-performing posts are both about the
+LIVED EXPERIENCE of operating at scale, not about a product, an architecture, or
+a category. The lowest performers are the category-tagged posts. That is a
+positioning input — `positioning-messaging` owns it — and it argues the founding
+story is the asset, which is the premise `WHY_THIS_EXISTS.md` was written on.
+
+### What follows from this
+
+1. **Healthcare stays the first vertical**, and this is the first evidence for
+   that choice that did not come from the product's own design.
+2. **Write for the champion, not the buyer.** 47% senior IC against 14%
+   director-and-above says the person who recognises the problem is not the
+   person who signs. The pilot package should be something a senior engineer can
+   run and then show upward.
+3. **A device-management vendor's staff are in the audience.** The specific name
+   stays in the owner's Drive, but the fact matters: this repo has already chosen
+   an MDM to build against, and there is a warm surface for a partner
+   conversation. `positioning-messaging` and the owner own that call — it is an
+   outreach decision, not a repo change.

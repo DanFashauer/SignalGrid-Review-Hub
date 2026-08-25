@@ -77,10 +77,26 @@ export function auditReviewCoverage(files, entries) {
     }
     if (typeof e?.path !== "string") continue;
 
-    // A prefix claim covers everything beneath it; an exact claim covers one file.
+    // An exact claim covers one file. A PREFIX claim used to cover everything
+    // beneath it, and that was the hole: two directory entries —
+    // `artifacts/signalgrid-web/src` and `.github/workflows` — silently counted 93
+    // files as read on the strength of two lines. `docs/agent/REVIEW_CYCLE.md`
+    // already required "FILE-level ledger entries (never directory prefixes)"; the
+    // gate simply did not enforce the rule it was written beside, so the number
+    // this whole effort exists to make true was inflated by its own checker.
+    //
+    // Found by a reader auditing the web trees, in the ledger rather than in the
+    // code — which is the point of having one.
     const matched = files.filter((f) => f === e.path || f.startsWith(e.path.endsWith("/") ? e.path : `${e.path}/`));
     if (matched.length === 0) {
       problems.push(`${LEDGER}: review claims \`${e.path}\`, which matches no reviewable file in this checkout — the ledger rotted, or the claim was always wrong`);
+    } else if (matched.length > 1 || !files.includes(e.path)) {
+      problems.push(
+        `${LEDGER}: review claims \`${e.path}\`, a DIRECTORY standing in for ${matched.length} file(s) — ` +
+          `a prefix is not a file-level read. Record one entry per file actually opened, ` +
+          `each with a note naming what was and was NOT examined (REVIEW_CYCLE.md).`,
+      );
+      continue;
     }
     for (const f of matched) covered.add(f);
   }
@@ -106,8 +122,30 @@ function selfTest() {
   let a = auditReviewCoverage(files, [ok]);
   checks.push(["an exact-file review covers exactly that file", a.problems.length === 0 && a.coveredCount === 1]);
 
+  // A DIRECTORY claim is FATAL, and this case used to assert the opposite.
+  //
+  // The gate once let a prefix cover everything beneath it, and the self-test
+  // pinned that as intended behaviour — so the defect had a test defending it. Two
+  // directory entries in the real ledger (`artifacts/signalgrid-web/src` and
+  // `.github/workflows`) were silently counting 93 files as read, inflating the one
+  // number this whole effort exists to make true, and the self-test would have
+  // failed anyone who fixed it.
+  //
+  // `REVIEW_CYCLE.md` already required "FILE-level ledger entries (never directory
+  // prefixes)". The gate and its self-test now enforce the rule they were written
+  // beside. BOTH directions are pinned below so the fix cannot regress into
+  // rejecting legitimate exact-file claims.
   a = auditReviewCoverage(files, [{ ...ok, path: "lib" }]);
-  checks.push(["a directory review covers everything beneath it", a.problems.length === 0 && a.coveredCount === 2]);
+  checks.push([
+    "a DIRECTORY review is FATAL — a prefix is not a file-level read",
+    a.problems.some((p) => p.includes("a DIRECTORY standing in for")) && a.coveredCount === 0,
+  ]);
+
+  a = auditReviewCoverage(files, [ok, { ...ok, path: "lib/b.ts" }]);
+  checks.push([
+    "...but two exact-file reviews still cover exactly two files",
+    a.problems.length === 0 && a.coveredCount === 2,
+  ]);
 
   a = auditReviewCoverage(files, [{ ...ok, path: "lib/gone.ts" }]);
   checks.push(["a review of a path that does not exist is FATAL", a.problems.some((p) => p.includes("matches no reviewable file"))]);

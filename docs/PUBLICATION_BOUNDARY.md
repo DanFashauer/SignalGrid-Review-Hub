@@ -88,16 +88,27 @@ partial coverage every run "so partial coverage is never mistaken for full cover
 
 ## Currently pending
 
-Two **Gartner Peer Insights** reports sit in `attached_assets/`, reproduced whole in a
-public repository. Gartner content is licensed and redistribution-restricted, and
-nothing here establishes a right to republish it. Neither file is referenced anywhere
-in the repo, and neither is copied to GitHub Pages.
+**Nothing on this heading is outstanding in HEAD.** The entry that used to sit here —
+two **Gartner Peer Insights** reports reproduced whole in `attached_assets/` — was
+RESOLVED on 2026-08-06 by `9143d73`, *"chore(licensing): remove four republished
+third-party files and gate the class (#171)"*. They were added on 2026-08-03 by
+`4a170db` and removed three days later.
 
-The decision is the owner's: remove them from the tree (reversible — the assessments
-they fed are already recorded in the intake ledger), or record the licence that
-permits publication. **Removal from HEAD does not remove them from git history**;
-purging that needs a rewrite, which `NOTICE` says the provenance record should not
-undergo.
+**This section said otherwise until 2026-08-25**, in the present tense, for nineteen
+days after the fix landed — and the stale text was believed twice in one day: once by
+a reader auditing the web trees, and once by this lane, which filed it as an open
+backlog row and told the owner the exposure was *worse* than when it was first
+recorded. It was not; it was already closed. A document asserting a present-tense
+state that a commit had already changed is the exact defect class this repository
+keeps registries for, and it appeared in the file whose subject is what may be
+published.
+
+**WHAT IS STILL TRUE, and it is a different problem with a different remedy.** The
+files remain in **git history**, exactly as the paragraph below this one has always
+warned. Purging that requires a history rewrite, which `NOTICE` says the provenance
+record should not undergo, and which is the owner's call and nobody else's. That is a
+standing, accepted condition — not a pending task — and it is recorded here so the
+next reader does not rediscover it as news.
 
 ## What a green does not establish
 

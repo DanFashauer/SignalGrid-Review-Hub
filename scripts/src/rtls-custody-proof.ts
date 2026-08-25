@@ -282,6 +282,106 @@ checkLiveGateIsolated({
   },
 });
 
+// ── A garbled caller threshold may not switch a check off ─────────────────────
+//
+// `staleFixSeconds` and `abandonDwellSeconds` are POSED by the caller. They used to
+// be read with a bare `?? DEFAULT`, and the comparisons are `>=`. A NaN threshold
+// makes every `>=` false and an Infinity threshold makes every finite age smaller,
+// so BOTH forms silently switched the check off — and this family's own header says
+// "a device we can't physically see is never mistaken for one in good custody."
+// Every internal fail-safe here is careful, and all of it was defeated by one
+// unreadable option from outside.
+//
+// Executed before the fix: a badge-less device with a fix age and dwell of ~28 hours
+// graded `abandoned / alert` on the defaults, and `in_zone / none / CUSTODY_OK` with
+// NaN or Infinity. A device nobody could see became a device in good custody.
+{
+  const abandonedLoc = {
+    subjectRef: "asset-9001",
+    zoneId: "ward-3",
+    zoneType: "clinical" as const,
+    zoneAuthorized: true,
+    fixAgeSeconds: 99999,
+    dwellSeconds: 99999,
+    badgeAssociated: false,
+    present: true,
+    atEgress: false,
+    covered: true,
+    source: "rtls",
+    observedAt: "2026-07-13T12:00:00.000Z",
+  };
+
+  // EACH AXIS IS ISOLATED, and the first draft of this block was not — it asserted
+  // "does not grant" on a record where the ABANDONMENT axis fired independently, so
+  // it passed with the fix-age guard removed. A test that passes for a reason other
+  // than the one it names is the unfalsifiable-guard defect this repo hunts, and it
+  // appeared here first. Each case below is built so the bound under test is the
+  // ONLY thing that can raise.
+
+  // Fix-age axis alone: badge held, dwell short — nothing else objects.
+  const staleFixOnly = {
+    ...abandonedLoc,
+    badgeAssociated: true,
+    dwellSeconds: 5,
+    fixAgeSeconds: 99999,
+  };
+  const staleFixControl = evaluateCustodyPosture(staleFixOnly as never);
+  check(
+    "fix-age axis control: on the DEFAULT bound this stale fix raises",
+    staleFixControl.recommendedAction !== "none" && staleFixControl.reasonCode === "STALE_FIX",
+  );
+
+  // Dwell axis alone: fix fresh — only the badge-less long dwell can object.
+  const dwellOnly = {
+    ...abandonedLoc,
+    fixAgeSeconds: 5,
+    badgeAssociated: false,
+    dwellSeconds: 99999,
+  };
+  const dwellControl = evaluateCustodyPosture(dwellOnly as never);
+  check(
+    "dwell axis control: on the DEFAULT bound this badge-less dwell raises",
+    dwellControl.recommendedAction !== "none" && dwellControl.reasonCode === "ABANDONED",
+  );
+
+  // WHICH OF THESE ACTUALLY DISCRIMINATE, stated because a case that cannot fail
+  // is not evidence: planting the defect back fails the NaN and Infinity cases
+  // only. `zero` and `negative` pass with OR without the guard, because any
+  // positive age satisfies `age >= 0` and `age >= -1` — the comparison happens to
+  // fall the safe way. They are kept because they pin the INTENT (a non-positive
+  // bound is a garbled pose and must never be honoured) and would become
+  // load-bearing the moment the comparison changed shape or a negative age became
+  // representable. Four falsifiable, two intentional.
+  for (const [label, bound] of [
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+    ["zero", 0],
+    ["negative", -1],
+  ] as ReadonlyArray<readonly [string, number]>) {
+    const byFix = evaluateCustodyPosture(staleFixOnly as never, { staleFixSeconds: bound });
+    check(
+      `a ${label} staleFixSeconds does NOT silence the stale-fix finding`,
+      byFix.recommendedAction !== "none",
+    );
+    const byDwell = evaluateCustodyPosture(dwellOnly as never, { abandonDwellSeconds: bound });
+    check(
+      `a ${label} abandonDwellSeconds does NOT silence the abandonment finding`,
+      byDwell.recommendedAction !== "none",
+    );
+  }
+
+  // The fix must not degrade into "always raise": a HONEST bound still grades.
+  const honest = evaluateCustodyPosture(
+    { ...abandonedLoc, fixAgeSeconds: 10, dwellSeconds: 10, badgeAssociated: true } as never,
+    { staleFixSeconds: 900, abandonDwellSeconds: 3600 },
+  );
+  check(
+    "...and a readable bound over a fresh, badged fix still grants",
+    honest.recommendedAction === "none",
+  );
+}
+
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

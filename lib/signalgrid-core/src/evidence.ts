@@ -47,12 +47,22 @@ export function buildEvidence(
   const osSupported = readBoolean(latestByCategory, "os_support");
   const postureFreshness = readFreshness(latestByCategory);
 
-  const identityEnabled: boolean | "unknown" =
+  // Two sources can speak to whether the account is enabled: the resolved
+  // identity row, and an `identity_state` signal from the identity connector.
+  // Before this fold the signal was normalized, counted into `signalsUsed`, and
+  // never read — so a connector reporting a DISABLED account still produced
+  // `identityEnabled: true` and an allow, while the evidence snapshot recorded
+  // the signal as an input to a decision it had not influenced.
+  const identityEnabledFromRow: boolean | "unknown" =
     identity.state === "enabled"
       ? true
       : identity.state === "disabled"
         ? false
         : "unknown";
+  const identityEnabled = foldIdentityEnabled(
+    identityEnabledFromRow,
+    readBoolean(latestByCategory, "identity_state"),
+  );
 
   const partial = {
     identityEnabled,
@@ -248,6 +258,35 @@ function readCompliance(latestByCategory: LatestByCategory): ComplianceState {
     return "non_compliant";
   }
   return "unknown";
+}
+
+/**
+ * Fold the identity row's state together with the connector's `identity_state`
+ * signal, worst-wins.
+ *
+ * The direction is the whole point, and it is deliberately asymmetric:
+ *
+ * - An affirmative `false` from EITHER source wins. A revoked account must not
+ *   be allowed because the other source had not caught up yet.
+ * - SILENCE NEVER LOOSENS AND NEVER TIGHTENS. An absent signal leaves the row's
+ *   verdict alone, so a fixture with no identity connector behaves exactly as it
+ *   did before this fold existed. Equally, an absent signal can never promote an
+ *   `"unknown"` row to `true` — an unknown stays unknown, which `policy.ts`
+ *   already steps up on.
+ *
+ * The remaining case — row `true`, signal `true` or `"unknown"` — is `true`.
+ */
+export function foldIdentityEnabled(
+  fromRow: boolean | "unknown",
+  fromSignal: boolean | "unknown",
+): boolean | "unknown" {
+  if (fromRow === false || fromSignal === false) {
+    return false;
+  }
+  if (fromRow === "unknown") {
+    return "unknown";
+  }
+  return true;
 }
 
 function readBoolean(

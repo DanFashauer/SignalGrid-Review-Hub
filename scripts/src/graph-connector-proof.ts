@@ -164,6 +164,72 @@ checkLiveGateIsolated({
   },
 });
 
+// ── An agent NAME may not stand in for a management STATE ─────────────────────
+//
+// `normalizeManagement` used to read `if (state === "" && agent !== "") return
+// "managed"` — any non-empty string earned the affirmative. Graph's own vocabulary
+// makes that unsound: `eas` is ActiveSync only and `msSense` is the Defender
+// sensor, and BOTH mean the device is not MDM-managed. A typo qualified equally.
+// Downstream, `posture-composition` grades "managed" as compliant/none and
+// "unknown" as step_up, so one arbitrary string moved a device from challenge to
+// allow — on one of only two families that address a real tenant.
+//
+// The four sibling normalizers in that file all fall through to "unknown" on
+// silence. These cases pin the one that did not, in BOTH directions: a
+// non-enrolling agent must not grant, and a genuine MDM agent must still be
+// recognised, so the fix cannot be "always unknown".
+{
+  const AGENT_CASES: ReadonlyArray<readonly [string, string, string]> = [
+    ["eas", "unknown", "ActiveSync only — explicitly NOT MDM-managed"],
+    ["msSense", "unknown", "Defender sensor — explicitly NOT MDM-managed"],
+    ["zzz-typo", "unknown", "an unrecognised string may not earn an affirmative"],
+    ["", "unknown", "no state and no agent is the sibling behaviour"],
+    ["mdm", "managed", "a genuine MDM agent IS still recognised"],
+    ["intuneClient", "managed", "and so is its sibling enrolling agent"],
+  ];
+
+  const craftedDevices = AGENT_CASES.map(([agent], i) => ({
+    id: `device-agent-${i}`,
+    userId: "user-0001",
+    userPrincipalName: "ward.nurse@example.test",
+    deviceName: `agent-case-${i}`,
+    complianceState: "compliant",
+    // managementState DELIBERATELY ABSENT — that is the case under test.
+    managementAgent: agent,
+    deviceRegistrationState: "registered",
+    lastSyncDateTime: "2026-07-19T11:30:00Z",
+    operatingSystem: "iPadOS",
+    osVersion: "17.5",
+  }));
+
+  const agentConnector = new GraphPostureConnector(
+    { accessToken: fixture.accessToken, baseUrl: BASE_URL, pageLimit: 50 },
+    createMockGraphTransport({
+      users: fixture.users,
+      devices: craftedDevices,
+      expectedToken: fixture.accessToken,
+      pageSize: 10,
+      baseUrl: BASE_URL,
+    }),
+  );
+  const agentSignals = await agentConnector.fetchPosture(OBSERVED_AT);
+
+  check(
+    "agent-name cases: one posture signal per crafted device",
+    agentSignals.length === AGENT_CASES.length,
+  );
+
+  AGENT_CASES.forEach(([agent, expected, why], i) => {
+    const got = (agentSignals[i] as { deviceManagementState?: string } | undefined)
+      ?.deviceManagementState;
+    check(
+      `managementState absent + agent "${agent || "(none)"}" -> ${expected} (${why})`,
+      got === expected,
+    );
+  });
+}
+
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) {

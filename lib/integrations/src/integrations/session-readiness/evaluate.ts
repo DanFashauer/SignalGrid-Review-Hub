@@ -5,6 +5,7 @@ import type {
   SessionReadinessReasonCode,
   SessionReadinessVerdict,
 } from "./types";
+import { posedBound } from "../../utils/posed-bound";
 
 /** The unified ladder, minus the two rungs this family has no standing to reach. */
 const ACTION_RANK: Record<SessionReadinessAction, number> = {
@@ -39,8 +40,9 @@ const SPECIFICITY: Record<SessionReadinessReasonCode, number> = {
   READINESS_BUDGET_EXCEEDED: 5,
   APP_DEGRADED: 6,
   READINESS_UNKNOWN: 7,
-  READINESS_BUDGET_UNPOSED: 8,
-  SESSION_READY: 9,
+  READINESS_BUDGET_UNREADABLE: 8,
+  READINESS_BUDGET_UNPOSED: 9,
+  SESSION_READY: 10,
 };
 
 /**
@@ -90,14 +92,45 @@ export function evaluateSessionReadiness(state: NormalizedSessionReadiness): Ses
   // `service-lifecycle`'s equality guard went unfalsifiable. Pushing the LESS specific
   // candidate first makes the collision real, and the mutation guard caught this on
   // this family's very first sweep.
+  // A budget whose threshold cannot be READ is a third state, and it is the one
+  // that used to vanish. `elapsed > NaN` and `elapsed > undefined` are both false,
+  // so no EXCEEDED candidate fired — AND because `budget !== null`, the honest
+  // UNPOSED arm below was skipped too. Both the finding and its fallback switched
+  // off at once, and a garbled budget graded STRICTLY BETTER than no budget: `ready
+  // / none` against the `degraded / monitor` an absent one produces. A misspelled
+  // key in a deployment's config satisfies `ReadinessBudget` structurally and does
+  // exactly this.
+  //
+  // Kept DISTINCT from UNPOSED on purpose. "You did not pose a budget" and "the
+  // budget you posed is unreadable" have different owners and different fixes, and
+  // collapsing them would lose the difference the rest of this family works to keep.
+  // NOTE the asymmetry with `posedBound`'s own contract, and it is deliberate.
+  // There, `undefined` means "not posed" and yields the fallback. HERE a budget
+  // OBJECT exists, so `thresholdSeconds` is not optional — a budget carrying no
+  // readable threshold is a garbled pose, not an absent one. That case is the
+  // realistic one: a config with a misspelled key (`thresholdSecs`) satisfies
+  // `ReadinessBudget` structurally and arrives as `undefined`.
+  const budgetThreshold =
+    state.budget === null
+      ? null
+      : posedBound(
+          state.budget.thresholdSeconds === undefined
+            ? Number.NaN
+            : state.budget.thresholdSeconds,
+          Number.NaN,
+        );
+  if (state.budget !== null && budgetThreshold === null) {
+    candidates.push({ action: "monitor", reason: "READINESS_BUDGET_UNREADABLE" });
+  }
   if (
     state.budget !== null &&
+    budgetThreshold !== null &&
     // `elapsedToUsableSeconds !== null` is INERT and kept deliberately: JS coerces
     // `null > 30` to false, so removing it changes no outcome. It states the intent —
     // this branch compares two numbers — and becomes load-bearing the moment the
     // comparison changes shape. Registered as an ALLOWED inert term in the guard.
     state.elapsedToUsableSeconds !== null &&
-    state.elapsedToUsableSeconds > state.budget.thresholdSeconds
+    state.elapsedToUsableSeconds > budgetThreshold
   ) {
     candidates.push({
       action: state.workflowRisk === "critical" ? "restrict" : "alert",
@@ -185,7 +218,8 @@ function postureFor(winner: Candidate): SessionReadinessPosture {
     winner.reason === "READINESS_PLANE_UNREACHABLE" ||
     winner.reason === "READINESS_UNMEASURED_NOT_INSTRUMENTED" ||
     winner.reason === "READINESS_UNKNOWN" ||
-    winner.reason === "REPORT_MALFORMED"
+    winner.reason === "REPORT_MALFORMED" ||
+    winner.reason === "READINESS_BUDGET_UNREADABLE"
   ) {
     return "unassessed";
   }

@@ -1,6 +1,7 @@
 import React from "react";
 import { useGetDashboardMetrics, useGetDecisionSeries, useListDecisions, useListLatestSignals } from "@workspace/api-client-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { outcomeTone } from "../lib/outcome-tone";
 
 export default function DashboardPage() {
   const { data: metrics, isLoading } = useGetDashboardMetrics({ window: "24h" });
@@ -107,11 +108,7 @@ export default function DashboardPage() {
           <div className="space-y-1.5">
             {decisions?.decisions.slice(0, 8).map(d => (
               <div key={d.id} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-muted/30 transition-colors decision-row">
-                <span className={`text-xs font-mono font-semibold w-14 shrink-0 ${
-                  d.outcome === "allow" ? "text-status-allow" :
-                  d.outcome === "deny" ? "text-status-deny" :
-                  d.outcome === "step-up" ? "text-status-step-up" : "text-status-restrict"
-                }`}>{d.outcome.toUpperCase()}</span>
+                <span className={`text-xs font-mono font-semibold w-14 shrink-0 ${outcomeTone(d.outcome)}`}>{d.outcome.toUpperCase()}</span>
                 <span className="text-xs font-mono text-foreground/80 truncate flex-1">{d.identityId}</span>
                 <span className="text-xs font-mono text-muted-foreground shrink-0">{d.latencyMs}ms</span>
               </div>

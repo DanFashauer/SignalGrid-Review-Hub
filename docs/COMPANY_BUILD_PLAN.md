@@ -3847,23 +3847,34 @@ earlier — that is the loop working, not a reason to soften the record.
     so it reads as a decision rather than an assumption.
 
 168. **The palette gate cannot see a verdict painted with the WRONG ratified
-    token.** — OPEN, devex-tooling-engineer. Row 151 was three real defects —
-    fail-closed shown as danger, restrict wearing the step-up tone, and two verdicts
-    sharing one legend swatch — and `check-decision-palette.mjs` exited 0 before the
-    fix and exits 0 after it. It asserts that a verdict is painted from a RATIFIED
-    TOKEN, which all three were. It has no concept of WHICH verdict maps to which
-    token, and no concept of a legend at all.
-    So the gate is correct about the property it measures and blind to the one that
-    matters — the extractor-versus-audit boundary again, this time on the palette.
-    WHAT WOULD ACTUALLY HOLD IT, in increasing order of cost: (a) assert that no
-    `.tsx` in a decision-bearing tree contains an inline `outcome === "…"` ternary
-    assigning a `text-status-*` class, forcing every tone decision through a total
-    `Record` the compiler checks — this is cheap and statically decidable, and
-    `artifacts/signalgrid-desktop/src/lib/outcome-tone.ts` is now the reference
-    shape; (b) collect every verdict-labelled fill/stroke and assert each verdict
-    resolves to a DISTINCT rendered value, which is what would have caught the
-    legend; (c) pin the verdict-to-token mapping itself in one registry the gate
-    reads. Start with (a).
+    token.** — MITIGATED 2026-08-25 by option (a), devex-tooling-engineer. Row 151
+    was three real defects — fail-closed shown in the danger tone, `restrict`
+    wearing the step-up tone, and two verdicts sharing one legend swatch — and
+    `check-decision-palette.mjs` exited 0 before the fix and exits 0 after it. It
+    asserts that a verdict is painted from a RATIFIED TOKEN, which all three were.
+    It has no concept of WHICH verdict maps to which token, and none of a legend.
+    OPTION (a) SHIPPED: `scripts/check-verdict-tone-source.mjs` fails on any inline
+    expression that compares a verdict and picks a status class in the same breath,
+    forcing every tone decision through a total `Record` the compiler checks.
+    Registered in preflight and CI. A fourth independent ternary had survived in
+    `artifacts/signalgrid-desktop/src/pages/Dashboard.tsx`; it now calls
+    `outcomeTone`, and the tree scans clean across 231 files.
+    Falsified by restoring the ternary — one finding, exit 1.
+    TWO THINGS THE GATE GOT WRONG FIRST, both found by running it against the real
+    file rather than only against fixtures. It scanned sliding windows and reported
+    the WINDOW'S first line, which pointed at an innocent `<div>` four lines above
+    the defect — a finding that names the wrong line gets checked, found blameless,
+    and disbelieved, which is worse than a vague one. And it reported one chained
+    ternary as two findings, because each arm matched its own window. It now anchors
+    on the comparison line and coalesces the arms; both behaviours are pinned by
+    assertions, one of which asserts the exact line number.
+    WHAT IT STILL CANNOT DO, and this is why the row reads mitigated rather than
+    fixed: a total `Record` with the WRONG colours in it passes. Centralising the
+    decision does not make it correct — it makes it reviewable, and makes the next
+    drift a typecheck failure instead of a silent fourth opinion. Options (b) —
+    assert each verdict resolves to a DISTINCT rendered value, which is what would
+    have caught the legend — and (c), pinning the mapping in one registry the gate
+    reads, remain open and are the ones that would close it.
 
 170. **A row's status can be WRONG in either direction, and no gate can tell.** —
     OPEN, program-manager. This session produced both failures. Four rows (83, 89,

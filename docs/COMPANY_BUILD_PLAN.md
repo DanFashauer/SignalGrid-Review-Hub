@@ -3896,6 +3896,39 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+182. **The claims gate read zero of 281 public documents.** — MITIGATED 2026-08-25,
+    positioning-messaging. `scripts/check-launch-claims.mjs` reads the website, the
+    Pages-derived HTML, the outreach surface and anything carrying the public
+    contact address — 95 files. It read NO markdown under `docs/`, in a repository
+    whose own `NOTICE` calls it a public reference surface. The first docs-writer
+    shift found the pitch-deck defect reproduced there: a table headed "SignalGrid
+    surface (today)" listing 23 deferred connector families, with the freeze
+    disclaimer 180 lines below it.
+    WHY A CEILING AND NOT A GATE, measured before deciding rather than after.
+    Bringing `docs/` into the fatal scope fails 120 of 285 files on day one, and
+    reading what is flagged says why that is wrong:
+    `docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md` at 45 blocks,
+    `docs/research/MARKET_LANDSCAPE.md`, `KONTAKT_RTLS_INTEGRATION_NOTES.md`. Those
+    say "RTLS" and "geofence" because that is their SUBJECT — engineering and
+    research notes, not copy promising anything. The gate's own header argues three
+    separate times that a gate which cries wolf gets switched off.
+    So `docs/agent/launch-claims-docs-ceiling.json` records the debt on the pattern
+    row 170 established: a ceiling that may fall and may not rise. Baseline 511
+    mentions across 121 files. The buyer-facing arm stays FATAL and unchanged.
+    THE FIRST VERSION COUNTED THE WRONG THING, and falsifying it is the only reason
+    that surfaced. It counted FILES — which answers "did a document acquire its
+    first unhedged claim", not "did a new unhedged claim appear". A fresh deferred
+    claim planted in a document already on the list left the count unchanged and
+    the gate passed, so a new overclaim in any of the 121 worst documents was
+    invisible. The unit is now MENTIONS. Three falsifications now fire: a new claim
+    in an already-listed file, one in a previously clean file, and the original
+    fatal arm on the website. Gate runs in 196 ms.
+    WHAT IS STILL NOT DONE: narrowing the fatal scope to genuinely buyer-facing
+    prose. `public_review` in the publication boundary answers "is this safe to
+    publish", not "does a buyer read this as a promise", and covers all of `docs`,
+    so it does not derive the answer. That is an editorial judgement nobody has
+    made, and it is not pretended here.
+
 178. **Four roles switched on for the first time, and the first shift of each found
     something the gates do not see.** — FIXED in part 2026-08-25, program-manager.
     `check-surface-ownership.mjs` reports 0 unowned files of 2,347 and

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-signalgrid-native-now-routes-mac-evidence-",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "signalgrid-native now routes Mac evidence work through the evidence-toolchain skill (#321)",
+  "body": "#321 (merged, f748408) added a 'Mac evidence cross-check' section to your skill, .claude/skills/signalgrid-native/SKILL.md. When you act as mobile-native-engineer or validate Mac posture, you now also load .claude/skills/signalgrid-evidence-toolchain/SKILL.md and docs/agent/EVIDENCE_TOOLCHAIN_OWNERSHIP.md, and keep source provenance separate even when two tools report the same value: signalgrid-mcp is the first-party grid_collected path; Fleet/osquery keeps Fleet provenance; MacAdmins osquery-extension is an independent cross-check; SOFA/Munki/Santa/ReportMate are research/reference under the breadth freeze, not launch connectors. A disagreement is contradiction evidence — never pick the least-restrictive source. This adds no new native platform, connector family, or launch promise. Also merged since your last pull: #322 (retired category labels removed sitewide + reconciled README launch boundary + a retired-label gate) and #323 (deck CI-claim, DPoP attribution, and Federal/DoD pricing corrections). Nothing here changes scripts/mac/**, run-live-lanes.sh, or the sim loop."
+}

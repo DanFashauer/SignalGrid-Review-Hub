@@ -12,8 +12,9 @@ built" ages just as badly as one that overclaims): the token-verification layer
 is built and proof-gated in this public repo. `@workspace/enterprise-auth` is
 the production verifier, and `proof:live-idp` exercises it against a real,
 certified OpenID Connect provider booted in-process — real RS256 signatures
-from the provider's own keystore, real JWKS fetch, real DPoP `cnf.jkt`
-binding — covering a substantial slice of the negative-test families listed at
+from the provider's own keystore and a real JWKS fetch; the DPoP `cnf.jkt`
+binding is demonstrated at the IdP/client level (RFC 7638 thumbprint agreement
+with the provider), not validated by the token verifier itself — covering a substantial slice of the negative-test families listed at
 the bottom of this page (forged signature, `alg` confusion, wrong issuer, wrong
 audience, expiry, token-type confusion). What remains future, exactly as this
 page frames it: the customer-capable PROFILE around that verifier — user store,

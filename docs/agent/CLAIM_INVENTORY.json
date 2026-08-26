@@ -764,7 +764,8 @@
    "kind": "availability",
    "classification": "unsubstantiated",
    "evidence": "No Federal/DoD offering exists; Pricing.tsx:85 states the air-gap Federal/DoD deployment \"is a design modeled on public-safe fixtures, not an available offering\", and docs/SECURITY_BASELINE_ALIGNMENT.md:107-109 forbids asserting any authorization",
-   "action": "rewrite"
+   "action": "rewrite",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): reworded so the Federal/DoD tier reads as a pre-announcement design conversation modeled on public-safe fixtures, not delivered features; the one real capability (consuming CIS/STIG/SCAP benchmark results as a decision signal) is stated precisely."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -773,7 +774,8 @@
    "kind": "framework",
    "classification": "unsubstantiated",
    "evidence": "docs/SECURITY_BASELINE_ALIGNMENT.md:107-109 \u2014 \"These are mappings, not certifications\u2026 does not assert it is STIG-hardened, CIS-certified, FedRAMP/CMMC-authorized\"; that file (:98-105) is the ONLY substantiation and lists no CMMC row at all \u2014 the sole CMMC mentions in docs are non-claims (SECURITY_BASELINE_ALIGNMENT.md:108, docs/WHAT_SIGNALGRID_DOES_TODAY.md:151). The \"-oriented\"/\"path\" hedging and \"(pre-announcement)\" keep it short of a forbidden phrasing, but no artifact grounds the mapping",
-   "action": "rewrite"
+   "action": "rewrite",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): reworded so the Federal/DoD tier reads as a pre-announcement design conversation modeled on public-safe fixtures, not delivered features; the one real capability (consuming CIS/STIG/SCAP benchmark results as a decision signal) is stated precisely."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -782,7 +784,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No air-gap deployment code or artifact exists (repo-wide search of lib/, artifacts/api-server/src, scripts/ returns only lib/integrations/src/integrations/sse-egress/types.ts:20, an unrelated comment); Pricing.tsx:85 concedes it is \"not an available offering\"",
-   "action": "rewrite"
+   "action": "rewrite",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): reworded so the Federal/DoD tier reads as a pre-announcement design conversation modeled on public-safe fixtures, not delivered features; the one real capability (consuming CIS/STIG/SCAP benchmark results as a decision signal) is stated precisely."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -791,7 +794,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No base image of any kind exists in the repo; docs/SECURITY_BASELINE_ALIGNMENT.md:104 maps STIG/SCAP only as a CONSUMED benchmark result, and :107-109 states SignalGrid \"does not assert it is STIG-hardened\" and \"does not run a CIS/STIG/SCAP scan\"",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): row removed from the Federal/DoD tier \u2014 no artifact grounds this framework claim."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -800,7 +804,8 @@
    "kind": "framework",
    "classification": "unsubstantiated",
    "evidence": "docs/SECURITY_BASELINE_ALIGNMENT.md:127-128 \u2014 \"No compliance, certification, authorization, or partnership is claimed (no \u2026 'FedRAMP authorized', or similar)\"; the roadmap qualifier is honest but sits in a checkmarked included-features list, which reads as delivered",
-   "action": "rewrite"
+   "action": "rewrite",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): reworded so the Federal/DoD tier reads as a pre-announcement design conversation modeled on public-safe fixtures, not delivered features; the one real capability (consuming CIS/STIG/SCAP benchmark results as a decision signal) is stated precisely."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -809,7 +814,8 @@
    "kind": "framework",
    "classification": "unsubstantiated",
    "evidence": "No IL2\u2013IL5 mapping exists anywhere in docs/ or lib/; docs/SECURITY_BASELINE_ALIGNMENT.md:98-105 is the only framework-mapping table and contains no DoD impact-level row; :123-128 lists the non-claims",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): row removed from the Federal/DoD tier \u2014 no artifact grounds this framework claim."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -818,7 +824,8 @@
    "kind": "framework",
    "classification": "unsubstantiated",
    "evidence": "No CMMC mapping document exists \u2014 every CMMC mention in the estate is a disclaimer (docs/SECURITY_BASELINE_ALIGNMENT.md:108, docs/WHAT_SIGNALGRID_DOES_TODAY.md:151 lists CMMC under \"Certifications / authorizations\" NOT claimed, docs/OWNER_ACTIONS.md:160); the only substantiated mappings are the six rows at docs/SECURITY_BASELINE_ALIGNMENT.md:100-105",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): row removed from the Federal/DoD tier \u2014 no artifact grounds this framework claim."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -827,7 +834,8 @@
    "kind": "framework",
    "classification": "unsubstantiated",
    "evidence": "No ITAR/EAR analysis, control or document exists in the repo; docs/SECURITY_BASELINE_ALIGNMENT.md:98-105 (the only substantiation surface) has no such row and :127 forbids claiming unearned regulatory posture",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): row removed from the Federal/DoD tier \u2014 no artifact grounds this framework claim."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -836,7 +844,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No classified-network design artifact exists; Pricing.tsx:85 states the Federal/DoD deployment \"is a design modeled on public-safe fixtures, not an available offering\"",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): row removed from the Federal/DoD tier \u2014 no artifact grounds this framework claim."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -845,7 +854,8 @@
    "kind": "availability",
    "classification": "unsubstantiated",
    "evidence": "No services capability or engagement exists; docs/DECISION_RECORDS.md:243-259 (DR-005) fixes the launch edge and the owner's constraint \"do not widen the product again now\"; Pricing.tsx:103 disclaims any live offer",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): row removed from the Federal/DoD tier \u2014 no artifact grounds this framework claim."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -854,7 +864,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No licensing code of any kind exists \u2014 a repo-wide search of lib/, artifacts/api-server/src and scripts/ for \"offline license\"/\"license model\" returns nothing; there is likewise no metering or entitlement surface (only auth keys at lib/api-spec/v1-openapi.yaml:74, itself demo_only per scripts/launch-profile.mjs:377-385)",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): row removed from the Federal/DoD tier \u2014 no artifact grounds this framework claim."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -863,7 +874,8 @@
    "kind": "framework",
    "classification": "unsubstantiated",
    "evidence": "docs/SECURITY_BASELINE_ALIGNMENT.md:104 does map \"DISA STIG + SCAP / XCCDF / OVAL\" as a consumable baseline result \u2014 but :125 states SignalGrid \"does not run a CIS/STIG/SCAP scan\", so listing it as a delivered Federal-tier feature overstates a documented input mapping; no proof:* script covers a SCAP/XCCDF path",
-   "action": "rewrite"
+   "action": "rewrite",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): reworded so the Federal/DoD tier reads as a pre-announcement design conversation modeled on public-safe fixtures, not delivered features; the one real capability (consuming CIS/STIG/SCAP benchmark results as a decision signal) is stated precisely."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -872,7 +884,8 @@
    "kind": "availability",
    "classification": "unsubstantiated",
    "evidence": "No design partner or engagement exists; docs/DECISION_RECORDS.md:236-259 records the pre-buyer stage and Pricing.tsx:103 disclaims any live offer",
-   "action": "rewrite"
+   "action": "rewrite",
+   "resolution": "\u2714 RESOLVED 2026-08-26 (this PR): reworded so the Federal/DoD tier reads as a pre-announcement design conversation modeled on public-safe fixtures, not delivered features; the one real capability (consuming CIS/STIG/SCAP benchmark results as a decision signal) is stated precisely."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",

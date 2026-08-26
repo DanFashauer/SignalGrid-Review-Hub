@@ -63,6 +63,35 @@ Simulator-only demo flags live in `EnterpriseShell/Services/DemoMode.swift`.
 So `pnpm run build` (the vite web build) **only runs on linux-x64 / in CI**.
 A web-build failure on your Mac is expected — do not try to fix it.
 
+## Mac evidence cross-check
+
+When this role is acting as `mobile-native-engineer` or validating Mac posture,
+also read `.claude/skills/signalgrid-evidence-toolchain/SKILL.md` and
+`docs/agent/EVIDENCE_TOOLCHAIN_OWNERSHIP.md`.
+
+Keep source provenance separate even when two tools report the same value:
+
+- `signalgrid-mcp` is the first-party Mac-native `grid_collected` path.
+- Fleet/osquery is the managed endpoint source and keeps Fleet/osquery provenance.
+- MacAdmins `osquery-extension` is an independent Mac evidence cross-check for
+  MDM, software-management, SOFA-derived security/update state, Unified Log and
+  network-quality facts.
+- SOFA is independent Apple software/security currency evidence; it does not
+  become an MDM or launch connector by being queried in the lab.
+- Munki is software-management intent/state research; desired state is not proof
+  that software is actually installed or healthy.
+- Santa is deferred execution/security evidence research unless a ratified
+  evidence dimension explicitly requires it.
+- ReportMate is an architecture/reference cross-check; its server/API/MCP reuse
+  requires a separate licence review before any code is embedded.
+
+For overlapping facts, record source identity, observation time, collection
+method/fidelity, required privilege and freshness. A disagreement is contradiction
+evidence; never choose the source that produces the least restrictive verdict.
+
+Independent evidence sources improve verification coverage. They do not create a
+new native platform, new connector family, or new launch promise.
+
 ## Maintain, do not extend
 
 Four native surfaces already exceed what this org can carry. Android, desktop,

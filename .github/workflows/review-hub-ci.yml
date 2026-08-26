@@ -437,6 +437,10 @@ jobs:
         run: pnpm run proof:absent-collection
       - name: "Mutation sharding partitions the registry (the daily sweep loses no target)"
         run: node scripts/check-mutation-sharding.mjs
+      - name: "Backlog row citations name rows that exist"
+        run: node scripts/check-row-citations.mjs
+      - name: "Row-citation gate self-test (it can actually fail)"
+        run: node scripts/check-row-citations.mjs --self-test
       - name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)"
         run: node scripts/check-it-layer-model.mjs
       - name: "IT-layer model self-test (the gate can actually fail)"

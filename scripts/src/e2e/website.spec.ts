@@ -32,7 +32,7 @@ test.beforeEach(async ({ page }) => {
 test("landing page renders with brand and hardware nav", async ({ page }) => {
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await expect(page).toHaveTitle(
-    "SignalGrid — Operational Trust Orchestration for Shared Devices",
+    "SignalGrid — Shared-Device Trust Gateway",
   );
   // Scoped to the header — the footer repeats both the brand and the link.
   await expect(

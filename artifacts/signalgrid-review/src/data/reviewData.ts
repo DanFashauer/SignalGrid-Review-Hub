@@ -428,7 +428,7 @@ export const dimensionReviews: DimensionReview[] = [
     observations: [
       "Runtime decision layer positioning for shared-device and frontline environments is differentiated",
       "Conservative framing (not replacing IAM/UEM/SIEM/ITSM) protects credibility",
-      "Zero Trust orchestration framing aligns with current enterprise security vocabulary",
+      "Runtime decision-layer framing aligns with current enterprise security vocabulary",
       "Competitive differentiation from Okta Device Trust, CrowdStrike ZTA, Microsoft Conditional Access not yet articulated",
       "The 'extend existing stack' objection is identified but not answered in current materials",
     ],

@@ -47,6 +47,39 @@ Each was written accurately and became false without anyone touching it.
    before asserting an absence that may already have been disproven.
 7. **Date what you measure.** "Verified 2026-08-18 by running X" ages honestly.
    An undated claim pretends to be permanent.
+8. **Name an external tool by its actual adoption state.** Research/reference,
+   registry candidate, installed, deployed, CI-required and product-visible are
+   different claims. Do not promote one state into another because a repository
+   exists or a local experiment succeeded.
+9. **Preserve proof-layer language.** Bruno, Schemathesis, oasdiff, Prism, Hurl,
+   MCP Inspector, Fleet/osquery and Mac evidence sources prove different things.
+   A mock is not live-wire proof; a fuzz pass is not product readiness; an MCP
+   metadata check is not publication; two agreeing sources do not become one
+   authoritative source.
+
+For documentation about API/MCP/Fleet/osquery/Mac verification sources, read
+`.claude/skills/signalgrid-evidence-toolchain/SKILL.md`,
+`docs/agent/EVIDENCE_TOOLCHAIN_OWNERSHIP.md`, and the current
+`docs/OPEN_SOURCE_LAB_REGISTRY.md` before writing status language.
+
+## Evidence-toolchain claim vocabulary
+
+Use the narrowest truthful verb:
+
+- **researched / studied** — documentation or source was reviewed;
+- **candidate** — selected for possible use, not installed/deployed;
+- **installed** — dependency/tool is present in a defined environment;
+- **executed** — a specific run occurred; name where and when;
+- **deployed in lab** — the repository's deployment-evidence rule is satisfied;
+- **CI-required** — a checked workflow/gate requires it;
+- **live-wire proven** — the real named source emitted/accepted the tested wire
+  behavior; this still is not customer or production proof;
+- **customer/pilot/production proven** — only when evidence from that environment
+  actually exists and publication authority permits the claim.
+
+When sources overlap, documentation preserves each source identity, observation
+time, fidelity and freshness. Do not describe a contradiction as "verified" until
+the contradiction is actually resolved by evidence or policy.
 
 ## The publication boundary
 

@@ -82,10 +82,25 @@ route beside others and dropping them — are a real defect class here.
 | Doc citing a nonexistent path | `pnpm run check:cited-paths`. |
 | Absence claimed from one grep | `pnpm run check:absence <topic>`. |
 | Overclaim | Production-ready, certified, partner, autonomous remediation. |
+| API contract drift | Compare implementation/OpenAPI/Bruno; use oasdiff for base→head compatibility and Schemathesis for generated edge cases when available. |
+| Vacuous API proof | Confirm Bruno/Schemathesis actually executed the expected requests/operations/cases, not merely exited zero. |
+| MCP protocol drift | Run the official MCP Inspector when available; enumerate and call the expected tools/resources and compare annotations with actual behavior. |
+| MCP permission lie | A tool marked read-only/destructive=false must not consume or mutate endpoint state behind the label; inspect underlying permissions/actions. |
+| Source-provenance collapse | If Fleet/osquery, native Mac, SOFA or another source reports the same fact, confirm the evidence keeps source, time, fidelity and freshness distinct. |
+| Unreviewed external dependency | Check registry classification, exact licence basis, mutation posture, pin/provenance and whether "research" was silently promoted to "required/deployed." |
+
+For API, MCP, Fleet/osquery or Mac evidence work, read
+`.claude/skills/signalgrid-evidence-toolchain/SKILL.md` and
+`docs/agent/EVIDENCE_TOOLCHAIN_OWNERSHIP.md` before issuing a verdict.
 
 **4. Try to break the guard, not just run it.** A guard nobody has watched fail
 is a guard nobody should trust. Plant the defect it claims to catch and confirm
 it fails. If it passes, the guard is the finding.
+
+For evidence-toolchain gates, break the layer they claim to protect: introduce a
+breaking OpenAPI change for an oasdiff gate, an invalid/edge request for an API
+adversarial lane, or an MCP annotation/tool mismatch for an Inspector-facing
+check. Do not accept a tool because its own install command works.
 
 **5. Record what you did NOT check.** Coverage gaps are findings. "Not verified:
 iOS build — no Xcode in this environment" is worth more than silence.
@@ -97,6 +112,9 @@ iOS build — no Xcode in this environment" is worth more than silence.
 - A partial, killed, or timed-out run proves nothing — re-run in isolation
   before reporting anything as failing or hanging.
 - A gate registered in preflight but not CI is not a gate.
+- A mock, fixture, fuzz run or local lab run is not customer/production proof.
+- Two agreeing sources remain two provenances; two disagreeing sources become
+  contradiction evidence rather than an invitation to pick the friendlier answer.
 - No secret, tenant ID, customer data, PHI, or live vendor call. Ever.
 
 ## Findings format

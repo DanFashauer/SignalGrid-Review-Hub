@@ -207,7 +207,30 @@ export class PasskeyAssuranceConnector {
   async fetchNormalized(identityRef: string, credentialRef?: string): Promise<NormalizedPasskey> {
     guardReadOnly("GET");
     const raw = await this.transport({ identityRef, credentialRef, token: this.config.accessToken });
-    return normalizeReport(identityRef, raw, this.config.source ?? "passkey-idp-export");
+    const report = normalizeReport(identityRef, raw, this.config.source ?? "passkey-idp-export");
+
+    // SUBSTITUTION GUARD, and it belongs HERE rather than around the caller.
+    //
+    // A source that answers a request for a weak credential with a healthy
+    // DIFFERENT one would otherwise be accepted. The verdict is not a lie — it
+    // carries the returned `credentialRef` — but it truthfully answers a question
+    // nobody asked, and a caller who asked "grade cred-A" is told `none` and
+    // `passkeyConfirmed: true` about cred-B.
+    //
+    // This check lived on `fetchNormalizedSet` only, which called straight through
+    // to this method with the same `credentialRef` argument and then guarded the
+    // result. So the set path was protected and the primitive it is built on was
+    // not — a guard one layer above the thing it guards. Found by the first
+    // qa-engineer shift, 2026-08-25.
+    //
+    // Only fires when a ref was actually REQUESTED: `fetchNormalized(id)` with no
+    // ref is asking "whatever this identity has", and there is nothing to
+    // contradict. An empty returned ref is a separate defect the evaluator raises
+    // as `CREDENTIAL_REF_MISSING`, so it is not swallowed here.
+    if (credentialRef !== undefined && report.credentialRef.length > 0 && report.credentialRef !== credentialRef) {
+      return { ...report, reportIntegrity: "malformed" as const };
+    }
+    return report;
   }
 
   /** Fetch a NAMED SET of credentials for one identity. The caller supplies the refs
@@ -220,16 +243,11 @@ export class PasskeyAssuranceConnector {
     guardReadOnly("GET");
     return Promise.all(
       credentialRefs.map(async (ref) => {
-        const report = await this.fetchNormalized(identityRef, ref);
-        // SUBSTITUTION GUARD (review finding): a source that answers a request for a
-        // weak credential with a healthy DIFFERENT credential would otherwise be
-        // accepted, and two such substitutions could even satisfy an authoritative
-        // count while the requested credentials were never graded. A returned ref
-        // that does not match the requested one is a substitution, not an answer.
-        if (report.credentialRef.length > 0 && report.credentialRef !== ref) {
-          return { ...report, reportIntegrity: "malformed" as const };
-        }
-        return report;
+        // The substitution guard now lives in `fetchNormalized` itself, which this
+        // calls with the same ref — so the set path inherits it. Two copies of one
+        // rule is how the copies drift, and this repository spent 2026-08-25
+        // repairing two instances of exactly that.
+        return this.fetchNormalized(identityRef, ref);
       }),
     );
   }

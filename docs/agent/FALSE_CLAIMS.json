@@ -4,7 +4,7 @@
   "claims": [
     {
       "id": "android-absent",
-      "claimed": "Android does not exist in any form \u2014 zero .kt, .gradle or android files",
+      "claimed": "Android does not exist in any form — zero .kt, .gradle or android files",
       "assertedBy": "docs/DELIVERY_GAP_ANALYSIS.md, then repeated by two external analyses",
       "assertedOn": "2026-08-08",
       "whyItHappened": "The document was measured correctly and then overtaken the same morning by PR #196. Everyone downstream quoted the document instead of the tree.",
@@ -24,7 +24,7 @@
     },
     {
       "id": "tauri-desktop-absent",
-      "claimed": "No Electron, Tauri, .csproj or .sln files exist \u2014 there is no native desktop shell",
+      "claimed": "No Electron, Tauri, .csproj or .sln files exist — there is no native desktop shell",
       "assertedBy": "docs/DELIVERY_GAP_ANALYSIS.md",
       "assertedOn": "2026-08-08",
       "whyItHappened": "Same stale-document error; native/desktop landed in PR #199 hours later.",
@@ -43,10 +43,10 @@
     },
     {
       "id": "dock-firmware-absent",
-      "claimed": "Embedded firmware is ABSENT \u2014 zero .ino, .c, .cpp or .h files in the entire repository",
+      "claimed": "Embedded firmware is ABSENT — zero .ino, .c, .cpp or .h files in the entire repository",
       "assertedBy": "docs/DELIVERY_GAP_ANALYSIS.md",
       "assertedOn": "2026-08-08",
-      "whyItHappened": "THE SEARCH WAS THE ERROR, not the tree. It enumerated C-family extensions only, so it could not have found the firmware whether or not it existed \u2014 the firmware is Rust. This is the exact failure absence-check.mjs exists to prevent: one pattern shape is not exhaustion.",
+      "whyItHappened": "THE SEARCH WAS THE ERROR, not the tree. It enumerated C-family extensions only, so it could not have found the firmware whether or not it existed — the firmware is Rust. This is the exact failure absence-check.mjs exists to prevent: one pattern shape is not exhaustion.",
       "refutation": {
         "kind": "path_exists",
         "paths": [
@@ -80,10 +80,10 @@
     },
     {
       "id": "launch-profile-stranded",
-      "claimed": "The launch-profile scope decision is stranded on an unmerged branch \u2014 variously '7 files versus 2' and 'the branch is 220 commits ahead' \u2014 and merging it blocks everything else",
+      "claimed": "The launch-profile scope decision is stranded on an unmerged branch — variously '7 files versus 2' and 'the branch is 220 commits ahead' — and merging it blocks everything else",
       "assertedBy": "docs/DELIVERY_GAP_ANALYSIS.md, then two external analyses independently, as their #1 finding",
       "assertedOn": "2026-08-08",
-      "whyItHappened": "PR #152 merged on 2026-08-12 (e11f2cc) and the document was never restamped. The numbers were never file counts: 7 was a commits-ahead count, 2 was a modified-file count, and 220 was invented outright \u2014 the branch was 8 ahead and 0 behind when it was written. THIS IS THE MOST EXPENSIVE ENTRY HERE: it survived two independent reviews because it was already shaped like a measurement.",
+      "whyItHappened": "PR #152 merged on 2026-08-12 (e11f2cc) and the document was never restamped. The numbers were never file counts: 7 was a commits-ahead count, 2 was a modified-file count, and 220 was invented outright — the branch was 8 ahead and 0 behind when it was written. THIS IS THE MOST EXPENSIVE ENTRY HERE: it survived two independent reviews because it was already shaped like a measurement.",
       "refutation": {
         "kind": "file_contains",
         "file": "scripts/preflight.mjs",
@@ -106,7 +106,7 @@
       "claimed": "This repository has roughly 180 proof gates (elsewhere: 122)",
       "assertedBy": "two external analyses, one high and one low",
       "assertedOn": "2026-08-12",
-      "whyItHappened": "Neither analysis counted. The repo publishes the real figure in docs/STATUS.md and binds it with two gates (check-status-figures, check-proof-counts); both analyses quoted a remembered number instead, in documents whose whole argument was that this repo's discipline is measured figures. NOTE 2026-08-15: this entry originally pinned the literal count (132) as its refutation evidence, and broke the first time a proof was ADDED \u2014 the count is owned by the gates, so the registry now pins the MECHANISM (a gate-bound published figure exists) rather than any value of it.",
+      "whyItHappened": "Neither analysis counted. The repo publishes the real figure in docs/STATUS.md and binds it with two gates (check-status-figures, check-proof-counts); both analyses quoted a remembered number instead, in documents whose whole argument was that this repo's discipline is measured figures. NOTE 2026-08-15: this entry originally pinned the literal count (132) as its refutation evidence, and broke the first time a proof was ADDED — the count is owned by the gates, so the registry now pins the MECHANISM (a gate-bound published figure exists) rather than any value of it.",
       "refutation": {
         "kind": "file_contains",
         "file": "docs/STATUS.md",
@@ -123,6 +123,24 @@
         "122 proof:? gates",
         "122 `?proof:\\*`? gates",
         "proof gates: \\*\\*(180|122)\\*\\*"
+      ]
+    },
+    {
+      "id": "route-owner-absent",
+      "claimed": "routeOwner does not exist anywhere in the codebase today (listed among five fields that are 'a design target')",
+      "assertedBy": "docs/SIGNALGRID_CLOUD_PLATFORM_AND_CYBER_RESILIENCE_ARCHITECTURE.md",
+      "assertedOn": "2026-08-25",
+      "whyItHappened": "A TRUE narrow claim was written as a BROAD one. The narrow claim — routeOwner is not a field on `Decision`, and the IT-layer model puts owner routing on no wire by design — is correct and still stands. It was generalised to 'does not exist anywhere in the codebase', which is false: owner routing ships as scripts/it-layer-model.mjs plus a console mirror that check-it-layer-model.mjs fails the build over in both directions. The other four fields in the same sentence genuinely appear nowhere, which is what made the fifth easy to wave through — a list is only as true as its weakest member, and nobody re-checks a member that arrived with four correct siblings.",
+      "refutation": {
+        "kind": "path_exists",
+        "paths": [
+          "artifacts/signalgrid-app/src/lib/route-owner.ts",
+          "scripts/check-it-layer-model.mjs"
+        ]
+      },
+      "denials": [
+        "`?routeOwner`?[^.\\n]{0,60}(do(es)? not exist|not exist anywhere)",
+        "[Ff]ive of those fields do not exist anywhere"
       ]
     }
   ]

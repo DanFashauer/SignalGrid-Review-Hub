@@ -58,7 +58,7 @@ evidence of recovery before the restriction lifts.
 | ITOM group | Elements | SignalGrid surface |
 |---|---|---|
 | **Infrastructure Operations** | Compute & Cloud · Network Operations · Capacity Management | `network-nac`/`nac`, `ot-posture`; capacity is a **consumed** figure, not one SignalGrid computes |
-| **Observability & AIOps** | Unified Telemetry · Event Correlation · Agentic Automation · Automated Remediation · Noise Classification | `observability-integrity` (the 50th family — *is the plane that would tell you even working*), `telemetry`/`siem`/`syslog` emitters, `agent-identity` + `agent-behavior` for agentic action, `response-accountability` for remediation truthfulness |
+| **Observability & AIOps** | Unified Telemetry · Event Correlation · Agentic Automation · Automated Remediation · Noise Classification | `observability-integrity` (*is the plane that would tell you even working*), `telemetry`/`siem`/`syslog` emitters, `agent-identity` + `agent-behavior` for agentic action, `response-accountability` for remediation truthfulness |
 | **Resilience Engineering** | Dependency Mapping · Availability Management · Resilience Testing | Flow situations + worst-concern-wins composition; `service-lifecycle`; recovery verification per §10 |
 | **Outcomes** | Service Health · Operational Efficiency · Digital Resilience | Indicator layer (§11) |
 

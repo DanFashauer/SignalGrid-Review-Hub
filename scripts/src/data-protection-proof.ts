@@ -20,8 +20,9 @@ import {
   normalizeViolation,
   resolveDataProtectionConnector,
   type DataProtectionRaw,
+  type DlpTransport,
 } from "@workspace/integrations/data-protection";
-import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { checkLiveGateIsolated, checkCollectionRefusals } from "./lib/live-gate.js";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
@@ -237,6 +238,17 @@ checkLiveGateIsolated({
     SIGNALGRID_LIVE_INTEGRATIONS: "true",
     DLP_ACCESS_TOKEN: "t",
   },
+});
+
+
+// COLLECTION SHAPE and PAGE-CAP REFUSAL — both survived mutation until 2026-08-25.
+// Shared helper, one statement of a rule nine families implement identically.
+await checkCollectionRefusals({
+  check,
+  family: "data-protection",
+  listWith: (t, pageLimit) => () =>
+    new DataProtectionConnector({ accessToken: "t", baseUrl: BASE_URL, pageLimit }, t as unknown as DlpTransport).listDevices(),
+  codeOf: (e) => (e instanceof DlpConnectorError ? e.code : undefined),
 });
 
 const total = passed + failures.length;

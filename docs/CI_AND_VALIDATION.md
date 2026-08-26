@@ -205,6 +205,15 @@ builds; preflight sets them for the build step itself.
   unrelated phantom failures elsewhere (a "stale allowlist entry" for code that had not
   moved, and a failing facility-trust-graph proof whose guard clause had been silently
   rewritten to `true`).
+  **"Anything else" includes a SECOND mutation guard, and includes preflight.** Two
+  sweeps in one working tree race on the same in-place edits; a proof run by anything
+  else can read a file mid-mutation and fail for a defect that is not there. This
+  paragraph existed and was violated anyway on 2026-08-25, by starting a `--shard`
+  run to check the new flag while the full sweep was still going — no damage, and
+  only because the two happened to draw different families.
+  **This is exactly why the CI shards are safe:** `--shard=i/N` splits the registry
+  across SEPARATE RUNNERS, each with its own checkout. Sharding into one working tree
+  would be the concurrency this bullet forbids, not a way around it.
 
 ### A name-drift gate is not a behaviour gate
 

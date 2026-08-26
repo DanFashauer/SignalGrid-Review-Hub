@@ -435,6 +435,8 @@ jobs:
         run: node scripts/check-pagination-truncation.mjs
       - name: "Absent-collection law (nothing observed ≠ nothing wrong)"
         run: pnpm run proof:absent-collection
+      - name: "Mutation sharding partitions the registry (the daily sweep loses no target)"
+        run: node scripts/check-mutation-sharding.mjs
       - name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)"
         run: node scripts/check-it-layer-model.mjs
       - name: "IT-layer model self-test (the gate can actually fail)"

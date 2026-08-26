@@ -19,8 +19,9 @@ import {
   normalizeEndpoint,
   resolveEdrThreatConnector,
   type EndpointThreatRaw,
+  type EdrTransport,
 } from "@workspace/integrations/edr-threat";
-import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { checkLiveGateIsolated, checkCollectionRefusals } from "./lib/live-gate.js";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
@@ -264,6 +265,35 @@ checkLiveGateIsolated({
     EDR_ACCESS_TOKEN: "t",
   },
 });
+
+
+// COLLECTION SHAPE and PAGE-CAP REFUSAL — both survived mutation until 2026-08-25.
+// Shared helper, one statement of a rule nine families implement identically.
+await checkCollectionRefusals({
+  check,
+  family: "edr-threat",
+  listWith: (t, pageLimit) => () =>
+    new EdrThreatConnector({ accessToken: "t", baseUrl: BASE_URL, pageLimit }, t as unknown as EdrTransport).listEndpoints(),
+  codeOf: (e) => (e instanceof EdrConnectorError ? e.code : undefined),
+});
+
+
+// SIGNATURE AGE — only a FINITE, non-negative number is a reported age. Until
+// 2026-08-25 the `Number.isFinite` conjunct survived mutation: nothing here passed
+// a non-finite value, so replacing it with `true` let `Infinity` through as a real
+// age. An infinitely old signature set would then grade as a REPORTED age rather
+// than an unverifiable one, and the freshness ladder would read it at face value.
+const ageOf = (v: unknown): number | null =>
+  normalizeEndpoint({ deviceId: "d", signatureAgeHours: v } as never).signatureAgeHours;
+check("signature age: Infinity is not an age — it normalizes to null, never to a reported value",
+  ageOf(Infinity) === null && ageOf(-Infinity) === null);
+check("signature age: NaN is not an age either", ageOf(Number.NaN) === null);
+check("signature age: a negative age claims signatures newer than now, and is refused",
+  ageOf(-1) === null);
+// Non-vacuity: a real finite age must still survive, including the 0 boundary.
+check("signature age: ...while a finite non-negative age is preserved, 0 included",
+  ageOf(5) === 5 && ageOf(0) === 0);
+
 
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

@@ -475,6 +475,28 @@ check("connector marks a SUBSTITUTED report malformed — a different credential
 check("...so the substitution cannot buy a confirmation off an authoritative count",
   evaluateIdentityPasskeys(swapped, { expectedCredentialCount: 2 }).identityConfirmed === false);
 
+// The SET path above was the only path these three checks covered, and the guard
+// lived there too — one layer above the primitive it guards. `fetchNormalized`
+// takes the same `credentialRef` and is callable directly, so a single fetch
+// accepted a substituted report while the set built on it rejected one. These
+// assertions fail if the guard moves back out of the primitive.
+const singleSwapped = await swapConnector.fetchNormalized("dave", "synced-2");
+check("SINGLE fetch marks a substituted report malformed too, not only the set path",
+  singleSwapped.reportIntegrity === "malformed");
+check("...and the substituted single report cannot be confirmed",
+  evaluatePasskey(singleSwapped).passkeyConfirmed === false);
+// Both directions: a guard that fires on everything proves nothing.
+const singleHonest = await swapConnector.fetchNormalized("dave", "key-1");
+check("...while an honest single fetch, ref matching what was asked, stays clean",
+  singleHonest.reportIntegrity === "clean");
+// Asking with NO ref means "whatever this identity has" — nothing to contradict.
+const unrefConnector = new PasskeyAssuranceConnector(
+  { accessToken: "t", baseUrl: "https://idp.local", source: "enum" },
+  createMockPasskeyTransport({ reports: { erin: { ...GRANT, credential_ref: "key-9" } } }),
+);
+check("...and a fetch with no requested ref is never malformed on ref grounds",
+  (await unrefConnector.fetchNormalized("erin")).reportIntegrity === "clean");
+
 const fetchedVerdict = evaluateIdentityPasskeys(fetchedSet, { expectedCredentialCount: 2 });
 check("end-to-end — the fetched set does NOT confirm, because one credential is synced",
   fetchedVerdict.recommendedAction === "step_up" && fetchedVerdict.identityConfirmed === false &&

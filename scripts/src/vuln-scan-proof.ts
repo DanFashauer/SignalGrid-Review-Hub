@@ -17,8 +17,9 @@ import {
   normalizeFinding,
   resolveVulnScanConnector,
   type VulnFindingRaw,
+  type VulnTransport,
 } from "@workspace/integrations/vuln-scan";
-import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { checkCollectionRefusals, checkLiveGateIsolated } from "./lib/live-gate.js";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
@@ -101,6 +102,18 @@ check("health check reports unhealthy on a bad token", badHealth.healthy === fal
 let authErr: VulnConnectorError | null = null;
 try { await bad.listFindings(); } catch (err) { authErr = err instanceof VulnConnectorError ? err : null; }
 check("a bad token surfaces a typed auth_failed error", authErr?.code === "auth_failed");
+
+// COLLECTION SHAPE and PAGE-CAP REFUSAL — both branches survived mutation until
+// 2026-08-25, meaning nothing here could tell whether they existed. Driven through
+// the shared helper so the rule has one statement across the nine families that
+// implement it.
+await checkCollectionRefusals({
+  check,
+  family: "vuln-scan",
+  listWith: (t, pageLimit) => () =>
+    new VulnScanConnector({ accessToken: "t", baseUrl: BASE_URL, pageLimit }, t as unknown as VulnTransport).listFindings(),
+  codeOf: (err) => (err instanceof VulnConnectorError ? err.code : undefined),
+});
 
 // gating
 check("dev tier resolves to fixture mode", resolveVulnScanConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");

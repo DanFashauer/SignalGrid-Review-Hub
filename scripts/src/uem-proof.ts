@@ -26,6 +26,9 @@ import {
   normalizeUemDevice,
   resolveUemConnector,
   UEM_FIXTURES,
+  getUEMConfig,
+  setUEMConfig,
+  __resetUemConfigForTests,
 } from "@workspace/integrations/uem";
 import type {
   NormalizedUemDeviceState,
@@ -606,6 +609,58 @@ check("no fixture carries a wall-clock timestamp — ages are durations supplied
     differing === 0 && compared > 0,
   );
 }
+
+
+// REDIS FAULT IS AUDIBLE — both `if (redis)` guards in uem/store.ts survived
+// mutation until 2026-08-25. The store's own header says "a Redis fault is
+// reported, not swallowed", and describes the bug that sentence was written to fix:
+// a deployment could serve a stale process-local config indefinitely while Redis was
+// down and nothing anywhere said so. Nothing tested it, because the proofs run with
+// no REDIS_URL, so the client is always null and the branch never executes.
+// A closed port makes the connection fail fast (~70ms) without needing a server.
+const priorRedisUrl = process.env["REDIS_URL"];
+process.env["REDIS_URL"] = "redis://127.0.0.1:1";
+const redisFaults: string[] = [];
+__resetUemConfigForTests();
+await getUEMConfig("tenant-fault", (m) => redisFaults.push(m));
+await setUEMConfig("tenant-fault", { provider: "jamf", enabled: true }, (m) => redisFaults.push(m));
+check("a Redis READ fault is reported, never silently swallowed",
+  redisFaults.some((f) => f.startsWith("read failed")));
+check("a Redis WRITE fault is reported too",
+  redisFaults.some((f) => f.startsWith("write failed")));
+check("...and the config still falls back to the process-local value, so the fault is audible WITHOUT being fatal",
+  (await getUEMConfig("tenant-fault", () => undefined))?.provider === "jamf");
+if (priorRedisUrl === undefined) delete process.env["REDIS_URL"];
+else process.env["REDIS_URL"] = priorRedisUrl;
+// NON-VACUITY: with no REDIS_URL there is nothing to fault, and silence is correct.
+const quietFaults: string[] = [];
+await getUEMConfig("tenant-fault", (m) => quietFaults.push(m));
+check("with no REDIS_URL configured there is no fault to report, so the checks above are not vacuous",
+  quietFaults.length === 0);
+
+
+
+// A PAYLOAD WITH NO IDENTIFIABLE COMPUTER OBJECT is `malformed`, not a pile of
+// `unknown`s — the file's own header says so, and the branch survived mutation
+// until 2026-08-25 because nothing passed a shapeless payload. The distinction is
+// operational: "the bridge sent us something we could not read" and "the bridge
+// read a device and could not determine its state" need different responses, and
+// only the first means someone should go look at the integration.
+for (const [label, payload] of [
+  ["an empty payload", {}],
+  ["a computer with no general block", { computer: {} }],
+  ["a general block with no id", { computer: { general: {} } }],
+] as const) {
+  const bad = normalizeJamfDevice(payload as never);
+  check(`jamf: ${label} is reportIntegrity malformed, with an empty deviceId`,
+    bad.reportIntegrity === "malformed" && bad.deviceId === "");
+}
+// NON-VACUITY: a payload that DOES carry an id must not be malformed, or the
+// three checks above would pass for a normalizer that rejected everything.
+const wellFormed = normalizeJamfDevice({ computer: { general: { id: 42 } } } as never);
+check("jamf: ...while a payload carrying an id is read, not refused",
+  wellFormed.reportIntegrity !== "malformed" && wellFormed.deviceId === "42");
+
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length) {

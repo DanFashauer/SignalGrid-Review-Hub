@@ -276,10 +276,19 @@ A richer response shape has been proposed for the cloud/platform case:
 }
 ```
 
-**Five of those fields do not exist anywhere in the codebase today** —
-`permittedActions`, `blockedActions`, `routeOwner`, `approvalOwners`,
-`verificationRequired`. `outcome` and `reasonCodes` are real; the rest are a
-design target.
+**Four of those fields do not exist anywhere in the codebase today** —
+`permittedActions`, `blockedActions`, `approvalOwners`, `verificationRequired`.
+`outcome` and `reasonCodes` are real; those four are a design target.
+
+`routeOwner` is the exception, and this paragraph claimed otherwise until
+2026-08-25. Owner routing ships: `scripts/it-layer-model.mjs` classifies every
+reason code to an owner, `artifacts/signalgrid-app/src/lib/route-owner.ts`
+mirrors that table for the console, `DecisionDetail` renders it, and
+`scripts/check-it-layer-model.mjs` fails the build in both directions if the two
+ever disagree. What is true is narrower than what was written: it is not a field
+on `Decision`, and the IT-layer model puts owner routing on **no wire** on
+purpose — a named gap there, not an oversight. So a `/v1` consumer cannot read
+an owner, while a console operator can see one.
 
 The *concepts*, however, are already built one layer over. `@workspace/flows`
 plans actions with an explicit disposition:

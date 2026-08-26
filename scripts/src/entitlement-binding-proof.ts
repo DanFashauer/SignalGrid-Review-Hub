@@ -409,6 +409,36 @@ check("no fixture carries a wall-clock timestamp — depths are counts, not time
     banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
 }
 
+
+// AN UNREPORTED DEPTH IS NEVER OVER BUDGET, whatever the budget. The
+// `nestingDepth !== null` conjunct survived mutation until 2026-08-25 because the
+// sweep's budgets are [null, 3]: with a null depth, `null > 3` coerces to `0 > 3`
+// and is false either way, so the guard could not be observed. A NEGATIVE budget
+// separates them — `null > -1` coerces to `0 > -1` and is TRUE — and the budget is
+// a caller-supplied parameter with no normalizer clamping it, so a negative value
+// is reachable rather than hypothetical.
+//
+// Dropping the conjunct would therefore FABRICATE an over-budget finding about a
+// binding whose depth was never reported. It errs strict rather than permissive,
+// which is why it is a truthfulness defect rather than a fail-open, and this
+// repository treats an invented finding as a defect in its own right.
+//
+// The sweep alone cannot catch this: it only asserts that CLEAN verdicts are
+// justified, and the mutant makes this state non-clean, so it is skipped by the
+// `continue` above rather than flagged.
+const unreportedDepth: NormalizedEntitlementBinding = {
+  principalId: "p", mechanism: "group", carrier: "security_group",
+  carrierOwner: "owner_assigned", nestingDepth: null, nestingDepthBudget: -1,
+  reportIntegrity: "intact",
+};
+check("an unreported nesting depth is never graded over budget, even against a negative budget",
+  evaluateEntitlementBinding(unreportedDepth).reasonCode !== "NESTING_DEPTH_OVER_BUDGET");
+// NON-VACUITY: a REPORTED depth over that same budget must still be caught, or the
+// assertion above would pass for an evaluator that never grades depth at all.
+check("...while a reported depth over the same budget still is",
+  evaluateEntitlementBinding({ ...unreportedDepth, nestingDepth: 0 }).reasonCode === "NESTING_DEPTH_OVER_BUDGET");
+
+
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length) {
   console.error("\nFAILED:");

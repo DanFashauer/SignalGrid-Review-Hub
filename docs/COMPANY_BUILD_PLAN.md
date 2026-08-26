@@ -3896,6 +3896,38 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+184. **A guard sat one layer above the thing it guarded.** — FIXED 2026-08-25,
+    qa-engineer, in PR #319.
+    `lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts`;
+    verify with the passkey-assurance proof, which this change took from 87 checks
+    to 91.
+    `PasskeyAssuranceConnector.fetchNormalized(identityRef,
+    credentialRef?)` took the requested credential ref and never compared it to
+    the ref the source answered with. The substitution check lived on
+    `fetchNormalizedSet`, which calls straight through to `fetchNormalized` with
+    that same argument and then guards the result — so the SET path was protected
+    and the primitive it is built on was not. A caller asking "grade cred-A" and
+    answered with a healthy cred-B was told `passkeyConfirmed: true` about a
+    credential nobody asked about. The verdict was not even a lie; it truthfully
+    answered a question no one had put.
+    Moved into the primitive; the set path now delegates instead of keeping a
+    second copy of the rule, because a second copy of a rule is a second source of
+    truth. It fires only when a ref was actually requested — `fetchNormalized(id)`
+    means "whatever this identity has" and has nothing to contradict.
+    That proof held at 87/87 across the fix, so it covered none of
+    this; four assertions added, 87 -> 91.
+    TWO PROBES LIED BEFORE THE THIRD TOLD THE TRUTH, and that is the part worth
+    keeping. The first invented field names, so every case normalized `malformed`
+    for unrelated reasons and the guard looked like it over-fired. The second used
+    real field names but hit the mock's `credentialReports` branch, which returns
+    `{}` on a miss, so the returned ref was empty and the guard correctly declined
+    — and it looked like it under-fired. Both readings were about to be reported.
+    A test fixture is code, and a wrong fixture produces a confident wrong answer
+    exactly as fast as a right one.
+    Falsified: disabling the guard fails three of the four new checks AND the
+    pre-existing set-path check — the second half being the evidence that the set
+    path now genuinely delegates rather than carrying its own copy.
+
 183. **The org automated on a clock and never on an event.** — FIXED 2026-08-25,
     agent-platform-engineer. The owner asked for an assistant that acts "when x
     event or task plus function happens", and asked first whether something already
@@ -3991,14 +4023,25 @@ earlier — that is the loop working, not a reason to soften the record.
     permission-enforcement claim and its tautological control (row 180), the
     publication-boundary misclassification and the absent mirror-drift check (row
     181), and the Graph permission boundary's fifteen invented scopes.
-    STILL OPEN and deliberately not fixed here, each needing its own decision: the
-    passkey substitution guard sitting on the wrapper rather than the primitive;
-    device-attestation being the only connector of five with no report-integrity
-    axis; `mutation-guard.mjs` registering `device-attestation` index-only so the
-    file granting its top assurance tier is never mutated; and the two structural
-    gate gaps docs-writer measured — `check-launch-claims.mjs` reads zero
-    `docs/*.md` in a PUBLIC repository, and `check-proof-figures.mjs` cannot see a
-    figure below 1,000, which is why every fossil it found survived.
+    CLOSED SINCE: the passkey substitution guard moved into the primitive (row
+    184), and the mutation-registry gap turned out to be far wider than
+    device-attestation (row 185).
+    STILL OPEN, each needing its own decision: device-attestation being the only
+    connector of five with no report-integrity axis — SCOPED MORE PRECISELY
+    2026-08-25 before building anything, because the fix is smaller than the
+    finding sounded. Twenty-one of the fabric's families carry no `reportIntegrity`,
+    so this is not device-attestation's private defect and "add it to the outlier"
+    was the wrong frame; whether a family needs the axis depends on whether it can
+    receive a report that is present but junk. For device-attestation the answer is
+    yes, and the consequence is DIAGNOSTIC rather than a grant risk: a report of
+    garbage and no report at all both normalize to `unknown` and both raise to
+    `step_up`, so nothing is granted that should not be — the operator simply cannot
+    tell an unenrolled device from a broken attestation bridge, and those need
+    opposite responses. Worth building, not urgent, and not to be widened into a
+    twenty-one-family sweep without asking the question separately for each;
+    and the two structural gate gaps docs-writer measured — `check-launch-claims.mjs` reads zero `docs/*.md`
+    in a PUBLIC repository (closed by row 182), and `check-proof-figures.mjs`
+    cannot see a figure below 1,000, which is why every fossil it found survived.
 
 179. **A malformed version erased the not-in-catalog finding.** — FIXED 2026-08-25,
     qa-engineer. `lib/integrations/src/integrations/benchmark-selection/benchmark-selection-connector.ts`

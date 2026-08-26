@@ -437,7 +437,7 @@ in one place.
   provenance than a synced one. A synced credential's custody is unknowable by
   construction — no administrator can query where it synced — so it forecloses the grant
   rather than lowering it. User verification discouraged is possession-only, a known-false
-  reliance that restricts. `proof:passkey-assurance` (87 checks).
+  reliance that restricts. `proof:passkey-assurance` (91 checks).
 
 - **Outbound emitters under discipline** — the six delivery families (`itsm`, `siem`, `syslog`,
   `telemetry`, `webhooks`, `caep-events`) each carry the same unanimous live-call gate as every
@@ -618,7 +618,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   the equal-rank tie-break unfalsifiable (the more specific candidate was also pushed
   first — the same `service-lifecycle` defect, fixed by pushing the less specific one
   first) and a three-field malformed guard with only one control.
-- **`proof:uem` (67 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
+- **`proof:uem` (75 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
   and Workspace ONE. Includes a **1,440-state exhaustive sweep** whose grant path is
   pinned to *exactly 9* fully-confirmed states, four isolated live-call-gate refusals,
   and a source scan asserting no vendor-API call. `personal` ownership on an
@@ -648,7 +648,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   model catalog, neither of which is a UEM read. The axis is also proved **carried, not
   graded** — swapping only `cellularHardware` across all 1,440 swept states changes no
   verdict, because a device's radio is not a management-posture fact.
-- **`proof:nac` (34 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
+- **`proof:nac` (45 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
   read-only. Hostile-identifier cases are asserted against the **filter builder**, not
   merely the validator, and fixture lookups are scoped to the identifier kind so a
   certificate query cannot be answered by a MAC match. The normalizers now take **no
@@ -658,7 +658,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   by *nothing*: reverting the fix left this proof passing at the identical count. The
   dead parameters are removed so the echo is unrepresentable rather than merely absent,
   and the reads-from-the-response property is now asserted for both vendors.
-- **`proof:entitlement-binding` (57 checks)** — whether a grant is *reviewable*, not
+- **`proof:entitlement-binding` (59 checks)** — whether a grant is *reviewable*, not
   merely correct. Includes a **1,200-state sweep** with the clean path pinned to
   *exactly 18*, plus coherence checks that reject a report contradicting itself.
 - **`proof:service-lifecycle` (82 checks)** — whether the *service* plane still agrees
@@ -715,7 +715,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   deployment without `REDIS_URL` set, which is this package's documented default. The
   id rule is an **allowlist** (`/^[A-Za-z0-9._-]{1,128}$/`), so the characters nobody
   thought of are refused by default rather than enumerated by someone who tried.
-- **`proof:network-nac` (56 checks)** — 802.1X / NAC access posture, read-only. The
+- **`proof:network-nac` (59 checks)** — 802.1X / NAC access posture, read-only. The
   device's network SEGMENT is now evaluated against an operator-supplied policy rather
   than merely carried: an unexpected VLAN steps up, a segment the operator marked
   high-consequence (management / security / OT) restricts, and a policy that cannot be

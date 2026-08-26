@@ -147,9 +147,25 @@ jobs:
     # (1,083 killed, 77 documented-inert, 0 survivors, 0 hung), which is why
     # this is a DAILY lane and not a per-push gate: the cadence follows the
     # measurement. Preflight deliberately does not run it and says so.
+    #
+    # SHARDED 2026-08-25, when registering the connector files the guard had
+    # never mutated took the registry from 1,160 mutations to 1,367 (+18%),
+    # projecting ~48 min on one runner. That still fit inside 75, so the lane
+    # was not broken — it was on a trajectory, and the fix for a trajectory is
+    # not a bigger number that needs raising again the next time someone
+    # registers a file. `--shard=i/N` splits TARGETS balanced by MUTATION COUNT,
+    # not by target count: one family can outweigh ten others, and the slowest
+    # shard sets the wall clock. `check-mutation-sharding.mjs` (per-push) proves
+    # the split is a PARTITION — a sharder that dropped a target would report
+    # success over work it never did, which is the failure this whole lane
+    # exists to catch, reintroduced at the scheduling layer.
     name: Daily mutation sweep (every guard must be falsifiable)
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -169,8 +185,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Full mutation sweep
-        run: pnpm run guard:mutations
+      - name: Mutation sweep (shard ${{ matrix.shard }} of 4)
+        run: node scripts/mutation-guard.mjs --shard=${{ matrix.shard }}/4
 
       - name: Open or refresh the regression tracking issue on failure
         if: failure()
@@ -182,6 +198,7 @@ jobs:
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = [
               `The DAILY MUTATION SWEEP failed on \`${context.sha.slice(0, 7)}\` — a mutation survived, hung, or the sweep broke.`,
+              `Shard **${{ matrix.shard }} of 4**. Shards run independently (\`fail-fast: false\`), so check the run before concluding the whole sweep is red — and check it before concluding the rest is GREEN, which is the more dangerous half.`,
               ``,
               `- Run: ${runUrl}`,
               ``,

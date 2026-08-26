@@ -140,6 +140,26 @@ const truncate = (s) => (s.length > 58 ? `${s.slice(0, 55)}...` : s);
 // A registry is a coverage CLAIM. Zero survivors over the wrong population is not
 // coverage, and this was the fourth time the right rule was found attached to the wrong
 // set. When a family moves code between files, re-check what this list still reaches.
+// THREE FILES WERE REGISTERED HERE ON 2026-08-25 AND REMOVED THE SAME DAY, because
+// the sweep proved the registration was a false coverage claim rather than coverage:
+//
+//   macos-posture/apple-schema.ts — genuinely has no falsifiable logic. 127 lines,
+//   zero conditional lines; it is Apple's canonical vocabulary expressed as
+//   constants. Protect it with a shape/completeness pin, not a mutator.
+//
+//   nac/cisco-ise.ts and nac/aruba-clearpass.ts — DO have logic, and this is the
+//   uncomfortable one. Their guards are brace-less clauses (`if (!v.ok) return
+//   null;`) and ternaries, and every mutator here is line-oriented and requires
+//   `if (...) {`. So the mutator cannot reach them, and leaving them registered
+//   would report "every registered guard is falsifiable" over files it never
+//   touched.
+//
+// MEASURED, not estimated: 417 brace-less guard clauses sit in registered files
+// across 49 of the 53 targets — a whole class this harness cannot currently
+// falsify, and a ~31% increase in mutations (1,367 -> ~1,784) once a mutator for
+// that shape exists. That is its own piece of work with its own triage cycle, and
+// it is filed rather than smuggled into this change. Re-register these two the
+// moment the mutator lands.
 export const TARGETS = [
   // `posture-composition` was registered here and REMOVED in the same session. The sweep
   // returned `mutations=0`: `compose.ts` is a sort plus a table lookup and `adapters.ts`
@@ -292,6 +312,7 @@ export const TARGETS = [
     proof: "proof:credential-rotation",
     files: [
       "lib/integrations/src/integrations/credential-rotation/evaluate.ts",
+      "lib/integrations/src/integrations/credential-rotation/index.ts",
       "lib/integrations/src/integrations/credential-rotation/normalize.ts",
     ],
   },
@@ -299,6 +320,7 @@ export const TARGETS = [
     proof: "proof:observability-integrity",
     files: [
       "lib/integrations/src/integrations/observability-integrity/evaluate.ts",
+      "lib/integrations/src/integrations/observability-integrity/index.ts",
       "lib/integrations/src/integrations/observability-integrity/normalize.ts",
     ],
   },
@@ -306,6 +328,7 @@ export const TARGETS = [
     proof: "proof:local-authority",
     files: [
       "lib/integrations/src/integrations/local-authority/evaluate.ts",
+      "lib/integrations/src/integrations/local-authority/index.ts",
       "lib/integrations/src/integrations/local-authority/normalize.ts",
     ],
   },
@@ -419,8 +442,11 @@ export const TARGETS = [
     proof: "proof:uem",
     files: [
       "lib/integrations/src/integrations/uem/evaluate.ts",
-      "lib/integrations/src/integrations/uem/intune.ts",
       "lib/integrations/src/integrations/uem/index.ts",
+      "lib/integrations/src/integrations/uem/intune.ts",
+      "lib/integrations/src/integrations/uem/jamf.ts",
+      "lib/integrations/src/integrations/uem/store.ts",
+      "lib/integrations/src/integrations/uem/workspace-one.ts",
     ],
   },
   {
@@ -474,59 +500,116 @@ export const TARGETS = [
   },
   {
     proof: "proof:credential-exposure",
-    files: ["lib/integrations/src/integrations/credential-exposure/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/credential-exposure/credential-connector.ts",
+      "lib/integrations/src/integrations/credential-exposure/evaluate.ts",
+      "lib/integrations/src/integrations/credential-exposure/index.ts",
+    ],
   },
   {
     proof: "proof:data-protection",
-    files: ["lib/integrations/src/integrations/data-protection/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/data-protection/dlp-connector.ts",
+      "lib/integrations/src/integrations/data-protection/evaluate.ts",
+      "lib/integrations/src/integrations/data-protection/index.ts",
+    ],
   },
   {
     proof: "proof:device-attestation",
-    files: ["lib/integrations/src/integrations/device-attestation/index.ts"],
+    files: [
+      // `evaluate.ts` grants the TOP assurance tier for this family and was not
+      // mutated at all: the registration named `index.ts`, which re-exports it.
+      // Mutation operates on files, so a barrel buys nothing.
+      "lib/integrations/src/integrations/device-attestation/evaluate.ts",
+      "lib/integrations/src/integrations/device-attestation/device-attestation-connector.ts",
+      "lib/integrations/src/integrations/device-attestation/index.ts",
+    ],
   },
   {
     proof: "proof:edr-threat",
-    files: ["lib/integrations/src/integrations/edr-threat/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/edr-threat/edr-connector.ts",
+      "lib/integrations/src/integrations/edr-threat/evaluate.ts",
+      "lib/integrations/src/integrations/edr-threat/index.ts",
+    ],
   },
   {
     proof: "proof:entitlement-binding",
-    files: ["lib/integrations/src/integrations/entitlement-binding/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/entitlement-binding/evaluate.ts",
+      "lib/integrations/src/integrations/entitlement-binding/index.ts",
+    ],
   },
   {
     proof: "proof:identity-risk",
-    files: ["lib/integrations/src/integrations/identity-risk/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/identity-risk/evaluate.ts",
+      "lib/integrations/src/integrations/identity-risk/identity-connector.ts",
+      "lib/integrations/src/integrations/identity-risk/index.ts",
+    ],
   },
   {
     proof: "proof:location-services",
-    files: ["lib/integrations/src/integrations/location-services/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/location-services/evaluate.ts",
+      "lib/integrations/src/integrations/location-services/index.ts",
+      "lib/integrations/src/integrations/location-services/location-connector.ts",
+    ],
   },
   {
     proof: "proof:macos-posture",
-    files: ["lib/integrations/src/integrations/macos-posture/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/macos-posture/evaluate.ts",
+      "lib/integrations/src/integrations/macos-posture/index.ts",
+      "lib/integrations/src/integrations/macos-posture/macos-connector.ts",
+    ],
   },
   {
     proof: "proof:nac",
-    files: ["lib/integrations/src/integrations/nac/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/nac/identifier.ts",
+      "lib/integrations/src/integrations/nac/index.ts",
+      "lib/integrations/src/integrations/nac/store.ts",
+    ],
   },
   {
     proof: "proof:network-nac",
-    files: ["lib/integrations/src/integrations/network-nac/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/network-nac/evaluate.ts",
+      "lib/integrations/src/integrations/network-nac/index.ts",
+      "lib/integrations/src/integrations/network-nac/network-connector.ts",
+    ],
   },
   {
     proof: "proof:peripheral-control",
-    files: ["lib/integrations/src/integrations/peripheral-control/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/peripheral-control/evaluate.ts",
+      "lib/integrations/src/integrations/peripheral-control/index.ts",
+      "lib/integrations/src/integrations/peripheral-control/peripheral-connector.ts",
+    ],
   },
   {
     proof: "proof:response-accountability",
-    files: ["lib/integrations/src/integrations/response-accountability/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/response-accountability/evaluate.ts",
+      "lib/integrations/src/integrations/response-accountability/index.ts",
+    ],
   },
   {
     proof: "proof:rtls-custody",
-    files: ["lib/integrations/src/integrations/rtls-custody/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/rtls-custody/evaluate.ts",
+      "lib/integrations/src/integrations/rtls-custody/index.ts",
+      "lib/integrations/src/integrations/rtls-custody/rtls-connector.ts",
+    ],
   },
   {
     proof: "proof:vuln-scan",
-    files: ["lib/integrations/src/integrations/vuln-scan/index.ts"],
+    files: [
+      "lib/integrations/src/integrations/vuln-scan/evaluate.ts",
+      "lib/integrations/src/integrations/vuln-scan/index.ts",
+      "lib/integrations/src/integrations/vuln-scan/vuln-connector.ts",
+    ],
   },
 ];
 
@@ -536,6 +619,35 @@ export const TARGETS = [
 // fine" is not one. An entry whose `line` no longer matches fails the gate: the code
 // moved and nobody re-derived whether the justification still holds.
 const ALLOWED = [
+  {
+    file: "lib/integrations/src/integrations/edr-threat/edr-connector.ts",
+    line: 'typeof endpoint.signatureAgeHours === "number" &&',
+    reason:
+      "REDUNDANT BY CONSTRUCTION, and checkable in one line: `Number.isFinite` on the very " +
+      "next conjunct performs NO coercion and returns true only for number primitives, so " +
+      "there exists no value for which this typeof test changes the result. Executed across " +
+      "5, 0, -1, Infinity, -Infinity, NaN, the string \"5\", null and undefined: identical " +
+      "output with and without it. Kept because it states the intended domain at the point " +
+      "of use, and because the SIBLING conjunct is emphatically not inert — dropping " +
+      "`Number.isFinite` lets Infinity through as a reported age, which the proof now pins " +
+      "with explicit Infinity/-Infinity/NaN assertions plus a finite-age non-vacuity control.",
+  },
+  {
+    file: "lib/integrations/src/integrations/identity-risk/evaluate.ts",
+    line: 'if (detectionsObserved && principal.riskLevel === "none") {',
+    reason:
+      "The EARNED terminal grant inside the remediated/dismissed/confirmed_safe block. " +
+      "Genuinely inert at current severities, verified rather than asserted: the whole block " +
+      "was removed and all 1,680 enumerated states (5 risk levels x 7 risk states x 3 mfa " +
+      "values x 4 detection grades x observed/unobserved feed x covered/uncovered) were " +
+      "diffed — ZERO verdicts changed. Whenever it fires, the ladder below reaches the same " +
+      "trusted/NO_RISK/none by another route: riskLevel \"none\" contributes no candidate and " +
+      "an observed-and-empty feed contributes no monitor floor, so the candidate list is empty " +
+      "and the earned grant falls out regardless. Kept as defence in depth — the last thing " +
+      "standing between a future weakening of the ladder and an unearned terminal grant. The " +
+      "counterexamples its own comment cites (2026-08-20) were real when they were executed; " +
+      "what changed is that the ladder now covers them too.",
+  },
   {
     file: "lib/signalgrid-core/src/continuity.ts",
     line: "if (!VALID_OUTCOMES.has(record.outcome)) {",
@@ -1064,7 +1176,7 @@ function runProof(proof) {
   return summary[1] === "pass" ? "survivor" : "killed";
 }
 
-function mutationsFor(file) {
+export function mutationsFor(file) {
   const abs = join(repoRoot, file);
   const original = readFileSync(abs, "utf8");
   const lines = original.split("\n");
@@ -1096,12 +1208,61 @@ function isAllowed(mutation) {
   return ALLOWED.find((a) => a.file === mutation.file && mutation.sourceLine.includes(a.line));
 }
 
+/** Split TARGETS across N shards, balanced by MUTATION COUNT rather than by target
+ *  count. The two are wildly different: one family can carry more mutations than
+ *  ten others together, so an even split of targets is a lopsided split of work,
+ *  and the slowest shard sets the wall clock. Counting is cheap — `mutationsFor`
+ *  parses text and runs no proof — so the balance is computed from the real
+ *  numbers instead of assumed.
+ *
+ *  Exported and self-tested because a sharder that silently DROPS a target would
+ *  make the sweep report success over work it never did — the exact failure mode
+ *  this whole script exists to prevent, reintroduced at the scheduling layer.
+ */
+export function shardTargets(all, index, count) {
+  if (!Number.isInteger(index) || !Number.isInteger(count) || count < 1 || index < 0 || index >= count) {
+    throw new Error(`--shard expects i/N with 0 <= i < N and N >= 1, got ${index}/${count}`);
+  }
+  const weighted = all.map((t) => ({
+    target: t,
+    weight: t.files.reduce((n, f) => n + mutationsFor(f).length, 0),
+  }));
+  // Longest-processing-time first: heaviest target into the currently lightest bin.
+  weighted.sort((a, b) => b.weight - a.weight || a.target.proof.localeCompare(b.target.proof));
+  const bins = Array.from({ length: count }, () => ({ load: 0, targets: [] }));
+  for (const w of weighted) {
+    const lightest = bins.reduce((min, b) => (b.load < min.load ? b : min), bins[0]);
+    lightest.load += w.weight;
+    lightest.targets.push(w.target);
+  }
+  return bins[index].targets;
+}
+
 function main() {
   const only = process.argv.find((a) => a.startsWith("--proof="))?.split("=")[1];
-  const targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;
+  const shardArg = process.argv.find((a) => a.startsWith("--shard="))?.split("=")[1];
+  let targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;
   if (targets.length === 0) {
     console.error(`No target matches --proof=${only}. Known: ${TARGETS.map((t) => t.proof).join(", ")}`);
     process.exit(1);
+  }
+  if (shardArg !== undefined) {
+    const [i, n] = shardArg.split("/").map((x) => Number.parseInt(x, 10));
+    try {
+      targets = shardTargets(targets, i, n);
+    } catch (err) {
+      // Refuse rather than sweep a subset. A malformed shard argument that fell
+      // through to "no targets" would report a clean sweep of nothing.
+      console.error(`Mutation guard FAILED: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+    console.log(`Shard ${i + 1} of ${n} — ${targets.length} of ${TARGETS.length} registered targets.`);
+    if (targets.length === 0) {
+      // Not an error: with more shards than targets, an empty shard is correct and
+      // must stay GREEN, or the lane fails for a scheduling choice rather than a defect.
+      console.log("This shard has no targets. Nothing to sweep.\n");
+      return;
+    }
   }
 
   console.log("Mutation guard — every registered guard must be falsifiable by its own proof\n");

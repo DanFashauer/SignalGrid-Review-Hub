@@ -21,8 +21,9 @@ import {
   normalizePrincipal,
   resolveIdentityRiskConnector,
   type PrincipalRiskRaw,
+  type IdentityTransport,
 } from "@workspace/integrations/identity-risk";
-import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { checkLiveGateIsolated, checkCollectionRefusals } from "./lib/live-gate.js";
 
 interface Expected {
   posture: string;
@@ -282,6 +283,18 @@ checkLiveGateIsolated({
   check("NEGATIVE CONTROL: declaring the never-observed feed clean is CAUGHT (mismatches > 0)",
     wrong.mismatches > 0 && typeof wrong.firstMismatch === "string");
 }
+
+
+// COLLECTION SHAPE and PAGE-CAP REFUSAL — both survived mutation until 2026-08-25.
+// Shared helper, one statement of a rule nine families implement identically.
+await checkCollectionRefusals({
+  check,
+  family: "identity-risk",
+  listWith: (t, pageLimit) => () =>
+    new IdentityRiskConnector({ accessToken: "t", baseUrl: BASE_URL, pageLimit }, t as unknown as IdentityTransport).listPrincipals(),
+  codeOf: (e) => (e instanceof IdentityRiskConnectorError ? e.code : undefined),
+});
+
 
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

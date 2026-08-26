@@ -19,8 +19,9 @@ import {
   normalizeLocation,
   resolveRtlsCustodyConnector,
   type AssetLocationRaw,
+  type RtlsTransport,
 } from "@workspace/integrations/rtls-custody";
-import { checkLiveGateIsolated } from "./lib/live-gate.js";
+import { checkLiveGateIsolated, checkCollectionRefusals } from "./lib/live-gate.js";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 
 interface Expected {
@@ -380,6 +381,18 @@ checkLiveGateIsolated({
     honest.recommendedAction === "none",
   );
 }
+
+
+
+// COLLECTION SHAPE and PAGE-CAP REFUSAL — both survived mutation until 2026-08-25.
+// Shared helper, one statement of a rule nine families implement identically.
+await checkCollectionRefusals({
+  check,
+  family: "rtls-custody",
+  listWith: (t, pageLimit) => () =>
+    new RtlsCustodyConnector({ accessToken: "t", baseUrl: BASE_URL, pageLimit }, t as unknown as RtlsTransport).listLocations(),
+  codeOf: (e) => (e instanceof RtlsConnectorError ? e.code : undefined),
+});
 
 
 const total = passed + failures.length;

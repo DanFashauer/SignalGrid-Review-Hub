@@ -41,6 +41,12 @@ Keep the public Review Hub inside this scope:
 - Approval gates must be explicit and must not be bypassed by default paths.
 - New connector or integration work should start read-only and fixture-backed unless a task explicitly says otherwise and provides a safe private-test context.
 
+## Evidence-toolchain routing
+
+For work involving Bruno/OpenAPI, MCP, Fleet/osquery, macOS posture evidence, source-independence testing, or adoption of an external verification tool, read `.claude/skills/signalgrid-evidence-toolchain/SKILL.md` and `docs/agent/EVIDENCE_TOOLCHAIN_OWNERSHIP.md` in addition to the role's normal skill.
+
+Use the existing roles named there; do not create a new department because a useful repository exists. Bruno remains the curated API contract/wire plane, MCP remains controlled agent interoperability, independent sources preserve their own provenance, and the deterministic SignalGrid core remains the only trust authority. Researching or installing a proof tool does not widen the ratified launch profile.
+
 ## Validation commands
 
 Run the relevant checks before opening or updating a pull request. For standard Review Hub changes, use:

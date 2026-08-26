@@ -42,6 +42,7 @@
     "guard:figures": "node scripts/check-proof-figures.mjs",
     "guard:mutations": "node scripts/mutation-guard.mjs",
     "check:mutation-sharding": "node scripts/check-mutation-sharding.mjs",
+    "check:row-citations": "node scripts/check-row-citations.mjs",
     "guard:registries": "node scripts/check-guard-registries.mjs",
     "guard:ungated-fetch": "node scripts/check-ungated-fetch.mjs",
     "level10:audit": "pnpm --filter @workspace/scripts run level10:audit",

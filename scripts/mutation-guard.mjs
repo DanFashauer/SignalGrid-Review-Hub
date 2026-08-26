@@ -74,7 +74,7 @@ const PROOF_TIMEOUT_MS = 90_000;
 // allowlisted survivor, because nothing ever re-validated the exemption. The
 // comment, when present, is preserved in the mutated line so allowlist matching
 // against the source line keeps working.
-const MUTATORS = [
+export const MUTATORS = [
   {
     id: "cond-false",
     // `if (<anything>) {` → `if (false) {`  — delete the branch.
@@ -1176,27 +1176,48 @@ function runProof(proof) {
   return summary[1] === "pass" ? "survivor" : "killed";
 }
 
+/**
+ * The per-line matching core, factored out so a gate can exercise the EXACT code
+ * path the sweep uses without needing a file on disk. Returns one entry per
+ * mutator that fires on this single line.
+ *
+ * This exists because the mutators are themselves safety-critical: a subtle
+ * narrowing of one `match` regex (e.g. `(.+)` → `([^)]+)` on the `&&`/`||`
+ * operand mutators) silently stops mutating every function-call guard operand —
+ * `isFinite(x) &&`, `!contradictory(cand) &&` — so those lines leave the sweep
+ * counted as "skipped", never as a SURVIVOR. The full sweep is scheduled and
+ * post-merge, so nothing per-PR would notice; `check-mutation-sharding.mjs`
+ * asserts each mutator still fires on its representative shape by calling this.
+ */
+export function lineMutations(line) {
+  const out = [];
+  for (const mutator of MUTATORS) {
+    const m = line.match(mutator.match);
+    if (!m) continue;
+    const replaced = mutator.apply(m);
+    if (replaced === line) continue; // no-op mutation, skip
+    out.push({ mutator: mutator.id, replaced, describe: mutator.describe(m) });
+  }
+  return out;
+}
+
 export function mutationsFor(file) {
   const abs = join(repoRoot, file);
   const original = readFileSync(abs, "utf8");
   const lines = original.split("\n");
   const out = [];
   for (let i = 0; i < lines.length; i += 1) {
-    for (const mutator of MUTATORS) {
-      const m = lines[i].match(mutator.match);
-      if (!m) continue;
-      const replaced = mutator.apply(m);
-      if (replaced === lines[i]) continue; // no-op mutation, skip
+    for (const lm of lineMutations(lines[i])) {
       const mutated = [...lines];
-      mutated[i] = replaced;
+      mutated[i] = lm.replaced;
       out.push({
         file,
         abs,
         original,
         lineNo: i + 1,
         sourceLine: lines[i].trim(),
-        mutator: mutator.id,
-        describe: mutator.describe(m),
+        mutator: lm.mutator,
+        describe: lm.describe,
         content: mutated.join("\n"),
       });
     }

@@ -92,6 +92,31 @@ If another lane has recent or uncommitted changes there, stop and hand back.
 One signal domain. Read-only. Unknown maps to unknown — never to a negative
 posture. Then `node scripts/check-connector-discipline.mjs`.
 
+## API, MCP, and endpoint evidence tooling
+
+When this role is acting as `api-contract-architect`, `endpoint-uem-domain`, or
+otherwise changing API/MCP/source-verification behavior, also read
+`.claude/skills/signalgrid-evidence-toolchain/SKILL.md` and
+`docs/agent/EVIDENCE_TOOLCHAIN_OWNERSHIP.md`.
+
+Keep the proof layers distinct:
+
+- **Bruno** is the curated, Git-reviewed API contract/wire suite.
+- **Schemathesis** generates adversarial OpenAPI cases; a real defect it finds
+  becomes a stable regression rather than remaining a one-off fuzz result.
+- **oasdiff** makes base-versus-head breaking API changes visible before release.
+- **Prism** provides spec-driven mocks/validation; mock success is not live-wire proof.
+- **Hurl** is reserved for compact shell-friendly HTTP regressions and must not
+  become a second canonical API suite.
+- **MCP Inspector** is the independent MCP protocol/tool-surface check; repository
+  MCP tests remain first-party regression coverage.
+- **Fleet MCP** is a least-privilege and mutation-boundary design reference, not
+  permission to copy its implementation.
+
+Adding one of these tools is engineering proof infrastructure, not a connector-family
+or launch-profile change. Installation/deployment/CI-required promotion follows the
+open-source lab registry and licence rules in the evidence-toolchain skill.
+
 ## Before you hand to the reviewer
 
 ```bash

@@ -47,7 +47,7 @@ export default function About() {
                 The closed-loop decision layer for access risk.
               </h1>
               <p className="text-lg text-muted-foreground leading-relaxed mb-4">
-                SignalGrid is a Zero Trust orchestration platform for shared and mobile work
+                SignalGrid is a Shared-Device Trust Gateway for shared and mobile work
                 environments. It enables secure, contextual, real-time access by continuously
                 evaluating identity, device trust, and operational context.
               </p>

@@ -316,6 +316,33 @@ function violationsIn(name, body) {
   return out;
 }
 
+// Retired category labels. DR-004 reconciled the site to "Shared-Device Trust
+// Gateway" and reconciled the earlier finalists OUT — "not kept as synonyms". A
+// buyer-facing surface using one is drift the site's own decision record forbids,
+// and unlike a deferred capability it cannot be hedged into truth: the label is
+// simply wrong now. Exempt a line that names the label AS retired/superseded — a
+// decision record and a "renamed to X" note must be able to say the old words,
+// the same honesty carve-out the deferred-noun rule makes for negations.
+const RETIRED_LABELS = /Zero[\s-]Trust orchestration|Operational Trust Orchestration/i;
+const RETIRED_OK = /retired|superseded|deprecat|renamed|former(ly)?|no longer|DR-004|historical|earlier (category|label|name|finalist|exploration)/i;
+
+// Scanned line-by-line over the buyer-facing MARKETING surface ONLY, never through
+// violationsIn — that feeds the docs ceiling below, and every decision record and
+// FALSE_CLAIMS entry legitimately names the old label.
+function retiredLabelViolations(name, body) {
+  const out = [];
+  body.split("\n").forEach((line, i) => {
+    if (RETIRED_LABELS.test(line) && !RETIRED_OK.test(line)) {
+      const m = (line.match(RETIRED_LABELS) || [""])[0];
+      out.push(
+        `${name}:${i + 1}: retired category label "${m}" in buyer-facing copy — ` +
+          'DR-004 ratified "Shared-Device Trust Gateway" and reconciled the earlier labels OUT, not kept as synonyms',
+      );
+    }
+  });
+  return out;
+}
+
 // ── self-test ────────────────────────────────────────────────────────────────
 {
   const bad0 = "6 evaluated-today signal dimensions";
@@ -360,7 +387,10 @@ function violationsIn(name, body) {
     violationsIn("st9.html", artifactFooter).length > 0 &&
     violationsIn("st10.html", honestIdiom).length === 0 &&
     violationsIn("st11.html", avoidList).length === 0 &&
-    violationsIn("st12.html", avoidList.replace("Trap phrases to avoid", "Signals we fuse")).length > 0;
+    violationsIn("st12.html", avoidList.replace("Trap phrases to avoid", "Signals we fuse")).length > 0 &&
+    // Retired category label — flagged in live copy, exempt when named as retired.
+    retiredLabelViolations("stR0", "SignalGrid is a Zero Trust orchestration platform.").length > 0 &&
+    retiredLabelViolations("stR1", "The Operational Trust Orchestration label is retired; DR-004 renamed it Shared-Device Trust Gateway.").length === 0;
   if (!st) {
     console.error("✗ SELF-TEST FAILED: a rule no longer flags its synthetic violation. A gate that cannot fail proves nothing.");
     process.exit(1);
@@ -371,6 +401,31 @@ let problems = 0;
 for (const f of files) {
   if (f.endsWith("check-launch-claims.mjs")) continue;
   for (const v of violationsIn(f, readFileSync(f, "utf8"))) {
+    console.error(`  ✗ ${v}`);
+    problems += 1;
+  }
+}
+
+// Retired-label scan over the marketing surface (web + review SPA source + the
+// served index.html copies + the README landing). Separate from `files` so it
+// never enters the docs-ceiling count.
+const RETIRED_ROOTS = ["artifacts/signalgrid-web/src", "artifacts/signalgrid-review/src"];
+const retiredFiles = [];
+const walkRetired = (d) => {
+  for (const e of readdirSync(d)) {
+    const p = join(d, e);
+    if (statSync(p).isDirectory()) walkRetired(p);
+    else if (/\.(tsx|ts|jsx|js|html)$/.test(p)) retiredFiles.push(p);
+  }
+};
+RETIRED_ROOTS.forEach((d) => { if (existsSync(d)) walkRetired(d); });
+for (const p of ["artifacts/signalgrid-web/index.html", "artifacts/signalgrid-web/dist/public/index.html", "README.md"]) {
+  if (existsSync(p) && !retiredFiles.includes(p)) retiredFiles.push(p);
+}
+let retiredScanned = 0;
+for (const f of retiredFiles) {
+  retiredScanned += 1;
+  for (const v of retiredLabelViolations(f, readFileSync(f, "utf8"))) {
     console.error(`  ✗ ${v}`);
     problems += 1;
   }

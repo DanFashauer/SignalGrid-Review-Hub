@@ -15,7 +15,7 @@
  * happens to be, and a threshold on it would fail the build for a defensible
  * distribution — a flaky gate gets switched off, and this one is worth keeping.
  */
-import { TARGETS, shardTargets, mutationsFor } from "./mutation-guard.mjs";
+import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations } from "./mutation-guard.mjs";
 
 let passed = 0;
 const failures = [];
@@ -59,6 +59,60 @@ for (const [i, n] of [[0, 0], [2, 2], [-1, 3], [1.5, 3]]) {
   let threw = false;
   try { shardTargets(TARGETS, i, n); } catch { threw = true; }
   check(`rejects --shard=${i}/${n} rather than silently sweeping a subset`, threw);
+}
+
+// ── The mutators must still fire on the shapes they exist to catch ────────────
+//
+// The sharder above proves no TARGET is dropped. This proves no MUTATOR is
+// silently neutered — the other way the sweep can report success over work it
+// never did. A one-character narrowing of an operand regex (`(.+)` → `([^)]+)`)
+// stops mutating every function-call guard operand, and because the full sweep
+// is scheduled/post-merge, no per-PR check would notice: the drop reads as
+// "skipped", never SURVIVOR. So each mutator is asserted to fire on a
+// representative guard-line shape, through the SAME `lineMutations` the sweep
+// uses. The fixture that matters most is a `&&`/`||` operand carrying a `)` — the
+// exact multi-term shape (`isFinite(x) &&`, `!contradictory(cand) &&`) two named
+// findings were built to catch and the exact shape the narrowing kills.
+const MUTATOR_FIXTURES = [
+  { line: `  if (isFinite(expiry) && report.ok) {`, expect: ["cond-false"] },
+  { line: `  } else if (tier !== "prod") {`, expect: ["else-if-false"] },
+  { line: `  } else if (!contradictory) {`, expect: ["else-if-false", "else-if-true"] },
+  { line: `    isFinite(expiry) &&`, expect: ["conjunct-true"] },
+  { line: `    !contradictory(cand) &&`, expect: ["conjunct-true"] },
+  { line: `    report.credentialRef.length > 0 ||`, expect: ["disjunct-false"] },
+  { line: `    zone === expectedZone ||`, expect: ["disjunct-false"] },
+  { line: `    return false;`, expect: ["return-flip"] },
+  { line: `    return true;`, expect: ["return-flip"] },
+  { line: `  const remaining = budget - spent;`, expect: [] },
+];
+// Non-vacuity: the case set is itself pinned. Deleting fixtures to weaken this
+// self-test is the same class of attack it defends against, so a shrunk fixture
+// list fails the gate. Also assert every mutator id is exercised by at least one
+// fixture, so adding a mutator without a fixture cannot leave it untested.
+const FIXTURE_FLOOR = 10;
+check(`mutator self-test is non-vacuous (${MUTATOR_FIXTURES.length} fixtures, floor ${FIXTURE_FLOOR})`,
+  MUTATOR_FIXTURES.length >= FIXTURE_FLOOR);
+const exercised = new Set(MUTATOR_FIXTURES.flatMap((f) => f.expect));
+check(`every mutator id is exercised by a fixture (${exercised.size}/${MUTATORS.length})`,
+  MUTATORS.every((m) => exercised.has(m.id)));
+for (const f of MUTATOR_FIXTURES) {
+  const got = lineMutations(f.line).map((x) => x.mutator).sort();
+  const want = [...f.expect].sort();
+  check(`mutators fire on \`${f.line.trim()}\` → [${want.join(", ") || "none"}]`,
+    got.length === want.length && got.every((id, i) => id === want[i]));
+}
+
+// ── The hand-registered safety-critical targets must stay in the registry ─────
+//
+// `check-guard-registries.mjs` only requires the GRANT-SAFETY population to be in
+// TARGETS; these four are registered by hand and sit outside it, so dropping one
+// (e.g. `continuity.ts`, whose reconcileDecisions can emit `allow`) escapes that
+// gate and shrinks the sweep by one safety-critical file with every per-PR check
+// still green. Pin them by name.
+const PINNED_PROOFS = ["proof:verdict-attestation", "proof:decision-continuity", "proof:pim-activation", "proof:dual-control"];
+const present = new Set(TARGETS.map((t) => t.proof));
+for (const p of PINNED_PROOFS) {
+  check(`hand-registered safety-critical target present: ${p}`, present.has(p));
 }
 
 // Reported, not gated.

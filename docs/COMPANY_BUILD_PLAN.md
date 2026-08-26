@@ -3896,6 +3896,42 @@ earlier — that is the loop working, not a reason to soften the record.
     have caught the legend — and (c), pinning the mapping in one registry the gate
     reads, remain open and are the ones that would close it.
 
+185. **The mutation registry was aimed at re-export barrels, and 45 guards had no
+    test.** — FIXED 2026-08-26, qa-engineer, in PR #319 (merged, `2962e55`).
+    `scripts/mutation-guard.mjs`; verify with `node scripts/mutation-guard.mjs`.
+    `proof:device-attestation` registered `index.ts` — a barrel that re-exports —
+    so `evaluate.ts`, the file granting this family's TOP assurance tier, was never
+    mutated. Mutation operates on FILES; a re-export buys nothing. Audited across
+    the fabric rather than fixed in place: 19 families had logic files no
+    registration named, 33 files in all, including 14 `evaluate.ts` decision cores.
+    1,160 mutations -> 1,367.
+    THE FIRST SWEEP AFTER WIDENING FOUND 45 SURVIVORS — guards deletable with every
+    proof still passing. That is the finding, and it is worth stating plainly: the
+    sweep had been reporting green over files it never touched, and "every
+    registered guard is falsifiable" was true only of the guards it could see.
+    Resolved 42 by new assertions and 3 by documented-inert entries with executed
+    reasoning (an exhaustive 1,680-state diff for identity-risk; an executed
+    nine-value domain for the edr-threat typeof conjunct). Every new assertion
+    carries a non-vacuity control, because each would otherwise pass for a
+    normalizer that refused everything.
+    THE THREE WORTH NAMING, because they are what the gap was hiding: a macOS
+    system-extension section reporting ITSELF untrustworthy was believed anyway; a
+    truncated device inventory could be returned as complete, which for a posture
+    fabric means a missing device reads as a HEALTHY device; and a Redis outage
+    could serve a stale config indefinitely with nothing said — in a file whose own
+    header promises that cannot happen.
+    The sweep is now SHARDED four ways (`--shard=i/N`, balanced by mutation count),
+    with `scripts/check-mutation-sharding.mjs` proving the split is a partition —
+    a sharder that dropped a target would report success over work it never did,
+    which is this lane's own failure mode reintroduced at the scheduling layer.
+    STILL OPEN, measured and deliberately not folded in: the mutators are
+    line-oriented and require `if (...) {`, so a brace-less guard clause
+    (`if (!v.ok) return null;`) cannot be reached at all. 417 of them sit in
+    registered files across 49 of the 53 targets — an entire class this harness has
+    never been able to falsify, and about a 31% mutation increase once a mutator
+    exists. `nac/cisco-ise.ts` and `nac/aruba-clearpass.ts` are unregistered because
+    of it, with the reason and a re-register instruction recorded at the registry.
+
 184. **A guard sat one layer above the thing it guarded.** — FIXED 2026-08-25,
     qa-engineer, in PR #319.
     `lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts`;

@@ -141,9 +141,14 @@ because a reviewer thought to try mutation testing. That is not a control; it is
 good habits.
 
 The guard mutates each condition in a registered file, runs that proof under a timeout,
-and fails on any survivor. Measured 2026-08-21: **1,160 mutations, 1,083 killed, 77 documented-inert,
-0 survivors, 40m29s wall-clock** — the sweep runs DAILY in the scheduled
-verification lane (it is too heavy for per-push CI, and preflight says so),
+and fails on any survivor. Measured 2026-08-26: **1,367 mutations, 1,287 killed, 80 documented-inert,
+0 survivors** — up from 1,160 on 2026-08-21, because the registry had been
+pointing at re-export barrels rather than the files carrying the logic, and 33
+connector source files across 19 families were brought into scope. The first
+sweep after that widening found **45 survivors**; 42 are now pinned by new
+assertions and 3 are documented inert with executed reasoning. The sweep runs
+DAILY in the scheduled verification lane, now SHARDED four ways (it is too heavy
+for per-push CI, and preflight says so),
 and each run prints its own counts, so these numbers are a dated measurement,
 not a live claim. The timeout is not incidental — deleting `MAX_PROTOTYPE_DEPTH` makes the
 proof *hang* rather than fail, because the walk meets a Proxy returning a fresh prototype

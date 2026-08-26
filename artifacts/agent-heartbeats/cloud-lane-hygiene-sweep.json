@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-24T09:40:20Z",
-  "result": "freed 226M: scratchpad 377M->151M (3816 files older than 24h); 23G free, far above the 1GB escalation line; no dockerd, 0 containers, /var/lib/docker only 116K so nothing to reclaim. HEARTBEAT HELD at fire time and written now: the push chain had a SHA pinned and refuses to run preflight on a dirty tree, so writing this file then would have blocked the push or moved HEAD past the pinned commit. pnpm store prune was also deferred at fire time because the mutation guard was resolving modules; run now that the guard has exited clean (1161 mutations, 0 survivors)."
+  "firedAt": "2026-08-26T09:40:19.000Z",
+  "result": "freed ~155MB from the session scratchpad (547 files older than ~24h removed — logs, task outputs, captures; the repo tree was never touched). 23G free on / — far above the 1GB floor, so no owner escalation. /var/lib/docker held only 116K with no daemon running, nothing to reclaim; pnpm store prune removed 0 (already clean)."
 }

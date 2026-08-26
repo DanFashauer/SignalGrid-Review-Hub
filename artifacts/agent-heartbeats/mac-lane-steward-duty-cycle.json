@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-26T12:25:11.000Z",
-  "result": "quiet: no Mac-lane commits, sim-results, or lane mail addressed to cloud since the 08:24 cycle. The 14 cloud->mac messages stay unread (the Mac lane has not run a cycle to ack them; that is theirs to close). One unchanged pending sim request (2026-08-25-ios-dynamic-type-and-nil-expiry). No shared-surface change owed a notice — the only merges since last cycle were #324 and #325, both heartbeat-only. HELD-CYCLE NOTE cleared: last cycle's 08:24 heartbeat landed via #324 and the branch is now clean at origin/SignalGrid_Alpha, so this heartbeat commits directly. No owner message."
+  "firedAt": "2026-08-26T16:24:31.000Z",
+  "result": "quiet: no Mac-lane commits, sim-results, or lane mail addressed to cloud since the 12:25 cycle. The only commits were the cloud lane's own merges (#326 steward heartbeat, #327 Definition of Done). 14 cloud->mac messages stay unread (the Mac lane has not run a cycle to ack them; theirs to close). One unchanged pending sim request (2026-08-25-ios-dynamic-type-and-nil-expiry). No shared-surface change owed a notice: #327 is docs-only (docs/DEFINITION_OF_DONE.md + INDEX.md), touching no Mac run surface. PR #327 was open when this cycle fired but has since merged, so this heartbeat commits directly rather than being held. No owner message."
 }

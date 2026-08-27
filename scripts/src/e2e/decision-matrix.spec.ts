@@ -22,7 +22,9 @@ for (const s of SCENARIOS) {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(String(e)));
 
-    await page.goto(`${CONSOLE}/`, { waitUntil: "domcontentloaded" });
+    // The preset panel lives on the operator dashboard, now at /overview
+    // (P0 IA: "/" is Sessions). Same panel, same /v1 evaluation.
+    await page.goto(`${CONSOLE}/overview`, { waitUntil: "domcontentloaded" });
 
     const evaluated = page.waitForResponse(
       (r) => r.url().includes("/v1/decisions/evaluate") && r.request().method() === "POST",

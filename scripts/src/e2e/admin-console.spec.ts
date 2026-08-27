@@ -56,7 +56,9 @@ test("api-server health and demo-key discovery respond through the app's own pro
 });
 
 test("dashboard renders the deterministic fixture telemetry", async ({ page }) => {
-  await page.goto(BASE, { waitUntil: "domcontentloaded" });
+  // P0 IA (docs/PURPOSE.md): "/" is now Sessions; the operator dashboard moved
+  // to /overview. Same page, same assertions — only the route follows the move.
+  await page.goto(`${BASE}/overview`, { waitUntil: "domcontentloaded" });
 
   await expect(page).toHaveTitle("SignalGrid — Operator Dashboard");
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
@@ -78,7 +80,8 @@ test("dashboard renders the deterministic fixture telemetry", async ({ page }) =
 });
 
 test("live decision panel evaluates a RESTRICT through the real /v1 core", async ({ page }) => {
-  await page.goto(BASE, { waitUntil: "domcontentloaded" });
+  // The live-decision panel lives on the operator dashboard, now at /overview.
+  await page.goto(`${BASE}/overview`, { waitUntil: "domcontentloaded" });
 
   await expect(page.getByText("Live decision · /v1 core")).toBeVisible();
 

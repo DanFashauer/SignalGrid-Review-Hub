@@ -88,10 +88,17 @@ if (existsSync(logPath)) {
   const startMatch = log.match(/Experiment started:\s*(\d{4}-\d{2}-\d{2})/);
   let daysMsg = "";
   if (startMatch) {
-    const days = Math.floor((Date.now() - Date.parse(startMatch[1])) / 86400000);
-    daysMsg = ` · day ${days}`;
-    if (days >= 7 && logged === 0) {
-      add("fail", "DISCOVERY", `${days} days since the freeze and 0 conversations. Nothing else on this list matters.`);
+    const startMs = Date.parse(startMatch[1]);
+    if (Number.isFinite(startMs)) {
+      const days = Math.floor((Date.now() - startMs) / 86400000);
+      daysMsg = ` · day ${days}`;
+      if (days >= 7 && logged === 0) {
+        add("fail", "DISCOVERY", `${days} days since the freeze and 0 conversations. Nothing else on this list matters.`);
+      }
+    } else {
+      // Fail closed: an unparseable start date must surface, never silently skip
+      // the discovery alarm (NaN >= 7 is false).
+      add("fail", "Discovery start date", `unparseable "Experiment started" date in docs/agent/DISCOVERY_LOG.md`);
     }
   }
   add(logged >= target ? "ok" : logged > 0 ? "warn" : "fail", "Discovery",

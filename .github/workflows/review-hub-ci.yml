@@ -356,6 +356,14 @@ jobs:
         run: node scripts/check-role-coverage.mjs
       - name: Role-coverage self-test (the gate can fail)
         run: node scripts/check-role-coverage.mjs --self-test
+      - name: Owner-gated surfaces manifest (autonomous-merge escalation line is non-empty)
+        run: node scripts/check-owner-gated-surfaces.mjs
+      - name: Owner-gated surfaces self-test (classify routes owner-gated diffs to the owner)
+        run: node scripts/check-owner-gated-surfaces.mjs --self-test
+      - name: Build-agent merge ledger (builder != reviewer on every autonomous merge)
+        run: node scripts/check-build-agent-merges.mjs
+      - name: Build-agent merge-ledger self-test (the gate can fail)
+        run: node scripts/check-build-agent-merges.mjs --self-test
       - name: Cited commands (documents may not promise a command that is gone)
         run: node scripts/check-cited-commands.mjs
       - name: Cited-command self-test (the gate can fail)

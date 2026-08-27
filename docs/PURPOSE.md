@@ -1,73 +1,105 @@
 # PURPOSE
 
-**Status: canonical. Frozen pending external validation.**
+**Status: canonical, v2. Corrected 2026-08-27 (DR-020).**
 
 Material changes require new evidence from customer discovery, design-partner
-deployment, or observed production-adjacent use. Internal preference alone is
-not sufficient grounds to reopen the doctrine. A customer provides the evidence;
-SignalGrid decides what the evidence means.
+deployment, observed production-adjacent use, **or a correction of owner intent**.
+Internal preference alone is not sufficient grounds to reopen the doctrine.
 
-*Last doctrine pass: 2026-08-26.*
+*v1 described a narrower company than the one being built. See DR-020.*
 
 ---
 
 ## 1. Purpose
 
-**Make the right decision at the moment of use.**
+**Make the right things happen when a person and their devices enter an
+operational context.**
 
 ## 2. Product
 
-**SignalGrid decides whether a shared-device session should proceed at the
-moment of use.**
+**SignalGrid connects the systems a building already runs - access control,
+identity, device management, location, applications, ticketing - into one grid
+that decides and acts on the person's behalf.**
 
-It deterministically correlates identity, device posture, custody, location and
-operational context across authoritative systems, and produces a reconstructable
-decision.
+One credential the person already carries - badge, phone, token, biometric -
+carries them through the building. Tap in at the door. Pick up a device. Enter
+the room. Open the app. **The identity is continuous; the systems are what is
+fragmented.** SignalGrid makes them behave as one, so the person never
+negotiates with technology.
 
-## 3. First wedge
+A decision is not the output. **A decision is the trigger for a cascade** -
+environment, workflow, verification, and escalation when reality does not match
+the expected outcome.
 
-**Microsoft Entra + Intune + one healthcare shared-device session workflow.**
+## 3. The law that outranks everything else
 
-Per `SignalGrid_Technology_Ecosystem_Master_Catalog_2026-07-31.xlsx`: *"Launch
-with Microsoft Entra ID + Intune and one shared-device workflow. Do not build
-every adapter."* The 423-entry catalog is *"strategy, not a build queue."*
+> **The worker never sees SignalGrid.**
 
-## 4. Signature demonstration
+This is not a UX preference. It is the thesis.
 
-Show a real session decision, the complete historical Decision Envelope, the
-exact policy version and evidence that produced it, and deterministic
-counterfactual replay when one input changes.
+Every prior layer of technology added a workflow: another login, another app,
+another training module. So the technology gets routed around - the phone is the
+last thing a clinician picks up, because the fastest path to the patient is the
+one that does not require negotiating with a device.
+
+**SignalGrid succeeds only by removing steps, never by adding one.** If the
+worker sees it, it has become the thing it replaces. Adoption is the product;
+security and evidence are by-products.
+
+Evidence for this is not internal opinion. Physicians spend nearly two hours on
+EHR and desk work per hour of direct patient face time (Sinsky et al., Annals
+of Internal Medicine, 2016). 73.6% of surveyed medical staff have used another
+person's credentials - 100% of residents (Hassidim et al., 2017). Those are
+adoption failures wearing a security-breach costume.
+
+## 4. Verticals are configuration, not code
+
+Healthcare is the first vertical, not the product. A nurse entering a patient
+room and a picker entering a bay are the **same event** to the core: identity +
+proximity + workflow context -> decision -> cascade.
+
+**Nothing industry-specific may enter the core.** The core knows `device_posture`
+and `local_authority`; it must never know `hospital_room_shade`. Verticals are
+policy and configuration over one engine. The moment a vertical needs its own
+code path, this is N products and no platform.
+
+## 5. Why the grid compounds
+
+**The more signals it absorbs, the better every decision becomes.** Each new
+source improves decisions that already existed - a competitor entering at signal
+one cannot catch a grid running at signal twenty.
+
+**This compounds only after deployment.** Signals absorbed in fixtures compound
+nothing. That is the argument for a live room, and it gets stronger as the vision
+gets larger, not weaker.
 
 ---
 
 ## Architectural differentiator
 
-**Cross-domain correlation, decided deterministically and reconstructable after
-the fact.**
+**Cross-system correlation, decided deterministically, orchestrated outward, and
+reconstructable after the fact.**
 
-Not neutrality. Neutrality is an architectural prerequisite and an ecosystem
-posture — every incumbent claims it, and it is a dependency rather than an
-advantage. What is harder to reach from any single plane is a decision that can
-be re-derived, with its policy version, and re-evaluated with one input changed.
+Not neutrality - every incumbent claims it. What is hard to reach from any single
+plane is a decision that can be re-derived with its policy version and replayed
+with one input changed.
 
 ### The determinism invariant
 
 > Given the same normalized decision inputs and the same policy version,
 > SignalGrid produces the same verdict and the same decision rationale.
 
-**Not** byte-for-byte envelope equality. Envelopes legitimately carry
-timestamps, source-retrieval metadata, execution receipts and correlation IDs
-that are not reproducible and must not be forced to be.
+Not byte-for-byte envelope equality: envelopes legitimately carry timestamps,
+retrieval metadata and execution receipts that are not reproducible.
 
 | Operation | What it does |
 | --- | --- |
 | **Reconstruction** | Returns the historical envelope exactly as recorded |
-| **Counterfactual replay** | Substitutes one or more normalized inputs and re-executes the same deterministic policy logic |
+| **Counterfactual replay** | Substitutes normalized inputs and re-executes the same deterministic policy logic |
 
 ### The verdict enum
 
-Ordering preserved from the published OpenAPI contract (`DecisionOutcome`,
-spec 0.2.0). Not a binary access gate — four distinct session dispositions:
+Ordering preserved from the published OpenAPI contract (`DecisionOutcome`, 0.2.0):
 
 | Verdict | Meaning |
 | --- | --- |
@@ -76,110 +108,83 @@ spec 0.2.0). Not a binary access gate — four distinct session dispositions:
 | `restrict` | Proceed with constrained workflow or capability |
 | `deny` | Do not proceed |
 
-*Corrected 2026-08-26.* An earlier draft of this document listed
-`allow · deny · step-up · hold`. That was wrong: `restrict` is implemented,
-published in OpenAPI 0.2.0, ported to the native surfaces and asserted by the
-proof suite; `hold` has no implementation evidence. The doctrine follows the
-contract. Adding `hold` would be speculative product development and is
-reopened only if a design partner demonstrates a real deferred/human-review
-state.
-
 ## Architectural prerequisite
 
-SignalGrid consumes authoritative evidence without becoming the underlying
-system of record. Source platforms remain authoritative for their own data and
-their own actions. SignalGrid consumes, normalizes, evaluates, routes, records
-and verifies.
+SignalGrid consumes authoritative evidence and delegates action. Source systems
+remain authoritative for their own data and their own actions. It **reads before
+it writes** - the first deployment of any source is read-only, because the badge
+and door systems are the most politically guarded in any building and an unknown
+vendor does not get write access first.
+
+---
+
+## The lanes where the thesis is testable
+
+This determines what may be built, and it corrects v1's freeze.
+
+| Lane | Status | Why |
+| --- | --- | --- |
+| **Mac / iOS** | **open** | Invisibility cannot be proven in a container. A real enrolled device in a real hand is the only place the embedded UX law is testable. |
+| **API - Bruno - Postman** | **open, gated** | For a product that connects systems, the API surface *is* the product. 57 `/v1` spec paths are the integration contract. `check:postman` verifies that contract is complete - it is a product gate, not doc-sync. |
+| Cloud logic, connectors, proofs | **frozen** | Sufficient. Adding here proves nothing new. |
+| New verticals, platforms, hardware | **frozen** | Until a design partner names one. |
+
+---
 
 ## Strategic hypothesis
 
-> The complete cross-domain moment-of-use decision boundary is insufficiently
-> owned by existing platforms.
+> No published platform connects access control, identity, device management,
+> location, applications and ticketing into one decision-and-orchestration layer
+> that acts on the person's behalf without adding a workflow.
 
 **Validation status: technically plausible; competitive overlap exists; buyer
 demand unvalidated.**
 
-A hypothesis under test, not a finding. The intersection is converging from five
-directions at once — Imprivata inward from identity and session context, Intune
-and Jamf inward from endpoint posture, LocknCharge and Traka inward from custody
-and workflow automation, Smplify inward from endpoint governance and approval
-gating, PACS inward from physical identity. **Do not assume the intersection
-stays empty.** The window is a reason for urgency, not for another doctrine pass.
+Artisight sells AI smart-hospital rooms and reaches adoption through passivity -
+the closest philosophical neighbour. Imprivata owns badge authentication.
+Vocera/Stryker, PerfectServe and TigerConnect own clinical communication. Each
+occupies part of the grid. **Do not assume the intersection stays empty.**
 
 ## Moat status
 
-**None claimed.**
+**None claimed.** A differentiated architecture, unusual founder domain
+knowledge, and accumulated implementation work are assets, not a moat. A moat
+comes only from deployment - and from signal compounding, which requires a live
+room.
 
-What exists today: a differentiated architecture, unusual founder domain
-knowledge, accumulated implementation work, and a possible head start in one
-workflow. Those are assets. They are not a moat.
-
-A moat can only come from deployment — embedded integrations, institution-
-specific policy models, operational dependence, accumulated implementation
-knowledge, reference customers, switching cost.
-
-**Standing prohibition: SignalGrid does not claim a moat before customer
-deployments create one.**
+**Standing prohibition: no moat is claimed before deployment creates one.**
 
 ## Economic buyer
 
-**Unresolved. To be answered through customer discovery.**
-
-The champion is likely someone who has run the operating problem — an enterprise
-mobility lead or endpoint engineering manager. The economic buyer may be a VP or
-Director of Infrastructure, a CIO, a CISO, digital workplace leadership,
-clinical technology leadership, or a combination. Founder-market fit is not the
-same as knowing who signs. The May 2025 second-opinion review flagged this as
-its first open question; it remains open.
+**Unresolved.** The champion is likely clinical informatics - the **CNIO** or
+nursing informatics leadership, who own whether staff actually use the thing -
+not the security team. Adoption is their language. Security is the CISO's. Test
+this directly; do not assume it.
 
 ---
 
 ## The Decision Envelope
 
-The atomic product object. One primitive shared by the engine, the API, the UI,
-the audit trail, the demo and eventually the sales story.
+The atomic product object, and now explicitly including what was orchestrated.
 
 ```
 Decision Envelope
-├── subject            who
-├── device             which device
-├── context            custody · location · shift/role · workflow
-├── evidence[]         value · source · provenance · freshness · contradictions
-├── policy             id · version · evaluated conditions
-├── decision           allow · step-up · restrict · deny
-├── reason             the rationale, in operator language
-├── requested action   what SignalGrid asked a system of record to do
-├── execution result   what that system reported back
-└── verification       whether the expected result actually occurred
+|-- subject            who
+|-- device             which device(s)
+|-- context            custody - location - zone - shift/role - workflow
+|-- evidence[]         value - source - provenance - freshness - contradictions
+|-- policy             id - version - evaluated conditions
+|-- decision           allow - step-up - restrict - deny
+|-- reason             the rationale, in operator language
+|-- requested actions  what SignalGrid asked each system of record to do
+|-- execution results  what each system reported back
+|-- verification       whether the expected outcome actually occurred
 ```
 
-Everything collapses into this:
-
-- **Decision Detail UI** is the human-readable rendering of an envelope.
-- **Counterfactual replay** is re-evaluation with one input changed.
-- **Audit** is envelope retrieval.
-- **The API** is evidence in, envelope out.
-- **The demo** is watching an envelope get created.
-
-### Consolidation rule — compatibility-aware
-
-The repository already contains competing names for this object. Measured on
-`SignalGrid_Alpha`, 2026-08-26: `DecisionOutcome` (30 files),
-`SignalGridDecision` (4), `DecisionResult` (4), `DecisionRecord` (3),
-`DecisionEnvelope` (2), plus a generated `Decision` in `lib/api-zod`.
-
-> **`DecisionEnvelope` is the sole canonical first-party term for the complete
-> decision transaction. `DecisionOutcome` remains the verdict enum (allow ·
-> step-up · restrict · deny). Existing externally exposed or generated names may survive
-> only as explicitly documented compatibility aliases, generated artifacts, or
-> deprecation shims. No new first-party model may introduce another
-> transaction-level decision noun.**
-
-Enforce with a vocabulary gate in `review:invariants` carrying an **explicit
-allowlist** of permitted legacy and generated names, registered in preflight
-**and** CI, with a `--self-test`. Conceptual purity without gratuitous contract
-breakage: the gate blocks new nouns; it does not force a breaking rename of
-published schema.
+`DecisionEnvelope` is the sole canonical first-party term for the complete
+transaction; `DecisionOutcome` is the verdict enum. Generated and published
+names survive as documented compatibility aliases. No new transaction-level
+decision noun may enter the tree.
 
 ---
 
@@ -189,49 +194,20 @@ published schema.
   partnership or autonomous remediation.
 - Claiming a moat.
 - Asserting the competitive seam is unowned as settled fact.
-- Equating practitioner experience with knowing the economic buyer.
-- Making offline/network-dependency the definition of the product. It is a
-  structural constraint and the sharpest demonstration — not the thesis.
-- Probabilistic scoring as the authoritative decision. Per the ecosystem
-  catalog: *"AI may summarize, recommend or triage; the authoritative
-  access/trust decision remains deterministic, policy-versioned, testable and
-  auditable."*
-- New verticals, connectors beyond P0/P1, platforms, hardware, or proofs written
-  for their own sake — until a paying design partner exists.
-
-## Outbound question
-
-Not a feature debate. The operational question:
-
-> *"What happens when a shared device leaves your controlled environment before
-> your management platform can act?"*
->
-> *"Which system knows the employee, the device posture, the checkout state, the
-> location and the current policy at that exact moment?"*
-
-The expected answer is not *"our MDM is bad."* It is **"no single system does."**
-That is where the conversation starts.
-
----
+- **Any industry-specific logic in the core.**
+- **Any change that adds a step for the worker.**
+- Probabilistic scoring as the authoritative decision. AI may summarize,
+  recommend or triage; the authoritative decision stays deterministic,
+  policy-versioned, testable and auditable.
+- Write access to a source system on first deployment.
 
 ## The test
 
-**The constraint is no longer technical possibility. It is external proof that
-this decision matters enough for an organization to change behavior around it.**
+**The constraint is not technical possibility. It is external proof that this
+matters enough for an organization to change behaviour around it.**
 
-One fact should govern how this document is used. In **May 2025**, an
-independent review named as its Priority 1 action: *"Identify one target
-integration — Okta, Jamf, or Microsoft Intune — and build a working
-proof-of-concept against a sandbox environment... Aim for a demo-able artifact
-within 30 days."* Its Priority 3 action was five customer discovery
-conversations.
-
-**Fifteen months later both remain open, and this doctrine pass reached the same
-conclusion.** The thesis has never been the bottleneck. Further internal
-refinement will produce synonyms, not insight.
-
-The doctrine is now precise enough to be wrong in public. That is the only state
-worth having, and it is where product discovery begins.
+An orchestration grid gets smarter by absorbing signals from a live deployment.
+Nothing in this repository compounds. One real room does.
 
 ---
 
@@ -239,12 +215,9 @@ worth having, and it is where product discovery begins.
 
 | Date | Source | Contribution |
 | --- | --- | --- |
-| May 2025 | `SignalGrid.pdf` (v0.1, Pre-Launch Second Opinion) | Independent pre-launch review, composite 6/10. Dominant gaps had shifted toward go-to-market, while live integration validation remained unresolved (Product Readiness 5/10). Economic buyer vs. technical champion flagged as open. |
-| Nov 2025 | `Enterprise_Mobility_Modernization_Documentation.docx` | The fragmentation problem, observed from inside a 200K+ device healthcare estate. The ownership-boundary model: IAM owns identity, Network/SASE owns routing, Mobility owns devices. |
-| May 2026 | `Enterprise Architecture for Badge Locked Shared Devices and Incident Alerting.pdf` | Two control planes — physical custody and cyber/operations. The deterministic state machine. The canonical event schema. The network-dependency constraint. |
-| Jul 2026 | `SignalGrid_Technology_Ecosystem_Master_Catalog_2026-07-31.xlsx` | Freeze breadth. P0 Microsoft wedge. The system-of-record boundary. The AI boundary. |
-| Aug 2026 | This document | Purpose · Product · Wedge · Demonstration. Decision Envelope as the atomic object. Moat disclaimed. Thesis frozen pending external evidence. |
-
-*Note: `SignalGrid.pdf` self-identifies as May 2025 in its header, scope section
-and footer. Its Drive file metadata shows a later modification date; the document
-content governs.*
+| May 2025 | `SignalGrid.pdf` v0.1 | Independent pre-launch review, 6/10. Gaps go-to-market; live integration unresolved. |
+| Nov 2025 | `Enterprise_Mobility_Modernization_Documentation.docx` | Fragmentation observed inside a 200K+ device healthcare estate. Ownership boundaries: IAM, Network/SASE, Mobility. |
+| May 2026 | `Enterprise Architecture for Badge Locked Shared Devices and Incident Alerting.pdf` | Two control planes. The deterministic state machine. The network-dependency constraint. |
+| Jul 2026 | `SignalGrid_Technology_Ecosystem_Master_Catalog_2026-07-31.xlsx` | Freeze breadth. P0 Microsoft wedge. System-of-record and AI boundaries. |
+| Aug 2026 | PURPOSE v1 | Decision Envelope, determinism invariant, moat disclaimed. **Described a gate, not the grid.** |
+| Aug 2026 | **PURPOSE v2 (DR-020)** | Orchestration thesis. Credential as spine. Embedded UX law promoted to thesis. Verticals as configuration. Mac and API lanes reopened. |

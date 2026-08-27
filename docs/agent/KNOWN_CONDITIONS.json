@@ -1,0 +1,43 @@
+{
+  "$comment": "Recurring failures, diagnosed once. A red gate with no cause attached looks identical to every other red gate, so a human re-diagnoses it every time. Each entry records the root cause, the evidence, whether it blocks a PR, and the fix. See scripts/classify-failure.mjs and docs/agent/LOOP.md.",
+  "conditions": [
+    {
+      "id": "e2e-v1-prefix-not-proxied",
+      "gate": "test:e2e",
+      "symptom": "7 browser E2E tests time out waiting for POST /v1/decisions/evaluate in the served admin console. Identical on re-run.",
+      "looks_like": "environment limitation - 'the api-server isn't fully served in this sandbox'",
+      "actual_cause": "artifacts/signalgrid-app/vite.config.ts proxies ONLY /api/*. The failing route is /v1/decisions/evaluate - a different prefix - so the browser POST reaches the Vite server, matches no proxy rule, and hangs until Playwright's timeout. Two things mask it: (a) Playwright's health gate is /api/healthz, a prefix that IS proxied, so the api-server reports healthy while /v1 is unreachable from the page; (b) API_PROXY_TARGET defaults to http://localhost:8080 while Playwright starts the api-server on PORTS.api, so even /api calls point at the wrong port unless the variable is exported.",
+      "evidence": [
+        "artifacts/signalgrid-app/vite.config.ts - const apiProxy = { '/api': ... } only",
+        "artifacts/api-server/src/routes/v1.ts:69 - router.post('/v1/decisions/evaluate', ...)",
+        "scripts/playwright.config.ts - webServer url: /api/healthz on PORTS.api"
+      ],
+      "reproduces": "anywhere API_PROXY_TARGET is not overridden - not sandbox-specific. Passes on a Mac only when a dev api-server already happens to occupy :8080.",
+      "blocks_pr": false,
+      "why_not_blocking": "Pre-existing and unrelated to any change that does not touch the proxy, the v1 router, or the Playwright config. Verify by confirming the PR touches none of those three.",
+      "fix": "Add '/v1': { target: apiProxyTarget, changeOrigin: true } to apiProxy in artifacts/signalgrid-app/vite.config.ts, and export API_PROXY_TARGET to PORTS.api in the admin webServer env in scripts/playwright.config.ts.",
+      "fix_owner": "core",
+      "diagnosed": "2026-08-27",
+      "status": "open"
+    },
+    {
+      "id": "unguarded-gate-prefixes",
+      "gate": "check:gate-census",
+      "symptom": "check:postman, verify:ledger-export and test:stress were registered in package.json but invoked by no lane and no workflow.",
+      "looks_like": "a large orphan count - naive audits reported 67, then 28, both false",
+      "actual_cause": "check-ci-preflight-sync.mjs guards only proof: gates. The check:, guard:, verify: and test: prefixes - 35 gates - had no coverage guard. Compounding it, gates are invoked two ways (pnpm run name, and node scripts/file as preflight does), so an audit matching one style reports orphans that do not exist.",
+      "evidence": [
+        "scripts/check-ci-preflight-sync.mjs",
+        "scripts/preflight.mjs",
+        "package.json"
+      ],
+      "reproduces": "deterministic - any gate added under a non-proof prefix could stop running unnoticed",
+      "blocks_pr": true,
+      "why_not_blocking": "",
+      "fix": "scripts/check-gate-census.mjs covers every prefix and matches both invocation styles; register it in preflight and CI with a self-test.",
+      "fix_owner": "core",
+      "diagnosed": "2026-08-27",
+      "status": "open"
+    }
+  ]
+}

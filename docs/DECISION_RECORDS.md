@@ -1018,3 +1018,49 @@ working, so reversal costs one commit and loses nothing. Reverse it if the two
 copies are found to have diverged twice without anyone noticing, which would mean
 the mirror is being edited in preference to the committed file and the vendored
 copy has become the fiction rather than the source.
+
+## DR-019 — PURPOSE.md becomes canonical; DR-004's category-label authority is superseded (2026-08-26)
+
+**Question.** `docs/PURPOSE.md` now states what SignalGrid is. DR-004 ratified
+"Shared-Device Trust Gateway" as the canonical category label. Both cannot be
+canonical, and leaving both standing recreates exactly the drift PURPOSE.md
+exists to end — every future contributor picks whichever phrase is convenient.
+
+**The call.**
+
+1. **`docs/PURPOSE.md` is canonical for current product truth.** Every other
+   document references it rather than paraphrasing it. Paraphrase is how
+   "decision layer" mutates back into "trust fabric."
+2. **DR-004 is preserved unchanged as historical record.** Its execution-order
+   ratification stands. Its ratification of "Shared-Device Trust Gateway" as
+   SignalGrid's canonical category label is **superseded** by PURPOSE.md.
+3. **No replacement category label is ratified.** PURPOSE.md's purpose and
+   product sentences are sufficient. Whether the recognised category is decision
+   infrastructure, trust orchestration, shared-device security, contextual
+   access or something unnamed is a question for buyers. Manufacturing a
+   category before discovery is the error DR-004 made cheaply and would make
+   expensively a second time.
+
+**Evidence read.** A framing census of the tree on 2026-08-26: `decision layer`
+35 files, `Assist gate` 19, `Shared-Device Trust Gateway` 16, `trust
+orchestration` 16, `runtime decision layer` 15, `trust fabric` 8 — against
+`moment of use`, the canonical framing, in 2.
+
+**Also corrected under this record.** PURPOSE.md was frozen carrying a factual
+error: it listed the verdict enum as `allow · deny · step-up · hold`. The
+published OpenAPI contract (`DecisionOutcome`, 0.2.0) is
+`allow · step-up · restrict · deny`. `restrict` is implemented, ported to the
+native surfaces and asserted by the proof suite; `hold` has no implementation
+evidence. The doctrine now follows the contract.
+
+This is the freeze rule working, not being broken. PURPOSE.md permits material
+change on new evidence and forbids it on internal preference. Implementation
+evidence falsified a statement, so the statement was corrected. Renaming
+"moment of use" because someone preferred different words would remain
+prohibited.
+
+**Reversal.** The owner reverses any part of this by saying so. Short of that:
+the category-label question reopens when customer discovery produces evidence
+that buyers recognise a specific category, and a later DR ratifies it. The
+verdict enum reopens only if a design partner demonstrates a workflow requiring
+a distinct deferred/human-review state that `restrict` cannot express.

@@ -42,19 +42,42 @@ import { useHealthCheck } from "@workspace/api-client-react";
 
 type NavEntry = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; match?: string };
 
+/**
+ * Primary navigation — docs/PURPOSE.md (DR-019).
+ *
+ * The semantic invariant, and the answer whenever ownership is ambiguous:
+ *
+ *   Session          the operational event
+ *   Decision Envelope the transaction produced for that event
+ *   DecisionOutcome   the verdict inside the envelope
+ *
+ * So there is deliberately NO first-class "Decisions" destination. A separate
+ * one immediately raises "is a session different from a decision?", and there is
+ * no good answer. A session produces an envelope; opening the session renders it.
+ *
+ * Sessions and Policies are primary because an operator governs policy
+ * independently of any individual session. Everything else — sources,
+ * connectors, integrations, fleet, tenants — is configuration and lives under
+ * Settings. Devices are entities involved in sessions, reachable by search and
+ * from session context, not a peer of the product itself.
+ */
 const LAUNCH_NAV: NavEntry[] = [
-  { href: "/", label: "Overview", icon: Activity },
-  { href: "/decisions", label: "Decisions", icon: ShieldAlert, match: "/decisions" },
-  { href: "/audit", label: "Audit", icon: ShieldAlert, match: "/audit" },
-  { href: "/connectors/setup", label: "Connector setup", icon: Network, match: "/connectors" },
-  { href: "/policies", label: "Policies", icon: Settings, match: "/policies" },
+  { href: "/sessions", label: "Sessions", icon: ShieldAlert, match: "/sessions" },
+  { href: "/policies", label: "Policies", icon: FileCode, match: "/policies" },
+  { href: "/settings", label: "Settings", icon: Settings, match: "/settings" },
+];
+
+/** Configuration, reached through Settings — never primary navigation. */
+const SETTINGS_NAV: NavEntry[] = [
+  { href: "/connectors/setup", label: "Sources & connectors", icon: Network, match: "/connectors" },
+  { href: "/integrations", label: "Integrations", icon: Network, match: "/integrations" },
+  { href: "/fleet", label: "Fleet & tenants", icon: Server, match: "/fleet" },
   { href: "/status", label: "Assurance", icon: Activity, match: "/status" },
+  { href: "/audit", label: "Audit", icon: ShieldAlert, match: "/audit" },
 ];
 
 const PREVIEW_NAV: NavEntry[] = [
   { href: "/signals", label: "Signals", icon: Activity, match: "/signals" },
-  { href: "/integrations", label: "Integrations", icon: Network, match: "/integrations" },
-  { href: "/fleet", label: "Fleet & tenants", icon: Server, match: "/fleet" },
   { href: "/app-workflows", label: "App workflows", icon: AppWindow, match: "/app-workflows" },
 ];
 

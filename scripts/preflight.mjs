@@ -72,6 +72,12 @@ const STEPS = [
   { name: "Shell lint (the one language with no static analysis)", cmd: ["node", "scripts/check-shell.mjs"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },
+  // PURPOSE.md makes the Decision Envelope the atomic product object; that only
+  // holds if there is exactly one first-party name for it.
+  { name: "Decision vocabulary (one name for the decision transaction)", cmd: ["node", "scripts/check-decision-vocabulary.mjs"] },
+  // PURPOSE.md is canonical (DR-019); current-truth surfaces reference it rather
+  // than paraphrase it. Historical records keep their terminology.
+  { name: "Product framing (current-truth surfaces reference PURPOSE.md)", cmd: ["node", "scripts/check-product-framing.mjs"] },
   // Sibling of the gate above, one question further in: orphans ask whether a reader
   // can REACH a document, this asks whether the document points anywhere real. A
   // citation that resolves to nothing reads as evidence and is not.

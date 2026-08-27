@@ -1,4 +1,11 @@
-# The Launch Profile — what ships as *SignalGrid Shared-Device Trust Gateway*
+# The Launch Profile — the supported scope
+
+> Canonical product truth is [`docs/PURPOSE.md`](PURPOSE.md) (DR-019). This file
+> states only what is **supported now**: the P0 wedge — Microsoft Entra + Intune
+> + one shared-device session workflow. Everything outside it is exploratory
+> breadth, not supported scope. The former title named this the *Shared-Device
+> Trust Gateway*; that category label is superseded and no replacement is
+> ratified pending customer discovery.
 
 **Status: a proposal in reviewable form. Scope is the owner's call; this file and
 `scripts/launch-profile.mjs` make the proposal concrete enough to argue with line by
@@ -78,7 +85,7 @@ connector surface not at all.
 **Signal kinds (3 of 41).** `device_posture`, `device_management_health`,
 `local_authority` — exactly what the three launch families produce.
 
-**Published API paths (13 of 54).** The Assist gate itself
+**Published API paths (13 of 54).** The Assist gate itself <!-- framing:mechanism -->
 (`/v1/decisions/evaluate`), the routes an operator console needs to see what it
 did, `/v1/decisions/{id}/evidence` — which is not garnish but the product's
 entire claim — plus `/v1/context`, `/v1/audit` and `/v1/metrics`. The

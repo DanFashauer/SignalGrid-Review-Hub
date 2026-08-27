@@ -228,7 +228,10 @@
     "verify:live": "./scripts/run-live-lanes.sh",
     "check:api-collection": "node scripts/check-api-collection.mjs",
     "proof:decision-palette": "node scripts/check-decision-palette.mjs",
-    "test:oidc": "pnpm --filter @workspace/api-server run test:oidc"
+    "test:oidc": "pnpm --filter @workspace/api-server run test:oidc",
+    "check:decision-vocabulary": "node scripts/check-decision-vocabulary.mjs",
+    "check:product-framing": "node scripts/check-product-framing.mjs",
+    "loop:state": "node scripts/loop-state.mjs"
   },
   "private": true,
   "devDependencies": {

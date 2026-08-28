@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-corrected-the-e2e-diagnosis-in-known-condi",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "corrected the e2e diagnosis in KNOWN_CONDITIONS.json (#336), owner-approved",
+  "body": "Owner approved (2026-08-28) correcting the e2e-v1-prefix-not-proxied entry. The recorded cause was wrong: the 7 E2E timeouts were NOT a missing /v1 proxy. The app posts /api/v1/decisions/evaluate (proxied); clean SignalGrid_Alpha passes all 53 E2E on the same /api-only vite.config.ts, which it could not if the proxy were the cause. The real cause was the Phase 0 Sessions-first IA moving the operator dashboard off '/' to '/overview' - the tests goto('/') and no longer found the live-decision panel/buttons, so the POST never fired. Fixed in #337 by pointing the 3 tests to /overview (assertions unchanged); E2E green on Alpha + the merged doctrine (5b23f8d). Entry kept (id is a legacy misnomer now), status -> resolved, latent /api-only observation preserved as a separate note. Merging #336 now."
+}

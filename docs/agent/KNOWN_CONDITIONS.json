@@ -5,20 +5,21 @@
       "id": "e2e-v1-prefix-not-proxied",
       "gate": "test:e2e",
       "symptom": "7 browser E2E tests time out waiting for POST /v1/decisions/evaluate in the served admin console. Identical on re-run.",
-      "looks_like": "environment limitation - 'the api-server isn't fully served in this sandbox'",
-      "actual_cause": "artifacts/signalgrid-app/vite.config.ts proxies ONLY /api/*. The failing route is /v1/decisions/evaluate - a different prefix - so the browser POST reaches the Vite server, matches no proxy rule, and hangs until Playwright's timeout. Two things mask it: (a) Playwright's health gate is /api/healthz, a prefix that IS proxied, so the api-server reports healthy while /v1 is unreachable from the page; (b) API_PROXY_TARGET defaults to http://localhost:8080 while Playwright starts the api-server on PORTS.api, so even /api calls point at the wrong port unless the variable is exported.",
+      "looks_like": "a missing /v1 proxy, or an environment limitation ('the api-server isn't fully served in this sandbox')",
+      "actual_cause": "The Sessions-first IA (Phase 0) moved the operator dashboard from '/' to '/overview'. The 7 tests (admin-console:58 and :80, decision-matrix x5) navigate to '/' expecting the dashboard's live-decision panel and its preset buttons; after the move '/' renders the sessions list, the buttons are absent, the POST never fires, and waitForResponse times out. The app posts to /api/v1/decisions/evaluate, which IS proxied, so the /v1-prefix-not-proxied theory (this id is now a legacy misnomer) is a red herring: clean SignalGrid_Alpha passes all 53 E2E on the SAME /api-only vite.config.ts, which it could not if the proxy were the cause.",
       "evidence": [
-        "artifacts/signalgrid-app/vite.config.ts - const apiProxy = { '/api': ... } only",
-        "artifacts/api-server/src/routes/v1.ts:69 - router.post('/v1/decisions/evaluate', ...)",
-        "scripts/playwright.config.ts - webServer url: /api/healthz on PORTS.api"
+        "SignalGrid_Alpha E2E: 53 passed, 0 failed, same artifacts/signalgrid-app/vite.config.ts (/api-only)",
+        "artifacts/signalgrid-app/src/App.tsx: '/' -> SessionList, '/overview' -> Dashboard (Phase 0 IA)",
+        "scripts/src/e2e/admin-console.spec.ts + decision-matrix.spec.ts: fixed to goto('/overview') in #337"
       ],
-      "reproduces": "anywhere API_PROXY_TARGET is not overridden - not sandbox-specific. Passes on a Mac only when a dev api-server already happens to occupy :8080.",
+      "reproduces": "on the phase0 / DR-020 branches BEFORE the test-navigation fix; never on Alpha.",
       "blocks_pr": false,
-      "why_not_blocking": "Pre-existing and unrelated to any change that does not touch the proxy, the v1 router, or the Playwright config. Verify by confirming the PR touches none of those three.",
-      "fix": "Add '/v1': { target: apiProxyTarget, changeOrigin: true } to apiProxy in artifacts/signalgrid-app/vite.config.ts, and export API_PROXY_TARGET to PORTS.api in the admin webServer env in scripts/playwright.config.ts.",
+      "why_not_blocking": "Resolved: #337 points the 3 dashboard-dependent tests at /overview (assertions unchanged). E2E is green on Alpha and on the merged DR-020 doctrine (5b23f8d).",
+      "fix": "Point the dashboard-dependent E2E tests at /overview (done, #337). SEPARATE latent note: vite.config.ts genuinely proxies only /api/* - true, but NOT the cause of these timeouts; add a '/v1' rule only if a code path is found that posts to a bare /v1 path.",
       "fix_owner": "core",
       "diagnosed": "2026-08-27",
-      "status": "open"
+      "corrected": "2026-08-28",
+      "status": "resolved"
     },
     {
       "id": "unguarded-gate-prefixes",

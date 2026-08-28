@@ -1,0 +1,44 @@
+{
+  "$comment": "Recurring failures, diagnosed once. A red gate with no cause attached looks identical to every other red gate, so a human re-diagnoses it every time. Each entry records the root cause, the evidence, whether it blocks a PR, and the fix. See scripts/classify-failure.mjs and docs/agent/LOOP.md.",
+  "conditions": [
+    {
+      "id": "e2e-v1-prefix-not-proxied",
+      "gate": "test:e2e",
+      "symptom": "7 browser E2E tests time out waiting for POST /v1/decisions/evaluate in the served admin console. Identical on re-run.",
+      "looks_like": "a missing /v1 proxy, or an environment limitation ('the api-server isn't fully served in this sandbox')",
+      "actual_cause": "The Sessions-first IA (Phase 0) moved the operator dashboard from '/' to '/overview'. The 7 tests (admin-console:58 and :80, decision-matrix x5) navigate to '/' expecting the dashboard's live-decision panel and its preset buttons; after the move '/' renders the sessions list, the buttons are absent, the POST never fires, and waitForResponse times out. The app posts to /api/v1/decisions/evaluate, which IS proxied, so the /v1-prefix-not-proxied theory (this id is now a legacy misnomer) is a red herring: clean SignalGrid_Alpha passes all 53 E2E on the SAME /api-only vite.config.ts, which it could not if the proxy were the cause.",
+      "evidence": [
+        "SignalGrid_Alpha E2E: 53 passed, 0 failed, same artifacts/signalgrid-app/vite.config.ts (/api-only)",
+        "artifacts/signalgrid-app/src/App.tsx: '/' -> SessionList, '/overview' -> Dashboard (Phase 0 IA)",
+        "scripts/src/e2e/admin-console.spec.ts + decision-matrix.spec.ts: fixed to goto('/overview') in #337"
+      ],
+      "reproduces": "on the phase0 / DR-020 branches BEFORE the test-navigation fix; never on Alpha.",
+      "blocks_pr": false,
+      "why_not_blocking": "Resolved: #337 points the 3 dashboard-dependent tests at /overview (assertions unchanged). E2E is green on Alpha and on the merged DR-020 doctrine (5b23f8d).",
+      "fix": "Point the dashboard-dependent E2E tests at /overview (done, #337). SEPARATE latent note: vite.config.ts genuinely proxies only /api/* - true, but NOT the cause of these timeouts; add a '/v1' rule only if a code path is found that posts to a bare /v1 path.",
+      "fix_owner": "core",
+      "diagnosed": "2026-08-27",
+      "corrected": "2026-08-28",
+      "status": "resolved"
+    },
+    {
+      "id": "unguarded-gate-prefixes",
+      "gate": "check:gate-census",
+      "symptom": "check:postman, verify:ledger-export and test:stress were registered in package.json but invoked by no lane and no workflow.",
+      "looks_like": "a large orphan count - naive audits reported 67, then 28, both false",
+      "actual_cause": "check-ci-preflight-sync.mjs guards only proof: gates. The check:, guard:, verify: and test: prefixes - 35 gates - had no coverage guard. Compounding it, gates are invoked two ways (pnpm run name, and node scripts/file as preflight does), so an audit matching one style reports orphans that do not exist.",
+      "evidence": [
+        "scripts/check-ci-preflight-sync.mjs",
+        "scripts/preflight.mjs",
+        "package.json"
+      ],
+      "reproduces": "deterministic - any gate added under a non-proof prefix could stop running unnoticed",
+      "blocks_pr": true,
+      "why_not_blocking": "",
+      "fix": "scripts/check-gate-census.mjs covers every prefix and matches both invocation styles; register it in preflight and CI with a self-test.",
+      "fix_owner": "core",
+      "diagnosed": "2026-08-27",
+      "status": "open"
+    }
+  ]
+}

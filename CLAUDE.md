@@ -6,9 +6,11 @@ first change. These rules override default behavior.
 ## What this is
 
 A pnpm/TypeScript monorepo for **SignalGrid**. `docs/PURPOSE.md` is canonical
-(DR-019) and states what SignalGrid is; this file governs implementation only.
-SignalGrid decides whether a shared-device session should proceed at the moment
-of use. The decision core is deterministic and
+(DR-020) and states what SignalGrid is; this file governs implementation only.
+SignalGrid connects the systems a building runs into one grid that decides and
+acts on a person's behalf as they move through door, device, room and app — a
+decision is the trigger for a cascade, not the end of it, and the worker never
+sees SignalGrid. The decision core is deterministic and
 fixture-backed; a "real-life simulator" subsystem plus a `proof:*` gate suite prove
 behavior without a database. Native iOS lives under `native/ios/`.
 

@@ -50,7 +50,8 @@ Evidence for this is not internal opinion. Physicians spend nearly two hours on
 EHR and desk work per hour of direct patient face time (Sinsky et al., Annals
 of Internal Medicine, 2016). 73.6% of surveyed medical staff have used another
 person's credentials - 100% of residents (Hassidim et al., 2017). Those are
-adoption failures wearing a security-breach costume.
+adoption failures wearing a security-breach costume. Both figures are quoted
+from the cited studies and remain unverified in this repository.
 
 ## 4. Verticals are configuration, not code
 

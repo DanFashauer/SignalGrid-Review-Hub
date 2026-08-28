@@ -1,22 +1,31 @@
 # SignalGrid Review Hub
 
-**Purpose — make the right decision at the moment of use.**
+**Purpose — make the right things happen when a person and their devices enter
+an operational context.**
 
-SignalGrid decides whether a shared-device session should proceed at the moment
-of use. It deterministically correlates identity, device posture, custody,
-location and operational context across systems that remain authoritative for
-their own data and actions, and produces a reconstructable decision —
-`allow` · `step-up` · `restrict` · `deny`. At launch the live signals are device
-posture, its freshness, and the device's authority to act; custody, location and
-operational context are proven on fixtures and deferred from the launch surface.
+SignalGrid connects the systems a building already runs — access control,
+identity, device management, location, applications and ticketing — into one
+grid that decides and, where a system of record permits it, acts on the person's
+behalf. One credential the person already carries takes them through door,
+device, room and app: the identity is continuous, and the fragmentation lives in
+the systems, not the person. A decision is not the end of the work — it is the
+trigger for a cascade (environment, workflow, verification, and escalation when
+reality does not match), recorded as a reconstructable Decision Envelope with an
+`allow` · `step-up` · `restrict` · `deny` verdict.
 
-**First wedge: Microsoft Entra + Intune + one healthcare shared-device session
-workflow.** Everything else in this repository is exploratory breadth, not
-supported product scope.
+**The law that outranks the rest: the worker never sees SignalGrid.** It succeeds
+only by removing a step, never by adding one. Missing or stale signals tighten
+the decision, never loosen it, and on first contact with any source system it
+reads before it writes.
 
-[`docs/PURPOSE.md`](docs/PURPOSE.md) is canonical (DR-019). This README
-references it and does not restate it. Missing or stale signals tighten the
-decision, never loosen it. See
+Nothing here is deployed. The grid compounds — every signal it absorbs sharpens
+the decisions it already makes — but only after a live room; in this repository
+every signal is a public-safe fixture. The first commercial wedge is Microsoft
+Entra + Intune with one healthcare shared-device workflow, and healthcare is the
+first vertical, not the product.
+
+[`docs/PURPOSE.md`](docs/PURPOSE.md) is canonical (DR-020). This README references
+it and does not restate it. See
 [What SignalGrid Does Today](docs/WHAT_SIGNALGRID_DOES_TODAY.md) for the exact
 implemented-vs-candidate boundary.
 

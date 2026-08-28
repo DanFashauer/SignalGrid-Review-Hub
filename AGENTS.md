@@ -2,9 +2,10 @@
 
 These instructions apply to the entire repository.
 
-**[`docs/PURPOSE.md`](docs/PURPOSE.md) is canonical (DR-019).** It states what
-SignalGrid is, what remains unproven, and what may not be claimed. Reference it;
-do not paraphrase it. Paraphrase is how the company description drifts. These
+**[`docs/PURPOSE.md`](docs/PURPOSE.md) is canonical (DR-020).** It states what
+SignalGrid is — an orchestration grid that decides and acts on a person's behalf,
+invisible to the worker — what remains unproven, and what may not be claimed.
+Reference it; do not paraphrase it. Paraphrase is how the company description drifts. These
 instructions govern agent conduct, not product truth.
 
 ## Owner-facing communication

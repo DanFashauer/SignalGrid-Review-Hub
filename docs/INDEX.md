@@ -364,3 +364,5 @@ records rather than current guidance.
 
 - [LOOP — where SignalGrid actually is](agent/LOOP.md): one-page state file, read first in any tool. `pnpm run loop:state` checks the seams between tools.
 - [Customer discovery log](agent/DISCOVERY_LOG.md): pre-registered discovery protocol, thresholds and tally.
+- [Integration map](INTEGRATION_MAP.md): the systems the grid connects to (access, identity, device, location, apps, ticketing), routed by lane — the platform surface DR-020 names.
+- [LAB 001](lab/LAB_001.md): the first real decision on hardware already owned — the Mac/local lane work order that carries a true signal into a Decision Envelope.

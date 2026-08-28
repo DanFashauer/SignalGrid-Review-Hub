@@ -36,8 +36,8 @@ The grid is physical. Most of it cannot be proven in a container.
 | **TENANT** | Anything needing live vendor credentials - owner only. |
 | **OWNER** | Partner agreements, program membership, purchasing decisions. |
 
-`pnpm run scan` routes findings by these venues. A MAC or TENANT finding is a
-**capability boundary, not a defect.**
+The steward's gap scanner routes findings by these venues. A MAC or TENANT
+finding is a **capability boundary, not a defect.**
 
 ---
 

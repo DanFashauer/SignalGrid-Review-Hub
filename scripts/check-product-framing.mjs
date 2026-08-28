@@ -6,7 +6,7 @@
 //
 // WHY THIS EXISTS
 // ---------------
-// docs/PURPOSE.md is canonical (DR-019). It only stays canonical if other
+// docs/PURPOSE.md is canonical (DR-020). It only stays canonical if other
 // documents REFERENCE it rather than paraphrase it — paraphrase is precisely how
 // "decision layer" mutates back into "trust fabric," "assist gate," or
 // "orchestration platform." A census on 2026-08-26 found six competing framings
@@ -51,8 +51,12 @@ const SURFACES = [
 // Retired framings: these name SignalGrid as a different thing than PURPOSE.md.
 const RETIRED = [
   { re: /\btrust fabric\b/i, why: "retired framing; PURPOSE.md owns the product sentence" },
-  { re: /\bShared-Device Trust Gateway\b/i, why: "DR-004 category label superseded by DR-019; no replacement label is ratified" },
+  { re: /\bShared-Device Trust Gateway\b/i, why: "DR-004 category label superseded by DR-020; no replacement label is ratified" },
   { re: /\bAssist gate\b/i, why: "retire where it describes SignalGrid itself; keep only where it names a real implementation mechanism" },
+  // The v1 (DR-019) gate thesis. DR-020 replaced it with the orchestration thesis;
+  // a surface drifting back to "a gate that decides whether a session proceeds" is
+  // the exact regression that let #337 carry PURPOSE(DR-020) beside README(DR-019).
+  { re: /make the right decision at the moment of use|decides whether a shared-device session (should )?proceed/i, why: "DR-019 gate thesis superseded by the DR-020 orchestration thesis" },
   { re: /\borchestration platform\b/i, why: "retired framing" },
   { re: /\bZero Trust orchestration platform\b/i, why: "retired framing" },
   { re: /\bevidence platform\b/i, why: "retired framing; evidence is part of a Decision Envelope, not the product" },
@@ -67,7 +71,7 @@ const ARCHITECTURE_LANGUAGE = [
 ];
 
 // A surface must anchor to the canonical framing rather than restate it.
-const ANCHOR = /moment of use|docs\/PURPOSE\.md|PURPOSE\.md/i;
+const ANCHOR = /docs\/PURPOSE\.md|PURPOSE\.md/i;
 const MUST_ANCHOR = ["README.md", "AGENTS.md", "CLAUDE.md"];
 
 if (process.argv.includes("--list")) {
@@ -108,7 +112,7 @@ for (const file of SURFACES) {
       if (!re.test(line)) return;
       // Deliberate, labelled exceptions. A contributor must SAY why the term
       // stands, which is the difference between a considered use and drift.
-      if (/superseded|historical|retired|DR-019|formerly|no longer/i.test(line)) return;
+      if (/superseded|historical|retired|DR-019|DR-020|\bv1\b|formerly|no longer/i.test(line)) return;
       // <!-- framing:mechanism --> marks a term naming a real implementation
       // mechanism (e.g. the gate inside EnterpriseShell) rather than describing
       // SignalGrid itself. Permitted, and visible in the diff.
@@ -146,7 +150,7 @@ if (failures.length) {
   }
   if (failures.length > 25) console.error(`    … and ${failures.length - 25} more`);
   console.error(
-    `docs/PURPOSE.md is canonical (DR-019). Reference it; do not paraphrase it.
+    `docs/PURPOSE.md is canonical (DR-020). Reference it; do not paraphrase it.
 Historical text may keep its terminology — label it historical, or leave it in
 a decision record, which this gate does not scan.\n`,
   );

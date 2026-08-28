@@ -1,11 +1,11 @@
 # The Launch Profile — the supported scope
 
-> Canonical product truth is [`docs/PURPOSE.md`](PURPOSE.md) (DR-019). This file
+> Canonical product truth is [`docs/PURPOSE.md`](PURPOSE.md) (DR-020). This file
 > states only what is **supported now**: the P0 wedge — Microsoft Entra + Intune
-> + one shared-device session workflow. Everything outside it is exploratory
-> breadth, not supported scope. The former title named this the *Shared-Device
-> Trust Gateway*; that category label is superseded and no replacement is
-> ratified pending customer discovery.
+> + one shared-device workflow, the first commercial cut of the orchestration
+> grid DR-020 describes. Everything outside it is exploratory breadth, not
+> supported scope. The *Shared-Device Trust Gateway* label is superseded (DR-004
+> → DR-020) and no replacement is ratified pending customer discovery.
 
 **Status: a proposal in reviewable form. Scope is the owner's call; this file and
 `scripts/launch-profile.mjs` make the proposal concrete enough to argue with line by

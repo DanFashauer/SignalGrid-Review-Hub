@@ -1,6 +1,33 @@
 # SignalGrid Review Hub
 
-SignalGrid is a **Shared-Device Trust Gateway** — the ratified category label (DR-004) — a runtime decision layer for shared, mobile, and frontline environments. When a workflow fires it returns a single allow / step-up / restrict / deny decision. **At launch that decision runs on three live signals:** device compliance (read-only from your device-management source), whether that compliance answer is still current, and whether the device may act on its own authority right now. The deterministic core also evaluates and proves a broader set on fixtures — identity state, physical custody (DockBridge), security-baseline (CIS) alignment, device owner type, and workflow risk — but those are **proven in-repo and deferred from the launch surface**, not shipped live; broader signal-source categories still (network/cellular, session/shift, and operational SIEM/ITSM signals) are candidate/roadmap. Missing or stale signals tighten the decision, never loosen it. See [What SignalGrid Does Today](docs/WHAT_SIGNALGRID_DOES_TODAY.md) for the exact implemented-vs-candidate boundary.
+**Purpose — make the right things happen when a person and their devices enter
+an operational context.**
+
+SignalGrid connects the systems a building already runs — access control,
+identity, device management, location, applications and ticketing — into one
+grid that decides and, where a system of record permits it, acts on the person's
+behalf. One credential the person already carries takes them through door,
+device, room and app: the identity is continuous, and the fragmentation lives in
+the systems, not the person. A decision is not the end of the work — it is the
+trigger for a cascade (environment, workflow, verification, and escalation when
+reality does not match), recorded as a reconstructable Decision Envelope with an
+`allow` · `step-up` · `restrict` · `deny` verdict.
+
+**The law that outranks the rest: the worker never sees SignalGrid.** It succeeds
+only by removing a step, never by adding one. Missing or stale signals tighten
+the decision, never loosen it, and on first contact with any source system it
+reads before it writes.
+
+Nothing here is deployed. The grid compounds — every signal it absorbs sharpens
+the decisions it already makes — but only after a live room; in this repository
+every signal is a public-safe fixture. The first commercial wedge is Microsoft
+Entra + Intune with one healthcare shared-device workflow, and healthcare is the
+first vertical, not the product.
+
+[`docs/PURPOSE.md`](docs/PURPOSE.md) is canonical (DR-020). This README references
+it and does not restate it. See
+[What SignalGrid Does Today](docs/WHAT_SIGNALGRID_DOES_TODAY.md) for the exact
+implemented-vs-candidate boundary.
 
 ## Quick start — three rungs, easiest first
 
@@ -46,7 +73,7 @@ Infrastructure-as-Code / GitOps for endpoints, and it is the primary way
 SignalGrid is meant to be operated.
 
 What makes it SignalGrid's IaC rather than a generic Terraform/Ansible pipeline
-is two things only a trust fabric adds:
+is two things only a correlated decision layer adds:
 
 1. **The apply is trust-gated.** A declared change rolls out *through the decision
    fabric* — an apply is refused unless a live decision returns `allow` (a

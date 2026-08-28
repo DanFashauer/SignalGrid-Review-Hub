@@ -13,6 +13,9 @@ const named = (loader: () => Promise<Record<string, unknown>>, key: string) =>
   lazy(() => loader().then((m) => ({ default: m[key] as ComponentType })));
 const Dashboard = named(() => import("@/pages/Dashboard"), "Dashboard");
 const DecisionList = named(() => import("@/pages/decisions/DecisionList"), "DecisionList");
+// Sessions is the product surface; it renders the same list component. See docs/PURPOSE.md.
+const SessionList = DecisionList;
+const Settings = named(() => import("@/pages/settings/Settings"), "Settings");
 const DecisionDetail = named(() => import("@/pages/decisions/DecisionDetail"), "DecisionDetail");
 const Audit = named(() => import("@/pages/Audit"), "Audit");
 const Status = named(() => import("@/pages/Status"), "Status");
@@ -88,9 +91,23 @@ function Router() {
       <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading…</div>}>
         <Switch>
           {/* ── Launch console — the six wireframe screens, bound to /v1 ── */}
-          <Route path="/" component={Dashboard} />
-          <Route path="/decisions" component={DecisionList} />
+          {/*
+            Sessions is the product and the default destination. Opening a
+            session renders its Decision Envelope — there is deliberately no
+            first-class Decisions destination, because a session produces an
+            envelope and two peer destinations would raise "is a session
+            different from a decision?" with no good answer. See docs/PURPOSE.md.
+
+            /decisions is retained as a compatibility alias so existing deep
+            links keep working; it is not advertised in navigation.
+          */}
+          <Route path="/" component={SessionList} />
+          <Route path="/sessions" component={SessionList} />
+          <Route path="/sessions/:id" component={DecisionDetail} />
+          <Route path="/decisions" component={SessionList} />
           <Route path="/decisions/:id" component={DecisionDetail} />
+          <Route path="/settings" component={Settings} />
+          <Route path="/overview" component={Dashboard} />
           <Route path="/audit" component={Audit} />
           <Route path="/status" component={Status} />
           <Route path="/connectors/setup" component={ConnectorSetup} />

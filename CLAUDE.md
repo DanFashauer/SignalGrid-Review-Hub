@@ -5,8 +5,12 @@ first change. These rules override default behavior.
 
 ## What this is
 
-A pnpm/TypeScript monorepo for **SignalGrid** — a signal- and location-driven
-**Assist gate** for frontline devices. The decision core is deterministic and
+A pnpm/TypeScript monorepo for **SignalGrid**. `docs/PURPOSE.md` is canonical
+(DR-020) and states what SignalGrid is; this file governs implementation only.
+SignalGrid connects the systems a building runs into one grid that decides and
+acts on a person's behalf as they move through door, device, room and app — a
+decision is the trigger for a cascade, not the end of it, and the worker never
+sees SignalGrid. The decision core is deterministic and
 fixture-backed; a "real-life simulator" subsystem plus a `proof:*` gate suite prove
 behavior without a database. Native iOS lives under `native/ios/`.
 
@@ -26,7 +30,7 @@ Layout: `lib/*` (decision core, connectors, flows), `artifacts/api-server`
    it; report status honestly (a failing gate is failing). `pnpm run
    review:invariants` enforces this — keep it green.
 3. **Embedded UX law.** SignalGrid is invisible to end users; the worker uses
-   their own host app and the Assist gate returns allow/step_up/restrict/deny.
+   their own host app and the gate returns allow/step_up/restrict/deny.
    Domain safety (patient lookup, clinical guidelines, etc.) belongs in the HOST
    apps, not in SignalGrid.
 4. **Platform honesty.** An app cannot grant device access, restrict other apps,
@@ -131,7 +135,7 @@ Vite 8's bundler, win32 bindings deliberately kept for the windows desktop CI), 
 - **Build from the repo root of the currently checked-out revision** — all iOS
   paths below are repo-relative (`native/ios/...`). Do not hand-fix any stray
   copy of the iOS tree outside this repository; only this tree is maintained.
-- Two apps: **EnterpriseShell** (the kiosk-until-auth shell + Assist gate) and
+- Two apps: **EnterpriseShell** (the kiosk-until-auth shell + Assist gate) and <!-- framing:mechanism -->
   **SignalGridMobile** (Operator + Wardlink demo/console).
 - Build & run:
   ```bash

@@ -145,7 +145,7 @@ decision inputs in the core today, and any surface that shows them must say so:
 - **Cross-platform app shells** (React Native / Expo, Tauri / Electron) — not
   built; responsive web + PWA is the cross-platform delivery. This is NOT a
   statement about native iOS: `native/ios/` ships two real Xcode targets,
-  EnterpriseShell (the kiosk-until-auth shell carrying the Assist gate) and
+  EnterpriseShell (the kiosk-until-auth shell carrying the Assist gate) and <!-- framing:mechanism -->
   SignalGridMobile, merged via PRs #107/#125/#128 and built in CI. They are
   simulator-verified; no MDM-enrolled hardware evidence exists.
 - **Certifications / authorizations** (SOC 2, FedRAMP, CMMC, STIG, EAL, FIPS) —

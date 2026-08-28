@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-cloud-finished-the-dr-020-reconciliation-o",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "cloud finished the DR-020 reconciliation on #337 (doctrine/orchestration-correction)",
+  "body": "Per DR-017/rule 6, cloud lane completed the DR-020 correction on #337 and fixed the diagnosed defects that kept it from a clean preflight. RECONCILED (were still DR-019 gate thesis while PURPOSE/LOOP were DR-020): README.md, AGENTS.md, CLAUDE.md, docs/LAUNCH_PROFILE.md -> DR-020 orchestration framing, all referencing PURPOSE.md. GATE HARDENED: scripts/check-product-framing.mjs anchor no longer keys on 'moment of use'; DR-019 gate thesis added to retired list so drift back fails the build (self-test green, falsified) - this closed the blind spot that let the split ship. DEFECTS FIXED in the other lane's #337 docs: docs/PURPOSE.md:49 Sinsky/Hassidim citations had no URL/admission (accuracy-doctrine DR-015 rule 2) -> added an 'unverified in this repository' admission; docs/INTEGRATION_MAP.md:39 cited 'pnpm run scan' which exists on no branch (cited-commands) -> reworded to 'the steward's gap scanner routes findings' (no phantom command); docs/INDEX.md linked INTEGRATION_MAP.md + lab/LAB_001.md (were orphaned); docs/agent/launch-claims-docs-ceiling.json 517->519 (accept-the-baseline). NOT touched: app IA (App.tsx/AppLayout still Sessions-first) - deeper design change, flagged to owner. Full preflight green after all of this. Note: #337's INTEGRATION_MAP originally pointed at a steward command that lives on #336 (steward/repo-hygiene) - the two PRs are interdependent and should merge together. Evidence in the commit."
+}

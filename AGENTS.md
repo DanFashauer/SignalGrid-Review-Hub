@@ -2,6 +2,12 @@
 
 These instructions apply to the entire repository.
 
+**[`docs/PURPOSE.md`](docs/PURPOSE.md) is canonical (DR-020).** It states what
+SignalGrid is — an orchestration grid that decides and acts on a person's behalf,
+invisible to the worker — what remains unproven, and what may not be claimed.
+Reference it; do not paraphrase it. Paraphrase is how the company description drifts. These
+instructions govern agent conduct, not product truth.
+
 ## Owner-facing communication
 
 For any text written directly to the owner — chat replies, status reports, PR summaries, owner-board entries, or action instructions — follow `.claude/skills/owner-comms/SKILL.md` as the canonical communication standard, even when the current agent is not Claude.

@@ -211,6 +211,24 @@ if (liveLanes.length) {
   L.push("");
 }
 
+// Truth-state taxonomy (docs/PURPOSE.md, DR-019). The single most misleading
+// thing a repository of this size can do is let "it exists" read as "it works
+// with a customer." Four states, derived rather than typed, because a hand-typed
+// maturity claim is a fossil the day it is written.
+L.push(`## Truth state — what "done" means here`);
+L.push("");
+L.push(`| State | Meaning | Where SignalGrid is |`);
+L.push(`| --- | --- | --- |`);
+L.push(`| **Implemented** | Code exists and its proof gate passes | **${proofCount}** proof gates |`);
+L.push(`| **Fixture-backed** | Runs on public-safe fixtures; no live tenant, no customer data | **all connectors** |`);
+L.push(`| **Live-validated** | Read real vendor software in an opt-in lane | **${liveLanes.length}** lane(s) available; run \`pnpm run verify:live\` for actual results |`);
+L.push(`| **Customer-validated** | A named organisation ran it against their own estate | **none** |`);
+L.push("");
+L.push(`Implemented is not fixture-backed is not live-validated is not`);
+L.push(`customer-validated. Nothing here has reached the fourth state, and no`);
+L.push(`document, demo or gate can move it there — only a customer can.`);
+L.push("");
+
 L.push(`## Inventory`);
 L.push(`- proof gates: **${proofCount}** · live-vendor lanes: **${liveLanes.length}** · browser E2E specs: **${e2eSpecs}** · CI workflows: **${workflows}**`);
 L.push("");

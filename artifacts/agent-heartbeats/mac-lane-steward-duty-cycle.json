@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-28T20:24:08.000Z",
-  "result": "quiet: no new Mac-lane commits, sim-results, or cloud-addressed lane mail since the 16:24 cycle; Alpha unchanged at af9e343. The DR-020 pivot is landed (see the 16:24 entry): #337 + #336 merged, #335 superseded, cadence released. One long-standing pending sim request (2026-08-25-ios-dynamic-type-and-nil-expiry, Mac-side). Open follow-ups still on the owner: app IA (App.tsx/AppLayout) is Sessions-first/gate-framed; agent skills (signalgrid-core/native/steward) still encode the gate reading. No owner message this cycle."
+  "firedAt": "2026-08-29T00:24:46.000Z",
+  "result": "quiet: no new Mac-lane commits, sim-results, or cloud-addressed lane mail since the 20:24 cycle; Alpha unchanged at af9e343. DR-020 pivot remains landed (#337 + #336 merged). One long-standing pending sim request (2026-08-25-ios-dynamic-type-and-nil-expiry, Mac-side); Fleet 4.90.0 proof:live-fleet still owed by the owner. Open follow-ups still on the owner: app IA (Sessions-first/gate-framed) and the agent skills (signalgrid-core/native/steward) still encoding the gate reading. No owner message this cycle."
 }

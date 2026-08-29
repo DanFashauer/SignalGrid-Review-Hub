@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-26T09:40:19.000Z",
-  "result": "freed ~155MB from the session scratchpad (547 files older than ~24h removed — logs, task outputs, captures; the repo tree was never touched). 23G free on / — far above the 1GB floor, so no owner escalation. /var/lib/docker held only 116K with no daemon running, nothing to reclaim; pnpm store prune removed 0 (already clean)."
+  "firedAt": "2026-08-29T09:40:12.000Z",
+  "result": "quiet, 23G free (40% used): scratchpad logs/stale files cleared, no dockerd and no layer cache to reclaim, pnpm store prune removed 0 packages. Well above the 1GB escalation floor; no owner message. NOTE: this sweep's first commit landed on the stale claude/signalgrid-launch-plan-emxm01 branch (0c07a30) because the container reset the checkout mid-cycle; re-applied here on the heartbeat branch off origin. Nothing was lost."
 }

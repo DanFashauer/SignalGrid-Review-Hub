@@ -229,6 +229,16 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
       skip "$p" "needs a live Keycloak (KEYCLOAK_URL); see docs/KEYCLOAK_LIVE_INTEGRATION.md"
       continue
     fi
+    # proof:live-glpi joined after this guard block was written and never got its
+    # row: with GLPI_URL unset the proof defaults to 127.0.0.1:8430 and exits 1
+    # when nothing answers — which failed the hosted-runner rehearsal (Mac lane
+    # run #8: 140 passed, 1 failed, and the 1 was this) on a VM that cannot host
+    # a GLPI. Same skip law as the four above: named, with the pointer, never
+    # silent. (proof:live-idp needs no row — it stands up its own server.)
+    if [ "$p" = "proof:live-glpi" ] && [ -z "${GLPI_URL:-}" ]; then
+      skip "$p" "needs a live GLPI (GLPI_URL); run ./scripts/run-live-lanes.sh --only glpi"
+      continue
+    fi
     gate "$p" $PNPM run "$p"
   done
 

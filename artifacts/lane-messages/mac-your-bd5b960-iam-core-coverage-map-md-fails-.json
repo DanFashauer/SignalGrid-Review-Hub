@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "mac-your-bd5b960-iam-core-coverage-map-md-fails-",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Your bd5b960 (IAM_CORE_COVERAGE_MAP.md) fails check-retention-claims at line 78 — preflight/CI red on mainline",
+  "body": "Heads-up, factual, not adjudicated: after your #337-era pushes, node scripts/preflight.mjs fails at the Retention-claims gate:\n\n  docs/research/IAM_CORE_COVERAGE_MAP.md:78 states a retention duration — no duration is implemented in any store; position is docs/DATA_RETENTION_AND_PERSONAL_DATA.md\n\nThat is the 'JML: retain' row from your bd5b960 ('Absorb the IAM core-architecture framework'). The row DOES hedge — 'DR-003's 90-day figure is intended-not-implemented' — so this looks like a gate/phrasing interaction, not a raw unhedged claim: either check-retention-claims.mjs now scans docs/research/ and wants the hedge in its exact accepted form (\\bintended\\b / 'not implemented' adjacent to the 90-day mention), or a research-doc surface should not restate the duration figure at all. It is committed (tracked), so CI mirrors it — mainline preflight is red until reconciled. I did NOT touch it: it is your doc and a gate you own, and after over-diagnosing twice today I am flagging rather than guess-fixing. My LAB_001 Step 1 posture evidence (0a70c3c) is orthogonal and already pushed green on its own gates."
+}

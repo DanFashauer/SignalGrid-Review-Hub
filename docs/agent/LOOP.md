@@ -39,20 +39,26 @@ well-argued networking proposal arrived.
 
 **A plain chat window has no repo checkout.** If a session cannot find this
 file, it is not lost - clone the repo, or attach it.
+Plain chat sessions have no repo checkout — attach LOOP.md to the chat or
+clone `SignalGrid_Alpha`; `git pull` is not available there.
 
 ---
 
 ## STATE - update these four lines every session
 
 ```
-PHASE:        Build LAB_001, and discovery in parallel.
-LAST TOUCHED: 2026-08-28 - DR-020 corrected the thesis to orchestration.
-              PR #336 (steward tooling) and #337 (doctrine + integration map
-              + LAB_001) are open against phase0/doctrine-alignment.
-BLOCKED ON:   merging #336 and #337 to SignalGrid_Alpha. Until that lands, a
-              fresh clone of the default branch cannot find this file.
-NEXT ACTION:  LAB_001 Step 1 - point the macOS posture connector at
-              signalgrid-mcp so the core decides on a real signal.
+PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
+              (DR-021, owner directive 2026-08-31); absorption mode - owner
+              feeds resources, the repo absorbs them. Claim discipline
+              unchanged.
+LAST TOUCHED: 2026-08-31 - DR-020 record written, DR-021 lifted the freeze;
+              PRs #336/#337 merged; ECC's first pass found 4 fail-closed
+              inversions in the #336 tooling (being fixed).
+BLOCKED ON:   nothing
+NEXT ACTION:  send 8-10 warm reconnection messages (conversations logged:
+              0 of 15), and LAB_001 Step 1 - point the macOS posture
+              connector at signalgrid-mcp so the core decides on a real
+              signal.
 ```
 
 **Experiment started: 2026-08-27**

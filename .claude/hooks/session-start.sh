@@ -38,6 +38,13 @@ echo "── SignalGrid session start ──────────────
 if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ]; then
   if pnpm install --frozen-lockfile >/tmp/sg-install.log 2>&1; then
     echo "  deps        installed from the frozen lockfile"
+    # Container restores resurrect a STALE gitignored web build, and the
+    # launch-claims gate then reds on copy that no longer exists in any
+    # source — three times now, most recently text carrying a label retired
+    # under DR-019/DR-020. A remote container may only ever scan output it
+    # built itself, so the restored copy goes at session start.
+    node -e "require('fs').rmSync('artifacts/signalgrid-web/dist',{recursive:true,force:true})" 2>/dev/null \
+      && echo "  stale dist  cleared (remote containers rebuild; restored copies lie)"
   else
     echo "  deps        INSTALL FAILED — see /tmp/sg-install.log. Expect unrelated build errors."
   fi

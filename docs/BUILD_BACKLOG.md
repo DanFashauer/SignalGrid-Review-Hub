@@ -1073,3 +1073,20 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       yes/no gate, not the DR-020 orchestration grid (a decision as the trigger
       for a cascade; the worker never sees it). That is a copy/design pass, not
       a label swap — same shape as the Sessions-first IA rework in the app.
+- [ ] Credential revocation has storage but no semantics. 2026-08-31 (IAM
+      coverage sweep): `removeCredential` exists in the WebAuthn store with no
+      route exposing it and no proof asserting revocation behavior — and the
+      security roster (row 82) separately found it lacks the lock its
+      neighbors have. Route + lock + an add/remove concurrency proof belong in
+      one change. See `docs/research/IAM_CORE_COVERAGE_MAP.md`.
+- [ ] The iOS shell captures SAML config keys backed by nothing. 2026-08-31
+      (IAM coverage sweep): `ProviderConfigurationService.swift` accepts
+      SAML_ENTRY_POINT / SAML_LOGOUT_URL / SAML_CERTIFICATE while no SAML
+      assertion processing exists anywhere — a dangling surface to remove or
+      implement, never to leave half-present. Native lane.
+- [ ] The retention/deletion admin job is still undesigned. 2026-08-31 (IAM
+      coverage sweep): DR-003's status note ratifies that no durable store has
+      a retention mechanism and the runtime role is proven-denied DELETE, so
+      honoring any window or DSAR needs an admin-credential job that does not
+      exist. `check-retention-claims` keeps surfaces honest meanwhile. See
+      `docs/DATA_RETENTION_AND_PERSONAL_DATA.md`.

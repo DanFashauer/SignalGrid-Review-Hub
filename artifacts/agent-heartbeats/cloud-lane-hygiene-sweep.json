@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-08-30T09:40:39.000Z",
-  "result": "quiet, 23G free (40% used): scratchpad logs/stale files cleared, no dockerd and no layer cache to reclaim, pnpm store prune removed 0 packages. Well above the 1GB escalation floor; no owner message."
+  "firedAt": "2026-08-31T09:40:55.000Z",
+  "result": "quiet, 23G free (40% used): scratchpad cleaned, no dockerd, pnpm store prune removed 0. Owner directive received 2026-08-31: engineering freeze LIFTED, absorption mode on; the freeze-lift work (DR-020 record + DR-021 + enforcement pack) was in progress when a container restart wiped the uncommitted tree — rebuilding now on claude/signalgrid-launch-plan-emxm01 with per-step pushes."
 }

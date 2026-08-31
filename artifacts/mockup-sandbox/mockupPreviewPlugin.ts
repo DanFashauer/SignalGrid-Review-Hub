@@ -51,11 +51,19 @@ export function mockupPreviewPlugin(): Plugin {
     }));
   }
 
+  // JSON.stringify escapes quotes and backslashes but NOT U+2028/U+2029, the
+  // two line separators that are legal in JSON strings and (historically)
+  // syntax errors inside JS string literals — the one gap between "valid JSON"
+  // and "valid JS source" (CodeQL #10). A filename carrying either would break
+  // out of the generated literal. Escape them explicitly.
+  const jsString = (s: string): string =>
+    JSON.stringify(s).replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+
   function generateSource(components: Array<DiscoveredComponent>): string {
     const entries = components
       .map(
         (c) =>
-          `  ${JSON.stringify(c.globKey)}: () => import(${JSON.stringify(c.importPath)})`,
+          `  ${jsString(c.globKey)}: () => import(${jsString(c.importPath)})`,
       )
       .join(",\n");
 

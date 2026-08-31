@@ -209,14 +209,17 @@ export async function verifyRegistration(
     return { success: false, error: 'Invalid credential type', timestamp };
   }
 
-  // Verify the attestation STATEMENT before trusting the credential. `none`
-  // (self-attested) is accepted; `packed` and `fido-u2f` are cryptographically
-  // verified over authData || SHA-256(clientDataJSON); any other format, or a bad
-  // signature, is refused (fail closed). This closes the gap where a forged
-  // `packed`/`fido-u2f` statement would have been accepted unverified.
+  // Verify the attestation STATEMENT before trusting the credential, with the
+  // accepted-format policy stated EXPLICITLY at the call site: `none`
+  // (self-attested) is accepted by current policy; `packed` and `fido-u2f` are
+  // cryptographically verified over authData || SHA-256(clientDataJSON); any
+  // format outside the allowlist, or a bad signature, is refused (fail closed).
+  // Tightening policy to exclude `none` is now a one-array change here, not a
+  // hunt through callers for who inspects `attested`.
   const attestation = verifyAttestation({
     attestationObjectB64: response.response.attestationObject,
     clientDataJSON: Buffer.from(response.response.clientDataJSON, 'base64url'),
+    allowedFormats: ['none', 'packed', 'fido-u2f'],
   });
   if (!attestation.ok) {
     return {

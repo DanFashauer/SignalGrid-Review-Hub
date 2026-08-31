@@ -43,9 +43,21 @@ const venueFilter = (argv.find((a) => a.startsWith("--venue=")) || "").split("="
 const G = "\x1b[32m", R = "\x1b[31m", Y = "\x1b[33m", C = "\x1b[36m", B = "\x1b[1m", D = "\x1b[2m", X = "\x1b[0m";
 
 const read = (p) => (existsSync(resolve(repo, p)) ? readFileSync(resolve(repo, p), "utf8") : "");
+
+// A scan command that DIES must not read as "nothing found" (ECC first-pass,
+// verified 2026-08-31: the old catch returned "" for every failure, so a
+// broken git turned the whole scan clean). Exit 1 is a benign no-match for
+// git grep and stays empty; anything else is recorded and surfaces as a
+// blocking finding, because an incomplete scan reported as clean is the
+// fail-open shape this repo exists to kill.
+const degraded = [];
 const sh = (cmd, args) => {
   try { return execFileSync(cmd, args, { cwd: repo, encoding: "utf8", stdio: ["ignore","pipe","ignore"] }); }
-  catch { return ""; }
+  catch (e) {
+    if (e && typeof e.status === "number" && e.status === 1) return "";
+    degraded.push(`${cmd} ${args.join(" ")} -> ${e?.code ?? `exit ${e?.status}`}`);
+    return "";
+  }
 };
 const files = (globs) =>
   sh("git", ["ls-files", ...globs]).split("\n").filter(Boolean).filter((f) => !/node_modules|\/dist\//.test(f));
@@ -218,19 +230,51 @@ const add = (f) => findings.push(f);
   }
 }
 
+// A degraded scan is itself a blocking finding — never silent.
+for (const d of degraded) {
+  add({
+    venue: "CLOUD", remedy: "fix-code", confidence: "high",
+    what: `scanner degraded: ${d}`,
+    where: "scripts/scan-gaps.mjs",
+    action: "A scan command failed for a reason other than no-match; the findings in this run are incomplete. Fix the command, re-scan.",
+    blocks: "blocks PR",
+  });
+}
+
 // --- self-test -------------------------------------------------------------
 if (argv.includes("--self-test")) {
-  const ok = findings.length > 0 && findings.every((f) => f.venue && f.remedy && f.confidence);
-  console.log(ok
-    ? "PASS  self-test - every finding carries a venue, remedy and confidence"
-    : "FAIL  self-test - a finding is missing its routing");
-  process.exit(ok ? 0 : 1);
+  const failures = [];
+  if (!findings.every((f) => f.venue && f.remedy && f.confidence)) {
+    failures.push("a finding is missing its venue/remedy/confidence routing");
+  }
+  // The swallow-guard must actually catch a dying command (the old self-test
+  // could not fail on the exact bug this scanner had).
+  const before = degraded.length;
+  sh("sg-scan-selftest-no-such-binary", []); // ENOENT — a real failure, not a no-match
+  if (degraded.length === before) {
+    failures.push("sh() swallowed a real command failure as no-match");
+  } else {
+    degraded.pop(); // the probe is not a real finding
+  }
+  if (failures.length) {
+    console.log("FAIL  self-test:");
+    for (const f of failures) console.log(`      - ${f}`);
+    process.exit(1);
+  }
+  console.log("PASS  self-test - findings carry routing, and a dying scan command surfaces instead of reading as clean");
+  process.exit(0);
 }
 
 // --- report ----------------------------------------------------------------
 const shown = venueFilter ? findings.filter((f) => f.venue.toLowerCase() === venueFilter.toLowerCase()) : findings;
 
-if (asJson) { console.log(JSON.stringify({ scanned: new Date().toISOString(), findings: shown }, null, 2)); process.exit(0); }
+// EXIT CONTRACT (fixed 2026-08-31): 0 = nothing blocking; 1 = at least one
+// blocking finding (or a degraded scan, which is always blocking). The old
+// report paths exited 0 unconditionally, so wiring this into any lane would
+// have gated nothing.
+const exitCode = shown.some((f) => f.blocks === "blocks PR") ? 1 : 0;
+
+if (asJson) { console.log(JSON.stringify({ scanned: new Date().toISOString(), findings: shown }, null, 2)); process.exit(exitCode); }
 
 const VENUES = {
   CLOUD:   [C, "a cloud agent can do this now"],
@@ -259,3 +303,4 @@ const blocking = shown.filter((f) => f.blocks === "blocks PR");
 const cloudNow = shown.filter((f) => f.venue === "CLOUD" && f.remedy !== "none");
 console.log(`${D}${shown.length} finding(s) - ${blocking.length} blocking - ${cloudNow.length} actionable in the cloud right now${X}`);
 console.log(`${D}Not a defect list: SERVICE/MAC/TENANT items are capability boundaries, not bugs.${X}\n`);
+process.exit(exitCode);

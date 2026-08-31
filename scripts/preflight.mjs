@@ -72,6 +72,17 @@ const STEPS = [
   { name: "Shell lint (the one language with no static analysis)", cmd: ["node", "scripts/check-shell.mjs"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },
+  // Re-registered 2026-08-31: the gate census found this invoked by NO lane
+  // and NO workflow — it had silently drifted out after #213 hardened it.
+  { name: "Postman collection tracks the /v1 spec (57 paths at registration)", cmd: ["node", "scripts/build-postman.mjs", "--check"] },
+  // The #336 self-check tooling, wired in 2026-08-31 after ECC's first pass
+  // found (and this lane fixed) four fail-closed inversions in it. Latent
+  // standalone scripts are how check:postman rotted; these run here now.
+  { name: "Gate census (every gate runs somewhere; self-test proves it can fail)", cmd: ["node", "scripts/check-gate-census.mjs"] },
+  { name: "Gate census self-test", cmd: ["node", "scripts/check-gate-census.mjs", "--self-test"] },
+  { name: "Failure-diagnosis registry audit (evidence paths still exist)", cmd: ["node", "scripts/classify-failure.mjs", "--audit"] },
+  { name: "Gap scan (blocking findings fail; degraded scan is blocking)", cmd: ["node", "scripts/scan-gaps.mjs"] },
+  { name: "Gap scan self-test", cmd: ["node", "scripts/scan-gaps.mjs", "--self-test"] },
   // PURPOSE.md makes the Decision Envelope the atomic product object; that only
   // holds if there is exactly one first-party name for it.
   { name: "Decision vocabulary (one name for the decision transaction)", cmd: ["node", "scripts/check-decision-vocabulary.mjs"] },

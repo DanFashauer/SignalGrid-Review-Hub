@@ -38,7 +38,8 @@
       "fix": "scripts/check-gate-census.mjs covers every prefix and matches both invocation styles; register it in preflight and CI with a self-test.",
       "fix_owner": "core",
       "diagnosed": "2026-08-27",
-      "status": "open"
+      "resolved": "2026-08-31: the census (plus its self-test, the diagnosis audit, and the gap scan) is registered in preflight; check:postman re-registered there and proof:decision-palette in the breadth lane. Before wiring, four fail-closed inversions ECC's first pass found in the census/classifier were fixed - substring coverage, blanket live-lane credit, a tautological self-test, and an inverted exit contract.",
+      "status": "resolved"
     }
   ]
 }

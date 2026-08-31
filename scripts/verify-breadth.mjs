@@ -75,6 +75,10 @@ const STEPS = [
   { name: "Proof: break-glass (was the emergency override accountable)", cmd: ["pnpm", "run", "proof:break-glass"] },
   { name: "Proof: response-accountability (the watermelon — closed but unresolved)", cmd: ["pnpm", "run", "proof:response-accountability"] },
   { name: "Proof: nac (read-only endpoint identity — gated, no actuators)", cmd: ["pnpm", "run", "proof:nac"] },
+  // Registered 2026-08-31: the gap scan found this in neither preflight, the
+  // breadth lane, nor CI — running only through the Mac harness's dynamic
+  // proof:* enumeration. A DR-005 design gate belongs in an always-on lane.
+  { name: "Proof: decision-palette (one palette, AA on every rendered ground)", cmd: ["pnpm", "run", "proof:decision-palette"] },
   { name: "Proof: ot-posture (grid-collected OT/IIoT edge, gated)", cmd: ["pnpm", "run", "proof:ot-posture"] },
   { name: "Proof: access-governance (IAM/access-governance runtime, gated)", cmd: ["pnpm", "run", "proof:access-governance"] },
   { name: "Proof: device-attestation (hardware-rooted attestation, gated)", cmd: ["pnpm", "run", "proof:device-attestation"] },

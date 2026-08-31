@@ -70,10 +70,23 @@ if (argv.includes("--audit")) {
   let stale = 0;
   for (const c of conditions) {
     for (const ev of c.evidence ?? []) {
-      const path = ev.split(/[\s\-:]/)[0];
-      if (!existsSync(resolve(repo, path))) {
-        stale++;
-        console.log(`  ${R}x${X} ${c.id} - evidence path gone: ${path}`);
+      // Evidence strings are prose WITH paths in them, not paths. The old
+      // splitter (`ev.split(/[\s\-:]/)[0]`) truncated at the first hyphen or
+      // colon — "artifacts/signalgrid-app/…" audited as "artifacts/signalgrid",
+      // a branch name audited as a path — so a healthy registry reported four
+      // stale entries (ECC first-pass, verified 2026-08-31). Extract the
+      // path-shaped tokens instead: the whole string when it IS a bare path,
+      // otherwise every slash-containing token. Pure-prose evidence has no
+      // auditable path and is testimony, not a reference — skipped.
+      const trimmed = ev.trim();
+      const candidates = /^[\w./-]+$/.test(trimmed)
+        ? [trimmed]
+        : [...trimmed.matchAll(/(?:[\w-]+\/)+[\w.-]+/g)].map((m) => m[0]);
+      for (const path of candidates) {
+        if (!existsSync(resolve(repo, path))) {
+          stale++;
+          console.log(`  ${R}x${X} ${c.id} - evidence path gone: ${path}`);
+        }
       }
     }
     // If the fix landed, the condition should not still be 'open'.
@@ -116,6 +129,12 @@ if (!hits.length) {
   process.exit(1);
 }
 
+// EXIT CONTRACT (fixed 2026-08-31, ECC first-pass finding #1): 0 = diagnosed
+// and nothing blocks; 1 = undiagnosed OR any diagnosed condition blocks the
+// PR; 2 = usage. The previous version fell off the end of this loop and
+// exited 0 even after printing "BLOCKS THIS PR." — the known-blocking case
+// passed while the safe-unknown case failed. Fail-open, inverted.
+let anyBlocks = false;
 for (const c of hits) {
   console.log(`  ${B}${c.id}${X}  ${D}diagnosed ${c.diagnosed} - ${c.status}${X}\n`);
   console.log(`  ${D}Symptom${X}        ${c.symptom}`);
@@ -126,6 +145,7 @@ for (const c of hits) {
   for (const e of c.evidence ?? []) console.log(`      ${e}`);
   console.log("");
   if (c.blocks_pr) {
+    anyBlocks = true;
     console.log(`  ${R}${B}BLOCKS THIS PR.${X} Fix before merging.`);
   } else {
     console.log(`  ${G}${B}Does not block a PR${X} - but verify, do not trust:`);
@@ -133,3 +153,4 @@ for (const c of hits) {
   }
   console.log(`\n  ${D}Fix (${c.fix_owner})${X}  ${c.fix}\n`);
 }
+process.exit(anyBlocks ? 1 : 0);

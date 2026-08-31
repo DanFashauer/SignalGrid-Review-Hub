@@ -350,15 +350,34 @@ function ecUncompressedPoint(cose: Map<unknown, unknown>): Buffer | null {
  *
  * "Signature verified" is the honest ceiling here — the certificate carrying the
  * verifying key is never itself validated. See `AttestationResult.attested`.
+ *
+ * POLICY GATE (2026-08-31, security roster row 82 item 2 + CodeQL #70-72).
+ * `fmt` arrives inside the CLIENT's attestationObject, so without a server-side
+ * gate the client selects which branch runs — including `none`, the branch that
+ * verifies nothing. The format is now checked against the SERVER's allowlist
+ * BEFORE any branch is chosen: a deployment that tightens policy to
+ * `['packed', 'fido-u2f']` makes `none` a refusal in one place, instead of an
+ * implicit accept its callers must each remember to inspect `attested` for.
+ * The default preserves the current, documented behavior (all three).
  */
+export type AcceptedAttestationFormat = 'none' | 'packed' | 'fido-u2f';
+export const DEFAULT_ATTESTATION_FORMATS: readonly AcceptedAttestationFormat[] = ['none', 'packed', 'fido-u2f'];
+
 export function verifyAttestation(params: {
   attestationObjectB64: string;
   clientDataJSON: Buffer;
+  /** Server-side policy: attestation formats this deployment accepts. */
+  allowedFormats?: readonly AcceptedAttestationFormat[];
 }): AttestationResult {
   const parsed = parseAttestationObject(params.attestationObjectB64);
   if (!parsed) return { ok: false, fmt: 'unknown', attested: false, error: 'unparseable attestationObject' };
   const { fmt, attStmt, authData } = parsed;
   const clientDataHash = sha256(params.clientDataJSON);
+
+  const allowed: ReadonlySet<string> = new Set(params.allowedFormats ?? DEFAULT_ATTESTATION_FORMATS);
+  if (!allowed.has(fmt)) {
+    return { ok: false, fmt, attested: false, error: `attestation format '${fmt}' not accepted by server policy` };
+  }
 
   if (fmt === 'none') {
     // No statement to verify. Accept, but flag that nothing was attested.
@@ -419,7 +438,9 @@ export function verifyAttestation(params: {
       return { ok, fmt, attested: ok, error: ok ? undefined : 'fido-u2f signature invalid' };
     }
 
-    // Unknown / unsupported format (tpm, android-key, apple, …): fail closed.
+    // A format the spec knows but this server's policy allowlist did not name
+    // (tpm, android-key, apple, …) was already refused above; reaching here
+    // means an ALLOWED format gained no branch — a wiring bug. Fail closed.
     return { ok: false, fmt, attested: false, error: `unsupported attestation format '${fmt}'` };
   } catch (err) {
     return { ok: false, fmt, attested: false, error: err instanceof Error ? err.message : 'attestation verify error' };

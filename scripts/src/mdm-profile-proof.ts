@@ -47,11 +47,21 @@ function check(name: string, ok: boolean): void {
 type PlistValue = string | number | boolean | PlistValue[] | { [k: string]: PlistValue };
 
 function parsePlist(xml: string): PlistValue {
-  // Strip declaration, doctype and comments, then walk the tags.
-  const body = xml
-    .replace(/<\?xml[^>]*\?>/g, "")
-    .replace(/<!DOCTYPE[^>]*>/g, "")
-    .replace(/<!--[\s\S]*?-->/g, "");
+  // Strip declaration, doctype and comments, then walk the tags. Stripping
+  // runs to a FIXPOINT (CodeQL #73): a single pass can manufacture a new
+  // marker from the fragments around a removed one (`<!<!-- -->--...`), so
+  // one-shot replace is exactly the incomplete-sanitization shape the
+  // fail-closed doctrine bans. Inputs are this repo's own committed profiles,
+  // but a sanitizer that can be reassembled is wrong regardless of who feeds it.
+  let body = xml;
+  for (;;) {
+    const next = body
+      .replace(/<\?xml[^>]*\?>/g, "")
+      .replace(/<!DOCTYPE[^>]*>/g, "")
+      .replace(/<!--[\s\S]*?-->/g, "");
+    if (next === body) break;
+    body = next;
+  }
   const tokens = body.match(/<\/?[a-zA-Z]+(?:\s[^>]*)?\/?>|[^<]+/g) ?? [];
   let i = 0;
 

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { classifyScanOutput, tallyClaims, UNSAFE_CLAIM_SOURCE } from "./unsafe-claim-classifier";
@@ -122,8 +122,9 @@ const unsafeClaims = gitOrEmpty([
 ]);
 
 const validationDoc = resolve(repoRoot, "docs/VALIDATION_COMMANDS.md");
+// readFileSync, not a spawned `cat` (CodeQL #9): same bytes, no child process.
 const validationText = existsSync(validationDoc)
-  ? execFileSync("cat", [validationDoc], { encoding: "utf8" })
+  ? readFileSync(validationDoc, "utf8")
   : "";
 const missingValidation = requiredValidation.filter(
   (command) => !validationText.includes(command),

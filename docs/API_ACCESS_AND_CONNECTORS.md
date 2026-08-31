@@ -29,6 +29,24 @@ SignalGrid's api-server exposes two surfaces on one origin (default
 The authoritative machine-readable contract for `/v1` is
 [`lib/api-spec/v1-openapi.yaml`](../lib/api-spec/v1-openapi.yaml) (OpenAPI 3.1).
 
+## Who each surface is for — and what that audience is promised
+
+The three surfaces above differ by MECHANISM (auth, direction, transport). They
+also differ by AUDIENCE, and the audience determines what each surface promises
+— the standard open / partner / internal API taxonomy, applied honestly to what
+is actually served (intake: an API-types taxonomy the owner supplied,
+2026-08-31; see `docs/agent/RESOURCE_INTAKE.md`):
+
+| Surface | Audience class | Who reads it | What it promises |
+| --- | --- | --- | --- |
+| `/v1` product API | **Partner-facing** | The integration surface a design partner builds against (none is signed yet — discovery gates that). | The full contract: OpenAPI 3.1, bearer auth with tenant derived from the token, the versioning policy in [`API_VERSIONING_POLICY.md`](./API_VERSIONING_POLICY.md), and CI-enforced spec↔collection↔route lockstep. |
+| `/cp/v1` control plane | **Internal** | SignalGrid's own management plane and operator console. | Fewer promises ON PURPOSE: no auth in the demo, no published versioning commitment, shape may move with the console. Do not build third-party integrations against it. |
+| Public demo surface | **Demo, not an open API** | Reviewers exploring the fixture-backed demo. | Nothing beyond "the demo works today." It is unauthenticated because it serves fixtures, not because it is a supported open API — SignalGrid currently ships NO open/public API, and that is deliberate: every real decision is tenant-scoped. |
+
+The distinction this table exists to hold: a route being REACHABLE does not make
+it SUPPORTED. `/v1` is the only surface whose stability anyone outside this
+repository may rely on, and only within the versioning policy's terms.
+
 ## Ways to connect — pick the one that fits
 
 ### 1. Postman collection (import and click)

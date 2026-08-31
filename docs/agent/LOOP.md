@@ -51,14 +51,15 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-08-31 - DR-020 record written, DR-021 lifted the freeze;
-              PRs #336/#337 merged; ECC's first pass found 4 fail-closed
-              inversions in the #336 tooling (being fixed).
-BLOCKED ON:   nothing
+LAST TOUCHED: 2026-08-31 - LAB_001 Step 1 protocol PROVEN over the real MCP
+              wire (cloud rehearsal: 4/4 unknown probes tighten); the Mac's
+              real-posture run is queued as a sim request. ECC live in both
+              lanes; site serves DR-020 framing; 7 ECC findings fixed.
+BLOCKED ON:   nothing cloud-side. Mac-side queue: lab001 evidence run,
+              6-day-pending ios sim request, row 58, Velociraptor.
 NEXT ACTION:  send 8-10 warm reconnection messages (conversations logged:
-              0 of 15), and LAB_001 Step 1 - point the macOS posture
-              connector at signalgrid-mcp so the core decides on a real
-              signal.
+              0 of 15) - owner's number, nothing substitutes; Mac lane runs
+              sim request 2026-08-31-lab001-step1-real-posture.
 ```
 
 **Experiment started: 2026-08-27**

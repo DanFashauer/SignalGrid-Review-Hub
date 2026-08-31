@@ -1,14 +1,28 @@
 {
+  "permissions": {
+    "defaultMode": "default",
+    "allow": [
+      "Bash(pnpm install)", "Bash(pnpm run *)", "Bash(pnpm --filter * test)",
+      "Bash(git status)", "Bash(git log *)", "Bash(git diff *)", "Bash(git show *)",
+      "Bash(git branch)", "Bash(git ls-remote *)", "Bash(git fetch *)",
+      "Bash(ls *)", "Bash(cat *)"
+    ],
+    "deny": [
+      "Bash(git push --force *)", "Bash(git push -f *)", "Bash(git push --no-verify *)",
+      "Bash(git commit --no-verify *)", "Bash(git stash *)", "Bash(git reset --hard *)",
+      "Bash(git branch -D *)", "Bash(rm -rf *)", "Bash(sudo *)",
+      "Read(**/.env)", "Read(**/.env.*)", "Read(~/.ssh/**)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"
-          }
-        ]
-      }
+      { "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-dangerous.sh" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/verify-done.sh" } ] }
     ]
   }
 }

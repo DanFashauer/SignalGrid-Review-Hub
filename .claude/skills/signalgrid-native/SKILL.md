@@ -92,11 +92,14 @@ evidence; never choose the source that produces the least restrictive verdict.
 Independent evidence sources improve verification coverage. They do not create a
 new native platform, new connector family, or new launch promise.
 
-## Maintain, do not extend
+## Maintain first; extend with a record (amended 2026-08-31, DR-021)
 
-Four native surfaces already exceed what this org can carry. Android, desktop,
-and firmware are frozen: keep them building and passing, add nothing. A request
-to extend a platform is an escalation, not a task.
+Four native surfaces are already a lot for this org to carry — that caution
+stands as judgement, not as a prohibition. DR-021 lifted the engineering
+freeze: extending an existing platform is a task when it strengthens the
+solution, and a NEW platform or hardware surface needs a decision record
+first (DR-020's rule). Keeping everything building and passing remains the
+floor either way.
 
 ## Before you hand to the reviewer
 

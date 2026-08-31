@@ -1064,3 +1064,105 @@ the category-label question reopens when customer discovery produces evidence
 that buyers recognise a specific category, and a later DR ratifies it. The
 verdict enum reopens only if a design partner demonstrates a workflow requiring
 a distinct deferred/human-review state that `restrict` cannot express.
+
+## DR-020 — The orchestration thesis: PURPOSE.md corrected from gate to grid (2026-08-27; recorded 2026-08-31)
+
+**Provenance of this record.** The decision was ratified and executed on
+2026-08-27 in commit `62679cb` ("DR-020: correct PURPOSE to the orchestration
+thesis"), which rewrote `docs/PURPOSE.md` to v2 without appending a record
+here. Ten tracked files then cited DR-020 while this file's last entry was
+DR-019 — a dangling citation no gate caught, because `check:cited-paths`
+validates file paths, not DR numbers. This record is a reconstruction from
+that commit's message and PURPOSE.md v2, written to close the gap; the
+substance below is the 2026-08-27 decision, not a new one.
+
+**Question.** PURPOSE.md v1 described a gate — "decides whether a shared-device
+session should proceed." That is one cell of the grid, not the company. It was
+written by reading the repository instead of asking the owner what the
+repository was for, and every agent skill then enforced the narrower reading.
+
+**The call.**
+
+1. **Product reframed to orchestration.** A decision is not the output; it is
+   the trigger for a cascade — environment, workflow, verification, and
+   escalation when reality does not match.
+2. **The credential is the spine, not a signal.** One badge or phone carries a
+   person through door, device, room and app. The identity is continuous; the
+   systems are what is fragmented. This is why the connector surface is wide —
+   it is the platform surface, not sprawl.
+3. **The embedded UX law is promoted from constraint to thesis.** The worker
+   never sees SignalGrid. Adoption is the product; security and evidence are
+   by-products. Evidence cited: Sinsky 2016, Hassidim 2017 (quoted from the
+   studies, unverified in this repository).
+4. **Verticals are configuration, not code.** Healthcare is the first
+   vertical. Nothing industry-specific may enter the core.
+5. **Lanes, as set on 2026-08-27:** Mac/iOS and API/Bruno/Postman REOPENED
+   (invisibility cannot be proven in a container; for a product that connects
+   systems, the API surface is the product). Cloud logic, connectors and
+   proofs stayed frozen, as did new verticals, platforms and hardware.
+   *That residual freeze is lifted by DR-021.*
+
+**Why this was legitimate under the freeze rule.** A correction of owner
+intent, not preference drift — the category PURPOSE.md's own change rule
+permits.
+
+**Reversal.** The owner reverses any part of this by saying so.
+
+## DR-021 — The engineering freeze is lifted; the repo runs in absorption mode (2026-08-31)
+
+**Question.** DR-020 left cloud logic, connectors, proofs, and new
+verticals/platforms/hardware frozen, and a 2026-08-28 session handoff wrote
+that freeze into the operating loop ("Engineering frozen — loop plumbing /
+merges / doc-state only"). On 2026-08-31 the owner directed otherwise.
+
+**The directive, quoted.** "Break the engineering freeze that needs to stop
+because I'm going to be feeding you information all the time for you to absorb
+and use to better strengthen the repo and its ability to use resources for
+easier access to build this solution exactly the way I intended it to be
+finally." Separately, on the same day, the owner directed that the ECC toolkit
+(github.com/affaan-m/ECC) be set up and used as "an overall strategy and final
+pass or additional passes" for this repository.
+
+**The call.**
+
+1. **The engineering freeze is lifted in full.** Every lane is open: cloud
+   logic, connectors, proofs, native surfaces, API, and — with a decision
+   record per DR-020's rule — verticals, platforms and hardware. "No small
+   versions of frozen work" is void because nothing is frozen.
+2. **Claim discipline is NOT lifted, and is not the freeze.** The
+   launch-claims gate, the launch-profile classification, the publication
+   boundary, and the no-overclaim rules (production-ready, certified,
+   compliant, partner, autonomous remediation) stay exactly as they are.
+   Building something and claiming it ships remain two different acts; only
+   the first is unfrozen. A change to what is *claimed* still requires its
+   own decision record.
+3. **Absorption mode.** The owner feeds resources — repositories, articles,
+   tools, vendor material — continuously. Each one gets absorbed: logged in
+   `docs/agent/RESOURCE_INTAKE.md`, evaluated by use, and where useful, wired
+   into the repo. The failure mode this replaces is documented there: a
+   resource answered with a memo of reasons instead of a working integration.
+4. **ECC is adopted as review tooling, and it has already earned the seat.**
+   The Mac lane hosts the harness dormant and report-only with hooks off; its
+   first pass (2026-08-31) found four verified fail-closed inversions in the
+   #336 self-check tooling — the tooling meant to enforce fail-closedness.
+   Cloud sessions install it on demand via the pinned, opt-in
+   `pnpm run ecc:install` (`ecc-universal@2.2.0`); it is never auto-executed
+   from a hook, because a public repo's hooks must not run third-party code
+   invisibly. ECC advises; only preflight/verify:breadth certify green.
+5. **The 2026-08-28 handoff enforcement pack is installed, with recorded
+   divergences:** (a) its three freeze-phase lines are updated to this
+   record's phase, because installing "Engineering FROZEN" banners on the day
+   the owner ended the freeze would encode a falsehood; (b) its
+   ask-on-commit/push permission list is omitted, because the owner's own
+   scheduled autonomous lanes (steward and hygiene heartbeats) require
+   unattended commits — the deny list and the Stop-hook push verification are
+   installed in full and enforce the same goal; (c) its MCP registration is
+   pointed at the repository's real Node MCP server
+   (`artifacts/mcp-server`), not the nonexistent `signalgrid_mcp` Python
+   module the handoff assumed.
+6. **Discovery remains the number that moves the company.** Conversations
+   logged (`docs/agent/DISCOVERY_LOG.md`) still gate the thesis; unfrozen
+   engineering widens what can be built, not what has been validated.
+
+**Reversal.** The owner reverses any part of this by saying so. Re-freezing
+any lane requires a new record naming the lane.

@@ -206,3 +206,21 @@ Destructive git (force-push, history rewrite, branch deletion), anything that
 sends data to an external service, and committing/pushing unless asked. For
 regulated verticals (healthcare/fintech): Claude Code does **not** guarantee
 HIPAA/SOC 2 — a human compliance review is required, not optional.
+
+## Working with Dan (owner) — communication contract
+- Non-engineer founder, dyslexic, usually reading on a phone. Be extremely concise: answer first, no preamble, no recaps, no hedging filler, plain prose over bullets. 1–3 sentences for simple answers; go long only when asked.
+- Blunt and short beats warm and long. Never pad for politeness.
+- Explain any risky command in one line before running it. Show a plan before editing.
+- Dan decides; Claude Code executes. Strategy and doctrine debates happen in chat, never here.
+- When Dan shares external material (repositories, articles, tools, vendor content), absorb it: log it in `docs/agent/RESOURCE_INTAKE.md`, evaluate it by use, and wire in what strengthens the repo — never answer it with a memo of reasons. (Amended per DR-021; the original handoff line said "never a build order.")
+
+## Truth and completion (enforced by hooks, restated here)
+- Never claim pass / exists / fixed / absent without just running the command and quoting real output. Numbers come from output, never memory.
+- Done = tests/gates pass with quoted output AND the commit is confirmed on origin via `git ls-remote`. Local-only is not done.
+- Never bypass a check: no `--no-verify`, no stash-to-dodge, no quiet flags, no force-push. Report the failure and fix the cause.
+- Session ritual: START — read `docs/agent/LOOP.md`, run `pnpm run loop:state`, quote output. END — update the LOOP.md STATE block, push, confirm on remote.
+
+## Scope (current phase — DR-021, 2026-08-31)
+- Engineering is UNFROZEN across every lane (DR-021). Build what strengthens the solution; new verticals/platforms/hardware still get a decision record first (DR-020 rule).
+- Claim discipline is unchanged: the launch-claims gate, launch-profile classification, and publication boundary still govern what may be *said* to ship. Building and claiming are different acts.
+- The only number that moves the company is discovery conversations (`docs/agent/DISCOVERY_LOG.md`). Code work never substitutes for it.

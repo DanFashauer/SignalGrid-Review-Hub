@@ -76,16 +76,51 @@ const workflows = existsSync(wfDir)
   : [];
 
 const scriptPath = (cmd) => cmd.match(/scripts\/[\w/-]+\.(mjs|cjs|js|ts|sh)/)?.[0] ?? null;
+
+// By-name matching requires the gate in a RUN POSITION — the argument of
+// `pnpm run` / `$PNPM run` / `npm run` — not anywhere in the text. Fixed
+// 2026-08-31 (ECC first-pass finding #2): bare `text.includes(gate)` counted
+// `skip "proof:live-fleet" "..."` as coverage, so a gate named only in its
+// own skip branch reported as running somewhere. By-path matching stays
+// plain inclusion ON PURPOSE: preflight and the workflows register scripts
+// by listing their paths, and the listing IS the invocation there.
+const invokesByName = (gate, text) => {
+  const g = gate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Shell form: `pnpm run <gate>` / `$PNPM run <gate>`, flags allowed.
+  const shell = new RegExp(
+    String.raw`(?:\$PNPM|pnpm|npm)(?:\s+--?[\w-]+(?:=\S+)?)*\s+run\s+(?:--?[\w-]+\s+)*${g}(?![\w:-])`,
+  );
+  // Argv-array form: `["pnpm", "run", "proof:x"]` — how verify-breadth.mjs
+  // registers its gates. The three tokens must be adjacent; a gate name
+  // quoted alone (a skip message, a comment) still does not count.
+  const argv = new RegExp(
+    String.raw`["']pnpm["']\s*,\s*["']run["']\s*,\s*["']${g}["']`,
+  );
+  return shell.test(text) || argv.test(text);
+};
 const covers = (gate, text) => {
   if (!text) return false;
-  if (text.includes(gate)) return true;              // by npm name
-  const s = scriptPath(scripts[gate]);
-  return Boolean(s && text.includes(s));             // by file path
+  if (invokesByName(gate, text)) return true;        // by npm name, run position
+  const s = scriptPath(scripts[gate] ?? "");
+  return Boolean(s && text.includes(s));             // by file path (registration)
 };
+
+// No lane is credited unconditionally. The previous version pushed "live"
+// for every proof:live-* gate without reading run-live-lanes.sh (ECC
+// first-pass finding #3): a proof:live-foo registered in package.json and
+// invoked nowhere — or the live runner deleted outright — still reported
+// covered. LANES.live is consulted like every other lane now.
+// The mac harness runs every proof:* gate through a DYNAMIC enumeration of
+// package.json (validate-sim-macos.sh, the `startsWith('proof:')` loop), so
+// individual proof names never appear there in run position. Credit the mac
+// lane for proof:* gates ONLY while that mechanism is verifiably present in
+// the file — a mechanism check, not a blanket assumption; delete the loop
+// and the credit disappears with it.
+const MAC_ENUMERATES_PROOFS = /startsWith\((['"])proof:\1\)/.test(LANES.mac);
 
 const census = gates.map((gate) => {
   const lanes = Object.entries(LANES).filter(([, t]) => covers(gate, t)).map(([n]) => n);
-  if (gate.startsWith("proof:live-")) lanes.push("live");
+  if (gate.startsWith("proof:") && MAC_ENUMERATES_PROOFS) lanes.push("mac");
   const ci = workflows.filter(([, t]) => covers(gate, t)).map(([f]) => f.replace(/\.ya?ml$/, ""));
   return { gate, lanes: [...new Set(lanes)], ci };
 });
@@ -93,13 +128,44 @@ const census = gates.map((gate) => {
 const orphans = census.filter((c) => !c.lanes.length && !c.ci.length && !EXEMPT.has(c.gate));
 
 if (process.argv.includes("--self-test")) {
-  // A guard nobody has watched fail is a guard nobody should trust.
-  const fake = "check:__no_such_gate__";
-  const wouldCatch = !Object.values(LANES).some((t) => t.includes(fake));
-  console.log(wouldCatch
-    ? "PASS  self-test - a gate present in no lane is detectable"
-    : "FAIL  self-test - the census would not notice an unrun gate");
-  process.exit(wouldCatch ? 0 : 1);
+  // A guard nobody has watched fail is a guard nobody should trust — and the
+  // previous self-test could not fail (ECC first-pass finding #4): it asked
+  // whether a made-up name appears in any lane file, which is true even with
+  // every lane file deleted, and never called covers() at all. This one runs
+  // the real code path and asserts it can say UNCOVERED.
+  const failures = [];
+
+  // 1. A gate the census reports covered must read UNCOVERED when every lane
+  //    and workflow text is blanked — coverage must come from the text.
+  const covered = census.find((c) => c.lanes.length || c.ci.length);
+  if (!covered) {
+    failures.push("no covered gate exists to test with (census is empty?)");
+  } else if (covers(covered.gate, "")) {
+    failures.push(`covers("${covered.gate}", "") returned true on empty text`);
+  }
+
+  // 2. A skip-line mention must NOT count as an invocation.
+  if (covers("proof:live-fleet", 'skip "proof:live-fleet" "could not stand up Fleet"')) {
+    failures.push("a skip-line mention counted as coverage");
+  }
+
+  // 3. A real run-position invocation MUST count — the guard can also pass.
+  if (!invokesByName("proof:live-fleet", "$PNPM run proof:live-fleet >/tmp/x.log 2>&1")) {
+    failures.push("a real '$PNPM run' invocation was not recognised");
+  }
+
+  // 4. A gate name that PREFIXES another must not borrow its coverage.
+  if (invokesByName("proof:live", "$PNPM run proof:live-fleet")) {
+    failures.push("prefix gate name matched a longer gate's invocation");
+  }
+
+  if (failures.length) {
+    console.log("FAIL  self-test:");
+    for (const f of failures) console.log(`      - ${f}`);
+    process.exit(1);
+  }
+  console.log("PASS  self-test - covers() distinguishes invocation from mention, and coverage disappears when the lane text does");
+  process.exit(0);
 }
 
 if (process.argv.includes("--report")) {

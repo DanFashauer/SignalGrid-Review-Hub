@@ -347,7 +347,7 @@ export default function ReviewDashboard() {
               </strong>{" "}
               and{" "}
               <strong className="text-foreground">
-                Shared-Device Trust Gateway
+                orchestration grid
               </strong>{" "}
               for shared-device and mobile frontline environments — using{" "}
               <span className="text-teal-400">identity</span>,{" "}

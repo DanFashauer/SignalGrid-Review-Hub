@@ -1060,3 +1060,16 @@ _These need the owner's call — an agent should not act on them unsupervised._
 - [x] Live `/v1` decision panel on the admin dashboard.
 - [x] Admin console → api-server data layer; marketing site; deployment models;
       IGA adjacency; founder portfolio; multi-vertical narrative.
+
+## Discovered
+
+New ideas land here first (CLAUDE.md scope rule), then get ranked.
+
+- [ ] Marketing-site narrative still tells the v1 gate story. 2026-08-31: the
+      retired "Shared-Device Trust Gateway" label was scrubbed from the title,
+      social meta, hero badge, About page and review deck, and the framing gate
+      now scans those files — but the hero headline ("Should this shared device
+      proceed right now?") and the page's flow still frame SignalGrid as a
+      yes/no gate, not the DR-020 orchestration grid (a decision as the trigger
+      for a cascade; the worker never sees it). That is a copy/design pass, not
+      a label swap — same shape as the Sessions-first IA rework in the app.

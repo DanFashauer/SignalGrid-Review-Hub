@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "requestId": "2026-08-31-lab001-step1-real-posture",
+  "completedAt": "2026-08-31T19:26:39.273Z",
+  "provenance": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "nodeVersion": "v24.18.0",
+    "macosVersion": "26.6.2",
+    "commit": "36419e33b7f024d96920511a46857fabd0df83c9",
+    "branch": "SignalGrid_Alpha",
+    "workingTreeClean": false
+  },
+  "runs": [
+    {
+      "operation": "evidence",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 169801,
+      "tail": [
+        "This says NOTHING about the launch surface — that is preflight's job.",
+        "",
+        "signalgrid-mcp found at <HOME>/Public/Projects/SignalGrid/signalgrid-mcp (python: <HOME>/Public/Projects/SignalGrid/signalgrid-mcp/.venv/bin/python)",
+        "",
+        "=== signalgrid-mcp pytest (+ posture-report contract) ===",
+        "$ <HOME>/Public/Projects/SignalGrid/signalgrid-mcp/.venv/bin/python -m pytest -q",
+        "........................................................................ [ 72%]",
+        "...........................                                              [100%]",
+        "=============================== warnings summary ===============================",
+        ".venv/lib/python3.12/site-packages/pydantic_settings/sources/utils.py:47",
+        "  <HOME>/Public/Projects/SignalGrid/signalgrid-mcp/.venv/lib/python3.12/site-packages/pydantic_settings/sources/utils.py:47: IncompleteFieldDefinitionWarning: Field 'lifespan' has an incomplete definition: its annotation contains an unresolved forward reference, so settings sources may fail to correctly resolve its value. Call `model_rebuild()` on the model where the field is defined, once all the referenced types are defined.",
+        "    warnings.warn(",
+        "",
+        "-- Docs: <URL>",
+        "99 passed, 1 warning in 1.81s",
+        "",
+        "=== verify:all summary ===",
+        "  mcp tool count:       PASS (22 tools, derived and matching the doc)",
+        "  Review-Hub preflight: PASS",
+        "  Review-Hub breadth:   PASS",
+        "  signalgrid-mcp:       PASS",
+        "  shared contract:      <HOME>/Public/Projects/SignalGrid/SignalGrid-Review-<REDACTED-BLOB>-posture/contract/posture-report.contract.json",
+        "",
+        "--emit-evidence: wrote <HOME>/Public/Projects/SignalGrid/SignalGrid-Review-Hub/artifacts/live-evidence/mac-run.json (manifestFingerprint=5ea9cb89c6da…).",
+        "  Commit artifacts/live-evidence/ to publish the run as repo evidence."
+      ]
+    }
+  ]
+}

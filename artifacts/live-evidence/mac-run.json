@@ -1,7 +1,7 @@
 {
   "schema": "signalgrid-live-evidence/v1",
-  "manifestFingerprint": "c8d7b49d0c08defe3e5fb10f385d54aa13e568b43198a6da158dc5cab8e08e84",
-  "manifestVersion": 31,
+  "manifestFingerprint": "5ea9cb89c6da84172b78cc5239603988db8d832706264786fc108b959d4de1be",
+  "manifestVersion": 43,
   "platform": "darwin",
   "preflightCoverage": {
     "nativeBuildExcluded": true,
@@ -25,7 +25,7 @@
     "signalCategories": 17,
     "taskExceptionReasonCodes": 13,
     "handoffSimRefusalCodes": 8,
-    "mcpTools": 8,
+    "mcpTools": 16,
     "proofsDocumented": 56
   }
 }

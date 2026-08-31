@@ -666,6 +666,7 @@
       "surface": [
         ".claude/**",
         ".agents/**",
+        ".mcp.json",
         "artifacts/mcp-server/**",
         "CLAUDE.md",
         "AGENTS.md",

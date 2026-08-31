@@ -368,3 +368,4 @@ records rather than current guidance.
 - [Integration map](INTEGRATION_MAP.md): the systems the grid connects to (access, identity, device, location, apps, ticketing), routed by lane — the platform surface DR-020 names.
 - [LAB 001](lab/LAB_001.md): the first real decision on hardware already owned — the Mac/local lane work order that carries a true signal into a Decision Envelope.
 - [LAB 001 cloud rehearsal](lab/LAB_001_CLOUD_REHEARSAL.md): Step 1's verification protocol proven over the real MCP stdio wire — baseline plus four forced-unknown probes, every one tightening; the Mac's real-posture run is queued against it as the known-good baseline.
+- [IAM core-architecture coverage map](research/IAM_CORE_COVERAGE_MAP.md): an owner-supplied IAM framework held against the tree cell by cell — 92 concepts, 83 proven with cited evidence, six that are work (DR-021 intake).

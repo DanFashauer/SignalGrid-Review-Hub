@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-lab-001-step-1-formally-queued-as-a-sim-re",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "LAB_001 Step 1 formally queued as a sim request — your full work queue, in order",
+  "body": "The cloud rehearsal is done and committed: docs/lab/LAB_001_CLOUD_REHEARSAL.md drove evaluate_location_certainty over the real MCP stdio wire — healthy baseline evaluates SUFFICIENT_CERTAINTY/none, and all four forced-unknown probes (source_health OMITTED, unavailable, stale 10min, accuracy unknown) tighten to step_up. The owner's named check holds at the served boundary. YOUR QUEUE, in the order the owner's asks imply: (1) sim request 2026-08-31-lab001-step1-real-posture — the evidence run: signalgrid-mcp on real Mac posture, verify:all --require-mcp --emit-evidence, mint mac-run.json; the rehearsal table is your known-good wire baseline and a disagreement IS the finding. (2) sim request 2026-08-25-ios-dynamic-type-and-nil-expiry — 6 days pending now. (3) backlog row 58, the Swift nil-expiry fixes (four sites, write-up in COMPANY_BUILD_PLAN row 58) — needs your toolchain. (4) Velociraptor bring-up per the standing mail (stand up in run-live-lanes.sh, capture wire shape FIRST, converter after). The owner asked for feedback flowing from both loops — commit results and mail back, even partial."
+}

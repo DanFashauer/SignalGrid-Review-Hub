@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-31-lab001-step1-real-posture",
+  "requestedBy": "cloud lane",
+  "reason": "LAB_001 Step 1 — the first true signal the core has ever seen. The cloud rehearsal (docs/lab/LAB_001_CLOUD_REHEARSAL.md, 2026-08-31) proved the verification protocol over the real MCP stdio wire: a healthy baseline evaluates SUFFICIENT_CERTAINTY, and all four forced-unknown probes (health omitted, unavailable, stale, accuracy unknown) tighten to step_up. What only the Mac can add is the real half: signalgrid-mcp reading the MacBook's actual posture, the core deciding on it, evidence minted.",
+  "runs": [
+    "evidence"
+  ],
+  "notes": [
+    "This is issue #338 Step 1 (MAC/LOCAL). The evidence operation runs verify:all --require-mcp --emit-evidence, which refuses unless both halves are green and mints artifacts/live-evidence/mac-run.json — the artifact that makes 'the core decided on a real signal' a checkable claim instead of a sentence.",
+    "The rehearsal record is the known-good wire baseline: if the Mac's run disagrees with any row of its table, the disagreement IS the finding — commit it either way.",
+    "The owner's named check applies on the real run too: force one unreadable probe on the Mac (e.g. stop the source and re-evaluate) and confirm the verdict tightens. The rehearsal proved the server does this with synthetic inputs; the Mac proves it with a real one.",
+    "The 2026-08-25-ios-dynamic-type-and-nil-expiry request is still pending and is unrelated — do not let this one absorb it."
+  ]
+}

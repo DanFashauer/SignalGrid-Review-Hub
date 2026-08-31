@@ -20,7 +20,19 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git ls-remote origin "refs/heads/$BRANCH" | awk '{print $1}')
 if [ -z "$REMOTE" ]; then
-  jq -nc --arg b "$BRANCH" '{decision:"block", reason:("Branch \($b) is not on origin. Push it, then re-verify with git ls-remote before declaring done.")}'
+  # The branch ref being gone from origin is NOT always an unpushed branch:
+  # GitHub deletes the head branch when its PR merges, and this hook then
+  # fired on the first fully-landed session it ever watched. If HEAD is
+  # already an ancestor of the remote default branch, the work is on origin
+  # and this is the success case, not the failure case.
+  DEFAULT=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub("refs/heads/","",$2); print $2}')
+  if [ -n "$DEFAULT" ]; then
+    git fetch -q origin "$DEFAULT" 2>/dev/null
+    if git merge-base --is-ancestor "$LOCAL" "refs/remotes/origin/$DEFAULT" 2>/dev/null; then
+      exit 0
+    fi
+  fi
+  jq -nc --arg b "$BRANCH" '{decision:"block", reason:("Branch \($b) is not on origin and HEAD is not on the default branch either. Push it, then re-verify with git ls-remote before declaring done.")}'
   exit 0
 fi
 if [ "$LOCAL" != "$REMOTE" ]; then

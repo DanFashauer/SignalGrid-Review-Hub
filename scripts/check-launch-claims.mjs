@@ -323,7 +323,11 @@ function violationsIn(name, body) {
 // simply wrong now. Exempt a line that names the label AS retired/superseded — a
 // decision record and a "renamed to X" note must be able to say the old words,
 // the same honesty carve-out the deferred-noun rule makes for negations.
-const RETIRED_LABELS = /Zero[\s-]Trust orchestration|Operational Trust Orchestration/i;
+// "Shared-Device Trust Gateway" joined this list 2026-08-31: DR-004 ratified
+// it, DR-019/DR-020 superseded it, and the deployed site then carried it for
+// five days while this gate — still enforcing DR-004's ruling — read the label
+// as the CORRECT one. No replacement category label is ratified (DR-020).
+const RETIRED_LABELS = /Zero[\s-]Trust orchestration|Operational Trust Orchestration|Shared-Device Trust Gateway/i;
 const RETIRED_OK = /retired|superseded|deprecat|renamed|former(ly)?|no longer|DR-004|historical|earlier (category|label|name|finalist|exploration)/i;
 
 // Scanned line-by-line over the buyer-facing MARKETING surface ONLY, never through
@@ -336,7 +340,7 @@ function retiredLabelViolations(name, body) {
       const m = (line.match(RETIRED_LABELS) || [""])[0];
       out.push(
         `${name}:${i + 1}: retired category label "${m}" in buyer-facing copy — ` +
-          'DR-004 ratified "Shared-Device Trust Gateway" and reconciled the earlier labels OUT, not kept as synonyms',
+          "DR-004's label and its predecessors are all superseded (DR-019/DR-020); no category label is ratified, and docs/PURPOSE.md owns the product sentence",
       );
     }
   });
@@ -390,7 +394,11 @@ function retiredLabelViolations(name, body) {
     violationsIn("st12.html", avoidList.replace("Trap phrases to avoid", "Signals we fuse")).length > 0 &&
     // Retired category label — flagged in live copy, exempt when named as retired.
     retiredLabelViolations("stR0", "SignalGrid is a Zero Trust orchestration platform.").length > 0 &&
-    retiredLabelViolations("stR1", "The Operational Trust Orchestration label is retired; DR-004 renamed it Shared-Device Trust Gateway.").length === 0;
+    retiredLabelViolations("stR1", "The Operational Trust Orchestration label is retired; DR-004 renamed it Shared-Device Trust Gateway.").length === 0 &&
+    // The label DR-019/DR-020 retired must flag in live copy and stay exempt
+    // when named as superseded — the five-day site drift this gate missed.
+    retiredLabelViolations("stR2", "SignalGrid is a Shared-Device Trust Gateway for frontline work.").length > 0 &&
+    retiredLabelViolations("stR3", "The Shared-Device Trust Gateway label is superseded by DR-020.").length === 0;
   if (!st) {
     console.error("✗ SELF-TEST FAILED: a rule no longer flags its synthetic violation. A gate that cannot fail proves nothing.");
     process.exit(1);

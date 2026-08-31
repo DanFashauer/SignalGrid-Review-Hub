@@ -31,8 +31,10 @@ test.beforeEach(async ({ page }) => {
 
 test("landing page renders with brand and hardware nav", async ({ page }) => {
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
+  // The retired category label was scrubbed 2026-08-31 (DR-019/DR-020); the
+  // title now carries the DR-020 spine — door, device, room, app.
   await expect(page).toHaveTitle(
-    "SignalGrid — Shared-Device Trust Gateway",
+    "SignalGrid — one grid across door, device, room and app",
   );
   // Scoped to the header — the footer repeats both the brand and the link.
   await expect(

@@ -24,7 +24,7 @@ export default function HeroSection() {
           >
             <div className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-medium text-primary mb-6">
               <span className="flex h-2 w-2 rounded-full bg-primary mr-2 animate-pulse"></span>
-              Shared-Device Trust Gateway
+              Pre-announcement · fixture-backed
             </div>
 
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-6 leading-tight text-balance">

@@ -46,6 +46,17 @@ const SURFACES = [
   "docs/LAUNCH_PROFILE.md",
   "docs/STATUS.md",
   "docs/WHAT_SIGNALGRID_DOES_TODAY.md",
+  // The buyer-facing web SOURCES, added 2026-08-31. The deployed site carried
+  // "Shared-Device Trust Gateway" in its <title>, social meta, hero badge and
+  // About page for five days after DR-019 retired the label — and this gate
+  // stayed green the whole time, because its surface list was docs-only. A
+  // marketing page is the most current-truth surface there is; a reader takes
+  // nothing else more literally.
+  "artifacts/signalgrid-web/index.html",
+  "artifacts/signalgrid-web/src/components/sections/HeroSection.tsx",
+  "artifacts/signalgrid-web/src/pages/About.tsx",
+  "artifacts/signalgrid-review/src/pages/ReviewDashboard.tsx",
+  "site/index.html",
 ];
 
 // Retired framings: these name SignalGrid as a different thing than PURPOSE.md.

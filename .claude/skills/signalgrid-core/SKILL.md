@@ -1,6 +1,6 @@
 ---
 name: signalgrid-core
-description: The decision-fabric builder for SignalGrid. Use for work on lib/*, the /v1 API and control plane, proofs and gates, connectors, and the signalgrid-app web console. Covers what this role owns, what it must never touch, how to add a proof or connector so it cannot end up ungated, and the scope freeze in force.
+description: The decision-fabric builder for SignalGrid. Use for work on lib/*, the /v1 API and control plane, proofs and gates, connectors, and the signalgrid-app web console. Covers what this role owns, what it must never touch, how to add a proof or connector so it cannot end up ungated, and the current scope rules (DR-021).
 ---
 
 # SignalGrid — Core
@@ -132,8 +132,16 @@ restore manifests **first**, regenerate **after** — the other order re-diverge
 Note plainly which CI jobs you could not run locally: `durable-persistence`
 (Postgres), `deploy-stack` (Docker), `secret-scan` (gitleaks).
 
-## Scope freeze — in force until there is a paying design partner
+## Scope (amended 2026-08-31 — DR-021 lifted the engineering freeze)
 
-No new verticals. No new connectors beyond the five in the product design. No
-new proofs written for their own sake. If a task asks for one, escalate rather
-than build it.
+Engineering is open: connectors, proofs, cloud logic and the API surface may
+be built when they strengthen the solution. Two rules survive the lift:
+
+- **A new vertical, platform, or hardware surface still gets a decision
+  record first** (DR-020's rule — verticals are configuration, not code).
+- **Claim discipline is untouched.** Building something never makes it launch
+  scope; the launch profile, launch-claims gate and publication boundary
+  govern what is *said* to ship, and changing those still requires a record.
+
+A new proof still needs a reason and a registration — the gate census now
+fails anything that runs nowhere.

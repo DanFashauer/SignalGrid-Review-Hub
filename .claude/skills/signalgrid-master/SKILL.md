@@ -62,7 +62,9 @@ Read `docs/DECISION_RECORDS.md` and `scripts/launch-profile.mjs` before work tha
 change product scope or public claims.
 At the revision used to create this skill, DR-005 ratifies launch-profile v4 and
 freezes breadth. A deferred capability does not become launch scope because it is
-already implemented or proven.
+already implemented or proven. (DR-021, 2026-08-31, lifted the ENGINEERING
+freeze — building is open; this paragraph's constraint is about CLAIMED launch
+scope, which DR-021 explicitly keeps in force.)
 Unless superseded by a later record, DR-004 sets the execution order:
 1. Protect the trust engine.
 2. Finish the production data boundary.

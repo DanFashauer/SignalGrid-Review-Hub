@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "signalgrid-mcp": {
+      "type": "stdio",
+      "command": "artifacts/mcp-server/node_modules/.bin/tsx",
+      "args": ["artifacts/mcp-server/src/index.ts"]
+    }
+  }
+}

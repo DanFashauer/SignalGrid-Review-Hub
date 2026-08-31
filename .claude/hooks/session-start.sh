@@ -79,5 +79,18 @@ if [ -f scripts/check-sim-requests.mjs ]; then
     | sed 's/^· /  sim pending /' || true
 fi
 
+# 4. The operating loop (2026-08-28 handoff Task 4b, merged under DR-021 —
+#    the handoff's "Engineering FROZEN" banner is NOT reproduced here because
+#    DR-021 lifted the freeze; the STATE block below is the live phase).
+#    Condensed to the STATE block rather than the whole file: this hook's
+#    contract is loud and short, and LOOP.md's own first line says where to
+#    read the rest.
+if [ -f docs/agent/LOOP.md ]; then
+  echo "  loop        docs/agent/LOOP.md STATE:"
+  sed -n '/^PHASE:/,/^NEXT ACTION:/p' docs/agent/LOOP.md | sed 's/^/              /'
+fi
+if node -e "process.exit(((require('./package.json').scripts)||{})['loop:state']?0:1)" 2>/dev/null; then
+  pnpm run --silent loop:state 2>/dev/null | tail -n +1 | sed 's/^/  loop:state  /' | head -12 || echo "  loop:state  (failed — run pnpm run loop:state yourself)"
+fi
 echo "─────────────────────────────────────────────────────────────────────────"
 exit 0

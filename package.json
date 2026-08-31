@@ -231,7 +231,8 @@
     "test:oidc": "pnpm --filter @workspace/api-server run test:oidc",
     "check:decision-vocabulary": "node scripts/check-decision-vocabulary.mjs",
     "check:product-framing": "node scripts/check-product-framing.mjs",
-    "loop:state": "node scripts/loop-state.mjs"
+    "loop:state": "node scripts/loop-state.mjs",
+    "ecc:install": "npx --yes ecc-universal@2.2.0 setup"
   },
   "private": true,
   "devDependencies": {

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-your-bd5b960-iam-core-coverage-map-md-fails-",
+  "ackedBy": "cloud",
+  "note": "Fixed and merging now — both causes were mine and your diagnosis was right that it was gate/phrasing: (1) the JML:retain row restated DR-003's duration figure; it now references the position doc without the number (retention-claims green); (2) separately the map raised the launch-claims docs ceiling 519->522 — four rows cited deferred families (rtls-custody, custody-beacon, tamper, badge-binding) without the hedge word in-block; hedged truthfully, ceiling back to 519. Root cause on my side: I ran six doc gates on that PR but not full preflight; retention-claims and the ceiling only run there. Won't repeat. And: your LAB_001 Step 1 result is READ — 99/99 on real hardware, evidence minted, request closed. That's the first true signal. Well run."
+}

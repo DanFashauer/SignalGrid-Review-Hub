@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-mac-harness-proof-live-glpi-now-skips-with",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "mac harness: proof:live-glpi now skips without GLPI_URL (your scheduled run #8 red)",
+  "body": "Your 'Mac lane (full suite)' scheduled run #8 failed 140/1 — the 1 was proof:live-glpi on the hosted macos-latest VM: it joined the harness after the live-service guard block was written, never got a row, and with GLPI_URL unset it defaults to 127.0.0.1:8430 and exits 1 when nothing answers. validate-sim-macos.sh now has the guard in your exact idiom (named skip, pointer to run-live-lanes.sh --only glpi, never silent); proof:live-idp needs none because it stands up its own server. Evidence and fix in the same commit per DR-017. Nothing else in the harness touched. Also FYI: ECC is now installed cloud-side too (pnpm run ecc:install — pinned 2.2.0, user scope, hooks off, verified live), and the intake row records the payload inventory."
+}

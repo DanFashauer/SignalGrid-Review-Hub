@@ -1281,3 +1281,76 @@ wire DR-007 also discussed remains deferred, exactly as that record left it.
 
 **Reversal.** The owner reverses by saying so; un-serving the route means
 restoring a gap entry that names it and bumping the profile version again.
+
+---
+
+## DR-024 — The layered operating model: Ponytail on top, ECC second, the owner's builds scanned by both, then the independent scan, then execution (owner-directed 2026-09-01)
+
+**Question.** The owner's directive, verbatim: *"This will now be the primary layer
+that runs and controls this repo and will do its own independent scan of my repo and
+adjust everything that needs to be redone and I don't care at this point if got to rip
+everything out and build new cause this should be at top then second layer will be ECC
+then my own that I build which will be scanned by both ponytail and ECC then you'll come
+back and do own independent scan then finally come together and execute I'm hands off
+fully and complete. Only time you need me will be to approve or allow access to something
+otherwise I'm staying out of it now. My job now will be to feed you information and build
+my product and solutions off what I provide you period no more freeze crap."* The layer
+named is [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail). What is
+it, and how does the stack run?
+
+**What Ponytail is, established by use.** `@dietrichgebert/ponytail` v4.9.0 (MIT,
+commit `2ed6c52`), "lazy senior dev mode for AI agents": a seven-rung ladder applied
+before any code is written — does it need to exist (YAGNI) → already in this codebase →
+stdlib → native platform → installed dependency → one line → only then the minimum — with
+hard rules that trust-boundary validation, error handling that prevents data loss,
+security, accessibility, anything explicitly requested, and one runnable check per
+non-trivial logic are **never** cut. Six skills (`ponytail`, `-review`, `-audit`,
+`-debt`, `-gain`, `-help`), three lifecycle hooks, a read-only MCP that serves the
+ruleset. It is a **minimalism lens**. By its own charter it is **not** a correctness,
+security, or performance reviewer; it routes those to a normal review pass.
+
+**Call: the stack, in order, each a distinct lens; no lens certifies green by itself.**
+
+1. **Ponytail — top.** `ponytail-audit` produces the ranked cut list; `ponytail-review`
+   runs on every diff; `ponytail-debt` keeps the ledger of deliberate shortcuts. Its cut
+   list is **executed**, not merely noted — "rip out and rebuild" is licensed wherever the
+   ladder says the code should not exist — bounded only by its own never-cut rules and by
+   this repository's gates. Default intensity `ultra`, per the owner's appetite.
+2. **ECC — second.** Correctness, security, architecture, test discipline (DR-016;
+   DR-021 §4 stands: ECC advises).
+3. **The owner's builds.** What the owner provides is scanned by 1 and then 2 before it
+   lands.
+4. **The independent scan.** Fail-closed inversions, contract drift, runtime truth, claim
+   discipline — the classes neither 1 nor 2 targets — run as this repository's own sweeps.
+5. **Converge and execute.** Findings from every lens ranked, built, gated (`preflight` +
+   `verify:breadth` certify green), PR'd, merged.
+
+The owner is hands-off: the organisation comes to him only for approvals and access. No
+engineering-freeze language anywhere; DR-021 stands and this record extends it. Claim
+discipline is unchanged (DR-021 §3).
+
+**Why Ponytail on top is coherent.** It removes what should not exist *before* the other
+lenses spend effort reviewing it, and its never-cut list protects precisely what the
+fail-closed doctrine protects. The two do not fight; the first audit proved it — every
+one of its 70-odd findings left every proof, guard, and `default:` arm in place.
+
+**How it is installed, and the one place this differs from ECC.** `pnpm run
+ponytail:install` (`scripts/install-ponytail.mjs`) registers the **local clone at the
+pinned commit** as the marketplace — the marketplace form of the install tracks the
+upstream author's moving HEAD, which this repository does not permit — and installs at
+user scope, non-interactively, then sets the default mode. Its three hooks are
+**installed**, where ECC's stayed off: they were read (2026-09-01) and are small Node
+scripts that only inject the ruleset text and record the mode under `~/.config/ponytail`
+— no child process, no network, no secret reads; `claude plugin details` classes them as
+harness-only with no model-context cost. ECC's hooks *run passes*; Ponytail's only speak.
+
+**First scan.** `docs/agent/PONYTAIL_AUDIT_2026-09-01.md` — three parallel auditors
+over `lib/`, `artifacts/`, and `scripts/`+`native/`, in `ultra`. Net possible:
+roughly 21,000 + 3,100 + 3,500 lines and ~170 dependency entries, with the owner-call
+deletions listed as decisions rather than applied. `ponytail-debt` baseline: clean ledger.
+
+**Evidence.** The clone at `2ed6c52`; `claude plugin validate` / `details` output; the
+hook sources; the three audit reports; `docs/agent/RESOURCE_INTAKE.md` (row 2026-09-01).
+
+**Reversal.** The owner reverses by saying so: `claude plugin uninstall ponytail`, remove
+the script and the rows. Nothing in the product depends on it, by construction.

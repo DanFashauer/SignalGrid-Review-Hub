@@ -1,4 +1,5 @@
 import { deriveFreshness } from "../../utils/freshness";
+import { posedBound } from "../../utils/posed-bound";
 import type { LocationFreshness, LocationVerdict, NormalizedLocationSignal } from "./types";
 
 /**
@@ -20,7 +21,7 @@ export function evaluateLocation(
   nowMs: number,
   options: EvaluateLocationOptions = {},
 ): LocationVerdict {
-  const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
+  const staleAfterMs = posedBound(options.staleAfterMs, DEFAULT_STALE_AFTER_MS);
   const freshness = deriveFreshness(signal.capturedAt, nowMs, staleAfterMs);
   const usesPreciseLocation = signal.hasPreciseCoordinates;
 

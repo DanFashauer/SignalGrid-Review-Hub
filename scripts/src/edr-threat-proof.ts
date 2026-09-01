@@ -295,6 +295,22 @@ check("signature age: ...while a finite non-negative age is preserved, 0 include
   ageOf(5) === 5 && ageOf(0) === 0);
 
 
+// THE BOUND, not just the measurement (independent sweep, 2026-09-01): the measurement
+// guard above turns a non-finite signature AGE into null; nothing guarded the caller's
+// THRESHOLD, and `x >= NaN` is false, so staleSignatureHours: NaN graded 11-year-old
+// signatures `protected`. A garbled pose must raise like an unreported age.
+{
+  const ancient = normalizeEndpoint({ deviceId: "ep-bound", agentInstalled: true, agentRunning: true, realtimeProtection: true, signatureAgeHours: 100000, threats: [] });
+  const onDefault = evaluateThreatPosture(ancient);
+  check("bound control: decade-stale signatures are degraded on the default bound", onDefault.posture === "degraded_protection" && onDefault.protectionHealthy === false);
+  for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, 0, -5]) {
+    const v = evaluateThreatPosture(ancient, { staleSignatureHours: bad });
+    check(`a garbled staleSignatureHours (${String(bad)}) raises — degraded, never protected (NaN/Infinity discriminate the fix; 0/-5 tightened by arithmetic already)`, v.posture === "degraded_protection" && v.protectionHealthy === false);
+  }
+  const fresh = evaluateThreatPosture(normalizeEndpoint({ deviceId: "ep-fresh", agentInstalled: true, agentRunning: true, realtimeProtection: true, signatureAgeHours: 1, threats: [] }), { staleSignatureHours: 72 });
+  check("...and a readable posed bound still grades fresh signatures protected (not over-tight)", fresh.posture === "protected");
+}
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

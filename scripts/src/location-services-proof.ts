@@ -201,6 +201,19 @@ await checkCollectionRefusals({
 });
 
 
+// The BOUND (independent sweep + ECC, 2026-09-01): a garbled staleAfterMs must grade an
+// ancient fix STALE_LOCATION_FIX/locate — the default bound's verdict — never the weaker
+// UNVERIFIED_LOCATION_FRESHNESS/monitor (a posed 0 must not outscore no bound at all).
+{
+  const ancient = mkSignal("inside", "2019-01-01T00:00:00Z");
+  const onDefault = evaluateLocation(ancient, NOW_MS);
+  check("bound control: a 2019 fix is STALE_LOCATION_FIX/locate on the default bound", onDefault.reasonCode === "STALE_LOCATION_FIX" && onDefault.recommendedAction === "locate");
+  for (const bad of [Number.POSITIVE_INFINITY, Number.NaN, 0]) {
+    const v = evaluateLocation(ancient, NOW_MS, { staleAfterMs: bad });
+    check(`a garbled staleAfterMs (${String(bad)}) grades the same fix STALE_LOCATION_FIX/locate — never the weaker unverified/monitor`, v.reasonCode === "STALE_LOCATION_FIX" && v.recommendedAction === "locate");
+  }
+}
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

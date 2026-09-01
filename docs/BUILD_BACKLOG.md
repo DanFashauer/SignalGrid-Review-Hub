@@ -1065,6 +1065,10 @@ _These need the owner's call — an agent should not act on them unsupervised._
 
 ### ECC-role review findings (2026-09-01) — the ones not fixed in the same pass
 
+- [ ] **UEM freshness axis is structurally dead (independent sweep, HIGH).** `lastCheckInAgeSeconds` is documented as the freshness axis in `lib/integrations/src/integrations/uem/types.ts`, hardcoded `null` by the Intune, Jamf and Workspace ONE adapters, and never read by `evaluateUem` — a 2019 `lastSyncDateTime` grades identical to today's. Either carry the vendor timestamp through and grade it against a caller clock with a posed bound (unknown raises), or delete the field and the claim; `scripts/src/uem-proof.ts` asserts `null || integer`, which cannot fail.
+- [ ] **`verdict-attestation` reads two posed bounds with `??` (posed-bound gate, reported not gated).** `lib/verdict-attestation/src/attest.ts` reads `maxAgeMs` and `maxSkewMs` with `??` and compares `issuedAt` against them; a `NaN`/`Infinity` bound switches the check off, the same class as the EDR finding. Outside the gate's evaluator scope because the file exports no `evaluate*`/`derive*`; it needs the posed-bound reader (or the package's own copy of the rule) and a proof row.
+- [ ] **Two freshness values computed and consulted by nothing (sweep, MEDIUM).** `edr-threat/edr-connector.ts` carries `lastSeen` and `graph/posture-connector.ts` carries `deviceLastSeenAt`; no evaluator reads either, so a record last updated years ago that still claims a healthy agent grades protected. Grade them or stop carrying them.
+
 Two were fixed immediately (fleetDMFreshness future-date fail-open; /v1/step-up/challenge
 authorize gap). These remain; see `docs/agent/REVIEW_STRUCTURE_COMPARISON.md`.
 

@@ -22,12 +22,13 @@
  *    `ready / none` against the `degraded / monitor` an honestly-absent budget
  *    produces. A malformed question outscored an unasked one.
  *  - `edr-threat`: signatures more than a decade stale reported as `protected`.
+ *    (Adopted 2026-09-01; `deriveFreshness` in freshness.ts applies the same rule to its bound.)
  *
  * A fourth, `pacs-access`, guarded it correctly and its comment states the rule
  * this helper generalises: *a garbled pose is a question we cannot read — never
- * answered optimistically.* Two more families (`network-nac`, `passkey-assurance`)
- * are safe only by arithmetic accident — their comparisons happen to fall the
- * right way — so they would drift the moment a comparison changed shape.
+ * answered optimistically.* `network-nac` (with `carrier` and `location-services`) now reads its bound through
+ * this helper too; `passkey-assurance` is safe only by arithmetic accident — its comparison
+ * happens to fall the right way — and would drift the moment that changed shape.
  *
  * THE CONTRACT, and the null is the point:
  *

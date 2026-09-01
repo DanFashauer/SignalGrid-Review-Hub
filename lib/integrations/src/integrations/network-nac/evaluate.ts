@@ -1,4 +1,5 @@
 import { deriveFreshness } from "../../utils/freshness";
+import { posedBound } from "../../utils/posed-bound";
 import type { NacFreshness, NetworkVerdict, NormalizedNetworkSignal, SegmentPolicy } from "./types";
 
 /**
@@ -39,7 +40,7 @@ export function evaluateNetwork(
   nowMs: number,
   options: EvaluateNetworkOptions = {},
 ): NetworkVerdict {
-  const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
+  const staleAfterMs = posedBound(options.staleAfterMs, DEFAULT_STALE_AFTER_MS);
   const freshness = deriveFreshness(signal.lastAuthAt, nowMs, staleAfterMs);
   const loc = signal.accessLocation;
 

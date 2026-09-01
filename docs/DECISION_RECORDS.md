@@ -1354,3 +1354,45 @@ hook sources; the three audit reports; `docs/agent/RESOURCE_INTAKE.md` (row 2026
 
 **Reversal.** The owner reverses by saying so: `claude plugin uninstall ponytail`, remove
 the script and the rows. Nothing in the product depends on it, by construction.
+
+## DR-025 — The durable audit ledger is tenant-readable: a tenant column hashed when present, a scoped READ over the one global chain, and an audit route that names its source (2026-09-01)
+
+**Question.** The independent scan (DR-024 step 4) found that the durable ledger
+(`lib/audit`) carried no tenant on a record, so a tenant could never be shown its
+own durable history, and that `/v1/audit` answered from the in-memory core ledger
+even when Postgres held the truth — a durable row was written on every decision and
+nothing could read it back per tenant. Two tenants' rows were distinguishable only by
+whatever the free-text `meta` happened to say.
+
+**Call.**
+
+1. **A nullable `tenant_id` column** (migration v3 in `lib/persistence/src/migrations.ts`,
+   index on `(tenant_id, seq)`), written by every decision recorded from
+   `/v1/decisions/evaluate` and `/v1/authorize` as a `decision.evaluated` event.
+2. **The tenant is part of the hashed body ONLY when present.** The canonicalizer writes
+   an absent key as `null`, so an unconditional key would have re-hashed every
+   pre-column row and turned the migration into a false tamper alarm. Append and verify
+   agree on this rule (`appendAuditRecord` and `verifySegment` in `lib/audit/src/index.ts`);
+   rows written before the column keep their hashes, and moving a row between tenants is
+   detected at that row.
+3. **A tenant slice is a READ view over the single global chain, never a chain of its
+   own.** `getAuditRecordsForTenant` returns the tenant's rows in ledger order, paged; the
+   chain is verified whole and the response says so (`chain.scope: global-ledger`). No
+   per-tenant head hash exists, so none is claimed.
+4. **`/v1/audit` names the ledger that answered** — `source: durable` (tenant rows +
+   whole-chain verdict, `?limit&offset`) when Postgres is configured, `source: memory`
+   otherwise — instead of silently serving the demo ledger under a durable-sounding route.
+
+**Evidence.** `pnpm run proof:audit-ledger` (seven tenant-scope assertions, including the
+moved-row tamper and the untenanted row belonging to no tenant's view);
+`pnpm --filter @workspace/api-server run test:api` (`source: memory` without Postgres);
+`lib/api-spec/v1-openapi.yaml` (`listAudit` parameters and description). The Postgres half ran
+on a disposable Postgres 16 cluster in the cloud lane (`SIGNALGRID_DB_DISPOSABLE=1`):
+`pnpm run db:migrate` applied v1–v3 in order, then `proof:audit-ledger-pg`,
+`proof:decision-store-pg`, `proof:db-role-split`, `proof:backup-restore` and
+`db:verify-ledger` all passed with the column and its index present.
+
+**Reversal.** Stop writing the tenant and drop the route branch; the column can stay, and
+every row already hashed with a tenant keeps verifying, because the rule in call 2 is
+symmetric. What cannot be reversed by deletion alone is a tenanted row's hash — so the
+column is not dropped.

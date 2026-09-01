@@ -93,6 +93,15 @@ export const MIGRATIONS: readonly Migration[] = [
     // (pg_restore --no-privileges strips every grant); one source, two callers.
     statements: ROLE_SPLIT_SQL,
   },
+  {
+    version: 3,
+    name: "audit-ledger-tenant-2026-09-01",
+    statements: `
+      ALTER TABLE audit_ledger ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+      CREATE INDEX IF NOT EXISTS audit_ledger_tenant_seq_idx
+        ON audit_ledger (tenant_id, seq);
+    `,
+  },
 ];
 
 export interface MigrationResult {

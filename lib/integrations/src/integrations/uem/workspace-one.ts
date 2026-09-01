@@ -141,7 +141,6 @@ export function normalizeWorkspaceOneDevice(
       supervision: "unknown",
       ownership: "unknown",
       osVersion: null,
-      lastCheckInAgeSeconds: null,
       cellularHardware: "unknown",
       reportIntegrity: "malformed",
     };
@@ -159,7 +158,6 @@ export function normalizeWorkspaceOneDevice(
     supervision,
     ownership: ownershipFrom(raw.Ownership),
     osVersion: asString(raw.OperatingSystem),
-    lastCheckInAgeSeconds: null,
     cellularHardware: "unknown",
     reportIntegrity: "intact",
   };

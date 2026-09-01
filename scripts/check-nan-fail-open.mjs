@@ -56,71 +56,14 @@
 //
 // SELF-TEST: each rule must flag a synthetic violation AND pass its fixed twin.
 // A gate that cannot fail proves nothing.
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { sanitize } from "./lib/sanitize.mjs";
 
 const ROOTS = ["lib", "artifacts", "scripts", "packages"];
 const SKIP = /(^|\/)(node_modules|dist|build|\.git|coverage|third_party|\.next)(\/|$)/;
 const SRC = /\.(ts|mts|tsx|mjs|js)$/;
-
-// ONE SCANNER, NOT TWO PASSES. Comments are blanked and string/template literal
-// CONTENTS are masked in a single left-to-right walk, because doing them
-// separately is broken in a way that is easy to miss: a comment stripper that
-// cuts at the first `//` slices its own `l.indexOf("//")` in half, leaving an
-// unterminated quote that throws every subsequent literal out of phase — the
-// masker then blanks the code and preserves the strings, exactly inverted. This
-// gate did that on its first run and reported two false positives on itself.
-//
-// Masking literals matters independently: this file quotes the defective shapes
-// as self-test fixtures, and production code is never inside a string literal, so
-// nothing real is lost. Blanket-exempting this file instead would have hidden a
-// genuine defect in the gate — which is precisely what was sitting here.
-function sanitize(text) {
-  let out = "";
-  let i = 0;
-  const keepNewlines = (chunk) => chunk.replace(/[^\n]/g, " ");
-  while (i < text.length) {
-    const c = text[i];
-    const next = text[i + 1];
-    if (c === "/" && next === "/") {
-      const nl = text.indexOf("\n", i);
-      const stop = nl === -1 ? text.length : nl;
-      out += keepNewlines(text.slice(i, stop));
-      i = stop;
-      continue;
-    }
-    if (c === "/" && next === "*") {
-      const close = text.indexOf("*/", i + 2);
-      const stop = close === -1 ? text.length : close + 2;
-      out += keepNewlines(text.slice(i, stop));
-      i = stop;
-      continue;
-    }
-    if (c === '"' || c === "'" || c === "`") {
-      const quote = c;
-      out += c;
-      i += 1;
-      while (i < text.length) {
-        if (text[i] === "\\") {
-          out += "  ";
-          i += 2;
-          continue;
-        }
-        if (text[i] === quote) {
-          out += quote;
-          i += 1;
-          break;
-        }
-        out += text[i] === "\n" ? "\n" : " ";
-        i += 1;
-      }
-      continue;
-    }
-    out += c;
-    i += 1;
-  }
-  return out;
-}
 
 const RULE1 = /!\s*Number\.isNaN\s*\([^)]*\)\s*&&/;
 // A parse expression on EITHER side of a relational operator, against ANY

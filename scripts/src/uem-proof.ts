@@ -126,7 +126,7 @@ for (const vendor of VENDORS)
             total += 1;
             const state: NormalizedUemDeviceState = {
               deviceId: "d", vendor, enrollment, compliance, supervision, ownership,
-              osVersion: null, lastCheckInAgeSeconds: null, cellularHardware: "unknown", reportIntegrity,
+              osVersion: null, cellularHardware: "unknown", reportIntegrity,
             };
             const v = evaluateUem(state);
             if (v.recommendedAction !== "none") continue;
@@ -172,7 +172,7 @@ check(`...and the grant path is REACHABLE — exactly 9 confirmed-clean states (
         for (const ownership of OWNERSHIPS) {
           const v = evaluateUem({
             deviceId: "d", vendor: "jamf", enrollment, compliance, supervision, ownership,
-            osVersion: null, lastCheckInAgeSeconds: null, cellularHardware: "unknown", reportIntegrity: "intact",
+            osVersion: null, cellularHardware: "unknown", reportIntegrity: "intact",
           });
           if ((v.recommendedAction as string) === "escalate") escalated += 1;
         }
@@ -192,7 +192,7 @@ check(`...and the grant path is REACHABLE — exactly 9 confirmed-clean states (
   const clean: NormalizedUemDeviceState = {
     deviceId: "d", vendor: "jamf", enrollment: "enrolled", compliance: "compliant",
     supervision: "supervised", ownership: "corporate",
-    osVersion: null, lastCheckInAgeSeconds: null, cellularHardware: "unknown", reportIntegrity: "intact",
+    osVersion: null, cellularHardware: "unknown", reportIntegrity: "intact",
   };
   const isolated = [
     evaluateUem({ ...clean, enrollment: "unknown" }),
@@ -218,7 +218,7 @@ check(`...and the grant path is REACHABLE — exactly 9 confirmed-clean states (
   const base: NormalizedUemDeviceState = {
     deviceId: "d", vendor: "intune", enrollment: "enrolled", compliance: "compliant",
     supervision: "unsupervised", ownership: "corporate",
-    osVersion: null, lastCheckInAgeSeconds: null, cellularHardware: "unknown", reportIntegrity: "intact",
+    osVersion: null, cellularHardware: "unknown", reportIntegrity: "intact",
   };
 
   const corporate = evaluateUem(base);
@@ -311,8 +311,6 @@ check("a non-boolean 'supervised' is unknown, not false",
 // Determinism: same input, same verdict, no clock anywhere in the path.
 check("evaluation is deterministic",
   JSON.stringify(evaluateUem(UEM_FIXTURES["intune-healthy"]!)) === JSON.stringify(evaluateUem(UEM_FIXTURES["intune-healthy"]!)));
-check("no fixture carries a wall-clock timestamp — ages are durations supplied by the caller",
-  Object.values(UEM_FIXTURES).every((f) => f.lastCheckInAgeSeconds === null || Number.isInteger(f.lastCheckInAgeSeconds)));
 
 // ── 4. The write actuators stay gone ─────────────────────────────────────────
 // A boundary the type system cannot express: nothing stops a future edit from
@@ -375,12 +373,48 @@ check("no fixture carries a wall-clock timestamp — ages are durations supplied
   }
   if (offenders.length) console.log(`      offenders: ${offenders.join(", ")}`);
   check(`no VENDOR-API call in any uem/ source — an actuator cannot return (${files.length} files scanned recursively)`,
-    offenders.length === 0);
+    files.length >= 6 && offenders.length === 0);
   // NON-VACUITY: the scan must be able to FAIL. Without this, deleting the pattern
   // list would leave the assertion green and nobody would notice.
   check("...and the scan actually detects a planted vendor call",
     banned.some((re) => re.test(`await fetch("https://vendor/api", { method: "POST" })`)) &&
     banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
+
+  // ── THE FRESHNESS AXIS IS GONE, and this is the assertion that can say so ──
+  //
+  // What used to stand here, in section 3, was:
+  //
+  //     every fixture's `lastCheckInAgeSeconds` is null or an integer
+  //
+  // and it COULD NOT FAIL. Every adapter hardcoded the field `null`, `null` satisfies
+  // the first disjunct, and the assertion would have kept printing green after the
+  // field was deleted outright — which is exactly what has now happened. It was a
+  // green light attached to nothing, on an axis `evaluateUem` never read and no caller
+  // outside this proof ever supplied.
+  //
+  // The field is removed. This assertion is the thing that keeps it removed: it fails
+  // the moment the token reappears anywhere under uem/, including in a comment, so a
+  // later reader "completing the mapping" has to argue for it rather than reintroduce
+  // a dead axis by habit. The shape a REAL one would take — an adapter-carried
+  // `lastCheckInAt`, an `options.nowMs`, a posed `staleCheckInSeconds` — is recorded
+  // in docs/BUILD_BACKLOG.md, where an unbuilt design belongs.
+  const FRESHNESS_TOKEN = "lastCheckInAgeSeconds";
+  const sources = files.map((f) => [f.slice(dir.length + 1), readFileSync(f, "utf8")] as const);
+  const carriers = sources.filter(([, text]) => text.includes(FRESHNESS_TOKEN)).map(([rel]) => rel);
+  check(
+    `no uem/ source carries \`${FRESHNESS_TOKEN}\` — a documented axis nothing graded` +
+      ` (${sources.length} files)${carriers.length ? ` — found in ${carriers.join(", ")}` : ""}`,
+    carriers.length === 0 && sources.length >= 6,
+  );
+  // NON-VACUITY / POSITIVE CONTROL: an absence claim proves nothing if the scan read
+  // nothing. The same matcher, over the same text, must FIND a token these sources
+  // really do carry — so an empty walk or an unread file fails here instead of
+  // printing a clean bill of health over zero bytes.
+  check(
+    "...and the same scan finds a token uem/ really does carry, so the absence is measured",
+    sources.some(([, text]) => text.includes("NormalizedUemDeviceState")) &&
+      sources.every(([, text]) => text.length > 0),
+  );
 }
 
 // ── Two branches the mutation guard found unfalsifiable (registry gap) ───────
@@ -405,7 +439,7 @@ check("no fixture carries a wall-clock timestamp — ages are durations supplied
   const unattributable: NormalizedUemDeviceState = {
     deviceId: "d", vendor: "unknown", enrollment: "enrolled", compliance: "compliant",
     supervision: "supervised", ownership: "corporate",
-    osVersion: null, lastCheckInAgeSeconds: null,
+    osVersion: null,
     cellularHardware: "unknown", reportIntegrity: "intact",
   };
   const unattributableVerdict = evaluateUem(unattributable);
@@ -478,7 +512,7 @@ check("no fixture carries a wall-clock timestamp — ages are durations supplied
             for (const reportIntegrity of INTEGRITIES) {
               const v = evaluateUem({
                 deviceId: "d", vendor, enrollment, compliance, supervision, ownership,
-                osVersion: null, lastCheckInAgeSeconds: null,
+                osVersion: null,
                 cellularHardware: "unknown", reportIntegrity,
               });
               if (!observed.has(v.reasonCode)) observed.set(v.reasonCode, new Set());
@@ -593,7 +627,7 @@ check("no fixture carries a wall-clock timestamp — ages are durations supplied
             for (const reportIntegrity of INTEGRITIES) {
               const base: NormalizedUemDeviceState = {
                 deviceId: "d", vendor, enrollment, compliance, supervision, ownership,
-                osVersion: null, lastCheckInAgeSeconds: null,
+                osVersion: null,
                 cellularHardware: "unknown", reportIntegrity,
               };
               compared += 1;

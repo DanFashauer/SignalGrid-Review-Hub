@@ -121,6 +121,16 @@ for (const s of fixture.sessions) {
   );
   check("a lastAuthAt 30s ahead (within skew tolerance) still reads fresh and trusts",
     skewAuth.reasonCode === "AUTHENTICATED_TRUSTED_SEGMENT" && skewAuth.recommendedAction === "none");
+  // The BOUND side of the same body: staleAfterMs: Infinity made a 7-year-old auth read
+  // fresh (every finite age <= Infinity). A garbled bound resolves to STALE — the raising
+  // member (step_up), not "unknown" (monitor), which would grade a posed 0 worse than no
+  // bound at all. Infinity is the discriminating value; NaN and 0 already read stale.
+  const ancientAuth = { ...on("VLAN10"), lastAuthAt: new Date(NOW_MS - 7 * 365 * 24 * 3600 * 1000).toISOString(), nacCompliant: true };
+  for (const bad of [Number.POSITIVE_INFINITY, Number.NaN, 0]) {
+    const v = evaluateNetwork(ancientAuth, NOW_MS, { segmentPolicy: POLICY, staleAfterMs: bad });
+    check(`a garbled staleAfterMs (${String(bad)}) grades a 7-year-old auth STALE (step_up) — the strongest member, not merely "not trusted"`,
+      v.reasonCode === "STALE_NETWORK_STATE" && v.recommendedAction === "step_up");
+  }
 
   // THE CASE THAT USED TO GRANT: the guest VLAN.
   const guest = evaluateNetwork(on("VLAN40"), NOW_MS, { segmentPolicy: POLICY });

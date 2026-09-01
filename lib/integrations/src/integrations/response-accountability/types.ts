@@ -155,7 +155,7 @@ export interface NormalizedResponseRecord {
    * How long acknowledgement took, in whole seconds, or null when not reported.
    *
    * A DURATION SUPPLIED BY THE CALLER, never computed here — the same rule as
-   * `lastCheckInAgeSeconds` in the uem dimension. A clock read inside a decision path
+   * `fixAgeSeconds` in the rtls-custody dimension. A clock read inside a decision path
    * makes the decision unreplayable.
    */
   readonly acknowledgedAfterSeconds: number | null;

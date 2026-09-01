@@ -51,16 +51,20 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-01 - security/adversarial scan pass (PR #351): fixed two
-              express-transitive DoS deps on the HTTP front door (qs, body-parser)
-              and one fail-closed inversion in the gate suite itself (cited-path
-              scan credited an unreadable checkout as CLEAN). Attack-surface
-              review found no exploitable high/critical. preflight green.
-BLOCKED ON:   nothing cloud-side. Mac-side queue: lab001 evidence run,
-              6-day-pending ios sim request, row 58, Velociraptor.
-NEXT ACTION:  send 8-10 warm reconnection messages (conversations logged:
-              0 of 15) - owner's number, nothing substitutes; Mac lane runs
-              sim request 2026-08-31-lab001-step1-real-posture.
+LAST TOUCHED: 2026-09-01 - first full cycle of the layered operating model
+              (DR-024: Ponytail top, ECC second, independent scan, converge).
+              Landed: #364 CRITICAL nac fail-open; #365 five runtime-truth fixes +
+              DR-025 tenant-readable audit ledger; two Ponytail cuts (~14,200
+              dead lines); posed-bound fail-open family (edr-threat CRITICAL) +
+              its gate; UEM dead freshness axis removed. preflight + breadth
+              green on every push; CI green.
+BLOCKED ON:   nothing cloud-side. Mac lane (lane mail sent): two iOS HIGHs
+              (DeviceInfo env-as-MDM facts; HybridIdentityProvider never
+              authenticates) + native Ponytail cuts; lab001 evidence run.
+NEXT ACTION:  owner: discovery conversations (0 of 15) - nothing substitutes.
+              cloud: Ponytail cut batch 3 (mockup-sandbox GO-WITH, guardReadOnly
+              STRICT factory, fetchWithTimeout -> AbortSignal.timeout),
+              verdict-attestation's two ?? bounds, neural-memory intake (DR-026).
 ```
 
 **Experiment started: 2026-08-27**

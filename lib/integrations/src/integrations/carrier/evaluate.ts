@@ -1,4 +1,5 @@
 import { deriveFreshness } from "../../utils/freshness";
+import { posedBound } from "../../utils/posed-bound";
 import type {
   Freshness,
   ReachabilitySignal,
@@ -30,7 +31,7 @@ export function evaluateReachability(
   nowMs: number,
   options: EvaluateReachabilityOptions = {},
 ): ReachabilityVerdict {
-  const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
+  const staleAfterMs = posedBound(options.staleAfterMs, DEFAULT_STALE_AFTER_MS);
   const freshness = deriveFreshness(signal.lastSeenAt, nowMs, staleAfterMs);
 
   // 1. No cellular backchannel at all — the founder's core blind spot. A device

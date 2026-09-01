@@ -38,6 +38,12 @@ export interface JamfComputerPayload {
   readonly computer?: {
     readonly general?: {
       readonly id?: unknown;
+      /** DECLARED BECAUSE JAMF REPORTS IT, AND DELIBERATELY NOT GRADED. This family
+       *  has no freshness axis: turning a vendor timestamp into an age needs a clock,
+       *  a clock read here would make the dimension non-replayable, and nothing
+       *  downstream consumes the answer. Declaring the field keeps the wire shape
+       *  honest — a reader can see what the vendor sends — without implying the
+       *  normalizer does anything with it. See the note in types.ts. */
       readonly last_contact_time_utc?: unknown;
       readonly remote_management?: { readonly managed?: unknown };
       readonly supervised?: unknown;
@@ -76,7 +82,6 @@ export function normalizeJamfDevice(raw: JamfComputerPayload): NormalizedUemDevi
       supervision: "unknown",
       ownership: "unknown",
       osVersion: null,
-      lastCheckInAgeSeconds: null,
       cellularHardware: "unknown",
       reportIntegrity: "malformed",
     };
@@ -124,10 +129,8 @@ export function normalizeJamfDevice(raw: JamfComputerPayload): NormalizedUemDevi
     supervision,
     ownership,
     osVersion: asString(raw.computer?.hardware?.os_version),
-    // Jamf reports a timestamp; converting it to an age needs a clock, and a clock
-    // read here would make this dimension non-replayable. The caller that owns the
-    // clock supplies the age. See the note on `lastCheckInAgeSeconds` in types.ts.
-    lastCheckInAgeSeconds: null,
+    // `last_contact_time_utc` is read off the wire by nothing here — see the note on
+    // that field in JamfComputerPayload above.
     cellularHardware: "unknown",
     reportIntegrity: "intact",
   };

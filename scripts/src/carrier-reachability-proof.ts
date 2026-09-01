@@ -377,6 +377,19 @@ checkLiveGateIsolated({
   },
 });
 
+// The BOUND (independent sweep + ECC, 2026-09-01): a garbled staleAfterMs must grade an
+// ancient sighting STALE_LAST_SEEN/locate — the same verdict the default bound gives — never
+// the weaker LAST_SEEN_UNVERIFIED/monitor (a posed 0 must not outscore no bound at all).
+{
+  const ancient = { ...byDevice.get("dev-online")!, lastSeenAt: new Date(NOW_MS - 7 * 365 * 24 * 3600 * 1000).toISOString() };
+  const onDefault = evaluateReachability(ancient, NOW_MS);
+  check("bound control: a 7-year-old sighting is STALE_LAST_SEEN/locate on the default bound", onDefault.reasonCode === "STALE_LAST_SEEN" && onDefault.recommendedAction === "locate");
+  for (const bad of [Number.POSITIVE_INFINITY, Number.NaN, 0]) {
+    const v = evaluateReachability(ancient, NOW_MS, { staleAfterMs: bad });
+    check(`a garbled staleAfterMs (${String(bad)}) grades the same sighting STALE_LAST_SEEN/locate — never the weaker unverified/monitor`, v.reasonCode === "STALE_LAST_SEEN" && v.recommendedAction === "locate");
+  }
+}
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) {

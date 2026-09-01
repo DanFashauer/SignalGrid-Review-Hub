@@ -297,6 +297,10 @@ jobs:
         run: node scripts/check-module-init-order.mjs
       - name: NaN fail-open (an unparseable expiry must read as EXPIRED)
         run: node scripts/check-nan-fail-open.mjs
+      - name: Posed-bound self-test (the gate must be able to fail)
+        run: node scripts/check-posed-bounds.mjs --self-test
+      - name: Posed bounds (a caller-posed numeric bound is never read with ??)
+        run: node scripts/check-posed-bounds.mjs
       - name: CI liveness (a sweep that stops running must fail a build)
         run: node scripts/check-ci-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)

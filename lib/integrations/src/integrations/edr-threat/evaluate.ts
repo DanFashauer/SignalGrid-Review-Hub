@@ -1,3 +1,4 @@
+import { posedBound } from "../../utils/posed-bound";
 import type {
   NormalizedEndpointThreat,
   ThreatAction,
@@ -62,7 +63,9 @@ export function evaluateThreatPosture(
   options: EvaluateThreatOptions = {},
 ): ThreatVerdict {
   const reporting = options.reporting ?? true;
-  const staleHours = options.staleSignatureHours ?? STALE_SIGNATURE_HOURS_DEFAULT;
+  // posedBound: NaN/Infinity/<=0 → null (see utils/posed-bound.ts); null is treated like an
+  // unreported age below — stale. An unguarded `??` once graded decade-old signatures protected.
+  const staleHours = posedBound(options.staleSignatureHours, STALE_SIGNATURE_HOURS_DEFAULT);
 
   // `null` means the source never reported a detection feed; `[]` means it did and
   // found nothing. Counting treats both as zero — which is correct arithmetic and
@@ -85,7 +88,7 @@ export function evaluateThreatPosture(
   // report protection as fresh when its freshness cannot be confirmed — the same
   // "can't-see ≠ clean" discipline as the not-reporting and absent-agent paths.
   const signaturesStale =
-    endpoint.signatureAgeHours === null || endpoint.signatureAgeHours >= staleHours;
+    endpoint.signatureAgeHours === null || staleHours === null || endpoint.signatureAgeHours >= staleHours;
   const agentPresent = endpoint.agentInstalled && endpoint.agentRunning;
   const protectionHealthy = agentPresent && endpoint.realtimeProtection && !signaturesStale;
 

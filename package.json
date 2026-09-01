@@ -235,7 +235,8 @@
     "loop:state": "node scripts/loop-state.mjs",
     "ecc:install": "npx --yes ecc-universal@2.2.0 setup --mode claude-plugin --scope user --hooks off --yes",
     "firecrawl:install": "node scripts/install-firecrawl.mjs",
-    "ponytail:install": "node scripts/install-ponytail.mjs"
+    "ponytail:install": "node scripts/install-ponytail.mjs",
+    "neural-memory:install": "node scripts/install-neural-memory.mjs"
   },
   "private": true,
   "devDependencies": {

@@ -93,3 +93,6 @@ native/ios/build/
 # first vault rather than after the first bad provenance stamp.
 .obsidian/
 artifacts/bruno/
+
+# Neural Memory (DR-026) writes a store into any `.git`/`package.json` root it is pointed at; the store lives outside the tree.
+.neuralmemory/

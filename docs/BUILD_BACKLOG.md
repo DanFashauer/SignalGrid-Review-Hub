@@ -1116,6 +1116,48 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       honoring any window or DSAR needs an admin-credential job that does not
       exist. `check-retention-claims` keeps surfaces honest meanwhile. See
       `docs/DATA_RETENTION_AND_PERSONAL_DATA.md`.
+- [ ] **The legacy OpenAPI spec generates a TypeScript SDK with six operations the
+      server never serves, and a shipped page calls one. 2026-09-01 (contract-drift
+      sweep, HIGH).** `lib/api-spec/openapi.yaml` is orval's input for
+      `@workspace/api-client-react` / `@workspace/api-zod`; it promises `POST /decisions`,
+      `POST /signals/ingest`, `POST /policies`, `GET/PUT/DELETE /policies/{id}`, while
+      `routes/monitoring.ts` serves only the GETs. `PolicyCreate.tsx` (`/policies/new`,
+      preview-bannered) calls `useCreatePolicy` → 404 "No such API route" toast; any
+      integrator importing the typed client gets hooks that 404 on first call. No
+      gate reads this spec (`api-contract-proof` holds only `v1-openapi.yaml`). Fix:
+      prune the six unserved operations and regenerate, or serve them; either way
+      extend the contract proof to hold `openapi.yaml` against the monitoring/
+      integrations/health routers. `docs/REPO_LAYOUT.md` should stop calling this
+      client "bindings for the /v1 API" — it binds the fixture monitoring surface.
+- [ ] **Orphan third spec `lib/api-spec/product-openapi.json` describes an API that
+      does not exist. 2026-09-01 (contract-drift sweep, MEDIUM).** Ten paths
+      (`/api/v1/session/start`, `/api/v1/location/report`, `/api/v1/devices` …),
+      eight unserved, servers `api.signalgrid.local`, committed 2026-08-03, referenced
+      by nothing, validated by no gate, sitting in the directory `REPO_LAYOUT.md`
+      calls "The OpenAPI contract". Anyone importing it builds against phantom
+      routes. Fix: delete it, or move under `docs/archive/` with a header.
+- [ ] **SDK docs say "append `/v1/authorize` to the base URL"; the server serves it
+      at `/api/v1/authorize`. 2026-09-01 (contract-drift sweep, MEDIUM, latent).**
+      `GateEndpoint.kt` and `endpoint.rs` trim a trailing slash "so callers can
+      append /v1/authorize"; neither mentions `/api`; the spec's `servers` is `/api`
+      and nginx routes `/` to the web tier. A partner following the SDK docs posts
+      to the root, gets an HTML 404 from the web app, and the SDK denies. Latent —
+      neither native shell issues HTTP yet — but iOS hit exactly this trap
+      (`DecisionService.swift:74`). Fix: document `/api/v1/authorize` and have
+      `check-assist-wire-served.mjs` assert the prefix, or make `validate()`
+      append `/api`.
+- [ ] **`/v1/app-workflows/evaluate` — the one route a shipping native client binds —
+      has no response schema and omits 401/403 in the spec. 2026-09-01
+      (contract-drift sweep, MEDIUM).** iOS decodes `{decision:{outcome,reasonCodes,
+      explanation}, plan:{outcome,mode}}`; the spec's 200 is description-only, so a
+      partner cannot learn `plan.outcome` exists. The api tests already pin the shape
+      — the schema can be written from them. `API_CONTRACT_AUDIT.md` lists response
+      shapes as unchecked; this is the highest-consequence instance.
+- [ ] **Small contract-name drift. 2026-09-01 (contract-drift sweep, LOW).**
+      `LAUNCH_CONSOLE_WIREFRAMES.md` names `GET /v1/connectors/:id/syncs`; the served
+      path is `/sync-runs`. The SDKs and vectors read an optional `obligations` array
+      that `AssistResult` and the handler never emit (tolerated, but an SDK-documented
+      field no server sends — either emit it on step_up or drop it from the SDK docs).
 - [ ] Census figures in `docs/PRODUCT_COMPLETION_PLAN.md` read as a dated
       point-in-time analysis but risk drifting from live counts. 2026-09-01
       (security/adversarial scan, fail-closed auditor): the doc's "48 deferred

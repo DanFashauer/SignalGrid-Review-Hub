@@ -28,6 +28,8 @@ export * from "./evidence";
 
 const FRESH_HOURS = 24;
 const STALE_HOURS = 72;
+// A check-in this far past "now" is a clock contradiction, not freshness.
+const FUTURE_SKEW_TOLERANCE_MS = 60 * 1000;
 
 /** Map a FleetDM (osquery) posture read into core posture signals. */
 export function fleetDMToPostureDrafts(
@@ -159,9 +161,18 @@ export function fleetDMFreshness(
   posture: telemetryTypes.FleetDMPostureSignal,
   nowIso: string,
 ): Freshness {
-  const ageMs = Date.parse(nowIso) - Date.parse(posture.lastCheckAt);
-  if (Number.isNaN(ageMs)) return "unknown";
-  const ageHours = ageMs / 3_600_000;
+  const checkMs = Date.parse(posture.lastCheckAt);
+  const nowMs = Date.parse(nowIso);
+  if (Number.isNaN(checkMs) || Number.isNaN(nowMs)) return "unknown";
+  // A check-in meaningfully in the FUTURE is contradictory — a skewed or
+  // manipulated source clock. It used to read as "fresh" (nowMs - checkMs is
+  // negative, so ageHours <= FRESH_HOURS is trivially true), the exact
+  // fail-open every sibling deriver guards against (location-services,
+  // pacs-access, access-governance, core util.ts). Contradiction resolves to
+  // "unknown" — never to the freshest possible reading. (ECC-role review,
+  // fail-closed-auditor, 2026-09-01.)
+  if (checkMs - nowMs > FUTURE_SKEW_TOLERANCE_MS) return "unknown";
+  const ageHours = (nowMs - checkMs) / 3_600_000;
   if (ageHours <= FRESH_HOURS) return "fresh";
   if (ageHours <= STALE_HOURS) return "stale";
   return "expired";

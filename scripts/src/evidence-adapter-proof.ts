@@ -36,6 +36,7 @@ import {
   deviceManagementEvidenceToFixtureRecord,
   effectiveEvidence,
   fleetHostToDeviceManagementEvidence,
+  fleetDMFreshness,
   headwindLabToDeviceManagementEvidence,
   type DeviceManagementEvidence,
   type EvidenceRecordContext,
@@ -314,6 +315,19 @@ async function main(): Promise<void> {
       console.log("  · headwind capture ABSENT — fixture-only run (mint one: ./scripts/run-live-lanes.sh --only headwind)");
     }
   }
+
+  // fleetDMFreshness fail-closed law (ECC-role review, fail-closed-auditor, 2026-09-01):
+  // a check-in in the FUTURE is a clock contradiction and must resolve to "unknown",
+  // never to the freshest reading — the same inversion every sibling deriver guards.
+  const fleetSig = (lastCheckAt: string): Parameters<typeof fleetDMFreshness>[0] =>
+    ({ hostUuid: "h1", platform: "darwin", compliant: true, lastCheckAt, policies: [] });
+  const now = "2026-09-01T00:00:00.000Z";
+  check("fleetDMFreshness: a recent check-in is fresh",
+    fleetDMFreshness(fleetSig("2026-08-31T18:00:00.000Z"), now) === "fresh");
+  check("fleetDMFreshness: a FUTURE check-in resolves to unknown, not fresh (fail-closed)",
+    fleetDMFreshness(fleetSig("2030-01-01T00:00:00.000Z"), now) === "unknown");
+  check("fleetDMFreshness: an unparseable check-in resolves to unknown",
+    fleetDMFreshness(fleetSig("not-a-date"), now) === "unknown");
 
   check("zero network: not one fetch() was attempted across the whole lab", fetchAttempts === 0, `attempts=${fetchAttempts}`);
 

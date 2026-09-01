@@ -1072,6 +1072,17 @@ async function run() {
   check("control: a held action of the SAME integration still mints a challenge",
     heldSameIntegration.status === 200 && typeof heldSameIntegration.json?.challengeId === "string");
 
+  // AUTHORIZATION: minting a step-up challenge is part of the action-release flow and
+  // requires decision:evaluate. A read-only `auditor` (no decision:evaluate) must be
+  // refused BEFORE any enrollment probe — otherwise 409-vs-200 leaks whether an
+  // identity has an enrolled credential. Regression for the ECC-role review finding
+  // (2026-09-01): the endpoint previously authenticated only.
+  const auditorChallenge = await req("POST", "/v1/step-up/challenge", {
+    token: KEYS.auditor, body: { identityRef: suIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" },
+  });
+  check("step-up challenge refuses a read-only auditor → 403 (no decision:evaluate)",
+    auditorChallenge.status === 403 && auditorChallenge.json?.challengeId === undefined);
+
   const completed = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,
     body: {

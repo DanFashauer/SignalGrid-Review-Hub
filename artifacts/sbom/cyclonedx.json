@@ -9954,9 +9954,9 @@
     {
       "type": "library",
       "name": "@orval/angular",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/%40orval/angular@8.24.0",
-      "purl": "pkg:npm/%40orval/angular@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/%40orval/angular@8.27.0",
+      "purl": "pkg:npm/%40orval/angular@8.27.0",
       "licenses": [
         {
           "license": {
@@ -9968,9 +9968,9 @@
     {
       "type": "library",
       "name": "@orval/axios",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/%40orval/axios@8.24.0",
-      "purl": "pkg:npm/%40orval/axios@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/%40orval/axios@8.27.0",
+      "purl": "pkg:npm/%40orval/axios@8.27.0",
       "licenses": [
         {
           "license": {
@@ -9982,9 +9982,9 @@
     {
       "type": "library",
       "name": "@orval/core",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/%40orval/core@8.24.0",
-      "purl": "pkg:npm/%40orval/core@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/%40orval/core@8.27.0",
+      "purl": "pkg:npm/%40orval/core@8.27.0",
       "licenses": [
         {
           "license": {
@@ -9996,9 +9996,9 @@
     {
       "type": "library",
       "name": "@orval/effect",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/%40orval/effect@8.24.0",
-      "purl": "pkg:npm/%40orval/effect@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/%40orval/effect@8.27.0",
+      "purl": "pkg:npm/%40orval/effect@8.27.0",
       "licenses": [
         {
           "license": {
@@ -10010,9 +10010,9 @@
     {
       "type": "library",
       "name": "@orval/fetch",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/%40orval/fetch@8.24.0",
-      "purl": "pkg:npm/%40orval/fetch@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/%40orval/fetch@8.27.0",
+      "purl": "pkg:npm/%40orval/fetch@8.27.0",
       "licenses": [
         {
           "license": {
@@ -10024,9 +10024,9 @@
     {
       "type": "library",
       "name": "@orval/hono",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/%40orval/hono@8.24.0",
-      "purl": "pkg:npm/%40orval/hono@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/%40orval/hono@8.27.0",
+      "purl": "pkg:npm/%40orval/hono@8.27.0",
       "licenses": [
         {
           "license": {
@@ -10038,9 +10038,9 @@
     {
       "type": "library",
       "name": "@orval/mcp",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/%40orval/mcp@8.24.0",
-      "purl": "pkg:npm/%40orval/mcp@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/%40orval/mcp@8.27.0",
+      "purl": "pkg:npm/%40orval/mcp@8.27.0",
       "licenses": [
         {
           "license": {
@@ -10052,9 +10052,9 @@
     {
       "type": "library",
       "name": "@orval/mock",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/%40orval/mock@8.24.0",
-      "purl": "pkg:npm/%40orval/mock@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/%40orval/mock@8.27.0",
+      "purl": "pkg:npm/%40orval/mock@8.27.0",
       "licenses": [
         {
           "license": {
@@ -10066,9 +10066,9 @@
     {
       "type": "library",
       "name": "@orval/query",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/%40orval/query@8.24.0",
-      "purl": "pkg:npm/%40orval/query@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/%40orval/query@8.27.0",
+      "purl": "pkg:npm/%40orval/query@8.27.0",
       "licenses": [
         {
           "license": {
@@ -10080,9 +10080,9 @@
     {
       "type": "library",
       "name": "@orval/solid-start",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/%40orval/solid-start@8.24.0",
-      "purl": "pkg:npm/%40orval/solid-start@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/%40orval/solid-start@8.27.0",
+      "purl": "pkg:npm/%40orval/solid-start@8.27.0",
       "licenses": [
         {
           "license": {
@@ -10094,9 +10094,9 @@
     {
       "type": "library",
       "name": "@orval/swr",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/%40orval/swr@8.24.0",
-      "purl": "pkg:npm/%40orval/swr@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/%40orval/swr@8.27.0",
+      "purl": "pkg:npm/%40orval/swr@8.27.0",
       "licenses": [
         {
           "license": {
@@ -10108,9 +10108,9 @@
     {
       "type": "library",
       "name": "@orval/zod",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/%40orval/zod@8.24.0",
-      "purl": "pkg:npm/%40orval/zod@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/%40orval/zod@8.27.0",
+      "purl": "pkg:npm/%40orval/zod@8.27.0",
       "licenses": [
         {
           "license": {
@@ -11217,6 +11217,20 @@
     },
     {
       "type": "library",
+      "name": "@scalar/helpers",
+      "version": "0.11.1",
+      "bom-ref": "pkg:npm/%40scalar/helpers@0.11.1",
+      "purl": "pkg:npm/%40scalar/helpers@0.11.1",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "@scalar/json-magic",
       "version": "0.12.20",
       "bom-ref": "pkg:npm/%40scalar/json-magic@0.12.20",
@@ -11232,9 +11246,9 @@
     {
       "type": "library",
       "name": "@scalar/json-magic",
-      "version": "0.13.0",
-      "bom-ref": "pkg:npm/%40scalar/json-magic@0.13.0",
-      "purl": "pkg:npm/%40scalar/json-magic@0.13.0",
+      "version": "0.13.2",
+      "bom-ref": "pkg:npm/%40scalar/json-magic@0.13.2",
+      "purl": "pkg:npm/%40scalar/json-magic@0.13.2",
       "licenses": [
         {
           "license": {
@@ -11246,9 +11260,9 @@
     {
       "type": "library",
       "name": "@scalar/openapi-parser",
-      "version": "0.28.14",
-      "bom-ref": "pkg:npm/%40scalar/openapi-parser@0.28.14",
-      "purl": "pkg:npm/%40scalar/openapi-parser@0.28.14",
+      "version": "0.28.16",
+      "bom-ref": "pkg:npm/%40scalar/openapi-parser@0.28.16",
+      "purl": "pkg:npm/%40scalar/openapi-parser@0.28.16",
       "licenses": [
         {
           "license": {
@@ -11273,10 +11287,24 @@
     },
     {
       "type": "library",
+      "name": "@scalar/openapi-types",
+      "version": "0.9.5",
+      "bom-ref": "pkg:npm/%40scalar/openapi-types@0.9.5",
+      "purl": "pkg:npm/%40scalar/openapi-types@0.9.5",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "@scalar/openapi-upgrader",
-      "version": "0.2.13",
-      "bom-ref": "pkg:npm/%40scalar/openapi-upgrader@0.2.13",
-      "purl": "pkg:npm/%40scalar/openapi-upgrader@0.2.13",
+      "version": "0.2.15",
+      "bom-ref": "pkg:npm/%40scalar/openapi-upgrader@0.2.15",
+      "purl": "pkg:npm/%40scalar/openapi-upgrader@0.2.15",
       "licenses": [
         {
           "license": {
@@ -11998,9 +12026,9 @@
     {
       "type": "library",
       "name": "@tanstack/query-core",
-      "version": "5.101.4",
-      "bom-ref": "pkg:npm/%40tanstack/query-core@5.101.4",
-      "purl": "pkg:npm/%40tanstack/query-core@5.101.4",
+      "version": "5.102.8",
+      "bom-ref": "pkg:npm/%40tanstack/query-core@5.102.8",
+      "purl": "pkg:npm/%40tanstack/query-core@5.102.8",
       "licenses": [
         {
           "license": {
@@ -12012,9 +12040,9 @@
     {
       "type": "library",
       "name": "@tanstack/react-query",
-      "version": "5.101.4",
-      "bom-ref": "pkg:npm/%40tanstack/react-query@5.101.4",
-      "purl": "pkg:npm/%40tanstack/react-query@5.101.4",
+      "version": "5.102.8",
+      "bom-ref": "pkg:npm/%40tanstack/react-query@5.102.8",
+      "purl": "pkg:npm/%40tanstack/react-query@5.102.8",
       "licenses": [
         {
           "license": {
@@ -12348,9 +12376,9 @@
     {
       "type": "library",
       "name": "@types/pg",
-      "version": "8.21.0",
-      "bom-ref": "pkg:npm/%40types/pg@8.21.0",
-      "purl": "pkg:npm/%40types/pg@8.21.0",
+      "version": "8.23.1",
+      "bom-ref": "pkg:npm/%40types/pg@8.23.1",
+      "purl": "pkg:npm/%40types/pg@8.23.1",
       "licenses": [
         {
           "license": {
@@ -12390,9 +12418,9 @@
     {
       "type": "library",
       "name": "@types/react-dom",
-      "version": "19.2.4",
-      "bom-ref": "pkg:npm/%40types/react-dom@19.2.4",
-      "purl": "pkg:npm/%40types/react-dom@19.2.4",
+      "version": "19.2.5",
+      "bom-ref": "pkg:npm/%40types/react-dom@19.2.5",
+      "purl": "pkg:npm/%40types/react-dom@19.2.5",
       "licenses": [
         {
           "license": {
@@ -14738,9 +14766,9 @@
     {
       "type": "library",
       "name": "express-rate-limit",
-      "version": "8.6.2",
-      "bom-ref": "pkg:npm/express-rate-limit@8.6.2",
-      "purl": "pkg:npm/express-rate-limit@8.6.2",
+      "version": "8.7.0",
+      "bom-ref": "pkg:npm/express-rate-limit@8.7.0",
+      "purl": "pkg:npm/express-rate-limit@8.7.0",
       "licenses": [
         {
           "license": {
@@ -15296,9 +15324,9 @@
     {
       "type": "library",
       "name": "get-tsconfig",
-      "version": "4.14.2",
-      "bom-ref": "pkg:npm/get-tsconfig@4.14.2",
-      "purl": "pkg:npm/get-tsconfig@4.14.2",
+      "version": "4.14.3",
+      "bom-ref": "pkg:npm/get-tsconfig@4.14.3",
+      "purl": "pkg:npm/get-tsconfig@4.14.3",
       "licenses": [
         {
           "license": {
@@ -15672,9 +15700,9 @@
     {
       "type": "library",
       "name": "input-otp",
-      "version": "1.4.2",
-      "bom-ref": "pkg:npm/input-otp@1.4.2",
-      "purl": "pkg:npm/input-otp@1.4.2",
+      "version": "1.5.0",
+      "bom-ref": "pkg:npm/input-otp@1.5.0",
+      "purl": "pkg:npm/input-otp@1.5.0",
       "licenses": [
         {
           "license": {
@@ -15714,9 +15742,9 @@
     {
       "type": "library",
       "name": "ip-address",
-      "version": "10.5.0",
-      "bom-ref": "pkg:npm/ip-address@10.5.0",
-      "purl": "pkg:npm/ip-address@10.5.0",
+      "version": "10.7.0",
+      "bom-ref": "pkg:npm/ip-address@10.7.0",
+      "purl": "pkg:npm/ip-address@10.7.0",
       "licenses": [
         {
           "license": {
@@ -15997,6 +16025,20 @@
       "version": "2.7.0",
       "bom-ref": "pkg:npm/jiti@2.7.0",
       "purl": "pkg:npm/jiti@2.7.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "jose",
+      "version": "6.2.10",
+      "bom-ref": "pkg:npm/jose@6.2.10",
+      "purl": "pkg:npm/jose@6.2.10",
       "licenses": [
         {
           "license": {
@@ -16737,9 +16779,9 @@
     {
       "type": "library",
       "name": "markdown-it",
-      "version": "14.3.0",
-      "bom-ref": "pkg:npm/markdown-it@14.3.0",
-      "purl": "pkg:npm/markdown-it@14.3.0",
+      "version": "14.3.1",
+      "bom-ref": "pkg:npm/markdown-it@14.3.1",
+      "purl": "pkg:npm/markdown-it@14.3.1",
       "licenses": [
         {
           "license": {
@@ -17269,9 +17311,9 @@
     {
       "type": "library",
       "name": "oidc-provider",
-      "version": "9.11.3",
-      "bom-ref": "pkg:npm/oidc-provider@9.11.3",
-      "purl": "pkg:npm/oidc-provider@9.11.3",
+      "version": "9.12.0",
+      "bom-ref": "pkg:npm/oidc-provider@9.12.0",
+      "purl": "pkg:npm/oidc-provider@9.12.0",
       "licenses": [
         {
           "license": {
@@ -17353,9 +17395,9 @@
     {
       "type": "library",
       "name": "orval",
-      "version": "8.24.0",
-      "bom-ref": "pkg:npm/orval@8.24.0",
-      "purl": "pkg:npm/orval@8.24.0",
+      "version": "8.27.0",
+      "bom-ref": "pkg:npm/orval@8.27.0",
+      "purl": "pkg:npm/orval@8.27.0",
       "licenses": [
         {
           "license": {
@@ -18025,9 +18067,9 @@
     {
       "type": "library",
       "name": "pretty-ms",
-      "version": "9.3.0",
-      "bom-ref": "pkg:npm/pretty-ms@9.3.0",
-      "purl": "pkg:npm/pretty-ms@9.3.0",
+      "version": "9.3.1",
+      "bom-ref": "pkg:npm/pretty-ms@9.3.1",
+      "purl": "pkg:npm/pretty-ms@9.3.1",
       "licenses": [
         {
           "license": {
@@ -18291,9 +18333,9 @@
     {
       "type": "library",
       "name": "react-hook-form",
-      "version": "7.85.0",
-      "bom-ref": "pkg:npm/react-hook-form@7.85.0",
-      "purl": "pkg:npm/react-hook-form@7.85.0",
+      "version": "7.86.0",
+      "bom-ref": "pkg:npm/react-hook-form@7.86.0",
+      "purl": "pkg:npm/react-hook-form@7.86.0",
       "licenses": [
         {
           "license": {
@@ -18571,9 +18613,9 @@
     {
       "type": "library",
       "name": "remeda",
-      "version": "2.40.0",
-      "bom-ref": "pkg:npm/remeda@2.40.0",
-      "purl": "pkg:npm/remeda@2.40.0",
+      "version": "2.45.0",
+      "bom-ref": "pkg:npm/remeda@2.45.0",
+      "purl": "pkg:npm/remeda@2.45.0",
       "licenses": [
         {
           "license": {
@@ -19669,9 +19711,9 @@
     {
       "type": "library",
       "name": "typedoc-plugin-markdown",
-      "version": "4.12.0",
-      "bom-ref": "pkg:npm/typedoc-plugin-markdown@4.12.0",
-      "purl": "pkg:npm/typedoc-plugin-markdown@4.12.0",
+      "version": "4.13.0",
+      "bom-ref": "pkg:npm/typedoc-plugin-markdown@4.13.0",
+      "purl": "pkg:npm/typedoc-plugin-markdown@4.13.0",
       "licenses": [
         {
           "license": {
@@ -19907,9 +19949,9 @@
     {
       "type": "library",
       "name": "uuid",
-      "version": "14.0.1",
-      "bom-ref": "pkg:npm/uuid@14.0.1",
-      "purl": "pkg:npm/uuid@14.0.1",
+      "version": "14.0.2",
+      "bom-ref": "pkg:npm/uuid@14.0.2",
+      "purl": "pkg:npm/uuid@14.0.2",
       "licenses": [
         {
           "license": {
@@ -19961,9 +20003,9 @@
     {
       "type": "library",
       "name": "vite",
-      "version": "8.2.1",
-      "bom-ref": "pkg:npm/vite@8.2.1",
-      "purl": "pkg:npm/vite@8.2.1",
+      "version": "8.2.2",
+      "bom-ref": "pkg:npm/vite@8.2.2",
+      "purl": "pkg:npm/vite@8.2.2",
       "licenses": [
         {
           "license": {

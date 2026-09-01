@@ -19697,9 +19697,9 @@
     {
       "type": "library",
       "name": "typescript",
-      "version": "5.9.3",
-      "bom-ref": "pkg:npm/typescript@5.9.3",
-      "purl": "pkg:npm/typescript@5.9.3",
+      "version": "6.0.3",
+      "bom-ref": "pkg:npm/typescript@6.0.3",
+      "purl": "pkg:npm/typescript@6.0.3",
       "licenses": [
         {
           "license": {

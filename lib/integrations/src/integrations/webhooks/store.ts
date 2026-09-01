@@ -14,7 +14,6 @@ import {
   DeliveryLog,
   DeliveryLogSchema,
   DLQEntry,
-  DLQEntrySchema,
   CreateWebhookRequest,
   UpdateWebhookRequest,
 } from './types';
@@ -250,21 +249,6 @@ export async function updateWebhook(
 }
 
 /**
- * Delete webhook
- */
-export async function deleteWebhook(id: string): Promise<boolean> {
-  const r = getRedis();
-  
-  if (r) {
-    const deleted = await r.del(`${WEBHOOK_KEY_PREFIX}:${id}`);
-    await r.srem(WEBHOOK_INDEX_KEY, id);
-    return deleted > 0;
-  }
-  
-  return memoryStore.webhooks.delete(id);
-}
-
-/**
  * Get webhook secret hash (internal use only)
  */
 export async function getWebhookSecretHash(id: string): Promise<string | null> {
@@ -373,48 +357,6 @@ export async function addToDLQ(
   }
 
   return entry;
-}
-
-/**
- * Get DLQ entries
- */
-export async function getDLQ(limit = 50): Promise<DLQEntry[]> {
-  const r = getRedis();
-  
-  if (r) {
-    const entries = await r.lrange(DLQ_PREFIX, 0, limit - 1);
-    return entries.map(e => DLQEntrySchema.parse(JSON.parse(e)));
-  }
-  
-  return memoryStore.dlq.slice(0, limit);
-}
-
-/**
- * Remove from DLQ
- */
-export async function removeFromDLQ(id: string): Promise<boolean> {
-  const r = getRedis();
-  
-  if (r) {
-    const entries = await r.lrange(DLQ_PREFIX, 0, -1);
-    let removed = false;
-    for (const entry of entries) {
-      const parsed = JSON.parse(entry);
-      if (parsed.id === id) {
-        await r.lrem(DLQ_PREFIX, 1, entry);
-        removed = true;
-        break;
-      }
-    }
-    return removed;
-  }
-  
-  const idx = memoryStore.dlq.findIndex(e => e.id === id);
-  if (idx >= 0) {
-    memoryStore.dlq.splice(idx, 1);
-    return true;
-  }
-  return false;
 }
 
 // Note: retryFromDLQ can be implemented if needed

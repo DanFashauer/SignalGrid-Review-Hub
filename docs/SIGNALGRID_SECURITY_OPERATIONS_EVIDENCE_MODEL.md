@@ -176,8 +176,8 @@ code says so at each site.
   expired or not-yet-valid token, a wrong issuer or audience, `alg:none`, HS256
   confusion, and an unknown `kid` — and `proof:live-idp` asserts the *reason*, not merely
   refusal, against a real certified `oidc-provider` booted in-process over real HTTP.
-- **Webhook signing.** Outbound deliveries carry an HMAC-SHA256 `X-Webhook-Signature`,
-  and `verifySignature` is fail-closed (explicit length check, then `timingSafeEqual`).
+- **Webhook signing.** Outbound deliveries carry an HMAC-SHA256 `X-Webhook-Signature`
+  (`signPayload` / `createSignedHeaders`, proven by `proof:webhooks`).
 
 **Fixture, and disclosed as fixture (STRUCTURAL):**
 
@@ -187,10 +187,10 @@ code says so at each site.
   anyone who can read the repo**, and the file says exactly that: *"a real deployment
   would use per-tenant secrets or asymmetric signing."* It proves the tampering path
   fails closed; it does not prove authenticity against an attacker holding the key.
-- **Inbound webhook verification is not wired.** `verifySignature` exists and is
-  fail-closed, but no inbound path calls it, and signing itself only engages in the live
-  tier. Treating an inbound webhook as authenticated is **not** something the product
-  does today.
+- **Inbound webhook verification has no implementation.** No inbound path verifies a
+  signature (the unused verifier was removed as dead code on 2026-09-01 rather than kept
+  as a claim), and signing itself only engages in the live tier. Treating an inbound
+  webhook as authenticated is **not** something the product does today.
 
 The doctrine rule that ties these together **(DOCTRINE)**:
 

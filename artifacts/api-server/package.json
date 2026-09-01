@@ -15,7 +15,6 @@
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
-    "@workspace/orchestration": "workspace:*",
     "@workspace/app-workflows": "workspace:*",
     "@workspace/flows": "workspace:*",
     "@workspace/recommendations": "workspace:*",

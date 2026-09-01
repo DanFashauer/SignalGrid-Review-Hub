@@ -92,7 +92,7 @@ const DECLARED_CLOCK_READS = new Map([
   [
     "lib/integrations/src/",
     {
-      count: 23,
+      count: 21,
       reason:
         "Connector boundary. Fixture/demo enrolment and last-seen timestamps, and freshness computed " +
         "AT the boundary where wall-clock is the input being read — not a decision path. The decision " +
@@ -102,7 +102,12 @@ const DECLARED_CLOCK_READS = new Map([
         "same shape as freshness: the wall-clock is the input being read, and the answer it produces " +
         "is 'entry or no entry', never a verdict. `now` is injectable precisely so the proof drives " +
         "expiry deterministically instead of sleeping, and purgeExpiredPosture() takes its clock as a " +
-        "REQUIRED argument rather than adding a second read — the write path samples once and shares it.",
+        "REQUIRED argument rather than adding a second read — the write path samples once and shares it. " +
+        "DROPPED to 21 (2026-09-01, Ponytail cut batch 2, DR-024): two of the 23 were dead code, not live " +
+        "connector-boundary reads — `itsm/store.ts` createTicketTemplate()'s `Date.now()`-seeded template " +
+        "id and `webhooks/retry.ts` getNextRetryAt()'s `new Date(Date.now() + delay)` — both removed with " +
+        "their unreachable callers (zero importers repo-wide, verified by grep before deletion), not " +
+        "rewritten to an injected clock. No live clock read moved or was added.",
       retires: "When connector fixtures move to injected clocks, this drops to the freshness derivations only.",
     },
   ],

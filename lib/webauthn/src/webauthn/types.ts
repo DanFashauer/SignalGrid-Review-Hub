@@ -117,16 +117,6 @@ export interface StepUpSession {
 }
 
 /**
- * Default WebAuthn configuration
- */
-export const DEFAULT_WEBAUTHN_CONFIG: WebAuthnConfig = {
-  rpId: process.env.WEBAUTHN_RP_ID || 'localhost',
-  rpName: process.env.WEBAUTHN_RP_NAME || 'Enterprise Shell',
-  origin: process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000',
-  requireStepUpForAdmin: process.env.WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN === 'true',
-};
-
-/**
  * Get current WebAuthn configuration from environment
  */
 export function getWebAuthnConfig(): WebAuthnConfig {

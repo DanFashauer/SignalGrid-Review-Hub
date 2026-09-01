@@ -179,14 +179,3 @@ export function renderMetrics(nowMs: number): string {
     "",
   ].join("\n");
 }
-
-/**
- * Collapse high-cardinality id segments to `:id` so the route label stays
- * bounded (a metric per real decision/session id would explode cardinality).
- */
-export function normalizeRoute(pathWithQuery: string): string {
-  const path = pathWithQuery.split("?")[0];
-  return path
-    .replace(/\/(?:dec|sess|evid|evd|pol|conn|rem|whk)_[A-Za-z0-9_-]+/g, "/:id")
-    .replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "/:id");
-}

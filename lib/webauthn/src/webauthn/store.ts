@@ -524,24 +524,6 @@ export async function getStepUpSession(sessionId: string): Promise<StepUpSession
   return inMemoryStepUps.get(sessionId) ?? null;
 }
 
-export async function deleteStepUpSession(sessionId: string): Promise<void> {
-  const redis = await getRedisClient();
-  const key = `${STEPUP_PREFIX}${sessionId}`;
-
-  if (redis) {
-    try {
-      await redis.connect();
-      await redis.del(key);
-    } catch {
-      // Fall through
-    } finally {
-      await redis.quit();
-    }
-  }
-
-  inMemoryStepUps.delete(sessionId);
-}
-
 // ============================================================================
 // Utility
 // ============================================================================

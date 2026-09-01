@@ -1063,6 +1063,8 @@ _These need the owner's call — an agent should not act on them unsupervised._
 
 ## Discovered
 
+- [ ] **iOS fixed-height rows truncate scaled Dynamic Type text (native lane).** 2026-09-01, flagged by the Mac lane after the Dynamic Type conversion (row 78): `HostAppViewController` has 5 `heightAnchor.constraint(equalToConstant:)` and 0 `greaterThanOrEqualToConstant`, so the now-scaling labels sit in fixed rows and will truncate/overlap at large accessibility text sizes — the conversion was necessary but not sufficient. Static-confirmed; needs a real AX render on the Assist-gate screen (behind a demo-badge injection) to verify each row. Mac lane owns it (Swift + simulator). Screenshot at tools/ios-ax-render.png on the Mac.
+
 ### Full-evaluation completion list (2026-09-01) — the real distance to a paying customer
 
 Surfaced by the independent six-dimension evaluation; see

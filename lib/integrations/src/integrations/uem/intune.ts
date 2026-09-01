@@ -128,7 +128,6 @@ export function normalizeIntuneDevice(raw: IntuneManagedDevicePayload): Normaliz
       supervision: "unknown",
       ownership: "unknown",
       osVersion: null,
-      lastCheckInAgeSeconds: null,
       cellularHardware: "unknown",
       reportIntegrity: "malformed",
     };
@@ -146,7 +145,6 @@ export function normalizeIntuneDevice(raw: IntuneManagedDevicePayload): Normaliz
     supervision,
     ownership: ownershipFrom(raw.managedDeviceOwnerType),
     osVersion: asString(raw.osVersion),
-    lastCheckInAgeSeconds: null,
     cellularHardware: cellularHardwareFrom(raw.imei, raw.meid, raw.iccid),
     reportIntegrity: "intact",
   };

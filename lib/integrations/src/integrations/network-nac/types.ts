@@ -57,8 +57,8 @@ export interface NormalizedNetworkSignal {
  * design decision — one site's "VLAN 10 / users" is another's "corp-wired" — so a
  * built-in classification would be a guess applied to every tenant. The operator
  * declares what is expected; the evaluator only compares. Same discipline as
- * `lastCheckInAgeSeconds` and the entitlement nesting budget: the caller owns policy,
- * the evaluator owns the comparison.
+ * `staleFixSeconds` in rtls-custody and the entitlement nesting budget: the caller owns
+ * policy, the evaluator owns the comparison.
  *
  * Comparison is trimmed and case-insensitive, because vendors report the same VLAN as
  * "VLAN10", "vlan10" and "  VLAN10 " across NAC, RADIUS and switch inventories.

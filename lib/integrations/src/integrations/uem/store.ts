@@ -12,8 +12,9 @@
  *  - `getDevicePosture()` computed `Date.now() - new Date(state.lastSync)`. A
  *    wall-clock read inside a decision path violates golden rule 2 and made this
  *    dimension impossible to replay: the same recorded inputs produced a different
- *    answer every time it ran. Freshness now belongs to the caller that owns the
- *    clock — see `lastCheckInAgeSeconds` in `./types`.
+ *    answer every time it ran. This family now grades no freshness at all — the
+ *    caller-posed age field that replaced the clock read was never consumed and was
+ *    removed 2026-09-01; see the note in `./types`.
  *
  *  - It also asserted `attest: { method: "mdm", confidence: enrolled ? "high" : "low" }`,
  *    claiming an attestation method and a confidence level from a single boolean.

@@ -123,15 +123,20 @@ export interface NormalizedUemDeviceState {
   /** Vendor-reported OS version, or null when absent/unparseable. Informational —
    *  currency is graded by the `app-update` dimension, not here. */
   readonly osVersion: string | null;
-  /** Age of the last vendor check-in, in whole seconds, or null when the vendor
-   *  did not report one.
-   *
-   *  A DURATION, NOT A TIMESTAMP, and supplied by the caller rather than computed
-   *  here. The previous implementation did `Date.now() - new Date(lastSync)` inside
-   *  the read path, which put a wall-clock read into a decision path — forbidden by
-   *  golden rule 2, and the reason this dimension could never have been replayed
-   *  deterministically. Freshness policy belongs to the caller that owns the clock. */
-  readonly lastCheckInAgeSeconds: number | null;
+  // NO CHECK-IN FRESHNESS AXIS LIVES ON THIS RECORD, and the absence is deliberate.
+  //
+  // This interface used to carry a vendor check-in age, documented as this dimension's
+  // freshness axis. It graded nothing: all three adapters hardcoded it `null`, no
+  // caller ever supplied one, `evaluateUem` never read it, and only the fixtures held
+  // numbers — a documented axis with no behaviour behind it, which reads to a reviewer
+  // as coverage this family does not have. Removed 2026-09-01, and `proof:uem` now
+  // asserts at the source level that it has not come back.
+  //
+  // A real one needs a consumer and a caller-posed clock; the shape it would take is
+  // recorded in docs/BUILD_BACKLOG.md rather than left half-built here. The graded
+  // freshness this plane DOES model lives one dimension over, in
+  // `device-management-health` (`mdmCheckInFreshness` / `agentCheckInFreshness`),
+  // whose Graph transport REFUSES to construct without an explicit `now` clock.
   /** AFFIRMATIVE-ONLY radio reading — `present` when the vendor volunteered a cellular
    *  identifier, `unknown` otherwise. Never `absent`; see UemCellularHardware. It is
    *  directly assignable to `carrier`'s posed `cellularBackchannel` axis, so a caller

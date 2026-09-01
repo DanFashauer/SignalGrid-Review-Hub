@@ -106,7 +106,7 @@ export interface NormalizedEntitlementBinding {
    *
    *  A COUNT SUPPLIED BY THE CALLER, never traversed here — walking a directory
    *  would put I/O in a decision path, and the graph/uem connectors own that read.
-   *  Same discipline as `lastCheckInAgeSeconds` in the uem dimension. */
+   *  Same discipline as `fixAgeSeconds` in the rtls-custody dimension. */
   readonly nestingDepth: number | null | "malformed";
   /** The deepest nesting the operator considers reviewable. Caller-supplied POLICY,
    *  not a constant in this file.

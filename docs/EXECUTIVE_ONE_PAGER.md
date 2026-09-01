@@ -9,8 +9,8 @@ named four deferred signal families as connected capability, targeted buyers
 "regardless of company size", and described the proof as synthetic when live
 open-source proof already existed.
 
-SignalGrid is a **Shared-Device Trust Gateway** — an access-decision service
-embedded invisibly in the apps your staff already use on shared frontline
+SignalGrid is **an access-decision service** embedded invisibly in the apps your
+staff already use on shared frontline
 devices. Before a sensitive action, the host app asks and gets one answer:
 allow, step_up, restrict, or deny. Your existing systems remain the systems of
 record; SignalGrid reads their evidence read-only and writes to none of them.
@@ -59,11 +59,15 @@ flow.
 
 ## Proof status
 
-The decision core is deterministic and fixture-backed, and it is proven **live,
-end to end, against real open-source systems**: Fleet (TLS with a real osqueryd
-agent), Keycloak, FreeRADIUS and Wazuh, each driven by a committed proof that
-runs in CI. Microsoft Entra/Intune is implemented and wire-hardened as the
-enterprise connector and is on the roadmap awaiting a customer tenant.
+The decision core is deterministic and fixture-backed. It has been proven **live,
+end to end, against real open-source systems** — Fleet (TLS with a real osqueryd
+agent), Keycloak, FreeRADIUS and Wazuh — each driven by a committed proof, run on
+the maintainer's lab hardware (the Mac live-lane, `scripts/run-live-lanes.sh`). In
+CI, the in-process OIDC provider proof runs on every build; the live-server proofs
+refuse to pass without a provisioned server rather than run against nothing, so
+they are lab-verified, not CI-continuous. Microsoft Entra/Intune is implemented
+and wire-hardened as the enterprise connector and is on the roadmap awaiting a
+customer tenant.
 
 The reasoning is deliberate: if the gateway holds against open-source systems
 anyone can stand up and inspect, there is no mechanism by which a commercial

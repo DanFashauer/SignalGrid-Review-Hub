@@ -430,6 +430,19 @@ RETIRED_ROOTS.forEach((d) => { if (existsSync(d)) walkRetired(d); });
 for (const p of ["artifacts/signalgrid-web/index.html", "artifacts/signalgrid-web/dist/public/index.html", "README.md"]) {
   if (existsSync(p) && !retiredFiles.includes(p)) retiredFiles.push(p);
 }
+// COVERAGE-HOLE FIX (2026-09-01, full-evaluation finding): the retired-label
+// scan ran only over the SPA source + README, so the published investor deck
+// (docs/pitch-deck.html via pages.yml), POSITIONING.md (the declared single
+// source of truth), the executive one-pager and the whole outreach surface —
+// every buyer-facing document under docs/ — were scanned for deferred nouns but
+// NEVER for a retired category label. That let "Shared-Device Trust Gateway"
+// (retired by DR-019/DR-020) sit live on three buyer surfaces the gate could
+// not see. `files` already resolves exactly that buyer-facing set (published
+// pages + outreach + contact-address docs + web SPA); fold it in so any surface
+// scanned for deferred nouns is also scanned for retired labels.
+for (const p of files) {
+  if (!retiredFiles.includes(p)) retiredFiles.push(p);
+}
 let retiredScanned = 0;
 for (const f of retiredFiles) {
   retiredScanned += 1;

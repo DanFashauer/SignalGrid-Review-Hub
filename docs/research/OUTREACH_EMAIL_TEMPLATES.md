@@ -17,11 +17,11 @@ These drafts are short editable starting points. Keep claims factual, public-saf
 
 ## Strategic partner
 
-Subject: SignalGrid operational trust orchestration discussion
+Subject: SignalGrid access-decision orchestration discussion
 
 Hi [Name],
 
-I am building SignalGrid, an operational trust orchestration layer for shared, mobile, and frontline environments. The current public Review Hub uses synthetic, fixture-backed proof assets to show how identity, device posture, credential-reader events, custody, network context, workflow ownership, approval gates, and audit evidence can be connected without replacing source systems.
+I am building SignalGrid, an access-decision service — one orchestration grid across door, device, room and app — for shared, mobile, and frontline environments. The current public Review Hub uses synthetic, fixture-backed proof assets to show how identity, device posture, credential-reader events, custody, network context, workflow ownership, approval gates, and audit evidence can be connected without replacing source systems.
 
 Would you be open to a short walkthrough to discuss whether this could complement your category in a future private sandbox path?
 
@@ -65,7 +65,7 @@ Subject: Shared-device trust workflow review
 
 Hi [Name],
 
-SignalGrid is exploring operational trust orchestration for healthcare and frontline shared-device environments. The public Review Hub demonstrates synthetic flows across identity, device posture, badge/custody events, workflow ownership, approval gates, and audit evidence.
+SignalGrid is exploring access-decision orchestration for healthcare and frontline shared-device environments. The public Review Hub demonstrates synthetic flows across identity, device posture, badge/custody events, workflow ownership, approval gates, and audit evidence.
 
 I would value your feedback on whether the workflow framing matches real shared-device handoff, custody, and escalation problems. No live data or production integration is involved in the current proof.
 

@@ -15,7 +15,7 @@ Use this talk track for conservative, factual first calls with strategic partner
 
 ## 30-second opener
 
-SignalGrid is an operational trust orchestration layer for shared, mobile, and frontline environments. It connects identity, device posture, credential-reader events, custody, network context, workflow ownership, approval gates, audit evidence, and verification expectations so teams can decide what should happen next while existing enterprise systems remain systems of record. The current Review Hub is public-safe, synthetic, and fixture-backed; it is not a production deployment or live integration claim.
+SignalGrid is an access-decision service — an orchestration grid across door, device, room and app — for shared, mobile, and frontline environments. It connects identity, device posture, credential-reader events, custody, network context, workflow ownership, approval gates, audit evidence, and verification expectations so teams can decide what should happen next while existing enterprise systems remain systems of record. The current Review Hub is public-safe, synthetic, and fixture-backed; it is not a production deployment or live integration claim.
 
 ## Problem framing
 
@@ -41,7 +41,7 @@ Preferred paths begin with design review or strategic partner feedback, then mov
 
 ## Founder-control preference
 
-The preferred structure preserves founder CEO, product, or creative leadership where possible. The goal is to protect the operational trust orchestration thesis, product quality, user trust, public-safety posture, and staged validation discipline.
+The preferred structure preserves founder CEO, product, or creative leadership where possible. The goal is to protect the orchestration thesis (docs/PURPOSE.md, DR-020), product quality, user trust, public-safety posture, and staged validation discipline.
 
 ## Next ask
 

@@ -148,3 +148,10 @@ overrides:
   # drizzle-kit uses esbuild internally on an older version that's vulnerable, this overrides it
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
   esbuild: "0.27.3"
+  # Security: force patched transitive deps that express 5.2.1 still resolves to
+  # vulnerable ranges. Both reach the two HTTP front doors (api-server + mcp-server).
+  #   qs <=6.15.1 — remotely-triggerable DoS in qs.stringify (GHSA-q8mj-m7cp-5q26)
+  #   body-parser <2.3.0 — DoS on malformed input
+  # express has no release above 5.2.1 that bundles the fixes, so pin them here.
+  qs: ">=6.15.2"
+  body-parser: ">=2.3.0"

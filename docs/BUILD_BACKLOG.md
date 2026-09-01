@@ -537,7 +537,7 @@ only), and the DDM rig is gated on an APNs push certificate.
       made during that pass — `lib/db` is untracked build residue (`dist/` and
       `node_modules/` with no manifest and no source), not a thirty-sixth package,
       which is the ordinary reason a derived figure beats a remembered one.
-- [ ] **186 vendored shadcn components are unreferenced, holding 21 packages alive.**
+- [x] **186 vendored shadcn components are unreferenced, holding 21 packages alive.** **DONE 2026-09-01 (Ponytail cut 41a, ECC: GO):** the owner decision is resolved by DR-024 — code the ladder says should not exist is removed. Measured by import-graph closure (ui→ui edges followed): 131 unreached `components/ui` files deleted across the three web apps (app 34 of 53, review 48 of 52, web 49 of 53) and 90 manifest entries only they held (24 / 33 / 33, incl. `@hookform/resolvers` which peers on the removed `react-hook-form`). Typecheck green, all three apps build, SBOM unaffected (dev-only deps). `npx shadcn add <name>` restores any one when a screen needs it. The same vendored set in signalgrid-desktop, signalgrid-mobile-pwa and mockup-sandbox is the follow-up (mockup-sandbox is itself an owner-call delete).
       ⚠️ **Owner decision: is this dead code, or an installed component library?**
       Measured, not estimated — same conservative check that justified deleting
       chart/calendar/resizable (`e5bad8e`): a component counts only if its module

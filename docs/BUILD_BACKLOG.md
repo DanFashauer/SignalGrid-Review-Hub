@@ -1063,6 +1063,16 @@ _These need the owner's call — an agent should not act on them unsupervised._
 
 ## Discovered
 
+### ECC-role review findings (2026-09-01) — the ones not fixed in the same pass
+
+Two were fixed immediately (fleetDMFreshness future-date fail-open; /v1/step-up/challenge
+authorize gap). These remain; see `docs/agent/REVIEW_STRUCTURE_COMPARISON.md`.
+
+- [ ] **Durable audit ledger is tenant-less and /v1/audit reads the in-memory ledger (architect, CONFIRMED high — candidate decision record).** `audit_ledger` (migrations.ts:43) has no `tenant_id` while its sibling tables all do; `/v1/audit` (v1.ts) returns the in-memory `core.listAudit()` (wiped on restart, per-replica), and decision-evaluation audit events are never persisted durably while admin events go only to the durable global chain. You cannot hand tenant A a verifiable copy of only its events. This is the compliance differentiator — it needs a deliberate design (schema migration + tenant-scoped durable read + wiring /v1/audit to the durable ledger), likely a DR, not a rushed patch.
+- [ ] **Dead code: competing webhook implementations + unreachable adapters (refactor-cleaner, 3× medium).** Two webhook-endpoint implementations (the unused one still carries a full CRUD/admin surface); three vendor adapter files (SIEM Sentinel/Splunk, telemetry MDE) unreachable from their own factories; `webhooks/emitter.ts` dead with a now-false header. Verify each is truly unreferenced (some knip hits are false positives per the same review), then remove.
+- [ ] **iOS ExpiryPolicy/isExpired has no unit test (code-reviewer, medium — native lane).** The Mac lane's 5e3b5c3 nil-expiry fix is safety-critical and framed as closing a fail-open, but no EnterpriseShellTests file exercises `SessionData.isExpired`/`ExpiryPolicy` — a wrong-logic edit inside an existing case would compile and pass every gate. Add a Swift unit test. Mac lane.
+- [ ] **Webhook dead_letter status + fixture-sync fail-safe are untested (tdd-guide, medium).** The `dead_letter` terminal delivery status is defined and implemented but never produced or asserted; the 'unresolvable subject → skip, don't trust' fail-safe branch in both fixture-sync paths has no test. Add coverage.
+
 - [ ] **iOS fixed-height rows truncate scaled Dynamic Type text (native lane).** 2026-09-01, flagged by the Mac lane after the Dynamic Type conversion (row 78): `HostAppViewController` has 5 `heightAnchor.constraint(equalToConstant:)` and 0 `greaterThanOrEqualToConstant`, so the now-scaling labels sit in fixed rows and will truncate/overlap at large accessibility text sizes — the conversion was necessary but not sufficient. Static-confirmed; needs a real AX render on the Assist-gate screen (behind a demo-badge injection) to verify each row. Mac lane owns it (Swift + simulator). Screenshot at tools/ios-ax-render.png on the Mac.
 
 ### Full-evaluation completion list (2026-09-01) — the real distance to a paying customer

@@ -597,6 +597,15 @@ router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, nex
 //    CodeQL + Codex findings). ONE challenge record: minted, persisted, id-returned.
 router.post("/v1/step-up/challenge", async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Authorize BEFORE anything is minted or probed. Minting a step-up challenge is
+    // part of the action-release flow, so it requires `decision:evaluate` — the same
+    // permission complete-step-up ultimately enforces via core.evaluate. Without this
+    // the endpoint authenticated only, letting a read-only `auditor` or a low-trust
+    // `connector` (neither holds decision:evaluate) learn via 409-vs-200 whether an
+    // identity has an enrolled credential — an authorization asymmetry with nothing
+    // asserting the endpoint should refuse it. (ECC-role review, tdd-guide, 2026-09-01.)
+    const stepUpCtx = core.context(token(req));
+    authorize(stepUpCtx.principal, "decision:evaluate");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const identityRef = requireString(body, "identityRef");
     const integrationId = requireString(body, "integrationId");
@@ -634,7 +643,7 @@ router.post("/v1/step-up/challenge", async (req: Request, res: Response, next: N
       throw new CoreError("forbidden", "No enrolled step-up credential for this identity. Enroll first.", 409);
     }
     const options = await webauthn.generateAuthenticationOptions(userId, {
-      tenantId: core.context(token(req)).tenant.id,
+      tenantId: stepUpCtx.tenant.id,
       identityRef,
       integrationId,
       deviceRef,

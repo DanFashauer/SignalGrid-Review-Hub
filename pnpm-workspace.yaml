@@ -53,7 +53,7 @@ catalog:
   tsx: ^4.23.12
   vite: ^8.2.0
   wouter: ^3.10.0
-  zod: ^3.25.76
+  zod: ^4.5.2
 
 autoInstallPeers: false
 

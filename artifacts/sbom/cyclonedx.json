@@ -20353,9 +20353,9 @@
     {
       "type": "library",
       "name": "zod",
-      "version": "3.25.76",
-      "bom-ref": "pkg:npm/zod@3.25.76",
-      "purl": "pkg:npm/zod@3.25.76",
+      "version": "4.5.2",
+      "bom-ref": "pkg:npm/zod@4.5.2",
+      "purl": "pkg:npm/zod@4.5.2",
       "licenses": [
         {
           "license": {

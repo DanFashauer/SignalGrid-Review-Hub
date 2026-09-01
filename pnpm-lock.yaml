@@ -55,8 +55,8 @@ catalogs:
       specifier: ^8.2.0
       version: 8.2.1
     zod:
-      specifier: ^3.25.76
-      version: 3.25.76
+      specifier: ^4.5.2
+      version: 4.5.2
 
 overrides:
   esbuild>@esbuild/darwin-arm64: '-'
@@ -257,7 +257,7 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
-        version: 1.30.0(zod@3.25.76)
+        version: 1.30.0(zod@4.5.2)
       '@workspace/facility-trust-graph':
         specifier: workspace:*
         version: link:../../lib/facility-trust-graph
@@ -272,7 +272,7 @@ importers:
         version: link:../../lib/signalgrid-core
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.5.2
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -453,7 +453,7 @@ importers:
         version: 8.2.1(@types/node@25.6.2)(esbuild@0.27.3)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.5.2
 
   artifacts/signalgrid-app:
     devDependencies:
@@ -636,7 +636,7 @@ importers:
         version: 3.10.0(react@19.2.8)
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.5.2
 
   artifacts/signalgrid-desktop:
     devDependencies:
@@ -813,7 +813,7 @@ importers:
         version: 3.10.0(react@19.2.8)
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.5.2
 
   artifacts/signalgrid-mobile-pwa:
     devDependencies:
@@ -990,7 +990,7 @@ importers:
         version: 3.10.0(react@19.2.8)
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.5.2
 
   artifacts/signalgrid-review:
     devDependencies:
@@ -1173,7 +1173,7 @@ importers:
         version: 3.10.0(react@19.2.8)
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.5.2
 
   artifacts/signalgrid-web:
     dependencies:
@@ -1354,7 +1354,7 @@ importers:
         version: 3.10.0(react@19.2.8)
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.5.2
 
   lib/adaptive-proposals:
     dependencies:
@@ -1385,7 +1385,7 @@ importers:
     dependencies:
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.5.2
 
   lib/app-workflows:
     dependencies:
@@ -1540,7 +1540,7 @@ importers:
         version: 14.0.1
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.5.2
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1553,7 +1553,7 @@ importers:
     dependencies:
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.5.2
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1703,7 +1703,7 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
-        version: 1.30.0(zod@3.25.76)
+        version: 1.30.0(zod@4.5.2)
       '@workspace/adaptive-proposals':
         specifier: workspace:*
         version: link:../lib/adaptive-proposals
@@ -5831,8 +5831,8 @@ packages:
     peerDependencies:
       zod: ^3.25.28 || ^4
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+  zod@4.5.2:
+    resolution: {integrity: sha512-XkYXCol10+ba/6F/cueWV+TezUeOqXW0hdeJt5CdXjTYeAgAQg5N03RQdJ80mhfFE72+pblvYMW4wy2Qp4Qbrg==}
 
 snapshots:
 
@@ -6745,7 +6745,7 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@modelcontextprotocol/sdk@1.30.0(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.30.0(zod@4.5.2)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.2)
       ajv: 8.20.0
@@ -6762,8 +6762,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.2(zod@3.25.76)
+      zod: 4.5.2
+      zod-to-json-schema: 3.25.2(zod@4.5.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -10372,8 +10372,8 @@ snapshots:
       property-expr: 2.0.6
       toposort: 2.0.2
 
-  zod-to-json-schema@3.25.2(zod@3.25.76):
+  zod-to-json-schema@3.25.2(zod@4.5.2):
     dependencies:
-      zod: 3.25.76
+      zod: 4.5.2
 
-  zod@3.25.76: {}
+  zod@4.5.2: {}

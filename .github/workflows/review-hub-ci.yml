@@ -214,6 +214,10 @@ jobs:
         run: node scripts/check-scheduled-routines.mjs --self-test
       - name: Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)
         run: node scripts/check-scheduled-routines.mjs
+      - name: iOS dynamic type self-test (the gate must be able to fail)
+        run: node scripts/check-ios-dynamic-type.mjs --self-test
+      - name: iOS dynamic type (no raw system font outside DesignSystem.swift)
+        run: node scripts/check-ios-dynamic-type.mjs
       - name: Lab registry self-test (the gate must be able to fail)
         run: node scripts/check-lab-registry.mjs --self-test
       - name: Lab registry (both halves agree; every deployment claim cites evidence on disk)

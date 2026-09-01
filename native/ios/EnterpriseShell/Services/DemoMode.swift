@@ -277,7 +277,7 @@ final class DemoIdentityProvider: IdentityProvider {
             accessToken: "demo-access-token",
             refreshToken: "demo-refresh-token",
             idToken: nil,
-            expiresAt: Date().addingTimeInterval(3600),
+            expiry: .expiresAt(Date().addingTimeInterval(3600)),
             userInfo: nil,
             persona: persona,
             providerSpecificData: nil

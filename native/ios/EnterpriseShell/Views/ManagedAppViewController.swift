@@ -53,13 +53,15 @@ final class ManagedAppViewController: UIViewController {
 
         let title = UILabel()
         title.text = app.displayName
-        title.font = .systemFont(ofSize: 17, weight: .semibold)
+        title.font = SG.sans(17, .semibold)
+        title.adjustsFontForContentSizeCategory = true
         title.textAlignment = .center
         title.translatesAutoresizingMaskIntoConstraints = false
 
         let done = UIButton(type: .system)
         done.setTitle("Done", for: .normal)
-        done.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        done.titleLabel?.font = SG.sans(17, .semibold)
+        done.titleLabel?.adjustsFontForContentSizeCategory = true
         done.addTarget(self, action: #selector(close), for: .touchUpInside)
         done.translatesAutoresizingMaskIntoConstraints = false
 

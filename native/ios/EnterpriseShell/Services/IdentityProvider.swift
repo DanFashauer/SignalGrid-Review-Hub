@@ -90,7 +90,7 @@ struct AuthenticationResult {
     let accessToken: String
     let refreshToken: String?
     let idToken: String?
-    let expiresAt: Date?
+    let expiry: ExpiryPolicy
     let userInfo: UserInfo?
     let persona: Persona?
     let providerSpecificData: [String: String]?
@@ -345,7 +345,7 @@ final class OIDCIdentityProvider: IdentityProvider {
             accessToken: tokenResponse.accessToken,
             refreshToken: tokenResponse.refreshToken,
             idToken: tokenResponse.idToken,
-            expiresAt: tokenExpiresAt,
+            expiry: tokenExpiresAt.map(ExpiryPolicy.expiresAt) ?? .expiresAt(.distantPast),
             userInfo: nil,
             persona: nil,
             providerSpecificData: ["token_type": tokenResponse.tokenType]
@@ -439,7 +439,7 @@ final class MDMIdentityProvider: IdentityProvider {
             accessToken: sessionToken,
             refreshToken: nil,
             idToken: nil,
-            expiresAt: nil,
+            expiry: .nonExpiring(justification: "MDM session: lifetime governed by MDM enrolment and device security, not a token TTL"),
             userInfo: nil,
             persona: persona,
             providerSpecificData: ["mdm_user_id": userId, "mdm_provider": config?.mdmProvider?.rawValue ?? "unknown"]
@@ -549,7 +549,7 @@ final class MFAIdentityProvider: IdentityProvider {
             accessToken: verificationResult.sessionToken,
             refreshToken: nil,
             idToken: nil,
-            expiresAt: tokenExpiresAt,
+            expiry: tokenExpiresAt.map(ExpiryPolicy.expiresAt) ?? .expiresAt(.distantPast),
             userInfo: nil,
             persona: persona,
             providerSpecificData: ["mfa_provider": config?.mfaProvider?.rawValue ?? "unknown"]

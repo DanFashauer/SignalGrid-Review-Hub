@@ -116,6 +116,8 @@ const STEPS = [
   { name: "Reason codes (the engine's vocabulary is the catalog's and the contract's)", cmd: ["node", "scripts/check-reason-codes.mjs"] },
   { name: "Retention claims self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-retention-claims.mjs", "--self-test"] },
   { name: "Retention claims (no surface sells a duration nothing implements)", cmd: ["node", "scripts/check-retention-claims.mjs"] },
+  { name: "iOS dynamic type self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-dynamic-type.mjs", "--self-test"] },
+  { name: "iOS dynamic type (no raw system font outside DesignSystem.swift)", cmd: ["node", "scripts/check-ios-dynamic-type.mjs"] },
   { name: "Pagination-truncation guard (a capped read must not look complete)", cmd: ["node", "scripts/check-pagination-truncation.mjs"] },
   { name: "Absent-collection law (nothing observed ≠ nothing wrong)", cmd: ["pnpm", "run", "proof:absent-collection"] },
   // The doctrine-document proofs (zero-trust, security-operations-evidence,

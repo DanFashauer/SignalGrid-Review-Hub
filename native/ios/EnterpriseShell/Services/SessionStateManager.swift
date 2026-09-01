@@ -330,7 +330,7 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
                 accessToken: authResult.accessToken,
                 refreshToken: authResult.refreshToken,
                 idToken: authResult.idToken,
-                expiresAt: authResult.expiresAt
+                expiry: authResult.expiry
             )
             
             currentSession = session

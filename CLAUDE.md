@@ -156,10 +156,14 @@ Vite 8's bundler, win32 bindings deliberately kept for the windows desktop CI), 
     `Light` while the SG palette was hardcoded dark, so the system-colored
     screens rendered white and the branded ones charcoal — the app contradicted
     itself screen to screen, and system UI (alerts, keyboards) never matched.
-  - **Never call `UIFont.systemFont` / `monospacedSystemFont` directly.** Use
+  - **Never call `.systemFont(ofSize:` / `.monospacedSystemFont(ofSize:`
+    directly** (the implicit-member form Swift uses at the call site — grepping
+    `UIFont.systemFont` matches ZERO, which is how 18 sites hid in the two
+    Assist-gate view controllers after a hand conversion regressed). Use
     `SG.sans` / `SG.mono` / `SG.monoDigits`, which scale via `UIFontMetrics`, and
-    set `adjustsFontForContentSizeCategory = true`. 29 raw calls had already
-    drifted in; the drift is the default unless this is written down.
+    set `adjustsFontForContentSizeCategory = true`. The drift is the default
+    unless this is written down — so it is now GATED: `scripts/check-ios-dynamic-type.mjs`
+    (in preflight and CI) fails on any raw call outside `DesignSystem.swift`.
   - **Scaling text needs somewhere to go.** A label that scales must be allowed
     to wrap (`numberOfLines = 0`, or `2` plus `minimumScaleFactor` in a narrow
     button), and any row holding it needs a `greaterThanOrEqualToConstant`

@@ -186,7 +186,7 @@ final class HostAppViewController: UIViewController {
     /// Live posture inputs, from what iOS genuinely exposes (+ simulator stand-ins).
     private func livePosture() -> (screenCaptured: Bool, stale: Bool, lockedOut: Bool) {
         let screenCaptured = UIScreen.main.isCaptured || simulatedScreenCapture
-        let stale = (SessionStateManager.shared.currentSession?.isExpired ?? false) || simulatedStale
+        let stale = (SessionStateManager.shared.currentSession?.isExpired ?? true) || simulatedStale
         let lockedOut = ((SecurityManager.shared.getSecurityStatus()["isLockedOut"] as? Bool) ?? false) || simulatedLockout
         return (screenCaptured, stale, lockedOut)
     }
@@ -354,12 +354,14 @@ final class HostAppViewController: UIViewController {
 
         let title = UILabel()
         title.text = config.appName
-        title.font = .systemFont(ofSize: 17, weight: .semibold)
+        title.font = SG.sans(17, .semibold)
+        title.adjustsFontForContentSizeCategory = true
         title.translatesAutoresizingMaskIntoConstraints = false
 
         let done = UIButton(type: .system)
         done.setTitle("Done", for: .normal)
-        done.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        done.titleLabel?.font = SG.sans(17, .semibold)
+        done.titleLabel?.adjustsFontForContentSizeCategory = true
         done.addTarget(self, action: #selector(close), for: .touchUpInside)
         done.translatesAutoresizingMaskIntoConstraints = false
 
@@ -403,7 +405,8 @@ final class HostAppViewController: UIViewController {
         let logo = UILabel()
         logo.text = config.appInitial
         logo.textColor = .white
-        logo.font = .systemFont(ofSize: 15, weight: .heavy)
+        logo.font = SG.sans(15, .heavy)
+        logo.adjustsFontForContentSizeCategory = true
         logo.textAlignment = .center
         logo.backgroundColor = UIColor.white.withAlphaComponent(0.22)
         logo.layer.cornerRadius = 6
@@ -413,13 +416,15 @@ final class HostAppViewController: UIViewController {
         let name = UILabel()
         name.text = config.appName
         name.textColor = .white
-        name.font = .systemFont(ofSize: 16, weight: .bold)
+        name.font = SG.sans(16, .bold)
+        name.adjustsFontForContentSizeCategory = true
         name.translatesAutoresizingMaskIntoConstraints = false
 
         let who = UILabel()
         who.text = config.whoLabel
         who.textColor = UIColor.white.withAlphaComponent(0.85)
-        who.font = .systemFont(ofSize: 12, weight: .regular)
+        who.font = SG.sans(12, .regular)
+        who.adjustsFontForContentSizeCategory = true
         who.translatesAutoresizingMaskIntoConstraints = false
 
         appBar.addSubview(logo); appBar.addSubview(name); appBar.addSubview(who)
@@ -464,10 +469,12 @@ final class HostAppViewController: UIViewController {
         let card = cardView()
         let subjTitle = UILabel()
         subjTitle.text = config.subjectTitle
-        subjTitle.font = .systemFont(ofSize: 17, weight: .bold)
+        subjTitle.font = SG.sans(17, .bold)
+        subjTitle.adjustsFontForContentSizeCategory = true
         let subjMeta = UILabel()
         subjMeta.text = config.subjectMeta
-        subjMeta.font = .systemFont(ofSize: 12)
+        subjMeta.font = SG.sans(12)
+        subjMeta.adjustsFontForContentSizeCategory = true
         subjMeta.textColor = .secondaryLabel
         subjMeta.numberOfLines = 0
         let cardStack = UIStackView(arrangedSubviews: [subjTitle, subjMeta])
@@ -488,7 +495,8 @@ final class HostAppViewController: UIViewController {
         stack.addArrangedSubview(rowsStack)
 
         hostBanner.numberOfLines = 0
-        hostBanner.font = .systemFont(ofSize: 13, weight: .medium)
+        hostBanner.font = SG.sans(13, .medium)
+        hostBanner.adjustsFontForContentSizeCategory = true
         hostBanner.layer.cornerRadius = 10
         hostBanner.clipsToBounds = true
         hostBanner.isHidden = true
@@ -496,7 +504,8 @@ final class HostAppViewController: UIViewController {
 
         primaryButton.backgroundColor = config.brandColor
         primaryButton.setTitleColor(.white, for: .normal)
-        primaryButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .bold)
+        primaryButton.titleLabel?.font = SG.sans(15, .bold)
+        primaryButton.titleLabel?.adjustsFontForContentSizeCategory = true
         primaryButton.layer.cornerRadius = 10
         primaryButton.addTarget(self, action: #selector(primaryTapped), for: .touchUpInside)
         primaryButton.heightAnchor.constraint(equalToConstant: 48).isActive = true
@@ -772,12 +781,14 @@ final class HostAppViewController: UIViewController {
 
         let lbl = UILabel()
         lbl.text = label
-        lbl.font = .systemFont(ofSize: 13, weight: .semibold)
+        lbl.font = SG.sans(13, .semibold)
+        lbl.adjustsFontForContentSizeCategory = true
         lbl.translatesAutoresizingMaskIntoConstraints = false
 
         let status = UILabel()
         status.tag = 1
-        status.font = .systemFont(ofSize: 11, weight: .heavy)
+        status.font = SG.sans(11, .heavy)
+        status.adjustsFontForContentSizeCategory = true
         status.translatesAutoresizingMaskIntoConstraints = false
         switch state {
         case .done:    status.text = "DONE";    status.textColor = .systemGreen
@@ -832,17 +843,22 @@ final class HostAppViewController: UIViewController {
 
         let heading = UILabel()
         heading.text = "BEHIND THE GLASS · operator view · the worker never sees this"
-        heading.font = .monospacedSystemFont(ofSize: 9, weight: .semibold)
+        heading.font = SG.mono(9, .semibold)
+        heading.adjustsFontForContentSizeCategory = true
         heading.textColor = SG.accent
         heading.numberOfLines = 0
 
-        glassAction.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
+        glassAction.font = SG.mono(12, .medium)
+        glassAction.adjustsFontForContentSizeCategory = true
         glassAction.textColor = .white
-        glassVerdict.font = .monospacedSystemFont(ofSize: 15, weight: .bold)
-        glassBody.font = .systemFont(ofSize: 12)
+        glassVerdict.font = SG.mono(15, .bold)
+        glassVerdict.adjustsFontForContentSizeCategory = true
+        glassBody.font = SG.sans(12)
+        glassBody.adjustsFontForContentSizeCategory = true
         glassBody.textColor = SG.mutedFg
         glassBody.numberOfLines = 0
-        glassWhy.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+        glassWhy.font = SG.mono(10, .regular)
+        glassWhy.adjustsFontForContentSizeCategory = true
         glassWhy.textColor = SG.mutedFg.withAlphaComponent(0.7)
         glassWhy.numberOfLines = 0
 

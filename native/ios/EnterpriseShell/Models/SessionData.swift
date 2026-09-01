@@ -1,5 +1,26 @@
 import Foundation
 
+/// How a session's lifetime is bounded.
+///
+/// Replaces the old `expiresAt: Date?`, whose `nil` conflated two very different
+/// things — "no token TTL by design" (an MDM session) and "expiry unknown" (a
+/// malformed or partial auth path) — and made `isExpired` return `false` for
+/// BOTH. `stale` (derived from `isExpired`) is a live posture input to the Assist
+/// gate; an unknown expiry that reads as a live session is a fail-OPEN on the
+/// safety-critical path, and `nil` is producible by a real auth path.
+///
+/// This type makes the ignorant third case UNREPRESENTABLE: a session must
+/// either name its expiry instant or justify not having one, so `isExpired` has
+/// no ignorance branch to fall through.
+enum ExpiryPolicy: Codable, Equatable {
+    /// The token expires at a specific instant.
+    case expiresAt(Date)
+    /// No token TTL by design — e.g. an MDM session whose lifetime is governed by
+    /// MDM enrolment and device security, not a token. The justification is
+    /// REQUIRED so "non-expiring" is always a stated choice, never a silent default.
+    case nonExpiring(justification: String)
+}
+
 /// Data model representing a complete user session
 struct SessionData: Codable {
     let sessionId: String
@@ -9,7 +30,7 @@ struct SessionData: Codable {
     let accessToken: String?
     let refreshToken: String?
     let idToken: String?
-    let expiresAt: Date?
+    let expiry: ExpiryPolicy
     let startedAt: Date
     var lastActivityAt: Date
     var isActive: Bool
@@ -22,7 +43,7 @@ struct SessionData: Codable {
         accessToken: String? = nil,
         refreshToken: String? = nil,
         idToken: String? = nil,
-        expiresAt: Date? = nil,
+        expiry: ExpiryPolicy,
         startedAt: Date = Date(),
         lastActivityAt: Date = Date(),
         isActive: Bool = true
@@ -34,22 +55,36 @@ struct SessionData: Codable {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
         self.idToken = idToken
-        self.expiresAt = expiresAt
+        self.expiry = expiry
         self.startedAt = startedAt
         self.lastActivityAt = lastActivityAt
         self.isActive = isActive
     }
     
-    /// Check if the session token is expired
+    /// Whether the session token is expired. No ignorance branch: a session that
+    /// cannot state a concrete expiry is `.nonExpiring` with a justification, not a
+    /// silent "not expired". An unknown expiry can never reach here — it is
+    /// unrepresentable in `ExpiryPolicy`.
     var isExpired: Bool {
-        guard let expiresAt = expiresAt else { return false }
-        return Date() >= expiresAt
+        switch expiry {
+        case .expiresAt(let date): return Date() >= date
+        case .nonExpiring: return false
+        }
     }
-    
-    /// Time remaining until token expiration
+
+    /// The concrete expiry instant, or nil for a non-expiring session. Convenience
+    /// for timeout/refresh checks that should only act when a token TTL exists.
+    var expiresAt: Date? {
+        if case .expiresAt(let date) = expiry { return date }
+        return nil
+    }
+
+    /// Time remaining until token expiration, or nil for a non-expiring session.
     var timeUntilExpiration: TimeInterval? {
-        guard let expiresAt = expiresAt else { return nil }
-        return expiresAt.timeIntervalSince(Date())
+        switch expiry {
+        case .expiresAt(let date): return date.timeIntervalSince(Date())
+        case .nonExpiring: return nil
+        }
     }
     
     /// Update last activity timestamp

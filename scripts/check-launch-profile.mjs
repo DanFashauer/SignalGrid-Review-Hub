@@ -356,6 +356,43 @@ for (const gap of GAPS) {
   if (agree) console.log(`  GA fence == launch surface: ${launchPaths.size} paths agree in both directions`);
 }
 
+// ── Every LAUNCH signal kind must be PRODUCED by the served core ─────────────
+// Two launch kinds were once never emitted (no seed record carried the field) and read as
+// unknown. Static, mutation-shaped: the connector must emit the category AND a seed posture
+// record must set the field. Remove either and this fails.
+{
+  const LAUNCH_KIND_EMISSION = {
+    device_posture: { connector: 'category: "device_compliance"', seed: "compliance:" },
+    device_management_health: { connector: 'category: "device_management_health"', seed: "managementHealth:" },
+    local_authority: { connector: 'category: "local_authority"', seed: "localAuthority:" },
+  };
+  const connectorSrc = read("lib/signalgrid-core/src/connector.ts");
+  const seedSrc = read("lib/signalgrid-core/src/seed.ts");
+  const kindSurface = SURFACES.find((s) => s.key === "signal-kinds");
+  let emitted = 0;
+  for (const entry of kindSurface.launch) {
+    const rule = LAUNCH_KIND_EMISSION[entry.id];
+    if (!rule) {
+      console.error(`\n✗ launch signal kind ${entry.id} has no emission rule in check-launch-profile.mjs — add one (connector category + seed field) before classifying it launch.`);
+      failures += 1;
+      continue;
+    }
+    const emits = connectorSrc.includes(rule.connector);
+    // the seed field must appear inside a posture record, not merely in a policy-test fixture:
+    const seeded = new RegExp(`posture: \\{[^}]*${rule.seed}`).test(seedSrc);
+    if (!emits || !seeded) {
+      console.error(
+        `\n✗ launch signal kind ${entry.id} is not produced by the served core: ` +
+          (emits ? "" : `the fixture connector never emits ${rule.connector}; `) +
+          (seeded ? "" : `no seed posture record sets ${rule.seed}. `) +
+          `A launch kind the runtime never emits reads as unknown and grants — reclassify it, or seed it.`,
+      );
+      failures += 1;
+    } else emitted += 1;
+  }
+  if (emitted === kindSurface.launch.length) console.log(`  launch signal kinds produced by the served core: ${emitted}/${kindSurface.launch.length}`);
+}
+
 console.log(
   `\n  totals: launch=${totals.launch} deferred=${totals.deferred} ` +
     `demo_only=${totals.demo_only} internal=${totals.internal} ` +

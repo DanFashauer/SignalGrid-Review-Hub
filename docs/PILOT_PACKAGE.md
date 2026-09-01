@@ -43,7 +43,9 @@ No writes to any of your systems. No device enforcement (that is your MDM's
 job, and stays so). No clinical, financial, or personal record access —
 verdicts are computed from device evidence, not business data. No claim in
 any report that the public gates can't back. You can end the pilot with one
-email; anything we hold is deleted on request.
+email. What we hold is fixture-backed demo data plus the decision records the pilot
+generated; we export those to you on request. A deletion path for persisted records is
+not yet built — stated here rather than promised (`docs/DATA_RETENTION_AND_PERSONAL_DATA.md`).
 
 ## Why trust a company this small
 

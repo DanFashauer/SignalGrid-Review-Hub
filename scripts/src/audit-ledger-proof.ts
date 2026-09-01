@@ -15,6 +15,7 @@
 import {
   appendAuditRecord,
   getAuditRecords,
+  getAuditRecordsForTenant,
   verifyLedger,
   verifyLedgerFull,
   setAuditBackend,
@@ -282,6 +283,33 @@ async function main() {
   // otherwise the assertion above proves nothing about order-independence.
   check("…and the reorder was real, not a no-op (raw JSON differs, hashes agree)",
     JSON.stringify(reorderedRecords[0]) !== JSON.stringify(originals[0]));
+
+  // ── Tenant scope: a READ view over the one global chain (DR-025) ───────────
+  // The tenant is part of the hashed body, so a record cannot be moved between
+  // tenants without breaking the chain; a tenant slice is ledger-ordered and
+  // paged, and a record with no tenant belongs to no tenant's view.
+  setAuditBackend(new InMemoryAuditBackend());
+  await appendAuditRecord("decision.evaluated", { type: "user", id: "nurse-1" }, { tenantId: "t-a", meta: { n: 1 } });
+  await appendAuditRecord("decision.evaluated", { type: "user", id: "nurse-2" }, { tenantId: "t-b", meta: { n: 2 } });
+  await appendAuditRecord("decision.evaluated", { type: "user", id: "nurse-1" }, { tenantId: "t-a", meta: { n: 3 } });
+  await appendAuditRecord("session.start", { type: "system", id: "boot" }, { meta: { n: 4 } });
+  await appendAuditRecord("decision.evaluated", { type: "user", id: "nurse-3" }, { tenantId: "t-a", meta: { n: 5 } });
+
+  const tenantA = await getAuditRecordsForTenant("t-a");
+  check("a tenant view holds exactly that tenant's records", tenantA.length === 3 && tenantA.every((r) => r.tenantId === "t-a"));
+  check("…in ledger order", tenantA.map((r) => (r.meta as { n: number }).n).join(",") === "1,3,5");
+  const paged = await getAuditRecordsForTenant("t-a", 2, 1);
+  check("…and pages (limit 2, offset 1 → the 2nd and 3rd)", paged.map((r) => (r.meta as { n: number }).n).join(",") === "3,5");
+  check("an unknown tenant sees nothing, not everything", (await getAuditRecordsForTenant("t-none")).length === 0);
+  const all = await getAuditRecords();
+  const untenanted = all.find((r) => r.tenantId === undefined);
+  check("a record with no tenant is in the global ledger but in no tenant's view",
+    untenanted !== undefined && !(await getAuditRecordsForTenant("t-b")).some((r) => r.id === untenanted.id));
+  const whole = await verifyLedger();
+  check("the ONE global chain verifies whole across tenants (count 5)", whole.ok === true && whole.count === 5);
+  (all[1] as { tenantId?: string }).tenantId = "t-a"; // move t-b's record into t-a without re-hashing
+  const moved = await verifyLedger();
+  check("moving a record between tenants is DETECTED at that record (tenant is hashed)", moved.ok === false && moved.brokenAtIndex === 1);
 
   const total = passed + failures.length;
   console.log(`Audit-ledger proof: ${passed}/${total} assertions passed`);

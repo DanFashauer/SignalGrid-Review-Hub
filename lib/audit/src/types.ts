@@ -17,6 +17,7 @@ export type AuditEventType =
   | "policy.draft.created"
   | "policy.matched"
   | "policy.action.executed"
+  | "decision.evaluated"
   // Phase 4: Telemetry + Security events
   | "telemetry.posture.updated"
   | "telemetry.posture.missing"
@@ -49,7 +50,7 @@ export type Actor = {
 };
 
 export type Target = {
-  type: "badge" | "session" | "device" | "policy" | "connector";
+  type: "badge" | "session" | "device" | "policy" | "connector" | "decision";
   id?: string;
 };
 
@@ -61,6 +62,8 @@ export type AuditRecord = {
   eventType: AuditEventType;
   target?: Target;
   meta?: Record<string, unknown>;
+  /** Hashed into the record when present; absent on rows written before the column. */
+  tenantId?: string;
   prevHash: string;
   hash: string;
 };

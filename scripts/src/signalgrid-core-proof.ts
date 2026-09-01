@@ -178,7 +178,11 @@ for (const scenario of scenarios) {
 // exactly as designed — it caught this on the first run instead of letting it ship
 // quietly. CORE_NORMALIZATION_VERSION goes 8 -> 9 to record the same change as
 // provenance.
-const LEGACY_SNAPSHOT_DIGEST = "9347fb8f9ad49d31";
+// 2026-09-01 (F1): seed.ts gave the demo's first decision two launch signals, so the pinned
+// sample body moved; the digest function is unchanged. (seed.ts is outside the normalization
+// closure; the same change set bumped the version 9 -> 10 for store.ts, which is inside it.)
+// Was 9347fb8f9ad49d31.
+const LEGACY_SNAPSHOT_DIGEST = "621410dc07677bb2";
 const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
 
 // The exact shape a pre-stamp row deserializes into: every field the same, no stamp.
@@ -1827,6 +1831,26 @@ for (const [fromRow, fromSignal, want, why] of [
   }
 }
 
+
+
+// ── MEMORY BOUND (F6): the in-process store must not grow without limit ─────────
+// A bound of 3 makes the eviction observable in a handful of evaluates. FIFO by
+// insertion: after five evaluates only the newest three remain, the oldest two are
+// gone together with their evidence snapshots, and a fresh evaluate still works.
+{
+  const bounded = SignalGridCore.demo(undefined, { maxDecisionsPerTenant: 3 });
+  const ids: string[] = [];
+  for (let i = 0; i < 5; i += 1) {
+    ids.push(bounded.evaluate(T.operator, { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" }).decisionId);
+  }
+  const kept = bounded.listDecisions(T.operator).map((d) => d.id);
+  check("memory bound: after 5 evaluates with a bound of 3, exactly 3 decisions remain", kept.length === 3);
+  check("memory bound: the three that remain are the three newest (FIFO eviction)", ids.slice(2).every((id) => kept.includes(id)));
+  const throws = (f: () => unknown) => { try { f(); return false; } catch { return true; } };
+  check("memory bound: the oldest decision is gone (not_found), not silently kept", throws(() => bounded.getDecision(T.operator, ids[0])));
+  const newest = bounded.getDecision(T.operator, ids[4]);
+  check("memory bound: the newest decision and its evidence snapshot are still readable", !throws(() => bounded.getSnapshot(T.operator, newest.evidenceSnapshotId)));
+}
 
 const failed = assertions.filter((a) => !a.passed);
 

@@ -94,7 +94,7 @@ cryptographic construction is a private-core concern.
 | Decision records store policy version, matched rules, reason codes, signal ids, evidence id | CSF 2.0 (ID/DE); ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/decision.ts`; `types.ts` (`Decision`) |
 | Audit chains never cross tenants | API Top 10 (API1); 800-207 | Implemented (public core) | `proof:signalgrid-core` (isolation invariant) |
 | Keyed / cryptographically signed audit + snapshot integrity | ASVS 5.0 | Private-core (planned) | Private production repo (`packages/audit-ledger`); see `docs/PRODUCT_CORE_FOUNDATION.md` (digest note) |
-| Durable, retained audit storage and log retention policy | CSF 2.0 (PR.PS); ASVS 5.0 | **Implemented in THIS repo** (retention policy still to define) | `lib/persistence` PostgresDecisionStore/PostgresSessionStore and `lib/audit` PostgresAuditBackend, with committed SQL migrations. Retention/deletion policy is genuinely unwritten — that part remains planned |
+| Durable, retained audit storage and log retention policy | CSF 2.0 (PR.PS); ASVS 5.0 | **Partially implemented in THIS repo** — durable storage yes; retention/deletion policy and mechanism not yet (`docs/DATA_RETENTION_AND_PERSONAL_DATA.md`) | `lib/persistence` PostgresDecisionStore/PostgresSessionStore and `lib/audit` PostgresAuditBackend, with committed SQL migrations. Retention/deletion policy is genuinely unwritten — that part remains planned |
 
 ---
 

@@ -20,6 +20,8 @@ export interface AuditBackend {
   appendWithChain(build: (prevHash: string) => AuditRecord): Promise<AuditRecord>;
   /** Records in insertion order, sliced. */
   getRecords(limit: number, offset: number): Promise<AuditRecord[]>;
+  /** One tenant's records in ledger order, sliced (a READ view over the one chain). */
+  getRecordsForTenant?(tenantId: string, limit: number, offset: number): Promise<AuditRecord[]>;
   /**
    * Round-trip readiness probe (durable backends only). Resolves when the
    * backend can actually append — connection AND privileges — and rejects
@@ -45,6 +47,9 @@ export class InMemoryAuditBackend implements AuditBackend {
   async getRecords(limit: number, offset: number): Promise<AuditRecord[]> {
     return this.ledger.slice(offset, offset + limit);
   }
+  async getRecordsForTenant(tenantId: string, limit: number, offset: number): Promise<AuditRecord[]> {
+    return this.ledger.filter((r) => r.tenantId === tenantId).slice(offset, offset + limit);
+  }
 }
 
 // ── Postgres (production; used only when DATABASE_URL is set) ────────────────
@@ -52,6 +57,21 @@ export class InMemoryAuditBackend implements AuditBackend {
 // advisory lock serializes the read-head → insert critical section so the hash
 // chain cannot fork under concurrent writers.
 const ADVISORY_LOCK_KEY = 0x516e414c; // "sgAL" — stable per-ledger lock id
+
+// node-postgres returns TIMESTAMPTZ as a Date; re-serialize to the exact ISO string
+// the hash was computed over so verifyLedger recomputes equal.
+const rowToRecord = (r: any): AuditRecord => ({
+  id: r.id,
+  ts: r.ts instanceof Date ? r.ts.toISOString() : String(r.ts),
+  requestId: r.request_id ?? undefined,
+  actor: r.actor,
+  eventType: r.event_type,
+  target: r.target ?? undefined,
+  meta: r.meta ?? undefined,
+  tenantId: r.tenant_id ?? undefined,
+  prevHash: r.prev_hash,
+  hash: r.hash,
+});
 
 export class PostgresAuditBackend implements AuditBackend {
   private pool: any;
@@ -122,6 +142,7 @@ export class PostgresAuditBackend implements AuditBackend {
           event_type TEXT NOT NULL,
           target     JSONB,
           meta       JSONB,
+          tenant_id  TEXT,
           prev_hash  TEXT NOT NULL,
           hash       TEXT NOT NULL
         );
@@ -204,8 +225,8 @@ export class PostgresAuditBackend implements AuditBackend {
       const record = build(prevHash);
       await client.query(
         `INSERT INTO public.audit_ledger
-           (id, ts, request_id, actor, event_type, target, meta, prev_hash, hash)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+           (id, ts, request_id, actor, event_type, target, meta, tenant_id, prev_hash, hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           record.id,
           record.ts,
@@ -214,6 +235,7 @@ export class PostgresAuditBackend implements AuditBackend {
           record.eventType,
           record.target ? JSON.stringify(record.target) : null,
           record.meta ? JSON.stringify(record.meta) : null,
+          record.tenantId ?? null,
           record.prevHash,
           record.hash,
         ],
@@ -231,23 +253,21 @@ export class PostgresAuditBackend implements AuditBackend {
   async getRecords(limit: number, offset: number): Promise<AuditRecord[]> {
     await this.ensureReady();
     const res = await this.pool.query(
-      `SELECT id, ts, request_id, actor, event_type, target, meta, prev_hash, hash
+      `SELECT id, ts, request_id, actor, event_type, target, meta, tenant_id, prev_hash, hash
          FROM public.audit_ledger ORDER BY seq ASC OFFSET $1 LIMIT $2`,
       [offset, limit],
     );
-    return res.rows.map((r: any): AuditRecord => ({
-      id: r.id,
-      // node-postgres returns TIMESTAMPTZ as a Date; re-serialize to the exact
-      // ISO string the hash was computed over so verifyLedger recomputes equal.
-      ts: r.ts instanceof Date ? r.ts.toISOString() : String(r.ts),
-      requestId: r.request_id ?? undefined,
-      actor: r.actor,
-      eventType: r.event_type,
-      target: r.target ?? undefined,
-      meta: r.meta ?? undefined,
-      prevHash: r.prev_hash,
-      hash: r.hash,
-    }));
+    return res.rows.map(rowToRecord);
+  }
+
+  async getRecordsForTenant(tenantId: string, limit: number, offset: number): Promise<AuditRecord[]> {
+    await this.ensureReady();
+    const res = await this.pool.query(
+      `SELECT id, ts, request_id, actor, event_type, target, meta, tenant_id, prev_hash, hash
+         FROM public.audit_ledger WHERE tenant_id = $1 ORDER BY seq ASC OFFSET $2 LIMIT $3`,
+      [tenantId, offset, limit],
+    );
+    return res.rows.map(rowToRecord);
   }
 
   async close(): Promise<void> {

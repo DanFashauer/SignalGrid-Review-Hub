@@ -47,6 +47,17 @@ export class MemoryStore {
   private readonly verifiedKeys = new Map<string, ApiKeyRecord>();
   private static readonly MAX_VERIFIED_KEYS = 1024;
 
+  // ponytail: decisions + snapshots kept in memory PER TENANT — FIFO, default 5000, no clock.
+  // Unbounded, every evaluate grew the process forever; a durable store serves older rows.
+  private readonly maxDecisionsPerTenant: number;
+  private readonly decisionOrder = new Map<string, string[]>();
+
+  constructor(options: { maxDecisionsPerTenant?: number } = {}) {
+    const n = options.maxDecisionsPerTenant ?? 5000;
+    if (!Number.isInteger(n) || n < 1) throw new Error(`maxDecisionsPerTenant must be a positive integer, got ${String(n)}`);
+    this.maxDecisionsPerTenant = n;
+  }
+
   private readonly identities = new Map<string, Identity>();
   private readonly devices = new Map<string, Device>();
   private readonly workflows = new Map<string, Workflow>();
@@ -193,6 +204,17 @@ export class MemoryStore {
     );
   }
 
+  /**
+   * Whether ANY connector in this process is something other than a fixture — a
+   * deployment fact, so deliberately unscoped by tenant. `ConnectorMode` is
+   * fixture-only today, so this cannot return true until a live mode exists; that
+   * is the point. The deployment's stated signal source derives from THIS, not from
+   * an environment flag that could assert a posture the core does not have.
+   */
+  hasNonFixtureConnector(): boolean {
+    return [...this.connectors.values()].some((row) => (row.mode as string) !== "fixture");
+  }
+
   putSyncRun(run: ConnectorSyncRun): void {
     this.syncRuns.set(run.id, run);
   }
@@ -287,7 +309,18 @@ export class MemoryStore {
   // ── Decisions & snapshots ─────────────────────────────────────────────────
 
   putDecision(decision: Decision): void {
+    const fresh = !this.decisions.has(decision.id);
     this.decisions.set(decision.id, decision);
+    if (!fresh) return;
+    const order = this.decisionOrder.get(decision.tenantId) ?? [];
+    order.push(decision.id);
+    while (order.length > this.maxDecisionsPerTenant) {
+      const evictId = order.shift()!;
+      const evicted = this.decisions.get(evictId);
+      this.decisions.delete(evictId);
+      if (evicted) this.snapshots.delete(evicted.evidenceSnapshotId);
+    }
+    this.decisionOrder.set(decision.tenantId, order);
   }
 
   /**

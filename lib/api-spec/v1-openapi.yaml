@@ -428,8 +428,15 @@ paths:
       operationId: listAudit
       tags: [audit]
       summary: List audit events and verify the tamper-evident chain
+      description: >-
+        With a Postgres ledger: the caller's tenant's rows from the single global chain plus that
+        whole chain's verification (`chain.scope: global-ledger`, `source: durable`); otherwise the
+        in-memory demo ledger (`source: memory`).
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 }, description: Durable ledger only. }
+        - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 }, description: Durable ledger only. }
       responses:
-        "200": { description: Audit events + chain verification }
+        "200": { description: "Audit events + chain verification; `source` names the ledger that answered" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
   /v1/metrics:

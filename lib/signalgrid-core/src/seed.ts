@@ -72,8 +72,8 @@ const FORGE = "tenant_forge";
 const ORION = "tenant_orion";
 const CIVIC = "tenant_civic";
 
-export function seedDemoStore(clock: Clock): SeededDemo {
-  const store = new MemoryStore();
+export function seedDemoStore(clock: Clock, storeOptions?: { maxDecisionsPerTenant?: number }): SeededDemo {
+  const store = new MemoryStore(storeOptions);
   const createdAt = clock.now().toISOString();
 
   seedTenant(store, {
@@ -510,17 +510,17 @@ function seedNorthwindSubjects(store: MemoryStore): FixturePostureRecord[] {
     {
       identity: { externalRef: "nurse.compliant", displayName: "Compliant Nurse", state: "enabled", assignedRole: "nurse" },
       device: { externalRef: "ipad-ward-01", name: "Ward iPad 01", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
-      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", sourceReference: "fixture:intune:managedDevices#ipad-ward-01" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, baseline: "aligned", managementHealth: "healthy", localAuthority: "verified", sourceReference: "fixture:intune:managedDevices#ipad-ward-01" },
     },
     {
       identity: { externalRef: "nurse.noncompliant", displayName: "Nurse (non-compliant device)", state: "enabled", assignedRole: "nurse" },
       device: { externalRef: "ipad-ward-02", name: "Ward iPad 02", osPlatform: "iPadOS", osVersion: "17.0", ownerType: "shared", managementAgent: "intune" },
-      posture: { identityEnabled: true, managed: true, compliance: "non_compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#ipad-ward-02" },
+      posture: { identityEnabled: true, managed: true, compliance: "non_compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, managementHealth: "healthy", localAuthority: "verified", sourceReference: "fixture:intune:managedDevices#ipad-ward-02" },
     },
     {
       identity: { externalRef: "nurse.stale", displayName: "Nurse (stale posture)", state: "enabled", assignedRole: "nurse" },
       device: { externalRef: "ipad-ward-03", name: "Ward iPad 03", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
-      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: stale, sourceReference: "fixture:intune:managedDevices#ipad-ward-03" },
+      posture: { identityEnabled: true, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: stale, managementHealth: "healthy", localAuthority: "verified", sourceReference: "fixture:intune:managedDevices#ipad-ward-03" },
     },
     {
       identity: { externalRef: "tech.unmanaged", displayName: "Tech (unmanaged device)", state: "enabled", assignedRole: "technician" },
@@ -530,7 +530,7 @@ function seedNorthwindSubjects(store: MemoryStore): FixturePostureRecord[] {
     {
       identity: { externalRef: "nurse.disabled", displayName: "Disabled account", state: "disabled", assignedRole: "nurse" },
       device: { externalRef: "ipad-ward-04", name: "Ward iPad 04", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" },
-      posture: { identityEnabled: false, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, sourceReference: "fixture:intune:managedDevices#ipad-ward-04" },
+      posture: { identityEnabled: false, managed: true, compliance: "compliant", encrypted: true, osSupported: true, lastSyncAt: fresh, managementHealth: "healthy", localAuthority: "verified", sourceReference: "fixture:intune:managedDevices#ipad-ward-04" },
     },
     {
       identity: { externalRef: "nurse.nosync", displayName: "Nurse (missing posture)", state: "enabled", assignedRole: "nurse" },

@@ -21,6 +21,7 @@ import { spawnSync } from "node:child_process";
 import {
   appendAuditRecord,
   getAuditRecords,
+  getAuditRecordsForTenant,
   verifyLedger,
   verifyLedgerFull,
   setAuditBackend,
@@ -190,6 +191,26 @@ async function main() {
     cliTampered.status === 1 && cliTampered.out.includes("CHAIN BROKEN at record index 3"));
 
   await admin.query("DROP TABLE IF EXISTS audit_ledger");
+  // ── Tenant scope over the persisted chain (DR-025): the SQL read path ──────
+  setAuditBackend(new PostgresAuditBackend(url!));
+  await appendAuditRecord("decision.evaluated", { type: "user", id: "n1" }, { tenantId: "t-a", meta: { n: 1 } });
+  await appendAuditRecord("decision.evaluated", { type: "user", id: "n2" }, { tenantId: "t-b", meta: { n: 2 } });
+  await appendAuditRecord("decision.evaluated", { type: "user", id: "n1" }, { tenantId: "t-a", meta: { n: 3 } });
+  await appendAuditRecord("session.start", { type: "system", id: "boot" }, { meta: { n: 4 } }); // pre-column shape: no tenant
+  const persistedA = await getAuditRecordsForTenant("t-a", 10, 0);
+  check("PG: a tenant's rows come back from SQL in seq order, that tenant only",
+    persistedA.length === 2 && persistedA.map((r) => (r.meta as { n: number }).n).join(",") === "1,3" && persistedA.every((r) => r.tenantId === "t-a"));
+  check("PG: an unknown tenant reads nothing", (await getAuditRecordsForTenant("t-none", 10, 0)).length === 0);
+  const persistedWhole = await verifyLedgerFull({ batchSize: 10 });
+  check("PG: the one chain verifies whole with tenanted and untenanted rows side by side (count 4)",
+    persistedWhole.ok === true && persistedWhole.count === 4);
+  await admin.query("UPDATE audit_ledger SET tenant_id = 't-a' WHERE tenant_id = 't-b'");
+  const movedRow = await verifyLedgerFull({ batchSize: 10 });
+  check("PG: moving a row between tenants by direct UPDATE is DETECTED at that row (tenant is hashed)",
+    movedRow.ok === false && movedRow.brokenAtIndex === 1);
+  check("PG: …and the moved row now shows in the other tenant's view — the read is honest, the chain is the alarm",
+    (await getAuditRecordsForTenant("t-a", 10, 0)).length === 3);
+
   await admin.end();
   await b.close?.();
 

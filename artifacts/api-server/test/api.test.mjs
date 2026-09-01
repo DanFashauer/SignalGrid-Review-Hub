@@ -466,6 +466,25 @@ async function run() {
   check("stale posture outcome is step_up", stale.json?.decision?.outcome === "step_up");
   const staleId = stale.json?.decision?.decisionId;
 
+  // ── /v1/audit names its source (DR-025): no Postgres here, so "memory", never "durable" ──
+  const auditSrc = await req("GET", "/v1/audit", { token: KEYS.owner }); // audit:read is owner/auditor, not operator
+  check("/v1/audit says which ledger answered (memory without Postgres)", auditSrc.json?.source === "memory");
+  check("...and still returns a chain verdict, not a bare list", typeof auditSrc.json?.chain === "object" && auditSrc.json?.chain !== null);
+
+  // ── requestContext value cap (F5): an over-long value is dropped, a short one kept ──
+  // requestContext is persisted whole into a store with no deletion path, so the cap is
+  // the only thing standing between a pasted record and a durable row. Dropped, never
+  // truncated: a truncated identifier is still an identifier.
+  const capped = await req("POST", "/v1/decisions/evaluate", {
+    token: KEYS.operator,
+    body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session",
+      requestContext: { pasted: "x".repeat(300), ref: "ticket-4411" } },
+  });
+  const cappedRow = await req("GET", `/v1/decisions/${capped.json?.decision?.decisionId}`, { token: KEYS.operator });
+  const rc = cappedRow.json?.decision?.requestContext ?? {};
+  check("an over-long requestContext value is NOT persisted (dropped, not truncated)", rc.pasted === undefined);
+  check("...while a short reference in the same request is kept", rc.ref === "ticket-4411");
+
   // ── app-workflows: gate application actions ─────────────────────────────
   const appList = await req("GET", "/v1/app-workflows/integrations?vertical=healthcare", { token: KEYS.operator });
   check("app-workflows catalog (healthcare) → 200 with EMR", appList.status === 200 && appList.json?.integrations?.some((i) => i.id === "emr-chart"));
@@ -1715,19 +1734,20 @@ async function run() {
   // with no METRICS_TOKEN the endpoint is open and the limiter is the only
   // protection left, so the limit must STAY. Asserting only the exempt half would
   // pass just as well against an unconditional skip, which is the unsafe version.
+  // Poll a short-lived server until /healthz answers (shared by every spawned server below).
+  const waitReady = async (port) => {
+    const start = Date.now();
+    while (Date.now() - start < 15000) {
+      try { if ((await fetch(`http://localhost:${port}/api/healthz`)).ok) return true; } catch { /* not up yet */ }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return false;
+  };
   {
     const spawnLimited = (port, extraEnv) => spawn("node", [serverEntry], {
       env: { ...process.env, PORT: String(port), LOG_LEVEL: "silent", SIGNALGRID_GLOBAL_RATE_LIMIT: "5", ...extraEnv },
       stdio: ["ignore", "ignore", "inherit"],
     });
-    const waitReady = async (port) => {
-      const start = Date.now();
-      while (Date.now() - start < 15000) {
-        try { if ((await fetch(`http://localhost:${port}/api/healthz`)).ok) return true; } catch { /* not up yet */ }
-        await new Promise((r) => setTimeout(r, 250));
-      }
-      return false;
-    };
     // Burn well past the limit of 5, then report what the path answers.
     const hammer = async (port, path) => {
       const seen = [];
@@ -1809,6 +1829,32 @@ async function run() {
   // Triggering a sync is a write: an auditor must not be able to.
   const syncAsAuditor = await req("POST", `/v1/connectors/${connectorId}/sync`, { token: KEYS.auditor });
   check("connector sync refused for a read-only auditor", syncAsAuditor.status === 403);
+
+  // ── Seventh short-lived server: beta tier WITH the live-integrations flag ──────
+  // SIGNALGRID_LIVE_INTEGRATIONS=true on beta/prod once made /v1/context report
+  // signalSource:"live" while every verdict came from fixture records — a posture no
+  // code path provided. The field now derives from the connectors the core holds.
+  // `tier` is asserted first so the env is proven to have taken effect; without that
+  // the second assertion would pass vacuously on a server that ignored the env.
+  {
+    const PORT7 = 5316;
+    const BASE7 = `http://localhost:${PORT7}/api`;
+    const server7 = spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT7), NODE_ENV: "production", LOG_LEVEL: "silent",
+        SIGNALGRID_TIER: "beta", SIGNALGRID_LIVE_INTEGRATIONS: "true" },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      check("beta-tier server (live flag set) came up", await waitReady(PORT7));
+      const ctx7 = await fetch(`${BASE7}/v1/context`, { headers: { authorization: `Bearer ${KEYS.operator}` } });
+      const a7 = (await ctx7.json().catch(() => null))?.assurance;
+      check("assurance: the env took effect — tier reads beta", a7?.tier === "beta");
+      check("assurance: with the live flag SET, signalSource is STILL fixtures — the flag can no longer assert a posture the core does not have",
+        a7?.signalSource === "fixtures");
+    } finally {
+      server7.kill("SIGTERM");
+    }
+  }
 
   // ── route coverage: every registered /v1 route must be exercised ─────────
   // The OpenAPI contract check proves the SPEC and the route SOURCE agree. Neither

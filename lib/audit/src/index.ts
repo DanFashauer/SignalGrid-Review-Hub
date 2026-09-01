@@ -144,6 +144,8 @@ export async function appendAuditRecord(
     target?: Target;
     meta?: Record<string, unknown>;
     requestId?: string;
+    /** The tenant the event belongs to; hashed into the record when present. */
+    tenantId?: string;
   }
 ): Promise<AuditRecord> {
   const now = new Date().toISOString();
@@ -154,6 +156,9 @@ export async function appendAuditRecord(
       id: uuidv4(),
       ts: now,
       requestId: options?.requestId,
+      // Hashed only when PRESENT: canonicalize() writes an absent key as null, so an
+      // unconditional key would change every pre-column row's hash on verify.
+      ...(options?.tenantId !== undefined ? { tenantId: options.tenantId } : {}),
       actor,
       eventType,
       target: options?.target,
@@ -168,6 +173,13 @@ export async function appendAuditRecord(
 // Get audit records (insertion order), delegated to the active backend.
 export async function getAuditRecords(limit = 1000, offset = 0): Promise<AuditRecord[]> {
   return getAuditBackend().getRecords(limit, offset);
+}
+
+/** A tenant's rows in ledger order — a READ view over the one verified chain, never a chain of its own. */
+export async function getAuditRecordsForTenant(tenantId: string, limit = 500, offset = 0): Promise<AuditRecord[]> {
+  const backend = getAuditBackend();
+  if (!backend.getRecordsForTenant) throw new Error("audit: this backend has no tenant-scoped read");
+  return backend.getRecordsForTenant(tenantId, limit, offset);
 }
 
 export interface LedgerVerification {
@@ -224,6 +236,7 @@ export function verifySegment(
       eventType: record.eventType,
       target: record.target,
       meta: record.meta,
+      ...(record.tenantId !== undefined ? { tenantId: record.tenantId } : {}),
       prevHash: record.prevHash,
     };
     const expectedHash = computeHash(recordWithoutHash, record.prevHash);

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS audit_ledger (
     event_type TEXT        NOT NULL,
     target     JSONB,
     meta       JSONB,
+    tenant_id  TEXT,
     prev_hash  TEXT        NOT NULL,
     hash       TEXT        NOT NULL
 );

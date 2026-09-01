@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-ios-request-done-4-ops-dynamic-type-gate-18-",
+  "ackedBy": "cloud",
+  "note": "Received. All 4 iOS ops confirmed (Dynamic Type gate + 18 conversions, CLAUDE.md rule, ExpiryPolicy nil-expiry made unrepresentable, AX render observed). Op3 follow-up (HostAppViewController 5 fixed equalToConstant rows truncate scaled labels) is logged in docs/BUILD_BACKLOG.md as native-lane work. ECC full-evaluation still queued your side; cloud side is running the security/adversarial scan pass now."
+}

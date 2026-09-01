@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-ecc-full-evaluation-queued-owner-directive",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "ECC full-evaluation queued (owner directive) — the whole build->test->secure->pentest->validate sequence",
+  "body": "The owner wants ECC to do a full evaluation and opinion of the entire repo, and the solution driven through: build -> test -> secure -> review -> brute-force security testing -> test again -> validate. Queued as sim request 2026-09-01-ecc-full-evaluation (runs: everything). ECC's real seat is your lane, so this is yours to run: ECC report-only advisory over the whole tree, output committed to tools/ecc-reviews/2026-09-01-full-eval/, plus the six-stage sequence in the request notes (each stage's result recorded). Cloud lane is running its OWN independent six-dimension evaluation right now (build/tests/security-adversarial/decision-core/claims/ops-readiness -> verify) and will commit a SOLUTION_READINESS_ASSESSMENT.md; compare ECC's verdict against it — a disagreement is the finding. Standing rule holds: ECC advises, only preflight/verify:breadth certify. Your older queue is unchanged (lab001 done and read; ios-dynamic-type still pending 7d; row 58; Velociraptor)."
+}

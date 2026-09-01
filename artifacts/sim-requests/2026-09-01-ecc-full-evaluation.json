@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-09-01-ecc-full-evaluation",
+  "requestedBy": "cloud lane (owner directive 2026-09-01)",
+  "reason": "The owner asked for ECC to do a FULL evaluation and opinion of the whole repo, and for the solution to be driven through the complete sequence build -> test -> secure -> review -> brute-force security testing -> test again -> validate. ECC's real seat is the Mac lane (it runs as a Claude Code plugin there, hooks-off/report-only, and produces committed evidence). The cloud lane is running its own independent six-dimension evaluation in parallel; this request is for the ECC pass so the two verdicts can be compared.",
+  "runs": [
+    "everything"
+  ],
+  "notes": [
+    "Run ECC's review/plan/build-fix passes over the whole tree as a report-only advisory pass (pnpm run ecc:install is already pinned; invoke ECC's /code-review and its security/plan agents against the repo). Write the full ECC output to tools/ecc-reviews/2026-09-01-full-eval/ and commit it — that directory is where the last ECC output landed, and committing is how the cloud lane sees the verdict.",
+    "SEQUENCE the owner asked for, run in this order and record each stage's result: (1) build all surfaces; (2) full test — validate-sim-macos.sh AND node scripts/preflight.mjs AND pnpm run verify:breadth, compare M failed against 0; (3) security review — ECC security-reviewer over auth/decision/API; (4) BRUTE-FORCE / adversarial — ECC's adversarial pass plus any fuzz/Schemathesis against the /v1 surface the evidence-toolchain skill blesses (Schemathesis generates adversarial OpenAPI cases; a real defect becomes a regression); (5) re-test — full preflight + breadth again after any fix; (6) validate — confirm all green with quoted output.",
+    "ECC ADVISES; it never certifies green. Only preflight/verify:breadth certify. A finding ECC raises that the repo's own gates already hold is a false positive — say so; a finding they hold nothing for is a real backlog row.",
+    "This is heavy (everything + ECC). Expect a long run. Partial results committed as you go are fine and preferred over one big commit at the end.",
+    "Do NOT let this absorb the still-pending 2026-08-25-ios-dynamic-type-and-nil-expiry request; that one is separate and older."
+  ]
+}

@@ -12990,9 +12990,9 @@
     {
       "type": "library",
       "name": "body-parser",
-      "version": "2.2.2",
-      "bom-ref": "pkg:npm/body-parser@2.2.2",
-      "purl": "pkg:npm/body-parser@2.2.2",
+      "version": "2.3.0",
+      "bom-ref": "pkg:npm/body-parser@2.3.0",
+      "purl": "pkg:npm/body-parser@2.3.0",
       "licenses": [
         {
           "license": {
@@ -15423,20 +15423,6 @@
       "version": "1.0.2",
       "bom-ref": "pkg:npm/has-tostringtag@1.0.2",
       "purl": "pkg:npm/has-tostringtag@1.0.2",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "hasown",
-      "version": "2.0.3",
-      "bom-ref": "pkg:npm/hasown@2.0.3",
-      "purl": "pkg:npm/hasown@2.0.3",
       "licenses": [
         {
           "license": {
@@ -18179,9 +18165,9 @@
     {
       "type": "library",
       "name": "qs",
-      "version": "6.15.1",
-      "bom-ref": "pkg:npm/qs@6.15.1",
-      "purl": "pkg:npm/qs@6.15.1",
+      "version": "6.16.0",
+      "bom-ref": "pkg:npm/qs@6.16.0",
+      "purl": "pkg:npm/qs@6.16.0",
       "licenses": [
         {
           "license": {
@@ -18963,9 +18949,9 @@
     {
       "type": "library",
       "name": "side-channel",
-      "version": "1.1.0",
-      "bom-ref": "pkg:npm/side-channel@1.1.0",
-      "purl": "pkg:npm/side-channel@1.1.0",
+      "version": "1.1.1",
+      "bom-ref": "pkg:npm/side-channel@1.1.1",
+      "purl": "pkg:npm/side-channel@1.1.1",
       "licenses": [
         {
           "license": {

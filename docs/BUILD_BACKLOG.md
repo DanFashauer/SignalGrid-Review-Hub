@@ -1116,3 +1116,23 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       honoring any window or DSAR needs an admin-credential job that does not
       exist. `check-retention-claims` keeps surfaces honest meanwhile. See
       `docs/DATA_RETENTION_AND_PERSONAL_DATA.md`.
+- [ ] Census figures in `docs/PRODUCT_COMPLETION_PLAN.md` read as a dated
+      point-in-time analysis but risk drifting from live counts. 2026-09-01
+      (security/adversarial scan, fail-closed auditor): the doc's "48 deferred
+      families" (:180), "47 gates fire on deferred families" (:295), "167
+      entries", "204 documents" are hand-maintained and no longer track the
+      tree (140 `proof:*` today; the deferred-family list at
+      `scripts/launch-profile.mjs` holds ~49). Not a confirmed drift finding —
+      each figure would need to be tied to a live category before rewriting —
+      but a fossil risk on a hand-maintained census. Either derive the numbers
+      or mark the doc as a fixed dated snapshot so a reader stops treating them
+      as current measurements.
+- [ ] Default `review-demo` profile mounts sim + control-plane routes
+      unauthenticated. 2026-09-01 (security/adversarial scan, attack-surface
+      review): informational, not a code defect — `POST /api/sim/room-entry`
+      and `/cp/v1/*` carry no auth under the default profile and the sim route
+      mints a seed tenant's own token server-side. Already documented and
+      gated: `SIGNALGRID_PRODUCT_PROFILE=shared-device-gateway` unmounts both
+      routers, cross-checked by `scripts/check-launch-profile.mjs`. A real
+      (non-review) deployment must set that variable — a deployment-checklist
+      item, not an in-code bypass.

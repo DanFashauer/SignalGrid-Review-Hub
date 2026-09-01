@@ -1166,3 +1166,59 @@ pass or additional passes" for this repository.
 
 **Reversal.** The owner reverses any part of this by saying so. Re-freezing
 any lane requires a new record naming the lane.
+
+---
+
+## DR-022 — Firecrawl is adopted as a research/verification lane, on top of ECC (owner-directed 2026-09-01)
+
+**Question.** The owner forwarded Firecrawl's marketing email (CLI + Agent Skill
++ hosted MCP server; "turn websites into LLM-ready data") with the instruction:
+*"Please also add this on top of ECC please."* Firecrawl had a prior recorded
+disposition — `docs/INTAKE_LEDGER.md` row 97 rated it **OUT OF SCOPE for the
+product, NOT NEEDED for research** (existing fetch tooling covers it; AGPL-3.0
+noted as a reason not to reach for it casually). Does the owner's direction
+stand, and how is it added safely?
+
+**Call: adopt it, as opt-in research/verification infrastructure only — the
+owner's direction supersedes row 97's "not needed."** Firecrawl joins ECC in the
+evidence toolchain (`.claude/skills/signalgrid-evidence-toolchain`) as the
+web-research / source-verification lane. It is installed the same disciplined way
+ECC was, and it is bounded the same way.
+
+**What "adopt" means here, precisely:**
+
+- **Pinned client, not the vendor one-liner.** `pnpm run firecrawl:install`
+  (`scripts/install-firecrawl.mjs`) registers the **MIT-licensed** `firecrawl-mcp@3.24.0`
+  hosted-API client as a **user-scoped** MCP server for Claude Code. It does the
+  opposite of the advertised `npx -y firecrawl-cli@latest init --all --browser`
+  on every axis the repo cares about: exact version not `@latest`, one client not
+  `--all`, and fail-CLOSED on a missing key not `-y` auto-confirm.
+- **The API key is a secret.** It is read from `FIRECRAWL_API_KEY` in the
+  environment and never enters the repo tree, a commit, or the installer file.
+  No key → the installer refuses and exits non-zero.
+- **The AGPL concern is sidestepped, not ignored.** Row 97's copyleft note was
+  about the self-hostable `firecrawl/firecrawl` **server** (AGPL-3.0). This
+  adoption uses the hosted API through the MIT client only; it does not vendor or
+  self-host that server, so no copyleft surface is added.
+- **Report-only, never in a decision path.** Firecrawl returns external web
+  content. It is a way to fetch what a human would read — competitive/source
+  research, verifying an external claim. It never feeds the deterministic core, a
+  proof fixture, a connector, or the public product build. The decision core
+  stays offline and deterministic (golden rule 2).
+
+**Why the reversal is coherent.** Row 97 answered a different question — "should
+we clone the AGPL server as a product/research dependency?" — and answered it
+well for that framing. The owner is asking a narrower one: "use the hosted
+service, through its permissive client, as a research convenience on top of ECC."
+The blocking facts row 97 raised (copyleft, redundancy) are addressed by the
+boundary above, and where they are a matter of the owner's convenience-vs-
+diligence tradeoff, that is his call to make, and he made it.
+
+**Evidence.** `scripts/install-firecrawl.mjs`; `package.json` (`firecrawl:install`);
+`docs/INTAKE_LEDGER.md` row 97 (the prior disposition, now annotated); the
+`firecrawl-mcp` npm licence (MIT) vs the `firecrawl/firecrawl` server licence
+(AGPL-3.0); the ECC precedent (DR-016, `ecc:install`).
+
+**Reversal.** The owner reverses by saying so. If the hosted service is dropped,
+remove the `firecrawl:install` script and the MCP registration; nothing in the
+product depends on it, by construction.

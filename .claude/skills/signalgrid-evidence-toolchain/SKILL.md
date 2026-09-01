@@ -167,6 +167,15 @@ Use Santa as future endpoint-security/execution evidence research. Keep it defer
 
 Study ReportMate primarily as a reference for combining Mac/osquery collection, API exposure and MCP. Treat its server/API/MCP licensing as a separate review before any reuse. Do not embed AGPL/server code into the MIT Review Hub by convenience.
 
+## Web research and source verification — Firecrawl (owner-directed, DR-022)
+
+Firecrawl (web → LLM-ready markdown) is the **research / source-verification** lane, adopted on top of ECC by owner direction (DR-022). It answers "what does this external page actually say" — competitive intel, verifying an outside claim, reading a vendor doc — the same job a human browser does, faster.
+
+- **Install:** `FIRECRAWL_API_KEY=fc-... pnpm run firecrawl:install` — registers the **MIT** `firecrawl-mcp@3.24.0` hosted-API client as a user-scoped MCP server for Claude Code. It fails CLOSED without a key and never writes the key into the repo. It is the disciplined inverse of the vendor one-liner (`npx -y firecrawl-cli@latest init --all --browser`): pinned, single-client, key-gated.
+- **Licence:** use the hosted API through the **MIT** client. Do **not** self-host or vendor the `firecrawl/firecrawl` **server** (AGPL-3.0) — that is the copyleft surface INTAKE_LEDGER row 97 flagged, and it stays out.
+- **Layer:** report-only research. Firecrawl output is external web content and is **never** an authoritative verdict — the cross-source contradiction rule and "do not use an MCP result as a verdict unless the deterministic core computed it" both apply. It never enters a decision path, a proof fixture, a connector, or the product build.
+- **When NOT to reach for it:** if a plain fetch or an already-connected source answers the question, use that — row 97's redundancy point still holds for the common case. Firecrawl earns its use on pages that resist a plain fetch (JS-rendered, crawl-shaped, multi-page).
+
 ## Adoption gate for every new source or tool
 
 Before a candidate becomes installed/deployed/required:

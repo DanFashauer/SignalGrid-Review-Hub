@@ -365,6 +365,7 @@ records rather than current guidance.
 - [LOOP — where SignalGrid actually is](agent/LOOP.md): one-page state file, read first in any tool. `pnpm run loop:state` checks the seams between tools.
 - [Solution readiness assessment](agent/SOLUTION_READINESS_ASSESSMENT.md): the whole repo evaluated end to end (build, tests, security, decision-core, claims, operational readiness) — verdict, six-dimension scorecard, and the real completion list to a paying customer (2026-09-01).
 - [Review-structure comparison](agent/REVIEW_STRUCTURE_COMPARISON.md): the same tree reviewed two ways — by concern (dimensions) and by ECC reviewer role — with the diff showing each structure catches a class the other misses (2026-09-01).
+- [`docs/agent/PONYTAIL_AUDIT_2026-09-01.md`](agent/PONYTAIL_AUDIT_2026-09-01.md) — the top layer's first whole-repo scan (DR-024): Ponytail's ranked cut list from three parallel auditors, the execution plan, and every item routed to the ECC and independent-scan lanes.
 - [Resource intake](agent/RESOURCE_INTAKE.md): what the owner feeds in and what became of it — every resource gets a row, absorbed by use, never answered with only reasons (DR-021).
 - [Customer discovery log](agent/DISCOVERY_LOG.md): pre-registered discovery protocol, thresholds and tally.
 - [Integration map](INTEGRATION_MAP.md): the systems the grid connects to (access, identity, device, location, apps, ticketing), routed by lane — the platform surface DR-020 names.

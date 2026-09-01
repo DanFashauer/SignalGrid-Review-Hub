@@ -63,7 +63,7 @@
   },
   "dependencies": {
     "ioredis": "^5.4.1",
-    "uuid": "^14.0.1",
+    "uuid": "^14.0.2",
     "zod": "catalog:",
     "@workspace/audit": "workspace:*"
   },

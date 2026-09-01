@@ -55,7 +55,7 @@ A ready-made collection covering **every** endpoint (public + `/v1` + the
 signal sourcing, config, provisioning, and app resilience) is committed at
 [`docs/postman/`](./postman/):
 
-- `SignalGrid.postman_collection.json` — 63 requests in three folders, with
+- `SignalGrid.postman_collection.json` — 74 requests in three folders, with
   example bodies.
 - `SignalGrid.postman_environment.json` — `base_url` + a demo `token` + the path
   variables (`decisionId`, `policyId`, …).

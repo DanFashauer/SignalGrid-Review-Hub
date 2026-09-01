@@ -1341,6 +1341,16 @@ async function run() {
         const r = await fetch(`${BASE4}${p}`);
         check(`gateway ALLOWS the launch path ${p} (${r.status}, not 404)`, r.status !== 404);
       }
+      // The two POST launch paths, probed with their METHOD. The fence is keyed on
+      // method+path, so a GET to a POST-only route is a fenced 404 by design and
+      // the loop above cannot prove them. An unauthenticated POST that answers 401
+      // is the route working: reachable, and demanding a credential. This is the
+      // probe that would have caught /v1/authorize being classified `launch` while
+      // absent from the fence (contract-drift sweep, 2026-09-01).
+      for (const p of ["/v1/decisions/evaluate", "/v1/authorize"]) {
+        const r = await fetch(`${BASE4}${p}`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+        check(`gateway ALLOWS the launch POST path ${p} (${r.status}, not 404)`, r.status !== 404);
+      }
 
       // One per deferred router plus a spread of deferred /v1 paths. Not exhaustive
       // by design — the allowlist is fail-closed, so a route absent from this list is

@@ -31,8 +31,8 @@ exposes raw tokens (`demoApiKeys()` throws off demo mode).
 ## Coverage
 
 **Every registered route has at least one request, and a gate enforces it in
-both directions.** As of 2026-08-21 that is 77 distinct method+path pairs
-across 96 request files (evaluate carries three scenario variants; four
+both directions.** As of 2026-08-21 that is 78 distinct method+path pairs
+across 97 request files (evaluate carries three scenario variants; four
 requests are deliberate negative tests and thirteen are the
 `adversarial-trust/` attacks), with zero declared exceptions. All 96 are
 live-verified on every push by `scripts/run-bruno-collection.mjs`.

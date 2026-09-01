@@ -223,7 +223,7 @@ existing public checks (`pnpm run typecheck`, the proof harnesses, and the
 unsafe-claim `git grep` from `AGENTS.md`) plus:
 
 - **Deterministic core proof, unchanged.** `pnpm run proof:signalgrid-core`
-  (239 invariant assertions: correct outcomes, fail-closed, tenant isolation,
+  (243 invariant assertions: correct outcomes, fail-closed, tenant isolation,
   RBAC, auth-fails-closed, tamper-evidence, determinism, the security-baseline
   dimension, the badge-binding dimension, and the dock/SmartDock hardware-state
   dimension) runs against the production wiring too.

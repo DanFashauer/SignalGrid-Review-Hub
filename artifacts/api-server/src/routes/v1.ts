@@ -6,11 +6,12 @@ import {
   reconcileDecisions,
   verifySnapshot,
   type EvaluateRequest,
+  type EvaluateResult,
   type ReconcilableDecision,
   type StandingBound,
 } from "@workspace/signalgrid-core";
 import { getDecisionStore, getSessionStore, type Session } from "@workspace/persistence";
-import { appendAuditRecord, type Target as AuditTarget } from "@workspace/audit";
+import { appendAuditRecord, getAuditBackend, getAuditRecordsForTenant, verifyLedger, type Target as AuditTarget } from "@workspace/audit";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { webauthn, webauthnStore } from "@workspace/webauthn";
 import { core, DEMO_KEYS } from "../lib/core";
@@ -78,6 +79,8 @@ router.post("/v1/decisions/evaluate", async (req: Request, res: Response, next: 
       const snapshot = core.getSnapshot(token(req), decision.evidenceSnapshotId);
       await store.saveDecision(decision, snapshot);
     }
+    await audit(req, "decision.evaluated", body.identityRef, { type: "decision", id: result.decisionId },
+      { outcome: result.outcome, policyVersionId: result.policyVersionId, workflowKey: body.workflowKey, deviceRef: body.deviceRef });
     res.json(envelope(req, { decision: result }));
   } catch (err) {
     next(err);
@@ -120,6 +123,8 @@ router.post("/v1/authorize", async (req: Request, res: Response, next: NextFunct
       const snapshot = core.getSnapshot(token(req), decision.evidenceSnapshotId);
       await store.saveDecision(decision, snapshot);
     }
+    await audit(req, "decision.evaluated", body.identityRef, { type: "decision", id: result.decisionId },
+      { outcome: result.outcome, policyVersionId: result.policyVersionId, workflowKey: body.workflowKey, deviceRef: body.deviceRef });
     res.json(
       envelope(req, {
         assist: result.outcome,
@@ -423,10 +428,25 @@ router.post("/v1/connectors/:id/sync", async (req: Request, res: Response, next:
   }
 });
 
-router.get("/v1/audit", (req: Request, res: Response) => {
-  const events = core.listAudit(token(req));
-  const chain = core.verifyAudit(token(req));
-  res.json(envelope(req, { events, chain }));
+router.get("/v1/audit", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Durable (Postgres, the /readyz predicate): the tenant's rows + the whole chain's verdict — DR-025 / listAudit in v1-openapi.yaml.
+    if (typeof getAuditBackend().ping === "function") {
+      const tenantId = core.authorizedContext(token(req), "audit:read").tenant.id;
+      // parseInt, as clampLimit does: "1.5" must never reach a bigint bind parameter
+      const limit = Math.min(Math.max(Number.parseInt(String(req.query["limit"] ?? 200), 10) || 200, 1), 1000);
+      const offset = Math.max(Number.parseInt(String(req.query["offset"] ?? 0), 10) || 0, 0);
+      const events = await getAuditRecordsForTenant(tenantId, limit, offset);
+      const chain = { ...(await verifyLedger()), scope: "global-ledger" as const };
+      res.json(envelope(req, { events, chain, source: "durable" as const, limit, offset }));
+      return;
+    }
+    const events = core.listAudit(token(req));
+    const chain = core.verifyAudit(token(req));
+    res.json(envelope(req, { events, chain, source: "memory" as const }));
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get("/v1/webhooks", (req: Request, res: Response) => {
@@ -814,6 +834,7 @@ async function audit(
     requestId: req.requestId,
     target,
     meta,
+    tenantId: core.context(token(req)).tenant.id,
   });
   auditEventsTotal.inc({ event_type: eventType });
 }
@@ -947,6 +968,8 @@ const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 // Linear, length-bounded key pattern (no nested quantifiers → no ReDoS).
 const CONTEXT_KEY = /^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/;
 const MAX_CONTEXT_ENTRIES = 32;
+// Over-long values are dropped, not truncated — see docs/DATA_RETENTION_AND_PERSONAL_DATA.md.
+const MAX_CONTEXT_VALUE_CHARS = 256;
 
 function sanitizeContext(
   input: Record<string, unknown>,
@@ -963,7 +986,7 @@ function sanitizeContext(
     if (typeof value !== "string") {
       continue;
     }
-    if (FORBIDDEN_KEYS.has(key) || !CONTEXT_KEY.test(key)) {
+    if (FORBIDDEN_KEYS.has(key) || !CONTEXT_KEY.test(key) || value.length > MAX_CONTEXT_VALUE_CHARS) {
       continue;
     }
     entries.push([key, value]);

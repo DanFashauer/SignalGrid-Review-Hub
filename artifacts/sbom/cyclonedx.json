@@ -8950,20 +8950,6 @@
     {
       "type": "library",
       "name": "@babel/helper-plugin-utils",
-      "version": "7.28.6",
-      "bom-ref": "pkg:npm/%40babel/helper-plugin-utils@7.28.6",
-      "purl": "pkg:npm/%40babel/helper-plugin-utils@7.28.6",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "@babel/helper-plugin-utils",
       "version": "7.29.7",
       "bom-ref": "pkg:npm/%40babel/helper-plugin-utils@7.29.7",
       "purl": "pkg:npm/%40babel/helper-plugin-utils@7.29.7",
@@ -9247,34 +9233,6 @@
       "version": "7.29.7",
       "bom-ref": "pkg:npm/%40babel/plugin-transform-private-methods@7.29.7",
       "purl": "pkg:npm/%40babel/plugin-transform-private-methods@7.29.7",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "@babel/plugin-transform-react-jsx-self",
-      "version": "7.27.1",
-      "bom-ref": "pkg:npm/%40babel/plugin-transform-react-jsx-self@7.27.1",
-      "purl": "pkg:npm/%40babel/plugin-transform-react-jsx-self@7.27.1",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "@babel/plugin-transform-react-jsx-source",
-      "version": "7.27.1",
-      "bom-ref": "pkg:npm/%40babel/plugin-transform-react-jsx-source@7.27.1",
-      "purl": "pkg:npm/%40babel/plugin-transform-react-jsx-source@7.27.1",
       "licenses": [
         {
           "license": {
@@ -11176,20 +11134,6 @@
     {
       "type": "library",
       "name": "@rolldown/pluginutils",
-      "version": "1.0.0-rc.3",
-      "bom-ref": "pkg:npm/%40rolldown/pluginutils@1.0.0-rc.3",
-      "purl": "pkg:npm/%40rolldown/pluginutils@1.0.0-rc.3",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "@rolldown/pluginutils",
       "version": "1.0.1",
       "bom-ref": "pkg:npm/%40rolldown/pluginutils@1.0.1",
       "purl": "pkg:npm/%40rolldown/pluginutils@1.0.1",
@@ -12025,62 +11969,6 @@
     },
     {
       "type": "library",
-      "name": "@types/babel__core",
-      "version": "7.20.5",
-      "bom-ref": "pkg:npm/%40types/babel__core@7.20.5",
-      "purl": "pkg:npm/%40types/babel__core@7.20.5",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "@types/babel__generator",
-      "version": "7.27.0",
-      "bom-ref": "pkg:npm/%40types/babel__generator@7.27.0",
-      "purl": "pkg:npm/%40types/babel__generator@7.27.0",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "@types/babel__template",
-      "version": "7.4.4",
-      "bom-ref": "pkg:npm/%40types/babel__template@7.4.4",
-      "purl": "pkg:npm/%40types/babel__template@7.4.4",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "@types/babel__traverse",
-      "version": "7.28.0",
-      "bom-ref": "pkg:npm/%40types/babel__traverse@7.28.0",
-      "purl": "pkg:npm/%40types/babel__traverse@7.28.0",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "@types/body-parser",
       "version": "1.19.6",
       "bom-ref": "pkg:npm/%40types/body-parser@1.19.6",
@@ -12614,9 +12502,9 @@
     {
       "type": "library",
       "name": "@vitejs/plugin-react",
-      "version": "5.2.0",
-      "bom-ref": "pkg:npm/%40vitejs/plugin-react@5.2.0",
-      "purl": "pkg:npm/%40vitejs/plugin-react@5.2.0",
+      "version": "6.1.1",
+      "bom-ref": "pkg:npm/%40vitejs/plugin-react@6.1.1",
+      "purl": "pkg:npm/%40vitejs/plugin-react@6.1.1",
       "licenses": [
         {
           "license": {
@@ -18336,20 +18224,6 @@
       "version": "18.3.1",
       "bom-ref": "pkg:npm/react-is@18.3.1",
       "purl": "pkg:npm/react-is@18.3.1",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "react-refresh",
-      "version": "0.18.0",
-      "bom-ref": "pkg:npm/react-refresh@0.18.0",
-      "purl": "pkg:npm/react-refresh@0.18.0",
       "licenses": [
         {
           "license": {

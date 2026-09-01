@@ -23,7 +23,7 @@ and approval-gated, simulated remediation (no autonomous production remediation)
 The controlling principle for the whole handoff: **the observable contract of
 `@workspace/signalgrid-core` stays fixed; only the backing implementations
 change.** The deterministic proof harness that guards that contract
-(`pnpm run proof:signalgrid-core`, 239 invariant assertions) must keep passing
+(`pnpm run proof:signalgrid-core`, 243 invariant assertions) must keep passing
 against the production wiring, extended with the new tests below.
 
 ## 1. Public fixture → private production mapping

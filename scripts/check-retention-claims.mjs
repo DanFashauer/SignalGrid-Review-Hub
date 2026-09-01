@@ -52,6 +52,10 @@ const RETENTION_TOKEN = /retention|retain(?:ed|s)?|\bstored?\b|\bstoring\b|\bhis
 // vendor "free trial, 31 days" or "available now" marketing line is not a
 // duration claim about SignalGrid's stores.
 const DATA_NOUN = /\b(?:data|history|audit|log|record|decision|evidence|ledger|chain|session)s?\b/i;
+// A deletion/erasure CAPABILITY ("deleted on request") is the same unsupported claim as a
+// duration — no store has that path. Gated alike; recording docs may quote it to refute it.
+const CAPABILITY = /\b(?:deleted?|erased?|purged?|removed?)\s+(?:on|upon)\s+request\b|\bright to (?:be forgotten|erasure)\b|\bdata erasure\b|\bwe (?:will |can )?(?:delete|erase|purge) (?:everything|anything|all|your)\b/i;
+
 const REVENUE_QUALIFIER = /(?:gross|net|customer|user|logo|employee)\s+$/i;
 
 /** Every retention TOKEN with a duration within 80 chars either side, minus
@@ -112,6 +116,14 @@ export function auditRetentionClaims(files) {
         if (!RECORDING.has(path)) {
           problems.push(
             `${path}:${i + 1} states a retention duration — no duration is implemented in any store; the position is docs/DATA_RETENTION_AND_PERSONAL_DATA.md`,
+          );
+        }
+      }
+      const cap = CAPABILITY.exec(line);
+      if (cap) {
+        if (!RECORDING.has(path)) {
+          problems.push(
+            `${path}:${i + 1} promises a deletion/erasure CAPABILITY ("${cap[0]}") — no deletion path exists in any durable store; the position is docs/DATA_RETENTION_AND_PERSONAL_DATA.md`,
           );
         }
       }
@@ -270,6 +282,16 @@ function selfTest() {
     "the POSITION DOCUMENT itself claiming implemented fails (self-validation)",
     p.some((x) => x.includes("canonical position lost its corrective meaning")),
   ]);
+  p = auditRetentionClaims({
+    ...good,
+    "docs/PILOT_PACKAGE.md": "You can end the pilot with one email; anything we hold is deleted on request.",
+  });
+  checks.push(["a deletion-on-request CAPABILITY claim FAILS with the file named", p.some((x) => x.includes("PILOT_PACKAGE.md:1") && x.includes("CAPABILITY"))]);
+  p = auditRetentionClaims({
+    ...good,
+    "docs/CLAIM_INVENTORY.md": "Row: the pilot page once said anything we hold is deleted on request — refuted.",
+  });
+  checks.push(["the same sentence in a RECORDING document is evidence, not a claim", p.length === 0]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);

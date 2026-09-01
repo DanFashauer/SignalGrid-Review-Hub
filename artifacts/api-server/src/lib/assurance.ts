@@ -17,7 +17,8 @@
 // posture it does not have — which is the same reason `check-launch-profile.mjs`
 // re-derives its surfaces instead of trusting the profile's own arithmetic.
 
-import { isLiveIntegrationsEnabled, resolveTier, type Tier } from "./tier";
+import { resolveTier, type Tier } from "./tier";
+import { core } from "./core";
 import { GA_ALLOWED_ROUTES, demoSurfacesEnabled, resolveProfile, type ProductProfile } from "./profile";
 
 export interface AssurancePosture {
@@ -44,7 +45,8 @@ export function resolveAssurancePosture(): AssurancePosture {
   return {
     profile: resolveProfile(),
     tier,
-    signalSource: isLiveIntegrationsEnabled(tier) ? "live" : "fixtures",
+    // From the connectors the core holds, never from SIGNALGRID_LIVE_INTEGRATIONS (which permits live calls; none exist).
+    signalSource: core.signalSource(),
     verdictEffect: "advisory",
     // Under review-demo every router is mounted, so the step-up routes exist. Under
     // the gateway profile the allowlist decides, and it lists none.

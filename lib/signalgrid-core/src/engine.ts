@@ -89,8 +89,8 @@ export class SignalGridCore {
   }
 
   /** Build a core preloaded with the deterministic public-safe demo seed. */
-  static demo(clockIso: string = DEMO_CLOCK_ISO): SignalGridCore {
-    const seeded = seedDemoStore(fixedClock(clockIso));
+  static demo(clockIso: string = DEMO_CLOCK_ISO, storeOptions?: { maxDecisionsPerTenant?: number }): SignalGridCore {
+    const seeded = seedDemoStore(fixedClock(clockIso), storeOptions);
     return new SignalGridCore(
       seeded.store,
       seeded.clock,
@@ -236,6 +236,12 @@ export class SignalGridCore {
     const principal = authenticate(this.store, token);
     authorize(principal, "connector:read");
     return this.store.listConnectors(principal.tenantId);
+  }
+
+  /** Where this deployment's signals come from — derived from the connectors it
+   *  actually holds. No token: it is a fact about the process, not about a tenant. */
+  signalSource(): "live" | "fixtures" {
+    return this.store.hasNonFixtureConnector() ? "live" : "fixtures";
   }
 
   listSyncRuns(token: string, connectorId: string): ConnectorSyncRun[] {

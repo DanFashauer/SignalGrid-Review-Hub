@@ -15046,9 +15046,9 @@
     {
       "type": "library",
       "name": "framer-motion",
-      "version": "12.38.0",
-      "bom-ref": "pkg:npm/framer-motion@12.38.0",
-      "purl": "pkg:npm/framer-motion@12.38.0",
+      "version": "13.1.1",
+      "bom-ref": "pkg:npm/framer-motion@13.1.1",
+      "purl": "pkg:npm/framer-motion@13.1.1",
       "licenses": [
         {
           "license": {
@@ -17003,9 +17003,9 @@
     {
       "type": "library",
       "name": "motion-dom",
-      "version": "12.38.0",
-      "bom-ref": "pkg:npm/motion-dom@12.38.0",
-      "purl": "pkg:npm/motion-dom@12.38.0",
+      "version": "13.1.1",
+      "bom-ref": "pkg:npm/motion-dom@13.1.1",
+      "purl": "pkg:npm/motion-dom@13.1.1",
       "licenses": [
         {
           "license": {
@@ -17017,9 +17017,9 @@
     {
       "type": "library",
       "name": "motion-utils",
-      "version": "12.36.0",
-      "bom-ref": "pkg:npm/motion-utils@12.36.0",
-      "purl": "pkg:npm/motion-utils@12.36.0",
+      "version": "13.0.0",
+      "bom-ref": "pkg:npm/motion-utils@13.0.0",
+      "purl": "pkg:npm/motion-utils@13.0.0",
       "licenses": [
         {
           "license": {

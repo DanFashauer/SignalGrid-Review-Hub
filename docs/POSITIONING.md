@@ -7,24 +7,31 @@ outside reader. Every claim traces to a `launch`-class item in
 location, badges, custody, network, and threat signals are absent — real and
 proven in this repository, and not Limited GA.
 
-## The one label, and the words around it
+## The label question — superseded, and deliberately left open
 
-Five incompatible product labels circulated before this page. The owner
-ratified all three finalists WITH DEFINED ROLES, which is what makes them
-compatible:
+**This section was reconciled to DR-019/DR-020 on 2026-09-01.** An earlier
+version of this page (last edited 2026-08-23) ratified "Shared-Device Trust
+Gateway" as the category/product name. **DR-019 (2026-08-26) superseded that
+ratification and ratified NO replacement label; DR-020 reinforced it.** The
+category question is deferred to customer discovery — manufacturing a category
+before buyers recognise one is the error DR-004 made once and DR-019 refused to
+repeat.
 
-- **Category / product name: "Shared-Device Trust Gateway"** — the name on
-  the site, the deck, and the pilot paperwork. Identical to the ratified
-  launch-profile product name (DR-005), so scope and name are the same word.
-- **Descriptor: "an access-decision service"** — the explaining phrase that
-  follows the name for a cold reader ("SignalGrid, a Shared-Device Trust
-  Gateway — an access-decision service embedded in the apps your staff
-  already use").
-- **Vision phrase: "workflow trust engine"** — reserved for roadmap/vision
-  contexts only; never used to describe what ships at Limited GA.
+So there is no ratified product-category name to put here, and this page no
+longer asserts one. What survives:
 
-Any document using a label outside these three roles is wrong and gets fixed
-to this page.
+- **`docs/PURPOSE.md` owns the product sentence** (canonical, DR-020). Describe
+  SignalGrid by what it does — an orchestration grid across door, device, room
+  and app that decides and acts on a person's behalf, invisible to the worker —
+  not by a coined category label.
+- **Descriptor, still usable for a cold reader: "an access-decision service"** —
+  the explaining phrase, e.g. "SignalGrid, an access-decision service embedded
+  in the apps your staff already use." This is a description, not a category
+  claim.
+
+Any document asserting a coined category label as SignalGrid's name is wrong
+and gets fixed to this rule. (The 2026-08 category name is superseded, DR-019 —
+named here only as the retired form this rule exists to catch.)
 
 ## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v4)
 

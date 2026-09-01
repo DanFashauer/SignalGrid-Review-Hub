@@ -1063,6 +1063,20 @@ _These need the owner's call — an agent should not act on them unsupervised._
 
 ## Discovered
 
+### Full-evaluation completion list (2026-09-01) — the real distance to a paying customer
+
+Surfaced by the independent six-dimension evaluation; see
+`docs/agent/SOLUTION_READINESS_ASSESSMENT.md`. Six of seven are self-declared in
+`scripts/launch-profile.mjs` GAPS — the evaluation confirms that accounting is honest.
+
+- [ ] **Non-demo core constructor.** The served API builds `SignalGridCore.demo()`; it never wires the real Graph connector in `lib/`. Largest gap to a real customer. (gap `non-demo-core-constructor`.)
+- [ ] **Verdict enforcement / step-up answerability.** The gate returns `step_up` in shadow mode with no launch route to answer one. (gap `step-up-answerability`.)
+- [ ] **Real connector auth in the deployable image.** Graph transport exists but the shipped server imports none of it; prod image runs the fixture core. (gap `device-management-health`.)
+- [ ] **Secrets management.** No manager exists; DR-010 model unimplemented, rotation is a runbook claim. The one real security gap. (`docs/SECRET_MODEL.md`.)
+- [ ] **Data lifecycle (retention / deletion / DSAR).** None implemented in any durable store; caller request-context persisted with no deletion path. (`docs/DATA_RETENTION_AND_PERSONAL_DATA.md`, DR-003.)
+- [ ] **Serve the Assist wire the SDKs bind.** Kotlin/Rust SDKs bind a planned `POST /v1/authorize` not served or specced; real envelope is `POST /v1/decisions/evaluate`. (gap `assist-wire-unserved`, DR-007.)
+- [ ] **Runtime enforced-vs-observed status route.** No route reports what the running server actually enforces per signal kind (Blocker 10). (gap `runtime-launch-status`.)
+
 New ideas land here first (CLAUDE.md scope rule), then get ranked.
 
 - [ ] Marketing-site narrative still tells the v1 gate story. 2026-08-31: the

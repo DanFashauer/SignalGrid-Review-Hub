@@ -363,6 +363,7 @@ records rather than current guidance.
 - [Review coverage](agent/review-coverage.json) and its gate `scripts/check-review-coverage.mjs`: what has actually been READ by a named role, as against what a gate asserts. Prints the percentage on every run beside every green suite, because a green gate suite is not a reviewed codebase — a gate checks an invariant, and an invariant holds perfectly well over code nobody has opened. Fatal only on incoherence: a claim naming a path that does not exist, or one with no reviewer, date or depth.
 
 - [LOOP — where SignalGrid actually is](agent/LOOP.md): one-page state file, read first in any tool. `pnpm run loop:state` checks the seams between tools.
+- [Solution readiness assessment](agent/SOLUTION_READINESS_ASSESSMENT.md): the whole repo evaluated end to end (build, tests, security, decision-core, claims, operational readiness) — verdict, six-dimension scorecard, and the real completion list to a paying customer (2026-09-01).
 - [Resource intake](agent/RESOURCE_INTAKE.md): what the owner feeds in and what became of it — every resource gets a row, absorbed by use, never answered with only reasons (DR-021).
 - [Customer discovery log](agent/DISCOVERY_LOG.md): pre-registered discovery protocol, thresholds and tally.
 - [Integration map](INTEGRATION_MAP.md): the systems the grid connects to (access, identity, device, location, apps, ticketing), routed by lane — the platform surface DR-020 names.

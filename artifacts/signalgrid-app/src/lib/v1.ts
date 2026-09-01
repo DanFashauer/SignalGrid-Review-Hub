@@ -12,12 +12,11 @@
 
 const DEMO_OPERATOR_TOKEN = "sgk_demo_northwind_operator";
 
-// Injectable token: defaults to the public-safe demo operator key, and a hosted
-// deployment (or a future login flow) can swap it without touching call sites.
-let activeToken = DEMO_OPERATOR_TOKEN;
-export function setV1Token(token: string): void {
-  activeToken = token.trim() || DEMO_OPERATOR_TOKEN;
-}
+// Injectable token: defaults to the public-safe demo operator key. `setV1Token`
+// (a setter for a future login flow to swap it without touching call sites) was
+// removed as dead code — no caller exists yet; reintroduce it alongside the
+// login flow that needs it.
+const activeToken = DEMO_OPERATOR_TOKEN;
 
 // Mirror main.tsx: relative in dev (Vite proxies /api) and same-origin deploys;
 // prefixed when a hosted build points at a remote api-server.

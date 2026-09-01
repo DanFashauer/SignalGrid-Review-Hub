@@ -18,7 +18,6 @@ import {
   getAndDeleteChallenge,
   addCredential,
   getCredentialsForUser,
-  createStepUpSession,
   getStepUpSession,
   advanceCredentialCounter,
 } from './store';
@@ -552,31 +551,6 @@ export async function verifyAuthentication(
     credentialId: credential.id,
     timestamp,
   };
-}
-
-/**
- * Create a step-up session
- */
-export async function createStepUp(
-  userId: string,
-  ttlSeconds: number = 300,
-  reason?: string
-): Promise<StepUpSession> {
-  const sessionId = randomBytes(32).toString('base64url');
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + ttlSeconds * 1000);
-
-  const session: StepUpSession = {
-    sessionId,
-    userId,
-    createdAt: now.toISOString(),
-    expiresAt: expiresAt.toISOString(),
-    reason,
-  };
-
-  await createStepUpSession(session);
-
-  return session;
 }
 
 /**

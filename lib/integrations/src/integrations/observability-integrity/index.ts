@@ -105,39 +105,3 @@ export function makeDefaultObservabilityIntegrityTransport(
     return body as ObservabilityStreamReportRaw;
   };
 }
-
-/** Deterministic fixtures — the shapes a reviewer should be able to reproduce.
- *  The middle one is the point of the family: green everywhere, and its silence
- *  still proves almost nothing. */
-export const DEMO_OBSERVABILITY_STREAM_RECORDS: Readonly<
-  Record<string, ObservabilityStreamReportRaw>
-> = {
-  "svc.orders.api": {
-    streamRef: "svc.orders.api",
-    collectionState: "reporting",
-    fidelity: "full",
-    reliance: "load_bearing",
-    lastDatapointAt: "2026-01-01T00:00:00.000Z",
-    expectedIntervalSeconds: 60,
-    source: "demo-observability",
-    observedAt: "2026-01-01T00:00:30.000Z",
-  },
-  "svc.checkout.traces": {
-    streamRef: "svc.checkout.traces",
-    collectionState: "reporting",
-    fidelity: "sampled",
-    reliance: "load_bearing",
-    keptFraction: 0.01,
-    lastDatapointAt: "2026-01-01T00:00:00.000Z",
-    expectedIntervalSeconds: 60,
-    source: "demo-observability",
-    observedAt: "2026-01-01T00:00:30.000Z",
-  },
-  "svc.legacy.batch": {
-    streamRef: "svc.legacy.batch",
-    collectionState: "never_instrumented",
-    reliance: "advisory",
-    source: "demo-observability",
-    observedAt: "2026-01-01T00:00:30.000Z",
-  },
-};

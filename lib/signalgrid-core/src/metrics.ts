@@ -1,7 +1,5 @@
 import type { Decision, DecisionOutcome, MetricsSummary } from "./types";
 
-const OUTCOMES: DecisionOutcome[] = ["allow", "step_up", "restrict", "deny"];
-
 /** Aggregate operator metrics over a tenant's decisions (deterministic). */
 export function computeMetrics(decisions: Decision[]): MetricsSummary {
   const byOutcome: Record<DecisionOutcome, number> = {
@@ -34,11 +32,6 @@ export function computeMetrics(decisions: Decision[]): MetricsSummary {
     pendingReview: decisions.filter((d) => d.reviewStatus === "pending_review")
       .length,
   };
-}
-
-/** Every stored decision references a real outcome bucket. */
-export function outcomesCovered(summary: MetricsSummary): boolean {
-  return OUTCOMES.every((outcome) => outcome in summary.byOutcome);
 }
 
 function rate(part: number, total: number): number {

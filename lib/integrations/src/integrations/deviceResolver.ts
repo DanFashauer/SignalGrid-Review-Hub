@@ -279,19 +279,3 @@ export class DeviceIdentityResolver {
     return Array.from(unique.values());
   }
 }
-
-/**
- * Singleton instance
- */
-let resolverInstance: DeviceIdentityResolver | null = null;
-
-export function getDeviceResolver(): DeviceIdentityResolver {
-  if (!resolverInstance) {
-    resolverInstance = new DeviceIdentityResolver();
-  }
-  return resolverInstance;
-}
-
-export function setDeviceResolver(resolver: DeviceIdentityResolver): void {
-  resolverInstance = resolver;
-}

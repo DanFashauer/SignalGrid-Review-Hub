@@ -10,7 +10,7 @@ import { evaluateUem } from "./evaluate";
 import { normalizeIntuneDevice } from "./intune";
 import { normalizeJamfDevice } from "./jamf";
 import { normalizeWorkspaceOneDevice } from "./workspace-one";
-import type { NormalizedUemDeviceState, UemVendor, UemVerdict } from "./types";
+import type { NormalizedUemDeviceState, UemVendor } from "./types";
 
 export * from "./types";
 // Mirrors `nac/index.ts`, which has always re-exported its store. The asymmetry was
@@ -202,10 +202,3 @@ export const UEM_FIXTURES: Readonly<Record<string, NormalizedUemDeviceState>> = 
     reportIntegrity: "malformed",
   },
 });
-
-/** Grade a fixture by name. Returns null for an unknown fixture rather than
- *  inventing one. */
-export function evaluateUemFixture(name: string): UemVerdict | null {
-  const fixture = UEM_FIXTURES[name];
-  return fixture ? evaluateUem(fixture) : null;
-}

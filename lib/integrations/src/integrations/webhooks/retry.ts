@@ -47,17 +47,6 @@ export function calculateBackoff(
 }
 
 /**
- * Get the next retry timestamp
- */
-export function getNextRetryAt(
-  attempt: number,
-  config: RetryConfig = DEFAULT_RETRY_CONFIG
-): Date {
-  const delay = calculateBackoff(attempt, config);
-  return new Date(Date.now() + delay);
-}
-
-/**
  * Check if an attempt should be retried based on response code
  */
 export function isRetryableStatus(statusCode: number): boolean {
@@ -81,17 +70,4 @@ export function hasReachedMaxAttempts(
   config: RetryConfig = DEFAULT_RETRY_CONFIG
 ): boolean {
   return attempt >= config.maxAttempts;
-}
-
-/**
- * Get retry schedule as array of delays
- */
-export function getRetrySchedule(
-  config: RetryConfig = DEFAULT_RETRY_CONFIG
-): number[] {
-  const schedule: number[] = [];
-  for (let i = 1; i <= config.maxAttempts; i++) {
-    schedule.push(calculateBackoff(i, config));
-  }
-  return schedule;
 }

@@ -530,14 +530,3 @@ type MinimalWebSocket = {
   send(data: string): void;
   close(): void;
 };
-
-// Singleton instance
-let fleetDMAdapter: FleetDMAdapter | null = null;
-
-export async function getFleetDMAdapter(): Promise<FleetDMAdapter> {
-  if (!fleetDMAdapter) {
-    fleetDMAdapter = new FleetDMAdapter();
-    await fleetDMAdapter.initialize();
-  }
-  return fleetDMAdapter;
-}

@@ -377,15 +377,6 @@ export async function dispatchEvent(
   };
 }
 
-/**
- * Get webhook secret (for admin purposes)
- * In production, this would integrate with a secret manager
- */
-export async function getWebhookSecret(webhookId: string): Promise<string | null> {
-  const envKey = `WEBHOOK_SECRET_${webhookId.slice(0, 8)}`;
-  return process.env[envKey] || null;
-}
-
 // Re-export types and functions for convenience
 export * from './types';
 export * from './sign';

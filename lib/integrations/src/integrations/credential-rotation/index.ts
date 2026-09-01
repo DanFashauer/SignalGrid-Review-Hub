@@ -92,21 +92,3 @@ export function makeDefaultCredentialRotationTransport(baseUrl: string): Credent
     return body as CredentialRotationReportRaw;
   };
 }
-
-/** Deterministic fixtures — the shapes a reviewer should be able to reproduce. */
-export const DEMO_CREDENTIAL_ROTATION_RECORDS: Readonly<Record<string, CredentialRotationReportRaw>> = {
-  "svc.pipeline.deploy": {
-    subjectRef: "svc.pipeline.deploy", kind: "static_secret", custody: "distributed_copy",
-    createdAt: "2024-01-15T00:00:00.000Z", maxAgeDays: 90,
-    source: "demo-secrets-manager", observedAt: "2026-01-01T00:00:00.000Z",
-  },
-  "svc.reporting.read": {
-    subjectRef: "svc.reporting.read", kind: "static_secret", custody: "managed_vault",
-    lastRotatedAt: "2025-12-20T00:00:00.000Z", createdAt: "2024-03-01T00:00:00.000Z", maxAgeDays: 90,
-    source: "demo-secrets-manager", observedAt: "2026-01-01T00:00:00.000Z",
-  },
-  "svc.session.token": {
-    subjectRef: "svc.session.token", kind: "short_lived", custody: "managed_vault",
-    source: "demo-secrets-manager", observedAt: "2026-01-01T00:00:00.000Z",
-  },
-};

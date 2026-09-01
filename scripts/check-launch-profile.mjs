@@ -309,6 +309,53 @@ for (const gap of GAPS) {
   }
 }
 
+// ── The GA fence must EQUAL the launch surface, in both directions ───────────
+// `artifacts/api-server/src/lib/profile.ts` says GA_ALLOWED_ROUTES "is cross-checked
+// … by scripts/check-launch-profile.mjs". Until 2026-09-01 that sentence was false:
+// this gate derived launch paths from the spec and never opened profile.ts, so
+// /v1/authorize could be classified `launch` while absent from the fence — and the
+// gate passed. Under shared-device-gateway that route 404'd, and the host-app SDKs
+// read any non-2xx as deny: every worker denied at the door, with a green gate.
+// Runtime (the fence) and governance (the profile) are written in different files
+// by different mechanisms; the point is that a gate compares them. Now one does.
+// Regex mirrors parseGaRoutes in check-api-collection.mjs (not imported, to keep
+// this gate free of that module's entry-point side effects).
+{
+  const profileSrc = read("artifacts/api-server/src/lib/profile.ts");
+  const block = profileSrc.match(/GA_ALLOWED_ROUTES[^=]*=\s*\[([\s\S]*?)\];/);
+  if (!block) die("could not find GA_ALLOWED_ROUTES in artifacts/api-server/src/lib/profile.ts — anchor drifted.");
+  const fence = [...block[1].matchAll(/\{\s*method:\s*"([A-Z]+)",\s*path:\s*"([^"]+)"\s*\}/g)].map((m) => m[2]);
+  if (fence.length === 0) die("GA_ALLOWED_ROUTES parsed to zero routes — an empty fence would 404 the whole product; the parser drifted.");
+  // Liveness/readiness probes sit deliberately outside the published contract.
+  const INFRA = new Set(["/healthz", "/readyz"]);
+  const norm = (p) => p.replace(/\{([^}]+)\}/g, ":$1");
+  const fencePaths = new Set(fence.filter((p) => !INFRA.has(p)).map(norm));
+  const apiSurface = SURFACES.find((s) => s.key === "published-api-paths");
+  const launchPaths = new Set(apiSurface.launch.map((e) => norm(e.id)));
+  let agree = true;
+  for (const p of launchPaths) {
+    if (!fencePaths.has(p)) {
+      agree = false;
+      console.error(
+        `\n✗ launch path ${p} is NOT on the GA fence (GA_ALLOWED_ROUTES in profile.ts).` +
+          `\n  Under shared-device-gateway it 404s, and a host-app SDK reads that as deny.`,
+      );
+      failures += 1;
+    }
+  }
+  for (const p of fencePaths) {
+    if (!launchPaths.has(p)) {
+      agree = false;
+      console.error(
+        `\n✗ the GA fence serves ${p}, which is not classified \`launch\` in the profile.` +
+          `\n  The gateway exposes a route the launch profile never ratified.`,
+      );
+      failures += 1;
+    }
+  }
+  if (agree) console.log(`  GA fence == launch surface: ${launchPaths.size} paths agree in both directions`);
+}
+
 console.log(
   `\n  totals: launch=${totals.launch} deferred=${totals.deferred} ` +
     `demo_only=${totals.demo_only} internal=${totals.internal} ` +

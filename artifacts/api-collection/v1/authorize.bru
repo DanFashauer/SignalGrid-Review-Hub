@@ -1,0 +1,33 @@
+meta {
+  name: Authorize - the Assist wire (compliant nurse)
+  type: http
+  seq: 21
+}
+
+post {
+  url: {{baseUrl}}/v1/authorize
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "identityRef": "nurse.compliant",
+    "deviceRef": "ipad-ward-01",
+    "workflowKey": "clinical-session"
+  }
+}
+
+docs {
+  The Assist wire (DR-007 declared it a gap; DR-023 served it): the SAME decision as
+  POST /v1/decisions/evaluate, returned in the minimal envelope a shared-device host
+  app obeys — top-level `assist` (allow | step_up | restrict | deny), `decisionId`,
+  `reasons`. A host app must fail closed on any other value and on any non-2xx.
+  Healthy identity + managed device -> assist: allow. Fixture actors from the demo seed.
+}
+
+script:post-response {
+  if (res.body && res.body.decisionId) {
+    bru.setVar("decisionId", res.body.decisionId);
+  }
+}

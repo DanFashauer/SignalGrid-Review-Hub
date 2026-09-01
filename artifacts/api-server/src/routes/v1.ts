@@ -84,6 +84,54 @@ router.post("/v1/decisions/evaluate", async (req: Request, res: Response, next: 
   }
 });
 
+/**
+ * The Assist wire — the envelope the Kotlin and Rust host-app SDKs bind.
+ *
+ * DR-007 declared this route a gap because building it "would widen the FROZEN
+ * launch surface." DR-021 lifted that freeze, and DR-023 closes the gap: the route
+ * is now served. It is the SAME decision as /v1/decisions/evaluate — same request
+ * body, same core.evaluate, same persisted record, same decisionId — presented in
+ * the shape a frontline host app consumes: `{assist, reasons, decisionId}`.
+ *
+ * WHY A SECOND ROUTE AND NOT A SECOND FIELD. A host app on a shared device obeys
+ * ONE word — allow / step_up / restrict / deny — and must fail closed on anything
+ * else. The 42 shared conformance vectors (native/shared/assist-wire-conformance.json)
+ * bind exactly that contract: top-level `assist`, the four-word vocabulary, unknown
+ * fields tolerated, any non-2xx read as deny. EvaluateResult carries policy ids,
+ * matched rules and an evidence reference a host app never needs and must not
+ * have to parse to stay safe. Two envelopes over one decision keeps the console's
+ * explainability surface and the host app's minimal obedience surface from
+ * dragging each other.
+ *
+ * `assist` IS `outcome`: DecisionOutcome and the Assist vocabulary are the same four
+ * strings by construction (lib/signalgrid-core/src/types.ts), so no mapping table
+ * can drift. `reasons` is the engine's reasonCodes verbatim. The standard envelope
+ * fields (requestId, timestamp) ride along at top level; the vectors prove every
+ * client tolerates unknown top-level fields.
+ */
+router.post("/v1/authorize", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = parseEvaluate(req.body);
+    const result = core.evaluate(token(req), body);
+    decisionsTotal.inc({ outcome: result.outcome });
+    const store = getDecisionStore();
+    if (store) {
+      const decision = core.getDecision(token(req), result.decisionId);
+      const snapshot = core.getSnapshot(token(req), decision.evidenceSnapshotId);
+      await store.saveDecision(decision, snapshot);
+    }
+    res.json(
+      envelope(req, {
+        assist: result.outcome,
+        decisionId: result.decisionId,
+        reasons: result.reasonCodes,
+      }),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/v1/decisions", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const store = getDecisionStore();

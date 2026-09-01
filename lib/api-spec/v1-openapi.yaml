@@ -134,6 +134,39 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/authorize:
+    post:
+      operationId: authorize
+      tags: [decisions]
+      summary: The Assist wire — the shared-device decision in the shape a host app obeys
+      description: >-
+        The same decision as POST /v1/decisions/evaluate (same request body, same
+        persisted record, same decisionId), returned as the minimal obedience envelope
+        the Kotlin and Rust host-app SDKs bind: `assist` is one of allow / step_up /
+        restrict / deny, `reasons` is the engine's reason codes verbatim. A host app
+        must fail closed on any value outside that vocabulary and on any non-2xx.
+        Bound by the 42 shared conformance vectors in
+        native/shared/assist-wire-conformance.json (DR-007 declared the gap; DR-023
+        closed it).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EvaluateRequest" }
+      responses:
+        "200":
+          description: Assist decision
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - $ref: "#/components/schemas/AssistResult"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/decisions:
     get:
       operationId: listDecisions
@@ -1043,6 +1076,21 @@ components:
           type: object
           additionalProperties: { type: string }
       required: [identityRef, deviceRef, workflowKey]
+    AssistResult:
+      # The Assist wire (DR-007 / DR-023): the minimal envelope a shared-device host
+      # app obeys. `assist` is DecisionOutcome by construction — the same four strings
+      # the engine emits — so there is no mapping table to drift. `reasons` is
+      # reasonCodes verbatim and is optional on the wire (absent is not an error).
+      type: object
+      properties:
+        assist:
+          type: string
+          enum: [allow, step_up, restrict, deny]
+        decisionId: { type: string }
+        reasons:
+          type: array
+          items: { type: string }
+      required: [assist, decisionId]
     EvaluateResult:
       type: object
       properties:

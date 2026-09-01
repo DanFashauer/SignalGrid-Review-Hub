@@ -121,6 +121,12 @@ export const GA_ALLOWED_ROUTES: readonly { method: string; path: string }[] = [
   { method: "GET", path: "/readyz" },
   { method: "GET", path: "/v1/context" },
   { method: "POST", path: "/v1/decisions/evaluate" },
+  // The Assist wire (DR-023) — the same decision as evaluate in the envelope a
+  // host-app SDK obeys. It MUST sit on the fence: the SDKs read any non-2xx as
+  // deny, so a gateway that 404'd this route would deny every worker at the door
+  // with no signal that the wire was ever meant to be served. The contract-drift
+  // sweep (2026-09-01) caught exactly that: classified `launch`, absent here.
+  { method: "POST", path: "/v1/authorize" },
   { method: "GET", path: "/v1/decisions" },
   { method: "GET", path: "/v1/decisions/:id" },
   { method: "GET", path: "/v1/decisions/:id/evidence" },

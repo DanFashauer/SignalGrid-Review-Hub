@@ -83,6 +83,8 @@ const v1Requests = [
   item("List demo keys", "GET", "/v1/keys", { auth: NOAUTH }),
   item("Context (principal + tenant)", "GET", "/v1/context"),
   item("Evaluate a decision", "POST", "/v1/decisions/evaluate", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" } }),
+  // The Assist wire (DR-023): the same decision, in the {assist, reasons, decisionId} shape a host-app SDK obeys.
+  item("Authorize (the Assist wire)", "POST", "/v1/authorize", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" } }),
   item("List decisions", "GET", "/v1/decisions?limit=20"),
   item("Get a decision", "GET", "/v1/decisions/{{decisionId}}"),
   item("Get decision evidence", "GET", "/v1/decisions/{{decisionId}}/evidence"),

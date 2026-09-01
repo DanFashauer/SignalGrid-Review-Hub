@@ -241,7 +241,7 @@ function main() {
       covered by \`scripts/check-decision-port-parity.mjs\`; bringing the iOS wire
       envelope under shared vectors is follow-on work, stated rather than implied
       done. And note what a green run here proves: the Kotlin and Rust SDKs agree
-      about a PLANNED wire (/v1/authorize, a declared gap) — served-ness is
+      about the Assist wire (/v1/authorize — declared a gap by DR-007, served since DR-023) — served-ness is
       \`scripts/check-assist-wire-served.mjs\`'s question, not this gate's.
     · the TypeScript source of truth in \`lib/\`, which is what the vectors were
       written FROM. A case that misreads the product would be wrong in every client

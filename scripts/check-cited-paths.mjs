@@ -20,8 +20,9 @@
 // tracked directories. A repo with `packages/` gets `packages/` for free; this one keeps
 // working unchanged.
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const SELF_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -42,6 +43,27 @@ const git = (args, cwd = ROOT) => {
   }
 };
 const lines = (s) => (s ? s.trim().split("\n").filter(Boolean) : []);
+
+// Prove the root is a readable git work tree BEFORE any scan. `git()` above swallows
+// every failure to "" so the citation reads stay simple — but that makes an unreadable
+// checkout (present path, no/broken `.git`, shallow-without-worktree) indistinguishable
+// from a real repo with zero markdown docs: both yield an empty `ls-files` and would be
+// reported CLEAN. That is the "green over an absent input" inversion the fail-closed
+// doctrine exists to stop, and the estate scanner's own header already promises "unrun
+// is not green". Throw here so callers surface NOT_SCANNED instead of a vacuous pass.
+export function assertGitWorkTree(root) {
+  let out;
+  try {
+    out = execSync("git rev-parse --is-inside-work-tree", {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    throw new Error(`not a readable git checkout (git rev-parse failed): ${root}`);
+  }
+  if (out !== "true") throw new Error(`not a git work tree (rev-parse returned "${out}"): ${root}`);
+}
 
 /** Top-level tracked directories — the roots a citation may plausibly start with. */
 export function deriveRoots(root = ROOT) {
@@ -117,6 +139,7 @@ export function missingIn(text, exists, pattern) {
 }
 
 export function scanRepo(root) {
+  assertGitWorkTree(root);
   const name = root.split("/").filter(Boolean).pop();
   const roots = deriveRoots(root);
   const pattern = buildPattern(roots);
@@ -212,6 +235,35 @@ function selfTest() {
     ),
   ]);
 
+  // The fail-open this gate shipped with: a present-but-non-git path read as a vacuous
+  // "0 citations across 0 docs" pass instead of NOT_SCANNED. Mutation-shaped — a real
+  // git checkout must still scan (proven by every other check running against SELF_ROOT),
+  // and a non-git one must throw.
+  const tmpNonGit = mkdtempSync(join(tmpdir(), "cited-notgit-"));
+  writeFileSync(join(tmpNonGit, "README.md"), "see `lib/ghost/src/index.ts` for detail");
+  let threwOnNonGit = false;
+  try {
+    scanRepo(tmpNonGit);
+  } catch {
+    threwOnNonGit = true;
+  } finally {
+    rmSync(tmpNonGit, { recursive: true, force: true });
+  }
+  checks.push([
+    "A PRESENT-BUT-NON-GIT PATH IS NOT_SCANNED (throws), never a vacuous 0-docs pass — the fail-open this gate shipped with",
+    threwOnNonGit,
+  ]);
+  checks.push([
+    "…and a real git checkout (this repo) still scans without throwing",
+    (() => {
+      try {
+        return scanRepo(SELF_ROOT).docs > 0;
+      } catch {
+        return false;
+      }
+    })(),
+  ]);
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -231,7 +283,18 @@ if (!isEntry) {
 }
 
 function runCli() {
-const r = scanRepo(ROOT);
+let r;
+try {
+  r = scanRepo(ROOT);
+} catch (err) {
+  // NOT SCANNED is not a pass. Exit 2 keeps it distinct from 1 (broken citation) and 0
+  // (clean), matching the check:absence convention — a caller can tell "the target could
+  // not be read" from "the target is clean" from "the target has a hole".
+  console.error(`Cited-path check NOT SCANNED for ${ROOT}: ${err.message}`);
+  console.error("An unreadable target cannot be scanned, and an unscanned target is never");
+  console.error("a pass. Point --root at a git work tree, or clone the checkout first.");
+  process.exit(2);
+}
 
 if (AS_JSON) {
   console.log(JSON.stringify(r, null, 2));

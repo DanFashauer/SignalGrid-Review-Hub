@@ -57,7 +57,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-hook-form": "^7.85.0",
-    "recharts": "^2.15.4",
+    "recharts": "^3.10.1",
     "sonner": "^2.0.8",
     "tailwind-merge": "catalog:",
     "tailwindcss": "catalog:",

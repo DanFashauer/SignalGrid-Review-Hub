@@ -76,7 +76,7 @@
 
 /** Bumped whenever a status changes. Not a semver — a serial number, so a doc or a
  *  review can name the exact revision of the scope it was written against. */
-export const LAUNCH_PROFILE_VERSION = 4;
+export const LAUNCH_PROFILE_VERSION = 5;
 
 // VERSION HISTORY, kept because a scope decision that changes silently is not a
 // decision anyone can hold you to.
@@ -314,6 +314,13 @@ export const SURFACES = [
   {
     id: "/v1/decisions/evaluate",
     reason: "The Assist gate itself. If only one route shipped, it would be this one.",
+  },
+  {
+    id: "/v1/authorize",
+    reason:
+      "The same gate, in the shape a host app obeys: {assist, reasons, decisionId}. " +
+      "The wire the Kotlin and Rust SDKs bind and the 42 shared conformance vectors " +
+      "hold. Declared a gap by DR-007 while the surface was frozen; served under DR-023.",
   },
   {
     id: "/v1/decisions",
@@ -733,29 +740,6 @@ export const GAPS = [
     // mechanical fact that matters, checked where the server constructs it.
     closedWhen: [
       { file: "artifacts/api-server/src/lib/core.ts", absent: "SignalGridCore.demo()" },
-    ],
-  },
-  {
-    id: "assist-wire-unserved",
-    surface: "published-api-paths",
-    whatIsMissing:
-      "The Assist wire the Kotlin and Rust SDKs bind — POST /v1/authorize returning " +
-      "{assist, reasons, decisionId} — is not served: no route implements it and the " +
-      "OpenAPI spec registers no such path. The 42 shared conformance vectors and both " +
-      "SDK suites test a PLANNED wire (DR-007); the envelope a host app integrates " +
-      "today is EvaluateResult from POST /v1/decisions/evaluate. Building /v1/authorize " +
-      "now would widen the frozen launch surface, so the wire stays declared-ahead " +
-      "rather than quietly implied as served. scripts/check-assist-wire-served.mjs " +
-      "fails if the vectors bind an unserved route while this entry is missing.",
-    // Closed mechanically the moment the spec registers the path — the same
-    // change that would make the SDK binding true. The FILE form, deliberately:
-    // the dir evaluator reads only .ts files, so a dir condition on lib/api-spec
-    // could never see the YAML and the gap would have reported "open" forever —
-    // the assurance review proved it by inserting the path and watching the
-    // predicate stay false (the stale-gap defect this register exists to
-    // prevent, reintroduced by the entry citing it).
-    closedWhen: [
-      { file: "lib/api-spec/v1-openapi.yaml", contains: "/v1/authorize:" },
     ],
   },
 ];

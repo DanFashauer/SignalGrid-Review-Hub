@@ -1222,3 +1222,62 @@ diligence tradeoff, that is his call to make, and he made it.
 **Reversal.** The owner reverses by saying so. If the hosted service is dropped,
 remove the `firecrawl:install` script and the MCP registration; nothing in the
 product depends on it, by construction.
+
+---
+
+## DR-023 — The Assist wire is served: DR-007's declared gap closes (2026-09-01)
+
+**Question.** DR-007 recorded `POST /v1/authorize` — the `{assist, reasons,
+decisionId}` envelope the Kotlin and Rust host-app SDKs bind and the 42 shared
+conformance vectors hold — as a **declared gap**, for one stated reason:
+*"building that route now would widen the frozen launch surface."* DR-021 has
+since lifted that freeze, and the owner's standing directive is to close every
+known gap. Does the wire get served?
+
+**Call: yes — the route is served, the gap entry is retired, and the route is
+classified `launch`.** The only blocker DR-007 named no longer exists.
+
+**What was built, precisely.**
+
+- `POST /v1/authorize` (`artifacts/api-server/src/routes/v1.ts`) is the **same
+  decision** as `POST /v1/decisions/evaluate`: same request body
+  (`EvaluateRequest`), same `core.evaluate`, same persisted decision record,
+  same `decisionId`. It differs only in envelope — top-level `assist`,
+  `decisionId`, `reasons` — the minimal obedience surface a shared-device host
+  app consumes. `assist` **is** `DecisionOutcome` by construction (the same four
+  strings in `lib/signalgrid-core/src/types.ts`), so no mapping table exists to
+  drift; `reasons` is `reasonCodes` verbatim.
+- The OpenAPI contract (`lib/api-spec/v1-openapi.yaml`) registers the path and
+  an `AssistResult` schema. Registering the path is exactly the `closedWhen`
+  DR-007's gap entry named, so the gap closed on the mechanism it declared.
+- `scripts/launch-profile.mjs`: the `assist-wire-unserved` gap entry is
+  removed (the served-ness gate fails on a served route with a stale gap), the
+  route is classified `launch` beside the evaluate route it duplicates, and
+  `LAUNCH_PROFILE_VERSION` is bumped 4 → 5 — the mechanical record that a
+  launch-surface change was taken deliberately (DR-001).
+- `scripts/check-assist-wire-served.mjs` keeps every failure mode it had, now
+  synthesised from a served baseline: an unserved wire with no gap, a served wire
+  with a stale gap, a retargeted gap, an emptied vector suite.
+- The api test suite binds the server side of the contract: 200, top-level
+  `assist` in vocabulary, agreement with evaluate's outcome for the same input,
+  restrict-with-reasons, and the same 401/403/400 discipline as evaluate
+  (an auditor cannot mint a decision through the Assist wire either).
+
+**Why two envelopes over one decision, and not one.** A host app on a frontline
+device obeys one word and must fail closed on anything else — the vectors read
+any non-2xx and any unrecognised `assist` as deny. `EvaluateResult` carries
+policy ids, matched rules and an evidence reference that the console's
+explainability surface needs and a host app must never have to parse to stay
+safe. Keeping them separate keeps the two surfaces from dragging each other.
+
+**What this does NOT change.** Claim discipline (DR-021 §3): the wire is
+served and fixture-backed on the review surface; it is not a production
+deployment and no document may say otherwise. The iOS `/v1/app-workflows/evaluate`
+wire DR-007 also discussed remains deferred, exactly as that record left it.
+
+**Evidence.** `artifacts/api-server/src/routes/v1.ts`; `lib/api-spec/v1-openapi.yaml`;
+`scripts/launch-profile.mjs` (version 5, GAPS 5 → 4); `scripts/check-assist-wire-served.mjs`;
+`native/shared/assist-wire-conformance.json` (routeComment); `artifacts/api-server/test/api.test.mjs`.
+
+**Reversal.** The owner reverses by saying so; un-serving the route means
+restoring a gap entry that names it and bumping the profile version again.

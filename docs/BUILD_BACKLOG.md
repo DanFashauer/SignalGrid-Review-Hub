@@ -1086,7 +1086,7 @@ Surfaced by the independent six-dimension evaluation; see
 - [ ] **Real connector auth in the deployable image.** Graph transport exists but the shipped server imports none of it; prod image runs the fixture core. (gap `device-management-health`.)
 - [ ] **Secrets management.** No manager exists; DR-010 model unimplemented, rotation is a runbook claim. The one real security gap. (`docs/SECRET_MODEL.md`.)
 - [ ] **Data lifecycle (retention / deletion / DSAR).** None implemented in any durable store; caller request-context persisted with no deletion path. (`docs/DATA_RETENTION_AND_PERSONAL_DATA.md`, DR-003.)
-- [ ] **Serve the Assist wire the SDKs bind.** Kotlin/Rust SDKs bind a planned `POST /v1/authorize` not served or specced; real envelope is `POST /v1/decisions/evaluate`. (gap `assist-wire-unserved`, DR-007.)
+- [x] **Serve the Assist wire the SDKs bind.** Kotlin/Rust SDKs bind a planned `POST /v1/authorize` not served or specced; real envelope is `POST /v1/decisions/evaluate`. (gap `assist-wire-unserved`, DR-007.) **DONE 2026-09-01 (DR-023):** served in `v1.ts` + registered in `v1-openapi.yaml` (`AssistResult`); gap entry retired, route classified `launch`, `LAUNCH_PROFILE_VERSION` 4→5; server-side contract bound in `test:api` (200 / vocab / agreement with evaluate / restrict-with-reasons / 401 / 403 / 400). Same decision, second envelope — the host-app obedience surface stays minimal.
 - [ ] **Runtime enforced-vs-observed status route.** No route reports what the running server actually enforces per signal kind (Blocker 10). (gap `runtime-launch-status`.)
 
 New ideas land here first (CLAUDE.md scope rule), then get ranked.

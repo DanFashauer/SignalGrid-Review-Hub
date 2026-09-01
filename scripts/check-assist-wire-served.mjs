@@ -80,26 +80,38 @@ function load() {
 function selfTest() {
   const checks = [];
   const base = load();
+  // The committed tree is now SERVED with NO gap entry (DR-023 closed DR-007's gap).
+  // Both failure modes are synthesised from it so the gate is still proven able to
+  // fail: an unserved wire with no gap, and a served wire with a stale gap.
+  const unservedSpec = base.specYaml.replace("/v1/authorize:", "/v1/authorize-unserved:");
+  // Build the synthetic gap with its route as a parameter: a String.replace over the
+  // whole source would swap the FIRST /v1/authorize in the file (the launch entry),
+  // not the gap, and the retarget case would silently pass — the exact blind spot v1
+  // had, reintroduced by the test meant to catch it.
+  const gapNaming = (route) =>
+    base.gapsSrc +
+    `\n// synthetic (self-test only)\nconst __gap = { id: "${GAP_ID}", whatIsMissing: "POST ${route} is not served" };\n`;
+  const staleGap = gapNaming("/v1/authorize");
   let r = auditAssistWire(base);
-  checks.push(["the committed tree passes (gap declared, route unserved)", r.problems.length === 0]);
-  r = auditAssistWire({ ...base, gapsSrc: base.gapsSrc.replace(`id: "${GAP_ID}"`, 'id: "renamed-away"') });
-  checks.push(["deleting the gap entry while the route stays unserved FAILS", r.problems.some((x) => x.includes("no \"assist-wire-unserved\" entry"))]);
-  r = auditAssistWire({ ...base, specYaml: base.specYaml + "\n  /v1/authorize:\n    post: {}\n" });
-  checks.push(["serving the route while the gap entry still stands FAILS (stale gap)", r.problems.some((x) => x.includes("still stands"))]);
-  // The retarget the review executed against v1 — now caught, because the
-  // route is data and the gap must name it:
+  checks.push(["the committed tree passes (route served, no gap entry)", r.problems.length === 0]);
+  r = auditAssistWire({ ...base, specYaml: unservedSpec });
+  checks.push(["an unserved route with NO gap entry FAILS (the phantom contract)", r.problems.some((x) => x.includes(`no "${GAP_ID}" entry`))]);
+  r = auditAssistWire({ ...base, gapsSrc: staleGap });
+  checks.push(["serving the route while a gap entry still stands FAILS (stale gap)", r.problems.some((x) => x.includes("still stands"))]);
+  r = auditAssistWire({ ...base, specYaml: unservedSpec, gapsSrc: gapNaming("/v1/elsewhere") });
+  checks.push(["an unserved route whose gap names a DIFFERENT route FAILS (retarget)", r.problems.some((x) => x.includes("different route"))]);
+  // Retargeting the vectors to a second unserved route must fail on the SDK-mention
+  // check even when the spec serves the original.
   const retargeted = JSON.stringify({ ...JSON.parse(base.vectorsJson), route: "/v1/assist" });
   r = auditAssistWire({ ...base, vectorsJson: retargeted });
   checks.push(["retargeting the vectors to a second unserved route FAILS", r.problems.some((x) => x.includes("different route") || x.includes("never mentions"))]);
-  // Multi-segment identical routes must NOT fabricate divergence — the v1
-  // defect where the honest comment fix failed the gate:
+  // Multi-segment identical routes must NOT fabricate divergence (the v1 defect).
   const deep = JSON.stringify({ ...JSON.parse(base.vectorsJson), route: "/v1/decisions/evaluate" });
   r = auditAssistWire({
     ...base,
     vectorsJson: deep,
     kotlinSrc: base.kotlinSrc + "\n// appends /v1/decisions/evaluate\n",
     rustSrc: base.rustSrc + "\n// appends /v1/decisions/evaluate\n",
-    gapsSrc: base.gapsSrc.replace(/\/v1\/authorize/g, "/v1/decisions/evaluate"),
   });
   checks.push(["identical multi-segment routes do NOT report divergence", !r.problems.some((x) => x.includes("DIFFERENT"))]);
   r = auditAssistWire({ ...base, vectorsJson: JSON.stringify({ requires: { minCases: 30 }, cases: [], route: "/v1/authorize" }) });
@@ -115,11 +127,11 @@ function selfTest() {
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const { problems, boundRoute } = auditAssistWire(load());
-  console.log("Assist-wire served-ness — the vector-bound wire is served or a declared gap (DR-007)");
+  console.log("Assist-wire served-ness — the vector-bound wire is served, or a declared gap (DR-007 / DR-023)");
   if (problems.length > 0) {
     console.error(`Assist-wire check FAILED: ${problems.length} problem(s).`);
     for (const p of problems) console.error(`  ✗ ${p}`);
     process.exit(1);
   }
-  console.log(`Assist-wire check passed — ${boundRoute} is a declared gap, not a phantom contract.`);
+  console.log(`Assist-wire check passed — ${boundRoute} is served by the spec (DR-023), and no stale gap entry remains.`);
 }

@@ -440,6 +440,32 @@
           }
         },
         {
+          "name": "Authorize (the Assist wire)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identityRef\": \"nurse.compliant\",\n  \"deviceRef\": \"ipad-ward-01\",\n  \"workflowKey\": \"clinical-session\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/authorize",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "authorize"
+              ]
+            }
+          }
+        },
+        {
           "name": "List decisions",
           "request": {
             "method": "GET",

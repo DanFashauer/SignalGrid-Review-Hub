@@ -409,6 +409,49 @@ async function run() {
   check("compliant outcome is allow", allow.json?.decision?.outcome === "allow");
   const allowId = allow.json?.decision?.decisionId;
 
+  // ── the Assist wire: POST /v1/authorize (DR-007 declared the gap, DR-023 closed it) ──
+  // The SAME decision as evaluate, in the shape the Kotlin/Rust host-app SDKs obey:
+  // top-level `assist` from the four-word vocabulary, `decisionId`, `reasons`. The
+  // shared conformance vectors bind the CLIENT side; these bind the SERVER side.
+  const ASSIST_VOCAB = new Set(["allow", "step_up", "restrict", "deny"]);
+  const authz = await req("POST", "/v1/authorize", {
+    token: KEYS.operator,
+    body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
+  });
+  check("authorize compliant → 200", authz.status === 200);
+  check("authorize is enveloped (requestId + timestamp ride along at top level)",
+    typeof authz.json?.requestId !== "undefined" && typeof authz.json?.timestamp === "string");
+  check("authorize returns TOP-LEVEL `assist` (the field the SDKs parse), not a nested decision",
+    typeof authz.json?.assist === "string" && authz.json?.decision === undefined);
+  check("authorize `assist` is inside the four-word Assist vocabulary", ASSIST_VOCAB.has(authz.json?.assist));
+  check("authorize compliant → assist is allow, agreeing with evaluate's outcome for the same input",
+    authz.json?.assist === "allow" && authz.json?.assist === allow.json?.decision?.outcome);
+  check("authorize carries a decisionId (a real persisted decision, not a synthetic answer)",
+    typeof authz.json?.decisionId === "string" && authz.json.decisionId.length > 0);
+  check("authorize `reasons` is an array (reasonCodes verbatim)", Array.isArray(authz.json?.reasons));
+
+  const authzRestrict = await req("POST", "/v1/authorize", {
+    token: KEYS.operator,
+    body: { identityRef: "nurse.noncompliant", deviceRef: "ipad-ward-02", workflowKey: "clinical-session" },
+  });
+  check("authorize non-compliant → assist is restrict (the ceiling, not a denial)", authzRestrict.json?.assist === "restrict");
+  check("authorize restrict carries at least one reason (a restrict with no reason is unexplainable)",
+    Array.isArray(authzRestrict.json?.reasons) && authzRestrict.json.reasons.length > 0);
+
+  // Authorization is the core's decision:evaluate — an auditor cannot mint a decision
+  // through the Assist wire any more than through evaluate.
+  const authzAuditor = await req("POST", "/v1/authorize", {
+    token: KEYS.auditor,
+    body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
+  });
+  check("authorize as auditor → 403 (decision:evaluate is enforced on the Assist wire too)", authzAuditor.status === 403);
+  const authzNoToken = await req("POST", "/v1/authorize", {
+    body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
+  });
+  check("authorize with no token → 401", authzNoToken.status === 401);
+  const authzBad = await req("POST", "/v1/authorize", { token: KEYS.operator, body: { identityRef: "x" } });
+  check("authorize with a malformed body → 400 (same validation as evaluate)", authzBad.status === 400);
+
   // ── evaluate: restrict + stale ──────────────────────────────────────────
   const restrict = await req("POST", "/v1/decisions/evaluate", {
     token: KEYS.operator,

@@ -78,9 +78,13 @@ From the operational-readiness read and the launch profile's own declared
 5. **Data lifecycle.** No retention, deletion, or DSAR mechanism in any durable
    store; caller-supplied request context is persisted whole with no deletion
    path. (`docs/DATA_RETENTION_AND_PERSONAL_DATA.md`, DR-003.)
-6. **The Assist wire an SDK actually binds.** The Kotlin/Rust SDKs bind a planned
-   `POST /v1/authorize` that is not served or in the spec; the real envelope today
-   is `POST /v1/decisions/evaluate`. (gap `assist-wire-unserved`, DR-007.)
+6. **The Assist wire an SDK actually binds.** ~~The Kotlin/Rust SDKs bind a planned
+   `POST /v1/authorize` that is not served or in the spec.~~ **CLOSED 2026-09-01
+   (DR-023):** `POST /v1/authorize` is now served and in the spec — the same decision
+   as `POST /v1/decisions/evaluate` in the `{assist, reasons, decisionId}` envelope the
+   SDKs bind; the `assist-wire-unserved` gap entry is retired and the route is
+   classified `launch` (profile version 5). DR-007's only stated blocker was the
+   engineering freeze, lifted by DR-021.
 7. **Runtime enforced-vs-observed status.** No route reports, per signal kind,
    what the running server actually enforces. (gap `runtime-launch-status`.)
 

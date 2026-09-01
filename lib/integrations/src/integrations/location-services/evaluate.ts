@@ -1,3 +1,4 @@
+import { deriveFreshness } from "../../utils/freshness";
 import type { LocationFreshness, LocationVerdict, NormalizedLocationSignal } from "./types";
 
 /**
@@ -65,17 +66,3 @@ function v(
   return { posture, reasonCode, recommendedAction, locatable, usesPreciseLocation };
 }
 
-// Clocks in a distributed fleet legitimately skew by seconds; beyond this a
-// "future" capture time is a contradiction, not a skew.
-const FUTURE_SKEW_TOLERANCE_MS = 60 * 1000;
-
-function deriveFreshness(capturedAt: string | null, nowMs: number, staleAfterMs: number): LocationFreshness {
-  if (!capturedAt) return "unknown";
-  const t = Date.parse(capturedAt);
-  if (Number.isNaN(t)) return "unknown";
-  // A capture time meaningfully in the FUTURE is contradictory (wedge #13) — it
-  // used to read as fresh (nowMs - t is negative, trivially ≤ staleAfterMs).
-  // Contradiction resolves to unknown, never to the freshest possible reading.
-  if (t - nowMs > FUTURE_SKEW_TOLERANCE_MS) return "unknown";
-  return nowMs - t <= staleAfterMs ? "fresh" : "stale";
-}

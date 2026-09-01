@@ -1,3 +1,4 @@
+import { deriveFreshness } from "../../utils/freshness";
 import type { NacFreshness, NetworkVerdict, NormalizedNetworkSignal, SegmentPolicy } from "./types";
 
 /**
@@ -148,9 +149,3 @@ function v(
   return { posture, reasonCode, recommendedAction, accessLocation };
 }
 
-function deriveFreshness(lastAuthAt: string | null, nowMs: number, staleAfterMs: number): NacFreshness {
-  if (!lastAuthAt) return "unknown";
-  const t = Date.parse(lastAuthAt);
-  if (Number.isNaN(t)) return "unknown";
-  return nowMs - t <= staleAfterMs ? "fresh" : "stale";
-}

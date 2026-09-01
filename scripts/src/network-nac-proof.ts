@@ -104,6 +104,24 @@ for (const s of fixture.sessions) {
     good.posture === "on_trusted_segment" && good.reasonCode === "AUTHENTICATED_TRUSTED_SEGMENT" &&
     good.recommendedAction === "none");
 
+  // THE FAIL-OPEN ECC CONFIRMED (2026-09-01): a lastAuthAt in the FUTURE read as the
+  // freshest possible auth (nowMs - t negative, trivially <= staleAfterMs) and, with a
+  // compliant flag on an expected segment, granted the trusted-segment verdict. The
+  // two sibling connectors guarded this; this one did not. One shared body now does.
+  const futureAuth = evaluateNetwork(
+    { ...on("VLAN10"), lastAuthAt: new Date(NOW_MS + 10 * 60 * 1000).toISOString(), nacCompliant: true },
+    NOW_MS, { segmentPolicy: POLICY },
+  );
+  check("a lastAuthAt in the FUTURE (beyond clock skew) is unknown, not fresh — the verdict is NOT trusted",
+    futureAuth.reasonCode === "AUTHENTICATED_POSTURE_UNVERIFIED" && futureAuth.recommendedAction === "monitor");
+  // ...and the guard is not over-tight: seconds of skew are a clock, not a contradiction.
+  const skewAuth = evaluateNetwork(
+    { ...on("VLAN10"), lastAuthAt: new Date(NOW_MS + 30 * 1000).toISOString(), nacCompliant: true },
+    NOW_MS, { segmentPolicy: POLICY },
+  );
+  check("a lastAuthAt 30s ahead (within skew tolerance) still reads fresh and trusts",
+    skewAuth.reasonCode === "AUTHENTICATED_TRUSTED_SEGMENT" && skewAuth.recommendedAction === "none");
+
   // THE CASE THAT USED TO GRANT: the guest VLAN.
   const guest = evaluateNetwork(on("VLAN40"), NOW_MS, { segmentPolicy: POLICY });
   check("an UNEXPECTED segment steps up — this is the case that used to grant",

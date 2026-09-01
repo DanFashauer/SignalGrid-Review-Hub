@@ -1,3 +1,4 @@
+import { deriveFreshness } from "../../utils/freshness";
 import type {
   Freshness,
   ReachabilitySignal,
@@ -122,17 +123,3 @@ function verdict(
   return { posture, reasonCode, recommendedAction, locatable };
 }
 
-// Clocks in a distributed fleet legitimately skew by seconds; beyond this a
-// "future" sighting is a contradiction, not a skew.
-const FUTURE_SKEW_TOLERANCE_MS = 60 * 1000;
-
-function deriveFreshness(lastSeenAt: string | null, nowMs: number, staleAfterMs: number): Freshness {
-  if (!lastSeenAt) return "unknown";
-  const seen = Date.parse(lastSeenAt);
-  if (Number.isNaN(seen)) return "unknown";
-  // A sighting meaningfully in the FUTURE is contradictory — it used to read as
-  // the freshest possible sighting (nowMs - seen is negative). Contradiction
-  // resolves to unknown, never to the most trusting reading.
-  if (seen - nowMs > FUTURE_SKEW_TOLERANCE_MS) return "unknown";
-  return nowMs - seen <= staleAfterMs ? "fresh" : "stale";
-}

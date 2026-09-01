@@ -51,10 +51,11 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-08-31 - LAB_001 Step 1 protocol PROVEN over the real MCP
-              wire (cloud rehearsal: 4/4 unknown probes tighten); the Mac's
-              real-posture run is queued as a sim request. ECC live in both
-              lanes; site serves DR-020 framing; 7 ECC findings fixed.
+LAST TOUCHED: 2026-09-01 - security/adversarial scan pass (PR #351): fixed two
+              express-transitive DoS deps on the HTTP front door (qs, body-parser)
+              and one fail-closed inversion in the gate suite itself (cited-path
+              scan credited an unreadable checkout as CLEAN). Attack-surface
+              review found no exploitable high/critical. preflight green.
 BLOCKED ON:   nothing cloud-side. Mac-side queue: lab001 evidence run,
               6-day-pending ios sim request, row 58, Velociraptor.
 NEXT ACTION:  send 8-10 warm reconnection messages (conversations logged:

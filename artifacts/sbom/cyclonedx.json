@@ -11115,6 +11115,20 @@
     },
     {
       "type": "library",
+      "name": "@reduxjs/toolkit",
+      "version": "2.12.0",
+      "bom-ref": "pkg:npm/%40reduxjs/toolkit@2.12.0",
+      "purl": "pkg:npm/%40reduxjs/toolkit@2.12.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "@rolldown/binding-linux-x64-gnu",
       "version": "1.2.4",
       "bom-ref": "pkg:npm/%40rolldown/binding-linux-x64-gnu@1.2.4",
@@ -11861,6 +11875,34 @@
     },
     {
       "type": "library",
+      "name": "@standard-schema/spec",
+      "version": "1.1.0",
+      "bom-ref": "pkg:npm/%40standard-schema/spec@1.1.0",
+      "purl": "pkg:npm/%40standard-schema/spec@1.1.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@standard-schema/utils",
+      "version": "0.3.0",
+      "bom-ref": "pkg:npm/%40standard-schema/utils@0.3.0",
+      "purl": "pkg:npm/%40standard-schema/utils@0.3.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "@tailwindcss/node",
       "version": "4.3.3",
       "bom-ref": "pkg:npm/%40tailwindcss/node@4.3.3",
@@ -12208,9 +12250,9 @@
     {
       "type": "library",
       "name": "@types/d3-shape",
-      "version": "3.1.8",
-      "bom-ref": "pkg:npm/%40types/d3-shape@3.1.8",
-      "purl": "pkg:npm/%40types/d3-shape@3.1.8",
+      "version": "3.2.0",
+      "bom-ref": "pkg:npm/%40types/d3-shape@3.2.0",
+      "purl": "pkg:npm/%40types/d3-shape@3.2.0",
       "licenses": [
         {
           "license": {
@@ -12449,6 +12491,20 @@
       "version": "3.0.3",
       "bom-ref": "pkg:npm/%40types/unist@3.0.3",
       "purl": "pkg:npm/%40types/unist@3.0.3",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@types/use-sync-external-store",
+      "version": "0.0.6",
+      "bom-ref": "pkg:npm/%40types/use-sync-external-store@0.0.6",
+      "purl": "pkg:npm/%40types/use-sync-external-store@0.0.6",
       "licenses": [
         {
           "license": {
@@ -14191,20 +14247,6 @@
     },
     {
       "type": "library",
-      "name": "dom-helpers",
-      "version": "5.2.1",
-      "bom-ref": "pkg:npm/dom-helpers@5.2.1",
-      "purl": "pkg:npm/dom-helpers@5.2.1",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "dom-serializer",
       "version": "2.0.0",
       "bom-ref": "pkg:npm/dom-serializer@2.0.0",
@@ -14541,6 +14583,20 @@
     },
     {
       "type": "library",
+      "name": "es-toolkit",
+      "version": "1.52.0",
+      "bom-ref": "pkg:npm/es-toolkit@1.52.0",
+      "purl": "pkg:npm/es-toolkit@1.52.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "esbuild-plugin-pino",
       "version": "2.3.3",
       "bom-ref": "pkg:npm/esbuild-plugin-pino@2.3.3",
@@ -14668,9 +14724,9 @@
     {
       "type": "library",
       "name": "eventemitter3",
-      "version": "4.0.7",
-      "bom-ref": "pkg:npm/eventemitter3@4.0.7",
-      "purl": "pkg:npm/eventemitter3@4.0.7",
+      "version": "5.0.4",
+      "bom-ref": "pkg:npm/eventemitter3@5.0.4",
+      "purl": "pkg:npm/eventemitter3@5.0.4",
       "licenses": [
         {
           "license": {
@@ -14783,20 +14839,6 @@
       "version": "3.1.3",
       "bom-ref": "pkg:npm/fast-deep-equal@3.1.3",
       "purl": "pkg:npm/fast-deep-equal@3.1.3",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "fast-equals",
-      "version": "5.4.0",
-      "bom-ref": "pkg:npm/fast-equals@5.4.0",
-      "purl": "pkg:npm/fast-equals@5.4.0",
       "licenses": [
         {
           "license": {
@@ -15619,6 +15661,20 @@
       "version": "0.7.3",
       "bom-ref": "pkg:npm/iconv-lite@0.7.3",
       "purl": "pkg:npm/iconv-lite@0.7.3",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "immer",
+      "version": "11.1.18",
+      "bom-ref": "pkg:npm/immer@11.1.18",
+      "purl": "pkg:npm/immer@11.1.18",
       "licenses": [
         {
           "license": {
@@ -16632,20 +16688,6 @@
         {
           "license": {
             "id": "Apache-2.0"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "loose-envify",
-      "version": "1.4.0",
-      "bom-ref": "pkg:npm/loose-envify@1.4.0",
-      "purl": "pkg:npm/loose-envify@1.4.0",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
           }
         }
       ]
@@ -18066,20 +18108,6 @@
     },
     {
       "type": "library",
-      "name": "prop-types",
-      "version": "15.8.1",
-      "bom-ref": "pkg:npm/prop-types@15.8.1",
-      "purl": "pkg:npm/prop-types@15.8.1",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "property-expr",
       "version": "2.0.6",
       "bom-ref": "pkg:npm/property-expr@2.0.6",
@@ -18318,24 +18346,10 @@
     },
     {
       "type": "library",
-      "name": "react-is",
-      "version": "16.13.1",
-      "bom-ref": "pkg:npm/react-is@16.13.1",
-      "purl": "pkg:npm/react-is@16.13.1",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "react-is",
-      "version": "18.3.1",
-      "bom-ref": "pkg:npm/react-is@18.3.1",
-      "purl": "pkg:npm/react-is@18.3.1",
+      "name": "react-redux",
+      "version": "9.3.0",
+      "bom-ref": "pkg:npm/react-redux@9.3.0",
+      "purl": "pkg:npm/react-redux@9.3.0",
       "licenses": [
         {
           "license": {
@@ -18388,20 +18402,6 @@
     },
     {
       "type": "library",
-      "name": "react-smooth",
-      "version": "4.0.4",
-      "bom-ref": "pkg:npm/react-smooth@4.0.4",
-      "purl": "pkg:npm/react-smooth@4.0.4",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "react-style-singleton",
       "version": "2.2.3",
       "bom-ref": "pkg:npm/react-style-singleton@2.2.3",
@@ -18410,20 +18410,6 @@
         {
           "license": {
             "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "react-transition-group",
-      "version": "4.4.5",
-      "bom-ref": "pkg:npm/react-transition-group@4.4.5",
-      "purl": "pkg:npm/react-transition-group@4.4.5",
-      "licenses": [
-        {
-          "license": {
-            "id": "BSD-3-Clause"
           }
         }
       ]
@@ -18500,24 +18486,10 @@
     },
     {
       "type": "library",
-      "name": "recharts-scale",
-      "version": "0.4.5",
-      "bom-ref": "pkg:npm/recharts-scale@0.4.5",
-      "purl": "pkg:npm/recharts-scale@0.4.5",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "recharts",
-      "version": "2.15.4",
-      "bom-ref": "pkg:npm/recharts@2.15.4",
-      "purl": "pkg:npm/recharts@2.15.4",
+      "version": "3.10.1",
+      "bom-ref": "pkg:npm/recharts@3.10.1",
+      "purl": "pkg:npm/recharts@3.10.1",
       "licenses": [
         {
           "license": {
@@ -18546,6 +18518,34 @@
       "version": "3.0.0",
       "bom-ref": "pkg:npm/redis-parser@3.0.0",
       "purl": "pkg:npm/redis-parser@3.0.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "redux-thunk",
+      "version": "3.1.0",
+      "bom-ref": "pkg:npm/redux-thunk@3.1.0",
+      "purl": "pkg:npm/redux-thunk@3.1.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "redux",
+      "version": "5.0.1",
+      "bom-ref": "pkg:npm/redux@5.0.1",
+      "purl": "pkg:npm/redux@5.0.1",
       "licenses": [
         {
           "license": {
@@ -18602,6 +18602,20 @@
       "version": "2.0.2",
       "bom-ref": "pkg:npm/require-from-string@2.0.2",
       "purl": "pkg:npm/require-from-string@2.0.2",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "reselect",
+      "version": "5.2.0",
+      "bom-ref": "pkg:npm/reselect@5.2.0",
+      "purl": "pkg:npm/reselect@5.2.0",
       "licenses": [
         {
           "license": {
@@ -19949,9 +19963,9 @@
     {
       "type": "library",
       "name": "victory-vendor",
-      "version": "36.9.2",
-      "bom-ref": "pkg:npm/victory-vendor@36.9.2",
-      "purl": "pkg:npm/victory-vendor@36.9.2",
+      "version": "37.3.6",
+      "bom-ref": "pkg:npm/victory-vendor@37.3.6",
+      "purl": "pkg:npm/victory-vendor@37.3.6",
       "licenses": [
         {
           "expression": "MIT AND ISC"

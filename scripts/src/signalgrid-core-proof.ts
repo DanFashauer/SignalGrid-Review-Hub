@@ -179,8 +179,9 @@ for (const scenario of scenarios) {
 // quietly. CORE_NORMALIZATION_VERSION goes 8 -> 9 to record the same change as
 // provenance.
 // 2026-09-01 (F1): seed.ts gave the demo's first decision two launch signals, so the pinned
-// sample body moved; digest function unchanged, version stays 9 (seed.ts is outside the
-// normalization closure). Was 9347fb8f9ad49d31.
+// sample body moved; the digest function is unchanged. (seed.ts is outside the normalization
+// closure; the same change set bumped the version 9 -> 10 for store.ts, which is inside it.)
+// Was 9347fb8f9ad49d31.
 const LEGACY_SNAPSHOT_DIGEST = "621410dc07677bb2";
 const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
 

@@ -5,22 +5,28 @@ Third-party work, copied in unmodified. **Not ours.**
 > **TEN exceptions in this directory — read this before any re-vendor.** These are
 > FIRST-PARTY, written in this repository and NOT part of the upstream set. They live
 > here because the harness loads skills from this directory. Everything else below
-> describes the other 14. Counted, not remembered: `ls -1d .claude/skills/*/` lists 24
-> directories = 14 upstream + the 10 in the table. This line said SEVEN until 2026-09-02,
+> describes the other 14. Counted, not remembered: `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`
+> lists 24 tracked directories = 14 upstream + the 10 in the table (tracked, because only
+> tracked paths publish; section E of `scripts/check-publication-boundary.mjs` holds this
+> table, this count and the carve-outs to one another since 2026-09-02). This line said SEVEN until 2026-09-02,
 > three skills after it stopped being true — the same drift that took it from "one
 > exception" to seven, recorded below.
 >
 > **The seventh, `signalgrid-master/`, arrived 2026-08-25 under DR-018 and is a
 > MIRROR, not an original.** The owner's synced copy at
-> `~/.claude/skills/synced/signalgrid-master/` still exists and still loads. What
-> changed is which copy is AUTHORITATIVE: this one, because it is the one that can
-> `pnpm run scan:agent-plane` reports the synced copy AND compares it byte-for-byte
-> against this one, printing `identical` or `DIVERGED`. That comparison did not
+> `~/.claude/skills/synced/signalgrid-master/` still exists and still loads on that
+> machine. What changed is which copy is AUTHORITATIVE: this one, because it is the
+> one that can be reviewed, diffed, and named as an executor by
+> `check-org-roster.mjs`, which derives executors from disk under the repository root
+> and cannot see a home directory at all. `pnpm run scan:agent-plane` reports the
+> synced copy AND compares it byte-for-byte against this one, printing `identical` or
+> `DIVERGED` — and `no mirror` on a machine with nothing synced, which is what it
+> prints on any box but the owner's. That comparison did not
 > exist when this sentence was first written on 2026-08-25 — the scanner read only
 > the home directory and never opened the committed copy, so the safeguard named
 > here was a claim with nothing behind it. Implemented the same day, once the first
-> agent-platform-engineer shift caught it.
-> one to correct.
+> agent-platform-engineer shift caught it. When the two disagree the committed copy
+> wins, and the synced one is the one to correct.
 >
 > | Skill | Authored | What it defines |
 > | --- | --- | --- |

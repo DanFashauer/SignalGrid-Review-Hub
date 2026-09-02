@@ -196,6 +196,91 @@ for (const f of files) {
 if (contentHits > 0) failures += 1;
 else console.log(`  ✓ content rules: ${CONTENT_RULES.length} rules over ${scanned} text files, no breaches`);
 
+// ── E. VENDORED-SET ARITHMETIC ───────────────────────────────────────────────
+// The `.claude/skills` area claims "N skills vendored unmodified" under someone
+// else's licence. Every directory under it that has NO more-specific area is
+// therefore being published as that author's work. Three first-party skills sat
+// there for a week (2026-08-26 → 09-02) because coverage (A) only proves a path is
+// classified, never that it is classified CORRECTLY. This section counts, on both
+// halves: the CODE half (uncovered tracked directories must equal the figure the
+// area's reason states) and the DOC half (.claude/skills/VENDORED.md is what a
+// re-vendor operator reads; its first-party table and its stated exception count
+// must equal the carve-outs). A new first-party skill without a carve-out makes
+// the code half N+1 and fails; a carve-out added without a table row, or a table
+// row without a carve-out, fails the doc half. The review of this section found
+// the doc half ungated on the first cut — the same shape one file over.
+{
+  const vendoredArea = AREAS.find((a) => a.path === ".claude/skills" && a.class === "third_party_intake");
+  const stated = vendoredArea && /(\d+) skills vendored/.exec(vendoredArea.reason);
+  if (!vendoredArea || !stated) {
+    console.error("\n✗ vendored-set arithmetic: no `.claude/skills` third_party_intake area stating \"N skills vendored\"");
+    failures += 1;
+  } else {
+    const claimed = Number(stated[1]);
+    const dirs = new Set(
+      files.filter((f) => f.startsWith(".claude/skills/") && f.split("/").length > 3).map((f) => f.split("/")[2]),
+    );
+    const carvedAreas = AREAS.filter((a) => a.path.startsWith(".claude/skills/") && a.class !== "third_party_intake");
+    // Only carve-outs that cover a tracked directory count — a phantom area is B's
+    // failure, and its figure must not inflate a green line here.
+    const carved = new Set(carvedAreas.map((a) => a.path.split("/")[2]).filter((d) => dirs.has(d)));
+    const uncovered = [...dirs].filter((d) => !carved.has(d)).sort();
+    let sectionFailed = false;
+    if (uncovered.length !== claimed) {
+      console.error(`\n✗ vendored-set arithmetic: the .claude/skills area claims ${claimed} vendored skills but ${uncovered.length} director(y/ies) fall under it with no carve-out:`);
+      for (const d of uncovered) console.error(`    .claude/skills/${d}`);
+      console.error(
+        "\n  Every directory listed is being published as obra/superpowers' work under its\n" +
+          "  author's MIT grant. A first-party skill needs its own `tooling` area in\n" +
+          "  scripts/publication-boundary.mjs; a vendored skill that was removed needs the\n" +
+          "  figure in the area's reason moved with it — and the same figure is quoted in\n" +
+          "  .claude/skills/VENDORED.md and docs/COMPANY_BUILD_PLAN.md (the reason string\n" +
+          "  is reproduced there verbatim; reword both or neither).",
+      );
+      sectionFailed = true;
+    }
+    // DOC HALF. The table rows are `> | \`name/\` | date | what |`; the count word is
+    // the bold opener "**<WORD> exceptions in this directory". A reformatted table
+    // or a rewritten opener fails loudly here rather than matching zero.
+    const WORDS = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5, SIX: 6, SEVEN: 7, EIGHT: 8, NINE: 9, TEN: 10, ELEVEN: 11, TWELVE: 12, THIRTEEN: 13, FOURTEEN: 14, FIFTEEN: 15 };
+    let vendoredDoc = "";
+    try {
+      vendoredDoc = readFileSync(resolve(repoRoot, ".claude/skills/VENDORED.md"), "utf8");
+    } catch {
+      console.error("\n✗ vendored-set arithmetic: .claude/skills/VENDORED.md is unreadable — the operator-facing half of the claim has no source");
+      sectionFailed = true;
+    }
+    if (vendoredDoc) {
+      const opener = /\*\*([A-Z]+|\d+) exceptions? in this directory/.exec(vendoredDoc);
+      const docStated = opener ? (WORDS[opener[1]] ?? Number(opener[1])) : NaN;
+      const rows = [...vendoredDoc.matchAll(/^> \| `([^`/]+)\/` \| \d{4}-\d{2}-\d{2} \| /gm)].map((m) => m[1]);
+      if (!opener || !Number.isFinite(docStated)) {
+        console.error("\n✗ vendored-set arithmetic: .claude/skills/VENDORED.md no longer opens with \"**<N> exceptions in this directory\" — the stated count cannot be read");
+        sectionFailed = true;
+      }
+      if (rows.length === 0) {
+        console.error("\n✗ vendored-set arithmetic: no first-party table rows (`> | \\`name/\\` | YYYY-MM-DD | …`) found in .claude/skills/VENDORED.md");
+        sectionFailed = true;
+      }
+      const rowSet = new Set(rows);
+      const rowsNotCarved = rows.filter((r) => !carved.has(r));
+      const carvedNotRows = [...carved].filter((c) => !rowSet.has(c)).sort();
+      if (rowsNotCarved.length > 0 || carvedNotRows.length > 0) {
+        console.error("\n✗ vendored-set arithmetic: the first-party table in .claude/skills/VENDORED.md and the carve-outs in scripts/publication-boundary.mjs disagree:");
+        for (const r of rowsNotCarved) console.error(`    table row without a carve-out (still published as vendored): .claude/skills/${r}`);
+        for (const c of carvedNotRows) console.error(`    carve-out without a table row (the operator's list is short): .claude/skills/${c}`);
+        sectionFailed = true;
+      }
+      if (Number.isFinite(docStated) && docStated !== carved.size) {
+        console.error(`\n✗ vendored-set arithmetic: .claude/skills/VENDORED.md says ${docStated} exceptions; ${carved.size} carve-out(s) cover tracked directories. The sentence a re-vendor operator obeys is the one that drifted.`);
+        sectionFailed = true;
+      }
+    }
+    if (sectionFailed) failures += 1;
+    else console.log(`  ✓ vendored-set arithmetic: ${uncovered.length} skill director(y/ies) under the vendored claim, ${carved.size} first-party carve-out(s) matching ${carved.size} table rows and the stated word, code figure ${claimed}`);
+  }
+}
+
 // ── UNRESOLVED EXPOSURES, printed in full on every run ───────────────────────
 // Not an appendix and not a summary line. A finding this gate has chosen not to
 // fail on is the one most at risk of being forgotten, so it gets the most space.

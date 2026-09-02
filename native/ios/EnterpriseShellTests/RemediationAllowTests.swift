@@ -131,7 +131,15 @@ final class RemediationAllowTests: XCTestCase {
             record = nil // JSON null / absent → absent record
         }
 
-        let maxAge: Double? = (c["evidenceMaxAgeMs"] as? NSNumber)?.doubleValue
+        // A JSON boolean bridges to NSNumber in Foundation (__NSCFBoolean), so a naive
+        // `as? NSNumber` would turn `true` into 1.0 — where TS `Number.isFinite(true)`
+        // is false. Exclude booleans so a non-number window decodes to nil -> illegible.
+        let maxAge: Double?
+        if let n = c["evidenceMaxAgeMs"] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID() {
+            maxAge = n.doubleValue
+        } else {
+            maxAge = nil
+        }
         let policy = (c["policyRequiresRemediation"] as? Bool)
 
         return RemediationAllow.Input(
@@ -167,6 +175,50 @@ final class RemediationAllowTests: XCTestCase {
                 evidenceMaxAgeMs: window
             )
             XCTAssertEqual(state, .illegible, "window \(window) should be illegible")
+        }
+    }
+
+    /// Dirty boundary inputs an adversarial TS/Swift parity audit found the twin
+    /// reading MORE permissively than the canonical wrapper — each outside the 40
+    /// shared vectors. On every one TS resolves to illegible/step_up/withheld; these
+    /// pin the Swift twin to the same so the fixes cannot silently regress. Exercised
+    /// through the real JSON decoder (`input(from:)`), because the divergences lived at
+    /// the boundary, not only in `classify`.
+    func testDirtyBoundaryInputsAreIllegibleLikeTS() {
+        let base: [String: Any] = [
+            "engineOutcomes": ["verify_remediation", "allow", "record_audit"],
+            "asOf": "2026-06-09T14:05:00.000Z",
+            "evidenceMaxAgeMs": 3600000,
+            "policyRequiresRemediation": true,
+        ]
+        func cleanRecord() -> [String: Any] {
+            ["id": "rem-x", "status": "verified", "verifiedAt": "2026-06-09T13:55:00.000Z"]
+        }
+        var cases: [(String, [String: Any])] = []
+
+        // 1. leading whitespace on verifiedAt — ISO8601DateFormatter tolerates, Date.parse rejects
+        var c1 = base; var r1 = cleanRecord(); r1["verifiedAt"] = " 2026-06-09T13:55:00.000Z"; c1["record"] = r1
+        cases.append(("whitespace-padded-verifiedAt", c1))
+        // 2. leading whitespace on asOf
+        var c2 = base; c2["asOf"] = " 2026-06-09T14:05:00.000Z"; c2["record"] = cleanRecord()
+        cases.append(("whitespace-padded-asOf", c2))
+        // 3. trailing NEL (U+0085) on status — Swift's default set trims it, JS trim does not
+        var c3 = base; var r3 = cleanRecord(); r3["status"] = "verified\u{0085}"; c3["record"] = r3
+        cases.append(("status-trailing-NEL", c3))
+        // 4. a lone BOM (U+FEFF) id — Swift's default set does NOT trim it, JS trim does
+        var c4 = base; var r4 = cleanRecord(); r4["id"] = "\u{FEFF}"; c4["record"] = r4
+        cases.append(("id-lone-BOM", c4))
+        // 5. a JSON boolean window — Foundation bridges it to NSNumber, TS reads it non-finite
+        var c5 = base; var r5 = cleanRecord(); r5["verifiedAt"] = "2026-06-09T14:05:00.000Z"; c5["record"] = r5
+        c5["evidenceMaxAgeMs"] = true
+        cases.append(("boolean-window", c5))
+
+        for (name, dict) in cases {
+            let out = RemediationAllow.resolve(Self.input(from: dict))
+            XCTAssertEqual(out.remediationState, .illegible, "\(name): state")
+            XCTAssertEqual(out.hostOutcome, .stepUp, "\(name): hostOutcome must withhold to step_up")
+            XCTAssertEqual(out.reasonCode, .stateIllegible, "\(name): reasonCode")
+            XCTAssertTrue(out.allowWithheld, "\(name): the allow must be withheld")
         }
     }
 

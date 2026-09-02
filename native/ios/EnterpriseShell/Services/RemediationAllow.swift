@@ -195,6 +195,21 @@ enum RemediationAllow {
             || policyRequiresRemediation == true
     }
 
+    /// A CharacterSet that trims exactly what JavaScript's `String.prototype.trim()`
+    /// trims — no more, no less — so `record.id`/`record.status` land in the same
+    /// vocabulary bucket on both ports. Swift's `.whitespacesAndNewlines` differs from
+    /// JS trim in two code points, and an adversarial parity audit found BOTH as
+    /// fail-opens: it trims U+0085 (NEL) which JS keeps (a status `"verified\u{85}"`
+    /// then read VERIFIED in Swift, ILLEGIBLE in TS), and it keeps U+FEFF (BOM) which JS
+    /// trims (an id of a lone BOM stayed non-empty in Swift, trimmed to empty in TS).
+    /// Removing NEL and adding BOM makes the two exact.
+    private static let jsTrimSet: CharacterSet = {
+        var set = CharacterSet.whitespacesAndNewlines
+        set.remove(Unicode.Scalar(0x0085)!) // NEL: JS trim() does NOT treat it as whitespace
+        set.insert(Unicode.Scalar(0xFEFF)!) // BOM/ZWNBSP: JS trim() DOES remove it
+        return set
+    }()
+
     /// Status vocabularies. An unrecognised word is ILLEGIBLE, never a pass.
     private static let statusVerified: Set<String> = ["verified", "verification_passed", "closed_verified"]
     private static let statusFailed: Set<String> = ["failed", "verification_failed", "rejected", "reopened"]
@@ -206,18 +221,23 @@ enum RemediationAllow {
     /// instant returns `nil`, and every caller below treats `nil` as ILLEGIBLE — never
     /// as fresh, never as absent.
     ///
-    /// PARITY NOTE (the one place this twin can drift from `Date.parse`, and the
-    /// vectors cannot catch it because all 40 use `…​.000Z` or obvious garbage):
-    /// `Date.parse` accepts several forms `ISO8601DateFormatter` rejects — a date with
-    /// no time (`2026-06-09`), a time with no zone (`2026-06-09T13:55:00`). This parser
-    /// accepts the internet-date-time forms WITH or WITHOUT fractional seconds and with
-    /// either `Z` or a numeric offset, and rejects the rest. Every such rejection turns
-    /// a readable instant into `illegible`, which TIGHTENS — safe under golden rule 2 —
-    /// so the twin is never more permissive than the TS side, only occasionally
-    /// stricter on an input no vector exercises.
+    /// PARITY NOTE (the place this twin can drift from `Date.parse`, which the 40
+    /// vectors cannot catch — all use clean `…​.000Z` or obvious garbage). It cuts BOTH
+    /// ways, and an adversarial audit found both:
+    ///   · `Date.parse` accepts forms `ISO8601DateFormatter` rejects — a date with no
+    ///     time (`2026-06-09`), a time with no zone. Rejecting those TIGHTENS (illegible),
+    ///     which is safe under golden rule 2.
+    ///   · `ISO8601DateFormatter` TOLERATES leading/trailing whitespace that `Date.parse`
+    ///     REJECTS (returns NaN) — a padded instant read fresh in Swift and illegible in
+    ///     TS, the twin being MORE permissive, a real fail-open. Both ports only trim to
+    ///     test EMPTINESS and then pass the RAW string to the parser, so the fix is to
+    ///     reject any surrounding whitespace here and match `Date.parse`.
     static func instantMs(_ value: String?) -> Double? {
         guard let value = value else { return nil }
-        if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return nil }
+        if value.isEmpty { return nil }
+        // Surrounding whitespace: Date.parse rejects it on an ISO-8601 string,
+        // ISO8601DateFormatter tolerates it. Reject to stay fail-closed and matched.
+        if value.trimmingCharacters(in: .whitespacesAndNewlines) != value { return nil }
         // .withInternetDateTime already accepts `Z` and numeric offsets; a second pass
         // adds fractional-second support without losing the plain form. The explicit
         // element type keeps each literal an OptionSet rather than an array.
@@ -243,12 +263,12 @@ enum RemediationAllow {
         guard let record = record else { return .absent }
 
         // A record with no readable identity cannot be reconciled with anything later.
-        guard let id = record.id, !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .illegible }
+        guard let id = record.id, !id.trimmingCharacters(in: Self.jsTrimSet).isEmpty else { return .illegible }
         _ = id
         guard let rawStatus = record.status,
-              !rawStatus.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .illegible }
+              !rawStatus.trimmingCharacters(in: Self.jsTrimSet).isEmpty else { return .illegible }
 
-        let status = rawStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let status = rawStatus.trimmingCharacters(in: Self.jsTrimSet).lowercased()
         if statusFailed.contains(status) { return .recordedFailed }
         if statusUnverified.contains(status) { return .recordedUnverified }
         // Unknown vocabulary. It is NOT "probably fine": a word this build has never

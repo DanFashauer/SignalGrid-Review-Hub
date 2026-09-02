@@ -69,7 +69,7 @@
 // both directions, including the ratchet. A gate that has never failed proves
 // nothing.
 
-import { chmodSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from "node:fs";
+import { chmodSync, closeSync, fstatSync, mkdtempSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
@@ -225,19 +225,25 @@ function staticChecks(absPath, label) {
 
 function referencedChecks(absPath, label, namedBy, cwd) {
   const problems = [];
-  // One stat, then one read; no exists-then-stat-then-read sequence. The file is
-  // absent when the stat throws, and the read is the same call CI's runner would
-  // make — the gate never reports on a file it checked and then lost.
+  // One descriptor: the mode and the text come from the same open file, so there
+  // is no window between checking the path and reading it. An open that throws
+  // is absence — the gate never reports on a file it checked and then lost.
   let mode;
+  let text;
   try {
-    mode = statSync(absPath).mode;
+    const fd = openSync(absPath, "r");
+    try {
+      mode = fstatSync(fd).mode;
+      text = readFileSync(fd, "utf8");
+    } finally {
+      closeSync(fd);
+    }
   } catch {
     return [{ label, rule: "a", detail: `named by operation(s) ${namedBy.join(", ")} but does not exist — the request would be accepted and could never run` }];
   }
   if ((mode & 0o111) === 0) {
     problems.push({ label, rule: "a", detail: `named by operation(s) ${namedBy.join(", ")} but carries no executable bit` });
   }
-  const text = readFileSync(absPath, "utf8");
   const declares = declaresSelfCheck(text);
   if (declares) {
     const before = sampleStatus(cwd);

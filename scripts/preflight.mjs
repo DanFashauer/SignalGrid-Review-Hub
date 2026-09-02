@@ -336,6 +336,12 @@ const STEPS = [
   { name: "Cited-command self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-commands.mjs", "--self-test"] },
   { name: "Review coverage (a green gate suite is not a reviewed codebase)", cmd: ["node", "scripts/check-review-coverage.mjs"] },
   { name: "Review-coverage self-test (the gate can actually fail)", cmd: ["node", "scripts/check-review-coverage.mjs", "--self-test"] },
+  // SURFACE-level sibling of the two gates above, which are FILE-level. Validation
+  // is whole-repo on every push; the deep independent reads are chosen surface by
+  // surface, and nothing showed which surfaces had been chosen. A new package can no
+  // longer appear without a row; an unread surface is named on every run.
+  { name: "Surface-read-coverage self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-surface-review-coverage.mjs", "--self-test"] },
+  { name: "Surface read coverage (an unread surface is named, never silent)", cmd: ["node", "scripts/check-surface-review-coverage.mjs"] },
   { name: "Proof: lane-messages (the cloud↔Mac channel — identity is derived, and no lane acknowledges its own mail)", cmd: ["pnpm", "run", "proof:lane-messages"] },
   { name: "Lane messages (unread mail is named on every run; only the addressee can close one)", cmd: ["node", "scripts/check-lane-messages.mjs"] },
   { name: "Lane message self-test (the gate can actually fail)", cmd: ["node", "scripts/check-lane-messages.mjs", "--self-test"] },

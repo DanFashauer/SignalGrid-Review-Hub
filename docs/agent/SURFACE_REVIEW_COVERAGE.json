@@ -1,0 +1,547 @@
+{
+  "$comment": "SURFACE-level read ledger. Sibling of docs/agent/review-coverage.json, and NOT the same thing: that one is FILE-level (which individual files a role opened, at what depth); this one is SURFACE-level (which package, directory or docs family has ever had a deep independent read run against it). The owner's worry on 2026-09-02, verbatim: 'only a select portion of the repo vs the full repo'. Validation is whole-repo on every push; the deep reads are chosen surface by surface, and nothing showed which surfaces had been chosen and which had never been looked at. A surface with an empty `reads` array has NOT BEEN READ, and that is the state this file exists to make visible rather than silent. GATED by scripts/check-surface-review-coverage.mjs: every tracked file must belong to a surface, every derived surface must have a row, every row's path must exist, and every read must carry a date (not in the future), a reviewer, a record and a scope. REPORTED, never fatal: how many surfaces are unread or partial, the oldest read, and staleness. SCOPE is required on every read and is the field that stops a slice counting as the whole: 'surface' means the whole surface was read; 'partial: <what>' names the slice and counts as PARTIAL; 'executed' means the surface was BUILT or RUN rather than read, and counts towards nothing. `open` and `closed` are the counts of findings the RECORD ITSELF names as left open / closed - transcribed from the record, not judged here. A row may also carry an optional `note`: one sentence for what an empty `reads` array cannot say on its own, usually that work landed NEAR a surface without being a read OF it. Optional, but never blank. A row says a read HAPPENED; the record is the only thing that proves it was any good.",
+  "version": 1,
+  "surfaces": {
+    "(root)": {
+      "path": ".",
+      "note": "The 26 tracked files at the repository root - package.json, the lockfile, the Dockerfiles, validate-sim-macos.sh, CLAUDE.md, README.md. Individually gated in several places and never read as one surface.",
+      "reads": []
+    },
+    ".agents": {
+      "path": ".agents",
+      "reads": []
+    },
+    ".claude/*": {
+      "path": ".claude",
+      "reads": []
+    },
+    ".claude/agents": {
+      "path": ".claude/agents",
+      "reads": []
+    },
+    ".claude/commands": {
+      "path": ".claude/commands",
+      "reads": []
+    },
+    ".claude/hooks": {
+      "path": ".claude/hooks",
+      "reads": []
+    },
+    ".claude/skills": {
+      "path": ".claude/skills",
+      "reads": [
+        {
+          "date": "2026-09-02",
+          "read": "Publication-boundary read of the skill set: three first-party skills were classified as vendored, and the VENDORED.md exceptions block was repaired.",
+          "reviewer": "cloud lane",
+          "record": "#379",
+          "scope": "partial: the first-party/vendored classification of each skill. The skills' content was not read.",
+          "open": 0,
+          "closed": 3
+        }
+      ]
+    },
+    ".githooks": {
+      "path": ".githooks",
+      "reads": []
+    },
+    ".github/*": {
+      "path": ".github",
+      "reads": []
+    },
+    ".github/ISSUE_TEMPLATE": {
+      "path": ".github/ISSUE_TEMPLATE",
+      "reads": []
+    },
+    ".github/codeql": {
+      "path": ".github/codeql",
+      "reads": []
+    },
+    ".github/workflows": {
+      "path": ".github/workflows",
+      "reads": [
+        {
+          "date": "2026-08-23",
+          "read": "Every workflow job read for an execution bound; nine were unbounded, and the finding was turned into a gate so the class cannot return.",
+          "reviewer": "cloud lane",
+          "record": "#276",
+          "scope": "partial: every job was read, but only for one property - whether it carries a timeout. What the jobs DO was not read.",
+          "open": 0,
+          "closed": 9
+        }
+      ]
+    },
+    "artifacts/agent-heartbeats": {
+      "path": "artifacts/agent-heartbeats",
+      "reads": []
+    },
+    "artifacts/api-collection": {
+      "path": "artifacts/api-collection",
+      "reads": []
+    },
+    "artifacts/api-server": {
+      "path": "artifacts/api-server",
+      "reads": [
+        {
+          "date": "2026-09-02",
+          "read": "Route cross-check - the built server booted and its Express route stack walked, so the routes the process actually mounts are compared against the documented surface rather than against the source that was meant to mount them; unresolvable layers fail the assertion.",
+          "reviewer": "cloud lane",
+          "record": "#384",
+          "scope": "partial: the mounted route stack and the webhook-signing path. The middleware, persistence and connector wiring were not read.",
+          "open": 0,
+          "closed": 0
+        }
+      ]
+    },
+    "artifacts/build-loop": {
+      "path": "artifacts/build-loop",
+      "reads": []
+    },
+    "artifacts/connector-emulator": {
+      "path": "artifacts/connector-emulator",
+      "reads": []
+    },
+    "artifacts/lab-collections": {
+      "path": "artifacts/lab-collections",
+      "reads": []
+    },
+    "artifacts/lane-messages": {
+      "path": "artifacts/lane-messages",
+      "reads": []
+    },
+    "artifacts/live-captures": {
+      "path": "artifacts/live-captures",
+      "reads": []
+    },
+    "artifacts/live-evidence": {
+      "path": "artifacts/live-evidence",
+      "reads": []
+    },
+    "artifacts/mcp-server": {
+      "path": "artifacts/mcp-server",
+      "reads": []
+    },
+    "artifacts/outreach-log": {
+      "path": "artifacts/outreach-log",
+      "reads": []
+    },
+    "artifacts/sbom": {
+      "path": "artifacts/sbom",
+      "reads": []
+    },
+    "artifacts/scanner-comparison": {
+      "path": "artifacts/scanner-comparison",
+      "reads": []
+    },
+    "artifacts/signalgrid-app": {
+      "path": "artifacts/signalgrid-app",
+      "reads": []
+    },
+    "artifacts/signalgrid-desktop": {
+      "path": "artifacts/signalgrid-desktop",
+      "reads": []
+    },
+    "artifacts/signalgrid-mobile-pwa": {
+      "path": "artifacts/signalgrid-mobile-pwa",
+      "reads": []
+    },
+    "artifacts/signalgrid-review": {
+      "path": "artifacts/signalgrid-review",
+      "reads": []
+    },
+    "artifacts/signalgrid-web": {
+      "path": "artifacts/signalgrid-web",
+      "reads": []
+    },
+    "artifacts/sim-requests": {
+      "path": "artifacts/sim-requests",
+      "reads": []
+    },
+    "artifacts/sim-results": {
+      "path": "artifacts/sim-results",
+      "reads": []
+    },
+    "artifacts/sync": {
+      "path": "artifacts/sync",
+      "reads": []
+    },
+    "config": {
+      "path": "config",
+      "reads": []
+    },
+    "docker": {
+      "path": "docker",
+      "reads": []
+    },
+    "docs/*": {
+      "path": "docs",
+      "note": "NOT READ. This row was seeded READ on the strength of #375 and that was wrong, in exactly the way this ledger exists to catch: #375 audited docs/INDEX.md line by line against the entries it routes to, and its squash commit touches three of the 203 top-level documents (INDEX.md, OPEN_SOURCE_LAB_REGISTRY.md, STATUS.md). An index audit is a read of the index, not of what it points at. Downgraded 2026-09-02 by independent review.",
+      "reads": []
+    },
+    "docs/agent": {
+      "path": "docs/agent",
+      "reads": []
+    },
+    "docs/assets": {
+      "path": "docs/assets",
+      "reads": []
+    },
+    "docs/company": {
+      "path": "docs/company",
+      "reads": []
+    },
+    "docs/connectors": {
+      "path": "docs/connectors",
+      "reads": []
+    },
+    "docs/consolidation": {
+      "path": "docs/consolidation",
+      "reads": []
+    },
+    "docs/env": {
+      "path": "docs/env",
+      "reads": []
+    },
+    "docs/estate": {
+      "path": "docs/estate",
+      "reads": []
+    },
+    "docs/inspiration": {
+      "path": "docs/inspiration",
+      "reads": []
+    },
+    "docs/lab": {
+      "path": "docs/lab",
+      "reads": []
+    },
+    "docs/outreach": {
+      "path": "docs/outreach",
+      "reads": []
+    },
+    "docs/postman": {
+      "path": "docs/postman",
+      "reads": []
+    },
+    "docs/preview": {
+      "path": "docs/preview",
+      "reads": []
+    },
+    "docs/research": {
+      "path": "docs/research",
+      "reads": []
+    },
+    "firmware": {
+      "path": "firmware",
+      "note": "NOT READ. #386's summary sentence names 'the dock firmware' alongside the Android and desktop reads, but the only firmware change in that PR was firmware/.gitignore and its workflow - no source file under firmware/dock/core/ was opened.",
+      "reads": []
+    },
+    "fixtures": {
+      "path": "fixtures",
+      "reads": []
+    },
+    "fleet": {
+      "path": "fleet",
+      "reads": []
+    },
+    "lib/adaptive-proposals": {
+      "path": "lib/adaptive-proposals",
+      "reads": []
+    },
+    "lib/api-client-react": {
+      "path": "lib/api-client-react",
+      "reads": []
+    },
+    "lib/api-spec": {
+      "path": "lib/api-spec",
+      "reads": []
+    },
+    "lib/api-zod": {
+      "path": "lib/api-zod",
+      "reads": []
+    },
+    "lib/app-workflows": {
+      "path": "lib/app-workflows",
+      "reads": []
+    },
+    "lib/audit": {
+      "path": "lib/audit",
+      "reads": []
+    },
+    "lib/control-plane": {
+      "path": "lib/control-plane",
+      "reads": []
+    },
+    "lib/ddm-connector": {
+      "path": "lib/ddm-connector",
+      "reads": []
+    },
+    "lib/dual-control": {
+      "path": "lib/dual-control",
+      "reads": []
+    },
+    "lib/enterprise-auth": {
+      "path": "lib/enterprise-auth",
+      "reads": []
+    },
+    "lib/event-contract": {
+      "path": "lib/event-contract",
+      "reads": []
+    },
+    "lib/facility-trust-graph": {
+      "path": "lib/facility-trust-graph",
+      "reads": []
+    },
+    "lib/fleet-connector": {
+      "path": "lib/fleet-connector",
+      "reads": []
+    },
+    "lib/flows": {
+      "path": "lib/flows",
+      "reads": []
+    },
+    "lib/handoff-sim": {
+      "path": "lib/handoff-sim",
+      "reads": []
+    },
+    "lib/iac": {
+      "path": "lib/iac",
+      "reads": []
+    },
+    "lib/incident-playbook": {
+      "path": "lib/incident-playbook",
+      "reads": []
+    },
+    "lib/integration-bridge": {
+      "path": "lib/integration-bridge",
+      "reads": []
+    },
+    "lib/integrations": {
+      "path": "lib/integrations",
+      "reads": [
+        {
+          "date": "2026-09-02",
+          "read": "Emit side, first directional read - the six emitter families and their shared factory, read for what happens when a credential is absent, whether every outbound fetch is bounded, and whether the dispatcher reports suppression honestly.",
+          "reviewer": "cloud lane (independent review before landing)",
+          "record": "#378",
+          "scope": "partial: the six emitter families and the shared adapter factory - roughly 25 of this package's 278 tracked files. The connector NORMALIZERS, the read paths and the other families were not in this read.",
+          "open": 0,
+          "closed": 5
+        },
+        {
+          "date": "2026-09-02",
+          "read": "Emit side, second read - payload construction: 27 build sites read, 17 whole-object copies found at 7 of them; every builder now declares a closed top-level key set with its open slots named.",
+          "reviewer": "cloud lane (independent review, eight notes folded)",
+          "record": "#383",
+          "scope": "partial: the payload builders of the same six emitter families.",
+          "open": 0,
+          "closed": 17
+        },
+        {
+          "date": "2026-09-02",
+          "read": "Emit side, third read - headers and inbound parsing across the same six families: redirect following, vendor-minted values reaching a header or a path, the two webhook families' URL guard and signature, error-text bounding.",
+          "reviewer": "cloud lane (independent review, notes folded)",
+          "record": "#388",
+          "scope": "partial: outbound headers and inbound response parsing in the same six emitter families.",
+          "open": 1,
+          "closed": 2
+        }
+      ]
+    },
+    "lib/location": {
+      "path": "lib/location",
+      "reads": []
+    },
+    "lib/orchestration": {
+      "path": "lib/orchestration",
+      "reads": []
+    },
+    "lib/persistence": {
+      "path": "lib/persistence",
+      "reads": []
+    },
+    "lib/pim-activation": {
+      "path": "lib/pim-activation",
+      "reads": []
+    },
+    "lib/posture-composition": {
+      "path": "lib/posture-composition",
+      "reads": []
+    },
+    "lib/recommendations": {
+      "path": "lib/recommendations",
+      "reads": []
+    },
+    "lib/reliability": {
+      "path": "lib/reliability",
+      "reads": []
+    },
+    "lib/room-sim": {
+      "path": "lib/room-sim",
+      "reads": []
+    },
+    "lib/self-audit": {
+      "path": "lib/self-audit",
+      "reads": []
+    },
+    "lib/signal-discovery": {
+      "path": "lib/signal-discovery",
+      "reads": []
+    },
+    "lib/signal-radar": {
+      "path": "lib/signal-radar",
+      "reads": []
+    },
+    "lib/signalgrid-core": {
+      "path": "lib/signalgrid-core",
+      "reads": [
+        {
+          "date": "2026-08-23",
+          "read": "Verdict core, first read - the eleven verdict-computing files read adversarially against the fail-closed invariant; nine file-level entries filed in docs/agent/review-coverage.json.",
+          "reviewer": "verdict-core-reader",
+          "record": "docs/COMPANY_BUILD_PLAN.md",
+          "scope": "partial: the eleven verdict-computing files named in build-plan row 42 (engine, decision, policy, resolution, evidence, continuity), which span three packages; this package's other modules were not in that read.",
+          "open": 0,
+          "closed": 2
+        },
+        {
+          "date": "2026-09-02",
+          "read": "Verdict core, second read - outcome order pinned, five previously unproven rules proven, evidence hardened so the worst input wins in both directions, resolution plan made honest on silence.",
+          "reviewer": "cloud lane (three independent reviews)",
+          "record": "#376",
+          "scope": "partial: evidence.ts, resolution.ts and types.ts - the outcome-order, evidence-composition and resolution rules.",
+          "open": 0,
+          "closed": 2
+        }
+      ]
+    },
+    "lib/signalgrid-simulator": {
+      "path": "lib/signalgrid-simulator",
+      "reads": [
+        {
+          "date": "2026-09-02",
+          "read": "Verdict core, second read, simulator half - the simulator's decision vocabulary catalogued against the core's and monotonicity proven; 89 lines added to the simulator proof.",
+          "reviewer": "cloud lane (three independent reviews)",
+          "record": "#376",
+          "scope": "partial: the decision vocabulary and monotonicity properties, reached through the simulator proof rather than by reading the package.",
+          "open": 0,
+          "closed": 0
+        }
+      ]
+    },
+    "lib/verdict-attestation": {
+      "path": "lib/verdict-attestation",
+      "reads": []
+    },
+    "lib/webauthn": {
+      "path": "lib/webauthn",
+      "reads": []
+    },
+    "lib/work-context": {
+      "path": "lib/work-context",
+      "reads": []
+    },
+    "native/android": {
+      "path": "native/android",
+      "reads": [
+        {
+          "date": "2026-09-02",
+          "read": "The same runtime-breakage read the iOS shell got, applied to the Android client: cleartext policy against the real minSdk, the emulator loopback alias, and whether the client decodes the contract the server serves. Not compiled in this lane.",
+          "reviewer": "cloud lane (two independent passes)",
+          "record": "#386",
+          "scope": "surface",
+          "open": 0,
+          "closed": 2
+        }
+      ]
+    },
+    "native/desktop": {
+      "path": "native/desktop",
+      "reads": [
+        {
+          "date": "2026-09-02",
+          "read": "The same runtime-breakage read applied to the desktop shell: the UI's invoke threw on every launch and the panel showed an error banner, which CI could not see because it never opens a window; an unreadable core now shows deny rather than a blank verdict. Not compiled in this lane.",
+          "reviewer": "cloud lane (two independent passes)",
+          "record": "#386",
+          "scope": "surface",
+          "open": 0,
+          "closed": 2
+        }
+      ]
+    },
+    "native/ios/*": {
+      "path": "native/ios",
+      "reads": []
+    },
+    "native/ios/EnterpriseShell": {
+      "path": "native/ios/EnterpriseShell",
+      "reads": [
+        {
+          "date": "2026-09-02",
+          "read": "Runtime read after the owner ran the app and said it was broken - the lock screen's way in, backend base-URL resolution against the served contract, the OIDC and launcher crash paths, and signing. Source read only; nothing was compiled in this lane.",
+          "reviewer": "cloud lane (independent review, notes folded)",
+          "record": "#387",
+          "scope": "surface",
+          "open": 0,
+          "closed": 4
+        },
+        {
+          "date": "2026-09-02",
+          "read": "The same batch BUILT and RUN on a simulator by the machine that has Xcode: BUILD SUCCEEDED, ios-shell-repair 8/8, clean provenance; step 6's standing failure root-caused to a self-inflicted grep in the harness rather than a crash.",
+          "reviewer": "Mac lane",
+          "record": "6f89457",
+          "scope": "executed",
+          "open": 1,
+          "closed": 1
+        }
+      ]
+    },
+    "native/ios/EnterpriseShellTests": {
+      "path": "native/ios/EnterpriseShellTests",
+      "note": "NOT READ. The Mac lane wrote SessionExpiryTests here on branch mac/session-expiry-hardening (LOOP.md, 2026-09-02), which had not landed on the default branch when this ledger was seeded. Writing tests for one fail-open is not a read of the test target.",
+      "reads": []
+    },
+    "native/ios/SignalGridMobile": {
+      "path": "native/ios/SignalGridMobile",
+      "reads": []
+    },
+    "native/ios/mdm": {
+      "path": "native/ios/mdm",
+      "reads": []
+    },
+    "native/ios/scripts": {
+      "path": "native/ios/scripts",
+      "reads": []
+    },
+    "native/shared": {
+      "path": "native/shared",
+      "reads": [
+        {
+          "date": "2026-09-02",
+          "read": "The shared Assist-wire vector table read against both clients: every vector key must be one the harnesses actually read, and at least one vector must assert the parsed obligations.",
+          "reviewer": "cloud lane (two independent passes)",
+          "record": "#386",
+          "scope": "surface",
+          "open": 0,
+          "closed": 0
+        }
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "reads": []
+    },
+    "site": {
+      "path": "site",
+      "reads": []
+    },
+    "tests": {
+      "path": "tests",
+      "note": "NOT READ as a surface. #380 (e66da87, 2026-09-02) read and dispositioned the tests/security-reference/ SUBTREE - eight specs no runner reached - by porting seven invariants to the live surface and deleting the directory. That subtree is gone, so the read covers nothing that is here now. What remains is tests/load/, the k6 drivers that scripts/check-test-execution.mjs says in its own header are invoked by nothing and are recorded open in docs/COMPANY_BUILD_PLAN.md row 43. A read of a deleted subtree is not a read of this surface.",
+      "reads": []
+    },
+    "tools": {
+      "path": "tools",
+      "reads": []
+    }
+  }
+}

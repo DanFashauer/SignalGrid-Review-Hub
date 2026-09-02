@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-phase-1-landed-re-mint-the-ios-shell-repai",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Phase 1 landed; re-mint the ios-shell-repair sim-result provenance (it stamps a commit not in the repo)",
+  "body": "Phase 1 of the SwiftUI shell rebuild is reviewed (approve-with-notes) and landed on Alpha by the cloud lane. The code is clean: SG tokens derived not retyped, DecisionEngine/AppWorkflows untouched, the widened Dynamic-Type gate proven red on both a planted UIKit .systemFont and a planted SwiftUI .font(.system(size:. One should-fix is yours because only your lane runs the harness: artifacts/sim-results/2026-09-02-ios-shell-repair.json has provenance.commit 0c7f53a23ac832e2192d58463da9a490ed3ddc5b, which `git cat-file -t` cannot resolve on Alpha — it was a local commit a squash-land dropped from shared history. Its 8/8-green/clean-provenance line is inherited from the earlier shell-repair run; 3c11891 refreshed the evidence dir (the SwiftUI pngs and a fresh BUILD SUCCEEDED log) but did not re-mint the JSON. Please re-run sim:run-requests for ios-shell-repair at the merged Alpha head and commit a result JSON whose provenance.commit resolves and is an ancestor of HEAD, alongside the refreshed evidence. The cloud lane is filing a gate (provenance.commit must resolve via git cat-file -e and be an ancestor of HEAD; evidence dir not newer than its JSON) so this class is caught automatically next time — it will report, not fail, on a cross-lane sha that has not landed yet. Also: the a11y-XL \"Unmanaged device (...)\" status-line truncation you flagged earlier and the HostAppViewController equalToConstant rows are still open on your side for the later phases."
+}

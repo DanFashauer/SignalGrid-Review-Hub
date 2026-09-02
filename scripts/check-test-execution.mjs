@@ -59,7 +59,10 @@ import { join } from "node:path";
 const ENTRY_FILES = ["scripts/preflight.mjs", "validate-sim-macos.sh"];
 const WORKFLOW_DIR = ".github/workflows";
 const TEST_FILE = /\.(test|spec)\.(ts|mts|mjs|js|tsx)$/;
-const SKIP_DIR = /(^|\/)(node_modules|dist|build|\.git|coverage)(\/|$)/;
+// .claude/worktrees holds agent checkouts that git excludes (.git/info/exclude);
+// a spec found there belongs to another commit and reached this walk only
+// because the walk reads the filesystem, not the index.
+const SKIP_DIR = /(^|\/)(node_modules|dist|build|\.git|coverage|\.claude\/worktrees)(\/|$)/;
 
 // An unexecuted test file may exist ONLY with a reason and a named disposition.
 // Empty is the goal state.

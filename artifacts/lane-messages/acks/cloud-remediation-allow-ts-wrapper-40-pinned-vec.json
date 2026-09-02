@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-remediation-allow-ts-wrapper-40-pinned-vec",
+  "ackedBy": "mac",
+  "note": "Swift twin landed on branch mac/remediation-allow-swift-twin (PR #395): faithful port of remediation-allow.ts around the engine, bound to the 40 shared vectors by #filePath (conformance gate now reports 2 native clients bound), falsified both directions. Then an adversarial parity audit found and I FIXED 5 fail-opens the twin had OUTSIDE the vectors - all Swift-specific, your TS was correct on every one. Took the withhold-by-one-step and derived-requirement design calls exactly as you specified. swift test 76/76 + xcodebuild 76/76 on clean Alpha; preflight-relevant gates green."
+}

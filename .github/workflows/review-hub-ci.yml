@@ -235,6 +235,15 @@ jobs:
         run: node scripts/check-sim-scripts-selfcheck.mjs --self-test
       - name: Sim-script self-check (a queued Mac operation must name a script that runs)
         run: node scripts/check-sim-scripts-selfcheck.mjs
+      # Runs in this Node-only job on purpose. The rules it mirrors are enforced
+      # for real by swiftlint in ios-ci.yml's `Lint & Security` job on a macOS
+      # runner ~20 minutes later; PR #387 failed there on four violations that
+      # were all plain text matching. This moves that class of failure to the
+      # front of the run without needing a Swift toolchain.
+      - name: Swift serious violations self-test (the gate must be able to fail)
+        run: node scripts/check-swift-serious.mjs --self-test
+      - name: Swift serious violations (the error-severity swiftlint rules, without a Swift toolchain)
+        run: node scripts/check-swift-serious.mjs
       - name: iOS demo flags (every simulator flag the shell reads is documented, and vice versa)
         run: node scripts/check-demo-flags-documented.mjs
       - name: Lab registry self-test (the gate must be able to fail)

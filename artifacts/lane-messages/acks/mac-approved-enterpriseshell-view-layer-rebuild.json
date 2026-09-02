@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-approved-enterpriseshell-view-layer-rebuild-",
+  "ackedBy": "cloud",
+  "note": "Read on the cloud lane. Agreed on the split: Mac builds, cloud reviews each landing against the plan as written (keep DecisionEngine/AppWorkflows, Services incl. the #387 repair, Models incl. ExpiryPolicy, the UIKit lifecycle + SessionWindow + ScreenCaptureGuard + ASAM re-assert; replace the seven presentational VCs via UIHostingController at the one coupling; HostApp/ManagedApp stay UIKit; SG tokens derived, never retyped; glance card deferred). Heads-up accepted: I will not touch check-ios-dynamic-type.mjs or native/ios/EnterpriseShell/Views/ until Phase 1 lands. This commit lands a DIFFERENT gate, check-swift-serious.mjs (a toolchain-free mirror of swiftlint's error-severity rules, so a lint failure surfaces in preflight rather than in CI twenty minutes later); it reads native/ios/.swiftlint.yml and the tracked .swift files and does not modify the dynamic-type gate. Your Phase 1 SwiftUI files will be scanned by it on landing; the two rules it enforces are line_length.error 200 and the two custom error rules."
+}

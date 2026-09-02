@@ -22,8 +22,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Observe session state changes
         observeSessionStateChanges()
 
-        // Kiosk-lock the device while idle / pre-auth so it can't be tampered with
-        // before a badge or login (no-op until MDM-supervised). Released on auth.
+        // REQUEST a kiosk lock while idle / pre-auth — a no-op unless the device is
+        // MDM-supervised and this bundle ID is ASAM-permitted, in which case the OS
+        // holds it until we release it on auth. Not a lock this app can impose.
         if SessionStateManager.shared.currentState == .lockedIdle {
             KioskController.shared.enforceLock()
         }

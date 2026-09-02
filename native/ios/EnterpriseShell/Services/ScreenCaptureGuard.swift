@@ -1,6 +1,6 @@
 import UIKit
 
-/// Enforces the session's screen-capture restriction. When the persona forbids
+/// Applies the session's screen-capture restriction as far as an app can. When the persona forbids
 /// screen capture (`restrictions.allowScreenCapture == false`) during an active
 /// session, it redacts on-screen content while the screen is being recorded /
 /// mirrored / AirPlayed, and audits every screenshot as a policy violation.

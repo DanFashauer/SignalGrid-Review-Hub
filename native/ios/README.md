@@ -4,7 +4,17 @@ A secure iOS/iPadOS enterprise application that functions as a "login shell" for
 
 ## Overview
 
-Enterprise Shell provides a secure kiosk-style interface for shared devices in enterprise environments. Users authenticate using hardware badge readers, and the app enforces strict session lifecycle management with automatic data cleanup.
+Enterprise Shell provides a kiosk-style interface for shared devices in enterprise
+environments. Users authenticate using hardware badge readers; the app drives the
+session lifecycle and wipes session data on teardown.
+
+**What the app does versus what the OS does.** The app cannot make itself
+non-removable, force full screen, or relaunch itself — those are OS capabilities.
+`Services/KioskController.swift` *requests* Autonomous Single App Mode, which the OS
+grants only on an **MDM-supervised** device whose management profile authorizes this
+bundle ID. Enforcement is the MDM's and the OS's; on an unsupervised device or the
+simulator the request is refused and the shell stays windowed and removable. The
+device-side half is documented in `native/ios/mdm/README.md`.
 
 ## Features
 
@@ -22,10 +32,14 @@ Enterprise Shell provides a secure kiosk-style interface for shared devices in e
 ### Platform Support
 - iPadOS 15.0+ (primary target)
 - iOS 15.0+ (secondary)
-- Android (mobile companion app - future)
-- macOS (desktop companion - future)
-- Supervised devices only
-- MDM-managed environments
+- Kiosk lock (ASAM) requires a supervised, MDM-managed device; without that the
+  app runs but does not lock down
+- Sibling shells that already exist, are built in CI, and are NOT "future":
+  - **Android** — `native/android` (Assist core + a reference host activity),
+    43 `@Test` cases, built by `.github/workflows/android.yml`
+  - **Desktop** — `native/desktop` (Tauri shell over a Rust Assist core), built on
+    **Windows and Linux** by `.github/workflows/desktop.yml`. There is no macOS
+    desktop target.
 
 ### Security & Authentication
 - **WebAuthn/FIDO2 Support**: Admin step-up authentication for high-risk operations
@@ -42,37 +56,70 @@ Enterprise Shell provides a secure kiosk-style interface for shared devices in e
 ## Project Structure
 
 ```
-ios/
-├── project.yml              # XcodeGen configuration
-├── setup.sh                 # Setup script
-├── README.md               # This file
+native/ios/
+├── project.yml                  # XcodeGen configuration
+├── Package.swift                # SwiftPM manifest
+├── setup.sh                     # Generates the Xcode project
+├── run-ios.sh                   # Build + boot a simulator
+├── run-code-analysis.sh
+├── README.md                    # This file
+├── MDM_CONFIGURATION.md         # Management-profile keys
+├── FLEET_MDM.md                 # Fleet-specific enrollment notes
+├── PROVIDER_CONFIGURATION.md    # Badge / identity provider config
+├── BLE_MVP_ACCEPTANCE_TESTS.md
+├── mdm/                         # Kiosk .mobileconfig + its README
+├── scripts/pick-simulator.py
+├── SignalGridMobile/            # Separate SwiftUI package (Operator + Wardlink)
+├── EnterpriseShellTests/        # XCTest: AppWorkflows, DecisionEngine, DecisionService,
+│                                #   ScreenCapturePolicy, SessionState, SignalContext
 └── EnterpriseShell/
-    ├── AppDelegate.swift   # App lifecycle
-    ├── SceneDelegate.swift  # Scene management
-    ├── Info.plist          # App configuration
-    ├── EnterpriseShell.entitlements  # Entitlements
+    ├── AppDelegate.swift
+    ├── SceneDelegate.swift
+    ├── SessionWindow.swift
+    ├── Info.plist
+    ├── EnterpriseShell.entitlements
     ├── Models/
-    │   ├── SessionState.swift    # State machine definition
-    │   └── SessionData.swift     # Data models
+    │   ├── SessionData.swift
+    │   └── SessionState.swift
     ├── Services/
-    │   ├── SessionStateManager.swift  # State machine logic
-    │   ├── BadgeReaderManager.swift   # Badge reader integration
-    │   ├── KeychainService.swift      # Secure storage
-    │   ├── OIDCAuthService.swift      # OIDC authentication
-    │   ├── BackendService.swift       # API communication
-    │   ├── AppLauncher.swift          # App launching
-    │   └── AuditLogger.swift         # Audit logging
+    │   ├── AppLauncher.swift
+    │   ├── AppWorkflows.swift          # byte-faithful port — see CLAUDE.md rule 1
+    │   ├── AuditLogger.swift
+    │   ├── BLEBadgeReaderProvider.swift
+    │   ├── BackendService.swift
+    │   ├── BadgeReaderManager.swift
+    │   ├── BadgeReaderProvider.swift
+    │   ├── DecisionEngine.swift        # byte-faithful port — see CLAUDE.md rule 1
+    │   ├── DecisionService.swift
+    │   ├── DemoMode.swift              # simulator-only launch flags
+    │   ├── DesignSystem.swift
+    │   ├── IdentityProvider.swift
+    │   ├── KeychainService.swift
+    │   ├── KioskController.swift
+    │   ├── OIDCAuthService.swift
+    │   ├── ProviderConfigurationService.swift
+    │   ├── ScreenCaptureGuard.swift
+    │   ├── ScreenCapturePolicy.swift
+    │   ├── SecurityManager.swift
+    │   ├── SessionStateManager.swift
+    │   ├── SignalContext.swift
+    │   └── USBCBadgeReaderProvider.swift
     ├── Utilities/
-    │   └── DeviceInfo.swift          # Device information
+    │   └── DeviceInfo.swift
     ├── Views/
-    │   ├── LockedIdleViewController.swift
-    │   ├── BadgeCapturedViewController.swift
-    │   ├── AuthenticatingViewController.swift
-    │   ├── ProvisioningViewController.swift
     │   ├── ActiveSessionViewController.swift
+    │   ├── AuthenticatingViewController.swift
+    │   ├── BadgeCapturedViewController.swift
+    │   ├── EnrollingViewController.swift
+    │   ├── HostAppViewController.swift
+    │   ├── LockedIdleViewController.swift
+    │   ├── ManagedAppViewController.swift
+    │   ├── ProvisioningViewController.swift
     │   └── TerminatingViewController.swift
     └── Resources/
-        └── Assets.xcassets/
+        ├── Assets.xcassets/
+        ├── EnterpriseShell-Kiosk.mobileconfig
+        └── README.md
 ```
 
 ## Configuration Required
@@ -117,15 +164,18 @@ private let accessoryProtocol = "com.enterprise.badgereader" // Protocol string 
    ```
 
 2. **Generate Xcode Project**
+
+   All paths below are repo-relative — run them from the root of the checked-out
+   revision, never from a stray copy of the iOS tree.
    ```bash
-   cd ios
+   cd native/ios
    chmod +x setup.sh
    ./setup.sh
    ```
 
 3. **Open in Xcode**
    ```bash
-   open ios/EnterpriseShell.xcodeproj
+   open native/ios/EnterpriseShell.xcodeproj
    ```
 
 4. **Configure Signing**
@@ -138,13 +188,53 @@ private let accessoryProtocol = "com.enterprise.badgereader" // Protocol string 
    - Badge reader protocol
 
 6. **Build and Run**
+
+   `ipados` is not an SDK name; the simulator SDK is `iphonesimulator`. This is the
+   block in `CLAUDE.md`, and it is the one that is run:
    ```bash
-   xcodebuild -project ios/EnterpriseShell.xcodeproj \
-     -scheme EnterpriseShell \
-     -sdk ipados \
-     -configuration Debug \
-     build
+   cd native/ios && xcodegen generate && \
+     xcodebuild -scheme EnterpriseShell -sdk iphonesimulator \
+       -destination 'platform=iOS Simulator,name=iPhone 17' build
    ```
+
+## Simulator demo flags
+
+`Services/DemoMode.swift` is compiled out of device builds (`#if
+targetEnvironment(simulator)`), so everything below exists only in the simulator.
+Pass flags at launch:
+
+```bash
+xcrun simctl launch booted com.enterprise.shell -SimulateBadge 04A3F291 -DemoMode YES
+```
+
+A flag with an explicit value wins (`-DemoMode NO` really does disable it); a bare
+`-Flag` is an opt-in. This table is GATED by
+`scripts/check-demo-flags-documented.mjs`, which derives the flag set from the Swift
+that reads it — a new flag fails CI until it appears here, and a row here for a flag
+nothing reads fails too.
+
+| Flag | What it does |
+|------|--------------|
+| `-DemoMode YES` | Master switch: run the whole LockedIdle → Authenticating → Provisioning → ActiveSession lifecycle against canned responses, with no backend or identity provider. |
+| `-DemoUnenrolled` | Treat the scanned badge as not enrolled, so the enrollment flow can be demonstrated. |
+| `-DemoAutoEnd` | ActiveSession auto-ends after a short delay, demonstrating terminate → teardown → lockedIdle. |
+| `-DemoIdleLock` | Persona uses an 8-second idle timeout instead of 300, so inactivity auto-lock shows in seconds. |
+| `-DemoOpenApp` | Auto-open the first workspace app in the in-app managed browser (app access stays native/contained). |
+| `-DemoAssist` | Auto-open the embedded Assist host-app demo: the invisible-gate flow allow → step-up → confirm → applied. |
+| `-DemoAssistAuto` | The Assist demo self-walks the full gate flow, so each state can be captured without taps. |
+| `-DemoAssistDecline` | The auto-walk declines the confirmation, capturing the fail-closed "nothing fires" state. |
+| `-DemoBackendURL <url>` | Control-plane base URL. **Loopback only** — `localhost`, `127.0.0.1`, `::1`; any other host resolves nil and the app stays on-device (fail closed). |
+| `-DemoBackendToken <tok>` | Bearer token for that control plane. |
+| `-DemoBackendIdentity <ref>` | Tenant-seeded identity ref to send, e.g. `nurse.compliant`, so a real verdict comes back rather than a fail-closed fallback. |
+| `-DemoBackendDevice <ref>` | Tenant-seeded device ref, e.g. `ipad-ward-01`. |
+| `-DemoLocation warehouse\|clinic\|office` | Building/area the device is deployed in; drives which role and app workspace the user is provisioned with. Defaults to `office`. |
+| `-DemoZone <zone>` | The zone the device is *sensed* in. iOS cannot sense this here, so it is injected; unset means it matches `-DemoLocation`. Use a mismatch to force a deny. |
+| `-DemoSignal a,b,c` | Comma-separated conditions iOS cannot detect natively (`stale`, `non_compliant`, `security_risk`, `remediated`), driving allow → step_up → restrict. |
+| `-DemoScreenCaptureAfter <s>` | Seconds after the host app opens before simulating screen recording starting (`UIScreen.isCaptured` cannot be toggled from simctl). Unset/0 means off. |
+| `-DemoStaleAfter <s>` | Seconds before simulating the session going stale, driving the live re-evaluation path deterministically. Unset/0 means off. |
+| `-DemoLockoutAfter <s>` | Seconds before simulating a security lockout engaging. Unset/0 means off. |
+| `-SimulateBadge <id>` | Inject a badge scan once, since the simulator has no reader hardware. Documented in `DemoMode.swift`, **implemented in `native/ios/EnterpriseShell/Views/LockedIdleViewController.swift:142`**. |
+| `-SimulateManualLogin YES` | Exercise the manual-override login path (no code entry); honored only when `KioskConfig.allowManualOverride` is set. |
 
 ## MDM Configuration
 
@@ -177,6 +267,31 @@ When configuring MDM, apply these restrictions for kiosk mode:
     </dict>
 </array>
 ```
+
+### Managed App Config keys
+
+`KioskConfig` (`EnterpriseShell/Services/KioskController.swift`) reads three keys.
+For each one it looks **first** in the Managed App Configuration dictionary the MDM
+delivers, which UserDefaults publishes under `com.apple.configuration.managed`, and
+**only if the key is absent there** does it fall back to a plain
+`UserDefaults.standard` lookup of the bare key name
+(`KioskController.swift:171-183`). So Managed App Config from the MDM is the
+intended source and wins wherever the MDM sets the key; the fallback is what makes
+these keys settable at launch — `xcrun simctl launch booted com.enterprise.shell
+-AllowManualOverride YES` — on a build with **no** managed configuration for that
+key, which is the simulator, a dev build, or an unenrolled device. Unlike the demo
+flags above, this file is compiled into device builds too.
+
+This table is GATED by `scripts/check-demo-flags-documented.mjs` as a second derived
+set, on the same rule as the flag table: the keys come from the `managedBool(` /
+`managedString(` call sites, a new key fails CI until it appears here, and a row
+here that nothing reads fails too.
+
+| Key | What it controls |
+|-----|------------------|
+| `SingleAppModeEnabled` | Bool, **default `true`**. Whether the shell runs the kiosk-until-auth model — held captive to the badge/login screen while idle, released once a worker authenticates, re-locked when the session ends. Set `false` to opt a fleet out. Engaging the lock at all still requires MDM supervision; on an unsupervised device it is a no-op and the shell runs as a normal app. |
+| `AllowManualOverride` | Bool, **default `false`**, and not recommended. Opts in to the disaster-recovery manual override, letting an admin code release the kiosk without a badge. |
+| `RecoveryCode` | String, no default. The code `validateRecoveryCode` compares a typed entry against, in constant time. Never hardcoded; unset or empty means every code is denied, and it is only consulted when `AllowManualOverride` is `true`. |
 
 ## Session Lifecycle
 
@@ -237,16 +352,31 @@ On session end:
 - User defaults reset
 - In-memory data cleared
 
-## Backend API Endpoints
+## Backend API
 
-### Required Endpoints
-- `POST /api/sessions/start` - Validate badge, return session token
-- `POST /api/sessions/{id}/end` - Notify session end
-- `POST /api/audit/logs` - Send audit events
-- `GET /health` - Health check
+This app is a CLIENT of the SignalGrid control plane. The served surface is
+specified once, in `lib/api-spec/v1-openapi.yaml` (mounted under `/api`, so the
+session-start route is **`POST /api/v1/sessions/start`** — see
+`artifacts/api-server/src/routes/v1.ts`). Read the spec; do not read a second copy
+of it here.
 
-### Request/Response Formats
-See `Models/SessionData.swift` for detailed API models.
+Everything this README previously listed under this heading — `/api/audit/logs`,
+`/api/admin/integrations/webhooks`, `/api/admin/location`, and the
+`BACKEND_SIGNING_SECRET` / `ADMIN_API_KEY` / `OIDC_ISSUER_URL` environment
+variables — was checked against `artifacts/api-server/src`, `lib/` and `scripts/`
+on 2026-09-02 and appears in none of them. It described a different service.
+
+The Swift request models live in `Models/SessionData.swift`.
+
+### Location signals, webhooks, integrations
+
+Not this app's surface. These are control-plane concerns; the served contract is
+`lib/api-spec/v1-openapi.yaml`, and the location and webhook libraries are
+`lib/location/` and `lib/integrations/`. The ~120 lines that used to sit here
+described endpoints (`/api/location/report`, `/api/admin/location`,
+`/api/admin/integrations/webhooks`) that do not exist in
+`artifacts/api-server/src`, alongside environment variables that do exist in
+`lib/` — a mixture no reader could tell apart, in a README about an iOS client.
 
 ## Testing
 
@@ -274,43 +404,6 @@ See `Models/SessionData.swift` for detailed API models.
 2. Export as .ipa
 3. Distribute via MDM
 
-## Production Deployment Checklist
-
-The MVP is secure-by-default but requires proper configuration before production use.
-
-### Required Configuration
-
-- [ ] **Secret Management**: Use a secret manager (GitHub Actions secrets, AWS Secrets Manager, HashiCorp Vault) for all secrets. Never commit secrets to version control.
-- [ ] **OIDC Configuration**: Register an application with your OIDC provider (Microsoft Entra ID, Okta, Auth0) and configure:
-  - `OIDC_ISSUER_URL`: Your OIDC provider's issuer URL
-  - `OIDC_CLIENT_ID`: Application client ID
-  - `OIDC_AUDIENCE`: Expected audience claim
-- [ ] **Redis Provisioning**: Deploy Redis with TLS support for:
-  - Nonce cache (prevents replay attacks)
-  - Device registry (device enrollment/allowlist)
-  - Set `REDIS_URL` environment variable
-- [ ] **Admin API Key**: Generate a secure random key (`openssl rand -hex 32`) and store securely. Set `ADMIN_API_KEY` environment variable.
-- [ ] **Backend Signing Secret**: Generate a secure HMAC key (`openssl rand -base64 32`) and store securely. Set `BACKEND_SIGNING_SECRET`.
-
-### Recommended Enhancements
-
-- [ ] **Rate Limiting**: Add rate limiting to `/api/session/start` and admin routes (e.g., `upstash/ratelimit` or API gateway-level)
-- [ ] **Device Allowlist**: Enable `DEVICE_ALLOWLIST_MODE=true` for restricted rollouts
-- [ ] **Monitoring**: Integrate with monitoring/observability platform (Datadog, New Relic, Grafana Cloud)
-- [ ] **TLS**: Ensure all Redis connections use `rediss://` protocol
-
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `BACKEND_SIGNING_SECRET` | HMAC signing key | Yes |
-| `ADMIN_API_KEY` | Admin API key | Yes |
-| `OIDC_ISSUER_URL` | OIDC provider URL | Yes |
-| `OIDC_CLIENT_ID` | OIDC client ID | Yes |
-| `REDIS_URL` | Redis connection URL | Yes (production) |
-| `OIDC_AUDIENCE` | JWT audience | No |
-| `DEVICE_ALLOWLIST_MODE` | Enable device allowlist | No |
-
 ## Limitations (MVP)
 
 ### iOS App
@@ -319,11 +412,6 @@ The MVP is secure-by-default but requires proper configuration before production
 - No biometric fallback
 - No Apple ID integration
 - No OS-level user switching
-
-### Backend / API
-- **Replay attack nonce cache**: In-memory only in dev. Production uses Redis (configure via `REDIS_URL`).
-- **Admin auth**: Supports JWT and API key fallback. Set `ADMIN_API_KEY` in production.
-- **Device enrollment**: Uses Redis for persistence. Ensure Redis is provisioned for production.
 
 ## Dependencies
 
@@ -335,131 +423,9 @@ No external dependencies required. Uses:
 
 ## License
 
-Proprietary - Enterprise Use Only
+MIT — see `LICENSE` at the repository root, and `NOTICE` for what that grant does
+and does not cover.
 
 ## Support
 
 For enterprise support and customization, contact your IT department.
-
-## Location Signals (Asset Presence / Auditing)
-
-This platform supports **Location Signals** as vendor-neutral events that can be fed from:
-- MDM/UEM (device attributes, compliance/location hints)
-- NAC (Cisco ISE / Aruba ClearPass) network+AP context
-- RTLS systems (optional, enterprise-controlled)
-- Device-side (BLE/Wi-Fi/GPS signals, depending on policy)
-
-### Configuration
-
-Set these environment variables in your backend:
-
-| Variable | Description | Default |
-|----------|-------------|----------|
-| `LOCATION_MODE` | Location granularity: `presence` (recommended), `coarse`, `precise` | `presence` |
-| `LOCATION_MAX_AGE_SECONDS` | Max age of location signals | `120` |
-| `LOCATION_USE_REDIS` | Use Redis for storage (production) | `true` |
-| `INTEGRATION_SIGNING_SECRET` | HMAC secret for signing outgoing webhooks | (empty) |
-
-### Privacy Posture
-
-- Default `LOCATION_MODE=presence` (zone-level). Avoids continuous tracking for pilots.
-- Asset accountability: "Last seen in ER-TRIAGE at 10:41" (presence mode)
-- Audit-grade evidence: location signal becomes a tamper-evident audit ledger event
-- Safe for healthcare pilots: no always-on consumer tracking vibe
-
-### API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/location/report` | POST | Ingest location signal → audit + optional webhook dispatch |
-| `/api/admin/location?deviceId=...` | GET | Admin-only last known location |
-
-### Webhook Events
-
-When location signals are received, the system dispatches `asset.location.observed` events to configured webhook targets. Each event includes:
-- `type`: `asset.location.observed`
-- `deviceId`: The device identifier
-- `occurredAt`: Timestamp (epoch ms)
-- `payload`: Full location signal data
-
-Webhooks are signed with HMAC-SHA256 using the `INTEGRATION_SIGNING_SECRET`.
-
-## Integrations (Webhooks v1)
-
-The platform includes a production-grade **webhook integrations system** that enables MDM/UEM-agnostic event-driven workflows. This replaces the basic integration dispatcher with a complete solution for external system automation.
-
-### Features
-
-- **Admin CRUD**: Create, read, update, delete webhook endpoints via API
-- **Per-Endpoint Signing**: Each webhook has its own HMAC-SHA256 signing secret
-- **Secret Rotation**: Rotate secrets without downtime
-- **Retry with Backoff**: Exponential backoff + jitter, max 6 attempts
-- **Dead Letter Queue (DLQ)**: Failed deliveries after max retries
-- **Delivery Receipts**: Track delivery status per event
-- **Security**: HTTPS-only in production, blocks localhost
-
-### Supported Events
-
-| Event | Description |
-|-------|-------------|
-| `session.start` | User started a session via badge tap |
-| `session.end` | Session terminated |
-| `badge.enroll` | Badge enrolled to user mapping |
-| `badge.delete` | Badge mapping removed |
-| `auth.failure` | Authentication failed |
-| `asset.location.observed` | Location signal received |
-| `policy.matched` | Policy evaluation matched |
-| `policy.action.executed` | Policy action dispatched |
-| `itsm.ticket.created` | ITSM ticket created |
-| `itsm.ticket.failed` | ITSM ticket creation failed |
-
-### API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/admin/integrations/webhooks` | POST | Create webhook |
-| `/api/admin/integrations/webhooks` | GET | List webhooks |
-| `/api/admin/integrations/webhooks/:id` | PATCH | Update webhook |
-| `/api/admin/integrations/webhooks/:id` | DELETE | Delete webhook |
-
-### Example: Create Webhook
-
-```bash
-curl -X POST https://api.example.com/api/admin/integrations/webhooks \
-  -H "Authorization: Bearer YOUR_ADMIN_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "ServiceNow Incidents",
-    "url": "https://your-instance.service-now.com/api/now/table/incident",
-    "events": ["auth.failure", "badge.delete"],
-    "secret": "your-32-char-minimum-secret-here"
-  }'
-```
-
-### Webhook Payload
-
-```json
-{
-  "id": "uuid",
-  "type": "session.start",
-  "timestamp": "2026-03-05T10:00:00.000Z",
-  "source": { "service": "tap-to-login", "version": "1.0.0" },
-  "data": { "sessionId": "...", "userId": "...", "deviceId": "..." },
-  "deliveryId": "uuid"
-}
-```
-
-### Integration Targets (What Buyers Will Recognize)
-
-- **Cisco ISE / Aruba ClearPass (NAC)**: Consume session events → drive NAC policies or SIEM correlation
-- **SIEM (Splunk / Microsoft Sentinel)**: Ingest webhook stream for security analytics
-- **ServiceNow / Jira / Zendesk / Freshservice / BMC Helix / Ivanti / ManageEngine (ITSM)**: Open tickets on policy events
-- **MDM/UEM (Workspace ONE / Intune / Jamf)**: They become consumers of your events, not your dependency
-
-### Security
-
-- HTTPS required in production
-- Localhost blocked in production
-- Per-endpoint secrets (not shared)
-- Idempotency via `deliveryId` + `eventId`
-- Request ID + delivery ID in logs (secrets redacted)

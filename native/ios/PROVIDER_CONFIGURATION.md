@@ -14,15 +14,24 @@ This allows you to integrate with your existing infrastructure without code chan
 
 ### Available Badge Reader Types
 
-| Type | Description | Configuration |
-|------|-------------|---------------|
-| `usb_accessory` | USB-C/Lightning badge readers via ExternalAccessory framework | Protocol string |
-| `bluetooth_le` | Bluetooth Low Energy badge readers | Service UUID, Characteristic UUID |
-| `nfc` | NFC tag reading | - |
-| `serial` | Serial/RS-232 badge readers | Port, Baud rate |
-| `keyboard_wedge` | Keyboard emulation mode (most common) | - |
-| `http_webhook` | HTTP-based badge events | Webhook URL, Secret |
-| `mdm_enrollment` | MDM-based device/user linking | MDM provider config |
+**Status column, verified 2026-09-02.** "Implemented" means
+`BadgeReaderProviderRegistry.registerBuiltInProviders()`
+(`EnterpriseShell/Services/BadgeReaderProvider.swift:180`) registers a factory for
+the type. "Declared, not implemented" means the case exists in the `BadgeReaderType`
+enum and can be selected by `BADGE_READER_TYPE`, but no class implements it — no
+`class NFC…` / `class Serial…` exists anywhere under `native/ios` — so
+`createProvider(config:)` (`:218`) finds no factory and **returns `nil` silently**.
+Selecting one leaves the app with no badge reader rather than an error.
+
+| Type | Description | Configuration | Status |
+|------|-------------|---------------|--------|
+| `usb_accessory` | USB-C/Lightning badge readers via ExternalAccessory framework | Protocol string | Implemented |
+| `bluetooth_le` | Bluetooth Low Energy badge readers | Service UUID, Characteristic UUID | Implemented |
+| `nfc` | NFC tag reading | - | **Declared, not implemented — `createProvider` returns `nil`** |
+| `serial` | Serial/RS-232 badge readers | Port, Baud rate | **Declared, not implemented — `createProvider` returns `nil`** |
+| `keyboard_wedge` | Keyboard emulation mode (most common) | - | Implemented |
+| `http_webhook` | HTTP-based badge events | Webhook URL, Secret | Implemented |
+| `mdm_enrollment` | MDM-based device/user linking | MDM provider config | Implemented |
 
 ### Environment Variables for Badge Readers
 
@@ -41,23 +50,34 @@ BADGE_READER_CHAR_UUID=12345678-1234-1234-1234-123456789ABD
 BADGE_WEBHOOK_URL=https://badges.example.com/webhook
 BADGE_WEBHOOK_SECRET=your_webhook_secret
 
-# For Serial:
+# For Serial (parsed, but consumed by nothing — see below):
 BADGE_SERIAL_PORT=/dev/ttyUSB0
 BADGE_BAUD_RATE=9600
 ```
+
+> **`BADGE_SERIAL_PORT` and `BADGE_BAUD_RATE` do nothing today.**
+> `ProviderConfigurationService.swift:108-109` reads both from the environment into
+> `BadgeReaderConfig.serialPort` / `.baudRate`, and no code anywhere reads those
+> fields back — there is no serial provider to consume them. Setting them is
+> silently inert, not a configuration.
 
 ## Identity Provider Types
 
 ### Available Identity Providers
 
-| Type | Description | Configuration |
-|------|-------------|---------------|
-| `oidc` | OpenID Connect (Microsoft Entra ID, Okta, Auth0, etc.) | Client ID, Tenant ID, Endpoints |
-| `saml` | SAML 2.0 | Entry point, Logout URL, Certificate |
-| `mdm` | MDM-based authentication | MDM provider, Enrollment endpoint |
-| `mfa` | MFA-only provider (Duo, RSA, etc.) | MFA provider, API key, Host |
-| `hybrid` | Combination (e.g., Badge + MFA) | Multiple provider config |
-| `custom` | Custom authentication | Custom endpoint, API key |
+Same status convention, against
+`IdentityProviderRegistry.registerBuiltInProviders()`
+(`EnterpriseShell/Services/IdentityProvider.swift:217`); `createProvider(config:)`
+is at `:245` and returns `nil` for an unregistered type.
+
+| Type | Description | Configuration | Status |
+|------|-------------|---------------|--------|
+| `oidc` | OpenID Connect (Microsoft Entra ID, Okta, Auth0, etc.) | Client ID, Tenant ID, Endpoints | Implemented |
+| `saml` | SAML 2.0 | Entry point, Logout URL, Certificate | **Declared, not implemented — `createProvider` returns `nil`** |
+| `mdm` | MDM-based authentication | MDM provider, Enrollment endpoint | Implemented |
+| `mfa` | MFA-only provider (Duo, RSA, etc.) | MFA provider, API key, Host | Implemented |
+| `hybrid` | Combination (e.g., Badge + MFA) | Multiple provider config | Implemented |
+| `custom` | Custom authentication | Custom endpoint, API key | **Declared, not implemented — `createProvider` returns `nil`** |
 
 ### Environment Variables for Identity Providers
 

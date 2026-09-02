@@ -167,8 +167,6 @@ export class ServiceNowAdapter implements ITSMAdapter {
     // resolves a configured hostname and opens a connection from wherever the process
     // runs. Note the gate goes BEFORE ensureAuthenticated() — that helper performs its
     // own OAuth token fetch, so gating after it would still have reached the network.
-    //
-    // this file reached the network only through a since-removed fetchWithTimeout wrapper
     const emission = resolveEmission();
     if (emission.mode !== "live") return false;
 

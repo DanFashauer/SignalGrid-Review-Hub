@@ -1463,3 +1463,80 @@ the worktree exits 1 the same way and creates no directory.
 **Reversal.** The owner reverses by saying so: `claude mcp remove neural-memory --scope
 user`, `uv tool uninstall neural-memory`, delete the store directory, remove the script
 and the rows. Nothing in the product depends on it, by construction.
+
+## DR-027 — The `public-apis` directory is an evidence/research catalogue beside Firecrawl: fixture-first, keyless rows only, nothing in a decision path (owner-directed 2026-09-02)
+
+**Question.** The owner's directive, verbatim: *"Here are additional resources and layers
+that's can be added or provide more information and detailed answers about my product as
+well. https://github.com/public-apis/public-apis"* What is it, where in the DR-024 stack does
+it sit, and what has to be true for a directory of third-party public endpoints to strengthen
+a repository whose decision core is deterministic, offline and fixture-backed? The resource had
+a prior recorded disposition — `docs/INTAKE_LEDGER.md` row 97 rated `public-apis` **OUT OF
+SCOPE** ("wrong category of API entirely"), without cloning it. Does that stand?
+
+**What it is, established by use.** `public-apis/public-apis` at commit
+`38527bc133d839cee090fa5c44f814ed1dca3d66` (MIT; cloned `--depth 1` on 2026-09-02): one
+README.md of 2215 lines holding 1721 link rows under 51 categories (a 52nd heading is a
+sponsor block), each row a name, a description and three contributor-supplied columns —
+`Auth` (`No` 809 / `apiKey` 755 / `OAuth` 150 / other 7), `HTTPS` (`Yes` 1629 / `No` 92) and
+`CORS`. It is a **directory of links**: no endpoint definitions, no rate limits, no terms, no
+freshness guarantee. Ten read-only GET probes with synthetic inputs (a well-known CVE id, a
+public DNS address, a public landmark coordinate, a year and country, a generic UA string)
+established: NVD's CVE 2.0 API, MSRC's CVRF feed, Nager.Date's holiday API, Nominatim's reverse
+geocoder and four IP-to-ASN/geo services answer 200 without a key; **URLhaus, marked `No` auth
+in the directory, returned 401** (the auth column drifts); ApicAgent's row links a landing
+page, not an API; the four IP-geo sources disagreed on the city for one anycast address. OSV,
+CIRCL CVE, CISA KEV, FIRST EPSS, macvendors.com and any UTC-offset service are **not in the
+directory at this sha**. HaveIBeenPwned and every threat-intel row are `apiKey` and were not
+probed.
+
+**Call: absorbed as an EVIDENCE/RESEARCH CATALOGUE beside Firecrawl (DR-022) — not a review
+layer, not a memory layer, not a connector, not a dependency. Row 97 is superseded for the
+narrow question and stands for the wide one.**
+
+1. **Row 97 answered "is this where SignalGrid's signals come from?" — no, and that holds.**
+   The systems of record (Entra, Intune, Jamf, Fleet, ISE, CrowdStrike, ServiceNow) are not
+   public APIs, and no directory row substitutes for their credentials or families. The owner's
+   direction asks a narrower question — *which keyless public rows can enrich a fixture or
+   answer a buyer's "without a vendor contract?" question* — and that one is answered in
+   `docs/research/PUBLIC_API_SOURCES.md`: a ranked registry of sixteen rows against the families
+   in `docs/INTEGRATION_CATALOG.md`, top fits being NVD → `vuln-scan` (CVE enrichment),
+   Nager.Date / gov.uk → `change-window` and `shift-context` (holiday tables), Nominatim →
+   `location-services` (a facility geofence centre at design time, under ODbL). (a deferred family, not shipping)
+2. **Fixture-first, by rule.** A public API's output enters this tree only as a committed
+   fixture minted by a human-run script, stamped with source URL, retrieval date and this sha.
+   The decision core never calls one (golden rule 2). A live read, if ever built, is a connector
+   family behind tier **and** `SIGNALGRID_LIVE_INTEGRATIONS=true` **and** a configured opt-in,
+   through an injected transport, scanned by `scripts/check-ungated-fetch.mjs` — "no key
+   needed" is not "no opt-in needed".
+3. **Closed input list.** Nothing identifying leaves the tree toward a public endpoint: no PHI,
+   PII, tenant id, device or gateway IP, worker coordinate, password material, or real
+   peripheral MAC. Permitted inputs are a CVE id, a country code and year, an administrator's
+   facility address at design time, and well-known public addresses in tests. Widening the list
+   needs a decision record.
+4. **Outage is unknown, and unknown raises.** Every non-200, malformed body, or stale fixture
+   resolves to `unknown` and raises assurance — the rule `lib/integrations/src/utils/freshness.ts`
+   already states for timestamps. Probe 8 is the standing reason: a row's auth can change
+   without notice.
+5. **Not a source of truth for claims.** A directory row is a pointer; a claim about a vendor's
+   API cites the vendor. The directory establishes nothing about the six sources the intake
+   named that it does not list.
+6. **No code, no dependency, no family, no proof.** This record changes documentation only:
+   the brief, this record, the intake row, the index line, and an annotation on row 97.
+
+**Why the reversal is coherent.** Row 97 was right that popularity is not relevance and that
+the decision core's differentiator is untouched by any public API. DR-022 set the shape for
+this situation: the owner's direction supersedes a "not needed" for the *narrow* use while the
+blocking facts are honoured by a boundary. Here the boundary is fixture-first plus the closed
+input list; inside it, three rows genuinely answer buyer questions the tree could not answer
+before, and the drift finding (probe 8) is itself worth the intake.
+
+**Evidence.** The clone at `38527bc133d839cee090fa5c44f814ed1dca3d66` (its README.md,
+CONTRIBUTING.md, LICENSE), read 2026-09-02; the ten-probe transcript quoted in
+`docs/research/PUBLIC_API_SOURCES.md`; `docs/INTAKE_LEDGER.md` row 97 (annotated);
+`pnpm run check:absence public-apis` on 2026-09-02 — INCONCLUSIVE with one mention, row 97,
+read and named here; the family type files cited row by row in the brief.
+
+**Reversal.** The owner reverses by saying so: delete the brief, this record, the intake row
+and the index line, and strike the row-97 annotation. Nothing in the product depends on it,
+by construction.

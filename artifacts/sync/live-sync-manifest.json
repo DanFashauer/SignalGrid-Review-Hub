@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 46,
-  "fingerprint": "0dea20589e96aa393be903c942ba63dfdbbf3751cf21cf8fbdfd4cbb9a63296a",
+  "manifestVersion": 47,
+  "fingerprint": "ee3f269d29c2be89d8e742ea1bddb2b9e6135d503584e4cfdb795cccf42c385c",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -155,7 +155,7 @@
       "uem": 76,
       "unsafe-claim": 40,
       "verdict-attestation": 76,
-      "work-context": 50
+      "work-context": 52
     },
     "mcpTools": [
       "list_room_scenarios",

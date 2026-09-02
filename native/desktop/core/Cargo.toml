@@ -8,7 +8,7 @@ edition = "2021"
 # a gate that stops running the first time an image lags.
 rust-version = "1.74"
 description = "The Assist gate client for the SignalGrid desktop shell: outcome vocabulary, fail-closed wire parsing, and endpoint validation."
-license = "UNLICENSED"
+license = "MIT"
 publish = false
 
 [dependencies]

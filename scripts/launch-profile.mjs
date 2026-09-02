@@ -1,5 +1,4 @@
-// The LAUNCH PROFILE — what "SignalGrid Shared-Device Trust Gateway" is, and
-// what it is not.
+// The LAUNCH PROFILE — what SignalGrid is, and what it is not.
 //
 // WHY THIS FILE EXISTS. The owner's launch plan names ten blockers. Three of them
 // are the same problem seen from three angles:
@@ -122,7 +121,19 @@ export const LAUNCH_PROFILE_VERSION = 5;
 //      the guard.
 //   1  Initial profile.
 
-export const PRODUCT_NAME = "SignalGrid Shared-Device Trust Gateway";
+// "SignalGrid", alone and on purpose. This constant read "SignalGrid Shared-Device
+// Trust Gateway" until 2026-09-02 — a label DR-004 ratified and DR-019 superseded,
+// which then explicitly ratified NO replacement ("Manufacturing a category before
+// discovery is the error DR-004 made cheaply and would make expensively a second
+// time"). docs/LAUNCH_PROFILE.md had already been corrected; this file had not.
+// It survived because the two gates that hold the retired label —
+// check-launch-claims.mjs (RETIRED_LABELS) and check-product-framing.mjs
+// (RETIRED) — both scan a list of buyer-facing documents, and a .mjs under
+// scripts/ is on neither list. It was outward anyway: check-launch-profile.mjs
+// prints it as the gate's heading, and artifacts/mcp-server serves it as
+// `product` on the launch-profile resource. Do not reintroduce a category label
+// here; that question reopens only when a later DR ratifies one.
+export const PRODUCT_NAME = "SignalGrid";
 export const TARGET = "Limited GA, 2027-02-04";
 
 /** The criterion every `launch` entry is tested against, quoted verbatim.

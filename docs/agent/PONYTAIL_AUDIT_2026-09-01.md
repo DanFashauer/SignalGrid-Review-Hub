@@ -142,7 +142,7 @@ I have everything I need; no further reads are required. Findings follow, ranked
 
 `delete:` `native/ios/setup.sh` — a `brew install xcodegen && xcodegen generate` wrapper whose printed hints are stale (`open ios/EnterpriseShell.xcodeproj`, `-sdk ipados`). CLAUDE.md's `cd native/ios && xcodegen generate && xcodebuild …` one-liner. [native/ios/setup.sh:1-48]
 
-`delete:` `native/ios/SignalGridMobile/FILES.txt` — a committed `find .` listing nothing reads. Nothing. [native/ios/SignalGridMobile/FILES.txt:1-60]
+`delete:` the committed `FILES.txt` under `native/ios/SignalGridMobile` — a `find .` listing nothing reads. Nothing. DONE 2026-09-02: deleted, so the path is deliberately not cited here; `git ls-files native/ios/SignalGridMobile` is the answer, and it cannot go stale.
 
 `shrink:` 8 copies of `stripComments` (the 9th, in `generate-core-normalization-version.mjs`, is a real string-aware tokenizer — keep that one and export it). Import it. [scripts/check-api-collection.mjs:57-63, scripts/check-durable-path-authorization.mjs:67, scripts/check-fabricated-status.mjs:65-69, scripts/check-launch-profile.mjs:258-259, scripts/check-read-error-swallowing.mjs:62-66, scripts/check-ungated-fetch.mjs:66, scripts/generate-sync-manifest.mjs:70-72, scripts/review-invariants.mjs:145-151 → scripts/generate-core-normalization-version.mjs:83]
 

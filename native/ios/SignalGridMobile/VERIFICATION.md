@@ -6,7 +6,7 @@ Date: 2026-07-24
 
 - Swift toolchain: 6.2.1
 - `swift test --package-path SignalGridMobileCore`
-- Result: 6 tests passed, 0 failed
+- Result: 6 tests passed, 0 failed — **as of the date above; run `./scripts/verify.sh` for the current count** (the suite has grown since, and this file is a dated record, not a live figure)
 - Parsed every Swift source file in `SignalGridOperator` and `WardlinkDemo` with `swiftc -frontend -parse`
 - Validated `project.yml` as YAML
 - Validated both property lists

@@ -108,7 +108,7 @@ defence in depth against the field-misuse path.
 
 ## The three monotone invariants
 
-Proved by `pnpm run proof:work-context` (50 checks), which enumerates them over a
+Proved by `pnpm run proof:work-context` (52 checks), which enumerates them over a
 deterministic matrix — every context ceiling {`none`, `step_up`, `restrict`}, with
 and without carried exceptions/restrictions, against device compositions spanning
 every rung of the unified ladder (the empty grid included), composed through the

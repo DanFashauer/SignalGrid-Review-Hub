@@ -32,13 +32,14 @@ enum SG {
 
     // MARK: - Decision states — allow / step-up (review) / deny ONLY.
     //
-    // The DARK values are canonical and must not be "improved" here. They are
-    // specified in DEV/docs/BRAND_SYSTEM.md ("Functional State Palette") — the
-    // repo where the company and product were invented — and the web tokens in
-    // artifacts/signalgrid-web/src/index.css carry the same hexes. All three
-    // agree; an edit in this file alone forks the platform, and a `deny` that is
-    // one red in the console and another on the device is a worse failure than
-    // the one it would be fixing.
+    // The DARK values are canonical and must not be "improved" here. They ORIGINATED
+    // in DEV/docs/BRAND_SYSTEM.md ("Functional State Palette"), the repo where the
+    // company and product were invented — which is RETIRED and receives no changes,
+    // so it is history, not a source to reconcile against (see CANONICAL SOURCE
+    // below). The live counterpart is artifacts/signalgrid-web/src/index.css, which
+    // carries the same hexes. The two agree; an edit in this file alone forks the
+    // platform, and a `deny` that is one red in the console and another on the device
+    // is a worse failure than the one it would be fixing.
     //
     // FINDING RESOLVED for `deny` (DR-005, 2026-08-20): the owner ratified WCAG
     // AA as the floor for decision-state colors and the exact tones the earlier

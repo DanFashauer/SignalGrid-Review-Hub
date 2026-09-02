@@ -46,12 +46,14 @@ live-verified on every push by `scripts/run-bruno-collection.mjs`.
   tenants, grid coverage, flows health). Review-demo only, like everything
   under `review-demo/`.
 - `review-demo/` — every route that exists only under the default
-  `review-demo` profile: the deferred `/v1` routes (reconcile, simulate,
-  resolution, policy authoring, webhooks, remediation, app-workflows, the
-  WebAuthn step-up ceremony), plus `integrations/`, `monitoring/`,
-  `simulator/`, `radar/`, `sim/`, and the remaining 20 `control-plane/`
-  routes. Under `SIGNALGRID_PRODUCT_PROFILE=shared-device-gateway` these
-  paths 404 by design — see `review-demo/README.md`.
+  `review-demo` profile, in seven subdirectories: `review-demo/v1/` (16
+  requests — the deferred `/v1` routes: reconcile, simulate, resolution,
+  policy authoring, webhooks, remediation, app-workflows, the WebAuthn
+  step-up ceremony), plus `integrations/` (2), `monitoring/` (6),
+  `simulator/` (5), `radar/` (2), `sim/` (2), and the remaining 20
+  `control-plane/` routes. Under
+  `SIGNALGRID_PRODUCT_PROFILE=shared-device-gateway` these paths 404 by
+  design — see `review-demo/README.md`.
 - `negative-tests/` — requests that MUST fail correctly (401 unauthenticated,
   404 cross-tenant, 400 malformed, 404 behind the GA fence), each asserting
   its expected status. See `negative-tests/README.md`.

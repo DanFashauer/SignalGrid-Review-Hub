@@ -51,7 +51,22 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-02 (Mac lane, later session) - synced mainline into the
+LAST TOUCHED: 2026-09-02 (Mac lane, latest) - the iOS shell was BROKEN FOR THE
+              OWNER; cloud's repair batch (#387) landed but had never met a
+              compiler. Built + ran it green: BUILD SUCCEEDED (their ~1300 lines
+              compile clean), ios-shell-repair 8/8 + everything-fast, clean
+              provenance on Alpha. Step 6 (the 40 s loopback soak) had failed on
+              EVERY run - root cause was a self-inflicted grep: saw_fatal matched
+              the log-stream PREDICATE ECHO (the predicate filters FOR the words
+              "fatal"/"crash"), not a crash; the app never crashed (proven: no
+              crash report, only a harness simctl-terminate; isolated + post-churn
+              40 s soaks both alive with the backend call succeeding). Fixed
+              saw_fatal to strip the header (still catches a real fatal). Two
+              visual findings mailed: demo shows a correct ActiveSession (the
+              "kiosk could not be released" alert is honest on a non-supervised
+              simulator); the a11y-XL lock screen wraps cleanly but the
+              "Unmanaged device (...)" status line truncates at extra-large.
+              Earlier this session - synced mainline into the
               lane, then delivered LAB_001 Step 1 with CLEAN provenance on
               mainline: the evidence op re-run on a clean afeb8c5e tree after
               #385 landed (reviewHubPass+mcpPass true), replacing the dirty-tree
@@ -79,12 +94,9 @@ LAST TOUCHED: 2026-09-02 (Mac lane, later session) - synced mainline into the
               independent reviews; two real fail-opens closed, one of them
               present at the merged head). Every landing reviewed before it
               landed; preflight + breadth green on every push; CI green.
-BLOCKED ON: the simulator remediation-allow path, and the block has MOVED to
-              the cloud lane by agreement: cloud writes the TS wrapper and its
-              proof first, the Mac lane ports the Swift twin second, because
-              the wrapper's shape is a design call and a Swift half written
-              against a guess is byte-parity only by luck. Cloud mails the
-              vector list when it lands.
+BLOCKED ON: (UNBLOCKED) the simulator remediation-allow TS wrapper + pinned
+              vector table LANDED via #389 (bb23a449). The Mac lane can now port
+              the Swift twin against the real wrapper shape - next native task.
               Still Mac-side, reported not fixed: MockSignalGridAPI's replayed
               vectors (waiting on cloud's parity gate), the DemoMode flag table
               verified on the simulator, and the equalToConstant rows at

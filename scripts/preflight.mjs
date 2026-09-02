@@ -284,6 +284,15 @@ const STEPS = [
   // Drives the built bundles, so it inherits the same platform constraint.
   { name: "Browser E2E (review console, website, admin)", cmd: ["pnpm", "run", "test:e2e"], heavy: true, needsNativeBuild: true },
   { name: "Proof: signalgrid-simulator", cmd: ["pnpm", "run", "proof:signalgrid-simulator"] },
+  // Sibling of the proof above, one layer OUT. The simulator engine's remediation
+  // branch grants `allow` without the `outcomes.size === 0` guard the base-trust
+  // allow requires, so a verified remediation record buys a grant that the identical
+  // evidence without the record would not get. The engine is not edited — it is the
+  // byte-faithful original of DecisionEngine.swift (golden rule 1) — so the rule
+  // lives in a wrapper around it, and this pins the wrapper against the same shared
+  // vectors the Swift twin will be ported to.
+  { name: "Proof: remediation-allow (a recorded-but-unverified remediation never buys an allow)", cmd: ["pnpm", "run", "proof:remediation-allow"] },
+  { name: "Remediation-allow conformance (the shared vectors bind the TS side; the native port is REPORTED)", cmd: ["node", "scripts/check-remediation-allow-conformance.mjs"] },
   { name: "Proof: signalgrid-grid", cmd: ["pnpm", "run", "proof:signalgrid-grid"] },
   { name: "Proof: microsoft-graph-sandbox", cmd: ["pnpm", "run", "proof:microsoft-graph-sandbox"] },
   { name: "Proof: graph-connector (read-only, gated)", cmd: ["pnpm", "run", "proof:graph-connector"] },

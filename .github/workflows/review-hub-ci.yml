@@ -75,6 +75,15 @@ jobs:
       - name: SignalGrid simulator proof
         run: pnpm run proof:signalgrid-simulator
 
+      - name: Remediation-allow proof (a remediation record must not buy an allow the base-trust gate would refuse)
+        run: pnpm run proof:remediation-allow
+
+      - name: Remediation-allow conformance (shared vectors bound; native port REPORTED as pending)
+        run: node scripts/check-remediation-allow-conformance.mjs
+
+      - name: Remediation-allow conformance self-test (the gate can fail)
+        run: node scripts/check-remediation-allow-conformance.mjs --self-test
+
       - name: SignalGrid grid proof
         run: pnpm run proof:signalgrid-grid
 

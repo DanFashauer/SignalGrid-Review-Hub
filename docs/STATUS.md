@@ -44,7 +44,7 @@
 
 | State | Meaning | Where SignalGrid is |
 | --- | --- | --- |
-| **Implemented** | Code exists and its proof gate passes | **140** proof gates |
+| **Implemented** | Code exists and its proof gate passes | **141** proof gates |
 | **Fixture-backed** | Runs on public-safe fixtures; no live tenant, no customer data | **all connectors** |
 | **Live-validated** | Read real vendor software in an opt-in lane | **4** lane(s) available; run `pnpm run verify:live` for actual results |
 | **Customer-validated** | A named organisation ran it against their own estate | **none** |

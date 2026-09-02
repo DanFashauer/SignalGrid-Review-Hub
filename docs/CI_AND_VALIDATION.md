@@ -166,6 +166,66 @@ client and is covered by `scripts/check-decision-port-parity.mjs`; or the TypeSc
 source the vectors were written *from* — a case that misread the product would be
 wrong in every client at once, and consistently.
 
+## One set of remediation-allow vectors, one implementation so far
+
+`lib/signalgrid-simulator/src/decisionEngine.ts` grants `allow` from its
+`remediation.verified` branch **without** the `outcomes.size === 0` guard the
+base-trust allow one block below it requires, and the allow-suppression that follows
+does not cover every finding the engine can report — the header of
+`lib/signalgrid-simulator/src/remediation-allow.ts` names the exact set it does cover,
+stated once there rather than copied here where it would go stale. So a finding
+outside that set — `api.integration_failed`, `device.low_battery`,
+`device.health_degraded` — rides alongside a verified remediation record and the
+decision still carries `allow`, where the identical evidence *without* the record
+gets no allow at all. A remediation record buys a grant that base trust refuses.
+
+The engine is **not** edited to close it. `native/ios/EnterpriseShell/Services/DecisionEngine.swift`
+is a byte-faithful port of that body (golden rule 1, held by
+`scripts/check-decision-port-parity.mjs`), so a fix inside the TypeScript would
+silently diverge the phone from the fabric. The rule lives *around* the engine
+instead, in `lib/signalgrid-simulator/src/remediation-allow.ts`, and it is stated
+once, there and in the vector file:
+
+> An `allow` the engine offered stands only if the remediation evidence is VERIFIED
+> and nothing else was found alongside it: a remediation that is
+> recorded-but-not-verified, recorded with a failure, absent where one was required,
+> stale beyond the caller's declared evidence window, or illegible never yields
+> `allow`; any other finding present in the same decision never yields `allow`; the
+> withheld allow drops to the NEXT-STRICTER outcome with a named reason code; an
+> unknown or illegible remediation state raises the outcome and never lowers it; and
+> this wrapper never moves the engine's own outcome in the permissive direction.
+
+`native/shared/remediation-allow-vectors.json` is the shared table — every engine
+outcome crossed with every remediation state, plus the illegibility variants, the
+concurrent-finding cases, and the cases where no remediation was required at all and
+the decision must pass through untouched. It is generated from the wrapper by
+`pnpm run proof:remediation-allow` (106 checks) and never hand-edited; the proof
+fails if the committed file is not byte-identical to the table it derives.
+
+`scripts/check-remediation-allow-conformance.mjs` guards the table's shape and its
+bindings, in `preflight` and in `review-hub-ci.yml`.
+
+**GATED:** the state every record resolves to, the host outcome and reason code for
+every pair, monotonicity across the state axis, non-vacuity in both directions (a
+wrapper hardcoded to `step_up` fails, and so does one hardcoded to `allow`), and that
+the committed vectors match the derived table.
+
+**REPORTED, not gated:** whether the *engine* still emits the raw `allow` this wrapper
+takes away — asserting that it does would turn a future correct fix inside the engine
+into a red gate. The defect is **latent, not shipped**: the combination is not
+constructible from live input on either side today. On iOS `remediation.verified` is
+appended only from a DemoMode-injected flag (`SignalContext.swift:92-95`, gated on
+`ctx.injected`), and there is **no Swift producer at all** for
+`api.integration_failed`, `device.low_battery` or `device.health_degraded` —
+`DecisionEngine.swift:112-121` consumes them and nothing in the shell emits them. So
+the grant this wrapper withholds cannot be reached on a device today; it becomes
+reachable the moment either producer is written, which is why the rule is pinned
+before the wiring rather than after. And the **Swift twin, which does not exist yet**: no native client
+reads this file today, so the rule is enforced in TypeScript only and the conformance
+gate says so on every run. The lane order was agreed in `artifacts/lane-messages/` —
+the TypeScript wrapper and its vectors first, because the wrapper's shape is a design
+decision; the Swift port second, against the pinned file.
+
 ## Required local checks
 
 Before opening or updating a pull request, run **one command** from the repository root:

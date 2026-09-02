@@ -126,7 +126,7 @@ NEXT ACTION: owner: discovery conversations (0 of 15) - nothing substitutes.
    frozen" until 2026-09-02 — two days after this file's own STATE section
    recorded DR-021 — which is the contradiction a doc can hold against itself
    when no gate reads English.*
-3. **Nobody has used the product.** 140 proof gates and four native surfaces do
+3. **Nobody has used the product.** 141 proof gates and four native surfaces do
    not change that number. Only a conversation does.
 
 ---

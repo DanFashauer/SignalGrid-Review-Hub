@@ -92,6 +92,19 @@ export const SIM_OPERATIONS = {
     platform: "macos",
     what: "proofs, API and MCP without the simulator phase",
   },
+  // The iOS shell repair of 2026-09-02 was written without a Swift toolchain; this
+  // is the run that proves or falsifies it, step by step with a PASS/FAIL line each
+  // (generate, build, demo launch, no-flag launch before and after the local
+  // sign-in toggle, a 40 s no-crash soak against a loopback backend, and the
+  // accessibility-extra-large lock screen). A single green row for `everything-fast`
+  // could not stand in for those; a request that named them only in notes would
+  // have closed on that one row.
+  "ios-shell-repair": {
+    argv: ["./scripts/mac/ios-shell-repair.sh"],
+    platform: "macos",
+    needs: "Xcode + iOS platform + xcodegen; an api-server on API_PORT (default 8080) for the soak step",
+    what: "EnterpriseShell generated, built, and launched through the demo, no-flag, local-toggle, loopback-backend and accessibility paths, with screenshots",
+  },
 
   // ── the native Android and desktop lanes ──────────────────────────────────
   //

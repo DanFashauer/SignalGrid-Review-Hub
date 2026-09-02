@@ -1,0 +1,19 @@
+// Signing.xcconfig — TRACKED. The simulator defaults: no team, ad-hoc identity,
+// signing not required, the reference bundle id. project.yml's `configFiles`
+// points here and sets NONE of these itself (project-level build settings would
+// override this file).
+//
+// The last line is Xcode's OPTIONAL include: if Signing.local.xcconfig exists, its
+// assignments come later and therefore win; if it does not exist, nothing happens
+// and this file's defaults stand. That is how `xcodegen generate && xcodebuild -sdk
+// iphonesimulator` builds on a fresh clone with no signing set up at all.
+//
+// For a DEVICE build:  cp Signing.local.xcconfig.example Signing.local.xcconfig
+// and fill it in (gitignored — a team id and identity never belong in the repo).
+
+DEVELOPMENT_TEAM =
+CODE_SIGN_IDENTITY = -
+CODE_SIGNING_REQUIRED = NO
+PRODUCT_BUNDLE_IDENTIFIER = com.enterprise.shell
+
+#include? "Signing.local.xcconfig"

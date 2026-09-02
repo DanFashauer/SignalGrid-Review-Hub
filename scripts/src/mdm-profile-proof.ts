@@ -138,10 +138,16 @@ const asDict = (v: PlistValue): Record<string, PlistValue> =>
 // ── The source of truth for the bundle identifier ────────────────────────────
 // Read from project.yml, NOT hardcoded here — a second copy of the string would
 // drift with the first and prove nothing.
-const projectYml = readFileSync(resolve(repo, "native/ios/project.yml"), "utf8");
-const bundleMatch = projectYml.match(/PRODUCT_BUNDLE_IDENTIFIER:\s*([\w.\-]+)/);
+// The shell's id lives in the tracked signing xcconfig (native/ios/Signing.xcconfig)
+// since the iOS repair batch moved signing out of project.yml so a local, untracked
+// override can carry a real team and id; project.yml now names only the TEST target's
+// id, and reading the first literal there returned "com.enterprise.shell.tests" as the
+// shell — which this proof then compared the ASAM allow-lists against. Read the shell's
+// own value from the file that sets it.
+const signingXcconfig = readFileSync(resolve(repo, "native/ios/Signing.xcconfig"), "utf8");
+const bundleMatch = signingXcconfig.match(/^\s*PRODUCT_BUNDLE_IDENTIFIER\s*=\s*([\w.\-]+)/m);
 const APP_BUNDLE_ID = bundleMatch?.[1] ?? "";
-check("project.yml declares a PRODUCT_BUNDLE_IDENTIFIER for the shell", APP_BUNDLE_ID.length > 0);
+check("Signing.xcconfig declares a PRODUCT_BUNDLE_IDENTIFIER for the shell", APP_BUNDLE_ID.length > 0);
 check(`bundle id is not a test target (got "${APP_BUNDLE_ID}")`, !APP_BUNDLE_ID.endsWith(".tests"));
 
 // ── Profile 1: the kiosk lockdown profile ────────────────────────────────────

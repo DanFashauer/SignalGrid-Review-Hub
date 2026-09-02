@@ -164,6 +164,16 @@ Vite 8's bundler, win32 bindings deliberately kept for the windows desktop CI), 
     set `adjustsFontForContentSizeCategory = true`. The drift is the default
     unless this is written down — so it is now GATED: `scripts/check-ios-dynamic-type.mjs`
     (in preflight and CI) fails on any raw call outside `DesignSystem.swift`.
+  - **Never derive a policy default from the ABSENCE of managed configuration.**
+    `managedBool("AllowManualOverride", default: !isManaged)` reads "no MDM
+    dictionary ⇒ allow the badge-less override", but a *supervised* device whose
+    admin never attached an app-config payload has no dictionary either, so the
+    phone the org believes is captive is the one that hands out the override —
+    unknown management state loosening the answer, which golden rule 2 forbids.
+    GATED by `scripts/check-ios-policy-defaults.mjs` (preflight and CI): a
+    `managedBool`/`managedString` default may be a literal or a shape that
+    provably resolves to `false` when the dictionary is absent, never `!isManaged`,
+    `managed == nil`, or anything read from `UserDefaults.standard`.
   - **Scaling text needs somewhere to go.** A label that scales must be allowed
     to wrap (`numberOfLines = 0`, or `2` plus `minimumScaleFactor` in a narrow
     button), and any row holding it needs a `greaterThanOrEqualToConstant`

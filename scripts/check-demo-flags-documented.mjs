@@ -59,7 +59,7 @@
 // that flag can never be green about nothing. The same suite also runs inline in
 // the ordinary mode.
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -69,13 +69,24 @@ const DEMO_MODE = `${SHELL_DIR}/Services/DemoMode.swift`;
 const KIOSK_CONFIG = `${SHELL_DIR}/Services/KioskController.swift`;
 const README = "native/ios/README.md";
 const MIN_FLAGS = 10;
-// Three managed keys are read today (SingleAppModeEnabled, AllowManualOverride,
-// RecoveryCode). The floor is the MEASURED number and is bumped deliberately when
-// a key is added — a floor with slack in it is a floor that hides a key.
-const MIN_MANAGED_KEYS = 3;
+// Six managed keys are read today (SingleAppModeEnabled, AllowManualOverride,
+// RecoveryCode, BackendBaseURL, BackendBearerToken, BackendWorkflowKey — the last
+// three added 2026-09-02 for the control-plane wiring). The floor is the MEASURED
+// number and is bumped deliberately when a key is added — a floor with slack in
+// it is a floor that hides a key.
+const MIN_MANAGED_KEYS = 6;
 // The managed-key table is found by its heading, so the two tables in one README
 // can never be confused for one another.
 const MANAGED_HEADING = "### Managed App Config keys";
+// Set C (added 2026-09-02): keys the SETTINGS BUNDLE declares. Root.plist is the
+// one place a holder can flip a switch on an unmanaged phone, and
+// `local_session_allowed` is a POLICY control (it decides whether a code-free
+// local sign-in exists at all). A key declared there but read by nothing is a
+// switch that does nothing; a key read by code but absent from the bundle is a
+// control nobody can reach; either undocumented is the same fossil as above.
+const SETTINGS_BUNDLE = `${SHELL_DIR}/Settings.bundle/Root.plist`;
+const SETTINGS_HEADING = "### Settings bundle keys";
+const MIN_SETTINGS_KEYS = 1;
 const SELF_TEST_ONLY = process.argv.slice(2).includes("--self-test");
 
 /** Strip line comments so prose naming a flag is never read as reading one. */
@@ -128,6 +139,21 @@ function deriveManagedKeys(sources) {
     for (const m of src.matchAll(/\bmanaged(?:Bool|String)\(\s*"([A-Za-z0-9_]+)"/g)) {
       if (!keys.has(m[1])) keys.set(m[1], path);
     }
+    // Shape 2 (ProviderConfigurationService, 2026-09-02): `configured(env: "…",
+    // managed: ConfigKeys.name)` where `static let name = "literal"` is declared in
+    // the SAME file. A managed-key read routed through a constant is still a read;
+    // a derivation that stopped at the constant's name would have left
+    // `badge_reader_type` a live, undocumented control — the exact miss set B
+    // exists to close. A literal `managed: "Key"` counts too.
+    const consts = new Map();
+    for (const c of src.matchAll(/\bstatic\s+let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([A-Za-z0-9_]+)"/g)) consts.set(c[1], c[2]);
+    for (const m of src.matchAll(/\bmanaged:\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)\b/g)) {
+      const key = consts.get(m[1]);
+      if (key && !keys.has(key)) keys.set(key, path);
+    }
+    for (const m of src.matchAll(/\bmanaged:\s*"([A-Za-z0-9_]+)"/g)) {
+      if (!keys.has(m[1])) keys.set(m[1], path);
+    }
   }
   return keys;
 }
@@ -144,24 +170,54 @@ function readmeFlagRows(md) {
   return rows;
 }
 
-/** The README text under MANAGED_HEADING, up to the next `##`-level heading. */
-function managedSection(md) {
-  const at = md.indexOf(MANAGED_HEADING);
+/** The README text under `heading`, up to the next heading of level 2 or 3 —
+ *  so two `###` tables under one `##` stay separate. */
+function sectionUnder(md, heading) {
+  const at = md.indexOf(heading);
   if (at < 0) return null;
-  const rest = md.slice(at + MANAGED_HEADING.length);
-  const end = rest.search(/\n## /);
+  const rest = md.slice(at + heading.length);
+  const end = rest.search(/\n##+ /);
   return end < 0 ? rest : rest.slice(0, end);
 }
 
-/** Rows shaped `| \`Key\` | meaning | … |` inside the managed-key section. */
-function readmeManagedRows(md) {
+function managedSection(md) {
+  return sectionUnder(md, MANAGED_HEADING);
+}
+
+/** Rows shaped `| \`Key\` | meaning | … |` inside a keyed section. */
+function keyedRows(section) {
   const rows = new Map();
-  const section = managedSection(md);
   if (section === null) return rows;
   for (const m of section.matchAll(/^\|\s*`([A-Za-z0-9_]+)`\s*\|([^|]*)\|/gm)) {
     rows.set(m[1], m[2].trim());
   }
   return rows;
+}
+
+function readmeManagedRows(md) {
+  return keyedRows(managedSection(md));
+}
+
+function readmeSettingsRows(md) {
+  return keyedRows(sectionUnder(md, SETTINGS_HEADING));
+}
+
+/**
+ * Derivation C: `<key>Key</key><string>NAME</string>` pairs in the Settings
+ * bundle's Root.plist, each checked against a `forKey: "NAME"` read somewhere
+ * under the shell. Returns { declared: Map(name -> plist path), unread: [names] }.
+ */
+function deriveSettingsKeys(plistText, plistPath, sources) {
+  const declared = new Map();
+  for (const m of plistText.matchAll(/<key>Key<\/key>\s*<string>([A-Za-z0-9_]+)<\/string>/g)) {
+    if (!declared.has(m[1])) declared.set(m[1], plistPath);
+  }
+  const readKeys = new Set();
+  for (const { text } of sources) {
+    for (const m of code(text).matchAll(/forKey:\s*"([A-Za-z0-9_]+)"/g)) readKeys.add(m[1]);
+  }
+  const unread = [...declared.keys()].filter((k) => !readKeys.has(k));
+  return { declared, unread };
 }
 
 /**
@@ -197,6 +253,11 @@ const MANAGED_MSGS = {
   missingWhy: "a policy control that an MDM payload — or a launch argument, where the MDM has not set it — can change, documented nowhere",
   fossilWhy: "a fossil row, or the key was renamed and the table was not",
 };
+const SETTINGS_MSGS = {
+  tableName: "Settings bundle table",
+  missingWhy: "a switch the holder of an unmanaged phone can flip in iOS Settings, documented nowhere",
+  fossilWhy: "a fossil row, or the key was renamed in Root.plist and the table was not",
+};
 
 // ── Real input ───────────────────────────────────────────────────────────────
 const sources = swiftFiles(resolve(repo, SHELL_DIR)).map((p) => ({
@@ -208,6 +269,9 @@ const managed = deriveManagedKeys(sources);
 const md = readFileSync(resolve(repo, README), "utf8");
 const rows = readmeFlagRows(md);
 const managedRows = readmeManagedRows(md);
+const settingsPlist = existsSync(resolve(repo, SETTINGS_BUNDLE)) ? readFileSync(resolve(repo, SETTINGS_BUNDLE), "utf8") : "";
+const settings = deriveSettingsKeys(settingsPlist, SETTINGS_BUNDLE, sources);
+const settingsRows = readmeSettingsRows(md);
 
 // ── Floors: a gate that scanned nothing is green about nothing ───────────────
 function floorProblems() {
@@ -230,7 +294,7 @@ function floorProblems() {
   if (managed.size < MIN_MANAGED_KEYS) {
     found.push(
       `  ✗ derived only ${managed.size} Managed App Config key(s), floor is ${MIN_MANAGED_KEYS} — ` +
-        `the managedBool/managedString read shape changed, so this gate stopped seeing the policy keys`,
+        `the managedBool/managedString/configured(managed:) read shape changed, so this gate stopped seeing the policy keys`,
     );
   }
   if (rows.size === 0) {
@@ -240,6 +304,18 @@ function floorProblems() {
     found.push(`  ✗ no "${MANAGED_HEADING}" section found in ${README} — the managed-key table has no home, so nothing to compare against`);
   } else if (managedRows.size === 0) {
     found.push(`  ✗ "${MANAGED_HEADING}" in ${README} holds no rows shaped \`| \`Key\` | meaning |\` — nothing to compare against`);
+  }
+  if (settingsPlist === "") {
+    found.push(`  ✗ ${SETTINGS_BUNDLE} not found — the Settings bundle moved, or the local sign-in switch is gone`);
+  }
+  if (settings.declared.size < MIN_SETTINGS_KEYS) {
+    found.push(`  ✗ derived only ${settings.declared.size} Settings-bundle key(s), floor is ${MIN_SETTINGS_KEYS} — the <key>Key</key> read shape changed`);
+  }
+  for (const k of settings.unread) {
+    found.push(`  ✗ Settings bundle declares "${k}" but nothing under ${SHELL_DIR} reads it (forKey: "${k}") — a switch that does nothing`);
+  }
+  if (sectionUnder(md, SETTINGS_HEADING) === null) {
+    found.push(`  ✗ no "${SETTINGS_HEADING}" section found in ${README} — the Settings-bundle table has no home`);
   }
   return found;
 }
@@ -295,6 +371,24 @@ function runSelfTests() {
     synthManaged.size === 2 && synthManaged.has("PlantedManagedKey") && synthManaged.has("PlantedRecoveryCode") && !synthManaged.has("key"),
     `derived {${[...synthManaged.keys()].join(", ")}}`,
   );
+  // F4b — shape 2: a key read through a same-file constant. The helper's own
+  // `managed: String` parameter must NOT resolve to a key.
+  const synthConst = deriveManagedKeys([
+    {
+      path: "synthetic.swift",
+      text: [
+        'private enum ConfigKeys { static let readerType = "planted_reader_type" }',
+        "private static func configured(env: String, managed: String) -> String? { nil }",
+        'let r = configured(env: "PLANTED_ENV", managed: ConfigKeys.readerType)',
+        'let q = configured(env: "PLANTED_ENV_2", managed: "PlantedLiteralKey")',
+      ].join("\n"),
+    },
+  ]);
+  t(
+    "managed derivation resolves a key read through a same-file constant and a literal `managed:` argument, not the helper's parameter",
+    synthConst.size === 2 && synthConst.has("planted_reader_type") && synthConst.has("PlantedLiteralKey") && !synthConst.has("String"),
+    `derived {${[...synthConst.keys()].join(", ")}}`,
+  );
   const undocManaged = compare(synthManaged, managedRows, MANAGED_MSGS);
   t(
     "undocumented managed key is flagged",
@@ -324,6 +418,31 @@ function runSelfTests() {
     "flag derivation alone does NOT see a managedBool key (the original miss)",
     managedViaFlagDerivation.size === 0,
     `derived ${managedViaFlagDerivation.size}`,
+  );
+
+  // F5 — the Settings-bundle derivation: a planted key must be found, an unread
+  // one reported, and an undocumented one flagged through the same compare.
+  const synthSettings = deriveSettingsKeys(
+    "<key>Key</key><string>planted_switch</string><key>Key</key><string>unread_switch</string>",
+    "synthetic/Root.plist",
+    [{ path: "synthetic.swift", text: 'UserDefaults.standard.bool(forKey: "planted_switch")' }],
+  );
+  t(
+    "settings derivation finds declared keys and reports the unread one",
+    synthSettings.declared.size === 2 && synthSettings.unread.length === 1 && synthSettings.unread[0] === "unread_switch",
+    `declared ${synthSettings.declared.size}, unread {${synthSettings.unread.join(", ")}}`,
+  );
+  const undocSettings = compare(synthSettings.declared, settingsRows, SETTINGS_MSGS);
+  t(
+    "undocumented settings key is flagged",
+    undocSettings.some((p) => p.includes("planted_switch") && p.includes("absent from the Settings bundle table")),
+    `${undocSettings.length} finding(s)`,
+  );
+  t(
+    "a ### table stops at the next ### heading (the two tables cannot bleed together)",
+    sectionUnder("### A\n| `x` | one |\n### B\n| `y` | two |\n## C\n", "### A").includes("`x`") &&
+      !sectionUnder("### A\n| `x` | one |\n### B\n| `y` | two |\n## C\n", "### A").includes("`y`"),
+    "section bounded",
   );
 
   return results;
@@ -366,6 +485,10 @@ for (const line of compare(managed, managedRows, MANAGED_MSGS)) {
   console.error(line);
   problems += 1;
 }
+for (const line of compare(settings.declared, settingsRows, SETTINGS_MSGS)) {
+  console.error(line);
+  problems += 1;
+}
 
 if (problems > 0) {
   console.error(
@@ -379,7 +502,9 @@ if (problems > 0) {
 console.log(
   `demo flags: ${flags.size} derived from ${sources.length} Swift source(s), all documented in ${README} with a meaning; ` +
     `${rows.size} table row(s), no fossils.\n` +
-    `managed app config keys: ${managed.size} derived (managedBool/managedString), all documented under "${MANAGED_HEADING}"; ` +
+    `managed app config keys: ${managed.size} derived (managedBool/managedString + configured(managed: ConfigKeys.*)), all documented under "${MANAGED_HEADING}"; ` +
     `${managedRows.size} table row(s), no fossils.\n` +
-    `  (GATED: presence + a non-empty meaning, both directions, for both sets. REPORTED, not gated: whether each meaning is accurate.)`,
+    `settings bundle keys: ${settings.declared.size} declared in ${SETTINGS_BUNDLE}, each read by the shell and documented under "${SETTINGS_HEADING}"; ` +
+    `${settingsRows.size} table row(s), no fossils.\n` +
+    `  (GATED: presence + a non-empty meaning, both directions, for all three sets. REPORTED, not gated: whether each meaning is accurate.)`,
 );

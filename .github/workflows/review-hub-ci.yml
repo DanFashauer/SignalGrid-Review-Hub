@@ -218,6 +218,14 @@ jobs:
         run: node scripts/check-ios-dead-stored-properties.mjs --self-test
       - name: iOS dead stored properties (a field nothing assigns makes every read of it dead)
         run: node scripts/check-ios-dead-stored-properties.mjs
+      - name: iOS policy defaults self-test (the gate must be able to fail)
+        run: node scripts/check-ios-policy-defaults.mjs --self-test
+      - name: iOS policy defaults (no managed-config default derived from the absence of policy)
+        run: node scripts/check-ios-policy-defaults.mjs
+      - name: Sim-script self-check self-test (the gate must be able to fail)
+        run: node scripts/check-sim-scripts-selfcheck.mjs --self-test
+      - name: Sim-script self-check (a queued Mac operation must name a script that runs)
+        run: node scripts/check-sim-scripts-selfcheck.mjs
       - name: iOS demo flags (every simulator flag the shell reads is documented, and vice versa)
         run: node scripts/check-demo-flags-documented.mjs
       - name: Lab registry self-test (the gate must be able to fail)

@@ -1,0 +1,17 @@
+// Signing.local.xcconfig — developer-local, UNTRACKED (native/ios/.gitignore).
+//
+//   cp Signing.local.xcconfig.example Signing.local.xcconfig   # then fill in
+//
+// Included at the END of the tracked Signing.xcconfig via `#include?`, so every
+// assignment here overrides the simulator defaults. A DEVICE build needs all four:
+// a Team ID from developer.apple.com, an identity, signing required, and a bundle
+// id your team can sign (com.enterprise.shell belongs to nobody).
+//
+// run-ios.sh reads the bundle id back from the built Info.plist;
+// scripts/mac/run-everything.sh and ios-shell-repair.sh assume com.enterprise.shell
+// (override with SHELL_BUNDLE_ID where the script supports it).
+
+DEVELOPMENT_TEAM = ABCDE12345
+CODE_SIGN_IDENTITY = Apple Development
+CODE_SIGNING_REQUIRED = YES
+PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.enterpriseshell

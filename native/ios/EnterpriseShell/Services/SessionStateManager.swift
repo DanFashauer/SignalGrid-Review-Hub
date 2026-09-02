@@ -255,9 +255,13 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
     /// authenticating → provisioning → activeSession, and the kiosk-until-auth
     /// lifecycle unlocks the device on activeSession (re-locking when it ends).
     func beginManualOverrideLogin() {
-        guard KioskConfig.allowManualOverride else { return }
+        // Re-checked HERE, not only at the button: the admin-code path (managed
+        // opt-in) or the local-toggle path (unmanaged, toggle on, no kiosk active).
+        guard KioskConfig.manualLoginAvailable else { return }
         guard currentState == .lockedIdle else { return }
-        AuditLogger.shared.log(event: .authenticationStarted, metadata: ["method": "manual_override"])
+        AuditLogger.shared.log(event: .authenticationStarted, metadata: [
+            "method": KioskConfig.allowManualOverride ? "manual_override" : "local_session_toggle"
+        ])
         capturedBadgeId = "MANUAL-OVERRIDE"
         transition(to: .badgeCaptured)
     }
@@ -298,7 +302,9 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
                 throw SessionError.authenticationFailed(errorMessage)
             }
             
-            // Step 2: Authenticate using configured identity provider
+            // Step 2: Authenticate using configured identity provider. The stated
+            // expiry travels with the credentials so the control-plane session
+            // provider can refuse a session that never said when it ends.
             let credentials = AuthenticationCredentials(
                 credentialType: .sessionToken,
                 badgeId: badgeId,
@@ -306,7 +312,7 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
                 deviceId: DeviceInfo.identifier,
                 mdmUserId: nil,
                 mfaToken: nil,
-                additionalData: nil
+                additionalData: startSessionResponse.expiresAt.map { ["expiresAt": ISO8601Wire.string($0)] }
             )
             
             let authResult: AuthenticationResult
@@ -321,9 +327,11 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
                 throw SessionError.authenticationFailed("No identity provider configured")
             }
             
-            // Create session data
+            // Create session data. The id is the CONTROL PLANE's session id when it
+            // minted one: `sessions/{id}/end` and `/refresh` are keyed by it, and a
+            // locally minted UUID answered 404 on both.
             var session = SessionData(
-                sessionId: UUID().uuidString,
+                sessionId: startSessionResponse.controlPlaneSessionId ?? sessionToken,
                 userId: user.userId,
                 badgeId: badgeId,
                 persona: persona,
@@ -720,7 +728,8 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
     }
     
     private func resetBadgeReaderState() {
-        // Reset badge reader buffer
+        // Reset the CONFIGURED reader's buffer (and the legacy manager's, harmlessly)
+        badgeReaderProvider?.resetReaderState()
         BadgeReaderManager.shared.resetReaderState()
         
         // Clear any pending badge reads
@@ -852,9 +861,11 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
         // Check if token needs refresh
         if let expiresAt = currentSession?.expiresAt,
            expiresAt.timeIntervalSinceNow < 300 {
-            // Token expires in less than 5 minutes, refresh it
+            // Token expires in less than 5 minutes: refresh through the CONFIGURED
+            // identity provider (this used to call the legacy OIDCAuthService,
+            // whose placeholder tenant endpoint could not even form a URL).
             do {
-                try await OIDCAuthService.shared.refreshToken()
+                _ = try await refreshActiveSession()
             } catch {
                 AuditLogger.shared.log(event: .tokenRefreshFailed, metadata: [
                     "error": error.localizedDescription
@@ -862,6 +873,53 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
                 endSession(userInitiated: false)
             }
         }
+    }
+
+    /// Refresh the active session through the CONFIGURED identity provider and
+    /// report what actually happened. Returns the new expiry when the provider
+    /// states one (nil means "validated, no new expiry stated"). Throws when there
+    /// is no provider, the provider cannot refresh, or the backend refused — the
+    /// caller shows THAT, never a canned success.
+    func refreshActiveSession() async throws -> Date? {
+        guard isSessionActive else { throw SessionError.missingSession }
+        guard let provider = identityProvider else { throw SessionError.tokenRefreshFailed }
+        do {
+            try await provider.refreshToken()
+        } catch {
+            AuditLogger.shared.log(event: .sessionRefreshFailed, metadata: [
+                "provider": provider.displayName,
+                "error": error.localizedDescription
+            ])
+            throw error
+        }
+        let newExpiry = (provider as? ControlPlaneSessionIdentityProvider)?.expiresAt
+        if let newExpiry = newExpiry {
+            await MainActor.run { self.applyRefreshedExpiry(newExpiry) }
+        }
+        AuditLogger.shared.log(event: .sessionRefreshed, metadata: [
+            "provider": provider.displayName,
+            "expiresAt": newExpiry.map(ISO8601Wire.string) ?? "unchanged"
+        ])
+        return newExpiry
+    }
+
+    /// Replace the session's expiry after a successful refresh (SessionData's
+    /// fields are immutable by design; a refreshed session is a new value).
+    private func applyRefreshedExpiry(_ date: Date) {
+        guard let s = currentSession else { return }
+        currentSession = SessionData(
+            sessionId: s.sessionId,
+            userId: s.userId,
+            badgeId: s.badgeId,
+            persona: s.persona,
+            accessToken: s.accessToken,
+            refreshToken: s.refreshToken,
+            idToken: s.idToken,
+            expiry: .expiresAt(date),
+            startedAt: s.startedAt,
+            lastActivityAt: s.lastActivityAt,
+            isActive: s.isActive
+        )
     }
     
     // MARK: - View Controller Factory

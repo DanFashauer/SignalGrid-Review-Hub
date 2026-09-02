@@ -44,6 +44,10 @@ final class AuditLogger {
         case error
         case auditUploadFailed
         case auditUploaded
+        /// Session audit recorded on the device because the server has no ingest route.
+        case auditKeptLocal
+        /// The bounded in-memory queue dropped its oldest entries (count in metadata).
+        case auditQueueOverflow
         
         // MDM
         case mdmConfigurationReceived
@@ -82,7 +86,15 @@ final class AuditLogger {
         case badgeReaderDidDisconnect
         case badgeReaderProviderError
         case badgeReaderProviderStateChange
+        /// A reader type is declared in configuration but has no provider in this build.
+        case badgeReaderProviderUnavailable
         case sessionStateChanged
+        case sessionRefreshed
+        case sessionRefreshFailed
+        /// One deterministic row per lock-screen appearance, with the exact inputs
+        /// that decide Manual login — greppable from the unified log (os_log,
+        /// subsystem com.enterprise.shell) by scripts/mac/ios-shell-repair.sh.
+        case lockScreenPresented
 
         // Embedded Assist gate (app-workflows Assist model)
         case assistActionEvaluated
@@ -116,16 +128,23 @@ final class AuditLogger {
     /// singleton init re-enters that still-initializing singleton and deadlocks.
     var currentSessionId: String?
 
+    // LOCAL ONLY. The served control plane has NO audit-ingest route (checked
+    // 2026-09-02 against artifacts/api-server/src/routes/v1.ts — `/v1/audit` is a
+    // GET; `/api/audit/logs` never existed). The previous version POSTed there
+    // every 30 s, and on any non-2xx re-queued the batch at the FRONT of the
+    // queue, forever: an unbounded queue that grew for the life of the process
+    // against a route that could never answer. Now: a bounded in-memory queue
+    // (cap `maxQueued`, drop-oldest, counted), flushed to the on-device file
+    // (itself bounded) — never to the network, never re-queued.
     private var eventQueue: [AuditLogEntry] = []
     private let queue = DispatchQueue(label: "com.enterprise.shell.audit")
     private var batchTimer: Timer?
     private let batchSize = 50
     private let batchInterval: TimeInterval = 30
-    
-    // Backend URL for audit logs
-    private var auditEndpoint: URL? {
-        URL(string: "\(BackendService.baseUrl)/api/audit/logs")
-    }
+    private let maxQueued = 500
+    /// Entries dropped from the in-memory queue since launch. Reported, so a
+    /// silent loss is impossible; never reset.
+    private(set) var droppedCount = 0
     
     // MARK: - Initialization
     
@@ -153,8 +172,24 @@ final class AuditLogger {
         )
         
         queue.async { [weak self] in
-            self?.eventQueue.append(entry)
-            self?.checkBatchFlush()
+            guard let self = self else { return }
+            self.eventQueue.append(entry)
+            if self.eventQueue.count > self.maxQueued {
+                let overflow = self.eventQueue.count - self.maxQueued
+                self.eventQueue.removeFirst(overflow)
+                self.droppedCount += overflow
+                // One overflow row per breach, appended AFTER the trim so it is kept.
+                self.eventQueue.append(AuditLogEntry(
+                    id: UUID().uuidString,
+                    timestamp: Date(),
+                    eventType: AuditEvent.auditQueueOverflow.rawValue,
+                    deviceId: entry.deviceId,
+                    deviceSerial: entry.deviceSerial,
+                    sessionId: self.currentSessionId,
+                    metadata: ["droppedNow": String(overflow), "droppedTotal": String(self.droppedCount)]
+                ))
+            }
+            self.checkBatchFlush()
         }
     }
     
@@ -180,53 +215,18 @@ final class AuditLogger {
         flushLogs()
     }
     
-    /// Flush queued logs to backend
+    /// Flush queued entries to the on-device audit file. No network: the server
+    /// has no ingest route today. When one exists, THIS is the place to add the
+    /// upload — and it must still never re-queue forever.
     func flushLogs() {
         queue.async { [weak self] in
             guard let self = self, !self.eventQueue.isEmpty else { return }
             
-            let logsToSend = self.eventQueue
+            let logsToPersist = self.eventQueue
             self.eventQueue.removeAll()
             
-            self.uploadLogs(logsToSend)
+            self.storeLocally(logsToPersist)
         }
-    }
-    
-    private func uploadLogs(_ logs: [AuditLogEntry]) {
-        guard let endpoint = auditEndpoint else { return }
-        
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        do {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            request.httpBody = try encoder.encode(logs)
-        } catch {
-            print("Failed to encode audit logs: \(error)")
-            // Store logs locally for later retry
-            storeLocally(logs)
-            return
-        }
-        
-        // Use shared URLSession for upload
-        let task = URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
-            if let error = error {
-                print("Failed to upload audit logs: \(error)")
-                // Store locally for retry later
-                self?.storeLocally(logs)
-            } else if let httpResponse = response as? HTTPURLResponse,
-                      (200...299).contains(httpResponse.statusCode) {
-                // Successfully uploaded
-            } else {
-                // Failed, re-queue
-                self?.queue.async {
-                    self?.eventQueue.insert(contentsOf: logs, at: 0)
-                }
-            }
-        }
-        task.resume()
     }
     
     // MARK: - Local Storage for Offline

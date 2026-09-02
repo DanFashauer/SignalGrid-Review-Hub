@@ -140,8 +140,32 @@ final class HostAppViewController: UIViewController {
     /// Runs the async decision off the tap path so the synchronous flow is unchanged.
     private func evaluateSessionDecision(isInitial: Bool, reason: String = "session_open") {
         let ctx = buildEnvironmentContext()
-        let service = DecisionServiceProvider.resolve(
-            backendURL: configuredBackendURL, bearerToken: configuredBackendToken)
+        // Tri-state (review finding): a REFUSED backend is a tenant authority that
+        // exists and cannot be reached — it must never resolve to the on-device
+        // engine as if no backend were configured. A refusing service goes through
+        // evaluateWithFallback's clamp (local allow → step_up), exactly like an
+        // unreachable one.
+        let service: DecisionService
+        switch BackendService.configuration {
+        case .refused(let error):
+            service = RefusedDecisionService(error: error)
+        case .absent:
+            // No control plane at all: the local engine may inform, but its `allow`
+            // is not authoritative — clamped to step_up (NO_CONTROL_PLANE), the same
+            // posture as a refused or unreachable authority. The simulator DEMO is
+            // the one exception, because DemoMode IS the stand-in control plane
+            // everywhere else in the shell (session start/end answer from it too).
+            var clamp = true
+            #if targetEnvironment(simulator)
+            if DemoMode.isEnabled { clamp = false }
+            #endif
+            service = clamp
+                ? ClampedLocalDecisionService()
+                : DecisionServiceProvider.resolve(backendURL: nil, bearerToken: nil)
+        case .configured:
+            service = DecisionServiceProvider.resolve(
+                backendURL: configuredBackendURL, bearerToken: configuredBackendToken)
+        }
         // Version each evaluation (review finding): overlapping remote evaluations
         // each capture a different ctx, and whichever finished LAST used to win —
         // so an older healthy result could overwrite a newer restrictive one and
@@ -313,20 +337,40 @@ final class HostAppViewController: UIViewController {
             postureObserved: postureObserved)
     }
 
+    /// No control plane configured (`.absent`, outside the simulator demo): the
+    /// on-device engine answers, but a local `allow` is held to step_up with
+    /// `NO_CONTROL_PLANE`. Restrict/deny stand as-is. Fail closed.
+    private struct ClampedLocalDecisionService: DecisionService {
+        func evaluate(_ request: AppDecisionRequest) async throws -> DecisionResult {
+            let local = try await LocalDecisionService().evaluate(request)
+            guard local.outcome == .allow else { return local }
+            return DecisionResult(
+                outcome: .step_up,
+                reasonCodes: local.reasonCodes + ["NO_CONTROL_PLANE"],
+                explanation: "No control plane is configured; on-device signals are healthy, but an allow requires the tenant authority — held for step-up.",
+                source: .onDevice)
+        }
+    }
+
+    /// A configured-but-refused backend: every evaluation throws its reason, so the
+    /// fallback clamp applies (never a local `allow`).
+    private struct RefusedDecisionService: DecisionService {
+        let error: BackendError
+        func evaluate(_ request: AppDecisionRequest) async throws -> DecisionResult {
+            throw error
+        }
+    }
+
+    /// One resolver for every build: `BackendService.resolveBaseURL()` already
+    /// orders managed config → `-DemoBackendURL` (simulator, loopback only) →
+    /// `BACKEND_BASE_URL`, and nil means on-device. A device build used to be
+    /// pinned to nil here even when an MDM had configured a control plane.
     private var configuredBackendURL: URL? {
-        #if targetEnvironment(simulator)
-        return DemoMode.backendURL
-        #else
-        return nil
-        #endif
+        BackendService.baseURL
     }
 
     private var configuredBackendToken: String? {
-        #if targetEnvironment(simulator)
-        return DemoMode.backendToken
-        #else
-        return nil
-        #endif
+        BackendService.tenantBearerToken
     }
 
     /// Refs sent to the control plane. Real refs come from the session/device; a demo

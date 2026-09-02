@@ -1,19 +1,29 @@
 name: EnterpriseShell
 options:
-  bundleIdPrefix: com.enterprise
+  # NO bundleIdPrefix: XcodeGen would then write PRODUCT_BUNDLE_IDENTIFIER into the
+  # app target's build settings, which beat the xcconfig chain below.
   deploymentTarget:
     iOS: "15.0"
   xcodeVersion: "15.0"
   generateEmptyDirectories: true
 
+# SIGNING lives in the xcconfig chain and NOWHERE in this file's `settings`:
+# project-level build settings override a project xcconfig, so a value here would
+# silently win. `Signing.xcconfig` (TRACKED) holds the simulator defaults — no
+# team, ad-hoc identity, signing not required, bundle id com.enterprise.shell —
+# and ends with `#include? "Signing.local.xcconfig"`, Xcode's optional include: a
+# later assignment overrides an earlier one, and a missing file is not an error.
+# A DEVICE build copies Signing.local.xcconfig.example to Signing.local.xcconfig
+# (gitignored) and fills in a real team, identity and bundle id.
 settings:
   base:
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: ""
-    CODE_SIGN_IDENTITY: "-"
-    CODE_SIGNING_REQUIRED: "NO"
     CODE_SIGN_ENTITLEMENTS: "EnterpriseShell/EnterpriseShell.entitlements"
+
+configFiles:
+  Debug: Signing.xcconfig
+  Release: Signing.xcconfig
 
 targets:
   EnterpriseShell:
@@ -26,7 +36,8 @@ targets:
       - path: EnterpriseShell/Resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.enterprise.shell
+        # PRODUCT_BUNDLE_IDENTIFIER deliberately absent: it comes from the
+        # Signing.xcconfig chain (see the top of this file).
         INFOPLIST_FILE: EnterpriseShell/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
@@ -58,9 +69,11 @@ targets:
       - path: EnterpriseShell/Services/DecisionService.swift
       - path: EnterpriseShell/Services/SignalContext.swift
       - path: EnterpriseShell/Services/ScreenCapturePolicy.swift
+      - path: EnterpriseShell/Services/DeviceBindingCrypto.swift
       - path: EnterpriseShell/Models/SessionState.swift
     settings:
       base:
+        # The hermetic test bundle keeps a literal id; it never installs on a device.
         PRODUCT_BUNDLE_IDENTIFIER: com.enterprise.shell.tests
         GENERATE_INFOPLIST_FILE: "YES"
         SWIFT_VERSION: "5.9"

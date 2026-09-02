@@ -34,6 +34,24 @@ Config). Read by `KioskConfig` (`Services/KioskController.swift`):
 | `SingleAppModeEnabled` | Bool | `true` | Run the kiosk-until-auth model. `false` ⇒ shell never self-locks (normal app). |
 | `AllowManualOverride` | Bool | `false` | Show the **Manual login** affordance on the lock screen and allow `beginManualOverrideLogin()`. |
 | `RecoveryCode` | String | — | The admin-issued manual-login code (constant-time compared; empty ⇒ manual login always denied). |
+| `BackendBaseURL` | String | — | Control-plane base URL, first in `BackendService.resolveBaseURL()`'s order. `https://` only (http only for loopback). Unset on a managed device ⇒ no session can start (fail closed); unset on an unmanaged device ⇒ local/offline mode. |
+| `BackendBearerToken` | String | — | Tenant bearer for the served `/v1` surface (`Authorization: Bearer`). Last in `BackendService.tenantBearerToken`'s order. |
+| `BackendWorkflowKey` | String | `clinical-session` | The `workflowKey` sent at `POST /api/v1/sessions/start`. The default is the key the fixture tenant seeds. |
+| `badge_reader_type` | String | `keyboard_wedge` | Which badge-reader provider the shell builds (`BadgeReaderType` raw value; `nfc` / `serial` are declared, not implemented). Read by `ProviderConfigurationService.configured(env:managed:)`: a present managed dictionary answers only from itself; `BADGE_READER_TYPE` in the environment is consulted on the simulator or with no managed dictionary, never over an MDM value on a device. |
+| `identity_provider_type` | String | — | `IdentityProviderType` raw value; same precedence as `badge_reader_type` (an MDM value is never outranked by `IDENTITY_PROVIDER_TYPE` on a device). Unset ⇒ `ControlPlaneSessionIdentityProvider`; set only to choose another provider explicitly. |
+
+`AllowManualOverride` defaults to `false` **everywhere**. The absence of a managed
+app-config dictionary proves nothing: app-config (this section) and ASAM
+authorisation (§2) are different payloads, and a supervised, kiosk-locked device may
+carry no app-config at all, so nothing in the shell loosens on that absence. The
+unmanaged path is a positive assertion by the holder — the Settings-bundle switch
+`local_session_allowed` ("Allow local sign-in on this unmanaged device", default
+OFF) — and it is refused unless the OS has explicitly refused the kiosk request
+(`KioskController.asamProbe == .unavailable`); a managed dictionary, an engaged lock,
+or an unanswered probe all refuse. See `native/ios/README.md`, "Settings bundle keys".
+
+When a managed dictionary is delivered it answers only from itself: a key it lacks is
+an absent value, and the launch-argument fallback the simulator uses does not apply.
 
 Example (MDM app-config payload for `com.enterprise.shell`):
 
@@ -42,6 +60,9 @@ Example (MDM app-config payload for `com.enterprise.shell`):
   <key>SingleAppModeEnabled</key><true/>
   <key>AllowManualOverride</key><true/>
   <key>RecoveryCode</key><string>REPLACE-WITH-ADMIN-ISSUED-CODE</string>
+  <key>BackendBaseURL</key><string>https://REPLACE-WITH-YOUR-CONTROL-PLANE</string>
+  <key>BackendBearerToken</key><string>REPLACE-WITH-TENANT-TOKEN</string>
+  <key>BackendWorkflowKey</key><string>clinical-session</string>
 </dict>
 ```
 

@@ -11,8 +11,9 @@ import PackageDescription
 //
 // Two things follow from that, and this package fixes both:
 //
-//   1. PLATFORM. The port is pure Foundation — every one of the six files below
-//      imports Foundation and nothing else. That is a claim, and a claim nothing
+//   1. PLATFORM. The port is pure Foundation — every one of the seven files below
+//      imports Foundation and nothing else (DeviceBindingCrypto also imports
+//      CommonCrypto, an Apple system module present on both iOS and macOS). That is a claim, and a claim nothing
 //      checks is a claim that decays: one `import UIKit` added for convenience and
 //      the port silently stops being portable, with no gate to say so. Building it
 //      for macOS makes the claim falsifiable. If someone reaches for UIKit, this
@@ -44,12 +45,20 @@ let package = Package(
         .target(
             name: "EnterpriseShellPort",
             path: "EnterpriseShell",
+            // The target path is the app directory, and SwiftPM scans it for
+            // resources even when `sources` is explicit. Settings.bundle carries a
+            // localized strings file for the iOS Settings pane; the port is
+            // Foundation-only and ships no resources, so the bundle is excluded
+            // rather than the manifest growing a `defaultLocalization` it has no
+            // use for. Without this line `swift build` refuses the manifest.
+            exclude: ["Settings.bundle"],
             sources: [
                 "Services/DecisionEngine.swift",
                 "Services/AppWorkflows.swift",
                 "Services/DecisionService.swift",
                 "Services/SignalContext.swift",
                 "Services/ScreenCapturePolicy.swift",
+                "Services/DeviceBindingCrypto.swift",
                 "Models/SessionState.swift"
             ]
         ),

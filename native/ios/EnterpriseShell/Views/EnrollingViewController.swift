@@ -39,7 +39,12 @@ final class EnrollingViewController: UIViewController {
     
     private lazy var messageLabel: UILabel = {
         let label = UILabel()
-        label.text = "Your badge is not registered in the system. Please contact your administrator to enroll your badge, or use a different badge that is already enrolled."
+        // Plain about what this device can and cannot do: the served /v1 surface has
+        // no badge-enrollment route (BackendService.checkBadgeEnrollment), so
+        // enrollment is an administrator's action in the SignalGrid console — never
+        // something this screen can finish or wait on.
+        label.text = "This badge is not enrolled. This backend does not support enrollment from the device — "
+            + "an administrator enrolls badges in the SignalGrid console. Try another badge, or go back to the lock screen."
         label.font = SG.sans(16, .regular)
         label.adjustsFontForContentSizeCategory = true
         label.textAlignment = .center
@@ -70,7 +75,7 @@ final class EnrollingViewController: UIViewController {
     
     private lazy var retryButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("Try Another Badge", for: .normal)
+        button.setTitle("Back to lock screen", for: .normal)
         button.titleLabel?.font = SG.sans(18, .semibold)
         button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.titleLabel?.numberOfLines = 0
@@ -123,18 +128,9 @@ final class EnrollingViewController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        // Reset to show we're checking enrollment
-        activityIndicator.startAnimating()
-    }
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        // The enrollment determination resolves quickly; stop the spinner so the
-        // "not registered" guidance and its action buttons are the clear final state
-        // (rather than spinning forever behind the message).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-            self?.activityIndicator.stopAnimating()
-        }
+        // Nothing is being checked: there is no enrollment route to wait on, so
+        // the spinner never runs. The guidance and its actions ARE the final state.
+        activityIndicator.stopAnimating()
     }
     
     override func viewDidDisappear(_ animated: Bool) {

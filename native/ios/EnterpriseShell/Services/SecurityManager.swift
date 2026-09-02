@@ -260,23 +260,37 @@ final class SecurityManager {
         let nonce = UUID().uuidString
         request.setValue(nonce, forHTTPHeaderField: "X-Request-Nonce")
         
-        // Create signature base (canonicalized format)
-        var signatureBase = "\(request.httpMethod ?? "GET")|\(request.url?.absoluteString ?? "")"
-        signatureBase += "\(timestamp)"
-        signatureBase += "\(nonce)"
-        
-        if let body = body, !body.isEmpty {
-            if let bodyString = String(data: body, encoding: .utf8) {
-                signatureBase += bodyString
-            }
-        }
+        // Create signature base (canonicalized format — DeviceBindingCrypto owns it,
+        // so signing and verification cannot drift apart)
+        let signatureBase = DeviceBindingCrypto.signatureBase(
+            method: request.httpMethod ?? "GET",
+            url: request.url?.absoluteString ?? "",
+            timestamp: timestamp,
+            nonce: nonce,
+            body: body
+        )
         
         // Generate HMAC-SHA256 signature
         let signature = hmacSHA256(key: signingKey, message: signatureBase)
         request.setValue(signature, forHTTPHeaderField: "X-Request-Signature")
         
-        // Add device binding claim
-        request.setValue(signingKey, forHTTPHeaderField: "X-Device-Binding")
+        // Device binding claim: a non-reversible IDENTIFIER of the key, never the key.
+        // Until 2026-09-02 the key itself went out here, on the same request it had
+        // just signed, so one observed request held everything needed to forge every
+        // later signature and the HMAC authenticated nothing against an observer.
+        //
+        // NO ROUTE IN artifacts/api-server READS THIS HEADER — nor X-Request-Signature,
+        // X-Request-Timestamp or X-Request-Nonce; no server source names any of the
+        // four (checked 2026-09-02, native/ios/README.md "Backend API" table). The
+        // headers are additive until a server-side verifier exists; that verifier and
+        // this header's meaning are the cloud lane's wire contract to define.
+        request.setValue(deviceBindingIdentifier(for: signingKey), forHTTPHeaderField: "X-Device-Binding")
+    }
+    
+    /// What may leave the device as a device-binding claim: SHA-256 (hex) of the
+    /// binding key. The key is HMAC material and stays in the Keychain.
+    private func deviceBindingIdentifier(for key: String) -> String {
+        hashString(key)
     }
     
     /// Verify request signature (for backend to call)
@@ -290,57 +304,26 @@ final class SecurityManager {
     ) -> Bool {
         guard let signingKey = deviceBindingKey else { return false }
         
-        // Check timestamp is within acceptable window (5 minutes)
-        if let ts = Int(timestamp) {
-            let requestTime = TimeInterval(ts)
-            let now = Date().timeIntervalSince1970
-            if abs(now - requestTime) > 300 {
-                AuditLogger.shared.log(event: .securityRequestExpired, metadata: [
-                    "timestamp": timestamp
-                ])
-                return false
-            }
+        // Window (5 minutes) then HMAC, in DeviceBindingCrypto. A timestamp that does
+        // not parse used to SKIP the window and verify on the HMAC alone, so a replay
+        // could carry a non-numeric timestamp forever; it is refused now
+        // (`.malformedTimestamp`), and the tests pin that.
+        let verdict = DeviceBindingCrypto.verifySignature(
+            signature: signature, timestamp: timestamp, nonce: nonce,
+            method: method, url: url, body: body, key: signingKey, now: Date()
+        )
+        if verdict == .expired {
+            AuditLogger.shared.log(event: .securityRequestExpired, metadata: [
+                "timestamp": timestamp
+            ])
         }
-        
-        // Verify signature (canonicalized format)
-        var signatureBase = "\(method)|\(url)"
-        signatureBase += "\(timestamp)"
-        signatureBase += "\(nonce)"
-        
-        if let body = body, !body.isEmpty {
-            if let bodyString = String(data: body, encoding: .utf8) {
-                signatureBase += bodyString
-            }
-        }
-        
-        let expectedSignature = hmacSHA256(key: signingKey, message: signatureBase)
-        return signature == expectedSignature
+        return verdict == .valid
     }
     
     // MARK: - HMAC-SHA256
     
     private func hmacSHA256(key: String, message: String) -> String {
-        guard let keyData = key.data(using: .utf8),
-              let messageData = message.data(using: .utf8) else {
-            return ""
-        }
-        
-        var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
-        
-        keyData.withUnsafeBytes { keyBytes in
-            messageData.withUnsafeBytes { messageBytes in
-                CCHmac(
-                    CCHmacAlgorithm(kCCHmacAlgSHA256),
-                    keyBytes.baseAddress,
-                    keyData.count,
-                    messageBytes.baseAddress,
-                    messageData.count,
-                    &digest
-                )
-            }
-        }
-        
-        return digest.map { String(format: "%02x", $0) }.joined()
+        DeviceBindingCrypto.hmacSHA256Hex(key: key, message: message)
     }
     
     // MARK: - URL Sanitization
@@ -361,38 +344,37 @@ final class SecurityManager {
     
     // MARK: - Token Binding
     
-    /// Generate a token binding identifier
+    /// Generate a token binding for THIS device's key:
+    /// `<unix-seconds>.<HMAC-SHA256(deviceBindingKey, "token-binding|<unix-seconds>")>`
+    /// (`DeviceBindingCrypto.mintTokenBinding`). The timestamp travels WITH the digest
+    /// so `verifyTokenBinding` can recompute the same value; the old form hashed the
+    /// timestamp in and then threw it away, which left nothing to recompute against.
     func generateTokenBinding() -> String {
         guard let deviceKey = deviceBindingKey else {
-            return UUID().uuidString
+            // No key: an unbound marker `verifyTokenBinding` always rejects (fail closed).
+            return "unbound\(DeviceBindingCrypto.tokenBindingSeparator)\(UUID().uuidString)"
         }
-        
         let timestamp = String(Int(Date().timeIntervalSince1970))
-        return hashString("\(deviceKey):\(timestamp)")
+        return DeviceBindingCrypto.mintTokenBinding(key: deviceKey, timestamp: timestamp)
     }
     
-    /// Verify token is bound to this device
+    /// Verify a token binding was minted by THIS device's key — recomputed from the
+    /// same inputs and compared in constant time (`DeviceBindingCrypto
+    /// .verifyTokenBinding`; `SecurityManagerTests` pins the reasons).
+    ///
+    /// Until 2026-09-02 this accepted any string beginning with the key's first 8
+    /// characters or containing its first 16 — a substring match against material
+    /// `signRequest` was publishing in a header — so it confirmed possession of
+    /// something already disclosed and never recomputed anything.
     func verifyTokenBinding(_ binding: String) -> Bool {
         guard let deviceKey = deviceBindingKey else { return false }
-        
-        // The binding should contain device-specific information
-        // We verify by checking if the binding was created with our device key
-        let expectedPrefix = String(deviceKey.prefix(8))
-        return binding.hasPrefix(expectedPrefix) || binding.contains(deviceKey.prefix(16))
+        return DeviceBindingCrypto.verifyTokenBinding(binding, key: deviceKey)
     }
     
     // MARK: - Hashing
     
     private func hashString(_ input: String) -> String {
-        guard let data = input.data(using: .utf8) else { return "" }
-        
-        var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
-        
-        data.withUnsafeBytes { bytes in
-            _ = CC_SHA256(bytes.baseAddress, CC_LONG(data.count), &digest)
-        }
-        
-        return digest.map { String(format: "%02x", $0) }.joined()
+        DeviceBindingCrypto.sha256Hex(input)
     }
     
     // MARK: - Privacy

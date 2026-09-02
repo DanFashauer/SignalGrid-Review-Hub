@@ -1,20 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-    <key>com.apple.developer.associated-domains</key>
-    <array>
-        <string>enterprise.example.com</string>
-    </array>
-    <key>keychain-access-groups</key>
-    <array>
-        <string>$(AppIdentifierPrefix)com.enterprise.shell</string>
-    </array>
-    <key>com.apple.security.application-groups</key>
-    <array>
-        <string>group.com.enterprise.shell</string>
-    </array>
-    <key>com.apple.developer.usernotifications.time-sensitive</key>
-    <true/>
-</dict>
+<!-- Deliberately EMPTY. This file used to demand associated-domains
+     (enterprise.example.com), an app group (group.com.enterprise.shell),
+     time-sensitive notifications and keychain-access-groups with an empty
+     $(AppIdentifierPrefix). Verified by grep on 2026-09-02: no Swift source under
+     EnterpriseShell uses universal links, an app-group container or suite,
+     UNUserNotificationCenter, or a keychain access group (KeychainService.accessGroup
+     is nil). Each unused entitlement was one more capability a device profile had
+     to grant before the app would install. Add an entitlement here only together
+     with the code that needs it. -->
+<dict/>
 </plist>

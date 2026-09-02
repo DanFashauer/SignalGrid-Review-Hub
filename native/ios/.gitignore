@@ -11,3 +11,8 @@ Package.resolved
 *.png
 # …but asset-catalog images (app icon, etc.) are real tracked assets, not screenshots.
 !EnterpriseShell/Resources/Assets.xcassets/**/*.png
+# Developer-local signing (team id, identity, bundle id). Signing.xcconfig (the
+# simulator defaults) and Signing.local.xcconfig.example are tracked; the real
+# local file never is — Signing.xcconfig pulls it in with `#include?`, so its
+# absence is not an error and simulator builds need nothing.
+Signing.local.xcconfig

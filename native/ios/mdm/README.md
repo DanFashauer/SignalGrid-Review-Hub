@@ -48,8 +48,13 @@ The shell reads these keys from Managed App Config (delivered under
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `SingleAppModeEnabled` | Boolean | `true` | Shell requests ASAM when active. |
-| `AllowManualOverride` | Boolean | `false` | Show the disaster-recovery override on the lock screen. **Not recommended.** |
+| `AllowManualOverride` | Boolean | `false` | Show the disaster-recovery override on the lock screen. **Not recommended.** Default `false` whether or not any app-config is delivered; the unmanaged path is the holder's Settings-bundle switch `local_session_allowed`, refused whenever a kiosk lock is engaged. |
 | `RecoveryCode` | String | — | Admin code that releases the kiosk for recovery (only if `AllowManualOverride`). Rotate per fleet. |
+| `BackendBaseURL` | String | — | Control-plane base URL (`https://`; http only for loopback). Required on a managed device for any session to start. |
+| `BackendBearerToken` | String | — | Tenant bearer the served `/v1` surface requires. |
+| `BackendWorkflowKey` | String | `clinical-session` | `workflowKey` sent at session start. |
+| `badge_reader_type` | String | `keyboard_wedge` | Which badge-reader provider the shell builds (`BadgeReaderType` raw value). A present managed dictionary answers only from itself; the environment fallback exists on the simulator or with no dictionary. |
+| `identity_provider_type` | String | — | `IdentityProviderType` raw value, same precedence as `badge_reader_type`; unset ⇒ the control-plane session provider. |
 
 ## What the simulator can and can't show
 

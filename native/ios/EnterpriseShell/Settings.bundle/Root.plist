@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- The ONE positive assertion an unmanaged phone can make. Read by
+     KioskConfig.localSessionAllowed via UserDefaults (key local_session_allowed,
+     default OFF — an absent key reads false). Ignored whenever a managed app-config
+     dictionary exists or a kiosk lock is engaged. Documented in native/ios/README.md
+     under "Settings bundle keys"; gated by scripts/check-demo-flags-documented.mjs. -->
+<dict>
+    <key>StringsTable</key>
+    <string>Root</string>
+    <key>PreferenceSpecifiers</key>
+    <array>
+        <dict>
+            <key>Type</key>
+            <string>PSGroupSpecifier</string>
+            <key>Title</key>
+            <string>Unmanaged device</string>
+            <key>FooterText</key>
+            <string>Only for a phone that is not enrolled in MDM. Lets Manual login start a local session without a badge or a login code. Has no effect when a managed configuration or a kiosk lock is present.</string>
+        </dict>
+        <dict>
+            <key>Type</key>
+            <string>PSToggleSwitchSpecifier</string>
+            <key>Title</key>
+            <string>Allow local sign-in on this unmanaged device</string>
+            <key>Key</key>
+            <string>local_session_allowed</string>
+            <key>DefaultValue</key>
+            <false/>
+        </dict>
+    </array>
+</dict>
+</plist>

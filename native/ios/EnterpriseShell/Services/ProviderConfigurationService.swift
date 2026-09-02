@@ -56,8 +56,11 @@ final class ProviderConfigurationService {
         let certificateHashes: [String]
         let timeout: TimeInterval
         
+        /// No placeholder host. The live base URL is `BackendService.resolveBaseURL()`
+        /// (managed config → launch argument → environment → nil); this record only
+        /// mirrors the environment value for the setup description.
         static let `default` = BackendConfig(
-            baseUrl: "https://api.enterprise.example.com",
+            baseUrl: "",
             enableCertificatePinning: false,
             certificateHashes: [],
             timeout: 30
@@ -69,13 +72,23 @@ final class ProviderConfigurationService {
     private var configuration: AppConfiguration
     private var badgeReaderProvider: BadgeReaderProvider?
     private var identityProvider: IdentityProvider?
+    /// True only when a provider type was chosen explicitly (IDENTITY_PROVIDER_TYPE
+    /// or updateConfiguration). The template default is NOT a choice.
+    private var identityProviderExplicit: Bool
+    /// Set when the configured reader type has no provider in this build; the lock
+    /// screen shows it in its footer.
+    private(set) var badgeReaderUnavailableReason: String?
     
     // User defaults keys
     private enum ConfigKeys {
         static let badgeReaderType = "badge_reader_type"
         static let identityProviderType = "identity_provider_type"
         static let customConfig = "custom_provider_config"
-        static let backendBaseUrl = "backend_base_url"
+        /// SAME key `KioskConfig.backendBaseURL` reads — the live resolution is
+        /// `BackendService.resolveBaseURL()`; this record only mirrors it for the setup
+        /// description. Two spellings for one URL would let an MDM set the one nothing
+        /// reads, so there is one.
+        static let backendBaseUrl = "BackendBaseURL"
     }
 
     /// Configuration an MDM pushed to this device, under the key Apple reserves for
@@ -89,11 +102,23 @@ final class ProviderConfigurationService {
         UserDefaults.standard.dictionary(forKey: "com.apple.configuration.managed")
     }
 
-    /// Environment first (a simulator or a launch argument overrides), then what MDM
-    /// pushed, then nothing. Callers supply the default.
+    /// Same precedence as `KioskConfig.managedString`: a PRESENT managed dictionary
+    /// answers only from itself — a key it lacks is an absent value, never the
+    /// environment. The environment arm exists for the simulator (a launch argument or
+    /// Xcode scheme standing in for MDM) and for a device with NO managed dictionary at
+    /// all; on a managed device it is compiled out, so `IDENTITY_PROVIDER_TYPE` in the
+    /// process environment can never outrank what the MDM pushed — `identityProviderExplicit`
+    /// is an authentication decision, and the first cut read the environment FIRST on
+    /// every build. Callers supply the default.
     private static func configured(env: String, managed: String) -> String? {
+        if let dict = managedConfiguration {
+            #if targetEnvironment(simulator)
+            if let value = ProcessInfo.processInfo.environment[env], !value.isEmpty { return value }
+            #endif
+            if let value = dict[managed] as? String, !value.isEmpty { return value }
+            return nil
+        }
         if let value = ProcessInfo.processInfo.environment[env], !value.isEmpty { return value }
-        if let value = managedConfiguration?[managed] as? String, !value.isEmpty { return value }
         return nil
     }
     
@@ -102,13 +127,20 @@ final class ProviderConfigurationService {
     private init() {
         // Load configuration from environment or defaults
         self.configuration = Self.loadConfiguration()
+        // Explicit from whichever source `configured(env:managed:)` answers from — the
+        // managed key an MDM pushed, or the environment on a simulator / unmanaged
+        // build. Consulting only the environment here would load a managed
+        // `identity_provider_type` and then ignore it in initializeProviders().
+        self.identityProviderExplicit = Self.configured(env: "IDENTITY_PROVIDER_TYPE", managed: ConfigKeys.identityProviderType)
+            .flatMap { IdentityProviderType(rawValue: $0) } != nil
         initializeProviders()
     }
     
     // MARK: - Configuration Loading
     
     private static func loadConfiguration() -> AppConfiguration {
-        // Environment first, then Managed App Configuration, then defaults.
+        // Managed App Configuration when present (simulator env may override), else
+        // environment, else defaults — see configured(env:managed:).
         let readerType = configured(env: "BADGE_READER_TYPE", managed: ConfigKeys.badgeReaderType)
         let providerType = configured(env: "IDENTITY_PROVIDER_TYPE", managed: ConfigKeys.identityProviderType)
         let backendUrl = configured(env: "BACKEND_BASE_URL", managed: ConfigKeys.backendBaseUrl)
@@ -168,7 +200,7 @@ final class ProviderConfigurationService {
         )
         
         let backendConfig = BackendConfig(
-            baseUrl: backendUrl ?? "https://api.enterprise.example.com",
+            baseUrl: backendUrl ?? "",
             enableCertificatePinning: ProcessInfo.processInfo.environment["CERT_PINNING_ENABLED"]?.lowercased() == "true",
             certificateHashes: ProcessInfo.processInfo.environment["CERT_HASHES"]?.split(separator: ",").map(String.init) ?? [],
             timeout: ProcessInfo.processInfo.environment["BACKEND_TIMEOUT"].flatMap { Double($0) } ?? 30
@@ -185,15 +217,26 @@ final class ProviderConfigurationService {
     // MARK: - Provider Initialization
     
     private func initializeProviders() {
-        // Initialize badge reader provider
+        // Initialize badge reader provider. A declared-but-unimplemented type is
+        // recorded here so the lock screen can say so instead of waiting forever.
+        badgeReaderUnavailableReason = BadgeReaderProviderFactory.shared.unavailableReason(
+            for: configuration.badgeReader.readerType
+        )
         badgeReaderProvider = BadgeReaderProviderFactory.shared.createProvider(
             config: configuration.badgeReader
         )
         
-        // Initialize identity provider
-        identityProvider = IdentityProviderFactory.shared.createProvider(
-            config: configuration.identityProvider
-        )
+        // Initialize identity provider. Unless one was chosen explicitly, the
+        // default is the control-plane session provider: the served /v1 surface has
+        // no token-exchange route, and the template OIDC config holds placeholders
+        // that are refused (see IdentityProviderConfig.placeholderFields).
+        if identityProviderExplicit {
+            identityProvider = IdentityProviderFactory.shared.createProvider(
+                config: configuration.identityProvider
+            )
+        } else {
+            identityProvider = ControlPlaneSessionIdentityProvider()
+        }
         
         // Log initialization
         AuditLogger.shared.log(event: .providerConfigurationLoaded, metadata: [
@@ -222,9 +265,29 @@ final class ProviderConfigurationService {
         return configuration
     }
     
+    /// What the lock screen should say about the CONFIGURED reader — not the legacy
+    /// `BadgeReaderManager`, which nothing configures. `ready` drives the spinner.
+    func badgeReaderStatus() -> (text: String, ready: Bool) {
+        let type = configuration.badgeReader.readerType
+        guard let provider = badgeReaderProvider else {
+            return (badgeReaderUnavailableReason ?? "No badge reader provider", false)
+        }
+        switch type {
+        case .keyboardWedge:
+            return ("\(provider.displayName) — ready; an HID reader types into this screen", true)
+        case .httpWebhook, .mdmEnrollment:
+            return ("\(provider.displayName) — passive; waiting for an event", false)
+        default:
+            return provider.isConnected
+                ? ("\(provider.displayName) connected — Ready to scan", true)
+                : ("\(provider.displayName) configured — not connected", false)
+        }
+    }
+    
     /// Update the configuration
     func updateConfiguration(_ newConfig: AppConfiguration) {
         self.configuration = newConfig
+        self.identityProviderExplicit = true
         initializeProviders()
         
         AuditLogger.shared.log(event: .providerConfigurationUpdated, metadata: [
@@ -265,7 +328,7 @@ final class ProviderConfigurationService {
         Current Configuration:
         - Badge Reader: \(configuration.badgeReader.readerType.displayName)
         - Identity Provider: \(configuration.identityProvider.providerType.displayName)
-        - Backend: \(configuration.backend.baseUrl)
+        - Backend: \(BackendService.baseURL?.absoluteString ?? "(none — local/offline)")
         - Rate Limiting: \(configuration.security.enableRateLimiting ? "Enabled" : "Disabled")
         - Request Signing: \(configuration.security.enableRequestSigning ? "Enabled" : "Disabled")
         - Device Binding: \(configuration.security.enableDeviceBinding ? "Enabled" : "Disabled")

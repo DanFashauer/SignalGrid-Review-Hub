@@ -11,7 +11,6 @@ final class AppLauncher {
     // MARK: - Properties
     
     private var launchedApps: [String] = []
-    private let launchQueue = DispatchQueue(label: "com.enterprise.shell.applauncher")
     
     // MARK: - Initialization
     
@@ -19,10 +18,13 @@ final class AppLauncher {
     
     // MARK: - App Launching
     
-    /// Launch an enterprise app
+    /// Launch an enterprise app. `UIApplication.canOpenURL` / `open` are
+    /// main-thread APIs; this used to call them from a private GCD queue (a
+    /// main-thread-checker violation and, under contention, a crash), so every
+    /// UIKit call here now hops to main.
     func launchEnterpriseApp(_ app: EnterpriseApp) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            launchQueue.async { [weak self] in
+            DispatchQueue.main.async { [weak self] in
                 guard let self = self else {
                     continuation.resume(throwing: AppLauncherError.unknown)
                     return
@@ -89,9 +91,13 @@ final class AppLauncher {
         continuation.resume(throwing: AppLauncherError.unknown)
     }
     
-    /// Launch app by bundle ID
+    /// Launch app by bundle ID. `bundleId` is SERVER-SUPPLIED; a value that is not
+    /// a valid URL scheme used to force-unwrap `URL(string:)` and crash.
+    @MainActor
     func launchApp(bundleId: String) async throws {
-        let url = URL(string: "\(bundleId)://")!
+        guard let url = URL(string: "\(bundleId)://") else {
+            throw AppLauncherError.urlNotSupported
+        }
         
         guard UIApplication.shared.canOpenURL(url) else {
             throw AppLauncherError.appNotInstalled
@@ -110,6 +116,7 @@ final class AppLauncher {
     }
     
     /// Open a URL (for web links, deep links, etc.)
+    @MainActor
     func openUrl(_ url: URL) async throws {
         guard UIApplication.shared.canOpenURL(url) else {
             throw AppLauncherError.urlNotSupported
@@ -133,9 +140,11 @@ final class AppLauncher {
         launchedApps
     }
     
-    /// Check if app is installed
+    /// Check if app is installed. Guarded: a server-supplied bundle id that is not
+    /// a valid scheme is simply "not installed", never a crash.
+    @MainActor
     func isAppInstalled(bundleId: String) -> Bool {
-        let url = URL(string: "\(bundleId)://")!
+        guard let url = URL(string: "\(bundleId)://") else { return false }
         return UIApplication.shared.canOpenURL(url)
     }
     

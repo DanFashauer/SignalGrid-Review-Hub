@@ -62,7 +62,7 @@ Two committed directories close it:
 | Mac → cloud | `artifacts/sim-results/<id>.json` | `pnpm run sim:run-requests` |
 
 **A request names KEYS, never commands.** `scripts/lib/sim-operations.mjs` is the
-allowlist — 26 operations covering the deterministic suites, the running
+allowlist — 27 operations covering the deterministic suites, the running
 `/v1` API (functionally and **under concurrency**, via `load` and `stress`), the
 browser E2E layer, the turnkey Mac runs (proofs → API → MCP over real JSON-RPC →
 EnterpriseShell in the iOS simulator with mimicked hardware), the real-hardware

@@ -29,16 +29,43 @@ final class OIDCAuthService: NSObject {
             ]
         )
         
-        var authorizationEndpoint: URL {
-            URL(string: "https://login.microsoftonline.com/\(tenantId)/oauth2/v2.0/authorize")!
+        /// Fields still holding a template placeholder. `<YOUR_TENANT_ID>` is what
+        /// ships by default, and `<` / `>` make `URL(string:)` return nil — which the
+        /// old force-unwraps below turned into a crash on the first token refresh.
+        var placeholderFields: [String] {
+            [("clientId", clientId), ("tenantId", tenantId), ("redirectUri", redirectUri)]
+                .filter { $0.1.contains("<") || $0.1.contains(">") || $0.1.contains("YOUR_") || $0.1.isEmpty }
+                .map { $0.0 }
         }
         
-        var tokenEndpoint: URL {
-            URL(string: "https://login.microsoftonline.com/\(tenantId)/oauth2/v2.0/token")!
+        /// Refuse a configuration that still holds a placeholder, by name.
+        func validate() throws {
+            let missing = placeholderFields
+            guard missing.isEmpty else { throw OIDCError.placeholderConfiguration(missing) }
         }
         
-        var issuer: URL {
-            URL(string: "https://login.microsoftonline.com/\(tenantId)/v2.0")!
+        func authorizationEndpoint() throws -> URL {
+            try validate()
+            guard let url = URL(string: "https://login.microsoftonline.com/\(tenantId)/oauth2/v2.0/authorize") else {
+                throw OIDCError.invalidConfiguration
+            }
+            return url
+        }
+        
+        func tokenEndpoint() throws -> URL {
+            try validate()
+            guard let url = URL(string: "https://login.microsoftonline.com/\(tenantId)/oauth2/v2.0/token") else {
+                throw OIDCError.invalidConfiguration
+            }
+            return url
+        }
+        
+        func issuer() throws -> URL {
+            try validate()
+            guard let url = URL(string: "https://login.microsoftonline.com/\(tenantId)/v2.0") else {
+                throw OIDCError.invalidConfiguration
+            }
+            return url
         }
     }
     
@@ -70,7 +97,9 @@ final class OIDCAuthService: NSObject {
     
     // MARK: - Configuration
     
-    func configure(with config: OIDCConfig) {
+    /// Throws rather than accept a configuration that still holds a placeholder.
+    func configure(with config: OIDCConfig) throws {
+        try config.validate()
         self.config = config
     }
     
@@ -99,9 +128,15 @@ final class OIDCAuthService: NSObject {
         // The session token from the backend is exchanged for OIDC tokens
         // This is typically done via a backend proxy to protect client secret
         
-        guard let backendTokenUrl = URL(string: "\(BackendService.baseUrl)/api/auth/exchange-token") else {
+        // NOTE: the served /v1 surface has no `/api/auth/exchange-token` route
+        // (lib/api-spec/v1-openapi.yaml). This legacy path is kept for a backend
+        // that provides one; against this repo's api-server it answers 404 and the
+        // default identity provider is `ControlPlaneSessionIdentityProvider` instead.
+        // A REFUSED backend throws its own error (tri-state); absent is invalid here.
+        guard let base = try BackendService.requiredBaseURL() else {
             throw OIDCError.invalidConfiguration
         }
+        let backendTokenUrl = base.appendingPathComponent("api/auth/exchange-token")
         
         var request = URLRequest(url: backendTokenUrl)
         request.httpMethod = "POST"
@@ -164,7 +199,7 @@ final class OIDCAuthService: NSObject {
             throw OIDCError.noRefreshToken
         }
         
-        let tokenUrl = config.tokenEndpoint
+        let tokenUrl = try config.tokenEndpoint()
         
         var request = URLRequest(url: tokenUrl)
         request.httpMethod = "POST"
@@ -226,8 +261,10 @@ final class OIDCAuthService: NSObject {
         // Clear Keychain
         KeychainService.shared.clearSessionTokens()
         
-        // Notify backend of logout
-        if let backendLogoutUrl = URL(string: "\(BackendService.baseUrl)/api/auth/logout") {
+        // Notify backend of logout (no such route on the served surface; see
+        // exchangeSessionToken). Skipped entirely when no backend is configured.
+        if let base = BackendService.baseURL {
+            let backendLogoutUrl = base.appendingPathComponent("api/auth/logout")
             var request = URLRequest(url: backendLogoutUrl)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -292,6 +329,8 @@ struct OIDCTokenResult {
 
 enum OIDCError: LocalizedError {
     case invalidConfiguration
+    /// Named fields still hold `<...>` / `YOUR_` template values.
+    case placeholderConfiguration([String])
     case networkError
     case tokenExchangeFailed
     case refreshFailed
@@ -303,6 +342,8 @@ enum OIDCError: LocalizedError {
         switch self {
         case .invalidConfiguration:
             return "OIDC configuration is invalid"
+        case .placeholderConfiguration(let fields):
+            return "OIDC configuration still holds template placeholders in: \(fields.joined(separator: ", "))"
         case .networkError:
             return "Network error during authentication"
         case .tokenExchangeFailed:

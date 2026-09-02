@@ -1,6 +1,21 @@
-# Operational Trust Orchestration
+# Operational Trust Orchestration — SUPERSEDED HISTORY
 
-This document defines the refined SignalGrid category positioning for public Review Hub discussion. It is positioning documentation only: it adds no product scope, live integrations, credentials, tenant data, customer data, PHI, PII, or production implementation.
+> **This page is a retired category exploration, kept for provenance. Nothing on it
+> is current positioning.** The label it argues for was superseded twice: DR-004
+> (2026-08-22) replaced it, and DR-019 (2026-08-26) then superseded DR-004's
+> replacement and **ratified no category label at all**, deferring the question to
+> customer discovery; DR-020 made `docs/PURPOSE.md` canonical for the product
+> sentence. `docs/POSITIONING.md` is the live page. Read every "SignalGrid is …"
+> sentence below as *what an earlier draft claimed*, not as what SignalGrid is.
+> Bannered 2026-09-02 — eleven days after DR-004 first replaced this label, and
+> seven after DR-019 retired the whole idea of having one. No gate read this page:
+> the retired-label scan covered the marketing surface, not `docs/**/*.md`.
+>
+> `docs/research/MARKET_LANDSCAPE.md` reached the same conclusion independently
+> from outside evidence — the exact phrase is not an established analyst category,
+> and its own guidance is to avoid leading with it.
+
+This document defined a refined SignalGrid category positioning for public Review Hub discussion. It is positioning documentation only: it adds no product scope, live integrations, credentials, tenant data, customer data, PHI, PII, or production implementation.
 
 ## 1. Executive definition
 

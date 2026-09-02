@@ -140,7 +140,7 @@ decision inputs in the core today, and any surface that shows them must say so:
 - **RTLS / precise indoor location** — candidate.
 - The **broader integration catalog** (~149 candidate sources across ~16
   categories in the catalog taxonomy) — these are *candidate signal-source
-  categories*, distinct from the 15 categories the core normalizes today, and
+  categories*, distinct from the 17 categories the core normalizes today, and
   none is a live integration.
 - **Cross-platform app shells** (React Native / Expo, Tauri / Electron) — not
   built; responsive web + PWA is the cross-platform delivery. This is NOT a
@@ -157,7 +157,7 @@ The repo intentionally has two surfaces that must not be conflated:
 
 1. **Product-core lineage** — `@workspace/signalgrid-core` and the Review Hub's
    Operator Console / Worker Self-Service run the real, deterministic decision
-   loop with the 15 categories and 4 outcomes above. This is the truth.
+   loop with the 17 categories and 4 outcomes above. This is the truth.
 2. **Catalog / app-shell lineage** — the `/api/integrations` catalog (~149
    candidate sources, ~16 taxonomy categories) and the platform app shells
    (`signalgrid-app`, `-desktop`, `-mobile-pwa`) illustrate the broader vision
@@ -165,7 +165,7 @@ The repo intentionally has two surfaces that must not be conflated:
    what the core evaluates.
 
 When a surface shows "16 categories" or "~149 sources," it means the candidate
-catalog taxonomy — not the 15 categories the core evaluates. When it shows the
+catalog taxonomy — not the 17 categories the core evaluates. When it shows the
 signal dimensions a decision actually uses, it means the five evaluated-today
 dimensions above.
 

@@ -240,7 +240,7 @@ work deferred to nowhere. Checked rather than assumed:
 
 | Capability | Where it really runs | Evidence |
 | ---------- | -------------------- | -------- |
-| Full gate suite (`preflight`, 110 gates) | **Cloud / CI, Linux** | runs on every PR |
+| Full gate suite (`preflight`) | **Cloud / CI, Linux** | runs on every PR; the gate count is `check-preflight-ci-parity.mjs`'s output on the run, not a number kept here — this cell said "110 gates" until 2026-09-02 |
 | Container lane (postgres + redis + durable proofs) | **Cloud, under Podman** | 22 pg assertions + 4 race assertions green; Docker cannot start in that sandbox at all |
 | Image builds (`Dockerfile.api`, `Dockerfile.web`) | **Cloud, under Podman** | both stages build; image runs and serves `/api/healthz` |
 | `signalgrid-mcp` test suite | **Cloud, on Linux** | **99 passed in 2.76s** — the macOS-only reads exercise their graceful-degradation paths, which is exactly what those tests are for |

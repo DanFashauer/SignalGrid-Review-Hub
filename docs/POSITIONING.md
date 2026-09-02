@@ -33,15 +33,38 @@ Any document asserting a coined category label as SignalGrid's name is wrong
 and gets fixed to this rule. (The 2026-08 category name is superseded, DR-019 —
 named here only as the retired form this rule exists to catch.)
 
-## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v4)
+## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v5)
 
 Every claim below is checked against the `launch` class in scripts/launch-profile.mjs. Nothing deferred appears — which is why location, badges, custody, network, and threat signals are absent: they are real and proven in this repository, and they are not Limited GA.
 
-### 1. The one sentence
+### 1. The one sentence — quoted, never paraphrased
 
-SignalGrid is a decision gate built invisibly into the apps your staff already use: before a sensitive action on a shared device it answers allow, step up, restrict, or deny — from the device's compliance, how current that compliance answer really is, and whether the device can vouch for itself right now — and anything it can't verify tightens the answer instead of waving it through.
+`docs/PURPOSE.md` §2 owns the product sentence (canonical, DR-020). This page
+**quotes** it rather than restating it in its own words, because paraphrase is
+exactly how a canonical sentence drifts — the rule `check-product-framing.mjs`
+exists to enforce:
 
-### 2. The 100-word version
+> **SignalGrid connects the systems a building already runs - access control,
+> identity, device management, location, applications, ticketing - into one grid
+> that decides and acts on the person's behalf.**
+>
+> — `docs/PURPOSE.md` §2, verbatim
+
+**Corrected 2026-09-02.** This section previously opened "SignalGrid is a decision
+gate built invisibly into the apps your staff already use…" — a paraphrase, and one
+DR-020 had already reversed when it corrected PURPOSE.md *from gate to grid*: a
+decision is the trigger for a cascade, not the output. `docs/agent/LOOP.md` states
+the same correction. The paraphrase survived because this file is not on the
+product-framing gate's surface list and no gate reads English.
+
+**What that sentence is, and what the rest of this page is.** The quote above is the
+PRODUCT. Everything below is the **Limited GA SCOPE** of it, which is deliberately
+much narrower: at Limited GA the grid reads exactly one source class — your
+device-management evidence — and several of the systems the canonical sentence names
+are classified `deferred` in `scripts/launch-profile.mjs` and do not ship. Read §2
+for what is actually connected today, and never quote §2 as the company description.
+
+### 2. The 100-word version — the Limited GA scope, not the product sentence
 
 SignalGrid is an access-decision service embedded invisibly in the apps your staff already use on shared frontline devices. Before a sensitive action, the host app asks and gets one answer — allow, step_up, restrict, or deny — computed from three signals: device compliance, read-only from your device-management source — proven live against Fleet, the management plane lean IT teams actually run, with Microsoft Entra/Intune as the enterprise connector on the roadmap (implemented, wire-hardened, awaiting a customer tenant); whether that compliance answer is still current; and whether the device may act on its own authority right now. Every verdict carries reproducible evidence an operator can audit. Missing or stale signals tighten the decision, never loosen it. Your app applies the verdict, including the step-up prompt.
 

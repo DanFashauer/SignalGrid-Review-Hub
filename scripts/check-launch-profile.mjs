@@ -393,6 +393,175 @@ for (const gap of GAPS) {
   if (emitted === kindSurface.launch.length) console.log(`  launch signal kinds produced by the served core: ${emitted}/${kindSurface.launch.length}`);
 }
 
+// ── The DOCUMENT's declared-gap count must equal GAPS.length ─────────────────
+//
+// `docs/LAUNCH_PROFILE.md` opens its gaps section with a stated number, and on
+// 2026-09-01 that number was 3 against a `GAPS` of 4 — the buyer-facing page
+// understated the profile's own declared prerequisites, and had done so silently.
+//
+// WHY THE FIGURE GUARD DID NOT CATCH IT, since the page claimed it would.
+// `check-proof-figures.mjs` does have a noun-adjacent pass that can see figures
+// under 1,000 ("3 declared gaps" is exactly its shape, and `proof:launch-profile`
+// publishes `declaredGaps`). But a figure is only judged inside a SCOPE — a
+// section, table row or list item — that NAMES the proof, and the gaps section
+// names no proof at all. The guard was not weak here; it was never pointed at
+// that section. Making the section name the proof would have worked and would
+// have been prose holding a gate open: delete one backticked token in an edit
+// about something else and the check silently stops applying. So the count is
+// checked HERE instead, against the array itself, where no sentence can switch
+// it off.
+//
+// SELF-TEST FIRST, because a parse that finds nothing would be green about
+// nothing: the extractor must flag a synthetic wrong count and must not flag a
+// synthetic right one, and the real document must yield at least one statement.
+{
+  const rel = "docs/LAUNCH_PROFILE.md";
+  // A count immediately before the phrase, allowing markdown emphasis and up to
+  // two intervening words ("3 declared gaps", "**four declared gaps**"). Spelled
+  // numbers are accepted because prose in this repo uses both.
+  const WORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+  const GAP_COUNT_RE = new RegExp(
+    `\\b(\\d+|${Object.keys(WORDS).join("|")})\\b[\\s*_]+(?:[A-Za-z-]+[\\s*_]+){0,2}declared gaps?\\b`,
+    "gi",
+  );
+  // A count marked as HISTORY is exempt, on the same line, for the same reason the
+  // scope-label check below exempts one: "there were five declared gaps, and two had
+  // been fixed" is a true sentence this page already tells in nearby words, and a gate
+  // that fails a correct sentence teaches people to route around it.
+  const HISTORICAL_COUNT =
+    /\b(?:was|were|previously|originally|earlier|before|until|no longer|then read|→|->)\b/i;
+  /** Every LIVE stated declared-gap count in `text`, as {stated, line}. */
+  const statedGapCounts = (text) =>
+    [...text.matchAll(GAP_COUNT_RE)]
+      .map((m) => {
+        const upto = text.slice(0, m.index);
+        const lineStart = upto.lastIndexOf("\n") + 1;
+        const lineEnd = text.indexOf("\n", m.index);
+        return {
+          stated: /^\d+$/.test(m[1]) ? Number(m[1]) : WORDS[m[1].toLowerCase()],
+          line: upto.split("\n").length,
+          historical: HISTORICAL_COUNT.test(text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd)),
+        };
+      })
+      .filter((x) => !x.historical);
+
+  // Synthetic violation it must flag, a positive control it must not, and a true
+  // historical sentence carrying the SAME wrong number that must also pass.
+  const wrong = statedGapCounts(`There are **${GAPS.length + 1} declared gaps**: work a launch entry needs.`);
+  const right = statedGapCounts(`There are **${GAPS.length} declared gaps**: work a launch entry needs.`);
+  const past = statedGapCounts(`There were ${GAPS.length + 1} declared gaps, and one had been fixed.`);
+  if (
+    wrong.length !== 1 ||
+    wrong[0].stated !== GAPS.length + 1 ||
+    right.length !== 1 ||
+    right[0].stated !== GAPS.length ||
+    past.length !== 0
+  ) {
+    die(
+      "declared-gap self-test failed: the extractor did not read a synthetic sentence correctly, so its" +
+        "\n  verdict on the real document means nothing. Fix the parser before trusting this check.",
+    );
+  }
+
+  const docText = read(rel);
+  const found = statedGapCounts(docText);
+  if (found.length === 0) {
+    die(
+      `found no stated declared-gap count in ${rel} — the anchor drifted, or the sentence was removed.` +
+        "\n  Refusing to report this check green: a scan that found nothing proves nothing.",
+    );
+  }
+  for (const { stated, line } of found) {
+    if (stated !== GAPS.length) {
+      console.error(
+        `\n✗ ${rel}:${line} states ${stated} declared gap${stated === 1 ? "" : "s"}, but GAPS holds ${GAPS.length}:` +
+          `\n    ${GAPS.map((g) => g.id).join(", ")}` +
+          "\n  The page a buyer reads must not understate the profile's own prerequisites.",
+      );
+      failures += 1;
+    }
+  }
+  if (found.every((f) => f.stated === GAPS.length)) {
+    console.log(`  ${rel} states ${GAPS.length} declared gaps in ${found.length} place(s) — matches GAPS`);
+  }
+}
+
+// ── A LIVE scope label must name the CURRENT profile version ─────────────────
+//
+// `docs/POSITIONING.md` and `docs/COMPANY_BUILD_PLAN.md` both head the buyer copy
+// "(Limited GA scope, launch-profile v4)" — the revision that copy was checked
+// against. DR-023 carried the profile to v5 on 2026-09-01 and neither heading
+// moved, so two buyer-facing pages named a scope revision that is one behind the
+// one they claim to be checked against. Nothing saw it: the version is not a
+// `figures=` key, so the docs↔proof figure guard has no figure to compare, and
+// `check-cited-paths.mjs` reads paths rather than numbers.
+//
+// SCOPE IS DELIBERATELY THE PHRASE, NOT THE NUMBER, and that is the whole design.
+// "DR-005 ratified v4 in full" is TRUE and must stay sayable — `DECISION_RECORDS`,
+// `LAUNCH_PROFILE.md`'s version history and `OWNER_ACTIONS` all say it correctly.
+// A gate that failed those would be punishing honest writing, which is worse than
+// the fossil it caught. So only the fixed template phrase below is read: it is a
+// live assertion about which revision the copy underneath was checked against, and
+// a historical marker on the same line exempts it for the writer who needs to
+// quote a past heading.
+{
+  const PHRASE = /(Limited GA scope, launch-profile v)(\d+)/g;
+  const HISTORICAL = /\b(?:was|were|previously|originally|earlier|before|until|then-current|no longer|→|->)\b/i;
+  const scopeLabels = (text) =>
+    [...text.matchAll(PHRASE)]
+      .map((m) => {
+        const upto = text.slice(0, m.index);
+        const lineStart = upto.lastIndexOf("\n") + 1;
+        const lineEnd = text.indexOf("\n", m.index);
+        return {
+          stated: Number(m[2]),
+          line: upto.split("\n").length,
+          historical: HISTORICAL.test(text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd)),
+        };
+      })
+      .filter((x) => !x.historical);
+
+  const v = LAUNCH_PROFILE_VERSION;
+  const bad = scopeLabels(`## Positioning (Limited GA scope, launch-profile v${v + 1})`);
+  const good = scopeLabels(`## Positioning (Limited GA scope, launch-profile v${v})`);
+  const exempt = scopeLabels(`It previously read (Limited GA scope, launch-profile v${v + 1}).`);
+  if (bad.length !== 1 || bad[0].stated !== v + 1 || good.length !== 1 || exempt.length !== 0) {
+    die(
+      "scope-label self-test failed: the extractor mis-read a synthetic heading, or stopped exempting a" +
+        "\n  historical one. A gate that cannot demonstrate both answers proves neither.",
+    );
+  }
+
+  // Which docs carry the phrase is DERIVED by scanning docs/, not listed here — a
+  // hand-kept file list is the fossil class this whole gate exists to catch.
+  const docsRoot = join(repoRoot, "docs");
+  const mdFiles = readdirSync(docsRoot, { recursive: true }).map(String).filter((f) => f.endsWith(".md"));
+  let labels = 0;
+  let stale = 0;
+  for (const rel of mdFiles) {
+    const text = readFileSync(join(docsRoot, rel), "utf8");
+    for (const { stated, line } of scopeLabels(text)) {
+      labels += 1;
+      if (stated !== v) {
+        stale += 1;
+        console.error(
+          `\n✗ docs/${rel}:${line} labels its copy "launch-profile v${stated}" — the profile is at v${v}.` +
+            "\n  A scope label names the revision the copy below was checked against. Re-check the copy" +
+            `\n  against v${v} and move the label, or mark the sentence as history.`,
+        );
+        failures += 1;
+      }
+    }
+  }
+  if (labels === 0) {
+    die(
+      "found no \"Limited GA scope, launch-profile vN\" label anywhere under docs/ — the phrase was" +
+        "\n  reworded or removed. Refusing to report green: a scan that found nothing proves nothing.",
+    );
+  }
+  if (stale === 0) console.log(`  scope labels naming a profile version: ${labels}, all at v${v}`);
+}
+
 console.log(
   `\n  totals: launch=${totals.launch} deferred=${totals.deferred} ` +
     `demo_only=${totals.demo_only} internal=${totals.internal} ` +

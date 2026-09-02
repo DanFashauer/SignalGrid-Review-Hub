@@ -22,7 +22,7 @@ Seven repositories. This is the full set; nothing else exists under the account.
 
 | Repository | Visibility | Role | Branches | Last push | Audit status |
 |---|---|---|---|---|---|
-| **SignalGrid-Review-Hub** | public | Public review surface — decision core, 52 connector families, `/v1` API, web + iOS, proof harness | **10** | 2026-08-10 | ✅ audited |
+| **SignalGrid-Review-Hub** | public | Public review surface — decision core, 51 connector families (corrected from 52 on 2026-09-02; derived by `ls -d lib/integrations/src/integrations/*/` filtered to those carrying an `index.ts`, the same derivation `scripts/launch-profile.mjs` uses), `/v1` API, web + iOS, proof harness | **10** | 2026-08-10 | ✅ audited |
 | **signalgrid-mcp** | public | Read-only macOS posture MCP server (Python) — a *signal source* | **13** | 2026-08-06 | ✅ audited |
 | **DEV** | public | Earlier alpha lineage | **99** | 2026-07-15 | ⚠️ audited, see §3 |
 | **VaultLens** | public | Collector intelligence app — unrelated to SignalGrid | **2** | 2026-06-18 | ✅ audited |
@@ -134,7 +134,9 @@ Recorded so the report is not a list of only bad news:
 
 - **The MCP tool-surface claim** (§2.1) — verified exact.
 - **The BUILD_BACKLOG record** of signalgrid-mcp PR #12 — head matches.
-- **Review-Hub's own internal consistency** — 125 proof gates, both
+- **Review-Hub's own internal consistency** — the proof gates (count in
+  `docs/STATUS.md`, gated by `check-status-figures.mjs`; this line said **125**
+  until 2026-09-02 against a real 140), both
   preflight↔CI parity gates, the figure guard and the proof-count gate all pass
   on the current head; the launch branch has four consecutive green CI runs.
 

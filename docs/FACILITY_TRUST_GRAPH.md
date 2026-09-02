@@ -26,7 +26,7 @@ safely.
 | Badge/door-crossing evidence, out-of-schedule/zone entry, tailgating flags | `pacs-access` (events are evidence, never proof — already its doctrine) |
 | "Is the person still inside" — continued observation vs the original badge event | `rtls-custody` (badge dwell), `custody-beacon` (offline recovery) |
 | Coarse premises geofence (on/off premises, stale fixes) | `location-services` |
-| Device/user trust plane (MDM, EDR, identity, network) | the existing 40 connector families + the decision core |
+| Device/user trust plane (MDM, EDR, identity, network) | every existing connector family + the decision core (this cell said "40" until 2026-09-02; the real count was 51, and naming no number is the fix that cannot rot — `scripts/launch-profile.mjs` derives it) |
 | MAC ≠ identity — network observation correlated through 802.1X → MDM → device record | `deviceResolver` + `nac` (endpoint identity), `network-nac` (posture) |
 | "Physical location is one contextual input, never the sole trust anchor" (NIST ZT) | the composition law: worst-concern-wins; no single signal grants |
 | Fail-safe when a source goes dark: unknown raises, never grants | every dimension's doctrine; `signal-radar` for novel/dead sources |

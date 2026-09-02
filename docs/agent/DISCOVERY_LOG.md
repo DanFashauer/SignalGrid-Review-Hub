@@ -1,8 +1,11 @@
 # Customer discovery — the log
 
-**State: Customer Discovery.** Repository engineering is stopped. The next
-evidence that can materially change `docs/PURPOSE.md`, the P0 wedge, or the
-product hierarchy must come from outside the repo.
+**State: Customer Discovery.** Repository engineering is **not** stopped — DR-021
+(2026-08-31) lifted the engineering freeze in full, and this line said "stopped"
+until 2026-09-02. What the line was reaching for is still true and is the point of
+this log: **no amount of engineering moves the number below.** The next evidence
+that can materially change `docs/PURPOSE.md`, the P0 wedge, or the product
+hierarchy must come from outside the repo.
 
 `PURPOSE.md` closes on this test:
 

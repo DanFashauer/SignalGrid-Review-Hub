@@ -85,7 +85,7 @@ connector surface not at all.
 **Signal kinds (3 of 41).** `device_posture`, `device_management_health`,
 `local_authority` — exactly what the three launch families produce.
 
-**Published API paths (13 of 54).** The Assist gate itself <!-- framing:mechanism -->
+**Published API paths (14 of 58).** The Assist gate itself <!-- framing:mechanism -->
 (`/v1/decisions/evaluate`), the routes an operator console needs to see what it
 did, `/v1/decisions/{id}/evidence` — which is not garnish but the product's
 entire claim — plus `/v1/context`, `/v1/audit` and `/v1/metrics`. The
@@ -95,8 +95,20 @@ connector trio (`/v1/connectors`, `…/{id}/sync-runs`, and `…/{id}/sync`, who
 handler runs only the core's fixture pipeline) and the policy read trio
 (`/v1/policies`, `…/{id}/versions`, `…/{id}/tests`). Draft creation and version
 activation stay off the fence — policy changes ride the repository at launch.
-All thirteen sit below the auth guard in `routes/v1.ts`, checked rather than
-assumed.
+DR-023 (2026-09-01) added the fourteenth, `/v1/authorize` — the same gate in the
+shape a host app obeys (`{assist, reasons, decisionId}`), which closed DR-007's
+declared gap. All fourteen sit below the auth guard in `routes/v1.ts`
+(`router.use("/v1", …, requireTenantContext, …)` precedes every one of them),
+checked rather than assumed.
+
+This fraction was **13 of 54** until 2026-09-02, and neither half was right:
+the denominator counts path keys in `lib/api-spec/v1-openapi.yaml` and the
+published contract had grown to 58, while `/v1/authorize` had been classified
+`launch` in the profile for a day without this sentence noticing. Like the app
+denominator below, it sits in prose the docs↔proof figure guard cannot reach —
+that guard's scope is the **What the profile says** section, and this is not it.
+Recompute both from the profile rather than trusting them:
+`node -e "import('./scripts/launch-profile.mjs').then(m=>{for(const s of m.SURFACES)console.log(s.key,s.launch.length,'of',s.launch.length+s.deferred.length+s.demo_only.length+s.internal.length)})"`.
 
 Version 1 listed `/v1/keys` as an eighth, described as "API-key authentication for
 the above". That was reasoned, not read. The route is a demo credential dispenser
@@ -105,7 +117,7 @@ to anonymous callers — and `demoSurfacesEnabled()` had already been refusing t
 register it outside the review demo. The runtime fence was right and the declared
 scope was wrong. It is `demo_only` in version 2.
 
-**App surfaces (3 of 25).** `api-server` (the product), `signalgrid-app` (the one
+**App surfaces (3 of 30).** `api-server` (the product), `signalgrid-app` (the one
 operator console — bound to the served `/v1` surface: decisions list, decision
 detail, digest-verified evidence, audit ledger, assurance labels), and
 `ios:EnterpriseShell` (the one host app, shipping as the integration reference a
@@ -115,10 +127,12 @@ in-browser copy of the core cannot be THE console, because it never exercises
 the API a customer would. `signalgrid-review` remains the zero-network review
 deck — reclassified `demo_only`, not diminished.
 
-This denominator has moved twice, and both moves are worth stating. An earlier
+This denominator has moved three times, and every move is worth stating. An earlier
 revision of this page said "3 of 18" after three lane-coordination surfaces had
 already joined the tree (real total then: 21) — the fraction sits in prose no
-figure guard can see, which is exactly how it went stale. Profile **v4**
+figure guard can see, which is exactly how it went stale. It then read **"3 of 25"**
+until 2026-09-02 against a real total of 30, which is the same failure a second
+time, in the same sentence, for the same reason. Profile **v4**
 (2026-08-16) then widened the *derivation*: the gate had only ever read
 `artifacts/`, `tools/` and the two iOS project files, so an entire Android port
 (`native:android`), a desktop port (`native:desktop`), the cross-port wire
@@ -132,9 +146,12 @@ and only a future decision record re-opens one.
 
 ## The gaps — read these before reading the launch set as readiness
 
-There are **3 declared gaps**: work a `launch` entry needs that does not exist yet.
+There are **4 declared gaps**: work a `launch` entry needs that does not exist yet.
 They are held as data in `GAPS`, not as prose, so the proof can count them and no
-document can quietly describe the launch set as complete.
+document can quietly describe the launch set as complete — and since 2026-09-02
+`check-launch-profile.mjs` fails the build when this number and `GAPS.length`
+disagree, because for a while they did: this sentence read **3** against a `GAPS`
+of four.
 
 **There were five, and two of them had been fixed without anyone noticing.** Both the
 runtime fence and the served-vs-published surface were built — with tests asserting a
@@ -200,8 +217,14 @@ derives from
 `git ls-files`, which is one reproducible answer everywhere and also the right
 question: a directory that is not in version control is output, not a surface.
 
-`proof:launch-profile` publishes the figures this document quotes, so the
-docs↔proof figure guard fails the build if this page and the profile ever disagree.
+`proof:launch-profile` publishes the figures quoted under **What the profile says**,
+and the docs↔proof figure guard fails the build if that section and the profile ever
+disagree. Read the scope of that guard exactly: it judges a number only inside a
+section, table row or list item that NAMES the proof. The gaps section above names
+no proof, so its count was never in scope — and it sat at **3** against a `GAPS` of
+four while this paragraph claimed otherwise. That count is now checked by
+`check-launch-profile.mjs` directly against `GAPS.length`, which no sentence on this
+page can switch off.
 
 ## What this deliberately does not do
 

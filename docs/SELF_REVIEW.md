@@ -8,21 +8,36 @@ version and Codex has less to find.
 ## The two layers
 
 ### 1. Mechanical — `pnpm run preflight`
-Runs the **service-free CI gate suite locally** in one command — a complete
-mirror of the two CI jobs that need nothing but Node (`validation` and
-`docs-sanity` in `review-hub-ci.yml`) plus the SBOM-drift gate from
+Runs the **service-free CI gate suite locally** in one command — a mirror of two
+of the **three** jobs in `review-hub-ci.yml` that need nothing but Node
+(`validation` and `docs-sanity`) plus the SBOM-drift gate from
 `supply-chain.yml`'s `sbom` job: the invariant reviewer, docs sanity (required
 docs + unsafe-claim scan), typecheck, build, every proof, the API integration
 test, the safety gate, Postman/spec sync, and the CycloneDX SBOM sync.
 
-It does **not** run the three CI jobs that need external services —
-`durable-persistence` (Postgres), `deploy-stack` (Docker compose smoke) and
-`secret-scan` (gitleaks). So a green preflight means everything reproducible
-locally is green; those three are proven only in CI, and a push can still go red
-on them. This paragraph previously said "a complete mirror of all three CI jobs
-… a green preflight means CI will be green", which was false in both halves:
-there are six jobs, and preflight mirrors three. It survived because no guard
-reads prose claims — see the coverage limits below.
+The third Node-only job is **`breadth`** — the 47 deferred-family gates and 8
+doctrine-doc proofs — and preflight does not run it. It is its own lane,
+`pnpm run verify:breadth`, and `CLAUDE.md` says to run it alongside preflight for
+exactly this reason.
+
+It does **not** run the **four** jobs that need external services —
+`durable-persistence` (Postgres), `podman-stack` (the prod stack under Podman),
+`deploy-stack` (Docker compose smoke) and `secret-scan` (gitleaks, which lives in
+`supply-chain.yml`, not in `review-hub-ci.yml`). So a green preflight means
+everything reproducible locally is green; those four are proven only in CI, and a
+push can still go red on them.
+
+**This paragraph has now been wrong twice, and the second time is the interesting
+one.** It first said "a complete mirror of all three CI jobs … a green preflight
+means CI will be green" — false in both halves. The correction said *six jobs,
+preflight mirrors three*, which is true about `review-hub-ci.yml`'s job count and
+was then contradicted by the sentences immediately under it: they named two
+Node-only jobs and three external ones, omitted `breadth` and `podman-stack`
+entirely, and counted `secret-scan` as if it were a job in this workflow. Derived
+2026-09-02 straight from the file — `grep -nE '^  [a-z][a-z0-9-]*:'
+.github/workflows/review-hub-ci.yml` returns exactly `validation`, `breadth`,
+`docs-sanity`, `durable-persistence`, `podman-stack`, `deploy-stack`. It survived
+because no guard reads prose claims — see the coverage limits below.
 
 ```
 pnpm run preflight          # full suite — what CI runs

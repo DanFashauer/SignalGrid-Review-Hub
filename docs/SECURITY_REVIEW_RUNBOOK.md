@@ -27,7 +27,10 @@ it is adopted, both conditions above must be satisfied in the same change.
 2. **Findings are verified before they are reported.** A finding that cannot be
    stated as *concrete inputs → wrong output* is not a finding; it is a smell, and
    it goes in the PR body as a note rather than as a defect.
-3. **The gate suite is the regression net.** 125 proof gates, the mutation guard,
+3. **The gate suite is the regression net.** The proof gates — count published by
+   `docs/STATUS.md` and held true by `check-status-figures.mjs`, cited rather than
+   copied here because the copy that used to sit in this line said **125** against a
+   real 140 — plus the mutation guard,
    the grant-safety enumeration and the figure guard already run on every commit.
    A human-or-model review that duplicates them adds noise; the review's job is
    what the gates *cannot* express.

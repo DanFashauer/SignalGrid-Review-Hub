@@ -3,8 +3,10 @@
 > **This is the canonical SignalGrid repository.** All active development happens
 > here. The earlier `DanFashauer/DEV` and `DanFashauer/SignalGrid` (beta) repos
 > are retired POC / concept and are superseded by this one (see *Legacy
-> repositories* below). CI, the safety gate, CodeQL, and Supply-Chain run across
-> the `dev` / `alpha` / `beta` / `prod` tier branches.
+> repositories* below). CI, the safety gate, CodeQL and Supply-Chain run on every
+> pull request and on pushes to **`SignalGrid_Alpha`**, the default branch and the
+> only long-lived branch that exists. The four tier branches this line named until
+> 2026-09-02 were pruned; see *Tier branches* below and `docs/BRANCH_HYGIENE.md`.
 
 ## Project stage — concept / pre-dev
 
@@ -49,12 +51,30 @@ lib/        Source-only @workspace/* packages (TypeScript project refs)
   integrations           Harvested vendor adapters (ITSM/UEM/NAC/SIEM/EDR), fixture-safe
   api-spec               /v1 + /cp/v1 OpenAPI contract
   api-client-react       Generated typed client + hooks
-artifacts/  Runnable apps: api-server, admin app, mobile PWA, desktop, web, MCP server
-config/tiers/            dev / alpha / beta / prod environment examples
+artifacts/               21 tracked directories. 7 are runnable packages (each has a
+                         package.json): api-server, mcp-server, signalgrid-app,
+                         signalgrid-review, signalgrid-desktop, signalgrid-mobile-pwa,
+                         signalgrid-web. The other 14 are EVIDENCE AND COORDINATION
+                         surfaces, not apps: agent-heartbeats, api-collection,
+                         build-loop, connector-emulator, lab-collections,
+                         lane-messages, live-captures, live-evidence, outreach-log,
+                         sbom, scanner-comparison, sim-requests, sim-results, sync.
+                         (Derived 2026-09-02: `git ls-files artifacts | cut -d/ -f2
+                         | sort -u`. The line here previously named six and omitted
+                         signalgrid-review and every evidence surface.)
+config/tiers/            dev / alpha / beta / prod environment examples (profiles,
+                         not branches — see Tier branches below)
 docs/                    Strategy, proofs, positioning, runbooks
 scripts/                 Proof harnesses + tooling (pnpm run proof:*)
-native/ios/              EnterpriseShell (BLE / USB-C badge) — hardware design concept
-.github/workflows/       CI, safety gate, CodeQL, SBOM, gitleaks, Pages, promote-tier
+native/                  FOUR trees, not one: android/ (native port), desktop/,
+                         ios/ (TWO Xcode apps — EnterpriseShell and SignalGridMobile),
+                         shared/ (cross-port wire-conformance fixtures)
+firmware/dock/           SmartDock firmware core
+.github/workflows/       15 workflow files (`ls .github/workflows`, 2026-09-02):
+                         review-hub-ci, supply-chain (SBOM + gitleaks + signing),
+                         codeql, pages, promote, ios-ci, android, desktop, firmware,
+                         mac-lane, branch-prune, pr-triage, phase-pr-evidence,
+                         connector-emulator-smoke, scheduled-verification
 ```
 
 ## The packages — all 43, derived not curated
@@ -117,28 +137,39 @@ the proof harnesses and gates.)
 | `signalgrid-review` | The public review hub app |
 | `signalgrid-web` | The marketing/website surface |
 
-## Tier branches — dev → alpha → beta → prod
+## Tier branches — the tiers are configuration; the branches are gone
 
-The four-tier buildout is reflected as branches, promoted upward. Each tier runs
-the **same code** with a different environment profile
-(`config/tiers/<tier>.env.example`); live vendor integrations stay **gated off**
-until a `beta`/`prod` deployment explicitly enables them with real credentials.
+**Corrected 2026-09-02.** This section stated the four tier branches as existing,
+flatly, in a table. They do not exist. `docs/BRANCH_HYGIENE.md` records them in the
+prune list (`artifacts/sync/merged-branches-to-prune.txt`, lines 4/5/63/65, all four
+pinned to the same tip `7ee88ef`) with the reason: *"They had not moved since
+2026-07-15 and nothing in CI or the compose files referenced them; as stale pointers
+they implied a promotion flow this repo does not run."* Verified 2026-09-02 with
+`git ls-remote --heads origin`, which returns 16 refs — `SignalGrid_Alpha`, four
+`claude/*`, ten `dependabot/*` and one `mac-sim-*` — and no `dev`, `alpha`, `beta`
+or `prod`.
 
-| Branch | Tier | Purpose | Live integrations |
-|---|---|---|---|
-| `dev` | dev | Active development, fastest iteration | off (fixtures only) |
-| `alpha` | alpha | Review / validation surface (this is where CI + Pages are wired today, as `SignalGrid_Alpha`) | off (fixtures only) |
-| `beta` | beta | Pilot-facing, real credentials behind an explicit env flag | opt-in |
-| `prod` | prod | Production profile (concept — no live deployment today) | opt-in |
+**What is real:**
 
-Promotion flows one step upward (`dev → alpha → beta → prod`) via the
-**Promote Tier** workflow, which opens a promotion PR for review — nothing is
-promoted blindly.
+- **One long-lived branch: `SignalGrid_Alpha`.** Everything merges there; CI, the
+  safety gate, CodeQL, Supply-Chain and the Pages demo are wired to it. Topic
+  branches are `claude/<topic>`, squash-merged and deleted
+  (`docs/BRANCH_HYGIENE.md` §*The convention*).
+- **The four TIERS are still real, as configuration.** `config/tiers/{dev,alpha,beta,prod}.env.example`
+  exist; each environment sets `SIGNALGRID_TIER`, the api-server resolves it
+  (`artifacts/api-server/src/lib/tier.ts`, defaulting to `dev`) and reports it at
+  `GET /api/healthz`. `isLiveIntegrationsEnabled()` returns `false` for `dev`/`alpha`
+  unconditionally and for `beta`/`prod` unless `SIGNALGRID_LIVE_INTEGRATIONS=true`,
+  so live vendor calls only ever happen in an explicitly-configured beta/prod deploy.
+  **A tier is a deployment profile, not a branch.**
+- **The Promote Tier workflow still exists** (`.github/workflows/promote.yml`) and is
+  honest about this: its "Report tier state" step prints `branch does not exist` for
+  each missing tier rather than failing opaquely. It is dormant machinery for a
+  pipeline nobody is running.
 
-> Note: `SignalGrid_Alpha` is the current default/working branch where CI, the
-> safety gate, and the Pages demo are wired. The `dev`/`alpha`/`beta`/`prod`
-> branches make the promotion pipeline explicit; branch protection and the
-> default-branch choice are owner settings.
+Reconnecting the pipeline is an owner decision with three defensible answers, set out
+in `docs/BRANCHING_AND_ENVIRONMENTS.md`. Until one is chosen, read the four-tier
+diagram anywhere in these docs as **intent, not current state**.
 
 ## What is intentionally *not* here
 

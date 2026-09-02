@@ -1,4 +1,21 @@
-# Manual Full-Product Smoke Screen Results
+# Manual Full-Product Smoke Screen Results — ARCHIVED RUN LOG (2026-06)
+
+> **This is a dated record of one execution, not a statement of current state.**
+> Nothing below re-verifies itself; a reader must not take "PASS" here as a
+> present-tense claim about the repository today.
+>
+> - **Run performed:** June 2026 — the checklist results and the workflow-run
+>   evidence below were recorded across commits `bd371d2` (2026-06-23, first
+>   record) through `2e7c3a0`/`90ff17f` (2026-06-30, the corrected connector-emulator
+>   smoke evidence this page's opening paragraph describes).
+> - **Last touched:** 2026-08-16 (`git log --follow --format=%ad -1 --
+>   docs/agent/MANUAL_FULL_PRODUCT_SMOKE_SCREEN_RESULTS.md`), a one-line
+>   documentation-sweep edit, not a re-run.
+> - **Moved 2026-09-02** from `docs/` to `docs/agent/`, where the repository keeps
+>   run logs and lane records. It sat in the top-level docs surface, undated and in
+>   the present tense, next to pages that describe how the product works now.
+> - **The live equivalents are `docs/STATUS.md` and a preflight run**, not this
+>   page. `docs/PHASE_BACKLOG.md`, which cites this record, is itself archived.
 
 This document records the Manual Full Product Smoke Screen phase run after the Phase Automation Orchestrator, Credential Reader Signal Model, Credential Reader / Smart Locker Dashboard, credential-reader guardrail hardening chain, and SignalGrid Autopilot Control Plane merged. This update records the corrected push-triggered post-merge Connector Emulator Smoke workflow evidence that closes the previous limited smoke-screen status.
 

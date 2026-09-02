@@ -80,10 +80,18 @@ NEXT ACTION:  owner: discovery conversations (0 of 15) - nothing substitutes.
    never sees it** - adoption is the product. Verticals are configuration, not
    code. It changes only on customer evidence or a correction of owner intent -
    never on internal preference, however good the argument.
-2. **Two lanes are OPEN; the rest stay frozen.** Mac/iOS and API/Bruno/Postman
-   are open, because invisibility cannot be proven in a container and for a
-   product that connects systems the API surface *is* the product. Cloud logic,
-   connectors, proofs, new verticals, platforms and hardware remain frozen.
+2. **Nothing is frozen; claim discipline is unchanged.** DR-021 (2026-08-31)
+   lifted the engineering freeze **in full**, on the owner's direction: every
+   lane is open — cloud logic, connectors, proofs, native surfaces, API, and,
+   with a decision record per DR-020's rule, verticals, platforms and hardware.
+   What did NOT lift, and is not the freeze: the launch-claims gate, the
+   launch-profile classification, the publication boundary and the no-overclaim
+   rules. **Building something and claiming it ships remain two different acts;
+   only the first is unfrozen**, and a change to what is *claimed* still needs
+   its own decision record. *This line said "Two lanes are OPEN; the rest stay
+   frozen" until 2026-09-02 — two days after this file's own STATE section
+   recorded DR-021 — which is the contradiction a doc can hold against itself
+   when no gate reads English.*
 3. **Nobody has used the product.** 140 proof gates and four native surfaces do
    not change that number. Only a conversation does.
 

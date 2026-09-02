@@ -169,6 +169,28 @@ export class PostgresAuditBackend implements AuditBackend {
       // happening without their audit trail.
       await this.assertPrivileges();
     }
+    // Unconditionally, on BOTH branches: `CREATE TABLE IF NOT EXISTS` is a no-op
+    // against an OLDER shape, so a pre-v3 ledger reported READY while `GET /v1/audit`
+    // (`WHERE tenant_id = $1`) answered 500.
+    await this.assertSchema();
+  }
+
+  /** The `tenant_id` column the tenant-scoped reads bind to. Checked on init AND on
+   *  every ping(), like assertPrivileges, so a schema regressing under a running
+   *  process is NOT ready. A future migration adds its own check. */
+  private async assertSchema(): Promise<void> {
+    const res = await this.pool.query(
+      `SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'audit_ledger'
+          AND column_name = 'tenant_id'`,
+    );
+    if (res.rowCount === 0) {
+      throw new Error(
+        "audit_ledger is missing column(s) tenant_id — the schema predates migration 3 " +
+          "(audit-ledger-tenant-2026-09-01). Run `pnpm run db:migrate` with the admin credential; " +
+          "refusing to report ready while the tenant-scoped audit reads would fail.",
+      );
+    }
   }
 
   /** The exact privileges appendWithChain needs; also run on every ping() so
@@ -209,6 +231,7 @@ export class PostgresAuditBackend implements AuditBackend {
     await this.ensureReady();
     await this.pool.query("SELECT 1");
     await this.assertPrivileges();
+    await this.assertSchema();
   }
 
   async appendWithChain(build: (prevHash: string) => AuditRecord): Promise<AuditRecord> {

@@ -79,6 +79,10 @@ services:
       SIGNALGRID_LIVE_INTEGRATIONS: "false"
       SIGNALGRID_V1_RATE_LIMIT: ${SIGNALGRID_V1_RATE_LIMIT:-}
       SIGNALGRID_GLOBAL_RATE_LIMIT: ${SIGNALGRID_GLOBAL_RATE_LIMIT:-}
+      # In-memory per-tenant decision retention (FIFO). Empty ⇒ the 5000 default;
+      # a non-integer value makes the API refuse to start rather than quietly
+      # revert to it, so a typo here is a failed deploy, not a silent one.
+      SIGNALGRID_MAX_DECISIONS_PER_TENANT: ${SIGNALGRID_MAX_DECISIONS_PER_TENANT:-}
       STEPUP_TTL_SECONDS: ${STEPUP_TTL_SECONDS:-}
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
       WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-}

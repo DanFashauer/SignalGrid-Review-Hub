@@ -697,6 +697,16 @@ async function run() {
   check("metrics → 200", metrics.status === 200);
   check("metrics count all evaluations", (metrics.json?.metrics?.totalDecisions ?? 0) >= 3);
   check("metrics report p95 latency", typeof metrics.json?.metrics?.p95LatencyMs === "number");
+  // The WINDOW the numbers were computed over. On the default server nothing has
+  // been evicted, so this is the honest "you are seeing everything" half; the
+  // capped half is proven on its own server below (PORT8), because reaching the
+  // 5,000 default here would cost 5,000 evaluates a run.
+  check("metrics carry a window naming what they were computed over",
+    typeof metrics.json?.metrics?.window?.decisionsConsidered === "number" &&
+    typeof metrics.json?.metrics?.window?.maxPerTenant === "number");
+  check("metrics window: an uncapped server reports capped=false", metrics.json?.metrics?.window?.capped === false);
+  check("metrics window: decisionsConsidered agrees with totalDecisions",
+    metrics.json?.metrics?.window?.decisionsConsidered === metrics.json?.metrics?.totalDecisions);
 
   // ── audit chain ─────────────────────────────────────────────────────────
   const audit = await req("GET", "/v1/audit", { token: KEYS.owner });
@@ -1854,6 +1864,64 @@ async function run() {
     } finally {
       server7.kill("SIGTERM");
     }
+  }
+
+  // ── Eighth short-lived server: the /v1/metrics WINDOW under a real cap ────────
+  // SIGNALGRID_MAX_DECISIONS_PER_TENANT makes the capped branch reachable in five
+  // evaluates instead of five thousand. The cap is asserted to have TAKEN EFFECT
+  // (maxPerTenant === 3) BEFORE anything is concluded from `capped` — without that, a
+  // server ignoring the env would pass vacuously.
+  {
+    const PORT8 = 5317;
+    const BASE8 = `http://localhost:${PORT8}/api`;
+    const server8 = spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT8), NODE_ENV: "production", LOG_LEVEL: "silent",
+        SIGNALGRID_MAX_DECISIONS_PER_TENANT: "3" },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      check("capped-metrics server came up", await waitReady(PORT8));
+      const call = async (method, path, body) => {
+        const res = await fetch(`${BASE8}${path}`, {
+          method,
+          headers: { authorization: `Bearer ${KEYS.operator}`, ...(body ? { "content-type": "application/json" } : {}) },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        return { status: res.status, json: await res.json().catch(() => null) };
+      };
+      for (let i = 0; i < 5; i += 1) {
+        await call("POST", "/v1/decisions/evaluate", {
+          identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session",
+        });
+      }
+      const m8 = await call("GET", "/v1/metrics");
+      check("capped metrics → 200", m8.status === 200);
+      check("metrics window: the env took effect — maxPerTenant reads 3", m8.json?.metrics?.window?.maxPerTenant === 3);
+      check("metrics window: past the cap the response SAYS capped=true", m8.json?.metrics?.window?.capped === true);
+      check("metrics window: decisionsConsidered reports the retained 3, not the 5 evaluated",
+        m8.json?.metrics?.window?.decisionsConsidered === 3);
+      check("metrics window: totalDecisions agrees with the window it was computed over",
+        m8.json?.metrics?.totalDecisions === 3);
+    } finally {
+      server8.kill("SIGTERM");
+    }
+  }
+
+  // ── Ninth short-lived server: an INVALID cap must refuse to boot ──────────────
+  // Asserted by watching the process die, not by reading the code that says it would.
+  {
+    const PORT9 = 5318;
+    const bad = spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT9), NODE_ENV: "production", LOG_LEVEL: "silent",
+        SIGNALGRID_MAX_DECISIONS_PER_TENANT: "0" },
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const exitCode = await new Promise((resolve) => {
+      const timer = setTimeout(() => { bad.kill("SIGKILL"); resolve("still-running"); }, 8000);
+      bad.on("exit", (code) => { clearTimeout(timer); resolve(code); });
+    });
+    check("invalid SIGNALGRID_MAX_DECISIONS_PER_TENANT refuses at boot (non-zero exit, never a silent default)",
+      exitCode !== "still-running" && exitCode !== 0);
   }
 
   // ── route coverage: every registered /v1 route must be exercised ─────────

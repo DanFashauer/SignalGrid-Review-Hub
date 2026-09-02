@@ -436,7 +436,7 @@ paths:
         - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 }, description: Durable ledger only. }
         - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 }, description: Durable ledger only. }
       responses:
-        "200": { description: "Audit events + chain verification; `source` names the ledger that answered" }
+        "200": { description: "Audit events + chain verification; `source` names the ledger that answered. `chain.truncated`/`chain.evictedCount` report eviction by the per-tenant memory bound: a truncated `chain.valid: true` covers the RETAINED window only, never the whole history." }
         "403": { $ref: "#/components/responses/Forbidden" }
 
   /v1/metrics:
@@ -444,8 +444,14 @@ paths:
       operationId: getMetrics
       tags: [metrics]
       summary: Operator metrics for the tenant's decisions
+      description: >-
+        Aggregates over the tenant's IN-MEMORY decision list, capped per tenant (FIFO).
+        `metrics.window` states what they were computed over: `decisionsConsidered`, `capped`
+        (a suffix of history, not the whole of it), `maxPerTenant` (`SIGNALGRID_MAX_DECISIONS_PER_TENANT`,
+        default 5000), `unrecognizedOutcomes` (outside the union; counted toward `restrictDenyRate`,
+        never `allowRate`). Past the cap `pendingReview` counts DOWN and `restrictDenyRate` drifts.
       responses:
-        "200": { description: Metrics summary }
+        "200": { description: "Metrics summary, with the `window` it was computed over" }
 
   /v1/decisions/{id}/resolution:
     get:

@@ -641,6 +641,20 @@ export interface MetricsSummary {
   decisionsWithPolicyVersion: number;
   decisionsWithEvidence: number;
   pendingReview: number;
+  /** What the fields above were computed over. Past the per-tenant FIFO cap they
+   *  describe a WINDOW: `pendingReview` counts DOWN and `restrictDenyRate` drifts. */
+  window: MetricsWindow;
+}
+
+export interface MetricsWindow {
+  /** How many decisions the aggregates above actually looped over. */
+  decisionsConsidered: number;
+  /** True once the per-tenant FIFO bound has evicted anything: this is a suffix of history. */
+  capped: boolean;
+  /** The per-tenant retention cap in force. */
+  maxPerTenant: number;
+  /** Rows whose outcome is outside the union; counted toward restrictDenyRate, never allowRate. */
+  unrecognizedOutcomes: number;
 }
 
 // ── Remediation requests (approval-gated, always simulated) ──────────────────

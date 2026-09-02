@@ -525,13 +525,32 @@ router.post("/v1/app-workflows/evaluate", (req: Request, res: Response) => {
 function webauthnUserId(req: Request, identityRef: string): string {
   // Tenant from the authenticated token, never from the body — same invariant as
   // every other /v1 route.
-  return `${core.context(token(req)).tenant.id}:${identityRef}`;
+  return `${webauthnTenantId(req)}:${identityRef}`;
+}
+
+/** The ceremony's tenant, from the authenticated token, passed EXPLICITLY into the
+ *  lib's verify calls so no `security.webauthn.*` audit row lands untenanted. */
+function webauthnTenantId(req: Request): string {
+  return core.context(token(req)).tenant.id;
 }
 
 function requireString(body: Record<string, unknown>, key: string): string {
   const v = body[key];
   if (typeof v !== "string" || v.length === 0) {
     throw new CoreError("validation", `${key} is required.`, 400);
+  }
+  return v;
+}
+
+/** A WebAuthn ceremony payload (`response` / `assertion`) must be a JSON object.
+ *  Validated HERE, by a helper that throws, for the same reason `requireString`
+ *  is: the payload is caller-provided and the verify call it feeds is the sensitive
+ *  action, so the check must reject-or-return, never sit as an inline condition
+ *  that CodeQL (js/user-controlled-bypass) reads as a caller-controlled gate. */
+function requireObject(body: Record<string, unknown>, key: string, what: string): object {
+  const v = body[key];
+  if (!v || typeof v !== "object") {
+    throw new CoreError("validation", `${key} (${what}) is required.`, 400);
   }
   return v;
 }
@@ -624,10 +643,7 @@ router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, nex
     const body = (req.body ?? {}) as Record<string, unknown>;
     const identityRef = requireString(body, "identityRef");
     const challengeId = requireString(body, "challengeId");
-    const response = body["response"];
-    if (!response || typeof response !== "object") {
-      throw new CoreError("validation", "response (WebAuthn registration) is required.", 400);
-    }
+    const response = requireObject(body, "response", "WebAuthn registration");
     // Bind verification to the principal who MINTED the ceremony (review finding):
     // the registration challenge context records enrolledByRef at options time, and
     // the verifier must be the same principal. Without this, a second operator could
@@ -647,7 +663,7 @@ router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, nex
       );
     }
     const userId = webauthnUserId(req, identityRef);
-    const result = await webauthn.verifyRegistration(userId, challengeId, response as never);
+    const result = await webauthn.verifyRegistration(userId, challengeId, response as never, webauthnTenantId(req));
     if (!result.success) {
       throw new CoreError("forbidden", `Enrollment rejected: ${result.error ?? "verification failed"}.`, 403);
     }
@@ -732,10 +748,7 @@ router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Resp
     const integrationId = requireString(body, "integrationId");
     const identityRef = requireString(body, "identityRef");
     const challengeId = requireString(body, "challengeId");
-    const assertion = body["assertion"];
-    if (!assertion || typeof assertion !== "object") {
-      throw new CoreError("validation", "assertion (WebAuthn authentication) is required.", 400);
-    }
+    const assertion = requireObject(body, "assertion", "WebAuthn authentication");
     const integration = findAppIntegration(integrationId);
     if (!integration) {
       throw new CoreError("not_found", `Unknown app integration '${integrationId}'.`, 404);
@@ -776,7 +789,7 @@ router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Resp
     // plan attached. The userId is derived from the STORED binding, so the
     // verification target is the identity the challenge was minted for.
     const userId = webauthnUserId(req, ctx.identityRef);
-    const verification = await webauthn.verifyAuthentication(userId, challengeId, assertion as never);
+    const verification = await webauthn.verifyAuthentication(userId, challengeId, assertion as never, tenantId);
     if (!verification.success) {
       throw new CoreError("forbidden", `Step-up assertion rejected: ${verification.error ?? "verification failed"}.`, 403);
     }

@@ -732,10 +732,11 @@ export const GAPS = [
       "evaluated tenants/identities/devices are still the demo seed: this deployment " +
       "demonstrates in a customer environment and does not yet decide about the " +
       "customer's own estate.",
-    // Closed when the served core stops being the demo factory — the only
-    // mechanical fact that matters, checked where the server constructs it.
+    // Closed when the served core stops being the demo factory. Matched WITHOUT the
+    // argument list: `SignalGridCore.demo()` read as CLOSED once a legitimate argument
+    // was added, so `demo(` matches the call however it is parameterised.
     closedWhen: [
-      { file: "artifacts/api-server/src/lib/core.ts", absent: "SignalGridCore.demo()" },
+      { file: "artifacts/api-server/src/lib/core.ts", absent: "SignalGridCore.demo(" },
     ],
   },
 ];

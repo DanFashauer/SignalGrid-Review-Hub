@@ -60,18 +60,28 @@ export interface ChainVerification {
   valid: boolean;
   brokenAtSeq: number | null;
   length: number;
+  /** True once the memory bound evicted the chain's oldest events: a truncated
+   *  `valid: true` covers the RETAINED window only, never the whole history. */
+  truncated: boolean;
+  /** How many events the memory bound has evicted for this tenant (0 when untruncated). */
+  evictedCount: number;
 }
 
-/** Verify a tenant's audit chain end-to-end by recomputing every digest. */
+/** Verify a tenant's audit chain by recomputing every digest. Past an eviction it
+ *  anchors on the last EVICTED digest, not GENESIS (which would read as BROKEN), and
+ *  says so via `truncated` — dropping the anchor would accept any suffix as intact. */
 export function verifyAuditChain(
   store: MemoryStore,
   tenantId: string,
 ): ChainVerification {
   const events = store.listAudit(tenantId);
-  let prevDigest = GENESIS_DIGEST;
+  const eviction = store.auditEviction(tenantId);
+  const truncated = eviction !== undefined;
+  const evictedCount = eviction?.count ?? 0;
+  let prevDigest = eviction ? eviction.lastDigest : GENESIS_DIGEST;
   for (const event of events) {
     if (event.prevDigest !== prevDigest) {
-      return { valid: false, brokenAtSeq: event.seq, length: events.length };
+      return { valid: false, brokenAtSeq: event.seq, length: events.length, truncated, evictedCount };
     }
     const body = canonicalJson({
       tenantId: event.tenantId,
@@ -85,9 +95,9 @@ export function verifyAuditChain(
       prevDigest: event.prevDigest,
     });
     if (digest(body) !== event.digest) {
-      return { valid: false, brokenAtSeq: event.seq, length: events.length };
+      return { valid: false, brokenAtSeq: event.seq, length: events.length, truncated, evictedCount };
     }
     prevDigest = event.digest;
   }
-  return { valid: true, brokenAtSeq: null, length: events.length };
+  return { valid: true, brokenAtSeq: null, length: events.length, truncated, evictedCount };
 }

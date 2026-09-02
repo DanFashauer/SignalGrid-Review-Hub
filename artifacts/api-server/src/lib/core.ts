@@ -7,7 +7,30 @@ import { SignalGridCore } from "@workspace/signalgrid-core";
  * decision/evidence/audit endpoints work out of the box for review. It carries
  * no real credentials, tenant data, or live vendor calls.
  */
-export const core: SignalGridCore = SignalGridCore.demo();
+/**
+ * `SIGNALGRID_MAX_DECISIONS_PER_TENANT` — the in-memory per-tenant decision cap.
+ * Exists so the FIFO bound and the `/v1/metrics` window are testable in five
+ * evaluates, not five thousand. REFUSES AT BOOT on anything that is not a positive
+ * integer; unset/empty means "use the default" and is the only value that falls through.
+ */
+function maxDecisionsPerTenantFromEnv(): number | undefined {
+  const raw = process.env["SIGNALGRID_MAX_DECISIONS_PER_TENANT"];
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const text = raw.trim();
+  // Digits only: Number("1e4"), Number(" 3 ") and Number("0x10") all coerce to
+  // something plausible, and a retention cap silently reinterpreted is the defect.
+  if (!/^\d+$/.test(text) || Number(text) < 1) {
+    throw new Error(
+      `SIGNALGRID_MAX_DECISIONS_PER_TENANT must be a positive integer, got "${raw}" — ` +
+        "refusing to start rather than silently using the default cap.",
+    );
+  }
+  return Number(text);
+}
+
+export const core: SignalGridCore = SignalGridCore.demo(undefined, {
+  maxDecisionsPerTenant: maxDecisionsPerTenantFromEnv(),
+});
 
 /**
  * Mint a small, deterministic set of REAL decisions at boot so the console's

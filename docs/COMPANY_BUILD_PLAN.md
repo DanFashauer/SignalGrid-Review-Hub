@@ -303,8 +303,8 @@ earlier — that is the loop working, not a reason to soften the record.
     checked only `success === false`, which passed identically with the defect
     planted back — any rejection satisfies it. They now assert the REASON
     (`error === "Challenge expired"`), and falsification drops the proof to
-    38/48. An assertion that cannot distinguish the fix from the bug is not
-    coverage.
+    38/48 (that change's 48; 56 today). An assertion that cannot distinguish the
+    fix from the bug is not coverage.
     NOT COVERED, deliberately: forward TTL arithmetic (`now.getTime() + ttl`)
     is not flagged — it never compares a parsed value against the clock and
     flagging it would fire on every correct TTL in the repo. Rule 3's window is

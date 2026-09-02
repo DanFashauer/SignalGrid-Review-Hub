@@ -931,13 +931,13 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
     func viewController(for state: SessionState) -> UIViewController {
         switch state {
         case .lockedIdle:
-            return LockedIdleViewController()
+            return LockedIdleView.hostingController()
         case .badgeCaptured:
             // Guard against nil badge ID - should not happen in normal flow
             guard let badgeId = capturedBadgeId else {
                 // Return to locked idle if no badge ID
                 transition(to: .lockedIdle, error: SessionError.missingBadgeId)
-                return LockedIdleViewController()
+                return LockedIdleView.hostingController()
             }
             return BadgeCapturedViewController(badgeId: badgeId)
         case .authenticating:

@@ -23,9 +23,276 @@ GatherProvisioningInputs
 
 CreateBuildDescription
 
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Resources/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+Build description signature: d8a70957dd86528c35615f9af32cfd70
+Build description path: /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/XCBuildData/d8a70957dd86528c35615f9af32cfd70.xcbuilddata
 ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache
     cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell.xcodeproj
     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -o /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache
+
+WriteAuxiliaryFile /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.LinkFileList (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    write-file /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.LinkFileList
+
+WriteAuxiliaryFile /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.SwiftFileList (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    write-file /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.SwiftFileList
+
+Ld /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.app/__preview.dylib normal (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios15.0-simulator -dynamiclib -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator -F/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator -install_name @rpath/EnterpriseShell.debug.dylib -Xlinker -dead_strip -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -dependency_info -Xlinker /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell_dependency_info.dat -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell.app-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell.app-Simulated.xcent.der -Xlinker -no_adhoc_codesign -o /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.app/__preview.dylib
+
+WriteAuxiliaryFile /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell-OutputFileMap.json (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    write-file /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell-OutputFileMap.json
+
+WriteAuxiliaryFile /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.SwiftConstValuesFileList (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    write-file /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.SwiftConstValuesFileList
+
+SwiftDriver EnterpriseShell normal arm64 com.apple.xcode.tools.swift.compiler (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name EnterpriseShell -Onone @/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios15.0-simulator -g -module-cache-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator -F /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/ModuleCache.noindex -sdk-module-cache-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell_const_extract_protocols.json -Xcc -iquote -Xcc /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-generated-files.hmap -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-own-target-headers.hmap -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-all-target-headers.hmap -Xcc -iquote -Xcc /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-project-headers.hmap -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/DerivedSources-normal/arm64 -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/DerivedSources/arm64 -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell-Swift.h -working-directory /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios -experimental-emit-module-separately -disable-cmo
+
+SwiftCompile normal arm64 Compiling\ SessionStateManager.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/SessionStateManager.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/SessionStateManager.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/SessionStateManager.swift:333:17: warning: variable 'session' was never mutated; consider changing to 'let' constant
+            var session = SessionData(
+            ~~~ ^
+            let
+/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/SessionStateManager.swift:578:45: warning: result of call to 'endSession(sessionId:reason:)' is unused
+            try await BackendService.shared.endSession(
+                                            ^         ~
+
+SwiftCompile normal arm64 Compiling\ SessionData.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Models/SessionData.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Models/SessionData.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 Compiling\ LockedIdleView.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/LockedIdleView.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/LockedIdleView.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 Compiling\ DesignSystem+SwiftUI.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/DesignSystem+SwiftUI.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/DesignSystem+SwiftUI.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ EnterpriseShell (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+EmitSwiftModule normal arm64 (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling DesignSystem+SwiftUI.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftCompile normal arm64 Compiling\ BLEBadgeReaderProvider.swift,\ BackendService.swift,\ BadgeCapturedViewController.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/BLEBadgeReaderProvider.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/BackendService.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/BadgeCapturedViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/BLEBadgeReaderProvider.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/BLEBadgeReaderProvider.swift:406:16: warning: value 'error' was defined but never used; consider replacing with boolean test
+        if let error = error {
+           ~~~~^~~~~~~~
+                             != nil
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/BackendService.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/BadgeCapturedViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 Compiling\ BadgeReaderManager.swift,\ BadgeReaderProvider.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/BadgeReaderManager.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/BadgeReaderProvider.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/BadgeReaderManager.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/BadgeReaderManager.swift:202:34: warning: 'withUnsafeBytes' is deprecated: use `withUnsafeBytes<R>(_: (UnsafeRawBufferPointer) throws -> R) rethrows -> R` instead
+            let buffer = command.withUnsafeBytes {
+                                 ^
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/BadgeReaderProvider.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 Compiling\ SceneDelegate.swift,\ ScreenCaptureGuard.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/SceneDelegate.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/ScreenCaptureGuard.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/SceneDelegate.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/ScreenCaptureGuard.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 Compiling\ ProviderConfigurationService.swift,\ ProvisioningViewController.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/ProviderConfigurationService.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/ProvisioningViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/ProviderConfigurationService.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/ProvisioningViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 Compiling\ SecurityManager.swift,\ TerminatingViewController.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/SecurityManager.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/TerminatingViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/SecurityManager.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/SecurityManager.swift:170:23: warning: value 'self' was defined but never used; consider replacing with boolean test
+            guard let self = self else { return }
+                  ~~~~^~~~~~~
+                                  != nil
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/TerminatingViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/TerminatingViewController.swift:150:14: warning: immutable value 'index' was never used; consider replacing with '_' or removing it
+        for (index, stepView) in stepsStackView.arrangedSubviews.enumerated() {
+             ^~~~~
+             _
+
+SwiftCompile normal arm64 Compiling\ LockedIdleViewController.swift,\ ManagedAppViewController.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/LockedIdleViewController.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/ManagedAppViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/LockedIdleViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/ManagedAppViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 Compiling\ IdentityProvider.swift,\ KioskController.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/IdentityProvider.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/KioskController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/IdentityProvider.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/IdentityProvider.swift:383:19: warning: value 'refreshToken' was defined but never used; consider replacing with boolean test
+        guard let refreshToken = KeychainService.shared.getRefreshToken() else {
+              ~~~~^~~~~~~~~~~~~~~
+                                                                          != nil
+/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/IdentityProvider.swift:484:19: warning: value 'endpoint' was defined but never used; consider replacing with boolean test
+        guard let endpoint = config?.enrollmentEndpoint else {
+              ~~~~^~~~~~~~~~~
+              (                                        ) != nil
+/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/IdentityProvider.swift:592:19: warning: immutable value 'mfaHost' was never used; consider replacing with '_' or removing it
+        guard let mfaHost = config?.mfaHost,
+              ~~~~^~~~~~~
+              _
+/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/IdentityProvider.swift:593:19: warning: immutable value 'apiKey' was never used; consider replacing with '_' or removing it
+              let apiKey = config?.mfaApiKey else {
+              ~~~~^~~~~~
+              _
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/KioskController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling SceneDelegate.swift, ScreenCaptureGuard.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftCompile normal arm64 Compiling\ EnrollingViewController.swift,\ HostAppViewController.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/EnrollingViewController.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/HostAppViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/EnrollingViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/HostAppViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling SessionStateManager.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftCompile normal arm64 Compiling\ USBCBadgeReaderProvider.swift,\ GeneratedAssetSymbols.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/USBCBadgeReaderProvider.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/DerivedSources/GeneratedAssetSymbols.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/USBCBadgeReaderProvider.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/USBCBadgeReaderProvider.swift:162:46: warning: left side of nil coalescing operator '??' has non-optional type 'String', so the right side is never used
+            "serial": accessory.serialNumber ?? "unknown"
+                      ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~
+                                            
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/DerivedSources/GeneratedAssetSymbols.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling SecurityManager.swift, TerminatingViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftCompile normal arm64 Compiling\ ActiveSessionViewController.swift,\ AppWorkflows.swift,\ AuthenticatingViewController.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/ActiveSessionViewController.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/AppWorkflows.swift /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/AuthenticatingViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/ActiveSessionViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/ActiveSessionViewController.swift:770:90: warning: variable 'self' was written to, but never read
+        alert.addAction(UIAlertAction(title: "End Session", style: .destructive) { [weak self] _ in
+                                                                                         ^
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Services/AppWorkflows.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftCompile normal arm64 /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/EnterpriseShell/Views/AuthenticatingViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling ProviderConfigurationService.swift, ProvisioningViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftDriverJobDiscovery normal arm64 Compiling LockedIdleView.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for EnterpriseShell (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftDriver\ Compilation\ Requirements EnterpriseShell normal arm64 com.apple.xcode.tools.swift.compiler (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name EnterpriseShell -Onone @/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios15.0-simulator -g -module-cache-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator -F /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/ModuleCache.noindex -sdk-module-cache-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell_const_extract_protocols.json -Xcc -iquote -Xcc /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-generated-files.hmap -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-own-target-headers.hmap -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-all-target-headers.hmap -Xcc -iquote -Xcc /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-project-headers.hmap -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/DerivedSources-normal/arm64 -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/DerivedSources/arm64 -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell-Swift.h -working-directory /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios -experimental-emit-module-separately -disable-cmo
+
+Copy /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.swiftmodule/arm64-apple-ios-simulator.swiftmodule /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.swiftmodule (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.swiftmodule /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.swiftmodule/arm64-apple-ios-simulator.swiftmodule
+
+Copy /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.swiftmodule/arm64-apple-ios-simulator.swiftdoc /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.swiftdoc (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.swiftdoc /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.swiftmodule/arm64-apple-ios-simulator.swiftdoc
+
+Copy /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.swiftmodule/arm64-apple-ios-simulator.abi.json /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.abi.json (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.abi.json /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.swiftmodule/arm64-apple-ios-simulator.abi.json
+
+Copy /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.swiftsourceinfo (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.swiftsourceinfo /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
+
+SwiftDriverJobDiscovery normal arm64 Compiling BadgeReaderManager.swift, BadgeReaderProvider.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftDriverJobDiscovery normal arm64 Compiling SessionData.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftDriverJobDiscovery normal arm64 Compiling BLEBadgeReaderProvider.swift, BackendService.swift, BadgeCapturedViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftDriverJobDiscovery normal arm64 Compiling LockedIdleViewController.swift, ManagedAppViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftDriverJobDiscovery normal arm64 Compiling USBCBadgeReaderProvider.swift, GeneratedAssetSymbols.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftDriverJobDiscovery normal arm64 Compiling IdentityProvider.swift, KioskController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftDriverJobDiscovery normal arm64 Compiling EnrollingViewController.swift, HostAppViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftDriverJobDiscovery normal arm64 Compiling ActiveSessionViewController.swift, AppWorkflows.swift, AuthenticatingViewController.swift (in target 'EnterpriseShell' from project 'EnterpriseShell')
+
+SwiftDriver\ Compilation EnterpriseShell normal arm64 com.apple.xcode.tools.swift.compiler (in target 'EnterpriseShell' from project 'EnterpriseShell')
+    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name EnterpriseShell -Onone @/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios15.0-simulator -g -module-cache-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator -F /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/ModuleCache.noindex -sdk-module-cache-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell_const_extract_protocols.json -Xcc -iquote -Xcc /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-generated-files.hmap -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-own-target-headers.hmap -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-all-target-headers.hmap -Xcc -iquote -Xcc /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-project-headers.hmap -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/DerivedSources-normal/arm64 -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/DerivedSources/arm64 -Xcc -I/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell-Swift.h -working-directory /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios -experimental-emit-module-separately -disable-cmo
 
 Ld /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.app/EnterpriseShell.debug.dylib normal (in target 'EnterpriseShell' from project 'EnterpriseShell')
     cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
@@ -40,15 +307,11 @@ Ld /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/io
     cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios15.0-simulator -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator -F/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator -Xlinker -rpath -Xlinker @executable_path -Xlinker -rpath -Xlinker @executable_path/Frameworks -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -e ___debug_blank_executor_main -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_dylib -Xlinker /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-DebugDylibPath-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_instlnm -Xlinker /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-DebugDylibInstallName-normal-arm64.txt -Xlinker -filelist -Xlinker /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell-ExecutorLinkFileList-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell.app-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell.app-Simulated.xcent.der /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.app/EnterpriseShell.debug.dylib -Xlinker -no_adhoc_codesign -o /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.app/EnterpriseShell
 
-Ld /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.app/__preview.dylib normal (in target 'EnterpriseShell' from project 'EnterpriseShell')
-    cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
-    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios15.0-simulator -dynamiclib -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator -F/Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator -install_name @rpath/EnterpriseShell.debug.dylib -Xlinker -dead_strip -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -dependency_info -Xlinker /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell_dependency_info.dat -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell.app-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell.app-Simulated.xcent.der -Xlinker -no_adhoc_codesign -o /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.app/__preview.dylib
-
 ExtractAppIntentsMetadata (in target 'EnterpriseShell' from project 'EnterpriseShell')
     cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios
     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name EnterpriseShell --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk --xcode-version 17F113 --platform-family iOS --deployment-target 15.0 --bundle-identifier com.enterprise.shell --output /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.app --target-triple arm64-apple-ios15.0-simulator --binary-file /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.app/EnterpriseShell --dependency-file /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell_dependency_info.dat --stringsdata-file /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.SwiftFileList --metadata-file-list /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell.DependencyMetadataFileList --static-metadata-file-list /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/EnterpriseShell.DependencyStaticMetadataFileList --swift-const-vals-list /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Intermediates.noindex/EnterpriseShell.build/Debug-iphonesimulator/EnterpriseShell.build/Objects-normal/arm64/EnterpriseShell.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
-2026-09-02 16:15:39.555 appintentsmetadataprocessor[86888:13767440] Starting appintentsmetadataprocessor export
-2026-09-02 16:15:39.559 appintentsmetadataprocessor[86888:13767440] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+2026-09-02 17:39:30.534 appintentsmetadataprocessor[95668:13864777] Starting appintentsmetadataprocessor export
+2026-09-02 17:39:30.535 appintentsmetadataprocessor[95668:13864777] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
 
 CopySwiftLibs /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios/build/Build/Products/Debug-iphonesimulator/EnterpriseShell.app (in target 'EnterpriseShell' from project 'EnterpriseShell')
     cd /Users/danfashauer/Public/Projects/SignalGrid/SignalGrid-Review-Hub/native/ios

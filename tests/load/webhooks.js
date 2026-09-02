@@ -69,7 +69,16 @@ export default function webhooksLoadTest() {
   var params = {
     headers: {
       'Content-Type': 'application/json',
-      'X-Webhook-Signature': 'test-signature', // In production, would be real HMAC
+      // A PLACEHOLDER THAT VERIFIES NOTHING, and is not the wire format. This is an
+      // INBOUND load fixture; no route here checks a webhook signature, so any string
+      // passes and this one is deliberately not hex so it cannot be mistaken for real
+      // evidence. The real OUTBOUND scheme is v2: `X-Webhook-Signature: v2=<hex>`,
+      // HMAC-SHA256 over `${timestampMs}.${body}` with `X-Webhook-Timestamp` (epoch
+      // MILLISECONDS) inside the MAC — see
+      // docs/SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md and
+      // lib/integrations/src/integrations/webhooks/sign.ts. A bare unprefixed hex is
+      // the retired v1 scheme and no verifier accepts it.
+      'X-Webhook-Signature': 'test-signature-not-a-real-hmac',
     },
   };
 

@@ -58,7 +58,15 @@ authorization lookup, key rotation, and sessions may all require server state.
 | Host backend | Workload | OAuth client credentials | SignalGrid-audience access token with application role such as `decision.evaluate` |
 | Host on behalf of user | Human + application | Delegated OAuth access token or validated on-behalf-of flow | User access token retaining both client and subject context |
 | Offline mobile device | Device + bounded user/workflow | Short-lived, sender-bound capability lease | Signed JWT or COSE object; encoding is secondary to constraints |
-| Webhook sender | Service | HMAC-signed body or mutual TLS | Rotating key/certificate, timestamp, delivery ID, digest, and replay window |
+| Webhook sender | Service | **Outbound signing is scheme v2 (shipped):** HMAC-SHA256 over `` `${timestampMs}.${rawBody}` ``, signature marked `v2=`, timestamp in epoch **milliseconds** and *inside* the MAC. Mutual TLS remains TARGET. | `X-Webhook-Signature: v2=<hex>` + `X-Webhook-Timestamp`, delivery ID, and a receiver-side replay window. **The retired v1 scheme — an unprefixed signature over the body alone — is not accepted; there is no dual-accept.** Key/certificate rotation remains TARGET. |
+
+The webhook row is the one line in this table whose "timestamp … and replay window"
+half is implemented rather than aspirational. Canonical spec, the reconstruction
+string, the derived tolerance floor, and the no-dual-accept rule live in
+[`docs/SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md`](SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md)
+§6; the code is `lib/integrations/src/integrations/webhooks/sign.ts` and the gate is
+`pnpm run proof:webhooks`. Inbound verification is a reference implementation driven
+by that proof — **no inbound route in this repository verifies a webhook.**
 | Public demo | Synthetic fixture | Demo-only credential | Never accepted by a customer-capable profile |
 
 An ID token is for the client that performed sign-in and must not be used as a

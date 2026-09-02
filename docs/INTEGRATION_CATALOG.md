@@ -867,3 +867,44 @@ SignalGrid performs none of this itself: it reads evaluated state and decides. Z
 provisioning requires the vendor's own enrollment program on organisation-registered
 hardware, and no application can grant itself that. These are read-only, fixture-backed
 dimensions — not live integrations, and not a compliance or certification claim.
+
+## Webhook delivery — outbound signing (scheme v2, shipped)
+
+Every integration in this catalog that emits an event can fan out over the webhooks
+family (`lib/integrations/src/integrations/webhooks/`). Delivery is tier-gated —
+dev/alpha never send — and everything that does leave is signed.
+
+**The scheme, in one line:** `X-Webhook-Signature: v2=<64 lowercase hex>`, an
+HMAC-SHA256 over `` `${timestampMs}.${rawBody}` `` under the per-endpoint secret,
+with `X-Webhook-Timestamp` in integer epoch **milliseconds** carried *inside* the
+MAC so a replayer cannot freshen it.
+
+**Three things a receiver must know before it writes any code:**
+
+1. Reconstruct over the **raw body, before parsing**, and compare in constant time.
+2. The timestamp is the **delivery's** instant, minted once and identical on every
+   retry — so size the replay window against the sender's whole retry envelope, not
+   against one request. The derived floor is in the canonical spec.
+3. **The retired v1 scheme (unprefixed signature over the body alone) is not
+   accepted. There is no dual-accept**, because a verifier that took both would
+   leave every receiver with no replay protection while reporting success.
+
+Canonical spec — reconstruction string, unit, the gate-derived tolerance floor, and
+the no-dual-accept rule — is §6 of
+[`docs/SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md`](SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md).
+Do not restate the numbers here; that document's figures are gated by
+`scripts/check-derived-doc-figures.mjs` and this one's would not be.
+
+- **`proof:webhooks` (201 checks)** — the tier gate and its per-tier refusal reasons,
+  SSRF and HTTPS target validation, retry permanence, the missing-secret refusal, and
+  the v2 signing scheme end to end through the transport with a record-and-throw
+  `fetch` spy: the signature that reaches the wire verifies under an independent HMAC
+  of `` `${timestamp}.${body}` ``, does **not** verify under the body alone, breaks if
+  the timestamp moves by one millisecond, and is identical across three retries — one
+  signature, one timestamp. Plus the receiver helper `verifySignedWebhook` across
+  acceptance, staleness, future skew, absent/repeated/malformed headers, tampering,
+  wrong secret, and v1 refusal.
+
+**Inbound verification is NOT a deployed path.** `verifySignedWebhook` is the
+reference implementation a receiver ports, driven by the proof above as an oracle. No
+inbound route in this repository receives or verifies a webhook.

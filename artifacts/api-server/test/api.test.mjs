@@ -10,6 +10,7 @@
  * Run: `pnpm --filter @workspace/api-server run test:api`
  */
 import { spawn } from "node:child_process";
+import { createServer as netCreateServer } from "node:net";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -2037,6 +2038,193 @@ async function run() {
   const guardOpens = await fetch(`${BASE}/v1/context`, { headers: { authorization: `Bearer ${KEYS.operator}` } });
   check("the guard is a guard, not a wall — a valid bearer gets past it (/v1/context is not 401)",
     guardOpens.status !== 401 && guardOpens.status === 200);
+
+  // ── CROSS-CHECK: the DECLARED set (source text) equals the MOUNTED set (live stack) ──
+  //
+  // Both derivations above — the coverage check and the anonymous sweep — read
+  // `src/routes/v1.ts` as TEXT for `router.<method>("/v1/…")`. That regex sees a
+  // literal call with a literal string, and nothing else. A route registered
+  // through a helper, inside a loop, or from a different file is invisible to it:
+  // the sweep would not probe it, the coverage check would not demand it be
+  // exercised, and "exactly one public route above the guard" would still pass
+  // while a second unauthenticated route answered on the wire. Today the two
+  // agree, so the property costs nothing to hold — which is exactly when to nail
+  // it down.
+  //
+  // So the same question is asked a second way, of a DIFFERENT oracle: boot the
+  // real server and walk the Express router stack it actually mounted
+  // (`test/route-stack-dump.mjs`), then compare the two sets in both directions
+  // and NAME the diff. Text-only is a claim about a file; the stack is what the
+  // process will route.
+  //
+  // The auth BOUNDARY is deliberately not re-derived here. Registration order is a
+  // source-text fact — the stack flattens middleware position into an array whose
+  // meaning depends on the router internals — so the "above/below the guard" split
+  // stays where it is, read from the file.
+  {
+    const BASE_PATH = new URL(BASE).pathname; // "/api" — the mount every request above used
+    // A free high port for the throwaway boot, kernel-picked (listen on 0, read it
+    // back, release). PORT is required by the entry, and the suite's fixed ports are
+    // already spoken for — but an OCCUPIED port cannot make this fail: the stack is
+    // built at import and the process exits before Express's async listen can
+    // report anything. Measured: with the port held by another process, the dumper
+    // still exited 0 and returned 81 routes. So there is no port race to retry.
+    const freePort = () => new Promise((resolvePort) => {
+      const probe = netCreateServer();
+      probe.listen(0, "127.0.0.1", () => {
+        const p = probe.address().port;
+        probe.close(() => resolvePort(p));
+      });
+    });
+    // `new URL`, not path.resolve: `resolve` is shadowed by a local const inside
+    // run() (the same reason the coverage block above reads its file that way).
+    const dumper = fileURLToPath(new URL("./route-stack-dump.mjs", import.meta.url));
+    const runDump = async () => {
+      const dump = spawn("node", [dumper, serverEntry], {
+        env: {
+          ...process.env,
+          PORT: String(await freePort()),
+          NODE_ENV: "production",
+          LOG_LEVEL: "silent",
+          ROUTE_DUMP_PREFIXES: JSON.stringify([BASE_PATH, ""]),
+        },
+        stdio: ["ignore", "pipe", "inherit"],
+      });
+      let raw = "";
+      dump.stdout.on("data", (c) => { raw += c; });
+      // `close`, not `exit`: exit fires when the child terminates, which can be
+      // before its stdio has flushed to us — and a truncated JSON payload would
+      // read as a crashed dumper. close fires once the pipes are done.
+      const exit = await new Promise((resolveExit) => {
+        const timer = setTimeout(() => { dump.kill("SIGKILL"); resolveExit("timeout"); }, 20000);
+        dump.on("close", (code) => { clearTimeout(timer); resolveExit(code); });
+      });
+      return { exit, raw };
+    };
+    const { exit: dumpExit, raw } = await runDump();
+    let payload = null;
+    try { payload = JSON.parse(raw); } catch { payload = null; }
+
+    // The dumper must have BOOTED and returned a stack. A crashed or silent dumper
+    // yields an empty set, and an empty set agrees with nothing while looking calm.
+    check("route-stack cross-check: the dumper booted the server and returned a router stack" +
+      (payload?.error ? ` — ERROR: ${payload.error}` : dumpExit !== 0 ? ` — exit ${dumpExit}` : ""),
+      dumpExit === 0 && payload !== null && !payload.error && Array.isArray(payload.routes));
+    const mountedAll = Array.isArray(payload?.routes) ? payload.routes : [];
+    // A mount whose prefix could not be resolved hides every route beneath it.
+    check(`route-stack cross-check: every mount prefix resolved` +
+      ((payload?.unresolved?.length ?? 0) > 0 ? ` — UNRESOLVED: ${payload.unresolved.join(", ")}` : ""),
+      (payload?.unresolved?.length ?? 0) === 0);
+
+    // Scope: the /v1 product surface, as the process mounts it. Three different
+    // drifts, three different assertions, named here so nobody has to guess which
+    // one holds what:
+    //   · the SINGLE v1 router remounted elsewhere — it leaves this set and all 35
+    //     of its routes are named below as declared but unmounted;
+    //   · a SECOND copy mounted at a path outside the candidate prefixes — the
+    //     dumper cannot place that mount, so it lands in `unresolved` above (which
+    //     now samples the hidden routes); the stray check below does NOT see it,
+    //     because routes under an unplaceable mount never enter `mountedAll`;
+    //   · a v1-shaped route mounted under a placeable path that is not /api/v1 —
+    //     that is what the stray check catches.
+    const V1_ROOT = `${BASE_PATH}/v1`;
+    const inV1 = (path) => path === V1_ROOT || path.startsWith(`${V1_ROOT}/`);
+    const mountedV1 = mountedAll.filter((r) => inV1(r.path)).map((r) => `${r.method} ${r.path}`);
+
+    // The OTHER versioned surface this server mounts, named with a reason. It is a
+    // PREFIX, so on its own it would let the unauthenticated control plane grow a
+    // new route unnoticed — a planted `router.get("/cp/v1/shadow-decisions")` moved
+    // no assertion at all. So the prefix buys exemption from the stray check only;
+    // membership is gated below against the launch profile.
+    const OTHER_V1_SURFACES = new Map([
+      [`${BASE_PATH}/cp/v1`,
+        "the demo-only control plane (src/routes/control-plane.ts), its own versioned " +
+        "surface, mounted only under the review-demo profile and carrying no principal " +
+        "at all — deliberately not part of the /v1 product surface or its auth boundary"],
+    ]);
+    const underSurface = (path, prefix) => path === prefix || path.startsWith(`${prefix}/`);
+    const strayV1 = mountedAll
+      .filter((r) => !inV1(r.path) && `${r.path}/`.includes("/v1/"))
+      .filter((r) => ![...OTHER_V1_SURFACES.keys()].some((prefix) => underSurface(r.path, prefix)))
+      .map((r) => `${r.method} ${r.path}`)
+      .sort();
+    // A v1-shaped route mounted anywhere else is a second version of the product
+    // surface that the /v1 guard — registered on the /v1 path — does not cover.
+    check(`no v1-shaped route is mounted outside ${V1_ROOT} or a declared surface` +
+      (strayV1.length > 0 ? ` — STRAY: ${strayV1.join(", ")}` : ""),
+      strayV1.length === 0);
+
+    // ── the control plane, mounted vs CLASSIFIED ──────────────────────────────
+    // Every /cp/v1 path is enumerated in scripts/launch-profile.mjs, which is what
+    // the launch-claims gate and the publication boundary read to decide what may
+    // be SAID to ship. DERIVED from that module (walk SURFACES for /cp/v1 strings),
+    // never copied here: a hand-list would be a fossil, and this surface answers
+    // anonymously — a route that appears on it without appearing in the profile is
+    // an unauthenticated endpoint nothing has classified.
+    // Paths only, both directions: the launch profile records paths, not methods,
+    // and inventing a method for it would be asserting something it does not say.
+    {
+      let profilePaths = null;
+      try {
+        const lp = await import(new URL("../../../scripts/launch-profile.mjs", import.meta.url));
+        const found = [];
+        const walk = (v) => {
+          if (typeof v === "string") { if (/^\/cp\/v1(\/|$)/.test(v)) found.push(v); }
+          else if (Array.isArray(v)) v.forEach(walk);
+          else if (v && typeof v === "object") Object.values(v).forEach(walk);
+        };
+        walk(lp.SURFACES);
+        // OpenAPI `{nodeId}` in the profile, Express `:nodeId` on the wire.
+        profilePaths = [...new Set(found)].map((x) => x.replace(/\{([^}]+)\}/g, ":$1"));
+      } catch (err) {
+        profilePaths = null;
+        console.error(`  launch-profile import failed: ${String(err?.message ?? err)}`);
+      }
+      const CP_ROOT = `${BASE_PATH}/cp/v1`;
+      const mountedCp = [...new Set(mountedAll
+        .filter((r) => underSurface(r.path, CP_ROOT))
+        .map((r) => r.path.slice(BASE_PATH.length)))].sort();
+      // NON-VACUITY, both sides: an unreadable profile or an unmounted control
+      // plane must fail here rather than agree with an empty set.
+      check(`control-plane cross-check: both sides are non-empty and at floor (mounted: ${mountedCp.length}, classified in launch-profile: ${profilePaths?.length ?? "IMPORT FAILED"})`,
+        Array.isArray(profilePaths) && profilePaths.length >= 20 && mountedCp.length >= 20);
+      const classified = new Set(profilePaths ?? []);
+      const cpMountedNotClassified = mountedCp.filter((p) => !classified.has(p)).sort();
+      const cpClassifiedNotMounted = [...classified].filter((p) => !mountedCp.includes(p)).sort();
+      for (const p of cpMountedNotClassified) console.error(`  control plane mounted but not in launch-profile: ${p}`);
+      for (const p of cpClassifiedNotMounted) console.error(`  control plane in launch-profile but not mounted: ${p}`);
+      check(`the mounted control plane equals the paths launch-profile.mjs classifies (${mountedCp.length} mounted, ${classified.size} classified)` +
+        (cpMountedNotClassified.length > 0 ? ` — MOUNTED BUT UNCLASSIFIED: ${cpMountedNotClassified.join(", ")}` : "") +
+        (cpClassifiedNotMounted.length > 0 ? ` — CLASSIFIED BUT UNMOUNTED: ${cpClassifiedNotMounted.join(", ")}` : ""),
+        Array.isArray(profilePaths) && cpMountedNotClassified.length === 0 && cpClassifiedNotMounted.length === 0);
+    }
+
+    // The declared set is the same text derivation the sweep runs on, lifted to the
+    // full request path so the two are comparable.
+    const declaredV1 = registered.map((r) => {
+      const [method, path] = r.split(" ");
+      return `${method} ${BASE_PATH}${path}`;
+    });
+
+    // NON-VACUITY: two empty sets are equal. Floor both, and require the stack walk
+    // to have seen more than the /v1 surface (health, metrics and the rest), so a
+    // walk that silently stopped one level deep cannot pass.
+    check(`route-stack cross-check: both sets are non-empty and at floor (mounted /v1: ${mountedV1.length}, declared: ${declaredV1.length}, stack total: ${mountedAll.length})`,
+      mountedV1.length >= 30 && declaredV1.length >= 30 && mountedAll.length > mountedV1.length);
+
+    const mountedSet = new Set(mountedV1);
+    const declaredSet = new Set(declaredV1);
+    const mountedNotDeclared = [...mountedSet].filter((r) => !declaredSet.has(r)).sort();
+    const declaredNotMounted = [...declaredSet].filter((r) => !mountedSet.has(r)).sort();
+    for (const r of mountedNotDeclared) console.error(`  mounted but not declared in v1.ts text: ${r}`);
+    for (const r of declaredNotMounted) console.error(`  declared in v1.ts text but not mounted: ${r}`);
+    // Names in the LABEL, for the same reason the anonymous sweep puts them there:
+    // a truncated CI log keeps the assertion line and drops everything before it.
+    check(`the mounted /v1 router stack equals the source-text derivation (${mountedSet.size} mounted, ${declaredSet.size} declared)` +
+      (mountedNotDeclared.length > 0 ? ` — MOUNTED BUT UNDECLARED: ${mountedNotDeclared.join(", ")}` : "") +
+      (declaredNotMounted.length > 0 ? ` — DECLARED BUT UNMOUNTED: ${declaredNotMounted.join(", ")}` : ""),
+      mountedNotDeclared.length === 0 && declaredNotMounted.length === 0);
+  }
 
   // ── secret redaction on the wire: a response never echoes the caller's credential ──
   //

@@ -219,7 +219,7 @@
           "artifacts/api-server/test/api.test.mjs",
           "scripts/src/webhooks-proof.ts"
         ],
-        "$why": "Seven of eight invariants were ported and are EXECUTED: `pnpm --filter @workspace/api-server run test:api` reports 363/363 (was 346/346) and `pnpm run proof:webhooks` reports 119/119 (was 90/90). Each added assertion was falsified once against the real tree before being kept. Only fail-closed-fallbacks block 1 (`checkApiKey`/`ADMIN_API_KEY`) was genuinely unportable — neither symbol exists in this repository."
+        "$why": "Seven of eight invariants were ported and are EXECUTED: `pnpm --filter @workspace/api-server run test:api` reported 363/363 at that port (was 346/346; 370/370 today — the total grows, so read it from output) and `pnpm run proof:webhooks` reports 119/119 (was 90/90). Each added assertion was falsified once against the real tree before being kept. Only fail-closed-fallbacks block 1 (`checkApiKey`/`ADMIN_API_KEY`) was genuinely unportable — neither symbol exists in this repository."
       },
       "denials": [
         "security-reference[^.\\n]{0,140}\\b(are|were) not portable\\b",

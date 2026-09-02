@@ -51,27 +51,27 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-02 - second full DR-024 cycle. Landed: #369 Ponytail cut 3
-              + review-claim retirement; #370 README rebuilt + native sweep
-              mailed to the Mac lane; #371 DR-025 follow-ups (tenant on every
-              WebAuthn audit row, truncation-honest /v1/metrics, memory bound
-              on three more tables); #372 docs truth sweep + figure repairs +
-              three gates; then batch A + public-apis (DR-027) + native batch C,
-              and cut 4 (-13,370 lines) + one freshness rule + the derived-figure
-              gate + batch B. Every item reviewed by the fail-closed auditor
-              before landing; every finding fixed; preflight + breadth green on
-              every push; CI green.
-BLOCKED ON: nothing cloud-side. Mac lane (lane mail sent 2026-09-02): the
-              two standing iOS HIGHs plus eleven new native items (mock engine
-              vocabulary now parity-gated from the cloud; Swift logic items are
-              the Mac's); validate-sim-macos.sh derived-artifact change needs one
-              Mac run.
+LAST TOUCHED: 2026-09-02 - second full DR-024 cycle, eight PRs merged (#369-#376):
+              Ponytail cut 3 and cut 4 (-20,300 dead lines), README rebuilt,
+              DR-025 follow-ups, the docs truth sweep, batches A/B/C of the
+              full-file sweep, the native sweep mailed to the Mac lane, the
+              public-apis catalogue (DR-027), one freshness rule, the INDEX
+              audit with two gates, and the verdict-core second read (three
+              independent reviews; two real fail-opens closed, one of them
+              present at the merged head). Every landing reviewed before it
+              landed; preflight + breadth green on every push; CI green.
+BLOCKED ON: nothing cloud-side. Mac lane (lane mail 2026-09-02, two messages):
+              the simulator remediation-allow path (byte-parity; fix goes
+              around the engine on both sides), the native ledger's Swift
+              items, one validate-sim-macos.sh run.
 NEXT ACTION: owner: discovery conversations (0 of 15) - nothing substitutes.
-              owner decisions pending: fork or delete the two vendored agent
-              definitions; file the neural-memory upstream bug; the four pasted
-              chat files under attached_assets/ in a public repo.
-              cloud: INDEX.md line-by-line audit; the Mac lane's native fixes
-              as they arrive.
+              owner decisions pending: uninstall the retired Codex reviewer's
+              GitHub app (it still posts "usage limits" on PRs); fork or
+              delete the two vendored agent definitions; file the
+              neural-memory upstream bug; the four pasted chat files under
+              attached_assets/.
+              cloud: the Mac lane's replies as they arrive; the next
+              independent scan (connector families' emit paths).
 ```
 
 **Experiment started: 2026-08-27**

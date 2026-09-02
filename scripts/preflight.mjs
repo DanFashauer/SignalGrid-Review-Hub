@@ -95,6 +95,12 @@ const STEPS = [
   // figure at all.
   { name: "Docs-HTML figure guard self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-doc-html-figures.mjs", "--self-test"] },
   { name: "Docs-HTML figures (a rendered page may not contradict a derived figure)", cmd: ["node", "scripts/check-doc-html-figures.mjs"] },
+  // Third sibling of the same family, for markdown figures the docs↔proof guard cannot
+  // reach because no proof publishes them: the Bruno request count, the Postman
+  // request/folder counts, the proof-script count. All three were repaired by hand on
+  // 2026-09-02 — a repair fixes the number and leaves the drift mechanism intact.
+  { name: "Derived-doc-figure self-test (a planted drift in each live document must fail)", cmd: ["node", "scripts/check-derived-doc-figures.mjs", "--self-test"] },
+  { name: "Derived doc figures (a stated count equals the artifact it describes)", cmd: ["node", "scripts/check-derived-doc-figures.mjs"] },
   // Two documents stated the four tier branches as live after all four were pruned.
   // Offline by design: it compares prose to the tracked prune record, not to origin.
   { name: "Documented-branch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-documented-branches.mjs", "--self-test"] },

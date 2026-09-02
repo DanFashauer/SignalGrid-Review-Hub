@@ -1,3 +1,37 @@
+// REFERENCE DOCUMENT — EXECUTED BY NO LANE. Read this file as a specification to port,
+// never as coverage. Nothing in this repository runs it.
+//
+// VERIFIED AT THIS TREE (2026-09-02) by search, not memory: this file is named by no
+// script in `package.json` or `scripts/package.json`, by no gate in
+// `scripts/preflight.mjs`, by no step in any `.github/workflows/*.yml`, and by no line
+// of `validate-sim-macos.sh`. It is a Vitest spec; no Vitest is installed here, `tests/`
+// sits outside the pnpm workspace, and `@/lib/utils/apiKeyAuth` — imported below — does
+// not exist in this repository. See `tests/security-reference/README.md`.
+//
+// THE UNRUN-NESS IS DECLARED AND GATED, which is the only reason it is allowed to sit
+// here. `scripts/check-test-execution.mjs` derives the reachable runner set from the
+// real entry points and FAILS on any test-shaped file that neither runs nor carries a
+// written reason; `tests/security-reference/` carries one, and a stale declaration is
+// itself fatal. That gate runs in both lanes:
+//   · scripts/preflight.mjs:185 — "Test execution (a test no runner reaches is not coverage; self-tested)"
+//   · .github/workflows/review-hub-ci.yml:288-289 — "Test execution (a test no runner reaches is not coverage)"
+//
+// WHERE EACH INVARIANT BELOW ACTUALLY LIVES, said block by block, because "a spec
+// exists" is not "the behaviour is held":
+//   · ITSM encryption-key refusal (RETIRED at the foot of this file) — HELD AND
+//     EXECUTED by `proof:itsm-credential-crypto`, at scripts/preflight.mjs:319 and
+//     .github/workflows/review-hub-ci.yml:662-663.
+//   · `checkApiKey` refusing an unset ADMIN_API_KEY — NOT HELD ANYWHERE. There is no
+//     `@/lib/utils/apiKeyAuth` counterpart in this tree, and `ADMIN_API_KEY` appears in
+//     no source file here (only in these specs and in native/ios/README.md prose).
+//   · Webhook dispatch failing without a signing secret — the CODE is live
+//     (lib/integrations/src/integrations/webhooks/dispatch.ts:218) but NO lane drives
+//     it: `proof:webhooks` (scripts/verify-breadth.mjs:103) covers outbound delivery
+//     gating and never exercises the missing-secret path.
+//
+// Do not wire this file up to close that gap — it addresses a server that does not
+// exist here. Port each block onto the /v1 surface, then delete it, per this
+// directory's README rule.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 

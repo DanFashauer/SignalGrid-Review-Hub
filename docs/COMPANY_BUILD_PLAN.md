@@ -3432,9 +3432,10 @@ earlier — that is the loop working, not a reason to soften the record.
     The one place REAL actions are checked reads
     `typeof action.approvalRequired === "boolean"` — and `false` is a boolean, so an
     action that dropped its approval requirement passes.
-    The fabricated array is also serialised into `artifacts/proof/signalgrid-grid-proof.json`
-    under `highRiskActionGates`, so the invented result LEAVES the proof as published
-    evidence. The run prints "approval-gate violations: 0" and exits 0.
+    The fabricated array is also serialised under `highRiskActionGates` into the
+    grid-proof evidence JSON that `pnpm run proof:signalgrid-grid` generates into
+    `artifacts/proof/` (gitignored), so the invented result LEAVES the proof as
+    published evidence. The run prints "approval-gate violations: 0" and exits 0.
     FIX: delete the literal. Derive the gate set from the routed actions the simulator
     actually emits, classify by kind/severity, and assert every high-risk action
     carries both flags true — plus a non-vacuity assertion that the class is non-empty,

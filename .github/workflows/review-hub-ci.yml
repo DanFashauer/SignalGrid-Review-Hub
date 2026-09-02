@@ -456,6 +456,14 @@ jobs:
         run: node scripts/check-doc-html-figures.mjs --self-test
       - name: "Docs-HTML figures (no rendered page contradicts a derived figure)"
         run: node scripts/check-doc-html-figures.mjs
+      # Markdown figures no proof publishes, so the docs↔proof guard cannot see them:
+      # the Bruno request count (docs/INDEX.md + the collection README), the Postman
+      # request/folder counts, the proof-script count. Derived from the artifacts
+      # themselves — no server is booted, only committed files are read.
+      - name: "Derived-doc-figure self-test (a planted drift in each live document must fail)"
+        run: node scripts/check-derived-doc-figures.mjs --self-test
+      - name: "Derived doc figures (a stated count equals the artifact it describes)"
+        run: node scripts/check-derived-doc-figures.mjs
       # Two documents stated the four tier branches as live after all four were
       # pruned, while BRANCH_HYGIENE.md recorded the opposite. Offline by design.
       - name: "Documented-branch self-test (the gate can actually fail)"

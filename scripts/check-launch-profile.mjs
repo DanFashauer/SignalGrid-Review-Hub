@@ -430,32 +430,62 @@ for (const gap of GAPS) {
   // that fails a correct sentence teaches people to route around it.
   const HISTORICAL_COUNT =
     /\b(?:was|were|previously|originally|earlier|before|until|no longer|then read|→|->)\b/i;
-  /** Every LIVE stated declared-gap count in `text`, as {stated, line}. */
-  const statedGapCounts = (text) =>
-    [...text.matchAll(GAP_COUNT_RE)]
-      .map((m) => {
-        const upto = text.slice(0, m.index);
-        const lineStart = upto.lastIndexOf("\n") + 1;
-        const lineEnd = text.indexOf("\n", m.index);
-        return {
-          stated: /^\d+$/.test(m[1]) ? Number(m[1]) : WORDS[m[1].toLowerCase()],
-          line: upto.split("\n").length,
-          historical: HISTORICAL_COUNT.test(text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd)),
-        };
-      })
-      .filter((x) => !x.historical);
+  // EXEMPTIONS ARE COUNTED AND NAMED, never silently dropped. The first version
+  // returned only the live counts, so a second sentence — "the summary table lists 3
+  // declared gaps before the appendix", on a line carrying an exemption word — was
+  // filtered out and the report still said "in 1 place(s)". A reader could not tell a
+  // page with one count from a page with two, one of which the gate had decided not to
+  // read. The exemption stays (a true historical sentence must remain sayable); what
+  // changes is that the check now says out loud what it declined to check, and where.
+  /** Every stated declared-gap count in `text`, split into {live, exempted}. */
+  const statedGapCounts = (text) => {
+    const all = [...text.matchAll(GAP_COUNT_RE)].map((m) => {
+      const upto = text.slice(0, m.index);
+      const lineStart = upto.lastIndexOf("\n") + 1;
+      const lineEnd = text.indexOf("\n", m.index);
+      return {
+        stated: /^\d+$/.test(m[1]) ? Number(m[1]) : WORDS[m[1].toLowerCase()],
+        line: upto.split("\n").length,
+        historical: HISTORICAL_COUNT.test(text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd)),
+      };
+    });
+    return { live: all.filter((x) => !x.historical), exempted: all.filter((x) => x.historical) };
+  };
+  /** Pure: the one line this check prints, so the self-test can assert on it verbatim. */
+  const describeGapCounts = (rel, { live, exempted }) =>
+    `${rel} states ${GAPS.length} declared gaps in ${live.length} place(s)` +
+    (exempted.length === 0
+      ? ""
+      : `, ${exempted.length} exempted as history (${exempted.map((e) => `line ${e.line}`).join(", ")})`);
 
   // Synthetic violation it must flag, a positive control it must not, and a true
   // historical sentence carrying the SAME wrong number that must also pass.
   const wrong = statedGapCounts(`There are **${GAPS.length + 1} declared gaps**: work a launch entry needs.`);
   const right = statedGapCounts(`There are **${GAPS.length} declared gaps**: work a launch entry needs.`);
   const past = statedGapCounts(`There were ${GAPS.length + 1} declared gaps, and one had been fixed.`);
+  // A live count AND an exempted one in the same document — the shape that used to be
+  // reported as "in 1 place(s)" with the second count invisible.
+  const mixed = statedGapCounts(
+    `There are **${GAPS.length} declared gaps**: work a launch entry needs.\n` +
+      `The summary table previously lists ${GAPS.length - 1} declared gaps before the appendix.\n`,
+  );
   if (
-    wrong.length !== 1 ||
-    wrong[0].stated !== GAPS.length + 1 ||
-    right.length !== 1 ||
-    right[0].stated !== GAPS.length ||
-    past.length !== 0
+    wrong.live.length !== 1 ||
+    wrong.live[0].stated !== GAPS.length + 1 ||
+    right.live.length !== 1 ||
+    right.live[0].stated !== GAPS.length ||
+    past.live.length !== 0 ||
+    // The exemption must be COUNTED, not discarded…
+    past.exempted.length !== 1 ||
+    past.exempted[0].stated !== GAPS.length + 1 ||
+    past.exempted[0].line !== 1 ||
+    mixed.live.length !== 1 ||
+    mixed.exempted.length !== 1 ||
+    mixed.exempted[0].line !== 2 ||
+    // …and NAMED in the line this check prints, with its line number.
+    describeGapCounts("d.md", mixed) !==
+      `d.md states ${GAPS.length} declared gaps in 1 place(s), 1 exempted as history (line 2)` ||
+    describeGapCounts("d.md", right) !== `d.md states ${GAPS.length} declared gaps in 1 place(s)`
   ) {
     die(
       "declared-gap self-test failed: the extractor did not read a synthetic sentence correctly, so its" +
@@ -465,13 +495,13 @@ for (const gap of GAPS) {
 
   const docText = read(rel);
   const found = statedGapCounts(docText);
-  if (found.length === 0) {
+  if (found.live.length === 0) {
     die(
       `found no stated declared-gap count in ${rel} — the anchor drifted, or the sentence was removed.` +
         "\n  Refusing to report this check green: a scan that found nothing proves nothing.",
     );
   }
-  for (const { stated, line } of found) {
+  for (const { stated, line } of found.live) {
     if (stated !== GAPS.length) {
       console.error(
         `\n✗ ${rel}:${line} states ${stated} declared gap${stated === 1 ? "" : "s"}, but GAPS holds ${GAPS.length}:` +
@@ -481,8 +511,16 @@ for (const gap of GAPS) {
       failures += 1;
     }
   }
-  if (found.every((f) => f.stated === GAPS.length)) {
-    console.log(`  ${rel} states ${GAPS.length} declared gaps in ${found.length} place(s) — matches GAPS`);
+  if (found.exempted.length > 0 && !found.live.every((f) => f.stated === GAPS.length)) {
+    // Say what was NOT checked even when the checked part failed — an exemption is only
+    // honest while it is visible.
+    console.error(
+      `  ${rel} also carries ${found.exempted.length} declared-gap count(s) exempted as history: ` +
+        found.exempted.map((e) => `line ${e.line} states ${e.stated}`).join(", "),
+    );
+  }
+  if (found.live.every((f) => f.stated === GAPS.length)) {
+    console.log(`  ${describeGapCounts(rel, found)} — matches GAPS`);
   }
 }
 

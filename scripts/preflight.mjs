@@ -79,6 +79,9 @@ const STEPS = [
   { name: "Shell lint (the one language with no static analysis)", cmd: ["node", "scripts/check-shell.mjs"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },
+  { name: "Doc-orphan self-test (a prose mention is not a route)", cmd: ["node", "scripts/check-doc-orphans.mjs", "--self-test"] },
+  { name: "Index\u2194banner parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-index-banner-parity.mjs", "--self-test"] },
+  { name: "Index\u2194banner parity (a bannered doc is not described alive in INDEX.md)", cmd: ["node", "scripts/check-index-banner-parity.mjs"] },
   // Re-registered 2026-08-31: the gate census found this invoked by NO lane
   // and NO workflow — it had silently drifted out after #213 hardened it.
   { name: "Postman collection tracks the /v1 spec (57 paths at registration)", cmd: ["node", "scripts/build-postman.mjs", "--check"] },

@@ -40,7 +40,12 @@
       "escalationBoundary": "anything ambiguous or refactor-sized: push nothing, leave the item; reports the compare link and stops",
       "heartbeatPath": null,
       "heartbeatPathReason": "its write scope is claude/build-agent-* branches only \u2014 a mainline heartbeat commit would WIDEN that scope, which is worse than the gap it fills. Firing evidence is the pushed branch (or the run's completion notification when no item was actionable). A declared null-with-reason is coherent; a silent absence is not.",
-      "cadenceToleranceHours": null
+      "cadenceToleranceHours": null,
+      "status": "retired",
+      "retiredAt": "2026-09-02T21:47Z",
+      "retiredBy": "the cloud lane, after telling the owner in the 2026-09-02 status update that it would be retired unless he said to keep it; not yet confirmed by him, and reversible on the account in one switch",
+      "retiredReason": "designed before this lane could open pull requests itself (it pushed a branch and asked the owner to open the PR). Per the account scheduler's run record, which this tree cannot read: it fired 2026-09-02 at 14:18 UTC, ran about three minutes, and its prompt still carried a stale attribution trailer. What the tree can show: origin carries no claude/build-agent-* branch. The cloud lane does the same job with a review and a merge path, so the trigger was disabled (update_trigger enabled=false).",
+      "retiredEvidence": { "branchGlob": "claude/build-agent-*", "reason": "its write scope was claude/build-agent-* branches only, so a fire after retirement can show nowhere else" }
     },
     {
       "id": "cloud-lane-hygiene-sweep",

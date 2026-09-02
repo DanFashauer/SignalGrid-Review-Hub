@@ -21,13 +21,14 @@
 //             heartbeat: the lanes are not always awake, but silence is never
 //             silent.
 import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
 const REGISTRY = "docs/agent/scheduled-routines.json";
 const HEARTBEATS_DIR = "artifacts/agent-heartbeats";
 const ROSTER = "docs/agent/org-roster.json";
 
-export function auditScheduledRoutines(registry, heartbeats, rosterText) {
+export function auditScheduledRoutines(registry, heartbeats, rosterText, listHeads = defaultListHeads) {
   const fatal = [];
   const reported = [];
   const routines = registry?.routines;
@@ -46,6 +47,46 @@ export function auditScheduledRoutines(registry, heartbeats, rosterText) {
     if (!r.authorizationEvidence) fatal.push(`${name}: authorization has no evidence basis`);
     if (!r.writeScope) fatal.push(`${name}: no write scope — an agent lane with unstated write access is unbounded by definition`);
     if (!r.escalationBoundary) fatal.push(`${name}: no escalation boundary`);
+    // A retired routine is a DECLARED shape, not a deleted row: the trigger is
+    // disabled on the account, and the registry keeps the row with the date,
+    // the human who retired it and the reason, so the history of what ran
+    // against this repository never has a hole in it. A retired routine is
+    // exempt from cadence reporting (it is supposed to be silent) — but a
+    // heartbeat newer than its retirement date means the trigger fired anyway,
+    // and that is FATAL: a disabled lane that still runs is worse than one that
+    // was never declared.
+    if (r.status !== undefined && r.status !== "active" && r.status !== "retired") {
+      fatal.push(`${name}: status "${r.status}" is not a shape this registry knows (active | retired)`);
+    }
+    const retired = r.status === "retired";
+    let retiredAt = NaN;
+    if (retired) {
+      retiredAt = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?Z$/.test(r.retiredAt ?? "") ? Date.parse(r.retiredAt) : NaN;
+      if (Number.isNaN(retiredAt)) fatal.push(`${name}: retired with no ISO retiredAt instant (YYYY-MM-DDTHH:MMZ) — an undated retirement cannot be checked against a later fire, and a date without a time would need slack a sub-daily cadence could fire inside`);
+      else if (retiredAt > Date.now()) fatal.push(`${name}: retiredAt ${r.retiredAt} is in the future — a retirement that has not happened yet is not a retirement`);
+      if (!r.retiredBy) fatal.push(`${name}: retired with no retiring party named`);
+      if (!r.retiredReason || r.retiredReason.length < 40) fatal.push(`${name}: retired with no reason a reviewer can weigh (40+ characters)`);
+      // A row that never wrote heartbeats cannot be caught firing through a
+      // heartbeat, so it must name the evidence its own write scope leaves
+      // (a branch glob on origin) and this gate looks there. A lister that
+      // cannot answer is fatal: "could not look" is not "nothing there".
+      if (r.heartbeatPath === null) {
+        const glob = r.retiredEvidence?.branchGlob;
+        if (!glob) {
+          fatal.push(`${name}: retired with a null heartbeat and no retiredEvidence.branchGlob — with no heartbeat, the branches its write scope names are the only place a post-retirement fire could show, and this row names none`);
+        } else {
+          let heads;
+          try {
+            heads = listHeads(glob);
+          } catch (e) {
+            fatal.push(`${name}: could not list origin heads for ${glob} (${e.message}) — this gate refuses to call a retired lane silent when it could not look`);
+          }
+          if (Array.isArray(heads) && heads.length > 0) {
+            fatal.push(`${name}: declared retired at ${r.retiredAt} but origin still carries ${heads.length} head(s) matching ${glob}: ${heads.join(", ")} — either the lane fired after retirement or its branches were never cleaned; delete them or un-retire the row`);
+          }
+        }
+      }
+    }
     if (r.heartbeatPath === undefined) {
       fatal.push(`${name}: heartbeat path is silently absent — declare a path, or null WITH a reason`);
     } else if (r.heartbeatPath === null) {
@@ -65,6 +106,13 @@ export function auditScheduledRoutines(registry, heartbeats, rosterText) {
           const at = Date.parse(parsed.firedAt ?? "");
           if (Number.isNaN(at)) {
             fatal.push(`${name}: heartbeat carries no parseable firedAt — 'ran at some point' is not evidence`);
+          } else if (retired) {
+            // Fail-closed spelling: an unparseable retirement instant does not
+            // skip the comparison (that would be the skip-on-unknown shape), it
+            // fails it — on top of the "no ISO retiredAt" fatal already raised.
+            if (!Number.isFinite(retiredAt) || at > retiredAt) {
+              fatal.push(`${name}: declared retired at ${r.retiredAt} but its heartbeat fired at ${parsed.firedAt} — the trigger is still running, or the retirement instant is unreadable; disable it on the account or un-retire the row`);
+            }
           } else if (r.cadenceToleranceHours != null) {
             const ageH = (Date.now() - at) / 3_600_000;
             if (ageH > r.cadenceToleranceHours) {
@@ -89,6 +137,14 @@ export function auditScheduledRoutines(registry, heartbeats, rosterText) {
     }
   }
   return { fatal, reported };
+}
+
+/** origin heads matching a refs/heads glob, via ls-remote; throws when the remote cannot be asked. */
+function defaultListHeads(glob) {
+  const r = spawnSync("git", ["ls-remote", "--heads", "origin", `refs/heads/${glob}`], { encoding: "utf8", timeout: 60_000 });
+  if (r.error) throw r.error;
+  if (r.status !== 0) throw new Error(`git ls-remote exited ${r.status}: ${(r.stderr || "").trim().split("\n")[0]}`);
+  return r.stdout.split("\n").filter(Boolean).map((l) => l.split("\t")[1]?.replace("refs/heads/", "")).filter(Boolean);
 }
 
 function load() {
@@ -128,6 +184,39 @@ function selfTest() {
   checks.push(["an empty registry with no heartbeats is clean", r.fatal.length === 0 && r.reported.length === 0]);
   r = auditScheduledRoutines({ ...good, routines: [{ ...good.routines[1], heartbeatPathReason: undefined }] }, {}, "");
   checks.push(["a null heartbeat path WITHOUT a reason is FATAL", r.fatal.some((x) => x.includes("no reason"))]);
+  const retiredGood = { ...good.routines[0], id: "c", status: "retired", retiredAt: "2026-09-01T12:00Z", retiredBy: "Owner", retiredReason: "designed before the lane could open pull requests itself; it fired and left nothing behind", heartbeatPath: "artifacts/agent-heartbeats/c.json" };
+  const noHeads = () => [];
+  const oldHb = { "artifacts/agent-heartbeats/c.json": JSON.stringify({ firedAt: "2026-08-30T14:00:00Z", result: "quiet" }) };
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, retiredGood] }, { ...freshHb, ...oldHb }, "", noHeads);
+  checks.push(["a retired routine with a date, a human and a reason, whose last heartbeat predates the retirement, is clean", r.fatal.length === 0]);
+  checks.push(["…and it is NOT reported stale — retired means silent by design", !r.reported.some((x) => x.startsWith("c:"))]);
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, retiredGood] }, { ...freshHb, "artifacts/agent-heartbeats/c.json": JSON.stringify({ firedAt: new Date().toISOString(), result: "acted" }) }, "", noHeads);
+  checks.push(["a retired routine whose heartbeat fired AFTER retirement is FATAL — the trigger is still running", r.fatal.some((x) => x.includes("still running"))]);
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, retiredGood] }, { ...freshHb, "artifacts/agent-heartbeats/c.json": JSON.stringify({ firedAt: "2026-09-01T12:00:01Z", result: "acted" }) }, "", noHeads);
+  checks.push(["…and one that fired ONE SECOND after the retirement instant is FATAL too — there is no slack for a later fire to hide in", r.fatal.some((x) => x.includes("still running"))]);
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, retiredGood] }, { ...freshHb, "artifacts/agent-heartbeats/c.json": JSON.stringify({ firedAt: "2026-09-01T11:59:59Z", result: "quiet" }) }, "", noHeads);
+  checks.push(["…while one that fired one second BEFORE it is clean — the comparison is the instant itself", !r.fatal.some((x) => x.includes("still running"))]);
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, { ...retiredGood, retiredAt: undefined }] }, { ...freshHb, ...oldHb }, "", noHeads);
+  checks.push(["retired without an ISO instant is FATAL", r.fatal.some((x) => x.includes("no ISO retiredAt"))]);
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, { ...retiredGood, retiredAt: "2026-09-01" }] }, { ...freshHb, ...oldHb }, "", noHeads);
+  checks.push(["a date without a time is FATAL — no slack for a sub-daily cadence to fire inside", r.fatal.some((x) => x.includes("no ISO retiredAt"))]);
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, { ...retiredGood, retiredBy: undefined }] }, { ...freshHb, ...oldHb }, "", noHeads);
+  checks.push(["retired with no retiring party is FATAL", r.fatal.some((x) => x.includes("no retiring party"))]);
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, { ...retiredGood, retiredAt: "2999-01-01T00:00Z" }] }, { ...freshHb, ...oldHb }, "", noHeads);
+  checks.push(["retired on a future date is FATAL", r.fatal.some((x) => x.includes("in the future"))]);
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, { ...retiredGood, retiredReason: "gone" }] }, { ...freshHb, ...oldHb }, "", noHeads);
+  checks.push(["retired with a reason too short to weigh is FATAL", r.fatal.some((x) => x.includes("reason a reviewer can weigh"))]);
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, { ...retiredGood, status: "paused" }] }, { ...freshHb, ...oldHb }, "", noHeads);
+  checks.push(["an unknown status is FATAL, not read as active", r.fatal.some((x) => x.includes("not a shape"))]);
+  const retiredNull = { ...retiredGood, heartbeatPath: null, heartbeatPathReason: "branch-scoped writer", retiredEvidence: { branchGlob: "claude/build-agent-*" } };
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, retiredNull] }, freshHb, "", noHeads);
+  checks.push(["a retired null-heartbeat routine whose branch glob has NO heads on origin is clean", r.fatal.length === 0]);
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, retiredNull] }, freshHb, "", () => ["claude/build-agent-late"]);
+  checks.push(["…and one whose glob still has a head on origin is FATAL — the branch is the only evidence it can leave", r.fatal.some((x) => x.includes("still carries"))]);
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, retiredNull] }, freshHb, "", () => { throw new Error("no network"); });
+  checks.push(["a lister that cannot ask origin is FATAL — could not look is not nothing there", r.fatal.some((x) => x.includes("could not list"))]);
+  r = auditScheduledRoutines({ ...good, routines: [...good.routines, { ...retiredNull, retiredEvidence: undefined }] }, freshHb, "", noHeads);
+  checks.push(["a retired null-heartbeat routine that names no evidence is FATAL", r.fatal.some((x) => x.includes("no retiredEvidence"))]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);

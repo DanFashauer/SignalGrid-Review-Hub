@@ -12,7 +12,11 @@
  */
 
 import { MDEDevice, MDEConfig, MDEPostureSignal } from './types';
-import { resolveEmission } from '../adapters/emit-gate';
+// Same bound the other Graph callers in this repo use (itsm/servicenow.ts,
+// itsm/jira.ts, telemetry/fleetdm.ts). MDEConfig carries no timeout field of its
+// own, and inventing one nothing else sets would be a knob with no hand on it.
+import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
+import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
 
 export class MDEAdapter {
   private config: MDEConfig | null = null;
@@ -40,6 +44,12 @@ export class MDEAdapter {
     };
   }
 
+  /** The credential this adapter holds, named so the gate's refusal names it back.
+   *  Passed at every resolveEmission() site in this class — see adapters/emit-gate.ts. */
+  private emissionCredential(): EmissionCredential {
+    return { name: 'MDE clientSecret (MDE_CLIENT_SECRET)', value: this.config?.clientSecret };
+  }
+
   /**
    * May this adapter reach Microsoft Graph right now?
    *
@@ -58,9 +68,10 @@ export class MDEAdapter {
    * on every run and explicitly labelled "an OPEN QUESTION, not a clearance". It was
    * disclosed, never hidden. Now it is closed, and the exemption is deleted.
    */
+
   isEnabled(): boolean {
     if (!(this.config?.enabled ?? false)) return false;
-    return resolveEmission().mode === 'live';
+    return resolveEmission(process.env, this.emissionCredential()).mode === 'live';
   }
 
   private getGraphUrl(): string {
@@ -87,6 +98,7 @@ export class MDEAdapter {
     const tokenUrl = `${this.getGraphUrl()}/oauth2/v2.0/token`;
     const response = await fetch(tokenUrl, {
       method: 'POST',
+      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         client_id: this.config.clientId,
@@ -118,6 +130,7 @@ export class MDEAdapter {
       
       const response = await fetch(`${graphUrl}/v1.0/deviceManagement/managedDevices`, {
         headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
       });
 
       if (!response.ok) {
@@ -154,6 +167,7 @@ export class MDEAdapter {
       
       const response = await fetch(`${graphUrl}/v1.0/deviceManagement/managedDevices/${deviceId}`, {
         headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
       });
 
       if (response.status === 404) {
@@ -188,7 +202,7 @@ export class MDEAdapter {
       
       const response = await fetch(
         `${graphUrl}/v1.0/deviceManagement/deviceCompliancePolicies/${deviceId}/deviceStatus`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal) }
       );
 
       if (response.status === 404) {

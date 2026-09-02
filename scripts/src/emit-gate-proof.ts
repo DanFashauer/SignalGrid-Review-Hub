@@ -19,7 +19,31 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveEmission, EMIT_SUPPRESSED } from "@workspace/integrations/emit-gate";
+import { resolveEmission, EMIT_SUPPRESSED, NO_CREDENTIAL } from "@workspace/integrations/emit-gate";
+import {
+  createITSMAdapter,
+  ZendeskAdapter,
+  JiraAdapter,
+  ServiceNowAdapter,
+  FreshserviceAdapter,
+  BMCHelixAdapter,
+  IvantiAdapter,
+  ManageEngineAdapter,
+  GenericWebhookAdapter,
+} from "@workspace/integrations/itsm";
+import { ITSMVendorSchema } from "@workspace/integrations/itsm/store";
+import { WebhookSIEMAdapter } from "@workspace/integrations/siem";
+import { SyslogAdapter } from "@workspace/integrations/syslog";
+import { setFleetDMConfig } from "@workspace/integrations/telemetry/store";
+import { FleetDMAdapter } from "@workspace/integrations/telemetry";
+// Not re-exported by their family index.ts — the barrels export ./webhook and
+// ./fleetdm only — so these three reach them through explicit package subpaths rather
+// than through `export *`, which would widen each family's public surface to make a
+// proof convenient.
+import { SplunkAdapter } from "@workspace/integrations/siem/splunk";
+import { SentinelAdapter } from "@workspace/integrations/siem/sentinel";
+import { MDEAdapter } from "@workspace/integrations/telemetry/mde";
+import type { SIEMEventRequest, SIEMEventResponse } from "@workspace/integrations/adapters/types";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -36,7 +60,7 @@ function check(name: string, ok: boolean): void {
 }
 
 function suppressedWithReason(env: NodeJS.ProcessEnv, label: string): void {
-  const r = resolveEmission(env);
+  const r = resolveEmission(env, NO_CREDENTIAL);
   check(`${label} → suppressed`, r.mode === "suppressed");
   check(`${label} → states a reason`, r.mode === "suppressed" && r.reason.length > 0);
 }
@@ -67,7 +91,7 @@ for (const tier of ["beta", "prod"]) {
 // A gate that can never open is a wall: it would satisfy every assertion above
 // while silently breaking every integration in production.
 for (const tier of ["beta", "prod", "PROD", "Beta"]) {
-  const r = resolveEmission({ SIGNALGRID_TIER: tier, SIGNALGRID_LIVE_INTEGRATIONS: "true" });
+  const r = resolveEmission({ SIGNALGRID_TIER: tier, SIGNALGRID_LIVE_INTEGRATIONS: "true" }, NO_CREDENTIAL);
   check(`tier "${tier}" + flag true → live`, r.mode === "live");
 }
 
@@ -136,7 +160,7 @@ check("syslog refuses loudly when live: throws rather than reporting a status", 
 // and is free to change the second.
 check(
   "syslog healthCheck consults the emit gate before answering",
-  /async healthCheck\(\)[\s\S]{0,400}?resolveEmission\(\)/.test(syslogSrc),
+  /async healthCheck\(\)[\s\S]{0,400}?resolveEmission\(/.test(syslogSrc),
 );
 check(
   "syslog healthCheck no longer answers from config truthiness alone",
@@ -266,7 +290,7 @@ const mdeSrc = readFileSync(resolve(repo, "lib/integrations/src/integrations/tel
 const mdeEnabled = mdeSrc.slice(mdeSrc.indexOf("isEnabled(): boolean"));
 const mdeBody = mdeEnabled.slice(0, mdeEnabled.indexOf("\n  }"));
 check("mde.isEnabled(): requires the local config flag", /config\?\.enabled/.test(mdeBody));
-check("mde.isEnabled(): ALSO requires the emission gate", /resolveEmission\s*\(\)\.mode === ['"]live['"]/.test(mdeBody));
+check("mde.isEnabled(): ALSO requires the emission gate", /resolveEmission\s*\([^;]*\)\.mode === ['"]live['"]/.test(mdeBody));
 check(
   "mde: every outbound method still routes through isEnabled()",
   (mdeSrc.match(/if \(!this\.isEnabled\(\)\)/g) ?? []).length >= 5,
@@ -293,14 +317,62 @@ check(
 // exclusion is asserted below rather than left to this comment.
 {
   const FAMILY_ROOT = "lib/integrations/src/integrations";
-  const ROUTED_FAMILIES = ["itsm", "siem", "syslog", "telemetry"];
-  const OUT_OF_SCOPE = ["webhooks", "caep-events"];
+
+  // DERIVED, not hand-listed — these two arrays were literal string lists, and a
+  // seventh emitter family would have joined neither, leaving this sweep reporting
+  // green over a family it had never looked at. Two rules, both mechanical:
+  //
+  //   an EMITTER FAMILY is a directory whose resolve.ts imports createEmitterResolver;
+  //   it is ROUTED iff some module in it imports adapters/emit-gate.
+  //
+  // OUT_OF_SCOPE is then the remainder by construction, so the two sets cannot
+  // overlap and cannot both drift the same way.
+  const GATE_IMPORT_RE = /from ['"][^'"]*adapters\/emit-gate['"]/;
+  const emitterFamilies = readdirSync(resolve(repo, FAMILY_ROOT), { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .filter((name) => {
+      try {
+        return /createEmitterResolver/.test(readFileSync(resolve(repo, FAMILY_ROOT, name, "resolve.ts"), "utf8"));
+      } catch {
+        return false;
+      }
+    })
+    .sort();
+  const importsGate = (family: string): boolean =>
+    readdirSync(resolve(repo, FAMILY_ROOT, family))
+      .filter((f) => f.endsWith(".ts"))
+      .some((f) => GATE_IMPORT_RE.test(readFileSync(resolve(repo, FAMILY_ROOT, family, f), "utf8")));
+  const ROUTED_FAMILIES = emitterFamilies.filter(importsGate);
+  const OUT_OF_SCOPE = emitterFamilies.filter((f) => !importsGate(f));
+
+  // FLOORS AND THE COUNT PIN. A derivation that stops matching agrees with an empty
+  // expectation and calls the agreement coverage. The counts are asserted because
+  // this file's own header states them in prose ("Six resolve.ts files, four callers
+  // of this one") — the prose and the derivation now fail together or not at all.
+  check(
+    `derived: six emitter families in the tree (found ${emitterFamilies.length}: ${emitterFamilies.join(", ")})`,
+    emitterFamilies.length === 6,
+  );
+  check(
+    `derived: FOUR of them route through adapters/emit-gate (found ${ROUTED_FAMILIES.length}: ${ROUTED_FAMILIES.join(", ")})`,
+    ROUTED_FAMILIES.length === 4,
+  );
+  check(
+    `derived: the other TWO carry the policy in their own resolve.ts (found ${OUT_OF_SCOPE.length}: ${OUT_OF_SCOPE.join(", ")})`,
+    OUT_OF_SCOPE.length === 2,
+  );
+  check(
+    "derived: routed and out-of-scope partition the emitter families — no family is in both or neither",
+    ROUTED_FAMILIES.length + OUT_OF_SCOPE.length === emitterFamilies.length &&
+      !ROUTED_FAMILIES.some((f) => OUT_OF_SCOPE.includes(f)),
+  );
   // Not adapters: the family's own gate wiring (resolve.ts), its type surface
   // (types.ts), its re-export barrel (index.ts) and any fixture module. None of
   // them reaches a vendor, so none of them is asked to import the gate — and the
   // qualifier below would exclude them anyway. Named so the exclusion is visible.
   const NOT_AN_ADAPTER = /^(resolve|types|index)\.ts$|fixture/i;
-  const GATE_IMPORT = /from ['"][^'"]*adapters\/emit-gate['"]/;
+  const GATE_IMPORT = GATE_IMPORT_RE;
   const VENDOR_HOST = /https?:\/\//;
   // stripComments() above blanks from the first `//` to end of line, which eats the
   // `//` of a URL and turns `https://acme.zendesk.com` into `https:` — so the host
@@ -374,6 +446,283 @@ check(
     "derived: a vendor URL in LIVE code IS still seen after comment-stripping (the sparing strip works)",
     VENDOR_HOST.test(stripCommentsSparingUrls('const u = `https://${sub}.zendesk.com`;')),
   );
+}
+
+// ── 9. THE THIRD CLAUSE: a credential must be present ───────────────────────
+//
+// Seven comments in lib/, `scripts/check-ungated-fetch.mjs:8` and
+// `docs/SECURITY_REVIEW_PACKAGE.md` all describe the boundary as THREE conditions
+// — tier AND SIGNALGRID_LIVE_INTEGRATIONS AND a credential. `resolveEmission`
+// checked two. The third lived only in `createEmitterResolver()`, which the four
+// resolveEmission-routed families' ADAPTER paths never call, so at beta/prod with
+// the flag on, `createITSMAdapter('zendesk', {credentials: {}})` returned a live
+// adapter carrying an EMPTY Basic header aimed at a customer's ITSM.
+//
+// Both halves are pinned here: the clause in the gate, and the ITSM factory
+// passing it for every vendor in the union — DERIVED from ITSMVendorSchema, so a
+// ninth vendor added without a credential rule fails this proof instead of
+// shipping ungated.
+{
+  const beta = { SIGNALGRID_TIER: "beta", SIGNALGRID_LIVE_INTEGRATIONS: "true" };
+  for (const [label, value] of [["absent", undefined], ["empty", ""], ["whitespace-only", "   "]] as ReadonlyArray<readonly [string, string | undefined]>) {
+    const r = resolveEmission({ ...beta }, { name: "Zendesk apiToken", value });
+    check(`beta + flag true + ${label} credential → suppressed, never live`, r.mode === "suppressed");
+    check(
+      `beta + flag true + ${label} credential → the refusal NAMES the credential`,
+      r.mode === "suppressed" && r.reason.includes("Zendesk apiToken"),
+    );
+  }
+  check(
+    "prod + flag true + a present credential → live (the clause is not a wall)",
+    resolveEmission({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }, { name: "X", value: "tok" }).mode === "live",
+  );
+  check(
+    "the credential clause is checked LAST — a dev tier still refuses on tier, not on the token",
+    (() => {
+      const r = resolveEmission({ SIGNALGRID_TIER: "dev" }, { name: "X", value: "tok" });
+      return r.mode === "suppressed" && r.reason.includes("tier");
+    })(),
+  );
+
+  // Per-vendor fixtures: everything a vendor needs EXCEPT the credential. Derived
+  // membership is asserted below, so this table cannot fall behind the union.
+  const VENDOR_FIXTURES: Record<string, { config: Record<string, unknown>; credential: Record<string, string> }> = {
+    servicenow: { config: { instanceUrl: "https://acme.service-now.com" }, credential: { apiToken: "tok" } },
+    jira: { config: { instanceUrl: "https://acme.atlassian.net", projectKey: "OPS" }, credential: { username: "a@b.test", apiToken: "tok" } },
+    zendesk: { config: { subdomain: "acme" }, credential: { username: "a@b.test", apiToken: "tok" } },
+    freshservice: { config: { subdomain: "acme" }, credential: { apiToken: "tok" } },
+    "bmc-helix": { config: { instanceUrl: "https://acme.bmc.test" }, credential: { apiToken: "tok" } },
+    ivanti: { config: { instanceUrl: "https://acme.ivanti.test" }, credential: { clientId: "cid", clientSecret: "sec" } },
+    manageengine: { config: { instanceUrl: "https://acme.me.test" }, credential: { apiToken: "tok" } },
+    generic_webhook: {
+      config: { genericWebhook: { url: "https://hooks.example.test/x", method: "POST", bodyTemplate: '{"t":"{{title}}"}' } },
+      credential: { signingSecret: "s".repeat(32) },
+    },
+  };
+
+  const vendors = ITSMVendorSchema.options as readonly string[];
+  check("derived: the ITSM vendor union is non-empty (assertion is not vacuous)", vendors.length >= 8);
+  check(
+    `derived: every vendor in ITSMVendorSchema has a fixture here (${vendors.length} in the union, ${Object.keys(VENDOR_FIXTURES).length} fixtures)`,
+    vendors.every((v) => v in VENDOR_FIXTURES) && Object.keys(VENDOR_FIXTURES).every((k) => vendors.includes(k)),
+  );
+
+  const savedTier = process.env.SIGNALGRID_TIER;
+  const savedLive = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  process.env.SIGNALGRID_TIER = "beta";
+  process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+  try {
+    for (const vendor of vendors) {
+      const fx = VENDOR_FIXTURES[vendor];
+      if (!fx) continue; // the membership check above already failed
+      const base = { vendor, name: `${vendor} test`, enabled: true, lastTestResult: "not_tested", ...fx.config };
+      // EMPTY credential: the whole point. beta tier, live flag on, every non-secret
+      // field present — the ONLY thing missing is the token.
+      const empty = createITSMAdapter(vendor as never, { ...base, credentials: {} } as never);
+      check(`${vendor}: beta + flag true + EMPTY credential → no adapter is built`, empty === null);
+      // NON-VACUITY: with the credential, the same config DOES build. Without this,
+      // a factory that returned null for everything would satisfy the eight above.
+      const armed = createITSMAdapter(vendor as never, { ...base, credentials: fx.credential } as never);
+      check(`${vendor}: the same config WITH the credential builds an adapter (not always-null)`, armed !== null);
+    }
+  } finally {
+    if (savedTier === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedTier;
+    if (savedLive === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedLive;
+  }
+}
+
+// ── 10. THE RESIDUAL HOLE: an OMITTED credential skipped the clause entirely ──
+//
+// Section 9 proves the clause and proves the ITSM FACTORY passes one. It could not
+// see the hole one level down, because the parameter was OPTIONAL: 36 of the 37
+// `resolveEmission(` call sites in lib/ omitted it, so on every path that does not
+// go through createITSMAdapter — every vendor class constructed directly, every SIEM
+// adapter, both telemetry adapters — the third condition was not checked at all.
+//
+// Reproduced before the fix, on the real classes, at prod + SIGNALGRID_LIVE_INTEGRATIONS=true:
+//
+//     new ZendeskAdapter({ instanceUrl, email: "", apiToken: "" }).createTicket(req)
+//
+// attempted a real POST to the configured host carrying `Authorization: Basic
+// L3Rva2VuOg==` — the base64 of "/token:", an empty credential, inside a boundary
+// three documents describe as closed.
+//
+// The fix is a TYPE change (credential is required; a family holding no secret says
+// NO_CREDENTIAL out loud), and a type change is erased at runtime, so it is pinned
+// here BEHAVIOURALLY: one vector per family, built straight from the class with an
+// empty or whitespace credential, with `globalThis.fetch` replaced by a spy that
+// records and throws. The assertion is that the spy is never called.
+{
+  const realFetch = globalThis.fetch;
+  let attempts: string[] = [];
+  const installSpy = (): void => {
+    attempts = [];
+    globalThis.fetch = ((input: unknown): never => {
+      attempts.push(String(input));
+      throw new Error("FETCH ATTEMPTED — an outbound call escaped the gate");
+    }) as unknown as typeof globalThis.fetch;
+  };
+
+  const savedTier = process.env.SIGNALGRID_TIER;
+  const savedLive = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  const savedMde = {
+    tenant: process.env.MDE_TENANT_ID,
+    client: process.env.MDE_CLIENT_ID,
+    secret: process.env.MDE_CLIENT_SECRET,
+  };
+  const savedFleet = { base: process.env.FLEETDM_BASE_URL, token: process.env.FLEETDM_API_TOKEN };
+
+  const ticket = {
+    title: "gate vector",
+    description: "must never leave the process",
+    severity: "low" as const,
+    category: "test",
+  };
+  const event: SIEMEventRequest = {
+    type: "gate.vector",
+    severity: "low",
+    timestamp: "2026-09-02T00:00:00.000Z",
+  };
+
+  // Everything a vendor needs EXCEPT the secret. The empty string is the shape the
+  // adapters actually shipped (`credentials.apiToken || ''`).
+  const ITSM_VECTORS: Array<[string, () => Promise<unknown>]> = [
+    ["zendesk", () => new ZendeskAdapter({ instanceUrl: "https://acme.zendesk.com", email: "agent@acme.test", apiToken: "" }).createTicket(ticket)],
+    ["jira", () => new JiraAdapter({ baseUrl: "https://acme.atlassian.net", email: "agent@acme.test", apiToken: "", serviceDeskId: "1" }).createTicket(ticket)],
+    ["servicenow", () => new ServiceNowAdapter({ instanceUrl: "https://acme.service-now.com", auth: { type: "api_token", apiToken: "" } }).createTicket(ticket)],
+    ["freshservice", () => new FreshserviceAdapter({ instanceUrl: "https://acme.freshservice.com", apiKey: "" }).createTicket(ticket)],
+    ["bmc-helix", () => new BMCHelixAdapter({ instanceUrl: "https://acme.bmc.test", auth: { type: "api_token", apiToken: "" } }).createTicket(ticket)],
+    ["ivanti", () => new IvantiAdapter({ instanceUrl: "https://acme.ivanti.test", clientId: "cid", clientSecret: "" }).createTicket(ticket)],
+    ["manageengine", () => new ManageEngineAdapter({ instanceUrl: "https://acme.me.test", technicianKey: "" }).createTicket(ticket)],
+    ["generic_webhook", () => new GenericWebhookAdapter({ url: "https://hooks.example.test/x", method: "POST", headers: {}, bodyTemplate: '{"t":"{{title}}"}', signingSecret: "" }).createTicket(ticket)],
+  ];
+
+  try {
+    process.env.SIGNALGRID_TIER = "prod";
+    process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+
+    // NON-VACUITY FIRST. If the spy could never fire, every assertion below would
+    // pass over an adapter that simply does nothing. With the credential PRESENT the
+    // same class at the same tier DOES reach for the network — the spy records the
+    // URL and throws, which is how we know the vectors mean something.
+    installSpy();
+    try {
+      await new ZendeskAdapter({ instanceUrl: "https://acme.zendesk.com", email: "agent@acme.test", apiToken: "tok" }).createTicket(ticket);
+    } catch { /* the spy throws by design */ }
+    check(
+      "control: zendesk WITH a credential at prod+live does attempt a fetch (the spy can fire)",
+      attempts.length === 1 && attempts[0].includes("acme.zendesk.com"),
+    );
+
+    for (const [label, run] of ITSM_VECTORS) {
+      installSpy();
+      let refused = false;
+      try { await run(); } catch { refused = true; }
+      check(`${label}: an EMPTY credential at prod+live refuses`, refused);
+      check(`${label}: and no fetch was attempted — refused AT THE GATE`, attempts.length === 0);
+    }
+
+    // SIEM: these return a status rather than throwing, so both halves are asserted —
+    // nothing sent, and the response says why (SIEMEventResponse.reason, section 11).
+    const SIEM_VECTORS: Array<[string, () => Promise<SIEMEventResponse>, string]> = [
+      ["siem/webhook", () => new WebhookSIEMAdapter({ url: "https://siem.example.test/hook", method: "POST", signingSecret: "" }).sendEvent(event), "SIEM webhook signingSecret"],
+      ["siem/splunk", () => new SplunkAdapter({ hecUrl: "https://splunk.example.test", hecToken: "" }).sendEvent(event), "Splunk hecToken"],
+      ["siem/sentinel", () => new SentinelAdapter({ workspaceId: "ws-1", primaryKey: "" }).sendEvent(event), "Sentinel primaryKey"],
+    ];
+    for (const [label, run, credentialName] of SIEM_VECTORS) {
+      installSpy();
+      const res = await run();
+      check(`${label}: an EMPTY credential at prod+live → suppressed, not sent`, res.status === EMIT_SUPPRESSED);
+      check(`${label}: and no fetch was attempted`, attempts.length === 0);
+      check(`${label}: the response carries the reason, naming the credential`, (res.reason ?? "").includes(credentialName));
+    }
+
+    // sentinel's BATCH path, which was the one that used to POST while its singular
+    // sibling was suppressed. Every element carries the reason.
+    installSpy();
+    const batch = await new SentinelAdapter({ workspaceId: "ws-1", primaryKey: "" }).sendEvents([event, event]);
+    check("siem/sentinel sendEvents: N events in, N suppressed answers out", batch.length === 2 && batch.every((r) => r.status === EMIT_SUPPRESSED));
+    check("siem/sentinel sendEvents: every answer carries the reason", batch.every((r) => (r.reason ?? "").includes("Sentinel primaryKey")));
+    check("siem/sentinel sendEvents: no fetch was attempted", attempts.length === 0);
+
+    // telemetry/mde — WHITESPACE-ONLY secret. `getConfig()` accepts it (it is truthy),
+    // so before the fix isEnabled() was true at prod+live and getDevices() fetched a
+    // token from login.microsoftonline.com. The gate's own `.trim()` now refuses it.
+    process.env.MDE_TENANT_ID = "tenant";
+    process.env.MDE_CLIENT_ID = "client";
+    process.env.MDE_CLIENT_SECRET = "   ";
+    const mde = new MDEAdapter();
+    await mde.initialize();
+    installSpy();
+    const devices = await mde.getDevices();
+    check("telemetry/mde: a whitespace-only clientSecret at prod+live → isEnabled() false", mde.isEnabled() === false);
+    check("telemetry/mde: getDevices() returns nothing and attempts no fetch", devices.length === 0 && attempts.length === 0);
+
+    // telemetry/fleetdm — same shape, driven through the real config store so the
+    // adapter is ENABLED by the operator flag and refused by the credential alone.
+    await setFleetDMConfig({ enabled: true, baseUrl: "https://fleet.example.test", apiToken: "", syncIntervalMs: 300000 });
+    process.env.FLEETDM_BASE_URL = "https://fleet.example.test";
+    process.env.FLEETDM_API_TOKEN = "   ";
+    const fleet = new FleetDMAdapter();
+    await fleet.initialize();
+    installSpy();
+    const hosts = await fleet.getHosts();
+    check("telemetry/fleetdm: enabled=true with a whitespace apiToken at prod+live → isEnabled() false", fleet.isEnabled() === false);
+    check("telemetry/fleetdm: getHosts() returns nothing and attempts no fetch", hosts.length === 0 && attempts.length === 0);
+  } finally {
+    globalThis.fetch = realFetch;
+    if (savedTier === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedTier;
+    if (savedLive === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedLive;
+    for (const [k, v] of [["MDE_TENANT_ID", savedMde.tenant], ["MDE_CLIENT_ID", savedMde.client], ["MDE_CLIENT_SECRET", savedMde.secret], ["FLEETDM_BASE_URL", savedFleet.base], ["FLEETDM_API_TOKEN", savedFleet.token]] as const) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+}
+
+// ── 11. NO_CREDENTIAL is a statement, not a bypass ──────────────────────────
+//
+// The sentinel exists so a family that genuinely holds no secret (syslog: a host and
+// a port) can say so in source instead of leaving an argument off. Two properties
+// must both hold, or it becomes the old hole with a name: it must CLEAR the third
+// clause, and it must clear NOTHING ELSE.
+{
+  const beta = { SIGNALGRID_TIER: "beta", SIGNALGRID_LIVE_INTEGRATIONS: "true" };
+  check("NO_CREDENTIAL at beta + flag true → live (it clears the credential clause)", resolveEmission(beta, NO_CREDENTIAL).mode === "live");
+  check("NO_CREDENTIAL does NOT clear the tier clause", resolveEmission({ SIGNALGRID_TIER: "dev", SIGNALGRID_LIVE_INTEGRATIONS: "true" }, NO_CREDENTIAL).mode === "suppressed");
+  check("NO_CREDENTIAL does NOT clear the live-flag clause", resolveEmission({ SIGNALGRID_TIER: "prod" }, NO_CREDENTIAL).mode === "suppressed");
+  check("NO_CREDENTIAL is not a string an env value could impersonate", typeof NO_CREDENTIAL === "symbol");
+
+  // syslog is the one family that passes it, and its suppressed response now carries
+  // the reason — the field its own type documents as present on every non-sent status.
+  const syslogSrc2 = readFileSync(resolve(repo, "lib/integrations/src/integrations/syslog/transport.ts"), "utf8");
+  check("syslog states NO_CREDENTIAL rather than omitting the argument", /resolveEmission\(process\.env, NO_CREDENTIAL\)/.test(syslogSrc2));
+}
+
+// ── 12. A suppressed response SAYS WHY, on every family that returns one ────
+//
+// `SIEMEventResponse.reason` is documented as "present on every non-'sent' status
+// that the adapter itself decided". It was set on none of the suppressed branches.
+// Asserted at dev tier, where the refusal is the TIER rather than a credential — so
+// this pins the field being populated from the resolution, not from one clause.
+{
+  const savedTier = process.env.SIGNALGRID_TIER;
+  process.env.SIGNALGRID_TIER = "dev";
+  delete process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  const event: SIEMEventRequest = { type: "gate.vector", severity: "low", timestamp: "2026-09-02T00:00:00.000Z" };
+  try {
+    const responses: Array<[string, SIEMEventResponse]> = [
+      ["siem/webhook", await new WebhookSIEMAdapter({ url: "https://siem.example.test/hook", method: "POST", signingSecret: "s" }).sendEvent(event)],
+      ["siem/splunk", await new SplunkAdapter({ hecUrl: "https://splunk.example.test", hecToken: "tok" }).sendEvent(event)],
+      ["siem/sentinel", await new SentinelAdapter({ workspaceId: "ws-1", primaryKey: "key" }).sendEvent(event)],
+      ["syslog", await new SyslogAdapter({ host: "collector.example.test", protocol: "udp", format: "json" }).sendEvent(event)],
+    ];
+    for (const [label, res] of responses) {
+      check(`${label}: dev tier → suppressed`, res.status === EMIT_SUPPRESSED);
+      check(`${label}: the suppressed response states the reason`, (res.reason ?? "").includes("never emits to live systems"));
+    }
+  } finally {
+    if (savedTier === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedTier;
+  }
 }
 
 const total = passed + failures.length;

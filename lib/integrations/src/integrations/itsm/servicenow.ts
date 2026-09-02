@@ -1,6 +1,6 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
 import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
-import { resolveEmission } from '../adapters/emit-gate';
+import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
 
 /**
  * ServiceNow Adapter Configuration
@@ -39,11 +39,42 @@ export class ServiceNowAdapter implements ITSMAdapter {
   private tokenExpiry: number = 0;
 
   constructor(config: ServiceNowConfig) {
+    // `timeout: 30000` sat here as a literal with `...config` spread AFTER it, so a
+    // caller-supplied timeout did survive — and then nothing read the field at all.
+    // The request paths below now read it; healthCheck keeps the SHORT preset on
+    // purpose (a reachability probe that waits as long as a ticket write is not a
+    // probe), which is why that one site is not `this.config.timeout`.
     this.config = {
       table: 'incident',
       timeout: 30000,
       ...config,
     };
+  }
+
+  /**
+   * The credential this adapter holds, named so the gate's refusal can name it back.
+   *
+   * Passed at EVERY resolveEmission() site in this class. The parameter was optional
+   * until 2026-09-02 and every site here omitted it, so the third clause of the
+   * boundary — tier AND live flag AND a credential — was not enforced on this path:
+   * an adapter built with an empty secret reached the vendor with an empty auth
+   * header. The gate cannot read this itself; the shape is per-vendor, so the caller
+   * names what it holds.
+   */
+  private emissionCredential(): EmissionCredential {
+    // Derived from the auth union rather than hand-picked: whichever secret this
+    // adapter would authenticate WITH is the one whose absence must refuse. An auth
+    // type with no rule here is refused rather than silently cleared.
+    switch (this.config.auth.type) {
+      case 'oauth':
+        return { name: 'ServiceNow auth.clientSecret', value: this.config.auth.clientSecret };
+      case 'basic':
+        return { name: 'ServiceNow auth.password', value: this.config.auth.password };
+      case 'api_token':
+        return { name: 'ServiceNow auth.apiToken', value: this.config.auth.apiToken };
+      default:
+        return { name: `ServiceNow auth.type "${String(this.config.auth.type)}" declares no credential rule`, value: undefined };
+    }
   }
 
   /**
@@ -55,7 +86,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -73,7 +104,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
         'Accept': 'application/json',
       },
       body: JSON.stringify(incident),
-      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+      signal: AbortSignal.timeout(this.config.timeout ?? 30000),
     });
 
     if (!response.ok) {
@@ -110,7 +141,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -134,7 +165,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
         'Accept': 'application/json',
       },
       body: JSON.stringify(incident),
-      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+      signal: AbortSignal.timeout(this.config.timeout ?? 30000),
     });
 
     if (!response.ok) {
@@ -167,7 +198,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
     // resolves a configured hostname and opens a connection from wherever the process
     // runs. Note the gate goes BEFORE ensureAuthenticated() — that helper performs its
     // own OAuth token fetch, so gating after it would still have reached the network.
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, this.emissionCredential());
     if (emission.mode !== "live") return false;
 
     try {
@@ -217,7 +248,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -237,7 +268,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
         'Accept': 'application/json',
       },
       body: params.toString(),
-      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+      signal: AbortSignal.timeout(this.config.timeout ?? 30000),
     });
 
     if (!response.ok) {
@@ -263,7 +294,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -276,7 +307,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
         'Authorization': `Bearer ${this.accessToken}`,
         'Accept': 'application/json',
       },
-      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+      signal: AbortSignal.timeout(this.config.timeout ?? 30000),
     });
 
     if (!response.ok) {

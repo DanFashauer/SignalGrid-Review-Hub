@@ -1,6 +1,6 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
 import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
-import { resolveEmission } from '../adapters/emit-gate';
+import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
 
 /**
  * Jira Service Management Adapter Configuration
@@ -46,8 +46,16 @@ export class JiraAdapter implements ITSMAdapter {
       projectKey: config.projectKey || '',
       issueType: config.issueType || 'Bug',
       useJSM: config.useJSM !== false,
+      // READ on every request path below. It was declared, defaulted, and read by
+      // nothing — a configurable that configured nothing.
       timeout: config.timeout || 30000,
     };
+  }
+
+  /** The credential this adapter holds, named so the gate's refusal names it back.
+   *  Passed at every resolveEmission() site in this class — see adapters/emit-gate.ts. */
+  private emissionCredential(): EmissionCredential {
+    return { name: 'Jira apiToken', value: this.config.apiToken };
   }
 
   /**
@@ -70,7 +78,7 @@ export class JiraAdapter implements ITSMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -99,7 +107,7 @@ export class JiraAdapter implements ITSMAdapter {
         'Authorization': `Basic ${Buffer.from(`${this.config.email}:${this.config.apiToken}`).toString('base64')}`,
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+      signal: AbortSignal.timeout(this.config.timeout),
     });
 
     if (!response.ok) {
@@ -132,7 +140,7 @@ export class JiraAdapter implements ITSMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -183,7 +191,7 @@ export class JiraAdapter implements ITSMAdapter {
         'Authorization': `Basic ${Buffer.from(`${this.config.email}:${this.config.apiToken}`).toString('base64')}`,
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+      signal: AbortSignal.timeout(this.config.timeout),
     });
 
     if (!response.ok) {
@@ -217,7 +225,7 @@ export class JiraAdapter implements ITSMAdapter {
     // GATED, like every other outbound path — see the note on ServiceNow's healthCheck.
     // `/rest/api/3/myself` looks like the most harmless call in the file and is still a
     // credentialed request to a customer's Atlassian tenant from wherever this runs.
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, this.emissionCredential());
     if (emission.mode !== "live") return false;
 
     try {

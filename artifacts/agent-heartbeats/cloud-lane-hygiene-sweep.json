@@ -1,4 +1,1 @@
-{
-  "firedAt": "2026-08-26T09:40:19.000Z",
-  "result": "freed ~155MB from the session scratchpad (547 files older than ~24h removed — logs, task outputs, captures; the repo tree was never touched). 23G free on / — far above the 1GB floor, so no owner escalation. /var/lib/docker held only 116K with no daemon running, nothing to reclaim; pnpm store prune removed 0 (already clean)."
-}
+{"firedAt":"2026-09-02T11:09:44Z","result":"freed ~1.8GB (09:40 sweep: delivered agent scratch trees and 24h-old logs removed from the session scratchpad; pnpm store pruned; /var/lib/docker holds no layer cache); 22G free after; the heartbeat was held while PR #377 was open and is written here with the emit-path landing"}

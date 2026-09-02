@@ -250,6 +250,12 @@ jobs:
         run: node scripts/check-ungated-fetch.mjs --self-test
       - name: "Ungated fetch (the live boundary covers every outbound path)"
         run: node scripts/check-ungated-fetch.mjs
+      # Sibling of the gate above: that one asks whether the call was allowed and whether
+      # it is bounded, this one asks whether it went out SIGNED.
+      - name: Signing-unconditional self-test (the gate must be able to fail)
+        run: node scripts/check-signing-unconditional.mjs --self-test
+      - name: "Signing unconditional (a missing secret refuses; it never sends unsigned)"
+        run: node scripts/check-signing-unconditional.mjs
       # Sibling of the gate above: that one asks whether the call was allowed to happen,
       # this one asks whether the result reported was one anybody observed.
       - name: "Fabricated status (a connector may not report a status it never observed)"

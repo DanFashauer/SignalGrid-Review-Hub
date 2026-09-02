@@ -1,5 +1,5 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
-import { resolveEmission } from '../adapters/emit-gate';
+import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
 
 /**
  * Ivanti Neurons for ITSM / Ivanti Service Manager Adapter Configuration
@@ -48,6 +48,12 @@ export class IvantiAdapter implements ITSMAdapter {
     };
   }
 
+  /** The credential this adapter holds, named so the gate's refusal names it back.
+   *  Passed at every resolveEmission() site in this class — see adapters/emit-gate.ts. */
+  private emissionCredential(): EmissionCredential {
+    return { name: 'Ivanti clientSecret', value: this.config.clientSecret };
+  }
+
   /**
    * Create a new incident in Ivanti
    */
@@ -57,7 +63,7 @@ export class IvantiAdapter implements ITSMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -78,6 +84,7 @@ export class IvantiAdapter implements ITSMAdapter {
         'BusinessUnit-Id': this.config.businessUnitId,
       },
       body: JSON.stringify(incident),
+      signal: AbortSignal.timeout(this.config.timeout),
     });
 
     if (!response.ok) {
@@ -109,7 +116,7 @@ export class IvantiAdapter implements ITSMAdapter {
     // process runs. Ungated, it reached the network in dev/alpha with no credential
     // — outside the three-condition boundary the security-review package tells an
     // assessor to verify FIRST. Found by review taking that document at its word.
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, this.emissionCredential());
     if (emission.mode !== "live") return false;
 
     try {
@@ -123,6 +130,7 @@ export class IvantiAdapter implements ITSMAdapter {
           'Accept': 'application/json',
           'Tenant-Id': this.config.tenantId,
         },
+        signal: AbortSignal.timeout(this.config.timeout),
       });
       
       return response.ok;
@@ -140,7 +148,7 @@ export class IvantiAdapter implements ITSMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -166,6 +174,7 @@ export class IvantiAdapter implements ITSMAdapter {
         'Accept': 'application/json',
       },
       body: params.toString(),
+      signal: AbortSignal.timeout(this.config.timeout),
     });
 
     if (!response.ok) {

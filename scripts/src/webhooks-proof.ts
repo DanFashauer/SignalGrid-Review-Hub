@@ -17,7 +17,15 @@
 // Pure and offline: the gate is a function of the environment, so this asserts it
 // without a network, a server, or a fixture endpoint.
 
-import { resolveWebhookDelivery, validateWebhookUrl } from "@workspace/integrations/webhooks";
+import {
+  resolveWebhookDelivery,
+  validateWebhookUrl,
+  dispatchEvent,
+  isPermanentDeliveryError,
+  WEBHOOK_URL_REFUSALS,
+  WEBHOOK_URL_REFUSAL_REASONS,
+} from "@workspace/integrations/webhooks";
+import { createWebhook, getDeliveryLogs } from "@workspace/integrations/webhooks/store";
 
 let passed = 0;
 const failures: string[] = [];
@@ -145,6 +153,134 @@ check(
     live: resolveWebhookDelivery({ SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" }).mode === "live",
   }).valid === false,
 );
+
+// ── 5. A REFUSAL IS PERMANENT, AND SUPPRESSION IS NOT A FAILURE ─────────────
+//
+// THE BEFORE-STATE, reproduced by the author at caabfdd and quoted here so the
+// assertions below have something to be about:
+//
+//   · dev tier, one enabled webhook → THREE suppressed delivery rows for one
+//     event, and `dispatchEvent` returned `failed: 1`. The retry loop treated a
+//     tier decision as a transient error and re-asked it twice, ~3s apart, then
+//     dead-lettered an event that was never supposed to leave the process.
+//   · live tier, a plain-http target → NO delivery rows at all. The URL refusal
+//     returned without recording, so the per-webhook delivery log — the thing an
+//     operator opens to ask what happened — showed nothing, while the event sat
+//     in the DLQ.
+//
+// Both came from the same root: `isPermanentError` compared `result.error`
+// against 'HTTPS required in production' and 'Localhost not allowed in
+// production', two strings validateWebhookUrl STOPPED RETURNING when its rules
+// were rewritten. A dead string comparison does not fail. It just never matches.
+
+// 5a. DERIVED permanence. Every string the validator can return, taken from the
+//     validator's own source of truth rather than retyped here — the retyped copy
+//     is precisely what went stale.
+check(
+  `the validator's refusal set is non-empty (${WEBHOOK_URL_REFUSAL_REASONS.length} reasons) — the loop below is not vacuous`,
+  WEBHOOK_URL_REFUSAL_REASONS.length >= 4,
+);
+for (const reason of WEBHOOK_URL_REFUSAL_REASONS) {
+  check(
+    `permanent: "${reason}" is never retried`,
+    isPermanentDeliveryError({ success: false, error: reason }) === true,
+  );
+}
+// And the set really is the one the validator returns — asserted from the other
+// side, so a constant added to the object but never returned cannot pad it.
+for (const [label, url, live] of [
+  ["plain http at a live tier", "http://hooks.example.test/x", true],
+  ["loopback", "https://127.0.0.1/hook", true],
+  ["private range", "https://10.0.0.7/hook", true],
+  ["unparseable", "not-a-url", true],
+] as ReadonlyArray<readonly [string, string, boolean]>) {
+  const r = validateWebhookUrl(url, { live });
+  check(
+    `derived: the ${label} refusal is one of the exported reasons`,
+    r.valid === false && r.error !== undefined && WEBHOOK_URL_REFUSAL_REASONS.includes(r.error),
+  );
+}
+check(
+  "derived: the exported constants are the strings the validator returns (https rule)",
+  validateWebhookUrl("http://hooks.example.test/x", { live: true }).error === WEBHOOK_URL_REFUSALS.httpsRequired,
+);
+
+// 5b. SUPPRESSION IS PERMANENT, and it is not a failure.
+check(
+  "permanent: a suppressed result is never retried — a tier does not change between attempts",
+  isPermanentDeliveryError({ success: false, suppressed: true, error: 'tier "dev" never delivers live webhooks' }) === true,
+);
+// NON-VACUITY for the whole permanence block: a retryable 5xx must still retry,
+// or "everything is permanent" would satisfy every assertion above.
+check(
+  "not permanent: a 503 is still retried (the predicate is not always-true)",
+  isPermanentDeliveryError({ success: false, statusCode: 503 }) === false,
+);
+
+// 5c. END TO END at dev tier, against the real in-memory store. This is the
+//     before-state above, measured.
+{
+  const savedTier = process.env.SIGNALGRID_TIER;
+  const savedLive = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  const savedRedis = process.env.REDIS_URL;
+  delete process.env.REDIS_URL; // in-memory store; no network, no database
+  process.env.SIGNALGRID_TIER = "dev";
+  delete process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  try {
+    const hook = await createWebhook({
+      name: "proof-suppressed",
+      url: "https://hooks.example.test/suppressed",
+      events: ["session.start"],
+    } as never);
+    const summary = await dispatchEvent("session.start", { probe: true });
+    check("dev tier: dispatchEvent reports the suppression as suppressed, not failed",
+      summary.suppressed === 1 && summary.failed === 0);
+    check("dev tier: the event is still counted as dispatched (it was attempted)", summary.dispatched === 1);
+    check("dev tier: nothing is reported as succeeded", summary.succeeded === 0);
+    const logs = await getDeliveryLogs(hook.id);
+    check(`dev tier: ONE suppressed delivery row, not one per retry attempt (found ${logs.length})`,
+      logs.length === 1 && logs[0]?.status === "suppressed");
+    check("dev tier: the suppressed row carries the reason the tier gave",
+      /tier "dev"/.test(logs[0]?.error ?? ""));
+  } finally {
+    if (savedTier === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedTier;
+    if (savedLive === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedLive;
+    if (savedRedis === undefined) delete process.env.REDIS_URL; else process.env.REDIS_URL = savedRedis;
+  }
+}
+
+// 5d. A URL REFUSAL LEAVES AN AUDIT ROW, like the two refusals either side of it.
+//     Driven at a LIVE tier with a plain-http target: the validator refuses before
+//     any fetch, so this reaches no network.
+{
+  const savedTier = process.env.SIGNALGRID_TIER;
+  const savedLive = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  const savedRedis = process.env.REDIS_URL;
+  delete process.env.REDIS_URL;
+  process.env.SIGNALGRID_TIER = "prod";
+  process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+  try {
+    const hook = await createWebhook({
+      name: "proof-bad-url",
+      url: "http://hooks.example.test/plain",
+      events: ["auth.failure"],
+    } as never);
+    const summary = await dispatchEvent("auth.failure", { probe: true });
+    check("live tier + plain-http target: counted as failed, not suppressed",
+      summary.failed === 1 && summary.suppressed === 0);
+    const logs = await getDeliveryLogs(hook.id);
+    check(`live tier + plain-http target: the refusal RECORDS a delivery row (found ${logs.length})`,
+      logs.length >= 1);
+    check("live tier + plain-http target: exactly ONE row — the refusal is permanent, not retried",
+      logs.length === 1);
+    check("live tier + plain-http target: the row names the URL rule that refused it",
+      logs[0]?.error === WEBHOOK_URL_REFUSALS.httpsRequired);
+  } finally {
+    if (savedTier === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedTier;
+    if (savedLive === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedLive;
+    if (savedRedis === undefined) delete process.env.REDIS_URL; else process.env.REDIS_URL = savedRedis;
+  }
+}
 
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);

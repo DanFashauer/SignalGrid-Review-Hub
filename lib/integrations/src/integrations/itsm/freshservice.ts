@@ -1,5 +1,5 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
-import { resolveEmission } from '../adapters/emit-gate';
+import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
 
 /**
  * Freshservice ITSM Adapter Configuration
@@ -39,6 +39,12 @@ export class FreshserviceAdapter implements ITSMAdapter {
     };
   }
 
+  /** The credential this adapter holds, named so the gate's refusal names it back.
+   *  Passed at every resolveEmission() site in this class — see adapters/emit-gate.ts. */
+  private emissionCredential(): EmissionCredential {
+    return { name: 'Freshservice apiKey', value: this.config.apiKey };
+  }
+
   /**
    * Create a new ticket in Freshservice
    */
@@ -48,7 +54,7 @@ export class FreshserviceAdapter implements ITSMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -58,6 +64,7 @@ export class FreshserviceAdapter implements ITSMAdapter {
     const url = `${this.config.instanceUrl}/api/v2/tickets`;
 
     const response = await fetch(url, {
+      signal: AbortSignal.timeout(this.config.timeout),
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -98,12 +105,13 @@ export class FreshserviceAdapter implements ITSMAdapter {
     // process runs. Ungated, it reached the network in dev/alpha with no credential
     // — outside the three-condition boundary the security-review package tells an
     // assessor to verify FIRST. Found by review taking that document at its word.
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, this.emissionCredential());
     if (emission.mode !== "live") return false;
 
     try {
       const url = `${this.config.instanceUrl}/api/v2/tickets?page=1&per_page=1`;
       const response = await fetch(url, {
+        signal: AbortSignal.timeout(this.config.timeout),
         method: 'GET',
         headers: {
           'Authorization': `Basic ${Buffer.from(`${this.config.apiKey}:X`).toString('base64')}`,

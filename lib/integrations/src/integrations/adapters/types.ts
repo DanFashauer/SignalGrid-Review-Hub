@@ -106,6 +106,13 @@ export interface SIEMEventRequest {
 export interface SIEMEventResponse {
   eventId: string;
   status: string;
+  /**
+   * Why the adapter did not deliver. Present on every non-'sent' status that the
+   * adapter itself decided — a refusal that carried no reason let a caller read
+   * "nothing was sent" as "there was nothing to send", which is the defect the
+   * whole emit-gate exists to prevent. Absent on success.
+   */
+  reason?: string;
   receivedAt: string;
 }
 

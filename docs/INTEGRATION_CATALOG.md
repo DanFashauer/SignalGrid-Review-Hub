@@ -446,7 +446,7 @@ in one place.
   emitter records what WOULD have been sent with a literal `delivered: false` on every entry —
   after the syslog family was found returning `status:'sent'` for events it silently dropped,
   the surface is shaped so that claim is unrepresentable. Routing (`response-accountability`)
-  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (51 checks).
+  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (67 checks).
 
 - **CAEP / Shared Signals session-signal emitter** — the sixth family, and the outbound half of
   continuous access evaluation (intake ledger row 17, built on the owner's keep-going): telling

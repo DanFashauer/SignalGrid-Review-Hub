@@ -1,5 +1,5 @@
 import type { SIEMAdapter, SIEMEventRequest, SIEMEventResponse } from '../adapters/types';
-import { resolveEmission, EMIT_SUPPRESSED } from '../adapters/emit-gate';
+import { resolveEmission, EMIT_SUPPRESSED, type EmissionCredential } from '../adapters/emit-gate';
 
 /**
  * Splunk HEC (HTTP Event Collector) Adapter Configuration
@@ -43,16 +43,29 @@ export class SplunkAdapter implements SIEMAdapter {
     };
   }
 
+  /** The credential this adapter holds, named so the gate's refusal names it back.
+   *  Passed at every resolveEmission() site in this class — see adapters/emit-gate.ts. */
+  private emissionCredential(): EmissionCredential {
+    return { name: 'Splunk hecToken', value: this.config.hecToken };
+  }
+
   /**
    * Send a single event to Splunk
    */
   async sendEvent(event: SIEMEventRequest): Promise<SIEMEventResponse> {
     // Gate first: dev/alpha never emit outbound. See ../adapters/emit-gate.ts.
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, this.emissionCredential());
     if (emission.mode === 'suppressed') {
       return {
         eventId: `suppressed-${Date.now()}`,
         status: EMIT_SUPPRESSED,
+        // The reason, carried onto the response. `SIEMEventResponse.reason` is
+        // documented as present on every non-'sent' status the adapter decided, and it
+        // was set on none of the suppressed branches: a caller saw status 'suppressed'
+        // with nothing saying whether the tier, the flag or a missing credential
+        // withheld it — the same "nothing was sent" / "nothing to send" ambiguity the
+        // gate's own refusal text exists to remove.
+        reason: emission.reason,
         receivedAt: new Date().toISOString(),
       };
     }
@@ -66,6 +79,7 @@ export class SplunkAdapter implements SIEMAdapter {
         'Authorization': `Splunk ${this.config.hecToken}`,
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(this.config.timeout),
     });
 
     if (!response.ok) {
@@ -108,7 +122,7 @@ export class SplunkAdapter implements SIEMAdapter {
    */
   async healthCheck(): Promise<boolean> {
     // GATED. A health check is still a live call — see check-ungated-fetch.mjs.
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, this.emissionCredential());
     if (emission.mode !== "live") return false;
 
     try {
@@ -119,6 +133,7 @@ export class SplunkAdapter implements SIEMAdapter {
         headers: {
           'Authorization': `Splunk ${this.config.hecToken}`,
         },
+        signal: AbortSignal.timeout(this.config.timeout),
       });
       
       return response.ok;

@@ -51,9 +51,28 @@ There is no executor in this repository. See
 ## 3. The single most important thing to verify first
 
 **The fixture/live boundary.** Connectors are fixture-backed by default. A live call
-is intended to require a tier (`beta`/`prod`), the environment flag
-`SIGNALGRID_LIVE_INTEGRATIONS=true`, **and** a credential — each checked
-independently, so no single misconfiguration opens a live path.
+requires a tier (`beta`/`prod`), the environment flag
+`SIGNALGRID_LIVE_INTEGRATIONS=true`, **and** the credential the calling adapter holds.
+All three are checked in one resolver
+(`lib/integrations/src/integrations/adapters/emit-gate.ts`), and any one of them alone
+refuses. Verify the third by counting: every one of the 37 `resolveEmission(` call
+sites under `lib/integrations/src/integrations/` passes the secret its own config
+declares — `apiToken`, `clientSecret`, `signingSecret`, the Splunk HEC token, the
+Sentinel workspace key — or the explicit `NO_CREDENTIAL` sentinel where the family
+authenticates with nothing (syslog: a host and a port).
+`node scripts/check-ungated-fetch.mjs` prints that count and fails on any call that
+passes neither.
+
+That sentence used to end "each checked independently, so no single misconfiguration
+opens a live path", and it was not yet true when it said so. The credential clause was
+documented in seven places and implemented in none until 2026-09-02; it then landed as
+an OPTIONAL parameter that 36 of the 37 call sites omitted, so for its first hours it
+was enforced in the ITSM factory alone. Measured, not inferred: at `prod` with the flag
+on, `new ZendeskAdapter({ instanceUrl, email: "", apiToken: "" }).createTicket(...)`
+POSTed to the configured host carrying `Authorization: Basic L3Rva2VuOg==` — the base64
+of `/token:`. The parameter is now required, an omission is a type error, and
+`proof:emit-gate` drives one empty-credential vector per family against a spy `fetch`
+that must never be called.
 
 An assessor should treat that as a claim to attack, not a fact to accept. It is the
 load-bearing assumption behind every other safety property here: if it does not hold,
@@ -71,11 +90,17 @@ is instructive — a health check does not *feel* like an emission (it returns a
 and sends nothing) while still opening a connection from wherever the process runs.
 Look for other paths that are outbound without looking like it.
 
-**Known remaining scope:** sixteen other outbound class methods (`createTicket`,
-`lookupEndpoint`, token fetches, retry helpers) are counted but **not** enforced by
-that gate — whether each is gated by a caller one level up is an open audit, printed
-on every run. `lib/integrations/src/integrations/telemetry/mde.ts` is gated by a local `config.enabled` flag rather than
-the tier boundary, which is weaker than every other connector.
+**Known remaining scope, restated after the August audit closed the last of it.** The
+gate now enforces every outbound method under `itsm/`, `siem/`, `telemetry/` and
+`passkey-assurance/`, plus `healthCheck()` anywhere, and it prints the unenforced
+remainder on every run — empty on this tree as of 2026-09-02. This paragraph previously
+said that sixteen outbound methods were counted but unenforced, and that
+`lib/integrations/src/integrations/telemetry/mde.ts` was gated by a local
+`config.enabled` flag rather than the tier boundary; `MDEAdapter.isEnabled()` now
+requires `resolveEmission(...).mode === "live"` as well, and the gate's exemption entry
+for it is deleted rather than left standing. What the gate still cannot establish is
+printed in its own output: it is a static scan, so it proves no connector function
+calls `fetch` without naming the gate — a necessary condition, not a sufficient one.
 
 ## 4. Threat model and controls
 

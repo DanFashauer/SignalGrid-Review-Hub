@@ -413,19 +413,65 @@ export function buildResolutionPlan(
     });
   }
 
+  // SILENCE IS NOT RESOLVABILITY (2026-09-02, verdict-core finding V9).
+  //
+  // The loop above `continue`s past any reason code with no DESCRIPTORS entry, so
+  // a blocking code the planner has no answer for left NO trace in the plan: the
+  // plan was assembled as though that code had never fired. `autoResolvable`
+  // already refused to be true with zero steps, but `path` did not — a DENY whose
+  // only codes lack descriptors reported `path: "self_service"` (executed
+  // counterexample, 2026-09-02), which is the wrong word for a block nobody can
+  // clear. The unanswered codes are now CARRIED, and every optimistic field is
+  // false while the list is non-empty.
+  //
+  // Which codes count is DERIVED from the MATCHED RULE that contributed the code,
+  // not from the code's identity (review finding F3, 2026-09-02). A code
+  // contributed by a rule whose own outcome was `allow` (TRUST_ESTABLISHED is the
+  // live case, and it rides along on most restrict/step_up decisions) is an
+  // affirmative finding with nothing to resolve, and an `allow` decision has no
+  // block at all. What remains is exactly the set of descriptor-less codes that
+  // could have held the worker back.
+  //
+  // The first cut of this excluded by code IDENTITY — any code an allow rule
+  // mentioned was excluded outright — and reason codes are NOT unique to a rule
+  // (`policy.ts` pushes `rule.reasonCode` verbatim, and tenant-authored rule sets
+  // may reuse a spelling). One allow rule anywhere in an active version carrying
+  // the same code as a DENY rule therefore disappeared the deny's own block from
+  // the plan, restoring the exact silence this carrying exists to end. The
+  // exclusion now requires that EVERY matched rule contributing the code was an
+  // allow: one non-allow contributor is enough to keep it.
+  const matched = decision.matchedRules ?? [];
+  const allowContributed = new Set(
+    matched.filter((rule) => rule.outcome === "allow").map((rule) => rule.reasonCode),
+  );
+  for (const rule of matched) {
+    if (rule.outcome !== "allow") {
+      allowContributed.delete(rule.reasonCode);
+    }
+  }
+  const unresolvedCodes =
+    decision.outcome === "allow"
+      ? []
+      : decision.reasonCodes.filter(
+          (code) => !DESCRIPTORS[code] && !allowContributed.has(code),
+        );
+
   const hasManual = steps.some((s) => s.resolutionClass === "manual_only");
   const hasApproval = steps.some((s) => s.resolutionClass === "requires_approval");
-  const path = hasManual ? "escalation" : hasApproval ? "assisted" : "self_service";
-  const autoResolvable = steps.length > 0 && !hasManual;
+  const hasUnresolved = unresolvedCodes.length > 0;
+  const path =
+    hasManual || hasUnresolved ? "escalation" : hasApproval ? "assisted" : "self_service";
+  const autoResolvable = steps.length > 0 && !hasManual && !hasUnresolved;
 
   return {
     decisionId: decision.id,
     outcome: decision.outcome,
     summaryForWorker: workerSummary(decision, path, steps.length),
-    summaryForOperator: operatorSummary(decision, steps, path),
+    summaryForOperator: operatorSummary(decision, steps, path, unresolvedCodes),
     steps,
     autoResolvable,
     path,
+    unresolvedCodes,
   };
 }
 
@@ -514,9 +560,17 @@ function operatorSummary(
   decision: Decision,
   steps: ResolutionStep[],
   path: string,
+  unresolvedCodes: string[] = [],
 ): string {
   const auto = steps.filter((s) => s.resolutionClass === "auto_proposed").length;
   const approval = steps.filter((s) => s.resolutionClass === "requires_approval").length;
   const manual = steps.filter((s) => s.resolutionClass === "manual_only").length;
-  return `${decision.outcome.toUpperCase()} · path=${path} · ${auto} self-service, ${approval} approval-gated, ${manual} manual. All actions are approval-gated and simulated.`;
+  // Named, not counted away: an operator reading this needs the code itself to
+  // look it up, and a bare "1 unresolved" would be the same silence in a
+  // shorter sentence.
+  const unresolved =
+    unresolvedCodes.length > 0
+      ? ` ${unresolvedCodes.length} reason code(s) have no resolution step and need a person: ${unresolvedCodes.join(", ")}.`
+      : "";
+  return `${decision.outcome.toUpperCase()} · path=${path} · ${auto} self-service, ${approval} approval-gated, ${manual} manual. All actions are approval-gated and simulated.${unresolved}`;
 }

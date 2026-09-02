@@ -189,6 +189,94 @@ not shipped.
 That last line is the invariant the whole product rests on, and it is enforced by
 `pnpm run review:invariants` rather than by convention.
 
+**One stated exception — an ABSENT dock (recorded 2026-09-02, and narrowed the
+same day).** The invariant does not hold for `dockEvidenceFreshness` when there is
+no dock reading at all, and that much is deliberate. A dock that goes SILENT
+contributes no signal, so `readDockEvidenceFreshness`
+(`lib/signalgrid-core/src/evidence.ts`) derives `"missing"`, and `"missing"` is
+deliberately absent from the disqualifying list in `deriveCriticalSignalsPresent`
+(same file, where `"stale"`, `"expired"` and `"unknown"` all disqualify). The
+consequence, executed rather than reasoned about: identical evidence in every other
+dimension reaches **allow** when the dock has vanished and **step_up** when the dock
+is stale — a signal that disappeared is treated more kindly than one that answered
+late.
+
+The reason is that a dockless deployment is a SHAPE, not a degradation: no v1 rule
+matches custody/tamper/dock "unknown" — all three are **deferred** families under
+the launch profile — and making absence disqualifying would step
+up every tenant with no dock hardware on day one. The cost is that this one field
+cannot distinguish "we have no docks" from "our docks stopped talking" — the tenant's
+dock EXPECTATION is not modelled anywhere, so nothing can. Stated here rather than
+fixed, because closing it means introducing that expectation as tenant configuration,
+which is a change to the product, not to this function.
+
+**The exception covers ABSENCE ONLY, and two independent reviews were needed to
+get the statement of it right.** The first found that `groupLatest` was DROPPING
+any signal whose `observedAt` would not parse, so a dock reading that EXISTED and
+said "stale" with a broken clock stamp reached `readDockEvidenceFreshness` as
+nothing at all and came back `"missing"` — the one value that does not disqualify.
+The second found that the repair for it had over-corrected: every
+present-but-illegible reading answered `"unknown"`, which is right for a value that
+VOUCHES and wrong for one that ACCUSES, so a `tamper_state: "confirmed"` with an
+unparseable stamp turned a **deny** into a step-up. Corruption must never buy
+leniency, in either direction.
+
+Both are fixed. The table below is measured against **HEAD (19e53e0)** — the tree
+as it stands before this batch — and against the batch, on the real
+`buildEvidence` → `evaluatePolicy(SHARED_DEVICE_RULES_V1)` path with everything
+else healthy. An earlier version of this table labelled its "Before" column HEAD
+when the column actually held this batch's own first cut; rows 3 and 4 are the
+rows that were wrong, and they are unchanged versus HEAD:
+
+| Vector (everything else healthy) | HEAD (19e53e0) | This batch |
+|---|---|---|
+| no dock signal at all | `missing` → **allow** | `missing` → **allow** (the exception, unchanged) |
+| dock `stale`, valid `observedAt` | `stale` → **step_up** | `stale` → **step_up** (unchanged) |
+| dock `stale`, `observedAt: "not-a-date"` | `stale` → **step_up** | `stale` → **step_up** (unchanged) |
+| dock `expired`, `observedAt: "not-a-date"` | `expired` → **step_up** | `expired` → **step_up** (unchanged) |
+| posture `stale` at 08:00Z + `fresh` stamped `09:00+02:00` (= 07:00Z, EARLIER) | `fresh` → **allow** | `stale` → **step_up** [`POSTURE_STALE`] |
+| posture `stale` at 08:00Z + `fresh` with `observedAt: "not-a-date"` | `fresh` → **allow** | `stale` → **step_up** [`POSTURE_STALE`] |
+| sole `tamper_state: "confirmed"`, `observedAt: "not-a-date"` | **deny** [`TAMPER_CONFIRMED`, `TRUST_ESTABLISHED`] | **deny** [`TAMPER_CONFIRMED`] (outcome unchanged; the first cut said step_up. `TRUST_ESTABLISHED` drops because the illegible reading no longer vouches, so `criticalSignalsPresent` goes false) |
+| sole `tamper_state: "none"`, `observedAt: "not-a-date"` | `none` → **allow** | `unknown` → **step_up** |
+| tamper `none` legible + `confirmed` illegible, plus a SECOND illegible `none` ahead of it | `none` → **allow** [`TRUST_ESTABLISHED`] | `confirmed` → **deny** [`TAMPER_CONFIRMED`] |
+| two illegible tamper readings, `none` first then `confirmed` | `none` → **allow** | `confirmed` → **deny** [`TAMPER_CONFIRMED`] |
+| two illegible `identity_state` readings, `true` first then `false` | `true` → **allow** | `false` → **deny** [`IDENTITY_DISABLED`] |
+
+The last three rows are a THIRD finding (F-1), and it is older than either of the
+others: readings whose stamp cannot be ordered were kept one per category — the
+FIRST one in array order — so among illegible peers, arrival order decided the
+answer. Adding a signal could therefore move **deny** to **allow**, which is the
+one direction fail-closed forbids. Measured on the batch's own first cut, before
+the fold: row 9 allowed, row 10 stepped up, row 11 allowed. All three now keep
+the WORST value any illegible peer carries, which is order-independent, and the
+core proof asserts each row plus a reversed-order control.
+
+What the batch changes versus HEAD in the ordering rows is the middle pair: "latest" was a
+STRING comparison, and both an offset stamp and an unparseable one sort above a
+UTC `2026-…` string, so a `fresh` reading that was not the latest overwrote the
+`stale` one that was. Ordering is now by parsed instant.
+
+The rule the two reviews converged on, stated once: **an unorderable timestamp
+never erases a reading, and never trades its value down.** The reading is retained
+as present-but-illegible; it can never win as latest on TIME; but if its value is
+worse than the latest parseable one, the worse value wins — worst-wins, the same
+rule freshness has always followed, applied to values. Alone, it may accuse but it
+may not vouch: an affirmative-good value (`compliant`, `true`, `"none"`) with an
+unorderable stamp is downgraded to the same silence an absent signal produces,
+while a bad one stands. Absence and illegibility are different answers, and only
+absence is exempt.
+
+Held by `pnpm run proof:signalgrid-core`, which sweeps every signal-derived field
+that can move the backstop OR the verdict — 18 families, every member of each
+family's union, against both corruptions — and fails on any cell where corrupting
+an input LOOSENS either `criticalSignalsPresent` or the outcome's rank. The
+`absent signal` loosenings that remain are named exemptions with stated reasons,
+each stale-checked so it fails the day it stops describing a real one; they all
+have one shape, and it is REPORTED rather than gated: a signal that was never sent
+carries no accusation, and the core models no tenant-level EXPECTATION of a
+category, so it cannot tell "no dock hardware" from "the dock stopped talking".
+Every `unparseable observedAt` row is clean.
+
 Related: [`SIGNAL_SOURCING.md`](SIGNAL_SOURCING.md), and
 [`EVIDENCE_COVERAGE.md`](EVIDENCE_COVERAGE.md) — which reports, for a given
 estate, which evidence axes it can answer, which are dark, and which are dark

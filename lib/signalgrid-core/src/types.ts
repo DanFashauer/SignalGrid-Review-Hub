@@ -84,7 +84,15 @@ export interface Identity {
   assignedRole: string;
 }
 
-export type OwnerType = "corporate" | "personal" | "shared" | "unknown";
+/** Every device ownership shape, as a const array with the union DERIVED from it.
+ *  A sweep must be able to enumerate this: the core proof's probe set was
+ *  `[true, false, "unknown", ...FRESHNESS_VALUES]`, which contains no ownership
+ *  member at all, so a planted `ownerType !== "personal"` clause in
+ *  `deriveCriticalSignalsPresent` passed 322/322 assertions undetected
+ *  (second-review finding F-C, 2026-09-02). A union cannot be enumerated; an
+ *  array can, and deriving the union from the array keeps the two from drifting. */
+export const OWNER_TYPES = ["corporate", "personal", "shared", "unknown"] as const;
+export type OwnerType = (typeof OWNER_TYPES)[number];
 export type ManagementAgent = "intune" | "jamf" | "workspace_one" | "unknown";
 
 export interface Device {
@@ -98,7 +106,9 @@ export interface Device {
   managementAgent: ManagementAgent;
 }
 
-export type RiskTier = "low" | "standard" | "elevated" | "critical";
+/** Every workflow risk tier, array-first for the same reason as `OWNER_TYPES`. */
+export const RISK_TIERS = ["low", "standard", "elevated", "critical"] as const;
+export type RiskTier = (typeof RISK_TIERS)[number];
 
 export interface Workflow {
   id: string;
@@ -738,9 +748,15 @@ export interface ResolutionPlan {
   summaryForWorker: string;
   summaryForOperator: string;
   steps: ResolutionStep[];
-  /** True when at least one block is auto-proposable/approvable (not all hard). */
+  /** True when at least one block is auto-proposable/approvable (not all hard)
+   *  AND no reason code was left unanswered (see `unresolvedCodes`). */
   autoResolvable: boolean;
   path: ResolutionPathKind;
+  /** Reason codes on a non-allow decision that the planner has NO descriptor for,
+   *  and therefore no step for. They are carried rather than dropped: while this
+   *  list is non-empty the plan is `escalation` and never `autoResolvable`, so a
+   *  block the planner cannot answer can no longer read as self-service silence. */
+  unresolvedCodes: string[];
 }
 
 export interface ResolutionSimulation {

@@ -18,17 +18,23 @@
  */
 import {
   buildEvidence,
+  buildResolutionPlan,
   computeMetrics,
   runDockSync,
   foldIdentityEnabled,
   deriveCriticalSignalsPresent,
   FRESHNESS_VALUES,
+  EVIDENCE_VALUE_MEMBERS,
+  EVIDENCE_VALUE_DOMAINS,
   canonicalJson,
   constantTimeEquals,
   CoreError,
   evaluatePolicy,
   fixedClock,
+  MAX_POLICY_RULES,
+  MAX_RULE_CONDITIONS,
   MemoryStore,
+  mostRestrictiveOutcome,
   RESOLUTION_DESCRIPTOR_SHAPES,
   seedDemoStore,
   verifySnapshot,
@@ -38,6 +44,7 @@ import {
   SHARED_DEVICE_RULES_V2,
   validatePolicyRules,
   type Decision,
+  type DecisionEvidence,
   type DecisionOutcome,
   type Device,
   type Identity,
@@ -1921,6 +1928,1634 @@ for (const [fromRow, fromSignal, want, why] of [
     computeMetrics(healthy, { capped: false, maxPerTenant: 5000 }).window.unrecognizedOutcomes === 0);
 }
 
+// ── 20. Rule arms nothing had ever executed (verdict-core finding V6, 2026-09-02) ──
+//
+// A source read at 19e53e0 found eight branches of the shipped decision path with
+// NEITHER a fixture NOR a proof assertion behind them: four v1 rules
+// (identity-unknown, elevated-workflow-needs-encryption, custody-exception,
+// tamper-confirmed — the last reached only through a hand-built Decision in the
+// zero-trust proof, never through a real evaluation), the no-rule-matched default,
+// both authoring size ceilings, and the condition-shape rejections. Each one is
+// exercised here through the REAL evaluator or the REAL validator; each assertion
+// was confirmed to go red when its rule/guard is removed.
+{
+  const identityFor = (state: Identity["state"]): Identity => ({
+    id: `id_v6_${state}`,
+    tenantId: "tenant_northwind",
+    externalRef: `nurse.v6.${state}`,
+    displayName: "Nurse",
+    state,
+    assignedRole: "nurse",
+  });
+  const device: Device = {
+    id: "dev_v6",
+    tenantId: "tenant_northwind",
+    externalRef: "ipad-v6",
+    name: "Ward iPad",
+    osPlatform: "iPadOS",
+    osVersion: "18.5",
+    ownerType: "shared",
+    managementAgent: "intune",
+  };
+  const workflowFor = (riskTier: Workflow["riskTier"]): Workflow => ({
+    id: `wf_v6_${riskTier}`,
+    tenantId: "tenant_northwind",
+    key: "clinical-session",
+    name: "Clinical session",
+    riskTier,
+  });
+  const sig = (
+    category: SignalCategory,
+    value: NormalizedSignal["value"],
+  ): NormalizedSignal => ({
+    id: `sig_v6_${category}`,
+    tenantId: "tenant_northwind",
+    connectorId: "conn",
+    subjectType: "device",
+    subjectId: device.id,
+    category,
+    value,
+    observedAt: "2026-07-13T13:00:00.000Z",
+    freshness: "fresh",
+    sourceReference: "fixture:v6",
+  });
+  const healthy: NormalizedSignal[] = [
+    sig("device_compliance", "compliant"),
+    sig("device_management", true),
+    sig("device_encryption", true),
+    sig("os_support", true),
+    sig("posture_freshness", "fresh"),
+  ];
+  const v1 = {
+    id: "pv_v6_1",
+    tenantId: "tenant_northwind",
+    policyId: "pol_v6",
+    version: 1,
+    status: "active" as const,
+    rules: SHARED_DEVICE_RULES_V1,
+    createdAt: "2026-07-13T13:00:00.000Z",
+    digest: "test",
+  };
+
+  // identity-unknown → step_up / IDENTITY_STATE_UNKNOWN
+  const unknownIdentity = buildEvidence(identityFor("unknown"), device, workflowFor("standard"), healthy);
+  const unknownIdentityEval = evaluatePolicy(v1, unknownIdentity);
+  check(
+    "v6 identity-unknown: an unknown identity state derives 'unknown', never true",
+    unknownIdentity.identityEnabled === "unknown",
+    `got ${String(unknownIdentity.identityEnabled)}`,
+  );
+  check(
+    "v6 identity-unknown: evaluates to step_up with IDENTITY_STATE_UNKNOWN",
+    unknownIdentityEval.outcome === "step_up" &&
+      unknownIdentityEval.reasonCodes.includes("IDENTITY_STATE_UNKNOWN"),
+    `${unknownIdentityEval.outcome} [${unknownIdentityEval.reasonCodes.join(", ")}]`,
+  );
+  check(
+    "v6 identity-unknown: the rule FIRED — it is not the no-rule default wearing the same verdict",
+    unknownIdentityEval.matchedRules.some((r) => r.ruleId === "identity-unknown") &&
+      !unknownIdentityEval.reasonCodes.includes("NO_RULE_MATCHED_DEFAULT_STEP_UP"),
+  );
+
+  // elevated-workflow-needs-encryption → step_up / ENCRYPTION_REQUIRED_FOR_WORKFLOW
+  const unencrypted = buildEvidence(
+    identityFor("enabled"),
+    device,
+    workflowFor("elevated"),
+    [...healthy.filter((s) => s.category !== "device_encryption"), sig("device_encryption", false)],
+  );
+  const unencryptedEval = evaluatePolicy(v1, unencrypted);
+  check(
+    "v6 elevated-needs-encryption: an unencrypted elevated workflow steps up with ENCRYPTION_REQUIRED_FOR_WORKFLOW",
+    unencryptedEval.outcome === "step_up" &&
+      unencryptedEval.reasonCodes.includes("ENCRYPTION_REQUIRED_FOR_WORKFLOW") &&
+      unencryptedEval.matchedRules.some((r) => r.ruleId === "elevated-workflow-needs-encryption"),
+    `${unencryptedEval.outcome} [${unencryptedEval.reasonCodes.join(", ")}]`,
+  );
+  check(
+    "v6 elevated-needs-encryption: the SAME device on a standard workflow does not raise it (the risk-tier condition is load-bearing)",
+    !evaluatePolicy(
+      v1,
+      buildEvidence(identityFor("enabled"), device, workflowFor("standard"), [
+        ...healthy.filter((s) => s.category !== "device_encryption"),
+        sig("device_encryption", false),
+      ]),
+    ).reasonCodes.includes("ENCRYPTION_REQUIRED_FOR_WORKFLOW"),
+  );
+
+  // custody-exception → restrict / CUSTODY_EXCEPTION
+  const custodyException = buildEvidence(identityFor("enabled"), device, workflowFor("standard"), [
+    ...healthy,
+    sig("custody_state", "exception"),
+  ]);
+  const custodyEval = evaluatePolicy(v1, custodyException);
+  check(
+    "v6 custody-exception: a custody exception restricts with CUSTODY_EXCEPTION",
+    custodyEval.outcome === "restrict" &&
+      custodyEval.reasonCodes.includes("CUSTODY_EXCEPTION") &&
+      custodyEval.matchedRules.some((r) => r.ruleId === "custody-exception"),
+    `${custodyEval.outcome} [${custodyEval.reasonCodes.join(", ")}]`,
+  );
+
+  // tamper-confirmed → deny / TAMPER_CONFIRMED, through a real evaluation
+  const tamperConfirmed = buildEvidence(identityFor("enabled"), device, workflowFor("standard"), [
+    ...healthy,
+    sig("tamper_state", "confirmed"),
+  ]);
+  const tamperEval = evaluatePolicy(v1, tamperConfirmed);
+  check(
+    "v6 tamper-confirmed: a confirmed tamper DENIES with TAMPER_CONFIRMED (evaluated, not hand-built)",
+    tamperEval.outcome === "deny" &&
+      tamperEval.reasonCodes.includes("TAMPER_CONFIRMED") &&
+      tamperEval.matchedRules.some((r) => r.ruleId === "tamper-confirmed"),
+    `${tamperEval.outcome} [${tamperEval.reasonCodes.join(", ")}]`,
+  );
+  check(
+    "v6 tamper-confirmed: deny beats the allow the same evidence would otherwise earn",
+    evaluatePolicy(v1, buildEvidence(identityFor("enabled"), device, workflowFor("standard"), healthy))
+      .outcome === "allow",
+  );
+
+  // NO_RULE_MATCHED_DEFAULT_STEP_UP — a policy whose only rule cannot match.
+  const inertVersion = {
+    ...v1,
+    id: "pv_v6_inert",
+    rules: validatePolicyRules([
+      {
+        id: "never-matches",
+        description: "A rule pinned to an owner type this fixture never has.",
+        match: [{ field: "ownerType", in: ["personal"] }],
+        outcome: "deny",
+        reasonCode: "INERT_RULE_NEVER_FIRES",
+        severity: "critical",
+      },
+    ]),
+  };
+  const inertEval = evaluatePolicy(
+    inertVersion,
+    buildEvidence(identityFor("enabled"), device, workflowFor("standard"), healthy),
+  );
+  check(
+    "v6 no-rule-matched: a policy with no matching rule steps up with NO_RULE_MATCHED_DEFAULT_STEP_UP — never a silent allow",
+    inertEval.outcome === "step_up" &&
+      inertEval.matchedRules.length === 0 &&
+      inertEval.reasonCodes.includes("NO_RULE_MATCHED_DEFAULT_STEP_UP"),
+    `${inertEval.outcome} [${inertEval.reasonCodes.join(", ")}]`,
+  );
+
+  // Authoring ceilings — MAX_POLICY_RULES and MAX_RULE_CONDITIONS.
+  const okRule = (id: string) => ({
+    id,
+    description: "filler",
+    match: [{ field: "ownerType", in: ["personal"] }],
+    outcome: "deny",
+    reasonCode: "FILLER_CODE",
+    severity: "critical",
+  });
+  check(
+    `v6 ceiling: exactly MAX_POLICY_RULES (${MAX_POLICY_RULES}) rules is ACCEPTED — the gate is a ceiling, not an off-by-one`,
+    validatePolicyRules(Array.from({ length: MAX_POLICY_RULES }, (_, i) => okRule(`r${i}`))).length ===
+      MAX_POLICY_RULES,
+  );
+  expectError(
+    `v6 ceiling: MAX_POLICY_RULES + 1 (${MAX_POLICY_RULES + 1}) rules is REJECTED`,
+    "validation",
+    () => validatePolicyRules(Array.from({ length: MAX_POLICY_RULES + 1 }, (_, i) => okRule(`r${i}`))),
+  );
+  const conditions = (n: number) =>
+    Array.from({ length: n }, () => ({ field: "ownerType", in: ["personal"] }));
+  check(
+    `v6 ceiling: exactly MAX_RULE_CONDITIONS (${MAX_RULE_CONDITIONS}) conditions is ACCEPTED`,
+    validatePolicyRules([{ ...okRule("r_cond"), match: conditions(MAX_RULE_CONDITIONS) }])[0].match
+      .length === MAX_RULE_CONDITIONS,
+  );
+  expectError(
+    `v6 ceiling: MAX_RULE_CONDITIONS + 1 (${MAX_RULE_CONDITIONS + 1}) conditions is REJECTED`,
+    "validation",
+    () => validatePolicyRules([{ ...okRule("r_cond"), match: conditions(MAX_RULE_CONDITIONS + 1) }]),
+  );
+
+  // validateCondition reject paths — an unknown field, and a tristate field given
+  // a value that is neither a boolean nor the sanctioned "unknown".
+  expectError(
+    "v6 validateCondition: an unknown condition field is REJECTED (a typo cannot author a rule that silently never fires)",
+    "validation",
+    () => validatePolicyRules([{ ...okRule("r_field"), match: [{ field: "notAField", in: ["personal"] }] }]),
+  );
+  expectError(
+    "v6 validateCondition: a tristate field given a non-boolean, non-'unknown' value is REJECTED",
+    "validation",
+    () => validatePolicyRules([{ ...okRule("r_tri"), match: [{ field: "identityEnabled", equals: "yes" }] }]),
+  );
+
+  // ── V8: evidence derivation hardening (2026-09-02) ────────────────────────
+  //
+  // (a) A freshness string outside the union must resolve to "unknown" — the
+  // RAISING answer. Before the guard, `FRESHNESS_SEVERITY[bogus]` was undefined,
+  // the bogus string stuck as `worst`, it equalled none of the values
+  // `deriveCriticalSignalsPresent` rejects, and the decision reached ALLOW.
+  const bogusFreshness = buildEvidence(identityFor("enabled"), device, workflowFor("standard"), [
+    ...healthy,
+    { ...sig("dock_state", "docked"), freshness: "totally-bogus" as unknown as Freshness },
+  ]);
+  check(
+    "v8a: an out-of-union dock freshness resolves to 'unknown', never to itself",
+    bogusFreshness.dockEvidenceFreshness === "unknown",
+    `got ${JSON.stringify(bogusFreshness.dockEvidenceFreshness)}`,
+  );
+  check(
+    "v8a: …and it therefore degrades critical evidence and cannot reach allow",
+    bogusFreshness.criticalSignalsPresent === false &&
+      evaluatePolicy(v1, bogusFreshness).outcome !== "allow",
+  );
+  // (b) "Latest" is by parsed instant. Two shapes broke the old string compare.
+  const olderUtc = { ...sig("device_compliance", "compliant"), id: "sig_v8_a", observedAt: "2026-07-13T08:00:00.000Z" };
+  const newerUtc = { ...sig("device_compliance", "non_compliant"), id: "sig_v8_b", observedAt: "2026-07-13T10:00:00.000Z" };
+  const earlierOffset = { ...sig("device_compliance", "non_compliant"), id: "sig_v8_c", observedAt: "2026-07-13T09:00:00+02:00" };
+  const unparseable = { ...sig("device_compliance", "non_compliant"), id: "sig_v8_d", observedAt: "not-a-date" };
+  const rest = healthy.filter((s) => s.category !== "device_compliance");
+  check(
+    "v8b: a +02:00 timestamp that is EARLIER in real time does not become 'latest' (it sorts later as text)",
+    buildEvidence(identityFor("enabled"), device, workflowFor("standard"), [...rest, olderUtc, earlierOffset])
+      .deviceCompliance === "compliant",
+  );
+  // An illegible reading never wins ON TIME. The only way to observe that now is
+  // to make its value the BETTER one: if it could win as latest it would
+  // overwrite the parseable answer with `compliant`, and it does not.
+  const unparseableGood = { ...sig("device_compliance", "compliant"), id: "sig_v8_e", observedAt: "not-a-date" };
+  const olderUtcBad = { ...sig("device_compliance", "non_compliant"), id: "sig_v8_f", observedAt: "2026-07-13T08:00:00.000Z" };
+  check(
+    "v8b: an UNPARSEABLE observedAt never wins over a real timestamp — its BETTER value does not overwrite the parseable answer, in either array order",
+    buildEvidence(identityFor("enabled"), device, workflowFor("standard"), [...rest, olderUtcBad, unparseableGood])
+      .deviceCompliance === "non_compliant" &&
+      buildEvidence(identityFor("enabled"), device, workflowFor("standard"), [...rest, unparseableGood, olderUtcBad])
+        .deviceCompliance === "non_compliant",
+  );
+  // …but it can still ACCUSE. Second-review finding F-A (2026-09-02): the first
+  // cut answered "unknown" for every illegible reading, which discards a bad
+  // value, and a discarded bad value is leniency bought with corruption. Worst
+  // wins in both directions — the freshness rule, applied to values.
+  check(
+    "v8b/F-A: an illegible reading whose value is WORSE than the latest parseable one still wins on VALUE (it cannot win on time, but a bad value is never traded down)",
+    buildEvidence(identityFor("enabled"), device, workflowFor("standard"), [...rest, olderUtc, unparseable])
+      .deviceCompliance === "non_compliant",
+  );
+  check(
+    "v8b/F-A: a SOLE illegible reading may not VOUCH — an affirmative-good value with an unorderable stamp reads 'unknown'",
+    buildEvidence(identityFor("enabled"), device, workflowFor("standard"), [...rest, unparseableGood])
+      .deviceCompliance === "unknown",
+  );
+  check(
+    "v8b/F-A: a SOLE illegible reading may still ACCUSE — a bad value with an unorderable stamp is kept, and the decision it drives is the same one the legible reading drives",
+    buildEvidence(identityFor("enabled"), device, workflowFor("standard"), [...rest, unparseable])
+      .deviceCompliance === "non_compliant",
+  );
+  check(
+    "v8b: ordering is otherwise unchanged — the genuinely newer UTC reading still wins",
+    buildEvidence(identityFor("enabled"), device, workflowFor("standard"), [...rest, olderUtc, newerUtc])
+      .deviceCompliance === "non_compliant",
+  );
+
+  // ── V9: a plan cannot report itself resolvable on silence ─────────────────
+  //
+  // `buildResolutionPlan` skips a reason code with no descriptor, so a block it
+  // has no answer for left no trace: the DENY below reported `path:
+  // "self_service"` before this change. The unanswered codes are now carried.
+  const silentDeny = {
+    id: "dec_v9",
+    tenantId: "tenant_northwind",
+    outcome: "deny" as const,
+    reasonCodes: ["A_CODE_WITH_NO_DESCRIPTOR", "ANOTHER_CODE_WITH_NO_DESCRIPTOR"],
+    matchedRules: [],
+  } as unknown as Decision;
+  const silentPlan = buildResolutionPlan(silentDeny, {
+    tenantId: "tenant_northwind",
+    primaryHardwareChannel: "device_prompt",
+    autoProposeEnabled: true,
+  });
+  check(
+    "v9: a deny of ONLY descriptor-less codes is NOT auto-resolvable and is NOT self-service",
+    silentPlan.autoResolvable === false && silentPlan.path === "escalation",
+    `auto=${silentPlan.autoResolvable} path=${silentPlan.path}`,
+  );
+  check(
+    "v9: …and it NAMES the codes it could not answer rather than dropping them",
+    silentPlan.unresolvedCodes.length === 2 &&
+      silentPlan.unresolvedCodes.includes("A_CODE_WITH_NO_DESCRIPTOR") &&
+      silentPlan.summaryForOperator.includes("A_CODE_WITH_NO_DESCRIPTOR"),
+    `unresolved=[${silentPlan.unresolvedCodes.join(", ")}]`,
+  );
+  // The converse, so the rule above is not simply "every plan escalates": a real
+  // decision whose codes all have descriptors is unaffected, and an affirmative
+  // code contributed by an ALLOW rule (TRUST_ESTABLISHED rides along on most
+  // restrict/step_up decisions) is not an unanswered block.
+  const staleDecision = decisions[scenarios.findIndex((s) => s.label === "stale-step-up")];
+  const stalePlan = buildResolutionPlan(staleDecision, {
+    tenantId: "tenant_northwind",
+    primaryHardwareChannel: "device_prompt",
+    autoProposeEnabled: true,
+  });
+  check(
+    "v9: a described block still reports self-service and carries no unresolved codes",
+    stalePlan.path === "self_service" &&
+      stalePlan.autoResolvable === true &&
+      stalePlan.unresolvedCodes.length === 0,
+    `path=${stalePlan.path} unresolved=[${stalePlan.unresolvedCodes.join(", ")}]`,
+  );
+  const custodyDecision = decisions[scenarios.findIndex((s) => s.label === "custody-overdue-restrict")];
+  check(
+    "v9: TRUST_ESTABLISHED (contributed by an ALLOW rule, no descriptor) is NOT counted as an unanswered block",
+    custodyDecision.reasonCodes.includes("TRUST_ESTABLISHED") &&
+      buildResolutionPlan(custodyDecision, {
+        tenantId: "tenant_northwind",
+        primaryHardwareChannel: "device_prompt",
+        autoProposeEnabled: true,
+      }).unresolvedCodes.length === 0,
+  );
+}
+
+// ── 21. Review findings F1–F3 (2026-09-02): an ILLEGIBLE reading, a bogus
+//        freshness arriving at the exported boundary, and one reason code two
+//        rules share ────────────────────────────────────────────────────────
+//
+// F1 is the one that blocked the batch, and it is worth stating as a rule rather
+// than as a case: AN UNORDERABLE TIMESTAMP MUST NEVER ERASE A READING. The first
+// cut of `groupLatest` dropped a signal whose `observedAt` would not parse, which
+// for the dock family meant `readDockEvidenceFreshness` fell through to "missing"
+// — the one freshness `deriveCriticalSignalsPresent` deliberately does not
+// disqualify — so a dock that ANSWERED "stale" with a broken clock stamp was
+// treated better than one that answered "stale" with a good one. Measured, both
+// directions, on the real functions: the four dock vectors below.
+{
+  const identity: Identity = {
+    id: "id_f1",
+    tenantId: "tenant_northwind",
+    externalRef: "nurse.f1",
+    displayName: "Nurse",
+    state: "enabled",
+    assignedRole: "nurse",
+  };
+  const device: Device = {
+    id: "dev_f1",
+    tenantId: "tenant_northwind",
+    externalRef: "ipad-f1",
+    name: "Ward iPad",
+    osPlatform: "iPadOS",
+    osVersion: "18.5",
+    ownerType: "shared",
+    managementAgent: "intune",
+  };
+  const workflow: Workflow = {
+    id: "wf_f1",
+    tenantId: "tenant_northwind",
+    key: "clinical-session",
+    name: "Clinical session",
+    riskTier: "standard",
+  };
+  const VALID_AT = "2026-07-13T13:00:00.000Z";
+  const ILLEGIBLE_AT = "not-a-date";
+  const sig = (
+    category: SignalCategory,
+    value: NormalizedSignal["value"],
+    extra: Partial<NormalizedSignal> = {},
+  ): NormalizedSignal => ({
+    id: `sig_f1_${category}`,
+    tenantId: "tenant_northwind",
+    connectorId: "conn",
+    subjectType: "device",
+    subjectId: device.id,
+    category,
+    value,
+    observedAt: VALID_AT,
+    freshness: "fresh",
+    sourceReference: "fixture:f1",
+    ...extra,
+  });
+  const healthy: NormalizedSignal[] = [
+    sig("device_compliance", "compliant"),
+    sig("device_management", true),
+    sig("device_encryption", true),
+    sig("os_support", true),
+    sig("posture_freshness", "fresh"),
+  ];
+  const v1 = {
+    id: "pv_f1",
+    tenantId: "tenant_northwind",
+    policyId: "pol_f1",
+    version: 1,
+    status: "active" as const,
+    rules: SHARED_DEVICE_RULES_V1,
+    createdAt: VALID_AT,
+    digest: "test",
+  };
+  const outcomeFor = (signals: NormalizedSignal[]) => {
+    const evidence = buildEvidence(identity, device, workflow, signals);
+    const evaluation = evaluatePolicy(v1, evidence);
+    return { evidence, outcome: evaluation.outcome, codes: evaluation.reasonCodes };
+  };
+
+  // The four dock vectors, as a table. The FIRST is the deliberate exemption —
+  // no dock at all is a deployment shape — and it is asserted here so the other
+  // three cannot be read as "everything dock-shaped steps up".
+  const dockVectors: [string, NormalizedSignal[], Freshness, DecisionOutcome][] = [
+    ["dock signal VANISHED (no dock reading at all)", healthy, "missing", "allow"],
+    [
+      "dock STALE with a valid observedAt",
+      [...healthy, sig("custody_state", "checked_in", { freshness: "stale" })],
+      "stale",
+      "step_up",
+    ],
+    [
+      "dock STALE with observedAt='not-a-date' (F1)",
+      [...healthy, sig("custody_state", "checked_in", { freshness: "stale", observedAt: ILLEGIBLE_AT })],
+      "stale",
+      "step_up",
+    ],
+    [
+      "dock EXPIRED with observedAt='not-a-date' (F1)",
+      [...healthy, sig("custody_state", "checked_in", { freshness: "expired", observedAt: ILLEGIBLE_AT })],
+      "expired",
+      "step_up",
+    ],
+  ];
+  for (const [label, signals, wantFreshness, wantOutcome] of dockVectors) {
+    const { evidence, outcome } = outcomeFor(signals);
+    check(
+      `f1 dock vector — ${label}: dockEvidenceFreshness=${wantFreshness}, ${wantOutcome.toUpperCase()}`,
+      evidence.dockEvidenceFreshness === wantFreshness && outcome === wantOutcome,
+      `got dockEvidenceFreshness=${evidence.dockEvidenceFreshness} outcome=${outcome}`,
+    );
+  }
+  check(
+    "f1: a dock reading that EXISTS is never reported as 'missing' merely because nothing can order its timestamp — absence and illegibility are different answers",
+    outcomeFor([
+      ...healthy,
+      sig("custody_state", "checked_in", { freshness: "stale", observedAt: ILLEGIBLE_AT }),
+    ]).evidence.dockEvidenceFreshness !== "missing",
+  );
+  // The same rule on the posture channel: the reading is retained, but nothing
+  // about it is trusted as current.
+  const posture = outcomeFor([
+    ...healthy.filter((s) => s.category !== "posture_freshness"),
+    sig("posture_freshness", "fresh", { observedAt: ILLEGIBLE_AT }),
+  ]);
+  check(
+    "f1: a SOLE posture reading with an unorderable observedAt is not 'fresh' — it reads 'unknown' (illegible), critical evidence is absent, and the outcome is not allow",
+    posture.evidence.postureFreshness === "unknown" &&
+      posture.evidence.criticalSignalsPresent === false &&
+      posture.outcome !== "allow",
+    `postureFreshness=${posture.evidence.postureFreshness} crit=${posture.evidence.criticalSignalsPresent} outcome=${posture.outcome}`,
+  );
+  // An illegible sibling cannot win on TIME — shown with the illegible reading
+  // carrying the better value, which is the only direction in which winning on
+  // time is distinguishable from winning on badness (see the F-A pair below).
+  check(
+    "f1: an illegible reading never OUTRANKS a parseable sibling — the orderable one is still latest, in either array order",
+    buildEvidence(identity, device, workflow, [
+      ...healthy.filter((s) => s.category !== "device_compliance"),
+      sig("device_compliance", "non_compliant", { id: "sig_f1_bad", observedAt: VALID_AT }),
+      sig("device_compliance", "compliant", { id: "sig_f1_ok", observedAt: ILLEGIBLE_AT }),
+    ]).deviceCompliance === "non_compliant" &&
+      buildEvidence(identity, device, workflow, [
+        ...healthy.filter((s) => s.category !== "device_compliance"),
+        sig("device_compliance", "compliant", { id: "sig_f1_ok", observedAt: ILLEGIBLE_AT }),
+        sig("device_compliance", "non_compliant", { id: "sig_f1_bad", observedAt: VALID_AT }),
+      ]).deviceCompliance === "non_compliant",
+  );
+  check(
+    "f1/F-A: …and an illegible sibling whose value is WORSE than the parseable latest wins on VALUE, in either array order — worst-wins, the freshness rule applied to values",
+    buildEvidence(identity, device, workflow, [
+      ...healthy.filter((s) => s.category !== "device_compliance"),
+      sig("device_compliance", "compliant", { id: "sig_f1_ok", observedAt: VALID_AT }),
+      sig("device_compliance", "non_compliant", { id: "sig_f1_bad", observedAt: ILLEGIBLE_AT }),
+    ]).deviceCompliance === "non_compliant" &&
+      buildEvidence(identity, device, workflow, [
+        ...healthy.filter((s) => s.category !== "device_compliance"),
+        sig("device_compliance", "non_compliant", { id: "sig_f1_bad", observedAt: ILLEGIBLE_AT }),
+        sig("device_compliance", "compliant", { id: "sig_f1_ok", observedAt: VALID_AT }),
+      ]).deviceCompliance === "non_compliant",
+  );
+
+  // ── F-A (second review, 2026-09-02): AN ILLEGIBLE READING MAY ACCUSE ──────
+  //
+  // The first repair answered "unknown" for every present-but-illegible reading.
+  // For a GOOD value that is correct — a reading nothing can place in time may
+  // not vouch. For a BAD value it was a fail-OPEN regression against HEAD: the
+  // corruption BOUGHT leniency. Each row below was measured on HEAD before the
+  // fix, and HEAD's verdict is the expectation: an unorderable timestamp must not
+  // change the answer a bad value gives. Every row is paired with its LEGIBLE
+  // control, so a row that passed because the vector never fired is visible.
+  const faVectors: [string, NormalizedSignal[], DecisionOutcome, string][] = [
+    [
+      "tamper_state=confirmed, sole illegible reading",
+      [...healthy, sig("tamper_state", "confirmed", { observedAt: ILLEGIBLE_AT })],
+      "deny",
+      "TAMPER_CONFIRMED",
+    ],
+    [
+      "badge_binding=forced, sole illegible reading",
+      [...healthy, sig("badge_binding", "forced", { observedAt: ILLEGIBLE_AT })],
+      "deny",
+      "BADGE_FORCED_REMOVAL",
+    ],
+    [
+      "device_compliance=non_compliant, sole illegible reading",
+      [
+        ...healthy.filter((s) => s.category !== "device_compliance"),
+        sig("device_compliance", "non_compliant", { observedAt: ILLEGIBLE_AT }),
+      ],
+      "restrict",
+      "DEVICE_NONCOMPLIANT",
+    ],
+    [
+      "device_management=false, sole illegible reading",
+      [
+        ...healthy.filter((s) => s.category !== "device_management"),
+        sig("device_management", false, { observedAt: ILLEGIBLE_AT }),
+      ],
+      "restrict",
+      "DEVICE_UNMANAGED",
+    ],
+    [
+      "tamper_state=confirmed illegible WITH a parseable, fresh dock_state sibling",
+      [
+        ...healthy,
+        sig("tamper_state", "confirmed", { observedAt: ILLEGIBLE_AT }),
+        sig("dock_state", "occupied", { id: "sig_f1_dock_sibling" }),
+      ],
+      "deny",
+      "TAMPER_CONFIRMED",
+    ],
+  ];
+  for (const [label, signals, wantOutcome, wantCode] of faVectors) {
+    const corrupted = outcomeFor(signals);
+    const legible = outcomeFor(
+      signals.map((sg) => (sg.observedAt === ILLEGIBLE_AT ? { ...sg, observedAt: VALID_AT } : sg)),
+    );
+    check(
+      `f-a: ${label} — still ${wantOutcome.toUpperCase()} [${wantCode}], exactly as HEAD decided it`,
+      corrupted.outcome === wantOutcome &&
+        evaluatePolicy(v1, corrupted.evidence).reasonCodes.includes(wantCode),
+      `got ${corrupted.outcome} [${evaluatePolicy(v1, corrupted.evidence).reasonCodes.join(", ")}]`,
+    );
+    check(
+      `f-a control: ${label} with a LEGIBLE timestamp decides the same way — the vector fires for its VALUE, not for its stamp`,
+      legible.outcome === wantOutcome &&
+        evaluatePolicy(v1, legible.evidence).reasonCodes.includes(wantCode),
+      `got ${legible.outcome} [${evaluatePolicy(v1, legible.evidence).reasonCodes.join(", ")}]`,
+    );
+  }
+  // The other half of the rule, and the half the first repair got right: a GOOD
+  // value with an unorderable stamp may not vouch for itself.
+  const goodIllegible = outcomeFor([
+    ...healthy,
+    sig("tamper_state", "none", { observedAt: ILLEGIBLE_AT }),
+  ]);
+  check(
+    "f-a: an affirmative-GOOD value with an unorderable stamp is downgraded — tamper_state 'none' reads 'unknown', not 'none', and the decision does not reach allow",
+    goodIllegible.evidence.tamperState === "unknown" && goodIllegible.outcome !== "allow",
+    `tamperState=${goodIllegible.evidence.tamperState} outcome=${goodIllegible.outcome}`,
+  );
+  check(
+    "f-a control: the same reading with a LEGIBLE stamp really does read 'none' and really does allow — so the downgrade above is attributable to the stamp",
+    outcomeFor([...healthy, sig("tamper_state", "none")]).evidence.tamperState === "none" &&
+      outcomeFor([...healthy, sig("tamper_state", "none")]).outcome === "allow",
+  );
+
+  // ── F-1 (third review, 2026-09-02): WORST-WINS AMONG ILLEGIBLE PEERS ───────
+  //
+  // PRE-EXISTING, not introduced by this batch, and it defeated the invariant the
+  // batch states. `groupLatest` kept the FIRST illegible reading per category and
+  // dropped every other one, so among readings that nothing can order by time,
+  // ARRAY ORDER decided the answer — and it decided it in the fail-open direction.
+  //
+  // Every row was measured through buildEvidence → evaluatePolicy(SHARED_DEVICE_RULES_V1)
+  // with everything else healthy, on the code BEFORE the fold; the arrow is what
+  // that code returned versus what it must return:
+  //
+  //   D  legible "none" latest + illegible "confirmed"            deny            (unchanged)
+  //   E  D plus one extra illegible "none" placed FIRST           allow   → deny
+  //   B  illegible "none" first, illegible "confirmed" second     step_up → deny
+  //   G  illegible identity `true` first, illegible `false`       allow   → deny
+  //
+  // E IS THE WHOLE FINDING IN ONE ROW: adding a signal moved DENY to ALLOW. B is
+  // the same defect with no parseable sibling at all, and G shows it is not a
+  // tamper quirk — the identity family loses a revocation the same way.
+  //
+  // Each row is paired with a CONTROL that reverses the order of the illegible
+  // peers and demands the identical answer. Worst-wins is order-independent by
+  // construction; first-wins is not, so the control fails on the old code even
+  // where the row itself might not.
+  const peerVectors: [string, NormalizedSignal[], keyof DecisionEvidence, string, DecisionOutcome, string][] = [
+    [
+      "D: legible tamper 'none' is latest, an illegible 'confirmed' accuses",
+      [
+        ...healthy,
+        sig("tamper_state", "none", { id: "sig_f1_peer_d_ok" }),
+        sig("tamper_state", "confirmed", { id: "sig_f1_peer_d_bad", observedAt: ILLEGIBLE_AT }),
+      ],
+      "tamperState",
+      "confirmed",
+      "deny",
+      "TAMPER_CONFIRMED",
+    ],
+    [
+      "E: D plus a SECOND illegible 'none' ahead of the accusation — one added signal, nothing removed",
+      [
+        ...healthy,
+        sig("tamper_state", "none", { id: "sig_f1_peer_e_extra", observedAt: ILLEGIBLE_AT }),
+        sig("tamper_state", "confirmed", { id: "sig_f1_peer_e_bad", observedAt: ILLEGIBLE_AT }),
+        sig("tamper_state", "none", { id: "sig_f1_peer_e_ok" }),
+      ],
+      "tamperState",
+      "confirmed",
+      "deny",
+      "TAMPER_CONFIRMED",
+    ],
+    [
+      "B: two illegible tamper readings and no parseable one — 'none' first, 'confirmed' second",
+      [
+        ...healthy,
+        sig("tamper_state", "none", { id: "sig_f1_peer_b_ok", observedAt: ILLEGIBLE_AT }),
+        sig("tamper_state", "confirmed", { id: "sig_f1_peer_b_bad", observedAt: ILLEGIBLE_AT }),
+      ],
+      "tamperState",
+      "confirmed",
+      "deny",
+      "TAMPER_CONFIRMED",
+    ],
+    [
+      "G: two illegible identity readings — `true` first, `false` second; a revocation is not outvoted by arriving second",
+      [
+        ...healthy,
+        sig("identity_state", true, { id: "sig_f1_peer_g_ok", observedAt: ILLEGIBLE_AT }),
+        sig("identity_state", false, { id: "sig_f1_peer_g_bad", observedAt: ILLEGIBLE_AT }),
+      ],
+      "identityEnabled",
+      "false",
+      "deny",
+      "IDENTITY_DISABLED",
+    ],
+  ];
+  for (const [label, signals, field, wantValue, wantOutcome, wantCode] of peerVectors) {
+    const result = outcomeFor(signals);
+    check(
+      `f-1: ${label} — ${field}=${wantValue}, ${wantOutcome.toUpperCase()} [${wantCode}]`,
+      String(result.evidence[field]) === wantValue &&
+        result.outcome === wantOutcome &&
+        result.codes.includes(wantCode),
+      `${field}=${String(result.evidence[field])} outcome=${result.outcome} [${result.codes.join(", ")}]`,
+    );
+    // The control: reverse the illegible peers. Nothing can order them by time, so
+    // the answer must not depend on which one arrived first — in EITHER direction.
+    const illegible = signals.filter((sg) => sg.observedAt === ILLEGIBLE_AT);
+    const reversed = [
+      ...signals.filter((sg) => sg.observedAt !== ILLEGIBLE_AT),
+      ...[...illegible].reverse(),
+    ];
+    const control = outcomeFor(reversed);
+    check(
+      `f-1 control: ${label} — reversing the illegible peers changes nothing (${field}=${wantValue}, ${wantOutcome.toUpperCase()}); worst-wins is order-independent, first-wins is not`,
+      String(control.evidence[field]) === wantValue &&
+        control.outcome === wantOutcome &&
+        control.codes.includes(wantCode),
+      `${field}=${String(control.evidence[field])} outcome=${control.outcome} [${control.codes.join(", ")}]`,
+    );
+  }
+  // And the other half of the rule survives the fold: several illegible peers that
+  // ALL vouch still may not vouch. Worst-wins never invents an accusation either.
+  const allGoodPeers = outcomeFor([
+    ...healthy,
+    sig("tamper_state", "none", { id: "sig_f1_peer_h1", observedAt: ILLEGIBLE_AT }),
+    sig("tamper_state", "none", { id: "sig_f1_peer_h2", observedAt: ILLEGIBLE_AT }),
+  ]);
+  check(
+    "f-1: two illegible readings that both say 'none' still cannot vouch — tamperState reads 'unknown' and the decision does not reach allow",
+    allGoodPeers.evidence.tamperState === "unknown" && allGoodPeers.outcome !== "allow",
+    `tamperState=${allGoodPeers.evidence.tamperState} outcome=${allGoodPeers.outcome}`,
+  );
+
+  // ── The lexical-ordering pair: what this batch fixes versus HEAD ───────────
+  //
+  // Both rows below ALLOWED at HEAD, because "latest" was a string compare: an
+  // offset stamp and an unparseable one each sort above a UTC "2026-…" string and
+  // each carried `fresh`, so the true latest reading — which said `stale` — was
+  // overwritten. These are the two rows the docs table cites.
+  const lexicalPair: [string, NormalizedSignal][] = [
+    [
+      "an offset stamp (09:00+02:00 = 07:00Z, EARLIER than the 08:00Z reading)",
+      sig("posture_freshness", "fresh", { id: "sig_lex_off", observedAt: "2026-07-13T09:00:00+02:00" }),
+    ],
+    [
+      "an unparseable stamp",
+      sig("posture_freshness", "fresh", { id: "sig_lex_bad", observedAt: ILLEGIBLE_AT }),
+    ],
+  ];
+  for (const [label, sibling] of lexicalPair) {
+    const result = outcomeFor([
+      ...healthy.filter((s) => s.category !== "posture_freshness"),
+      sig("posture_freshness", "stale", { id: "sig_lex_true", observedAt: "2026-07-13T08:00:00.000Z" }),
+      sibling,
+    ]);
+    check(
+      `f-a/V8b: a 'fresh' sibling carrying ${label} no longer beats the true latest 'stale' reading — postureFreshness=stale, STEP_UP [POSTURE_STALE] (HEAD: allow)`,
+      result.evidence.postureFreshness === "stale" &&
+        result.outcome === "step_up" &&
+        result.codes.includes("POSTURE_STALE"),
+      `postureFreshness=${result.evidence.postureFreshness} outcome=${result.outcome} [${result.codes.join(", ")}]`,
+    );
+  }
+
+  // ── F2: junk arriving at the EXPORTED boundary ────────────────────────────
+  //
+  // `deriveCriticalSignalsPresent` is exported and `resolution.ts` calls it on a
+  // DecisionEvidence its caller supplied. The fields are typed; a durable row cast
+  // with an unchecked `as` is not.
+  const healthyEvidence = buildEvidence(identity, device, workflow, healthy);
+  check(
+    "f2 control: the unaltered healthy evidence DOES have critical signals present (so a flip below is attributable to the injection)",
+    deriveCriticalSignalsPresent(healthyEvidence) === true,
+  );
+  const junk: unknown[] = ["totally-bogus", "", null, undefined, 7, "FRESH"];
+  for (const field of ["postureFreshness", "dockEvidenceFreshness"] as const) {
+    const survivors = junk.filter((value) =>
+      deriveCriticalSignalsPresent({
+        ...healthyEvidence,
+        [field]: value,
+      } as unknown as Omit<DecisionEvidence, "criticalSignalsPresent">),
+    );
+    check(
+      `f2: an out-of-union ${field} at the DecisionEvidence boundary reads as "unknown", never as good — all ${junk.length} injected values yield criticalSignalsPresent=false`,
+      survivors.length === 0,
+      `values that still passed the backstop: ${survivors.map((v) => (v === undefined ? "undefined" : JSON.stringify(v))).join(", ")}`,
+    );
+  }
+
+  // ── F3: one reason code, two rules, two outcomes ──────────────────────────
+  //
+  // Reason codes are not unique to a rule — `policy.ts` pushes `rule.reasonCode`
+  // verbatim and `validatePolicyRules` only requires unique rule IDs — so
+  // excluding a code from `unresolvedCodes` by its NAME let one allow rule
+  // anywhere in the version disappear a deny's own unanswerable block. The
+  // exclusion is now keyed on the contributing rule's outcome. Built through the
+  // REAL validator and the REAL evaluator, not hand-assembled.
+  const SHARED = "SHARED_UNDESCRIBED_CODE";
+  const sharedCodeVersion = {
+    ...v1,
+    id: "pv_f3",
+    rules: validatePolicyRules([
+      {
+        id: "allow-side-shared-code",
+        description: "An allow rule carrying the shared code.",
+        match: [{ field: "ownerType", in: ["shared"] }],
+        outcome: "allow",
+        reasonCode: SHARED,
+        severity: "low",
+      },
+      {
+        id: "deny-side-shared-code",
+        description: "A deny rule carrying the SAME code.",
+        match: [{ field: "workflowRiskTier", in: ["standard"] }],
+        outcome: "deny",
+        reasonCode: SHARED,
+        severity: "critical",
+      },
+    ]),
+  };
+  const sharedEval = evaluatePolicy(sharedCodeVersion, healthyEvidence);
+  check(
+    "f3 setup: both rules really fired, on one code, with two different outcomes",
+    sharedEval.outcome === "deny" &&
+      sharedEval.reasonCodes.filter((c) => c === SHARED).length === 1 &&
+      sharedEval.matchedRules.filter((r) => r.reasonCode === SHARED).length === 2 &&
+      sharedEval.matchedRules.some((r) => r.outcome === "allow") &&
+      sharedEval.matchedRules.some((r) => r.outcome === "deny"),
+    `${sharedEval.outcome} matched=${sharedEval.matchedRules.map((r) => `${r.ruleId}:${r.outcome}`).join(", ")}`,
+  );
+  const sharedPlan = buildResolutionPlan(
+    {
+      id: "dec_f3",
+      tenantId: "tenant_northwind",
+      outcome: sharedEval.outcome,
+      reasonCodes: sharedEval.reasonCodes,
+      matchedRules: sharedEval.matchedRules,
+    } as unknown as Decision,
+    {
+      tenantId: "tenant_northwind",
+      primaryHardwareChannel: "device_prompt",
+      autoProposeEnabled: true,
+    },
+  );
+  check(
+    "f3: a descriptor-less code carried by BOTH an allow rule and a deny rule stays in unresolvedCodes — one allow contributor does not clear a deny's block",
+    sharedPlan.unresolvedCodes.includes(SHARED) &&
+      sharedPlan.path === "escalation" &&
+      sharedPlan.autoResolvable === false &&
+      sharedPlan.summaryForOperator.includes(SHARED),
+    `unresolved=[${sharedPlan.unresolvedCodes.join(", ")}] path=${sharedPlan.path} auto=${sharedPlan.autoResolvable}`,
+  );
+}
+
+// ── 22. MONOTONICITY of criticalSignalsPresent — the general form of F1 ──────
+//
+// F1 was one cell of a table nobody had drawn: a dock reading whose timestamp
+// would not parse RAISED assurance (step_up → allow) because the corruption
+// routed the field to the single freshness value the backstop does not
+// disqualify. The specific vectors are asserted above; this is the sweep that
+// would have caught it without knowing to look.
+//
+// THE INVARIANT: corrupting an input never raises `criticalSignalsPresent`. For
+// every field that feeds the backstop, for every member of that field's union,
+// degrading the reading — an `observedAt` nothing can order, or the signal gone
+// entirely — must leave the verdict where it was or lower it. Never higher.
+//
+// SCOPE IS DERIVED, not listed: the set of fields that can change the backstop's
+// answer is probed out of the real function below, and the sweep must cover
+// exactly that set — add a field to the ladder without adding a row here and this
+// proof fails rather than quietly testing six of seven fields.
+//
+// ONE EXEMPTION, declared by name with its reason and STALE-CHECKED: an absent
+// dock raises, deliberately. It is asserted to still be a real raise, so the day
+// that stops being true the exemption fails instead of hiding the next one.
+const monotonicityTable: string[] = [];
+{
+  const identity: Identity = {
+    id: "id_mono",
+    tenantId: "tenant_northwind",
+    externalRef: "nurse.mono",
+    displayName: "Nurse",
+    state: "enabled",
+    assignedRole: "nurse",
+  };
+  const device: Device = {
+    id: "dev_mono",
+    tenantId: "tenant_northwind",
+    externalRef: "ipad-mono",
+    name: "Ward iPad",
+    osPlatform: "iPadOS",
+    osVersion: "18.5",
+    ownerType: "shared",
+    managementAgent: "intune",
+  };
+  const workflow: Workflow = {
+    id: "wf_mono",
+    tenantId: "tenant_northwind",
+    key: "clinical-session",
+    name: "Clinical session",
+    riskTier: "standard",
+  };
+  const VALID_AT = "2026-07-13T13:00:00.000Z";
+  const ILLEGIBLE_AT = "not-a-date";
+  const sig = (
+    category: SignalCategory,
+    value: NormalizedSignal["value"],
+    extra: Partial<NormalizedSignal> = {},
+  ): NormalizedSignal => ({
+    id: `sig_mono_${category}`,
+    tenantId: "tenant_northwind",
+    connectorId: "conn",
+    subjectType: "device",
+    subjectId: device.id,
+    category,
+    value,
+    observedAt: VALID_AT,
+    freshness: "fresh",
+    sourceReference: "fixture:mono",
+    ...extra,
+  });
+  const healthy: NormalizedSignal[] = [
+    sig("device_compliance", "compliant"),
+    sig("device_management", true),
+    sig("device_encryption", true),
+    sig("os_support", true),
+    sig("posture_freshness", "fresh"),
+  ];
+  const healthyEvidence = buildEvidence(identity, device, workflow, healthy);
+  // The live v1 rule set, so the verdict dimension below is measured through the
+  // REAL evaluator on the REAL shipped rules, not on a rule set written to pass.
+  const monoV1 = {
+    id: "pv_mono",
+    tenantId: "tenant_northwind",
+    policyId: "pol_mono",
+    version: 1,
+    status: "active" as const,
+    rules: SHARED_DEVICE_RULES_V1,
+    createdAt: VALID_AT,
+    digest: "test",
+  };
+
+  // (a) WHICH FIELDS FEED THE BACKSTOP — probed, not declared. Any field whose
+  // substitution can flip the real function's answer is in scope.
+  //
+  // THE PROBE SET IS DERIVED (second-review finding F-C, 2026-09-02). It used to
+  // be `[true, false, "unknown", ...FRESHNESS_VALUES]` — a hand-list that contains
+  // no ownership member, no tamper member and no badge member, so a disqualifying
+  // clause planted on any of those fields was invisible to it. Three were planted
+  // into `deriveCriticalSignalsPresent` and all three passed 322/322:
+  // `ownerType !== "personal"`, `tamperState !== "confirmed"`,
+  // `badgeBinding !== "forced"`. `EVIDENCE_VALUE_MEMBERS` is the union of every
+  // domain the evidence readers themselves consume plus the two subject-derived
+  // unions, so a family added to the core is probed here without anyone editing
+  // this file.
+  const PROBES: unknown[] = [...EVIDENCE_VALUE_MEMBERS];
+  const PROBE_FLOOR = 30;
+  check(
+    `22 probe set is DERIVED and covers the disqualifying members a hand-list missed — ${PROBES.length} probes (floor ${PROBE_FLOOR}), including "personal", "confirmed", "forced"`,
+    PROBES.length >= PROBE_FLOOR &&
+      ["personal", "confirmed", "forced", "non_compliant", "withheld", "broken", false].every((m) =>
+        PROBES.includes(m),
+      ),
+    `probes=[${PROBES.map((v) => String(v)).join(", ")}]`,
+  );
+  const feedingFields = (Object.keys(healthyEvidence) as (keyof DecisionEvidence)[])
+    .filter(
+      (key) =>
+        key !== "criticalSignalsPresent" &&
+        PROBES.some(
+          (probe) =>
+            !deriveCriticalSignalsPresent({
+              ...healthyEvidence,
+              [key]: probe,
+            } as unknown as Omit<DecisionEvidence, "criticalSignalsPresent">),
+        ),
+    )
+    .sort();
+
+  type Member = string | boolean;
+  interface MonoField {
+    field: keyof DecisionEvidence;
+    /** The signal category whose reading this field is derived from. */
+    category: SignalCategory;
+    /**
+     * The value domain this field is read through — THE SAME OBJECT the evidence
+     * readers consume (`EVIDENCE_VALUE_DOMAINS`). Both the swept members and the
+     * family's affirmative-good member are read from it, so a member added to the
+     * core, or a change to what the core counts as good, is swept here without
+     * anyone editing this file. It used to be a hand-copied `members:` array on
+     * four of these rows; a hand-maintained copy of something the core already
+     * knows is the fossil this repo keeps finding.
+     */
+    domain: { readonly members: readonly Member[]; readonly good: readonly Member[] };
+    reading: (member: Member, observedAt: string) => NormalizedSignal;
+  }
+  /** The family's affirmative-good member, derived — never named here. */
+  const goodOf = (f: MonoField): Member => f.domain.good[0];
+  // Every row's members come from `EVIDENCE_VALUE_DOMAINS`, and the freshness
+  // domain's members are FRESHNESS_VALUES — derived in turn from the exhaustive
+  // `Record<Freshness, number>` severity map in evidence.ts. Add a member to any
+  // union and it is swept here without anyone editing this file.
+  const MONO_FIELDS: MonoField[] = [
+    {
+      field: "identityEnabled",
+      category: "identity_state",
+      domain: EVIDENCE_VALUE_DOMAINS.boolean,
+      reading: (m, at) => sig("identity_state", m as boolean, { observedAt: at }),
+    },
+    {
+      field: "deviceCompliance",
+      category: "device_compliance",
+      domain: EVIDENCE_VALUE_DOMAINS.compliance,
+      reading: (m, at) => sig("device_compliance", m as string, { observedAt: at }),
+    },
+    {
+      field: "deviceManaged",
+      category: "device_management",
+      domain: EVIDENCE_VALUE_DOMAINS.boolean,
+      reading: (m, at) => sig("device_management", m as boolean, { observedAt: at }),
+    },
+    {
+      field: "deviceEncrypted",
+      category: "device_encryption",
+      domain: EVIDENCE_VALUE_DOMAINS.boolean,
+      reading: (m, at) => sig("device_encryption", m as boolean, { observedAt: at }),
+    },
+    {
+      field: "osSupported",
+      category: "os_support",
+      domain: EVIDENCE_VALUE_DOMAINS.boolean,
+      reading: (m, at) => sig("os_support", m as boolean, { observedAt: at }),
+    },
+    {
+      field: "postureFreshness",
+      category: "posture_freshness",
+      domain: EVIDENCE_VALUE_DOMAINS.freshness,
+      reading: (m, at) => sig("posture_freshness", m as string, { observedAt: at }),
+    },
+    {
+      field: "dockEvidenceFreshness",
+      category: "custody_state",
+      domain: EVIDENCE_VALUE_DOMAINS.freshness,
+      reading: (m, at) =>
+        sig("custody_state", "checked_in", { observedAt: at, freshness: m as Freshness }),
+    },
+    // ── The families the VERDICT dimension pulled into scope ──────────────────
+    //
+    // None of these feed `criticalSignalsPresent`, so a sweep of the backstop
+    // alone never touched them — and each one carries a rule that can deny or
+    // restrict, which is precisely where a corruption-bought loosening hurts.
+    // Their members come from `EVIDENCE_VALUE_DOMAINS`, the same object the
+    // evidence readers consume, so a member added to the core is swept here
+    // without anyone editing this file.
+    {
+      field: "custodyState",
+      category: "custody_state",
+      domain: EVIDENCE_VALUE_DOMAINS.custody,
+      reading: (m, at) => sig("custody_state", m as string, { observedAt: at }),
+    },
+    {
+      field: "dockChargeState",
+      category: "charge_state",
+      domain: EVIDENCE_VALUE_DOMAINS.charge,
+      reading: (m, at) => sig("charge_state", m as string, { observedAt: at }),
+    },
+    {
+      field: "batteryHealth",
+      category: "battery_health",
+      domain: EVIDENCE_VALUE_DOMAINS.batteryHealth,
+      reading: (m, at) => sig("battery_health", m as string, { observedAt: at }),
+    },
+    {
+      field: "tamperState",
+      category: "tamper_state",
+      domain: EVIDENCE_VALUE_DOMAINS.tamper,
+      reading: (m, at) => sig("tamper_state", m as string, { observedAt: at }),
+    },
+    {
+      field: "dockState",
+      category: "dock_state",
+      domain: EVIDENCE_VALUE_DOMAINS.dock,
+      reading: (m, at) => sig("dock_state", m as string, { observedAt: at }),
+    },
+    {
+      field: "baselineCompliance",
+      category: "security_baseline",
+      domain: EVIDENCE_VALUE_DOMAINS.baseline,
+      reading: (m, at) => sig("security_baseline", m as string, { observedAt: at }),
+    },
+    {
+      field: "benchmarkSelection",
+      category: "benchmark_selection",
+      domain: EVIDENCE_VALUE_DOMAINS.benchmarkSelection,
+      reading: (m, at) => sig("benchmark_selection", m as string, { observedAt: at }),
+    },
+    {
+      field: "shiftContext",
+      category: "shift_context",
+      domain: EVIDENCE_VALUE_DOMAINS.shiftContext,
+      reading: (m, at) => sig("shift_context", m as string, { observedAt: at }),
+    },
+    {
+      field: "badgeBinding",
+      category: "badge_binding",
+      domain: EVIDENCE_VALUE_DOMAINS.badge,
+      reading: (m, at) => sig("badge_binding", m as string, { observedAt: at }),
+    },
+    {
+      field: "managementHealthState",
+      category: "device_management_health",
+      domain: EVIDENCE_VALUE_DOMAINS.managementHealth,
+      reading: (m, at) => sig("device_management_health", m as string, { observedAt: at }),
+    },
+    {
+      field: "localAuthorityState",
+      category: "local_authority",
+      domain: EVIDENCE_VALUE_DOMAINS.localAuthority,
+      reading: (m, at) => sig("local_authority", m as string, { observedAt: at }),
+    },
+  ];
+
+  // Scope for the VERDICT dimension is derived the same way, through the REAL
+  // evaluator: any field whose substitution can change the outcome is in scope.
+  // This is what pulled eleven rule-carrying families in that a backstop-only
+  // sweep never saw.
+  const baselineOutcome = evaluatePolicy(monoV1, healthyEvidence).outcome;
+  const verdictFields = (Object.keys(healthyEvidence) as (keyof DecisionEvidence)[]).filter((key) =>
+    PROBES.some(
+      (probe) =>
+        evaluatePolicy(monoV1, {
+          ...healthyEvidence,
+          [key]: probe,
+        } as unknown as DecisionEvidence).outcome !== baselineOutcome,
+    ),
+  );
+  // Two fields are in that derived set but cannot be swept by these mutations,
+  // and they are named rather than silently dropped: they are NOT read from a
+  // signal at all — they come from the resolved device and workflow rows — so
+  // "the signal is absent" and "the signal's stamp is unorderable" are not states
+  // they can be in. `criticalSignalsPresent` is the sweep's own output, not an
+  // input. Rule coverage for all three lives in section 20's rule-arm table.
+  const NOT_SIGNAL_DERIVED: (keyof DecisionEvidence)[] = [
+    "ownerType",
+    "workflowRiskTier",
+    "criticalSignalsPresent",
+  ];
+  const inScope = [...new Set([...feedingFields, ...verdictFields])]
+    .filter((f) => !NOT_SIGNAL_DERIVED.includes(f))
+    .sort();
+  check(
+    "22 scope is DERIVED: the swept fields are exactly the signal-derived fields that can change deriveCriticalSignalsPresent OR the verdict under the live v1 rules",
+    JSON.stringify(MONO_FIELDS.map((f) => f.field).sort()) === JSON.stringify(inScope),
+    `swept=[${MONO_FIELDS.map((f) => f.field).sort().join(", ")}] derived=[${inScope.join(", ")}]`,
+  );
+  // THE BACKSTOP'S OWN SCOPE IS PINNED, not merely covered. The sweep can only
+  // mutate signal-derived fields, so a field the ladder starts gating on that no
+  // signal produces — `ownerType` was the planted example, and it passed 429/429
+  // undetected until this check existed — would otherwise change the backstop's
+  // meaning invisibly. The derived side of this comparison is the fact; the
+  // declared side is the expectation, and changing the ladder means changing it
+  // here, deliberately, in the same commit.
+  const BACKSTOP_FIELDS: (keyof DecisionEvidence)[] = [
+    "deviceCompliance",
+    "deviceEncrypted",
+    "deviceManaged",
+    "dockEvidenceFreshness",
+    "identityEnabled",
+    "osSupported",
+    "postureFreshness",
+  ].sort() as (keyof DecisionEvidence)[];
+  check(
+    `22 backstop scope is PINNED: exactly ${BACKSTOP_FIELDS.length} fields can change deriveCriticalSignalsPresent, and they are the seven the ladder names`,
+    JSON.stringify(feedingFields) === JSON.stringify(BACKSTOP_FIELDS),
+    `derived=[${feedingFields.join(", ")}] declared=[${BACKSTOP_FIELDS.join(", ")}]`,
+  );
+  check(
+    "22 scope floor: the verdict set is strictly wider than the backstop set — sweeping the backstop alone leaves rule-carrying families unmeasured, which is how finding F-A survived",
+    verdictFields.length > feedingFields.length,
+    `feeding=[${feedingFields.join(", ")}] verdict=[${verdictFields.join(", ")}]`,
+  );
+
+  // THREE DEGRADATIONS, and the third is a pure ADDITION (third-review finding
+  // F-1, 2026-09-02). The first two damage the one reading a category has. The
+  // third leaves it alone and adds a SECOND illegible reading — the family's
+  // affirmative-good member — ahead of an accusing illegible one. That is a
+  // corruption of the input stream in the only shape `groupLatest` was sensitive
+  // to: it kept the FIRST illegible reading per category and dropped the rest, so
+  // array order decided the answer among readings nothing can order by time, and
+  // adding a good peer erased the accusation. Measured before the fold: tamper
+  // deny → allow. Adding a signal must never buy leniency.
+  const MUTATIONS = [
+    "unparseable observedAt",
+    "absent signal",
+    "duplicate illegible good peer",
+  ] as const;
+  type Mutation = (typeof MUTATIONS)[number];
+
+  // TWO DIMENSIONS, because one of them was blind. This sweep measured only
+  // `criticalSignalsPresent`, and every vector of second-review finding F-A
+  // passed it: an illegible `tamper_state: "confirmed"` turns csp true→false —
+  // a LOWERING, which the backstop invariant permits — while simultaneously
+  // turning the VERDICT from deny into step_up, which is the fail-open the whole
+  // exercise exists to prevent. The backstop is not the decision. Both are swept.
+  const DIMENSIONS = ["criticalSignalsPresent", "verdict"] as const;
+  type Dimension = (typeof DIMENSIONS)[number];
+
+  // Outcome membership is exhaustive BY CONSTRUCTION (a Record over the union:
+  // add a member and this stops compiling), and the ORDER is derived from the
+  // core's own fail-closed join rather than hand-numbered here — a second copy of
+  // an ordering that already exists is exactly the fossil this repo keeps finding.
+  const OUTCOME_MEMBERSHIP: Record<DecisionOutcome, true> = {
+    allow: true,
+    step_up: true,
+    restrict: true,
+    deny: true,
+  };
+  const OUTCOME_MEMBERS = Object.keys(OUTCOME_MEMBERSHIP) as DecisionOutcome[];
+  const OUTCOME_RANK = Object.fromEntries(
+    OUTCOME_MEMBERS.map((outcome) => [
+      outcome,
+      OUTCOME_MEMBERS.filter((other) => mostRestrictiveOutcome([outcome, other]) === outcome).length,
+    ]),
+  ) as Record<DecisionOutcome, number>;
+  check(
+    `22 outcome rank is DERIVED from mostRestrictiveOutcome and strictly orders all ${OUTCOME_MEMBERS.length} outcomes: allow<step_up<restrict<deny (${OUTCOME_MEMBERS.map((o) => `${o}=${OUTCOME_RANK[o]}`).join(" ")})`,
+    OUTCOME_MEMBERS.length === 4 &&
+      OUTCOME_RANK.allow < OUTCOME_RANK.step_up &&
+      OUTCOME_RANK.step_up < OUTCOME_RANK.restrict &&
+      OUTCOME_RANK.restrict < OUTCOME_RANK.deny,
+  );
+
+  // A violation is a LOOSENING under corruption, in either dimension: critical
+  // evidence that goes absent→present, or a verdict that goes less restrictive.
+  interface Cell {
+    field: keyof DecisionEvidence;
+    member: Member;
+    mutation: Mutation;
+    base: boolean;
+    mutated: boolean;
+    baseOutcome: DecisionOutcome;
+    mutatedOutcome: DecisionOutcome;
+  }
+  const violations = (row: Cell[], dimension: Dimension): Cell[] =>
+    dimension === "criticalSignalsPresent"
+      ? row.filter((c) => c.mutated && !c.base)
+      : row.filter((c) => OUTCOME_RANK[c.mutatedOutcome] < OUTCOME_RANK[c.baseOutcome]);
+
+  // NAMED EXEMPTIONS. One entry, and it is the reason `readDockEvidenceFreshness`
+  // needed fixing rather than the ladder: absence is a real answer here, so it is
+  // written down instead of being allowed to swallow illegibility with it.
+  const EXEMPTIONS: {
+    name: string;
+    field: keyof DecisionEvidence;
+    mutation: Mutation;
+    dimension: Dimension;
+    /** The exact cells this exemption covers. A loosening on any OTHER member of
+     *  the same row still fails — an exemption is a named cell, not a waiver on a
+     *  whole field. */
+    members: readonly Member[];
+    reason: string;
+  }[] = [
+    {
+      name: "dock-absence-is-a-deployment-shape",
+      field: "dockEvidenceFreshness",
+      mutation: "absent signal",
+      dimension: "criticalSignalsPresent",
+      members: FRESHNESS_VALUES,
+      reason:
+        "A tenant with no dock hardware emits no dock signal, so the field derives 'missing', and 'missing' is deliberately not in the disqualifying ladder — treating it as degraded would step up every dockless tenant on day one. The tenant's dock EXPECTATION is not modelled anywhere, so nothing in the core can tell 'we have no docks' from 'our docks stopped talking'. This exemption covers ABSENCE only: a dock reading that exists is never routed to 'missing', which is exactly what review finding F1 corrected.",
+    },
+    // ── The VERDICT dimension's exemptions, enumerated from this sweep's own
+    // output rather than from memory. Every one of them is the same shape and it
+    // is worth naming the shape once: A SIGNAL THAT WAS NEVER SENT IS SILENCE,
+    // AND SILENCE HAS NO ACCUSATION IN IT. When the only reading that carried the
+    // bad news disappears, the field falls back to its unknown/default value and
+    // the verdict falls back to the fail-closed default (step_up) or, where the
+    // field is not in the allow rule's match list, to allow. The core cannot tell
+    // "this tenant has no such connector" from "this tenant's connector went
+    // quiet", because no tenant-level EXPECTATION of a category is modelled
+    // anywhere — that is a real deferred capability, not a bug in this sweep, and
+    // it is REPORTED here rather than gated.
+    {
+      name: "identity-signal-absence-is-not-an-identity-answer",
+      field: "identityEnabled",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: [false],
+      reason:
+        "deny→allow. An `identity_state: false` signal is what makes the disabled account deny; with the signal gone the resolved identity ROW (state: enabled) is the only source left, and it says enabled. Nothing in the core knows the tenant HAS an identity connector, so a connector that stops emitting is indistinguishable from a tenant that never had one. The fold in `foldIdentityEnabled` is already worst-wins over the two sources that spoke; it cannot weigh a source that did not.",
+    },
+    {
+      name: "compliance-signal-absence-falls-to-unknown-not-to-the-accusation",
+      field: "deviceCompliance",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["non_compliant"],
+      reason:
+        "restrict→step_up. With no compliance reading the field is 'unknown', `device-noncompliant` no longer matches, and the decision lands on the fail-closed default step-up. The backstop DOES hold here — criticalSignalsPresent goes true→false in the same cell — so the loosening is bounded: allow is unreachable either way. Closing the remaining gap needs a per-tenant expectation of the compliance category, which is not modelled.",
+    },
+    {
+      name: "management-signal-absence-falls-to-unknown-not-to-the-accusation",
+      field: "deviceManaged",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: [false],
+      reason:
+        "restrict→step_up, and identical in shape to the compliance row above: `device-unmanaged` cannot match a field that has no reading, the default step-up applies, and the backstop simultaneously drops criticalSignalsPresent to false so allow stays unreachable.",
+    },
+    {
+      name: "dock-absence-is-a-deployment-shape",
+      field: "dockEvidenceFreshness",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["unknown", "stale", "expired"],
+      reason:
+        "step_up→allow, and it is the verdict twin of the criticalSignalsPresent exemption above, for exactly the same reason: a tenant with no dock hardware emits no dock signal, the field derives 'missing', and 'missing' is deliberately outside the disqualifying ladder. It is stated twice and stale-checked twice, once per dimension. Allow being reachable after the mutation is NOT peculiar to this row — the sentence that stood here said it was the only such row, and measurement says otherwise, so the number is now DERIVED from the table below and printed with it rather than asserted from memory in a comment. It covers ABSENCE only — a dock reading that exists, however badly stamped, is never routed to 'missing' (finding F1) and never trades its value down (finding F-A).",
+    },
+    // ── The eleven rule-carrying families, all one shape ──────────────────────
+    //
+    // Every row below is `absent signal` × `verdict`, and every one is the same
+    // sentence: THE ONLY READING THAT CARRIED THE ACCUSATION IS GONE, SO THE
+    // ACCUSATION IS GONE. The field falls back to its no-reading default
+    // ('unknown'/'unverified'), no rule matches that default by design, and
+    // against an otherwise-healthy fixture the decision returns to allow — the
+    // maximally-loose form of the shape, which is why it is stated per family
+    // rather than waived once. Closing it needs a per-tenant EXPECTATION of a
+    // signal category ("this tenant has dock hardware and it has gone quiet"),
+    // which nothing in the core models today. REPORTED, deliberately, not gated.
+    //
+    // What is NOT exempt, and is the point of the whole section: the
+    // `unparseable observedAt` row for every one of these families is clean. A
+    // reading that EXISTS still accuses, however badly stamped (finding F-A).
+    {
+      name: "custody-absence-is-not-a-custody-answer",
+      field: "custodyState",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["overdue", "exception", "maintenance"],
+      reason:
+        "restrict→allow on all three accusing members. `custody-overdue`, `custody-exception` and `custody-maintenance` match named states; the field's default with no reading is 'unknown', which none of them match.",
+    },
+    {
+      name: "charge-absence-is-not-a-charge-answer",
+      field: "dockChargeState",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["critical"],
+      reason:
+        "step_up→allow. `battery-critical` matches 'critical' only; with no charge reading the field defaults to 'unknown' and the rule cannot fire.",
+    },
+    {
+      name: "battery-health-absence-is-not-a-battery-answer",
+      field: "batteryHealth",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["failing"],
+      reason:
+        "restrict→allow. `battery-failing` matches 'failing' only; 'unknown' is the no-reading default and is deliberately unmatched (as is 'degraded' — see the rule's own note).",
+    },
+    {
+      name: "tamper-absence-is-not-a-tamper-answer",
+      field: "tamperState",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["suspected", "confirmed", "sensor_unavailable"],
+      reason:
+        "deny→allow for 'confirmed', and this is the sharpest cell in the table: a tamper sensor that stops reporting altogether is not distinguishable from a device that has no tamper sensor. Note the contrast that finding F-A turned on — a tamper reading that EXISTS with an unorderable stamp still denies (the 'unparseable observedAt' row above is clean); only true silence lands here.",
+    },
+    {
+      name: "dock-state-absence-is-not-a-dock-answer",
+      field: "dockState",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["faulted", "offline"],
+      reason:
+        "restrict→allow and step_up→allow. `dock-faulted`/`dock-offline` match named states; no dock reading means 'unknown', which neither matches — the deployment-shape argument for dock freshness applies unchanged to dock state.",
+    },
+    {
+      name: "baseline-absence-is-not-a-baseline-answer",
+      field: "baselineCompliance",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["drifted"],
+      reason:
+        "step_up→allow. `baseline-drifted` matches 'drifted'; a fleet with no hardening connector emits nothing and must not be stepped up on day one.",
+    },
+    {
+      name: "benchmark-selection-absence-is-day-one-quiet",
+      field: "benchmarkSelection",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["misfit"],
+      reason:
+        "step_up→allow, and DELIBERATE at the rule layer: the active v1 rule matches only the affirmative 'misfit', because the no-reading default 'unverified' would otherwise step up the entire fleet before a connector exists. The strict arm that does match 'unverified' ships in SHARED_DEVICE_RULES_V2 and is asserted in section 11b.",
+    },
+    {
+      name: "shift-context-absence-is-day-one-quiet",
+      field: "shiftContext",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["misfit"],
+      reason:
+        "step_up→allow, same day-one-quiet shape as benchmark selection: v1 matches only the affirmative mismatch, and the labor-plane default 'unverified' stays quiet until a WFM connector emits.",
+    },
+    {
+      name: "badge-absence-is-not-a-badge-answer",
+      field: "badgeBinding",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["removed", "forced"],
+      reason:
+        "deny→allow for 'forced'. The badge family has an 'absent' MEMBER — a reader that reports no badge — and that member is a real answer the rules could act on; what cannot be acted on is the connector never speaking at all, which is what this cell measures.",
+    },
+    {
+      name: "management-health-absence-is-day-one-quiet",
+      field: "managementHealthState",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["broken"],
+      reason:
+        "restrict→allow. `management-health-broken` matches only the affirmative failure; 'unknown' is the no-reading default and stays quiet so adding the category could not change an existing decision.",
+    },
+    {
+      name: "local-authority-absence-is-day-one-quiet",
+      field: "localAuthorityState",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["withheld"],
+      reason:
+        "restrict→allow. `local-authority-withheld` matches only the affirmative withholding; 'unverified' is the default and stays quiet until the control plane speaks.",
+    },
+  ];
+
+  // EACH MUTATION NAMES ITS OWN BASE, because they do not all start from the same
+  // place. The first two DEGRADE the single reading a healthy category has, so the
+  // base is that reading. The third ADDS a peer to a pair that already contains an
+  // illegible reading, so the base is that pair — ranking an addition against the
+  // single-reading base would measure the illegible stamp as well as the addition,
+  // and it is the ADDITION that must never buy leniency.
+  const vectorFor = (
+    f: MonoField,
+    member: Member,
+    rest: NormalizedSignal[],
+    mutation: Mutation,
+  ): { base: NormalizedSignal[]; mutated: NormalizedSignal[] } => {
+    const single = [...rest, f.reading(member, VALID_AT)];
+    switch (mutation) {
+      case "absent signal":
+        return { base: single, mutated: rest };
+      case "unparseable observedAt":
+        return { base: single, mutated: [...rest, f.reading(member, ILLEGIBLE_AT)] };
+      case "duplicate illegible good peer":
+        // The reading under test is the ILLEGIBLE one and its parseable sibling is
+        // the family's affirmative-good member, so the accusation lives ONLY in the
+        // illegible reading — the one shape where dropping an illegible peer can
+        // change the answer at all. The mutation adds the good member a SECOND
+        // time, illegible, AHEAD of it: same category, one more reading, nothing
+        // removed.
+        return {
+          base: [...rest, f.reading(member, ILLEGIBLE_AT), f.reading(goodOf(f), VALID_AT)],
+          mutated: [
+            ...rest,
+            f.reading(goodOf(f), ILLEGIBLE_AT),
+            f.reading(member, ILLEGIBLE_AT),
+            f.reading(goodOf(f), VALID_AT),
+          ],
+        };
+    }
+  };
+
+  const cells: Cell[] = [];
+  const accusingPeerBases: Cell[] = [];
+  for (const f of MONO_FIELDS) {
+    const rest = healthy.filter((s) => s.category !== f.category);
+    const ineffective: string[] = [];
+    for (const member of f.domain.members) {
+      const baseEvidence = buildEvidence(identity, device, workflow, [
+        ...rest,
+        f.reading(member, VALID_AT),
+      ]);
+      // A vector that does not actually produce the member it claims proves
+      // nothing about that member. This is the floor: it fails if the derivation
+      // stops routing this category to this field.
+      if (String(baseEvidence[f.field]) !== String(member)) {
+        ineffective.push(`${String(member)}→${String(baseEvidence[f.field])}`);
+      }
+      for (const mutation of MUTATIONS) {
+        const vector = vectorFor(f, member, rest, mutation);
+        const beforeEvidence = buildEvidence(identity, device, workflow, vector.base);
+        const mutatedEvidence = buildEvidence(identity, device, workflow, vector.mutated);
+        const cell: Cell = {
+          field: f.field,
+          member,
+          mutation,
+          base: beforeEvidence.criticalSignalsPresent,
+          mutated: mutatedEvidence.criticalSignalsPresent,
+          baseOutcome: evaluatePolicy(monoV1, beforeEvidence).outcome,
+          mutatedOutcome: evaluatePolicy(monoV1, mutatedEvidence).outcome,
+        };
+        cells.push(cell);
+        // The third mutation is only meaningful where its base actually carries an
+        // accusation an added peer could erase. Counted, not assumed.
+        if (
+          mutation === "duplicate illegible good peer" &&
+          (cell.baseOutcome !== baselineOutcome || !cell.base)
+        ) {
+          accusingPeerBases.push(cell);
+        }
+      }
+    }
+    check(
+      `22 vector effectiveness: every swept member of ${f.field} is really derived from a ${f.category} reading`,
+      ineffective.length === 0,
+      `member→derived mismatches: ${ineffective.join(", ")}`,
+    );
+  }
+  // FLOOR ON THE THIRD MUTATION, because a peer added to a base that says nothing
+  // cannot loosen anything and a row of those would be green about nothing. This
+  // counts the cells whose two-signal base is genuinely worse than the healthy
+  // baseline — the cells where the added good peer HAD something to erase.
+  const ACCUSING_PEER_FLOOR = 25;
+  check(
+    `22 floor: the 'duplicate illegible good peer' mutation is not vacuous — ${accusingPeerBases.length} of its bases (floor ${ACCUSING_PEER_FLOOR}) are genuinely worse than the healthy baseline, so the added peer had an accusation to erase`,
+    accusingPeerBases.length >= ACCUSING_PEER_FLOOR,
+    `accusing bases=${accusingPeerBases.length}`,
+  );
+
+  for (const f of MONO_FIELDS) {
+    for (const mutation of MUTATIONS) {
+      const row = cells.filter((c) => c.field === f.field && c.mutation === mutation);
+      for (const dimension of DIMENSIONS) {
+        const loosened = violations(row, dimension);
+        const exemption = EXEMPTIONS.find(
+          (e) => e.field === f.field && e.mutation === mutation && e.dimension === dimension,
+        );
+        const shown = loosened.map((c) =>
+          dimension === "verdict"
+            ? `${String(c.member)}:${c.baseOutcome}→${c.mutatedOutcome}`
+            : String(c.member),
+        );
+        monotonicityTable.push(
+          `  ${f.field.padEnd(22)} ${mutation.padEnd(22)} ${dimension.padEnd(22)} ${String(
+            row.length,
+          ).padStart(2)} cells, ${loosened.length} looser${
+            shown.length > 0 ? ` [${shown.join(", ")}]` : ""
+          }${exemption ? ` — EXEMPT: ${exemption.name}` : ""}`,
+        );
+        if (exemption) {
+          check(
+            `22 exemption "${exemption.name}" is NOT stale — ${f.field} × ${mutation} × ${dimension} still describes a real loosening`,
+            loosened.length > 0,
+            "the exemption no longer covers any cell: delete it, or the next real loosening hides behind it",
+          );
+          const unnamed = loosened.filter((c) => !exemption.members.includes(c.member));
+          check(
+            `22 exemption "${exemption.name}" covers ONLY the members it names [${exemption.members
+              .map((m) => String(m))
+              .join(", ")}] — a loosening on any other member of the row still fails`,
+            unnamed.length === 0,
+            `unnamed loosening(s): ${unnamed
+              .map((c) => `${String(c.member)}:${c.baseOutcome}→${c.mutatedOutcome}`)
+              .join(", ")}`,
+          );
+        } else {
+          check(
+            `22 monotone (${dimension}): corrupting ${f.field} (${mutation}) never LOOSENS the answer`,
+            loosened.length === 0,
+            `loosened on: ${shown.join(", ")}`,
+          );
+        }
+      }
+    }
+  }
+
+  // HOW MANY EXEMPTION ROWS REACH ALLOW — DERIVED, and it is here because a
+  // comment in this file got it wrong. The dock row's reason string claimed to be
+  // the only exemption where allow is reachable after the mutation; it is not, and
+  // it could not have been, because "the only reading that carried the accusation
+  // is gone" lands on allow by construction for every family whose v1 rule matches
+  // only an affirmative member. The count is computed from the same cells the
+  // table above is built from and printed beside it, so it cannot go stale.
+  const exemptionsReachingAllow = EXEMPTIONS.filter((e) =>
+    cells.some(
+      (c) =>
+        c.field === e.field &&
+        c.mutation === e.mutation &&
+        e.members.includes(c.member) &&
+        c.mutatedOutcome === "allow",
+    ),
+  );
+  monotonicityTable.push(
+    `  — ${exemptionsReachingAllow.length} of ${EXEMPTIONS.length} named exemptions reach ALLOW after their mutation (DERIVED from the cells above): ${exemptionsReachingAllow
+      .map((e) => e.name)
+      .join(", ")}`,
+  );
+  check(
+    `22 exemption reach is DERIVED, not remembered: ${exemptionsReachingAllow.length} of ${EXEMPTIONS.length} exemption rows reach allow after their mutation — allow-after-mutation is the common case among them, not the single dock row a comment here once claimed`,
+    exemptionsReachingAllow.length > 1 &&
+      exemptionsReachingAllow.length <= EXEMPTIONS.length &&
+      EXEMPTIONS.length >= 16,
+    `reachAllow=[${exemptionsReachingAllow.map((e) => e.name).join(", ")}] of ${EXEMPTIONS.length}`,
+  );
+
+  // Floors and a SYNTHETIC violation, so a sweep that silently stopped sweeping
+  // cannot report itself clean. The cell floor is bumped deliberately when a
+  // field or a union member is added — never trailed to whatever ran today.
+  check(
+    `22 floor: the sweep is not vacuous — ${cells.length} cells over ${MONO_FIELDS.length} fields × ${MUTATIONS.length} mutations × ${DIMENSIONS.length} dimensions = ${
+      cells.length * DIMENSIONS.length
+    } measurements (floor 150 cells over 18 fields and 3 mutations; bumped deliberately when the verdict dimension widened the field set from 7, and again when the illegible-peer mutation was added)`,
+    cells.length >= 150 &&
+      MONO_FIELDS.length >= 18 &&
+      MUTATIONS.length >= 3 &&
+      DIMENSIONS.length >= 2,
+    `cells=${cells.length} fields=${MONO_FIELDS.length} mutations=${MUTATIONS.length} dimensions=${DIMENSIONS.length}`,
+  );
+  const synth = (
+    base: boolean,
+    mutated: boolean,
+    baseOutcome: DecisionOutcome = "step_up",
+    mutatedOutcome: DecisionOutcome = "step_up",
+  ): Cell[] => [
+    {
+      field: "postureFreshness",
+      member: "synthetic",
+      mutation: "absent signal",
+      base,
+      mutated,
+      baseOutcome,
+      mutatedOutcome,
+    },
+  ];
+  check(
+    "22 self-test: the classifier FLAGS a synthetic raise (base=false → mutated=true) and passes the three non-raising shapes — a table that can only say 'clean' is green about nothing",
+    violations(synth(false, true), "criticalSignalsPresent").length === 1 &&
+      violations(synth(true, true), "criticalSignalsPresent").length === 0 &&
+      violations(synth(true, false), "criticalSignalsPresent").length === 0 &&
+      violations(synth(false, false), "criticalSignalsPresent").length === 0,
+  );
+  check(
+    "22 self-test (verdict): the classifier FLAGS a synthetic loosening (deny → step_up, the exact shape of finding F-A) and passes equal and tightening shapes",
+    violations(synth(true, true, "deny", "step_up"), "verdict").length === 1 &&
+      violations(synth(true, true, "deny", "deny"), "verdict").length === 0 &&
+      violations(synth(true, true, "step_up", "deny"), "verdict").length === 0 &&
+      violations(synth(true, true, "allow", "step_up"), "verdict").length === 0,
+  );
+  check(
+    "22 self-test: the verdict classifier is blind to csp and the csp classifier is blind to the verdict — the two dimensions really are independent, which is why sweeping one alone passed every F-A vector",
+    violations(synth(true, false, "deny", "step_up"), "criticalSignalsPresent").length === 0 &&
+      violations(synth(false, true, "deny", "deny"), "verdict").length === 0,
+  );
+}
+
 const failed = assertions.filter((a) => !a.passed);
 
 console.log("SignalGrid core proof (public-safe, deterministic, fixture-backed)");
@@ -1936,6 +3571,16 @@ for (let i = 0; i < scenarios.length; i++) {
   console.log(
     `- ${d.outcome.toUpperCase().padEnd(8)} ${s.label} :: [${d.reasonCodes.join(", ")}] policy v${d.policyVersion}`,
   );
+}
+
+console.log(
+  "\nMonotonicity under corruption — corrupting an input never loosens criticalSignalsPresent OR the verdict",
+);
+console.log(
+  "  (field × union member × corruption × dimension; a LOOSENING is a violation unless named EXEMPT)",
+);
+for (const line of monotonicityTable) {
+  console.log(line);
 }
 
 console.log("\nEvidence bundle (first decision):");

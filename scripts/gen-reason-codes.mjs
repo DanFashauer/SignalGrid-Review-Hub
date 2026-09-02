@@ -24,7 +24,11 @@ const FILES = {
   "lib/signalgrid-core/src/continuity.ts": "continuity",
   "lib/signalgrid-core/src/resolution.ts": "resolution",
 };
-const CODE_LIT = /"([A-Z][A-Z0-9_]{4,})"/g;
+// EXPORTED so a self-test cannot assert against a code shape this parser could
+// never produce: the first near-collision vector written against this gate was
+// "TRUST-ESTABLISHED", and a hyphen is outside this character class — the gate was
+// being self-tested on a string it can never see.
+export const CODE_LIT = /"([A-Z][A-Z0-9_]{4,})"/g;
 
 export function runTruthDump() {
   // The workspace's OWN tsx, by absolute path — not `npx tsx`, which resolves
@@ -110,6 +114,59 @@ export function parseFixtures() {
   return out;
 }
 
+/** The FIXTURE SIMULATOR's own reason-code vocabulary (2026-09-02, verdict-core
+ *  finding V4). `lib/signalgrid-simulator/src/decisionEngine.ts` is a separate
+ *  engine from the launch core: it emits codes the catalog above never named, and
+ *  `native/ios/EnterpriseShell/Services/DecisionEngine.swift` is a byte-faithful
+ *  port of it (CLAUDE.md golden rule 1), so its vocabulary is what an iOS reader
+ *  sees. Parsed with the SAME balanced-paren technique as the core emit set — the
+ *  ternary emit shape at decisionEngine.ts:260 has two literals in one push, and a
+ *  literal-after-paren parser would have missed both.
+ *
+ *  NOTHING here edits or imports the engine; it is read as text. */
+export const SIMULATOR_ENGINE = "lib/signalgrid-simulator/src/decisionEngine.ts";
+
+export function parseSimulatorVocabulary(coreCodes) {
+  const src = readFileSync(SIMULATOR_ENGINE, "utf8");
+  const codes = new Set();
+  const problems = [];
+  for (const m of src.matchAll(/reasonCodes\.(?:push|add|unshift)\(/g)) {
+    let i = m.index + m[0].length, depth = 1;
+    while (i < src.length && depth > 0) {
+      if (src[i] === "(") depth += 1;
+      else if (src[i] === ")") depth -= 1;
+      i += 1;
+    }
+    const args = src.slice(m.index + m[0].length, i - 1);
+    const lits = [...args.matchAll(CODE_LIT)].map((x) => x[1]);
+    for (const c of lits) codes.add(c);
+    if (lits.length === 0 || args.includes("`") || /"\s*\+|\+\s*"/.test(args)) {
+      const line = src.slice(0, m.index).split("\n").length;
+      problems.push(`${SIMULATOR_ENGINE}:${line} constructs a simulator reason code non-literally (${args.trim().slice(0, 60)}…)`);
+    }
+  }
+  const all = [...codes].sort();
+  const core = new Set(coreCodes);
+  // Two codes that differ ONLY by punctuation, case or underscore are one code
+  // wearing two spellings across two engines — the live pair is
+  // DEVICE_NON_COMPLIANT (simulator) vs DEVICE_NONCOMPLIANT (core). Derived, so a
+  // second one cannot appear quietly.
+  const normalize = (code) => code.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const byNormalizedCore = new Map(coreCodes.map((c) => [normalize(c), c]));
+  const nearCollisions = [];
+  for (const code of all) {
+    const twin = byNormalizedCore.get(normalize(code));
+    if (twin && twin !== code) nearCollisions.push({ simulator: code, core: twin });
+  }
+  return {
+    codes: all,
+    shared: all.filter((c) => core.has(c)),
+    simulatorOnly: all.filter((c) => !core.has(c)),
+    nearCollisions,
+    problems,
+  };
+}
+
 // Engine-level push sites (not rule-table entries): their verdict is what the
 // emitting code path does, cited — never guessed from a text window.
 const ENGINE_PUSH = {
@@ -181,7 +238,8 @@ export function buildCatalog(truth = runTruthDump()) {
       fixture: fx?.name ?? null,
     });
   }
-  return { rows, problems, contradictions };
+  const simulator = parseSimulatorVocabulary(rows.map((r) => r.code));
+  return { rows, problems: [...problems, ...simulator.problems], contradictions, simulator };
 }
 
 function table(rows) {
@@ -191,14 +249,14 @@ function table(rows) {
       r.worker ??
       (r.verdicts.includes("allow") && r.cls === null
         ? "*(an allow carries no resolution step)*"
-        : "*(no resolution descriptor — this code silently drops out of the resolution plan today; see the note below)*");
+        : "*(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)*");
     out.push(`| \`${r.code}\` | ${r.verdicts} | ${r.cls ?? "*(none)*"} | ${worker} | ${r.operator ?? "—"} | ${r.fixture ? `\`${r.fixture.slice(0, 60)}\`` : "—"} |`);
   }
   return out.join("\n");
 }
 
 export function buildMarkdown(catalog) {
-  const { rows } = catalog;
+  const { rows, simulator } = catalog;
   const launch = rows.filter((r) => r.section === "launch");
   const draft = rows.filter((r) => r.section === "draft");
   const deferred = rows.filter((r) => r.section === "deferred");
@@ -223,8 +281,8 @@ through the launch evaluate surface, ${draft.length} only via the draft-policy
 test route, ${deferred.length} only through deferred routes. Worker/operator
 language comes from the engine's own resolution descriptors; a code without a
 descriptor is marked, because that gap is real behavior — the resolution
-planner silently drops descriptor-less codes from its plan today (role-lens
-review, engineering.2; tracked work).
+planner has no step to offer for such a code, and since 2026-09-02 it says so
+instead of staying quiet (see the note below).
 
 Tenant-authored policy rules may carry **custom reason codes** — the set is
 open by construction (\`policy.ts\` pushes \`rule.reasonCode\` verbatim), which
@@ -257,12 +315,92 @@ ${table(deferred)}
 
 ## The descriptor gap, stated
 
-${gapCount} of ${rows.length} codes have no resolution descriptor. For the
-non-allow ones, \`buildResolutionPlan\` silently omits the code from the plan —
-a DENY carrying only descriptor-less codes reports itself self-service and
-auto-resolvable (executed counterexample in the role-lens review,
-engineering.2). Until that is fixed, host apps must render the VERDICT as
-the primary signal and treat the resolution plan as advisory.
+${gapCount} of ${rows.length} codes have no resolution descriptor, so
+\`buildResolutionPlan\` has no STEP to offer for them. What changed on
+2026-09-02 (verdict-core finding V9) is that it no longer stays quiet about it.
+
+Before: a descriptor-less code was skipped and left no trace, so a DENY carrying
+only such codes came back with \`path: "self_service"\` — the wrong word for a
+block nobody can clear. (\`autoResolvable\` was already false in that case, because
+it requires at least one step; the role-lens review's phrasing that it reported
+"self-service AND auto-resolvable" was half right, and the half that was wrong is
+corrected here rather than repeated.)
+
+Now: the plan carries \`unresolvedCodes: string[]\` — the codes on a non-allow
+decision that have no descriptor — and while that list is non-empty the plan is
+\`path: "escalation"\`, \`autoResolvable: false\`, and \`summaryForOperator\` names
+the codes. A code contributed by a rule whose own outcome was \`allow\`
+(\`TRUST_ESTABLISHED\` rides along on most restrict/step-up decisions) is an
+affirmative finding, not an unanswered block, and is excluded — derived from the
+decision's own \`matchedRules\`, not from a list anyone maintains. The exclusion is
+keyed on the CONTRIBUTING RULE, not on the code's spelling: reason codes are not
+unique to a rule, so one allow rule sharing a code with a deny rule would otherwise
+have disappeared the deny's own unanswerable block. Both pinned by
+\`pnpm run proof:signalgrid-core\`.
+
+Host apps should still render the VERDICT as the primary signal: a plan with
+unresolved codes tells the worker a person is needed, not what to do.
+
+## Published fields with no in-repo reader (REPORTED, measured 2026-09-02)
+
+Four fields are serialized onto \`/v1\` responses and read by nothing in this
+repository. That is not a defect — a published contract may legitimately have no
+in-repo consumer — but it means NO in-repo test constrains their content, so a
+change to any of them breaks only the host app that depends on it. Stated so a
+host-app developer knows which fields are unexercised here.
+
+Measured, not assumed, with (results quoted after each field):
+
+\`\`\`
+grep -rn "\\b<field>\\b" --include=*.ts --include=*.tsx --include=*.mjs --include=*.swift \\
+  lib scripts artifacts native tests tools site | grep -v node_modules
+\`\`\`
+
+| Field | Declared | Minted | In-repo reader |
+|---|---|---|---|
+| \`SignalGridDecision.confidence\` (simulator) | \`lib/signalgrid-simulator/src/types.ts:150\` | \`lib/signalgrid-simulator/src/decisionEngine.ts:292\` | none — \`scripts/src/signalgrid-grid-proof.ts:988\` COPIES it into an output object and asserts nothing about it |
+| \`ResolutionPlan.summaryForOperator\` | \`lib/signalgrid-core/src/types.ts\` | \`lib/signalgrid-core/src/resolution.ts\` | one, added 2026-09-02: \`scripts/src/signalgrid-core-proof.ts\` asserts it NAMES an unresolved reason code. Nothing reads the rest of the sentence |
+| \`ResolutionSimulation.projectedReasonCodes\` | \`lib/signalgrid-core/src/types.ts\` | \`lib/signalgrid-core/src/resolution.ts\` | none — declaration and mint site only |
+| \`ResolutionStep.clears\` | \`lib/signalgrid-core/src/types.ts\` | \`lib/signalgrid-core/src/resolution.ts\` | none — every other \`clears\` match in the tree is unrelated prose |
+
+REPORTED, not gated: this is a measurement with a date on it, not an invariant. A
+reader added tomorrow does not fail anything; re-run the command above rather than
+trusting this table's age.
+
+## Simulator vocabulary — a DIFFERENT engine's codes, catalogued so nobody reads them as the core's
+
+The tables above are the **launch decision core** (\`lib/signalgrid-core\`). The
+**fixture simulator** — \`${SIMULATOR_ENGINE}\` — is a second, separate engine.
+It emits its own ${simulator.codes.length} reason codes. ${simulator.shared.length} of them the core also emits
+(${simulator.shared.map((c) => `\`${c}\``).join(", ")}); the other ${simulator.simulatorOnly.length}
+appear nowhere above. The list is parsed from that file's emit sites by this
+generator, not maintained by hand. Several of them name **deferred** families
+(custody, dock, location) — the simulator is a fixture harness, so it models
+families the launch profile does not serve.
+
+**GATED:** that this list is complete, that it parses, and that no simulator code
+collides with a core code by punctuation/case/underscore alone
+(\`scripts/check-reason-codes.mjs\`). **REPORTED, not gated:** everything about what
+these codes MEAN. No \`/v1\` route emits them — they are not part of the published
+API vocabulary, and a host app must not build against them as if they were.
+
+They are also not renameable at will: \`native/ios/EnterpriseShell/Services/DecisionEngine.swift\`
+is a byte-faithful port of the simulator engine (CLAUDE.md golden rule 1), so the
+iOS app's reason codes ARE these spellings. Aligning them with the core's would
+break the parity the port exists to prove.
+
+The ${simulator.simulatorOnly.length} the core never emits — none of them a launch
+surface, and the custody/dock/location ones name **deferred** families:
+${simulator.simulatorOnly.map((c) => `- \`${c}\` — simulator/iOS only`).join("\n")}
+
+${
+    simulator.nearCollisions.length === 0
+      ? "No simulator code differs from a core code by punctuation, case or underscore alone."
+      : `**Near-collisions found (${simulator.nearCollisions.length}) — one concept, two spellings, two engines:**\n\n` +
+        simulator.nearCollisions
+          .map((n) => `- \`${n.simulator}\` (simulator/iOS) vs \`${n.core}\` (core) — the gate carries a NAMED exemption for this pair or fails on it; see \`scripts/check-reason-codes.mjs\`.`)
+          .join("\n")
+  }
 
 ## History
 

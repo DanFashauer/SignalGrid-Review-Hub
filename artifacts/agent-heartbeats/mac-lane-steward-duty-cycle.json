@@ -1,1 +1,1 @@
-{"firedAt":"2026-09-02T04:54:51Z","result":"quiet (04:24 cycle): no Mac commits, sim-results or lane mail addressed to cloud since the last cycle; the 04:24 heartbeat was held while PR #373 was open and is written here with PR-B"}
+{"firedAt":"2026-09-02T08:25:10Z","result":"quiet (08:24 cycle): no Mac commits, sim-results or lane mail addressed to cloud since the 04:24 cycle; no open PR on the branch, so this heartbeat is committed now and rides the next validated push (the verdict-core batch landing)"}

@@ -2399,7 +2399,7 @@ earlier — that is the loop working, not a reason to soften the record.
     never reads the measurement.
     COVERAGE HALF: 12 of the 21 attribute keys the engine branches on are never set
     by any scenario — including all of `hasWorkflowRoutingFailure` — while
-    `proof:signalgrid-simulator` reports 43/43 assertions passed.
+    `proof:signalgrid-simulator` reports 51/51 assertions passed.
     FIX: add a `zone !== expectedZone` comparison, plus fixtures for the 12
     uncovered keys. **Golden rule 1 applies** — this file is byte-ported to
     `native/ios/EnterpriseShell/Services/DecisionEngine.swift`, so the port and the

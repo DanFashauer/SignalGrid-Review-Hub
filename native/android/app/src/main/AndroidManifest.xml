@@ -6,16 +6,24 @@
          permissions it does not need trains people to grant them without reading. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- usesCleartextTraffic is set EXPLICITLY because minSdk is 26. The platform
+         default only flipped to false on API 28; on a 26/27 device the default is
+         true, so a comment that said "defaults to false on API 28+" described two
+         of the supported API levels and left the other two permitting plaintext.
+         GateEndpoint refuses plaintext to any non-loopback host regardless. Two
+         independent layers: one the platform enforces on every supported level now,
+         one this repository tests. The DEBUG build overlays src/debug/AndroidManifest.xml,
+         which attaches a network security config excepting ONLY http://10.0.2.2 (the
+         emulator's host alias) — the same single exception DeviceGate makes at the
+         validator layer, in debug builds only. Release has no overlay. -->
     <application
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.SignalGridAssist"
         android:allowBackup="false"
-        android:fullBackupContent="false">
+        android:fullBackupContent="false"
+        android:usesCleartextTraffic="false">
 
-        <!-- cleartextTrafficPermitted defaults to FALSE on API 28+, and GateEndpoint
-             refuses plaintext to any non-loopback host regardless. Two independent
-             layers: one the platform enforces, one this repository tests. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

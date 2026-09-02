@@ -27,6 +27,33 @@ class AssistWireTest {
     }
 
     @Test
+    fun `a step up with no obligations field is the served shape and does not proceed`() {
+        // The spec's AssistResult has no obligations field, so this is what the real
+        // server sends. It must parse as STEP_UP, carry an empty list, and stay
+        // non-proceedable — absent is "not stated", never "nothing required".
+        val d = AssistWire.parse(200, """{"assist":"step_up","decisionId":"dec_9","reasons":["device posture is stale"]}""")
+        assertEquals(Assist.STEP_UP, d.assist)
+        assertTrue(d.obligations.isEmpty())
+        assertTrue(!d.assist.proceedsWithoutFurtherAction)
+    }
+
+    @Test
+    fun `obligations that is not a list is malformed and denies`() {
+        // Strict like `assist`: present-but-wrong-type is a body this client does
+        // not understand, not a field to coerce away.
+        for (body in listOf(
+            """{"assist":"step_up","obligations":"webauthn"}""",
+            """{"assist":"allow","obligations":{"type":"webauthn"}}""",
+            """{"assist":"allow","obligations":1}""",
+            """{"assist":"allow","obligations":null}""",
+        )) {
+            val d = AssistWire.parse(200, body)
+            assertEquals(Assist.DENY, d.assist, body)
+            assertTrue(d.explanation().contains("obligations"), d.explanation())
+        }
+    }
+
+    @Test
     fun `an unknown field from a newer server does not break an older client`() {
         val d = AssistWire.parse(200, """{"assist":"allow","somethingAddedLater":{"a":1}}""")
         assertEquals(Assist.ALLOW, d.assist)

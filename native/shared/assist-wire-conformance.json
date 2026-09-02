@@ -4,8 +4,8 @@
   "route": "/v1/authorize",
   "routeComment": "The wire these vectors bind, as DATA \u2014 the gate (scripts/check-assist-wire-served.mjs) reads THIS field, not prose; DR-007 recorded the route as a declared gap until the spec served it; DR-023 closed that gap and the spec now serves it.",
   "requires": {
-    "$comment": "Non-vacuity floor, asserted by each client's test before the cases run. Without it a client that returns DENY unconditionally passes every deny case and the suite proves nothing.",
-    "minCases": 30,
+    "$comment": "Non-vacuity floor, asserted by each client's test before the cases run. Without it a client that returns DENY unconditionally passes every deny case and the suite proves nothing. KEPT CURRENT: check-assist-conformance.mjs fails when the file holds more than minCases + 4 cases, so a floor cannot lag far enough behind for a deleted vector to fail nothing.",
+    "minCases": 44,
     "outcomesPresent": [
       "allow",
       "step_up",
@@ -48,6 +48,21 @@
       "status": 200,
       "body": "{\"assist\":\"step_up\",\"reasons\":[\"unmanaged device\"],\"obligations\":[\"webauthn\"]}",
       "expect": "step_up"
+    },
+    {
+      "id": "step-up-no-obligations-served-shape",
+      "why": "the served /api/v1/authorize contract (lib/api-spec/v1-openapi.yaml AssistResult) declares no obligations field; a step_up with none stated must parse as step_up with an EMPTY obligations list (expectObligations, asserted by every client) and must NOT proceed \u2014 absent is not-stated, never nothing-required",
+      "status": 200,
+      "body": "{\"assist\":\"step_up\",\"decisionId\":\"dec_9\",\"reasons\":[\"device posture is stale\"]}",
+      "expect": "step_up",
+      "expectObligations": []
+    },
+    {
+      "id": "step-up-obligations-wrong-type",
+      "why": "obligations present but not a list is a malformed body, and malformed is DENY \u2014 the same rule `assist` already gets (present-but-wrong-type denies). An earlier version of this case expected step_up, which pinned an asymmetry: a wrong-typed assist denied while a wrong-typed obligations was quietly coerced to empty and let the step_up stand with its obligations silently dropped. Both clients are now strict on obligations.",
+      "status": 200,
+      "body": "{\"assist\":\"step_up\",\"obligations\":\"webauthn\"}",
+      "expect": "deny"
     },
     {
       "id": "restrict",

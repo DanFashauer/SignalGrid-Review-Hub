@@ -29,6 +29,18 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const VECTORS = "native/shared/assist-wire-conformance.json";
 const CLIENT_ROOT = "native";
 const VALID_OUTCOMES = ["allow", "step_up", "restrict", "deny"];
+/** How far `cases.length` may run ahead of `requires.minCases` before the gate fails. */
+const FLOOR_SLACK = 4;
+/**
+ * Every key a case may carry — exactly the keys the two harnesses READ
+ * (`case["…"]` in native/android/core/src/test/kotlin/.../SharedConformanceTest.kt,
+ * `case.get("…")`/`case["…"]` in native/desktop/core/tests/conformance.rs). Any other
+ * key is a typo or a field no client consumes, and either way it is a vector that
+ * binds nothing while looking like one: `expectObligation` (no s) on the one case
+ * that carries it left every gate green, because both harnesses treat the field as
+ * opt-in by key presence. Add a key here only when a harness starts reading it.
+ */
+const KNOWN_CASE_KEYS = ["id", "why", "status", "body", "expect", "expectExplanationContains", "expectObligations"];
 
 /** Every `native/<platform>/core` directory. Derived, not listed. */
 function discoverClients() {
@@ -68,6 +80,15 @@ function validateVectors(doc) {
     problems.push("`requires.minCases` is missing — the file states no floor for itself");
   } else if (cases.length < requires.minCases) {
     problems.push(`${cases.length} cases, below the file's own floor of ${requires.minCases}`);
+  } else if (cases.length > requires.minCases + FLOOR_SLACK) {
+    // The floor must be KEPT CURRENT, not merely satisfied. It sat at 30 while the
+    // file held 44, and at that distance deleting a vector failed nothing — a floor
+    // fourteen cases below the water line is a floor in name only. Not equality:
+    // a batch may add a few cases before the number is raised, but not many.
+    problems.push(
+      `${cases.length} cases, but requires.minCases is ${requires.minCases} — more than ${FLOOR_SLACK} ` +
+        `behind. Raise the floor to ${cases.length}; a floor that lags lets a deleted vector fail nothing`,
+    );
   }
 
   const expects = cases.map((c) => c.expect);
@@ -89,7 +110,23 @@ function validateVectors(doc) {
   const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
   if (dupes.length) problems.push(`duplicate case ids: ${[...new Set(dupes)].join(", ")}`);
 
+  // The opt-in assertions must be OPTED INTO somewhere: a file where no case carries
+  // `expectObligations` is a file that asserts nothing about parsed obligations, and
+  // the served-shape case exists precisely to assert "empty", not merely "step_up".
+  const withObligations = cases.filter((c) => c.expectObligations !== undefined).length;
+  if (withObligations === 0) {
+    problems.push("no case carries expectObligations — the parsed-obligations assertion is opted into by nobody");
+  }
+
   for (const c of cases) {
+    for (const key of Object.keys(c)) {
+      if (!KNOWN_CASE_KEYS.includes(key)) {
+        problems.push(
+          `case ${c.id ?? "(no id)"}: unknown key "${key}" — no harness reads it (known: ${KNOWN_CASE_KEYS.join(", ")}). ` +
+            `A misspelled assertion key is a vector that binds nothing while looking like one`,
+        );
+      }
+    }
     if (!c.id) problems.push("a case has no id");
     if (!VALID_OUTCOMES.includes(c.expect)) {
       problems.push(`case ${c.id}: expect "${c.expect}" is not one of ${VALID_OUTCOMES.join("/")}`);
@@ -99,6 +136,11 @@ function validateVectors(doc) {
       problems.push(`case ${c.id}: body must be a string or null`);
     }
     if (!c.why) problems.push(`case ${c.id}: no "why" — a case nobody can justify is a case nobody can review`);
+    if (c.expectObligations !== undefined) {
+      if (!Array.isArray(c.expectObligations) || c.expectObligations.some((o) => typeof o !== "string")) {
+        problems.push(`case ${c.id}: expectObligations must be an array of strings`);
+      }
+    }
   }
   return problems;
 }
@@ -107,7 +149,7 @@ function selfTest() {
   const good = {
     requires: { minCases: 2, outcomesPresent: VALID_OUTCOMES },
     cases: [
-      { id: "a", why: "w", status: 200, body: '{"assist":"allow"}', expect: "allow" },
+      { id: "a", why: "w", status: 200, body: '{"assist":"allow"}', expect: "allow", expectObligations: [] },
       { id: "b", why: "w", status: 200, body: null, expect: "deny" },
       { id: "c", why: "w", status: 200, body: '{"assist":"step_up"}', expect: "step_up" },
       { id: "d", why: "w", status: 200, body: '{"assist":"restrict"}', expect: "restrict" },
@@ -139,6 +181,41 @@ function selfTest() {
     [
       "a case with no justification is caught",
       { ...good, cases: [...good.cases, { id: "f", status: 200, body: "{}", expect: "deny" }] },
+      false,
+    ],
+    [
+      "a floor more than FLOOR_SLACK behind the case count is caught (the floor must be kept current)",
+      {
+        ...good,
+        requires: { ...good.requires, minCases: 1 },
+        cases: [
+          ...good.cases,
+          ...[1, 2, 3, 4, 5].map((i) => ({ id: `pad${i}`, why: "w", status: 500, body: null, expect: "deny" })),
+        ],
+      },
+      false,
+    ],
+    [
+      "a floor within FLOOR_SLACK of the case count is fine (not equality)",
+      { ...good, requires: { ...good.requires, minCases: 2 } },
+      true,
+    ],
+    [
+      "a non-list expectObligations is caught",
+      { ...good, cases: [...good.cases, { id: "g", why: "w", status: 200, body: "{}", expect: "deny", expectObligations: "webauthn" }] },
+      false,
+    ],
+    [
+      "THE REVIEWER'S TYPO: expectObligation (no s) is an unknown key and is caught",
+      {
+        ...good,
+        cases: good.cases.map((c) => (c.id === "a" ? { id: c.id, why: c.why, status: c.status, body: c.body, expect: c.expect, expectObligation: [] } : c)),
+      },
+      false,
+    ],
+    [
+      "a file in which NO case carries expectObligations is caught (the assertion is opted into by nobody)",
+      { ...good, cases: good.cases.map(({ expectObligations, ...rest }) => rest) },
       false,
     ],
     [
@@ -183,7 +260,8 @@ function main() {
   }
   console.log(`  ✓ ${VECTORS}: ${doc.cases.length} cases, all four outcomes, ${
     doc.cases.filter((c) => c.expect === "allow").length
-  } proceedable`);
+  } proceedable, ${doc.cases.filter((c) => c.expectObligations !== undefined).length} asserting parsed obligations, ` +
+    `every key one of ${KNOWN_CASE_KEYS.length} the harnesses read`);
 
   const clients = discoverClients();
   if (clients.length === 0) {

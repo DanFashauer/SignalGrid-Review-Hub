@@ -134,6 +134,18 @@ fn every_shared_case_agrees_with_this_client() {
             ));
         }
 
+        // The obligations a client must have PARSED — the served shape declares none,
+        // and "empty" is the assertion, not merely "still a step_up".
+        if let Some(expected) = case.get("expectObligations").and_then(|v| v.as_array()) {
+            let expected: Vec<&str> = expected.iter().map(|v| v.as_str().unwrap()).collect();
+            if decision.obligations != expected {
+                failures.push(format!(
+                    "  {id}: obligations parsed as {:?}, expected {expected:?}",
+                    decision.obligations
+                ));
+            }
+        }
+
         if let Some(fragments) = case
             .get("expectExplanationContains")
             .and_then(|v| v.as_array())

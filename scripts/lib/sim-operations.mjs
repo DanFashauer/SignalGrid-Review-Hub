@@ -93,6 +93,34 @@ export const SIM_OPERATIONS = {
     what: "proofs, API and MCP without the simulator phase",
   },
 
+  // ── the native Android and desktop lanes ──────────────────────────────────
+  //
+  // The two core suites run anywhere with a JDK / a Rust toolchain, so they are
+  // `any`: calling them macOS-only would make a Linux runner REFUSE work it can
+  // do, and the proof pins the macOS-only set to the genuinely hardware-bound
+  // lanes. They are here so the Mac can be ASKED to run them — darwin truth for
+  // suites that have only ever run on Linux CI. The window smoke is macOS-only
+  // because it opens a real window and (optionally) takes a screenshot with
+  // `screencapture`; CI never opens the window at all.
+  "android-core-tests": {
+    argv: ["gradle", "-p", "native/android/core", "test", "--console=plain"],
+    platform: "any",
+    needs: "Gradle 8.14.3 and a JDK 17+ on PATH; no Android SDK",
+    what: "the pure-Kotlin Assist core: fail-closed wire parsing, endpoint validation, the shared conformance vectors",
+  },
+  "desktop-core-tests": {
+    argv: ["cargo", "test", "--manifest-path", "native/desktop/core/Cargo.toml"],
+    platform: "any",
+    needs: "a Rust toolchain (rust-version 1.74+)",
+    what: "the Rust Assist core: the same rules as the Kotlin client, plus the shared conformance vectors",
+  },
+  "desktop-window-smoke": {
+    argv: ["./scripts/mac/desktop-window-smoke.sh"],
+    platform: "macos",
+    needs: "a Rust toolchain, and Screen Recording permission for the terminal (the screenshot is mandatory: no PNG, no pass)",
+    what: "builds the Tauri shell, launches it, asserts the process is still alive after ten seconds AND a screenshot was captured; the error-banner check is visual, from that screenshot",
+  },
+
   // ── real-hardware evidence (the only lane that can refresh mac-run.json) ──
   evidence: {
     argv: ["node", "scripts/verify-all.mjs", "--require-mcp", "--emit-evidence"],

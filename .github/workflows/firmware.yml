@@ -67,22 +67,23 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
+      # ONE run, then assert on what it printed. This used to be two steps — a
+      # `cargo test -- --nocapture` and then a second `cargo test` piped through tee
+      # for the assertion — so every push compiled and ran the suite twice for one
+      # answer. `test result: ok` is printed by a run that executed zero tests just
+      # as happily as by one that executed twenty-eight, which is why the assertion
+      # stays; the duplicate run does not.
       - name: Test on the host
-        run: cargo test -- --nocapture
-
-      # `test result: ok` is printed by a run that executed zero tests just as happily as
-      # by one that executed twenty-eight.
-      - name: Assert the tests actually ran
         shell: bash
         run: |
           set -o pipefail
-          cargo test 2>&1 | tee test-output.txt
-          RAN=$(awk '/^test result: ok\./ { for (i = 1; i <= NF; i++) if ($i == "passed;") total += $(i-1) } END { print total + 0 }' test-output.txt)
-          echo "tests that reported passing: $RAN"
-          if [ "$RAN" -lt 20 ]; then
-            echo "::error::only $RAN test(s) ran. The suite has ~28; a collapse toward zero must not read as green."
-            exit 1
-          fi
+          cargo test -- --nocapture 2>&1 | tee test-output.txt
+
+      # The floor is DERIVED from the #[test] attributes in the source, not typed: the
+      # hand floor this replaces said 20 while the suite held 28.
+      - name: Assert every declared test ran
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-desktop-core-tests.mjs firmware/dock/core firmware/dock/core/test-output.txt
 
       # THE CLAIM THAT MATTERS. Building for thumbv7em-none-eabihf is what separates
       # "this is Rust that happens to be about docks" from "this could be flashed": no

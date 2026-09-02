@@ -34,6 +34,14 @@ class GateEndpointTest {
     }
 
     @Test
+    fun `the api mount is the base, and appending the route reaches authorize`() {
+        // The one composition that reaches a decision, pinned so the "append
+        // /v1/authorize" comments cannot drift from what actually resolves.
+        assertEquals("https://host/api/v1/authorize", usable("https://host/api") + "/v1/authorize")
+        assertEquals("https://host/api/v1/authorize", usable("https://host/api/") + "/v1/authorize")
+    }
+
+    @Test
     fun `surrounding whitespace from a config field is tolerated`() {
         assertEquals("https://gate.example.com", usable("  https://gate.example.com  "))
     }
@@ -62,10 +70,28 @@ class GateEndpointTest {
         assertEquals("http://localhost:3000", usable("http://localhost:3000"))
         assertEquals("http://127.0.0.1:3000", usable("http://127.0.0.1:3000"))
         assertEquals("http://[::1]:3000", usable("http://[::1]:3000"))
-        // The Android emulator's alias for the host's loopback. Without it, every
-        // emulator demo would need the check disabled — trading a narrow exception
-        // for a blanket one.
-        assertEquals("http://10.0.2.2:3000", usable("http://10.0.2.2:3000"))
+    }
+
+    @Test
+    fun `the emulator alias is NOT loopback by default, matching the Rust client`() {
+        // 10.0.2.2 aliases the host only inside an emulator. On a physical device it
+        // is a routable address, and accepting plaintext to it unconditionally — as
+        // this validator once did — was the on-path rewrite the rule exists to refuse.
+        val reason = refusedReason("http://10.0.2.2:3000")
+        assertTrue(reason.contains("plaintext"), reason)
+        assertTrue(GateEndpoint(GateEndpoint.STRICT_LOOPBACK).validate("http://10.0.2.2:3000") is GateEndpoint.Result.Refused)
+    }
+
+    @Test
+    fun `the emulator set accepts the alias, and ONLY the alias, beyond strict`() {
+        // The widened set exists so an emulator demo does not need the check turned
+        // off. It must add exactly one host and nothing else.
+        val emulator = GateEndpoint(GateEndpoint.EMULATOR_LOOPBACK)
+        assertEquals("http://10.0.2.2:3000", (emulator.validate("http://10.0.2.2:3000") as GateEndpoint.Result.Usable).baseUrl)
+        assertEquals(setOf("10.0.2.2"), GateEndpoint.EMULATOR_LOOPBACK - GateEndpoint.STRICT_LOOPBACK)
+        assertTrue(emulator.validate("http://10.0.2.3:3000") is GateEndpoint.Result.Refused)
+        assertTrue(emulator.validate("http://gate.example.com") is GateEndpoint.Result.Refused)
+        assertTrue(emulator.validate("http://10.0.2.2.attacker.com") is GateEndpoint.Result.Refused)
     }
 
     @Test
@@ -116,7 +142,7 @@ class GateEndpointTest {
         // The invariant, asserted over the whole spread rather than left implied.
         val mustRefuse = listOf(
             null, "", "  ", "gate.example.com", "http://gate.example.com",
-            "http://10.20.30.40", "http://localhost.attacker.com", "ftp://x.example.com",
+            "http://10.20.30.40", "http://10.0.2.2:3000", "http://localhost.attacker.com", "ftp://x.example.com",
             "file:///etc/passwd", "https://", "https://user:pass@gate.example.com",
         )
         for (raw in mustRefuse) {

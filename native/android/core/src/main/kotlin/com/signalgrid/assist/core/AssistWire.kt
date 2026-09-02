@@ -1,6 +1,7 @@
 package com.signalgrid.assist.core
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -75,6 +76,25 @@ object AssistWire {
             return AssistDecision(
                 assist = Assist.DENY,
                 reasons = listOf("the Assist gate's response carried no \"assist\" field"),
+                decisionId = stringOrNull(root, "decisionId"),
+            )
+        }
+
+        // `obligations` is OPTIONAL-ABSENT, and absent is the served case: the
+        // /api/v1/authorize contract (lib/api-spec/v1-openapi.yaml, AssistResult)
+        // declares `assist`, `decisionId` and `reasons` only. Absent means no
+        // obligation is known to be satisfied — an empty list is never permission;
+        // only ALLOW proceeds, whatever this list holds.
+        //
+        // PRESENT-BUT-NOT-A-LIST IS MALFORMED, and malformed is DENY — the same rule
+        // `assist` gets above. Coercing it to empty (as this once did) let a step_up
+        // stand with its obligations silently dropped, an asymmetry the shared
+        // vectors now pin closed.
+        val obligationsEl = root["obligations"]
+        if (obligationsEl != null && obligationsEl !is JsonArray) {
+            return AssistDecision(
+                assist = Assist.DENY,
+                reasons = listOf("the Assist gate's response carried an \"obligations\" field that is not a list"),
                 decisionId = stringOrNull(root, "decisionId"),
             )
         }

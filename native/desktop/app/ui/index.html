@@ -124,11 +124,24 @@
           : "The host app must NOT proceed on this alone.";
 
         list(document.getElementById("reasons"), d.reasons, "The gate gave no reason.");
-        list(document.getElementById("obligations"), d.obligations, "None.");
+        // The served /api/v1/authorize contract (lib/api-spec/v1-openapi.yaml,
+        // AssistResult) declares NO obligations field, so absent is the normal case,
+        // not a defect. Absent means no obligation is known to be satisfied: a step_up
+        // with nothing listed still does not proceed, and the panel says so instead of
+        // showing a blank that reads as "nothing required".
+        list(
+          document.getElementById("obligations"),
+          d.obligations,
+          d.assist === "step_up"
+            ? "Step up required; the gate did not state an obligation."
+            : "None stated by the gate."
+        );
 
+        // SIGNALGRID_GATE_URL is VALIDATED and displayed. It is never contacted: this
+        // build has no HTTP client, and the decision above is the fixture either way.
         const gate = document.getElementById("gate");
         gate.textContent = d.gate
-          ? d.gate
+          ? d.gate + " — validated only; this build never contacts it"
           : d.gate_refusal || "No gate URL is configured.";
         gate.className = d.gate ? "" : "empty";
 
@@ -139,7 +152,15 @@
 
       render().catch((e) => {
         // A shell that silently renders nothing on failure looks like an empty
-        // decision. Say what happened instead.
+        // decision. Absent evidence RAISES: the badge becomes deny and the verdict
+        // says not to proceed, BEFORE the note explains why. The first version set
+        // only the note, leaving the badge at "…" and the verdict blank — a screen a
+        // host app could read as "no decision yet" rather than "do not proceed".
+        const badge = document.getElementById("badge");
+        badge.textContent = "deny";
+        badge.className = "badge deny";
+        document.getElementById("verdict").textContent =
+          "The host app must NOT proceed on this alone.";
         document.getElementById("fixture-note").textContent =
           "Could not read the decision from the core: " + e;
       });

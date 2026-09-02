@@ -1,2 +1,5 @@
 # Cargo build output. Cargo.lock IS committed — same reason as native/desktop.
 target/
+
+# The cargo test log CI tees for scripts/check-desktop-core-tests.mjs.
+test-output.txt

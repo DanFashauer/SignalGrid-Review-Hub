@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only manifest overlay: merged into the main manifest for debug builds
+     only. It attaches res/xml/network_security_config.xml (also debug-only), which
+     excepts http://10.0.2.2 — the emulator's alias for the host — from the
+     cleartext ban. A release build has no overlay, no config, and no exception. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+</manifest>

@@ -33,8 +33,13 @@ export function auditAssistWire({ vectorsJson, specYaml, gapsSrc, kotlinSrc, rus
   } catch {
     return { problems: [`${VECTORS} does not parse — the shared contract is unreadable`], boundRoute: null };
   }
-  const minCases = vectors?.requires?.minCases ?? 30;
-  if (!Array.isArray(vectors?.cases) || vectors.cases.length < minCases) {
+  // FAIL CLOSED on a missing floor, like check-assist-conformance does. This used to
+  // default a missing `requires.minCases` to 30 — a floor the file never stated,
+  // invented by the gate that was supposed to hold the file to its own.
+  const minCases = vectors?.requires?.minCases;
+  if (typeof minCases !== "number") {
+    problems.push(`${VECTORS} declares no requires.minCases — a file that states no floor for itself cannot be held to one, and this gate will not invent it`);
+  } else if (!Array.isArray(vectors?.cases) || vectors.cases.length < minCases) {
     problems.push(`${VECTORS} carries ${vectors?.cases?.length ?? 0} cases, below its own floor of ${minCases} — an emptied suite cannot count as agreement`);
   }
   const boundRoute = vectors?.route ?? null;
@@ -116,6 +121,8 @@ function selfTest() {
   checks.push(["identical multi-segment routes do NOT report divergence", !r.problems.some((x) => x.includes("DIFFERENT"))]);
   r = auditAssistWire({ ...base, vectorsJson: JSON.stringify({ requires: { minCases: 30 }, cases: [], route: "/v1/authorize" }) });
   checks.push(["an emptied vector suite trips the vacuity floor", r.problems.some((x) => x.includes("below its own floor"))]);
+  r = auditAssistWire({ ...base, vectorsJson: JSON.stringify({ ...JSON.parse(base.vectorsJson), requires: {} }) });
+  checks.push(["vectors that declare NO minCases FAIL (no invented floor)", r.problems.some((x) => x.includes("declares no requires.minCases"))]);
   r = auditAssistWire({ ...base, vectorsJson: JSON.stringify({ ...JSON.parse(base.vectorsJson), route: undefined }) });
   checks.push(["vectors without a route field FAIL (the wire must be data)", r.problems.some((x) => x.includes("no well-formed \"route\""))]);
   const failed = checks.filter(([, ok]) => !ok);

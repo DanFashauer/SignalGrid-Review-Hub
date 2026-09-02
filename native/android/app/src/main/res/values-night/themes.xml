@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      The night half of Theme.SignalGridAssist. Same style name as values/themes.xml;
+      the resource system picks this one when the device is in dark mode, so the
+      window between process start and Compose's first frame is dark on a dark
+      device. `android:Theme.Material.NoActionBar` is the platform's dark Material
+      theme, available from API 21 — no dependency, matching the day half.
+    -->
+    <style name="Theme.SignalGridAssist" parent="android:Theme.Material.NoActionBar" />
+
+</resources>

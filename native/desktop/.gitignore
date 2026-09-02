@@ -12,3 +12,7 @@ target/
 # would mean the tree drifts depending on which machine last built — the same trap as
 # a committed lockfile that gets regenerated per platform.
 app/gen/
+
+# The cargo test log CI tees for scripts/check-desktop-core-tests.mjs; a local run
+# must not leave it as an untracked file that dirties the tree.
+test-output.txt

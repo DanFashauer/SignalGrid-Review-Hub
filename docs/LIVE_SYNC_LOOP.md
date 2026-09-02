@@ -62,11 +62,15 @@ Two committed directories close it:
 | Mac → cloud | `artifacts/sim-results/<id>.json` | `pnpm run sim:run-requests` |
 
 **A request names KEYS, never commands.** `scripts/lib/sim-operations.mjs` is the
-allowlist — fifteen operations covering the deterministic suites, the running
+allowlist — 26 operations covering the deterministic suites, the running
 `/v1` API (functionally and **under concurrency**, via `load` and `stress`), the
 browser E2E layer, the turnkey Mac runs (proofs → API → MCP over real JSON-RPC →
 EnterpriseShell in the iOS simulator with mimicked hardware), the real-hardware
-evidence emission, the container stack, and the live vendor lanes.
+evidence emission, the container stack, the live vendor lanes (one key per lane
+plus the all-or-nothing `live-lanes`), and the native Android and desktop lanes
+(`android-core-tests`, `desktop-core-tests`, and the macOS-only
+`desktop-window-smoke`, which is the only thing anywhere that opens the Tauri
+window).
 The machine that executes decides what a key means. This is the security
 property, not a convenience: request files are authored by one lane and executed
 on another lane's machine, with that machine's filesystem and credentials, so a
@@ -75,11 +79,14 @@ request carrying a shell string would make *"please run a simulation"* and
 call site — no spawn in the runner takes its program from a request field, and
 none opts into a shell.
 
-That count is deliberately spelled out and deliberately checkable: `node -e
+That count is checkable: `node -e
 "import('./scripts/lib/sim-operations.mjs').then(m => console.log(m.OPERATION_KEYS.length))"`.
-The docs↔proof figure guard only reads comma-formatted numbers of `1,000` or more, so a
-written-out count like this one is exactly the kind of figure it cannot see —
-it went stale within an hour of being written, when `load` and `stress` landed.
+It is also GATED, since 2026-09-02, by a `sim-operations` row in
+`scripts/check-derived-doc-figures.mjs` that derives the figure from the
+allowlist's source — because a written-out count is exactly the kind of figure
+no guard could see: it went stale within an hour of being written, when `load`
+and `stress` landed, and it said "fifteen" until 2026-09-02 while the file held
+twenty-three. The next operation added moves this sentence or fails the gate.
 
 **An operation the machine cannot honestly run is REFUSED, never downgraded.** A
 macOS-only run on Linux records `refused_platform` and says so; it is never

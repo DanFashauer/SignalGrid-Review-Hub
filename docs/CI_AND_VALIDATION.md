@@ -79,12 +79,12 @@ with `fail-fast: false` so a green Linux cannot hide a red Windows.
 
 | Job | What it proves |
 | --- | --- |
-| `Assist core (ubuntu-latest)` / `(windows-latest)` | the trust rules compile and their 38 tests pass on both platforms |
+| `Assist core (ubuntu-latest)` / `(windows-latest)` | the trust rules compile and their tests pass on both platforms (the job asserts a floor on how many ran; no count is pinned here) |
 | `Desktop shell (ubuntu-latest)` / `(windows-latest)` | a **runnable executable** builds on both, and is uploaded as a CI artifact |
 | `Shared Assist vectors bind every client` | see the next section |
 
 **The core came first, deliberately.** `native/desktop/core` is a Rust crate — the
-Assist outcome vocabulary, fail-closed wire parsing, endpoint validation, 38 tests.
+Assist outcome vocabulary, fail-closed wire parsing, endpoint validation, and its tests.
 Everything that decides what a worker is told is testable with `cargo test` on any
 machine, with no display server, installer, or signing certificate. `native/desktop/app`
 is then a Tauri shell thin enough that nothing important can hide in it: it renders a

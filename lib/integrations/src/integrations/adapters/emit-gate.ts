@@ -1,9 +1,34 @@
 // The shared live-emission gate for OUTBOUND connector families.
 //
-// An emitter (SIEM, syslog, telemetry, ITSM) sends data OUT to a customer system.
-// Unlike a device actuator — "quarantine this endpoint", deleted from nac/ and
-// uem/ because it has no read-only form — an emitter has an obviously correct
-// disciplined behaviour: send nothing. So emitters are GATED, not deleted.
+// An emitter sends data OUT to a customer system. Unlike a device actuator —
+// "quarantine this endpoint", deleted from nac/ and uem/ because it has no
+// read-only form — an emitter has an obviously correct disciplined behaviour:
+// send nothing. So emitters are GATED, not deleted.
+//
+// SCOPE — this resolver is shared by the FOUR families whose adapter modules
+// call it in-line before an outbound request: siem/, syslog/, telemetry/ and
+// itsm/. It is NOT every outbound family: the repository has six emitter
+// families in all, and the other two — webhooks/ and caep-events/ — carry the
+// identical policy in their own `resolve*Emitter()` (each family's resolve.ts),
+// because they additionally require an INJECTED transport this repository does
+// not ship. Six resolve.ts files, four callers of this one.
+//
+// WHAT ENFORCES THAT, precisely — an earlier version of this paragraph said
+// `proof:emit-gate` "derives that same set and asserts each one routes through
+// here", and that was false: the proof held a hand-written list of six
+// representative modules, so nine of the fifteen importers were unwatched by it
+// and the gate could be stripped from itsm/zendesk.ts with the proof still
+// reporting green. Two things watch this now, and they are different shapes:
+//
+//   · `proof:emit-gate` — pins those six modules BY NAME (their gate must sit
+//     before the first outbound call, which a directory sweep cannot see), and
+//     separately SWEEPS all four family directories, asserting that every module
+//     naming a vendor host or calling fetch imports this file.
+//   · `scripts/check-ungated-fetch.mjs` — the derived net over the whole
+//     connector tree, per function rather than per file.
+//
+// Neither subsumes the other; the sweep is scoped to these four families, the
+// net is scoped to fetch call sites.
 //
 // One resolver, shared, because four copies of a policy is four chances for one
 // of them to drift permissive. The policy is the repo's standard: dev and alpha

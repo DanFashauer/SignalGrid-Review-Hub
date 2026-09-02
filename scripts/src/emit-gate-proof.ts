@@ -272,6 +272,110 @@ check(
   (mdeSrc.match(/if \(!this\.isEnabled\(\)\)/g) ?? []).length >= 5,
 );
 
+// ── 8. DERIVED coverage of the four routed families ─────────────────────────
+//
+// Section 5 above is a HAND-WRITTEN list of six modules, and for as long as it was
+// the only routing assertion it was advertised — in adapters/emit-gate.ts — as
+// deriving the family set. It does not. Fifteen modules import the gate; six were
+// listed. Measured, not argued: deleting the import from itsm/zendesk.ts left this
+// proof at 84/84.
+//
+// The named six stay, because they carry a claim a sweep cannot make (the gate sits
+// BEFORE the first outbound call, section 7). This adds the claim the sweep CAN
+// make: walk the four routed family directories and require the gate import on every
+// module that reaches a vendor. A seventh ITSM adapter added tomorrow is covered
+// without editing a list.
+//
+// SCOPE, stated so the silence is not read as coverage: exactly siem/, syslog/,
+// telemetry/ and itsm/. webhooks/ and caep-events/ are deliberately OUT — they hold
+// the identical policy in their own resolve*Emitter() and import nothing from
+// adapters/, so sweeping them would demand an import that must not exist. That
+// exclusion is asserted below rather than left to this comment.
+{
+  const FAMILY_ROOT = "lib/integrations/src/integrations";
+  const ROUTED_FAMILIES = ["itsm", "siem", "syslog", "telemetry"];
+  const OUT_OF_SCOPE = ["webhooks", "caep-events"];
+  // Not adapters: the family's own gate wiring (resolve.ts), its type surface
+  // (types.ts), its re-export barrel (index.ts) and any fixture module. None of
+  // them reaches a vendor, so none of them is asked to import the gate — and the
+  // qualifier below would exclude them anyway. Named so the exclusion is visible.
+  const NOT_AN_ADAPTER = /^(resolve|types|index)\.ts$|fixture/i;
+  const GATE_IMPORT = /from ['"][^'"]*adapters\/emit-gate['"]/;
+  const VENDOR_HOST = /https?:\/\//;
+  // stripComments() above blanks from the first `//` to end of line, which eats the
+  // `//` of a URL and turns `https://acme.zendesk.com` into `https:` — so the host
+  // probe uses a stripper that spares a protocol separator. Without it itsm/adapter.ts,
+  // whose only vendor signal is two `https://${subdomain}...` template literals in
+  // live code, dropped out of the sweep entirely. Same borrowed shape as
+  // scripts/check-ungated-fetch.mjs, and for the same reason.
+  const stripCommentsSparingUrls = (t: string) =>
+    t.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/gm, "$1");
+
+  const swept: string[] = [];
+  const reaching: Array<[string, string]> = [];
+  for (const family of ROUTED_FAMILIES) {
+    for (const file of readdirSync(resolve(repo, FAMILY_ROOT, family)).sort()) {
+      if (!file.endsWith(".ts") || NOT_AN_ADAPTER.test(file)) continue;
+      const rel = `${FAMILY_ROOT}/${family}/${file}`;
+      swept.push(rel);
+      // Comments stripped first, for the reason section 7 records: a comment that
+      // says "fetch" or quotes a vendor URL is prose, not a network call, and a
+      // sweep that cannot tell them apart would demand a gate on an honest file.
+      const raw = readFileSync(resolve(repo, rel), "utf8");
+      const code = stripComments(raw);
+      if (OUTBOUND_CALL.test(code) || VENDOR_HOST.test(stripCommentsSparingUrls(raw))) reaching.push([rel, code]);
+    }
+  }
+
+  // FLOOR. A sweep that finds nothing asserts nothing, and would report every
+  // module gated while scanning an empty set. 12 is just below the 14 the tree
+  // holds today, so one adapter may legitimately be deleted without tripping it;
+  // a derivation that has drifted fails here instead of passing quietly.
+  check(
+    `derived: the four routed families yield >= 12 vendor-reaching modules (found ${reaching.length} of ${swept.length} swept)`,
+    reaching.length >= 12,
+  );
+
+  for (const [rel, code] of reaching) {
+    check(`derived: ${rel.slice(FAMILY_ROOT.length + 1)} imports the shared emit gate`, GATE_IMPORT.test(code));
+  }
+
+  // The sweep must not reach the two families that correctly do NOT import this
+  // file — asserted from the other side too: neither of them imports it today, so
+  // a future sweep that widened onto them would fail loudly rather than silently
+  // demand the wrong thing.
+  check(
+    "derived: the sweep covers neither webhooks/ nor caep-events/ (they carry the policy in their own resolve*Emitter)",
+    !swept.some((rel) => /\/(webhooks|caep-events)\//.test(rel)),
+  );
+  for (const family of OUT_OF_SCOPE) {
+    const files = readdirSync(resolve(repo, FAMILY_ROOT, family)).filter((f) => f.endsWith(".ts"));
+    check(`derived: ${family}/ exists and is a real family (${files.length} modules)`, files.length >= 3);
+    check(
+      `derived: no ${family}/ module imports adapters/emit-gate — its policy lives in its own resolve.ts`,
+      files.every((f) => !GATE_IMPORT.test(readFileSync(resolve(repo, FAMILY_ROOT, family, f), "utf8"))),
+    );
+  }
+
+  // The classifier itself, exercised against a planted module. Without this, a
+  // qualifier that stopped matching would report "every vendor-reaching module is
+  // gated" over an empty set — the exact shape of the defect this section fixes.
+  const plantedUngated = 'export async function ping(u: string) { return fetchWithTimeout(u); }';
+  const plantedGated = 'import { resolveEmission } from "../adapters/emit-gate";\n' + plantedUngated;
+  const plantedComment = "// see https://example.service.com/docs\nexport const x = 1;";
+  check("derived: a planted module calling fetchWithTimeout IS classified as vendor-reaching", OUTBOUND_CALL.test(plantedUngated));
+  check("derived: a planted module with no gate import IS classified ungated", !GATE_IMPORT.test(plantedUngated));
+  check("derived: the same module WITH the import is classified gated (the check is not always-fail)", GATE_IMPORT.test(plantedGated));
+  check(
+    "derived: a comment naming a vendor URL alone does NOT make a module vendor-reaching",
+    !VENDOR_HOST.test(stripCommentsSparingUrls(plantedComment)) && !OUTBOUND_CALL.test(stripComments(plantedComment)),
+  );
+  check(
+    "derived: a vendor URL in LIVE code IS still seen after comment-stripping (the sparing strip works)",
+    VENDOR_HOST.test(stripCommentsSparingUrls('const u = `https://${sub}.zendesk.com`;')),
+  );
+}
+
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
 if (failures.length > 0) {

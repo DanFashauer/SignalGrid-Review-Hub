@@ -47,6 +47,9 @@ import {
   type ComposableSignal,
   type UnifiedAction,
 } from "@workspace/posture-composition";
+// The SECOND, deliberately independent copy of the same ladder. Imported here
+// only so the two can be held equal — see the deep-equality check below.
+import { UNIFIED_ACTIONS as ATTESTATION_UNIFIED_ACTIONS } from "@workspace/verdict-attestation";
 
 let passed = 0;
 const failures: string[] = [];
@@ -123,6 +126,25 @@ check("ceiling projection is monotone and exhaustive over all 8 ladder actions",
     const prev = i === 0 ? "none" : ceilingFromAction(UNIFIED_ACTIONS[i - 1]);
     return c === expected && ACTION_RANK[c] >= ACTION_RANK[prev];
   }));
+
+// ── the ladder is duplicated on purpose; nothing held the two copies equal ────
+// `lib/verdict-attestation/src/types.ts` RESTATES UNIFIED_ACTIONS rather than
+// importing it, and says why: it must be usable at the boundary where a verdict
+// ARRIVES, before anything has been composed, so it cannot depend on
+// `posture-composition`. That reasoning is sound and the copy stays — but the
+// same docblock calls the drift risk acceptable while no check existed to
+// notice drift at all. This is that check, and it is GATED, not reported:
+// two spellings of one severity ladder is not a style question.
+//
+// ORDER is compared, not just membership: `posture-composition` derives
+// ACTION_RANK from the INDEX, so a reordered copy would rank a verdict wrongly
+// at the boundary while every member still matched.
+const LADDER_FLOOR = 8; // the ladder as it stands; a shrunken copy must not pass quietly
+check(`both ladder copies are non-empty and at least ${LADDER_FLOOR} rungs — a truncated copy cannot pass a comparison of two empty arrays`,
+  UNIFIED_ACTIONS.length >= LADDER_FLOOR && ATTESTATION_UNIFIED_ACTIONS.length >= LADDER_FLOOR);
+check("verdict-attestation's duplicated UNIFIED_ACTIONS is deep-equal to posture-composition's — same length, same members, same order",
+  ATTESTATION_UNIFIED_ACTIONS.length === UNIFIED_ACTIONS.length &&
+    UNIFIED_ACTIONS.every((a, i) => ATTESTATION_UNIFIED_ACTIONS[i] === a));
 
 let emptyRefusal: WorkContextError | null = null;
 try { assembleWorkContext({ ...makeInputs("none", false), sourceVerdicts: [] }); } catch (err) { emptyRefusal = err instanceof WorkContextError ? err : null; }

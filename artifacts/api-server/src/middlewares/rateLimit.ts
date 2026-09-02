@@ -91,7 +91,7 @@ export const v1RateLimiter: RateLimitRequestHandler = rateLimit({
 const UNTHROTTLED_PROBES = new Set(["/api/healthz", "/api/readyz"]);
 
 /**
- * Why the probes are exempt at all: `lib/profile.ts` already keeps `/healthz`
+ * Why the probes are exempt at all: `src/lib/profile.ts` already keeps `/healthz`
  * and `/readyz` outside the GA fence on the stated reasoning that an
  * orchestrator "would treat a fenced 404 as a dead instance and restart a
  * working server". A 429 lands in exactly the same place — a probe that cannot

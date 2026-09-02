@@ -100,7 +100,8 @@ retrieval metadata and execution receipts that are not reproducible.
 
 ### The verdict enum
 
-Ordering preserved from the published OpenAPI contract (`DecisionOutcome`, 0.2.0):
+Ordering and spelling preserved from the published OpenAPI contract (`DecisionOutcome`,
+0.2.0), as DR-019 ratified:
 
 | Verdict | Meaning |
 | --- | --- |
@@ -108,6 +109,14 @@ Ordering preserved from the published OpenAPI contract (`DecisionOutcome`, 0.2.0
 | `step-up` | Obtain additional assurance, then proceed |
 | `restrict` | Proceed with constrained workflow or capability |
 | `deny` | Do not proceed |
+
+Two spellings of the second rung are live, each on its own surface, and neither is a
+typo. The 0.2.0 contract (`lib/api-spec/openapi.yaml`) and its generated clients
+(`lib/api-zod`, `lib/api-client-react`) say `step-up`. The engine (`VALID_OUTCOMES` in
+`lib/signalgrid-core/src/policy.ts`) and every outcome enum in the `/v1` contract
+(`lib/api-spec/v1-openapi.yaml`) say `step_up`. `scripts/check-decision-vocabulary.mjs`
+GATES engine-vs-`/v1` agreement and REPORTS the 0.2.0 divergence, so it stays visible
+instead of being tidied into a contract break.
 
 ## Architectural prerequisite
 

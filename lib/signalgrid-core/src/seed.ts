@@ -24,9 +24,10 @@ import type {
 /**
  * Deterministic, public-safe demo seed.
  *
- * Six tenants exist across six verticals (healthcare / warehouse / global-fleet
- * / retail / industrial / data-center-NOC) so cross-tenant isolation can be
- * exercised directly and each of the six app-workflow catalogs now gates
+ * Seven tenants exist across seven verticals (healthcare / warehouse /
+ * global-fleet / retail / industrial / data-center-NOC / government) so
+ * cross-tenant isolation can be exercised directly and each of the seven
+ * app-workflow catalogs now gates
  * against a live decision. All identities, devices, tokens, and posture records
  * are synthetic. Tokens are
  * obviously-fake demo strings, never real credentials. `credentialRef` values

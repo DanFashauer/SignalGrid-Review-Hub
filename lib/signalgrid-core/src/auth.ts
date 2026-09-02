@@ -43,7 +43,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   connector: ["connector:read", "connector:sync"],
 };
 
-export function roleHasPermission(role: Role, permission: Permission): boolean {
+function roleHasPermission(role: Role, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role].includes(permission);
 }
 

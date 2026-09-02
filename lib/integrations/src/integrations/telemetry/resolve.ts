@@ -8,11 +8,8 @@
 // failure mode here is "there is no code".
 //
 // THE FIXTURE EMITTER NEVER CLAIMS DELIVERY. Every record it captures carries
-// `delivered: false` and the mode that produced it. The syslog family once
-// returned status:'sent' for events it had silently dropped — the exact
-// unearned affirmative this fabric exists to withdraw — and this surface is
-// shaped so that lie is unrepresentable: there is no field a fixture record
-// could set that reads as a completed send.
+// `delivered: false` and the mode that produced it — the same unrepresentable-
+// lie shape as the other five families.
 
 /** What this family emits, opaque at the gate. The vendor modules type their own
  *  payloads; the gate decides WHETHER anything may leave, not what it looks like. */

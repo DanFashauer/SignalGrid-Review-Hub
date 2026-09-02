@@ -466,7 +466,7 @@ interface ReasonCatalogEntry {
  *  parse still refuses to guess: a row that does not match the pinned shape is
  *  skipped, and the caller sees its code as "not in the catalog" rather than
  *  paired with invented prose. */
-export function parseReasonCatalog(markdown: string): ReasonCatalogEntry[] {
+function parseReasonCatalog(markdown: string): ReasonCatalogEntry[] {
   const entries: ReasonCatalogEntry[] = [];
   let section: ReasonCatalogEntry["section"] | null = null;
   for (const line of markdown.split("\n")) {
@@ -735,7 +735,7 @@ server.registerTool(
 
 const BRUNO_ROOT = resolve(REPO_ROOT, "artifacts/api-collection");
 
-export function listBrunoCollection(): {
+function listBrunoCollection(): {
   folders: Array<{ path: string; requests: Array<{ file: string; name: string | null }> }>;
 } {
   const folders: Array<{ path: string; requests: Array<{ file: string; name: string | null }> }> = [];

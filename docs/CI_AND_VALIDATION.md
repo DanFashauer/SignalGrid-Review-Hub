@@ -131,7 +131,7 @@ to that client's own suite:
 | Defect | Why it mattered | Settled by |
 | --- | --- | --- |
 | `RESTRICT.proceedsWithoutFurtherAction` returned `true` | a host app would have carried on at **full** capability on a restrict decision, silently discarding the ceiling | `lib/orchestration/src/index.ts` maps `restrict` → mode `hold`, not `proceed` |
-| `parse()` accepted `"stepup"` / `"step-up"` as `STEP_UP` | strictly **more permissive** than denying: `STEP_UP` offers a challenge and so a route to proceeding, `DENY` offers none | the wire vocabulary is exactly four values (`VALID_OUTCOMES` in `lib/signalgrid-core/src/policy.ts`) — neither spelling appears anywhere in the product |
+| `parse()` accepted `"stepup"` / `"step-up"` as `STEP_UP` | strictly **more permissive** than denying: `STEP_UP` offers a challenge and so a route to proceeding, `DENY` offers none | the Assist wire vocabulary is exactly the four underscore-spelled values of `VALID_OUTCOMES` (`lib/signalgrid-core/src/policy.ts`), which is also what every outcome enum in `lib/api-spec/v1-openapi.yaml` publishes. `step-up` is not a synonym to be waved through: it is a DIFFERENT contract's spelling — the older published 0.2.0 `/api` `DecisionOutcome` in `lib/api-spec/openapi.yaml`, carried by the generated `lib/api-zod` and `lib/api-client-react` clients — so a parser that accepted it would be guessing which surface it was talking to. Gated by `scripts/check-decision-vocabulary.mjs` |
 
 Both were fixed against the source of truth rather than by editing the vectors to
 match. **Never make a case pass by weakening it**: a disagreement here is a client

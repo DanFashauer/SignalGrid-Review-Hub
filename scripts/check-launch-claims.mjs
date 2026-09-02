@@ -444,6 +444,77 @@ function retiredLabelViolationsInProse(name, body) {
   return retiredProseScan(name, body).violations;
 }
 
+// ── the retired label in CODE, not only in copy ──────────────────────────────
+//
+// THE HOLE THIS CLOSES, measured. `scripts/launch-profile.mjs` carried
+// `PRODUCT_NAME = "SignalGrid Shared-Device Trust Gateway"` for five days after
+// DR-019/DR-020 retired the label, and it was OUTWARD-FACING: check-launch-profile
+// prints it as the gate's heading and artifacts/mcp-server serves it as `product`
+// on the launch-profile resource. Four separate gates read that file and none of
+// them read that string. Fixing the constant fixed the instance and left the hole:
+// re-planting the label there passed check-product-framing, check-launch-claims,
+// check-launch-profile and review-invariants, all four.
+//
+// So the label is now held in the two places it can reach a buyer FROM code:
+// `scripts/*.mjs` (the gates and the profile they read) and
+// `artifacts/mcp-server/src/**/*.ts` (the MCP surface that serves it).
+//
+// COMMENTS ARE NOT SCANNED, deliberately, and this is the honest-writing carve-out
+// the rest of this file keeps making: a comment explaining that a label WAS used and
+// is now retired is a true sentence, and a gate that reddened the build over it
+// would be teaching the tree to delete its own history. Only live code counts —
+// string literals, template literals and regex literals. A line that names the label
+// AS retired stays exempt via RETIRED_OK, exactly as in buyer-facing copy.
+// LINE-SHAPED ON PURPOSE, and the general version was written first and thrown away
+// after it hid the very defect this section exists to catch. The usual
+// `replace(/\/\*[\s\S]*?\*\//g, "")` stripper found `native/*` inside a `//` comment
+// on scripts/launch-profile.mjs:92, treated it as the start of a block comment, and
+// blanked everything to the next `*/` fifty lines later — including line 136, where
+// the planted `PRODUCT_NAME = "SignalGrid Shared-Device Trust Gateway"` sat. The
+// gate reported green over its own falsification. A regex literal such as
+// /https?:\/\// carries the same hazard in the other direction, ending `\/\//` with
+// two adjacent slashes that read as a line comment.
+//
+// So: a line counts as comment text only when it is ENTIRELY one (trimmed start of
+// `//`, `/*`, `*` or `*/`) or has a trailing ` // ` segment. Anything ambiguous stays
+// SCANNED, which is the safe direction — the failure mode of this stripper is a false
+// positive on a comment, which RETIRED_OK already forgives and a human can read.
+const stripCodeComments = (t) =>
+  t
+    .split("\n")
+    .map((line) => {
+      const trimmed = line.trimStart();
+      if (/^(\/\/|\/\*|\*\/|\*(?!\/))/.test(trimmed)) return " ".repeat(line.length);
+      const at = line.lastIndexOf(" // ");
+      return at === -1 ? line : line.slice(0, at);
+    })
+    .join("\n");
+
+function codeRetiredViolations(name, body) {
+  return retiredLabelViolations(name, stripCodeComments(body)).map((v) =>
+    v.replace("in buyer-facing copy", "in live CODE (string/template/regex literal)"),
+  );
+}
+
+// Files that MUST spell the label, because their job is to match it. Each carries
+// the reason, and each is VERIFIED below to actually contain it — an exemption whose
+// subject no longer names the label is a fossil that silently widens the hole, so a
+// stale entry is fatal rather than ignored.
+const CODE_LABEL_EXEMPT = new Map([
+  [
+    "scripts/check-launch-claims.mjs",
+    "this gate: RETIRED_LABELS is the pattern itself, and the self-test fixtures below must spell the label to prove the rule can fail",
+  ],
+  [
+    "scripts/check-product-framing.mjs",
+    "the sibling framing gate: its RETIRED table holds /\\bShared-Device Trust Gateway\\b/ as a detection pattern",
+  ],
+  [
+    "scripts/loop-state.mjs",
+    "reads README's first 40 lines for the retired label in order to REPORT framing drift; it must name what it looks for",
+  ],
+]);
+
 // ── self-test ────────────────────────────────────────────────────────────────
 {
   const bad0 = "6 evaluated-today signal dimensions";
@@ -538,7 +609,16 @@ function retiredLabelViolationsInProse(name, body) {
     retiredProseScan(
       "stD11.md",
       "# Old positioning — SUPERSEDED HISTORY\n\nSignalGrid is a Shared-Device Trust Gateway.\n",
-    ).byBanner === 1;
+    ).byBanner === 1 &&
+    // The CODE surface. stC0 is the planted launch-profile defect verbatim; stC1 is
+    // the honest comment that replaced it and must stay green; stC2 is a regex
+    // literal (how check-product-framing and loop-state name the label); stC3 is a
+    // string that names the label as retired.
+    codeRetiredViolations("stC0.mjs", 'export const PRODUCT_NAME = "SignalGrid Shared-Device Trust Gateway";').length > 0 &&
+    codeRetiredViolations("stC1.mjs", '// this constant once read "SignalGrid Shared-Device Trust Gateway"\nexport const PRODUCT_NAME = "SignalGrid";').length === 0 &&
+    codeRetiredViolations("stC2.mjs", "const re = /Shared-Device Trust Gateway/i;").length > 0 &&
+    codeRetiredViolations("stC3.mjs", 'const note = "the Shared-Device Trust Gateway label is superseded by DR-020";').length === 0 &&
+    codeRetiredViolations("stC4.ts", 'const product = "SignalGrid";').length === 0;
   if (!st) {
     console.error("✗ SELF-TEST FAILED: a rule no longer flags its synthetic violation. A gate that cannot fail proves nothing.");
     process.exit(1);
@@ -710,6 +790,69 @@ const RETIRED_CEILING_FILE = "docs/agent/launch-claims-retired-labels-ceiling.js
   }
 }
 
+// ── the CODE surface: scripts/*.mjs + artifacts/mcp-server/src/**/*.ts ───────
+// See CODE_LABEL_EXEMPT above for why these two roots and not the whole tree.
+// DERIVED by walking the directories, never hand-listed: a new gate file joins the
+// scan the moment it exists.
+let codeScanned = 0;
+{
+  const codeFiles = [];
+  if (existsSync("scripts")) {
+    for (const e of readdirSync("scripts").sort()) {
+      const q = join("scripts", e);
+      if (e.endsWith(".mjs") && statSync(q).isFile()) codeFiles.push(q);
+    }
+  }
+  const MCP_SRC = "artifacts/mcp-server/src";
+  const walkMcp = (d) => {
+    for (const e of readdirSync(d).sort()) {
+      const q = join(d, e);
+      if (statSync(q).isDirectory()) walkMcp(q);
+      else if (q.endsWith(".ts")) codeFiles.push(q);
+    }
+  };
+  if (existsSync(MCP_SRC)) walkMcp(MCP_SRC);
+
+  // FATAL AT ZERO. A walk that finds nothing would report "0 retired labels in code"
+  // — green about nothing, and the precise shape of the defect this whole section
+  // exists to stop. If a root moved, fix the derivation; never scan less quietly.
+  if (codeFiles.length === 0) {
+    console.error(
+      "  ✗ retired-label CODE scan found ZERO files under scripts/*.mjs and artifacts/mcp-server/src — " +
+        "the derivation has drifted, so this scan proves nothing and refuses to pass.",
+    );
+    problems += 1;
+  }
+
+  for (const f of codeFiles) {
+    const body = readFileSync(f, "utf8");
+    const exemptWhy = CODE_LABEL_EXEMPT.get(f);
+    if (exemptWhy) continue;
+    codeScanned += 1;
+    for (const v of codeRetiredViolations(f, body)) {
+      console.error(`  ✗ ${v}`);
+      problems += 1;
+    }
+  }
+
+  // Every exemption must still be doing work. An entry whose file no longer names
+  // the label (or no longer exists) is a hole standing open with a reason attached.
+  for (const [f, why] of CODE_LABEL_EXEMPT) {
+    if (!existsSync(f)) {
+      console.error(`  ✗ retired-label exemption names a missing file: ${f} — delete the entry (${why}).`);
+      problems += 1;
+      continue;
+    }
+    if (!RETIRED_LABELS.test(stripCodeComments(readFileSync(f, "utf8")))) {
+      console.error(
+        `  ✗ retired-label exemption for ${f} is a FOSSIL — the file no longer names the label in code, ` +
+          `so the exemption only widens the hole. Delete it (stated reason: ${why}).`,
+      );
+      problems += 1;
+    }
+  }
+}
+
 // ── docs/**/*.md — REPORTED against a ceiling, never fatal ───────────────────
 //
 // This gate reads the website, the Pages-derived HTML, the outreach surface and
@@ -752,6 +895,11 @@ console.log(
     `(${publishedPages.length} derived from the Pages deploy, ${outreachScanned} from the outreach surface ` +
     `and the documents it cites, ${contactScanned} from carrying the public contact address), ` +
     `${problems} violation(s); self-test green`,
+);
+console.log(
+  `  retired category labels: ${retiredScanned} buyer-facing file(s) + ${codeScanned} code file(s) ` +
+    `(scripts/*.mjs, artifacts/mcp-server/src/**/*.ts) scanned; ` +
+    `${CODE_LABEL_EXEMPT.size} exempt gate file(s), each verified to still name the label`,
 );
 {
   // READ, DON'T CHECK-THEN-READ. `existsSync(f) ? readFileSync(f) : {}` is a

@@ -473,10 +473,6 @@ export const SURFACES = [
   ],
     demo_only: [
   {
-    id: "mockup-sandbox",
-    reason: "A mockup surface. Never shipping; exists to show shapes before they are built.",
-  },
-  {
     id: "connector-emulator",
     reason:
       "Emulates upstreams so connectors can be exercised with no vendor account. Presenting " +

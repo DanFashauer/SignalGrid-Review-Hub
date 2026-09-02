@@ -20,8 +20,7 @@ console. Persistence is **gated, not assumed**: with no `DATABASE_URL` everythin
 on deterministic in-memory stores seeded from fixtures (the public default); with
 `DATABASE_URL` set, decisions, sessions and the audit hash chain persist to Postgres
 (`lib/persistence`, `lib/audit`). There are no live vendor calls in this repository;
-every connector is fixture-backed behind a tier gate. `artifacts/mockup-sandbox` is
-dev-only preview tooling and is not deployed.
+every connector is fixture-backed behind a tier gate.
 
 ## Assets
 
@@ -49,7 +48,7 @@ dev-only preview tooling and is not deployed.
 - **Build tooling → artifacts** — clients and schemas are generated from
   `lib/api-spec/v1-openapi.yaml`; the spec↔route drift is gated in both directions
   (`proof:api-contract`).
-- **Prod vs dev artifacts** — `mockup-sandbox` and preview tooling stay out of the
+- **Prod vs dev artifacts** — dev-only and demo-only surfaces stay out of the
   runtime; the launch profile classifies every app surface and fails CI on an
   unclassified one.
 
@@ -101,4 +100,3 @@ These are tracked work, not discoveries a scanner should have to make:
   `scripts/check-durable-path-authorization.mjs`
 - **Integrity**: `lib/audit/src/index.ts`, `lib/audit/src/backend.ts`
 - **Shared client code**: `lib/api-client-react/src/custom-fetch.ts`, `lib/api-spec/v1-openapi.yaml`
-- **Dev-only, out of scope unless made reachable**: `artifacts/mockup-sandbox/**`

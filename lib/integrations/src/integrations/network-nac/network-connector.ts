@@ -5,6 +5,7 @@ import {
   type NetworkPostureRaw,
   type NormalizedNetworkSignal,
 } from "./types";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
 
 /**
  * Read-only network / NAC posture connector. Reads per-device access state from a
@@ -34,11 +35,9 @@ export interface NetworkConnectorConfig {
 }
 
 /** Fail closed on any non-GET method — the connector must never enforce/mutate. */
-export function guardReadOnly(method: string): void {
-  if (method !== "GET") {
-    throw new NetworkConnectorError("read_only_violation", `The network/NAC connector is read-only; refused a ${method} request.`);
-  }
-}
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new NetworkConnectorError("read_only_violation", `The network/NAC connector is read-only; refused a ${method} request.`),
+);
 
 export class NetworkNacConnector {
   private readonly accessToken: string;

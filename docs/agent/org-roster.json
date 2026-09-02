@@ -83,7 +83,6 @@
         "artifacts/signalgrid-review/**",
         "artifacts/signalgrid-app/**",
         "artifacts/signalgrid-mobile-pwa/**",
-        "artifacts/mockup-sandbox/**",
         "tools/**"
       ],
       "activated": "2026-08-19",

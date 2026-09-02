@@ -13,16 +13,12 @@ import {
   type MacosPostureReportRaw,
   type NormalizedMacosPosture,
 } from "./types";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
 
 /** A GET-only guard, mirroring the other connectors — a non-GET is a bug. */
-export function guardReadOnly(method: string): void {
-  if (method.toUpperCase() !== "GET") {
-    throw new MacosPostureConnectorError(
-      "read_only_violation",
-      `macOS posture is read-only; refused ${method}`,
-    );
-  }
-}
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new MacosPostureConnectorError("read_only_violation", `macOS posture is read-only; refused ${method}`),
+);
 
 /** true → "on", false → "off", anything else (null/undefined/non-bool) → "unknown". */
 function control(v: unknown): MacosControl {

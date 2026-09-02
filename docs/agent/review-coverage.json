@@ -1,5 +1,5 @@
 {
-  "$comment": "What has actually been READ by a named role, as opposed to what a gate asserts. scripts/check-review-coverage.mjs prints the percentage on every run and fails only on incoherence — a claim naming a path that does not exist, or a claim with no reviewer, date or depth. Seeded honestly on 2026-08-19: the number is small on purpose, because the alternative was leaving it invisible. depth: read = opened and understood; audited = read adversarially against a specific question; verified-live = checked against a real running system.",
+  "$comment": "What has actually been READ by a named role, as opposed to what a gate asserts. scripts/check-review-coverage.mjs prints the percentage on every run and fails only on incoherence — a claim naming a path that does not exist, or a claim with no reviewer, date or depth. Seeded honestly on 2026-08-19: the number is small on purpose, because the alternative was leaving it invisible. depth: read = opened and understood; audited = read adversarially against a specific question; verified-live = checked against a real running system. RETIREMENT (added 2026-09-02, the first time a reviewed surface was deleted): a deleted surface retires its claims; a retired claim must name a file that is gone; the ratchet accepts exactly that drop. Set `retiredOn` (YYYY-MM-DD) and `retiredWhy` (one sentence) on the entry, keep every other field as it was, and never delete the entry — a retired claim counts as covering nothing, and check-role-coverage.mjs lets a role's count fall by exactly the number of its entries retired since the ratchet was last written. A retired claim whose file STILL EXISTS is a narrowing, not a retirement, and fails.",
   "version": 1,
   "reviews": [
     {
@@ -2562,35 +2562,45 @@
       "reviewedBy": "web-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "25 Google Font families from two vendor hosts plus a duplicate noscript copy. Established the tree is NON-SHIPPING and gated before judging it (row 158)."
+      "note": "25 Google Font families from two vendor hosts plus a duplicate noscript copy. Established the tree is NON-SHIPPING and gated before judging it (row 158).",
+      "retiredOn": "2026-09-02",
+      "retiredWhy": "artifacts/mockup-sandbox deleted in Ponytail cut 3 (DR-024); the file no longer exists"
     },
     {
       "path": "artifacts/mockup-sandbox/src/App.tsx",
       "reviewedBy": "web-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Read in full. The /preview/* renderer resolves against the generated module map; Gallery is the only other page. The map is EMPTY, so every preview route errors."
+      "note": "Read in full. The /preview/* renderer resolves against the generated module map; Gallery is the only other page. The map is EMPTY, so every preview route errors.",
+      "retiredOn": "2026-09-02",
+      "retiredWhy": "artifacts/mockup-sandbox deleted in Ponytail cut 3 (DR-024); the file no longer exists"
     },
     {
       "path": "artifacts/mockup-sandbox/src/main.tsx",
       "reviewedBy": "web-engineer",
       "date": "2026-08-25",
       "depth": "read",
-      "note": "Five lines. Clean."
+      "note": "Five lines. Clean.",
+      "retiredOn": "2026-09-02",
+      "retiredWhy": "artifacts/mockup-sandbox deleted in Ponytail cut 3 (DR-024); the file no longer exists"
     },
     {
       "path": "artifacts/mockup-sandbox/src/.generated/mockup-components.ts",
       "reviewedBy": "web-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Five lines, ZERO module entries. Cross-checked: the mockups directory has 0 tracked files and does not exist on disk. Regenerated at dev-server start by the plugin, so an empty committed map is a correct steady state."
+      "note": "Five lines, ZERO module entries. Cross-checked: the mockups directory has 0 tracked files and does not exist on disk. Regenerated at dev-server start by the plugin, so an empty committed map is a correct steady state.",
+      "retiredOn": "2026-09-02",
+      "retiredWhy": "artifacts/mockup-sandbox deleted in Ponytail cut 3 (DR-024); the file no longer exists"
     },
     {
       "path": "artifacts/mockup-sandbox/mockupPreviewPlugin.ts",
       "reviewedBy": "web-engineer",
       "date": "2026-08-25",
       "depth": "read",
-      "note": "Lines 1-60: the plugin globs the mockups tree and regenerates the map on watch. NOT read: the middleware/HMR half including the 127.0.0.1 reference."
+      "note": "Lines 1-60: the plugin globs the mockups tree and regenerates the map on watch. NOT read: the middleware/HMR half including the 127.0.0.1 reference.",
+      "retiredOn": "2026-09-02",
+      "retiredWhy": "artifacts/mockup-sandbox deleted in Ponytail cut 3 (DR-024); the file no longer exists"
     },
     {
       "path": "artifacts/signalgrid-web/index.html",

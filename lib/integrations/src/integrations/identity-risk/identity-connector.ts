@@ -10,6 +10,7 @@ import {
   type RiskLevel,
   type RiskState,
 } from "./types";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
 
 /**
  * Read-only identity / SSO sign-in-risk connector. Reads per-principal risk
@@ -38,11 +39,9 @@ export interface IdentityConnectorConfig {
 }
 
 /** Fail closed on any non-GET method — the connector must never mutate. */
-export function guardReadOnly(method: string): void {
-  if (method !== "GET") {
-    throw new IdentityRiskConnectorError("read_only_violation", `The identity-risk connector is read-only; refused a ${method} request.`);
-  }
-}
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new IdentityRiskConnectorError("read_only_violation", `The identity-risk connector is read-only; refused a ${method} request.`),
+);
 
 export class IdentityRiskConnector {
   private readonly accessToken: string;

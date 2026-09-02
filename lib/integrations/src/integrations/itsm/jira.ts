@@ -1,5 +1,5 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
-import { fetchWithTimeout, TIMEOUT_PRESETS } from '../../utils/fetchWithTimeout';
+import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
 import { resolveEmission } from '../adapters/emit-gate';
 
 /**
@@ -91,7 +91,7 @@ export class JiraAdapter implements ITSMAdapter {
       },
     };
 
-    const response = await fetchWithTimeout(url, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -99,7 +99,7 @@ export class JiraAdapter implements ITSMAdapter {
         'Authorization': `Basic ${Buffer.from(`${this.config.email}:${this.config.apiToken}`).toString('base64')}`,
       },
       body: JSON.stringify(payload),
-      timeoutMs: TIMEOUT_PRESETS.normal,
+      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
     });
 
     if (!response.ok) {
@@ -175,7 +175,7 @@ export class JiraAdapter implements ITSMAdapter {
       // This is a simplified version
     }
 
-    const response = await fetchWithTimeout(url, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -183,7 +183,7 @@ export class JiraAdapter implements ITSMAdapter {
         'Authorization': `Basic ${Buffer.from(`${this.config.email}:${this.config.apiToken}`).toString('base64')}`,
       },
       body: JSON.stringify(payload),
-      timeoutMs: TIMEOUT_PRESETS.normal,
+      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
     });
 
     if (!response.ok) {
@@ -222,13 +222,13 @@ export class JiraAdapter implements ITSMAdapter {
 
     try {
       const url = `${this.config.baseUrl}/rest/api/3/myself`;
-      const response = await fetchWithTimeout(url, {
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${Buffer.from(`${this.config.email}:${this.config.apiToken}`).toString('base64')}`,
           'Accept': 'application/json',
         },
-        timeoutMs: TIMEOUT_PRESETS.short,
+        signal: AbortSignal.timeout(TIMEOUT_PRESETS.short),
       });
       
       return response.ok;

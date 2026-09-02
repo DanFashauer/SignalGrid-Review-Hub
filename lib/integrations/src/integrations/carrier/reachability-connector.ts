@@ -7,6 +7,7 @@ import {
   type ProvisioningState,
   type ReachabilitySignal,
 } from "./types";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
 
 /**
  * Read-only carrier / IoT-connectivity reachability connector.
@@ -44,14 +45,9 @@ export interface CarrierConnectorConfig {
 }
 
 /** Fail closed on any non-GET method — the connector must never command a device. */
-export function guardReadOnly(method: string): void {
-  if (method !== "GET") {
-    throw new CarrierConnectorError(
-      "read_only_violation",
-      `The carrier reachability connector is read-only; refused a ${method} request.`,
-    );
-  }
-}
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new CarrierConnectorError("read_only_violation", `The carrier reachability connector is read-only; refused a ${method} request.`),
+);
 
 export class CarrierReachabilityConnector {
   private readonly accessToken: string;

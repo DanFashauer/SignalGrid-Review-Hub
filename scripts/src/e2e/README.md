@@ -117,7 +117,6 @@ with the next evidence field.
   runs the public-safe in-memory tier only; the pg proofs own the rest.
   There is no OpenAPI-serving endpoint on the api-server to test (the spec
   lives in `lib/api-spec` and is contract-checked by `proof:api-contract`).
-- **mockup-sandbox**: not part of the launch review surface.
 - **Cross-browser, mobile viewports, visual regression, a11y audits**:
   Chromium-only by design — the preinstalled browser is the only one allowed
   here, and these tests pin *content and wiring*, not pixels.

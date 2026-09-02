@@ -24,13 +24,12 @@ import {
   type MethodStanding,
   type NormalizedChallengeCapability,
 } from "./types";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
 
 /** GET-only guard, mirroring the other connectors. */
-export function guardReadOnly(method: string): void {
-  if (method.toUpperCase() !== "GET") {
-    throw new ChallengeCapabilityConnectorError("read_only_violation", `challenge-capability is read-only; refused ${method}`);
-  }
-}
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new ChallengeCapabilityConnectorError("read_only_violation", `challenge-capability is read-only; refused ${method}`),
+);
 
 /** Only an explicit boolean is trusted; null/undefined = not reported. */
 function boolOrNull(v: unknown): boolean | null {

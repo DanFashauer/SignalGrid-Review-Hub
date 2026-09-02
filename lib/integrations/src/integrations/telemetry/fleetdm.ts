@@ -12,7 +12,7 @@ import {
 } from './types';
 import { resolveEmission } from '../adapters/emit-gate';
 import { getFleetDMConfig, setPostureForHost } from './store';
-import { fetchWithTimeout, TIMEOUT_PRESETS } from '../../utils/fetchWithTimeout';
+import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
 
 export class FleetDMAdapter {
   private config: FleetDMConfig | null = null;
@@ -62,10 +62,10 @@ export class FleetDMAdapter {
       return [];
     }
 
-    const response = await fetchWithTimeout(`${this.getBaseUrl()}/api/v1/fleet/hosts`, {
+    const response = await fetch(`${this.getBaseUrl()}/api/v1/fleet/hosts`, {
       method: 'GET',
       headers: this.getHeaders(),
-      timeoutMs: TIMEOUT_PRESETS.normal,
+      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
     });
 
     if (!response.ok) {
@@ -94,12 +94,12 @@ export class FleetDMAdapter {
       return null;
     }
 
-    const response = await fetchWithTimeout(
+    const response = await fetch(
       `${this.getBaseUrl()}/api/v1/fleet/hosts/identifier/${encodeURIComponent(hostUuid)}`,
       {
         method: 'GET',
         headers: this.getHeaders(),
-        timeoutMs: TIMEOUT_PRESETS.normal,
+        signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
       }
     );
 
@@ -136,10 +136,10 @@ export class FleetDMAdapter {
       ? `${this.getBaseUrl()}/api/v1/fleet/teams/${this.config.teamId}/policies`
       : `${this.getBaseUrl()}/api/v1/fleet/global/policies`;
 
-    const response = await fetchWithTimeout(url, {
+    const response = await fetch(url, {
       method: 'GET',
       headers: this.getHeaders(),
-      timeoutMs: TIMEOUT_PRESETS.normal,
+      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
     });
 
     if (!response.ok) {
@@ -169,12 +169,12 @@ export class FleetDMAdapter {
     if (!this.isEnabled()) {
       throw new Error('refused: host fetch with the fixture/live boundary closed.');
     }
-    const response = await fetchWithTimeout(
+    const response = await fetch(
       `${this.getBaseUrl()}/api/v1/fleet/hosts/identifier/${encodeURIComponent(hostUuid)}?populate_policies=true`,
       {
         method: 'GET',
         headers: this.getHeaders(),
-        timeoutMs: TIMEOUT_PRESETS.normal,
+        signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
       }
     );
 
@@ -281,10 +281,10 @@ export class FleetDMAdapter {
     }
 
     try {
-      const response = await fetchWithTimeout(`${this.getBaseUrl()}/api/v1/fleet/config`, {
+      const response = await fetch(`${this.getBaseUrl()}/api/v1/fleet/config`, {
         method: 'GET',
         headers: this.getHeaders(),
-        timeoutMs: TIMEOUT_PRESETS.short,
+        signal: AbortSignal.timeout(TIMEOUT_PRESETS.short),
       });
 
       if (!response.ok) {
@@ -382,11 +382,11 @@ export class FleetDMAdapter {
     // must not make completion unreachable.
     const targets = new Set(hostIds);
 
-    const response = await fetchWithTimeout(`${this.getBaseUrl()}/api/v1/fleet/queries/run`, {
+    const response = await fetch(`${this.getBaseUrl()}/api/v1/fleet/queries/run`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ query: sql, selected: { hosts: hostIds } }),
-      timeoutMs: TIMEOUT_PRESETS.normal,
+      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
     });
     if (!response.ok) {
       throw new Error(`FleetDM live query POST failed: ${response.status}`);

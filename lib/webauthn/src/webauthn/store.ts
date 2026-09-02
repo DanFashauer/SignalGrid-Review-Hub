@@ -374,6 +374,7 @@ function purgeExpiredInMemoryChallenges(): void {
     // exists to prevent. Every read path now refuses an unparseable expiry, so
     // such an entry is dead weight by definition.
     const exp = Date.parse(entry.challenge.expiresAt);
+    // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (null-maps the opposite way); its gate is check-nan-fail-open.mjs
     if (!Number.isFinite(exp) || exp <= now) inMemoryChallenges.delete(key);
   }
 }
@@ -442,6 +443,7 @@ export async function getChallengeContext(
   // unreadable expiry was treated as a valid one. Unknown must tighten, so an
   // unparseable value is now refused outright.
   const exp = Date.parse(entry.challenge.expiresAt);
+  // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (null-maps the opposite way); its gate is check-nan-fail-open.mjs
   if (!Number.isFinite(exp) || exp <= Date.now()) return null;
   return { context: entry.challenge.context, userId: entry.userId };
 }
@@ -487,6 +489,7 @@ export async function createStepUpSession(session: StepUpSession): Promise<void>
   if (!Number.isFinite(expiresAtMs)) {
     throw new Error('createStepUpSession: expiresAt is not a valid timestamp — refusing to mint a session that cannot expire.');
   }
+  // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (null-maps the opposite way); its gate is check-nan-fail-open.mjs
   const ttlSeconds = Math.floor((expiresAtMs - Date.now()) / 1000);
 
   if (redis) {

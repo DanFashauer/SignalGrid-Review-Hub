@@ -207,6 +207,11 @@ const STEPS = [
   // Sibling of NaN fail-open: guards the BOUND, not the timestamp.
   { name: "Posed-bound self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-posed-bounds.mjs", "--self-test"] },
   { name: "Posed bounds (a caller-posed numeric bound is never read with ??)", cmd: ["node", "scripts/check-posed-bounds.mjs"] },
+  // Third sibling: NaN fail-open guards the TIMESTAMP, posed-bounds guards the BOUND,
+  // this one guards the RULE — that only one body decides whether a future sighting
+  // is evidence of freshness, and that every copy that stays local says why.
+  { name: "Freshness-divergence self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-freshness-divergence.mjs", "--self-test"] },
+  { name: "Freshness divergence (one future/age rule, one body; exemptions REPORTED)", cmd: ["node", "scripts/check-freshness-divergence.mjs"] },
   { name: "CI liveness (a sweep that stops running must fail a build; self-tested)", cmd: ["node", "scripts/check-ci-liveness.mjs"] },
   { name: "CI job timeouts (an unbounded job is an unbounded outage; self-tested)", cmd: ["node", "scripts/check-ci-job-timeouts.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },

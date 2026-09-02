@@ -17,6 +17,7 @@
 //   • recency — the run's own timestamp aged against the operator's stated bound,
 //     at a reference instant the CALLER supplies (no clock in the decision path)
 
+import { ageMs } from "../../utils/freshness";
 import { loadBenchmarkCatalog, versionGreater, type BenchmarkCatalog } from "./catalog";
 import { createReadOnlyGuard } from "../../utils/guardReadOnly";
 import {
@@ -217,9 +218,13 @@ export function deriveRecency(
   if (bound === undefined) return "unbounded";
   if (typeof bound !== "number" || !Number.isFinite(bound) || bound <= 0) return "unknown";
   if (assessmentMs === null || referenceMs === null) return "unknown";
-  const ageMs = referenceMs - assessmentMs;
-  if (ageMs < 0) return "unknown";
-  return ageMs <= bound * MS_PER_DAY ? "current" : "stale";
+  // Tolerance 0 is this family's DOCUMENTED position, quoted from the doc comment
+  // above: "No skew allowance exists on purpose — an allowance is a tuned number,
+  // and this fabric does not tune." It is also the non-lowering choice: widening to
+  // the shared 60s would turn a future-dated run from `unknown` into `current`.
+  const age = ageMs(assessmentMs, referenceMs, 0);
+  if (age === null) return "unknown";
+  return age <= bound * MS_PER_DAY ? "current" : "stale";
 }
 
 export interface NormalizeOptions {

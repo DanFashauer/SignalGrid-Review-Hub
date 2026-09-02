@@ -23,6 +23,7 @@ class InMemoryLocationStore implements StoreBackend {
     // is the fail-closed rule inverted: what we cannot date must be treated as
     // stale, never as current.
     const observedAtMs = new Date(signal.observedAt).getTime();
+    // freshness: local-by-design — not the sighting-freshness rule — a retention TTL against LOCATION_MAX_AGE_SECONDS, where an undateable signal must read TOO OLD; the `Number.isFinite` on this same line is the guard, and check-nan-fail-open.mjs keys on it because the value comes through `new Date(...).getTime()`. Not folded: @workspace/location declares no dependency on @workspace/integrations (see its package.json).
     if (!Number.isFinite(observedAtMs) || Date.now() - observedAtMs > this.maxAge) {
       this.lastByDevice.delete(deviceId);
       return null;
@@ -32,6 +33,7 @@ class InMemoryLocationStore implements StoreBackend {
   }
   
   private cleanup() {
+    // freshness: local-by-design — a retention-sweep CUTOFF instant, not an age: the comparison it feeds is eight lines below and carries its own marker. Same TTL direction, same package-dependency reason as the guard above.
     const cutoff = Date.now() - this.maxAge;
     for (const [deviceId, signal] of this.lastByDevice) {
       // The twin of the guard eleven lines above, and it was missed on the first
@@ -40,6 +42,7 @@ class InMemoryLocationStore implements StoreBackend {
       // `cutoff`. Same NaN, same inversion — an undateable signal was never
       // swept, so the sweep leaked exactly the entries it could not read.
       const observedAtMs = new Date(signal.observedAt).getTime();
+      // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (null-maps the opposite way); its gate is check-nan-fail-open.mjs — a retention sweep cutoff
       if (!Number.isFinite(observedAtMs) || observedAtMs < cutoff) {
         this.lastByDevice.delete(deviceId);
       }

@@ -26,6 +26,7 @@
     "check:postman": "node scripts/build-postman.mjs --check",
     "check:proof-counts": "node scripts/check-proof-counts.mjs",
     "check:posed-bounds": "node scripts/check-posed-bounds.mjs",
+    "check:freshness-divergence": "node scripts/check-freshness-divergence.mjs",
     "check:text-safety": "node scripts/check-text-safety.mjs",
     "db:backup": "pnpm --filter @workspace/scripts run db:backup",
     "db:restore": "pnpm --filter @workspace/scripts run db:restore",

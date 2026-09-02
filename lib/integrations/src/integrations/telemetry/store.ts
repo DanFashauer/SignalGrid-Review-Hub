@@ -110,6 +110,7 @@ export interface CachedPosture {
  * comparing and hoping.
  */
 export function isPostureExpired(entry: CachedPosture, now: number): boolean {
+  // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED. CORRECTED 2026-09-02: this marker used to name check-nan-fail-open.mjs as its gate, which has nothing to key on here — `expiresAt` is a stored number and never passes through Date.parse or .getTime(). The guard is the `!Number.isFinite(entry.expiresAt)` disjunct ON THIS LINE, which reads an unusable bound as EXPIRED, plus `parsePostureEntry` at store.ts:128, which refuses to build a CachedPosture from a non-finite expiresAt at all.
   return !Number.isFinite(entry.expiresAt) || entry.expiresAt <= now;
 }
 

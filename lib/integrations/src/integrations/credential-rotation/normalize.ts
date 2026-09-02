@@ -1,3 +1,4 @@
+import { ageMs } from "../../utils/freshness";
 import {
   type CredentialCustody,
   type CredentialKind,
@@ -82,22 +83,23 @@ export function normalizeCredentialRotation(
     standing = "no_policy";
     const basis = lastRotated ?? created;
     if (basis !== null) {
-      const age = Math.floor((now - basis) / DAY_MS);
       // A future-dated basis is an unreadable clock, not a fresh credential.
       // Report no age rather than a negative one, so nothing downstream renders
-      // "-3653 days" as if it were a reading.
-      ageDays = age < 0 ? null : age;
+      // "-3653 days" as if it were a reading. `ageMs` returns null for exactly that.
+      // Tolerance 0: `referenceInstant` is caller-posed, not a clock read.
+      const ms = ageMs(basis, now, 0);
+      ageDays = ms === null ? null : Math.floor(ms / DAY_MS);
     }
   } else if (lastRotated === null) {
     // A policy exists and nothing has ever been rotated against it.
     standing = created === null ? "unknown" : "never_rotated";
     if (created !== null) {
-      const age = Math.floor((now - created) / DAY_MS);
-      ageDays = age < 0 ? null : age;
+      const ms = ageMs(created, now, 0); // tolerance 0: caller-posed reference, as above
+      ageDays = ms === null ? null : Math.floor(ms / DAY_MS);
     }
   } else {
-    const age = Math.floor((now - lastRotated) / DAY_MS);
-    if (age < 0) {
+    const rotatedAgeMs = ageMs(lastRotated, now, 0); // tolerance 0: caller-posed reference, as above
+    if (rotatedAgeMs === null) {
       // Rotated in the FUTURE relative to the reference — an unreadable clock,
       // not the most recently rotated secret possible.
       //
@@ -112,6 +114,7 @@ export function normalizeCredentialRotation(
       // a future-dated grant.
       standing = "unknown";
     } else {
+      const age = Math.floor(rotatedAgeMs / DAY_MS);
       ageDays = age;
       standing = age > maxAgeDays ? "overdue" : "within_policy";
     }

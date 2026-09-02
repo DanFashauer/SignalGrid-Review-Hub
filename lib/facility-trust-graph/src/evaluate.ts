@@ -239,6 +239,7 @@ export function normalizeLocationObservation(
     if (bound === undefined) return "unbounded";
     if (typeof bound !== "number" || !Number.isFinite(bound) || bound <= 0) return "unknown";
     if (observedMs === null || referenceMs === null) return "unknown";
+    // freshness: local-by-design — same rule, but this package cannot import @workspace/integrations without a new workspace dependency and a lockfile regeneration; folded copy pending that change (tolerance 0; future observation reads `unknown`)
     const ageMs = referenceMs - observedMs;
     if (ageMs < 0) return "unknown"; // future-dated never reads as fresh
     return ageMs <= bound * 1000 ? "current" : "stale";

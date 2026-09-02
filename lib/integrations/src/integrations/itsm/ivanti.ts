@@ -145,6 +145,7 @@ export class IvantiAdapter implements ITSMAdapter {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
     }
+    // freshness: local-by-design — not the sighting-freshness rule — an OAuth token EXPIRY, which runs the opposite direction: `tokenExpiry` is a locally minted forward instant (`Date.now() + expires_in * 1000`, initialised to 0), never a parsed sighting, so nothing here needs a skew tolerance. A false comparison — including against a NaN expiry — re-fetches the token, which is the closed direction; that is the guard, not a gate.
     if (this.accessToken && Date.now() < this.tokenExpiry) {
       return;
     }

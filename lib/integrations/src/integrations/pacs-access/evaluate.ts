@@ -1,3 +1,4 @@
+import { ageMs } from "../../utils/freshness";
 import {
   type CredentialAssurance,
   type PacsAccessAction,
@@ -91,8 +92,13 @@ export function deriveEventFreshness(
   const observedMs = instantMs(observedAt);
   const referenceMs = instantMs(referenceTime);
   if (observedMs === null || referenceMs === null) return "unknown";
-  if (observedMs > referenceMs) return "unknown"; // future-dated evidence is a contradiction
-  return referenceMs - observedMs <= maxEventAgeSeconds * 1000 ? "fresh" : "stale";
+  // Tolerance 0, NOT the shared FUTURE_SKEW_TOLERANCE_MS: this family's reference
+  // instant is POSED BY THE CALLER, not read from a clock, so there is no second
+  // clock to skew against — and widening to 60s would turn a future-dated read from
+  // `unknown` (which RAISES here) into `fresh`. A fold must never lower a verdict.
+  const age = ageMs(observedMs, referenceMs, 0);
+  if (age === null) return "unknown"; // future-dated evidence is a contradiction
+  return age <= maxEventAgeSeconds * 1000 ? "fresh" : "stale";
 }
 
 interface Candidate {

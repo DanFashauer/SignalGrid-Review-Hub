@@ -1,3 +1,4 @@
+import { ageMs } from "../../utils/freshness";
 import {
   type ClockConfidence,
   type GrantStanding,
@@ -119,16 +120,26 @@ export function normalizeLocalAuthority(
     standing = "unknown";
   } else if (!grantPolicyDefined) {
     standing = "no_grant_policy";
-    if (issued !== null) grantAgeSeconds = Math.floor((now - issued) / 1000);
+    // THE FIX (2026-09-02 fold): this branch used `Math.floor((now - issued) / 1000)`
+    // with no future guard, so a grant dated 30s ahead of the reference published
+    // `grantAgeSeconds: -30` — a reading nobody observed, and the one shape the
+    // sibling normalizer (credential-rotation) explicitly refuses to emit. `ageMs`
+    // returns null instead. The STANDING was never wrong here (`no_grant_policy`
+    // either way); the published age was.
+    if (issued !== null) {
+      const ms = ageMs(issued, now, 0); // tolerance 0: caller-posed reference instant
+      grantAgeSeconds = ms === null ? null : Math.floor(ms / 1000);
+    }
   } else if (issued === null) {
     standing = "never_issued";
   } else {
-    const age = Math.floor((now - issued) / 1000);
-    if (age < 0) {
+    const issuedAgeMs = ageMs(issued, now, 0); // tolerance 0: caller-posed reference instant
+    if (issuedAgeMs === null) {
       // Issued in the future relative to the reference — an unreadable clock,
       // not the freshest grant ever minted.
       standing = "unknown";
     } else {
+      const age = Math.floor(issuedAgeMs / 1000);
       grantAgeSeconds = age;
       standing =
         maxDisconnectedSeconds === null

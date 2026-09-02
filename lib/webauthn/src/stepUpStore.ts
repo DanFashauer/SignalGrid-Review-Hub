@@ -187,6 +187,7 @@ export async function verifyStepUpSession(
     sessionData = await redis.get(`${CONFIG.keyPrefix}:${stepUpSessionId}`);
   } else {
     const entry = memoryStore.get(stepUpSessionId);
+    // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (null-maps the opposite way); its gate is check-nan-fail-open.mjs
     if (entry && entry.expiresAt > Date.now()) {
       sessionData = JSON.stringify(entry.session);
     }
@@ -203,6 +204,7 @@ export async function verifyStepUpSession(
   // Same NaN family as the challenge checks: `new Date(bad).getTime()` is NaN,
   // and NaN < now is false, so an unreadable expiry read as a live session.
   const sessionExpiresAtMs = new Date(session.expiresAt).getTime();
+  // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (null-maps the opposite way); its gate is check-nan-fail-open.mjs
   if (!Number.isFinite(sessionExpiresAtMs) || sessionExpiresAtMs < Date.now()) {
     console.log(`[StepUpStore] Step-up session ${stepUpSessionId} expired`);
     return null;

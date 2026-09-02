@@ -4,6 +4,7 @@
 // feed an ALLOW/STEP-UP/RESTRICT/DENY decision. Pure and deterministic: it does
 // no I/O — the caller fetches the posture and wraps these drafts into full
 // NormalizedSignals (adding tenant/connector/subject/id).
+import { ageMs } from "@workspace/integrations/utils/freshness";
 import type {
   NormalizedSignal,
   SignalCategory,
@@ -28,8 +29,10 @@ export * from "./evidence";
 
 const FRESH_HOURS = 24;
 const STALE_HOURS = 72;
-// A check-in this far past "now" is a clock contradiction, not freshness.
-const FUTURE_SKEW_TOLERANCE_MS = 60 * 1000;
+// The future-skew tolerance is NOT redeclared here. This file carried its own
+// `const FUTURE_SKEW_TOLERANCE_MS = 60 * 1000` — a second copy of the number the
+// shared deriver already owns, which is how two tolerances become three. It now
+// imports the one body (see the import of `ageMs` above).
 
 /** Map a FleetDM (osquery) posture read into core posture signals. */
 export function fleetDMToPostureDrafts(
@@ -171,8 +174,11 @@ export function fleetDMFreshness(
   // pacs-access, access-governance, core util.ts). Contradiction resolves to
   // "unknown" — never to the freshest possible reading. (ECC-role review,
   // fail-closed-auditor, 2026-09-01.)
-  if (checkMs - nowMs > FUTURE_SKEW_TOLERANCE_MS) return "unknown";
-  const ageHours = (nowMs - checkMs) / 3_600_000;
+  // Folded onto the shared deriver at its DEFAULT tolerance — the same 60s this
+  // file used to spell out for itself.
+  const age = ageMs(checkMs, nowMs);
+  if (age === null) return "unknown";
+  const ageHours = age / 3_600_000;
   if (ageHours <= FRESH_HOURS) return "fresh";
   if (ageHours <= STALE_HOURS) return "stale";
   return "expired";

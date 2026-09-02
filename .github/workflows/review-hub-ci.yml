@@ -299,6 +299,10 @@ jobs:
         run: node scripts/check-posed-bounds.mjs --self-test
       - name: Posed bounds (a caller-posed numeric bound is never read with ??)
         run: node scripts/check-posed-bounds.mjs
+      - name: Freshness-divergence self-test (the gate must be able to fail)
+        run: node scripts/check-freshness-divergence.mjs --self-test
+      - name: Freshness divergence (one future/age rule, one body; exemptions REPORTED)
+        run: node scripts/check-freshness-divergence.mjs
       - name: CI liveness (a sweep that stops running must fail a build)
         run: node scripts/check-ci-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)

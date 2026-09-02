@@ -124,6 +124,7 @@ export function deriveScheduleStanding(
 ): ScheduleStanding {
   if (shiftStartMs === null || shiftEndMs === null || referenceMs === null) return "unknown";
   if (shiftStartMs > shiftEndMs) return "unknown"; // self-contradictory window — also flagged malformed
+  // freshness: local-by-design — not the sighting-freshness rule — CONTAINMENT of a reference instant inside a declared window, which has no age and no skew allowance by design — a rostered shift, not a sighting
   return referenceMs >= shiftStartMs && referenceMs <= shiftEndMs ? "on_shift" : "off_shift";
 }
 

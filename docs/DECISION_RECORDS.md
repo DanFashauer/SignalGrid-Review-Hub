@@ -1396,3 +1396,70 @@ on a disposable Postgres 16 cluster in the cloud lane (`SIGNALGRID_DB_DISPOSABLE
 every row already hashed with a tenant keeps verifying, because the rule in call 2 is
 symmetric. What cannot be reversed by deletion alone is a tenanted row's hash — so the
 column is not dropped.
+
+## DR-026 — Neural Memory is the memory substrate under the stack: MCP server only, pinned, hooks off, store outside the tree (owner-directed 2026-09-01)
+
+**Question.** The owner's directive, verbatim: *"This need to be added to the stack this
+is essential that this is added. https://github.com/nhadaututtheky/neural-memory"* What is
+it, where in the DR-024 stack does it sit, and what has to be true for a memory that
+persists across sessions to be safe in a repository that holds tenant fixtures and live
+evidence?
+
+**What Neural Memory is, established by use.** `neural-memory` v4.62.0 (MIT, commit
+`2015cb9b`): a Python MCP server (`nmem-mcp`) over a local SQLite graph — memories as
+nodes, typed links between them, recall by spreading activation rather than by embedding
+search. Installed with `uv`, run over stdio, it gives Claude Code remember / recall /
+recap tools. It also ships a plugin form: a PyPI-latest server plus four Claude Code
+hooks — two of which ingest the session transcript (`hooks/stop.py` lines 303–345), one
+of which records every tool call — a PyPI version check on start (`cli/update_check.py`
+lines 21 and 75–93; `mcp/version_check_handler.py` lines 77–108), an optional Mem0 sync,
+a sync service and a Telegram bridge. Its surface writer walks up to any
+`.git`/`package.json` root and writes a `.neuralmemory/` directory there
+(`surface/resolver.py` lines 36 and 65–70). Concurrent synapse adds on one SQLite
+connection can drop edges (`pipeline_steps.py` lines 1503 and 1599): an upstream defect,
+noted here and NOT filed — filing sends content to an external service, which is the
+owner's call.
+
+**Call: adopted as the MEMORY SUBSTRATE under the DR-024 stack — not a lens, not a
+review layer. It remembers; it judges nothing.**
+
+1. **MCP server only, user scope, pinned to the commit.** `pnpm run neural-memory:install`
+   (`scripts/install-neural-memory.mjs`) runs `uv tool install --python 3.11 --force`
+   against `git+https://github.com/nhadaututtheky/neural-memory@2015cb9b…` and registers
+   `nmem-mcp` with `claude mcp add --scope user`. The plugin form is refused: its server
+   floats on PyPI-latest and its hooks read the transcript and log every tool call — the
+   same hooks-off call made for ECC, for the same reason.
+2. **Hooks OFF.** None of the four `nmem-hook-*` executables is wired into any settings
+   file. Memory is written deliberately, by a tool call, or not at all.
+3. **Outbound off by config.** The installer writes a minimal `config.toml` —
+   `[maintenance] version_check_enabled=false`, `[mem0_sync] enabled=false`,
+   `[sync] enabled=false`, `[telegram] enabled=false` — only when none exists; an existing
+   file is never overwritten, and the installer says which happened.
+4. **The store lives OUTSIDE the repo.** `NEURALMEMORY_DIR` must resolve outside the
+   tree; the installer refuses otherwise. `.neuralmemory/` is gitignored so the surface
+   writer can never land a store in this checkout.
+5. **Operating memory only.** The store holds what a session learned about working this
+   repo — a gate's quirk, a lane's state, an owner preference. It never holds tenant data,
+   secrets, PHI, `artifacts/live-evidence/`, or an index of the tree. Committed docs
+   (`docs/agent/LOOP.md`, the decision records, the intake log) remain the memory of
+   record; the store is a cache of them, never their source.
+6. **Nothing in the product touches it.** No file in `lib/*`, `artifacts/api-server`, or
+   any proof may import, call, or read it. A decision that consulted a memory would no
+   longer be deterministic (golden rule 2).
+
+Fail-closed at every step: no `uv`, no `claude`, an in-tree store path, a failed pinned
+install, a missing `nmem-mcp`, or a failed registration each exit 1 — there is no PyPI
+fallback. Session ritual: `nmem_recap` at session start, in addition to (never instead
+of) reading `docs/agent/LOOP.md` and running `pnpm run loop:state`.
+
+**Evidence.** The clone at `2015cb9b0973a6fe14a3bc547c932d64d6ced203`, read 2026-09-01
+at the file lines named above. The install receipt from the cloud lane (2026-09-01):
+`uv` built the pin and installed `neural-memory==4.62.0` with nine dependencies;
+`claude mcp get neural-memory` reports user scope, stdio, connected, with
+`NEURALMEMORY_DIR` set; user settings carry no `nmem-hook` entry. The refusal
+transcripts: a PATH without `uv` exits 1 with "Nothing was done"; a store path inside
+the worktree exits 1 the same way and creates no directory.
+
+**Reversal.** The owner reverses by saying so: `claude mcp remove neural-memory --scope
+user`, `uv tool uninstall neural-memory`, delete the store directory, remove the script
+and the rows. Nothing in the product depends on it, by construction.

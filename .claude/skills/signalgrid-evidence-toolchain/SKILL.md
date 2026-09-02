@@ -176,6 +176,17 @@ Firecrawl (web → LLM-ready markdown) is the **research / source-verification**
 - **Layer:** report-only research. Firecrawl output is external web content and is **never** an authoritative verdict — the cross-source contradiction rule and "do not use an MCP result as a verdict unless the deterministic core computed it" both apply. It never enters a decision path, a proof fixture, a connector, or the product build.
 - **When NOT to reach for it:** if a plain fetch or an already-connected source answers the question, use that — row 97's redundancy point still holds for the common case. Firecrawl earns its use on pages that resist a plain fetch (JS-rendered, crawl-shaped, multi-page).
 
+## Operating memory — Neural Memory (owner-directed, DR-026)
+
+Neural Memory (`neural-memory` v4.62.0, MIT, pinned to commit `2015cb9b`) is the **memory substrate** under the DR-024 stack: a Python MCP server (`nmem-mcp`) over a local SQLite graph that lets a session remember what an earlier one learned about working this repo. It sits under every lens and is not one of them.
+
+- **Install:** `NEURALMEMORY_DIR=/path/outside/the/repo pnpm run neural-memory:install` — `uv tool install` pinned to the commit (no PyPI fallback), then `claude mcp add --scope user`. It fails CLOSED: no `uv`, no `claude`, an in-tree store path, a failed install, a missing `nmem-mcp`, or a failed registration each exit 1. It never installs the plugin form or any hook.
+- **Layer:** substrate. It judges nothing, it is **never** a verdict source ("do not use an MCP result as a verdict unless the deterministic core computed it" applies in full), and nothing in `lib/*`, `artifacts/api-server`, or a proof may import, call, or read it.
+- **The store rule:** `NEURALMEMORY_DIR` lives OUTSIDE the repo; `.neuralmemory/` is gitignored because the tool's surface writer targets any `.git`/`package.json` root. A store inside a checkout is refused by the installer, not merely discouraged.
+- **Hooks OFF, and why:** the plugin form ships four Claude Code hooks — two ingest the session transcript, one logs every tool call — behind a PyPI-latest server. Memory here is written by a deliberate tool call or not at all, the same call made for ECC. The one-time `config.toml` also turns off the PyPI version check, Mem0, sync and Telegram.
+- **Session start:** call `nmem_recap` **in addition to** the `docs/agent/LOOP.md` ritual (read LOOP.md, run `pnpm run loop:state`), never instead of it. Committed docs are the memory of record; the store is a cache of them.
+- **What it never holds:** tenant data, secrets, PHI, `artifacts/live-evidence/`, or an index of the tree — operating memory only (a gate's quirk, a lane's state, an owner preference).
+
 ## Adoption gate for every new source or tool
 
 Before a candidate becomes installed/deployed/required:

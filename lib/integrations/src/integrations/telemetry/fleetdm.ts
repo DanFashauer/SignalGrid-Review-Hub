@@ -10,7 +10,7 @@ import {
   FleetDMPostureSignal,
   FleetDMQueryResult,
 } from './types';
-import { resolveEmission } from '../adapters/emit-gate';
+import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
 import { getFleetDMConfig, setPostureForHost } from './store';
 import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
 
@@ -21,6 +21,12 @@ export class FleetDMAdapter {
     this.config = await getFleetDMConfig();
   }
 
+  /** The credential this adapter holds, named so the gate's refusal names it back.
+   *  Passed at every resolveEmission() site in this class — see adapters/emit-gate.ts. */
+  private emissionCredential(): EmissionCredential {
+    return { name: 'FleetDM apiToken', value: this.config?.apiToken };
+  }
+
   isEnabled(): boolean {
     // The tier gate is ANDed with the operator's config flag, and it is checked
     // HERE because every live path in this file guards on isEnabled() — making
@@ -29,7 +35,7 @@ export class FleetDMAdapter {
     // `config.enabled` is an operator preference, not a safety control: a dev or
     // alpha process with enabled=true would otherwise reach the live Fleet API,
     // including runQuery(), which POSTs arbitrary osquery SQL to real hosts.
-    if (resolveEmission().mode === 'suppressed') return false;
+    if (resolveEmission(process.env, this.emissionCredential()).mode === 'suppressed') return false;
     return this.config?.enabled ?? false;
   }
 

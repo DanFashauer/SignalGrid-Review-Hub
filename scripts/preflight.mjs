@@ -221,6 +221,12 @@ const STEPS = [
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },
   { name: "Ungated-fetch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ungated-fetch.mjs", "--self-test"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },
+  // Sibling of the two assertions inside that gate. Ungated-fetch asks whether the call was
+  // allowed and whether it is bounded; this asks whether it went out SIGNED. `if (secret)
+  // { sign }` skipped the signature on an absent secret and reported 'sent' — a guard with
+  // its sense inverted, failing open on the exact input it exists for.
+  { name: "Signing-unconditional self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-signing-unconditional.mjs", "--self-test"] },
+  { name: "Signing unconditional (a missing secret refuses; it never sends unsigned)", cmd: ["node", "scripts/check-signing-unconditional.mjs"] },
   // Sibling of the ungated-fetch gate. That one asks whether a call was allowed to happen;
   // this one asks whether the RESULT reported was one anybody observed. Twelve connectors
   // returned `status: 200` after awaiting an injected transport that resolves a payload —

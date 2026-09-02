@@ -1,5 +1,5 @@
 import type { SIEMAdapter, SIEMEventRequest, SIEMEventResponse } from '../adapters/types';
-import { resolveEmission, EMIT_SUPPRESSED } from '../adapters/emit-gate';
+import { resolveEmission, EMIT_SUPPRESSED, NO_CREDENTIAL } from '../adapters/emit-gate';
 
 /**
  * Syslog Transport Configuration
@@ -98,15 +98,23 @@ export class SyslogAdapter implements SIEMAdapter {
    */
   async sendEvent(event: SIEMEventRequest): Promise<SIEMEventResponse> {
     // GATE FIRST — the shared emit gate (../adapters/emit-gate.ts) the other
-    // emitter families route through. When policy says nothing may be sent
+    // emitter families route through. NO_CREDENTIAL, stated rather than omitted:
+    // a syslog collector is a host and a port and there is no secret to hold, so
+    // this family says so out loud. Every other family passes the secret its config
+    // declares; an omitted argument would be indistinguishable from forgetting.
+    //
+    // When policy says nothing may be sent
     // (dev/alpha, or the live flag unset), nothing was promised and nothing is
     // lost: report the honest `suppressed` status WITH the reason, exactly like
     // siem/telemetry/itsm do.
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, NO_CREDENTIAL);
     if (emission.mode === 'suppressed') {
       return {
         eventId: `syslog-${event.type}-${Date.now()}`,
         status: EMIT_SUPPRESSED,
+        // The reason, carried onto the response — the only channel a caller of this
+        // family has, since the live path throws rather than returning one.
+        reason: emission.reason,
         receivedAt: new Date().toISOString(),
       };
     }
@@ -199,7 +207,7 @@ export class SyslogAdapter implements SIEMAdapter {
    * `false` is not a failure report. It is "this cannot deliver", which is true.
    */
   async healthCheck(): Promise<boolean> {
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, NO_CREDENTIAL);
     if (emission.mode === 'suppressed') {
       return false;
     }

@@ -13,6 +13,7 @@ import {
   DeliveryStatus,
 } from './types';
 import { createSignedHeaders } from './sign';
+import { SIGNING_SECRET_MISSING } from '../adapters/signing';
 import {
   calculateBackoff,
   isRetryableStatus,
@@ -109,6 +110,22 @@ export function resolveWebhookDelivery(
  * resolution, read once, per call. A suppressed tier may legitimately point a
  * fixture at a plain-HTTP mock; a live one may not.
  */
+export const WEBHOOK_URL_REFUSALS = {
+  httpsRequired: 'HTTPS required for live webhook delivery',
+  loopback: 'Loopback and unspecified addresses are never valid webhook targets',
+  privateRange: 'Private and link-local addresses are never valid webhook targets',
+  invalidUrl: 'Invalid URL',
+} as const;
+
+/** Every string `validateWebhookUrl` can return in its `error` field. Derived from
+ *  the object above rather than retyped, because the retyped copy is exactly what
+ *  went stale: `isPermanentError` below compared against 'HTTPS required in
+ *  production' and 'Localhost not allowed in production', two strings this function
+ *  stopped returning when the rules were rewritten. Nothing failed — the comparison
+ *  just silently stopped matching, and a plain-http target at a live tier was
+ *  retried six times over ~31 seconds instead of being refused once. */
+export const WEBHOOK_URL_REFUSAL_REASONS: readonly string[] = Object.values(WEBHOOK_URL_REFUSALS);
+
 export function validateWebhookUrl(
   url: string,
   opts: { live: boolean },
@@ -117,7 +134,7 @@ export function validateWebhookUrl(
     const parsed = new URL(url);
 
     if (opts.live && parsed.protocol !== 'https:') {
-      return { valid: false, error: 'HTTPS required for live webhook delivery' };
+      return { valid: false, error: WEBHOOK_URL_REFUSALS.httpsRequired };
     }
 
     const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
@@ -131,7 +148,7 @@ export function validateWebhookUrl(
       hostname === '::1' ||
       /^127\./.test(hostname)
     ) {
-      return { valid: false, error: 'Loopback and unspecified addresses are never valid webhook targets' };
+      return { valid: false, error: WEBHOOK_URL_REFUSALS.loopback };
     }
 
     // RFC1918 private ranges, RFC6598 shared address space, and link-local —
@@ -145,12 +162,12 @@ export function validateWebhookUrl(
       /^f[cd][0-9a-f]{2}:/.test(hostname) ||
       /^fe[89ab][0-9a-f]:/.test(hostname)
     ) {
-      return { valid: false, error: 'Private and link-local addresses are never valid webhook targets' };
+      return { valid: false, error: WEBHOOK_URL_REFUSALS.privateRange };
     }
 
     return { valid: true };
   } catch {
-    return { valid: false, error: 'Invalid URL' };
+    return { valid: false, error: WEBHOOK_URL_REFUSALS.invalidUrl };
   }
 }
 
@@ -201,6 +218,19 @@ async function dispatchToEndpoint(
 
   const urlValidation = validateWebhookUrl(webhook.url, { live: delivery.mode === 'live' });
   if (!urlValidation.valid) {
+    // RECORDED, like the two refusals either side of it. This branch returned
+    // without a row: the delivery was refused, dead-lettered after the retry loop,
+    // and the per-webhook delivery log — the thing an operator opens to ask "what
+    // happened to my webhook?" — showed nothing at all. A refusal nobody can see
+    // is indistinguishable from an event that was never raised.
+    await recordDelivery(
+      webhook.id,
+      payload.id,
+      'failed',
+      undefined,
+      undefined,
+      urlValidation.error,
+    );
     return {
       success: false,
       error: urlValidation.error,
@@ -215,7 +245,7 @@ async function dispatchToEndpoint(
     process.env[`WEBHOOK_SECRET_${webhook.id.slice(0, 8)}`];
 
   if (!secret) {
-    const errorMessage = 'Webhook signing secret not configured';
+    const errorMessage = SIGNING_SECRET_MISSING;
     await recordDelivery(
       webhook.id,
       payload.id,
@@ -279,6 +309,36 @@ async function dispatchToEndpoint(
 }
 
 /**
+ * Is this result final — must the retry loop stop?
+ *
+ * EXPORTED so it can be driven directly against `WEBHOOK_URL_REFUSAL_REASONS`.
+ * As a closure inside dispatchWithRetry it was unreachable from any proof, and it
+ * spent its whole life comparing against two strings validateWebhookUrl had
+ * stopped returning.
+ */
+export function isPermanentDeliveryError(result: DeliveryResult): boolean {
+  // A tier does not change between attempts. Retrying a suppression is retrying a
+  // policy decision — it wrote one suppressed delivery row per attempt and then
+  // dead-lettered an event that was never supposed to leave.
+  if (result.suppressed === true) {
+    return true;
+  }
+
+  if (result.statusCode && !isRetryableStatus(result.statusCode)) {
+    return true;
+  }
+
+  if (result.error === SIGNING_SECRET_MISSING) {
+    return true;
+  }
+
+  // DERIVED, not retyped. Every string validateWebhookUrl can return is permanent
+  // by construction: no retry makes an http:// URL https, or a loopback address
+  // routable.
+  return result.error !== undefined && WEBHOOK_URL_REFUSAL_REASONS.includes(result.error);
+}
+
+/**
  * Dispatch with retry logic
  */
 async function dispatchWithRetry(
@@ -288,24 +348,28 @@ async function dispatchWithRetry(
 ): Promise<DeliveryResult> {
   let lastResult: DeliveryResult | null = null;
 
-  const isPermanentError = (result: DeliveryResult): boolean => {
-    if (result.statusCode && !isRetryableStatus(result.statusCode)) {
-      return true;
-    }
+  // WHAT IS PERMANENT, and why the list is no longer typed out here.
+  //
+  // This compared `result.error` against four literals, two of which
+  // ('HTTPS required in production', 'Localhost not allowed in production') were
+  // strings validateWebhookUrl had STOPPED RETURNING when its rules were rewritten.
+  // A dead string comparison does not fail; it just never matches. So a live tier
+  // pointed at a plain-http URL retried the refusal six times, and a dev tier —
+  // where `suppressed` was not permanent either — retried a policy decision six
+  // times, writing six suppressed delivery rows for one event and reporting
+  // failed: 1 at the end.
+  //
+  // Both halves are fixed structurally rather than by editing the strings:
+  // the URL reasons are DERIVED from the object validateWebhookUrl returns them
+  // from, and a suppressed delivery is permanent by construction — no amount of
+  // retrying changes a tier.
 
-    return (
-      result.error === 'Webhook signing secret not configured' ||
-      result.error === 'Invalid URL' ||
-      result.error === 'HTTPS required in production' ||
-      result.error === 'Localhost not allowed in production'
-    );
-  };
 
   for (let attempt = 1; attempt <= config.retry.maxAttempts; attempt++) {
     const result = await dispatchToEndpoint(webhook, payload, config);
     lastResult = result;
 
-    if (result.success || isPermanentError(result)) {
+    if (result.success || isPermanentDeliveryError(result)) {
       return result;
     }
 
@@ -319,7 +383,9 @@ async function dispatchWithRetry(
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
-  // All retries exhausted, add to DLQ
+  // All retries exhausted, add to DLQ. A suppressed result never reaches here —
+  // it is permanent above — so this cannot dead-letter a delivery that policy
+  // withheld, which is what used to happen at dev tier.
   const finalError = lastResult?.error || 'Max retries exceeded';
   await addToDLQ(
     webhook.id,
@@ -335,6 +401,16 @@ async function dispatchWithRetry(
   };
 }
 
+/** What one dispatchEvent() call did. `dispatched === succeeded + failed +
+ *  suppressed` always; `suppressed` is NOT a flavour of `failed`. */
+export interface DispatchSummary {
+  dispatched: number;
+  succeeded: number;
+  failed: number;
+  /** The tier gate withheld these — nothing left the process, nothing is broken. */
+  suppressed: number;
+}
+
 /**
  * Dispatch event to all subscribed webhooks
  */
@@ -342,12 +418,12 @@ export async function dispatchEvent(
   eventType: WebhookEventType,
   data: Record<string, unknown>,
   config: DispatcherConfig = DEFAULT_DISPATCHER_CONFIG
-): Promise<{ dispatched: number; succeeded: number; failed: number }> {
+): Promise<DispatchSummary> {
   // Get all webhooks subscribed to this event
   const webhooks = await getWebhooksForEvent(eventType);
   
   if (webhooks.length === 0) {
-    return { dispatched: 0, succeeded: 0, failed: 0 };
+    return { dispatched: 0, succeeded: 0, failed: 0, suppressed: 0 };
   }
 
   // Build payload
@@ -360,10 +436,19 @@ export async function dispatchEvent(
 
   let succeeded = 0;
   let failed = 0;
+  let suppressed = 0;
 
+  // THREE buckets, not two. `DeliveryResult.suppressed` has carried the
+  // distinction since it was added — with a comment saying a caller that cannot
+  // tell them apart "would report 'webhook failed' for a tier that is never
+  // supposed to send" — and this loop then folded it into `failed` anyway, and
+  // dropped the flag on the floor. A dev tier reported failed: 1 for a webhook
+  // working exactly as designed.
   for (const result of results) {
     if (result.status === 'fulfilled' && result.value.success) {
       succeeded++;
+    } else if (result.status === 'fulfilled' && result.value.suppressed === true) {
+      suppressed++;
     } else {
       failed++;
     }
@@ -373,6 +458,7 @@ export async function dispatchEvent(
     dispatched: webhooks.length,
     succeeded,
     failed,
+    suppressed,
   };
 }
 

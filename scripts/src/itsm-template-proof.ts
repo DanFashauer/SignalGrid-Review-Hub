@@ -21,6 +21,13 @@
 // substituteTemplate lives on the store module (ticket templates), exposed as a
 // package subpath — the family's index deliberately exports only resolve+adapter.
 import { substituteTemplate } from "@workspace/integrations/itsm/store";
+// The generic-webhook template path is a SECOND substituter with its own syntax
+// and its own defects; it lives beside the store's one and was never covered here.
+import {
+  buildTemplateContext,
+  substituteVariables,
+  UnresolvedTemplateVariableError,
+} from "@workspace/integrations/itsm";
 
 let passed = 0;
 const failures: string[] = [];
@@ -79,6 +86,86 @@ check(
   "a dot in a key does not wildcard-match sibling slots",
   substituteTemplate("{{a.b}} {{axb}}", { "a.b": "dotted" }) === "dotted {{axb}}",
 );
+
+// ── THE GENERIC-WEBHOOK TEMPLATE PATH ───────────────────────────────────────
+//
+// A different substituter, `{{var}}` syntax, two defects of its own.
+
+// 1. AN UNRESOLVED PLACEHOLDER IS A REFUSAL, NOT A DEFAULT.
+//    It returned the literal `{{assetTag}}` into the outbound JSON body, and the
+//    POST then succeeded — so a ticket in a customer's ITSM carried template
+//    syntax where evidence belonged, and nothing anywhere reported a problem. The
+//    ledger of what an incident SAID is the last place silent placeholder text is
+//    acceptable.
+{
+  const ctx = buildTemplateContext(
+    { title: "t", description: "d", severity: "high" } as never,
+    "req-1",
+    "2026-09-02T00:00:00.000Z",
+  );
+  check(
+    "a resolvable placeholder still substitutes (the refusal is not a wall)",
+    substituteVariables('{"t":"{{title}}"}', ctx) === '{"t":"t"}',
+  );
+  check(
+    "a dotted path still resolves through the context",
+    substituteVariables("{{requestId}}", ctx) === "req-1",
+  );
+  let threw: unknown = null;
+  try {
+    substituteVariables('{"a":"{{assetTag}}"}', ctx);
+  } catch (err) {
+    threw = err;
+  }
+  check(
+    "an UNRESOLVED placeholder throws instead of emitting the literal ${var} into the body",
+    threw instanceof UnresolvedTemplateVariableError,
+  );
+  check(
+    "the refusal NAMES the placeholder it could not resolve",
+    threw instanceof UnresolvedTemplateVariableError && threw.unresolved.includes("assetTag"),
+  );
+  check(
+    "every unresolved placeholder is named, not just the first",
+    (() => {
+      try {
+        substituteVariables("{{a}} {{b}}", ctx);
+        return false;
+      } catch (err) {
+        return err instanceof UnresolvedTemplateVariableError && err.unresolved.length === 2;
+      }
+    })(),
+  );
+}
+
+// 2. rawEvent CANNOT OVERRIDE A SANCTIONED FIELD.
+//    `...request.rawEvent` was spread LAST, so a key in the untrusted vendor event
+//    won against the value this adapter derives. The ticket then described the
+//    device the raw event named, not the device the decision was about.
+{
+  const ctx = buildTemplateContext(
+    {
+      title: "REAL-TITLE",
+      description: "d",
+      severity: "high",
+      deviceId: "REAL-DEVICE",
+      rawEvent: { deviceId: "ATTACKER-DEVICE", title: "ATTACKER-TITLE", severity: "low", extra: "passthrough" },
+    } as never,
+    "req-2",
+    "2026-09-02T00:00:00.000Z",
+  );
+  check("rawEvent cannot override the sanctioned deviceId", ctx.deviceId === "REAL-DEVICE");
+  check("rawEvent cannot override the sanctioned title", ctx.title === "REAL-TITLE");
+  check("rawEvent cannot override the sanctioned severity", ctx.severity === "high");
+  check("rawEvent cannot override the derived requestId", ctx.requestId === "req-2");
+  // NON-VACUITY: rawEvent is still passthrough for keys the adapter does not own.
+  // Dropping it entirely would satisfy the four assertions above and break the feature.
+  check("a rawEvent key the adapter does NOT sanction is still addressable", ctx.extra === "passthrough");
+  check(
+    "and it substitutes into a template (the passthrough is real, not just present)",
+    substituteVariables("{{extra}}", ctx) === "passthrough",
+  );
+}
 
 const total = passed + failures.length;
 console.log(`\nITSM template proof: ${passed}/${total} assertions passed`);

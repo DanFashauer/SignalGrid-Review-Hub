@@ -23,7 +23,56 @@ export { BMCHelixAdapter } from './bmc-helix';
 export { IvantiAdapter } from './ivanti';
 export { ManageEngineAdapter } from './manageengine';
 export { GenericWebhookAdapter } from './generic-webhook';
-import { resolveEmission } from '../adapters/emit-gate';
+// The two pure halves of the generic-webhook template path, exported so
+// proof:itsm-template can drive them without a network: the context BUILDER (whose
+// field order is the security property) and the SUBSTITUTER (which refuses an
+// unresolved placeholder rather than emitting the literal `{{var}}`).
+export { buildTemplateContext, substituteVariables, UnresolvedTemplateVariableError } from './generic-webhook';
+import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
+
+/**
+ * The one credential each vendor must hold before an adapter may be built.
+ *
+ * WHY. Three vendors already refused an absent credential — jira (username +
+ * apiToken), ivanti (clientId + clientSecret), manageengine (technicianKey). The
+ * other five did not: zendesk read `credentials.apiToken || ''`, freshservice the
+ * same, servicenow and bmc-helix passed `apiToken: undefined` straight into an
+ * auth block, and generic_webhook never looked at signingSecret at all. At
+ * beta/prod with the live flag on, that constructed an adapter whose Basic or
+ * Bearer header was EMPTY and pointed it at a customer's real ITSM.
+ *
+ * Fail-closed on an unknown vendor: a ninth vendor added to ITSMVendorSchema
+ * without a rule here lands in the `default` branch and is REFUSED, rather than
+ * silently inheriting "no credential required". proof:emit-gate derives the
+ * vendor list from the schema, so the omission fails a proof, not a customer.
+ */
+function requiredCredential(vendor: ITSMVendor, config: ITSMFullConfig): EmissionCredential {
+  const c = config.credentials;
+  switch (vendor) {
+    case 'servicenow':
+      return c?.clientId
+        ? { name: 'ServiceNow clientSecret', value: c?.clientSecret }
+        : { name: 'ServiceNow apiToken', value: c?.apiToken };
+    case 'jira':
+      return { name: 'Jira apiToken', value: c?.apiToken };
+    case 'zendesk':
+      return { name: 'Zendesk apiToken', value: c?.apiToken };
+    case 'freshservice':
+      return { name: 'Freshservice apiToken', value: c?.apiToken };
+    case 'bmc-helix':
+      return c?.clientId
+        ? { name: 'BMC Helix clientSecret', value: c?.clientSecret }
+        : { name: 'BMC Helix apiToken', value: c?.apiToken };
+    case 'ivanti':
+      return { name: 'Ivanti clientSecret', value: c?.clientSecret };
+    case 'manageengine':
+      return { name: 'ManageEngine apiToken (technicianKey)', value: c?.apiToken };
+    case 'generic_webhook':
+      return { name: 'Generic webhook signingSecret', value: c?.signingSecret };
+    default:
+      return { name: `unknown ITSM vendor "${String(vendor)}" declares no credential rule`, value: undefined };
+  }
+}
 
 /**
  * Create an ITSM adapter based on vendor and configuration
@@ -39,7 +88,11 @@ export function createITSMAdapter(
   //
   // Returning null is the existing contract for "cannot build an adapter"
   // (see the missing-credentials branch below), so no caller changes.
-  const emission = resolveEmission();
+  //
+  // The gate is passed the vendor's REQUIRED credential, so all three documented
+  // conditions are checked here rather than two — an empty apiToken now refuses
+  // at the same chokepoint the tier does, with a reason that names the field.
+  const emission = resolveEmission(process.env, requiredCredential(vendor, config));
   if (emission.mode === 'suppressed') {
     console.warn(`ITSM adapter not created for ${vendor}: ${emission.reason}`);
     return null;
@@ -51,7 +104,13 @@ export function createITSMAdapter(
     console.warn(`No credentials provided for ITSM vendor: ${vendor}`);
     return null;
   }
-  
+
+  // The `|| ''` fallbacks in the vendor branches below are now UNREACHABLE with an
+  // empty credential: requiredCredential() named the field to the gate above and a
+  // blank one returned null there. They are left in place as the type-level default
+  // only. Do not read them as "an empty token is acceptable here" — it is not, and
+  // proof:emit-gate drives every vendor in ITSMVendorSchema through the refusal.
+
   switch (vendor) {
     case 'servicenow':
       if (!config.instanceUrl) {

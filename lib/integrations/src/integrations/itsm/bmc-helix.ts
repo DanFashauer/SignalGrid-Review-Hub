@@ -1,5 +1,5 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
-import { resolveEmission } from '../adapters/emit-gate';
+import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
 
 /**
  * BMC Helix ITSM / BMC Helix Recovery / BMC Helix BusinessWorkflows Adapter Configuration
@@ -53,6 +53,31 @@ export class BMCHelixAdapter implements ITSMAdapter {
   }
 
   /**
+   * The credential this adapter holds, named so the gate's refusal can name it back.
+   *
+   * Passed at EVERY resolveEmission() site in this class. The parameter was optional
+   * until 2026-09-02 and every site here omitted it, so the third clause of the
+   * boundary — tier AND live flag AND a credential — was not enforced on this path:
+   * an adapter built with an empty secret reached the vendor with an empty auth
+   * header. The gate cannot read this itself; the shape is per-vendor, so the caller
+   * names what it holds.
+   */
+  private emissionCredential(): EmissionCredential {
+    // Derived from the auth union, like servicenow.ts: the secret authentication would
+    // actually use is the one whose absence refuses.
+    switch (this.config.auth.type) {
+      case 'oauth':
+        return { name: 'BMC Helix auth.clientSecret', value: this.config.auth.clientSecret };
+      case 'basic':
+        return { name: 'BMC Helix auth.password', value: this.config.auth.password };
+      case 'api_token':
+        return { name: 'BMC Helix auth.apiToken', value: this.config.auth.apiToken };
+      default:
+        return { name: `BMC Helix auth.type "${String(this.config.auth.type)}" declares no credential rule`, value: undefined };
+    }
+  }
+
+  /**
    * Create a new incident in BMC Helix ITSM
    */
   async createTicket(request: ITSMTicketRequest): Promise<ITSMTicketResponse> {
@@ -61,7 +86,7 @@ export class BMCHelixAdapter implements ITSMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -80,6 +105,7 @@ export class BMCHelixAdapter implements ITSMAdapter {
         'Tenant-Id': this.config.tenantId,
       },
       body: JSON.stringify(incident),
+      signal: AbortSignal.timeout(this.config.timeout),
     });
 
     if (!response.ok) {
@@ -111,7 +137,7 @@ export class BMCHelixAdapter implements ITSMAdapter {
     // process runs. Ungated, it reached the network in dev/alpha with no credential
     // — outside the three-condition boundary the security-review package tells an
     // assessor to verify FIRST. Found by review taking that document at its word.
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, this.emissionCredential());
     if (emission.mode !== "live") return false;
 
     try {
@@ -125,6 +151,7 @@ export class BMCHelixAdapter implements ITSMAdapter {
           'Accept': 'application/json',
           'Tenant-Id': this.config.tenantId,
         },
+        signal: AbortSignal.timeout(this.config.timeout),
       });
       
       return response.ok;
@@ -164,7 +191,7 @@ export class BMCHelixAdapter implements ITSMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -184,6 +211,7 @@ export class BMCHelixAdapter implements ITSMAdapter {
         'Accept': 'application/json',
       },
       body: params.toString(),
+      signal: AbortSignal.timeout(this.config.timeout),
     });
 
     if (!response.ok) {

@@ -18,7 +18,13 @@
 // `delivered: false` — the unearned affirmative is unrepresentable, and this
 // proof pins it at runtime for every family anyway, because a type assertion
 // alone is erased at the boundary the wire crosses.
-import { resolveItsmEmitter, type ItsmEmitterResolution } from "@workspace/integrations/itsm";
+import { readFileSync, readdirSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { resolveItsmEmitter, type ItsmEmitterResolution, GenericWebhookAdapter } from "@workspace/integrations/itsm";
+import { WebhookSIEMAdapter } from "@workspace/integrations/siem";
+import { SIGNING_SECRET_MISSING } from "@workspace/integrations/emit-gate/signing";
+import { credentialAbsentReason } from "@workspace/integrations/emit-gate";
 import { resolveSiemEmitter } from "@workspace/integrations/siem";
 import { resolveSyslogEmitter, SyslogAdapter } from "@workspace/integrations/syslog";
 import { resolveTelemetryEmitter } from "@workspace/integrations/telemetry";
@@ -33,6 +39,8 @@ const check = (name: string, ok: boolean): void => {
 };
 
 console.log("Emitter-discipline proof");
+
+const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 interface FamilyUnderTest {
   name: string;
@@ -54,6 +62,44 @@ const FAMILIES: FamilyUnderTest[] = [
   { name: "caep", tokenVar: "CAEP_EMITTER_TOKEN", resolve: resolveCaepEmitter },
 ];
 
+// ── F7: the family list is DERIVED, not hand-kept ───────────────────────────
+//
+// FAMILIES above is a hand-written list, and it has to be: these are STATIC
+// IMPORTS of six differently-typed resolve functions, which no directory walk can
+// produce. What a walk CAN do is refuse to let the list fall behind — a seventh
+// emitter family added tomorrow joins neither this proof nor emit-gate-proof's
+// ROUTED_FAMILIES, and both would keep printing green over five-sixths of the
+// tree. So the membership is derived and COMPARED, and a mismatch fails here.
+//
+// The derivation rule is the definition: a directory under integrations/ is an
+// emitter family iff its resolve.ts imports createEmitterResolver.
+{
+  const FAMILY_ROOT = "lib/integrations/src/integrations";
+  const derived = readdirSync(resolve(repo, FAMILY_ROOT), { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .filter((name) => {
+      try {
+        return /createEmitterResolver/.test(readFileSync(resolve(repo, FAMILY_ROOT, name, "resolve.ts"), "utf8"));
+      } catch {
+        return false;
+      }
+    })
+    .sort();
+  // FLOOR first: a derivation that matched nothing would agree with an empty
+  // asserted list and report the agreement as coverage.
+  check(`derived: at least six emitter families exist in the tree (found ${derived.length})`, derived.length >= 6);
+  const asserted = FAMILIES.map((f) => (f.name === "caep" ? "caep-events" : f.name)).sort();
+  check(
+    `derived: the asserted family set EQUALS the derived one (asserted ${asserted.join(",")} / derived ${derived.join(",")})`,
+    JSON.stringify(asserted) === JSON.stringify(derived),
+  );
+  check(
+    `derived: the count this proof reports in figures= is the derived count (${FAMILIES.length})`,
+    FAMILIES.length === derived.length,
+  );
+}
+
 const noopTransport = async (): Promise<void> => {};
 
 for (const fam of FAMILIES) {
@@ -69,8 +115,12 @@ for (const fam of FAMILIES) {
   check(`${fam.name}: dev tier never emits, even fully armed with an injected transport`,
     dev.mode === "fixture" && (dev.reason ?? "").includes("never makes live vendor calls"));
   const noFlag = fam.resolve({ ...armed, SIGNALGRID_LIVE_INTEGRATIONS: "TRUE" }, noopTransport);
+  // The REASON, not just the mode. `mode === "fixture"` is satisfied by refusing for
+  // ANY of the four clauses — so this assertion passed while proving nothing about
+  // the flag it names. Five of the six families would still have satisfied it if the
+  // flag check had been deleted and the token check caught the call instead.
   check(`${fam.name}: the live flag is an exact lowercase 'true' — 'TRUE' does not arm it`,
-    noFlag.mode === "fixture");
+    noFlag.mode === "fixture" && (noFlag.reason ?? "") === "SIGNALGRID_LIVE_INTEGRATIONS is not 'true'");
   const noToken = fam.resolve({ ...armed, [fam.tokenVar]: "   " }, noopTransport);
   check(`${fam.name}: a whitespace-only credential reads as absent → fixture`,
     noToken.mode === "fixture" && (noToken.reason ?? "").includes(fam.tokenVar));
@@ -123,6 +173,85 @@ check("syslog: with live delivery fully configured, the raw adapter still THROWS
 const suppressed = await adapter.sendEvent(probeEvent);
 check("syslog: under a suppressing env the adapter reports status 'suppressed', never 'sent'",
   (suppressed as { status?: string }).status === "suppressed");
+
+// ── F1: an absent signing secret REFUSES; it never sends unsigned ────────────
+//
+// Both adapters wrote `if (this.config.signingSecret) { ...sign... }`, with the
+// secret defaulted to '' in the constructor. So on the LIVE path an adapter with
+// no secret skipped the signature and POSTed anyway — and siem/webhook.ts returned
+// status 'sent' for it. webhooks/dispatch.ts has refused exactly this case, in
+// exactly these words, since it was written; the two paths simply disagreed.
+//
+// Asserted with the boundary FULLY OPEN (beta + flag exactly "true"), because that
+// is the only configuration in which the defect could fire — at any other tier the
+// emit gate stops the call first and the assertion would pass for the wrong reason.
+// Neither call reaches the network: both refuse before the fetch.
+{
+  const savedT = process.env.SIGNALGRID_TIER;
+  const savedL = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  process.env.SIGNALGRID_TIER = "beta";
+  process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+  try {
+    for (const [label, secret] of [["absent", undefined], ["empty", ""], ["whitespace-only", "   "]] as ReadonlyArray<readonly [string, string | undefined]>) {
+      const siem = new WebhookSIEMAdapter({ url: "https://collector.invalid/ingest", method: "POST", signingSecret: secret });
+      const res = await siem.sendEvent({ type: "session.probe", severity: "high", timestamp: "2026-09-02T00:00:00.000Z" } as never);
+      check(`siem/webhook: live boundary open + ${label} signing secret → NOT 'sent'`, res.status !== "sent");
+      // WHICH LAYER REFUSES CHANGED ON 2026-09-02, and the assertion follows the code
+      // rather than the code following the assertion. The signing secret IS this
+      // adapter's gate credential — it is the only secret in WebhookSIEMConfig — so
+      // since `resolveEmission` began requiring the caller to name its credential, an
+      // absent one is refused by the GATE, one layer earlier, before a URL is resolved.
+      // Both refusals name the same field, and neither sends: the claim held here is
+      // unchanged (nothing goes out unsigned, and the caller is told which field is
+      // missing), so both wordings are accepted and nothing else is.
+      const reason = (res as { reason?: string }).reason ?? "";
+      check(`siem/webhook: live boundary open + ${label} signing secret → refusal names the missing secret`,
+        reason === SIGNING_SECRET_MISSING || reason === credentialAbsentReason("SIEM webhook signingSecret"));
+      check(`siem/webhook: live boundary open + ${label} signing secret → the refusal is not silent`,
+        reason.length > 0);
+
+      const itsm = new GenericWebhookAdapter({
+        url: "https://hooks.invalid/x",
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        bodyTemplate: '{"t":"{{title}}"}',
+        signingSecret: secret,
+      });
+      let threw = "";
+      try {
+        await itsm.createTicket({ title: "t", description: "d", severity: "high" } as never);
+      } catch (err) {
+        threw = err instanceof Error ? err.message : String(err);
+      }
+      check(`itsm/generic-webhook: live boundary open + ${label} signing secret → refuses rather than POSTing unsigned`,
+        threw === SIGNING_SECRET_MISSING);
+    }
+    // NON-VACUITY: with a secret, the refusal is no longer about signing. Driven with
+    // the boundary CLOSED (dev tier) on purpose — with it open this call would reach
+    // the network, and a proof that makes a network call is not offline. What it
+    // establishes is the same thing either way: the refusal above is about the
+    // secret, not something this adapter would have said regardless.
+    process.env.SIGNALGRID_TIER = "dev";
+    const signed = new GenericWebhookAdapter({
+      url: "https://hooks.invalid/x",
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      bodyTemplate: '{"t":"{{title}}"}',
+      signingSecret: "s".repeat(32),
+    });
+    let signedErr = "";
+    try {
+      await signed.createTicket({ title: "t", description: "d", severity: "high" } as never);
+    } catch (err) {
+      signedErr = err instanceof Error ? err.message : String(err);
+    }
+    check("itsm/generic-webhook: WITH a secret the refusal is no longer about signing (not always-refuse)",
+      signedErr !== SIGNING_SECRET_MISSING);
+  } finally {
+    if (savedT === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedT;
+    if (savedL === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedL;
+  }
+}
 
 // Determinism: two identical resolutions produce identical fixture logs.
 const r1 = resolveItsmEmitter({}, undefined);

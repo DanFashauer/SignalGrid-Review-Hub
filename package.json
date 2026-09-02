@@ -50,6 +50,7 @@
     "check:row-citations": "node scripts/check-row-citations.mjs",
     "guard:registries": "node scripts/check-guard-registries.mjs",
     "guard:ungated-fetch": "node scripts/check-ungated-fetch.mjs",
+    "guard:signing-unconditional": "node scripts/check-signing-unconditional.mjs",
     "level10:audit": "pnpm --filter @workspace/scripts run level10:audit",
     "lint:shell": "node scripts/check-shell.mjs",
     "loop": "node scripts/build-loop.mjs",

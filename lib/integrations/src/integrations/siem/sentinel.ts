@@ -1,5 +1,5 @@
 import type { SIEMAdapter, SIEMEventRequest, SIEMEventResponse } from '../adapters/types';
-import { resolveEmission, EMIT_SUPPRESSED } from '../adapters/emit-gate';
+import { resolveEmission, EMIT_SUPPRESSED, type EmissionCredential } from '../adapters/emit-gate';
 
 /**
  * Microsoft Sentinel (Azure Log Analytics) Adapter Configuration
@@ -51,15 +51,46 @@ export class SentinelAdapter implements SIEMAdapter {
   }
 
   /**
+   * The credential this adapter holds, named so the gate's refusal can name it back.
+   *
+   * Passed at EVERY resolveEmission() site in this class. The parameter was optional
+   * until 2026-09-02 and every site here omitted it, so the third clause of the
+   * boundary — tier AND live flag AND a credential — was not enforced on this path:
+   * an adapter built with an empty secret reached the vendor with an empty auth
+   * header. The gate cannot read this itself; the shape is per-vendor, so the caller
+   * names what it holds.
+   */
+  private emissionCredential(): EmissionCredential {
+    // Mirrors getAccessToken()'s own branch order, so the credential named here is the
+    // one that authentication would actually use. Managed identity's secret is the MSI
+    // endpoint's, read from the environment exactly where getManagedIdentityToken()
+    // requires it.
+    if (this.config.useManagedIdentity) {
+      return { name: 'Sentinel managed-identity secret (MSI_SECRET)', value: process.env.MSI_SECRET };
+    }
+    if (this.config.tenantId && this.config.clientId) {
+      return { name: 'Sentinel clientSecret', value: this.config.clientSecret };
+    }
+    return { name: 'Sentinel primaryKey (workspace key)', value: this.config.primaryKey };
+  }
+
+  /**
    * Send a single event to Sentinel
    */
   async sendEvent(event: SIEMEventRequest): Promise<SIEMEventResponse> {
     // Gate first: dev/alpha never emit outbound. See ../adapters/emit-gate.ts.
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, this.emissionCredential());
     if (emission.mode === 'suppressed') {
       return {
         eventId: `suppressed-${Date.now()}`,
         status: EMIT_SUPPRESSED,
+        // The reason, carried onto the response. `SIEMEventResponse.reason` is
+        // documented as present on every non-'sent' status the adapter decided, and it
+        // was set on none of the suppressed branches: a caller saw status 'suppressed'
+        // with nothing saying whether the tier, the flag or a missing credential
+        // withheld it — the same "nothing was sent" / "nothing to send" ambiguity the
+        // gate's own refusal text exists to remove.
+        reason: emission.reason,
         receivedAt: new Date().toISOString(),
       };
     }
@@ -80,6 +111,7 @@ export class SentinelAdapter implements SIEMAdapter {
         'x-ms-date': new Date().toUTCString(),
       },
       body: JSON.stringify([payload]),
+      signal: AbortSignal.timeout(this.config.timeout),
     });
 
     if (!response.ok) {
@@ -110,11 +142,13 @@ export class SentinelAdapter implements SIEMAdapter {
     //
     // Suppressing per event rather than returning [] keeps the caller's contract: it
     // asked about N events and gets N answers, each honestly labelled as not sent.
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, this.emissionCredential());
     if (emission.mode === 'suppressed') {
       return events.map((event) => ({
         eventId: `suppressed-${event.type}-${event.timestamp}`,
         status: EMIT_SUPPRESSED,
+        // Per event, from the one resolution above: N answers, each carrying WHY.
+        reason: emission.reason,
         receivedAt: new Date().toISOString(),
       }));
     }
@@ -134,6 +168,7 @@ export class SentinelAdapter implements SIEMAdapter {
         'x-ms-date': new Date().toUTCString(),
       },
       body: JSON.stringify(payloads),
+      signal: AbortSignal.timeout(this.config.timeout),
     });
 
     if (!response.ok) {
@@ -153,7 +188,7 @@ export class SentinelAdapter implements SIEMAdapter {
    */
   async healthCheck(): Promise<boolean> {
     // GATED. A health check is still a live call — see check-ungated-fetch.mjs.
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, this.emissionCredential());
     if (emission.mode !== "live") return false;
 
     try {
@@ -165,6 +200,7 @@ export class SentinelAdapter implements SIEMAdapter {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
+        signal: AbortSignal.timeout(this.config.timeout),
       });
       
       return response.ok || response.status === 401; // 401 is OK - means we can authenticate
@@ -216,7 +252,7 @@ export class SentinelAdapter implements SIEMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -232,6 +268,7 @@ export class SentinelAdapter implements SIEMAdapter {
       headers: {
         'Secret': msiSecret,
       },
+      signal: AbortSignal.timeout(this.config.timeout),
     });
 
     if (!response.ok) {
@@ -251,7 +288,7 @@ export class SentinelAdapter implements SIEMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -271,6 +308,7 @@ export class SentinelAdapter implements SIEMAdapter {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: params.toString(),
+      signal: AbortSignal.timeout(this.config.timeout),
     });
 
     if (!response.ok) {

@@ -1,5 +1,5 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
-import { resolveEmission } from '../adapters/emit-gate';
+import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
 
 /**
  * ManageEngine ServiceDesk Plus / ServiceNow Plus Adapter Configuration
@@ -42,6 +42,12 @@ export class ManageEngineAdapter implements ITSMAdapter {
     };
   }
 
+  /** The credential this adapter holds, named so the gate's refusal names it back.
+   *  Passed at every resolveEmission() site in this class — see adapters/emit-gate.ts. */
+  private emissionCredential(): EmissionCredential {
+    return { name: 'ManageEngine technicianKey', value: this.config.technicianKey };
+  }
+
   /**
    * Create a new request in ServiceDesk Plus
    */
@@ -51,7 +57,7 @@ export class ManageEngineAdapter implements ITSMAdapter {
     // boundary. Nothing constructs this adapter in fixture mode today; the gate
     // makes that a property instead of a circumstance.
     {
-      const emission = resolveEmission();
+      const emission = resolveEmission(process.env, this.emissionCredential());
       if (emission.mode !== "live") {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
@@ -68,6 +74,7 @@ export class ManageEngineAdapter implements ITSMAdapter {
         'Accept': 'application/json',
       },
       body: JSON.stringify(workOrder),
+      signal: AbortSignal.timeout(this.config.timeout),
     });
 
     if (!response.ok) {
@@ -103,7 +110,7 @@ export class ManageEngineAdapter implements ITSMAdapter {
     // process runs. Ungated, it reached the network in dev/alpha with no credential
     // — outside the three-condition boundary the security-review package tells an
     // assessor to verify FIRST. Found by review taking that document at its word.
-    const emission = resolveEmission();
+    const emission = resolveEmission(process.env, this.emissionCredential());
     if (emission.mode !== "live") return false;
 
     try {
@@ -114,6 +121,7 @@ export class ManageEngineAdapter implements ITSMAdapter {
           'Authorization': `TechnicianKey ${this.config.technicianKey}`,
           'Accept': 'application/json',
         },
+        signal: AbortSignal.timeout(this.config.timeout),
       });
       
       return response.ok;

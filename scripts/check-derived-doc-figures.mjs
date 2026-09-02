@@ -696,7 +696,12 @@ export function auditAll(rows = FIGURES, root = ROOT) {
 // in the live document does not fail the row, that row guards nothing.
 function selfTest() {
   const checks = [];
-  const row = FIGURES[0];
+  // The synthetic controls are written against the Bruno index row's matcher, so
+  // they select it by id: FIGURES[0] silently became a different row the first
+  // time a batch inserted rows at the top of the table, and two controls failed
+  // for a reason that had nothing to do with the gate.
+  const row = FIGURES.find((r) => r.id === "bru-requests-index");
+  if (!row) throw new Error("self-test: the bru-requests-index row is gone; the synthetic controls need a row whose matcher they were written for");
 
   checks.push(["a matching figure equal to the derived value passes", auditFigure(row, "— 7 requests as plain-text `.bru` files", 7).problems.length === 0]);
   checks.push(["A WRONG FIGURE IS FLAGGED — the gate's whole purpose", auditFigure(row, "— 8 requests as plain-text `.bru` files", 7).problems.length === 1]);

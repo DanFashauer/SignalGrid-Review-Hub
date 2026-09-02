@@ -30,7 +30,7 @@ Harness: `validate-sim-macos.sh`. Result **as recorded at the time of this run:
 
 | Group | Gates | Result |
 |---|---|---|
-| Real-life simulator | `proof:signalgrid-simulator` (11 scenarios / 43 assertions), `proof:room-sim`, `proof:signalgrid-core`, `proof:signalgrid-grid` | PASS |
+| Real-life simulator | `proof:signalgrid-simulator` (11 scenarios / 51 assertions), `proof:room-sim`, `proof:signalgrid-core`, `proof:signalgrid-grid` | PASS |
 | CI-mirror proof suite | the remaining `proof:*` gates at that time — 24 then; derive the current count with the command above (incl. `-pg` gates via in-memory fallback) | PASS |
 | Non-proof gates | `typecheck`, `build`, `test:api`, `safety:check`, `docs:sanity`, `review:invariants` | PASS |
 | Hygiene | `git diff --check` | clean |

@@ -16,8 +16,8 @@ through the launch evaluate surface, 5 only via the draft-policy
 test route, 7 only through deferred routes. Worker/operator
 language comes from the engine's own resolution descriptors; a code without a
 descriptor is marked, because that gap is real behavior — the resolution
-planner silently drops descriptor-less codes from its plan today (role-lens
-review, engineering.2; tracked work).
+planner has no step to offer for such a code, and since 2026-09-02 it says so
+instead of staying quiet (see the note below).
 
 Tenant-authored policy rules may carry **custom reason codes** — the set is
 open by construction (`policy.ts` pushes `rule.reasonCode` verbatim), which
@@ -29,7 +29,7 @@ falsify the contract for every tenant with a custom rule.
 
 | Code | Verdicts | Resolution class | Worker-facing action | Operator-facing action | Fixture |
 |---|---|---|---|---|---|
-| `ALLOW_SUPPRESSED_DEGRADED_EVIDENCE` | step_up | *(none)* | *(no resolution descriptor — this code silently drops out of the resolution plan today; see the note below)* | — | — |
+| `ALLOW_SUPPRESSED_DEGRADED_EVIDENCE` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | — |
 | `BADGE_FORCED_REMOVAL` | deny | manual_only | This device is locked out — the badge was forcibly removed. Use a different device and report it. | Out of service: forced badge removal / reader-case tamper — route to security operations; do not clear automatically. | `badge forced removal → deny` |
 | `BADGE_REMOVED` | restrict | auto_proposed | Re-insert your badge into the reader case to re-bind it to this device, then retry. | Confirm the worker's badge is re-seated in the reader case, then re-evaluate. | `badge removed → restrict` |
 | `BASELINE_DRIFTED` | step_up | auto_proposed | This device has drifted from its security baseline — return it to its dock or reconnect so the hardening profile re-applies, then retry. | Request a baseline (CIS/hardening) re-scan and profile re-apply from the endpoint-management source, then re-evaluate. | `baseline drift → step-up` |
@@ -49,7 +49,7 @@ falsify the contract for every tenant with a custom rule.
 | `IDENTITY_STATE_UNKNOWN` | step_up | auto_proposed | Re-verify your identity (re-badge at the reader or re-authenticate), then retry. | Ask the worker to re-authenticate; confirm the identity source is reachable. | — |
 | `LOCAL_AUTHORITY_WITHHELD` | restrict | requires_approval | This device's permission to act on its own was withdrawn by the control plane. Nothing on the device changes that — an operator has to re-verify its authority. | Re-issue the device's local-authority lease (verify its clock source and revocation state first), then re-evaluate. | `local authority withheld → restrict (the control plane revok` |
 | `MANAGEMENT_HEALTH_BROKEN` | restrict | requires_approval | This device's management system has failed — its safety answers can't be trusted right now. Swap to a healthy device; an operator has to repair this one's enrollment. | Re-enroll the device in the management plane (or complete the failed enrollment), confirm a fresh check-in, then re-evaluate. | `management plane broken → restrict (a failed management plan` |
-| `NO_RULE_MATCHED_DEFAULT_STEP_UP` | step_up | *(none)* | *(no resolution descriptor — this code silently drops out of the resolution plan today; see the note below)* | — | — |
+| `NO_RULE_MATCHED_DEFAULT_STEP_UP` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | — |
 | `POSTURE_MISSING` | restrict | auto_proposed | Bring the device online and let it check in (dock or reconnect), then retry. | Request a posture check-in; if the device never reports, escalate to device operations. | `missing posture → restrict` |
 | `POSTURE_STALE` | step_up | auto_proposed | Reconnect the device (or return it to its dock) to refresh its compliance check, then retry. | Request a posture re-sync from the device-management source, then re-evaluate. | `stale posture → step-up` |
 | `SHIFT_CONTEXT_MISFIT` | step_up | requires_approval | The labor system does not show you on shift for this. Ask your supervisor to confirm your shift record — do not clock in to get past this. | Have the supervisor or workforce-management owner verify this worker's shift, punch state and site, correct the record if it is wrong, then re-evaluate. | `shift-context misfit → step-up (the labor plane disagrees wi` |
@@ -83,22 +83,112 @@ them as launch surface.
 
 | Code | Verdicts | Resolution class | Worker-facing action | Operator-facing action | Fixture |
 |---|---|---|---|---|---|
-| `NEWER_PROVENANCE_RELAXED_STALE_DECISION` | — | *(none)* | *(no resolution descriptor — this code silently drops out of the resolution plan today; see the note below)* | — | — |
-| `OFFLINE_AUTHORITY_CANNOT_RELAX` | — | *(none)* | *(no resolution descriptor — this code silently drops out of the resolution plan today; see the note below)* | — | — |
-| `OFFLINE_STANDING_AGE_UNSTATED` | step_up | *(none)* | *(no resolution descriptor — this code silently drops out of the resolution plan today; see the note below)* | — | — |
-| `OFFLINE_STANDING_BOUND_EXCEEDED` | step_up | *(none)* | *(no resolution descriptor — this code silently drops out of the resolution plan today; see the note below)* | — | — |
-| `PROVENANCE_CONTESTED_FAIL_CLOSED` | — | *(none)* | *(no resolution descriptor — this code silently drops out of the resolution plan today; see the note below)* | — | — |
-| `PROVENANCE_UNIFORM_ACROSS_RECORDS` | — | *(none)* | *(no resolution descriptor — this code silently drops out of the resolution plan today; see the note below)* | — | — |
-| `SUPERSEDED_POLICY_AUTHORITY_CANNOT_RELAX` | — | *(none)* | *(no resolution descriptor — this code silently drops out of the resolution plan today; see the note below)* | — | — |
+| `NEWER_PROVENANCE_RELAXED_STALE_DECISION` | — | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | — |
+| `OFFLINE_AUTHORITY_CANNOT_RELAX` | — | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | — |
+| `OFFLINE_STANDING_AGE_UNSTATED` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | — |
+| `OFFLINE_STANDING_BOUND_EXCEEDED` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | — |
+| `PROVENANCE_CONTESTED_FAIL_CLOSED` | — | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | — |
+| `PROVENANCE_UNIFORM_ACROSS_RECORDS` | — | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | — |
+| `SUPERSEDED_POLICY_AUTHORITY_CANNOT_RELAX` | — | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | — |
 
 ## The descriptor gap, stated
 
-10 of 40 codes have no resolution descriptor. For the
-non-allow ones, `buildResolutionPlan` silently omits the code from the plan —
-a DENY carrying only descriptor-less codes reports itself self-service and
-auto-resolvable (executed counterexample in the role-lens review,
-engineering.2). Until that is fixed, host apps must render the VERDICT as
-the primary signal and treat the resolution plan as advisory.
+10 of 40 codes have no resolution descriptor, so
+`buildResolutionPlan` has no STEP to offer for them. What changed on
+2026-09-02 (verdict-core finding V9) is that it no longer stays quiet about it.
+
+Before: a descriptor-less code was skipped and left no trace, so a DENY carrying
+only such codes came back with `path: "self_service"` — the wrong word for a
+block nobody can clear. (`autoResolvable` was already false in that case, because
+it requires at least one step; the role-lens review's phrasing that it reported
+"self-service AND auto-resolvable" was half right, and the half that was wrong is
+corrected here rather than repeated.)
+
+Now: the plan carries `unresolvedCodes: string[]` — the codes on a non-allow
+decision that have no descriptor — and while that list is non-empty the plan is
+`path: "escalation"`, `autoResolvable: false`, and `summaryForOperator` names
+the codes. A code contributed by a rule whose own outcome was `allow`
+(`TRUST_ESTABLISHED` rides along on most restrict/step-up decisions) is an
+affirmative finding, not an unanswered block, and is excluded — derived from the
+decision's own `matchedRules`, not from a list anyone maintains. The exclusion is
+keyed on the CONTRIBUTING RULE, not on the code's spelling: reason codes are not
+unique to a rule, so one allow rule sharing a code with a deny rule would otherwise
+have disappeared the deny's own unanswerable block. Both pinned by
+`pnpm run proof:signalgrid-core`.
+
+Host apps should still render the VERDICT as the primary signal: a plan with
+unresolved codes tells the worker a person is needed, not what to do.
+
+## Published fields with no in-repo reader (REPORTED, measured 2026-09-02)
+
+Four fields are serialized onto `/v1` responses and read by nothing in this
+repository. That is not a defect — a published contract may legitimately have no
+in-repo consumer — but it means NO in-repo test constrains their content, so a
+change to any of them breaks only the host app that depends on it. Stated so a
+host-app developer knows which fields are unexercised here.
+
+Measured, not assumed, with (results quoted after each field):
+
+```
+grep -rn "\b<field>\b" --include=*.ts --include=*.tsx --include=*.mjs --include=*.swift \
+  lib scripts artifacts native tests tools site | grep -v node_modules
+```
+
+| Field | Declared | Minted | In-repo reader |
+|---|---|---|---|
+| `SignalGridDecision.confidence` (simulator) | `lib/signalgrid-simulator/src/types.ts:150` | `lib/signalgrid-simulator/src/decisionEngine.ts:292` | none — `scripts/src/signalgrid-grid-proof.ts:988` COPIES it into an output object and asserts nothing about it |
+| `ResolutionPlan.summaryForOperator` | `lib/signalgrid-core/src/types.ts` | `lib/signalgrid-core/src/resolution.ts` | one, added 2026-09-02: `scripts/src/signalgrid-core-proof.ts` asserts it NAMES an unresolved reason code. Nothing reads the rest of the sentence |
+| `ResolutionSimulation.projectedReasonCodes` | `lib/signalgrid-core/src/types.ts` | `lib/signalgrid-core/src/resolution.ts` | none — declaration and mint site only |
+| `ResolutionStep.clears` | `lib/signalgrid-core/src/types.ts` | `lib/signalgrid-core/src/resolution.ts` | none — every other `clears` match in the tree is unrelated prose |
+
+REPORTED, not gated: this is a measurement with a date on it, not an invariant. A
+reader added tomorrow does not fail anything; re-run the command above rather than
+trusting this table's age.
+
+## Simulator vocabulary — a DIFFERENT engine's codes, catalogued so nobody reads them as the core's
+
+The tables above are the **launch decision core** (`lib/signalgrid-core`). The
+**fixture simulator** — `lib/signalgrid-simulator/src/decisionEngine.ts` — is a second, separate engine.
+It emits its own 18 reason codes. 2 of them the core also emits
+(`CUSTODY_EXCEPTION`, `POSTURE_STALE`); the other 16
+appear nowhere above. The list is parsed from that file's emit sites by this
+generator, not maintained by hand. Several of them name **deferred** families
+(custody, dock, location) — the simulator is a fixture harness, so it models
+families the launch profile does not serve.
+
+**GATED:** that this list is complete, that it parses, and that no simulator code
+collides with a core code by punctuation/case/underscore alone
+(`scripts/check-reason-codes.mjs`). **REPORTED, not gated:** everything about what
+these codes MEAN. No `/v1` route emits them — they are not part of the published
+API vocabulary, and a host app must not build against them as if they were.
+
+They are also not renameable at will: `native/ios/EnterpriseShell/Services/DecisionEngine.swift`
+is a byte-faithful port of the simulator engine (CLAUDE.md golden rule 1), so the
+iOS app's reason codes ARE these spellings. Aligning them with the core's would
+break the parity the port exists to prove.
+
+The 16 the core never emits — none of them a launch
+surface, and the custody/dock/location ones name **deferred** families:
+- `ALLOW_REMOVED_DUE_TO_CUSTODY_FAILURE` — simulator/iOS only
+- `ALLOW_REMOVED_DUE_TO_HIGHER_RISK` — simulator/iOS only
+- `APPLE_DECLARED_STATE_TRUSTED` — simulator/iOS only
+- `BATTERY_WORKFLOW_RISK` — simulator/iOS only
+- `DEVICE_NON_COMPLIANT` — simulator/iOS only
+- `DEVICE_TRUST_FAILURE` — simulator/iOS only
+- `DOCK_EXCEPTION` — simulator/iOS only
+- `IDENTITY_AND_POSTURE_TRUSTED` — simulator/iOS only
+- `IDENTITY_INTEGRITY_FAILURE` — simulator/iOS only
+- `INTEGRATION_ROUTE_DEGRADED` — simulator/iOS only
+- `LOCATION_EXCEPTION` — simulator/iOS only
+- `OPERATIONAL_HEALTH_DEGRADED` — simulator/iOS only
+- `REMEDIATION_VERIFIED` — simulator/iOS only
+- `SECURITY_RISK_ESCALATION` — simulator/iOS only
+- `STATE_FRESHNESS_FAILURE` — simulator/iOS only
+- `WORKFLOW_ROUTE_UNAVAILABLE` — simulator/iOS only
+
+**Near-collisions found (1) — one concept, two spellings, two engines:**
+
+- `DEVICE_NON_COMPLIANT` (simulator/iOS) vs `DEVICE_NONCOMPLIANT` (core) — the gate carries a NAMED exemption for this pair or fails on it; see `scripts/check-reason-codes.mjs`.
 
 ## History
 

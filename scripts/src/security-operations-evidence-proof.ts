@@ -63,6 +63,14 @@ function healthyEvidence(overrides: Partial<DecisionEvidence> = {}): DecisionEvi
     dockState: "empty" as DecisionEvidence["dockState"],
     baselineCompliance: "aligned" as DecisionEvidence["baselineCompliance"],
     badgeBinding: "present" as DecisionEvidence["badgeBinding"],
+    // STATED, not omitted (review finding F2, 2026-09-02). This fixture claims
+    // "everything is known and healthy" while leaving a required field of
+    // `DecisionEvidence` off the object behind an `as` cast — and an omitted
+    // freshness used to read as GOOD, because `undefined` equals none of the
+    // values the backstop rejects. It now reads as "unknown" and disqualifies,
+    // which is the doctrine (silence never affirms). Every dock channel above is
+    // populated and healthy, so the honest stamp for this context is "fresh".
+    dockEvidenceFreshness: "fresh" as Freshness,
     ...overrides,
   } as Omit<DecisionEvidence, "criticalSignalsPresent">;
   return { ...partial, criticalSignalsPresent: deriveCriticalSignalsPresent(partial) };

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   listSimulatorScenarios,
   runScenario,
@@ -77,6 +80,92 @@ assertions.push(assertion(
   remWithoutBaseTrust !== undefined &&
     !remWithoutBaseTrust.decision.outcomes.includes("allow") &&
     remWithoutBaseTrust.decision.outcomes.includes("verify_remediation"),
+));
+
+// ── ORDER LIST ≡ DecisionOutcome UNION (verdict-core finding V1, 2026-09-02) ──
+//
+// `orderOutcomes` in lib/signalgrid-simulator/src/decisionEngine.ts filters a
+// HARDCODED list of outcomes and returns only the members it names. A
+// DecisionOutcome that exists in the union but is missing from that list is
+// therefore dropped from `decision.outcomes` entirely — and because
+// `primaryOutcome` is `ordered[0]`, dropping a restrictive member moves the
+// primary outcome in the PERMISSIVE direction, silently. The engine itself is a
+// byte-faithful twin of the Swift port (CLAUDE.md golden rule 1), so this is
+// checked from OUTSIDE it: both lists are parsed lexically from source and
+// compared as sets. Nothing here edits or imports the engine's internals.
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const enginePath = `${repoRoot}/lib/signalgrid-simulator/src/decisionEngine.ts`;
+const typesPath = `${repoRoot}/lib/signalgrid-simulator/src/types.ts`;
+
+/** The literal members of the ORDER array inside `orderOutcomes`. */
+function parseOrderList(engineSource: string): string[] {
+  const m = /function orderOutcomes\([\s\S]*?const order: DecisionOutcome\[\] = \[([\s\S]*?)\];/.exec(engineSource);
+  return m ? [...m[1].matchAll(/"([a-z_]+)"/g)].map((x) => x[1]) : [];
+}
+
+/** The literal members of the exported `DecisionOutcome` union. */
+function parseOutcomeUnion(typesSource: string): string[] {
+  const m = /export type DecisionOutcome =([\s\S]*?);/.exec(typesSource);
+  return m ? [...m[1].matchAll(/"([a-z_]+)"/g)].map((x) => x[1]) : [];
+}
+
+/** Members of the union that ORDER does not name — i.e. silently droppable. */
+function droppedByOrder(union: string[], order: string[]): string[] {
+  return union.filter((member) => !order.includes(member));
+}
+
+const engineSource = readFileSync(enginePath, "utf8");
+const typesSource = readFileSync(typesPath, "utf8");
+const orderList = parseOrderList(engineSource);
+const outcomeUnion = parseOutcomeUnion(typesSource);
+
+// Vacuity floors FIRST: a parse that found nothing must never read as agreement.
+assertions.push(assertion(
+  `order-list parse floor: orderOutcomes names >= 10 outcomes (found ${orderList.length})`,
+  orderList.length >= 10,
+));
+assertions.push(assertion(
+  `DecisionOutcome union parse floor: >= 10 members (found ${outcomeUnion.length})`,
+  outcomeUnion.length >= 10,
+));
+const droppedToday = droppedByOrder(outcomeUnion, orderList);
+assertions.push(assertion(
+  `every DecisionOutcome is named in orderOutcomes' ORDER list (dropped: ${droppedToday.join(", ") || "none"})`,
+  droppedToday.length === 0,
+));
+const strangers = orderList.filter((o) => !outcomeUnion.includes(o));
+assertions.push(assertion(
+  `ORDER names no outcome the union does not declare (extra: ${strangers.join(", ") || "none"})`,
+  strangers.length === 0,
+));
+assertions.push(assertion(
+  "ORDER lists each outcome exactly once",
+  new Set(orderList).size === orderList.length,
+));
+assertions.push(assertion(
+  "ORDER is fail-closed at the head: deny/restrict/step_up precede allow",
+  ["deny", "restrict", "step_up"].every(
+    (o) => orderList.indexOf(o) !== -1 && orderList.indexOf(o) < orderList.indexOf("allow"),
+  ),
+));
+
+// SYNTHETIC VIOLATION — the check must be able to fail. An 11th union member is
+// planted in a COPY of the types source (the tree is never touched) and the same
+// comparison must flag it; and a member removed from a COPY of the ORDER list
+// must be flagged too. If either stays silent, the check above proves nothing.
+const plantedUnion = parseOutcomeUnion(
+  typesSource.replace('export type DecisionOutcome =\n  | "allow"', 'export type DecisionOutcome =\n  | "quarantine"\n  | "allow"'),
+);
+assertions.push(assertion(
+  "self-test: a planted 11th DecisionOutcome member is reported as dropped by ORDER",
+  plantedUnion.length === outcomeUnion.length + 1 &&
+    droppedByOrder(plantedUnion, orderList).includes("quarantine"),
+));
+const shortenedOrder = parseOrderList(engineSource.replace('    "deny",\n', ""));
+assertions.push(assertion(
+  "self-test: an outcome deleted from a copy of the ORDER list is reported as dropped",
+  shortenedOrder.length === orderList.length - 1 &&
+    droppedByOrder(outcomeUnion, shortenedOrder).includes("deny"),
 ));
 
 const failed = assertions.filter((item) => !item.passed);

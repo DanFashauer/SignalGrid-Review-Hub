@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
   "requestId": "2026-08-31-lab001-step1-real-posture",
-  "completedAt": "2026-08-31T19:26:39.273Z",
+  "completedAt": "2026-09-02T16:51:33.649Z",
   "provenance": {
     "platform": "darwin",
     "arch": "arm64",
     "nodeVersion": "v24.18.0",
     "macosVersion": "26.6.2",
-    "commit": "36419e33b7f024d96920511a46857fabd0df83c9",
+    "commit": "afeb8c5eaeff8b9fb2a9127e31bf98025bf0dece",
     "branch": "SignalGrid_Alpha",
-    "workingTreeClean": false
+    "workingTreeClean": true
   },
   "runs": [
     {
       "operation": "evidence",
       "status": "passed",
       "exitCode": 0,
-      "durationMs": 169801,
+      "durationMs": 183943,
       "tail": [
         "This says NOTHING about the launch surface — that is preflight's job.",
         "",
@@ -32,7 +32,7 @@
         "    warnings.warn(",
         "",
         "-- Docs: <URL>",
-        "99 passed, 1 warning in 1.81s",
+        "99 passed, 1 warning in 1.78s",
         "",
         "=== verify:all summary ===",
         "  mcp tool count:       PASS (22 tools, derived and matching the doc)",
@@ -41,7 +41,7 @@
         "  signalgrid-mcp:       PASS",
         "  shared contract:      <HOME>/Public/Projects/SignalGrid/SignalGrid-Review-<REDACTED-BLOB>-posture/contract/posture-report.contract.json",
         "",
-        "--emit-evidence: wrote <HOME>/Public/Projects/SignalGrid/SignalGrid-Review-Hub/artifacts/live-evidence/mac-run.json (manifestFingerprint=5ea9cb89c6da…).",
+        "--emit-evidence: wrote <HOME>/Public/Projects/SignalGrid/SignalGrid-Review-Hub/artifacts/live-evidence/mac-run.json (manifestFingerprint=655b9fae66da…).",
         "  Commit artifacts/live-evidence/ to publish the run as repo evidence."
       ]
     }

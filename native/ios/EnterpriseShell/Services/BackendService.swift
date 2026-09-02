@@ -151,8 +151,15 @@ final class BackendService {
         #if targetEnvironment(simulator)
         if DemoMode.isEnabled { return }
         #endif
-        // DECLARED-NOT-IMPLEMENTED: no route serves this path. The api-server has
-        // /api/v1/sessions/{start,:id,:id/refresh,:id/end} and no audit sub-route.
+        // DECLARED-NOT-IMPLEMENTED: no route in artifacts/api-server serves this path.
+        // The served session routes are /api/v1/sessions/{start,:id,:id/refresh,:id/end}
+        // and the only audit routes are /api/v1/audit, /api/simulator/audit and
+        // /api/cp/v1/self-audit. Established by enumerating every router.get/post/put/
+        // patch/delete (including the multi-line signatures) plus every router.use in
+        // routes/ — all sub-routers mount with NO path prefix, so their declared paths
+        // are absolute. `check:absence` returns INCONCLUSIVE for this string and its two
+        // matches are this file and a lane message, i.e. the caller and the report,
+        // never a route.
         let url = URL(string: "\(Self.baseUrl)/api/sessions/\(sessionId)/audit")!
         
         var request = URLRequest(url: url)
@@ -227,8 +234,12 @@ final class BackendService {
         #if targetEnvironment(simulator)
         if DemoMode.isEnabled { return DemoMode.enrollmentCheckResponse() }
         #endif
-        // DECLARED-NOT-IMPLEMENTED: the api-server serves no /badges route. This call
-        // throws BackendError.httpError(404) until one exists.
+        // DECLARED-NOT-IMPLEMENTED: no route in artifacts/api-server serves any /badges
+        // path. "badge" and "enroll" appear there only in prose, a control-plane
+        // connector id, and the x-enrollment-authorization CORS header; the only enroll
+        // routes are /v1/step-up/enroll/{options,verify}, which are WebAuthn step-up and
+        // not badge enrollment. This call throws BackendError.httpError(404) until a
+        // route exists.
         let url = URL(string: "\(Self.baseUrl)/api/badges/check-enrollment")!
         
         var request = URLRequest(url: url)

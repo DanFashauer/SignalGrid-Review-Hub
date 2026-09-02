@@ -1417,8 +1417,8 @@ a sync service and a Telegram bridge. Its surface writer walks up to any
 `.git`/`package.json` root and writes a `.neuralmemory/` directory there
 (`surface/resolver.py` lines 36 and 65–70). Concurrent synapse adds on one SQLite
 connection can drop edges (`pipeline_steps.py` lines 1503 and 1599): an upstream defect,
-noted here and NOT filed — filing sends content to an external service, which is the
-owner's call.
+noted here and, on 2026-09-02, filed upstream by the owner from the cloud lane's draft —
+filing sends content to an external service, which was the owner's call to make.
 
 **Call: adopted as the MEMORY SUBSTRATE under the DR-024 stack — not a lens, not a
 review layer. It remembers; it judges nothing.**

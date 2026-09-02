@@ -143,7 +143,20 @@ export class SplunkAdapter implements SIEMAdapter {
   }
 
   /**
-   * Build HEC event payload
+   * Build HEC event payload — the CLOSED set of fields this adapter sends.
+   *
+   * The five sub-objects below were whole-object copies (`actor: event.actor`), so
+   * anything ever added to `SIEMEventRequest.actor` / `.device` / `.session` /
+   * `.location`, or to an evidence element, would have started reaching a
+   * customer's Splunk index the day the type was widened — with no edit here and
+   * no review. They are copied FIELD BY FIELD now; adding a field is a deliberate
+   * act in this file.
+   *
+   * THE ONE OPEN SLOT is `customFields`, open BY DECLARATION: it is
+   * `Record<string, unknown>` on the request type, the caller's own escape hatch.
+   * `evidence[].data` is the second declared-open map, nested inside a closed
+   * element shape. Both are named in ../adapters/payload-fields.ts and in
+   * docs/DATA_RETENTION_AND_PERSONAL_DATA.md.
    */
   private buildEventPayload(event: SIEMEventRequest): Record<string, unknown> {
     const payload: Record<string, unknown> = {
@@ -157,28 +170,65 @@ export class SplunkAdapter implements SIEMAdapter {
         type: event.type,
         severity: event.severity,
         timestamp: event.timestamp || new Date().toISOString(),
-        
+
         // Correlation IDs
         caseId: event.caseId,
         requestId: event.requestId,
         correlationId: event.correlationId,
-        
-        // Actor
-        actor: event.actor,
-        
-        // Device
-        device: event.device,
-        
-        // Session
-        session: event.session,
-        
-        // Location
-        location: event.location,
-        
-        // Evidence
-        evidence: event.evidence,
-        
-        // Custom fields
+
+        // Actor — named fields only
+        actor: event.actor
+          ? {
+              userId: event.actor.userId,
+              badgeUid: event.actor.badgeUid,
+              email: event.actor.email,
+              name: event.actor.name,
+            }
+          : undefined,
+
+        // Device — named fields only
+        device: event.device
+          ? {
+              deviceId: event.device.deviceId,
+              platform: event.device.platform,
+              ip: event.device.ip,
+              mac: event.device.mac,
+              tags: event.device.tags,
+            }
+          : undefined,
+
+        // Session — named fields only
+        session: event.session
+          ? {
+              sessionId: event.session.sessionId,
+              startedAt: event.session.startedAt,
+              endedAt: event.session.endedAt,
+              duration: event.session.duration,
+            }
+          : undefined,
+
+        // Location — named fields only
+        location: event.location
+          ? {
+              zone: event.location.zone,
+              building: event.location.building,
+              floor: event.location.floor,
+              coordinates: event.location.coordinates
+                ? { lat: event.location.coordinates.lat, lng: event.location.coordinates.lng }
+                : undefined,
+            }
+          : undefined,
+
+        // Evidence — closed element shape around one DECLARED OPEN SLOT (`data`,
+        // which is Record<string, unknown> on the request type).
+        evidence: event.evidence?.map((e) => ({
+          type: e.type,
+          timestamp: e.timestamp,
+          data: e.data,
+        })),
+
+        // DECLARED OPEN SLOT — the caller's own Record<string, unknown>, carried
+        // under its own key rather than merged into the event.
         customFields: event.customFields,
       },
     };

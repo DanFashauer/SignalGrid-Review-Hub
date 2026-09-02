@@ -320,70 +320,85 @@ export class SentinelAdapter implements SIEMAdapter {
   }
 
   /**
-   * Build Sentinel event payload (Custom Log format)
+   * Build Sentinel event payload (Custom Log format).
+   *
+   * WRITE ORDER IS THE SECURITY PROPERTY HERE, and it was the wrong way round.
+   *
+   * Sentinel's Custom Log format is FLAT, so this family is the only one that
+   * MERGES the caller's `customFields` into the payload's top level instead of
+   * carrying it under its own key. That merge used to be the LAST write before
+   * `return`, which meant a caller key named `ActorEmail`, `TimeGenerated` or
+   * `Evidence` silently OVERWROTE the column SignalGrid derived — a row in a
+   * customer's SIEM asserting an actor, an instant or an evidence set that this
+   * fabric never observed. Nothing stated the direction: the only ordering
+   * sentence in the tree is `itsm/generic-webhook.ts`'s, and it documents the
+   * OPPOSITE order for exactly this reason ("rawEvent is untrusted passthrough,
+   * so it goes FIRST and the sanctioned fields overwrite it").
+   *
+   * So the two now agree. The open slot is written FIRST, and every sanctioned
+   * column is written AFTER it — UNCONDITIONALLY, not inside an `if`, because a
+   * column written only when the fabric has a value leaves the caller's key
+   * standing whenever it does not. `undefined` is dropped by JSON.stringify, so
+   * the wire body is unchanged for every honest caller; what changed is that a
+   * caller can no longer occupy a sanctioned column.
+   *
+   * The typed sub-objects are named field by field for the same reason they are
+   * everywhere else in this batch. Declared in ../adapters/payload-fields.ts.
    */
   private buildEventPayload(event: SIEMEventRequest): Record<string, unknown> {
-    const payload: Record<string, unknown> = {
-      // Required TimeGenerated (Sentinel will use ingestion time if not provided)
-      TimeGenerated: event.timestamp,
-      
-      // Event type
-      EventType: event.type,
-      Severity: event.severity,
-      
-      // Correlation IDs
-      CaseId: event.caseId,
-      RequestId: event.requestId,
-      CorrelationId: event.correlationId,
-    };
+    const payload: Record<string, unknown> = {};
 
-    // Add actor info
-    if (event.actor) {
-      payload.ActorUserId = event.actor.userId;
-      payload.ActorBadgeUid = event.actor.badgeUid;
-      payload.ActorEmail = event.actor.email;
-      payload.ActorName = event.actor.name;
-    }
-
-    // Add device info
-    if (event.device) {
-      payload.DeviceId = event.device.deviceId;
-      payload.DevicePlatform = event.device.platform;
-      payload.DeviceIp = event.device.ip;
-      payload.DeviceMac = event.device.mac;
-      payload.DeviceTags = event.device.tags?.join(',');
-    }
-
-    // Add session info
-    if (event.session) {
-      payload.SessionId = event.session.sessionId;
-      payload.SessionStartedAt = event.session.startedAt;
-      payload.SessionEndedAt = event.session.endedAt;
-      payload.SessionDuration = event.session.duration;
-    }
-
-    // Add location info
-    if (event.location) {
-      payload.LocationZone = event.location.zone;
-      payload.LocationBuilding = event.location.building;
-      payload.LocationFloor = event.location.floor;
-      if (event.location.coordinates) {
-        payload.LocationLat = event.location.coordinates.lat;
-        payload.LocationLng = event.location.coordinates.lng;
-      }
-    }
-
-    // Add evidence
-    if (event.evidence && event.evidence.length > 0) {
-      payload.Evidence = JSON.stringify(event.evidence);
-    }
-
-    // Add custom fields
+    // DECLARED OPEN SLOT, slot "*" — the caller's own Record<string, unknown>,
+    // flattened because the Custom Log format has no nesting. FIRST, so that
+    // everything below overwrites it rather than the other way round.
     if (event.customFields) {
       for (const [key, value] of Object.entries(event.customFields)) {
         payload[key] = value;
       }
     }
+
+    // ── Sanctioned columns. Written after the open slot, so a sanctioned field
+    //    always wins. Unconditional, so it wins even when the value is absent.
+    payload.TimeGenerated = event.timestamp;
+    payload.EventType = event.type;
+    payload.Severity = event.severity;
+
+    payload.CaseId = event.caseId;
+    payload.RequestId = event.requestId;
+    payload.CorrelationId = event.correlationId;
+
+    payload.ActorUserId = event.actor?.userId;
+    payload.ActorBadgeUid = event.actor?.badgeUid;
+    payload.ActorEmail = event.actor?.email;
+    payload.ActorName = event.actor?.name;
+
+    payload.DeviceId = event.device?.deviceId;
+    payload.DevicePlatform = event.device?.platform;
+    payload.DeviceIp = event.device?.ip;
+    payload.DeviceMac = event.device?.mac;
+    payload.DeviceTags = event.device?.tags?.join(',');
+
+    payload.SessionId = event.session?.sessionId;
+    payload.SessionStartedAt = event.session?.startedAt;
+    payload.SessionEndedAt = event.session?.endedAt;
+    payload.SessionDuration = event.session?.duration;
+
+    payload.LocationZone = event.location?.zone;
+    payload.LocationBuilding = event.location?.building;
+    payload.LocationFloor = event.location?.floor;
+    payload.LocationLat = event.location?.coordinates?.lat;
+    payload.LocationLng = event.location?.coordinates?.lng;
+
+    // Evidence — the ELEMENT SHAPE is closed. This was
+    // `JSON.stringify(event.evidence)`, the whole array by reference, so a field
+    // added to the evidence element type upstream would have started crossing to a
+    // customer's Sentinel workspace with no edit here. Named fields only; the one
+    // map inside is a DECLARED OPEN SLOT (`data`, Record<string, unknown> on the
+    // request type).
+    payload.Evidence =
+      event.evidence && event.evidence.length > 0
+        ? JSON.stringify(event.evidence.map((e) => ({ type: e.type, timestamp: e.timestamp, data: e.data })))
+        : undefined;
 
     return payload;
   }

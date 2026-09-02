@@ -1,183 +1,246 @@
 # SignalGrid Review Hub
 
-**Purpose — make the right things happen when a person and their devices enter
-an operational context.**
+The public, pre-production working repository for **SignalGrid**. Everything
+here is fixture-backed and public-safe: no secrets, no tenant identifiers, no
+customer data, and no live vendor calls unless a proof is explicitly opted in.
 
-SignalGrid connects the systems a building already runs — access control,
-identity, device management, location, applications and ticketing — into one
-grid that decides and, where a system of record permits it, acts on the person's
-behalf. One credential the person already carries takes them through door,
-device, room and app: the identity is continuous, and the fragmentation lives in
-the systems, not the person. A decision is not the end of the work — it is the
-trigger for a cascade (environment, workflow, verification, and escalation when
-reality does not match), recorded as a reconstructable Decision Envelope with an
-`allow` · `step-up` · `restrict` · `deny` verdict.
+## What SignalGrid is
 
-**The law that outranks the rest: the worker never sees SignalGrid.** It succeeds
-only by removing a step, never by adding one. Missing or stale signals tighten
-the decision, never loosen it, and on first contact with any source system it
-reads before it writes.
+[`docs/PURPOSE.md`](docs/PURPOSE.md) owns the product sentence (DR-020); this
+README references it and does not restate it. No category label is ratified — every
+earlier label is retired, and this file does not coin a new one.
 
-Nothing here is deployed. The grid compounds — every signal it absorbs sharpens
-the decisions it already makes — but only after a live room; in this repository
-every signal is a public-safe fixture. The first commercial wedge is Microsoft
-Entra + Intune with one healthcare shared-device workflow, and healthcare is the
-first vertical, not the product.
+Inside a host app the mechanism is the Assist gate <!-- framing:mechanism -->:
+the host asks whether a workflow may proceed and receives one of four verdicts,
+`allow` / `step_up` / `restrict` / `deny` (the exact wire vocabulary lives in
+[`lib/signalgrid-core/src/policy.ts`](lib/signalgrid-core/src/policy.ts)),
+wrapped in a reconstructable `DecisionEnvelope`. The gate is deterministic —
+same normalised inputs and policy version, same verdict — and fail-closed: a
+missing, stale or unreachable signal raises the assurance required, never
+lowers it. End users never see SignalGrid; they use their own host app.
 
-[`docs/PURPOSE.md`](docs/PURPOSE.md) is canonical (DR-020). This README references
-it and does not restate it. See
-[What SignalGrid Does Today](docs/WHAT_SIGNALGRID_DOES_TODAY.md) for the exact
-implemented-vs-candidate boundary.
+What it is not (CLAUDE.md golden rules 3 and 4):
 
-## Quick start — three rungs, easiest first
+- **Not an MDM.** An app cannot grant device access, restrict other apps, make
+  itself non-removable or self-kiosk. Those are OS/MDM capabilities on a
+  supervised device; Fleet is the MDM used in the lab (`fleet/`).
+- **Not domain safety.** Patient lookup, clinical guidelines and every other
+  vertical rule belong in the host app. Nothing industry-specific enters the
+  core.
+- **Not on-device enforcement proven from a simulator.** A simulator cannot be
+  MDM-enrolled, so nothing run on one says anything about enforcement.
+- **Not a system of record.** IAM, UEM, MDM, ITSM, SIEM and NAC stay
+  authoritative; SignalGrid reads before it writes and delegates action.
 
-Every rung runs the same deterministic decision engine on public-safe fixtures;
-pick the lightest one that answers your question. There is deliberately nothing
-heavier on this ladder — Kubernetes/Helm is a bounded packaging task the day a
-partner requires it, and not before (the reasoning is recorded in
-[`docs/INTAKE_LEDGER.md`](docs/INTAKE_LEDGER.md), row 87).
+## Repository layout
 
-1. **Open a file — zero install.**
-   [`docs/room-entry-console.html`](docs/room-entry-console.html) and
-   [`docs/fabric-console.html`](docs/fabric-console.html) are self-contained
-   pages that run fully offline in any browser, phone included: scenarios in,
-   allow / step-up / restrict / deny out, with the evidence behind each call.
-   Nothing to install, nothing leaves the page.
+A pnpm workspace (`pnpm-workspace.yaml`: `lib/*`, `artifacts/*`, `scripts`),
+Node 22, TypeScript project references. Package one-liners are derived from
+the tree; [`docs/REPO_LAYOUT.md`](docs/REPO_LAYOUT.md) carries the full table.
 
-2. **One process — Node only.**
-   ```bash
-   pnpm install && PORT=8080 pnpm --filter @workspace/api-server run dev
-   ```
-   Builds and serves the real `/v1` decision API plus the console at
-   `http://localhost:8080/console` — fixture-backed, no database, no external
-   calls. (`PORT` is required on purpose: the server refuses to guess.)
+| Path | What it is |
+| --- | --- |
+| `lib/` | Source-only `@workspace/*` packages — the decision fabric (see below). |
+| `artifacts/api-server` | The Node control plane and `/v1` decision API; the product surface. |
+| `artifacts/signalgrid-app` | The operator console, bound to the served `/v1` API. |
+| `artifacts/signalgrid-review` | The zero-network review deck (demo-only per the launch profile). |
+| `artifacts/signalgrid-web` | The public website source. |
+| `artifacts/signalgrid-desktop` | The desktop-shaped operator console (Vite web app). |
+| `artifacts/signalgrid-mobile-pwa` | The mobile PWA surface. |
+| `artifacts/mcp-server` | The read-only MCP gateway ([`docs/MCP_SECURITY_MODEL.md`](docs/MCP_SECURITY_MODEL.md)). |
+| `artifacts/*` (data) | Committed records, not packages: `lane-messages`, `sim-requests`, `sim-results`, `live-evidence`, `live-captures`, `api-collection` and `lab-collections` (Bruno), `agent-heartbeats`, `outreach-log`, `sbom`, `scanner-comparison`, `connector-emulator`, `build-loop`, `sync` (generated manifests and pins). |
+| `scripts/` | Proof harnesses (`pnpm run proof:*`), the gate suite, `scripts/preflight.mjs`, `scripts/verify-breadth.mjs`, the lane and simulation tooling. |
+| `native/ios` | Two apps: `EnterpriseShell` (the host-app reference with the gate inside) and `SignalGridMobile` (`SignalGridOperator` + `WardlinkDemo`). |
+| `native/android`, `native/desktop` | Kotlin and Rust/Tauri Assist clients; deferred surfaces, kept and CI-built. |
+| `native/shared` | The one wire-conformance case set every client must agree on. |
+| `firmware/dock` | SmartDock firmware core (Rust, `no_std`): sensor readings to a custody event. A deferred surface. |
+| `docs/` | Product, design and operating docs — the de-facto PRD. Start at [`docs/INDEX.md`](docs/INDEX.md). |
+| `third_party/` | Vendored developer tooling (a Claude Code skill pack); not product code, not shipped. |
+| `config/` | Tier environment examples (`config/tiers`) and the example grid config (`config/grid`). |
+| `fixtures/`, `fleet/`, `tests/`, `tools/` | Public-safe Graph fixtures; example Fleet config; harvested security test specs and load tests; the self-contained room-console and evidence-coverage pages. |
+| `site/`, `docker/`, `docker-compose.*.yml` | GitHub Pages landing, nginx config, and the compose stacks CI smoke-tests. |
+| `.github/workflows` | Review Hub CI, breadth lane, Apple lane, Android, desktop, firmware, supply chain, CodeQL, Pages. |
 
-3. **One command — production-shaped.**
-   ```bash
-   docker compose -f docker-compose.prod.yml up -d --build --wait
-   ```
-   The API plus a durable Postgres audit ledger, health-gated, fixture-safe by
-   default — no live vendor call unless `SIGNALGRID_LIVE_INTEGRATIONS=true` is
-   set explicitly. This exact stack is smoke-tested in CI on both Docker and
-   Podman on every push.
+`lib/` grouped by role (all 35 are listed in `docs/REPO_LAYOUT.md`):
 
-## The operating model: managed as code (GitOps)
+| Group | Packages |
+| --- | --- |
+| Decision core | `signalgrid-core`, `signalgrid-simulator`, `orchestration`, `posture-composition`, `incident-playbook`, `self-audit`, `reliability`, `verdict-attestation` |
+| Contract | `api-spec` (`lib/api-spec/v1-openapi.yaml`), `api-zod`, `api-client-react`, `event-contract` |
+| Identity and step-up | `enterprise-auth`, `webauthn`, `pim-activation`, `dual-control` |
+| Connectors and evidence | `integrations`, `integration-bridge`, `fleet-connector`, `ddm-connector`, `signal-discovery`, `signal-radar`, `location`, `facility-trust-graph` — most families are deferred; see the launch profile |
+| Flows and workflows | `flows`, `app-workflows`, `work-context`, `handoff-sim`, `room-sim`, `recommendations`, `adaptive-proposals`, `iac` ([`docs/IAC_GITOPS.md`](docs/IAC_GITOPS.md)) |
+| Persistence and control plane | `persistence`, `audit`, `control-plane` |
 
-SignalGrid is driven the way modern platform teams run everything else —
-**declaratively, in version control, through pull requests**, not by clicking
-through an MDM console. Device configurations, compliance policies, software
-packages, and the decision rules that gate them live as version-controlled files;
-changes roll out through review and approval; and the system continuously checks
-that the fleet still matches what Git declares (drift detection). This is
-Infrastructure-as-Code / GitOps for endpoints, and it is the primary way
-SignalGrid is meant to be operated.
+## How to run it
 
-What makes it SignalGrid's IaC rather than a generic Terraform/Ansible pipeline
-is two things only a correlated decision layer adds:
+```bash
+pnpm install --frozen-lockfile                          # Node 22, pnpm (see packageManager)
+PORT=8080 pnpm --filter @workspace/api-server run dev   # /v1 API + console at /console; PORT is required
+pnpm run dev:simulator                                   # review UI + API together (5173 / 5174)
+pnpm run proof:signalgrid-simulator                      # one proof; every proof is a proof:* script
+pnpm run typecheck && pnpm run review:invariants         # the two cheapest gates
+```
 
-1. **The apply is trust-gated.** A declared change rolls out *through the decision
-   fabric* — an apply is refused unless a live decision returns `allow` (a
-   `restrict` / `deny` / fail-closed `unknown` blocks it), on top of a recorded
-   human approval. A rollout can never apply itself.
-2. **Drift is a signal.** The gap between declared and observed fleet state feeds
-   the self-audit checklist and the posture engine, so configuration drift
-   degrades trust the same way a missing security signal does.
+The api-server runs without a database; fixtures back every decision. The
+in-browser consoles ([`docs/room-entry-console.html`](docs/room-entry-console.html),
+[`docs/fabric-console.html`](docs/fabric-console.html)) need no install at all
+and are demo surfaces, not shipping product.
 
-Fleet, Microsoft Intune, and Jamf are the declarative **backends** SignalGrid
-plans, gates, and drift-checks — it complements a Fleet GitOps repo or a
-Terraform+Intune module, and never competes with one. Engine:
-[`lib/iac`](lib/iac) · proof: `pnpm run proof:iac` (67 checks) · fixture status:
-`GET /api/cp/v1/iac` · full write-up: [`docs/IAC_GITOPS.md`](docs/IAC_GITOPS.md).
+**The harness and the lanes.**
 
-## Live demo — build the grid
+```bash
+./validate-sim-macos.sh          # macOS: every proof:* natively; read "== SUMMARY: N passed, M failed ==" and compare M to 0
+node scripts/preflight.mjs       # the per-push gate lane CI mirrors (--quick skips heavy builds)
+pnpm run verify:breadth          # deferred connector families + doctrine proofs; its own CI job
+```
 
-An interactive, public-safe console with one idea: **you add signals and workflows; the grid evaluates more of what happens.** Every signal lets the grid *see* more; every workflow lets it *assess* more. Toggle signals and workflows on and watch coverage of illustrative situations (lost tablet, compromised sign-in, PHI exfiltration, unmanaged access, config drift, tailgating) climb — each caught only when its workflow is active and the signals it needs are wired, then **evaluated** by the grid, which returns allow / step-up / restrict / deny together with the evidence behind it. SignalGrid decides and explains; it does not act. Carrying out a response belongs to the host app and to the systems of record, and any high-risk response is simulated or approval-required. The more you add, the more of the organization's activity the grid can reason about — not control. It mirrors the **real fusion + orchestration logic** ([`lib/posture-composition`](lib/posture-composition)) on illustrative data — no live tenant, no action taken — the same logic proven end-to-end by `pnpm run proof:fabric-scenario`.
+The harness enumerates proofs only; preflight also runs the non-proof gates
+(figure guard, launch profile, parity checks, registries, publication
+boundary). Run both before pushing anything that touches gates, docs figures
+or the launch surface. Details: [`docs/CI_AND_VALIDATION.md`](docs/CI_AND_VALIDATION.md).
 
-- Source: [`docs/fabric-console.html`](docs/fabric-console.html) (self-contained, offline)
-- Published at `https://signalgrid.app/fabric.html` once the [Pages workflow](.github/workflows/pages.yml) is run
+**Toolchain wrinkle.** `pnpm-workspace.yaml` strips every native binary except
+linux-x64-gnu, so `pnpm run build` (the Vite web build) runs only on linux-x64
+or in CI; `validate-sim-macos.sh` supplies the darwin binaries for its own run.
+Shell scripts must stay bash 3.2 compatible (see CLAUDE.md).
 
-## What this repository is
+**Postgres proofs.** `proof:*-pg`, `proof:db-role-split` and
+`proof:backup-restore` DROP the tables they test and re-password a cluster-wide
+role, so they refuse (exit 1, never a silent skip) unless
+`SIGNALGRID_DB_DISPOSABLE=1` declares the whole cluster at `DATABASE_URL`
+throwaway. `pnpm run verify:docker` provisions such a cluster itself. See
+[`docs/BACKUP_AND_RESTORE.md`](docs/BACKUP_AND_RESTORE.md).
 
-**DanFashauer/SignalGrid-Review-Hub** is the public working surface for SignalGrid pre-production planning, post-launch review, public visibility, and external validation. It is where reviewers can understand the product direction, validate the story, inspect public roadmap assumptions, and discuss integration priorities without requiring access to the protected core source repository.
+**Touched the api-server?** `pnpm --filter @workspace/api-server run test:api`
+must print every assertion green (`N/N`). Changed a package's dependencies?
+`pnpm install --lockfile-only` and commit `pnpm-lock.yaml` — `.githooks/pre-push`
+refuses a mismatched lockfile.
 
-Current stage: **concept / pre-dev — a public, buildable prototype and review/validation surface**, not production software. This consolidated monorepo is the current source of truth; the earlier `DanFashauer/DEV` and `DanFashauer/SignalGrid` (beta) repos are **legacy (pre-dev / concept) and superseded by this repo**. It carries a **dev → alpha → beta → prod** tier layout. See [`docs/REPO_LAYOUT.md`](docs/REPO_LAYOUT.md) for the package/branch structure, the legacy-repo mapping, and the promotion pipeline.
+## How it is proven
 
-## Runnable simulator foundation
+The ladder, cheapest first; stop at the first failure:
 
-Review Hub includes a local SignalGrid real-life simulator foundation. It uses deterministic fixtures to show how identity, device state and compliance, device posture, operational health, DockBridge/shared-device events, workflow ownership, integration health, decisions, routed actions, and audit evidence fit together. RTLS/location appears in the fixtures as a **roadmap** signal family, not a decision input today — see docs/LAUNCH_PROFILE.md for the implemented-vs-deferred boundary.
+| Rung | Command | What green means |
+| --- | --- | --- |
+| 1 | `pnpm run typecheck` | The project references compile. |
+| 2 | `pnpm run review:invariants` | No `Date.now()`/`Math.random()` in decision paths; fail-closed and truthful-status invariants hold. |
+| 3 | `pnpm run proof:signalgrid-core` (any `proof:*` script) | One fixture-backed proof passes with its printed check count. |
+| 4 | `pnpm --filter @workspace/api-server run test:api` | The served `/v1` surface, every assertion. |
+| 5 | `node scripts/preflight.mjs` | Every registered gate; `scripts/check-preflight-ci-parity.mjs` fails CI if a gate is registered but unwired. Mirrors the CI jobs that need no external service — Postgres, the compose smoke and the secret scan run only in CI. |
+| 6 | `pnpm run verify:breadth` | The deferred families and doctrine proofs, held disjoint from preflight. |
 
-Local simulator entry points:
+**What green does not mean.** A gate checks an invariant; it does not mean
+the code has been read. `scripts/check-review-coverage.mjs` prints review
+coverage beside every green preflight for exactly that reason, and a green
+harness is narrower than a green preflight. A proof that refuses (a missing
+server, a non-disposable database) exits 1 by name; nothing skips silently.
 
-- Review Hub UI: `http://localhost:5173`
-- API health: `http://localhost:5174/api/healthz`
-- Static integrations: `http://localhost:5174/api/integrations`
-- Simulator scenarios: `http://localhost:5174/api/simulator/scenarios`
-- Simulator proof: `pnpm run proof:signalgrid-simulator`
-- Product core proof (tenancy, policy, decision, evidence, audit): `pnpm run proof:signalgrid-core`
-- API contract + integration tests: `pnpm run proof:api-contract` and `pnpm run test:api`
-- Product `/v1` API (works without a database): `POST /api/v1/decisions/evaluate` with a demo Bearer key
-- Operator Console decision trace: the "Operator Console" section of the Review Hub UI
-- Simulator dev suite: `pnpm run dev:simulator`
+The fail-closed doctrine, in three lines:
 
-The simulator is public-safe: no credentials, no tenant IDs, no customer data, no real Microsoft Graph calls, and no real vendor API calls.
+1. Unknown, stale or unreachable raises assurance; it never lowers it.
+2. The same inputs and policy version always produce the same verdict.
+3. Status is reported as measured — a failing gate is failing, and a claim
+   that cannot be checked is not made.
 
-## What this repository is not
+**Provenance.** Every `artifacts/sim-results/*.json` records the commit and
+`workingTreeClean` (untracked files included) sampled *before* the run by
+`scripts/mac/run-requests.mjs`; a result from a dirty tree says so. Live
+evidence (`artifacts/live-evidence/mac-run.json`) can be refreshed only by the
+Mac lane's `pnpm run verify:all --require-mcp --emit-evidence`, never from CI.
 
-This repository is not the production SignalGrid core, not a customer deployment package, and not a compliance-certified system. It does not replace existing enterprise systems such as IAM, UEM, DEX, RMM, monitoring, observability, SIEM, ITSM, MDM, or NAC. It does not claim current partner certification, partnership, or alliance status with any listed vendor.
+## How the repository is operated
 
-## Repository roles
+**The layered model (DR-024, owner-directed).** Ponytail runs on top as the
+minimalism lens — its cut list is executed, bounded by its own never-cut rules
+and this repository's gates. ECC runs second (correctness, security, test
+discipline; it advises, and only the gates make a run green). The owner's own builds are scanned by
+both. The repository's independent scan then covers what neither targets:
+fail-closed inversions, contract drift, runtime truth, claim discipline. Last,
+the findings converge and are built, gated (`preflight` + `verify:breadth`),
+PR'd and merged. The owner is hands-off except for approvals and access.
+Installers: `pnpm run ponytail:install`, `pnpm run ecc:install` (pinned, opt-in,
+hooks off).
 
-| Repository                          | Role going forward                                                             |
-| ----------------------------------- | ------------------------------------------------------------------------------ |
-| `DanFashauer/SignalGrid`            | **Retired.** Legacy beta/POC, superseded by this repo (see line above and `docs/REPO_LAYOUT.md`). Not an active core. |
-| `DanFashauer/SignalGrid-Review-Hub` | Public pre-production and post-launch review/validation surface.               |
-| `DanFashauer/DEV`                   | Legacy Alpha repository and future Home/profile transition area after cleanup. |
-| `DanFashauer/Home`                  | Future personal homepage, resume, and founder profile if created separately.   |
+**Two lanes, one repository.** A cloud lane (decision fabric, proofs, docs)
+and a Mac lane (iOS, the harness, benches, hardware operations) work in
+parallel and cannot message each other; git is the bus. Protocol:
+[`docs/LANE_COORDINATION.md`](docs/LANE_COORDINATION.md). Channels:
 
-## Relationship to the private SignalGrid core
+| Channel | Commands | Rule |
+| --- | --- | --- |
+| Lane messages (`artifacts/lane-messages/`) | `pnpm run lane:inbox` first every session; `lane:send`, `lane:ack` | Only the addressee closes a message; the push is the delivery. |
+| Simulation requests (`artifacts/sim-requests/` → `artifacts/sim-results/`) | `pnpm run sim:run-requests` on the Mac; `node scripts/check-sim-requests.mjs` for what is owed | A refusal or skip never closes a request. See [`docs/LIVE_SYNC_LOOP.md`](docs/LIVE_SYNC_LOOP.md). |
+| Session state | `pnpm run loop:state`; [`docs/agent/LOOP.md`](docs/agent/LOOP.md) | Read at start, update last. |
 
-**The public/private boundary is an OPEN DECISION, not a settled arrangement, and this paragraph used to describe it as settled in a way that contradicted the rest of this same file.** `DanFashauer/SignalGrid` is retired — stated four paragraphs above, and in `docs/REPO_LAYOUT.md`, which this README links as the canonical reference. It is not a protected production core, because no such active repository currently exists: `docs/PRIVATE_CORE_HANDOFF.md` is a blueprint, not an implementation.
+**Memory substrate (DR-026).** Neural Memory is installed as an MCP server
+only — pinned, hooks off, store outside the tree (`pnpm run
+neural-memory:install`). It holds operating memory (a gate's quirk, a lane's
+state); the committed docs and decision records remain the memory of record,
+and nothing in `lib/*`, the api-server or any proof may read it.
 
-So today THIS repository is the single canonical source, and it contains product-shaped runtime logic — real OIDC verification (`lib/enterprise-auth`), durable Postgres persistence (`lib/persistence`, `lib/audit`), gated live vendor transports, and the deterministic decision core. Anyone assessing IP exposure should assess it here.
+**Claim registries.** `docs/agent/FALSE_CLAIMS.json` holds every claim that
+proved false, with the refutation; `pnpm run check:false-claims` fails if a
+document re-states one. Before writing that anything is absent, run
+`pnpm run check:absence <topic>` and read the matches yourself — two in-repo
+documents have declared a surface missing while it sat in the tree.
+[`docs/DECISION_RECORDS.md`](docs/DECISION_RECORDS.md) records each call with
+its evidence and reversal path.
 
-Choosing between a public-core model (proprietary value in hosted operations, connectors and implementation) and an open-spec-plus-private-SaaS model is a founder decision that has not been made. Until it is, no document should assert that protected implementation lives elsewhere.
+## Status, honestly
 
-## Relationship to DEV and future Home
+Scope is held as data in `scripts/launch-profile.mjs` and published by
+`pnpm run proof:launch-profile`; `scripts/check-launch-profile.mjs` fails the
+build if the profile and the tree disagree in either direction. Read
+[`docs/LAUNCH_PROFILE.md`](docs/LAUNCH_PROFILE.md) before reading any of this
+as readiness.
 
-`DanFashauer/DEV` is treated as a legacy Alpha source of learnings and a future personal Home/profile repository after SignalGrid materials are migrated, summarized, or archived. Review Hub preserves the SignalGrid-specific public strategy so DEV can eventually become a cleaner personal or portfolio surface.
+**Limited GA is deliberately narrow:** one read-only Entra/Intune connector
+(`graph`) with the device-management-health and local-authority families; the
+three signal kinds they produce; the `/v1` decision, evidence, audit, context,
+metrics, connector-read and policy-read paths; and three app surfaces —
+`api-server`, `signalgrid-app`, and `EnterpriseShell` as the host-app
+reference. Everything else in the tree is `deferred` (real, gated, proven,
+staying — not shipping), `demo_only`, or `internal`. The counts per status are
+the `figures=` line that proof prints; do not quote them from memory.
 
-## Current priorities
+**Declared gaps** (`GAPS` in `scripts/launch-profile.mjs`, verified
+2026-09-02 by running the proof — four, each with a `closedWhen` condition the
+gate evaluates against source):
 
-1. Preserve Alpha learnings.
-2. Validate public positioning.
-3. Prepare the first integration proof.
-4. Document the mobile/operator workflow direction.
-5. Support design-partner conversations.
+| Gap | What is missing |
+| --- | --- |
+| `device-management-health` | The Graph transport exists but is not yet the default; the launch connector set is `graph` alone until it flips. |
+| `step-up-answerability` | Limited GA runs in shadow mode: the gate can return `step_up`, and no launch route can answer one. |
+| `runtime-launch-status` | No served report of enforced vs observed vs simulated per signal kind. |
+| `non-demo-core-constructor` | The served core is still the seeded demo factory; it does not yet decide about a customer's own estate. |
 
-## Level 10 review path
+Nothing here is deployed; the grid compounds only after a live room. Pilot
+terms and what a pilot receives: [`docs/PILOT_PACKAGE.md`](docs/PILOT_PACKAGE.md).
+The current gate verdict, generated rather than written: [`docs/STATUS.md`](docs/STATUS.md).
 
-For a fast public-safe review, start with the [Executive One-Pager](docs/EXECUTIVE_ONE_PAGER.md), then review the [Strategic Buyer / Partner Pitch Pack](docs/research/STRATEGIC_BUYER_PARTNER_PITCH_PACK.md), [Level 10 Completion Matrix](docs/LEVEL_10_COMPLETION_MATRIX.md), [Level 10 Autopilot Runbook](docs/LEVEL_10_AUTOPILOT_RUNBOOK.md), Review Hub dashboards, deterministic proof evidence, [Real-World Testing Readiness Plan](docs/research/REAL_WORLD_TESTING_READINESS_PLAN.md), and [Company Operating Pack](docs/COMPANY_OPERATING_PACK.md). The recommended owner flow is: understand the one-pager, inspect proofs, choose the relevant pitch/demo path, confirm public-safety guardrails, and approve only YELLOW/RED or strategic decisions.
+## Where to read next
 
-## Documentation map
-
-Start with [`docs/INDEX.md`](docs/INDEX.md) for the complete public review package. The honest end-to-end launch sequence — from today's review surface to demo, design partner, paid pilot, and production SaaS — is in [`docs/REALISTIC_LAUNCH_PLAN.md`](docs/REALISTIC_LAUNCH_PLAN.md), and the deterministic, public-safe product core that realizes its tenancy/connector/decision/evidence/audit loop (with a `/v1` API and in-browser Operator Console) is documented in [`docs/PRODUCT_CORE_FOUNDATION.md`](docs/PRODUCT_CORE_FOUNDATION.md), with a [data model](docs/PRODUCT_DATA_MODEL.md), [threat model](docs/PRODUCT_CORE_THREAT_MODEL.md), [security-controls matrix](docs/SECURITY_CONTROLS_MATRIX.md), [`/v1` OpenAPI spec](lib/api-spec/v1-openapi.yaml), a [run & go-live runbook](docs/RUN_AND_GO_LIVE.md), a [private-core hand-off spec](docs/PRIVATE_CORE_HANDOFF.md) for building the production core, the [hardware+software ecosystem flow & Resolution Assistant](docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md) design, and the [DockBridge product connector](docs/DOCKBRIDGE_PRODUCT_CONNECTOR.md) (dock/custody/charging/tamper signals in the decision loop). The v0.2 product-foundation plan starts with [`docs/research/SIGNALGRID_V0_2_READINESS_PLAN.md`](docs/research/SIGNALGRID_V0_2_READINESS_PLAN.md), [`docs/V0_2_EPIC_BACKLOG.md`](docs/V0_2_EPIC_BACKLOG.md) (archived record), [`docs/MICROSOFT_CONNECTOR_FIRST_PATH.md`](docs/MICROSOFT_CONNECTOR_FIRST_PATH.md), [`docs/SECURE_TENANCY_FOUNDATION_PLAN.md`](docs/SECURE_TENANCY_FOUNDATION_PLAN.md), [`docs/PILOT_READINESS_CRITERIA.md`](docs/PILOT_READINESS_CRITERIA.md), and [`docs/research/PRODUCT_REALITY_CHECKLIST.md`](docs/research/PRODUCT_REALITY_CHECKLIST.md). Continue with [`docs/INDEX.md`](docs/INDEX.md) including the superseded Operational Trust Orchestration positioning (renamed to Shared-Device Trust Gateway per DR-004), the simulator foundation, lineage, Alpha parity, milestone strategy, mobile/platform direction, integration catalog, Signal Source Catalog, the first Intune / Entra posture proof, Operational Health / DEX layer strategy, ecosystem positioning, configuration remediation guardrails, partner strategy, roadmap to private core, and reviewer checklist. The superseded Operational Trust Orchestration category exploration (renamed to Shared-Device Trust Gateway per DR-004) lives in [`docs/OPERATIONAL_TRUST_ORCHESTRATION.md`](docs/OPERATIONAL_TRUST_ORCHESTRATION.md). The short buyer-facing answer to “why not just use existing IAM/UEM/ITSM tools?” lives in [`docs/ECOSYSTEM_POSITIONING.md`](docs/ECOSYSTEM_POSITIONING.md), the first concrete posture-signal proof is in [`docs/INTUNE_ENTRA_POSTURE_PROOF.md`](docs/INTUNE_ENTRA_POSTURE_PROOF.md), and the cloud-first connector emulator is documented in [`docs/CLOUD_CONNECTOR_EMULATOR_HARNESS.md`](docs/CLOUD_CONNECTOR_EMULATOR_HARNESS.md) with scenario coverage in [`docs/CONNECTOR_EMULATOR_SCENARIOS.md`](docs/CONNECTOR_EMULATOR_SCENARIOS.md) and the dashboard guide in [`docs/CONNECTOR_EMULATOR_REVIEW_DASHBOARD.md`](docs/CONNECTOR_EMULATOR_REVIEW_DASHBOARD.md). Hardware custody strategy lives in [`docs/HARDWARE_PARTNER_MATRIX.md`](docs/HARDWARE_PARTNER_MATRIX.md), [`docs/research/BEAM_MOBILE_PARTNER_CANDIDATE_BRIEF.md`](docs/research/BEAM_MOBILE_PARTNER_CANDIDATE_BRIEF.md), [`docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md`](docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md), [`docs/CREDENTIAL_READER_SIGNAL_MODEL.md`](docs/CREDENTIAL_READER_SIGNAL_MODEL.md), and [`docs/SMART_LOCKER_IDENTITY_CUSTODY_MODEL.md`](docs/SMART_LOCKER_IDENTITY_CUSTODY_MODEL.md). Review Hub automation is described in [`docs/CI_AND_VALIDATION.md`](docs/CI_AND_VALIDATION.md), the Autopilot Control Plane is in [`docs/SIGNALGRID_AUTOPILOT_CONTROL_PLANE.md`](docs/SIGNALGRID_AUTOPILOT_CONTROL_PLANE.md), phase PR evidence is in [`docs/PHASE_PR_EVIDENCE_BOT.md`](docs/PHASE_PR_EVIDENCE_BOT.md), the buyer/partner readiness pack is in [`docs/research/BUYER_PARTNER_READINESS_PACK.md`](docs/research/BUYER_PARTNER_READINESS_PACK.md), the strategic buyer/partner pitch pack is in [`docs/research/STRATEGIC_BUYER_PARTNER_PITCH_PACK.md`](docs/research/STRATEGIC_BUYER_PARTNER_PITCH_PACK.md), the Level 10 completion matrix is in [`docs/LEVEL_10_COMPLETION_MATRIX.md`](docs/LEVEL_10_COMPLETION_MATRIX.md), the Level 10 Autopilot runbook is in [`docs/LEVEL_10_AUTOPILOT_RUNBOOK.md`](docs/LEVEL_10_AUTOPILOT_RUNBOOK.md), the outbound-ready pitch execution pack is in [`docs/research/PITCH_EXECUTION_PACK.md`](docs/research/PITCH_EXECUTION_PACK.md), the social media pre-announcement packet is in [`docs/research/SOCIAL_MEDIA_PREANNOUNCEMENT_PACKET.md`](docs/research/SOCIAL_MEDIA_PREANNOUNCEMENT_PACKET.md), target categories are in [`docs/research/PITCH_TARGET_CATEGORIES.md`](docs/research/PITCH_TARGET_CATEGORIES.md), the target buyer/partner matrix is in [`docs/research/TARGET_BUYER_PARTNER_MATRIX.md`](docs/research/TARGET_BUYER_PARTNER_MATRIX.md), partnership and acquisition paths are in [`docs/research/PARTNERSHIP_AND_ACQUISITION_PATHS.md`](docs/research/PARTNERSHIP_AND_ACQUISITION_PATHS.md), founder-control requirements are in [`docs/research/FOUNDER_CONTROL_REQUIREMENTS.md`](docs/research/FOUNDER_CONTROL_REQUIREMENTS.md), company operating strategy is in [`docs/COMPANY_OPERATING_PACK.md`](docs/COMPANY_OPERATING_PACK.md), real-world testing readiness is in [`docs/research/REAL_WORLD_TESTING_READINESS_PLAN.md`](docs/research/REAL_WORLD_TESTING_READINESS_PLAN.md), the phase automation loop is in [`docs/PHASE_AUTOMATION_ORCHESTRATOR.md`](docs/PHASE_AUTOMATION_ORCHESTRATOR.md), the archived phase backlog is in [`docs/PHASE_BACKLOG.md`](docs/PHASE_BACKLOG.md) (the live queue is [`docs/BUILD_BACKLOG.md`](docs/BUILD_BACKLOG.md)), intake classification is in [`docs/INTAKE_CLASSIFICATION_GUIDE.md`](docs/INTAKE_CLASSIFICATION_GUIDE.md), merge-lane policy is in [`docs/GREEN_YELLOW_RED_MERGE_POLICY.md`](docs/GREEN_YELLOW_RED_MERGE_POLICY.md), the reusable automation phase prompt is in [`docs/AUTOMATION_PHASE_TEMPLATE.md`](docs/AUTOMATION_PHASE_TEMPLATE.md), validation commands are in [`docs/VALIDATION_COMMANDS.md`](docs/VALIDATION_COMMANDS.md), repo-level agent guardrails are in [`AGENTS.md`](AGENTS.md), Microsoft Graph/MCP sequencing is in [`docs/MICROSOFT_GRAPH_AND_MCP_STRATEGY.md`](docs/MICROSOFT_GRAPH_AND_MCP_STRATEGY.md), Apple open-source platform strategy is in [`docs/research/APPLE_OPEN_SOURCE_PLATFORM_STRATEGY.md`](docs/research/APPLE_OPEN_SOURCE_PLATFORM_STRATEGY.md), and visual-code process is in [`docs/research/VISUAL_CODE_ASSET_STRATEGY.md`](docs/research/VISUAL_CODE_ASSET_STRATEGY.md).
+- [`docs/INDEX.md`](docs/INDEX.md) — the tiered entry points ("your first hour, by who you are") and the full catalog.
+- [`docs/WHAT_SIGNALGRID_DOES_TODAY.md`](docs/WHAT_SIGNALGRID_DOES_TODAY.md) — the implemented-vs-candidate boundary for a technical evaluator.
+- [`docs/CI_AND_VALIDATION.md`](docs/CI_AND_VALIDATION.md) — every CI lane and what a green run does and does not establish.
+- [`docs/DECISION_RECORDS.md`](docs/DECISION_RECORDS.md) — the calls, the evidence, the reversal paths.
+- [`docs/BUILD_BACKLOG.md`](docs/BUILD_BACKLOG.md) — the live queue.
+- Security and evidence: [`docs/SECURITY_CONTROLS_MATRIX.md`](docs/SECURITY_CONTROLS_MATRIX.md), [`docs/RELEASE_EVIDENCE.md`](docs/RELEASE_EVIDENCE.md), [`docs/SECURITY_REVIEW_RUNBOOK.md`](docs/SECURITY_REVIEW_RUNBOOK.md), [`docs/PUBLICATION_BOUNDARY.md`](docs/PUBLICATION_BOUNDARY.md), [`docs/PRODUCT_CORE_THREAT_MODEL.md`](docs/PRODUCT_CORE_THREAT_MODEL.md).
+- Agents and roles: `CLAUDE.md`, [`AGENTS.md`](AGENTS.md), [`docs/agent/ORG.md`](docs/agent/ORG.md), the skills under `.claude/skills/`.
 
 ## License
 
-Open source under the [MIT License](LICENSE). This public Review Hub is
-intentionally open — it contains public-safe fixtures, proofs, docs, and review
-apps, no secrets or protected core implementation. (Protected production-core
-implementation details remain in a separate private repository, as described
-above.)
+Open source under the [MIT License](LICENSE).
 
 ## Security
 
-Everything here is public-safe by design and defended in depth: a deterministic,
-fail-closed decision core; a CI safety gate (determinism, secret-pattern scan,
-spec/Postman coverage, live-integrations gated off by default); CodeQL, gitleaks,
-and a CycloneDX SBOM; and real WebAuthn step-up verification (exact-origin +
-User-Verification-required). See [SECURITY.md](SECURITY.md) to report a concern.
+See [SECURITY.md](SECURITY.md) to report a concern privately.
 
 ## Disclaimer
 
-SignalGrid Review Hub is not production-ready, not compliance-certified, and not a replacement for IAM, UEM, DEX, RMM, monitoring, observability, SIEM, ITSM, MDM, NAC, or other source systems. Remediation concepts are simulated, constrained, or operator-approved unless separately validated. No current partner certification, partnership, or alliance status is claimed.
+This is a public, pre-production review and validation surface. It claims no
+compliance attestation, no vendor alliance or endorsement, and no on-device
+enforcement; it does not stand in for IAM, UEM, MDM, DEX, RMM, SIEM, ITSM,
+NAC or any other system of record. Remediation is simulated, constrained or
+operator-approved unless separately validated.

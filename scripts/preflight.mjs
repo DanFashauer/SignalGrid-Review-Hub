@@ -89,6 +89,16 @@ const STEPS = [
   // PURPOSE.md is canonical (DR-019); current-truth surfaces reference it rather
   // than paraphrase it. Historical records keep their terminology.
   { name: "Product framing (current-truth surfaces reference PURPOSE.md)", cmd: ["node", "scripts/check-product-framing.mjs"] },
+  // Sibling of the docs↔proof figure guard, for the format that guard cannot read.
+  // `docs/architecture.html` said "12 dimensions" against a 17-member union for as
+  // long as nobody could date, because no gate in this repository read a docs HTML
+  // figure at all.
+  { name: "Docs-HTML figure guard self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-doc-html-figures.mjs", "--self-test"] },
+  { name: "Docs-HTML figures (a rendered page may not contradict a derived figure)", cmd: ["node", "scripts/check-doc-html-figures.mjs"] },
+  // Two documents stated the four tier branches as live after all four were pruned.
+  // Offline by design: it compares prose to the tracked prune record, not to origin.
+  { name: "Documented-branch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-documented-branches.mjs", "--self-test"] },
+  { name: "Documented branches (a doc may not state a pruned branch as existing)", cmd: ["node", "scripts/check-documented-branches.mjs"] },
   // Sibling of the gate above, one question further in: orphans ask whether a reader
   // can REACH a document, this asks whether the document points anywhere real. A
   // citation that resolves to nothing reads as evidence and is not.

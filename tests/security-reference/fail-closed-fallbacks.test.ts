@@ -70,22 +70,22 @@ describe('fail-closed fallback hardening', () => {
     );
   });
 
-  it('requires explicit encryption key for ITSM credential encryption', async () => {
-    vi.stubEnv('ITSM_ENCRYPTION_KEY', '');
-    vi.stubEnv('ENCRYPTION_KEY', '');
-
-    const { createITSMConfig } = await import('@/lib/integrations/itsm/store');
-
-    await expect(
-      createITSMConfig({
-        name: 'ServiceNow Prod',
-        vendor: 'servicenow',
-        instanceUrl: 'https://acme.service-now.com',
-        credentials: {
-          username: 'admin',
-          password: 'secret',
-        },
-      })
-    ).rejects.toThrow('ITSM encryption key not configured');
-  });
+  // RETIRED 2026-09-02 — 'requires explicit encryption key for ITSM credential
+  // encryption'. It reached the guard through `createITSMConfig`, which 45cdecf
+  // (Ponytail cut 1) deleted from lib/integrations/src/integrations/itsm/store.ts
+  // as zero-importer CRUD; the symbol now exists nowhere in this repository, so
+  // the block named a door that is gone.
+  //
+  // The INVARIANT it encoded did not go with it, and that is why this is a
+  // retirement rather than a loss. `getEncryptionKey()` still throws
+  // 'ITSM encryption key not configured' (itsm/store.ts:141-143), and that exact
+  // refusal is already ported onto the live surface and EXECUTED on every push:
+  // `proof:itsm-credential-crypto` drives it through `__cryptoInternals.deriveKey`
+  // and asserts 'a missing key is refused' and 'an empty key is refused', plus the
+  // short-key refusals this block never covered.
+  //
+  // Per this directory's README rule — porting a spec onto the monorepo retires it
+  // here — the block is removed rather than re-pointed. The other two blocks above
+  // stay: `@/lib/utils/apiKeyAuth` has no counterpart in this tree at all, and the
+  // webhook signing-secret refusal (dispatch.ts:219) is live but unported.
 });

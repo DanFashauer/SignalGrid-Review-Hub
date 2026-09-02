@@ -22,7 +22,9 @@ the truth; what this page owes you is the shape:
   `scripts/check-preflight-ci-parity.mjs` fails CI when any gate registered in
   `scripts/preflight.mjs` is not wired into a workflow — so "the gate exists"
   and "CI runs it" cannot drift apart silently. The live gate count is the
-  parity checker's own output on every run (208 at last count).
+  parity checker's own output on every run — **read it there**. A figure used to
+  sit in this parenthesis; it was 48 short by 2026-09-02, in the one sentence on
+  the page whose whole point is that derived numbers do not get copied.
 
 The docs sanity job verifies that required public-review docs exist and checks for narrow, direct unsafe claims such as production-ready, replacement, partner, MFi certification, or autonomous production-remediation claims. It is not intended to block explicit disclaimers, guardrail language, or validation-command examples that document the scanner itself.
 

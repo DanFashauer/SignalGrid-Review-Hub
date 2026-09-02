@@ -43,13 +43,24 @@ them for the live codebase, without deleting any history.
 **Why you:** the default branch is the public face of the repo; which tier is
 "default" is a product decision, not something to guess.
 
-The promotion branches `dev` → `alpha` → `beta` → `prod` exist alongside the
-working base `SignalGrid_Alpha`. They **no longer track the current build** — all
-four are pinned to the `Merge PR #65` commit, while every PR since has merged into
-`SignalGrid_Alpha`. This section previously claimed otherwise; it was true when
-written and quietly stopped being true. Dispatch **Actions → Promote Tier** to see
-the live gap: its "Tier state" summary measures each branch's position rather than
-restating a number that would go stale the same way.
+**There is nothing to choose between any more, and that is the correction.** The
+promotion refs `dev`, `alpha`, `beta` and `prod` were **pruned** — all four sit in
+`artifacts/sync/merged-branches-to-prune.txt` (lines 4, 5, 63, 65, each at the same
+tip `7ee88ef`), and `docs/BRANCH_HYGIENE.md` gives the reason: they had not moved
+since 2026-07-15 and nothing in CI or the compose files referenced them, so as stale
+pointers they implied a promotion flow this repo does not run. `SignalGrid_Alpha` is
+the working base and the only long-lived ref. Verified 2026-09-02 with
+`git ls-remote --heads origin`.
+
+This section has now been corrected twice for the same class of error. It first
+claimed the four refs tracked the current build; the correction said they existed
+but were pinned to the `Merge PR #65` commit — accurate on the day it was written,
+and false once they were pruned. A pruned ref is recoverable in one command
+(`git push origin 7ee88ef:refs/heads/<name>`), so recreating the pipeline is still
+an owner decision; it is just no longer a decision about which EXISTING branch is
+default. Dispatch **Actions → Promote Tier** for live state: its "Tier state"
+summary prints `branch does not exist` for each missing tier rather than restating
+a number that would go stale the same way.
 
 > Separately, and **not** something you need to fix: this repository does not let
 > GitHub Actions open pull requests (*Settings → Actions → General → Workflow

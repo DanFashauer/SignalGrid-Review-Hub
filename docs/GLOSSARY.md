@@ -21,7 +21,13 @@ unreachable signal RAISES the assurance required, never lowers it — that
 asymmetry is the core doctrine.
 
 **Breadth freeze** — the standing rule that scope does not widen (no new
-verticals, connectors, platforms) without ratification. Currently v4. Its
+verticals, connectors, platforms) without ratification. It is enforced by the
+launch profile's classification bijection, whose revision is
+`LAUNCH_PROFILE_VERSION` in `scripts/launch-profile.mjs` — **v5** today, and read
+from there rather than typed here, because this line said "Currently v4" after
+DR-023 had already carried it to v5. **Not to be confused with the engineering
+freeze, which DR-021 lifted in full on 2026-08-31**: claim discipline and the
+classification bijection are unchanged and were never the freeze. Its
 purpose is not austerity; it is that every extra surface is another thing
 that can silently rot.
 
@@ -93,8 +99,9 @@ coordinate through committed artifacts, never through assumption.
 (`artifacts/lane-messages/`). The push is the delivery; only the addressee
 can close a message.
 
-**Launch profile** — the ratified (DR-005, v4) classification of every
-surface in the tree: what ships at launch, what is lab, what is deferred.
+**Launch profile** — the ratified classification of every
+surface in the tree (DR-005 ratified v4 in full; DR-023 carried it to v5, the
+revision `scripts/launch-profile.mjs` declares today): what ships at launch, what is lab, what is deferred.
 The gate fails when a real surface is unclassified.
 
 **Level 10** — a completion grade that appeared in early README drafts with
@@ -120,8 +127,12 @@ control; real enforcement needs a supervised device and an MDM. Claims
 otherwise are refused, not softened.
 
 **Preflight** — `node scripts/preflight.mjs`: the per-push gate lane CI
-mirrors (~35 gates beyond the proofs). Green preflight is WIDER than a
-green proof harness — see `CLAUDE.md`'s warning.
+mirrors, carrying far more than the `proof:*` suite. **No count is written
+here on purpose.** This entry said "~35 gates beyond the proofs" while
+`CI_AND_VALIDATION.md` said 208 and the parity checker printed a third number —
+three hand-typed figures for one derived quantity. The live figure is
+`scripts/check-preflight-ci-parity.mjs`'s own output, printed on every run.
+Green preflight is WIDER than a green proof harness — see `CLAUDE.md`'s warning.
 
 **Proof** — a `proof:*` script that exercises real behavior against fixtures
 and asserts outcomes. Proofs are never weakened, skipped, or deleted to

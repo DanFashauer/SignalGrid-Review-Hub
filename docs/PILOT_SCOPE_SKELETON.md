@@ -94,4 +94,8 @@ Tracked here so the skeleton cannot quietly read as ready:
 3. Retention durations for the pilot deployment's decision/audit data.
 4. Whether the graph transport default flips before or during the pilot (the
    `device-management-health` gap in `scripts/launch-profile.mjs`).
-5. Ratification of launch-profile v4 classifications (`docs/LAUNCH_PROFILE.md`).
+
+*A fifth item — "Ratification of launch-profile v4 classifications" — was listed
+here as OPEN until 2026-09-02. It was not open: DR-005 ratified v4 in full on
+2026-08-20, and the profile has since moved to v5 (DR-023). A decided question
+sitting on an open-decisions list is a false claim about what the owner still owes.*

@@ -330,9 +330,10 @@ function violationsIn(name, body) {
 const RETIRED_LABELS = /Zero[\s-]Trust orchestration|Operational Trust Orchestration|Shared-Device Trust Gateway/i;
 const RETIRED_OK = /retired|superseded|deprecat|renamed|former(ly)?|no longer|DR-004|historical|earlier (category|label|name|finalist|exploration)/i;
 
-// Scanned line-by-line over the buyer-facing MARKETING surface ONLY, never through
-// violationsIn — that feeds the docs ceiling below, and every decision record and
-// FALSE_CLAIMS entry legitimately names the old label.
+// Scanned line-by-line over the buyer-facing MARKETING surface, the docs HTML set,
+// and (with the two extra prose negators below) docs/**/*.md. Never through
+// violationsIn — that feeds the deferred-noun docs ceiling, and every decision
+// record and FALSE_CLAIMS entry legitimately names the old label.
 function retiredLabelViolations(name, body) {
   const out = [];
   body.split("\n").forEach((line, i) => {
@@ -345,6 +346,102 @@ function retiredLabelViolations(name, body) {
     }
   });
   return out;
+}
+
+// ── THE HONEST IDIOMS OF PROSE, and why they are NOT applied to markup ───────
+//
+// Widening the retired-label scan to `docs/**/*.md` on 2026-09-02 found 43 lines,
+// and reading them said most were documents being honest rather than documents
+// drifting. Three idioms recur, and a gate that flagged them would teach the next
+// author to delete a true sentence:
+//
+//   QUOTE_CONTEXT   `docs/CLAIM_INVENTORY.md` quotes the exact offending copy it is
+//                   cataloguing; `docs/DECISION_RECORDS.md` quotes the owner's own
+//                   words. The label is INSIDE quotes or backticks — the document is
+//                   naming the string, not asserting it.
+//   AVOID_CONTEXT   `docs/research/MARKET_LANDSCAPE.md` says "Avoid leading with
+//                   'Operational Trust Orchestration'". A list of phrases NOT to use
+//                   is the inverse of a claim. This repository has flagged an
+//                   avoid-list as a violation once already (the battlecard's trap
+//                   phrases) and the fix was the same: teach the idiom.
+//   PAGE_BANNER     A page that opens by declaring itself superseded history is
+//                   allowed to contain its own retired thesis — that is what an
+//                   archive IS. Deleting the sentences would destroy the provenance
+//                   the decision records depend on.
+//
+// NONE of the three is applied to HTML, and the quote rule is the reason. In markup
+// the label sits inside quotes BY CONSTRUCTION — `<meta content="… Shared-Device
+// Trust Gateway">`, `<title>`, a `className`. Applying QUOTE_CONTEXT there would
+// fail-open the exact defect this rule exists to catch: the deployed site carried
+// that label in its title and social meta for five days. Prose quoting and attribute
+// quoting look identical to a regex and mean opposite things, so only prose gets it.
+const QUOTE_CONTEXT =
+  /["“”‘’'`][^"“”‘’'`]{0,24}(Zero[\s-]Trust orchestration|Operational Trust Orchestration|Shared-Device Trust Gateway)/i;
+const AVOID_CONTEXT =
+  /trap phrases|phrases to avoid|words to avoid|never say|do not say|don'?t say|avoid leading with|not an established|collision assessment|invented category/i;
+// Deliberately explicit: the banner has to disclaim CURRENT status in so many
+// words, the same bar `PAGE_SCOPE` sets for the deferred-noun rule. "Historical
+// note" further down the page does not buy the whole file an exemption.
+const PAGE_BANNER =
+  /superseded history|retired .{0,60}kept for provenance|nothing on (it|this page) is current positioning|archived .{0,40}not (a statement of )?current/i;
+const BANNER_SCAN_LINES = 40;
+
+// ── THE BANNER EXEMPTS WHAT FOLLOWS IT, NOT THE FILE (F2a, 2026-09-02) ───────
+//
+// Two defects, one shape. The first version tested PAGE_BANNER against the joined
+// first forty lines and, on a hit, returned `[]` for the WHOLE document:
+//
+//   * a claim ABOVE the banner was exempted by a disclaimer the reader had not
+//     reached yet — the same distant-hedge defect the deferred-noun rule already
+//     refuses in a footer, arriving through the front door; and
+//   * the phrase counted even inside a fenced code block, so a document QUOTING a
+//     banner (a runbook showing the markup, this gate's own docs page showing what
+//     PAGE_BANNER matches) disarmed the label rule for every line it had.
+//
+// Both are fail-open, and both are invisible: the count simply goes down.
+//
+// Now the banner is located as a LINE, fenced code is not eligible to be one, and
+// only lines strictly after it are exempt. The bar is unchanged — it must still be
+// in the first forty lines and still disclaim current status in so many words.
+/** Line index of a genuine page banner, or -1. Fenced code is markup, not a banner. */
+function bannerLineIndex(body) {
+  const lines = body.split("\n");
+  let fenced = false;
+  for (let i = 0; i < Math.min(lines.length, BANNER_SCAN_LINES); i += 1) {
+    if (/^\s*(```|~~~)/.test(lines[i])) { fenced = !fenced; continue; }
+    if (!fenced && PAGE_BANNER.test(lines[i])) return i;
+  }
+  return -1;
+}
+
+/**
+ * Prose-only variant. Same labels, same RETIRED_OK, plus the three idioms above —
+ * and it COUNTS what each idiom took out (F2b). An exemption nobody can see is
+ * indistinguishable from a rule that never fired, which is how a fail-open hides.
+ */
+function retiredProseScan(name, body) {
+  const lines = body.split("\n");
+  const bannerIdx = bannerLineIndex(body);
+  const out = { violations: [], byQuote: 0, byAvoid: 0, byBanner: 0, bannerIdx };
+  for (const v of retiredLabelViolations(name, body)) {
+    const lineNo = Number(v.slice(name.length + 1).split(":")[0]);
+    const line = lines[lineNo - 1] ?? "";
+    // Order is attribution, not policy — the exempt SET is unchanged, only which
+    // bucket a doubly-idiomatic line lands in. Avoid-lists are checked before quotes
+    // because an avoid-list almost always quotes the phrase it is banning ("Avoid
+    // leading with 'Operational Trust Orchestration'"), and reporting those as
+    // quote-context would leave the avoid bucket permanently at zero — an idiom that
+    // always reads as never having fired is one nobody can audit.
+    if (bannerIdx >= 0 && lineNo - 1 > bannerIdx) { out.byBanner += 1; continue; }
+    if (AVOID_CONTEXT.test(line)) { out.byAvoid += 1; continue; }
+    if (QUOTE_CONTEXT.test(line)) { out.byQuote += 1; continue; }
+    out.violations.push(v);
+  }
+  return out;
+}
+
+function retiredLabelViolationsInProse(name, body) {
+  return retiredProseScan(name, body).violations;
 }
 
 // ── self-test ────────────────────────────────────────────────────────────────
@@ -398,7 +495,50 @@ function retiredLabelViolations(name, body) {
     // The label DR-019/DR-020 retired must flag in live copy and stay exempt
     // when named as superseded — the five-day site drift this gate missed.
     retiredLabelViolations("stR2", "SignalGrid is a Shared-Device Trust Gateway for frontline work.").length > 0 &&
-    retiredLabelViolations("stR3", "The Shared-Device Trust Gateway label is superseded by DR-020.").length === 0;
+    retiredLabelViolations("stR3", "The Shared-Device Trust Gateway label is superseded by DR-020.").length === 0 &&
+    // ── the docs widening (2026-09-02) ──────────────────────────────────────
+    // A bare assertion in prose must still fail …
+    retiredLabelViolationsInProse("stD0.md", "SignalGrid is a Shared-Device Trust Gateway.").length > 0 &&
+    // … and each honest idiom must be legal, or the widening punishes truth.
+    retiredLabelViolationsInProse("stD1.md", '| README.md:3 | "SignalGrid is an Operational Trust Orchestration platform" | rewrite |').length === 0 &&
+    retiredLabelViolationsInProse("stD2.md", "Avoid leading with “Operational Trust Orchestration” until buyers use it.").length === 0 &&
+    retiredLabelViolationsInProse(
+      "stD3.md",
+      "# Old positioning — SUPERSEDED HISTORY\n\n> Kept for provenance.\n\nSignalGrid is a Shared-Device Trust Gateway.\n",
+    ).length === 0 &&
+    // The banner must be AT THE TOP. A page that asserts the label for forty lines
+    // and confesses afterwards is the pitch deck's distant-hedge defect again.
+    retiredLabelViolationsInProse(
+      "stD4.md",
+      `SignalGrid is a Shared-Device Trust Gateway.\n${"filler\n".repeat(60)}\n(SUPERSEDED HISTORY)\n`,
+    ).length > 0 &&
+    // MARKUP KEEPS THE STRICT RULE. The same string inside an attribute is exactly
+    // the five-day site drift, so the quote idiom must NOT reach it.
+    retiredLabelViolations("stD5.html", '<meta name="description" content="SignalGrid — Shared-Device Trust Gateway">').length > 0 &&
+    // ── F2a: the banner exempts what FOLLOWS it, and cannot hide in a code fence ──
+    // An assertion ABOVE the banner line is a claim the reader meets first.
+    retiredLabelViolationsInProse(
+      "stD6.md",
+      "SignalGrid is a Shared-Device Trust Gateway.\n\n# Old positioning — SUPERSEDED HISTORY\n\nfiller\n",
+    ).length === 1 &&
+    // …while the same assertion below it stays exempt, so the archive keeps its text.
+    retiredLabelViolationsInProse(
+      "stD7.md",
+      "# Old positioning — SUPERSEDED HISTORY\n\nSignalGrid is a Shared-Device Trust Gateway.\n",
+    ).length === 0 &&
+    // A banner phrase inside a fenced block is a document SHOWING the markup, not
+    // wearing it. It must not exempt a single line.
+    retiredLabelViolationsInProse(
+      "stD8.md",
+      "# Gate docs\n\n```md\n# SUPERSEDED HISTORY\n```\n\nSignalGrid is a Shared-Device Trust Gateway.\n",
+    ).length === 1 &&
+    // ── F2b: every idiom that removes a line must be countable ──────────────────
+    retiredProseScan("stD9.md", '| README.md:3 | "SignalGrid is a Shared-Device Trust Gateway" | rewrite |').byQuote === 1 &&
+    retiredProseScan("stD10.md", "Avoid leading with “Shared-Device Trust Gateway” for now.").byAvoid === 1 &&
+    retiredProseScan(
+      "stD11.md",
+      "# Old positioning — SUPERSEDED HISTORY\n\nSignalGrid is a Shared-Device Trust Gateway.\n",
+    ).byBanner === 1;
   if (!st) {
     console.error("✗ SELF-TEST FAILED: a rule no longer flags its synthetic violation. A gate that cannot fail proves nothing.");
     process.exit(1);
@@ -449,6 +589,124 @@ for (const f of retiredFiles) {
   for (const v of retiredLabelViolations(f, readFileSync(f, "utf8"))) {
     console.error(`  ✗ ${v}`);
     problems += 1;
+  }
+}
+
+// ── docs/**/*.html — FATAL, and it is fatal because it is at zero ────────────
+//
+// Until 2026-09-02 NO gate in this repository read a single `docs/*.html` figure or
+// label. Two of them — `docs/preview/signalgrid-teaser.html` and its OpenGraph twin
+// `docs/preview/assets/signalgrid-og.html` — carried the eyebrow "Operational Trust
+// Orchestration", a label DR-004 retired on 2026-08-22, above a headline a reviewer
+// reads first. Both were fixed in the same pass that added this scan, which is the
+// only reason this half can be fatal rather than ceilinged: the count is 0, so any
+// future occurrence is a REGRESSION and deserves to fail a build.
+//
+// Scope is DERIVED from `git ls-files docs` rather than from the Pages deploy list.
+// That is wider than "published" on purpose — a page can be linked, shared or
+// screenshotted long before a workflow copies it, and both offenders here were
+// exactly that: unpublished previews nobody's gate could see.
+const docsHtml = execSync("git ls-files docs", { encoding: "utf8" })
+  .trim().split("\n").filter((f) => /\.html?$/.test(f));
+if (docsHtml.length < 5) {
+  console.error(
+    `✗ found only ${docsHtml.length} docs/**/*.html file(s) — this repository has had eight or more ` +
+      "for months, so the derivation is broken rather than the tree empty. Do not silently scan less.",
+  );
+  process.exit(1);
+}
+for (const f of docsHtml) {
+  if (retiredFiles.includes(f)) continue; // already scanned, do not double-count
+  for (const v of retiredLabelViolations(f, readFileSync(f, "utf8"))) {
+    console.error(`  ✗ ${v}`);
+    problems += 1;
+  }
+}
+
+// ── docs/**/*.md retired labels — REPORTED against a ceiling, fatal on a RISE ─
+//
+// WHY A CEILING HERE AND A HARD GATE FOR THE HTML ABOVE, measured before deciding.
+// The widened prose scan found 43 raw lines across 22 documents on 2026-09-02;
+// the three idioms take that to 29 across 17, and reading every one of the 29
+// says a hard gate would be wrong TODAY: `docs/research/*` is a pre-DR-019
+// messaging archive that argues about category names for a living, and
+// `MARKET_LANDSCAPE.md` is the document that TALKED THIS REPOSITORY OUT of the
+// label. Failing the build on those would be the "gate that punishes honest
+// writing" this file already warns about three times.
+//
+// So the three honest idioms are exempted outright (see retiredLabelViolationsInProse)
+// and what remains is recorded as debt that may only fall. A RISE is fatal: a NEW
+// document asserting a retired label as SignalGrid's name is the regression, and it
+// fails here rather than being averaged away.
+//
+// The unit is MENTIONS, not files — the same correction the deferred-noun ceiling
+// above had to make, for the same reason: counting files makes a fresh violation in
+// an already-listed document invisible.
+const RETIRED_CEILING_FILE = "docs/agent/launch-claims-retired-labels-ceiling.json";
+{
+  const docMd = execSync("git ls-files docs", { encoding: "utf8" })
+    .trim().split("\n").filter((f) => f.endsWith(".md"));
+  if (docMd.length < 100) {
+    console.error(
+      `✗ found only ${docMd.length} docs/**/*.md file(s) — the derivation is broken, not the tree empty.`,
+    );
+    process.exit(1);
+  }
+  let mentions = 0;
+  let bannered = 0;
+  let byQuote = 0;
+  let byAvoid = 0;
+  let byBanner = 0;
+  const worst = [];
+  for (const f of docMd) {
+    let body;
+    try { body = readFileSync(f, "utf8"); } catch { continue; }
+    if (bannerLineIndex(body) >= 0 && RETIRED_LABELS.test(body)) bannered += 1;
+    const r = retiredProseScan(f, body);
+    byQuote += r.byQuote;
+    byAvoid += r.byAvoid;
+    byBanner += r.byBanner;
+    const n = r.violations.length;
+    if (n > 0) { mentions += n; worst.push([f, n]); }
+  }
+  worst.sort((a, b) => b[1] - a[1]);
+
+  let prior = {};
+  try { prior = JSON.parse(readFileSync(RETIRED_CEILING_FILE, "utf8")); } catch { prior = {}; }
+  const ceiling = prior.retiredLabelMentions;
+  // SAY WHAT THE IDIOMS TOOK OUT (F2b). "29 unexempted mentions" alone cannot be
+  // told apart from "29 mentions and the idioms never fired"; the raw total and the
+  // three deductions have to be on the line, or a fail-open in any one of them looks
+  // exactly like the tree getting cleaner.
+  const raw = mentions + byQuote + byAvoid + byBanner;
+  console.log(
+    `  docs/**/*.md retired labels (REPORTED, not gated; a RISE is fatal): ${mentions} unexempted mention(s) ` +
+      `across ${worst.length} file(s) out of ${raw} raw, ${byQuote} exempt by quote context, ${byAvoid} by avoid ` +
+      `context, ${byBanner} by banner (in ${bannered} bannered page(s); a banner exempts only the lines BELOW it)` +
+      (typeof ceiling === "number" ? ` (ceiling ${ceiling})` : " (no baseline yet)"),
+  );
+  for (const [f, n] of worst.slice(0, 5)) console.log(`      ${String(n).padStart(3)}  ${f}`);
+  if (typeof ceiling === "number" && mentions > ceiling) {
+    console.error(
+      `\n  ✗ ${mentions - ceiling} MORE retired-label mention(s) than the recorded ceiling of ${ceiling}.\n` +
+        "    A document now names a retired category label as SignalGrid's name. No category label is\n" +
+        "    ratified (DR-019/DR-020) and docs/PURPOSE.md owns the product sentence. If the line is\n" +
+        "    HISTORY, say so on the line, quote the label, or banner the page as superseded — do not\n" +
+        "    delete a true sentence, and never raise this file by hand.",
+    );
+    problems += 1;
+  } else if (typeof ceiling !== "number" || mentions < ceiling) {
+    writeFileSync(
+      RETIRED_CEILING_FILE,
+      JSON.stringify({
+        note: "DEBT CEILING for retired category labels in docs/**/*.md: the COUNT OF mentions that survive RETIRED_OK, the quote idiom, the avoid-list idiom and a superseded-history page banner. A RISE is fatal; a drop is recorded automatically. Never hand-edit; the gate writes it. docs/**/*.html is NOT here — it is at zero and gated hard.",
+        retiredLabelMentions: mentions,
+        filesCarryingThem: worst.length,
+        pagesExemptByBanner: bannered,
+        worst: worst.slice(0, 15).map(([f, n]) => ({ file: f, mentions: n })),
+      }, null, 2) + "\n",
+    );
+    console.log(typeof ceiling !== "number" ? `      baseline recorded at ${mentions}` : `      ceiling lowered ${ceiling} → ${mentions}`);
   }
 }
 

@@ -8,7 +8,10 @@ is a founder decision; nothing here self-executes.**
 
 ## What a funder or collaborator actually sees today (the asset inventory)
 
-- **A readable company.** The entire product — engine, 136 proof gates,
+- **A readable company.** The entire product — engine, the proof-gate suite
+  whose size `docs/STATUS.md` publishes and `check-status-figures.mjs` keeps
+  true (this page cites it rather than keeping a second copy that can drift,
+  the way its own hand-typed **136** did — the real figure was 140),
   audit ledger, threat model, release evidence with signed artifacts — is a
   public repository. For pre-seed diligence, this is rare: the diligence
   packet is `git clone`.

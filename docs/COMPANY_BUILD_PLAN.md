@@ -1838,9 +1838,15 @@ earlier — that is the loop working, not a reason to soften the record.
     matches a literal string and does not parse comments; for a security check
     that is correct fail-closed behaviour, so the COMMENT was reworded rather than
     the gate weakened.
-    STILL OPEN — web-engineer: four demo-only trees still load remote fonts and
+    STILL OPEN — web-engineer: three demo-only trees still load remote fonts and
     are reported on every run: `signalgrid-review`, `signalgrid-mobile-pwa`,
-    `signalgrid-desktop`, `mockup-sandbox`. Same fix, already proven twice.
+    `signalgrid-desktop`. Same fix, already proven twice.
+    RE-COUNTED 2026-09-02: this row said **four** and named `mockup-sandbox`, which
+    Ponytail cut 3 (DR-024) deleted — an open row naming a tree that no longer
+    exists reads as work outstanding that is not. Re-derived rather than reasoned:
+    `grep -rln "fonts.googleapis\|fonts.gstatic" artifacts/signalgrid-*` returns
+    `signalgrid-review/index.html`, `signalgrid-mobile-pwa/{index.html,src/index.css}`
+    and `signalgrid-desktop/index.html` — three trees, four files.
 
 71. **Five of eight security reference tests cannot fail against broken code.**
     — OPEN, security-engineer. Found by the first `security-engineer` read of
@@ -2435,12 +2441,27 @@ earlier — that is the loop working, not a reason to soften the record.
     `ShiftContextRecord`, though both are fixture-connector inputs of the same kind.
     Internal callers use relative imports, so nothing is broken today.
 
-88. **`metrics.ts` accumulates an out-of-union outcome into a NaN that
-    `outcomesCovered()` still reports as covered.** — OPEN, principal-engineer.
-    NOTE severity, reporting path only. `metrics.ts:14` does
-    `byOutcome[decision.outcome] += 1` unguarded, and `types.ts:559` documents that
-    durable snapshot rows are cast with an unchecked `as`. A poisoned key gives NaN
-    rates while `outcomesCovered()` — which only checks key presence — stays true.
+88. **`computeMetrics` accumulates an out-of-union outcome into a bucket the
+    type says cannot exist, and serves it.** — OPEN, principal-engineer.
+    NOTE severity, reporting path only. RE-ANCHORED 2026-09-02: this row used to be
+    anchored on `outcomesCovered()`, which 45cdecf (Ponytail cut 1) deleted as
+    zero-importer code — the symbol exists nowhere in the tree now, so half of the
+    row named a function that is gone. The LIVE half survived the cut and is
+    restated here against the symbol that still exists.
+    `lib/signalgrid-core/src/metrics.ts:12` does `byOutcome[decision.outcome] += 1`
+    unguarded over a `Record<DecisionOutcome, number>`, and
+    `lib/signalgrid-core/src/types.ts:557` documents that durable snapshot rows are
+    cast with an unchecked `as`. `SignalGridCore.metrics()`
+    (`lib/signalgrid-core/src/engine.ts:418`) is the only caller and
+    `GET /v1/metrics` (`artifacts/api-server/src/routes/v1.ts:348`) is the served
+    surface, so the result reaches an operator.
+    MEASURED 2026-09-02 rather than reasoned, and the earlier wording overstated it:
+    the rates do NOT go NaN. Over `["allow","deny","quarantine"]` the four in-union
+    counters stay correct, the out-of-union key lands as `quarantine: NaN` — `null`
+    once `res.json` serialises it — and the poisoned decision is counted in `total`
+    but in no bucket, so `allowRate + restrictDenyRate` = 0.333 + 0.333 = 0.666 over
+    three decisions. The under-sum is the reporting defect; the extra key is a
+    `MetricsSummary` that contradicts its own type.
 
 89. **The connector's `identity_state` signal is normalized, recorded as "used",
     and never read: a disabled account allows.** — FIXED 2026-08-25,
@@ -4573,7 +4594,7 @@ Runner-up: **benchmark-selection** (10 references, day-one-quiet 'unverified →
 
 ### From the positioning-messaging lens
 
-## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v4)
+## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v5)
 
 Every claim below is checked against the `launch` class in scripts/launch-profile.mjs. Nothing deferred appears — which is why location, badges, custody, network, and threat signals are absent: they are real and proven in this repository, and they are not Limited GA.
 

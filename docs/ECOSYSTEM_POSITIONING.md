@@ -5,9 +5,12 @@
 > categories — and it does not get to define the product. Where the two
 > disagree, POSITIONING.md wins and this page gets fixed to it. Corrected
 > 2026-08-23: this document opened with two unratified product labels and named
-> the Microsoft wedge that DR-012 reversed.
+> the Microsoft wedge that DR-012 reversed. Corrected again 2026-09-02: the
+> opening sentence still carried DR-011's category label, which DR-019 superseded
+> on 2026-08-26 and DR-020 reinforced. It survived because the retired-label scan
+> read the marketing surface and not this page.
 
-SignalGrid is a **Shared-Device Trust Gateway** — an access-decision service for shared-device and mobile frontline environments (the one ratified name and descriptor; DR-011). It is not another IAM, UEM/MDM, ITSM, SIEM/SOAR, NAC, healthcare access-management, or hardware platform. Those systems remain the systems of record for their own domains.
+SignalGrid is an **access-decision service** for shared-device and mobile frontline environments — the descriptor `docs/POSITIONING.md` keeps for a cold reader, and a description rather than a category claim. **There is no ratified category label** (DR-019 ratified none, deferring the question to customer discovery), and `docs/PURPOSE.md` §2 owns the product sentence, which this page does not restate. It is not another IAM, UEM/MDM, ITSM, SIEM/SOAR, NAC, healthcare access-management, or hardware platform. Those systems remain the systems of record for their own domains.
 
 SignalGrid consumes signals from those systems, evaluates runtime context, determines an access outcome, and emits decision evidence or action requests back to connected workflows.
 

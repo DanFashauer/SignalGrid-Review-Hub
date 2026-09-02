@@ -7,11 +7,15 @@ to the public repository; an investor's diligence packet is `git clone`.
 
 ## One sentence
 
-SignalGrid is a **Shared-Device Trust Gateway** — an access-decision service
-built invisibly into the apps frontline staff already use: before a
-sensitive action on a shared device it answers allow, step up, restrict, or
-deny, and anything it can't verify tightens the answer instead of waving it
-through.
+SignalGrid is an **access-decision service** built invisibly into the apps
+frontline staff already use: before a sensitive action on a shared device it
+answers allow, step up, restrict, or deny, and anything it can't verify tightens
+the answer instead of waving it through.
+
+That is the Limited GA scope, in the descriptor `docs/POSITIONING.md` keeps for a
+cold reader. `docs/PURPOSE.md` §2 owns the product sentence and this page does not
+restate it; no category label is ratified (DR-019/DR-020), and the one this
+paragraph carried until 2026-09-02 was retired on 2026-08-26.
 
 ## The problem (measured, not asserted)
 

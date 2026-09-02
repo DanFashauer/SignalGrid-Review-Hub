@@ -22,14 +22,31 @@ Everything the product does must serve one question:
 
 > **Should this shared-device workflow continue right now, and why?**
 
-The first product is the **SignalGrid Shared-Device Trust Gateway**: one tenant,
+The first product is the **shared-device wedge**: one tenant,
 one shared-device workflow, one read-only device-management evidence source
 (open-source lab first — Fleet; Microsoft Entra/Intune as the first enterprise
 production connector — the §12 redirect), one deterministic allow / step-up /
 restrict / deny loop, one operator console, one host-app integration pattern,
 one evidence/audit story, one design partner.
 
-## 2. The freeze, widened — this is the change
+## 2. The freeze, widened — SUPERSEDED HISTORY (DR-021)
+
+> **This whole section is superseded and is kept as the record of a rule that
+> once ran, not as a rule that runs.** DR-021 (2026-08-31) lifted the engineering
+> freeze **in full** on the owner's direction: every lane is open, and *"no small
+> versions of frozen work" is void because nothing is frozen*. Nothing in the
+> table below is enforced today.
+>
+> **What did not lift, and never was the freeze** (DR-021 §2): the launch-claims
+> gate, the launch-profile classification bijection, the publication boundary, and
+> the no-overclaim rules. Building something and claiming it ships are two
+> different acts; only the first is unfrozen, and a change to what is *claimed*
+> still requires its own decision record. So the mechanical guards this plan leans
+> on are all still live — what ended is the prohibition on writing new code.
+>
+> Bannered 2026-09-02. It had read as the operating rule for two days after the
+> owner ended it, and `docs/agent/LOOP.md` and `docs/agent/DISCOVERY_LOG.md`
+> carried the same stale rule; all three are corrected in the same pass.
 
 Task #212 froze **connector families and catalogs**. That wording had a gap, and
 work kept flowing through it: doctrine and vertical documents are neither a family

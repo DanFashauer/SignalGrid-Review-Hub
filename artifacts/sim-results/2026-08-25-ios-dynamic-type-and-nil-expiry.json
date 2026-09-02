@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "requestId": "2026-08-25-ios-dynamic-type-and-nil-expiry",
-  "completedAt": "2026-09-01T01:57:17.531Z",
+  "completedAt": "2026-09-02T16:56:33.307Z",
   "provenance": {
     "platform": "darwin",
     "arch": "arm64",
     "nodeVersion": "v24.18.0",
     "macosVersion": "26.6.2",
-    "commit": "5e3b5c321a745a52def0a2a0ec334e042457d05c",
+    "commit": "cd090382e6af99b673fc3888a2f573b049d1d40f",
     "branch": "SignalGrid_Alpha",
     "workingTreeClean": true
   },
@@ -16,7 +16,7 @@
       "operation": "proofs-sim-only",
       "status": "passed",
       "exitCode": 0,
-      "durationMs": 6000,
+      "durationMs": 5435,
       "tail": [
         "",
         "   acknowledge with: pnpm run lane:ack cloud-velociraptor-lane-is-decided-and-yours-plu \"what you did\"",
@@ -39,7 +39,7 @@
         "== NOTE: the web build now RUNS here (it used to be skipped) ==",
         "   — the vite/rollup/lightningcss/tailwind darwin binaries this repo strips are",
         "     added to node_modules for the run, exactly as tsx's esbuild binary always",
-        "     was. Nothing about the sources is linux-only; all 6 artifacts build on arm64.",
+        "     was. Nothing about the sources is linux-only; all 5 web artifacts build on arm64.",
         "",
         "== SUMMARY: 4 passed, 0 failed, 0 skipped ==",
         "✅ Simulation validation GREEN."

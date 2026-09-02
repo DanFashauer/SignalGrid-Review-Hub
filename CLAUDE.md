@@ -204,6 +204,15 @@ registration, connector families the other lane's commits name), read
 `docs/LANE_COORDINATION.md` and follow its protocol — the nac/webhooks
 eight-file collision is why it exists.
 
+- **Take a sandbox patch with `git add -A -N && git diff HEAD`, never a plain
+  `git diff`** — a staged change is invisible to the latter, and PR #366's
+  `emitter.ts` and the shared sanitizer `scripts/lib/sanitize.mjs` (staged as a new file, absent from the PR #367 patch; the landing died on the missing import and the file had to land in its own commit) were both lost this way on 2026-09-01
+  compare the patch's actual file list against the claimed deletions before
+  writing the description.
+- **Never revert a file with `git checkout --` inside a sandbox holding
+  unsaved batch edits** — it discards them along with whatever you meant to
+  undo; plant a self-test string in a copy of the file instead.
+
 ## Ask before
 
 Destructive git (force-push, history rewrite, branch deletion), anything that

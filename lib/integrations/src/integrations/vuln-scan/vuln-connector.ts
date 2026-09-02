@@ -5,6 +5,7 @@ import {
   type VulnFindingRaw,
   type VulnSeverity,
 } from "./types";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
 
 /**
  * Read-only vulnerability-scanner connector. Reads per-device findings from a
@@ -32,11 +33,9 @@ export interface VulnConnectorConfig {
 }
 
 /** Fail closed on any non-GET method — the connector must never mutate. */
-export function guardReadOnly(method: string): void {
-  if (method !== "GET") {
-    throw new VulnConnectorError("read_only_violation", `The vuln-scan connector is read-only; refused a ${method} request.`);
-  }
-}
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new VulnConnectorError("read_only_violation", `The vuln-scan connector is read-only; refused a ${method} request.`),
+);
 
 export class VulnScanConnector {
   private readonly accessToken: string;

@@ -18,6 +18,7 @@
 //     at a reference instant the CALLER supplies (no clock in the decision path)
 
 import { loadBenchmarkCatalog, versionGreater, type BenchmarkCatalog } from "./catalog";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
 import {
   BENCHMARK_SELECTION_REPORT_KEYS,
   BenchmarkSelectionConnectorError,
@@ -36,11 +37,9 @@ import {
 } from "./types";
 
 /** GET-only guard, mirroring the other connectors. */
-export function guardReadOnly(method: string): void {
-  if (method.toUpperCase() !== "GET") {
-    throw new BenchmarkSelectionConnectorError("read_only_violation", `benchmark-selection is read-only; refused ${method}`);
-  }
-}
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new BenchmarkSelectionConnectorError("read_only_violation", `benchmark-selection is read-only; refused ${method}`),
+);
 
 /** Map a string to one of `allowed`, case-insensitively; anything else → fallback.
  *  An ALLOWLIST on purpose — an unrecognized value fails to the safe unknown. */

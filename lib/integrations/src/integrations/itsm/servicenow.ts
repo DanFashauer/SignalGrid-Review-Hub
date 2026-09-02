@@ -1,5 +1,5 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
-import { fetchWithTimeout, TIMEOUT_PRESETS } from '../../utils/fetchWithTimeout';
+import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
 import { resolveEmission } from '../adapters/emit-gate';
 
 /**
@@ -65,7 +65,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
     const incident = this.buildIncidentPayload(request);
     const url = `${this.config.instanceUrl}/api/now/table/${this.config.table}`;
 
-    const response = await fetchWithTimeout(url, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,7 +73,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
         'Accept': 'application/json',
       },
       body: JSON.stringify(incident),
-      timeoutMs: TIMEOUT_PRESETS.normal,
+      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
     });
 
     if (!response.ok) {
@@ -126,7 +126,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
     const url = `${this.config.instanceUrl}/api/now/table/${this.config.table}/${sysId}`;
     const incident = this.buildIncidentPayload(updates as ITSMTicketRequest);
 
-    const response = await fetchWithTimeout(url, {
+    const response = await fetch(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -134,7 +134,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
         'Accept': 'application/json',
       },
       body: JSON.stringify(incident),
-      timeoutMs: TIMEOUT_PRESETS.normal,
+      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
     });
 
     if (!response.ok) {
@@ -168,11 +168,7 @@ export class ServiceNowAdapter implements ITSMAdapter {
     // runs. Note the gate goes BEFORE ensureAuthenticated() — that helper performs its
     // own OAuth token fetch, so gating after it would still have reached the network.
     //
-    // This one survived the sweep that fixed the other seven for a mechanical reason
-    // worth recording: check-ungated-fetch.mjs matched the literal string `fetch(`, and
-    // this file reaches the network only through `fetchWithTimeout`. The file was never
-    // scanned at all, so the gate printed green over it. The detector now matches any
-    // "fetch"-containing callee and fails if a util helper is named so it cannot see it.
+    // this file reached the network only through a since-removed fetchWithTimeout wrapper
     const emission = resolveEmission();
     if (emission.mode !== "live") return false;
 
@@ -180,13 +176,13 @@ export class ServiceNowAdapter implements ITSMAdapter {
       await this.ensureAuthenticated();
 
       const url = `${this.config.instanceUrl}/api/now/table/${this.config.table}?sysparm_limit=1`;
-      const response = await fetchWithTimeout(url, {
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'Accept': 'application/json',
         },
-        timeoutMs: TIMEOUT_PRESETS.short,
+        signal: AbortSignal.timeout(TIMEOUT_PRESETS.short),
       });
       
       return response.ok;
@@ -235,14 +231,14 @@ export class ServiceNowAdapter implements ITSMAdapter {
       client_secret: this.config.auth.clientSecret || '',
     });
 
-    const response = await fetchWithTimeout(tokenUrl, {
+    const response = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json',
       },
       body: params.toString(),
-      timeoutMs: TIMEOUT_PRESETS.normal,
+      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
     });
 
     if (!response.ok) {
@@ -275,13 +271,13 @@ export class ServiceNowAdapter implements ITSMAdapter {
     }
     const url = `${this.config.instanceUrl}/api/now/table/${this.config.table}?sysparm_query=number=${ticketNumber}&sysparm_fields=sys_id`;
 
-    const response = await fetchWithTimeout(url, {
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${this.accessToken}`,
         'Accept': 'application/json',
       },
-      timeoutMs: TIMEOUT_PRESETS.normal,
+      signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
     });
 
     if (!response.ok) {

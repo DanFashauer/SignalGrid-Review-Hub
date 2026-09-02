@@ -105,13 +105,12 @@ the proof harnesses and gates.)
 | `webauthn` | FIDO2/passkey registration + authentication |
 | `work-context` | Fabric verdict summaries in, portable work context out |
 
-### `artifacts/` — runnable surfaces (8)
+### `artifacts/` — runnable surfaces (7)
 
 | Package | What it is |
 | --- | --- |
 | `api-server` | The Node control-plane + `/v1` decision API |
 | `mcp-server` | The 16-tool MCP agent gateway |
-| `mockup-sandbox` | Design mockup sandbox |
 | `signalgrid-app` | The operator web console |
 | `signalgrid-desktop` | Tauri desktop shell |
 | `signalgrid-mobile-pwa` | Mobile PWA surface |

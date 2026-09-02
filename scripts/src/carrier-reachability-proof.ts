@@ -269,6 +269,9 @@ try {
   readOnly = err instanceof CarrierConnectorError && err.code === "read_only_violation";
 }
 check("a non-GET request is refused by the read-only guard", readOnly);
+let threw = false;
+try { guardReadOnly("get"); } catch { threw = true; }
+check("a lowercase get is refused — the guard is strict, not case-folded", threw);
 
 // ── auth-failure handling ──────────────────────────────────────────────────────
 const badConnector = new CarrierReachabilityConnector({ accessToken: "wrong", baseUrl: BASE_URL }, transport);

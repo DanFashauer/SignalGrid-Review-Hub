@@ -5,11 +5,12 @@ import {
   type DlpAction,
   type DlpChannel,
   type DlpCollection,
-  type DlpSeverity,
   type DlpViolationRaw,
   type NormalizedDataProtection,
   type NormalizedDlpViolation,
 } from "./types";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
+import { normalizeSeverity } from "../../utils/normalizeSeverity";
 
 /**
  * Read-only data-protection / DLP connector. Reads per-device DLP policy state +
@@ -38,11 +39,9 @@ export interface DlpConnectorConfig {
 }
 
 /** Fail closed on any non-GET method — the connector must never mutate. */
-export function guardReadOnly(method: string): void {
-  if (method !== "GET") {
-    throw new DlpConnectorError("read_only_violation", `The data-protection connector is read-only; refused a ${method} request.`);
-  }
-}
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new DlpConnectorError("read_only_violation", `The data-protection connector is read-only; refused a ${method} request.`),
+);
 
 export class DataProtectionConnector {
   private readonly accessToken: string;
@@ -224,22 +223,6 @@ function normalizeAction(action: string | undefined): DlpAction {
     case "user_override":
     case "bypassed":
       return "overridden";
-    default:
-      return "unknown";
-  }
-}
-
-function normalizeSeverity(severity: string | undefined): DlpSeverity {
-  switch ((severity ?? "").toLowerCase()) {
-    case "critical":
-      return "critical";
-    case "high":
-      return "high";
-    case "medium":
-    case "moderate":
-      return "medium";
-    case "low":
-      return "low";
     default:
       return "unknown";
   }

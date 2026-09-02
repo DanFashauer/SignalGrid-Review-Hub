@@ -6,6 +6,7 @@ import {
   type LocationSource,
   type NormalizedLocationSignal,
 } from "./types";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
 
 /**
  * Read-only device location connector. Reads per-device location fixes from an
@@ -34,14 +35,9 @@ export interface LocationConnectorConfig {
 }
 
 /** Fail closed on any non-GET method — the connector must never command a device. */
-export function guardReadOnly(method: string): void {
-  if (method !== "GET") {
-    throw new LocationConnectorError(
-      "read_only_violation",
-      `The location connector is read-only; refused a ${method} request.`,
-    );
-  }
-}
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new LocationConnectorError("read_only_violation", `The location connector is read-only; refused a ${method} request.`),
+);
 
 export class LocationServicesConnector {
   private readonly accessToken: string;

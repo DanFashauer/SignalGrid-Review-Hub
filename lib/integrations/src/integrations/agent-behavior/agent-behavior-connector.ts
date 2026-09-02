@@ -22,13 +22,12 @@ import {
   type TargetFamiliarity,
   type VolumeState,
 } from "./types";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
 
 /** GET-only guard, mirroring the other connectors. */
-export function guardReadOnly(method: string): void {
-  if (method.toUpperCase() !== "GET") {
-    throw new AgentBehaviorConnectorError("read_only_violation", `agent behavior is read-only; refused ${method}`);
-  }
-}
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new AgentBehaviorConnectorError("read_only_violation", `agent behavior is read-only; refused ${method}`),
+);
 
 /** Map a string to one of `allowed`, case-insensitively; anything else → fallback.
  *  An ALLOWLIST on purpose — an unrecognized value fails to the safe unknown. */

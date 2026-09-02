@@ -162,6 +162,26 @@
         "each driven by a committed proof that runs in CI",
         "(fleet|keycloak|freeradius|wazuh)[^.\\n]{0,60}\\blive[^.\\n]{0,60}\\bruns? in CI\\b"
       ]
+    },
+    {
+      "id": "pr-366-deleted-webhooks-emitter",
+      "claimed": "PR #366 (Ponytail cut 2) deleted lib/integrations/src/integrations/webhooks/emitter.ts",
+      "assertedBy": "PR #366 description and its squash commit message (45cdecf), 2026-09-01",
+      "assertedOn": "2026-09-01",
+      "whyItHappened": "The deletion was staged in the sandbox with git rm, and the landing patch was taken with a plain git diff (index vs worktree), which cannot see a staged change; the PR text described the sandbox, not the patch.",
+      "refutation": {
+        "kind": "file_contains",
+        "file": "docs/BUILD_BACKLOG.md",
+        "contains": "went in the third cut, not the second",
+        "paths": [
+          "docs/BUILD_BACKLOG.md"
+        ],
+        "$why": "the backlog row that tracked the file records where it actually went"
+      },
+      "denials": [
+        "emitter\\.ts \\(whole file\\)",
+        "(cut 2|second cut|#366)[^.\\n]{0,60}\\b(deleted|removed)\\b[^.\\n]{0,40}emitter\\.ts"
+      ]
     }
   ]
 }

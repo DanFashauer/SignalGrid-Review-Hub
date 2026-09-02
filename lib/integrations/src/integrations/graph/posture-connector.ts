@@ -10,6 +10,7 @@ import {
   type IdentityStatus,
   type UserRisk,
 } from "./types";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
 
 /**
  * Read-only Microsoft Graph posture connector.
@@ -47,14 +48,9 @@ export interface GraphConnectorConfig {
 }
 
 /** Fail closed on any non-GET method — the connector must never write. */
-export function guardReadOnly(method: string): void {
-  if (method !== "GET") {
-    throw new GraphConnectorError(
-      "read_only_violation",
-      `The Graph posture connector is read-only; refused a ${method} request.`,
-    );
-  }
-}
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new GraphConnectorError("read_only_violation", `The Graph posture connector is read-only; refused a ${method} request.`),
+);
 
 export class GraphPostureConnector {
   private readonly accessToken: string;

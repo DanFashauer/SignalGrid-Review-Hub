@@ -26,7 +26,6 @@ import {
   recordDelivery,
   addToDLQ,
 } from './store';
-import { fetchWithTimeout, TIMEOUT_PRESETS } from '../../utils/fetchWithTimeout';
 
 // NOTE: there is deliberately NO module-load environment constant here any more.
 // `IS_PRODUCTION = process.env.NODE_ENV === 'production'` used to live at this
@@ -235,11 +234,11 @@ async function dispatchToEndpoint(
   const headers = createSignedHeaders(payloadStr, secret, payload.deliveryId, payload.id);
 
   try {
-    const response = await fetchWithTimeout(webhook.url, {
+    const response = await fetch(webhook.url, {
       method: 'POST',
       headers,
       body: payloadStr,
-      timeoutMs: config.timeoutMs,
+      signal: AbortSignal.timeout(config.timeoutMs),
     });
 
     const responseBody = await response.text().catch(() => undefined);

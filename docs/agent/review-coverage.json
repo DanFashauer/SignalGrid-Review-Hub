@@ -2558,41 +2558,6 @@
       "note": "The localStorage schema and the status cycles; viewer edits persist locally and feed the tracker badges. NOT read: the reducer/merge logic."
     },
     {
-      "path": "artifacts/mockup-sandbox/index.html",
-      "reviewedBy": "web-engineer",
-      "date": "2026-08-25",
-      "depth": "audited",
-      "note": "25 Google Font families from two vendor hosts plus a duplicate noscript copy. Established the tree is NON-SHIPPING and gated before judging it (row 158)."
-    },
-    {
-      "path": "artifacts/mockup-sandbox/src/App.tsx",
-      "reviewedBy": "web-engineer",
-      "date": "2026-08-25",
-      "depth": "audited",
-      "note": "Read in full. The /preview/* renderer resolves against the generated module map; Gallery is the only other page. The map is EMPTY, so every preview route errors."
-    },
-    {
-      "path": "artifacts/mockup-sandbox/src/main.tsx",
-      "reviewedBy": "web-engineer",
-      "date": "2026-08-25",
-      "depth": "read",
-      "note": "Five lines. Clean."
-    },
-    {
-      "path": "artifacts/mockup-sandbox/src/.generated/mockup-components.ts",
-      "reviewedBy": "web-engineer",
-      "date": "2026-08-25",
-      "depth": "audited",
-      "note": "Five lines, ZERO module entries. Cross-checked: the mockups directory has 0 tracked files and does not exist on disk. Regenerated at dev-server start by the plugin, so an empty committed map is a correct steady state."
-    },
-    {
-      "path": "artifacts/mockup-sandbox/mockupPreviewPlugin.ts",
-      "reviewedBy": "web-engineer",
-      "date": "2026-08-25",
-      "depth": "read",
-      "note": "Lines 1-60: the plugin globs the mockups tree and regenerates the map on watch. NOT read: the middleware/HMR half including the 127.0.0.1 reference."
-    },
-    {
       "path": "artifacts/signalgrid-web/index.html",
       "reviewedBy": "web-engineer",
       "date": "2026-08-25",

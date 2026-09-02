@@ -5,6 +5,7 @@ import {
   type NormalizedAssetLocation,
   type ZoneType,
 } from "./types";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
 
 /**
  * Read-only RTLS / badge-dwell custody connector. Reads per-device real-time
@@ -33,11 +34,9 @@ export interface RtlsConnectorConfig {
 }
 
 /** Fail closed on any non-GET method — the connector must never mutate. */
-export function guardReadOnly(method: string): void {
-  if (method !== "GET") {
-    throw new RtlsConnectorError("read_only_violation", `The RTLS custody connector is read-only; refused a ${method} request.`);
-  }
-}
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new RtlsConnectorError("read_only_violation", `The RTLS custody connector is read-only; refused a ${method} request.`),
+);
 
 export class RtlsCustodyConnector {
   private readonly accessToken: string;

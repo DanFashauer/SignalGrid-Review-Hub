@@ -123,12 +123,57 @@ async function withFetch<R>(stub: FetchLike, body: () => Promise<R>): Promise<R>
 const responseOf = (status: number, body: string): Response =>
   new Response(body, { status, headers: { "content-type": "application/json" } });
 
-export async function checkDefaultTransport(probe: TransportProbe): Promise<void> {
+/** One outbound attempt, as the stub saw it. `url` is `String(input)` — the same
+ *  reading the record-and-throw spy in `emit-gate-proof.ts` takes — because that is
+ *  what a fetch stub can observe without pretending to be a server. */
+export interface RecordedRequest {
+  readonly url: string;
+  readonly init?: RequestInit;
+}
+
+/**
+ * Run `body` with `globalThis.fetch` replaced by a stub that RECORDS every attempt
+ * and then defers to `respond` (which may throw, to model a network failure or to
+ * make an escaped call loud).
+ *
+ * WHY THIS EXISTS. The transport stubs here were `async () => responseOf(...)` —
+ * they ignored their arguments entirely, so nothing downstream could assert anything
+ * about the REQUEST. Three defects in `makeDefaultPasskeyTransport` lived exactly
+ * there: an empty identityRef widened the GET to the collection endpoint, `..` popped
+ * a path segment, and the credential ref was dropped so N refs issued N identical
+ * requests. Every one of them was inside a function this helper executes on every
+ * run, and every one of them would have survived it. A stub that discards the request
+ * can only ever prove things about the response.
+ */
+export async function withRecordedFetch<R>(
+  respond: (req: RecordedRequest) => Response | Promise<Response>,
+  body: (requests: readonly RecordedRequest[]) => Promise<R>,
+): Promise<R> {
+  const requests: RecordedRequest[] = [];
+  const stub = (async (input: unknown, init?: RequestInit): Promise<Response> => {
+    const req: RecordedRequest = { url: String(input), init };
+    requests.push(req);
+    return await respond(req);
+  }) as unknown as FetchLike;
+  return withFetch(stub, () => body(requests));
+}
+
+/** Returns every request the stubs below observed, so a family that wants to assert
+ *  something about its transport's REQUEST shape can, without re-stubbing fetch. */
+export async function checkDefaultTransport(probe: TransportProbe): Promise<readonly RecordedRequest[]> {
   const { check, family, transport, arg, codeOf } = probe;
   const call = () => transport(arg as never);
+  const seen: RecordedRequest[] = [];
 
-  const caught = async (stub: FetchLike): Promise<string | undefined> =>
-    withFetch(stub, async () => {
+  const recording = (respond: (req: RecordedRequest) => Response | Promise<Response>): FetchLike =>
+    (async (input: unknown, init?: RequestInit): Promise<Response> => {
+      const req: RecordedRequest = { url: String(input), init };
+      seen.push(req);
+      return await respond(req);
+    }) as unknown as FetchLike;
+
+  const caught = async (respond: (req: RecordedRequest) => Response | Promise<Response>): Promise<string | undefined> =>
+    withFetch(recording(respond), async () => {
       try {
         await call();
         return undefined;
@@ -171,7 +216,7 @@ export async function checkDefaultTransport(probe: TransportProbe): Promise<void
   // Non-vacuity: everything above would also hold for a transport that threw
   // unconditionally.
   const ok = await withFetch(
-    async () => responseOf(200, '{"ok":true}'),
+    recording(() => responseOf(200, '{"ok":true}')),
     async () => {
       try {
         return await call();
@@ -184,6 +229,7 @@ export async function checkDefaultTransport(probe: TransportProbe): Promise<void
     `${family}: NON-VACUITY — a well-formed 200 object IS returned, so the refusals above are refusals`,
     typeof ok === "object" && ok !== null && (ok as Record<string, unknown>)["ok"] === true,
   );
+  return seen;
 }
 
 /** A paging connector's two REFUSALS, which every family in this fabric implements

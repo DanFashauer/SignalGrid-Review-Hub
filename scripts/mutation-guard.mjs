@@ -633,6 +633,37 @@ const ALLOWED = [
       "with explicit Infinity/-Infinity/NaN assertions plus a finite-age non-vacuity control.",
   },
   {
+    file: "lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts",
+    line: "readThrew ||",
+    reason:
+      "INERT SINCE THE ABSENT-REPORT RULE LANDED (2026-09-02), verified rather than asserted: " +
+      "the `assertsNothing` term two lines down is true for exactly this state, because the " +
+      "catch arm resets all seven raw values to undefined before this expression runs. " +
+      "Checked by mutating this term to `false` and running the proof: 114/114 still pass, " +
+      "including the throwing-accessor fixture, which is what makes it inert rather than " +
+      "untested. Kept because it fails in the SAFE direction if `assertsNothing` is ever " +
+      "narrowed; the alternative arrangement — guarding `assertsNothing` with " +
+      "`plain && !readThrew` — moves the inertness onto those guards and makes deleting one " +
+      "of them turn a non-plain report CLEAN. Labelled inert in the source. THIS ENTRY is " +
+      "what keeps the term present: deleting both terms leaves the proof at 114/114 (they " +
+      "are inert, so nothing fails) and this gate fails with STALE allowlist entry instead " +
+      "— so a reader removing the terms must also remove these entries, and now knows that " +
+      "is the safety they are undoing.",
+  },
+  {
+    file: "lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts",
+    line: "!plain ||",
+    reason:
+      "INERT SINCE THE ABSENT-REPORT RULE LANDED (2026-09-02), and inert for the same reason " +
+      "as the `readThrew ||` term above it: a non-plain report (a string, null, an array, " +
+      "Object.prototype) has no readable fields, so every raw value is undefined and " +
+      "`assertsNothing` is true. Verified the same way — mutated to `false`, proof still " +
+      "114/114 with the string/null/Object.prototype fixtures green. Kept for the same " +
+      "safe-direction reason. Labelled inert in the source, and — as with the entry above " +
+      "— it is THIS ENTRY that keeps the term present: delete both terms and the proof " +
+      "still passes, while this gate fails with STALE allowlist entry.",
+  },
+  {
     file: "lib/integrations/src/integrations/identity-risk/evaluate.ts",
     line: 'if (detectionsObserved && principal.riskLevel === "none") {',
     reason:

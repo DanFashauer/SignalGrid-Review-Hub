@@ -119,6 +119,51 @@ weak credential with a healthy *different* one would otherwise be graded as if t
 requested credential had been read, and two such substitutions would satisfy the
 count while the real credentials were never seen.
 
+## The reference transport, and what it puts on the wire
+
+`makeDefaultPasskeyTransport(baseUrl)` is the reference HTTP shape for this
+connector — a bearer-authenticated GET against an IdP's authentication-methods
+export, bounded by `PASSKEY_TRANSPORT_TIMEOUT_MS` (10 s). A real IdP adapter will
+differ; three properties are not optional, and each is pinned by a check in
+`proof:passkey-assurance` that observes the REQUEST rather than the response.
+
+- **The credential ref travels with the request.** This transport carries it as a
+  `credential_ref` query parameter: `GET {baseUrl}/{identityRef}?credential_ref={ref}`,
+  both segments percent-encoded. An adapter may carry it in a header or a body
+  instead — what it may not do is drop it. Dropping it is what this transport used
+  to do, and `fetchNormalizedSet(id, ["c1", "c2"])` then issued two *identical*
+  requests: N refs asking one question N times, with only the substitution guard
+  (written for a hostile source) rescuing the verdict by accident. The proof
+  asserts that N refs produce N requests that DIFFER, each carrying its own ref —
+  not an exact URL — so a header- or body-carried ref is not a false positive.
+- **A blank or non-string requested `credentialRef` is refused too**, with
+  `credential_ref_missing`, before any request leaves — `?credential_ref=` and
+  `?credential_ref=null` never reach the wire. `undefined` is a different statement
+  ("no ref requested") and still produces no query string at all.
+- **A request-shaping refusal happens BEFORE the socket.** An empty or
+  whitespace-only `identityRef` raises `PasskeyConnectorError("identity_ref_missing")`
+  without calling `fetch`, because `${baseUrl}/` is the COLLECTION endpoint: an
+  absent input would otherwise WIDEN the outbound request, and the fail-closed
+  verdict downstream (`IDENTITY_REF_MISSING`) arrives only after the wider request
+  has left. `.` and `..` raise `identity_ref_invalid` for the neighbouring reason —
+  dots are unreserved, so `encodeURIComponent` leaves them intact and the segment
+  pops one level off the path. Those two exact values are rejected by name; there
+  is deliberately no general identity-value regex, because guessing at what an IdP
+  may use as a subject id rejects real identities.
+- **A timeout is typed like every other failure.** `AbortSignal.timeout` rejects
+  with a runtime `TimeoutError`, which used to propagate untyped while every other
+  failure carried a `PasskeyConnectorError` code — the one failure mode a slow IdP
+  actually produces was the one a caller could not switch on. It is now
+  `PasskeyConnectorError("timeout")`. Other network errors are rethrown untouched
+  rather than relabelled as something the transport did not establish.
+
+**An absent report is not a clean one.** A 200 carrying `{}` normalizes to
+`reportIntegrity: "malformed"`, not `clean`: `clean` says "we read this source's
+answer and every field parsed", and an empty body asserts nothing. The verdict is
+unchanged by that relabelling — it was already `step_up` with
+`CREDENTIAL_REF_MISSING` — but the integrity label is read on its own, so it has to
+be true on its own.
+
 ## Why `restrict` for missing user verification
 
 Every other failure here raises to `step_up`, because an unread axis is a reason to
@@ -153,7 +198,11 @@ real question — but the fabric no longer has to stop there.
 - **It does not re-implement WebAuthn verification.** `lib/webauthn` verifies an
   assertion; this grades the standing worth of the credential behind it.
 - Registered with the mutation guard from day one (TARGETS, zero survivors), not
-  queued.
+  queued. Two terms in `normalizeReport` became INERT when the absent-report rule
+  landed (`readThrew ||` and `!plain ||` — `assertsNothing` is true for both states);
+  they are kept, labelled inert in the source, and registered with a checkable reason
+  rather than deleted, because they fail in the safe direction if that rule is ever
+  narrowed.
 
 ## One disagreement with the source framing
 
@@ -167,7 +216,9 @@ recovery plan. This dimension takes no position on which tier a given population
 should hold; it grades what a credential actually is, and `recoveryRisk` makes the
 tradeoff visible instead of implicit.
 
-Proven by `proof:passkey-assurance` (91 checks; the three headline claims pinned
+Proven by `proof:passkey-assurance` (114 checks; the three headline claims pinned
 individually, per-field integrity, hostile shapes, both grant-safety enumerations
-including a non-vacuity guard, the identity-level worst-wins aggregation, and the
-connector surface; deterministic, offline).
+including a non-vacuity guard, the identity-level worst-wins aggregation, the
+connector surface, and the reference transport's REQUEST — its two pre-socket
+refusals, its per-ref distinctness, its encoding, and its typed timeout;
+deterministic, offline).

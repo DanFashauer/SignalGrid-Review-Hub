@@ -127,7 +127,13 @@ export class WebhookSIEMAdapter implements SIEMAdapter {
       };
     }
 
-    const payload = JSON.stringify(event);
+    // WHAT MAY LEAVE, NAMED. This was `JSON.stringify(event)` — the entire inbound
+    // SIEMEventRequest, serialised verbatim to a customer-configured URL. The emit
+    // gate above answers "may I send"; nothing answered "what may I send", so any
+    // field a caller ever added to the request type crossed to the vendor the day it
+    // was added, with no edit here and no review. The declared set lives in
+    // ../adapters/payload-fields.ts and is asserted by scripts/src/emit-gate-proof.ts.
+    const payload = JSON.stringify(this.buildEventPayload(event));
     const headers = { ...this.config.headers };
 
     const signature = this.signPayload(payload);
@@ -186,6 +192,76 @@ export class WebhookSIEMAdapter implements SIEMAdapter {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Build the outbound event body — the CLOSED set of fields this adapter sends.
+   *
+   * Every typed sub-object is copied FIELD BY FIELD rather than by reference, so a
+   * field added to `SIEMEventRequest.actor` (or device/session/location, or an
+   * evidence element) does NOT start crossing to a customer's collector because
+   * somebody widened a type upstream. Adding a field here is the deliberate act.
+   *
+   * THE ONE OPEN SLOT is `customFields`, and it is open BY DECLARATION: it is
+   * `Record<string, unknown>` on the request type — the caller's own escape hatch —
+   * so it is carried through under its own key rather than merged into the payload.
+   * `evidence[].data` is the second declared-open map, nested under a closed element
+   * shape. Both are named in ../adapters/payload-fields.ts and in
+   * docs/DATA_RETENTION_AND_PERSONAL_DATA.md.
+   */
+  private buildEventPayload(event: SIEMEventRequest): Record<string, unknown> {
+    return {
+      type: event.type,
+      severity: event.severity,
+      timestamp: event.timestamp,
+      caseId: event.caseId,
+      requestId: event.requestId,
+      correlationId: event.correlationId,
+      actor: event.actor
+        ? {
+            userId: event.actor.userId,
+            badgeUid: event.actor.badgeUid,
+            email: event.actor.email,
+            name: event.actor.name,
+          }
+        : undefined,
+      device: event.device
+        ? {
+            deviceId: event.device.deviceId,
+            platform: event.device.platform,
+            ip: event.device.ip,
+            mac: event.device.mac,
+            tags: event.device.tags,
+          }
+        : undefined,
+      session: event.session
+        ? {
+            sessionId: event.session.sessionId,
+            startedAt: event.session.startedAt,
+            endedAt: event.session.endedAt,
+            duration: event.session.duration,
+          }
+        : undefined,
+      location: event.location
+        ? {
+            zone: event.location.zone,
+            building: event.location.building,
+            floor: event.location.floor,
+            coordinates: event.location.coordinates
+              ? { lat: event.location.coordinates.lat, lng: event.location.coordinates.lng }
+              : undefined,
+          }
+        : undefined,
+      evidence: event.evidence?.map((e) => ({
+        type: e.type,
+        timestamp: e.timestamp,
+        // DECLARED OPEN SLOT — `evidence[].data` is Record<string, unknown> on the
+        // request type. The element around it is closed; this map is not.
+        data: e.data,
+      })),
+      // DECLARED OPEN SLOT — the caller's own Record<string, unknown>.
+      customFields: event.customFields,
+    };
   }
 
   private signPayload(payload: string): string {

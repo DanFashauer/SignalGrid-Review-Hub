@@ -65,7 +65,8 @@
     "./vuln-scan": "./src/integrations/vuln-scan/index.ts",
     "./webhooks": "./src/integrations/webhooks/index.ts",
     "./webhooks/store": "./src/integrations/webhooks/store.ts",
-    "./telemetry/store": "./src/integrations/telemetry/store.ts"
+    "./telemetry/store": "./src/integrations/telemetry/store.ts",
+    "./adapters/payload-fields": "./src/integrations/adapters/payload-fields.ts"
   },
   "dependencies": {
     "ioredis": "^5.4.1",

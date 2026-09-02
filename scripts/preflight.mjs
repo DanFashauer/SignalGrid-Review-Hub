@@ -227,6 +227,14 @@ const STEPS = [
   // its sense inverted, failing open on the exact input it exists for.
   { name: "Signing-unconditional self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-signing-unconditional.mjs", "--self-test"] },
   { name: "Signing unconditional (a missing secret refuses; it never sends unsigned)", cmd: ["node", "scripts/check-signing-unconditional.mjs"] },
+  // Third question at the same boundary. Ungated-fetch asks whether the call was
+  // ALLOWED; signing-unconditional asks whether it went out SIGNED; this asks WHAT
+  // WAS IN IT. The emit gate's own header says it "decides WHETHER anything may
+  // leave, not what it looks like" — so `JSON.stringify(event)` sent an entire
+  // inbound request to a customer-configured URL inside a boundary three documents
+  // describe as closed, and nothing was watching.
+  { name: "Emit-payload-discipline self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-emit-payload-discipline.mjs", "--self-test"] },
+  { name: "Emit payload discipline (every field crossing to a vendor is named; open slots declared)", cmd: ["node", "scripts/check-emit-payload-discipline.mjs"] },
   // Sibling of the ungated-fetch gate. That one asks whether a call was allowed to happen;
   // this one asks whether the RESULT reported was one anybody observed. Twelve connectors
   // returned `status: 200` after awaiting an injected transport that resolves a payload —

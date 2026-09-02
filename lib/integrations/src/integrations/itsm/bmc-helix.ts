@@ -302,9 +302,20 @@ export class BMCHelixAdapter implements ITSMAdapter {
       incident.ConfigurationItem = request.deviceId;
     }
 
-    // Add links
+    // Links — NAMED FIELD BY FIELD, like every other typed sub-object in this
+    // batch. This was `JSON.stringify(request.links)`: a closed typed object, so
+    // it broke no rule the gate enforces, but it broke the RULE THE BATCH STATES
+    // ("typed sub-objects are copied field by field, so an upstream addition never
+    // crosses unchosen") — and `links` is exactly the kind of shape that grows a
+    // fifth URL. Serialising it by reference would have carried that fifth URL to a
+    // customer's ITSM the day it was added. The four fields are adapters/types.ts:22-27.
     if (request.links) {
-      incident.Links = JSON.stringify(request.links);
+      incident.Links = JSON.stringify({
+        dashboard: request.links.dashboard,
+        auditLog: request.links.auditLog,
+        device: request.links.device,
+        session: request.links.session,
+      });
     }
 
     return incident;

@@ -54,6 +54,86 @@ the field is open hardening work.
 | `sessions` | `lib/persistence/migrations/002_sessions.sql:5-18` | One row per gated session | `identity_ref`, `device_ref` (columns, not JSONB) | Session continuity and step-up | **Decided-not-implemented for expiry-then-delete**: expiry is implemented (`expires_at`, status flip), deletion is not — expired rows persist |
 | `audit_ledger` | `lib/audit/migrations/001_audit_ledger.sql:10-21` | Hash-chained audit events | `actor` JSONB (`{type, id}` — id can be an identity ref), `target` JSONB, `meta` JSONB | Tamper-evident record of actions | **Unwritten, and structurally append-only**: no expiry column, no partitioning, runtime role denied DELETE; any future retention design must preserve chain verifiability — with the known limitation stated: deleting a PREFIX or interior rows breaks `prev_hash` continuity and is detectable, but deleting a SUFFIX leaves every surviving link valid and still verifies as intact (`proof:audit-ledger-pg` pins this; `docs/LEDGER_TRUNCATION_FINDING.md`), so the design needs an external anchor or minimum-record-count check, not chain verification alone |
 
+## Data that LEAVES the system — the outbound field sets
+
+Everything above is about data SignalGrid **stores**. This section is the other
+direction: the fields that cross to a third-party vendor when one of the
+six emitter families sends. It was undocumented until 2026-09-02, and the reason it needed writing is
+that the boundary answered only half the question. `lib/integrations/src/integrations/adapters/emit-gate.ts`
+and each family's `resolve.ts` decide **whether** anything may be sent — tier, the
+`SIGNALGRID_LIVE_INTEGRATIONS` flag, a credential. Nothing decided **what**. The
+gate's own header says so: it "decides WHETHER anything may leave, not what it
+looks like."
+
+**No production caller exists today.** Only the proof harnesses under
+`scripts/src/` construct these adapters; no host app, no `/v1` route and no
+decision path wires one. Every field set below therefore describes what *would*
+cross when a deployment injects a transport, not traffic that happens now. That is
+also why the fix landed now — closing it before the first caller exists costs one
+declaration file.
+
+The canonical, machine-checked declaration is
+`lib/integrations/src/integrations/adapters/payload-fields.ts`. It is read by two
+independent readers, so the prose here cannot drift away from the code without
+something going red: `scripts/check-emit-payload-discipline.mjs` (lexical, in
+preflight and CI) and section 13 of `scripts/src/emit-gate-proof.ts`, which drives
+one vector per vendor with a key planted at every level and asserts what came back
+off the wire.
+
+### Per family
+
+Column and key names below are the vendor field names the adapters emit today. A location or `Zone` column carries whatever the host app supplied in the request; it is not a claim that zone, badge-presence or any other deferred signal ships.
+| Family | What crosses (closed set) | The one declared open slot | Where |
+| --- | --- | --- | --- |
+| `siem` (Splunk HEC) | `time, host, index, source, sourcetype, event`; inside `event`: `type, severity, timestamp, caseId, requestId, correlationId, actor, device, session, location, evidence, customFields` | `customFields`, plus `evidence[].data` nested in a closed element shape | `lib/integrations/src/integrations/siem/splunk.ts` |
+| `siem` (Microsoft Sentinel) | `TimeGenerated, EventType, Severity, CaseId, RequestId, CorrelationId, ActorUserId, ActorBadgeUid, ActorEmail, ActorName, DeviceId, DevicePlatform, DeviceIp, DeviceMac, DeviceTags, SessionId, SessionStartedAt, SessionEndedAt, SessionDuration, LocationZone, LocationBuilding, LocationFloor, LocationLat, LocationLng, Evidence` — written AFTER the open slot, so a caller key named `ActorEmail` or `TimeGenerated` cannot occupy a sanctioned column | `customFields`, **flattened into the row's top level** — the only flattened slot in the whole surface, because Sentinel's Custom Log format has no nesting. It is merged FIRST and every sanctioned column is written after it, so a sanctioned field always wins; the opposite order let a caller key overwrite a column SignalGrid derived | `lib/integrations/src/integrations/siem/sentinel.ts` |
+| `siem` (signed webhook) | `type, severity, timestamp, caseId, requestId, correlationId, actor, device, session, location, evidence, customFields` | `customFields`, plus `evidence[].data` | `lib/integrations/src/integrations/siem/webhook.ts` |
+| `syslog` | `timestamp, type, severity, actor, device, session, location, correlationId, requestId, caseId, customFields` (JSON format; CEF and LEEF emit a narrower, already field-by-field extension set, and neither emits evidence) | `customFields` | `lib/integrations/src/integrations/syslog/transport.ts` |
+| `itsm` (seven vendors) | Per-vendor ticket/incident fields only — subject/summary, description, priority or impact+urgency, category, source, correlation id, requester email/name/id, device or CI reference | none for the seven typed vendors; the generic-webhook adapter's `rawEvent` template context is the family's one open slot, and even there the emitted body is the **operator's** own template, so only variables that template names are substituted | `lib/integrations/src/integrations/itsm/` |
+| `telemetry` | An OAuth client-credentials token request (`client_id, client_secret, scope, tenant_id`) and a bounded live query (`query, selected`) | none — no caller-supplied map reaches either path | `lib/integrations/src/integrations/telemetry/` |
+| `webhooks` | `id, type, timestamp, source, data, deliveryId` | `data` — the event body the caller composes | `lib/integrations/src/integrations/webhooks/dispatch.ts` |
+| `caep-events` | `iss, aud, jti, iat, sub_id, events` (an UNSIGNED claims set; this family has no transport at all, and the subject is a pseudonym — an email-shaped subject refuses) | none | `lib/integrations/src/integrations/caep-events/format.ts` |
+
+### The name-equivalents, stated rather than left to be noticed
+
+The paragraph above about `requestContext` warns that a host app can put a
+name-equivalent into a durable store. The outbound direction is not the same
+situation and must not be read as one: here the name-equivalents are **declared
+fields of the adapter types**, deliberately carried, not accidents of a free-text
+map.
+
+- `userEmail`, `userName`, `userId` on `ITSMTicketRequest`
+- `actor.email`, `actor.name`, `actor.userId`, `actor.badgeUid` on `SIEMEventRequest`
+- `device.ip`, `device.mac`, and `location.coordinates` — a device address and a
+  physical position, which are personal data in combination with the actor fields
+  above
+
+They exist because a service-desk ticket nobody can route and a SIEM event nobody
+can attribute are not useful. The honest statement for an assessor is: SignalGrid's
+own **stores** are pseudonymous by design; its outbound **adapters** are not, they
+carry the identifiers the receiving system needs, and the closed sets above are the
+complete list of what they carry. The typed sub-objects (`actor`, `device`,
+`session`, `location`) are copied field by field at every builder precisely so this
+list stays complete — a field added to one of those types upstream does not begin
+crossing until somebody edits a builder.
+
+### What is GATED and what is REPORTED
+
+**GATED.** The key sets above. `scripts/check-emit-payload-discipline.mjs` fails on
+a whole-object copy, a spread of a caller's object into a payload, an untyped map
+read outside a declared open slot, and an entries-merge — with the scope derived
+from the tree (a family is a directory whose `resolve.ts` imports
+`createEmitterResolver`) rather than listed. `emit-gate-proof` asserts the same
+sets against the bodies real adapters hand to `fetch`, and names the offending key
+when one is unexpected.
+
+**REPORTED, not gated.** The **content** a caller places in a declared open slot.
+`customFields`, `evidence[].data`, the webhook `data` slot and the generic-webhook
+template context are `Record<string, unknown>` by design; SignalGrid cannot see what
+a host app puts in them, and a gate claiming otherwise would be asserting something
+it does not hold. Integration guidance must tell host apps the same thing it already
+tells them about `requestContext`: send references, not identifiers.
+
 ## What this means for claims
 
 - No surface may state a retention **duration** as shipped. The honest

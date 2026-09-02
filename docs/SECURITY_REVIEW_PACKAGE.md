@@ -33,7 +33,25 @@ There is no executor in this repository. See
 |---|---|
 | Decision core | `lib/signalgrid-core`, `lib/posture-composition` |
 | `/v1` decision + evidence API | `artifacts/api-server` |
-| Connector normalizers (read-only) | `lib/integrations/*` |
+| Connector normalizers (read-only) **and the six outbound emitter families (they WRITE)** | `lib/integrations/*` |
+
+> The parenthetical on that row said "read-only" alone until 2026-09-02, and it was
+> wrong in the direction that matters to an assessor. Most of `lib/integrations` is
+> read-only by discipline — the UEM and NAC actuators were deleted rather than gated,
+> for reasons stated in `lib/integrations/src/integrations/adapters/types.ts`. But six
+> families SEND: `itsm`, `siem`, `syslog`, `telemetry`, `webhooks` and `caep-events`.
+> An assessor reading "read-only" would not have looked for an outbound boundary at
+> all. Verify three things about it, in this order: **whether** anything may be sent
+> (`lib/integrations/src/integrations/adapters/emit-gate.ts` — tier AND
+> `SIGNALGRID_LIVE_INTEGRATIONS` AND a credential, fail-closed), whether it goes out
+> **signed** (`scripts/check-signing-unconditional.mjs`), and **what may be sent**
+> (`lib/integrations/src/integrations/adapters/payload-fields.ts`, held by
+> `scripts/check-emit-payload-discipline.mjs` and section 13 of
+> `scripts/src/emit-gate-proof.ts`). The outbound field sets and their declared open
+> slots are written out in
+> [Data retention and personal data](DATA_RETENTION_AND_PERSONAL_DATA.md). No
+> production caller constructs these adapters today; only the proofs under
+> `scripts/src/` do.
 | Auth / tenancy | `lib/enterprise-auth`, `lib/audit` |
 | Operator console | `artifacts/signalgrid-review` |
 | iOS shell | `native/ios/EnterpriseShell` |

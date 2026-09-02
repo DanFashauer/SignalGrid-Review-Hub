@@ -187,7 +187,11 @@ export class ManageEngineAdapter implements ITSMAdapter {
       workOrder.affected_resource = { device_id: request.deviceId };
     }
 
-    // Add tags/custom fields
+    // `custom_fields` here is CLOSED BY CONSTRUCTION, not an open slot — the same
+    // note freshservice carries, written out because the KEY NAME is the one that
+    // invites the wrong reading. It is built from two named request fields below;
+    // no caller map reaches it, and `ITSMTicketRequest.rawEvent` is deliberately
+    // not among them. Declared as closed in ../adapters/payload-fields.ts.
     const customFields: Record<string, string> = {};
     if (request.correlationId) {
       customFields.correlation_id = request.correlationId;

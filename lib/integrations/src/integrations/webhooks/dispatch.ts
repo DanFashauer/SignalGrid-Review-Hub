@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import {
   WebhookConfig,
   WebhookPayload,
+  WebhookPayloadSchema,
   WebhookEventType,
   DeliveryStatus,
 } from './types';
@@ -172,13 +173,48 @@ export function validateWebhookUrl(
 }
 
 /**
- * Build webhook payload
+ * The reason recorded when the envelope itself will not build.
+ *
+ * EXPORTED so a proof can assert the REASON rather than merely that something
+ * failed — `success === false` is satisfied by a network error, a 500, a missing
+ * secret and this, and an assertion that cannot tell them apart is not holding the
+ * behaviour it claims to.
+ */
+export const WEBHOOK_ENVELOPE_INVALID =
+  'webhook envelope refused: the payload does not match WebhookPayloadSchema (a source edit added or renamed a top-level key)';
+
+/**
+ * Build webhook payload — the CLOSED top-level set, now actually enforced.
+ *
+ * `WebhookPayloadSchema` has described this shape since the family was written and
+ * NOTHING EVER PARSED IT. A schema nobody parses cannot reject anything; it is
+ * documentation wearing a validator's clothes, and it made the boundary look
+ * defended to the next reader. It is `.strict()` and it is parsed here, which is
+ * the one place a webhook body is constructed — so the six top-level keys below
+ * are the six keys that can leave, and an unknown seventh is a thrown error rather
+ * than a silently-stripped field or a silently-forwarded one.
+ *
+ * SAID EXACTLY: this rejects a seventh key added to the literal below — a SOURCE
+ * EDIT — and it does not validate caller content. Caller data is confined to `data`,
+ * whose schema is `z.record(z.unknown())`: no caller FIELD can make this throw,
+ * because every key inside `data` is accepted. The one caller-reachable failure is
+ * `data` not being an object at all, which a JavaScript caller (or a TypeScript one
+ * with a cast) can still produce. So the refusal path in `dispatchEvent` is mostly
+ * about a developer's edit reaching production — and is reachable, which is why it is
+ * driven rather than reasoned about.
+ *
+ * `data` IS THE DECLARED OPEN SLOT, and the only one. It is
+ * `z.record(z.string(), z.unknown())` by design: the caller composes the event body
+ * and this dispatcher does not interpret it. That is honest and it is bounded to
+ * one key — it is NOT the same as copying the caller's object over the envelope.
+ * Declared in ../adapters/payload-fields.ts, named in
+ * docs/DATA_RETENTION_AND_PERSONAL_DATA.md.
  */
 function buildPayload(
   eventType: WebhookEventType,
   data: Record<string, unknown>
 ): WebhookPayload {
-  return {
+  return WebhookPayloadSchema.parse({
     id: crypto.randomUUID(),
     type: eventType,
     timestamp: new Date().toISOString(),
@@ -186,9 +222,10 @@ function buildPayload(
       service: 'tap-to-login',
       version: '1.0.0',
     },
+    // DECLARED OPEN SLOT — the caller's own map, under its own key.
     data,
     deliveryId: crypto.randomUUID(),
-  };
+  });
 }
 
 /**
@@ -426,8 +463,29 @@ export async function dispatchEvent(
     return { dispatched: 0, succeeded: 0, failed: 0, suppressed: 0 };
   }
 
-  // Build payload
-  const payload = buildPayload(eventType, data);
+  // BUILD, OR REFUSE VISIBLY. `buildPayload` parses through a `.strict()` schema,
+  // so a seventh key added to its literal throws — and an uncaught throw here left
+  // the worst possible trace: ZERO delivery rows, no summary, and an exception
+  // surfacing in whatever raised the event, with nothing in the per-webhook
+  // delivery log an operator opens to ask "what happened to my webhook?". That is
+  // the same defect this file already fixed twice — a refusal nobody can see is
+  // indistinguishable from an event that was never raised.
+  //
+  // So the refusal is RECORDED, one row per subscribed webhook naming the schema
+  // error, and the summary is returned like any other outcome. `failed`, not
+  // `suppressed`: no policy withheld this, a source edit broke the envelope and
+  // somebody must chase it.
+  let payload: WebhookPayload;
+  try {
+    payload = buildPayload(eventType, data);
+  } catch (error) {
+    const detail = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ').slice(0, 300);
+    const reason = `${WEBHOOK_ENVELOPE_INVALID}: ${detail}`;
+    for (const webhook of webhooks) {
+      await recordDelivery(webhook.id, crypto.randomUUID(), 'failed', undefined, undefined, reason);
+    }
+    return { dispatched: webhooks.length, succeeded: 0, failed: webhooks.length, suppressed: 0 };
+  }
 
   // Dispatch to all webhooks in parallel
   const results = await Promise.allSettled(

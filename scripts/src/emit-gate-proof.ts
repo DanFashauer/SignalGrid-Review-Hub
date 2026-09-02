@@ -43,9 +43,28 @@ import { FleetDMAdapter } from "@workspace/integrations/telemetry";
 import { SplunkAdapter } from "@workspace/integrations/siem/splunk";
 import { SentinelAdapter } from "@workspace/integrations/siem/sentinel";
 import { MDEAdapter } from "@workspace/integrations/telemetry/mde";
-import type { SIEMEventRequest, SIEMEventResponse } from "@workspace/integrations/adapters/types";
+import type { SIEMEventRequest, SIEMEventResponse, ITSMTicketRequest } from "@workspace/integrations/adapters/types";
+// The DECLARED outbound field set — what may leave, per builder. Section 13 asserts
+// the key set actually emitted against it; scripts/check-emit-payload-discipline.mjs
+// reads the same file lexically. Two readers, one source.
+import {
+  OUTBOUND_BUILDERS,
+  DECLARED_FAMILIES,
+  SIEM_TYPED_SUBOBJECTS,
+  builderFor,
+  permittedTopLevel,
+} from "@workspace/integrations/adapters/payload-fields";
+import { buildTemplateContext } from "@workspace/integrations/itsm";
+import { buildCaepClaims } from "@workspace/integrations/caep-events";
+import { dispatchEvent, DEFAULT_DISPATCHER_CONFIG, WEBHOOK_ENVELOPE_INVALID } from "@workspace/integrations/webhooks";
+import { createWebhook, getDeliveryLogs } from "@workspace/integrations/webhooks/store";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+
+/** The DERIVED emitter-family set, hoisted out of section 5's block so section 14
+ *  can hold payload-fields.ts to it. Derived, never listed: a directory whose
+ *  resolve.ts imports createEmitterResolver. */
+let DERIVED_EMITTER_FAMILIES: string[] = [];
 
 let passed = 0;
 const failures: string[] = [];
@@ -350,6 +369,7 @@ check(
   // expectation and calls the agreement coverage. The counts are asserted because
   // this file's own header states them in prose ("Six resolve.ts files, four callers
   // of this one") — the prose and the derivation now fail together or not at all.
+  DERIVED_EMITTER_FAMILIES = [...emitterFamilies];
   check(
     `derived: six emitter families in the tree (found ${emitterFamilies.length}: ${emitterFamilies.join(", ")})`,
     emitterFamilies.length === 6,
@@ -723,6 +743,540 @@ check(
   } finally {
     if (savedTier === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedTier;
   }
+}
+
+
+// ── 13. WHAT MAY LEAVE — the declared field set, asserted off the wire ───────
+//
+// Sections 1-12 answer ONE question: MAY anything be sent (tier, live flag,
+// credential). The gate's own header says so out loud — "the vendor modules type
+// their own payloads; the gate decides WHETHER anything may leave, not what it
+// looks like." Nothing answered the second question, and the answer was worse than
+// nobody had checked: `siem/webhook.ts` ran `JSON.stringify(event)` on the entire
+// inbound SIEMEventRequest and POSTed it to a customer-configured URL, jira dumped
+// the untrusted `rawEvent` map into a ticket description, and splunk / sentinel /
+// syslog copied `actor`, `device`, `session`, `location`, `evidence` and
+// `customFields` as whole objects. Every one of them would have carried a field
+// added upstream tomorrow, with no edit at the boundary and nothing to review.
+//
+// (A fail-closed read on 2026-09-02 put the census at 27 construction sites and 17
+// whole-object copies at 7 sites. That figure is THAT READ'S, cited and not
+// re-measured here — nothing in this file holds it. What this file holds is the
+// vector count printed in its own summary line and the per-vendor assertions below.)
+//
+// THE VECTOR. One request per vendor carrying a PLANTED key at every level — top
+// level, inside `actor`, inside `rawEvent`, inside `customFields`, inside
+// `evidence[].data`. The assertion is that the emitted key set is a subset of the
+// set declared in `adapters/payload-fields.ts`, and that the planted key surfaces
+// ONLY where an open slot declares it may. The failure NAMES THE KEY, because "a
+// check failed" does not tell the next person what crossed.
+//
+// NON-VACUITY IS ASSERTED, NOT ASSUMED. A planted key that never reached the
+// builder would satisfy every subset assertion for the wrong reason, so each vector
+// also asserts that the OPEN-SLOT plant DOES cross. Both directions, every vector.
+//
+// These run at prod + SIGNALGRID_LIVE_INTEGRATIONS=true with the spy installed
+// exactly as the non-vacuity control in section 10 does — the fetch must be
+// ATTEMPTED for there to be a body to read. The spy throws before any socket
+// opens; nothing leaves this process.
+{
+  const realFetch = globalThis.fetch;
+  let captured: Array<{ url: string; body: string }> = [];
+  const installBodySpy = (): void => {
+    captured = [];
+    globalThis.fetch = ((input: unknown, init?: { body?: unknown }): never => {
+      const body = init?.body;
+      captured.push({
+        url: String(input),
+        body: typeof body === "string" ? body : body === undefined ? "" : String(body),
+      });
+      throw new Error("FETCH ATTEMPTED — the spy records the body and stops here; no socket opens");
+    }) as unknown as typeof globalThis.fetch;
+  };
+
+  const PLANT = {
+    top: "__planted_top__",
+    actor: "__planted_actor__",
+    raw: "__planted_raw__",
+    custom: "__planted_custom__",
+    evidence: "__planted_evidence__",
+  };
+
+  // Obviously synthetic throughout: example.test hosts, RFC 5737 documentation IPs,
+  // no tenant ids, no real identifiers.
+  const plantedEvent = {
+    type: "payload.vector",
+    severity: "low",
+    timestamp: "2026-09-02T00:00:00.000Z",
+    caseId: "case-synthetic-1",
+    requestId: "req-synthetic-1",
+    correlationId: "corr-synthetic-1",
+    actor: {
+      userId: "user-synthetic-1",
+      badgeUid: "badge-synthetic-1",
+      email: "worker@example.test",
+      name: "Synthetic Worker",
+      [PLANT.actor]: "must-not-cross",
+    },
+    device: { deviceId: "device-synthetic-1", platform: "ios", ip: "203.0.113.5", mac: "00:00:5e:00:53:01", tags: ["synthetic"] },
+    session: { sessionId: "session-synthetic-1", startedAt: "2026-09-02T00:00:00.000Z", endedAt: "2026-09-02T00:05:00.000Z", duration: 300 },
+    location: { zone: "zone-synthetic", building: "building-synthetic", floor: "3", coordinates: { lat: 0, lng: 0 } },
+    evidence: [{ type: "synthetic", timestamp: "2026-09-02T00:00:00.000Z", data: { [PLANT.evidence]: "declared open slot" } }],
+    customFields: { [PLANT.custom]: "declared open slot" },
+    [PLANT.top]: "must-not-cross",
+  } as unknown as SIEMEventRequest;
+
+  const plantedTicket = {
+    title: "payload vector",
+    description: "must never carry an undeclared field",
+    severity: "low" as const,
+    category: "synthetic",
+    source: "proof",
+    correlationId: "corr-synthetic-1",
+    userId: "user-synthetic-1",
+    userEmail: "worker@example.test",
+    userName: "Synthetic Worker",
+    deviceId: "device-synthetic-1",
+    deviceName: "device-synthetic",
+    devicePlatform: "ios",
+    links: { dashboard: "https://console.example.test/d" },
+    rawEvent: { [PLANT.raw]: "untrusted vendor passthrough" },
+    [PLANT.top]: "must-not-cross",
+  } as unknown as ITSMTicketRequest;
+
+  const CUSTOM_KEYS = new Set(Object.keys((plantedEvent as { customFields?: Record<string, unknown> }).customFields ?? {}));
+
+  /** Resolve payload-fields.ts's `bodyPath` against a parsed body. */
+  const atPath = (body: unknown, path: string): unknown => {
+    if (path === "") return body;
+    if (Array.isArray(body)) return body[Number(path)];
+    return (body as Record<string, unknown>)[path];
+  };
+
+  /**
+   * The assertion, for one builder. Three claims, and the first two NAME THE KEY:
+   *   · the emitted top-level key set is a subset of the declared closed set (plus
+   *     any declared open slot, plus — for sentinel alone — the flattened slot);
+   *   · no planted key crosses anywhere in the body except through an open slot;
+   *   · NON-VACUITY: the open-slot plant DOES cross, so the vector reached here.
+   */
+  const assertDeclared = (
+    label: string,
+    moduleName: string,
+    builderName: string,
+    emitted: unknown,
+    opts: { openPlant?: string; flattenedAllowed?: Set<string> } = {},
+  ): void => {
+    const decl = builderFor(moduleName, builderName);
+    if (!decl || typeof emitted !== "object" || emitted === null) {
+      check(`${label}: a declared builder and an object to check it against`, false);
+      return;
+    }
+    const { closed, flattened } = permittedTopLevel(decl);
+    const openSlots = new Set(decl.open.map((o) => o.slot));
+    const allowFlat = opts.flattenedAllowed ?? new Set<string>();
+    const keys = Object.keys(emitted as Record<string, unknown>);
+    const unexpected = keys.filter(
+      (k) => !closed.has(k) && !openSlots.has(k) && !(flattened && allowFlat.has(k)),
+    );
+    check(
+      `${label}: emitted top-level keys ⊆ declared — unexpected: ${unexpected.length > 0 ? unexpected.join(", ") : "none"}`,
+      unexpected.length === 0,
+    );
+
+    const serialized = JSON.stringify(emitted);
+    for (const [where, key] of [["top level", PLANT.top], ["actor", PLANT.actor], ["rawEvent", PLANT.raw]] as const) {
+      if (opts.openPlant === key) continue;
+      check(`${label}: the key planted at ${where} (${key}) does NOT appear anywhere in the body`, !serialized.includes(key));
+    }
+    if (opts.openPlant) {
+      check(
+        `${label}: NON-VACUITY — the DECLARED OPEN SLOT plant (${opts.openPlant}) does cross, so this vector reached the builder`,
+        serialized.includes(opts.openPlant),
+      );
+    }
+  };
+
+  /** Nested typed sub-objects: actor/device/session/location must carry exactly the
+   *  fields adapters/types.ts declares — no more. This is the half a top-level key
+   *  check cannot see, and it is where four of the seventeen copies lived. */
+  const assertNested = (label: string, container: unknown): void => {
+    if (typeof container !== "object" || container === null) {
+      check(`${label}: nested sub-objects are readable`, false);
+      return;
+    }
+    const obj = container as Record<string, unknown>;
+    for (const name of ["actor", "device", "session", "location"]) {
+      const sub = obj[name];
+      if (typeof sub !== "object" || sub === null) continue;
+      const allowed = new Set(SIEM_TYPED_SUBOBJECTS[name] ?? []);
+      const extra = Object.keys(sub as Record<string, unknown>).filter((k) => !allowed.has(k));
+      check(
+        `${label}.${name}: keys ⊆ the declared typed shape — unexpected: ${extra.length > 0 ? extra.join(", ") : "none"}`,
+        extra.length === 0,
+      );
+    }
+  };
+
+  const savedTier = process.env.SIGNALGRID_TIER;
+  const savedLive = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  const savedMde = { tenant: process.env.MDE_TENANT_ID, client: process.env.MDE_CLIENT_ID, secret: process.env.MDE_CLIENT_SECRET };
+  const savedFleetEnv = { base: process.env.FLEETDM_BASE_URL, token: process.env.FLEETDM_API_TOKEN, allow: process.env.SIGNALGRID_ALLOW_LIVE_QUERY };
+
+  /** Drive one adapter with the spy installed and hand back the parsed body. */
+  const bodyOf = async (run: () => Promise<unknown>): Promise<unknown> => {
+    installBodySpy();
+    try { await run(); } catch { /* the spy throws by design */ }
+    if (captured.length === 0) return undefined;
+    try { return JSON.parse(captured[0].body); } catch { return captured[0].body; }
+  };
+
+  try {
+    process.env.SIGNALGRID_TIER = "prod";
+    process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+
+    // ── siem ────────────────────────────────────────────────────────────────
+    {
+      const body = await bodyOf(() =>
+        new SplunkAdapter({ hecUrl: "https://splunk.example.test", hecToken: "tok" }).sendEvent(plantedEvent),
+      );
+      check("siem/splunk: the spy captured a body (the vector reached the wire)", body !== undefined);
+      assertDeclared("siem/splunk", "siem/splunk.ts", "SplunkAdapter.buildEventPayload", atPath(body, ""));
+      assertDeclared("siem/splunk#event", "siem/splunk.ts", "SplunkAdapter.buildEventPayload#event", atPath(body, "event"), {
+        openPlant: PLANT.custom,
+      });
+      assertNested("siem/splunk#event", atPath(body, "event"));
+    }
+    {
+      const body = await bodyOf(() =>
+        new SentinelAdapter({ workspaceId: "ws-synthetic", primaryKey: "key" }).sendEvent(plantedEvent),
+      );
+      check("siem/sentinel: the spy captured a body", body !== undefined);
+      assertDeclared("siem/sentinel", "siem/sentinel.ts", "SentinelAdapter.buildEventPayload", atPath(body, "0"), {
+        openPlant: PLANT.custom,
+        flattenedAllowed: CUSTOM_KEYS,
+      });
+    }
+    // SENTINEL'S WRITE ORDER — the flattened open slot must never occupy a
+    // sanctioned column. Sentinel is the one family that MERGES customFields into
+    // the payload's top level, and the merge used to be the last write before
+    // `return`, so a caller key named `ActorEmail` or `TimeGenerated` overwrote the
+    // column SignalGrid derived: a row in a customer's SIEM asserting an actor and
+    // an instant this fabric never observed. Nothing stated the direction — the only
+    // ordering sentence in the tree was generic-webhook's, documenting the opposite.
+    // Driven with a hostile customFields map, asserting the SANCTIONED value arrives.
+    {
+      const hostile = {
+        ...(plantedEvent as unknown as Record<string, unknown>),
+        customFields: {
+          ActorEmail: "attacker@example.test",
+          TimeGenerated: "1970-01-01T00:00:00Z",
+          Evidence: "[]",
+          [PLANT.custom]: "declared open slot",
+        },
+      } as unknown as SIEMEventRequest;
+      const body = await bodyOf(() =>
+        new SentinelAdapter({ workspaceId: "ws-synthetic", primaryKey: "key" }).sendEvent(hostile),
+      );
+      const row = atPath(body, "0") as Record<string, unknown> | undefined;
+      check(
+        `siem/sentinel write order: a customFields key named ActorEmail does NOT occupy the sanctioned column (got "${String(row?.ActorEmail)}")`,
+        row?.ActorEmail === "worker@example.test",
+      );
+      check(
+        `siem/sentinel write order: a customFields key named TimeGenerated does NOT occupy the sanctioned column (got "${String(row?.TimeGenerated)}")`,
+        row?.TimeGenerated === "2026-09-02T00:00:00.000Z",
+      );
+      check(
+        "siem/sentinel write order: a customFields key named Evidence does NOT occupy the sanctioned column",
+        typeof row?.Evidence === "string" && (row.Evidence as string).includes("synthetic"),
+      );
+      check(
+        `siem/sentinel write order: NON-VACUITY — a customFields key that collides with NOTHING still arrives (${PLANT.custom})`,
+        row !== undefined && Object.prototype.hasOwnProperty.call(row, PLANT.custom),
+      );
+    }
+    {
+      const body = await bodyOf(() =>
+        new WebhookSIEMAdapter({ url: "https://siem.example.test/hook", method: "POST", signingSecret: "s".repeat(32) }).sendEvent(plantedEvent),
+      );
+      check("siem/webhook: the spy captured a body", body !== undefined);
+      assertDeclared("siem/webhook", "siem/webhook.ts", "WebhookSIEMAdapter.buildEventPayload", atPath(body, ""), {
+        openPlant: PLANT.custom,
+      });
+      assertNested("siem/webhook", atPath(body, ""));
+    }
+
+    // ── itsm, off the wire ──────────────────────────────────────────────────
+    const ITSM_WIRE: Array<[string, string, string, string, () => Promise<unknown>]> = [
+      ["itsm/zendesk", "itsm/zendesk.ts", "ZendeskAdapter.buildTicketPayload", "ticket",
+        () => new ZendeskAdapter({ instanceUrl: "https://acme.zendesk.example.test", email: "agent@example.test", apiToken: "tok" }).createTicket(plantedTicket)],
+      ["itsm/jira (JSM)", "itsm/jira.ts", "JiraAdapter.createJSMRequest", "",
+        () => new JiraAdapter({ baseUrl: "https://acme.atlassian.example.test", email: "agent@example.test", apiToken: "tok", serviceDeskId: "1", requestTypeId: "2", useJSM: true } as never).createTicket(plantedTicket)],
+      ["itsm/jira (issue)", "itsm/jira.ts", "JiraAdapter.createJiraIssue", "",
+        () => new JiraAdapter({ baseUrl: "https://acme.atlassian.example.test", email: "agent@example.test", apiToken: "tok", projectKey: "SG", useJSM: false } as never).createTicket(plantedTicket)],
+      ["itsm/servicenow", "itsm/servicenow.ts", "ServiceNowAdapter.buildIncidentPayload", "",
+        () => new ServiceNowAdapter({ instanceUrl: "https://acme.service-now.example.test", auth: { type: "api_token", apiToken: "tok" } }).createTicket(plantedTicket)],
+      ["itsm/freshservice", "itsm/freshservice.ts", "FreshserviceAdapter.buildTicketPayload", "",
+        () => new FreshserviceAdapter({ instanceUrl: "https://acme.freshservice.example.test", apiKey: "key" }).createTicket(plantedTicket)],
+      ["itsm/bmc-helix", "itsm/bmc-helix.ts", "BMCHelixAdapter.buildIncidentPayload", "",
+        () => new BMCHelixAdapter({ instanceUrl: "https://acme.bmc.example.test", auth: { type: "api_token", apiToken: "tok" } }).createTicket(plantedTicket)],
+      ["itsm/manageengine", "itsm/manageengine.ts", "ManageEngineAdapter.buildWorkOrderPayload", "",
+        () => new ManageEngineAdapter({ instanceUrl: "https://acme.me.example.test", technicianKey: "key" }).createTicket(plantedTicket)],
+    ];
+    for (const [label, moduleName, builderName, path, run] of ITSM_WIRE) {
+      const body = await bodyOf(run);
+      check(`${label}: the spy captured a body (the vector reached the wire)`, body !== undefined);
+      assertDeclared(label, moduleName, builderName, atPath(body, path));
+      // rawEvent is the plant this family had a live leak for: jira printed the whole
+      // map into the ticket DESCRIPTION, which is a string, so the subset check above
+      // could never have seen it. Search the raw body text.
+      const raw = typeof body === "string" ? body : JSON.stringify(body);
+      check(`${label}: the untrusted rawEvent plant (${PLANT.raw}) is nowhere in the body, description included`, !raw.includes(PLANT.raw));
+    }
+
+    // ── itsm/generic-webhook — the family's ONE declared open slot ───────────
+    //
+    // Asserted differently on purpose. The body here is the OPERATOR's own
+    // bodyTemplate after substitution, so what crosses is decided by the template,
+    // not by the caller's rawEvent. Both directions:
+    {
+      const closedTemplate = '{"title":"{{title}}","user":"{{userEmail}}"}';
+      const body = await bodyOf(() =>
+        new GenericWebhookAdapter({ url: "https://hooks.example.test/x", method: "POST", headers: {}, bodyTemplate: closedTemplate, signingSecret: "s".repeat(32) }).createTicket(plantedTicket),
+      );
+      const raw = typeof body === "string" ? body : JSON.stringify(body);
+      check("itsm/generic-webhook: a template naming only sanctioned variables carries NO planted key", !raw.includes(PLANT.raw) && !raw.includes(PLANT.top));
+      const ctx = buildTemplateContext(plantedTicket, "req-synthetic-1", "2026-09-02T00:00:00.000Z") as Record<string, unknown>;
+      check(
+        `itsm/generic-webhook: NON-VACUITY — the template CONTEXT does carry the rawEvent plant (${PLANT.raw}), which is why it is a declared open slot and not a silent copy`,
+        Object.prototype.hasOwnProperty.call(ctx, PLANT.raw),
+      );
+      const decl = builderFor("itsm/generic-webhook.ts", "buildTemplateContext");
+      const sanctioned = new Set(decl?.closed ?? []);
+      const fromRaw = Object.keys(ctx).filter((k) => !sanctioned.has(k));
+      check(
+        `itsm/generic-webhook: every context key outside the declared closed set came from the open slot — found: ${fromRaw.join(", ") || "none"}`,
+        fromRaw.length > 0 && fromRaw.every((k) => Object.prototype.hasOwnProperty.call(plantedTicket.rawEvent ?? {}, k)),
+      );
+    }
+
+    // ── syslog — no socket, by design, so the FORMATTER is the wire ──────────
+    //
+    // `sendEvent` formats and then throws on the live path (there is no transport in
+    // this repository and it refuses to pretend otherwise), so there is no body to
+    // capture. The formatter's own output is what a transport would carry, and it is
+    // read here through an explicit cast rather than by widening the class's public
+    // surface to make a proof convenient.
+    {
+      const syslog = new SyslogAdapter({ host: "collector.example.test", protocol: "udp", format: "json" });
+      const formatted = (syslog as unknown as { formatJSON(e: SIEMEventRequest): string }).formatJSON(plantedEvent);
+      const parsed = JSON.parse(formatted) as Record<string, unknown>;
+      assertDeclared("syslog/json", "syslog/transport.ts", "SyslogAdapter.formatJSON", parsed, { openPlant: PLANT.custom });
+      assertNested("syslog/json", parsed);
+    }
+
+    // ── itsm/ivanti — the OAuth token request precedes the incident ──────────
+    //
+    // Ivanti always fetches a token first, so the spy's first body is the token
+    // request, not the payload. Asserted off the builder for that reason, and the
+    // reason is stated rather than left as an unexplained difference.
+    {
+      const ivanti = new IvantiAdapter({ instanceUrl: "https://acme.ivanti.example.test", clientId: "cid", clientSecret: "secret" });
+      const incident = (ivanti as unknown as { buildIncidentPayload(r: ITSMTicketRequest): Record<string, unknown> }).buildIncidentPayload(plantedTicket);
+      assertDeclared("itsm/ivanti", "itsm/ivanti.ts", "IvantiAdapter.buildIncidentPayload", incident);
+      check(`itsm/ivanti: the rawEvent plant (${PLANT.raw}) is nowhere in the incident`, !JSON.stringify(incident).includes(PLANT.raw));
+    }
+
+    // ── webhooks ────────────────────────────────────────────────────────────
+    {
+      const hook = await createWebhook({
+        name: "payload-vector",
+        url: "https://hooks.example.test/wh",
+        events: ["session.start"],
+        secret: "s".repeat(48),
+      });
+      process.env[`WEBHOOK_SECRET_${hook.id.slice(0, 8)}`] = "s".repeat(48);
+      const oneAttempt = { ...DEFAULT_DISPATCHER_CONFIG, retry: { ...DEFAULT_DISPATCHER_CONFIG.retry, maxAttempts: 1 } };
+      installBodySpy();
+      // Wrapped, so a REFUSAL to build the envelope reports as a failed assertion
+      // naming what happened rather than as an uncaught stack. buildPayload now
+      // `.strict()`-parses, so an undeclared key throws here — which is the intended
+      // behaviour, and it must still be legible when it fires.
+      let buildRefusal: string | null = null;
+      try {
+        await dispatchEvent("session.start", { [PLANT.custom]: "declared open slot", probe: true }, oneAttempt);
+      } catch (e) {
+        buildRefusal = (e instanceof Error ? e.message : String(e)).replace(/\s+/g, " ").slice(0, 160);
+      }
+      check(
+        `webhooks/dispatch: the envelope built without refusal (${buildRefusal ?? "no refusal"})`,
+        buildRefusal === null,
+      );
+      const body = captured.length > 0 ? JSON.parse(captured[0].body) : undefined;
+      check("webhooks/dispatch: the spy captured a body", body !== undefined);
+      assertDeclared("webhooks/dispatch", "webhooks/dispatch.ts", "buildPayload", body, { openPlant: PLANT.custom });
+      const data = (body as { data?: Record<string, unknown> } | undefined)?.data ?? {};
+      check(
+        `webhooks/dispatch: the planted key appears ONLY under the declared open slot \`data\` (found there: ${Object.prototype.hasOwnProperty.call(data, PLANT.custom)})`,
+        Object.prototype.hasOwnProperty.call(data, PLANT.custom),
+      );
+
+      // THE ENVELOPE REFUSAL IS RECORDED, NOT THROWN AWAY. `buildPayload` parses
+      // through a `.strict()` schema, and an uncaught throw there left the worst
+      // trace available: zero delivery rows, no summary, and an exception surfacing
+      // in whatever raised the event — a refusal nobody can see, which this file has
+      // already fixed twice under other names. Driven through the one
+      // caller-reachable rejection (`data` that is not an object).
+      //
+      // THE REASON IS ASSERTED, NOT `success === false`: a failed delivery is equally
+      // consistent with a network error, a 500, and a missing secret, and an
+      // assertion that cannot tell those apart is not holding this behaviour.
+      //
+      // CAUGHT, NOT LET FLY. The behaviour under test is precisely "does this throw
+      // out of dispatchEvent" — so the call is wrapped here too. Without the wrap
+      // the falsification (delete the try/catch in dispatch.ts) ends the proof with
+      // an unhandled ZodError at check 194 and the remaining hundred-odd assertions
+      // never run: a crash, not a named failure, and a crash tells a reader which
+      // file broke but not which PROPERTY did.
+      const before = (await getDeliveryLogs(hook.id)).length;
+      let refusedSummary: Awaited<ReturnType<typeof dispatchEvent>> | undefined;
+      let refusalThrew: string | undefined;
+      try {
+        refusedSummary = await dispatchEvent("session.start", "not-an-object" as never, oneAttempt);
+      } catch (error) {
+        refusalThrew = error instanceof Error ? error.constructor.name : String(error);
+      }
+      check(
+        `webhooks/dispatch: an unbuildable envelope does NOT throw out of dispatchEvent (threw: ${refusalThrew ?? "no"})`,
+        refusalThrew === undefined,
+      );
+      check(
+        `webhooks/dispatch: an unbuildable envelope still returns a summary (dispatched=${refusedSummary?.dispatched}, failed=${refusedSummary?.failed})`,
+        refusedSummary !== undefined &&
+          refusedSummary.dispatched === 1 &&
+          refusedSummary.failed === 1 &&
+          refusedSummary.succeeded === 0,
+      );
+      const logs = await getDeliveryLogs(hook.id);
+      const refusalRow = logs.find((l) => (l.error ?? "").startsWith(WEBHOOK_ENVELOPE_INVALID));
+      check(
+        `webhooks/dispatch: one delivery row per subscribed webhook records the refusal (rows ${before} → ${logs.length})`,
+        logs.length === before + 1,
+      );
+      check(
+        "webhooks/dispatch: and the row names the REASON — the schema refusal, not a bare failure",
+        refusalRow !== undefined && refusalRow.status === "failed" && (refusalRow.error ?? "").includes("WebhookPayloadSchema"),
+      );
+
+      delete process.env[`WEBHOOK_SECRET_${hook.id.slice(0, 8)}`];
+    }
+
+    // ── telemetry/mde — an OAuth token body, no caller-controlled map ────────
+    {
+      process.env.MDE_TENANT_ID = "tenant-synthetic";
+      process.env.MDE_CLIENT_ID = "client-synthetic";
+      process.env.MDE_CLIENT_SECRET = "secret-synthetic";
+      const mde = new MDEAdapter();
+      await mde.initialize();
+      installBodySpy();
+      try { await mde.getDevices(); } catch { /* the spy throws by design */ }
+      const decl = builderFor("telemetry/mde.ts", "MDEAdapter.getAccessToken");
+      const sent = new Set([...new URLSearchParams(captured[0]?.body ?? "").keys()]);
+      const unexpected = [...sent].filter((k) => !(decl?.closed ?? []).includes(k));
+      check("telemetry/mde: the spy captured the token request body", captured.length > 0 && sent.size > 0);
+      check(
+        `telemetry/mde: token-request keys ⊆ declared — unexpected: ${unexpected.length > 0 ? unexpected.join(", ") : "none"}`,
+        unexpected.length === 0,
+      );
+      // REPORTED, not gated: there is no caller-supplied map on this path, so there
+      // is nothing to plant. Saying so is the honest form of "this vector is weaker".
+      console.log("  — telemetry/mde carries no caller-controlled map, so no key could be planted (reported, not gated)");
+    }
+
+    // ── telemetry/fleetdm — the live-query body, the other telemetry write ───
+    //
+    // Driven through the real approval chain (tier + operator flag + the separate
+    // SIGNALGRID_ALLOW_LIVE_QUERY approval + a non-empty host list), because a
+    // vector that skipped those would be asserting about a call this repository
+    // does not permit.
+    {
+      await setFleetDMConfig({ enabled: true, baseUrl: "https://fleet.example.test", apiToken: "token-synthetic", syncIntervalMs: 300000 });
+      process.env.FLEETDM_BASE_URL = "https://fleet.example.test";
+      process.env.FLEETDM_API_TOKEN = "token-synthetic";
+      process.env.SIGNALGRID_ALLOW_LIVE_QUERY = "true";
+      const fleet = new FleetDMAdapter();
+      await fleet.initialize();
+      installBodySpy();
+      try { await fleet.runQuery("select 1 as synthetic;", [1]); } catch { /* the spy throws by design */ }
+      const body = captured.length > 0 ? JSON.parse(captured[0].body) : undefined;
+      check("telemetry/fleetdm: the spy captured the live-query body", body !== undefined);
+      assertDeclared("telemetry/fleetdm", "telemetry/fleetdm.ts", "FleetDMAdapter.runLiveQuery", body);
+      console.log("  — telemetry/fleetdm carries no caller-controlled map either: the body is the caller's SQL and an explicit host list (reported, not gated)");
+    }
+
+    // ── caep-events — closed by construction, declared for completeness ──────
+    {
+      const result = buildCaepClaims({
+        issuer: "https://issuer.example.test",
+        audience: "https://relying-party.example.test",
+        jti: "decision-synthetic-1",
+        issuedAt: "2026-09-02T00:00:00.000Z",
+        subjectPseudonym: "pseudonym-synthetic-1",
+        eventKind: "session_revoked",
+        occurredAt: "2026-09-02T00:00:00.000Z",
+        reasonCodes: ["SYNTHETIC_REASON"],
+        [PLANT.top]: "must-not-cross",
+      } as never);
+      check("caep-events: the planted vector still builds a claims set", result.claims !== null);
+      assertDeclared("caep-events", "caep-events/format.ts", "buildCaepClaims", result.claims);
+    }
+  } finally {
+    globalThis.fetch = realFetch;
+    if (savedTier === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedTier;
+    if (savedLive === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedLive;
+    for (const [k, v] of [
+      ["MDE_TENANT_ID", savedMde.tenant],
+      ["MDE_CLIENT_ID", savedMde.client],
+      ["MDE_CLIENT_SECRET", savedMde.secret],
+      ["FLEETDM_BASE_URL", savedFleetEnv.base],
+      ["FLEETDM_API_TOKEN", savedFleetEnv.token],
+      ["SIGNALGRID_ALLOW_LIVE_QUERY", savedFleetEnv.allow],
+    ] as const) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+}
+
+// ── 14. The declaration itself must not fossilise ────────────────────────────
+//
+// Section 13 is only as good as `adapters/payload-fields.ts`. Two ways it could
+// quietly stop meaning anything: a family appearing in the tree that it never
+// heard of, and a builder count that drifts to zero without failing. Both are the
+// same shape as the hand-written list section 5's comment apologises for.
+{
+  check(
+    `payload-fields declares every DERIVED emitter family (declared: ${[...DECLARED_FAMILIES].sort().join(", ")})`,
+    DERIVED_EMITTER_FAMILIES.every((f) => DECLARED_FAMILIES.includes(f)) &&
+      DECLARED_FAMILIES.every((f) => DERIVED_EMITTER_FAMILIES.includes(f)),
+  );
+  // A FLOOR, AND ONLY A FLOOR — labelled as one because it was read as more.
+  // `>= 18` is satisfied by any declaration with 18 entries, including one that has
+  // stopped describing the tree: a reviewer added an entire undeclared vendor module
+  // and this assertion, the gate, and every vector above all stayed green. The
+  // question it actually answers is "has the declaration been emptied", which is
+  // worth asking and is not completeness. Completeness — every scanned outbound
+  // module declares a builder, and every builder-shaped function in a declared module
+  // is declared — is rules 6 and 7 of scripts/check-emit-payload-discipline.mjs,
+  // which can see the tree; this file only sees what was imported.
+  check(
+    `payload-fields is not empty — a FLOOR, not completeness (found ${OUTBOUND_BUILDERS.length} builders; rules 6-7 of the lexical gate hold the correspondence)`,
+    OUTBOUND_BUILDERS.length >= 28,
+  );
+  check(
+    "every declared builder names a closed set and every open slot states why",
+    OUTBOUND_BUILDERS.every((b) => b.closed.length > 0 && b.open.every((o) => o.why.trim().length > 20)),
+  );
 }
 
 const total = passed + failures.length;

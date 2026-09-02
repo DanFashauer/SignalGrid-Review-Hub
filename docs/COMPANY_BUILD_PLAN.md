@@ -3507,7 +3507,7 @@ earlier — that is the loop working, not a reason to soften the record.
     service-lifecycle, response-accountability. ZERO grants.
     The cross-family suspicion that opened that read — that `covered ?? true` (17
     occurrences) defaults a coverage flag to the permissive value — DOES NOT HOLD.
-    Also verified: all 26 families in range carry a tier + live-integrations gate,
+    Also verified: every family in that read's range (the list above) carries a tier + live-integrations gate,
     so no ungated live vendor call exists there; and the two `switch` statements
     without a `default:` on a decision path (`response-accountability:246`,
     `service-lifecycle:291`) are compiler-enforced exhaustive over closed unions,

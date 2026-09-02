@@ -51,7 +51,26 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-02 (Mac lane, latest) - the iOS shell was BROKEN FOR THE
+LAST TOUCHED: 2026-09-02 (Mac lane, latest) - PHASE 1 OF THE SWIFTUI REBUILD
+              landed on mac/ios-shell-swiftui-phase1 (3c118917), mailed to
+              cloud to review+land. The owner ran the shell, said it isn't
+              looking the way they intended, and approved rebuilding the VIEW
+              LAYER in SwiftUI (not ground-up): the intended design is the
+              DEV/ios/Prototype "glance layer"; decision core + #387 plumbing
+              stay untouched. Seam = SessionStateManager.viewController(for:)
+              .lockedIdle -> UIHostingController, hosted INSIDE the UIKit
+              lifecycle (SessionWindow / ScreenCaptureGuard / ASAM unchanged).
+              DesignSystem+SwiftUI derives Color.sg* via Color(uiColor:) (never
+              retyped); LockedIdleView = the prototype's composition in SG
+              tokens with the UIKit behaviour verbatim (log rows, manual-login
+              gate, keyboard-wedge sink); the 635-line LockedIdleViewController
+              is retired. check-ios-dynamic-type now catches SwiftUI
+              .system(size:) too. Verified: BUILD SUCCEEDED, ios-shell-repair
+              8/8 against the new screen, a11y-XL wraps with NO truncation
+              (closes the ellipsis), preflight PASSED, breadth 56/0. Glance
+              card deferred (owner call). Next: Phase 2 (the linear session
+              screens) once Phase 1 lands.
+              Before that, same session: the iOS shell was BROKEN FOR THE
               OWNER; cloud's repair batch (#387) landed but had never met a
               compiler. Built + ran it green: BUILD SUCCEEDED (their ~1300 lines
               compile clean), ios-shell-repair 8/8 + everything-fast, clean

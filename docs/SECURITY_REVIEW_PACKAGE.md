@@ -91,8 +91,8 @@ and sends nothing) while still opening a connection from wherever the process ru
 Look for other paths that are outbound without looking like it.
 
 **Known remaining scope, restated after the August audit closed the last of it.** The
-gate now enforces every outbound method under `itsm/`, `siem/`, `telemetry/` and
-`passkey-assurance/`, plus `healthCheck()` anywhere, and it prints the unenforced
+gate now enforces every outbound method under `lib/integrations/src/integrations/itsm/`, `lib/integrations/src/integrations/siem/`, `lib/integrations/src/integrations/telemetry/` and
+`lib/integrations/src/integrations/passkey-assurance/`, plus `healthCheck()` anywhere, and it prints the unenforced
 remainder on every run — empty on this tree as of 2026-09-02. This paragraph previously
 said that sixteen outbound methods were counted but unenforced, and that
 `lib/integrations/src/integrations/telemetry/mde.ts` was gated by a local

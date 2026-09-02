@@ -1,6 +1,8 @@
 # Open-source lab registry
 
-The owner's 30-repo research index, made a governed artifact. This is the human
+The owner's research index, made a governed artifact — `node scripts/check-lab-registry.mjs`
+prints the entry count on every run, which is why no numeral is written here (it said
+"30-repo" on 2026-09-02 while the gate printed 48). This is the human
 half; the machine half is [`docs/agent/open-source-lab-registry.json`](agent/open-source-lab-registry.json)
 and the gate is `scripts/check-lab-registry.mjs` (`--self-test` proves the gate
 can fail; the live run cross-checks this table against the JSON and the JSON

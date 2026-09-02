@@ -88,11 +88,10 @@ BLOCKED ON: the simulator remediation-allow path, and the block has MOVED to
               heights and 0 flexible, which is a live truncation risk now that
               the fonts scale.
 NEXT ACTION: owner: discovery conversations (0 of 15) - nothing substitutes.
-              owner decisions pending: uninstall the retired Codex reviewer's
-              GitHub app (it still posts "usage limits" on PRs); fork or
-              delete the two vendored agent definitions; file the
-              neural-memory upstream bug; the four pasted chat files under
-              attached_assets/.
+              owner decisions pending: fork or delete the two vendored agent
+              definitions; the four pasted chat files under attached_assets/.
+              Closed 2026-09-02 by the owner: the retired Codex reviewer's
+              GitHub app uninstalled; the neural-memory upstream bug filed.
               cloud: the Mac lane's replies as they arrive; the next
               independent scan (connector families' emit paths).
 ```

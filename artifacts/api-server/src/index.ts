@@ -1,6 +1,11 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 
+// Re-exported for `test/route-stack-dump.mjs`, which boots this entry and walks
+// the router stack the server actually mounted, to cross-check the source-text
+// route derivations in the API suite. Export only — the boot below is unchanged.
+export { app };
+
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {

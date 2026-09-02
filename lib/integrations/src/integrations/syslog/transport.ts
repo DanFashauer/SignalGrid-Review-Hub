@@ -231,20 +231,66 @@ export class SyslogAdapter implements SIEMAdapter {
   }
 
   /**
-   * Format event as JSON
+   * Format event as JSON — the CLOSED set of fields this formatter emits.
+   *
+   * The four sub-objects were whole-object copies (`actor: event.actor`), so a
+   * field added to `SIEMEventRequest.actor` / `.device` / `.session` / `.location`
+   * upstream would have started appearing in the syslog line with no edit here.
+   * They are copied FIELD BY FIELD now. Note the CEF and LEEF formatters below
+   * were already field-by-field — JSON was the one format that was not.
+   *
+   * THE ONE OPEN SLOT is `customFields`, open BY DECLARATION: it is
+   * `Record<string, unknown>` on the request type. `evidence` is deliberately NOT
+   * emitted by this family at all (it never was) — a syslog line is a single
+   * bounded record, and CEF/LEEF omit it too.
+   *
+   * Named in ../adapters/payload-fields.ts and in
+   * docs/DATA_RETENTION_AND_PERSONAL_DATA.md.
    */
   private formatJSON(event: SIEMEventRequest): string {
     const payload = {
       timestamp: event.timestamp || new Date().toISOString(),
       type: event.type,
       severity: event.severity,
-      actor: event.actor,
-      device: event.device,
-      session: event.session,
-      location: event.location,
+      actor: event.actor
+        ? {
+            userId: event.actor.userId,
+            badgeUid: event.actor.badgeUid,
+            email: event.actor.email,
+            name: event.actor.name,
+          }
+        : undefined,
+      device: event.device
+        ? {
+            deviceId: event.device.deviceId,
+            platform: event.device.platform,
+            ip: event.device.ip,
+            mac: event.device.mac,
+            tags: event.device.tags,
+          }
+        : undefined,
+      session: event.session
+        ? {
+            sessionId: event.session.sessionId,
+            startedAt: event.session.startedAt,
+            endedAt: event.session.endedAt,
+            duration: event.session.duration,
+          }
+        : undefined,
+      location: event.location
+        ? {
+            zone: event.location.zone,
+            building: event.location.building,
+            floor: event.location.floor,
+            coordinates: event.location.coordinates
+              ? { lat: event.location.coordinates.lat, lng: event.location.coordinates.lng }
+              : undefined,
+          }
+        : undefined,
       correlationId: event.correlationId,
       requestId: event.requestId,
       caseId: event.caseId,
+      // DECLARED OPEN SLOT — the caller's own Record<string, unknown>.
       customFields: event.customFields,
     };
 

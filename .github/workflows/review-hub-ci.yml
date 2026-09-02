@@ -260,6 +260,13 @@ jobs:
         run: node scripts/check-signing-unconditional.mjs --self-test
       - name: "Signing unconditional (a missing secret refuses; it never sends unsigned)"
         run: node scripts/check-signing-unconditional.mjs
+      # Third question at the same boundary: ungated-fetch asks whether the call was
+      # ALLOWED, signing-unconditional whether it went out SIGNED, this asks WHAT WAS
+      # IN IT. The emit gate decides whether anything may leave, not what it looks like.
+      - name: "Emit-payload-discipline self-test (the gate must be able to fail)"
+        run: node scripts/check-emit-payload-discipline.mjs --self-test
+      - name: "Emit payload discipline (every field crossing to a vendor is named)"
+        run: node scripts/check-emit-payload-discipline.mjs
       # Sibling of the gate above: that one asks whether the call was allowed to happen,
       # this one asks whether the result reported was one anybody observed.
       - name: "Fabricated status (a connector may not report a status it never observed)"

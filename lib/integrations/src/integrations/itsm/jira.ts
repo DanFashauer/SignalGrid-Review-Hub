@@ -296,15 +296,26 @@ export class JiraAdapter implements ITSMAdapter {
       if (request.devicePlatform) lines.push(`- Platform: ${request.devicePlatform}`);
     }
 
-    if (request.rawEvent) {
-      lines.push('');
-      lines.push('---');
-      lines.push('**Raw Event Data**');
-      lines.push('```json');
-      lines.push(JSON.stringify(request.rawEvent, null, 2));
-      lines.push('```');
-    }
-
+    // `request.rawEvent` IS DELIBERATELY NOT PRINTED HERE, and this note is the
+    // reason it will not come back.
+    //
+    // It used to be dumped whole into the ticket description as pretty-printed
+    // JSON. `rawEvent` is typed `Record<string, unknown>` and is described by the
+    // one adapter that reads it (itsm/generic-webhook.ts) as UNTRUSTED PASSTHROUGH
+    // — whatever a vendor webhook posted at us. So the shape was: an arbitrary
+    // caller-supplied map, unread and unbounded, rendered into a ticket body that
+    // lands in a customer's ITSM and is then read by their service desk.
+    //
+    // No other ITSM vendor in this family did it — servicenow, zendesk,
+    // freshservice, bmc-helix, ivanti and manageengine all build a description
+    // from named fields only. Jira was the single outlier, so removing it makes
+    // the family uniform rather than making Jira poorer.
+    //
+    // If a deployment genuinely needs raw vendor context in a ticket, the
+    // sanctioned route already exists and is bounded: the generic-webhook adapter
+    // exposes rawEvent as TEMPLATE VARIABLES, and only the keys an operator's own
+    // body template names are substituted. That is a declared open slot; this was
+    // a silent copy of everything.
     return lines.join('\n');
   }
 }

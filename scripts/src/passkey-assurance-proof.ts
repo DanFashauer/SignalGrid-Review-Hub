@@ -29,7 +29,7 @@ import {
   type PasskeyReportRaw,
 } from "@workspace/integrations/passkey-assurance";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
-import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
+import { checkDefaultTransport, checkLiveGateIsolated, withRecordedFetch } from "./lib/live-gate.js";
 
 let passed = 0;
 const failures: string[] = [];
@@ -169,6 +169,51 @@ check("a null report body is malformed, not a thrown TypeError",
   normalizeReport("n", null as unknown as PasskeyReportRaw).reportIntegrity === "malformed");
 check("Object.prototype itself as the report is malformed (polluted-prototype fields must never read as own assertions)",
   normalizeReport("op", Object.prototype as PasskeyReportRaw).reportIntegrity === "malformed");
+// AN ABSENT REPORT IS NOT A CLEAN ONE (2026-09-02 review finding). A 200 carrying
+// `{}` used to normalize to `reportIntegrity: "clean"` — the label said "we read this
+// source's answer and every field parsed" about a body that asserted nothing. The
+// VERDICT was already fail-closed one layer out (CREDENTIAL_REF_MISSING), and stays
+// exactly where it was; what changes is that the integrity label stops overstating.
+const absentReport = normalizeReport("u", {});
+check("an EMPTY report body asserts nothing, so its integrity is malformed, never clean",
+  absentReport.reportIntegrity === "malformed" && absentReport.registration === "unknown" &&
+  absentReport.credentialRef === "");
+const absentVerdict = evaluatePasskey(absentReport);
+check("...and the VERDICT is unchanged by that relabelling — still step_up, still CREDENTIAL_REF_MISSING",
+  absentVerdict.recommendedAction === "step_up" && absentVerdict.reasonCode === "CREDENTIAL_REF_MISSING" &&
+  absentVerdict.unknownSignals.includes("report_integrity"));
+// The SAME absence in a different spelling: `null` in every slot. It read `clean`
+// while `{}` read `malformed` — one absence wearing two labels. The integrity label
+// AND the evidence must match the `{}` case, not merely be non-clean.
+const ALL_NULL = {
+  credential_ref: null, registration: null, credential_type: null, attestation: null,
+  attestation_policy: null, user_verification_policy: null, backup: null,
+} as unknown as PasskeyReportRaw;
+const allNull = normalizeReport("u", ALL_NULL);
+const allNullVerdict = evaluatePasskey(allNull);
+check("an ALL-NULL report is the same absence as `{}` — same integrity label, same unknown signals",
+  allNull.reportIntegrity === absentReport.reportIntegrity &&
+  allNullVerdict.unknownSignals.includes("report_integrity") &&
+  JSON.stringify(allNullVerdict.unknownSignals) === JSON.stringify(absentVerdict.unknownSignals));
+// Two-directional: null is absence, but a value beside it is still an assertion.
+check("...while ONE non-null field beside six nulls is a partial answer, not an absent one, and stays clean",
+  normalizeReport("u", { ...ALL_NULL, registration: "registered" } as PasskeyReportRaw).reportIntegrity === "clean");
+// Both directions, and PER FIELD: a rule that fires on everything proves nothing, and
+// a single control would leave six of the seven terms unfalsifiable — the mutation
+// guard reported exactly that, one survivor per unpinned field. A report asserting any
+// ONE readable field is a partial answer, not an absent one.
+for (const [field, value] of [
+  ["credential_ref", "cred-1"],
+  ["registration", "registered"],
+  ["credential_type", "security_key"],
+  ["attestation", "verified"],
+  ["attestation_policy", "enforced"],
+  ["user_verification_policy", "required"],
+  ["backup", "registered"],
+] as const) {
+  check(`...while a report asserting ONLY "${field}" is a partial answer, not an absent one, and stays clean`,
+    normalizeReport("u", { [field]: value } as PasskeyReportRaw).reportIntegrity === "clean");
+}
 check("case and whitespace are canonicalized, not rejected",
   normalizeReport("cw", { credential_type: " SECURITY_KEY " } as PasskeyReportRaw).credentialType === "security_key");
 // Each malformed term pinned SEPARATELY: a report where exactly one field is
@@ -525,13 +570,160 @@ checkLiveGateIsolated({
   },
 });
 
-await checkDefaultTransport({
+const TRANSPORT_ROOT = "https://vendor.invalid/passkey-assurance";
+const codeOfPasskeyError = (err: unknown): string | undefined =>
+  err instanceof PasskeyConnectorError ? err.code : undefined;
+
+const observedProbeRequests = await checkDefaultTransport({
   check,
   family: "passkey-assurance",
-  transport: makeDefaultPasskeyTransport("https://vendor.invalid/passkey-assurance") as (a: never) => Promise<unknown>,
+  transport: makeDefaultPasskeyTransport(TRANSPORT_ROOT) as (a: never) => Promise<unknown>,
   arg: { identityRef: "identityRef-1", token: "t" },
-  codeOf: (err) => (err instanceof PasskeyConnectorError ? err.code : undefined),
+  codeOf: codeOfPasskeyError,
 });
+
+// ── the REQUEST the default transport builds, observed ────────────────────────
+//
+// Everything above stubs the RESPONSE. The stub used to be `async () => responseOf(…)`
+// — arguments discarded — so nothing could assert what left the process, and three
+// defects lived in exactly that blind spot (2026-09-02 review findings):
+//
+//   · an empty identityRef built `${root}/` and issued an AUTHENTICATED GET to the
+//     COLLECTION endpoint. The verdict failed closed afterwards; the request did not.
+//   · `.` and `..` survive encodeURIComponent unchanged (dots are unreserved) and pop
+//     a path segment — `new Request(`${root}/..`).url` is the origin.
+//   · `credentialRef` was destructured away, so a two-credential set issued two
+//     IDENTICAL requests and only the substitution guard — written for a HOSTILE
+//     source — rescued the verdict, by accident.
+//
+// The stub now records `String(input)` and `init`, the record-and-throw shape from
+// emit-gate-proof.ts. Each check below pins the REASON, not merely that something threw.
+const liveTransport = makeDefaultPasskeyTransport(TRANSPORT_ROOT);
+type Attempt = { code: string | undefined; threw: boolean; urls: string[] };
+
+/** Call the live transport with fetch replaced by a spy that records and THROWS, so an
+ *  escaped call is both counted and loud. */
+const attempt = async (req: { identityRef: string; credentialRef?: string; token: string }): Promise<Attempt> =>
+  withRecordedFetch(
+    (r) => {
+      throw new Error(`FETCH ATTEMPTED — an outbound call escaped the refusal: ${r.url}`);
+    },
+    async (requests) => {
+      let code: string | undefined;
+      let threw = false;
+      try {
+        await liveTransport(req);
+      } catch (err) {
+        threw = true;
+        code = codeOfPasskeyError(err);
+      }
+      return { code, threw, urls: requests.map((r) => r.url) };
+    },
+  );
+
+/** Call it against a well-formed 200 and return what the spy saw. */
+const observe = async (
+  reqs: { identityRef: string; credentialRef?: string; token: string }[],
+): Promise<{ url: string; init?: RequestInit }[]> =>
+  withRecordedFetch(
+    () => new Response('{"credential_ref":"x"}', { status: 200, headers: { "content-type": "application/json" } }),
+    async (requests) => {
+      for (const r of reqs) await liveTransport(r).catch(() => undefined);
+      return requests.map((r) => ({ url: r.url, init: r.init }));
+    },
+  );
+
+const emptyRef = await attempt({ identityRef: "", token: "t" });
+check("transport — an EMPTY identityRef is refused BEFORE any request leaves (spy never called), naming `identity_ref_missing`",
+  emptyRef.urls.length === 0 && emptyRef.code === "identity_ref_missing");
+const blankIdentityRef = await attempt({ identityRef: "   ", token: "t" });
+check("transport — a WHITESPACE-ONLY identityRef is refused the same way, not trimmed into a collection GET",
+  blankIdentityRef.urls.length === 0 && blankIdentityRef.code === "identity_ref_missing");
+const dotDotRef = await attempt({ identityRef: "..", token: "t" });
+check("transport — `..` is refused before the request, naming `identity_ref_invalid` (it pops a path segment, encoded or not)",
+  dotDotRef.urls.length === 0 && dotDotRef.code === "identity_ref_invalid");
+const dotRef = await attempt({ identityRef: ".", token: "t" });
+check("transport — `.` is refused the same way, for the same reason",
+  dotRef.urls.length === 0 && dotRef.code === "identity_ref_invalid");
+
+// NON-VACUITY: a transport that refused everything would satisfy all four refusals.
+const oneRequest = await observe([{ identityRef: "user-1", token: "t" }]);
+check("transport — NON-VACUITY: a legitimate identityRef DOES issue exactly one request, under the configured root",
+  oneRequest.length === 1 && oneRequest[0]?.url === `${TRANSPORT_ROOT}/user-1`);
+check("...and it carries no `credential_ref` when none was asked for — no ref invented on the caller's behalf",
+  oneRequest.length === 1 && !(oneRequest[0]?.url ?? "?credential_ref=").includes("credential_ref"));
+
+// N refs must ask N DIFFERENT questions. Asserted as "the requests DIFFER and each
+// carries its own ref" rather than as exact URL strings, so a real IdP adapter that
+// carried the ref in a header or a body would not be a false positive here.
+const setRequests = await observe([
+  { identityRef: "carol", credentialRef: "key-1", token: "t" },
+  { identityRef: "carol", credentialRef: "synced-2", token: "t" },
+]);
+// Indexed reads are guarded throughout this block: a planted defect that changes HOW
+// MANY requests are issued must produce a failing CHECK, not a TypeError that aborts
+// the run before the remaining assertions are reached.
+const carriesRef = (r: { url: string; init?: RequestInit } | undefined, ref: string): boolean =>
+  r !== undefined && `${r.url} ${JSON.stringify(r.init ?? {})}`.includes(encodeURIComponent(ref));
+check("transport — TWO credential refs produce TWO requests that DIFFER, each carrying its own ref",
+  setRequests.length === 2 &&
+  new Set(setRequests.map((r) => r.url)).size === 2 &&
+  carriesRef(setRequests[0], "key-1") && carriesRef(setRequests[1], "synced-2") &&
+  !carriesRef(setRequests[0], "synced-2"));
+
+// A REQUESTED credentialRef gets the same absent-input rule as the identity ref.
+// Measured before this landed: `fetchNormalizedSet("carol", ["", "x"])` put
+// `…/carol?credential_ref=` on the wire, and only the substitution guard — one layer
+// out, after the socket — rescued the verdict.
+const blankCred = await attempt({ identityRef: "carol", credentialRef: "", token: "t" });
+const spaceCred = await attempt({ identityRef: "carol", credentialRef: "   ", token: "t" });
+check("transport — a BLANK requested credentialRef is refused before any request leaves, naming `credential_ref_missing`",
+  blankCred.urls.length === 0 && blankCred.code === "credential_ref_missing" &&
+  spaceCred.urls.length === 0 && spaceCred.code === "credential_ref_missing");
+const nullCred = await attempt({ identityRef: "carol", credentialRef: null as unknown as string, token: "t" });
+const numberCred = await attempt({ identityRef: "carol", credentialRef: 7 as unknown as string, token: "t" });
+check("transport — a NON-STRING credentialRef is refused the same way; `?credential_ref=null` never reaches the wire",
+  nullCred.urls.length === 0 && nullCred.code === "credential_ref_missing" &&
+  numberCred.urls.length === 0 && numberCred.code === "credential_ref_missing");
+
+// A ref full of URL metacharacters must stay ONE path segment under the root.
+const hostileRef = "a/b?c#d@e f";
+const hostileRequests = await observe([{ identityRef: hostileRef, token: "t" }]);
+const hostileUrl = hostileRequests[0]?.url ?? "";
+check("transport — a ref carrying `/ ? # @ space` is percent-encoded and stays ONE segment under the root",
+  hostileRequests.length === 1 &&
+  hostileUrl === `${TRANSPORT_ROOT}/${encodeURIComponent(hostileRef)}` &&
+  new URL(new Request(hostileUrl).url).pathname === `${new URL(TRANSPORT_ROOT).pathname}/${encodeURIComponent(hostileRef)}` &&
+  new Request(hostileUrl).url.startsWith(`${TRANSPORT_ROOT}/`));
+
+// A timeout used to propagate UNTYPED while every other failure carried a code — the
+// one failure a slow IdP actually produces was the one a caller could not switch on.
+const timedOut = await withRecordedFetch(
+  () => {
+    const err = new Error("The operation was aborted due to timeout");
+    err.name = "TimeoutError";
+    throw err;
+  },
+  async (requests) => {
+    let code: string | undefined;
+    try {
+      await liveTransport({ identityRef: "user-1", token: "t" });
+    } catch (err) {
+      code = codeOfPasskeyError(err);
+    }
+    return { code, calls: requests.length };
+  },
+);
+check("transport — a fetch TIMEOUT is a typed `timeout` error, not an untyped throw from the runtime",
+  timedOut.code === "timeout" && timedOut.calls === 1);
+
+// F5's own control: the response-shape probes above are only evidence if the stub
+// actually saw the calls it answered.
+const bearerOf = (init?: RequestInit): string | undefined =>
+  (init?.headers as Record<string, string> | undefined)?.authorization;
+check("transport — the response-shape probes above were OBSERVABLE: every stubbed call recorded a URL under the root, carrying the bearer token",
+  observedProbeRequests.length >= 8 &&
+  observedProbeRequests.every((r) => r.url === `${TRANSPORT_ROOT}/identityRef-1` && bearerOf(r.init) === "Bearer t"));
 
 const total = passed + failures.length;
 console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},syncedGrantingCombos=${syncedGrants},ladderRungs=6`);

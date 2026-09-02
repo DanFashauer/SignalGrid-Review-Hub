@@ -205,7 +205,21 @@ export interface PasskeyVerdict {
 
 export class PasskeyConnectorError extends Error {
   constructor(
-    public readonly code: "read_only_violation" | "auth_failed" | "upstream_error" | "bad_response",
+    /** Every failure this connector can produce carries one of these. The last three
+     *  were added 2026-09-02 after a fail-closed read: two REQUEST-SHAPE refusals the
+     *  transport now makes before opening a socket (an empty identityRef addressed the
+     *  collection endpoint; `.`/`..` popped a path segment), and `timeout`, which was
+     *  the one failure mode a slow IdP actually produces and the only one that
+     *  propagated UNTYPED — a caller could switch on every failure except the likely one. */
+    public readonly code:
+      | "read_only_violation"
+      | "auth_failed"
+      | "upstream_error"
+      | "bad_response"
+      | "identity_ref_missing"
+      | "identity_ref_invalid"
+      | "credential_ref_missing"
+      | "timeout",
     message: string,
     public readonly status?: number,
   ) {

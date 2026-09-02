@@ -40,6 +40,12 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], fallback: T)
   return (allowed as readonly string[]).includes(s) ? (s as T) : fallback;
 }
 
+/** Nothing asserted in this slot. `null` is absence, not a value — the same reading
+ *  `enumMalformed` below takes of it. */
+function absent(v: unknown): boolean {
+  return v === undefined || v === null;
+}
+
 /** Did the report ASSERT something here that we could not parse? `null` counts as absent. */
 function enumMalformed(v: unknown, allowed: readonly string[]): boolean {
   if (v === undefined || v === null) return false;
@@ -143,11 +149,59 @@ export function normalizeReport(
   // attestation half of the grant.
   const contradictoryAttestation = credentialType === "synced" && attestation === "verified";
 
+  // Computed once, and only for a plain report — a non-plain one is already malformed
+  // on the `!plain` term below, and this scan is the expensive one.
+  const unrecognizedKey = plain && hasUnrecognizedKey(report, PASSKEY_REPORT_KEYS);
+
+  // DOES THIS REPORT ASSERT ANYTHING AT ALL? A 200 carrying `{}` is an ABSENT report,
+  // not a clean one, and the two must not share a label: `clean` says "we read this
+  // source's answer and every field parsed", while an empty body says the source
+  // answered nothing. Reading absence as clean integrity is the fail-open shape this
+  // dimension exists to catch — one layer out the verdict was rescued by
+  // CREDENTIAL_REF_MISSING, but the INTEGRITY LABEL is read on its own (custody and
+  // assurance both branch on it just below, and it is carried into evidence), so it
+  // has to be true by itself. `malformed` is the only non-clean label
+  // `ReportIntegrity` has; the VERDICT is unchanged (step_up), only the label stops
+  // overstating. (2026-09-02 review finding.)
+  //
+  // Derived from the values ALREADY READ, rather than from a second `Reflect.ownKeys`
+  // call: a fresh enumeration would need its own try/catch for a hostile Proxy, and
+  // that catch arm could return either value without changing any outcome — an
+  // unfalsifiable branch, which the mutation guard reported as a survivor.
+  //
+  // It deliberately does NOT re-check `plain`, `readThrew` or `unrecognizedKey`. Each
+  // of those states is already malformed on its own term below, so guarding them here
+  // too would be three more conjuncts that cannot change an outcome — the same
+  // unfalsifiable shape one paragraph up, and the mutation guard flagged all three
+  // when they were written.
+  // `null` counts as ABSENT here, exactly as `enumMalformed` above already treats it:
+  // a slot explicitly set to null asserts nothing readable. Without this an ALL-NULL
+  // report read `clean` while `{}` read `malformed` — the same absence wearing two
+  // labels, which is the drift this rule exists to remove.
+  const assertsNothing =
+    absent(rawCredentialRef) &&
+    absent(rawRegistration) &&
+    absent(rawType) &&
+    absent(rawAttestation) &&
+    absent(rawPolicy) &&
+    absent(rawUv) &&
+    absent(rawBackup);
+
+  // INERT AT PRESENT, and kept deliberately. `assertsNothing` below is true for both of
+  // these states — a non-plain report has no readable fields, and a read that threw
+  // resets every raw value to undefined — so neither term can change an outcome today,
+  // and the mutation guard records both as known-inert with that reason. They are kept
+  // because they fail in the SAFE direction if `assertsNothing` is ever narrowed: the
+  // alternative arrangement (guarding `assertsNothing` with `plain && !readThrew`) makes
+  // these two terms load-bearing and the guards inert, and then deleting one of the
+  // guards turns a non-plain report CLEAN. Same number of inert mutants, opposite
+  // failure direction.
   const malformed =
     readThrew ||
     !plain ||
     contradictoryAttestation ||
-    hasUnrecognizedKey(report, PASSKEY_REPORT_KEYS) ||
+    assertsNothing ||
+    unrecognizedKey ||
     enumMalformed(rawRegistration, REGISTRATIONS) ||
     enumMalformed(rawType, CREDENTIAL_TYPES) ||
     enumMalformed(rawAttestation, ATTESTATIONS) ||

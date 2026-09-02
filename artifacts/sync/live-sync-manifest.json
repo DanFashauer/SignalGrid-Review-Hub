@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 49,
-  "fingerprint": "f28bcb4a31a19a38b9b169144ff7956cd9054bba0532c36ee4472b80d794fc33",
+  "manifestVersion": 51,
+  "fingerprint": "655b9fae66dae095762add0d69ce66566999bb50987c6b6480943e7f8ceb7931",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -136,7 +136,7 @@
       "oauth-consent": 74,
       "ot-posture": 46,
       "pacs-access": 103,
-      "passkey-assurance": 91,
+      "passkey-assurance": 114,
       "pim-activation": 43,
       "platform-sso": 65,
       "policy-binding": 59,
@@ -155,6 +155,7 @@
       "uem": 76,
       "unsafe-claim": 40,
       "verdict-attestation": 76,
+      "webhooks": 201,
       "work-context": 52
     },
     "mcpTools": [

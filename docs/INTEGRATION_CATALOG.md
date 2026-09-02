@@ -20,6 +20,48 @@ SignalGrid acts as a runtime decision layer that consumes signals from source sy
 | Dock/edge shared-device events                  | Docks, charging stations, smart cabinets, kiosks, return stations, optional edge gateways                                                                                                                                                                                                     | Dock/undock events, slot state, wrong-slot return, return overdue, charging fault, dock online/offline, location and device identifiers.                  | Runtime decision event, operator/admin alert, ticket/audit event, remediation recommendation.                                         | Dock firmware, hardware state, charging behavior, accessory certification, local safety controls.                                        | Low/medium: start with simulated DockBridge event API after posture proof.                | Medium later if one dock/vendor adapter is validated.                                                   |
 | Agentic control surfaces / MCP-style connectors | Cisco Cloud Control-style agentic operations platforms, MCP-style tool surfaces, connector marketplaces                                                                                                                                                                                       | Governed operational signals, scoped tool/action requests, simulation context, approval state, action metadata where a future approved connector exists.  | Decision/audit event, policy evaluation, signed action request, approval requirement, simulation result.                              | Agent workspace, source-system APIs, marketplace governance, execution tooling, vendor platform controls.                                | Low: market-signal documentation only; not a first proof.                                 | Medium later after Intune/Entra, Jamf/Fleet/Workspace ONE, DockBridge, and operator mobile proofs.      |
 
+## What actually leaves — the outbound field sets, per emitter family
+
+The "What SignalGrid emits" column above is a **category-level roadmap**: it names
+the kind of thing a category would emit if a connector for it existed. This section
+is the different, narrower claim — the exact fields the six emitter families that
+are BUILT put on the wire.
+
+The declaration is `lib/integrations/src/integrations/adapters/payload-fields.ts`.
+Read it rather than this table when the two could disagree; it is the file the gate
+and the proof both hold the code to, and it carries the reason for every open slot.
+
+Three things to know before reading it:
+
+1. **No production caller exists.** Only the proofs under `scripts/src/` construct
+   these adapters today. Nothing in a decision path, a `/v1` route or a host app
+   wires one, and this repository ships no live transport — a private deployment
+   injects one.
+2. **Typed sub-objects are copied field by field.** `actor`, `device`, `session`,
+   `location` and the evidence element shape are named field by field at every
+   builder, so widening one of those types upstream does not silently start sending
+   a new field to a customer's SIEM.
+3. **Each family has at most ONE declared open slot**, and it is stated in the code,
+   in the declaration file, and in
+   [Data retention and personal data](DATA_RETENTION_AND_PERSONAL_DATA.md). The open
+   slots are `SIEMEventRequest.customFields`, `evidence[].data`, the webhook `data`
+   slot, and the generic-webhook adapter's `rawEvent` template context. They are
+   `Record<string, unknown>` by design and stay that way; what they cannot be is
+   silent.
+
+| Family | Vendors built | Outbound shape | Declared open slot |
+| --- | --- | --- | --- |
+| `siem` | Splunk HEC, Microsoft Sentinel, signed webhook | Event envelope + correlation ids + the four typed sub-objects + evidence | `customFields` (flattened into the row for Sentinel, nested elsewhere); `evidence[].data` |
+| `syslog` | JSON / CEF / LEEF formatters | One bounded record per event; no socket is opened in this repository, by design | `customFields` (JSON format only) |
+| `itsm` | ServiceNow, Jira (issue + JSM), Zendesk, Freshservice, BMC Helix, Ivanti, ManageEngine, generic webhook | Vendor ticket/incident fields only | none for the seven typed vendors; the generic-webhook `rawEvent` template context for the eighth, bounded by the operator's own body template |
+| `telemetry` | Microsoft Defender for Endpoint, FleetDM | An OAuth token request; a bounded live query (`query` + explicit host list) | none |
+| `webhooks` | Any admin-configured HTTPS endpoint | `id, type, timestamp, source, data, deliveryId`, HMAC-signed | `data` |
+| `caep-events` | none — formatter only | An UNSIGNED CAEP/SET claims set with an opaque subject pseudonym | none |
+
+Held by `scripts/check-emit-payload-discipline.mjs` (preflight and CI) and by
+section 13 of `scripts/src/emit-gate-proof.ts`, which drives one vector per vendor
+carrying a planted key at every level and asserts what came back off `fetch`.
+
 ## First proof: Entra ID + Intune identity/posture
 
 The first concrete proof should validate the combined identity trust and UEM/MDM posture path before broader connector claims. The public-safe plan is documented in [Intune / Entra posture proof](INTUNE_ENTRA_POSTURE_PROOF.md), the identity roadmap is documented in [Identity Trust Layer strategy](IDENTITY_TRUST_LAYER_STRATEGY.md), and Microsoft sequencing is documented in [Microsoft Graph and MCP strategy](MICROSOFT_GRAPH_AND_MCP_STRATEGY.md). It uses a user/device identifier, Microsoft Graph / Entra ID / Intune identity, device-compliance, and enrollment context or deterministic fixture data, a normalized SignalGrid identity/posture model, explicit decision mapping, and an audit record to prove that external identity plus posture can become a runtime trust decision input.
@@ -437,7 +479,7 @@ in one place.
   provenance than a synced one. A synced credential's custody is unknowable by
   construction — no administrator can query where it synced — so it forecloses the grant
   rather than lowering it. User verification discouraged is possession-only, a known-false
-  reliance that restricts. `proof:passkey-assurance` (91 checks).
+  reliance that restricts. `proof:passkey-assurance` (114 checks).
 
 - **Outbound emitters under discipline** — the six delivery families (`itsm`, `siem`, `syslog`,
   `telemetry`, `webhooks`, `caep-events`) each carry the same unanimous live-call gate as every
@@ -825,3 +867,44 @@ SignalGrid performs none of this itself: it reads evaluated state and decides. Z
 provisioning requires the vendor's own enrollment program on organisation-registered
 hardware, and no application can grant itself that. These are read-only, fixture-backed
 dimensions — not live integrations, and not a compliance or certification claim.
+
+## Webhook delivery — outbound signing (scheme v2, shipped)
+
+Every integration in this catalog that emits an event can fan out over the webhooks
+family (`lib/integrations/src/integrations/webhooks/`). Delivery is tier-gated —
+dev/alpha never send — and everything that does leave is signed.
+
+**The scheme, in one line:** `X-Webhook-Signature: v2=<64 lowercase hex>`, an
+HMAC-SHA256 over `` `${timestampMs}.${rawBody}` `` under the per-endpoint secret,
+with `X-Webhook-Timestamp` in integer epoch **milliseconds** carried *inside* the
+MAC so a replayer cannot freshen it.
+
+**Three things a receiver must know before it writes any code:**
+
+1. Reconstruct over the **raw body, before parsing**, and compare in constant time.
+2. The timestamp is the **delivery's** instant, minted once and identical on every
+   retry — so size the replay window against the sender's whole retry envelope, not
+   against one request. The derived floor is in the canonical spec.
+3. **The retired v1 scheme (unprefixed signature over the body alone) is not
+   accepted. There is no dual-accept**, because a verifier that took both would
+   leave every receiver with no replay protection while reporting success.
+
+Canonical spec — reconstruction string, unit, the gate-derived tolerance floor, and
+the no-dual-accept rule — is §6 of
+[`docs/SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md`](SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md).
+Do not restate the numbers here; that document's figures are gated by
+`scripts/check-derived-doc-figures.mjs` and this one's would not be.
+
+- **`proof:webhooks` (201 checks)** — the tier gate and its per-tier refusal reasons,
+  SSRF and HTTPS target validation, retry permanence, the missing-secret refusal, and
+  the v2 signing scheme end to end through the transport with a record-and-throw
+  `fetch` spy: the signature that reaches the wire verifies under an independent HMAC
+  of `` `${timestamp}.${body}` ``, does **not** verify under the body alone, breaks if
+  the timestamp moves by one millisecond, and is identical across three retries — one
+  signature, one timestamp. Plus the receiver helper `verifySignedWebhook` across
+  acceptance, staleness, future skew, absent/repeated/malformed headers, tampering,
+  wrong secret, and v1 refusal.
+
+**Inbound verification is NOT a deployed path.** `verifySignedWebhook` is the
+reference implementation a receiver ports, driven by the proof above as an oracle. No
+inbound route in this repository receives or verifies a webhook.

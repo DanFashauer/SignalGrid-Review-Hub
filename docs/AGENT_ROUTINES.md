@@ -19,7 +19,7 @@ from the live scheduler; re-transcription is a deliberate act.
 | --- | --- | --- | --- | --- |
 | `mac-lane-steward-duty-cycle` | every 4 hours | the owner, 2026-08-21, by direct request in-session | `artifacts/lane-messages/**` + its heartbeat | only what only the owner can clear (credentials, Mac-side actions) |
 | `live-sync-loop-keeper` | daily 13:00 UTC | the owner, 2026-07-27 (owner-directed live-sync build) | the sync manifest, its notice marker, its heartbeat | live evidence stale >3 days and not recently notified; anything large is flagged, not fixed |
-| `nightly-build-agent` | daily 14:00 UTC | the owner, 2026-07-15 | `claude/build-agent-*` branches ONLY — never merges, never the mainline | anything ambiguous or refactor-sized: pushes nothing |
+| `nightly-build-agent` | **retired 2026-09-02 21:47 UTC** (was daily 14:00 UTC; trigger disabled on the account, reversible; the gate checks origin for `claude/build-agent-*` heads, the only place a later fire could show) | the owner, 2026-07-15 | `claude/build-agent-*` branches ONLY — never merged, never the mainline | it was designed before the cloud lane could open pull requests itself; on 2026-09-02 it fired, ran three minutes and left nothing, so the cloud lane carries its job with a review and a merge path. The registry row stays, with the date and the reason, so the history has no hole. |
 | `cloud-lane-hygiene-sweep` | daily 09:40 UTC | the owner, 2026-08-21, by direct request in-session | scratchpad + dead caches on the cloud machine (never the repo tree) + its heartbeat | free space under 1GB after every cleanup step — an environment-level fix only the owner can approve |
 
 ## Heartbeats — "ran and did nothing" must differ from "never ran"
@@ -28,7 +28,7 @@ Every fire of a heartbeat-carrying routine writes its heartbeat file —
 including a fire that changed nothing — so a quiet lane leaves evidence of
 its quietness. A heartbeat older than the routine's declared tolerance is
 **reported on every gate run** (never fatal — the lanes are not always
-awake, but silence is never silent). The nightly build agent carries a
+awake, but silence is never silent). The retired nightly build agent carried a
 declared **null** heartbeat with its reason recorded: its write scope is
 review branches only, and a mainline heartbeat commit would widen that
 scope — worse than the gap it fills. Its firing evidence is the pushed

@@ -332,8 +332,6 @@ const STEPS = [
   { name: "Role-coverage self-test (the gate can actually fail)", cmd: ["node", "scripts/check-role-coverage.mjs", "--self-test"] },
   { name: "Owner-gated surfaces manifest (the autonomous-merge escalation line is non-empty and well-formed)", cmd: ["node", "scripts/check-owner-gated-surfaces.mjs"] },
   { name: "Owner-gated surfaces self-test (classify routes safety-machinery + owner-reserved diffs to the owner)", cmd: ["node", "scripts/check-owner-gated-surfaces.mjs", "--self-test"] },
-  { name: "Build-agent merge ledger (every autonomous merge was built and reviewed by different sessions)", cmd: ["node", "scripts/check-build-agent-merges.mjs"] },
-  { name: "Build-agent merge-ledger self-test (builder==reviewer or wrong trigger fails)", cmd: ["node", "scripts/check-build-agent-merges.mjs", "--self-test"] },
   { name: "Cited commands (a command a document promises must still exist)", cmd: ["node", "scripts/check-cited-commands.mjs"] },
   { name: "Cited-command self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-commands.mjs", "--self-test"] },
   { name: "Review coverage (a green gate suite is not a reviewed codebase)", cmd: ["node", "scripts/check-review-coverage.mjs"] },

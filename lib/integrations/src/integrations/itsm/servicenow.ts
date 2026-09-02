@@ -1,6 +1,8 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
 import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
 import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
+import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
+import { asNonEmptyString, asPositiveNumber, asVendorInstant } from '../adapters/vendor-values';
 
 /**
  * ServiceNow Adapter Configuration
@@ -23,6 +25,48 @@ export interface ServiceNowConfig {
   table?: string;
   /** Timeout for requests in ms */
   timeout?: number;
+}
+
+
+/**
+ * A ServiceNow `sys_id`, VALIDATED against the vendor's own shape.
+ *
+ * THE SHAPE, documented rather than assumed: a ServiceNow `sys_id` is a GUID with
+ * the hyphens removed — exactly 32 hexadecimal characters
+ * (`6816f79cc0a8016401c5a33be04be441`). Nothing else is one.
+ *
+ * WHY IT IS CHECKED. `getSysIdByNumber` returned `data.result[0]?.sys_id` straight
+ * out of the vendor's JSON and `updateTicket` interpolated it into a REST path
+ * unencoded. Measured on this tree: a vendor response whose `sys_id` was
+ * `../../../../api/now/table/sys_user/<id>` produced a PATCH whose path NORMALISED
+ * — `fetch` resolves `..` segments before the request leaves — to
+ * `/api/now/table/sys_user/<id>`. The adapter believed it was updating an incident
+ * and wrote to the user table. A compromised or merely buggy vendor response chose
+ * which table SignalGrid wrote to.
+ *
+ * ENCODING ALONE WOULD NOT HAVE BEEN ENOUGH to make the value meaningful, and
+ * validation alone would not survive a shape change, so this file does BOTH: the
+ * value must be a sys_id, and it is percent-encoded at the interpolation site.
+ */
+const SERVICENOW_SYS_ID = /^[0-9a-f]{32}$/i;
+
+/** Thrown when a vendor id will not pass {@link SERVICENOW_SYS_ID}. Exported so a
+ *  proof can assert the REASON rather than merely that something failed. */
+export class ServiceNowSysIdInvalid extends Error {
+  constructor(readonly where: string, received: unknown) {
+    super(
+      `ServiceNow sys_id from ${where} is not 32 hexadecimal characters ` +
+        `(received ${typeof received === 'string' ? `a ${received.length}-character string` : `a ${typeof received}`})`,
+    );
+    this.name = 'ServiceNowSysIdInvalid';
+  }
+}
+
+export function asServiceNowSysId(value: unknown, where: string): string {
+  if (typeof value !== 'string' || !SERVICENOW_SYS_ID.test(value)) {
+    throw new ServiceNowSysIdInvalid(where, value);
+  }
+  return value;
 }
 
 /**
@@ -105,7 +149,17 @@ export class ServiceNowAdapter implements ITSMAdapter {
       },
       body: JSON.stringify(incident),
       signal: AbortSignal.timeout(this.config.timeout ?? 30000),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
     });
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (!response.ok) {
       const error = await response.text();
@@ -121,14 +175,20 @@ export class ServiceNowAdapter implements ITSMAdapter {
       };
     };
 
-    const ticketId = data.result.sys_id;
+    const ticketId = asServiceNowSysId(data.result.sys_id, 'the create response');
     const ticketNumber = data.result.number;
 
     return {
       ticketId: ticketNumber,
-      ticketUrl: `${this.config.instanceUrl}/nav_to.do?uri=incident.do?sys_id=${ticketId}`,
+      // ENCODED, like every other interpolated segment in this file. The value is
+      // validated above as well; encoding is what stops a shape change from becoming
+      // a query-parameter injection in the link an operator clicks.
+      ticketUrl: `${this.config.instanceUrl}/nav_to.do?uri=incident.do?sys_id=${encodeURIComponent(ticketId)}`,
       status: this.mapState(data.result.state),
-      createdAt: new Date(data.result.sys_created_on).toISOString(),
+      // NAMED, not a bare RangeError. `new Date(undefined).toISOString()` throws
+      // `Invalid time value` from inside the adapter and says nothing about which
+      // vendor field was absent. See ../adapters/vendor-values.ts.
+      createdAt: asVendorInstant(data.result.sys_created_on, 'result.sys_created_on'),
     };
   }
 
@@ -154,7 +214,11 @@ export class ServiceNowAdapter implements ITSMAdapter {
       throw new Error(`Ticket not found: ${ticketId}`);
     }
 
-    const url = `${this.config.instanceUrl}/api/now/table/${this.config.table}/${sysId}`;
+    // ENCODED. `sysId` came off the vendor's wire; `getSysIdByNumber` now validates
+    // its shape, and this encodes it, so neither a `..` segment nor a `?` can change
+    // which resource this PATCH addresses. `this.config.table` is operator
+    // configuration rather than vendor data and is interpolated as configured.
+    const url = `${this.config.instanceUrl}/api/now/table/${this.config.table}/${encodeURIComponent(sysId)}`;
     const incident = this.buildIncidentPayload(updates as ITSMTicketRequest);
 
     const response = await fetch(url, {
@@ -166,7 +230,17 @@ export class ServiceNowAdapter implements ITSMAdapter {
       },
       body: JSON.stringify(incident),
       signal: AbortSignal.timeout(this.config.timeout ?? 30000),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
     });
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (!response.ok) {
       const error = await response.text();
@@ -184,9 +258,11 @@ export class ServiceNowAdapter implements ITSMAdapter {
 
     return {
       ticketId: data.result.number,
-      ticketUrl: `${this.config.instanceUrl}/nav_to.do?uri=incident.do?sys_id=${data.result.sys_id}`,
+      ticketUrl: `${this.config.instanceUrl}/nav_to.do?uri=incident.do?sys_id=${encodeURIComponent(
+        asServiceNowSysId(data.result.sys_id, 'the update response'),
+      )}`,
       status: this.mapState(data.result.state),
-      createdAt: new Date(data.result.sys_updated_on).toISOString(),
+      createdAt: asVendorInstant(data.result.sys_updated_on, 'result.sys_updated_on'),
     };
   }
 
@@ -212,6 +288,9 @@ export class ServiceNowAdapter implements ITSMAdapter {
           'Accept': 'application/json',
         },
         signal: AbortSignal.timeout(TIMEOUT_PRESETS.short),
+        // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+        // second hop to whatever the vendor's `Location` header named, unvalidated.
+        redirect: 'manual',
       });
       
       return response.ok;
@@ -237,6 +316,17 @@ export class ServiceNowAdapter implements ITSMAdapter {
       this.accessToken = btoa(`${this.config.auth.username}:${this.config.auth.password || this.config.auth.apiToken || ''}`);
       this.tokenExpiry = Date.now() + 3600000; // 1 hour
     }
+
+    // GUARDED AFTER MINTING, not only at the vendor read. Whichever arm above ran,
+    // the very next thing that happens to this value is `Bearer ${this.accessToken}`
+    // in an outbound header, so the assertion belongs where the value is finished
+    // rather than only where one of its sources is parsed.
+    //
+    // SAID EXACTLY: this catches absent, empty and whitespace. It does NOT catch a
+    // structurally-empty basic credential — `btoa("user:")` is a non-empty string —
+    // and claiming otherwise would be the overclaim this repository gates against.
+    // That case is the emit gate's, which refuses when the named credential is empty.
+    this.accessToken = asNonEmptyString(this.accessToken, 'accessToken (after authentication)');
   }
 
   /**
@@ -269,20 +359,34 @@ export class ServiceNowAdapter implements ITSMAdapter {
       },
       body: params.toString(),
       signal: AbortSignal.timeout(this.config.timeout ?? 30000),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
     });
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (!response.ok) {
       const error = await response.text();
       throw new Error(`ServiceNow OAuth error: ${response.status} - ${error}`);
     }
 
-    const data = await response.json() as {
-      access_token: string;
-      expires_in: number;
-    };
-
-    this.accessToken = data.access_token;
-    this.tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000; // 1 minute buffer
+    // CHECKED, NOT CAST. `await response.json() as { access_token: string }` asserted
+    // a shape at COMPILE time and verified nothing at run time: a 200 whose body was
+    // `{"ok":true}` produced `Bearer undefined` on the next request, and
+    // `{"access_token":""}` produced a bare `Bearer ` — both inside the boundary the
+    // security-review package tells an assessor is closed. The readers throw with the
+    // vendor's own field name, so the refusal says which field was missing.
+    const data = await response.json() as Record<string, unknown>;
+    this.accessToken = asNonEmptyString(data.access_token, 'access_token');
+    // The numeric twin. `Date.now() + (undefined * 1000)` is NaN, and `Date.now() <
+    // NaN` is false forever — so every request re-ran the whole OAuth dance.
+    this.tokenExpiry = Date.now() + (asPositiveNumber(data.expires_in, 'expires_in') * 1000) - 60000; // 1 minute buffer
   }
 
   /**
@@ -299,7 +403,12 @@ export class ServiceNowAdapter implements ITSMAdapter {
         throw new Error("refused: outbound call with the fixture/live boundary closed (mode is not live).");
       }
     }
-    const url = `${this.config.instanceUrl}/api/now/table/${this.config.table}?sysparm_query=number=${ticketNumber}&sysparm_fields=sys_id`;
+    // ENCODED. `ticketNumber` is the CALLER's string and was interpolated raw into a
+    // query, so a value containing `&` or `^` rewrote the ServiceNow encoded query
+    // this URL is built from.
+    const url = `${this.config.instanceUrl}/api/now/table/${this.config.table}?sysparm_query=number=${encodeURIComponent(
+      ticketNumber,
+    )}&sysparm_fields=sys_id`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -308,17 +417,33 @@ export class ServiceNowAdapter implements ITSMAdapter {
         'Accept': 'application/json',
       },
       signal: AbortSignal.timeout(this.config.timeout ?? 30000),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
     });
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (!response.ok) {
       return null;
     }
 
     const data = await response.json() as {
-      result: Array<{ sys_id: string }>;
+      result?: Array<{ sys_id?: unknown }>;
     };
 
-    return data.result[0]?.sys_id || null;
+    // NOT FOUND stays null — an empty result set is a legitimate answer and the
+    // caller already turns it into `Ticket not found`. A PRESENT id of the wrong
+    // shape is different in kind and throws by name: it means the vendor sent
+    // something this adapter must not put in a URL.
+    const first = Array.isArray(data.result) ? data.result[0] : undefined;
+    if (first === undefined || first.sys_id === undefined || first.sys_id === null) return null;
+    return asServiceNowSysId(first.sys_id, 'the number→sys_id lookup');
   }
 
   /**

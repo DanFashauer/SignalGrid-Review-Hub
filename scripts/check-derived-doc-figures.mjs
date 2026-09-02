@@ -61,11 +61,14 @@
 // ADDING A FIGURE IS ONE ROW in FIGURES: the document, a regex with exactly one capture
 // group, and the function that derives the truth. If the sweep then reports it FATAL
 // somewhere else, that somewhere else is a second home and wants its own row.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { execSync } from "node:child_process";
 import { collectionRequestFiles, registeredRoutePairCount } from "./check-api-collection.mjs";
+
+/** The connector tree the redirect census walks. */
+const INTEGRATIONS = "lib/integrations/src/integrations";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel, root = ROOT) => readFileSync(join(root, rel), "utf8");
@@ -224,11 +227,77 @@ export const webhookBackoffSeconds = (root = ROOT) => webhookRetryEnvelope(root)
 export const webhookTimeoutSeconds = (root = ROOT) => webhookRetryEnvelope(root).timeoutSeconds;
 export const webhookEnvelopeSeconds = (root = ROOT) => webhookRetryEnvelope(root).envelopeSeconds;
 
+// ── Redirect refusal: the two halves of the fetch gate's own ratio ─────────────────
+//
+// The build-plan entry states how many outbound fetches refuse to follow a redirect.
+// The first version of that sentence said "every outbound fetch in
+// lib/integrations/src/integrations/**", which OVERSHOOTS: the rule is enforced in the
+// six emitter families and the 39 sites outside them are REPORTED by
+// check-ungated-fetch.mjs, not gated. A prose figure that overstates its own scope is
+// the defect this gate exists for, so both numbers are now derived from the same place
+// the gate counts them — the call arguments themselves.
+//
+// COUNTED FROM SOURCE, not from the gate's stdout: parsing another script's output
+// would make this row a test of that script's formatting.
+function redirectCensus(root = ROOT) {
+  const families = readdirSync(join(root, INTEGRATIONS), { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .filter((name) => {
+      try {
+        return /createEmitterResolver/.test(readFileSync(join(root, INTEGRATIONS, name, "resolve.ts"), "utf8"));
+      } catch {
+        return false;
+      }
+    });
+  let refusing = 0;
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) { walk(p); continue; }
+      if (!e.name.endsWith(".ts") || e.name.endsWith(".test.ts")) continue;
+      const text = readFileSync(p, "utf8");
+      const inFamily = families.some((f) => p.includes(`${INTEGRATIONS}/${f}/`));
+      const lines = text.split("\n");
+      if (!inFamily) continue;
+      lines.forEach((line, i) => {
+        // The option belongs to THIS call: search forward to the call's closing. Only
+        // the NUMERATOR is derived here. A denominator counted a second way is drift,
+        // not evidence — `check-ungated-fetch.mjs` owns the ratio and prints it on
+        // every run, so the prose points at that rather than freezing a second copy.
+        if (!/^\s*redirect: 'manual',\s*$/.test(line)) return;
+        refusing += 1;
+      });
+    }
+  };
+  walk(join(root, INTEGRATIONS));
+  return { refusing, families: families.length };
+}
+
+export const redirectRefusingSites = (root = ROOT) => redirectCensus(root).refusing;
+export const emitterFamilyCount = (root = ROOT) => redirectCensus(root).families;
+
+
 // ── The table ───────────────────────────────────────────────────────────────────────
 // Each row: the document, a regex whose ONE capture group is the stated figure, the
 // deriver, and a short `from` naming where the truth comes from (printed on failure, so
 // whoever hits this knows which artifact to look at rather than which number to retype).
 export const FIGURES = [
+  {
+    id: "redirect-refusing-sites",
+    doc: "docs/COMPANY_BUILD_PLAN.md",
+    re: /all (\d+) outbound fetches in the six emitter families set `redirect: 'manual'`/,
+    derive: redirectRefusingSites,
+    from: "fetch call sites carrying `redirect: 'manual'` inside the derived emitter families",
+  },
+  {
+    id: "redirect-emitter-families",
+    doc: "docs/COMPANY_BUILD_PLAN.md",
+    re: /across the (\d+) emitter families that refuse redirects/,
+    derive: emitterFamilyCount,
+    from: "directories under lib/integrations/src/integrations whose resolve.ts imports createEmitterResolver",
+  },
+
   {
     id: "bru-requests-index",
     doc: "docs/INDEX.md",

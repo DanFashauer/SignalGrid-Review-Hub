@@ -1,5 +1,7 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
 import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
+import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
+import { asNonEmptyString, asPositiveNumber } from '../adapters/vendor-values';
 
 /**
  * BMC Helix ITSM / BMC Helix Recovery / BMC Helix BusinessWorkflows Adapter Configuration
@@ -106,7 +108,17 @@ export class BMCHelixAdapter implements ITSMAdapter {
       },
       body: JSON.stringify(incident),
       signal: AbortSignal.timeout(this.config.timeout),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
     });
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (!response.ok) {
       const error = await response.text();
@@ -122,7 +134,10 @@ export class BMCHelixAdapter implements ITSMAdapter {
 
     return {
       ticketId: data.incidentNumber,
-      ticketUrl: `${this.config.instanceUrl}/#incidents/${data.incidentId}`,
+      // ENCODED. The id came off the vendor's wire and this link is what an operator
+      // clicks; interpolated raw, a value containing `?`, `#` or `..` builds a link to
+      // somewhere other than the ticket. Same rule as the request paths.
+      ticketUrl: `${this.config.instanceUrl}/#incidents/${encodeURIComponent(data.incidentId)}`,
       status: data.status,
       createdAt: data.createdDateTime,
     };
@@ -152,6 +167,9 @@ export class BMCHelixAdapter implements ITSMAdapter {
           'Tenant-Id': this.config.tenantId,
         },
         signal: AbortSignal.timeout(this.config.timeout),
+        // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+        // second hop to whatever the vendor's `Location` header named, unvalidated.
+        redirect: 'manual',
       });
       
       return response.ok;
@@ -180,6 +198,17 @@ export class BMCHelixAdapter implements ITSMAdapter {
       }
       this.tokenExpiry = Date.now() + 3600000; // 1 hour
     }
+
+    // GUARDED AFTER MINTING, not only at the vendor read. Whichever arm above ran,
+    // the very next thing that happens to this value is `Bearer ${this.accessToken}`
+    // in an outbound header, so the assertion belongs where the value is finished
+    // rather than only where one of its sources is parsed.
+    //
+    // SAID EXACTLY: this catches absent, empty and whitespace. It does NOT catch a
+    // structurally-empty basic credential — `btoa("user:")` is a non-empty string —
+    // and claiming otherwise would be the overclaim this repository gates against.
+    // That case is the emit gate's, which refuses when the named credential is empty.
+    this.accessToken = asNonEmptyString(this.accessToken, 'accessToken (after authentication)');
   }
 
   /**
@@ -212,20 +241,34 @@ export class BMCHelixAdapter implements ITSMAdapter {
       },
       body: params.toString(),
       signal: AbortSignal.timeout(this.config.timeout),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
     });
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (!response.ok) {
       const error = await response.text();
       throw new Error(`BMC Helix OAuth error: ${response.status} - ${error}`);
     }
 
-    const data = await response.json() as {
-      access_token: string;
-      expires_in: number;
-    };
-
-    this.accessToken = data.access_token;
-    this.tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000; // 1 minute buffer
+    // CHECKED, NOT CAST. `await response.json() as { access_token: string }` asserted
+    // a shape at COMPILE time and verified nothing at run time: a 200 whose body was
+    // `{"ok":true}` produced `Bearer undefined` on the next request, and
+    // `{"access_token":""}` produced a bare `Bearer ` — both inside the boundary the
+    // security-review package tells an assessor is closed. The readers throw with the
+    // vendor's own field name, so the refusal says which field was missing.
+    const data = await response.json() as Record<string, unknown>;
+    this.accessToken = asNonEmptyString(data.access_token, 'access_token');
+    // The numeric twin. `Date.now() + (undefined * 1000)` is NaN, and `Date.now() <
+    // NaN` is false forever — so every request re-ran the whole OAuth dance.
+    this.tokenExpiry = Date.now() + (asPositiveNumber(data.expires_in, 'expires_in') * 1000) - 60000; // 1 minute buffer
   }
 
   /**

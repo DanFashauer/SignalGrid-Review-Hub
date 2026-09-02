@@ -1,5 +1,7 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
 import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
+import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
+import { asVendorInstant } from '../adapters/vendor-values';
 
 /**
  * ManageEngine ServiceDesk Plus / ServiceNow Plus Adapter Configuration
@@ -75,7 +77,17 @@ export class ManageEngineAdapter implements ITSMAdapter {
       },
       body: JSON.stringify(workOrder),
       signal: AbortSignal.timeout(this.config.timeout),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
     });
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (!response.ok) {
       const error = await response.text();
@@ -95,9 +107,13 @@ export class ManageEngineAdapter implements ITSMAdapter {
 
     return {
       ticketId: String(data.request.request_id),
-      ticketUrl: `${this.config.instanceUrl}/workOrderDetails.do?requestId=${data.request.id}`,
+      // ENCODED. The id came off the vendor's wire and this link is what an operator
+      // clicks; interpolated raw, a value containing `?`, `#` or `..` builds a link to
+      // somewhere other than the ticket. Same rule as the request paths.
+      ticketUrl: `${this.config.instanceUrl}/workOrderDetails.do?requestId=${encodeURIComponent(data.request.id)}`,
       status: data.request.status.name,
-      createdAt: new Date(data.request.created_time).toISOString(),
+      // NAMED, not a bare RangeError — see ../adapters/vendor-values.ts.
+      createdAt: asVendorInstant(data.request.created_time, 'request.created_time'),
     };
   }
 
@@ -122,6 +138,9 @@ export class ManageEngineAdapter implements ITSMAdapter {
           'Accept': 'application/json',
         },
         signal: AbortSignal.timeout(this.config.timeout),
+        // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+        // second hop to whatever the vendor's `Location` header named, unvalidated.
+        redirect: 'manual',
       });
       
       return response.ok;

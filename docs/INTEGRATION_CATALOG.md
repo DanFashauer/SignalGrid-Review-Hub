@@ -488,7 +488,7 @@ in one place.
   emitter records what WOULD have been sent with a literal `delivered: false` on every entry —
   after the syslog family was found returning `status:'sent'` for events it silently dropped,
   the surface is shaped so that claim is unrepresentable. Routing (`response-accountability`)
-  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (67 checks).
+  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (100 checks).
 
 - **CAEP / Shared Signals session-signal emitter** — the sixth family, and the outbound half of
   continuous access evaluation (intake ledger row 17, built on the owner's keep-going): telling
@@ -878,6 +878,25 @@ dev/alpha never send — and everything that does leave is signed.
 HMAC-SHA256 over `` `${timestampMs}.${rawBody}` `` under the per-endpoint secret,
 with `X-Webhook-Timestamp` in integer epoch **milliseconds** carried *inside* the
 MAC so a replayer cannot freshen it.
+
+**Which senders use it: all three, since 2026-09-02.** `webhooks/dispatch.ts` has
+signed this way since the scheme landed. `siem/webhook.ts` and
+`itsm/generic-webhook.ts` did **not** — they emitted `X-Signature` over the **body
+alone** plus an `X-Signing-Algorithm` header and no timestamp at all, which is the
+retired v1 scheme this repository's own verifier refuses by name as replayable. A
+second scheme existed because two files had not been read together; both now call
+the same helper (`v2SignatureHeaders` in `webhooks/sign.ts`) and the two retired
+headers are gone from the wire. The header→scheme registry is
+`lib/integrations/src/integrations/adapters/signature-headers.ts`, asserted against
+source by `scripts/check-emitter-wire-discipline.mjs` so a third scheme cannot appear
+unnamed, and `proof:emitter-discipline` drives both families' headers through
+`verifySignedWebhook`.
+
+**Redirects are never followed.** Every outbound fetch in the six emitter families
+sets `redirect: 'manual'`; a 3xx is a permanent refusal named by status and Location
+host, and is not retried. Before that, a 307 from the configured host delivered the
+full signed body to whatever origin its `Location` named — the target validator
+checks the first hop only, and the signature header survives a cross-origin redirect.
 
 **Three things a receiver must know before it writes any code:**
 

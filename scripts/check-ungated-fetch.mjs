@@ -287,6 +287,32 @@ export function boundedByAbortSignal(args, fileText = "") {
 }
 
 /**
+ * Does this call REFUSE to follow redirects?
+ *
+ * WHY IT SITS BESIDE THE BOUND. Measured on this tree, 2026-09-02: none of the 42
+ * outbound fetches in the six emitter families set `redirect`, so all of them
+ * inherited undici's default `follow` — and the only SSRF guard in the repository
+ * (`validateWebhookUrl`) checks the FIRST hop. A 307 from the configured collector
+ * delivered the full signed body to an unvalidated loopback origin and the adapter
+ * reported `sent`; `X-Webhook-Signature` survives a cross-origin redirect (only
+ * `Authorization` is stripped), and 1000 bytes of the final hop's answer were
+ * persisted to the tenant-visible delivery log.
+ *
+ * Same shape as the `signal:` assertion above and for the same reason: the option
+ * has to be READ OFF THE CALL, because a rule that lives only in a comment is a rule
+ * that the forty-third fetch will not have.
+ */
+export function refusesRedirects(args) {
+  const a = stripComments(args);
+  const m = a.match(/(?<![\w$])redirect\s*:\s*([^,}\n]+)/);
+  if (m === null) return false;
+  const value = m[1].trim().replace(/[,;)]+$/, "").replace(/^["'`]|["'`]$/g, "");
+  // 'error' rejects the redirect as a network error, which is also never-follow.
+  // OUTBOUND_REDIRECT_MODE is the shared constant in adapters/redirect.ts.
+  return value === "manual" || value === "error" || value === "OUTBOUND_REDIRECT_MODE";
+}
+
+/**
  * Fetch-shaped callees DECLARED IN THIS FILE — delegations, not network primitives.
  *
  * `this.fetchNormalized(identityRef, ref)` is a method one screen up whose own body
@@ -504,6 +530,18 @@ function selfTest() {
     // ── assertion 2: is it bounded ────────────────────────────────────────────
     ["a fetch options object WITHOUT signal is unbounded — the planted defect",
       boundedByAbortSignal(callArgs(plantedUnbounded, plantedUnbounded.indexOf("(", plantedUnbounded.indexOf("fetch")))) === false],
+    ["a fetch with NO redirect option FOLLOWS — the planted defect (undici defaults to follow)",
+      refusesRedirects("(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(1000) })") === false],
+    ["`redirect: 'manual'` refuses",
+      refusesRedirects("(url, { method: 'POST', redirect: 'manual' })") === true],
+    ["`redirect: 'error'` refuses too (a redirect becomes a network error)",
+      refusesRedirects("(url, { redirect: 'error' })") === true],
+    ["`redirect: 'follow'` — the default, written out — is NOT a refusal",
+      refusesRedirects("(url, { redirect: 'follow' })") === false],
+    ["a COMMENTED redirect option does not clear it",
+      refusesRedirects("(url, { headers /* redirect: 'manual' */ })") === false],
+    ["a variable named redirectMode does not clear it — the property, not the word",
+      refusesRedirects("(url, { headers: redirectManual })") === false],
     ["the same call WITH signal is bounded (the probe is not always-fail)",
       boundedByAbortSignal(callArgs(plantedBounded, plantedBounded.indexOf("(", plantedBounded.indexOf("fetch")))) === true],
     ["a MULTI-LINE options object is read whole, not just its first line",
@@ -630,6 +668,9 @@ for (const file of execFileSync("git", ["ls-files", UTIL_ROOT], { cwd: repoRoot,
 
 const unbounded = [];
 const unboundedReported = [];
+const followsRedirects = [];
+const followsRedirectsReported = [];
+let redirectRefusingSites = 0;
 const delegatedSites = [];
 const injectedSignalSites = [];
 const deadTimeoutKnobs = [];
@@ -694,6 +735,16 @@ for (const file of files) {
       // dropped. (`fetch` itself is never "locally declared" in these files.)
       const isLocalDelegation = callee !== "fetch" && !wrapped && localDeclared.has(callee);
       const site = `${file}:${i + 1}  ${lines[i].trim().slice(0, 72)}`;
+      // ASSERTION 2b — DOES IT REFUSE REDIRECTS. Scored on the same call's argument
+      // list. A WebSocket constructor has no redirect option (there is no such thing
+      // to set), and a delegation's own primitive is a separate site in this scan, so
+      // both are excluded by SHAPE rather than by name — as above.
+      if (!isLocalDelegation && !isWebSocket && !wrapped) {
+        if (refusesRedirects(args)) redirectRefusingSites += 1;
+        else if (EMITTER_FAMILY_RE.test(file)) followsRedirects.push(site);
+        else followsRedirectsReported.push(site);
+      }
+
       if (isLocalDelegation) {
         delegatedSites.push(site);
       } else if (wrapped || isWebSocket || boundedByAbortSignal(args, text)) {
@@ -924,6 +975,7 @@ if (missingCredentialArgs.length > 0) {
 console.log(`  emitter families (DERIVED):       ${EMITTER_FAMILIES.join(", ")}`);
 console.log(`  outbound call sites:              ${fetchSites} (${primitiveSites} network primitives, ${delegatedSites.length} delegating to a local declaration)`);
 console.log(`  primitives bounded by a signal:   ${boundedSites}/${primitiveSites}`);
+console.log(`  primitives refusing redirects:    ${redirectRefusingSites}/${primitiveSites}`);
 console.log(`  signals cleared BY NAME:          ${INJECTED_SIGNALS.size} (none needed on this tree)`);
 for (const d of injectedSignalSites) console.log(`      ⚠ ${d}`);
 if (delegatedSites.length > 0) {
@@ -951,6 +1003,10 @@ if (boundedSites === 0 || primitiveSites === 0) {
   console.error("\n✗ zero bounded network primitives — the `signal:` probe matched nothing, so it is measuring nothing.");
   process.exit(1);
 }
+if (redirectRefusingSites === 0) {
+  console.error("\n✗ zero redirect-refusing primitives — the `redirect:` probe matched nothing, so it is measuring nothing.");
+  process.exit(1);
+}
 
 if (unboundedReported.length > 0) {
   console.log(
@@ -968,6 +1024,27 @@ if (deadTimeoutKnobs.length > 0) {
       "\n\n  A timeout an operator can set and no code consults is a knob with nothing behind\n" +
       "  it — and it is why nobody noticed the fetches were unbounded: the configurability\n" +
       "  existed on paper. Read it at the call sites, or delete the field.",
+  );
+  process.exit(1);
+}
+
+if (followsRedirectsReported.length > 0) {
+  console.log(
+    `\n  ⚠ ${followsRedirectsReported.length} fetch site(s) OUTSIDE the emitter families that do not set\n` +
+      "    `redirect` — REPORTED, not gated. The rule belongs on them too; claiming this\n" +
+      "    gate holds them would be false.",
+  );
+  for (const u of followsRedirectsReported) console.log(`      ${u}`);
+}
+
+if (followsRedirects.length > 0) {
+  console.error(
+    `\n✗ ${followsRedirects.length} outbound fetch site(s) in an emitter family that FOLLOW redirects:\n` +
+      followsRedirects.map((u) => `    ${u}`).join("\n") +
+      "\n\n  Add `redirect: 'manual'`. undici's default is `follow`, and the only SSRF guard\n" +
+      "  here checks the FIRST hop: a 307 from the configured host delivered the full\n" +
+      "  signed body to an unvalidated origin and the adapter reported `sent`. A 3xx is a\n" +
+      "  PERMANENT refusal named by status — see lib/integrations/src/integrations/adapters/redirect.ts.",
   );
   process.exit(1);
 }
@@ -1001,5 +1078,5 @@ console.log(
 );
 console.log(
   "\nUngated-fetch gate passed — no ungated healthCheck() remains, every emitter-family\n" +
-    "fetch is bounded, and no timeout knob is disconnected.",
+    "fetch is bounded AND refuses redirects, and no timeout knob is disconnected.",
 );

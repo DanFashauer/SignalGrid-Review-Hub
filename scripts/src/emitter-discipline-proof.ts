@@ -1,4 +1,12 @@
-// Emitter-discipline proof — fully OFFLINE and deterministic.
+// Emitter-discipline proof — OFFLINE and deterministic, with ONE stated exception.
+//
+// THE EXCEPTION, named rather than buried: the header-injection assertion (§5b of
+// the wire section) uses the REAL `fetch` against `https://collector.invalid`,
+// because the behaviour being pinned is UNDICI's — a CR/LF header value is rejected
+// while the Headers object is built, before any socket or DNS lookup — and a stubbed
+// fetch would be asserting the stub. `.invalid` is the reserved TLD (RFC 2606), so
+// even if that rejection ever stopped happening the call resolves nothing.
+// Everything else runs against a recording `globalThis.fetch`.
 //
 // The five outbound emitter families (itsm, siem, syslog, telemetry, webhooks)
 // were this repository's longest-standing KNOWN_GAPS: real delivery code with no
@@ -30,6 +38,11 @@ import { resolveSyslogEmitter, SyslogAdapter } from "@workspace/integrations/sys
 import { resolveTelemetryEmitter } from "@workspace/integrations/telemetry";
 import { resolveWebhooksEmitter } from "@workspace/integrations/webhooks";
 import { resolveCaepEmitter } from "@workspace/integrations/caep-events";
+import { REDIRECT_REFUSED } from "@workspace/integrations/emit-gate/redirect";
+import { WEBHOOK_URL_REFUSALS } from "@workspace/integrations/emit-gate/url-guard";
+import { ITSM_WEBHOOK_REFUSALS } from "@workspace/integrations/itsm";
+import { verifySignedWebhook } from "@workspace/integrations/webhooks";
+import { VENDOR_ERROR_TEXT_LIMIT } from "@workspace/integrations/emit-gate/bounded-text";
 
 let passed = 0;
 const failures: string[] = [];
@@ -248,6 +261,281 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
     check("itsm/generic-webhook: WITH a secret the refusal is no longer about signing (not always-refuse)",
       signedErr !== SIGNING_SECRET_MISSING);
   } finally {
+    if (savedT === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedT;
+    if (savedL === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedL;
+  }
+}
+
+// ── THE WIRE, for the two webhook-shaped emitters ────────────────────────────
+//
+// Everything above asks whether a call was ALLOWED. This section asks what happens
+// on the wire once it is, and every assertion here corresponds to a defect measured
+// on this tree on 2026-09-02:
+//
+//   · a 307 from the configured host delivered the full SIGNED body to whatever
+//     origin its `Location` named — `validateWebhookUrl` guards the FIRST hop only,
+//     and the adapter reported `sent`;
+//   · both families signed with `X-Signature` over the BODY ALONE plus
+//     `X-Signing-Algorithm` — scheme v1, which this repository's own
+//     `verifySignedWebhook` refuses BY NAME as replayable;
+//   · both POSTed to `config.url` with no SSRF guard, while one sat in webhooks/;
+//   · a 5 MB vendor error body travelled whole into `SIEMEventResponse.reason`;
+//   · `await response.json() as { access_token: string }` produced `Bearer undefined`.
+//
+// DRIVEN THROUGH A RECORDING `globalThis.fetch`, the same idiom as
+// `scripts/src/webhooks-proof.ts`: no socket opens, the adapter's real code runs, and
+// the proof observes the request rather than reasoning about it. The `redirect:
+// 'manual'` OPTION itself is held lexically by `scripts/check-ungated-fetch.mjs`;
+// what is driven here is what the adapter DOES with a 3xx, which is the half a
+// lexical scan cannot see.
+{
+  const realFetch = globalThis.fetch;
+  const savedT = process.env.SIGNALGRID_TIER;
+  const savedL = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  process.env.SIGNALGRID_TIER = "beta";
+  process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+  const SECRET = "s".repeat(32);
+  const EVENT_AT = "2026-09-02T00:00:00.000Z";
+  try {
+    // ---- 1. a 3xx is refused by name, once, and never followed -----------------
+    {
+      const calls: Array<{ url: string; init: Record<string, unknown> }> = [];
+      globalThis.fetch = ((input: unknown, init?: Record<string, unknown>) => {
+        calls.push({ url: String(input), init: init ?? {} });
+        return Promise.resolve(
+          new Response(null, { status: 307, headers: { location: "https://exfil.invalid/collect?q=1" } }),
+        );
+      }) as unknown as typeof globalThis.fetch;
+
+      const siem = new WebhookSIEMAdapter({ url: "https://collector.invalid/ingest", method: "POST", signingSecret: SECRET });
+      const res = await siem.sendEvent({ type: "session.probe", severity: "high", timestamp: EVENT_AT } as never);
+      const reason = (res as { reason?: string }).reason ?? "";
+      check("siem/webhook: a 307 from the configured collector is NOT reported as sent", res.status === "failed");
+      check("siem/webhook: the refusal NAMES the redirect rather than reading as a generic transport error",
+        reason.startsWith(REDIRECT_REFUSED) && reason.includes("307"));
+      check("siem/webhook: the refusal carries the Location HOST and not the attacker's full URL",
+        reason.includes("exfil.invalid") && !reason.includes("/collect?q=1"));
+      // PERMANENT BY CONSTRUCTION: one attempt, not three. Retrying re-fetches the
+      // same 3xx from the same configured host, and three retries of a redirect is
+      // three chances to be re-routed.
+      check("siem/webhook: a refused redirect is PERMANENT — exactly one attempt, no retry storm", calls.length === 1);
+      check("siem/webhook: the request that was made asked the transport NOT to follow",
+        calls[0]?.init.redirect === "manual");
+    }
+
+    // ---- 2. scheme v2, and only v2, on both webhook-shaped families ------------
+    {
+      const seen: Array<{ headers: Record<string, string>; body: string }> = [];
+      globalThis.fetch = ((_input: unknown, init?: { headers?: Record<string, string>; body?: string }) => {
+        seen.push({ headers: init?.headers ?? {}, body: String(init?.body ?? "") });
+        return Promise.resolve(new Response(JSON.stringify({ id: "TCK-1" }), { status: 200 }));
+      }) as unknown as typeof globalThis.fetch;
+
+      const siem = new WebhookSIEMAdapter({ url: "https://collector.invalid/ingest", method: "POST", signingSecret: SECRET });
+      await siem.sendEvent({ type: "session.probe", severity: "high", timestamp: EVENT_AT } as never);
+      const itsm = new GenericWebhookAdapter({
+        url: "https://hooks.invalid/x", method: "POST",
+        headers: { "Content-Type": "application/json" },
+        bodyTemplate: '{"t":"{{title}}"}', signingSecret: SECRET,
+      });
+      await itsm.createTicket({ title: "t", description: "d", severity: "high" } as never);
+
+      check("both webhook-shaped families reached the wire once each", seen.length === 2);
+      for (const [i, label] of [[0, "siem/webhook"], [1, "itsm/generic-webhook"]] as ReadonlyArray<readonly [number, string]>) {
+        const h = seen[i]?.headers ?? {};
+        check(`${label}: the retired v1 headers are GONE from the wire`,
+          h["X-Signature"] === undefined && h["X-Signing-Algorithm"] === undefined);
+        check(`${label}: carries a v2-marked signature`, (h["X-Webhook-Signature"] ?? "").startsWith("v2="));
+        check(`${label}: carries the timestamp the MAC covers`, /^[0-9]+$/.test(h["X-Webhook-Timestamp"] ?? ""));
+        // THE ORACLE, not a re-implementation: this repository's own receiver-side
+        // verifier reconstructs `${timestamp}.${body}` and must accept it. A proof
+        // that recomputed the HMAC itself would pass against two consistent bugs.
+        const v = verifySignedWebhook(h, seen[i]?.body ?? "", SECRET, {
+          toleranceMs: 10 * 60 * 1000,
+          now: Number(h["X-Webhook-Timestamp"]),
+        });
+        check(`${label}: the signature VERIFIES under this repository's own v2 verifier`, v.valid === true);
+        const tampered = verifySignedWebhook(
+          { ...h, "X-Webhook-Timestamp": String(Number(h["X-Webhook-Timestamp"]) + 1) },
+          seen[i]?.body ?? "", SECRET, { toleranceMs: 10 * 60 * 1000, now: Number(h["X-Webhook-Timestamp"]) + 1 },
+        );
+        check(`${label}: moving the timestamp by ONE ms breaks the signature — it is inside the MAC`,
+          tampered.valid === false);
+      }
+      // The SIEM instant is the EVENT's, derived rather than re-minted, so a retry
+      // cannot give one delivery two signatures.
+      check("siem/webhook: the signed timestamp IS the event's own instant, not a fresh clock read",
+        seen[0]?.headers["X-Webhook-Timestamp"] === String(Date.parse(EVENT_AT)));
+    }
+
+    // ---- 3. an operator-supplied endpoint is validated -------------------------
+    {
+      let reached = 0;
+      globalThis.fetch = (() => { reached += 1; return Promise.resolve(new Response("", { status: 200 })); }) as unknown as typeof globalThis.fetch;
+      const siem = new WebhookSIEMAdapter({ url: "https://169.254.169.254/latest/meta-data/", method: "POST", signingSecret: SECRET });
+      const res = await siem.sendEvent({ type: "session.probe", severity: "high", timestamp: EVENT_AT } as never);
+      // HTTPS ON PURPOSE, so it is the ADDRESS rule being tested and not the scheme
+      // rule. `http://169.254.169.254/...` refuses too — for the earlier reason — and
+      // an assertion satisfied by the wrong clause is not holding the clause it names.
+      check("siem/webhook: a link-local target is REFUSED, and the refusal names the range",
+        res.status === "failed" && (res as { reason?: string }).reason === WEBHOOK_URL_REFUSALS.privateRange);
+      check("siem/webhook: nothing reached the transport at all", reached === 0);
+
+      const itsm = new GenericWebhookAdapter({
+        url: "https://127.0.0.1:9/x", method: "POST",
+        headers: { "Content-Type": "application/json" },
+        bodyTemplate: '{"t":"{{title}}"}', signingSecret: SECRET,
+      });
+      let threw = "";
+      try { await itsm.createTicket({ title: "t", description: "d", severity: "high" } as never); }
+      catch (err) { threw = err instanceof Error ? err.message : String(err); }
+      check("itsm/generic-webhook: a loopback target is REFUSED before the fetch",
+        threw.includes(WEBHOOK_URL_REFUSALS.loopback) && reached === 0);
+
+      // SPLUNK HEC, the field the first version of this batch left REPORTED. Measured
+      // against a real socket on 2026-09-02: `hecUrl` of `http://127.0.0.1:<port>` at
+      // prod + live POSTed the whole event, HEC token in the Authorization header, to
+      // loopback and returned `sent`. https:// here so the ADDRESS rule is what fires
+      // rather than the scheme rule.
+      const { SplunkAdapter } = await import("@workspace/integrations/siem");
+      const splunk = new SplunkAdapter({ hecUrl: "https://127.0.0.1:8088", hecToken: "tok-abc" });
+      const sres = await splunk.sendEvent({ type: "access.denied", severity: "critical", timestamp: EVENT_AT } as never);
+      check("siem/splunk: a loopback hecUrl is REFUSED, naming the loopback rule",
+        sres.status === "failed" && (sres as { reason?: string }).reason === WEBHOOK_URL_REFUSALS.loopback);
+      check("siem/splunk: …and nothing reached the transport", reached === 0);
+      check("siem/splunk: healthCheck refuses the same target rather than probing it",
+        (await splunk.healthCheck()) === false && reached === 0);
+    }
+
+    // ---- 4. a hostile vendor error body is bounded where it is read ------------
+    {
+      const HUGE = "A".repeat(5_000_000);
+      globalThis.fetch = (() => Promise.resolve(new Response(HUGE, { status: 400 }))) as unknown as typeof globalThis.fetch;
+      const siem = new WebhookSIEMAdapter({ url: "https://collector.invalid/ingest", method: "POST", signingSecret: SECRET });
+      const res = await siem.sendEvent({ type: "session.probe", severity: "high", timestamp: EVENT_AT } as never);
+      const reason = (res as { reason?: string }).reason ?? "";
+      check("siem/webhook: a 5 MB vendor error body does not travel whole into the response reason",
+        reason.length < VENDOR_ERROR_TEXT_LIMIT + 200);
+      check("siem/webhook: …and the truncation is STATED rather than silent", reason.includes("truncated"));
+    }
+
+    // ---- 5. a vendor token is checked, not cast --------------------------------
+    {
+      globalThis.fetch = ((input: unknown) =>
+        Promise.resolve(
+          String(input).includes("oauth_token.do")
+            ? new Response(JSON.stringify({ ok: true }), { status: 200 })
+            : new Response(JSON.stringify({ result: { sys_id: "a".repeat(32), number: "INC1", state: "1", sys_created_on: "2026-01-01 00:00:00" } }), { status: 201 }),
+        )) as unknown as typeof globalThis.fetch;
+      const { ServiceNowAdapter } = await import("@workspace/integrations/itsm");
+      const sn = new ServiceNowAdapter({
+        instanceUrl: "https://vendor.invalid", table: "incident",
+        auth: { type: "oauth", clientId: "cid", clientSecret: "csecret" },
+      } as never);
+      let threw = "";
+      try { await sn.createTicket({ title: "t", description: "d", severity: "high", category: "security" } as never); }
+      catch (err) { threw = err instanceof Error ? err.message : String(err); }
+      check("servicenow: an OAuth 200 carrying no access_token REFUSES instead of sending `Bearer undefined`",
+        threw.includes("access_token"));
+    }
+    // ---- 5b. a header undici refuses is PERMANENT, not transient -------------
+    //
+    // A VERIFIED NEGATIVE, PINNED. A CR/LF in a header value is rejected by undici
+    // BEFORE the socket opens (`TypeError: Headers.append: … is an invalid header
+    // value`) — so header injection was never possible here, and that is worth
+    // holding rather than assuming. What WAS wrong is what happened next: both
+    // adapters' catch arms retried it, so an unchanged string was re-offered to an
+    // unchanged library three times with backoff in between, and the operator was
+    // told the vendor was unreachable rather than that the header was malformed.
+    //
+    // Driven with the REAL fetch on purpose: the rejection is undici's, and a stub
+    // would be asserting the stub. No socket opens and no name is resolved — the
+    // throw happens while building the Headers object.
+    {
+      globalThis.fetch = realFetch;
+      const siem = new WebhookSIEMAdapter({
+        url: "https://collector.invalid/ingest", method: "POST", signingSecret: SECRET,
+        retryPolicy: { maxAttempts: 3, initialDelayMs: 5_000, maxDelayMs: 5_000, backoffMultiplier: 1 },
+      });
+      const startedAt = Date.now();
+      const res = await siem.sendEvent({
+        type: "session.probe", severity: "high", timestamp: EVENT_AT,
+        correlationId: "evt\r\nX-Injected: 1",
+      } as never);
+      const elapsed = Date.now() - startedAt;
+      const reason = (res as { reason?: string }).reason ?? "";
+      check("siem/webhook: a CR/LF header value is refused before the socket (undici, not us)",
+        res.status === "failed" && /invalid header value/i.test(reason));
+      check("siem/webhook: …and it is PERMANENT — no retry, so well under one 5s backoff",
+        reason.startsWith("permanent:") && elapsed < 5_000);
+    }
+
+    // ---- 5c. a missing vendor instant refuses BY NAME ------------------------
+    //
+    // `new Date(data.result.sys_created_on).toISOString()` threw a bare
+    // `RangeError: Invalid time value` when the vendor omitted the field. It failed
+    // CLOSED, which is right, and failed UNNAMED, which is not: the caller learned
+    // nothing about which field was absent. The refusal now names it.
+    {
+      globalThis.fetch = ((input: unknown) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ result: { sys_id: "b".repeat(32), number: "INC9", state: "1" } }),
+            { status: 201 },
+          ),
+        )) as unknown as typeof globalThis.fetch;
+      const { ServiceNowAdapter } = await import("@workspace/integrations/itsm");
+      const sn = new ServiceNowAdapter({
+        instanceUrl: "https://vendor.invalid", table: "incident",
+        auth: { type: "api_token", username: "u", apiToken: "tok" },
+      } as never);
+      let threw = "";
+      try { await sn.createTicket({ title: "t", description: "d", severity: "high", category: "security" } as never); }
+      catch (err) { threw = err instanceof Error ? err.message : String(err); }
+      check("servicenow: a create response missing sys_created_on refuses NAMING the field",
+        threw.includes("sys_created_on"));
+      check("servicenow: …and not as a bare RangeError", !/^Invalid time value/.test(threw));
+    }
+
+    // ---- 6. a vendor id may not choose which resource we write to ------------
+    //
+    // MEASURED 2026-09-02: `getSysIdByNumber` returned the vendor's `sys_id`
+    // unvalidated and `updateTicket` interpolated it into a REST path unencoded, so a
+    // response whose id was `../../../../api/now/table/sys_user/<32 hex>` produced a
+    // PATCH that NORMALISED — `fetch` resolves `..` before the request leaves — to the
+    // user table. The adapter believed it was updating an incident.
+    {
+      const urls: string[] = [];
+      globalThis.fetch = ((input: unknown, init?: { method?: string }) => {
+        urls.push(`${init?.method ?? "GET"} ${String(input)}`);
+        if (String(input).includes("sysparm_query=number=")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ result: [{ sys_id: `../../../../api/now/table/sys_user/${"6".repeat(32)}` }] }),
+              { status: 200 },
+            ),
+          );
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({ result: { sys_id: "a".repeat(32), number: "N", state: "1", sys_updated_on: "2026-01-01 00:00:00" } }), { status: 200 }),
+        );
+      }) as unknown as typeof globalThis.fetch;
+      const { ServiceNowAdapter } = await import("@workspace/integrations/itsm");
+      const sn = new ServiceNowAdapter({
+        instanceUrl: "https://vendor.invalid", table: "incident",
+        auth: { type: "api_token", username: "u", apiToken: "tok" },
+      } as never);
+      let threw = "";
+      try { await sn.updateTicket("INC0001", { description: "note" } as never); }
+      catch (err) { threw = err instanceof Error ? err.message : String(err); }
+      check("servicenow: a traversal-shaped sys_id from the vendor is REFUSED by name",
+        threw.includes("32 hexadecimal"));
+      check("servicenow: …and no PATCH was ever issued", urls.every((u) => !u.startsWith("PATCH")));
+      check("servicenow: …and sys_user was never addressed", urls.every((u) => !u.includes("sys_user")));
+    }
+
+  } finally {
+    globalThis.fetch = realFetch;
     if (savedT === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedT;
     if (savedL === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedL;
   }

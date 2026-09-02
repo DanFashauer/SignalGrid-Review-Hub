@@ -13,6 +13,7 @@
 
 import crypto from 'crypto';
 import { z } from 'zod';
+import { validateWebhookUrl } from '../adapters/url-guard';
 
 // ============================================================================
 // Environment & Config
@@ -87,8 +88,20 @@ export const ITSMCredentialsSchema = z.object({
   username: z.string().optional(),
   password: z.string().optional(),
   apiToken: z.string().optional(),
-  // Webhook
-  webhookUrl: z.string().url().optional(),
+  // Webhook. GUARDED WHERE IT IS PARSED, because no adapter fetches this field yet
+  // and a check at a call site that does not exist guards nothing. `z.string().url()`
+  // validates SYNTAX — `http://169.254.169.254/latest/meta-data/` passes it — so the
+  // shared address rules run here as a refinement. `{ live: false }` on purpose: that
+  // is the UNCONDITIONAL half (loopback/RFC1918/RFC6598/link-local, refused in every
+  // tier); the HTTPS clause belongs at delivery time, where the tier is known, and
+  // applying it here would reject a fixture config a dev tier may legitimately hold.
+  webhookUrl: z
+    .string()
+    .url()
+    .refine((u) => validateWebhookUrl(u, { live: false }).valid, {
+      message: 'webhookUrl points at a loopback, private, shared or link-local address',
+    })
+    .optional(),
   webhookSecret: z.string().optional(),
   // Generic Webhook signing secret
   signingSecret: z.string().optional(),

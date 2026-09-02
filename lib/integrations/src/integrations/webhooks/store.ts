@@ -17,6 +17,7 @@ import {
   CreateWebhookRequest,
   UpdateWebhookRequest,
 } from './types';
+import { boundedText, VENDOR_BODY_TEXT_LIMIT, VENDOR_ERROR_TEXT_LIMIT } from '../adapters/bounded-text';
 
 // Environment
 const REDIS_URL = process.env.REDIS_URL;
@@ -289,8 +290,12 @@ export async function recordDelivery(
     status,
     attempts,
     responseCode,
-    responseBody: responseBody?.slice(0, 1000), // Truncate
-    error: error?.slice(0, 500),
+    // BOUNDED FROM THE SHARED LIMITS, not from two literals that happen to agree.
+    // Every family now truncates to these same numbers where it READS the vendor's
+    // bytes (../adapters/bounded-text.ts); this store applying them at write time is
+    // the second layer, not the only one.
+    responseBody: responseBody === undefined ? undefined : boundedText(responseBody, VENDOR_BODY_TEXT_LIMIT),
+    error: error === undefined ? undefined : boundedText(error, VENDOR_ERROR_TEXT_LIMIT),
     lastAttemptAt: nowTimestamp,
     nextRetryAt,
     createdAt: nowTimestamp,
@@ -343,7 +348,7 @@ export async function addToDLQ(
     eventId,
     payload: payload as DLQEntry['payload'],
     attempts: 6, // After max retries
-    lastError: error.slice(0, 500),
+    lastError: boundedText(error, VENDOR_ERROR_TEXT_LIMIT),
     failedAt: now(),
   };
 

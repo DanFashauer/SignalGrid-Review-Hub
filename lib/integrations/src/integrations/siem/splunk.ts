@@ -1,5 +1,7 @@
 import type { SIEMAdapter, SIEMEventRequest, SIEMEventResponse } from '../adapters/types';
 import { resolveEmission, EMIT_SUPPRESSED, type EmissionCredential } from '../adapters/emit-gate';
+import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
+import { validateWebhookUrl } from '../adapters/url-guard';
 
 /**
  * Splunk HEC (HTTP Event Collector) Adapter Configuration
@@ -70,6 +72,28 @@ export class SplunkAdapter implements SIEMAdapter {
       };
     }
 
+    // THE COLLECTOR IS VALIDATED, and it was not. `hecUrl` is the whole destination
+    // — this adapter appends only the fixed `/services/collector` path — and nothing
+    // looked at it. REPRODUCED 2026-09-02 against a real socket: `hecUrl` of
+    // `http://127.0.0.1:<port>` at prod + SIGNALGRID_LIVE_INTEGRATIONS=true POSTed the
+    // entire event, with the HEC token in the `Authorization` header, to loopback and
+    // this method returned status 'sent'. The guard already existed in
+    // ../adapters/url-guard.ts and two of its callers simply had not been written.
+    //
+    // RETURNED, NOT THROWN, deliberately: this is a POLICY refusal — nothing left the
+    // process — which is the same kind as the emit-gate suppression above and returns
+    // the same way. Transport failures below still throw, because those are outcomes
+    // of an attempt that was made.
+    const targetCheck = validateWebhookUrl(this.config.hecUrl, { live: true });
+    if (!targetCheck.valid) {
+      return {
+        eventId: event.correlationId || 'target-refused',
+        status: 'failed',
+        reason: targetCheck.error,
+        receivedAt: new Date().toISOString(),
+      };
+    }
+
     const payload = this.buildEventPayload(event);
     
     const response = await fetch(`${this.config.hecUrl}/services/collector`, {
@@ -80,7 +104,17 @@ export class SplunkAdapter implements SIEMAdapter {
       },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(this.config.timeout),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
     });
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (!response.ok) {
       const error = await response.text();
@@ -125,6 +159,10 @@ export class SplunkAdapter implements SIEMAdapter {
     const emission = resolveEmission(process.env, this.emissionCredential());
     if (emission.mode !== "live") return false;
 
+    // The same target guard as sendEvent(). A health check that resolves and connects
+    // to an internal address is the SSRF, not a rehearsal of it.
+    if (!validateWebhookUrl(this.config.hecUrl, { live: true }).valid) return false;
+
     try {
       // Try to get server info
       const url = new URL('/services/server/info', this.config.hecUrl);
@@ -134,6 +172,9 @@ export class SplunkAdapter implements SIEMAdapter {
           'Authorization': `Splunk ${this.config.hecToken}`,
         },
         signal: AbortSignal.timeout(this.config.timeout),
+        // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+        // second hop to whatever the vendor's `Location` header named, unvalidated.
+        redirect: 'manual',
       });
       
       return response.ok;

@@ -16,6 +16,13 @@ import {
 import { createSignedHeaders, WebhookTimestampUnresolvable } from './sign';
 import { SIGNING_SECRET_MISSING } from '../adapters/signing';
 import {
+  WEBHOOK_URL_REFUSALS,
+  WEBHOOK_URL_REFUSAL_REASONS,
+  validateWebhookUrl,
+} from '../adapters/url-guard';
+import { isRedirectStatus, isRedirectRefusal, redirectRefusal } from '../adapters/redirect';
+import { boundedText, VENDOR_BODY_TEXT_LIMIT, VENDOR_ERROR_TEXT_LIMIT } from '../adapters/bounded-text';
+import {
   calculateBackoff,
   isRetryableStatus,
   hasReachedMaxAttempts,
@@ -108,82 +115,14 @@ export function resolveWebhookDelivery(
 }
 
 /**
- * Validate a webhook target.
+ * Validate a webhook target — MOVED to ../adapters/url-guard.ts.
  *
- * TWO RULES, and they are deliberately different in kind.
- *
- * THE SSRF BLOCK IS UNCONDITIONAL. Loopback, link-local, and RFC1918 private
- * ranges are refused in every tier, because there is no tier in which posting a
- * signed customer payload at 127.0.0.1 — or at a neighbour on the internal
- * network — is the intended behaviour. It was previously gated on production AND
- * covered only four loopback spellings: 192.168.0.5, 10.0.0.7 and every other
- * RFC1918 address passed the guard even when it fired.
- *
- * THE HTTPS RULE IS GATED ON LIVE DELIVERY, passed in by the caller from the same
- * `resolveWebhookDelivery` result that decides whether to send at all. One
- * resolution, read once, per call. A suppressed tier may legitimately point a
- * fixture at a plain-HTTP mock; a live one may not.
+ * It is re-exported here under the identical names because two other families POST
+ * to an operator-supplied URL and called nothing: a guard that only one of its
+ * three callers can reach is a guard in the wrong file. Everything that imported
+ * these three symbols from this module still does.
  */
-export const WEBHOOK_URL_REFUSALS = {
-  httpsRequired: 'HTTPS required for live webhook delivery',
-  loopback: 'Loopback and unspecified addresses are never valid webhook targets',
-  privateRange: 'Private and link-local addresses are never valid webhook targets',
-  invalidUrl: 'Invalid URL',
-} as const;
-
-/** Every string `validateWebhookUrl` can return in its `error` field. Derived from
- *  the object above rather than retyped, because the retyped copy is exactly what
- *  went stale: `isPermanentError` below compared against 'HTTPS required in
- *  production' and 'Localhost not allowed in production', two strings this function
- *  stopped returning when the rules were rewritten. Nothing failed — the comparison
- *  just silently stopped matching, and a plain-http target at a live tier was
- *  retried six times over ~31 seconds instead of being refused once. */
-export const WEBHOOK_URL_REFUSAL_REASONS: readonly string[] = Object.values(WEBHOOK_URL_REFUSALS);
-
-export function validateWebhookUrl(
-  url: string,
-  opts: { live: boolean },
-): { valid: boolean; error?: string } {
-  try {
-    const parsed = new URL(url);
-
-    if (opts.live && parsed.protocol !== 'https:') {
-      return { valid: false, error: WEBHOOK_URL_REFUSALS.httpsRequired };
-    }
-
-    const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-
-    // Loopback and unspecified, in both families.
-    if (
-      hostname === 'localhost' ||
-      hostname.endsWith('.localhost') ||
-      hostname === '0.0.0.0' ||
-      hostname === '::' ||
-      hostname === '::1' ||
-      /^127\./.test(hostname)
-    ) {
-      return { valid: false, error: WEBHOOK_URL_REFUSALS.loopback };
-    }
-
-    // RFC1918 private ranges, RFC6598 shared address space, and link-local —
-    // including IPv6 unique-local (fc00::/7) and link-local (fe80::/10).
-    if (
-      /^10\./.test(hostname) ||
-      /^192\.168\./.test(hostname) ||
-      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
-      /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(hostname) ||
-      /^169\.254\./.test(hostname) ||
-      /^f[cd][0-9a-f]{2}:/.test(hostname) ||
-      /^fe[89ab][0-9a-f]:/.test(hostname)
-    ) {
-      return { valid: false, error: WEBHOOK_URL_REFUSALS.privateRange };
-    }
-
-    return { valid: true };
-  } catch {
-    return { valid: false, error: WEBHOOK_URL_REFUSALS.invalidUrl };
-  }
-}
+export { WEBHOOK_URL_REFUSALS, WEBHOOK_URL_REFUSAL_REASONS, validateWebhookUrl };
 
 /**
  * The reason recorded when the envelope itself will not build.
@@ -383,9 +322,24 @@ async function dispatchToEndpoint(
       headers,
       body: payloadStr,
       signal: AbortSignal.timeout(config.timeoutMs),
+      // NEVER FOLLOWED. `validateWebhookUrl` above guards the FIRST hop only; the
+      // default `follow` handed the second hop to whatever the collector's
+      // `Location` header named, and `X-Webhook-Signature` survives a cross-origin
+      // redirect in undici. See ../adapters/redirect.ts for the measurement.
+      redirect: 'manual',
     });
 
-    const responseBody = await response.text().catch(() => undefined);
+    // A 3xx is a PERMANENT refusal, before the body is read: no retry re-routes a
+    // configured target, and reading the body of a redirect we did not follow would
+    // be reading an unvalidated origin's answer.
+    if (isRedirectStatus(response.status)) {
+      const reason = redirectRefusal(response.status, response.headers.get('location'));
+      await recordDelivery(webhook.id, payload.id, 'failed', response.status, undefined, reason);
+      return { success: false, statusCode: response.status, error: reason, permanent: true };
+    }
+
+    const rawBody = await response.text().catch(() => undefined);
+    const responseBody = rawBody === undefined ? undefined : boundedText(rawBody, VENDOR_BODY_TEXT_LIMIT);
 
     const result: DeliveryResult = {
       success: response.ok,
@@ -404,8 +358,11 @@ async function dispatchToEndpoint(
 
     return result;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
+    const errorMessage = boundedText(
+      error instanceof Error ? error.message : 'Unknown error',
+      VENDOR_ERROR_TEXT_LIMIT,
+    );
+
     await recordDelivery(
       webhook.id,
       payload.id,
@@ -450,6 +407,14 @@ export function isPermanentDeliveryError(result: DeliveryResult): boolean {
   }
 
   if (result.error === SIGNING_SECRET_MISSING) {
+    return true;
+  }
+
+  // A REFUSED REDIRECT is permanent by construction, and it is recognised from the
+  // shared constant rather than from a retyped copy of the sentence — the same
+  // lesson as the URL reasons below. Retrying re-fetches the same 3xx from the same
+  // configured host.
+  if (isRedirectRefusal(result.error)) {
     return true;
   }
 

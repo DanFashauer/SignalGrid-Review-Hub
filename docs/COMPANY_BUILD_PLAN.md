@@ -3355,13 +3355,72 @@ earlier — that is the loop working, not a reason to soften the record.
     `internal.example.com` pointing at 10.0.0.5, or any of the public
     resolve-to-loopback services, walks straight through every rule above. The naive
     case is covered; the deliberate one is not.
-    WHY IT IS NOT BEING FIXED NOW: `webhooks` sits in the DEFERRED list in
-    `scripts/launch-profile.mjs`, and DR-005 froze breadth — a deferred family does
-    not earn launch-scope engineering because a gap in it is real. The exposure is
-    also narrower than it first reads: webhook delivery is fire-and-forget, so an
-    operator who aims one at internal infrastructure gets blind SSRF (timing, and
-    whatever an unauthenticated internal POST does) rather than a response body, and
-    the URL is set by a tenant admin rather than an anonymous caller.
+    CORRECTED 2026-09-02, and the correction is the point of re-reading an entry
+    rather than trusting it. This paragraph said the exposure was "fire-and-forget,
+    so an operator who aims one at internal infrastructure gets blind SSRF … rather
+    than a response body". BOTH HALVES WERE FALSE AT THE TIME OF WRITING.
+      · NOT BLIND. `dispatchToEndpoint` reads `await response.text()` and
+        `recordDelivery` persists up to 1000 bytes of it to the per-webhook delivery
+        log a tenant admin opens. The answer from the internal service came back and
+        was stored.
+      · A SECOND HOP EXISTED AND THIS ENTRY NEVER NAMED IT. No fetch in any of the
+        six emitter families set `redirect`, so all 42 inherited undici's default
+        `follow`, and `validateWebhookUrl` guards only the FIRST hop. Measured
+        2026-09-02: a 307 from the configured host delivered the full signed body to
+        an unvalidated loopback origin and the adapter reported `sent`.
+        `X-Webhook-Signature` survives a cross-origin redirect (undici strips
+        `Authorization`, not this); so the address rules could be satisfied by hop one
+        and defeated by hop two, with the operator's own configured host doing the
+        redirecting. That is not a narrowing of the SSRF finding — it is a bypass of it.
+    FIXED 2026-09-02, WITH ITS SCOPE STATED. This entry first said "every outbound
+    fetch in lib/integrations/src/integrations/**", which overshoots by about half:
+    all 42 outbound fetches in the six emitter families set `redirect: 'manual'`, and
+    the sites OUTSIDE those families (graph, passkey-assurance,
+    device-management-health and the rest) do NOT — `check-ungated-fetch.mjs` prints
+    them as REPORTED, not gated, with the ratio, on every run. Both figures here are
+    derived by `check-derived-doc-figures.mjs` (rows `redirect-refusing-sites` and
+    `redirect-emitter-families`), so the sentence moves when the tree does; the
+    denominator deliberately is NOT frozen in prose, because a second derivation of
+    it disagreed with the gate's own and two counts of one thing is drift.
+    A 3xx is a PERMANENT refusal named by status and
+    Location HOST, counted `failed`, recorded where the family records rows, and never
+    retried, across the 6 emitter families that refuse redirects. `scripts/check-ungated-fetch.mjs` asserts the option on the call beside
+    the AbortSignal assertion (planted-string self-test), and `proof:emitter-discipline`
+    drives a 307 through the real adapter and asserts one attempt, the named reason,
+    and that the Location HOST — not the attacker's full URL — reaches the log. Two
+    families that POSTed to `config.url` with no guard at all (`siem/webhook.ts`,
+    `itsm/generic-webhook.ts`) now call the same validator, moved to
+    `adapters/url-guard.ts` because a guard only one of its three callers can reach is
+    a guard in the wrong file.
+    THE RESIDUE IS TWO THINGS, AND AN EARLIER DRAFT OF THIS LINE SAID ONE. It read
+    "the residue after this batch is DNS resolution only", and that was false when
+    written: the guard was called on three config fields named `url`, and ELEVEN other
+    operator-supplied URL fields never reached it. Reproduced 2026-09-02 against a real
+    socket — a Splunk `hecUrl` of `http://127.0.0.1:<port>` at prod +
+    `SIGNALGRID_LIVE_INTEGRATIONS=true` POSTed the whole event, with the HEC token in
+    the `Authorization` header, to loopback, and `sendEvent` returned status `sent`.
+      · NOW GATED, and no longer residue: `siem`'s `hecUrl` (Splunk HEC — the adapter
+        appends only the fixed `/services/collector` path) and `itsm`'s stored
+        `webhookUrl`, guarded as a zod refinement where the credential is PARSED,
+        because nothing fetches that field yet and a check at a call site that does not
+        exist guards nothing.
+      · STILL UNGUARDED, and REPORTED rather than claimed: the vendor-tenant hosts —
+        `itsm:instanceUrl` (ServiceNow, Freshservice, Zendesk, ManageEngine, Ivanti,
+        BMC Helix, and the ITSM config store), `itsm:baseUrl` (Jira), `itsm:tokenUrl`
+        (BMC Helix) and `telemetry:baseUrl` (FleetDM). What is missing on these is the
+        DESIGN, not the call: whether an on-premise ServiceNow at 10.x is a legitimate
+        deployment is undecided, and refusing one would break it. The split is written
+        down with a reason per field in `OPERATOR_URL_FIELDS`
+        (`lib/integrations/src/integrations/adapters/url-guard.ts`) and
+        `check-emitter-wire-discipline.mjs` asserts that registry against the fields it
+        DERIVES from source, so an unclassified new field fails the build.
+      · DNS RESOLUTION, on every field including the gated ones: the rules match the
+        literal address in the URL. A hostname that RESOLVES to an internal address
+        still passes. The next paragraph says what closing that would cost.
+    WHY THE DNS HALF IS STILL NOT BEING FIXED: `webhooks` sits in the DEFERRED list in
+    `scripts/launch-profile.mjs`. The URL is set by a tenant admin rather than an
+    anonymous caller, which bounds who can aim it — it does not make the answer
+    unreadable, and this entry used to claim it did.
     WHAT WOULD ACTUALLY CLOSE IT, so the next person does not re-derive it: resolve
     the hostname at dispatch time and apply the SAME range rules to every returned
     address, A and AAAA both. That is defence in depth, not a proof — resolution and

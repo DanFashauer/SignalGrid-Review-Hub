@@ -11,6 +11,7 @@ import {
   FleetDMQueryResult,
 } from './types';
 import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
+import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
 import { getFleetDMConfig, setPostureForHost } from './store';
 import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
 
@@ -72,7 +73,17 @@ export class FleetDMAdapter {
       method: 'GET',
       headers: this.getHeaders(),
       signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
     });
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (!response.ok) {
       const error = await response.text();
@@ -106,8 +117,18 @@ export class FleetDMAdapter {
         method: 'GET',
         headers: this.getHeaders(),
         signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+        // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+        // second hop to whatever the vendor's `Location` header named, unvalidated.
+        redirect: 'manual',
       }
     );
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (response.status === 404) {
       return null;
@@ -146,7 +167,17 @@ export class FleetDMAdapter {
       method: 'GET',
       headers: this.getHeaders(),
       signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
     });
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (!response.ok) {
       const error = await response.text();
@@ -181,8 +212,18 @@ export class FleetDMAdapter {
         method: 'GET',
         headers: this.getHeaders(),
         signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+        // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+        // second hop to whatever the vendor's `Location` header named, unvalidated.
+        redirect: 'manual',
       }
     );
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (response.status === 404) {
       return null;
@@ -291,7 +332,17 @@ export class FleetDMAdapter {
         method: 'GET',
         headers: this.getHeaders(),
         signal: AbortSignal.timeout(TIMEOUT_PRESETS.short),
+        // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+        // second hop to whatever the vendor's `Location` header named, unvalidated.
+        redirect: 'manual',
       });
+
+      // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+      // never fall through to a generic "API error" or a retry. Permanent by
+      // construction: no retry re-routes a configured host.
+      if (isRedirectStatus(response.status)) {
+        throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+      }
 
       if (!response.ok) {
         return {
@@ -393,7 +444,17 @@ export class FleetDMAdapter {
       headers: this.getHeaders(),
       body: JSON.stringify({ query: sql, selected: { hosts: hostIds } }),
       signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
     });
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
+
     if (!response.ok) {
       throw new Error(`FleetDM live query POST failed: ${response.status}`);
     }

@@ -1,5 +1,6 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
 import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
+import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
 
 /**
  * Freshservice ITSM Adapter Configuration
@@ -65,6 +66,9 @@ export class FreshserviceAdapter implements ITSMAdapter {
 
     const response = await fetch(url, {
       signal: AbortSignal.timeout(this.config.timeout),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,6 +77,13 @@ export class FreshserviceAdapter implements ITSMAdapter {
       },
       body: JSON.stringify(ticket),
     });
+
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
 
     if (!response.ok) {
       const error = await response.text();
@@ -90,7 +101,10 @@ export class FreshserviceAdapter implements ITSMAdapter {
 
     return {
       ticketId: String(data.ticket.display_id),
-      ticketUrl: `${this.config.instanceUrl}/a/tickets/${data.ticket.id}`,
+      // ENCODED. The id came off the vendor's wire and this link is what an operator
+      // clicks; interpolated raw, a value containing `?`, `#` or `..` builds a link to
+      // somewhere other than the ticket. Same rule as the request paths.
+      ticketUrl: `${this.config.instanceUrl}/a/tickets/${encodeURIComponent(String(data.ticket.id))}`,
       status: this.mapStatus(data.ticket.status),
       createdAt: data.ticket.created_at,
     };
@@ -112,6 +126,9 @@ export class FreshserviceAdapter implements ITSMAdapter {
       const url = `${this.config.instanceUrl}/api/v2/tickets?page=1&per_page=1`;
       const response = await fetch(url, {
         signal: AbortSignal.timeout(this.config.timeout),
+        // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+        // second hop to whatever the vendor's `Location` header named, unvalidated.
+        redirect: 'manual',
         method: 'GET',
         headers: {
           'Authorization': `Basic ${Buffer.from(`${this.config.apiKey}:X`).toString('base64')}`,

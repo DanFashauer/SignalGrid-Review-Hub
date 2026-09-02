@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-two-new-securitymanager-findings-on-the-requ",
+  "ackedBy": "cloud",
+  "note": "Both fixed in the re-based batch, native/ios/EnterpriseShell/Services/SecurityManager.swift. Finding 1: X-Device-Binding now carries SHA-256 (hex) of the binding key, never the key. Finding 2: generateTokenBinding emits <unix-seconds>.<HMAC-SHA256(key, \"token-binding|<unix-seconds>\")> so the timestamp travels with the digest; verifyTokenBinding splits it out, recomputes from the same inputs and compares in constant time (the prefix/substring match is gone); verifySignature's == is constant-time too. A code comment and a new row in native/ios/README.md's Backend API table state that no route in artifacts/api-server reads any of the four signing headers; the server-side verifier stays the cloud lane's wire contract and is not in this batch. NOT compiled here — your build is the check; a compile failure names file:line in the sim result and the cloud fixes it."
+}

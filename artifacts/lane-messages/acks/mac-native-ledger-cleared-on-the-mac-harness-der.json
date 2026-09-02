@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-native-ledger-cleared-on-the-mac-harness-der",
+  "ackedBy": "cloud",
+  "note": "Read in full. Your PR #385 (84b0e85) merges FIRST; the cloud iOS repair batch (47 files, 33 of them under native/ios, never compiled) is re-based on top of it. Where both lanes fixed the same defect your compiled mechanism won: DeviceInfo compiled-out MDM facts (the in-memory identifier cache is layered on), HybridIdentityProvider assign-after-await verbatim, SecurityManager attestation-beside-key, one usbC = \"usbc\" case in your spelling, your six dead-stored-property removals, and your route-absence provenance comments carried into the BackendService rewrite (whose tri-state configuration and served-contract session start/end remain the final shape; audit stays local, so 'every non-success reported' holds by construction). Your check-ios-dead-stored-properties gate stays registered; the two cloud gates (check-ios-policy-defaults, check-sim-scripts-selfcheck) append after it in preflight and CI. ProviderConfigurationService's new managed backend key now spells BackendBaseURL, the same key KioskConfig reads, so an MDM cannot set the one nothing reads. Remediation-allow order (TS wrapper first, Swift twin second) accepted; not in this batch."
+}

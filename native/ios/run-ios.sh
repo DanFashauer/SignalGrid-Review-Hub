@@ -3,17 +3,25 @@
 # EnterpriseShell — build, boot a simulator, install & launch, screenshot.
 # One command to see the app running in the iOS Simulator.
 #
-#   ./run-ios.sh                       # default: iPad Pro 13-inch (M5)
-#   SIM="iPhone 17 Pro" ./run-ios.sh   # pick another simulator
+#   ./run-ios.sh                       # default: iPhone 17, demo mode + injected badge
+#   SIM="iPad Pro 13-inch (M5)" ./run-ios.sh   # pick another simulator
+#   LAUNCH_ARGS="" ./run-ios.sh        # launch with NO flags: the non-demo path
+#                                      # (expect: unmanaged footer + Manual login)
+#   LAUNCH_ARGS="-DemoBackendURL http://127.0.0.1:8080 -DemoBackendToken <tok>" ./run-ios.sh
 #
 # Requires: full Xcode + iOS platform, xcodegen (brew). Simulator builds need
-# no code signing.
+# no code signing: the tracked Signing.xcconfig carries the simulator defaults and
+# `#include?`s an optional, gitignored Signing.local.xcconfig for device builds.
 # =============================================================================
 set -euo pipefail
 export PATH="/opt/homebrew/bin:$PATH"
 cd "$(dirname "$0")"
 
-SIM="${SIM:-iPad Pro 13-inch (M5)}"
+SIM="${SIM:-iPhone 17}"
+# Same flags scripts/mac/run-everything.sh passes: the simulator has no reader
+# hardware, so the badge scan is injected and the canned demo backend answers.
+# `LAUNCH_ARGS=""` (set but empty) launches with no flags at all.
+LAUNCH_ARGS="${LAUNCH_ARGS--DemoMode YES -SimulateBadge 04A3F291}"
 SCHEME="EnterpriseShell"
 PROJ="EnterpriseShell.xcodeproj"
 DD="$PWD/.build-dd"
@@ -24,7 +32,7 @@ xcodegen generate >/dev/null && echo "   $PROJ ready"
 echo "== 2/6  resolve + boot simulator: $SIM =="
 UDID=$(xcrun simctl list devices available | grep -F "$SIM (" | head -1 | grep -oE '[0-9A-Fa-f-]{36}' || true)
 if [ -z "$UDID" ]; then
-  echo "   simulator '$SIM' not found. Available iPads:"; xcrun simctl list devices available | grep -i ipad
+  echo "   simulator '$SIM' not found. Available devices:"; xcrun simctl list devices available | grep -iE 'iphone|ipad'
   exit 1
 fi
 echo "   udid: $UDID"
@@ -47,7 +55,15 @@ echo "   bundle id: $BID"
 
 echo "== 5/6  install + launch =="
 xcrun simctl install "$UDID" "$APP"
-xcrun simctl launch "$UDID" "$BID" >/dev/null
+# Word-split LAUNCH_ARGS on purpose (it is a flag list); bash 3.2-safe — no arrays.
+if [ -n "$LAUNCH_ARGS" ]; then
+  echo "   launching $BID with: $LAUNCH_ARGS"
+  # shellcheck disable=SC2086
+  xcrun simctl launch "$UDID" "$BID" $LAUNCH_ARGS >/dev/null
+else
+  echo "   launching $BID with NO flags (non-demo path: expect the unmanaged footer and Manual login)"
+  xcrun simctl launch "$UDID" "$BID" >/dev/null
+fi
 echo "   launched $BID"
 
 echo "== 6/6  screenshot =="

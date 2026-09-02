@@ -67,6 +67,18 @@ both builds. Because both file lists are hand-maintained,
 `macos-native` job. Without it the two lanes could drift into testing different code
 while both stayed green.
 
+**Two iOS gates run in the per-push lane, not the Apple lane.** They are static
+scans over `native/ios/**/*.swift`, so they need no runner:
+`check-ios-dynamic-type.mjs` (no raw `.systemFont(ofSize:` outside
+`DesignSystem.swift`) and `check-ios-policy-defaults.mjs`, which forbids a
+Managed-App-Config default derived from the ABSENCE of managed configuration —
+`managedBool("AllowManualOverride", default: !isManaged)` grants the badge-less
+override to any device with no app-config dictionary, and a supervised device
+whose admin never attached a payload is one of those. The accessor family it
+checks is derived from the `static func managed<X>(_ key: String, default:)`
+definitions in the tree rather than listed, and both gates carry a `--self-test`
+that runs immediately before them in preflight and in CI.
+
 **What none of this proves.** A hosted macOS runner is a throwaway VM and a simulator
 is not a device: nothing here says anything about MDM enrolment, supervision, or
 on-device enforcement. See `docs/MAC_LANE.md` for that boundary.

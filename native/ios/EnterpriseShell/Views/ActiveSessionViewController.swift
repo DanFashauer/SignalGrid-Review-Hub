@@ -789,19 +789,37 @@ final class ActiveSessionViewController: UIViewController {
         present(alert, animated: true)
     }
     
+    /// Refresh through the CONFIGURED identity provider and report its real
+    /// result. This used to dismiss after 1.5 s and toast "refreshed successfully"
+    /// without calling anything — a canned affirmative on a session screen.
     @objc private func refreshSessionTapped() {
-        // Show refreshing indicator
         let alert = UIAlertController(
             title: "Refreshing Session",
-            message: "Verifying session credentials...",
+            message: "Asking the configured identity provider to extend the session…",
             preferredStyle: .alert
         )
         
         present(alert, animated: true) {
-            // Simulate refresh (in real app, call backend)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                alert.dismiss(animated: true) {
-                    self.showToast(message: "Session refreshed successfully")
+            Task { @MainActor in
+                let outcome: String
+                let ok: Bool
+                do {
+                    let expiry = try await SessionStateManager.shared.refreshActiveSession()
+                    ok = true
+                    if let expiry = expiry {
+                        let formatter = DateFormatter()
+                        formatter.dateStyle = .none
+                        formatter.timeStyle = .short
+                        outcome = "Session refreshed — valid until \(formatter.string(from: expiry))"
+                    } else {
+                        outcome = "Session validated — the provider stated no new expiry"
+                    }
+                } catch {
+                    ok = false
+                    outcome = "Refresh failed: \(error.localizedDescription)"
+                }
+                alert.dismiss(animated: true) { [weak self] in
+                    self?.showToast(message: outcome, ok: ok)
                 }
             }
         }
@@ -818,11 +836,11 @@ final class ActiveSessionViewController: UIViewController {
         present(alert, animated: true)
     }
     
-    private func showToast(message: String) {
+    private func showToast(message: String, ok: Bool = true) {
         let toast = UILabel()
         toast.text = message
-        toast.textColor = SG.onAllow
-        toast.backgroundColor = SG.allow
+        toast.textColor = ok ? SG.onAllow : SG.onDeny
+        toast.backgroundColor = ok ? SG.allow : SG.deny
         toast.textAlignment = .center
         toast.font = SG.sans(14, .medium)
         toast.adjustsFontForContentSizeCategory = true

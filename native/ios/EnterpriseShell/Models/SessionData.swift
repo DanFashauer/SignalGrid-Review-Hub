@@ -170,13 +170,99 @@ struct StartSessionRequest: Codable {
     let metadata: [String: String]
 }
 
-/// Response from session start endpoint
+/// The shell's app-level session-start result. Built from the control plane's
+/// `{session, decision}` wire response (`BackendService.startSession`), from the
+/// simulator demo (`DemoMode`), or from a local/offline session.
 struct StartSessionResponse: Codable {
     let success: Bool
     let sessionToken: String?
     let user: UserInfo?
     let persona: Persona?
     let error: APIError?
+    /// The control plane's `session.id` when it minted the session; nil for demo
+    /// and local sessions.
+    var controlPlaneSessionId: String? = nil
+    /// The expiry instant the server (or the local session) stated, when known.
+    var expiresAt: Date? = nil
+    /// The gating decision's outcome verbatim (`allow` / `step_up` / `restrict` /
+    /// `deny`) when a control plane answered.
+    var decisionOutcome: String? = nil
+}
+
+// MARK: - Control-plane wire models
+//
+// The SERVED shapes, from `lib/api-spec/v1-openapi.yaml` (`EvaluateRequest`,
+// `EvaluateResult`) and `artifacts/api-server/src/routes/v1.ts` (`Session`, from
+// `lib/persistence/src/session-store.ts`). Responses arrive inside
+// `envelope()` — `{requestId, timestamp, ...data}` — so decoding the named keys
+// and ignoring the rest is the whole of the unwrapping. Dates are ISO-8601 strings
+// with fractional seconds (`Date.toISOString()`); `ISO8601Wire.parse` reads them.
+
+/// `POST /api/v1/sessions/start` body (`EvaluateRequest`, plus the optional TTL).
+struct SessionStartWireRequest: Codable {
+    let identityRef: String
+    let deviceRef: String
+    let workflowKey: String
+    let ttlSeconds: Int?
+}
+
+/// `Session` as the server stores and returns it.
+struct ControlPlaneSession: Codable {
+    let id: String
+    let tenantId: String?
+    let identityRef: String
+    let deviceRef: String
+    let workflowKey: String
+    let status: String
+    let outcome: String?
+    let decisionId: String?
+    let createdAt: String?
+    let lastSeenAt: String?
+    let expiresAt: String?
+}
+
+/// `EvaluateResult` — the gating decision.
+struct ControlPlaneDecision: Codable {
+    let decisionId: String
+    let outcome: String
+    let reasonCodes: [String]?
+    let explanation: String?
+}
+
+/// `{session, decision}` from `sessions/start`.
+struct SessionStartWireResponse: Codable {
+    let session: ControlPlaneSession
+    let decision: ControlPlaneDecision
+}
+
+/// `{session}` from `sessions/{id}`, `/refresh` and `/end`.
+struct SessionWireEnvelope: Codable {
+    let session: ControlPlaneSession
+}
+
+/// ISO-8601 on the wire, both with and without fractional seconds. Foundation's
+/// `ISO8601DateFormatter` accepts exactly one of those per configuration, and the
+/// server emits the fractional form.
+enum ISO8601Wire {
+    private static let fractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let whole: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    static func parse(_ raw: String?) -> Date? {
+        guard let raw = raw, !raw.isEmpty else { return nil }
+        return fractional.date(from: raw) ?? whole.date(from: raw)
+    }
+
+    static func string(_ date: Date) -> String {
+        fractional.string(from: date)
+    }
 }
 
 /// Request to end a session

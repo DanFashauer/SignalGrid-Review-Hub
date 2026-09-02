@@ -11,8 +11,9 @@ import PackageDescription
 //
 // Two things follow from that, and this package fixes both:
 //
-//   1. PLATFORM. The port is pure Foundation — every one of the six files below
-//      imports Foundation and nothing else. That is a claim, and a claim nothing
+//   1. PLATFORM. The port is pure Foundation — every one of the seven files below
+//      imports Foundation and nothing else (DeviceBindingCrypto also imports
+//      CommonCrypto, an Apple system module present on both iOS and macOS). That is a claim, and a claim nothing
 //      checks is a claim that decays: one `import UIKit` added for convenience and
 //      the port silently stops being portable, with no gate to say so. Building it
 //      for macOS makes the claim falsifiable. If someone reaches for UIKit, this
@@ -50,6 +51,7 @@ let package = Package(
                 "Services/DecisionService.swift",
                 "Services/SignalContext.swift",
                 "Services/ScreenCapturePolicy.swift",
+                "Services/DeviceBindingCrypto.swift",
                 "Models/SessionState.swift"
             ]
         ),

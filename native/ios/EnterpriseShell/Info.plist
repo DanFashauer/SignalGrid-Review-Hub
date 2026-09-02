@@ -45,14 +45,20 @@
             </array>
         </dict>
     </dict>
+    <!-- LaunchBackground is a real color set (Resources/Assets.xcassets), a system
+         background reference so the launch frame follows the device appearance. It
+         was named here and absent from the catalog, which iOS renders as a black
+         launch frame. -->
     <key>UILaunchScreen</key>
     <dict>
         <key>UIColorName</key>
         <string>LaunchBackground</string>
     </dict>
+    <!-- arm64: every device this deployment target (iOS 15) can run on is arm64;
+         armv7 named a 32-bit capability no supported device has. -->
     <key>UIRequiredDeviceCapabilities</key>
     <array>
-        <string>armv7</string>
+        <string>arm64</string>
     </array>
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array>

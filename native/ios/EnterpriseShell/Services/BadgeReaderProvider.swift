@@ -199,10 +199,19 @@ final class BadgeReaderProviderFactory {
             MDMBadgeReaderProvider()
         }
         
-        // USB-C provider (parity with BLE)
+        // USB-C provider (parity with BLE). Registered under the ENUM case, not a
+        // bare string: `"usbc"` used to be registered while `BadgeReaderType` had no
+        // such case, so no configuration could ever select it — dead wiring.
         registeredProviders[BadgeReaderType.usbC.rawValue] = {
             USBCBadgeReaderProvider()
         }
+    }
+
+    /// Why a declared reader type cannot be built here, or nil when it can.
+    /// `nfc` and `serial` are declared in `BadgeReaderType` and have no provider.
+    func unavailableReason(for type: BadgeReaderType) -> String? {
+        if registeredProviders[type.rawValue] != nil { return nil }
+        return "Badge reader \"\(type.displayName)\" (\(type.rawValue)) is declared in configuration but not implemented in this build"
     }
     
     /// Register a custom badge reader provider
@@ -210,16 +219,23 @@ final class BadgeReaderProviderFactory {
         registeredProviders[type.rawValue] = factory
     }
     
-    /// Create a badge reader provider for the given configuration
+    /// Create a badge reader provider for the given configuration. A type with no
+    /// provider returns nil AND says so in the audit log — silently returning nil
+    /// left the lock screen waiting on a reader that could never exist.
     func createProvider(config: BadgeReaderConfig) -> BadgeReaderProvider? {
         guard let factory = registeredProviders[config.readerType.rawValue] else {
             // BadgeReaderType declares more transports than are implemented: `nfc` and
             // `serial` have no provider class. Returning a bare nil left the caller
             // unable to tell "not implemented" from "failed to build", and left an
-            // operator with a configured reader that silently read nothing.
-            AuditLogger.shared.log(event: .badgeReaderProviderInitialized, metadata: [
+            // operator with a configured reader that silently read nothing. Recorded
+            // under its own event rather than `badgeReaderProviderInitialized` with a
+            // provider of "none": a reader that cannot exist was never initialised, and
+            // `ProviderConfigurationService.badgeReaderUnavailableReason` puts the same
+            // fact on the lock screen.
+            AuditLogger.shared.log(event: .badgeReaderProviderUnavailable, metadata: [
                 "provider": "none",
-                "type": config.readerType.rawValue,
+                "readerType": config.readerType.rawValue,
+                "reason": "declared, not implemented",
                 "error": "no provider registered for this reader type"
             ])
             return nil

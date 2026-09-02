@@ -38,6 +38,36 @@ final class KioskController {
     private(set) var isLocked = false
     private(set) var isRecoveryUnlocked = false
 
+    /// What the ASAM request answered. MAINTAINED ON THE MAIN THREAD ONLY — every
+    /// write is inside a main-queue block — and read from main
+    /// (`KioskConfig.localSessionAllowed` asserts it). A bare `isKioskActive == false`
+    /// was being read as "not supervised", but it is also false BEFORE the ASAM
+    /// callback returns and on a supervised device that is not in
+    /// `AutonomousSingleAppModePermittedAppIDs`; only an explicit refusal means
+    /// "no kiosk exists here".
+    enum AsamProbe: String {
+        /// No completed request yet (or the org opted out, so none was made).
+        /// Proves nothing either way — and is therefore REFUSED as evidence.
+        case notAttempted
+        /// The OS refused ASAM: unsupervised or not permitted. The only answer that
+        /// a code-free local sign-in may rely on.
+        case unavailable
+        /// ASAM (or manual Guided Access) was granted at least once this process:
+        /// the device IS supervised. Sticky — a later release never downgrades it.
+        case engaged
+    }
+    private(set) var asamProbe: AsamProbe = .notAttempted
+
+    private func recordProbe(_ value: AsamProbe) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if self.asamProbe == .engaged { return }   // sticky proof of supervision
+            guard self.asamProbe != value else { return }
+            self.asamProbe = value
+            NotificationCenter.default.post(name: .asamProbeDidChange, object: nil)
+        }
+    }
+
     /// True when the device is ACTUALLY captive — either app-requested ASAM
     /// (`isLocked`) or a manually-enabled Guided Access session (the no-MDM
     /// alternative). Use this to verify the kiosk in testing without supervision.
@@ -52,6 +82,7 @@ final class KioskController {
         // guard — so the pre-auth kiosk would never re-engage on the next scene
         // activation. Assigning `on` keeps the flag honest.
         isLocked = on
+        if on { recordProbe(.engaged) }
         AuditLogger.shared.log(
             event: on ? .kioskLockEngaged : .kioskUnlocked,
             metadata: ["mode": "guided_access_manual"])
@@ -71,6 +102,7 @@ final class KioskController {
             guard !self.isLocked else { return }             // already locked
             UIAccessibility.requestGuidedAccessSession(enabled: true) { success in
                 self.isLocked = success
+                self.recordProbe(success ? .engaged : .unavailable)
                 AuditLogger.shared.log(
                     event: success ? .kioskLockEngaged : .kioskLockFailed,
                     metadata: ["asam": success ? "engaged" : "unavailable_needs_mdm_supervision"])
@@ -149,11 +181,64 @@ enum KioskConfig {
         managedBool("SingleAppModeEnabled", default: true)
     }
 
-    /// Disaster-recovery manual override. OFF by default and NOT recommended — a
-    /// company may opt in (managed config `AllowManualOverride = true`) to let an
-    /// admin code release the kiosk without a badge.
+    /// True when an MDM has delivered a Managed App Configuration dictionary
+    /// (`com.apple.configuration.managed`). THIS PROVES NOTHING ABOUT SUPERVISION:
+    /// app-config and the `com.apple.applicationaccess` ASAM authorisation are
+    /// different payloads, and a supervised, kiosk-locked device may carry no
+    /// app-config dictionary at all. Nothing here may loosen on its absence.
+    static var isManaged: Bool {
+        managed != nil
+    }
+
+    /// Disaster-recovery manual override with an admin code. OFF by default
+    /// EVERYWHERE and NOT recommended — a company opts in via managed config
+    /// (`AllowManualOverride = true`) together with a `RecoveryCode`.
     static var allowManualOverride: Bool {
         managedBool("AllowManualOverride", default: false)
+    }
+
+    /// Code-free local sign-in on an UNMANAGED phone. Requires a POSITIVE assertion
+    /// by the person holding the device — the Settings-bundle toggle
+    /// `local_session_allowed` (iOS Settings → Enterprise Shell, default OFF) — and
+    /// an explicit OS refusal of ASAM (`KioskController.AsamProbe.unavailable`):
+    /// a managed app-config dictionary, an engaged lock, or a probe that has not
+    /// answered yet all refuse. MAIN THREAD ONLY (`asamProbe` is main-thread
+    /// state); off-main callers hop first, as `BackendService.startSession` does.
+    /// Absent policy is never permission:
+    /// an earlier version defaulted manual login ON when the dictionary was absent,
+    /// which on a supervised device with no app-config would have released the
+    /// kiosk in two taps.
+    static var localSessionAllowed: Bool {
+        assert(Thread.isMainThread, "KioskConfig.localSessionAllowed reads main-thread kiosk state; hop to MainActor first")
+        guard !isManaged else { return false }
+        guard UserDefaults.standard.bool(forKey: "local_session_allowed") else { return false }
+        return KioskController.shared.asamProbe == .unavailable
+    }
+
+    /// Whether the lock screen offers Manual login at all: the admin-code path
+    /// (managed opt-in) or the local toggle path. Re-evaluated at the moment of the
+    /// tap, never cached.
+    static var manualLoginAvailable: Bool {
+        allowManualOverride || localSessionAllowed
+    }
+
+    /// Control-plane base URL from Managed App Config (`BackendBaseURL`); the first
+    /// step of `BackendService.resolveBaseURL()`'s order. Falls back to the
+    /// same-named launch argument like every other key here.
+    static var backendBaseURL: String? {
+        managedString("BackendBaseURL")
+    }
+
+    /// Tenant bearer for the control plane (`BackendBearerToken`); the last step of
+    /// `BackendService.tenantBearerToken`'s order.
+    static var backendBearerToken: String? {
+        managedString("BackendBearerToken")
+    }
+
+    /// `workflowKey` sent at session start (`BackendWorkflowKey`); see
+    /// `BackendService.workflowKey` for the default.
+    static var backendWorkflowKey: String? {
+        managedString("BackendWorkflowKey")
     }
 
     /// Validate a disaster-recovery code against the one provisioned by managed
@@ -172,14 +257,20 @@ enum KioskConfig {
         UserDefaults.standard.dictionary(forKey: "com.apple.configuration.managed")
     }
 
+    // A PRESENT managed dictionary answers only from itself: a key it lacks is an
+    // absent value, never a launch argument. The plain-UserDefaults fallback (what
+    // makes these keys settable with `-Key value` at launch) exists ONLY on a device
+    // with no managed dictionary at all. Before this, a launch argument could set
+    // `BackendBaseURL` on a managed device whose MDM had simply not set it.
     private static func managedBool(_ key: String, default def: Bool) -> Bool {
-        if let value = managed?[key] as? Bool { return value }
+        if let dict = managed { return (dict[key] as? Bool) ?? def }
         if UserDefaults.standard.object(forKey: key) != nil { return UserDefaults.standard.bool(forKey: key) }
         return def
     }
-
+    
     private static func managedString(_ key: String) -> String? {
-        (managed?[key] as? String) ?? UserDefaults.standard.string(forKey: key)
+        if let dict = managed { return dict[key] as? String }
+        return UserDefaults.standard.string(forKey: key)
     }
 
     /// Length-independent, constant-time string compare (avoid an early-exit oracle).
@@ -193,4 +284,10 @@ enum KioskConfig {
         }
         return diff == 0
     }
+}
+
+extension Notification.Name {
+    /// Posted on the main thread whenever `KioskController.asamProbe` changes, so
+    /// the lock screen can re-derive Manual login availability and its footer.
+    static let asamProbeDidChange = Notification.Name("com.enterprise.shell.asamProbeDidChange")
 }

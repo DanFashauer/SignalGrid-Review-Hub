@@ -127,7 +127,24 @@ struct IdentityProviderConfig: Codable {
     let customEndpoint: String?
     let customApiKey: String?
     
-    // Default OIDC configuration (Microsoft Entra ID)
+    /// Fields still holding a template placeholder (`<...>` or `YOUR_`). A config
+    /// with any is refused by the providers: `<YOUR_TENANT_ID>` makes
+    /// `URL(string:)` nil, which used to be a crash rather than an error.
+    var placeholderFields: [String] {
+        let candidates: [(String, String?)] = [
+            ("clientId", clientId), ("tenantId", tenantId),
+            ("authorizationEndpoint", authorizationEndpoint), ("tokenEndpoint", tokenEndpoint),
+            ("issuer", issuer), ("samlEntryPoint", samlEntryPoint), ("customEndpoint", customEndpoint)
+        ]
+        return candidates.compactMap { name, value in
+            guard let value = value else { return nil }
+            return (value.contains("<") || value.contains(">") || value.contains("YOUR_")) ? name : nil
+        }
+    }
+    
+    // Default OIDC configuration (Microsoft Entra ID). TEMPLATE: the placeholders
+    // are refused at authenticate time; the shell's default identity provider is
+    // ControlPlaneSessionIdentityProvider unless IDENTITY_PROVIDER_TYPE is set.
     static let defaultMicrosoftEntraID = IdentityProviderConfig(
         providerType: .oidc,
         clientId: "<YOUR_CLIENT_ID>",
@@ -293,15 +310,25 @@ final class OIDCIdentityProvider: IdentityProvider {
         guard let sessionToken = credentials.sessionToken else {
             throw IdentityProviderError.invalidCredentials
         }
+        // Refuse a configuration that still holds template placeholders, by name.
+        if let config = config, !config.placeholderFields.isEmpty {
+            throw IdentityProviderError.placeholderConfiguration(config.placeholderFields)
+        }
         
         // Exchange session token for OIDC tokens via backend
         return try await exchangeSessionToken(sessionToken: sessionToken)
     }
     
     private func exchangeSessionToken(sessionToken: String) async throws -> AuthenticationResult {
-        guard let backendTokenUrl = URL(string: "\(BackendService.baseUrl)/api/auth/exchange-token") else {
+        // NOTE: the served /v1 surface has no `/api/auth/exchange-token` route
+        // (lib/api-spec/v1-openapi.yaml). Against this repo's api-server this
+        // answers 404; it is kept for a backend that provides the route.
+        // A REFUSED backend throws its own error here (tri-state); only absent is
+        // "not configured for this provider".
+        guard let base = try BackendService.requiredBaseURL() else {
             throw IdentityProviderError.invalidConfiguration
         }
+        let backendTokenUrl = base.appendingPathComponent("api/auth/exchange-token")
         
         var request = URLRequest(url: backendTokenUrl)
         request.httpMethod = "POST"
@@ -369,8 +396,10 @@ final class OIDCIdentityProvider: IdentityProvider {
         
         KeychainService.shared.clearSessionTokens()
         
-        // Notify backend of logout
-        if let backendLogoutUrl = URL(string: "\(BackendService.baseUrl)/api/auth/logout") {
+        // Notify backend of logout (no such route on the served surface; skipped
+        // entirely when no backend is configured).
+        if let base = BackendService.baseURL {
+            let backendLogoutUrl = base.appendingPathComponent("api/auth/logout")
             var request = URLRequest(url: backendLogoutUrl)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -461,9 +490,12 @@ final class MDMIdentityProvider: IdentityProvider {
     }
     
     private func createMDMSession(userId: String, deviceId: String) async throws -> String {
-        guard let url = URL(string: "\(BackendService.baseUrl)/api/auth/mdm-session") else {
+        // No `/api/auth/mdm-session` route on the served surface either; see
+        // OIDCIdentityProvider.exchangeSessionToken.
+        guard let base = try BackendService.requiredBaseURL() else {
             throw IdentityProviderError.invalidConfiguration
         }
+        let url = base.appendingPathComponent("api/auth/mdm-session")
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -672,6 +704,8 @@ final class HybridIdentityProvider: IdentityProvider {
 
 enum IdentityProviderError: LocalizedError {
     case invalidConfiguration
+    /// Named config fields still hold `<...>` / `YOUR_` template values.
+    case placeholderConfiguration([String])
     case invalidCredentials
     case authenticationFailed
     case noRefreshToken
@@ -687,6 +721,8 @@ enum IdentityProviderError: LocalizedError {
         switch self {
         case .invalidConfiguration:
             return "Identity provider configuration is invalid"
+        case .placeholderConfiguration(let fields):
+            return "Identity provider configuration still holds template placeholders in: \(fields.joined(separator: ", "))"
         case .invalidCredentials:
             return "Invalid authentication credentials"
         case .authenticationFailed:
@@ -723,4 +759,79 @@ struct MFAVerificationResult {
     let sessionToken: String
     let expiresIn: Int
     let error: String?
+}
+
+// MARK: - Control-plane session identity provider (the default)
+
+/// The identity provider used when none is configured explicitly
+/// (`IDENTITY_PROVIDER_TYPE` unset). The served `/v1` surface
+/// (`lib/api-spec/v1-openapi.yaml`) has NO token-exchange route — `/api/auth/*`
+/// does not exist — so the session the control plane minted at
+/// `POST /api/v1/sessions/start` IS the authenticated session: its id is the
+/// session token, its `expiresAt` is the expiry, and refresh is
+/// `POST /api/v1/sessions/{id}/refresh`. A local/offline session (no backend, on
+/// an unmanaged device) has the same shape with a local expiry.
+///
+/// Fail closed: a session whose expiry was not stated is refused — an unknown
+/// expiry must never read as a live session (see `ExpiryPolicy`).
+final class ControlPlaneSessionIdentityProvider: IdentityProvider {
+    var providerId: String { "control_plane_session" }
+    var displayName: String { "Control-plane session" }
+    var providerType: IdentityProviderType { .custom }
+    var isAuthenticated: Bool { sessionId != nil }
+    var currentAccessToken: String? { sessionId }
+
+    private var sessionId: String?
+    /// The expiry the server (or the local session) last stated.
+    private(set) var expiresAt: Date?
+
+    func configure(with config: IdentityProviderConfig) {}
+
+    func authenticate(credentials: AuthenticationCredentials, persona: Persona) async throws -> AuthenticationResult {
+        guard let token = credentials.sessionToken, !token.isEmpty else {
+            throw IdentityProviderError.invalidCredentials
+        }
+        guard let expiry = ISO8601Wire.parse(credentials.additionalData?["expiresAt"]) else {
+            throw IdentityProviderError.invalidConfiguration
+        }
+        sessionId = token
+        expiresAt = expiry
+        return AuthenticationResult(
+            accessToken: token,
+            refreshToken: nil,
+            idToken: nil,
+            expiry: .expiresAt(expiry),
+            userInfo: nil,
+            persona: persona,
+            providerSpecificData: ["source": token.hasPrefix("local-") ? "local" : "control-plane"]
+        )
+    }
+
+    /// Extend the session. Remote sessions go through `sessions/{id}/refresh`; a
+    /// local session extends locally. Throws when the server refuses, so the
+    /// caller reports that rather than a canned success.
+    func refreshToken() async throws {
+        guard let id = sessionId else { throw IdentityProviderError.noRefreshToken }
+        if id.hasPrefix("local-") {
+            expiresAt = Date().addingTimeInterval(3600)
+            return
+        }
+        guard let newExpiry = try await BackendService.shared.refreshSession(sessionId: id) else {
+            throw IdentityProviderError.notSupported
+        }
+        expiresAt = newExpiry
+    }
+
+    /// The remote session end itself is `BackendService.endSession`, which the
+    /// session machine calls after this; here only the local handle is dropped.
+    func revokeAuthentication(token: String) async throws {
+        sessionId = nil
+        expiresAt = nil
+    }
+
+    /// The credential the control plane requires on every call is the TENANT
+    /// bearer, not the session id.
+    func getAccessToken() -> String? {
+        BackendService.tenantBearerToken
+    }
 }

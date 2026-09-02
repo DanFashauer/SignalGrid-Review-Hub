@@ -4,17 +4,31 @@ import UIKit
 /// Utility for accessing device information
 struct DeviceInfo {
     
-    /// Unique device identifier (stored in Keychain for security, changes on app reinstall)
+    private static var cachedIdentifier: String?
+    private static let identifierLock = NSLock()
+
+    /// Unique device identifier (stored in Keychain for security, changes on app
+    /// reinstall). ALSO cached in memory: with no keychain-access-group
+    /// entitlement (removed — nothing used it) an unsigned simulator build's save
+    /// can fail with errSecMissingEntitlement, and before this cache every call
+    /// then minted a NEW UUID — a different X-Device-ID on every request, and a
+    /// different `deviceId` in every audit row of one process. The id is now
+    /// stable for the life of the process whether or not the save succeeded.
     static var identifier: String {
+        identifierLock.lock()
+        defer { identifierLock.unlock() }
+        if let cached = cachedIdentifier { return cached }
         // Use Keychain instead of UserDefaults for secure storage
         if let stored = try? KeychainService.shared.retrieve(forKey: "device_identifier"),
            let id = String(data: stored, encoding: .utf8) {
+            cachedIdentifier = id
             return id
         }
         let newId = UUID().uuidString
         if let data = newId.data(using: .utf8) {
             try? KeychainService.shared.save(data, forKey: "device_identifier")
         }
+        cachedIdentifier = newId
         return newId
     }
     

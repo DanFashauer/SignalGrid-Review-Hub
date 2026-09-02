@@ -1,0 +1,7 @@
+/* Settings.bundle strings table named by Root.plist's StringsTable = Root.
+   Keys are the Title / FooterText values in Root.plist; iOS Settings looks each
+   up here and falls back to the key itself when absent. */
+
+"Unmanaged device" = "Unmanaged device";
+"Allow local sign-in on this unmanaged device" = "Allow local sign-in on this unmanaged device";
+"Only for a phone that is not enrolled in MDM. Lets Manual login start a local session without a badge or a login code. Has no effect when a managed configuration or a kiosk lock is present." = "Only for a phone that is not enrolled in MDM. Lets Manual login start a local session without a badge or a login code. Has no effect when a managed configuration or a kiosk lock is present.";

@@ -366,6 +366,16 @@ const defaultRecordIO = {
     }
     return out.trim() !== "";
   },
+  /** True when this clone can resolve the commit object. A shallow clone (CI checks
+   * out depth 1) cannot resolve an older commit, so a miss is not proof of a bad hash. */
+  commitExists(hex, root) {
+    try {
+      execFileSync("git", ["cat-file", "-e", `${hex}^{commit}`], { cwd: root, stdio: "ignore" });
+      return true;
+    } catch {
+      return false;
+    }
+  },
   /** True when this clone is shallow — a miss then cannot be told from a PR beyond depth. */
   isShallow(root) {
     try {
@@ -397,6 +407,7 @@ export function resolveRecord(record, root = REPO, io = {}) {
   if (typeof record !== "string" || record.trim() === "") return null;
   const r = record.trim();
   const prInHistory = io.prInHistory ?? defaultRecordIO.prInHistory;
+  const commitExists = io.commitExists ?? defaultRecordIO.commitExists;
   const m = /^#([1-9]\d*)$/.exec(r);
   if (m) {
     const n = m[1];
@@ -411,12 +422,11 @@ export function resolveRecord(record, root = REPO, io = {}) {
   }
   if (existsSync(join(root, r))) return "path in the tree";
   if (/^[0-9a-f]{7,40}$/i.test(r)) {
-    try {
-      execFileSync("git", ["cat-file", "-e", `${r}^{commit}`], { cwd: root, stdio: "ignore" });
-      return "commit";
-    } catch {
-      return null;
-    }
+    if (commitExists(r, root)) return "commit";
+    // Commit resolution is clone-depth dependent (CI checks out depth 1), the same
+    // as a PR ref: an older commit beyond the fetch depth cannot be told from a
+    // fabricated hash, so a miss is REPORTED, never fatal.
+    return `commit reference — UNVERIFIED (${r} not resolvable here; clone may be shallow)`;
   }
   return null;
 }
@@ -934,11 +944,14 @@ function selfTest() {
   });
   check("a record that resolves NOWHERE is FATAL", () => audit1(withRead({ ...good, record: "docs/THIS_DOES_NOT_EXIST.md" })).fatal.some((f) => f.includes("resolves to nothing")));
   check("a record that is a real path in the tree passes", () => audit1(withRead({ ...good, record: "docs/COMPANY_BUILD_PLAN.md" })).fatal.length === 0);
-  check("a record that is a real commit passes, and a hex id that is not a commit fails", () => {
-    const head = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: REPO, encoding: "utf8" }).trim();
+  check("a resolvable commit passes; a commit NOT resolvable here is REPORTED unverified, never fatal (clone depth is unknowable, injected)", () => {
+    const okc = (rec) => resolveRecord(rec, REPO, { commitExists: () => true });
+    const missc = (rec) => resolveRecord(rec, REPO, { commitExists: () => false });
+    const a = audit1(withRead({ ...good, record: "abc1234" }), { recordOk: okc });
+    const b = audit1(withRead({ ...good, record: "abc1234" }), { recordOk: missc });
     return (
-      audit1(withRead({ ...good, record: head })).fatal.length === 0 &&
-      audit1(withRead({ ...good, record: "0123456789abcdef0123456789abcdef01234567" })).fatal.length > 0
+      a.fatal.length === 0 && a.unverified.length === 0 &&
+      b.fatal.length === 0 && b.unverified.length === 1 && /unverified/i.test(b.unverified[0].reason)
     );
   });
   check("`#0` and `#000000123` are NOT pull-request references", () => resolveRecord("#0") === null && resolveRecord("#000000123") === null);

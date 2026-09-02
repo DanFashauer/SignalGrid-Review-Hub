@@ -796,7 +796,18 @@ function selfTest() {
   ]);
   checks.push([
     "…and every listed exemption still MATCHES something — a stale exemption is a hole",
-    SWEEP_EXEMPT.every((e) => sweep.exemptListed.some((x) => x.reason === e.reason)),
+    // Tested against the document's text, not against this run's sweep hits: an
+    // exemption for a dated quotation of an OLD value stops appearing in the sweep
+    // the moment the derived figure moves (the quotation no longer states the
+    // current figure, which is exactly why it needed no gate), while the sentence
+    // it covers is still there. The hole is a sentence that is gone.
+    SWEEP_EXEMPT.every((e) => {
+      try {
+        return e.near.test(read(e.doc, ROOT));
+      } catch {
+        return false;
+      }
+    }),
   ]);
   checks.push([
     "every sweep probe derives from the tree and names its noun",

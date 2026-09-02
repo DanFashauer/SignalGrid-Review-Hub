@@ -54,7 +54,7 @@ customer-validated. Nothing here has reached the fourth state, and no
 document, demo or gate can move it there — only a customer can.
 
 ## Inventory
-- proof gates: **140** · live-vendor lanes: **4** · browser E2E specs: **10** · CI workflows: **14**
+- proof gates: **141** · live-vendor lanes: **4** · browser E2E specs: **10** · CI workflows: **14**
 
 ## Not verified by this run
 - Preflight (typecheck, build, all proofs, browser E2E) — heavy — re-run with --full

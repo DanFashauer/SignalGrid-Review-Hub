@@ -220,8 +220,32 @@ const OVERCLAIM_MARKERS = [
   /\b([4-9]|\d{2,})\s+(?:evaluated[\s-]today\s+)?signal dimensions/i,
 ];
 const LAUNCH_IDS = new Set(["device-posture", "management-health", "local-authority"]);
+// `zone` IS WORD-ANCHORED ON BOTH SIDES, and it was anchored on the right only.
+// `zone\b` matched the TAIL of every identifier ending in the word, so a document
+// NAMING A STRING read as a document CLAIMING A CAPABILITY. One of those pushed the
+// docs ceiling over on 2026-09-02 and failed this gate on a truthful field-set table
+// — the failure mode this repository has now hit four times, whose fix is always to
+// teach the gate the honest idiom and never to delete the true sentence.
+//
+// THREE MEASUREMENTS, because they answer three different questions and an earlier
+// version of this comment gave a hand count for all of them ("Eleven lines") without
+// saying which. Each is reproduced by diffing the two regexes over `git ls-files docs`:
+//
+//   4 mentions across 3 files — the CEILING delta, and the only exact figure that
+//     matters here: this gate's unit is mentions, and it recorded 520 → 516 itself.
+//   11 lines across 7 files — lines where the WHOLE deferred-noun rule stopped
+//     matching (no other deferred noun on the line).
+//   19 lines across 9 files — lines where any `zone` TOKEN stopped matching, most of
+//     which still match the rule on a different noun (`RTLS` on the same line).
+//
+// The idioms, so the next reader can check rather than trust: identifier suffixes
+// (`LocationZone` — a Microsoft Sentinel column in a field-set table — `expectedZone`,
+// `detectedZone`, `networkZone`), snake_case state values (`in_zone`, `off_zone`,
+// `rtls.wrong_zone`), Python's `timezone`, a hostname (`techzone.omnissa.com`), and
+// two vendor PRODUCT names (AWS `DataZone`, Bitdefender `GravityZone`). Not one of
+// them asserts that zone capability ships. No claim stopped matching.
 const DEFERRED_NOUNS =
-  /badge\s?(binding|state|tap|present)|custody|geofence|zone\b|shift window|shift-scoped|BLE proximity|proximity confirm|tamper (sensor|witness|detection)|GPS|RTLS/i;
+  /badge\s?(binding|state|tap|present)|custody|geofence|\bzone\b|shift window|shift-scoped|BLE proximity|proximity confirm|tamper (sensor|witness|detection)|GPS|RTLS/i;
 // Hedges the copy ACTUALLY uses. Tightening rule 3 to block scope exposed that
 // this vocabulary was too narrow in the other direction: Hardware.tsx hedges with
 // "candidate signals, not evaluated today" and IntegrationsSection with "candidate
@@ -553,6 +577,12 @@ const CODE_LABEL_EXEMPT = new Map([
     violationsIn("st3", bad3).length > 0 &&
     violationsIn("st4", good3).length === 0 &&
     violationsIn("st5", goodNeg).length === 0 &&
+    // The identifier-suffix idiom, both directions. A field NAMED `LocationZone` in a
+    // table of what crosses to a vendor is a document naming a string; "the zone is
+    // evaluated" is a claim. A rule that cannot tell them apart punishes the honest one.
+    violationsIn("stZ0", "| `siem` | `LocationZone, LocationBuilding` | the declared column set |").length === 0 &&
+    violationsIn("stZ1", "Python's `timezone.utc`, AWS DataZone and Bitdefender GravityZone are product names.").length === 0 &&
+    violationsIn("stZ2", "The zone a worker stands in decides the verdict today.").length > 0 &&
     violationsIn("st6.html", farHedge).length > 0 &&
     violationsIn("st7.html", nearHedge).length === 0 &&
     violationsIn("st8.html", pageBanner).length === 0 &&

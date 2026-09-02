@@ -275,6 +275,13 @@ jobs:
         run: node scripts/check-emit-payload-discipline.mjs --self-test
       - name: "Emit payload discipline (every field crossing to a vendor is named)"
         run: node scripts/check-emit-payload-discipline.mjs
+      # Fourth question at the same boundary: ungated-fetch asks whether the call was
+      # ALLOWED and BOUNDED, signing-unconditional whether it went out SIGNED,
+      # emit-payload-discipline WHAT WAS IN IT — this one asks about the WIRE.
+      - name: "Emitter-wire-discipline self-test (the gate must be able to fail)"
+        run: node scripts/check-emitter-wire-discipline.mjs --self-test
+      - name: "Emitter wire discipline (validated target, one signature scheme, checked vendor values)"
+        run: node scripts/check-emitter-wire-discipline.mjs
       # Sibling of the gate above: that one asks whether the call was allowed to happen,
       # this one asks whether the result reported was one anybody observed.
       - name: "Fabricated status (a connector may not report a status it never observed)"

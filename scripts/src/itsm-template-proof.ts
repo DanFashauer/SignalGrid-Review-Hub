@@ -27,6 +27,8 @@ import {
   buildTemplateContext,
   substituteVariables,
   UnresolvedTemplateVariableError,
+  GenericWebhookAdapter,
+  ITSM_WEBHOOK_REFUSALS,
 } from "@workspace/integrations/itsm";
 
 let passed = 0;
@@ -165,6 +167,83 @@ check(
     "and it substitutes into a template (the passthrough is real, not just present)",
     substituteVariables("{{extra}}", ctx) === "passthrough",
   );
+}
+
+// ── A 2xx IS NOT A TICKET ────────────────────────────────────────────────────
+//
+// THE DEFECT THIS PINS, measured on this tree 2026-09-02. `executeWithRetry`
+// swallowed a JSON parse failure — `catch { /* Response isn't JSON, use request ID */ }`
+// — and `createTicket` then returned `ticketId: result.ticketId || context.requestId,
+// status: 'open'`. So ANY 2xx from whatever was listening on the configured URL —
+// an empty body, an HTML error page, a JSON object naming no id — minted OUR OWN
+// correlation id as a ticket number and reported the ticket open. The ledger of what
+// an incident said then contained an id that exists in no ITSM, and the caller had
+// no way to tell it apart from a real one.
+//
+// DRIVEN BY REASON, not by "it failed": `success === false` is satisfied by a 500, a
+// timeout and each of these, and an assertion that cannot tell them apart is not
+// holding the behaviour it claims to. The three refusals are exported constants.
+//
+// Offline: a recording `globalThis.fetch`, no socket. The env is restored in a
+// `finally` whatever happens.
+{
+  const realFetch = globalThis.fetch;
+  const savedT = process.env.SIGNALGRID_TIER;
+  const savedL = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  process.env.SIGNALGRID_TIER = "beta";
+  process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+  const CORRELATION = "corr-1234-this-is-ours";
+  const make = (): GenericWebhookAdapter =>
+    new GenericWebhookAdapter({
+      url: "https://hooks.invalid/x",
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      bodyTemplate: '{"t":"{{title}}"}',
+      signingSecret: "s".repeat(32),
+    });
+  const drive = async (body: BodyInit | null, status = 200): Promise<{ id?: string; err: string }> => {
+    globalThis.fetch = (() => Promise.resolve(new Response(body, { status }))) as unknown as typeof globalThis.fetch;
+    try {
+      const t = await make().createTicket({
+        title: "t", description: "d", severity: "high", category: "security", correlationId: CORRELATION,
+      } as never);
+      return { id: t.ticketId, err: "" };
+    } catch (err) {
+      return { err: err instanceof Error ? err.message : String(err) };
+    }
+  };
+
+  try {
+    const empty = await drive("");
+    check("an EMPTY 200 does not become an open ticket", empty.id === undefined);
+    check("…and the refusal names the empty body", empty.err.includes(ITSM_WEBHOOK_REFUSALS.emptyBody));
+    check("…and OUR OWN correlation id is not handed back as a vendor ticket number",
+      !empty.err.includes(CORRELATION) && empty.id !== CORRELATION);
+
+    const html = await drive("<html>Bad Gateway</html>");
+    check("a NON-JSON 200 does not become an open ticket", html.id === undefined);
+    check("…and the refusal names the non-JSON body", html.err.includes(ITSM_WEBHOOK_REFUSALS.nonJsonBody));
+
+    const noId = await drive(JSON.stringify({ ok: true, message: "queued" }));
+    check("a 2xx JSON naming NO id does not become an open ticket", noId.id === undefined);
+    check("…and the refusal names the missing id", noId.err.includes(ITSM_WEBHOOK_REFUSALS.noTicketId));
+
+    const blankId = await drive(JSON.stringify({ id: "   " }));
+    check("a whitespace-only id is not an id", blankId.err.includes(ITSM_WEBHOOK_REFUSALS.noTicketId));
+
+    // NON-VACUITY, twice over: a vendor that DOES name an id still gets a ticket, and
+    // a numeric id — which a great many ITSMs return — is accepted rather than refused.
+    // Without these the four refusals above are satisfied by an adapter that never
+    // creates anything.
+    const good = await drive(JSON.stringify({ id: "INC0012345", url: "https://vendor.invalid/t/1" }));
+    check("a 2xx naming an id DOES produce a ticket, carrying the VENDOR's id", good.id === "INC0012345");
+    const numeric = await drive(JSON.stringify({ ticket_id: 90210 }));
+    check("a numeric vendor id is accepted and stringified, not refused", numeric.id === "90210");
+  } finally {
+    globalThis.fetch = realFetch;
+    if (savedT === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedT;
+    if (savedL === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedL;
+  }
 }
 
 const total = passed + failures.length;

@@ -258,6 +258,37 @@ export function classifyCitation(p, docRel, tracked, exists) {
   return { state: "generated", at: rootThere ? asRoot : asRel };
 }
 
+/**
+ * Gate scripts named in a SOURCE COMMENT, and whether they exist.
+ *
+ * WHY THIS EXISTS, and why it is deliberately narrow. Prose in `docs/` markdown has
+ * had its paths checked since this gate was written; prose in TypeScript comments
+ * under `lib/` never did. Two
+ * adapter modules landed on 2026-09-02 each pointing a reader at the gate that holds
+ * their shape — `scripts/check-signature-header-registry.mjs` and
+ * `scripts/check-vendor-value-discipline.mjs` — and NEITHER FILE EXISTED. The rule
+ * they described was real and enforced (by a differently-named gate), so nothing
+ * failed; a reader following the pointer would have concluded the rule was
+ * unenforced. That is the same defect class as a stale citation in a document, in a
+ * place nothing was looking.
+ *
+ * ONE SHAPE ONLY: `scripts/<kebab>.mjs`, inside a line or block comment. Not every
+ * path in every comment — a comment legitimately names a file a reader should look
+ * for and may legitimately be aspirational prose — but a gate script is a claim
+ * "this rule is enforced HERE", and that claim is checkable and worth checking.
+ */
+export function gateScriptRefsIn(text) {
+  const out = [];
+  text.split("\n").forEach((line, i) => {
+    const comment = line.match(/(?:\/\/|^\s*\*|\/\*)(.*)$/);
+    if (comment === null) return;
+    for (const m of comment[1].matchAll(/\bscripts\/([a-z0-9-]+\.mjs)\b/g)) {
+      out.push({ line: i + 1, path: `scripts/${m[1]}` });
+    }
+  });
+  return out;
+}
+
 export function scanRepo(root) {
   assertGitWorkTree(root);
   const { key: name, source: keySource, aliasedFrom } = repoKey(root);
@@ -325,9 +356,39 @@ export function scanRepo(root) {
     if (exempt[rel]) exempted.push({ doc: rel, count: bad.length, reason: exempt[rel] });
     else for (const b of bad) missing.push({ doc: rel, path: b.path, why: b.why });
   }
+  // ── SOURCE COMMENTS THAT NAME A GATE SCRIPT ────────────────────────────────
+  // Scoped to TypeScript under lib/ and to the one shape `scripts/<kebab>.mjs`. Counted and
+  // reported on every run, so "nothing broken" and "nothing scanned" stay different
+  // claims — the same convention as the docs half above.
+  let gateRefs = 0;
+  const gateRefSources = new Set();
+  for (const rel of lines(git("ls-files -- 'lib/**/*.ts'", root))) {
+    if (rel.endsWith(".test.ts")) continue;
+    let src;
+    try {
+      src = readFileSync(join(root, rel), "utf8");
+    } catch {
+      continue;
+    }
+    for (const ref of gateScriptRefsIn(src)) {
+      gateRefs += 1;
+      gateRefSources.add(rel);
+      // TRACKED, like every other citation here: a gate script that exists only as
+      // untracked local output is absent from a fresh clone and from CI.
+      if (tracked.has(ref.path)) continue;
+      missing.push({
+        doc: `${rel}:${ref.line}`,
+        path: ref.path,
+        why: "a SOURCE COMMENT names a gate script that does not exist — the rule reads as enforced there and is not",
+      });
+    }
+  }
+
   return {
     repo: name,
     repoKeySource: keySource,
+    gateRefs,
+    gateRefSources: gateRefSources.size,
     repoKeyAliasedFrom: aliasedFrom,
     dir,
     exemptionsDeclared: Object.keys(exempt).length,
@@ -350,6 +411,39 @@ function selfTest() {
   const pattern = buildPattern(["lib", "scripts", "artifacts", "docs", "vendor_absent"]);
   const none = () => false;
   const all = () => true;
+
+  // ── the source-comment half (2026-09-02) ───────────────────────────────────
+  // A PLANTED MISS and its honest twin. Both directions, because a rule that only
+  // ever sees a passing input has shown nothing.
+  checks.push([
+    "A GATE SCRIPT NAMED IN A `//` COMMENT IS EXTRACTED — the planted miss",
+    (() => {
+      const hits = gateScriptRefsIn("// held by `scripts/check-ghost-gate.mjs`, honest\nconst x = 1;");
+      return hits.length === 1 && hits[0].path === "scripts/check-ghost-gate.mjs" && hits[0].line === 1;
+    })(),
+  ]);
+  checks.push([
+    "…and in a block-comment continuation line, which is where a module docblock puts it",
+    gateScriptRefsIn(" * see `scripts/check-emitter-wire-discipline.mjs` for the rule")[0]?.path ===
+      "scripts/check-emitter-wire-discipline.mjs",
+  ]);
+  checks.push([
+    "a gate script named in CODE, not a comment, is out of scope — this rule reads prose only",
+    gateScriptRefsIn("execFileSync('node', ['scripts/check-ghost-gate.mjs']);").length === 0,
+  ]);
+  checks.push([
+    "a non-.mjs path in a comment is out of scope — one shape only, deliberately",
+    gateScriptRefsIn("// see `scripts/src/emit-gate-proof.ts` and scripts/mac/run.sh").length === 0,
+  ]);
+  checks.push([
+    "the two names that shipped broken are now the real gate, and it is tracked",
+    (() => {
+      const t = new Set(lines(git("ls-files", SELF_ROOT)));
+      const src = readFileSync(join(SELF_ROOT, "lib/integrations/src/integrations/adapters/signature-headers.ts"), "utf8");
+      const refs = gateScriptRefsIn(src);
+      return refs.length > 0 && refs.every((rf) => t.has(rf.path));
+    })(),
+  ]);
 
   checks.push([
     "A MISSING CITATION IS CAUGHT — the gate's whole purpose, exercised over real text",
@@ -613,6 +707,13 @@ console.log(
 if (r.exemptionsDeclared === 0 && Object.keys(CROSS_REPO).length > 0) {
   console.log(`  (CROSS_REPO declares keys: ${Object.keys(CROSS_REPO).join(", ")} — none matched.)`);
 }
+// The source-comment half, counted on every run so "nothing broken" and "nothing
+// scanned" cannot be confused. Two adapter modules named gate scripts that did not
+// exist; nothing was looking at TypeScript comments until 2026-09-02.
+console.log(
+  `Gate scripts named in TypeScript comments under lib/: ${r.gateRefs} reference(s) ` +
+    `across ${r.gateRefSources} source file(s), each required to be a TRACKED script.`,
+);
 
 if (r.exempted.length > 0) {
   console.log("Cross-repo citations, exempted by declaration (not silently):");
@@ -634,7 +735,8 @@ if (r.missing.length > 0) {
   process.exit(1);
 }
 console.log(
-  `Cited-path check passed — ${r.checked} citation(s) across ${r.docs} docs in ${r.repo} ` +
+  `Cited-path check passed — ${r.checked} citation(s) across ${r.docs} docs ` +
+    `plus ${r.gateRefs} gate-script reference(s) in lib/ source comments, in ${r.repo}: ` +
     `all resolve to TRACKED files (a fresh clone resolves them too).`,
 );
 }

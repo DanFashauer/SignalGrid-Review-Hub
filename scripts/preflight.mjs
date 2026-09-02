@@ -241,6 +241,16 @@ const STEPS = [
   // describe as closed, and nothing was watching.
   { name: "Emit-payload-discipline self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-emit-payload-discipline.mjs", "--self-test"] },
   { name: "Emit payload discipline (every field crossing to a vendor is named; open slots declared)", cmd: ["node", "scripts/check-emit-payload-discipline.mjs"] },
+  // FOURTH question at the same boundary. Ungated-fetch asks whether the call was
+  // ALLOWED and whether it is BOUNDED; signing-unconditional whether it went out
+  // SIGNED; emit-payload-discipline WHAT WAS IN IT. This one asks about the WIRE:
+  // where the packet actually goes (a 307 re-routed a signed body to an unvalidated
+  // origin, and two families POSTed to config.url with no SSRF guard at all), what
+  // signature scheme it carries (two existed, one of them the replayable v1 this
+  // repo's own verifier refuses by name), and what we believe from the answer (a
+  // `.json() as { access_token: string }` cast produced `Bearer undefined`).
+  { name: "Emitter-wire-discipline self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-emitter-wire-discipline.mjs", "--self-test"] },
+  { name: "Emitter wire discipline (validated target, one signature scheme, checked vendor values)", cmd: ["node", "scripts/check-emitter-wire-discipline.mjs"] },
   // Sibling of the ungated-fetch gate. That one asks whether a call was allowed to happen;
   // this one asks whether the RESULT reported was one anybody observed. Twelve connectors
   // returned `status: 200` after awaiting an injected transport that resolves a payload —

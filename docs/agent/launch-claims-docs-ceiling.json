@@ -1,7 +1,7 @@
 {
   "note": "DEBT CEILING for docs/**/*.md, not a high-water mark: the COUNT OF unhedged deferred-capability mentions, not the count of files carrying them — a new claim in an already-listed document must fail, and counting files hid exactly that. A RISE is fatal; a drop is recorded automatically. Never hand-edit; the gate writes it.",
-  "unhedgedDeferredMentions": 519,
-  "filesCarryingThem": 125,
+  "unhedgedDeferredMentions": 516,
+  "filesCarryingThem": 123,
   "worst": [
     {
       "file": "docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md",

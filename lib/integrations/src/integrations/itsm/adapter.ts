@@ -23,6 +23,10 @@ export { BMCHelixAdapter } from './bmc-helix';
 export { IvantiAdapter } from './ivanti';
 export { ManageEngineAdapter } from './manageengine';
 export { GenericWebhookAdapter } from './generic-webhook';
+// The 2xx-shape refusals, re-exported so a proof asserts the REASON rather than
+// merely that something failed. `success === false` is satisfied by a 500, a
+// timeout and each of these.
+export { ITSM_WEBHOOK_REFUSALS, ITSM_WEBHOOK_REFUSAL_REASONS } from './generic-webhook';
 // The two pure halves of the generic-webhook template path, exported so
 // proof:itsm-template can drive them without a network: the context BUILDER (whose
 // field order is the security property) and the SUBSTITUTER (which refuses an

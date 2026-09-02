@@ -17,6 +17,8 @@ import { MDEDevice, MDEConfig, MDEPostureSignal } from './types';
 // own, and inventing one nothing else sets would be a knob with no hand on it.
 import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
 import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
+import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
+import { asNonEmptyString } from '../adapters/vendor-values';
 
 export class MDEAdapter {
   private config: MDEConfig | null = null;
@@ -99,6 +101,9 @@ export class MDEAdapter {
     const response = await fetch(tokenUrl, {
       method: 'POST',
       signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+      // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+      // second hop to whatever the vendor's `Location` header named, unvalidated.
+      redirect: 'manual',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         client_id: this.config.clientId,
@@ -108,12 +113,23 @@ export class MDEAdapter {
       }),
     });
 
+    // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+    // never fall through to a generic "API error" or a retry. Permanent by
+    // construction: no retry re-routes a configured host.
+    if (isRedirectStatus(response.status)) {
+      throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+    }
+
     if (!response.ok) {
       throw new Error(`Failed to get MDE access token: ${response.status}`);
     }
 
-    const data = await response.json() as { access_token: string };
-    return data.access_token;
+    // CHECKED, NOT CAST. A 200 whose body carries no `access_token` used to return
+    // `undefined` from this method and interpolate as `Bearer undefined` on the next
+    // request; an empty string returned a bare `Bearer `. The reader throws naming the
+    // vendor's own field, so the caller's refusal says which field was missing.
+    const data = await response.json() as Record<string, unknown>;
+    return asNonEmptyString(data.access_token, 'access_token');
   }
 
   /**
@@ -131,7 +147,17 @@ export class MDEAdapter {
       const response = await fetch(`${graphUrl}/v1.0/deviceManagement/managedDevices`, {
         headers: { Authorization: `Bearer ${token}` },
         signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+        // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+        // second hop to whatever the vendor's `Location` header named, unvalidated.
+        redirect: 'manual',
       });
+
+      // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+      // never fall through to a generic "API error" or a retry. Permanent by
+      // construction: no retry re-routes a configured host.
+      if (isRedirectStatus(response.status)) {
+        throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+      }
 
       if (!response.ok) {
         throw new Error(`MDE getDevices failed: ${response.status}`);
@@ -165,10 +191,24 @@ export class MDEAdapter {
       const token = await this.getAccessToken();
       const graphUrl = this.getGraphUrl();
       
-      const response = await fetch(`${graphUrl}/v1.0/deviceManagement/managedDevices/${deviceId}`, {
+      // ENCODED. `deviceId` is the CALLER's string; interpolated raw, a value
+      // containing `/` or `..` addresses a different Graph resource than this method
+      // names. `telemetry/fleetdm.ts` has encoded its host identifier all along —
+      // the two sibling adapters simply disagreed.
+      const response = await fetch(`${graphUrl}/v1.0/deviceManagement/managedDevices/${encodeURIComponent(deviceId)}`, {
         headers: { Authorization: `Bearer ${token}` },
         signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+        // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+        // second hop to whatever the vendor's `Location` header named, unvalidated.
+        redirect: 'manual',
       });
+
+      // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+      // never fall through to a generic "API error" or a retry. Permanent by
+      // construction: no retry re-routes a configured host.
+      if (isRedirectStatus(response.status)) {
+        throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+      }
 
       if (response.status === 404) {
         return null;
@@ -201,9 +241,23 @@ export class MDEAdapter {
       const graphUrl = this.getGraphUrl();
       
       const response = await fetch(
-        `${graphUrl}/v1.0/deviceManagement/deviceCompliancePolicies/${deviceId}/deviceStatus`,
-        { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal) }
+        // ENCODED — `deviceId` is the caller's string; see getDevice() above.
+        `${graphUrl}/v1.0/deviceManagement/deviceCompliancePolicies/${encodeURIComponent(deviceId)}/deviceStatus`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(TIMEOUT_PRESETS.normal),
+          // Never followed — see ../adapters/redirect.ts. The default `follow` handed the
+          // second hop to whatever the vendor's `Location` header named, unvalidated.
+          redirect: 'manual',
+        }
       );
+
+      // A 3xx IS A REFUSAL, NAMED — decided before any other status test so it can
+      // never fall through to a generic "API error" or a retry. Permanent by
+      // construction: no retry re-routes a configured host.
+      if (isRedirectStatus(response.status)) {
+        throw new Error(redirectRefusal(response.status, response.headers.get('location')));
+      }
 
       if (response.status === 404) {
         return null;

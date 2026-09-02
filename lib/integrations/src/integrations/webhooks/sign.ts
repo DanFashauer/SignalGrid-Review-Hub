@@ -177,6 +177,65 @@ export class WebhookTimestampUnresolvable extends Error {
 }
 
 /**
+ * Resolve the delivery instant this signature will cover.
+ *
+ * Extracted from {@link createSignedHeaders} so the two other outbound families
+ * that sign a body — `siem/webhook.ts` and `itsm/generic-webhook.ts` — reach the
+ * SAME resolution rather than growing a second one. There is still no clock read in
+ * this module.
+ */
+function resolveDeliveryInstant(payload: string, options: SignedHeaderOptions): number {
+  if (options.timestampMs !== undefined) {
+    // Threaded but unreadable is an ERROR, never a reason to consult the payload:
+    // the caller stated an instant and got it wrong, and signing at a different
+    // instant than the one it named would hide that.
+    const explicit = asTimestampMs(options.timestampMs);
+    if (explicit === null) {
+      throw new WebhookTimestampUnresolvable(
+        `options.timestampMs must be a non-negative integer of epoch milliseconds, received ${JSON.stringify(options.timestampMs)}`,
+      );
+    }
+    return explicit;
+  }
+  const derived = payloadTimestampMs(payload);
+  if (derived === null) {
+    throw new WebhookTimestampUnresolvable(
+      "the payload carries no readable ISO-8601 `timestamp`, and no options.timestampMs was threaded",
+    );
+  }
+  return derived;
+}
+
+/**
+ * The TWO signature headers alone, for a family that owns the rest of its headers.
+ *
+ * WHY IT IS EXPORTED. `siem/webhook.ts` and `itsm/generic-webhook.ts` each emitted
+ * their own `X-Signature` over the BODY ALONE plus an `X-Signing-Algorithm` header
+ * and no timestamp — v1, the scheme `verifySignedWebhook` in this same file refuses
+ * by name as replayable. They now call this. Two schemes existed because two files
+ * had not been read together; one implementation is the fix, not a third copy of the
+ * HMAC. Those families do not want this module's `Content-Type`,
+ * `X-Webhook-Delivery-Id` or `X-Webhook-Event-Id` — they set their own — so the
+ * signing half is separable and `createSignedHeaders` is built on it.
+ *
+ * MINTED ONCE PER DELIVERY. Call this ABOVE a retry loop, never inside one: the
+ * timestamp is inside the MAC, so a per-attempt instant gives one delivery more than
+ * one signature and a strict receiver reads the second as forgery.
+ */
+export function v2SignatureHeaders(
+  payload: string,
+  secret: string,
+  options: SignedHeaderOptions = {},
+): Record<string, string> {
+  const timestampMs = resolveDeliveryInstant(payload, options);
+  return {
+    [WEBHOOK_SIGNATURE_HEADER]: `${WEBHOOK_SIGNATURE_SCHEME}=${signTimestampedPayload(payload, secret, timestampMs)}`,
+    // Integer epoch MILLISECONDS, UTC. Covered by the signature above.
+    [WEBHOOK_TIMESTAMP_HEADER]: timestampMs.toString(),
+  };
+}
+
+/**
  * Create signed webhook headers (scheme v2).
  */
 export function createSignedHeaders(
@@ -189,38 +248,13 @@ export function createSignedHeaders(
   // RESOLUTION, and it REFUSES rather than falling back. There is no clock read in
   // this module at all: `Date.now()` here would mint a fresh instant per call, and
   // this function is called once per ATTEMPT, so an unreadable payload timestamp
-  // would silently restore per-attempt signing.
-  let timestampMs;
-  if (options.timestampMs !== undefined) {
-    // Threaded but unreadable is an ERROR, never a reason to consult the payload:
-    // the caller stated an instant and got it wrong, and signing at a different
-    // instant than the one it named would hide that.
-    const explicit = asTimestampMs(options.timestampMs);
-    if (explicit === null) {
-      throw new WebhookTimestampUnresolvable(
-        `options.timestampMs must be a non-negative integer of epoch milliseconds, received ${JSON.stringify(options.timestampMs)}`,
-      );
-    }
-    timestampMs = explicit;
-  } else {
-    const derived = payloadTimestampMs(payload);
-    if (derived === null) {
-      throw new WebhookTimestampUnresolvable(
-        "the payload carries no readable ISO-8601 `timestamp`, and no options.timestampMs was threaded",
-      );
-    }
-    timestampMs = derived;
-  }
-
-  const signature = signTimestampedPayload(payload, secret, timestampMs);
-
+  // would silently restore per-attempt signing. Shared with the two other outbound
+  // families through v2SignatureHeaders above, so there is one resolution.
   return {
     'Content-Type': 'application/json',
-    'X-Webhook-Signature': `${WEBHOOK_SIGNATURE_SCHEME}=${signature}`,
+    ...v2SignatureHeaders(payload, secret, options),
     'X-Webhook-Delivery-Id': deliveryId,
     'X-Webhook-Event-Id': eventId,
-    // Integer epoch MILLISECONDS, UTC. Covered by the signature above.
-    'X-Webhook-Timestamp': timestampMs.toString(),
   };
 }
 

@@ -14,6 +14,31 @@ import crypto from 'crypto';
 import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
 import { SIGNING_SECRET_MISSING } from '../adapters/signing';
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
+import { validateWebhookUrl } from '../adapters/url-guard';
+import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
+import { boundedText, VENDOR_ERROR_TEXT_LIMIT } from '../adapters/bounded-text';
+import { v2SignatureHeaders } from '../webhooks/sign';
+
+/**
+ * A 2xx IS NOT A TICKET. The refusals below are exported so `proof:itsm-template`
+ * asserts the REASON rather than merely that something failed — `success === false`
+ * is satisfied by a 500, a timeout and each of these, and an assertion that cannot
+ * tell them apart is not holding the behaviour it claims to.
+ *
+ * WHAT WAS WRONG. A JSON parse failure was swallowed (`catch { /* isn't JSON *\/ }`)
+ * and createTicket then returned `ticketId: result.ticketId || context.requestId,
+ * status: 'open'` — so an EMPTY 200 from anything listening on the configured URL
+ * minted OUR OWN correlation id as a ticket number and reported the ticket open.
+ * The ledger of what an incident said then contained an id that exists in no ITSM.
+ */
+export const ITSM_WEBHOOK_REFUSALS = {
+  emptyBody: 'ITSM webhook refused: the endpoint returned a 2xx with an EMPTY body, which names no ticket',
+  nonJsonBody: 'ITSM webhook refused: the endpoint returned a 2xx whose body is not JSON, which names no ticket',
+  noTicketId: 'ITSM webhook refused: the 2xx JSON carries no non-empty id/ticketId/ticket_id/number, which names no ticket',
+} as const;
+
+/** Every string the 2xx-shape refusals can return. Derived, never retyped. */
+export const ITSM_WEBHOOK_REFUSAL_REASONS: readonly string[] = Object.values(ITSM_WEBHOOK_REFUSALS);
 
 export interface GenericWebhookConfig {
   url: string;
@@ -23,6 +48,14 @@ export interface GenericWebhookConfig {
   /** MANDATORY on the live path — createTicket() throws rather than POSTing an
    *  unsigned ticket. createITSMAdapter() also refuses to build without it. */
   signingSecret?: string;
+  /**
+   * RETIRED KNOB, kept only so an existing config still parses. Under signature
+   * scheme v2 the primitive is FIXED at HMAC-SHA256 and announced by the `v2=`
+   * marker, so there is nothing for this to select; it used to be echoed on the wire
+   * as `X-Signing-Algorithm`, which told a receiver the algorithm and bought it no
+   * replay protection. Nothing reads it now, and deleting it would reject a config
+   * an operator has already written.
+   */
   signingAlgorithm?: 'hmac-sha256' | 'hmac-sha512';
   /** Per-attempt request timeout in ms, READ by every fetch below. */
   timeout?: number;
@@ -98,15 +131,6 @@ export function substituteVariables(template: string, context: VariableContext):
 }
 
 /**
- * Sign request body with HMAC
- */
-function signBody(body: string, secret: string, algorithm: 'hmac-sha256' | 'hmac-sha512'): string {
-  const hmac = crypto.createHmac(algorithm === 'hmac-sha512' ? 'sha512' : 'sha256', secret);
-  hmac.update(body);
-  return hmac.digest('hex');
-}
-
-/**
  * Build the template context for one ticket request.
  *
  * EXTRACTED so it can be proven. The ORDER inside is the security property and it
@@ -169,18 +193,36 @@ export class GenericWebhookAdapter implements ITSMAdapter {
   }
 
   async createTicket(request: ITSMTicketRequest): Promise<ITSMTicketResponse> {
+    // ONE INSTANT PER DELIVERY, sampled once here. The template context and the v2
+    // signature timestamp are the SAME moment: under v2 the timestamp is inside the
+    // MAC and executeWithRetry recurses, so a per-attempt instant would give one
+    // ticket more than one signature. This is the clock read the adapter already
+    // made for the template context — reused, not a second one.
+    const deliveryInstant = new Date();
     const context = buildTemplateContext(
       request,
       request.correlationId || crypto.randomUUID(),
-      new Date().toISOString(),
+      deliveryInstant.toISOString(),
     );
 
     // Substitute variables in body template
     const body = substituteVariables(this.config.bodyTemplate, context);
-    
-    // Build headers
+
+    // THE TARGET IS VALIDATED, and it was not. This adapter POSTed to `config.url`
+    // raw, and the ITSM config schema's `z.string().url()` accepts
+    // `http://169.254.169.254/latest/meta-data/` — a URL validator validates SYNTAX
+    // and says nothing about where the address points. UNCONDITIONAL for the address
+    // rules, live-gated for HTTPS; see ../adapters/url-guard.ts. Past the emit gate
+    // in executeWithRetry, `live` is true.
+    const targetCheck = validateWebhookUrl(this.config.url, { live: true });
+    if (!targetCheck.valid) {
+      throw new Error(`Webhook target refused: ${targetCheck.error}`);
+    }
+
+    // Spread FIRST so a caller-supplied header can never overwrite the signature
+    // written after it.
     const headers = { ...this.config.headers };
-    
+
     // SIGNING IS NOT OPTIONAL. This was `if (this.config.signingSecret) { ...sign }`,
     // so an adapter built without a secret POSTed the ticket UNSIGNED and reported
     // it as created. webhooks/dispatch.ts refuses the same case in these exact
@@ -190,9 +232,16 @@ export class GenericWebhookAdapter implements ITSMAdapter {
     if (!this.config.signingSecret?.trim()) {
       throw new Error(SIGNING_SECRET_MISSING);
     }
-    const signature = signBody(body, this.config.signingSecret, this.config.signingAlgorithm || 'hmac-sha256');
-    headers['X-Signature'] = signature;
-    headers['X-Signing-Algorithm'] = this.config.signingAlgorithm || 'hmac-sha256';
+    // SIGNED UNDER SCHEME v2, minted ONCE for this delivery. This was `X-Signature`
+    // over the BODY ALONE plus an `X-Signing-Algorithm` header and no timestamp —
+    // v1, which webhooks/sign.ts's own verifier refuses by name as replayable. The
+    // body here is the OPERATOR's template output and carries no field this could
+    // derive an instant from, so the instant is THREADED: `deliveryInstant`, the same
+    // moment the template context was built at.
+    Object.assign(
+      headers,
+      v2SignatureHeaders(body, this.config.signingSecret, { timestampMs: deliveryInstant.getTime() }),
+    );
     
     // Execute with retry
     const result = await this.executeWithRetry(this.config.url, {
@@ -205,11 +254,18 @@ export class GenericWebhookAdapter implements ITSMAdapter {
       throw new Error(`Webhook failed: ${result.error}`);
     }
     
+    // NO LOCAL FALLBACK. `result.ticketId || context.requestId` minted OUR OWN
+    // correlation id as a ticket number whenever the endpoint answered 2xx with a
+    // body naming none, and reported it 'open'. executeWithRetry now refuses those
+    // three shapes by name above, so reaching here means the vendor named an id.
+    if (typeof result.ticketId !== 'string' || result.ticketId.trim().length === 0) {
+      throw new Error(ITSM_WEBHOOK_REFUSALS.noTicketId);
+    }
     return {
-      ticketId: result.ticketId || context.requestId,
+      ticketId: result.ticketId,
       ticketUrl: result.ticketUrl,
       status: 'open',
-      createdAt: new Date().toISOString(),
+      createdAt: deliveryInstant.toISOString(),
     };
   }
 
@@ -236,25 +292,56 @@ export class GenericWebhookAdapter implements ITSMAdapter {
         headers: options.headers,
         body: options.body,
         signal: AbortSignal.timeout(this.config.timeout ?? 30000),
+        // NEVER FOLLOWED — see ../adapters/redirect.ts. The first hop is validated;
+        // the second was handed to whatever the endpoint's `Location` named, and the
+        // signature header survives the cross-origin hop.
+        redirect: 'manual',
       });
-      
+
+      // Decided BEFORE the 2xx arm, because a 3xx is neither ok nor a 5xx and would
+      // otherwise fall through to "HTTP 302: <body>" and be retried.
+      if (isRedirectStatus(response.status)) {
+        return { success: false, error: redirectRefusal(response.status, response.headers.get('location')) };
+      }
+
       if (response.ok || response.status === 201 || response.status === 202) {
-        // Try to parse response for ticket ID
-        let ticketId: string | undefined;
-        let ticketUrl: string | undefined;
-        
-        try {
-          const data = await response.json() as Record<string, unknown>;
-          ticketId = (data.id || data.ticketId || data.ticket_id || data.number) as string | undefined;
-          ticketUrl = (data.url || data.webUrl || data.link) as string | undefined;
-        } catch {
-          // Response isn't JSON, use request ID
+        // A 2xx IS NOT A TICKET. Each of the three shapes below is a named refusal
+        // rather than a silent fall-through to our own correlation id.
+        const text = await response.text();
+        if (text.trim().length === 0) {
+          return { success: false, error: ITSM_WEBHOOK_REFUSALS.emptyBody };
         }
-        
+        let data: unknown;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          return { success: false, error: ITSM_WEBHOOK_REFUSALS.nonJsonBody };
+        }
+        if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+          return { success: false, error: ITSM_WEBHOOK_REFUSALS.nonJsonBody };
+        }
+        const record = data as Record<string, unknown>;
+        const idCandidate = record.id ?? record.ticketId ?? record.ticket_id ?? record.number;
+        // A NUMBER IS AN ID a great many ITSMs return; a boolean, an object or an
+        // empty string is not. Normalised here rather than cast, because the cast is
+        // what let `undefined` through in the first place.
+        const ticketId =
+          typeof idCandidate === 'string'
+            ? idCandidate
+            : typeof idCandidate === 'number' && Number.isFinite(idCandidate)
+              ? String(idCandidate)
+              : '';
+        if (ticketId.trim().length === 0) {
+          return { success: false, error: ITSM_WEBHOOK_REFUSALS.noTicketId };
+        }
+        const urlCandidate = record.url ?? record.webUrl ?? record.link;
+        const ticketUrl = typeof urlCandidate === 'string' && urlCandidate.length > 0 ? urlCandidate : undefined;
+
         return { success: true, ticketId, ticketUrl };
       }
-      
-      const errorText = await response.text();
+
+      // BOUNDED WHERE IT IS READ — see ../adapters/bounded-text.ts.
+      const errorText = boundedText(await response.text(), VENDOR_ERROR_TEXT_LIMIT);
       
       // Retry on 5xx errors
       if (response.status >= 500 && attempt < this.config.retryPolicy!.maxAttempts) {
@@ -268,8 +355,19 @@ export class GenericWebhookAdapter implements ITSMAdapter {
       
       return { success: false, error: `HTTP ${response.status}: ${errorText}` };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      
+      const message = boundedText(
+        error instanceof Error ? error.message : 'Unknown error',
+        VENDOR_ERROR_TEXT_LIMIT,
+      );
+
+      // A HEADER VALUE undici refuses (a CR or LF in a header) throws a TypeError
+      // BEFORE the socket opens. Retrying is retrying an unchanged string against an
+      // unchanged library — three identical throws and the same answer. Permanent,
+      // and named so the operator learns the header is malformed.
+      if (error instanceof TypeError) {
+        return { success: false, error: `permanent: request rejected before the socket: ${message}` };
+      }
+
       // Retry on network errors
       if (attempt < this.config.retryPolicy!.maxAttempts) {
         const delay = Math.min(
@@ -303,7 +401,12 @@ export class GenericWebhookAdapter implements ITSMAdapter {
         method: 'HEAD',
         headers: { 'User-Agent': 'EnterpriseShell-ITSM/1.0' },
         signal: AbortSignal.timeout(this.config.timeout ?? 30000),
+        // Never followed — see ../adapters/redirect.ts.
+        redirect: 'manual',
       });
+      // A 3xx is not evidence the CONFIGURED endpoint is there; it is evidence some
+      // other one might be, and we decline to find out.
+      if (isRedirectStatus(response.status)) return false;
       if (response.ok) return true;
       // An AUTH CHALLENGE proves the endpoint is there and simply refused this
       // unauthenticated HEAD; so does "method not allowed". Those are evidence.

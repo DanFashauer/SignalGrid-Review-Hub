@@ -9,6 +9,10 @@ import crypto from 'crypto';
 import { resolveEmission, EMIT_SUPPRESSED, type EmissionCredential } from '../adapters/emit-gate';
 import { SIGNING_SECRET_MISSING } from '../adapters/signing';
 import type { SIEMAdapter, SIEMEventRequest, SIEMEventResponse } from '../adapters/types';
+import { validateWebhookUrl } from '../adapters/url-guard';
+import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
+import { boundedText, VENDOR_ERROR_TEXT_LIMIT } from '../adapters/bounded-text';
+import { v2SignatureHeaders, WebhookTimestampUnresolvable } from '../webhooks/sign';
 
 export interface WebhookSIEMConfig {
   /** Webhook URL */
@@ -20,7 +24,15 @@ export interface WebhookSIEMConfig {
   /** Signing secret for HMAC. MANDATORY on the live path: sendEvent() refuses
    *  rather than POSTing an unsigned audit event (see the refusal below). */
   signingSecret?: string;
-  /** Signing algorithm */
+  /**
+   * RETIRED KNOB, kept only so an existing config still parses.
+   *
+   * Under signature scheme v2 the primitive is FIXED at HMAC-SHA256 and announced
+   * by the `v2=` marker, so there is nothing for this to select. It used to be
+   * echoed on the wire as `X-Signing-Algorithm`, which told a receiver the
+   * algorithm and bought it no replay protection. Nothing reads it now; it is not
+   * deleted because deleting it would reject a config an operator already wrote.
+   */
   signingAlgorithm?: 'hmac-sha256' | 'hmac-sha512';
   /** Per-attempt request timeout in ms. READ by every fetch in this file as
    *  `AbortSignal.timeout(...)` — an unbounded fetch inside a retry loop is three
@@ -134,11 +146,52 @@ export class WebhookSIEMAdapter implements SIEMAdapter {
     // was added, with no edit here and no review. The declared set lives in
     // ../adapters/payload-fields.ts and is asserted by scripts/src/emit-gate-proof.ts.
     const payload = JSON.stringify(this.buildEventPayload(event));
+
+    // THE TARGET IS VALIDATED, and it was not. This adapter POSTed to `config.url`
+    // raw while an SSRF guard for exactly this shape sat one directory over in
+    // webhooks/. `http://169.254.169.254/latest/meta-data/` is a syntactically valid
+    // URL and the only thing that ever looked at this one was `new URL()`.
+    // UNCONDITIONAL for the address rules, live-gated for HTTPS — see
+    // ../adapters/url-guard.ts. Past the emit gate above, `live` is true.
+    const targetCheck = validateWebhookUrl(this.config.url, { live: true });
+    if (!targetCheck.valid) {
+      return {
+        eventId: event.correlationId || 'target-refused',
+        status: 'failed',
+        reason: targetCheck.error,
+        receivedAt: new Date().toISOString(),
+      };
+    }
+
+    // Spread FIRST so a caller-supplied header can never overwrite the signature
+    // written after it.
     const headers = { ...this.config.headers };
 
-    const signature = this.signPayload(payload);
-    headers['X-Signature'] = signature;
-    headers['X-Signing-Algorithm'] = this.config.signingAlgorithm;
+    // SIGNED UNDER SCHEME v2, minted ONCE for this delivery — above executeWithRetry,
+    // which recurses. This was `X-Signature` over the BODY ALONE plus an
+    // `X-Signing-Algorithm` header and no timestamp: v1, the scheme
+    // webhooks/sign.ts's own verifier refuses by name because a captured body
+    // re-POSTs and verifies forever. One implementation, not a third copy of the
+    // HMAC. The instant is DERIVED from the payload's own `timestamp` (the event's,
+    // set by the caller), so no clock is read to sign.
+    let signatureHeaders: Record<string, string>;
+    try {
+      signatureHeaders = v2SignatureHeaders(payload, this.config.signingSecret);
+    } catch (error) {
+      // A caller whose event carries no readable instant cannot be given a signature
+      // claiming one. Named refusal, not a silent unsigned send.
+      const named = error instanceof WebhookTimestampUnresolvable ? error.name : 'Error';
+      return {
+        eventId: event.correlationId || 'unsigned-refused',
+        status: 'failed',
+        reason: boundedText(
+          `webhook signing refused: ${named}: ${error instanceof Error ? error.message : String(error)}`,
+          VENDOR_ERROR_TEXT_LIMIT,
+        ),
+        receivedAt: new Date().toISOString(),
+      };
+    }
+    Object.assign(headers, signatureHeaders);
 
     headers['X-Event-ID'] = event.correlationId || crypto.randomUUID();
     headers['X-Event-Type'] = event.type;
@@ -187,7 +240,12 @@ export class WebhookSIEMAdapter implements SIEMAdapter {
         method: 'HEAD',
         headers: { 'User-Agent': 'EnterpriseShell-SIEM/1.0' },
         signal: AbortSignal.timeout(this.config.timeout),
+        // Never followed — see ../adapters/redirect.ts.
+        redirect: 'manual',
       });
+      // A 3xx is NOT evidence the configured endpoint is there: it is evidence some
+      // OTHER endpoint might be, and we decline to find out.
+      if (isRedirectStatus(response.status)) return false;
       return response.ok || response.status < 500;
     } catch {
       return false;
@@ -264,15 +322,6 @@ export class WebhookSIEMAdapter implements SIEMAdapter {
     };
   }
 
-  private signPayload(payload: string): string {
-    const hmac = crypto.createHmac(
-      this.config.signingAlgorithm === 'hmac-sha512' ? 'sha512' : 'sha256',
-      this.config.signingSecret!
-    );
-    hmac.update(payload);
-    return hmac.digest('hex');
-  }
-
   private async executeWithRetry(
     options: { url: string; method: string; headers: Record<string, string>; body: string },
     attempt: number = 1
@@ -296,13 +345,26 @@ export class WebhookSIEMAdapter implements SIEMAdapter {
         headers: options.headers,
         body: options.body,
         signal: AbortSignal.timeout(this.config.timeout),
+        // NEVER FOLLOWED. A 307 from the configured collector used to deliver this
+        // signed body to whatever origin its `Location` named — `X-Signature`
+        // survived the cross-origin hop in undici — and this method reported
+        // `sent`. See ../adapters/redirect.ts.
+        redirect: 'manual',
       });
+
+      // Decided BEFORE `response.ok`, because a 3xx is not ok and must not fall
+      // through to the retry arm: no retry re-routes a configured target.
+      if (isRedirectStatus(response.status)) {
+        return { success: false, error: redirectRefusal(response.status, response.headers.get('location')) };
+      }
 
       if (response.ok || response.status === 202) {
         return { success: true };
       }
 
-      const errorText = await response.text();
+      // BOUNDED WHERE IT IS READ. A 5 MB vendor error body travelled whole into
+      // SIEMEventResponse.reason and from there into the caller's log.
+      const errorText = boundedText(await response.text(), VENDOR_ERROR_TEXT_LIMIT);
 
       // Retry on 5xx
       if (response.status >= 500 && attempt < this.config.retryPolicy.maxAttempts) {
@@ -316,7 +378,19 @@ export class WebhookSIEMAdapter implements SIEMAdapter {
 
       return { success: false, error: `HTTP ${response.status}: ${errorText}` };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
+      const message = boundedText(
+        error instanceof Error ? error.message : 'Unknown error',
+        VENDOR_ERROR_TEXT_LIMIT,
+      );
+
+      // A HEADER VALUE undici refuses (a CR or LF in `X-Event-ID`) throws a
+      // TypeError BEFORE the socket opens. Retrying it is retrying an unchanged
+      // string against an unchanged library: three identical throws, ~3s of
+      // backoff, and the same answer. Permanent, and named so the operator learns
+      // the header is malformed rather than that the vendor is down.
+      if (error instanceof TypeError) {
+        return { success: false, error: `permanent: request rejected before the socket: ${message}` };
+      }
 
       if (attempt < this.config.retryPolicy.maxAttempts) {
         const delay = Math.min(

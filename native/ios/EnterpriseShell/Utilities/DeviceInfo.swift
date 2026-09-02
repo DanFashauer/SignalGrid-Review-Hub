@@ -64,29 +64,52 @@ struct DeviceInfo {
         return "\(version) (\(build))"
     }
     
-    /// Device serial number (requires MDM/Enterprise)
+    // MARK: - MDM-supplied facts
+    //
+    // None of the four values below is readable by an app on iOS. The hardware serial,
+    // the UDID, supervision and Single App Mode are properties of a supervised device
+    // and reach an app only through MDM (golden rule 4). The environment reads exist so
+    // a simulator can stand in for an MDM-supplied value during a demo or a proof, and
+    // they are compiled out everywhere else: a launch argument the operator controls must
+    // never reach an audit record, a session record or an identity payload as hardware
+    // truth. On device each one answers "not known", which is the honest answer, and
+    // callers already treat nil/false as the tighter side.
+
+    /// Device serial number. MDM-supplied; nil unless a simulator stands one in.
     static var serialNumber: String? {
-        // This requires special entitlements and MDM API access
-        // Return nil by default, override with MDM value if available
+        #if targetEnvironment(simulator)
         return ProcessInfo.processInfo.environment["DEVICE_SERIAL"]
+        #else
+        return nil
+        #endif
     }
     
-    /// Device UDID (requires MDM)
+    /// Device UDID. MDM-supplied; nil unless a simulator stands one in.
     static var udid: String? {
-        // This requires special entitlements
+        #if targetEnvironment(simulator)
         return ProcessInfo.processInfo.environment["DEVICE_UDID"]
+        #else
+        return nil
+        #endif
     }
     
-    /// Whether device is supervised
+    /// Whether the device is supervised. MDM-supplied; false unless a simulator stands it in.
     static var isSupervised: Bool {
-        // Check for MDM-managed supervision
+        #if targetEnvironment(simulator)
         return ProcessInfo.processInfo.environment["MDM_SUPERVISED"] == "true"
+        #else
+        return false
+        #endif
     }
     
-    /// Whether device is in kiosk/single app mode
+    /// Whether the device is in kiosk/Single App Mode. MDM-supplied; false unless a
+    /// simulator stands it in. An app cannot self-kiosk, so it cannot answer this alone.
     static var isKioskMode: Bool {
-        // This would be set by MDM configuration
+        #if targetEnvironment(simulator)
         return ProcessInfo.processInfo.environment["MDM_KIOSK_MODE"] == "true"
+        #else
+        return false
+        #endif
     }
     
     /// Collect all device metadata for API requests

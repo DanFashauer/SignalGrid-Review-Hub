@@ -45,7 +45,6 @@ final class OIDCAuthService: NSObject {
     // MARK: - Properties
     
     private var config: OIDCConfig = .default
-    private var currentAuthorizationFlow: ASWebAuthenticationSession?
     private var sessionToken: String?
     private var currentPersona: Persona?
     
@@ -54,9 +53,6 @@ final class OIDCAuthService: NSObject {
     private var refreshToken: String?
     private var idToken: String?
     private var tokenExpiresAt: Date?
-    
-    // Callbacks
-    private var authCompletion: ((Result<OIDCTokenResult, Error>) -> Void)?
     
     // URLSession with certificate pinning support
     private lazy var secureSession: URLSession = {

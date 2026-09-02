@@ -608,17 +608,26 @@ final class HybridIdentityProvider: IdentityProvider {
         
         // This is a simplified example - actual implementation would be configurable
         
-        guard let sessionToken = credentials.sessionToken else {
+        guard credentials.sessionToken != nil else {
             throw IdentityProviderError.invalidCredentials
         }
         
-        // Use OIDC as primary provider
+        // Use OIDC as primary provider.
+        //
+        // Both providers below used to be built as locals and dropped on return, so
+        // `primaryProvider` and `secondaryProvider` were never assigned and every member
+        // that reads them was dead: `isAuthenticated` was permanently false,
+        // `currentAccessToken` and `getAccessToken()` permanently nil, `refreshToken()`
+        // a no-op — and `revokeAuthentication(token:)` returned successfully having
+        // revoked nothing, which is the one of the five that fails OPEN. The composite
+        // only composes if it keeps what it authenticated with.
         let oidcProvider = OIDCIdentityProvider()
         if let config = config {
             oidcProvider.configure(with: config)
         }
         
         let result = try await oidcProvider.authenticate(credentials: credentials, persona: persona)
+        primaryProvider = oidcProvider
         
         // If MFA token is provided, verify it
         if let mfaToken = credentials.mfaToken {
@@ -637,7 +646,9 @@ final class HybridIdentityProvider: IdentityProvider {
                 additionalData: nil
             )
             
+            // Throws on failure, so a rejected second factor aborts before assignment.
             _ = try await mfaProvider.authenticate(credentials: mfaCredentials, persona: persona)
+            secondaryProvider = mfaProvider
         }
         
         return result

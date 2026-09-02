@@ -1,13 +1,6 @@
 import Foundation
 import UIKit
 
-/// Stub: the HTTP-webhook badge reader is not yet implemented. This placeholder
-/// lets the passive HTTP webhook provider compile; setup()/stop() are no-ops
-/// until a real embedded HTTP listener is added.
-private final class HTTPServer {
-    func stop() {}
-}
-
 /// Protocol defining the interface for badge reader providers
 /// Allows integration with any badge reader system (USB, Bluetooth, NFC, serial, etc.)
 protocol BadgeReaderProvider: AnyObject {
@@ -46,7 +39,8 @@ protocol BadgeReaderProviderDelegate: AnyObject {
 
 /// Type of badge reader connection
 enum BadgeReaderType: String, Codable, CaseIterable {
-    case usbAccessory = "usb_accessory"      // USB-C/Lightning badge readers
+    case usbAccessory = "usb_accessory"      // Legacy shim over BadgeReaderManager
+    case usbC = "usbc"                       // USB-C/Lightning via External Accessory
     case bluetoothLE = "bluetooth_le"       // Bluetooth Low Energy badge readers
     case nfc = "nfc"                         // NFC tag reading
     case serial = "serial"                  // Serial/RS-232 badge readers
@@ -58,6 +52,8 @@ enum BadgeReaderType: String, Codable, CaseIterable {
         switch self {
         case .usbAccessory:
             return "USB Badge Reader"
+        case .usbC:
+            return "USB-C Badge Reader"
         case .bluetoothLE:
             return "Bluetooth LE Badge Reader"
         case .nfc:
@@ -204,7 +200,7 @@ final class BadgeReaderProviderFactory {
         }
         
         // USB-C provider (parity with BLE)
-        registeredProviders["usbc"] = {
+        registeredProviders[BadgeReaderType.usbC.rawValue] = {
             USBCBadgeReaderProvider()
         }
     }
@@ -217,6 +213,15 @@ final class BadgeReaderProviderFactory {
     /// Create a badge reader provider for the given configuration
     func createProvider(config: BadgeReaderConfig) -> BadgeReaderProvider? {
         guard let factory = registeredProviders[config.readerType.rawValue] else {
+            // BadgeReaderType declares more transports than are implemented: `nfc` and
+            // `serial` have no provider class. Returning a bare nil left the caller
+            // unable to tell "not implemented" from "failed to build", and left an
+            // operator with a configured reader that silently read nothing.
+            AuditLogger.shared.log(event: .badgeReaderProviderInitialized, metadata: [
+                "provider": "none",
+                "type": config.readerType.rawValue,
+                "error": "no provider registered for this reader type"
+            ])
             return nil
         }
         return factory()
@@ -330,20 +335,24 @@ final class HTTPWebhookBadgeReaderProvider: BadgeReaderProvider {
     
     weak var delegate: BadgeReaderProviderDelegate?
     
-    private var config: BadgeReaderConfig?
-    private var httpServer: HTTPServer?
+    // NOT IMPLEMENTED: this provider starts no listener. It previously held a
+    // `config` and an `httpServer` that nothing ever assigned, plus a stub HTTPServer
+    // whose stop() was a no-op — so `teardown()` stopped a server that had never been
+    // started, and the fields made an unbuilt listener read as a built one. Badge events
+    // reach this provider ONLY when the host calls processIncomingBadge(_:metadata:).
     
     func setup() {
-        // Start HTTP server to listen for badge events
-        // Configuration would come from BadgeReaderConfig
+        // Deliberately starts nothing. Recorded so an operator reading the audit trail
+        // sees a passive provider that was initialised, not a listener that is running.
         AuditLogger.shared.log(event: .badgeReaderProviderInitialized, metadata: [
             "provider": displayName,
-            "type": BadgeReaderType.httpWebhook.rawValue
+            "type": BadgeReaderType.httpWebhook.rawValue,
+            "listener": "not_implemented"
         ])
     }
     
     func teardown() {
-        httpServer?.stop()
+        // Nothing is started, so nothing is stopped.
     }
     
     func resetReaderState() {
@@ -383,7 +392,8 @@ final class MDMBadgeReaderProvider: BadgeReaderProvider {
     
     weak var delegate: BadgeReaderProviderDelegate?
     
-    private var mdmConfig: MDMProviderConfig?
+    // `mdmConfig` was declared here and never assigned or read; queryMDMForUser()
+    // takes its parameters from the MDM API call itself.
     
     func setup() {
         // Initialize MDM provider

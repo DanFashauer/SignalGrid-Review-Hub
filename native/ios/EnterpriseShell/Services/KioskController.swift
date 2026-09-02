@@ -6,7 +6,7 @@ import UIKit
 /// own relaunch — that is an OS capability, not an app one. The real mechanism is
 /// ASAM: on an **MDM-supervised** device whose management profile authorizes this
 /// bundle ID for Autonomous Single App Mode (the MDM payload
-/// `com.apple.applicationaccess` key `AutonomousSingleAppModePermittedAppIDs`),
+/// `com.apple.applicationaccess` key `autonomousSingleAppModePermittedAppIDs`),
 /// the app locks itself in — Home / App-Switcher / notification gestures are
 /// disabled and the user cannot leave until the app releases the lock. This is
 /// what makes the device captive to the shell "until badge tap".

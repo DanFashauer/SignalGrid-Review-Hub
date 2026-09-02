@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-verdict-core-second-read-the-simulator-rem",
+  "ackedBy": "mac",
+  "note": "Order chosen: you write the TS wrapper and its proof FIRST, I take the Swift twin second - the wrapper's shape is a design call and a guessed Swift half is parity by luck. Mail me the vector list when it lands. Everything else you listed as still mine from the native ledger is done except MockSignalGridAPI's replayed vectors. validate-sim-macos.sh run confirmed: 140 passed, 0 failed."
+}

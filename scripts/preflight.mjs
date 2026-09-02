@@ -152,6 +152,8 @@ const STEPS = [
   { name: "Retention claims (no surface sells a duration nothing implements)", cmd: ["node", "scripts/check-retention-claims.mjs"] },
   { name: "iOS dynamic type self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-dynamic-type.mjs", "--self-test"] },
   { name: "iOS dynamic type (no raw system font outside DesignSystem.swift)", cmd: ["node", "scripts/check-ios-dynamic-type.mjs"] },
+  { name: "iOS dead stored properties self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-dead-stored-properties.mjs", "--self-test"] },
+  { name: "iOS dead stored properties (a field nothing assigns makes every read of it dead)", cmd: ["node", "scripts/check-ios-dead-stored-properties.mjs"] },
   { name: "iOS demo flags (every simulator flag the shell reads is documented, and vice versa)", cmd: ["node", "scripts/check-demo-flags-documented.mjs"] },
   { name: "Pagination-truncation guard (a capped read must not look complete)", cmd: ["node", "scripts/check-pagination-truncation.mjs"] },
   { name: "Absent-collection law (nothing observed ≠ nothing wrong)", cmd: ["pnpm", "run", "proof:absent-collection"] },

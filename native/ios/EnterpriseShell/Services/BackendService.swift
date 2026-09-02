@@ -70,7 +70,7 @@ final class BackendService {
         #if targetEnvironment(simulator)
         if DemoMode.isEnabled { return DemoMode.unenrolled ? DemoMode.unenrolledStartResponse() : DemoMode.startSessionResponse(badgeId: badgeId) }
         #endif
-        let url = URL(string: "\(Self.baseUrl)/api/sessions/start")!
+        let url = URL(string: "\(Self.baseUrl)/api/v1/sessions/start")!
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -109,7 +109,7 @@ final class BackendService {
         #if targetEnvironment(simulator)
         if DemoMode.isEnabled { return DemoMode.endSessionResponse() }
         #endif
-        let url = URL(string: "\(Self.baseUrl)/api/sessions/\(sessionId)/end")!
+        let url = URL(string: "\(Self.baseUrl)/api/v1/sessions/\(sessionId)/end")!
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -151,6 +151,15 @@ final class BackendService {
         #if targetEnvironment(simulator)
         if DemoMode.isEnabled { return }
         #endif
+        // DECLARED-NOT-IMPLEMENTED: no route in artifacts/api-server serves this path.
+        // The served session routes are /api/v1/sessions/{start,:id,:id/refresh,:id/end}
+        // and the only audit routes are /api/v1/audit, /api/simulator/audit and
+        // /api/cp/v1/self-audit. Established by enumerating every router.get/post/put/
+        // patch/delete (including the multi-line signatures) plus every router.use in
+        // routes/ — all sub-routers mount with NO path prefix, so their declared paths
+        // are absolute. `check:absence` returns INCONCLUSIVE for this string and its two
+        // matches are this file and a lane message, i.e. the caller and the report,
+        // never a route.
         let url = URL(string: "\(Self.baseUrl)/api/sessions/\(sessionId)/audit")!
         
         var request = URLRequest(url: url)
@@ -165,14 +174,31 @@ final class BackendService {
         let task = session.dataTask(with: request) { _, response, error in
             if let error = error {
                 AuditLogger.shared.log(event: .auditUploadFailed, metadata: [
+                    "sessionId": sessionId,
                     "error": error.localizedDescription
                 ])
-            } else if let httpResponse = response as? HTTPURLResponse,
-                      (200...299).contains(httpResponse.statusCode) {
-                AuditLogger.shared.log(event: .auditUploaded, metadata: [
-                    "sessionId": sessionId
-                ])
+                return
             }
+            guard let httpResponse = response as? HTTPURLResponse else {
+                AuditLogger.shared.log(event: .auditUploadFailed, metadata: [
+                    "sessionId": sessionId,
+                    "error": "no HTTP response"
+                ])
+                return
+            }
+            guard (200...299).contains(httpResponse.statusCode) else {
+                // A non-2xx used to fall through both branches and log nothing at all,
+                // so a 404 discarded the audit payload silently. Unreported is the one
+                // outcome an audit path may never have.
+                AuditLogger.shared.log(event: .auditUploadFailed, metadata: [
+                    "sessionId": sessionId,
+                    "error": "HTTP \(httpResponse.statusCode)"
+                ])
+                return
+            }
+            AuditLogger.shared.log(event: .auditUploaded, metadata: [
+                "sessionId": sessionId
+            ])
         }
         task.resume()
     }
@@ -181,7 +207,7 @@ final class BackendService {
     
     /// Check backend connectivity
     func healthCheck() async throws -> Bool {
-        guard let url = URL(string: "\(Self.baseUrl)/health") else {
+        guard let url = URL(string: "\(Self.baseUrl)/api/healthz") else {
             throw BackendError.invalidUrl
         }
         
@@ -208,6 +234,12 @@ final class BackendService {
         #if targetEnvironment(simulator)
         if DemoMode.isEnabled { return DemoMode.enrollmentCheckResponse() }
         #endif
+        // DECLARED-NOT-IMPLEMENTED: no route in artifacts/api-server serves any /badges
+        // path. "badge" and "enroll" appear there only in prose, a control-plane
+        // connector id, and the x-enrollment-authorization CORS header; the only enroll
+        // routes are /v1/step-up/enroll/{options,verify}, which are WebAuthn step-up and
+        // not badge enrollment. This call throws BackendError.httpError(404) until a
+        // route exists.
         let url = URL(string: "\(Self.baseUrl)/api/badges/check-enrollment")!
         
         var request = URLRequest(url: url)
@@ -244,6 +276,8 @@ final class BackendService {
         badgeId: String,
         userInfo: EnrollmentUserInfo
     ) async throws -> BadgeEnrollmentResponse {
+        // DECLARED-NOT-IMPLEMENTED: the api-server serves no /badges route. This call
+        // throws BackendError.httpError(404) until one exists.
         let url = URL(string: "\(Self.baseUrl)/api/badges/enroll")!
         
         var request = URLRequest(url: url)

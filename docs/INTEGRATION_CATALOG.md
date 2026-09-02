@@ -437,7 +437,7 @@ in one place.
   provenance than a synced one. A synced credential's custody is unknowable by
   construction — no administrator can query where it synced — so it forecloses the grant
   rather than lowering it. User verification discouraged is possession-only, a known-false
-  reliance that restricts. `proof:passkey-assurance` (91 checks).
+  reliance that restricts. `proof:passkey-assurance` (114 checks).
 
 - **Outbound emitters under discipline** — the six delivery families (`itsm`, `siem`, `syslog`,
   `telemetry`, `webhooks`, `caep-events`) each carry the same unanimous live-call gate as every

@@ -50,7 +50,8 @@ let package = Package(
                 "Services/DecisionService.swift",
                 "Services/SignalContext.swift",
                 "Services/ScreenCapturePolicy.swift",
-                "Models/SessionState.swift"
+                "Models/SessionState.swift",
+                "Models/SessionData.swift"
             ]
         ),
         .testTarget(

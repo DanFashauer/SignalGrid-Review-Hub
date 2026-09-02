@@ -63,12 +63,22 @@ struct SessionData: Codable {
     
     /// Whether the session token is expired. No ignorance branch: a session that
     /// cannot state a concrete expiry is `.nonExpiring` with a justification, not a
-    /// silent "not expired". An unknown expiry can never reach here — it is
-    /// unrepresentable in `ExpiryPolicy`.
+    /// silent "not expired".
+    ///
+    /// The type removes the *in-code* ignorance case, but `ExpiryPolicy` is
+    /// `Codable` and `SessionData` is restored from the Keychain via
+    /// `try? JSONDecoder().decode(SessionData.self, …)` (see `KeychainService`).
+    /// A malformed or tampered blob can therefore decode cleanly to
+    /// `.nonExpiring(justification: "")` — the ignorance case, relocated into the
+    /// persistence layer. The sole in-code producer always states a full reason,
+    /// so a blank justification is never deliberate; it reads as expired, because
+    /// an unjustified "never expires" is exactly the fail-OPEN on the Assist gate's
+    /// staleness input this type exists to remove.
     var isExpired: Bool {
         switch expiry {
         case .expiresAt(let date): return Date() >= date
-        case .nonExpiring: return false
+        case .nonExpiring(let justification):
+            return justification.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 

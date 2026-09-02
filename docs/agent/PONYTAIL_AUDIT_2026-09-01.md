@@ -106,7 +106,7 @@ Not cut on purpose: the 40 `*ConnectorError` classes (proofs `instanceof` the fa
 route to normal review:
 - `lib/integrations/src/integrations/network-nac/evaluate.ts:151-156` — `deriveFreshness` lacks the future-skew guard its two siblings carry (`carrier/evaluate.ts:136`, `location-services/evaluate.ts:79`): a `lastAuthAt` in the future reads **fresh**. Fail-open by doctrine.
 - `guardReadOnly` is inconsistent: 8 copies use `method !== "GET"`, 27 use `method.toUpperCase() !== "GET"` (e.g. `carrier/reachability-connector.ts:48` vs `sse-egress/sse-egress-connector.ts:24`); the loose form accepts `"get"`. Standardize on strict when consolidating.
-- `tests/security-reference/*.test.ts` import `@/lib/integrations/webhooks/dispatch`, a path that does not exist in this repo, and no script or workflow runs them — fossil tests that still "reference" `createITSMConfig`. Out of my scope, flagged only.
+- ~~`tests/security-reference/*.test.ts` import `@/lib/integrations/webhooks/dispatch`, a path that does not exist in this repo, and no script or workflow runs them — fossil tests that still "reference" `createITSMConfig`.~~ RESOLVED 2026-09-02: seven of the eight invariants ported onto the live surface (`artifacts/api-server/test/api.test.mjs`, `scripts/src/webhooks-proof.ts`), the eighth (`checkApiKey`/`ADMIN_API_KEY`) unportable — no such symbol in this tree — and the directory deleted.
 - `lib/audit/src/index.ts:97-99` — `escapeJsonString` does not escape control characters, so the canonical form is not valid JSON for such strings (no collision, but worth a look alongside item 21).
 ---
 
@@ -214,7 +214,7 @@ Each auditor's own "route to normal review" list, verbatim, so nothing a lens sa
 
 - FAIL-OPEN: lib/integrations/src/integrations/network-nac/evaluate.ts:151-156 deriveFreshness lacks the future-skew guard its siblings carry (carrier/evaluate.ts:136, location-services/evaluate.ts:79): a future lastAuthAt reads FRESH. Same class as the integration-bridge fix in #350. Fix: add the guard (future beyond tolerance → unknown) + a regression assertion in proof:network-nac.
 - guardReadOnly inconsistency: 8 copies strict `method !== "GET"`, 27 loose `method.toUpperCase() !== "GET"` (accepts "get"). Standardize strict when consolidating (Ponytail item 5).
-- Fossil tests: tests/security-reference/*.test.ts import a nonexistent path (@/lib/integrations/webhooks/dispatch); nothing runs them.
+- ~~Fossil tests: tests/security-reference/*.test.ts import a nonexistent path (@/lib/integrations/webhooks/dispatch); nothing runs them.~~ RESOLVED 2026-09-02 — invariants ported to api.test.mjs + webhooks-proof.ts; directory deleted; block 1 (checkApiKey/ADMIN_API_KEY) unportable here.
 - lib/audit/src/index.ts:97-99 escapeJsonString doesn't escape control chars (canonical form not valid JSON for such strings; no collision).
 - PLATFORM HONESTY (CLAUDE.md rule 4): iOS MDMIdentityProvider / MDMBadgeReaderProvider / DeviceInfo.serialNumber|udid|isSupervised read MDM identity + supervision from ENV VARS — an app cannot obtain these. [native/ios/EnterpriseShell/Utilities/DeviceInfo.swift:68-92] → native lane.
 - BUG: HybridIdentityProvider.authenticate never assigns primaryProvider → isAuthenticated/refreshToken/revokeAuthentication are no-ops after success. [IdentityProvider.swift:589-660] (moot if the yagni cut removes Hybrid).

@@ -21,9 +21,14 @@
 #        (demo) tier. Gating CI red on them produces false signal.
 #      - lib/api-client-react — generated (orval) typed client; regenerated
 #        from the OpenAPI spec, not hand-authored.
-#      - tests — the `tests/` tree: `tests/load/` and
-#        `tests/security-reference/` fixtures.
-#      - **/*.test.ts — unit-test files (9 tracked).
+#      - tests — the `tests/` tree. As of 2026-09-02 that is `tests/load/`
+#        alone (k6 load drivers); `tests/security-reference/` was retired once
+#        its invariants were ported onto the /v1 suite and the webhooks proof.
+#      - **/*.test.ts — unit-test files (1 tracked as of 2026-09-02:
+#        `artifacts/mcp-server/test/server.test.ts`; was 9 before the
+#        security-reference retirement). NOTE: no gate reads this file, so every
+#        count in this comment is HAND-HELD and can rot. Re-derive before
+#        trusting one: `git ls-files "*.test.ts" | wc -l`.
 #      - **/*.spec.ts — Playwright specs. TODAY THAT IS EXACTLY THE TEN FILES IN
 #        `scripts/src/e2e/`, so the entire browser E2E suite is outside the
 #        security scan. That is a consequence worth stating rather than

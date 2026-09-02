@@ -46,7 +46,6 @@
         "scripts/**",
         "lib/webauthn/**",
         "lib/enterprise-auth/**",
-        "tests/security-reference/**",
         ".gitleaks.toml",
         ".gitleaksignore",
         "SECURITY.md"

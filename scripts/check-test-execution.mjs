@@ -2,13 +2,21 @@
 //
 // WHY THIS EXISTS. The org sweep found ten test-shaped files in this repository
 // that nothing executes. Eight of them (`tests/security-reference/*.test.ts`)
-// encode real security invariants — replay, rate limiting, secret redaction,
+// encoded real security invariants — replay, rate limiting, secret redaction,
 // webhook signing, admin-auth hardening, fail-closed fallbacks, step-up,
-// WebAuthn request identity — and they have never run once here. They are
-// Vitest specs, no Vitest is installed, `tests/` sits outside the pnpm
-// workspace, and they address a DEV Next.js server (`/api/session/start`,
-// `/api/health`, started with `bun`) whose endpoints do not exist in this
-// monorepo. Their own README says so plainly.
+// WebAuthn request identity — and never ran once here. They were Vitest specs,
+// no Vitest is installed, `tests/` sits outside the pnpm workspace, and they
+// addressed a DEV Next.js server (`/api/session/start`, `/api/health`, started
+// with `bun`) whose endpoints do not exist in this monorepo.
+//
+// THAT DIRECTORY IS GONE (2026-09-02) — retired the way this gate always said it
+// should be, by porting rather than deleting. Seven of the eight invariants are
+// now held and EXECUTED on the live surface: the auth boundary, wire-level secret
+// redaction, replay/idempotency, rate limiting and step-up/WebAuthn fail-closed in
+// `artifacts/api-server/test/api.test.mjs`; webhook signing and the missing-secret
+// refusal in `scripts/src/webhooks-proof.ts`. The eighth (`checkApiKey` /
+// `ADMIN_API_KEY`) was unportable — neither symbol exists anywhere in this tree —
+// so it was deleted rather than carried as a debt.
 //
 // The disclaimer being honest is exactly why a gate is needed. An unexecuted
 // test is the most expensive kind of false assurance: it looks like coverage in
@@ -56,17 +64,6 @@ const SKIP_DIR = /(^|\/)(node_modules|dist|build|\.git|coverage)(\/|$)/;
 // An unexecuted test file may exist ONLY with a reason and a named disposition.
 // Empty is the goal state.
 const DECLARED_UNEXECUTED = new Map([
-  [
-    "tests/security-reference/",
-    "Org sweep 2026-08-23 + this directory's own README: eight Vitest specs harvested " +
-      "from the retired DEV Next.js build. They target that server's endpoints " +
-      "(/api/session/start, /api/health, badgeUid, `bun run scripts/test-server.ts`), " +
-      "none of which exist on this monorepo's /v1 surface, and one of them tests step-up " +
-      "enforcement — a DEFERRED family, so there is no shipping surface to test yet. " +
-      "They are kept as reference to PORT, not as coverage, and they are counted as " +
-      "coverage nowhere. Porting each onto /v1 retires its line here; the last line out " +
-      "deletes this entry, which this gate then enforces because a stale exemption fails.",
-  ],
   [
     "artifacts/mcp-server/test/server.test.ts",
     "Org sweep 2026-08-23: the package declares `test: tsx --test test/server.test.ts`, " +
@@ -198,6 +195,38 @@ const declarationFor = (file) => {
   return null;
 };
 
+// Which declared keys match NOTHING in a given corpus — the reverse of
+// `declarationFor`, and the direction this gate never checked.
+//
+// The header above has always said a stale declaration is fatal, and the
+// security-reference entry said porting the last spec "deletes this entry, which
+// this gate then enforces because a stale exemption fails". NEITHER WAS TRUE until
+// now: resolution only ever ran file → declaration, so a key pointing at a
+// directory that had been emptied or renamed was never looked at again. Measured on
+// 2026-09-02 by removing tests/security-reference/ and re-running: the gate printed
+// `0 problem(s)` and exited 0 over a dead exemption.
+//
+// That is this file's own defect class, one level up. An unexecuted test is false
+// assurance about code; a stale exemption is false assurance about the gate — it
+// reads as "someone decided this deliberately" long after the thing decided about is
+// gone, and it is the line a reader trusts INSTEAD of looking.
+//
+// Takes its corpus and its declarations as arguments so the self-test below can run
+// it against a synthetic pair. First key wins, exactly as `declarationFor` resolves,
+// so a key is never called stale for a file another key absorbed.
+const staleKeys = (files, decls) => {
+  const matched = new Set();
+  for (const file of files) {
+    for (const [key] of decls) {
+      if (key.endsWith("/") ? file.startsWith(key) : file === key) {
+        matched.add(key);
+        break;
+      }
+    }
+  }
+  return [...decls.keys()].filter((k) => !matched.has(k));
+};
+
 // ── self-test ────────────────────────────────────────────────────────────────
 {
   const FILE_FLOOR = 5;
@@ -205,18 +234,26 @@ const declarationFor = (file) => {
   const knownReached = testFiles.find((f) => f.includes("api-server/test/api.test.mjs"));
   const positive = knownReached ? reaches(knownReached) !== null : false;
   const negative = reaches("nowhere/definitely-not-invoked.test.ts") === null;
+  // The stale-exemption detector, driven both ways against a synthetic corpus. A
+  // detector that cannot fire would let every dead key through in silence, which is
+  // precisely the state this check was added to end.
+  const stalePositive = staleKeys(["a/b.test.ts"], new Map([["gone/", "r"]])).join() === "gone/";
+  const staleNegative = staleKeys(["a/b.test.ts"], new Map([["a/", "r"]])).length === 0;
   if (
     testFiles.length < FILE_FLOOR ||
     reachedScriptNames.size < SCRIPT_FLOOR ||
     !knownReached ||
     !positive ||
-    !negative
+    !negative ||
+    !stalePositive ||
+    !staleNegative
   ) {
     console.error(
       "✗ SELF-TEST FAILED — " +
         `testFiles=${testFiles.length} (floor ${FILE_FLOOR}), reachedScripts=${reachedScriptNames.size} ` +
         `(floor ${SCRIPT_FLOOR}), knownReached=${knownReached ?? "(none found)"}, positive=${positive}, ` +
-        `negative=${negative}. The reachability derivation has drifted from how this repo invokes tests; ` +
+        `negative=${negative}, stalePositive=${stalePositive}, staleNegative=${staleNegative}. ` +
+        "The reachability derivation has drifted from how this repo invokes tests; " +
         "a gate that resolves nothing is green about nothing.",
     );
     process.exit(1);
@@ -251,6 +288,15 @@ for (const file of testFiles.sort()) {
     `  ✗ ${file}: NO runner reaches this file. It is not coverage, and a directory listing cannot tell.\n` +
       "      Wire it to a script preflight or CI runs, delete it, or declare it in\n" +
       "      DECLARED_UNEXECUTED with the reason and the disposition that retires it.",
+  );
+  problems += 1;
+}
+
+for (const key of staleKeys(testFiles, DECLARED_UNEXECUTED)) {
+  console.error(
+    `  ✗ DECLARED_UNEXECUTED key "${key}" matches no test file in the corpus. The exemption has\n` +
+      "      outlived the thing it exempted — delete the entry. A declaration nobody can reach is a\n" +
+      "      reason a reader trusts instead of looking.",
   );
   problems += 1;
 }

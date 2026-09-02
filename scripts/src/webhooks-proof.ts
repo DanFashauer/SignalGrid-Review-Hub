@@ -17,14 +17,18 @@
 // Pure and offline: the gate is a function of the environment, so this asserts it
 // without a network, a server, or a fixture endpoint.
 
+import { createHmac } from "node:crypto";
 import {
   resolveWebhookDelivery,
   validateWebhookUrl,
   dispatchEvent,
   isPermanentDeliveryError,
+  signPayload,
+  createSignedHeaders,
   WEBHOOK_URL_REFUSALS,
   WEBHOOK_URL_REFUSAL_REASONS,
 } from "@workspace/integrations/webhooks";
+import { SIGNING_SECRET_MISSING } from "@workspace/integrations/emit-gate/signing";
 import { createWebhook, getDeliveryLogs } from "@workspace/integrations/webhooks/store";
 
 let passed = 0;
@@ -280,6 +284,269 @@ check(
     if (savedLive === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedLive;
     if (savedRedis === undefined) delete process.env.REDIS_URL; else process.env.REDIS_URL = savedRedis;
   }
+}
+
+// 5e. A MISSING SIGNING SECRET IS REFUSED, RECORDED, AND FINAL.
+//
+//     PORTED from tests/security-reference/fail-closed-fallbacks.test.ts — the block
+//     'fails webhook dispatch when signing secret is missing'. That spec is a Vitest
+//     file no runner in this repository reaches (scripts/check-test-execution.mjs
+//     declares the directory unexecuted), so until now the refusal at
+//     dispatch.ts:247 was CODE THAT LOOKED RIGHT AND WAS DRIVEN BY NOBODY. The
+//     sibling refusals either side of it — the tier gate (5c) and the URL rules
+//     (5d) — both got here after a defect; this one simply had not been asked.
+//
+//     It is reachable on every live dispatch in this tree, not a corner: the store
+//     strips `secretHash` from everything `getWebhooksForEvent` returns and never
+//     carries a plaintext `_secret`, so the ONLY secret source dispatch has is the
+//     `WEBHOOK_SECRET_<id8>` environment variable. Unset, every live delivery must
+//     refuse rather than POST a customer payload unsigned — a receiver cannot tell
+//     an unsigned event from anybody else's.
+//
+//     Offline, like the two before it: the refusal returns before any fetch.
+{
+  const savedTier = process.env.SIGNALGRID_TIER;
+  const savedLive = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  const savedRedis = process.env.REDIS_URL;
+  delete process.env.REDIS_URL;
+  process.env.SIGNALGRID_TIER = "prod";
+  process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+  try {
+    const hook = await createWebhook({
+      name: "proof-no-secret",
+      url: "https://hooks.example.test/unsigned",
+      events: ["session.end"],
+    } as never);
+    // Guard the premise rather than assume it: if some other path ever starts
+    // handing dispatch a secret, this block must say so instead of passing.
+    check("no-secret premise: the stored webhook exposes no usable secret to dispatch",
+      (hook as unknown as { _secret?: string })._secret === undefined &&
+        process.env[`WEBHOOK_SECRET_${hook.id.slice(0, 8)}`] === undefined);
+
+    const summary = await dispatchEvent("session.end", { probe: true });
+    check("live tier + no signing secret: counted as failed, not succeeded and not suppressed",
+      summary.failed === 1 && summary.succeeded === 0 && summary.suppressed === 0);
+    const logs = await getDeliveryLogs(hook.id);
+    check(`live tier + no signing secret: the refusal RECORDS a delivery row (found ${logs.length})`,
+      logs.length >= 1);
+    check("live tier + no signing secret: exactly ONE row — the refusal is permanent, not retried",
+      logs.length === 1);
+    check("live tier + no signing secret: the row names the missing secret, in the shared wording",
+      logs[0]?.error === SIGNING_SECRET_MISSING);
+    // The permanence branch itself (dispatch.ts:331). Every OTHER permanent reason
+    // is derived from WEBHOOK_URL_REFUSAL_REASONS above; this one is a standalone
+    // comparison, and a standalone string comparison going stale is the exact
+    // defect 5a exists to remember.
+    check("permanent: a missing signing secret is never retried (no retry mints a secret)",
+      isPermanentDeliveryError({ success: false, error: SIGNING_SECRET_MISSING }) === true);
+
+    // NON-VACUITY I — the signing refusal is not what a secretless webhook always
+    // gets. At a tier that never delivers, the same webhook is refused by the TIER,
+    // and the row says so.
+    process.env.SIGNALGRID_TIER = "dev";
+    delete process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+    const devHook = await createWebhook({
+      name: "proof-no-secret-dev",
+      url: "https://hooks.example.test/unsigned-dev",
+      events: ["badge.enroll"],
+    } as never);
+    await dispatchEvent("badge.enroll", { probe: true });
+    const devLogs = await getDeliveryLogs(devHook.id);
+    check("non-vacuity: the SAME secretless webhook at a non-delivering tier is refused by the tier, not the secret",
+      devLogs.length === 1 && devLogs[0]?.status === "suppressed" &&
+        devLogs[0]?.error !== SIGNING_SECRET_MISSING);
+
+    // NON-VACUITY II — ORDER. A plain-http target with no secret must be refused by
+    // the URL rule, which runs first. If the secret check ever moved above
+    // validateWebhookUrl, this row would read SIGNING_SECRET_MISSING and an operator
+    // would be told to configure a secret for a URL that can never be delivered to.
+    process.env.SIGNALGRID_TIER = "prod";
+    process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+    const orderHook = await createWebhook({
+      name: "proof-no-secret-bad-url",
+      url: "http://hooks.example.test/unsigned-plain",
+      events: ["policy.matched"],
+    } as never);
+    await dispatchEvent("policy.matched", { probe: true });
+    const orderLogs = await getDeliveryLogs(orderHook.id);
+    check("non-vacuity: URL validation runs BEFORE the secret check — a bad URL names the URL rule",
+      orderLogs.length === 1 && orderLogs[0]?.error === WEBHOOK_URL_REFUSALS.httpsRequired);
+  } finally {
+    if (savedTier === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedTier;
+    if (savedLive === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedLive;
+    if (savedRedis === undefined) delete process.env.REDIS_URL; else process.env.REDIS_URL = savedRedis;
+  }
+}
+
+// 5f. THE SECRET PATH, END TO END THROUGH THE TRANSPORT — and still offline.
+//
+//     5e proves the REFUSAL when no secret exists. On its own that is the weaker
+//     half: a dispatcher that refused everything would satisfy it. The other half —
+//     that a webhook holding a secret actually reaches the wire, and that what lands
+//     on the wire is SIGNED — needs the fetch to happen, and a proof that makes a
+//     network call is not offline.
+//
+//     Resolved with the record-and-throw spy `emit-gate-proof.ts` uses (there, to
+//     assert a fetch NEVER happens; here, to assert one does and to read what it
+//     carried). `globalThis.fetch` is replaced by a function that records the URL and
+//     the init, then throws before any socket is opened. Nothing leaves the process.
+//
+//     `maxAttempts: 1` is passed deliberately. The spy throws, which is a TRANSIENT
+//     error by every rule in retry.ts, so the default six attempts would fire the spy
+//     six times over ~63s of backoff — a slow proof whose central assertion ("exactly
+//     once") would be about the retry policy rather than about signing.
+{
+  const savedTier = process.env.SIGNALGRID_TIER;
+  const savedLive = process.env.SIGNALGRID_LIVE_INTEGRATIONS;
+  const savedRedis = process.env.REDIS_URL;
+  const realFetch = globalThis.fetch;
+  delete process.env.REDIS_URL;
+  process.env.SIGNALGRID_TIER = "prod";
+  process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+
+  const SECRET = "w".repeat(40);
+  const TARGET = "https://hooks.example.test/signed";
+  let calls: Array<{ url: string; headers: Record<string, string>; body: string }> = [];
+  const installSpy = (): void => {
+    calls = [];
+    globalThis.fetch = ((input: unknown, init?: { headers?: unknown; body?: unknown }): never => {
+      calls.push({
+        url: String(input),
+        headers: (init?.headers ?? {}) as Record<string, string>,
+        body: String(init?.body ?? ""),
+      });
+      throw new Error("FETCH INTERCEPTED — recorded and stopped before the socket");
+    }) as unknown as typeof globalThis.fetch;
+  };
+  // One attempt only: the assertion is about what the FIRST send carried.
+  const ONE_SHOT = { timeoutMs: 1000, retry: { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 1, jitterFactor: 0 } };
+
+  try {
+    const hook = await createWebhook({ name: "proof-signed", url: TARGET, events: ["siem.event"] } as never);
+    // The only secret source dispatch has in this tree (the store strips secretHash
+    // and carries no plaintext `_secret`) — so this is the real production seam,
+    // not a test-only injection point.
+    const ENV_KEY = `WEBHOOK_SECRET_${hook.id.slice(0, 8)}`;
+    process.env[ENV_KEY] = SECRET;
+    try {
+      installSpy();
+      await dispatchEvent("siem.event", { probe: true }, ONE_SHOT as never);
+
+      check(`with a secret configured, the delivery REACHES the transport exactly once (spy fired ${calls.length}x)`,
+        calls.length === 1);
+      const sent = calls[0];
+      check("…and it went to the configured target URL",
+        sent?.url === TARGET);
+      const sig = sent?.headers["X-Webhook-Signature"] ?? "";
+      check("the request that left carries the X-Webhook-Signature header",
+        /^[0-9a-f]{64}$/.test(sig));
+      // THE CENTRAL ASSERTION: the signature on the wire verifies against the BODY on
+      // the wire, under the secret the operator configured. This is what a receiver
+      // does, done here against the bytes dispatch actually handed to fetch — not
+      // against a payload this proof rebuilt and hoped matched.
+      check("the signature on the wire VERIFIES against the body on the wire, under the configured secret",
+        sig.length > 0 && signPayload(sent?.body ?? "", SECRET) === sig);
+      // Cross-checked with an independent HMAC, so this is not signPayload agreeing
+      // with itself.
+      check("…and verifies under an INDEPENDENT HMAC-SHA256 of the same body and secret",
+        sig.length > 0 && createHmac("sha256", SECRET).update(sent?.body ?? "", "utf8").digest("hex") === sig);
+      // The signed bytes must be the real event, not an empty or placeholder body.
+      check("the signed body is the actual event payload (non-empty, carries the event type)",
+        (sent?.body.length ?? 0) > 0 && (sent?.body ?? "").includes("siem.event"));
+      // A WRONG secret must not verify — otherwise the check above would pass for a
+      // receiver holding any key at all.
+      check("a receiver holding the WRONG secret does not verify the same body",
+        sig.length > 0 && signPayload(sent?.body ?? "", `${SECRET}x`) !== sig);
+
+      // RETRY RE-SENDS THE IDENTICAL SIGNED BODY. Three attempts, 1ms apart, with the
+      // spy recording each. A receiver deduplicates on X-Webhook-Delivery-Id and
+      // verifies the signature; if a retry re-signed fresh material — a new
+      // timestamp, a nonce, a re-serialised body with different key order — the
+      // second delivery would carry a different signature for the same delivery id,
+      // and a strict receiver would read that as forgery of an event it had already
+      // seen. The payload is built ONCE in dispatchEvent, above the retry loop, and
+      // this pins that.
+      installSpy();
+      await dispatchEvent("siem.event", { probe: true },
+        { timeoutMs: 1000, retry: { maxAttempts: 3, baseDelayMs: 1, maxDelayMs: 1, jitterFactor: 0 } } as never);
+      check(`a transient failure is retried to the configured ceiling (3 attempts, spy fired ${calls.length}x)`,
+        calls.length === 3);
+      const sigs = new Set(calls.map((c) => c.headers["X-Webhook-Signature"]));
+      const bodies = new Set(calls.map((c) => c.body));
+      check(`every retry re-sends the IDENTICAL signed body — one distinct signature across the attempts (found ${sigs.size})`,
+        calls.length === 3 && sigs.size === 1 && bodies.size === 1);
+      check("…and that one signature still verifies against that one body",
+        bodies.size === 1 && signPayload([...bodies][0] ?? "", SECRET) === ([...sigs][0] ?? ""));
+    } finally {
+      delete process.env[ENV_KEY];
+    }
+
+    // NON-VACUITY, the mirror of 5e: the SAME webhook shape with the secret removed
+    // must never reach the transport at all. Together with the block above this pins
+    // both directions — secret present, it sends and signs; secret absent, nothing
+    // is attempted, which is the only safe failure for an unsigned customer payload.
+    const bare = await createWebhook({ name: "proof-signed-nosecret", url: TARGET, events: ["telemetry.sync.completed"] } as never);
+    installSpy();
+    await dispatchEvent("telemetry.sync.completed", { probe: true }, ONE_SHOT as never);
+    check("without the secret the transport is NEVER reached — refused before the socket, not after",
+      calls.length === 0);
+    const bareLogs = await getDeliveryLogs(bare.id);
+    check("…and that untransmitted attempt is still recorded, naming the missing secret",
+      bareLogs.length === 1 && bareLogs[0]?.error === SIGNING_SECRET_MISSING);
+  } finally {
+    globalThis.fetch = realFetch;
+    if (savedTier === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedTier;
+    if (savedLive === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedLive;
+    if (savedRedis === undefined) delete process.env.REDIS_URL; else process.env.REDIS_URL = savedRedis;
+  }
+}
+
+// 6. THE SIGNATURE ITSELF.
+//
+//    PORTED from tests/security-reference/webhook-signing.test.ts. That spec asserted
+//    the invariants against HMACs it computed INLINE with node:crypto — so it would
+//    have passed with `signPayload` deleted, and it tested node, not this repository.
+//    Rewritten to drive lib/integrations' own `signPayload`/`createSignedHeaders`,
+//    which nothing else in the tree exercises: the only caller is dispatch.ts:264,
+//    and every dispatch assertion above stops BEFORE reaching it.
+//
+//    The reference HMAC is kept as an independent oracle — computed here, compared
+//    against the library — so this is a cross-check, not `f(x) === f(x)`.
+{
+  const secret = "s".repeat(32);
+  const payload = JSON.stringify({ event: "session.start", data: { sessionId: "sess-123" } });
+  const sig = signPayload(payload, secret);
+
+  check("signPayload emits SHA-256 hex: 64 lowercase hex characters", /^[0-9a-f]{64}$/.test(sig));
+  check("signPayload agrees with an independent HMAC-SHA256 of the same payload and secret",
+    sig === createHmac("sha256", secret).update(payload, "utf8").digest("hex"));
+  check("signPayload is deterministic — the same payload and secret sign identically",
+    signPayload(payload, secret) === sig);
+  check("a DIFFERENT secret produces a different signature (the secret is actually keyed in)",
+    signPayload(payload, `${secret}x`) !== sig);
+  check("a TAMPERED payload produces a different signature (one byte is enough)",
+    signPayload(JSON.stringify({ event: "session.start", data: { sessionId: "sess-124" } }), secret) !== sig);
+
+  const headers = createSignedHeaders(payload, secret, "delivery-1", "event-1");
+  check("createSignedHeaders carries the signature under X-Webhook-Signature",
+    headers["X-Webhook-Signature"] === sig);
+  check("createSignedHeaders carries the delivery and event ids a receiver dedupes on",
+    headers["X-Webhook-Delivery-Id"] === "delivery-1" && headers["X-Webhook-Event-Id"] === "event-1");
+  // STATED, NOT ASSERTED: `X-Webhook-Timestamp` is emitted (sign.ts:35) but is NOT
+  // part of the signed material — the HMAC covers the body alone. So the timestamp is
+  // attacker-mutable in transit and cannot carry replay protection, which is the job
+  // it looks like it is doing. Left as-is in this batch deliberately: signing it is a
+  // WIRE-FORMAT change every existing receiver would have to adopt in lockstep, so it
+  // needs its own decision and its own migration, not a quiet edit inside a proof.
+  // Tracked separately; this comment exists so the next reader does not mistake the
+  // header's presence for freshness coverage.
+  // The signature must cover the BODY. Signing the envelope ids instead would let a
+  // captured body be replayed under a fresh delivery id with a signature that still
+  // verifies — the header set would look correct and protect nothing.
+  check("the signature is over the PAYLOAD, not the envelope ids (a new delivery id re-signs the same body identically)",
+    createSignedHeaders(payload, secret, "delivery-2", "event-2")["X-Webhook-Signature"] === sig);
+  check("…and a changed body changes the header signature, with the ids held fixed",
+    createSignedHeaders(`${payload} `, secret, "delivery-1", "event-1")["X-Webhook-Signature"] !== sig);
 }
 
 const total = passed + failures.length;

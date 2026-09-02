@@ -275,7 +275,7 @@ Do **not** archive anything until every box is checked.
       (expected: build 0, typecheck 0, core 166/166, API 76/76).
 - [ ] `GET /api/healthz` on a `dev`/`alpha` run reports `"liveIntegrations": false`.
 - [ ] Branch protection active on `prod`/`beta` (direct push rejected; PR required).
-- [ ] The **Promote Tier** workflow opens a `dev → alpha` PR successfully (dry test).
+- [ ] ~~The **Promote Tier** workflow opens a `dev → alpha` PR successfully (dry test).~~ *Retired 2026-09-02: the promotion workflow and the tier branches are gone (see `docs/BRANCH_HYGIENE.md`); a replacement flow, if one is reconnected, needs its own dry test.*
 - [ ] Environments `dev/alpha/beta/prod` exist; `SIGNALGRID_LIVE_INTEGRATIONS` set only on `beta`/`prod`.
 - [ ] Keeper issues migrated; snapshot committed.
 

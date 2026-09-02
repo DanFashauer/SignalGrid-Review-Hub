@@ -27,16 +27,23 @@ const quick = process.argv.includes("--quick");
 // lockstep with those; a proof that runs in CI but not here would let a red build
 // pass preflight.
 //
-// WHAT IT DOES NOT COVER, stated because the previous wording here claimed a
-// green preflight "genuinely means CI will be green" and that was false. Six CI
-// jobs run on pull_request; this mirrors three. The other three need external
-// services and cannot run in this harness:
-//   durable-persistence  (Postgres audit ledger)
-//   deploy-stack         (Docker compose smoke)
-//   secret-scan          (gitleaks)
-// So a green preflight means EVERYTHING REPRODUCIBLE LOCALLY is green. Those
-// three are still proven only in CI, and a push can go red on them after a clean
-// preflight. `heavy` steps (full monorepo build) are skipped only under --quick.
+// WHAT IT DOES NOT COVER is NOT listed here. It is DERIVED and printed with the
+// verdict at the bottom of this file (`uncoveredLines()` from
+// ./lib/ci-jobs.mjs), and that is the only list to read.
+//
+// A hand-written copy stood in this slot and rotted exactly as you would expect.
+// It said "Six CI jobs run on pull_request; this mirrors three. The other three
+// need external services" and then named durable-persistence, deploy-stack and
+// secret-scan. Three errors in four lines: `review-hub-ci.yml:podman-stack` and
+// `review-hub-ci.yml:breadth` were never named at all, and `secret-scan` is a
+// `supply-chain.yml` job rather than a fourth review-hub-ci one — so the list
+// whose entire job is to enumerate what preflight does not prove was itself
+// under-reporting. Same defect as the three-string array the derived footer
+// replaced, re-introduced one comment higher up.
+//
+// So: a green preflight means EVERYTHING THIS HARNESS RUNS is green, and the
+// footer says what that leaves out, recomputed from `.github/workflows/` on
+// every run. `heavy` steps (full monorepo build) are skipped only under --quick.
 const STEPS = [
   // FIRST, because it is the first thing CI does and the cheapest way to be told
   // this push cannot even install. It was missing, and that omission let preflight
@@ -95,6 +102,12 @@ const STEPS = [
   // figure at all.
   { name: "Docs-HTML figure guard self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-doc-html-figures.mjs", "--self-test"] },
   { name: "Docs-HTML figures (a rendered page may not contradict a derived figure)", cmd: ["node", "scripts/check-doc-html-figures.mjs"] },
+  // Third sibling of the same family, for markdown figures the docs↔proof guard cannot
+  // reach because no proof publishes them: the Bruno request count, the Postman
+  // request/folder counts, the proof-script count. All three were repaired by hand on
+  // 2026-09-02 — a repair fixes the number and leaves the drift mechanism intact.
+  { name: "Derived-doc-figure self-test (a planted drift in each live document must fail)", cmd: ["node", "scripts/check-derived-doc-figures.mjs", "--self-test"] },
+  { name: "Derived doc figures (a stated count equals the artifact it describes)", cmd: ["node", "scripts/check-derived-doc-figures.mjs"] },
   // Two documents stated the four tier branches as live after all four were pruned.
   // Offline by design: it compares prose to the tracked prune record, not to origin.
   { name: "Documented-branch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-documented-branches.mjs", "--self-test"] },
@@ -107,6 +120,14 @@ const STEPS = [
   { name: "Absence-check self-test (a word in a disclaimer is not the thing existing)", cmd: ["node", "scripts/agent/absence-check.mjs", "--self-test"] },
   { name: "Package reachability (a library nobody ships is a library nobody runs)", cmd: ["node", "scripts/check-package-reachability.mjs"] },
   { name: "Core normalization-version (the provenance stamp must track the code it names)", cmd: ["node", "scripts/generate-core-normalization-version.mjs", "--check"] },
+  // Same shape as the stamp above, one document over. docs/CLAIM_INVENTORY.md is
+  // DERIVED from docs/agent/CLAIM_INVENTORY.json and says so in its own preamble —
+  // and until this line existed, nothing re-derived it: the generator was invoked by
+  // no lane and no workflow, so the JSON could change and the published Markdown
+  // would keep vouching for the old text. GATED on byte equality only; it says
+  // nothing about whether a claim is true (that is check-launch-claims.mjs).
+  { name: "Claim-inventory drift (the derived Markdown matches its JSON source)", cmd: ["node", "scripts/gen-claim-inventory-md.mjs", "--check"] },
+  { name: "Claim-inventory self-test (the drift check can actually fail)", cmd: ["node", "scripts/gen-claim-inventory-md.mjs", "--self-test"] },
   { name: "Guard-registry drift (coverage lists derived, not trusted)", cmd: ["node", "scripts/check-guard-registries.mjs"] },
   { name: "CI\u2194preflight drift (every proof runs in both places)", cmd: ["node", "scripts/check-ci-preflight-sync.mjs"] },
   // Pure static analysis of the Dockerfiles against pnpm-workspace.yaml — no
@@ -186,6 +207,11 @@ const STEPS = [
   // Sibling of NaN fail-open: guards the BOUND, not the timestamp.
   { name: "Posed-bound self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-posed-bounds.mjs", "--self-test"] },
   { name: "Posed bounds (a caller-posed numeric bound is never read with ??)", cmd: ["node", "scripts/check-posed-bounds.mjs"] },
+  // Third sibling: NaN fail-open guards the TIMESTAMP, posed-bounds guards the BOUND,
+  // this one guards the RULE — that only one body decides whether a future sighting
+  // is evidence of freshness, and that every copy that stays local says why.
+  { name: "Freshness-divergence self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-freshness-divergence.mjs", "--self-test"] },
+  { name: "Freshness divergence (one future/age rule, one body; exemptions REPORTED)", cmd: ["node", "scripts/check-freshness-divergence.mjs"] },
   { name: "CI liveness (a sweep that stops running must fail a build; self-tested)", cmd: ["node", "scripts/check-ci-liveness.mjs"] },
   { name: "CI job timeouts (an unbounded job is an unbounded outage; self-tested)", cmd: ["node", "scripts/check-ci-job-timeouts.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },

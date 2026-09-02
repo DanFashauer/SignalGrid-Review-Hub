@@ -60,12 +60,14 @@ export function createJwksCache(uri: string, fetchImpl: JwksFetch, ttlMs = 10 * 
 
   return {
     async get(nowMs: number, wantKid?: string): Promise<Jwks> {
+      // freshness: local-by-design — not the sighting-freshness rule — a JWKS CACHE TTL over a fetch this process performed itself, so there is no foreign clock to skew against
       const fresh = cached !== null && nowMs - fetchedAtMs < ttlMs;
       if (fresh && hasKid(cached, wantKid)) {
         return cached as Jwks;
       }
       // Fresh, but missing the key this token needs: refetch once per cooldown,
       // then fall back to the cache and let the caller reject the token.
+      // freshness: local-by-design — the same self-performed-fetch cache cooldown; no foreign clock, no skew
       if (fresh && nowMs - lastKidMissFetchAtMs < KID_MISS_COOLDOWN_MS) {
         return cached as Jwks;
       }

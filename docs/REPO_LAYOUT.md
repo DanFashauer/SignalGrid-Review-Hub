@@ -70,11 +70,12 @@ native/                  FOUR trees, not one: android/ (native port), desktop/,
                          ios/ (TWO Xcode apps — EnterpriseShell and SignalGridMobile),
                          shared/ (cross-port wire-conformance fixtures)
 firmware/dock/           SmartDock firmware core
-.github/workflows/       15 workflow files (`ls .github/workflows`, 2026-09-02):
+.github/workflows/       14 workflow files (`ls .github/workflows`, 2026-09-02):
                          review-hub-ci, supply-chain (SBOM + gitleaks + signing),
-                         codeql, pages, promote, ios-ci, android, desktop, firmware,
+                         codeql, pages, ios-ci, android, desktop, firmware,
                          mac-lane, branch-prune, pr-triage, phase-pr-evidence,
                          connector-emulator-smoke, scheduled-verification
+                         (promote was retired 2026-09-02 with the tier branches)
 ```
 
 ## The packages — all 43, derived not curated
@@ -162,10 +163,10 @@ or `prod`.
   unconditionally and for `beta`/`prod` unless `SIGNALGRID_LIVE_INTEGRATIONS=true`,
   so live vendor calls only ever happen in an explicitly-configured beta/prod deploy.
   **A tier is a deployment profile, not a branch.**
-- **The Promote Tier workflow still exists** (`.github/workflows/promote.yml`) and is
-  honest about this: its "Report tier state" step prints `branch does not exist` for
-  each missing tier rather than failing opaquely. It is dormant machinery for a
-  pipeline nobody is running.
+- **The Promote Tier workflow is gone too.** `.github/workflows/promote.yml` was
+  retired in the same sweep that pruned the branches: every promotion it could open
+  had an empty diff, and a `workflow_dispatch` whose inputs all name refs that
+  resolve to nothing can only fail. There is no automated promotion today.
 
 Reconnecting the pipeline is an owner decision with three defensible answers, set out
 in `docs/BRANCHING_AND_ENVIRONMENTS.md`. Until one is chosen, read the four-tier

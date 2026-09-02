@@ -150,6 +150,7 @@ export function gradeZonePresence(graph: FacilityGraph, input: ZonePresenceInput
     if (raw === null || typeof raw !== "object") return unknownVerdict("OBSERVATION_UNREADABLE");
     const ms = instantOf(raw.observed_at);
     if (ms === null) return unknownVerdict("OBSERVATION_UNREADABLE");
+    // freshness: local-by-design — same rule, but this package cannot import @workspace/integrations without a new workspace dependency and a lockfile regeneration; folded copy pending that change (tolerance 0; a future observation poisons the whole sequence as OBSERVATION_FUTURE_DATED)
     if (ms > referenceMs) return unknownVerdict("OBSERVATION_FUTURE_DATED");
     const spaceId = typeof raw.space_id === "string" ? raw.space_id.trim() : "";
     if (spaceId.length === 0 || graph.get(spaceId) === null) return unknownVerdict("OBSERVATION_UNREADABLE");
@@ -182,8 +183,10 @@ export function gradeZonePresence(graph: FacilityGraph, input: ZonePresenceInput
 
   const dwellMet = dwellMs >= p.entryDwellSeconds * 1000;
   const afterExit = seq.slice(lastIn + 1); // all not in zone, by construction
+  // freshness: local-by-design — exit-grace arithmetic over a sequence already proven non-future when it was normalized above; not an independent freshness derivation
   const withinGrace = referenceMs - seq[lastIn].ms <= p.exitGraceSeconds * 1000;
   const newest = seq[seq.length - 1];
+  // freshness: local-by-design — evidence-staleness over the same proven-non-future sequence; not an independent freshness derivation
   const evidenceStale = staleBound !== undefined && referenceMs - newest.ms > staleBound * 1000;
 
   if (!dwellMet) {

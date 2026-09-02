@@ -1,3 +1,4 @@
+import { ageMs } from "../../utils/freshness";
 import {
   type CollectionState,
   type EvidenceReliance,
@@ -129,12 +130,16 @@ export function normalizeObservabilityIntegrity(
   } else if (last === null) {
     freshness = "never_received";
   } else {
-    const age = Math.floor((now - last) / 1000);
-    if (age < 0) {
+    // Tolerance 0 (not the shared FUTURE_SKEW_TOLERANCE_MS): `referenceInstant` is
+    // posed by the caller, not read from a clock, and widening it would turn a
+    // future-dated datapoint from `unknown` (which raises) into `current`.
+    const ms = ageMs(last, now, 0);
+    if (ms === null) {
       // Dated in the future relative to the reference — an unreadable clock, not
       // freshness. Deliberately does NOT report an age it cannot vouch for.
       freshness = "unknown";
     } else {
+      const age = Math.floor(ms / 1000);
       ageSeconds = age;
       freshness =
         expectedIntervalSeconds === null

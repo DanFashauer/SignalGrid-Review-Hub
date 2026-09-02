@@ -124,6 +124,7 @@ export function deriveLifetimeStanding(
   if (expiresMs === null) return "unbounded";
   if (referenceMs === null) return "unknown";
   if (issuedMs !== null && issuedMs > expiresMs) return "unknown"; // self-contradictory — also flagged malformed
+  // freshness: local-by-design — not the sighting-freshness rule — CONTAINMENT of a reference instant inside a declared window, which has no age and no skew allowance by design — a credential lifetime, not a sighting
   return referenceMs <= expiresMs ? "within_lifetime" : "expired";
 }
 

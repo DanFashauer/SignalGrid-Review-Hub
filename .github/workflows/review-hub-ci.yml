@@ -4,10 +4,6 @@ on:
   pull_request:
   push:
     branches:
-      - dev
-      - alpha
-      - beta
-      - prod
       - SignalGrid_Alpha
   workflow_dispatch:
 
@@ -303,6 +299,10 @@ jobs:
         run: node scripts/check-posed-bounds.mjs --self-test
       - name: Posed bounds (a caller-posed numeric bound is never read with ??)
         run: node scripts/check-posed-bounds.mjs
+      - name: Freshness-divergence self-test (the gate must be able to fail)
+        run: node scripts/check-freshness-divergence.mjs --self-test
+      - name: Freshness divergence (one future/age rule, one body; exemptions REPORTED)
+        run: node scripts/check-freshness-divergence.mjs
       - name: CI liveness (a sweep that stops running must fail a build)
         run: node scripts/check-ci-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)
@@ -456,6 +456,14 @@ jobs:
         run: node scripts/check-doc-html-figures.mjs --self-test
       - name: "Docs-HTML figures (no rendered page contradicts a derived figure)"
         run: node scripts/check-doc-html-figures.mjs
+      # Markdown figures no proof publishes, so the docs↔proof guard cannot see them:
+      # the Bruno request count (docs/INDEX.md + the collection README), the Postman
+      # request/folder counts, the proof-script count. Derived from the artifacts
+      # themselves — no server is booted, only committed files are read.
+      - name: "Derived-doc-figure self-test (a planted drift in each live document must fail)"
+        run: node scripts/check-derived-doc-figures.mjs --self-test
+      - name: "Derived doc figures (a stated count equals the artifact it describes)"
+        run: node scripts/check-derived-doc-figures.mjs
       # Two documents stated the four tier branches as live after all four were
       # pruned, while BRANCH_HYGIENE.md recorded the opposite. Offline by design.
       - name: "Documented-branch self-test (the gate can actually fail)"
@@ -483,6 +491,14 @@ jobs:
       # would have passed on the very commit that introduced the artifacts.
       - name: "Core normalization-version (provenance stamp tracks the covered core source)"
         run: node scripts/generate-core-normalization-version.mjs --check
+      # Same shape, one document over: docs/CLAIM_INVENTORY.md is derived from
+      # docs/agent/CLAIM_INVENTORY.json and had no re-derivation anywhere — the
+      # generator ran in no lane and no workflow, so drift was silent and the
+      # document's own preamble vouched for whatever was committed.
+      - name: "Claim-inventory drift (the derived Markdown matches its JSON source)"
+        run: node scripts/gen-claim-inventory-md.mjs --check
+      - name: "Claim-inventory self-test (the drift check can actually fail)"
+        run: node scripts/gen-claim-inventory-md.mjs --self-test
       - name: "Proof — dual control"
         run: pnpm run proof:dual-control
       - name: "Pagination-truncation guard (a capped read must not look complete)"

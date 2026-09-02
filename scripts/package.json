@@ -15,7 +15,6 @@
     "db:migrate": "tsx ./src/db-migrate-cli.ts",
     "db:export-ledger": "tsx ./src/export-ledger-cli.ts",
     "verify:ledger-export": "tsx ./src/verify-ledger-export-cli.ts",
-    "hello": "tsx ./src/hello.ts",
     "level10:audit": "tsx ./src/level-10-audit.ts",
     "phase:gate": "tsx ./src/phase-gate.ts",
     "phase:pr-report": "tsx ./src/phase-pr-report.ts",

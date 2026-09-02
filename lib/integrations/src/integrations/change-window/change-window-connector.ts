@@ -22,6 +22,7 @@
 // for whether a change was approved — and an unlisted spelling is malformed, never
 // coerced.
 
+import { ageMs } from "../../utils/freshness";
 import {
   CHANGE_WINDOW_REPORT_KEYS,
   ChangeWindowConnectorError,
@@ -128,6 +129,7 @@ export function deriveChangeWindowStanding(
 ): ChangeWindowStanding {
   if (windowStartMs === null || windowEndMs === null || referenceMs === null) return "unknown";
   if (windowStartMs > windowEndMs) return "unknown"; // self-contradictory window — also flagged malformed
+  // freshness: local-by-design — not the sighting-freshness rule — CONTAINMENT of a reference instant inside a declared window, which has no age and no skew allowance by design — a change window, not a sighting. This file imports the helper for the freshness it does derive; that import does not and must not exempt this line.
   return referenceMs >= windowStartMs && referenceMs <= windowEndMs ? "inside" : "outside";
 }
 
@@ -173,8 +175,13 @@ export function deriveChangeRecordFreshness(
   if (observedMs === null || referenceMs === null) return "unknown";
   // A read timestamped after the caller's own reference instant is a contradiction,
   // not a very fresh read.
-  if (observedMs > referenceMs) return "unknown";
-  return referenceMs - observedMs <= maxChangeRecordAgeSeconds * 1000 ? "fresh" : "stale";
+  // Tolerance 0, NOT the shared FUTURE_SKEW_TOLERANCE_MS: this family's reference
+  // instant is POSED BY THE CALLER, not read from a clock, so there is no second
+  // clock to skew against — and widening to 60s would turn a future-dated read from
+  // `unknown` (which RAISES here) into `fresh`. A fold must never lower a verdict.
+  const age = ageMs(observedMs, referenceMs, 0);
+  if (age === null) return "unknown";
+  return age <= maxChangeRecordAgeSeconds * 1000 ? "fresh" : "stale";
 }
 
 export interface ChangeWindowNormalizeOptions {

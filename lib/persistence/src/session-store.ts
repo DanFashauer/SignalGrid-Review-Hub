@@ -59,6 +59,7 @@ function withExpiry(s: Session, nowMs: number): Session {
   // one comparison, and "unreachable today" is a property of the schema, not of
   // this function.
   const expiresAtMs = Date.parse(s.expiresAt);
+  // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (null-maps the opposite way); its gate is check-nan-fail-open.mjs — session expiry
   if (s.status === "active" && (!Number.isFinite(expiresAtMs) || expiresAtMs < nowMs)) {
     return { ...s, status: "expired" };
   }

@@ -69,6 +69,7 @@ function freshnessOf(lastSeenAt: string | null, nowMs: number): Freshness {
   if (!lastSeenAt) return "missing";
   const ts = Date.parse(lastSeenAt);
   if (Number.isNaN(ts)) return "unknown";
+  // freshness: local-by-design — same rule, but this package cannot import @workspace/integrations without a new workspace dependency and a lockfile regeneration; folded copy pending that change (tolerance 0; future sighting already reads `unknown`)
   const age = nowMs - ts;
   if (age < 0) return "unknown"; // report from the future → don't trust it
   if (age <= STALE_AFTER_MS) return "fresh";

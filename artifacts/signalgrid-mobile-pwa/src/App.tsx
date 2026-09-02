@@ -1,6 +1,5 @@
-import { lazy, Suspense, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
+import { lazy, Suspense, useState } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LifeBuoy, Home, List, Activity, Plug } from "lucide-react";
 // The default Access-support tab is lightweight and loads eagerly for an instant
@@ -11,8 +10,6 @@ const Overview = lazy(() => import("@/pages/Overview"));
 const Decisions = lazy(() => import("@/pages/Decisions"));
 const Signals = lazy(() => import("@/pages/Signals"));
 const Integrations = lazy(() => import("@/pages/Integrations"));
-
-const queryClient = new QueryClient();
 
 function MainLayout() {
   // This PWA is an operator/support surface on iOS/Android (per
@@ -55,12 +52,15 @@ function TabButton({ icon, label, active, onClick }: { icon: React.ReactNode, la
   );
 }
 
+// The tabs' data hooks are generated into @workspace/api-client-react on top of
+// react-query; this QueryClient is the data path (see the desktop App.tsx note).
+const queryClient = new QueryClient();
+
 function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <MainLayout />
-        <Toaster />
       </QueryClientProvider>
     </ErrorBoundary>
   );

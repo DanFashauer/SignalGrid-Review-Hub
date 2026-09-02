@@ -72,23 +72,29 @@ function stripComments(src) {
  * @param exceptions  the declared-exceptions list
  * @returns { fatal: string[], summary: { routesTotal, covered, excepted, requests } }
  */
-export function auditApiCollection({ routeFiles, indexSource, bruFiles, gaRoutes, exceptions }) {
-  const fatal = [];
-
-  // Only MOUNTED routers count: a route file removed from routes/index.ts but
-  // left on disk must not keep its registrations alive here — a v1 false-pass
-  // path. Not established by this: a router mounted conditionally at runtime;
-  // the api test suite exercises the configured app for that.
+/**
+ * Pure: the distinct `METHOD /normalized/path` pairs the mounted routers register.
+ *
+ * EXPORTED because `check-derived-doc-figures.mjs` fences the "78 distinct method+path
+ * pairs" figure the collection README states, and a second parser for "a registered
+ * route" would be a second place for that definition to drift. One parser, one
+ * definition, two consumers — the same reason `collectionRequestFiles` is exported.
+ *
+ * Only MOUNTED routers count: a route file removed from routes/index.ts but left on
+ * disk must not keep its registrations alive here — a v1 false-pass path. Not
+ * established by this: a router mounted conditionally at runtime; the api test suite
+ * exercises the configured app for that.
+ *
+ * Registrations are matched across LINE BREAKS. v1 matched single lines only, so the
+ * multi-line registration of POST /v1/policies/:id/versions/:versionId/activate
+ * (routes/v1.ts) was invisible — a request for a real route would have been flagged as
+ * matching nothing, and the reverse direction would have demanded coverage this checker
+ * could never see satisfied.
+ */
+export function parseRoutePairs({ routeFiles, indexSource }) {
   const mounted = new Set(
     [...indexSource.matchAll(/from\s+"\.\/([A-Za-z0-9-]+)"/g)].map((m) => `${m[1]}.ts`),
   );
-
-  // Registrations are matched across LINE BREAKS. v1 matched single lines
-  // only, so the multi-line registration of
-  // POST /v1/policies/:id/versions/:versionId/activate (routes/v1.ts) was
-  // invisible — a request for a real route would have been flagged as
-  // matching nothing, and the reverse direction would have demanded coverage
-  // this checker could never see satisfied.
   const routePairs = new Set();
   for (const [base, src] of Object.entries(routeFiles)) {
     if (!mounted.has(base)) continue;
@@ -98,6 +104,18 @@ export function auditApiCollection({ routeFiles, indexSource, bruFiles, gaRoutes
       routePairs.add(`${m[1].toUpperCase()} ${norm(m[2])}`);
     }
   }
+  return routePairs;
+}
+
+/** Read the mounted route files under `root` and count the distinct method+path pairs. */
+export function registeredRoutePairCount(root = ".") {
+  return parseRoutePairs(loadRoutes(root)).size;
+}
+
+export function auditApiCollection({ routeFiles, indexSource, bruFiles, gaRoutes, exceptions }) {
+  const fatal = [];
+
+  const routePairs = parseRoutePairs({ routeFiles, indexSource });
   if (routePairs.size === 0) {
     fatal.push("zero routes parsed from mounted route files — the parser, not the API, is broken");
   }
@@ -183,26 +201,38 @@ function walk(dir) {
   });
 }
 
-function load() {
+// The lab-service collections (Fleet, Traccar, Keycloak, Wazuh) live at
+// artifacts/lab-collections/ — OUTSIDE this collection — because their URLs
+// are third-party API paths, not api-server routes, and because Bruno
+// itself cannot run a collection that nests other collections (their
+// environments/ parse as requests from the parent). One collection, one
+// target server; the reverse direction below still demands a visible
+// request here for every api-server route.
+//
+// EXPORTED because `check-derived-doc-figures.mjs` fences the request COUNT that
+// docs/INDEX.md and the collection README both state, and a second copy of this walk
+// would be a second place for the definition of "a request file" to drift. One walk,
+// one definition, two consumers.
+export function collectionRequestFiles(root = ".") {
+  return walk(join(root, COLLECTION)).filter(
+    (f) => f.endsWith(".bru") && !f.includes("environments") && !f.endsWith("collection.bru"),
+  );
+}
+
+/** { routeFiles, indexSource } read from a repo root — shared by the gate and the count. */
+export function loadRoutes(root = ".") {
+  const dir = join(root, ROUTES_DIR);
   const routeFiles = {};
-  for (const f of walk(ROUTES_DIR).filter((f) => f.endsWith(".ts") && !f.endsWith("index.ts"))) {
+  for (const f of walk(dir).filter((f) => f.endsWith(".ts") && !f.endsWith("index.ts"))) {
     routeFiles[f.split("/").pop()] = readFileSync(f, "utf8");
   }
-  const indexSource = readFileSync(join(ROUTES_DIR, "index.ts"), "utf8");
+  return { routeFiles, indexSource: readFileSync(join(dir, "index.ts"), "utf8") };
+}
+
+function load() {
+  const { routeFiles, indexSource } = loadRoutes(".");
   const bruFiles = {};
-  // The lab-service collections (Fleet, Traccar, Keycloak, Wazuh) live at
-  // artifacts/lab-collections/ — OUTSIDE this collection — because their URLs
-  // are third-party API paths, not api-server routes, and because Bruno
-  // itself cannot run a collection that nests other collections (their
-  // environments/ parse as requests from the parent). One collection, one
-  // target server; the reverse direction below still demands a visible
-  // request here for every api-server route.
-  for (const f of walk(COLLECTION).filter(
-    (f) =>
-      f.endsWith(".bru") &&
-      !f.includes("environments") &&
-      !f.endsWith("collection.bru"),
-  )) {
+  for (const f of collectionRequestFiles()) {
     bruFiles[f] = readFileSync(f, "utf8");
   }
   const gaRoutes = parseGaRoutes(readFileSync(PROFILE_TS, "utf8"));
@@ -294,6 +324,25 @@ function selfTest() {
 
   const parsed = parseGaRoutes('const GA_ALLOWED_ROUTES: readonly x[] = [\n  { method: "GET", path: "/healthz" },\n  // comment\n  { method: "POST", path: "/v1/decisions/evaluate" },\n];');
   checks.push(["the GA parser reads method+path entries out of profile.ts source", parsed.length === 2 && parsed[1].path === "/v1/decisions/evaluate"]);
+
+  // The method+path pair COUNT is now a published figure (the collection README states
+  // it, and check-derived-doc-figures.mjs fences it against this parser). It is the same
+  // Set the reverse-direction check walks, so it can never disagree with the gate — but
+  // it must still refuse to report a vacuous zero.
+  const pairs = parseRoutePairs(good);
+  checks.push([
+    "the exported route-pair parser is the SAME set the gate uses — no second definition of 'a registered route'",
+    pairs.size === 2 && pairs.has("GET /v1/things") && pairs.has("POST /v1/things/*/activate"),
+  ]);
+  checks.push([
+    "…and it inherits the gate's exclusions: commented-out and unmounted registrations are not pairs",
+    !pairs.has("GET /v1/ghost") && !pairs.has("GET /orphaned"),
+  ]);
+  const liveRoot = join(import.meta.dirname ?? ".", "..");
+  checks.push([
+    "the live route-pair count is non-zero against the real tree — a 0 would be a broken parser reported as a figure",
+    registeredRoutePairCount(liveRoot) > 0,
+  ]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);

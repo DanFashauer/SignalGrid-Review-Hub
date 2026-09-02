@@ -193,6 +193,7 @@ export async function verifyRegistration(
   // That is the fail-closed rule inverted on an authentication surface: the one
   // input we cannot interpret was the one that bought unlimited time.
   const expiresAtMs = Date.parse(challengeData.challenge.expiresAt);
+  // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (null-maps the opposite way); its gate is check-nan-fail-open.mjs
   if (!Number.isFinite(expiresAtMs) || expiresAtMs < Date.now()) {
     return { success: false, error: 'Challenge expired', timestamp };
   }
@@ -408,6 +409,7 @@ export async function verifyAuthentication(
   // That is the fail-closed rule inverted on an authentication surface: the one
   // input we cannot interpret was the one that bought unlimited time.
   const expiresAtMs = Date.parse(challengeData.challenge.expiresAt);
+  // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (null-maps the opposite way); its gate is check-nan-fail-open.mjs
   if (!Number.isFinite(expiresAtMs) || expiresAtMs < Date.now()) {
     return { success: false, error: 'Challenge expired', timestamp };
   }
@@ -601,6 +603,7 @@ export async function verifyStepUp(sessionId: string): Promise<StepUpSession | n
   // read as complete. Found by external review after the in-repo reviewer passed
   // the same change. PARSE_EXPR now covers this form.
   const sessionExpiresAtMs = new Date(session.expiresAt).getTime();
+  // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (null-maps the opposite way); its gate is check-nan-fail-open.mjs
   if (!Number.isFinite(sessionExpiresAtMs) || sessionExpiresAtMs < Date.now()) {
     return null;
   }

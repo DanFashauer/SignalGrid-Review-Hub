@@ -9,7 +9,7 @@
 // call it in-line before an outbound request: siem/, syslog/, telemetry/ and
 // itsm/. It is NOT every outbound family: the repository has six emitter
 // families in all, and the other two — webhooks/ and caep-events/ — carry the
-// identical policy in their own `resolve*Emitter()` (each family's resolve.ts),
+// identical policy in the shared `createEmitterResolver()` (adapters/emitter-resolver.ts), which each family's resolve.ts calls,
 // because they additionally require an INJECTED transport this repository does
 // not ship. Six resolve.ts files, four callers of this one.
 //

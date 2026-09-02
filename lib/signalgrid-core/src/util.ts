@@ -115,9 +115,11 @@ export function classifyFreshness(
   }
   const observedMs = Date.parse(observedAtIso);
   const nowMs = Date.parse(nowIso);
+  // freshness: local-by-design — same rule, but this package cannot import @workspace/integrations without a new workspace dependency and a lockfile regeneration; folded copy pending that change — signalgrid-core is the BASE package with zero dependencies; the shared helper would have to move here, not be imported (tolerance 0, future reads `unknown`)
   if (Number.isNaN(observedMs) || Number.isNaN(nowMs) || observedMs > nowMs) {
     return "unknown";
   }
+  // freshness: local-by-design — the age arithmetic guarded by the future check immediately above; same local-by-design reason
   const ageHours = (nowMs - observedMs) / (1000 * 60 * 60);
   if (ageHours <= freshWindowHours) {
     return "fresh";

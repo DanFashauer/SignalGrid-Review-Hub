@@ -81,7 +81,12 @@ dev  ──▶  alpha  ──▶  beta  ──▶  prod
 | `beta`, `prod` | Gated: only with `SIGNALGRID_LIVE_INTEGRATIONS=true` **and** real creds |
 
 Details: [`docs/BRANCHING_AND_ENVIRONMENTS.md`](docs/BRANCHING_AND_ENVIRONMENTS.md).
-Promote with the **Promote Tier** workflow (`.github/workflows/promote.yml`).
+
+> The tier **branches** and the **Promote Tier** workflow that opened promotion
+> PRs between them were retired on 2026-09-02 (see `docs/BRANCH_HYGIENE.md`);
+> the tiers above survive as deployment **environments**, selected by
+> `SIGNALGRID_TIER`. Promotion is a manual PR until a replacement workflow
+> exists.
 
 ## Quickstart
 

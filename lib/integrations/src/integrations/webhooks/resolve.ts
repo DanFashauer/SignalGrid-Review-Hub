@@ -10,61 +10,33 @@
 // THE FIXTURE EMITTER NEVER CLAIMS DELIVERY. Every record it captures carries
 // `delivered: false` and the mode that produced it — the same unrepresentable-
 // lie shape as the other five families.
+//
+// The mechanical part of this (tier/flag/token/transport checks, the fixture
+// recorder) is shared with the other five families via
+// `../adapters/emitter-resolver` — Ponytail cut 4 folded six near-identical
+// bodies into one factory. This file is the family's binding: its payload
+// shape, its token env var, its fixture-reason text.
 
-/** What this family emits, opaque at the gate. The vendor modules type their own
- *  payloads; the gate decides WHETHER anything may leave, not what it looks like. */
-export type WebhookEmitPayload = Record<string, unknown>;
+import {
+  createEmitterResolver,
+  type EmitPayload,
+  type EmitTransport,
+  type EmitterResolution,
+  type FixtureEmitter,
+  type FixtureRecord,
+} from "../adapters/emitter-resolver";
 
-/** A live delivery transport. Deliberately NOT implemented in this repository. */
-export type WebhooksEmitTransport = (payload: WebhookEmitPayload) => Promise<void>;
-
-/** One captured fixture emission. `delivered` is a literal false — the type
- *  cannot express a fixture record that claims it was sent. */
-export interface WebhooksFixtureRecord {
-  readonly seq: number;
-  readonly payload: WebhookEmitPayload;
-  readonly delivered: false;
-  readonly mode: "fixture";
-}
-
-/** Deterministic in-memory recorder — no network, no clock, no randomness. */
-export class WebhooksFixtureEmitter {
-  private readonly log: WebhooksFixtureRecord[] = [];
-  record(payload: WebhookEmitPayload): WebhooksFixtureRecord {
-    const entry: WebhooksFixtureRecord = { seq: this.log.length + 1, payload, delivered: false, mode: "fixture" };
-    this.log.push(entry);
-    return entry;
-  }
-  entries(): readonly WebhooksFixtureRecord[] {
-    return this.log;
-  }
-}
-
-export type WebhooksEmitterResolution =
-  | { readonly mode: "fixture"; readonly reason: string; readonly emitter: WebhooksFixtureEmitter }
-  | { readonly mode: "live"; readonly deliver: WebhooksEmitTransport };
+export type WebhookEmitPayload = EmitPayload;
+export type WebhooksEmitTransport = EmitTransport<WebhookEmitPayload>;
+export type WebhooksFixtureRecord = FixtureRecord<WebhookEmitPayload>;
+export type WebhooksFixtureEmitter = FixtureEmitter<WebhookEmitPayload>;
+export type WebhooksEmitterResolution = EmitterResolution<WebhookEmitPayload>;
 
 /**
  * Decide whether this deployment may make a live webhooks emission.
  * Fail-closed and unanimous; the transport must be INJECTED.
  */
-export function resolveWebhooksEmitter(
-  env: NodeJS.ProcessEnv = process.env,
-  transportOverride?: WebhooksEmitTransport,
-): WebhooksEmitterResolution {
-  const fixture = (reason: string): WebhooksEmitterResolution => ({ mode: "fixture", reason, emitter: new WebhooksFixtureEmitter() });
-  const tier = (env["SIGNALGRID_TIER"] ?? "dev").toLowerCase();
-  if (tier !== "beta" && tier !== "prod") {
-    return fixture(`tier "${tier}" never makes live vendor calls`);
-  }
-  if (env["SIGNALGRID_LIVE_INTEGRATIONS"] !== "true") {
-    return fixture("SIGNALGRID_LIVE_INTEGRATIONS is not 'true'");
-  }
-  if (!env["WEBHOOKS_EMITTER_TOKEN"]?.trim()) {
-    return fixture("WEBHOOKS_EMITTER_TOKEN is not set");
-  }
-  if (!transportOverride) {
-    return fixture("no webhooks delivery transport is available — this repository ships none");
-  }
-  return { mode: "live", deliver: transportOverride };
-}
+export const resolveWebhooksEmitter = createEmitterResolver<WebhookEmitPayload>({
+  tokenEnvVar: "WEBHOOKS_EMITTER_TOKEN",
+  noTransportReason: "no webhooks delivery transport is available — this repository ships none",
+});

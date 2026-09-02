@@ -4,10 +4,6 @@ name: Supply Chain
 on:
   push:
     branches:
-      - dev
-      - alpha
-      - beta
-      - prod
       - SignalGrid_Alpha
   pull_request:
   schedule:

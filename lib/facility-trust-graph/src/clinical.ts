@@ -333,6 +333,7 @@ export function gradeExplicitSelection(
 
   // Future-dated is never valid, bound or no bound — an attestation from the
   // future is a clock problem the ceremony cannot vouch through.
+  // freshness: local-by-design — same rule, but this package cannot import @workspace/integrations without a new workspace dependency and a lockfile regeneration; folded copy pending that change (tolerance 0; future attestation reads `future_dated`, this family's raising member)
   if (attestedMs !== null && referenceMs !== null && attestedMs > referenceMs) {
     return { standing: "future_dated", method, attestedAt };
   }
@@ -342,6 +343,7 @@ export function gradeExplicitSelection(
     return { standing: "unverifiable", method, attestedAt };
   }
   if (attestedMs === null || referenceMs === null) return { standing: "unverifiable", method, attestedAt };
+  // freshness: local-by-design — the age arithmetic guarded by the future check above; same local-by-design reason
   return referenceMs - attestedMs <= bound * 1000 ? { standing: "valid", method, attestedAt } : { standing: "stale", method, attestedAt };
 }
 

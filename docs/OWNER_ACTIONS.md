@@ -58,24 +58,26 @@ but were pinned to the `Merge PR #65` commit — accurate on the day it was writ
 and false once they were pruned. A pruned ref is recoverable in one command
 (`git push origin 7ee88ef:refs/heads/<name>`), so recreating the pipeline is still
 an owner decision; it is just no longer a decision about which EXISTING branch is
-default. Dispatch **Actions → Promote Tier** for live state: its "Tier state"
-summary prints `branch does not exist` for each missing tier rather than restating
-a number that would go stale the same way.
+default. There is no workflow left to ask: **Promote Tier**
+(`.github/workflows/promote.yml`) was retired 2026-09-02 along with the branches it
+dispatched against. For live state run `git ls-remote --heads origin` rather than
+trusting a number here, which would go stale the same way.
 
 > Separately, and **not** something you need to fix: this repository does not let
 > GitHub Actions open pull requests (*Settings → Actions → General → Workflow
-> permissions*), which is GitHub's default and the safer posture. Promote Tier now
-> hands back a one-click compare link instead of failing. Turning that setting on
-> would let it open the PR for you and buys nothing else.
+> permissions*), which is GitHub's default and the safer posture. It is recorded
+> here because it constrains any replacement promotion workflow: a job-level
+> `pull-requests: write` grant cannot override it, so such a workflow must hand back
+> a `compare/...?expand=1` link instead of opening the PR itself.
 
 That makes this a decision about the *pipeline*, not just a label. Pick under
 **Settings → General → Default branch**:
 
 - Keep **`SignalGrid_Alpha`** as default and treat the tier branches as dormant —
   honest, and worth then deleting them so they stop implying a live pipeline; or
-- Switch the default to **`dev`** and fast-forward the tier branches, which
-  reconnects the promotion model end to end (work lands at the entry point, and
-  `Promote Tier` starts having something to carry); or
+- Recreate `dev`, switch the default to it and fast-forward the tier branches,
+  which reconnects the promotion model end to end (work lands at the entry point).
+  This also means writing a replacement promotion workflow; or
 - Switch to **`prod`**/`beta` so the default reflects the promotion model's stable
   end — see `docs/REPO_LAYOUT.md` for the tier map. Note this only helps once the
   tiers are actually fed; on today's refs it would make a stale commit the repo's

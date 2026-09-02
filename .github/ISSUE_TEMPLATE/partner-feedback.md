@@ -2,7 +2,6 @@
 name: Partner feedback
 about: Evaluation feedback after a demo, a self-hosted lab, or a tenant shadow run
 title: "Partner feedback: <workflow or scenario evaluated>"
-labels: partner-feedback
 ---
 
 <!-- Every submission gets an answer with a reason — feedback is triaged into

@@ -167,6 +167,17 @@ Use Santa as future endpoint-security/execution evidence research. Keep it defer
 
 Study ReportMate primarily as a reference for combining Mac/osquery collection, API exposure and MCP. Treat its server/API/MCP licensing as a separate review before any reuse. Do not embed AGPL/server code into the MIT Review Hub by convenience.
 
+## Review stack — Ponytail (owner-directed, DR-024)
+
+Ponytail (`@dietrichgebert/ponytail` v4.9.0, MIT, pinned to commit `2ed6c52`, vetted 2026-09-01) is the **top lens of the review stack** under DR-024. It is a **minimalism lens** — a seven-rung ladder applied before code is written (does it need to exist → is it already in this codebase → stdlib → native platform → installed dependency → one line → only then the minimum). It ranks and licenses removal; the other lenses judge whether what remains is right.
+
+- **Install:** `pnpm run ponytail:install` (`scripts/install-ponytail.mjs`) — clones to `$PONYTAIL_DIR` (default `~/dietrichgebert/ponytail`), checks out the **pinned commit `2ed6c52`**, `claude plugin validate`s it, registers that LOCAL CLONE as the marketplace, installs `ponytail@ponytail` at **user scope** non-interactively, and sets default mode `ultra`. The pin is the point: `/plugin marketplace add DietrichGebert/ponytail` tracks the author's moving HEAD, which this repository does not permit. Every step exits 1 on failure.
+- **Hooks ON, unlike ECC's.** Read 2026-09-01: three small Node scripts that only inject the ruleset text and record the mode under `~/.config/ponytail` — no child process, no network, no secret reads. ECC's hooks *run passes*; Ponytail's only speak. That difference is the whole reason one set is installed and the other is not.
+- **What it never cuts.** Trust-boundary validation, error handling that prevents data loss, security, accessibility, anything explicitly requested, and one runnable check per non-trivial logic. Its never-cut list protects exactly what the fail-closed doctrine protects, which is why "Ponytail on top" does not fight this repository's gates — the first audit left every proof, guard and `default:` arm in place.
+- **What it is NOT.** By its own charter it is **not** a correctness, security, or performance reviewer, and it certifies nothing green. A Ponytail-clean diff is a diff with nothing surplus in it, not a diff that works. Correctness routes to a normal review pass (ECC, then this repository's own sweeps); `preflight` + `verify:breadth` are still the only things that say green.
+- **Skills:** `ponytail` (the ladder), `-review` (per diff), `-audit` (ranked cut list), `-debt` (deliberate-shortcut ledger), `-gain`, `-help`. The audit's cut list is **executed**, not merely noted — bounded by the never-cut rules above and by this repository's gates.
+- **Evidence:** `docs/agent/PONYTAIL_AUDIT_2026-09-01.md` (first scan, three parallel auditors, `ultra`), `docs/DECISION_RECORDS.md` DR-024, `docs/agent/RESOURCE_INTAKE.md` (row 2026-09-01).
+
 ## Web research and source verification — Firecrawl (owner-directed, DR-022)
 
 Firecrawl (web → LLM-ready markdown) is the **research / source-verification** lane, adopted on top of ECC by owner direction (DR-022). It answers "what does this external page actually say" — competitive intel, verifying an outside claim, reading a vendor doc — the same job a human browser does, faster.

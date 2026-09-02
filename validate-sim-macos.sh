@@ -6,7 +6,7 @@
 # Silicon Mac — WITHOUT Docker. The repo's pnpm-workspace.yaml strips every
 # non-linux-x64 native binary, which long read as "the web build cannot run here".
 # It can: nothing about the SOURCES is linux-only, so this harness supplies the
-# four stripped darwin binaries for the run and builds all six web artifacts too.
+# four stripped darwin binaries for the run and builds every web artifact too.
 # The simulator + proof gates are pure TS via tsx. Everything runs natively.
 #
 #   ./validate-sim-macos.sh            # full suite
@@ -17,6 +17,24 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 SIM_ONLY="${1:-}"
+
+# How many web artifacts `pnpm run build` produces — DERIVED from the workspace,
+# never typed. This said "6" in four places and went stale the moment
+# artifacts/mockup-sandbox was deleted (ponytail cut 3), so the harness announced a
+# gate over a population that no longer existed. The count is the number of
+# artifacts whose build script invokes vite.
+#
+# bash 3.2 (the only bash on a stock Mac): plain command substitution and `wc -l`
+# only — no mapfile, no `${var@Q}`, no arrays to expand under `set -u`.
+WEB_ARTIFACTS=$(grep -lE '"build"[[:space:]]*:[[:space:]]*"[^"]*vite build' artifacts/*/package.json 2>/dev/null | wc -l | tr -d '[:space:]')
+# FLOOR. A derivation that finds nothing must not be reported as "0 web artifacts
+# built" — that reads as a fact and is a broken parse. Refuse instead.
+if [ "${WEB_ARTIFACTS:-0}" -lt 1 ]; then
+  echo "FATAL: derived 0 web artifacts from artifacts/*/package.json — the parse drifted," >&2
+  echo "       or this is not the repo root. Refusing to run a suite that cannot count" >&2
+  echo "       what it builds. (Expected: package.json files whose build script runs vite.)" >&2
+  exit 1
+fi
 
 # -- pnpm: prefer an on-PATH pnpm, else corepack, else a shim -----------------
 if command -v pnpm >/dev/null 2>&1; then PNPM=pnpm
@@ -56,7 +74,7 @@ run install --frozen-lockfile >/tmp/sgval_install.log 2>&1 || { echo "install fa
 # This covers tsx's esbuild AND the web build's toolchain. The header of this file
 # used to say the web build was unrunnable here; that was wrong in an important
 # way. Nothing about the SOURCES is linux-only — only the four native binaries the
-# workspace strips are. Supply them for the run and all six web artifacts build on
+# workspace strips are. Supply them for the run and every web artifact builds on
 # darwin/arm64. "The build is linux-x64-only" was a fact about node_modules being
 # read as a fact about the code.
 PLAT="$(uname -s | tr 'A-Z' 'a-z')-$(uname -m | sed 's/x86_64/x64/')"
@@ -76,7 +94,7 @@ want "@rollup/rollup-$PLAT"     "$(pkg_ver rollup)"
 # now resolves to an empty version and adds nothing, and this line is the one that
 # actually supplies the bundler. Without it `vite build` dies on darwin with
 # "Cannot find module '@rolldown/binding-darwin-arm64'" and the harness reports
-# `build (6 web artifacts)` failed on a tree that is fine — which is exactly what
+# the `build (N web artifacts)` gate failed on a tree that is fine — exactly what
 # it did once the web packages moved to Vite 8. pnpm-workspace.yaml strips this
 # binding like all the others; the list here has to track the bundler.
 want "@rolldown/binding-$PLAT"  "$(pkg_ver rolldown)"
@@ -244,7 +262,7 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
 
   echo; echo "== non-proof gates =="
   gate "typecheck"            $PNPM run typecheck
-  gate "build (6 web artifacts)" $PNPM run build
+  gate "build ($WEB_ARTIFACTS web artifacts)" $PNPM run build
   gate "test:api"             $PNPM run test:api
   gate "safety:check"         $PNPM run safety:check
   gate "docs:sanity"          $PNPM run docs:sanity
@@ -262,7 +280,7 @@ echo
 echo "== NOTE: the web build now RUNS here (it used to be skipped) =="
 echo "   — the vite/rollup/lightningcss/tailwind darwin binaries this repo strips are"
 echo "     added to node_modules for the run, exactly as tsx's esbuild binary always"
-echo "     was. Nothing about the sources is linux-only; all 6 artifacts build on arm64."
+echo "     was. Nothing about the sources is linux-only; all $WEB_ARTIFACTS web artifacts build on arm64."
 echo
 echo "== SUMMARY: $pass passed, $fail failed, $SKIPPED skipped =="
 if [ "$fail" -ne 0 ]; then echo "   failed:$failed_gates"; exit 1; fi

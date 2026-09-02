@@ -10,61 +10,33 @@
 // THE FIXTURE EMITTER NEVER CLAIMS DELIVERY. Every record it captures carries
 // `delivered: false` and the mode that produced it — the same unrepresentable-
 // lie shape as the other five families.
+//
+// The mechanical part of this (tier/flag/token/transport checks, the fixture
+// recorder) is shared with the other five families via
+// `../adapters/emitter-resolver` — Ponytail cut 4 folded six near-identical
+// bodies into one factory. This file is the family's binding: its payload
+// shape, its token env var, its fixture-reason text.
 
-/** What this family emits, opaque at the gate. The vendor modules type their own
- *  payloads; the gate decides WHETHER anything may leave, not what it looks like. */
-export type TelemetryEmitPayload = Record<string, unknown>;
+import {
+  createEmitterResolver,
+  type EmitPayload,
+  type EmitTransport,
+  type EmitterResolution,
+  type FixtureEmitter,
+  type FixtureRecord,
+} from "../adapters/emitter-resolver";
 
-/** A live delivery transport. Deliberately NOT implemented in this repository. */
-export type TelemetryEmitTransport = (payload: TelemetryEmitPayload) => Promise<void>;
-
-/** One captured fixture emission. `delivered` is a literal false — the type
- *  cannot express a fixture record that claims it was sent. */
-export interface TelemetryFixtureRecord {
-  readonly seq: number;
-  readonly payload: TelemetryEmitPayload;
-  readonly delivered: false;
-  readonly mode: "fixture";
-}
-
-/** Deterministic in-memory recorder — no network, no clock, no randomness. */
-export class TelemetryFixtureEmitter {
-  private readonly log: TelemetryFixtureRecord[] = [];
-  record(payload: TelemetryEmitPayload): TelemetryFixtureRecord {
-    const entry: TelemetryFixtureRecord = { seq: this.log.length + 1, payload, delivered: false, mode: "fixture" };
-    this.log.push(entry);
-    return entry;
-  }
-  entries(): readonly TelemetryFixtureRecord[] {
-    return this.log;
-  }
-}
-
-export type TelemetryEmitterResolution =
-  | { readonly mode: "fixture"; readonly reason: string; readonly emitter: TelemetryFixtureEmitter }
-  | { readonly mode: "live"; readonly deliver: TelemetryEmitTransport };
+export type TelemetryEmitPayload = EmitPayload;
+export type TelemetryEmitTransport = EmitTransport<TelemetryEmitPayload>;
+export type TelemetryFixtureRecord = FixtureRecord<TelemetryEmitPayload>;
+export type TelemetryFixtureEmitter = FixtureEmitter<TelemetryEmitPayload>;
+export type TelemetryEmitterResolution = EmitterResolution<TelemetryEmitPayload>;
 
 /**
  * Decide whether this deployment may make a live telemetry emission.
  * Fail-closed and unanimous; the transport must be INJECTED.
  */
-export function resolveTelemetryEmitter(
-  env: NodeJS.ProcessEnv = process.env,
-  transportOverride?: TelemetryEmitTransport,
-): TelemetryEmitterResolution {
-  const fixture = (reason: string): TelemetryEmitterResolution => ({ mode: "fixture", reason, emitter: new TelemetryFixtureEmitter() });
-  const tier = (env["SIGNALGRID_TIER"] ?? "dev").toLowerCase();
-  if (tier !== "beta" && tier !== "prod") {
-    return fixture(`tier "${tier}" never makes live vendor calls`);
-  }
-  if (env["SIGNALGRID_LIVE_INTEGRATIONS"] !== "true") {
-    return fixture("SIGNALGRID_LIVE_INTEGRATIONS is not 'true'");
-  }
-  if (!env["TELEMETRY_EMITTER_TOKEN"]?.trim()) {
-    return fixture("TELEMETRY_EMITTER_TOKEN is not set");
-  }
-  if (!transportOverride) {
-    return fixture("no telemetry delivery transport is available — this repository ships none");
-  }
-  return { mode: "live", deliver: transportOverride };
-}
+export const resolveTelemetryEmitter = createEmitterResolver<TelemetryEmitPayload>({
+  tokenEnvVar: "TELEMETRY_EMITTER_TOKEN",
+  noTransportReason: "no telemetry delivery transport is available — this repository ships none",
+});

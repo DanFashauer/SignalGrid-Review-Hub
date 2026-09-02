@@ -44,6 +44,7 @@
 // default: a caller (and every proof) must supply it, so the same tenant response
 // always produces the same report for a given instant.
 
+import { ageMs } from "../../utils/freshness";
 import { DeviceManagementHealthConnectorError, type DeviceManagementHealthReportRaw } from "./types";
 import type { DeviceManagementHealthTransport } from "./device-management-health-connector";
 
@@ -87,11 +88,13 @@ export function mapCheckInFreshness(lastSyncDateTime: unknown, now: Date, staleA
   if (!Number.isFinite(t)) return "unknown";
   // Graph returns the Unix epoch for a device that has never checked in.
   if (t <= 0) return "never";
-  const ageHours = (now.getTime() - t) / 3_600_000;
   // A timestamp in the future is not "extremely fresh" — it is a clock or tenant
   // problem, and reading it as fresh would let a skewed device look healthy forever.
-  if (ageHours < 0) return "unknown";
-  return ageHours <= staleAfterHours ? "fresh" : "stale";
+  // Tolerance 0: `now` is injected by the caller (`GraphTransportOptions.now`) for
+  // determinism, so it is a posed reference, not a wall clock racing the tenant's.
+  const age = ageMs(t, now.getTime(), 0);
+  if (age === null) return "unknown";
+  return age / 3_600_000 <= staleAfterHours ? "fresh" : "stale";
 }
 
 /**

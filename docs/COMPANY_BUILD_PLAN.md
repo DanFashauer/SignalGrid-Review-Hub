@@ -3057,6 +3057,38 @@ earlier — that is the loop working, not a reason to soften the record.
     FIX: treat a negative age as `unknown`, matching `local-authority`'s shape — NOT
     `overdue`, which would assert a lapse nobody established. The `no_policy` branch
     needs the same. Add a proof case feeding a future `lastRotatedAt`.
+    CORRECTION, 2026-09-02. "Matching `local-authority`'s shape" was true of ONE of
+    its two branches. A survey that read every now-comparison in `lib/*/src` — rather
+    than trusting this entry — found `local-authority`'s `no_grant_policy` branch
+    computing `Math.floor((now - issued) / 1000)` with NO future guard, publishing
+    `grantAgeSeconds: -21600` for a grant dated SIX hours ahead (REF `12:00:00Z`,
+    `grantIssuedAt` `18:00:00Z`). This entry and the proof's own comment both said
+    "seven hours" and `-25200` for one day; re-planting the pre-fold line and running
+    `pnpm run proof:local-authority` prints `... not a negative one (got -21600)`,
+    `summary=fail (36/37)`. The standing was
+    never wrong (`no_grant_policy` either way); the published age was. The copy this
+    entry held up as the correct one was only three-quarters correct, which is the
+    argument for one body rather than five good comments. Fixed by folding both
+    branches onto `utils/freshness.ts`'s `ageMs`, pinned by a new assertion in
+    `local-authority-proof` (36 -> 37) that fails on the pre-fold code. The same
+    survey measured the tolerances and got that wrong too. It reported TWO distinct
+    values, 60s and zero, "not the three an earlier audit reported". There are THREE,
+    and the earlier audit was right: the survey ran through
+    `scripts/check-freshness-divergence.mjs`, whose `now` pattern excluded a literal
+    `Date.now()`, so `lib/location/src/validate.ts` — `Date.now() - input.observedAt`
+    rejected at `< -30_000` — was never matched and never counted. Measured set, from
+    `grep -rnE 'SKEW_MS|SKEW_TOLERANCE_MS|< *-[0-9_]+' lib/*/src --include=*.ts | grep -vE '//'`
+    (six lines, three files): **60s** in `utils/freshness.ts`
+    (`FUTURE_SKEW_TOLERANCE_MS`), **60s** in `verdict-attestation/attest.ts:18`
+    (`DEFAULT_MAX_SKEW_MS`), **30s** in `lib/location/src/validate.ts:10`, and **0**
+    everywhere else. The remembered "5 minutes" is `DEFAULT_MAX_AGE_MS = 5 * 60_000`,
+    a staleness BOUND and not a skew tolerance — that part stands. The 30s site is
+    marked local-by-design, not folded: `@workspace/location` declares no dependency
+    on `@workspace/integrations`, and it REJECTS the input rather than resolving to
+    `unknown`. Divergence is now gated by `scripts/check-freshness-divergence.mjs`,
+    which — corrected the same day — no longer exempts a whole file for importing the
+    helper (that hole covered twelve files) and no longer accepts an empty exemption
+    reason.
 
 127. **`edr-threat` reports full protection from an unreadable signature age,
     contradicting its own comment.** — OPEN, secops-domain. `evaluate.ts:87-88`
@@ -3432,9 +3464,10 @@ earlier — that is the loop working, not a reason to soften the record.
     The one place REAL actions are checked reads
     `typeof action.approvalRequired === "boolean"` — and `false` is a boolean, so an
     action that dropped its approval requirement passes.
-    The fabricated array is also serialised into `artifacts/proof/signalgrid-grid-proof.json`
-    under `highRiskActionGates`, so the invented result LEAVES the proof as published
-    evidence. The run prints "approval-gate violations: 0" and exits 0.
+    The fabricated array is also serialised under `highRiskActionGates` into the
+    grid-proof evidence JSON that `pnpm run proof:signalgrid-grid` generates into
+    `artifacts/proof/` (gitignored), so the invented result LEAVES the proof as
+    published evidence. The run prints "approval-gate violations: 0" and exits 0.
     FIX: delete the literal. Derive the gate set from the routed actions the simulator
     actually emits, classify by kind/severity, and assert every high-risk action
     carries both flags true — plus a non-vacuity assertion that the class is non-empty,

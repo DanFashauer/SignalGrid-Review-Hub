@@ -295,6 +295,31 @@ Run every relevant proof/test in addition. On Mac, use
 `./validate-sim-macos.sh` where applicable and execute queued sim-requests.
 Never compare against a stale hard-coded pass total. Never convert "not run" into
 "pass." If the environment blocks validation, report that limitation.
+## Layer roster (DR-024)
+Five lenses, in order. None certifies green by itself; only `preflight` +
+`verify:breadth` do that.
+1. **Ponytail — top.** Minimalism lens, `ultra`. `ponytail-audit` ranks the cut list
+   and it is EXECUTED; `ponytail-review` runs on every diff; `ponytail-debt` keeps the
+   deliberate-shortcut ledger. Never cuts trust-boundary validation, error handling that
+   prevents data loss, security, accessibility, anything explicitly requested, or one
+   runnable check per non-trivial logic. It is NOT a correctness/security/performance
+   reviewer. `pnpm run ponytail:install` (pinned `2ed6c52`, MIT).
+2. **ECC — second.** Correctness, security, architecture, test discipline. DR-016;
+   DR-021 §4 stands — ECC advises.
+3. **The owner's builds.** What the owner supplies is scanned by 1, then 2, before it
+   lands.
+4. **The independent scan.** This repository's own sweeps: fail-closed inversions,
+   contract drift, runtime truth, claim discipline — the classes neither 1 nor 2 targets.
+5. **Converge and execute.** Rank findings from every lens, build, gate, PR, merge.
+Three things sit BESIDE the ladder rather than on it:
+- **Firecrawl (DR-022)** — research and source verification only. External web content,
+  never a verdict, never a decision path or proof fixture.
+- **Neural Memory (DR-026)** — the memory substrate UNDER the stack, not a lens. It
+  remembers; it judges nothing. Committed docs stay the memory of record.
+- **`public-apis` (DR-027)** — an evidence/research catalogue beside Firecrawl, ranked
+  against the connector families in `docs/research/PUBLIC_API_SOURCES.md`: fixture-first,
+  keyless rows only, never a connector, never a source of truth, nothing in a decision path.
+Procedure for all four tools is in `.claude/skills/signalgrid-evidence-toolchain/SKILL.md`.
 ## Review
 Before completion:
 1. Re-read the diff as a hostile reviewer.

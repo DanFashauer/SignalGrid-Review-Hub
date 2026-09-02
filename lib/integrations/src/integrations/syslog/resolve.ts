@@ -13,61 +13,33 @@
 // unearned affirmative this fabric exists to withdraw — and this surface is
 // shaped so that lie is unrepresentable: there is no field a fixture record
 // could set that reads as a completed send.
+//
+// The mechanical part of this (tier/flag/token/transport checks, the fixture
+// recorder) is shared with the other five families via
+// `../adapters/emitter-resolver` — Ponytail cut 4 folded six near-identical
+// bodies into one factory. This file is the family's binding: its payload
+// shape, its token env var, its fixture-reason text.
 
-/** What this family emits, opaque at the gate. The vendor modules type their own
- *  payloads; the gate decides WHETHER anything may leave, not what it looks like. */
-export type SyslogEmitPayload = Record<string, unknown>;
+import {
+  createEmitterResolver,
+  type EmitPayload,
+  type EmitTransport,
+  type EmitterResolution,
+  type FixtureEmitter,
+  type FixtureRecord,
+} from "../adapters/emitter-resolver";
 
-/** A live delivery transport. Deliberately NOT implemented in this repository. */
-export type SyslogEmitTransport = (payload: SyslogEmitPayload) => Promise<void>;
-
-/** One captured fixture emission. `delivered` is a literal false — the type
- *  cannot express a fixture record that claims it was sent. */
-export interface SyslogFixtureRecord {
-  readonly seq: number;
-  readonly payload: SyslogEmitPayload;
-  readonly delivered: false;
-  readonly mode: "fixture";
-}
-
-/** Deterministic in-memory recorder — no network, no clock, no randomness. */
-export class SyslogFixtureEmitter {
-  private readonly log: SyslogFixtureRecord[] = [];
-  record(payload: SyslogEmitPayload): SyslogFixtureRecord {
-    const entry: SyslogFixtureRecord = { seq: this.log.length + 1, payload, delivered: false, mode: "fixture" };
-    this.log.push(entry);
-    return entry;
-  }
-  entries(): readonly SyslogFixtureRecord[] {
-    return this.log;
-  }
-}
-
-export type SyslogEmitterResolution =
-  | { readonly mode: "fixture"; readonly reason: string; readonly emitter: SyslogFixtureEmitter }
-  | { readonly mode: "live"; readonly deliver: SyslogEmitTransport };
+export type SyslogEmitPayload = EmitPayload;
+export type SyslogEmitTransport = EmitTransport<SyslogEmitPayload>;
+export type SyslogFixtureRecord = FixtureRecord<SyslogEmitPayload>;
+export type SyslogFixtureEmitter = FixtureEmitter<SyslogEmitPayload>;
+export type SyslogEmitterResolution = EmitterResolution<SyslogEmitPayload>;
 
 /**
  * Decide whether this deployment may make a live syslog emission.
  * Fail-closed and unanimous; the transport must be INJECTED.
  */
-export function resolveSyslogEmitter(
-  env: NodeJS.ProcessEnv = process.env,
-  transportOverride?: SyslogEmitTransport,
-): SyslogEmitterResolution {
-  const fixture = (reason: string): SyslogEmitterResolution => ({ mode: "fixture", reason, emitter: new SyslogFixtureEmitter() });
-  const tier = (env["SIGNALGRID_TIER"] ?? "dev").toLowerCase();
-  if (tier !== "beta" && tier !== "prod") {
-    return fixture(`tier "${tier}" never makes live vendor calls`);
-  }
-  if (env["SIGNALGRID_LIVE_INTEGRATIONS"] !== "true") {
-    return fixture("SIGNALGRID_LIVE_INTEGRATIONS is not 'true'");
-  }
-  if (!env["SYSLOG_EMITTER_TOKEN"]?.trim()) {
-    return fixture("SYSLOG_EMITTER_TOKEN is not set");
-  }
-  if (!transportOverride) {
-    return fixture("no syslog delivery transport is available — this repository ships none");
-  }
-  return { mode: "live", deliver: transportOverride };
-}
+export const resolveSyslogEmitter = createEmitterResolver<SyslogEmitPayload>({
+  tokenEnvVar: "SYSLOG_EMITTER_TOKEN",
+  noTransportReason: "no syslog delivery transport is available — this repository ships none",
+});

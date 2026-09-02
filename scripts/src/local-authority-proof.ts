@@ -237,6 +237,37 @@ check(
   future.standing === "unknown" && future.grantAgeSeconds === null,
 );
 
+// THE SECOND HALF OF THE SAME TRAP, and the one that shipped. The assertion above
+// only ever exercised the branch where a grant POLICY exists. With NO policy
+// (`maxDisconnectedSeconds` absent) the normalizer took a different path that had
+// no future guard at all:
+//
+//     if (issued !== null) grantAgeSeconds = Math.floor((now - issued) / 1000);
+//
+// A grant dated SIX hours ahead of the reference published
+// `grantAgeSeconds: -21600` — a negative age, which is smaller than every bound
+// anything downstream could compare it against, and which renders as a reading
+// nobody observed. (Both figures read "seven hours" and "-25200" until 2026-09-02;
+// the case is REF 12:00:00Z against grantIssuedAt 18:00:00Z, which is six hours,
+// and re-planting the pre-fold line emits exactly:
+//     FAIL — a FUTURE-dated grant with NO policy reports NO age, not a negative
+//            one (got -21600)          summary=fail (36/37)
+// A figure in a comment is worth the run behind it.) The STANDING was never wrong here; the published number was.
+// Its sibling normalizer (credential-rotation) refuses to emit exactly this, and
+// says so in a comment. One copy had the lesson written on it; the copy next door
+// did not.
+//
+// This assertion FAILS on the pre-fold code — verified by reverting the fix and
+// re-running (2026-09-02).
+const futureNoPolicy = normalizeLocalAuthority(
+  { ...base, grantIssuedAt: "2026-01-01T18:00:00.000Z" },
+  REF,
+);
+check(
+  `a FUTURE-dated grant with NO policy reports NO age, not a negative one (got ${String(futureNoPolicy.grantAgeSeconds)})`,
+  futureNoPolicy.standing === "no_grant_policy" && futureNoPolicy.grantAgeSeconds === null,
+);
+
 // ── 8. THE EXPIRY BOUNDARY, PINNED ON BOTH SIDES ────────────────────────────
 const atLimit = normalizeLocalAuthority(
   { ...base, grantIssuedAt: "2026-01-01T11:00:00.000Z", maxDisconnectedSeconds: 3600 }, REF,

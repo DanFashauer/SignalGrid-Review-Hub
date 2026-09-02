@@ -1,7 +1,9 @@
 // Shell lint gate — the one language in this repo with no static analysis.
 //
-// CodeQL takes JS/TS, `tsc` takes types, gitleaks takes secrets, 55 proofs take
-// behaviour. Shell had nothing, and the shell here is not incidental: it includes
+// CodeQL takes JS/TS, `tsc` takes types, gitleaks takes secrets, the `proof:*`
+// suite takes behaviour (no count here on purpose — it said 55 while
+// `package.json` registered 140, and `check-gate-census.mjs` is the thing that
+// counts). Shell had nothing, and the shell here is not incidental: it includes
 // `validate-sim-macos.sh`, which IS the full local suite the Mac lane runs in CI.
 //
 // WHY A SEVERITY FLOOR RATHER THAN "ALL CLEAN". A gate introduced at zero findings

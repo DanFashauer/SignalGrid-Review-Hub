@@ -202,3 +202,32 @@ and reading the wrong one would misclassify every branch on this page as live.
 The four tier branches `alpha`, `beta`, `dev`, `prod` are in the prune list. They had
 not moved since 2026-07-15 and nothing in CI or the compose files referenced them; as
 stale pointers they implied a promotion flow this repo does not run.
+
+**2026-09-02 — the promotion workflow was retired with them.**
+`.github/workflows/promote.yml` ("Promote Tier") is deleted. It was a
+`workflow_dispatch` whose `from`/`to` inputs were fixed choice lists over exactly
+those four branch names, so with the branches pruned every dispatch it could
+accept named a ref that resolves to nothing: `git ls-remote --heads origin`
+returns none of `dev`/`alpha`/`beta`/`prod`. A workflow that can only fail is
+worse than no workflow — it trains people to ignore red — and its own run
+summary had already been rewritten once to explain, at run time, why every
+promotion it offered was empty. Two related edits landed in the same change,
+because neither could be deferred without breaking a gate or leaving a false
+statement in the tree:
+
+- `.github/workflows/codeql.yml` no longer triggers on `dev`/`alpha`/`beta`/`prod`
+  pushes; those triggers had the same problem, and a scan wired to a ref that
+  does not exist is a scan that never runs.
+- `scripts/lib/ci-jobs.mjs` lost its `promote.yml:open-promotion-pr` NOT_A_GATE
+  entry. `check-preflight-ci-parity.mjs` fails on a classification whose subject
+  no longer exists, so the two are inseparable by construction.
+
+The `release-engineer` review claim over the workflow is **retired, not deleted**,
+in `docs/agent/review-coverage.json` (`retiredOn` / `retiredWhy`) — a deleted
+surface retires its evidence rather than erasing it.
+
+The tiers themselves are unaffected as **deployment environments**:
+`SIGNALGRID_TIER`, `config/tiers/<tier>.env.example` and the fixture-safe rule in
+`docs/BRANCHING_AND_ENVIRONMENTS.md` all still hold. What is gone is the
+branch-per-tier promotion flow. Reinstating it means recreating the four branches
+*and* a promotion workflow — an owner decision, not a side effect of this sweep.

@@ -227,7 +227,13 @@ fi
 
 # ── summary ───────────────────────────────────────────────────────────────────
 say "SUMMARY"
-for row in "${RESULTS[@]}"; do
+# Guarded expansion, same reason as PROOF_ARGS above: under `set -u`, bash 3.2 —
+# the only bash on a stock Mac — treats an EMPTY array's "${a[@]}" as UNBOUND and
+# aborts, where bash 4.4+ expands it to nothing. RESULTS is normally non-empty by
+# here (phase 1 always records), so this is latent rather than live — which is
+# precisely how the PROOF_ARGS instance survived: it only bit on the one path
+# nobody took. The idiom is cheap; not using it is what costs.
+for row in ${RESULTS+"${RESULTS[@]}"}; do
   IFS='|' read -r phase status detail <<<"$row"
   printf '   %-8s %-8s %s\n' "$phase" "$status" "$detail"
 done

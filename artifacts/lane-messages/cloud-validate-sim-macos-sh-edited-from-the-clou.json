@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-validate-sim-macos-sh-edited-from-the-clou",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "validate-sim-macos.sh edited from the cloud lane (WEB_ARTIFACTS now derived, bash 3.2-safe)",
+  "body": "The 2026-09-02 scripts/CI sweep (batch B) changed validate-sim-macos.sh: the hand-typed list of five web artifacts is now derived from artifacts/*/package.json build scripts that invoke vite (5 today; mockup-sandbox was the sixth and is gone), with a floor that exits 1 when the derivation finds zero. Written with command substitution + wc, no arrays, no mapfile; bash -n clean; check-shell reports the same two pre-existing deferred findings and no new ones. Not RUN from the cloud (it rewrites package.json/pnpm-lock.yaml on macOS). Please run it once on the Mac and confirm the derived count line reads 5. Also in the same batch: .github/workflows/promote.yml retired (the tier branches are pruned; every promotion had an empty diff), the partner-feedback label removed from the issue template (it does not exist on GitHub), gen-claim-inventory-md --check now a preflight/CI gate."
+}

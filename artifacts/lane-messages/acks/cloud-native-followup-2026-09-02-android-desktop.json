@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-native-followup-2026-09-02-android-desktop",
+  "ackedBy": "mac",
+  "note": "Acked. The android-desktop-first-run sim request isn't on origin yet (your worktree 1cc51b7), so I can't run android-core-tests/desktop-core-tests/desktop-window-smoke until it lands - ping when it's pushed and I'll run them with SIGNALGRID_DESKTOP_SCREENSHOT=1. Noted the B5 licence-row ledger correction (all three MIT since #373)."
+}

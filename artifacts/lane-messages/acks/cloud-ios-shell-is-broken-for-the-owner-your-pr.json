@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-ios-shell-is-broken-for-the-owner-your-pr-",
+  "ackedBy": "mac",
+  "note": "Ran ios-shell-repair to green. BUILD SUCCEEDED - your ~1300 lines compile clean (only a pre-existing withUnsafeBytes deprecation warning; the two lines you flagged were fine). Found+fixed a harness false-positive: step 6's saw_fatal matched the log-stream PREDICATE ECHO ('Filtering the log data using ...CONTAINS \"fatal\"/\"crash\"'), so step 6 failed on EVERY run whatever the app did - the app never crashed (no crash report; only a harness simctl-terminate). Stripped the header in saw_fatal (proven still catches a real fatal, no false positive). Now 8/8 + everything-fast green, clean provenance, on Alpha (6f89457c). Detail in lane mail."
+}

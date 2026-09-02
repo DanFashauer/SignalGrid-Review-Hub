@@ -214,6 +214,10 @@ jobs:
         run: node scripts/check-ios-dynamic-type.mjs --self-test
       - name: iOS dynamic type (no raw system font outside DesignSystem.swift)
         run: node scripts/check-ios-dynamic-type.mjs
+      - name: iOS dead stored properties self-test (the gate must be able to fail)
+        run: node scripts/check-ios-dead-stored-properties.mjs --self-test
+      - name: iOS dead stored properties (a field nothing assigns makes every read of it dead)
+        run: node scripts/check-ios-dead-stored-properties.mjs
       - name: iOS demo flags (every simulator flag the shell reads is documented, and vice versa)
         run: node scripts/check-demo-flags-documented.mjs
       - name: Lab registry self-test (the gate must be able to fail)

@@ -39,6 +39,9 @@ final class SecurityManager {
     
     // Device binding
     private var deviceBindingKey: String?
+    /// Whether `deviceBindingKey` incorporates an MDM-supplied hardware serial.
+    /// False means the key is bound to Keychain state only — per-install, not per-device.
+    private var deviceBindingAttested: Bool = false
     
     // MARK: - Initialization
     
@@ -60,19 +63,35 @@ final class SecurityManager {
         if let existingKey = try? KeychainService.shared.retrieve(forKey: "device_binding_key"),
            let key = String(data: existingKey, encoding: .utf8) {
             deviceBindingKey = key
+            // The attestation belongs to the key that was stored, not to whatever the
+            // environment happens to say now, so it is read back beside it. A key stored
+            // before this field existed reads as unattested, which is the safe direction.
+            let storedAttestation = try? KeychainService.shared.retrieve(forKey: "device_binding_attested")
+            deviceBindingAttested = storedAttestation
+                .flatMap { String(data: $0, encoding: .utf8) } == "true"
         } else {
+            let attested = DeviceInfo.serialNumber != nil
             let newKey = generateDeviceBindingKey()
             if let data = newKey.data(using: .utf8) {
                 try? KeychainService.shared.save(data, forKey: "device_binding_key")
             }
+            if let data = String(attested).data(using: .utf8) {
+                try? KeychainService.shared.save(data, forKey: "device_binding_attested")
+            }
             deviceBindingKey = newKey
+            deviceBindingAttested = attested
         }
     }
     
     private func generateDeviceBindingKey() -> String {
         // Create a unique device binding key combining multiple identifiers
         let deviceId = DeviceInfo.identifier
-        let serial = DeviceInfo.serialNumber ?? UUID().uuidString
+        // A missing serial used to become a fresh UUID here. That kept the key unique but
+        // made a key bound to no device fact indistinguishable from one that was — and on
+        // real hardware the serial is ALWAYS missing, so every shipped key took that path
+        // while `deviceBindingEnabled` reported true. The absence is now named, and the
+        // entropy still comes from `DeviceInfo.identifier`, itself a Keychain-held UUID.
+        let serial = DeviceInfo.serialNumber ?? "unattested"
         let bundleId = Bundle.main.bundleIdentifier ?? "unknown"
         
         let combined = "\(deviceId):\(serial):\(bundleId)"
@@ -396,6 +415,9 @@ final class SecurityManager {
             var status: [String: Any] = [
                 "isLockedOut": isLockedOut,
                 "deviceBindingEnabled": deviceBindingKey != nil,
+                // Enabled says a key exists. Attested says it is bound to a hardware fact.
+                // They were the same field until the second answer was almost always no.
+                "deviceBindingAttested": deviceBindingAttested,
                 "rateLimitConfig": [
                     "maxBadgeAttemptsPerMinute": config.maxBadgeAttemptsPerMinute,
                     "maxAuthAttemptsPerMinute": config.maxAuthAttemptsPerMinute,

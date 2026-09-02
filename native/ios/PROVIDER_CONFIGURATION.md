@@ -20,17 +20,21 @@ This allows you to integrate with your existing infrastructure without code chan
 the type. "Declared, not implemented" means the case exists in the `BadgeReaderType`
 enum and can be selected by `BADGE_READER_TYPE`, but no class implements it — no
 `class NFC…` / `class Serial…` exists anywhere under `native/ios` — so
-`createProvider(config:)` (`:218`) finds no factory and **returns `nil` silently**.
-Selecting one leaves the app with no badge reader rather than an error.
+`createProvider(config:)` finds no factory and returns `nil`. That `nil` used to be
+returned in SILENCE; it now writes a `badgeReaderProviderInitialized` audit record
+naming the unresolved type, so a configured reader that reads nothing is visible in
+the audit trail instead of only in the absence of badge events. Selecting one still
+leaves the app with no badge reader.
 
 | Type | Description | Configuration | Status |
 |------|-------------|---------------|--------|
-| `usb_accessory` | USB-C/Lightning badge readers via ExternalAccessory framework | Protocol string | Implemented |
+| `usb_accessory` | Legacy shim delegating to the `BadgeReaderManager` singleton | - | Implemented |
+| `usbc` | USB-C/Lightning badge readers via ExternalAccessory (`USBCBadgeReaderProvider`) | Protocol string | Implemented |
 | `bluetooth_le` | Bluetooth Low Energy badge readers | Service UUID, Characteristic UUID | Implemented |
 | `nfc` | NFC tag reading | - | **Declared, not implemented — `createProvider` returns `nil`** |
 | `serial` | Serial/RS-232 badge readers | Port, Baud rate | **Declared, not implemented — `createProvider` returns `nil`** |
 | `keyboard_wedge` | Keyboard emulation mode (most common) | - | Implemented |
-| `http_webhook` | HTTP-based badge events | Webhook URL, Secret | Implemented |
+| `http_webhook` | HTTP-based badge events. **Starts no listener** — badges arrive only when the host calls `processIncomingBadge(_:metadata:)`. `BADGE_WEBHOOK_URL` / `BADGE_WEBHOOK_SECRET` are parsed and consumed by nothing. | Webhook URL, Secret | Registered; no listener |
 | `mdm_enrollment` | MDM-based device/user linking | MDM provider config | Implemented |
 
 ### Environment Variables for Badge Readers

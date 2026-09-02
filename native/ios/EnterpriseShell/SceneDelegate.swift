@@ -3,7 +3,6 @@ import UIKit
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     
     var window: UIWindow?
-    private var statusBarObserver: NSObjectProtocol?
     
     func scene(
         _ scene: UIScene,
@@ -108,9 +107,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     
     deinit {
-        if let observer = statusBarObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
+        // `statusBarObserver` was declared and never registered, so this used to
+        // unregister an observer that never existed. The selector-based observers this
+        // scene DOES add are covered by removeObserver(self).
         NotificationCenter.default.removeObserver(self)
     }
 }

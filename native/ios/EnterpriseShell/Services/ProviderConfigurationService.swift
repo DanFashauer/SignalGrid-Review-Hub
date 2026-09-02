@@ -75,6 +75,26 @@ final class ProviderConfigurationService {
         static let badgeReaderType = "badge_reader_type"
         static let identityProviderType = "identity_provider_type"
         static let customConfig = "custom_provider_config"
+        static let backendBaseUrl = "backend_base_url"
+    }
+
+    /// Configuration an MDM pushed to this device, under the key Apple reserves for
+    /// Managed App Configuration. This is the ONLY one of the three sources below that
+    /// exists on a shipped device: process environment is a simulator/launch-argument
+    /// affordance, so without this a supervised device had no way to be told which badge
+    /// reader or identity provider to use — the comment here promised a UserDefaults
+    /// fallback and none was written, and `ConfigKeys` was referenced nowhere at all.
+    /// Same accessor shape as `KioskConfig` in KioskController.swift, deliberately.
+    private static var managedConfiguration: [String: Any]? {
+        UserDefaults.standard.dictionary(forKey: "com.apple.configuration.managed")
+    }
+
+    /// Environment first (a simulator or a launch argument overrides), then what MDM
+    /// pushed, then nothing. Callers supply the default.
+    private static func configured(env: String, managed: String) -> String? {
+        if let value = ProcessInfo.processInfo.environment[env], !value.isEmpty { return value }
+        if let value = managedConfiguration?[managed] as? String, !value.isEmpty { return value }
+        return nil
     }
     
     // MARK: - Initialization
@@ -88,13 +108,10 @@ final class ProviderConfigurationService {
     // MARK: - Configuration Loading
     
     private static func loadConfiguration() -> AppConfiguration {
-        // Try to load from environment variables first
-        // Then fall back to UserDefaults
-        // Finally use defaults
-        
-        let readerType = ProcessInfo.processInfo.environment["BADGE_READER_TYPE"]
-        let providerType = ProcessInfo.processInfo.environment["IDENTITY_PROVIDER_TYPE"]
-        let backendUrl = ProcessInfo.processInfo.environment["BACKEND_BASE_URL"]
+        // Environment first, then Managed App Configuration, then defaults.
+        let readerType = configured(env: "BADGE_READER_TYPE", managed: ConfigKeys.badgeReaderType)
+        let providerType = configured(env: "IDENTITY_PROVIDER_TYPE", managed: ConfigKeys.identityProviderType)
+        let backendUrl = configured(env: "BACKEND_BASE_URL", managed: ConfigKeys.backendBaseUrl)
         
         var badgeReaderConfig: BadgeReaderConfig
         if let type = readerType, let readerTypeEnum = BadgeReaderType(rawValue: type) {

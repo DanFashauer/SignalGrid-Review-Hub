@@ -71,23 +71,27 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       # One run, then assert on what it printed. `test result: ok` is emitted by a run
-      # that executed ZERO tests just as happily as by one that executed thirty-eight,
+      # that executed ZERO tests just as happily as by one that executed forty-one,
       # so a green line is not on its own evidence that anything ran — the same trap
       # `scripts/check-android-core-tests.mjs` exists for on the Kotlin side.
       #
       # `bash` explicitly, so the Windows job uses git-bash and both platforms run the
-      # identical assertion rather than two dialects of it. awk only: no bc, no paste.
-      - name: Test, and assert the tests actually ran
+      # identical step rather than two dialects of it.
+      - name: Test
         shell: bash
         run: |
           set -o pipefail
           cargo test -- --nocapture 2>&1 | tee test-output.txt
-          RAN=$(awk '/^test result: ok\./ { for (i = 1; i <= NF; i++) if ($i == "passed;") total += $(i-1) } END { print total + 0 }' test-output.txt)
-          echo "tests that reported passing: $RAN"
-          if [ "$RAN" -lt 30 ]; then
-            echo "::error::only $RAN test(s) ran. The suite has ~38; a collapse toward zero must not read as green."
-            exit 1
-          fi
+
+      # The floor is DERIVED, not typed: every #[test] under src/ and tests/ must
+      # appear in the run's totals. The hand floor this replaces said 30 while the
+      # suite held 41 — eleven tests could have vanished under a green tick.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Assert every declared test ran
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-desktop-core-tests.mjs native/desktop/core native/desktop/core/test-output.txt
 
   app:
     name: Desktop shell (${{ matrix.os }})
@@ -135,7 +139,14 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       - name: Test
-        run: cargo test
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test 2>&1 | tee test-output.txt
+
+      - name: Assert every declared test ran
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-desktop-core-tests.mjs native/desktop/app native/desktop/app/test-output.txt
 
       - name: Build the executable
         run: cargo build --release

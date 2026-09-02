@@ -30,8 +30,15 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-    // A module that declares its own repositories is a module that can be pointed
-    // somewhere else without this file changing. Fail instead.
+    // A subproject of THIS build that declares its own repositories is a subproject
+    // that can be pointed somewhere else without this file changing. Fail instead.
+    //
+    // Scope, stated exactly: FAIL_ON_PROJECT_REPOS reaches the projects of this
+    // build only. The included build below (`../core`) has its own settings file and
+    // declares `repositories { mavenCentral() }` in its build.gradle.kts, and this
+    // mode neither fails on that nor governs it — a composite build's repository
+    // policy is its own. So this line keeps the app module honest and says nothing
+    // about the core module; the core's supply chain is `native/android/core`'s.
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google {

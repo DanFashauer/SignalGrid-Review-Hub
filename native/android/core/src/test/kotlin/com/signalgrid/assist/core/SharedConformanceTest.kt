@@ -129,6 +129,15 @@ class SharedConformanceTest {
                 failures += "  $id: $expect must NOT proceed without further action"
             }
 
+            // The obligations a client must have PARSED — the served shape declares
+            // none, and "empty" is the assertion, not merely "still a step_up".
+            case["expectObligations"]?.jsonArray?.let { expected ->
+                val want = expected.map { it.jsonPrimitive.content }
+                if (decision.obligations != want) {
+                    failures += "  $id: obligations parsed as ${decision.obligations}, expected $want"
+                }
+            }
+
             case["expectExplanationContains"]?.jsonArray?.forEach { fragment ->
                 val text = fragment.jsonPrimitive.content
                 if (!decision.explanation().contains(text)) {

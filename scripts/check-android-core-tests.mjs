@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Every @Test in the Android core module must have actually RUN.
 //
-//   node scripts/check-android-core-tests.mjs
+//   node scripts/check-android-core-tests.mjs                     # native/android/core
+//   node scripts/check-android-core-tests.mjs native/android/app   # the app module's JVM tests
 //
 // WHY. `gradle test` prints BUILD SUCCESSFUL over a run that executed eleven tests
 // and over a run that executed zero, identically. Gradle skips the `test` task when
@@ -22,9 +23,15 @@ import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const MODULE = join(repo, "native/android/core");
+// The module is an ARGUMENT so the app module's JVM tests (DeviceGateTest, the one
+// Android-side security decision) get the same declared-vs-ran comparison the core
+// gets, instead of "find | head -1 exists". Gradle writes plain-JVM results to
+// build/test-results/test and Android unit tests to build/test-results/testDebugUnitTest
+// (one per variant), so every TEST-*.xml under build/test-results is read.
+const MODULE_REL = process.argv[2] ?? "native/android/core";
+const MODULE = join(repo, MODULE_REL);
 const SRC = join(MODULE, "src/test/kotlin");
-const RESULTS = join(MODULE, "build/test-results/test");
+const RESULTS = join(MODULE, "build/test-results");
 
 const fail = (msg) => {
   console.error(`✗ ${msg}`);
@@ -73,7 +80,16 @@ if (!existsSync(RESULTS)) {
   process.exit(1);
 }
 
-const xml = readdirSync(RESULTS).filter((f) => f.startsWith("TEST-") && f.endsWith(".xml"));
+function resultXml(dir) {
+  const out = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) out.push(...resultXml(p));
+    else if (e.name.startsWith("TEST-") && e.name.endsWith(".xml")) out.push(p);
+  }
+  return out;
+}
+const xml = resultXml(RESULTS);
 if (xml.length === 0) {
   fail(`${RESULTS.replace(repo + "/", "")} exists but holds no TEST-*.xml files.`);
   process.exit(1);
@@ -83,7 +99,7 @@ const ran = new Set();
 let failures = 0;
 let skipped = 0;
 for (const f of xml) {
-  const text = readFileSync(join(RESULTS, f), "utf8");
+  const text = readFileSync(f, "utf8");
   for (const m of text.matchAll(/<testcase\b[^>]*\bname="([^"]*)"/g)) {
     // Gradle records Kotlin backtick names with a trailing "()".
     ran.add(m[1].replace(/\(\)$/, ""));
@@ -96,7 +112,7 @@ for (const f of xml) {
   }
 }
 
-console.log("Android core — every @Test in the source must have run\n");
+console.log(`Android ${MODULE_REL} — every @Test in the source must have run\n`);
 console.log(`  test sources:      ${sources.length}`);
 console.log(`  @Test declared:    ${expected.size}`);
 console.log(`  testcases recorded: ${ran.size}`);
@@ -117,4 +133,4 @@ if (process.exitCode) {
   console.error("\n  A suite that did not run is not a suite that passed.");
   process.exit(1);
 }
-console.log(`\nAndroid core test gate passed — ${expected.size}/${expected.size} declared tests ran, 0 failures.`);
+console.log(`\nAndroid test gate passed (${MODULE_REL}) — ${expected.size}/${expected.size} declared tests ran, 0 failures.`);

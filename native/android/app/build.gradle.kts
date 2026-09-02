@@ -1,7 +1,9 @@
 // The Android shell. Deliberately thin.
 //
-// Everything that decides what a worker is told lives in `:assist-core`, which is a
-// plain Kotlin build with 40 tests that run without an Android SDK. This module owns
+// Everything that decides what a worker is told lives in `:assist-core`, a plain
+// Kotlin build whose tests run without an Android SDK (no count here: the last one
+// went stale within weeks, and `scripts/check-android-core-tests.mjs` derives the
+// real figure from the source on every run). This module owns
 // only what genuinely needs Android: an Activity, a screen, and the HTTP call. If a
 // behavioural rule ever appears in THIS module, it has escaped its test coverage —
 // that is the review question to ask of any change here.
@@ -39,7 +41,18 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        // BuildConfig.DEBUG gates the emulator-loopback widening in DeviceGate; AGP 8
+        // stopped generating BuildConfig by default, so it is asked for by name.
+        buildConfig = true
+    }
+
+    // JVM unit tests for the one Android-side security decision (DeviceGate). They
+    // are pure Kotlin, but they live in THIS module because the function reads
+    // Build.PRODUCT and BuildConfig.DEBUG at its call site, and a test in `:assist-core`
+    // cannot see either. `gradle -p native/android/app test` runs them; CI does.
+    testOptions.unitTests.all { it.useJUnitPlatform() }
 }
 
 kotlin {
@@ -55,4 +68,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
+
+    testImplementation(kotlin("test"))
 }

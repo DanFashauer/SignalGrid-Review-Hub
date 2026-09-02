@@ -147,6 +147,22 @@ export function proofScriptCount(root = ROOT) {
 }
 
 /**
+ * Operations in the simulation-request allowlist — the top-level entries of
+ * `SIM_OPERATIONS` in scripts/lib/sim-operations.mjs, read from the source so this
+ * stays synchronous with the other derivers (the module is ESM and would need an
+ * async import). Every entry is written `  key: {` at two-space indent; the count is
+ * cross-checked against `OPERATION_KEYS.length` by proof:sim-requests's
+ * `figures=operations=` line, which printed 26 the day this row was added.
+ */
+export function simOperationCount(root = ROOT) {
+  const src = read("scripts/lib/sim-operations.mjs", root);
+  const start = src.indexOf("export const SIM_OPERATIONS");
+  const end = src.indexOf("\n};", start);
+  if (start < 0 || end < 0) return 0;
+  return [...src.slice(start, end).matchAll(/^  (?:"[a-z0-9-]+"|[a-z0-9-]+):\s*\{$/gm)].length;
+}
+
+/**
  * Distinct `METHOD /path` pairs the mounted routers register — the api-collection gate's
  * OWN parser, imported for the same reason the `.bru` walk is: the collection README
  * publishes this number, and a second parser for "a registered route" would be a second
@@ -254,6 +270,13 @@ export const FIGURES = [
     re: /(\d+) deterministic proof scripts/,
     derive: proofScriptCount,
     from: "proof:* keys in the root package.json",
+  },
+  {
+    id: "sim-operations",
+    doc: "docs/LIVE_SYNC_LOOP.md",
+    re: /allowlist — (\d+) operations covering/,
+    derive: simOperationCount,
+    from: "top-level entries of SIM_OPERATIONS in scripts/lib/sim-operations.mjs (the request allowlist)",
   },
   // ── Second homes, found by the sweep below rather than by hand ────────────────────
   // Every row from here down was invisible to the first version of this gate: the same

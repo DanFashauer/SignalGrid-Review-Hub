@@ -62,7 +62,7 @@ check(
 check("the macOS-only set is exactly the hardware-bound lanes", (() => {
   const macOnly = OPERATION_KEYS.filter((k: string) => ops[k].platform === "macos").sort();
   return JSON.stringify(macOnly) === JSON.stringify(
-    ["everything", "everything-fast", "everything-no-ios", "evidence", "proofs-full", "proofs-sim-only"],
+    ["desktop-window-smoke", "everything", "everything-fast", "everything-no-ios", "evidence", "proofs-full", "proofs-sim-only"],
   );
 })());
 

@@ -19,6 +19,16 @@
       So: a platform theme, no dependency. MaterialTheme in MainActivity does the
       actual theming. `android:Theme.Material.Light.NoActionBar` is available from
       API 21 and this app's minSdk is 26, so no version guard is needed.
+
+      FOLLOWS THE DEVICE. This used to be light-only, which is the Android twin of
+      the iOS defect CLAUDE.md records (UIUserInterfaceStyle pinned to Light while
+      the branded palette was dark): the launch window rendered white on a device in
+      dark mode, then Compose drew whatever it liked. The platform has no
+      `Theme.Material.DayNight` (DayNight lives in AppCompat/Material Components,
+      the dependency refused above), so day/night is done the way the platform does
+      it — this file for day, `values-night/themes.xml` for night, same style name.
+      MainActivity pairs it with `isSystemInDarkTheme()` so Compose and the window
+      agree.
     -->
     <style name="Theme.SignalGridAssist" parent="android:Theme.Material.Light.NoActionBar" />
 

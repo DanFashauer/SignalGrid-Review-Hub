@@ -22,6 +22,13 @@ pub enum Endpoint {
     /// The URL with any trailing slash removed, so callers appending `/v1/authorize`
     /// do not produce `//v1/authorize` — which 404s on some servers and silently
     /// redirects on others.
+    ///
+    /// THE BASE MUST BE THE `/api` MOUNT. The api-server mounts its router at `/api`
+    /// (artifacts/api-server/src/app.ts) and the route is `/v1/authorize` under it,
+    /// so the only base that reaches a decision is `https://host/api`: appending
+    /// gives `https://host/api/v1/authorize`. A bare `https://host` appends to
+    /// `https://host/v1/authorize`, which is a 404 — and a 404 is a DENY here, so
+    /// the symptom of a mis-set base is every worker refused, not an error message.
     Usable(String),
     Refused(String),
 }
@@ -147,6 +154,23 @@ mod tests {
         assert_eq!(
             usable("https://gate.example.com/api/"),
             "https://gate.example.com/api"
+        );
+    }
+
+    #[test]
+    fn the_api_mount_is_the_base_and_appending_the_route_reaches_authorize() {
+        // The one composition that reaches a decision, pinned as a vector so the
+        // "append /v1/authorize" comments cannot drift from what actually resolves.
+        let base = usable("https://host/api");
+        assert_eq!(
+            format!("{base}/v1/authorize"),
+            "https://host/api/v1/authorize"
+        );
+        // And with the slash a config field usually carries.
+        let base = usable("https://host/api/");
+        assert_eq!(
+            format!("{base}/v1/authorize"),
+            "https://host/api/v1/authorize"
         );
     }
 

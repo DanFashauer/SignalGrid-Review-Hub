@@ -70,10 +70,36 @@ pub fn parse(status: u16, body: Option<&str>) -> AssistDecision {
         };
     };
 
+    // `obligations` is OPTIONAL-ABSENT, and absent is the served case: the
+    // `/api/v1/authorize` contract (lib/api-spec/v1-openapi.yaml, AssistResult)
+    // declares `assist`, `decisionId` and `reasons` only. Absent means no obligation
+    // is known to be satisfied — nothing here turns an empty list into permission;
+    // only `Assist::Allow` proceeds, whatever this list holds.
+    //
+    // PRESENT-BUT-NOT-A-LIST IS MALFORMED, and malformed is DENY — the same rule
+    // `assist` gets above. Coercing it to empty (as this once did) let a step_up
+    // stand with its obligations silently dropped, an asymmetry the shared vectors
+    // now pin closed.
+    let obligations = match root.get("obligations") {
+        None => Vec::new(),
+        Some(Value::Array(_)) => string_list(root.get("obligations")),
+        Some(_) => {
+            return AssistDecision {
+                assist: Assist::Deny,
+                reasons: vec![
+                    "the Assist gate's response carried an \"obligations\" field that is not a list"
+                        .to_string(),
+                ],
+                obligations: Vec::new(),
+                decision_id,
+            }
+        }
+    };
+
     AssistDecision {
         assist,
         reasons: string_list(root.get("reasons")),
-        obligations: string_list(root.get("obligations")),
+        obligations,
         decision_id,
     }
 }
@@ -128,6 +154,42 @@ mod tests {
         assert_eq!(d.assist, Assist::StepUp);
         assert_eq!(d.reasons, vec!["unmanaged device".to_string()]);
         assert_eq!(d.obligations, vec!["webauthn".to_string()]);
+    }
+
+    #[test]
+    fn a_step_up_with_no_obligations_field_is_the_served_shape_and_does_not_proceed() {
+        // The spec's AssistResult has no obligations field, so this is what the real
+        // server sends. It must parse as a step_up, carry an empty list, and stay
+        // non-proceedable — absent is "not stated", never "nothing required".
+        let d = parse(
+            200,
+            Some(
+                r#"{"assist":"step_up","decisionId":"dec_9","reasons":["device posture is stale"]}"#,
+            ),
+        );
+        assert_eq!(d.assist, Assist::StepUp);
+        assert!(d.obligations.is_empty());
+        assert!(!d.assist.proceeds_without_further_action());
+    }
+
+    #[test]
+    fn obligations_that_is_not_a_list_is_malformed_and_denies() {
+        // Strict like `assist`: present-but-wrong-type is a body this client does
+        // not understand, not a field to coerce away.
+        for body in [
+            r#"{"assist":"step_up","obligations":"webauthn"}"#,
+            r#"{"assist":"allow","obligations":{"type":"webauthn"}}"#,
+            r#"{"assist":"allow","obligations":1}"#,
+            r#"{"assist":"allow","obligations":null}"#,
+        ] {
+            let d = parse(200, Some(body));
+            assert_eq!(d.assist, Assist::Deny, "{body}");
+            assert!(
+                d.explanation().contains("obligations"),
+                "{}",
+                d.explanation()
+            );
+        }
     }
 
     #[test]

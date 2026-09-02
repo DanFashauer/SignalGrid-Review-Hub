@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG BUILDS ONLY. This file lives under src/debug and is referenced from the
+  debug manifest overlay, so a release APK carries neither: release keeps
+  android:usesCleartextTraffic="false" from the main manifest with no exceptions.
+
+  The main manifest forbids cleartext everywhere. That also forbids the one
+  plaintext case the validator allows on purpose — http://10.0.2.2, the emulator's
+  alias for the host machine, used to point an emulator at an api-server on the
+  developer's box. Without this, the platform layer would refuse a URL the
+  validator layer accepted, and the emulator demo the README describes could not
+  run. base-config stays cleartext-forbidden; exactly one domain is excepted.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

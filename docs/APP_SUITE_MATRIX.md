@@ -36,10 +36,11 @@ a persona app.
 | Platform | Administrative surface | End-user (frontline worker) surface |
 | -------- | ---------------------- | ----------------------------------- |
 | **Web** | `signalgrid-app` (responsive admin console: dashboard, decisions, policies, signals, integrations) + `signalgrid-review` Operator Console (core-driven) | `signalgrid-review` Worker Self-Service (core-driven: outcome + plain-language reason + self-service steps) |
-| **iOS** | `signalgrid-mobile-pwa` (installable PWA, operator/support triage; **Access support** tab) | Embedded in the worker's host app — no SignalGrid worker screen (reference: [`embedded-host-app-demo.html`](embedded-host-app-demo.html)) |
-| **Android** | `signalgrid-mobile-pwa` (same PWA) | Embedded in the worker's host app — no SignalGrid worker screen |
-| **macOS** | `signalgrid-desktop` (desktop-chromed operator console + ITSM hand-off) | Embedded in the worker's host app (reference: [`embedded-desktop-demo.html`](embedded-desktop-demo.html)) |
-| **Windows** | `signalgrid-desktop` (same desktop shell) | Embedded in the worker's host app (reference: [`embedded-desktop-demo.html`](embedded-desktop-demo.html)) |
+| **iOS** | `signalgrid-mobile-pwa` (installable PWA, operator/support triage; **Access support** tab) | Embedded in the worker's host app — no SignalGrid worker screen (reference: [`embedded-host-app-demo.html`](embedded-host-app-demo.html)). Native reference host shell: `native/ios/EnterpriseShell` (Swift, kiosk-until-auth + Assist gate; CI builds for the simulator, no `.ipa`) |
+| **Android** | `signalgrid-mobile-pwa` (same PWA) | Embedded in the worker's host app — no SignalGrid worker screen. Native reference host shell: `native/android` (Kotlin/Compose, fixture decision, no transport; CI builds an unsigned debug APK) |
+| **macOS** | `signalgrid-desktop` (desktop-chromed operator console + ITSM hand-off) | Embedded in the worker's host app (reference: [`embedded-desktop-demo.html`](embedded-desktop-demo.html)). No native macOS build exists |
+| **Windows** | `signalgrid-desktop` (same desktop shell) | Embedded in the worker's host app (reference: [`embedded-desktop-demo.html`](embedded-desktop-demo.html)). Native reference host shell: `native/desktop` (Tauri/Rust, fixture decision, no transport; CI builds an unsigned executable) |
+| **Linux** | — (no administrative surface is targeted) | Native reference host shell: `native/desktop` (same Tauri shell, same CI claim as Windows). Not one of the five target platforms; listed because the tree builds for it |
 
 Notes:
 

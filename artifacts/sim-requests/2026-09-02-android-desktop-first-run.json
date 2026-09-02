@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-09-02-android-desktop-first-run",
+  "requestedBy": "cloud lane",
+  "reason": "The native Android and desktop trees have only ever run on Linux CI, and CI never opens the desktop window. The 2026-09-02 native read found that native/desktop/app/tauri.conf.json never set app.withGlobalTauri, so every launch of the Tauri shell showed 'Could not read the decision from the core' over empty panels while cargo build stayed green — a defect no test could see because nothing anywhere ran the window. That key is now set and held by a cargo test in main.rs, but the test asserts the CONFIG, not the render. This request is the first run of the window on a real machine, plus darwin truth for the two core suites (Kotlin: emulator loopback is now a constructor parameter, 10.0.2.2 refused by default; Rust and Kotlin: two new shared vectors for the served no-obligations shape and the /api-mount base URL).",
+  "runs": [
+    "android-core-tests",
+    "desktop-core-tests",
+    "desktop-window-smoke"
+  ],
+  "notes": [
+    "android-core-tests, desktop-core-tests and desktop-window-smoke are NEW in scripts/lib/sim-operations.mjs. The first two are platform 'any' (they run on Linux CI; the request wants darwin truth). desktop-window-smoke is macOS-only.",
+    "desktop-window-smoke builds native/desktop/app with cargo (first build pulls the Tauri crates; several minutes), launches the executable, captures a screenshot at 5 s, and PASSES only if the process is still alive after 10 s AND the PNG exists (it prints the path; written under mktemp, never into the tree). The screenshot is mandatory because the banner defect leaves the process alive — the JS catch handles it — so 'alive' alone would pass on the very defect. What the PNG SHOWS is a VISUAL check: a red 'Could not read the decision from the core' banner over a deny badge means withGlobalTauri did not take effect, and that is a real finding — record it in the result notes. Screen Recording permission for the terminal is needed for screencapture.",
+    "Run `bash scripts/mac/desktop-window-smoke.sh --self-check` first: it exercises the alive/dead branches against stand-in processes, checks the config key and the UI's fail-closed catch, and leaves the tree byte-identical.",
+    "Gradle 8.14.3 on PATH (no wrapper, by design) and a JDK 17+ for android-core-tests; no Android SDK is needed and none of this builds the APK."
+  ]
+}

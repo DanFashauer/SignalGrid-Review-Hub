@@ -117,6 +117,19 @@ jobs:
       - name: assembleDebug
         run: gradle -p native/android/app assembleDebug --console=plain
 
+      # The app module's own JVM unit tests: DeviceGate.isEmulator, the one security
+      # decision made on the Android side (whether the loopback set may widen to the
+      # emulator alias). Until this step existed, replacing its body with `return true`
+      # left every gate green — the core suite cannot see this module, and this job
+      # only assembled. Same trap as the core job: assert on the XML, not the exit code.
+      - name: Test the app module (JVM unit tests)
+        run: gradle -p native/android/app testDebugUnitTest --console=plain
+
+      # Same gate as the core job, pointed at this module: every @Test declared under
+      # app/src/test/kotlin must appear in the XML the runner wrote, by name.
+      - name: Assert the app-module tests actually ran
+        run: node scripts/check-android-core-tests.mjs native/android/app
+
       # An apk that was not produced is not an apk that built. `BUILD SUCCESSFUL` is
       # not the evidence; the artifact is.
       - name: Assert the apk exists

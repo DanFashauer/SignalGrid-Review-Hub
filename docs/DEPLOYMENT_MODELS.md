@@ -109,6 +109,97 @@ Adding hosted SaaS is **additive, not a rewrite** — the hard part is already b
 | Updates & versioning | ✅ | pulls config |
 | Cross-site analytics | ✅ | emits telemetry (consent) |
 
+## Where the planes run — the four hosting tiers
+
+The two planes above say what runs where logically. Physically, each plane
+lands in one of the four hosting tiers the data-center industry names, and the
+tier decides three things SignalGrid cares about: who holds the signals, how far
+a decision travels, and what happens when the link between the planes drops.
+
+| Tier | What it is | Which plane fits | Why it fits | When the link drops |
+|---|---|---|---|---|
+| **Enterprise / private** | The customer's own data center, operated for one organization | Decision plane; control plane too in the self-hosted model | Control and governance: sensitive signals and the audit trail stay resident, which is the whole reason the decision plane exists | Nothing changes for decisions; policy authoring pauses until the control plane is reachable again |
+| **Colocation** | Customer-owned racks inside a third-party facility with dense interconnection | Decision plane for a multi-site customer whose sites already meet there | Interconnection: one decision plane close to several sites and to the identity, network and ITSM systems the connectors read | Same as private; the facility's cross-connects are what keep the connectors reachable |
+| **Hyperscale / cloud region** | A cloud provider's region | Control plane (the hosted and hybrid models); decision plane only in the hosted model | Scale and repeatability: policy distribution, fleet management, cross-site analytics and the MCP endpoint want stable hosted URLs and elastic capacity | Decisions at edge or private sites continue on the policy they last pulled; hosted-model sites lose decisions with the link, which is why hosted is for low-regulation pilots |
+| **Edge** | Compute inside or beside the building, near doors, devices and docks | Decision plane in the hybrid model | Proximity: a decision that gates a door or a device should not cross a WAN to be made | Decisions continue locally; a signal that cannot be refreshed reads as unknown, and unknown raises assurance (golden rule 2) rather than loosening the answer |
+
+Two things follow. First, the decision core is the same code in every tier.
+Policy evaluation is a pure function of a policy version and the evidence it is
+handed (`evaluatePolicy` in `lib/signalgrid-core/src/policy.ts`), and the
+decision path around it is deterministic (`review-invariants` pins every clock
+read in `lib/`), so nothing about the verdict is tier-specific; what differs is
+the transport around it, and the transport is where the latency lives (see the
+in-process versus over-HTTP table in [`RELIABILITY_SLO.md`](./RELIABILITY_SLO.md)).
+Second, the "when the link drops" column rests on proven semantics and one
+unproven mechanism, and the line between them matters. Proven: a decision made
+without the control plane can never relax what a connected decision would have
+said, and past a bound the offline decision is raised to a floor
+(`lib/signalgrid-core/src/continuity.ts`, held by `proof:decision-continuity`);
+a local authority's weight decays as the disconnected interval grows
+(`lib/integrations/src/integrations/local-authority/evaluate.ts`, held by
+`proof:local-authority`); and the control plane serves the policy bundle an edge
+node runs (`GET /cp/v1/policy-bundle`). Not proven: **no test in this repository
+partitions the link between a running control plane and a running decision
+plane, and no edge appliance has been built.** Those two are design targets until
+a proof runs them.
+
+## Sizing by site — what scales and what does not
+
+Size is not a tier. A single clinic and a hospital campus can both sit in the
+edge tier; what changes between them is demand, and demand is what to size for.
+
+**Demand model.** Decisions per second at a site is the sum over its signal
+sources of events that reach the gate:
+
+```
+decisions/sec ≈ Σ over source types ( events per source per hour × count of sources of that type ) / 3600
+```
+
+where a source is a door, a shared device, a dock, an app step-up prompt or a
+scheduled posture poll. Count sources from the site's own inventory; do not
+estimate them. A worked example, with every number an ASSUMPTION for the arithmetic
+and not a measurement: a 40-door, 200-shared-device building where each door
+sees 30 badge events an hour and each device 6 session events an hour produces
+(40 × 30 + 200 × 6) / 3600 ≈ 0.67 decisions/sec on average. Peaks at shift change
+are the number that matters; plan for ten times the average unless the site's
+own badge logs say otherwise.
+
+**Supply, in the order that binds.** One shipped constant and two
+measurements, the measurements taken on one four-core machine and recorded with
+their date in [`RELIABILITY_SLO.md`](./RELIABILITY_SLO.md), which is the
+authority for these numbers; this section restates them and each carries its
+date so a re-measurement there is visibly a drift here.
+
+1. **The shipped rate limit binds first.** 240 requests per minute per key
+   (the default in `rateLimit.ts`, re-confirmed live 2026-08-24), four
+   decisions a second, is what a tenant gets unless `SIGNALGRID_V1_RATE_LIMIT`
+   is raised deliberately. Against the worked example's ten-times peak
+   (6.7/sec) the default limiter is the constraint, not the engine.
+2. **The HTTP path binds second.** 585 requests per second through `/v1` at
+   concurrency 32 (measured 2026-08-24), transport and middleware included;
+   the worked example's peak uses about one percent of it.
+3. **The core binds last.** 1,529 decisions per second on one core in process
+   and 5,370 across four workers at 88 percent of linear (measured 2026-08-24),
+   identical verdicts on every worker. Sizing never reaches this number before
+   it reaches the other two.
+
+**What scales horizontally today.** Policy evaluation is pure, and the
+throughput bench shows independent cores multiplying capacity — each bench
+worker runs its own seeded core and store, so what it measures is N independent
+decision planes, not one plane spread across N workers. Connectors are read
+paths (every family is gated, proven and action-free under
+`check-connector-discipline`).
+
+**What does not scale by adding nodes yet, stated so nobody sizes around a
+property that is not there:** every decision appends to its tenant's audit
+chain by reading the chain head and writing the next digest
+(`lib/signalgrid-core/src/audit.ts`), a per-tenant serialization point; the
+durable ledger is one chain per tenant in one Postgres; the rate limiter is per
+key and per process; no per-site sharding of connectors exists; and no
+multi-node decision-plane deployment has been run, measured or proven. A
+multi-site customer today is several independent decision planes reporting to
+one control plane, not one plane spanning sites.
+
 ## Honest boundaries
 
 - The hosted **SaaS offering is a design direction**, not a live, certified

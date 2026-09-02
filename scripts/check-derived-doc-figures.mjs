@@ -156,6 +156,58 @@ export function routePairCount(root = ROOT) {
   return registeredRoutePairCount(root);
 }
 
+/**
+ * The webhook retry envelope, PARSED from the two shipped config objects.
+ *
+ * WHY THIS IS DERIVED. The v2 signing docs tell a receiver how wide to set its
+ * replay window, and that guidance is only as good as the sender's retry envelope.
+ * It landed as hand-computed prose — "31s", "30s", "~217s" — with no gate, which is
+ * the exact shape of a figure that rots: change `maxAttempts` or `timeoutMs` and the
+ * doc keeps telling receivers a number that is no longer true, and their windows
+ * start rejecting the sender's own last retry.
+ *
+ * Parsed from source text rather than imported because this gate is .mjs and the
+ * configs are .ts; the parse is FLOORED (each field must be found, or throw) so a
+ * renamed field fails loudly instead of silently deriving from a default.
+ */
+const WEBHOOK_RETRY = "lib/integrations/src/integrations/webhooks/retry.ts";
+const WEBHOOK_DISPATCH = "lib/integrations/src/integrations/webhooks/dispatch.ts";
+
+function numField(text, object, field, where) {
+  const block = text.slice(text.indexOf(object));
+  const m = new RegExp(`${field}\\s*:\\s*([0-9.]+)`).exec(block);
+  if (!m) throw new Error(`could not parse ${object}.${field} from ${where} — the field was renamed or removed`);
+  return Number(m[1]);
+}
+
+export function webhookRetryEnvelope(root = ROOT) {
+  const retry = read(WEBHOOK_RETRY, root);
+  const dispatch = read(WEBHOOK_DISPATCH, root);
+  const maxAttempts = numField(retry, "DEFAULT_RETRY_CONFIG", "maxAttempts", WEBHOOK_RETRY);
+  const baseDelayMs = numField(retry, "DEFAULT_RETRY_CONFIG", "baseDelayMs", WEBHOOK_RETRY);
+  const maxDelayMs = numField(retry, "DEFAULT_RETRY_CONFIG", "maxDelayMs", WEBHOOK_RETRY);
+  const jitterFactor = numField(retry, "DEFAULT_RETRY_CONFIG", "jitterFactor", WEBHOOK_RETRY);
+  const timeoutMs = numField(dispatch, "DEFAULT_DISPATCHER_CONFIG", "timeoutMs", WEBHOOK_DISPATCH);
+  // calculateBackoff(attempt) = min(base * 2^(attempt-1), maxDelay); dispatchWithRetry
+  // waits after attempts 1..maxAttempts-1 and never after the last.
+  let backoffMs = 0;
+  for (let attempt = 1; attempt <= maxAttempts - 1; attempt += 1) {
+    backoffMs += Math.min(baseDelayMs * 2 ** (attempt - 1), maxDelayMs);
+  }
+  const worstMs = maxAttempts * timeoutMs + backoffMs * (1 + jitterFactor);
+  return {
+    maxAttempts,
+    backoffSeconds: backoffMs / 1000,
+    timeoutSeconds: timeoutMs / 1000,
+    envelopeSeconds: Math.floor(worstMs / 1000),
+  };
+}
+
+export const webhookMaxAttempts = (root = ROOT) => webhookRetryEnvelope(root).maxAttempts;
+export const webhookBackoffSeconds = (root = ROOT) => webhookRetryEnvelope(root).backoffSeconds;
+export const webhookTimeoutSeconds = (root = ROOT) => webhookRetryEnvelope(root).timeoutSeconds;
+export const webhookEnvelopeSeconds = (root = ROOT) => webhookRetryEnvelope(root).envelopeSeconds;
+
 // ── The table ───────────────────────────────────────────────────────────────────────
 // Each row: the document, a regex whose ONE capture group is the stated figure, the
 // deriver, and a short `from` naming where the truth comes from (printed on failure, so
@@ -242,6 +294,45 @@ export const FIGURES = [
     re: /\*\*: (\d+) proof gates \(the figure/,
     derive: proofScriptCount,
     from: "proof:* keys in the root package.json (the investor one-pager's proof-first claim)",
+  },
+  // ── Webhook v2 replay-window guidance ────────────────────────────────────────────
+  // GATED: the four integers a receiver's tolerance is derived FROM. NOT gated, and
+  // deliberately: the 300000 ms recommendation itself, which is judgement about
+  // headroom rather than a fact about the tree. Gate the derivation, report the advice.
+  {
+    id: "webhook-retry-max-attempts",
+    doc: "docs/SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md",
+    re: /is `maxAttempts: (\d+)`/,
+    derive: webhookMaxAttempts,
+    from: `DEFAULT_RETRY_CONFIG.maxAttempts in ${WEBHOOK_RETRY}`,
+  },
+  {
+    id: "webhook-retry-backoff-seconds",
+    doc: "docs/SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md",
+    re: /backoff waits summing to (\d+)s/,
+    derive: webhookBackoffSeconds,
+    from: `sum of calculateBackoff() over attempts 1..maxAttempts-1, from ${WEBHOOK_RETRY}`,
+  },
+  {
+    id: "webhook-dispatch-timeout-seconds",
+    doc: "docs/SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md",
+    re: /allows (\d+)s per attempt/,
+    derive: webhookTimeoutSeconds,
+    from: `DEFAULT_DISPATCHER_CONFIG.timeoutMs in ${WEBHOOK_DISPATCH}`,
+  },
+  {
+    id: "webhook-retry-envelope-seconds",
+    doc: "docs/SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md",
+    re: /in flight (\d+)s after its timestamp/,
+    derive: webhookEnvelopeSeconds,
+    from: "maxAttempts*timeoutMs + jittered backoff, from retry.ts and dispatch.ts together",
+  },
+  {
+    id: "webhook-tolerance-floor-seconds",
+    doc: "docs/SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md",
+    re: /A tolerance below (\d+)s will reject/,
+    derive: webhookEnvelopeSeconds,
+    from: "the same envelope — the floor a receiver's window must clear, stated as a bound not an estimate",
   },
 ];
 

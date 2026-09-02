@@ -13,7 +13,7 @@ import {
   WebhookEventType,
   DeliveryStatus,
 } from './types';
-import { createSignedHeaders } from './sign';
+import { createSignedHeaders, WebhookTimestampUnresolvable } from './sign';
 import { SIGNING_SECRET_MISSING } from '../adapters/signing';
 import {
   calculateBackoff,
@@ -67,6 +67,19 @@ export interface DeliveryResult {
    * is never supposed to send.
    */
   suppressed?: boolean;
+  /**
+   * This outcome cannot change on a retry, and the retry loop must stop NOW.
+   *
+   * STRUCTURAL, not a string. The other permanent outcomes are recognised by
+   * `isPermanentDeliveryError` from things it can derive — a tier, a status code,
+   * the URL validator's own reason table. A signing refusal has no such handle:
+   * its text comes from an error's `message`, and matching on that text is the
+   * exact defect the retry loop already shipped once (it compared `result.error`
+   * against two literals `validateWebhookUrl` had stopped returning, and a dead
+   * comparison does not fail — it just never matches). So the site that KNOWS the
+   * outcome is final says so here, and the classifier reads a flag.
+   */
+  permanent?: boolean;
 }
 
 /**
@@ -184,6 +197,16 @@ export const WEBHOOK_ENVELOPE_INVALID =
   'webhook envelope refused: the payload does not match WebhookPayloadSchema (a source edit added or renamed a top-level key)';
 
 /**
+ * No signed headers could be produced, so nothing was sent.
+ *
+ * The shared wording, exported for the same reason `WEBHOOK_ENVELOPE_INVALID` and
+ * `SIGNING_SECRET_MISSING` are: an assertion that retypes a refusal's text is
+ * pinning its own copy, and drifts silently when the real one changes.
+ */
+export const WEBHOOK_SIGNING_REFUSED =
+  'webhook signing refused: no signed headers could be produced for this delivery';
+
+/**
  * Build webhook payload — the CLOSED top-level set, now actually enforced.
  *
  * `WebhookPayloadSchema` has described this shape since the family was written and
@@ -298,7 +321,61 @@ async function dispatchToEndpoint(
   }
   
   const payloadStr = JSON.stringify(payload);
-  const headers = createSignedHeaders(payloadStr, secret, payload.deliveryId, payload.id);
+
+  // SIGN, OR REFUSE VISIBLY — the fourth refusal in this function, and the only one
+  // that used to leave NO TRACE AT ALL.
+  //
+  // `createSignedHeaders` THROWS when no delivery instant resolves
+  // (`WebhookTimestampUnresolvable`). This call sat in `dispatchToEndpoint`'s scope
+  // but OUTSIDE its try, so the throw propagated out of `dispatchWithRetry`, rejected
+  // that webhook's entry in `dispatchEvent`'s `Promise.allSettled`, was counted
+  // `failed` — and wrote no `recordDelivery` row. Every other refusal in this family
+  // records one; this was the single one that did not, so the per-webhook delivery
+  // log an operator opens to ask "what happened to my webhook?" showed nothing.
+  //
+  // NOT REACHABLE FROM PRODUCTION CONFIG TODAY, and the fix is not a claim that it
+  // is: `buildPayload` mints `timestamp` through `z.string().datetime()`, so the
+  // dispatch path always hands this a readable instant. It is a LATENT no-row
+  // refusal, which is why it is fixed structurally and driven rather than reasoned
+  // about — the schema admits pre-epoch instants (`0000-01-01T00:00:00Z` parses to a
+  // negative epoch-ms, which `payloadTimestampMs` refuses), so the distance between
+  // "unreachable" and "reachable" here is one edit to the literal above.
+  //
+  // PERMANENT BY CONSTRUCTION, not by class-name matching. Signing is a pure
+  // function of `(payloadStr, secret, deliveryId, eventId)` — the payload is built
+  // ONCE above the retry loop and the secret is resolved from the same place every
+  // attempt — so no input to it changes between attempts and no throw from it can be
+  // transient. The flag says that; it is not read back out of the message.
+  let headers: Record<string, string>;
+  try {
+    headers = createSignedHeaders(payloadStr, secret, payload.deliveryId, payload.id);
+  } catch (error) {
+    // The CLASS names the refusal, not a substring of the prose. `WebhookTimestampUnresolvable`
+    // is referenced as a value here so a rename cannot leave this reading a stale label.
+    const named =
+      error instanceof WebhookTimestampUnresolvable
+        ? WebhookTimestampUnresolvable.name
+        : error instanceof Error
+          ? error.name
+          : 'Error';
+    const detail = (error instanceof Error ? error.message : String(error))
+      .replace(/\s+/g, ' ')
+      .slice(0, 300);
+    const errorMessage = `${WEBHOOK_SIGNING_REFUSED}: ${named}: ${detail}`;
+    await recordDelivery(
+      webhook.id,
+      payload.id,
+      'failed',
+      undefined,
+      undefined,
+      errorMessage,
+    );
+    return {
+      success: false,
+      error: errorMessage,
+      permanent: true,
+    };
+  }
 
   try {
     const response = await fetch(webhook.url, {
@@ -354,6 +431,13 @@ async function dispatchToEndpoint(
  * stopped returning.
  */
 export function isPermanentDeliveryError(result: DeliveryResult): boolean {
+  // STATED BY THE SITE THAT KNOWS. A signing refusal is final and carries no handle
+  // this function could derive one from — its text is an error's `message`, and
+  // matching on message text is how the dead string comparisons below got shipped.
+  if (result.permanent === true) {
+    return true;
+  }
+
   // A tier does not change between attempts. Retrying a suppression is retrying a
   // policy decision — it wrote one suppressed delivery row per attempt and then
   // dead-lettered an event that was never supposed to leave.

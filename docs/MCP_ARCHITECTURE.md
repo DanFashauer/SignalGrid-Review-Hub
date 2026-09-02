@@ -69,6 +69,29 @@ the sibling lets the grid **read a device**. Neither one decides anything. A
 tool result from either plane-2 server is input or output of the trust plane,
 never a substitute for it.
 
+### MCP and skills are different instruments
+
+A skill is not a smaller MCP server and an MCP tool is not a stricter skill. In this
+repository the two carry different responsibilities, and confusing them is how a rule of
+conduct ends up as a tool nobody calls, or a capability ends up as prose nobody can
+invoke:
+
+- **MCP (`artifacts/mcp-server/`)** exposes capabilities of an external system to a model
+  over a client/server protocol. Here the "external system" is SignalGrid's own
+  fixture-backed decision core, and the tools are read-only (see
+  [MCP security model](MCP_SECURITY_MODEL.md)). The model decides *whether* to call one;
+  the tool decides nothing about trust (DR-008).
+- **Skills (`.claude/skills/`)** are instruction files a model selects by their metadata.
+  They shape the workflow, the output format and the constraints of the work: the role
+  executors, the owner-comms rules, the session rituals. A skill can *use* MCP tools; it
+  never exposes a capability of its own. The registry holds 24 tracked directories, 14
+  vendored and 10 first-party, and `.claude/skills/VENDORED.md` is the record of which is
+  which (gated by the publication boundary's vendored-set arithmetic).
+
+So: a new capability that a model should be able to reach lands as an MCP tool behind the
+same read-only, fixture-first rules as the rest of Plane 2; a new rule about *how* the
+organisation works lands as a skill. Neither one moves the trust boundary in Plane 3.
+
 ## Plane 3 — the trust authority plane (the deterministic core)
 
 `lib/signalgrid-core` — deterministic, fixture-backed, fail-closed. No

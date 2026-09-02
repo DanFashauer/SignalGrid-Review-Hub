@@ -56,12 +56,15 @@
 //     (methods included) and the tested expression must BE that parameter.
 //   · Inbound verification, BY NAME with a reason. `if (secret)` in a verifier asks
 //     "can we check this?", a different question with a different correct answer
-//     (refuse the request, not send it unsigned). The map below is EMPTY on this
-//     tree, and that is a measured fact rather than an oversight: no module under
-//     the scan root verifies an inbound signature today — the only three files
-//     containing `createHmac`/`X-Signature` are the two adapters above and
-//     webhooks/sign.ts, which signs outbound. The map exists so the first inbound
-//     verifier gets an entry with a reason instead of a widened regex.
+//     (refuse the request, not send it unsigned). The map below HAS ONE ENTRY as of
+//     2026-09-02: webhooks/sign.ts gained `verifySignedWebhook` when webhook signing
+//     moved to scheme v2. This header used to say the map was empty and that sign.ts
+//     "signs outbound" full stop — both true when written and both false the moment
+//     that function landed, which is why the count in the report line below is now
+//     DERIVED from the map rather than narrated beside it. NOTE what the entry does
+//     and does not claim: `verifySignedWebhook` is a REFERENCE verifier driven by
+//     proof:webhooks; no inbound ROUTE in this repository calls it. It is excluded
+//     because its secret test asks "can we check this?", not "may we send unsigned?".
 
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -84,12 +87,17 @@ const SIGN_OP = /createHmac|signBody|signPayload|createSignedHeaders|X-Signature
 const SECRET_EXPR = /[\w$.?]*secret[\w$.?]*/i;
 
 /**
- * Inbound verifiers, excluded BY NAME with a reason. Empty on this tree; see the
- * header. An entry here is a claim a reader can check, which an exclusion by regex
- * would not be.
+ * Inbound verifiers, excluded BY NAME with a reason. An entry here is a claim a
+ * reader can check, which an exclusion by regex would not be.
  */
 export const INBOUND_VERIFIERS = new Map([
-  // ["verifyInboundSignature", "asks whether we CAN verify; its refusal rejects the request"],
+  [
+    "verifySignedWebhook",
+    "webhooks/sign.ts, scheme v2 — a RECEIVER-side verifier: its secret test asks " +
+      "whether we CAN verify, and its refusal rejects the request rather than sending " +
+      "anything unsigned. Reference implementation driven by proof:webhooks; no inbound " +
+      "route in this repository calls it.",
+  ],
 ]);
 
 /**
@@ -409,6 +417,20 @@ function selfTest() {
       blockAfter("{ a; { b; } c; }", 0) === "{ a; { b; } c; }"],
     ["the inbound-verifier exclusion map is a Map that can hold an entry",
       INBOUND_VERIFIERS instanceof Map],
+    // The map is no longer empty, so "does it hold an entry" is no longer the whole
+    // question: every entry must carry a REASON a reader can check, and must name a
+    // function that actually exists under the scan root. An exclusion for a symbol
+    // that has been renamed or deleted silences a file nobody is watching.
+    ["every inbound-verifier exclusion carries a non-trivial reason",
+      [...INBOUND_VERIFIERS.values()].every((why) => typeof why === "string" && why.length > 40)],
+    ["every excluded inbound verifier is a symbol that EXISTS under the scan root",
+      // Enumerated HERE rather than reusing the module-level `files`: --self-test
+      // exits above that binding, so referencing it threw a TDZ ReferenceError and
+      // the self-test could not run at all.
+      [...INBOUND_VERIFIERS.keys()].every((name) =>
+        execFileSync("git", ["ls-files", SCAN_ROOT], { cwd: repoRoot, encoding: "utf8" })
+          .split("\n").filter((f) => f.endsWith(".ts"))
+          .some((f) => new RegExp(`function\\s+${name}\\b`).test(readFileSync(resolve(repoRoot, f), "utf8"))))],
   ];
   const failed = checks.filter(([, ok]) => !ok);
   for (const [n, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${n}`);
@@ -436,7 +458,17 @@ console.log("Signing-unconditional gate — a missing secret refuses, it never s
 console.log(`  connector files scanned:          ${files.length}`);
 console.log(`  files that sign something:        ${signingFiles.length}`);
 for (const f of signingFiles) console.log(`      ${f}`);
-console.log(`  inbound verifiers excluded:       ${INBOUND_VERIFIERS.size} (none exist under the scan root today)`);
+// DERIVED from the map, never narrated beside it. This line printed the literal
+// "(none exist under the scan root today)" regardless of the map's contents, so it
+// went on reporting an empty tree after `verifySignedWebhook` landed — a report that
+// cannot be wrong is a report that cannot be right either.
+console.log(
+  `  inbound verifiers excluded:       ${INBOUND_VERIFIERS.size}` +
+    (INBOUND_VERIFIERS.size === 0
+      ? " (none exist under the scan root today)"
+      : ` (${[...INBOUND_VERIFIERS.keys()].join(", ")})`),
+);
+for (const [name, why] of INBOUND_VERIFIERS) console.log(`      ${name} — ${why}`);
 
 // FLOOR. A scan that finds no signing at all would report "no unconditional signing
 // branch" over an empty set — green about nothing. Three files sign in this tree;

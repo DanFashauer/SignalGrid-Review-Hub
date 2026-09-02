@@ -176,8 +176,51 @@ code says so at each site.
   expired or not-yet-valid token, a wrong issuer or audience, `alg:none`, HS256
   confusion, and an unknown `kid` — and `proof:live-idp` asserts the *reason*, not merely
   refusal, against a real certified `oidc-provider` booted in-process over real HTTP.
-- **Webhook signing.** Outbound deliveries carry an HMAC-SHA256 `X-Webhook-Signature`
-  (`signPayload` / `createSignedHeaders`, proven by `proof:webhooks`).
+- **Webhook signing — scheme v2, the timestamp is inside the MAC.** Outbound
+  deliveries carry `X-Webhook-Signature: v2=<64 lowercase hex>` and
+  `X-Webhook-Timestamp` (`createSignedHeaders` in
+  `lib/integrations/src/integrations/webhooks/sign.ts`, proven by `proof:webhooks`).
+
+  **Reconstruction string.** A receiver recomputes, over the RAW request body
+  before parsing:
+
+  ```
+  signedMaterial = `${X-Webhook-Timestamp}.${rawBody}`
+  expected       = HMAC-SHA256(signedMaterial, endpointSecret)   // lowercase hex
+  accept iff  X-Webhook-Signature === `v2=${expected}`  (constant-time compare)
+  ```
+
+  **Unit.** `X-Webhook-Timestamp` is an integer count of **milliseconds** since the
+  Unix epoch, UTC (13 digits today, e.g. `1756771200000`). Not seconds. Compare and
+  re-sign the exact ASCII digits received; never reformat them.
+
+  **Tolerance guidance.** The timestamp is the **delivery's** instant, minted once
+  and unchanged across retries, so a receiver's replay window must exceed the
+  sender's whole retry envelope. Every integer below is DERIVED from the shipped
+  configs and gated by `scripts/check-derived-doc-figures.mjs` (rows
+  `webhook-retry-*`), because hand-computed prose is exactly the figure that rots
+  when someone changes a default: `DEFAULT_RETRY_CONFIG` in
+  `lib/integrations/src/integrations/webhooks/retry.ts` is `maxAttempts: 6` with
+  backoff waits summing to 31s before jitter, and `DEFAULT_DISPATCHER_CONFIG` in
+  `lib/integrations/src/integrations/webhooks/dispatch.ts` allows 30s per attempt —
+  so a fully timing-out delivery can still be in flight 217s after its timestamp was
+  minted. **A tolerance below 217s will reject the sender's own last retry.**
+
+  `toleranceMs: 300_000` (five minutes) is the recommended setting. That
+  recommendation is **REPORTED, not gated** — it is a judgement about how much
+  headroom to leave above the derived floor, not a fact about the tree. Future-dated
+  timestamps are refused by default; allow skew only deliberately (`futureSkewMs`).
+  An **absent, repeated or malformed** timestamp must be refused, never waved
+  through — absence tightens.
+
+  **The previous scheme is NOT accepted. There is no dual-accept.** v1 signed the
+  **body alone** and emitted an unprefixed 64-hex signature with the timestamp
+  outside the signed material, so a replayer could re-POST a captured body with a
+  freshened timestamp header and still verify — measured 2026-09-02 as 2 distinct
+  timestamps under 1 signature across 3 attempts. `verifySignedWebhook` refuses an
+  unprefixed signature by name so an operator upgrades the sender rather than
+  hunting a key mismatch. A verifier that accepted both schemes would leave every
+  receiver with no replay protection while reporting success.
 
 **Fixture, and disclosed as fixture (STRUCTURAL):**
 
@@ -187,10 +230,17 @@ code says so at each site.
   anyone who can read the repo**, and the file says exactly that: *"a real deployment
   would use per-tenant secrets or asymmetric signing."* It proves the tampering path
   fails closed; it does not prove authenticity against an attacker holding the key.
-- **Inbound webhook verification has no implementation.** No inbound path verifies a
-  signature (the unused verifier was removed as dead code on 2026-09-01 rather than kept
-  as a claim), and signing itself only engages in the live tier. Treating an inbound
-  webhook as authenticated is **not** something the product does today.
+- **Inbound webhook verification is a REFERENCE IMPLEMENTATION, not a deployed path.**
+  No inbound route in this repository receives or verifies a webhook. `sign.ts` exports
+  `verifySignedWebhook(headers, body, secret, { toleranceMs, now })` — the verifier a
+  receiver ports, with `now` **injected** so it reads no clock — and `proof:webhooks`
+  drives it as an oracle across acceptance, staleness, future skew, absent/malformed/
+  repeated headers, tampering, wrong secret, and v1 refusal. That is a proven function,
+  not a proven deployment. (An earlier unused verifier was deleted as dead code on
+  2026-09-01 precisely because nothing exercised it; this one is exercised, and its
+  docblock says in-file that it is wired to no route.) Signing itself still only engages
+  in the live tier. Treating an inbound webhook as authenticated is **not** something the
+  product does today.
 
 The doctrine rule that ties these together **(DOCTRINE)**:
 

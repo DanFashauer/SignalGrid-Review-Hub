@@ -92,7 +92,7 @@ const DECLARED_CLOCK_READS = new Map([
   [
     "lib/integrations/src/",
     {
-      count: 21,
+      count: 20,
       reason:
         "Connector boundary. Fixture/demo enrolment and last-seen timestamps, and freshness computed " +
         "AT the boundary where wall-clock is the input being read — not a decision path. The decision " +
@@ -107,7 +107,14 @@ const DECLARED_CLOCK_READS = new Map([
         "connector-boundary reads — `itsm/store.ts` createTicketTemplate()'s `Date.now()`-seeded template " +
         "id and `webhooks/retry.ts` getNextRetryAt()'s `new Date(Date.now() + delay)` — both removed with " +
         "their unreachable callers (zero importers repo-wide, verified by grep before deletion), not " +
-        "rewritten to an injected clock. No live clock read moved or was added.",
+        "rewritten to an injected clock. No live clock read moved or was added. " +
+        "DROPPED to 20 (2026-09-02, webhook signing scheme v2): webhooks/sign.ts createSignedHeaders() " +
+        "read `Date.now()` for `X-Webhook-Timestamp`. Under v2 the timestamp is INSIDE the MAC and the " +
+        "function is called once per retry ATTEMPT, so a per-call clock read would give one delivery " +
+        "several signatures. The read is REMOVED, not injected and not moved: the instant is derived " +
+        "from the payload's own `timestamp` (minted once per delivery in dispatch.ts buildPayload), and " +
+        "an unresolvable instant now throws WebhookTimestampUnresolvable rather than falling back to " +
+        "the clock. sign.ts reads no clock at all; `proof:webhooks` asserts the refusal by name.",
       retires: "When connector fixtures move to injected clocks, this drops to the freshness derivations only.",
     },
   ],

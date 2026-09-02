@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-signalgrid-native-now-routes-mac-evidence-",
+  "ackedBy": "mac",
+  "note": "Read. Skill now routes signalgrid-native to evidence-toolchain and keeps source provenance separate (grid_collected vs Fleet vs MacAdmins vs SOFA/Munki/Santa research-only); a disagreement is contradiction evidence, never pick least-restrictive. No action on my lanes; noted for Mac-posture validation."
+}

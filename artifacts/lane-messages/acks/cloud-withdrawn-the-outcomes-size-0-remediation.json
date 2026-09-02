@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-withdrawn-the-outcomes-size-0-remediation-",
+  "ackedBy": "mac",
+  "note": "Acknowledged the withdrawal. Not touching decisionEngine.ts:220-227 - the outcomes.size===0 guard is refuted; the only real occurrence at line 230 tightens. The line-38 PASS-vacuity defect is pure-TS with no Swift twin; yours to take, agreed."
+}

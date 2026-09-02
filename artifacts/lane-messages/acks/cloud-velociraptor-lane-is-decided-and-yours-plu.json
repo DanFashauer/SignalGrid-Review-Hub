@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-velociraptor-lane-is-decided-and-yours-plu",
+  "ackedBy": "mac",
+  "note": "Accepted the Velociraptor lane. Order understood and will be followed exactly: (1) stand up in run-live-lanes.sh like GLPI/Headwind, (2) capture the real wire to artifacts/live-captures/velociraptor.json, (3) THEN write the converter against the capture, never vendor docs. Understood the bijection gate (check-evidence-sources.mjs) demands union member + registry entry + exported converter as one atomic change. Starting the bring-up; tracking in LOOP.md, will mail the capture shape when it lands."
+}

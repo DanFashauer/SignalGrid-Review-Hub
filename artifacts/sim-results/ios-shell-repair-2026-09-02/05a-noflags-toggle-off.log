@@ -1,7 +1,7 @@
 getpwuid_r did not find a match for uid 501
 Filtering the log data using "subsystem == "com.enterprise.shell" OR (process == "EnterpriseShell" AND (composedMessage CONTAINS[c] "fatal" OR composedMessage CONTAINS[c] "crash"))"
 Timestamp               Ty Process[PID:TID]
-2026-09-02 16:15:56.139 Df EnterpriseShell[86991:d21832] [com.enterprise.shell:lockscreen] lock_screen_presented trigger=did_appear manual_login_available=false managed=false kiosk_active=false asam_probe=notAttempted local_session_allowed=false
-2026-09-02 16:15:56.227 Df EnterpriseShell[86991:d21832] [com.enterprise.shell:lockscreen] lock_screen_presented trigger=asam_probe_changed manual_login_available=false managed=false kiosk_active=false asam_probe=unavailable local_session_allowed=false
-2026-09-02 16:15:56.233 Df EnterpriseShell[86991:d21832] [com.enterprise.shell:lockscreen] lock_screen_presented trigger=did_become_active manual_login_available=false managed=false kiosk_active=false asam_probe=unavailable local_session_allowed=false
+2026-09-02 17:39:52.601 Df EnterpriseShell[95776:d394e7] [com.enterprise.shell:lockscreen] lock_screen_presented trigger=did_appear manual_login_available=false managed=false kiosk_active=false asam_probe=notAttempted local_session_allowed=false
+2026-09-02 17:39:52.710 Df EnterpriseShell[95776:d394e7] [com.enterprise.shell:lockscreen] lock_screen_presented trigger=did_become_active manual_login_available=false managed=false kiosk_active=false asam_probe=notAttempted local_session_allowed=false
+2026-09-02 17:39:52.752 Df EnterpriseShell[95776:d394e7] [com.enterprise.shell:lockscreen] lock_screen_presented trigger=asam_probe_changed manual_login_available=false managed=false kiosk_active=false asam_probe=unavailable local_session_allowed=false
 Child process terminated with signal 15: Terminated

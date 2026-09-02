@@ -79,6 +79,16 @@ checks is derived from the `static func managed<X>(_ key: String, default:)`
 definitions in the tree rather than listed, and both gates carry a `--self-test`
 that runs immediately before them in preflight and in CI.
 
+**Failing the `Lint & Security` job earlier.** That job needs a macOS runner and
+swiftlint, neither of which the cloud lane has, so an error-severity Swift violation
+used to surface only after a full CI round trip — PR #387 failed on four of them, all
+plain text matching. `scripts/check-swift-serious.mjs` (preflight and the Node-only
+`validation` job) derives the error-severity rules and the `line_length` error
+threshold from `native/ios/.swiftlint.yml` and applies the text-evaluable ones,
+honouring `swiftlint:disable` comments. It GATES only those; every warning-severity
+rule and every rule needing the Swift AST is left to CI's swiftlint, which remains the
+authority.
+
 **What none of this proves.** A hosted macOS runner is a throwaway VM and a simulator
 is not a device: nothing here says anything about MDM enrolment, supervision, or
 on-device enforcement. See `docs/MAC_LANE.md` for that boundary.

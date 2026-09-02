@@ -158,6 +158,8 @@ const STEPS = [
   { name: "iOS policy defaults (no managed-config default derived from the absence of policy)", cmd: ["node", "scripts/check-ios-policy-defaults.mjs"] },
   { name: "Sim-script self-check self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs", "--self-test"] },
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
+  { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },
+  { name: "Swift serious violations (the error-severity swiftlint rules, without a Swift toolchain)", cmd: ["node", "scripts/check-swift-serious.mjs"] },
   { name: "iOS demo flags (every simulator flag the shell reads is documented, and vice versa)", cmd: ["node", "scripts/check-demo-flags-documented.mjs"] },
   { name: "Pagination-truncation guard (a capped read must not look complete)", cmd: ["node", "scripts/check-pagination-truncation.mjs"] },
   { name: "Absent-collection law (nothing observed ≠ nothing wrong)", cmd: ["pnpm", "run", "proof:absent-collection"] },

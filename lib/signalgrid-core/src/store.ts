@@ -47,15 +47,31 @@ export class MemoryStore {
   private readonly verifiedKeys = new Map<string, ApiKeyRecord>();
   private static readonly MAX_VERIFIED_KEYS = 1024;
 
-  // ponytail: decisions + snapshots kept in memory PER TENANT — FIFO, default 5000, no clock.
-  // Unbounded, every evaluate grew the process forever; a durable store serves older rows.
+  // ONE KNOB (FIFO, per tenant, default 5000, no clock); every collection an
+  // evaluate grows derives its cap from it, so no bound is enforced at a smaller
+  // constant than the memory it holds:
+  //
+  //   decisions + snapshots  1x  one snapshot per decision
+  //   auditEvents            2x  decision.evaluated + evidence.snapshot.created
+  //                              (lib/signalgrid-core/src/decision.ts:157,166)
+  //   webhookDeliveries      2x  one per ACTIVE subscribed endpoint — a fan-out
+  //   remediations           1x  bounded by the decision that proposed them
   private readonly maxDecisionsPerTenant: number;
+  private readonly maxAuditEventsPerTenant: number;
+  private readonly maxWebhookDeliveriesPerTenant: number;
+  private readonly maxRemediationsPerTenant: number;
   private readonly decisionOrder = new Map<string, string[]>();
+  private readonly decisionsEvicted = new Map<string, number>();
+  private readonly webhookDeliveryOrder = new Map<string, string[]>();
+  private readonly remediationOrder = new Map<string, string[]>();
 
   constructor(options: { maxDecisionsPerTenant?: number } = {}) {
     const n = options.maxDecisionsPerTenant ?? 5000;
     if (!Number.isInteger(n) || n < 1) throw new Error(`maxDecisionsPerTenant must be a positive integer, got ${String(n)}`);
     this.maxDecisionsPerTenant = n;
+    this.maxAuditEventsPerTenant = n * 2;
+    this.maxWebhookDeliveriesPerTenant = n * 2;
+    this.maxRemediationsPerTenant = n;
   }
 
   private readonly identities = new Map<string, Identity>();
@@ -74,7 +90,9 @@ export class MemoryStore {
   private readonly remediations = new Map<string, RemediationAction>();
   private readonly resolutionConfigs = new Map<string, ResolutionConfig>();
   private readonly decisionSeq = new Map<string, number>();
-  private readonly auditEvents: AuditEvent[] = [];
+  // Per tenant. `auditTail` deliberately not trimmed: seq must stay monotonic.
+  private readonly auditByTenant = new Map<string, AuditEvent[]>();
+  private readonly auditEvicted = new Map<string, { count: number; lastDigest: string }>();
   private readonly auditTail = new Map<string, { seq: number; digest: string }>();
 
   // Composite-key indexes for the per-decision hot path, so device/identity/
@@ -308,19 +326,40 @@ export class MemoryStore {
 
   // ── Decisions & snapshots ─────────────────────────────────────────────────
 
+  /** Bounded per-tenant FIFO: append, then evict from the front past `max`. */
+  private track<T>(
+    order: Map<string, T[]>,
+    tenantId: string,
+    item: T,
+    max: number,
+    evict: (evicted: T) => void,
+  ): void {
+    const rows = order.get(tenantId) ?? [];
+    rows.push(item);
+    while (rows.length > max) evict(rows.shift()!);
+    order.set(tenantId, rows);
+  }
+
   putDecision(decision: Decision): void {
     const fresh = !this.decisions.has(decision.id);
     this.decisions.set(decision.id, decision);
     if (!fresh) return;
-    const order = this.decisionOrder.get(decision.tenantId) ?? [];
-    order.push(decision.id);
-    while (order.length > this.maxDecisionsPerTenant) {
-      const evictId = order.shift()!;
+    this.track(this.decisionOrder, decision.tenantId, decision.id, this.maxDecisionsPerTenant, (evictId) => {
       const evicted = this.decisions.get(evictId);
       this.decisions.delete(evictId);
       if (evicted) this.snapshots.delete(evicted.evidenceSnapshotId);
-    }
-    this.decisionOrder.set(decision.tenantId, order);
+      // Counted so /v1/metrics can say its numbers cover a WINDOW, not the whole history.
+      this.decisionsEvicted.set(decision.tenantId, (this.decisionsEvicted.get(decision.tenantId) ?? 0) + 1);
+    });
+  }
+
+  /**
+   * What window the decision-derived aggregates were computed over. `capped` is
+   * true once ANY row has been evicted for this tenant — from that moment the
+   * retained list is a suffix of the tenant's history, not the whole of it.
+   */
+  decisionBound(tenantId: string): { capped: boolean; maxPerTenant: number } {
+    return { capped: (this.decisionsEvicted.get(tenantId) ?? 0) > 0, maxPerTenant: this.maxDecisionsPerTenant };
   }
 
   /**
@@ -366,7 +405,11 @@ export class MemoryStore {
   }
 
   putWebhookDelivery(delivery: WebhookDelivery): void {
+    const fresh = !this.webhookDeliveries.has(delivery.id);
     this.webhookDeliveries.set(delivery.id, delivery);
+    if (!fresh) return;
+    this.track(this.webhookDeliveryOrder, delivery.tenantId, delivery.id, this.maxWebhookDeliveriesPerTenant,
+      (id) => { this.webhookDeliveries.delete(id); });
   }
 
   listWebhookDeliveries(tenantId: string): WebhookDelivery[] {
@@ -378,7 +421,13 @@ export class MemoryStore {
   // ── Remediation ───────────────────────────────────────────────────────────
 
   putRemediation(action: RemediationAction): void {
+    // `fresh` matters: approving a remediation re-puts the SAME id, and counting
+    // that as a new row would evict a live one on every approval.
+    const fresh = !this.remediations.has(action.id);
     this.remediations.set(action.id, action);
+    if (!fresh) return;
+    this.track(this.remediationOrder, action.tenantId, action.id, this.maxRemediationsPerTenant,
+      (id) => { this.remediations.delete(id); });
   }
 
   getRemediation(tenantId: string, id: string): RemediationAction | undefined {
@@ -404,15 +453,31 @@ export class MemoryStore {
   // ── Audit ledger ──────────────────────────────────────────────────────────
 
   appendAudit(event: AuditEvent): void {
-    this.auditEvents.push(event);
+    this.track(this.auditByTenant, event.tenantId, event, this.maxAuditEventsPerTenant, (evicted) => {
+      // The evicted event's digest is REMEMBERED, not discarded: the chain is a
+      // hash chain, so a verifier that still started at GENESIS would report the
+      // surviving head as broken. Keeping the boundary digest lets the verifier
+      // check the retained window honestly and SAY that it is a window
+      // (`truncated`), which is the same treatment LedgerVerification.truncated
+      // gives the durable ledger. Silently reporting `valid: true` over a
+      // re-anchored chain without saying so would be the false all-clear.
+      const prior = this.auditEvicted.get(event.tenantId);
+      this.auditEvicted.set(event.tenantId, {
+        count: (prior?.count ?? 0) + 1,
+        lastDigest: evicted.digest,
+      });
+    });
     // Maintain an O(1) per-tenant chain tail so appends do not rescan the log.
     this.auditTail.set(event.tenantId, { seq: event.seq, digest: event.digest });
   }
 
   listAudit(tenantId: string): AuditEvent[] {
-    return this.auditEvents
-      .filter((row) => row.tenantId === tenantId)
-      .sort((a, b) => a.seq - b.seq);
+    return [...(this.auditByTenant.get(tenantId) ?? [])].sort((a, b) => a.seq - b.seq);
+  }
+
+  /** The eviction boundary, or undefined: `lastDigest` is what the oldest RETAINED event links to. */
+  auditEviction(tenantId: string): { count: number; lastDigest: string } | undefined {
+    return this.auditEvicted.get(tenantId);
   }
 
   /** Digest of the last event in a tenant's chain (O(1)), or undefined. */

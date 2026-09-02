@@ -49,6 +49,26 @@ function generateCredentialId(): string {
 }
 
 /**
+ * The tenant every audit row of a ceremony must carry. An untenanted row lands
+ * `tenant_id NULL`, and `GET /v1/audit` (`WHERE tenant_id = $1`) never matches NULL.
+ *
+ * NOT derived from `userId`: `${tenantId}:${identityRef}` is the API server's
+ * convention, not this library's contract. Passed explicitly instead.
+ * FAIL CLOSED: a missing tenant THROWS rather than recording `tenantId: undefined`,
+ * aborting the ceremony with no credential stored and no step-up released.
+ * The type catches TypeScript callers; this check catches the JavaScript ones.
+ */
+function requireTenantId(tenantId: string, ceremony: string): string {
+  if (typeof tenantId !== 'string' || tenantId.trim().length === 0) {
+    throw new Error(
+      `webauthn: ${ceremony} requires a non-empty tenantId — refusing to run a ceremony whose ` +
+        'audit rows would land untenanted and be invisible to every tenant\'s audit read',
+    );
+  }
+  return tenantId;
+}
+
+/**
  * Convert buffer to base64url
  */
 function bufferToBase64url(buffer: ArrayBuffer | Uint8Array): string {
@@ -137,8 +157,11 @@ export async function verifyRegistration(
       attestationObject: string;
     };
     type: string;
-  }
+  },
+  /** The tenant this ceremony belongs to; stamped on every audit row it writes. */
+  tenantId: string
 ): Promise<VerificationResult> {
+  const tenant = requireTenantId(tenantId, 'verifyRegistration');
   const timestamp = new Date().toISOString();
 
   // A malformed CALL SHAPE is a refusal, not a crash. Everything below assumes
@@ -290,7 +313,7 @@ export async function verifyRegistration(
   await appendAuditRecord(
     'security.webauthn.registered',
     { type: 'user', id: userId },
-    { meta: { credentialId: credential.id } }
+    { meta: { credentialId: credential.id }, tenantId: tenant }
   );
 
   return {
@@ -354,8 +377,11 @@ export async function verifyAuthentication(
       signature: string;
     };
     type: string;
-  }
+  },
+  /** The tenant this ceremony belongs to; stamped on every audit row it writes. */
+  tenantId: string
 ): Promise<VerificationResult> {
+  const tenant = requireTenantId(tenantId, 'verifyAuthentication');
   const timestamp = new Date().toISOString();
 
   // Same shape refusal as verifyRegistration, same reason, same ordering:
@@ -461,7 +487,7 @@ export async function verifyAuthentication(
     await appendAuditRecord(
       'security.webauthn.step_up.failure',
       { type: 'user', id: userId },
-      { meta: { credentialId: credential.id, reason: 'user_verification_missing' } }
+      { meta: { credentialId: credential.id, reason: 'user_verification_missing' }, tenantId: tenant }
     );
     return { success: false, error: 'User verification required for step-up', timestamp };
   }
@@ -478,7 +504,7 @@ export async function verifyAuthentication(
     await appendAuditRecord(
       'security.webauthn.step_up.failure',
       { type: 'user', id: userId },
-      { meta: { credentialId: credential.id, reason: 'signature_invalid' } }
+      { meta: { credentialId: credential.id, reason: 'signature_invalid' }, tenantId: tenant }
     );
     return { success: false, error: 'Assertion signature verification failed', timestamp };
   }
@@ -495,7 +521,7 @@ export async function verifyAuthentication(
     await appendAuditRecord(
       'security.webauthn.step_up.failure',
       { type: 'user', id: userId },
-      { meta: { credentialId: credential.id, reason: 'counter_reset_to_zero' } }
+      { meta: { credentialId: credential.id, reason: 'counter_reset_to_zero' }, tenantId: tenant }
     );
     return { success: false, error: 'Authenticator counter reset to zero (possible clone)', timestamp };
   }
@@ -503,7 +529,7 @@ export async function verifyAuthentication(
     await appendAuditRecord(
       'security.webauthn.step_up.failure',
       { type: 'user', id: userId },
-      { meta: { credentialId: credential.id, reason: 'counter_regression' } }
+      { meta: { credentialId: credential.id, reason: 'counter_regression' }, tenantId: tenant }
     );
     return { success: false, error: 'Authenticator counter did not increase (possible clone)', timestamp };
   }
@@ -528,7 +554,7 @@ export async function verifyAuthentication(
       await appendAuditRecord(
         'security.webauthn.step_up.failure',
         { type: 'user', id: userId },
-        { meta: { credentialId: credential.id, reason: 'counter_advance_conflict' } }
+        { meta: { credentialId: credential.id, reason: 'counter_advance_conflict' }, tenantId: tenant }
       );
       return {
         success: false,
@@ -542,7 +568,7 @@ export async function verifyAuthentication(
   await appendAuditRecord(
     'security.webauthn.step_up.success',
     { type: 'user', id: userId },
-    { meta: { credentialId: credential.id } }
+    { meta: { credentialId: credential.id }, tenantId: tenant }
   );
 
   return {

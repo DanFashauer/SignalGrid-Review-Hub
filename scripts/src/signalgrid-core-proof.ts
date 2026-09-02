@@ -18,6 +18,7 @@
  */
 import {
   buildEvidence,
+  computeMetrics,
   runDockSync,
   foldIdentityEnabled,
   deriveCriticalSignalsPresent,
@@ -1850,6 +1851,74 @@ for (const [fromRow, fromSignal, want, why] of [
   check("memory bound: the oldest decision is gone (not_found), not silently kept", throws(() => bounded.getDecision(T.operator, ids[0])));
   const newest = bounded.getDecision(T.operator, ids[4]);
   check("memory bound: the newest decision and its evidence snapshot are still readable", !throws(() => bounded.getSnapshot(T.operator, newest.evidenceSnapshotId)));
+
+  // ── F6b: the bound covers EVERY collection an evaluate grows (audit 2x, deliveries 2x, remediations 1x) ──
+  // Five more evaluates of a RESTRICT case, so remediation proposals are minted.
+  for (let i = 0; i < 5; i += 1) {
+    bounded.evaluate(T.operator, { identityRef: "nurse.noncompliant", deviceRef: "ipad-ward-02", workflowKey: "clinical-session" });
+  }
+
+  const boundedAudit = bounded.listAudit(T.owner);
+  // FLOOR FIRST: "at most 6" over an empty list is green about nothing.
+  check("memory bound: the audit log is non-empty, so the cap below is measured against real rows", boundedAudit.length > 0);
+  check(
+    `memory bound: audit events are capped at 2x the decision bound (<= 6, got ${boundedAudit.length})`,
+    boundedAudit.length <= 6,
+  );
+  const boundedChain = bounded.verifyAudit(T.owner);
+  check("memory bound: the RETAINED audit chain still verifies after eviction (re-anchored, not broken)", boundedChain.valid === true);
+  check("memory bound: and it SAYS it is a window — truncated is true with a non-zero evicted count",
+    boundedChain.truncated === true && boundedChain.evictedCount > 0);
+
+  const boundedDeliveries = bounded.listWebhookDeliveries(T.owner);
+  check(
+    `memory bound: webhook deliveries were actually minted AND are capped at 2x the decision bound (0 < n <= 6, got ${boundedDeliveries.length})`,
+    boundedDeliveries.length > 0 && boundedDeliveries.length <= 6,
+  );
+  const boundedRemediations = bounded.listRemediations(T.owner);
+  check("memory bound: remediations were actually minted, so the cap below is measured against real rows", boundedRemediations.length > 0);
+  check(
+    `memory bound: remediations are capped at the decision bound (<= 3, got ${boundedRemediations.length})`,
+    boundedRemediations.length <= 3,
+  );
+
+  // ── F6c: /v1/metrics can SAY that its numbers cover a window ─────────────────
+  //
+  // Past the cap `pendingReview` counts DOWN and `restrictDenyRate` drifts, and the
+  // response used to carry nothing a reader could use to tell that from a full
+  // picture. The window is reported, not inferred.
+  const boundedMetrics = bounded.metrics(T.operator);
+  check("metrics window: a capped tenant reports capped=true", boundedMetrics.window.capped === true);
+  check("metrics window: decisionsConsidered equals the retained decisions, not the tenant's history",
+    boundedMetrics.window.decisionsConsidered === boundedMetrics.totalDecisions && boundedMetrics.window.decisionsConsidered === 3);
+  check("metrics window: maxPerTenant reports the cap actually in force", boundedMetrics.window.maxPerTenant === 3);
+
+  // The NEGATIVE control: an unbounded core must NOT report capped, or the flag is
+  // stuck true and says nothing.
+  const unbounded = SignalGridCore.demo();
+  unbounded.evaluate(T.operator, { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" });
+  const unboundedMetrics = unbounded.metrics(T.operator);
+  check("metrics window: an UNCAPPED tenant reports capped=false (the flag is not stuck on)", unboundedMetrics.window.capped === false);
+  check("metrics window: an uncapped tenant reports the default cap of 5000", unboundedMetrics.window.maxPerTenant === 5000);
+  check("audit chain: an unevicted chain reports truncated=false with evictedCount 0",
+    unbounded.verifyAudit(T.owner).truncated === false && unbounded.verifyAudit(T.owner).evictedCount === 0);
+
+  // ── F6d: an out-of-union outcome must not poison byOutcome (`undefined + 1` = NaN, and the write MINTS the key) ──
+  const healthy = unbounded.listDecisions(T.operator);
+  const poisoned = [
+    ...healthy,
+    { ...healthy[0], id: "dec_poisoned", outcome: "not_an_outcome" as unknown as DecisionOutcome },
+  ];
+  const poisonedMetrics = computeMetrics(poisoned, { capped: false, maxPerTenant: 5000 });
+  check("NaN guard: byOutcome holds exactly the four known outcomes — no phantom bucket minted by an out-of-union row",
+    JSON.stringify(Object.keys(poisonedMetrics.byOutcome).sort()) === JSON.stringify(["allow", "deny", "restrict", "step_up"]));
+  check("NaN guard: every byOutcome count is a finite number (no undefined + 1 = NaN)",
+    Object.values(poisonedMetrics.byOutcome).every((v) => Number.isFinite(v)));
+  check("NaN guard: the unclassifiable row is COUNTED, not silently dropped", poisonedMetrics.window.unrecognizedOutcomes === 1);
+  check("NaN guard: it counts on the restrictive side, never toward the allow rate",
+    poisonedMetrics.restrictDenyRate > computeMetrics(healthy, { capped: false, maxPerTenant: 5000 }).restrictDenyRate);
+  check("NaN guard: a clean decision set reports zero unrecognized outcomes",
+    computeMetrics(healthy, { capped: false, maxPerTenant: 5000 }).window.unrecognizedOutcomes === 0);
 }
 
 const failed = assertions.filter((a) => !a.passed);

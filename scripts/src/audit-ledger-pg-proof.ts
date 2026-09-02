@@ -211,6 +211,51 @@ async function main() {
   check("PG: …and the moved row now shows in the other tenant's view — the read is honest, the chain is the alarm",
     (await getAuditRecordsForTenant("t-a", 10, 0)).length === 3);
 
+  // ── 7. READINESS vs a PRE-v3 SCHEMA ───────────────────────────────────────
+  // `CREATE TABLE IF NOT EXISTS` is a no-op against an older shape, so a pre-v3
+  // ledger let ping() resolve and /readyz report READY while `GET /v1/audit`
+  // (`WHERE tenant_id = $1`) answered 500.
+  //
+  // A DEDICATED LEAST-PRIVILEGE ROLE, because the POSITIVE control needs one: this
+  // proof's DATABASE_URL is a superuser, whose UPDATE/DELETE/TRUNCATE assertPrivileges
+  // correctly refuses, so a superuser ping could never resolve and the refusal below
+  // would pass against a probe that is simply always red.
+  const probePassword = "sg_probe_pw"; // gitleaks:allow — disposable cluster, created and dropped here
+  await admin.query(`
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sg_probe') THEN
+        EXECUTE 'DROP OWNED BY sg_probe';
+        EXECUTE 'DROP ROLE sg_probe';
+      END IF;
+    END $$;
+    CREATE ROLE sg_probe LOGIN PASSWORD '${probePassword}';
+    GRANT USAGE ON SCHEMA public TO sg_probe;
+    GRANT SELECT, INSERT ON public.audit_ledger TO sg_probe;
+    GRANT USAGE ON SEQUENCE public.audit_ledger_seq_seq TO sg_probe;
+  `);
+  const probeUrl = (() => {
+    const u = new URL(url!);
+    u.username = "sg_probe";
+    u.password = probePassword;
+    return u.toString();
+  })();
+
+  const readyCurrent = new PostgresAuditBackend(probeUrl);
+  const currentOk = await readyCurrent.ping().then(() => true).catch(() => false);
+  check("PG readiness: ping() RESOLVES on the CURRENT (v3) schema with a runtime-shaped credential — the probe is not simply always-red",
+    currentOk === true);
+  await readyCurrent.close?.();
+
+  await admin.query("ALTER TABLE public.audit_ledger DROP COLUMN tenant_id");
+  const readyPreV3 = new PostgresAuditBackend(probeUrl);
+  const preV3 = await readyPreV3.ping().then(() => "resolved").catch((err: unknown) => String((err as Error)?.message ?? err));
+  check("PG readiness: against a PRE-v3 schema (no tenant_id) ping() REFUSES — /readyz cannot be green while /v1/audit 500s",
+    preV3 !== "resolved");
+  check("PG readiness: …and the refusal names the missing column and the command that fixes it",
+    preV3.includes("tenant_id") && preV3.includes("db:migrate"));
+  await readyPreV3.close?.();
+  await admin.query(`DROP OWNED BY sg_probe; DROP ROLE sg_probe;`);
+
   await admin.end();
   await b.close?.();
 

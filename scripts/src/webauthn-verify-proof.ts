@@ -26,6 +26,7 @@ import {
   randomBytes,
 } from "crypto";
 import { webauthn, webauthnStore } from "@workspace/webauthn";
+import { appendAuditRecord, getAuditRecords } from "@workspace/audit";
 
 // ── tiny CBOR encoder (only what these fixtures need) ───────────────────────
 function cborUint(n: number): Buffer {
@@ -106,6 +107,9 @@ async function main() {
   const rpId = "localhost";
   const origin = "http://localhost:3000";
   const userId = "user-proof-1";
+  // Every ceremony in this proof runs under ONE tenant, so "did the ceremony stamp
+  // the tenant on its audit rows" is a question with a single right answer.
+  const TENANT = "tenant_webauthn_proof";
 
   // Generate a real P-256 credential keypair.
   const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
@@ -139,7 +143,7 @@ async function main() {
       clientDataJSON: clientData("webauthn.create", regChallenge, origin).toString("base64url"),
       attestationObject,
     },
-  });
+  }, TENANT);
   check("registration with real attestation succeeds", reg.success === true);
 
   // ── 1b. Attestation-statement verification (packed / none / unknown) ───────
@@ -165,7 +169,7 @@ async function main() {
       rawId: credIdStr,
       type: "public-key",
       response: { clientDataJSON: cd.toString("base64url"), attestationObject: attObj },
-    });
+    }, TENANT);
   }
 
   // Valid `packed` self-attestation: the credential key signs authData||hash.
@@ -266,7 +270,7 @@ async function main() {
         authenticatorData: authData.toString("base64url"),
         signature: signature.toString("base64url"),
       },
-    });
+    }, TENANT);
   }
 
   // ── 2. Genuine assertion accepted ─────────────────────────────────────────
@@ -321,8 +325,8 @@ async function main() {
       challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId,
     });
     const resp = signedAssertion(ch, 20);
-    const first = await webauthn.verifyAuthentication(userId, chId, resp);
-    const second = await webauthn.verifyAuthentication(userId, chId, resp);
+    const first = await webauthn.verifyAuthentication(userId, chId, resp, TENANT);
+    const second = await webauthn.verifyAuthentication(userId, chId, resp, TENANT);
     check("challenge accepted on first use", first.success === true);
     check("replayed challenge (same id) rejected on second use", second.success === false);
   }
@@ -335,7 +339,7 @@ async function main() {
     await webauthnStore.saveChallenge(chId, {
       challenge: ch, expiresAt: new Date(Date.now() - 1000).toISOString(), purpose: "authentication", userId,
     });
-    const res = await webauthn.verifyAuthentication(userId, chId, signedAssertion(ch, 21));
+    const res = await webauthn.verifyAuthentication(userId, chId, signedAssertion(ch, 21), TENANT);
     check("expired challenge rejected", res.success === false);
   }
 
@@ -365,7 +369,7 @@ async function main() {
     // here passed identically with the defect planted back, which is to say it
     // proved nothing. The only rejection that falsifies the fail-open is the
     // expiry one, so that is what is asserted.
-    const authRes = await webauthn.verifyAuthentication(userId, chIdAuth, signedAssertion(chAuth, 31));
+    const authRes = await webauthn.verifyAuthentication(userId, chIdAuth, signedAssertion(chAuth, 31), TENANT);
     check(
       `unparseable expiresAt ${label} rejected on authentication AS EXPIRED (got: ${authRes.error ?? "accepted"})`,
       authRes.success === false && authRes.error === "Challenge expired",
@@ -409,7 +413,7 @@ async function main() {
     await webauthnStore.saveChallenge(chIdA, {
       challenge: chA, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId,
     });
-    const advanced = await webauthn.verifyAuthentication(userId, chIdA, signedAssertion(chA, 1000));
+    const advanced = await webauthn.verifyAuthentication(userId, chIdA, signedAssertion(chA, 1000), TENANT);
     check("a valid high-counter assertion advances the stored counter (setup)", advanced.success === true);
 
     const chIdB = randomBytes(16).toString("base64url");
@@ -417,7 +421,7 @@ async function main() {
     await webauthnStore.saveChallenge(chIdB, {
       challenge: chB, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId,
     });
-    const cloneZero = await webauthn.verifyAuthentication(userId, chIdB, signedAssertion(chB, 0));
+    const cloneZero = await webauthn.verifyAuthentication(userId, chIdB, signedAssertion(chB, 0), TENANT);
     check("a zero counter AFTER the credential advanced is rejected as a clone reset", cloneZero.success === false);
   }
 
@@ -428,7 +432,7 @@ async function main() {
     await webauthnStore.saveChallenge(chId, {
       challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "registration", userId,
     });
-    const res = await webauthn.verifyAuthentication(userId, chId, signedAssertion(ch, 22));
+    const res = await webauthn.verifyAuthentication(userId, chId, signedAssertion(ch, 22), TENANT);
     check("authentication with a registration-purpose challenge rejected", res.success === false);
   }
 
@@ -439,7 +443,7 @@ async function main() {
     await webauthnStore.saveChallenge(chId, {
       challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId: "some-other-user",
     });
-    const res = await webauthn.verifyAuthentication(userId, chId, signedAssertion(ch, 23));
+    const res = await webauthn.verifyAuthentication(userId, chId, signedAssertion(ch, 23), TENANT);
     check("challenge bound to a different user rejected", res.success === false);
   }
 
@@ -474,7 +478,7 @@ async function main() {
     const cloneReg = await webauthn.verifyRegistration(cloneUser, cloneRegChId, {
       id: cloneCredIdStr, rawId: cloneCredIdStr, type: "public-key",
       response: { clientDataJSON: cloneRegCd.toString("base64url"), attestationObject: cloneAttObj },
-    });
+    }, TENANT);
     check("clone-detect: registration succeeds", cloneReg.success === true);
 
     // Genuine assertion signer for this credential at a chosen signCount.
@@ -494,7 +498,7 @@ async function main() {
           authenticatorData: authData.toString("base64url"),
           signature: signature.toString("base64url"),
         },
-      });
+      }, TENANT);
     }
 
     const N = 10;
@@ -545,7 +549,7 @@ async function main() {
     const seedReg = await webauthn.verifyRegistration(seedUser, seedRegChId, {
       id: seedCredIdStr, rawId: seedCredIdStr, type: "public-key",
       response: { clientDataJSON: seedRegCd.toString("base64url"), attestationObject: seedAttObj },
-    });
+    }, TENANT);
     check("reg-counter-seed: registration at a non-zero counter succeeds", seedReg.success === true);
 
     async function seedAssert(signCount: number) {
@@ -564,7 +568,7 @@ async function main() {
           authenticatorData: authData.toString("base64url"),
           signature: signature.toString("base64url"),
         },
-      });
+      }, TENANT);
     }
 
     const seedEqual = await seedAssert(REG_COUNTER);
@@ -602,7 +606,7 @@ async function main() {
       authenticatorData: legacyAuth.toString("base64url"),
       signature: randomBytes(70).toString("base64url"),
     },
-  });
+  }, TENANT);
   check("legacy stub credential fails closed", legacy.success === false);
 
   // ── 13. Atomic counter compare-and-advance (concurrent-completion race) ────
@@ -632,6 +636,82 @@ async function main() {
   // An unknown credential/user fails closed rather than throwing.
   check("cas: an unknown credential fails closed", (await webauthnStore.advanceCredentialCounter(casUser, "no-such-cred", 10, 11, new Date().toISOString())) === false);
   check("cas: a legitimate later advance from the NEW expected value succeeds", (await webauthnStore.advanceCredentialCounter(casUser, casCred, 10, 11, new Date().toISOString())) === true);
+
+  // ── 14. Every audit row a ceremony writes carries its TENANT ───────────────
+  // All seven `appendAuditRecord` calls in server.ts omitted `tenantId`, so the rows
+  // landed `tenant_id NULL` and `GET /v1/audit` (`WHERE tenant_id = $1`) never matched
+  // them: the clone detections above were recorded and unreachable while `chain.ok`
+  // stayed true. Read back through the real ledger API, not a spy.
+  const ledger = await getAuditRecords(5000, 0);
+  const webauthnRows = ledger.filter((r) => r.eventType.startsWith("security.webauthn."));
+
+  // FLOOR FIRST: "every row is tenanted" over zero rows is green about nothing.
+  check(
+    `audit: the ceremonies appended at least 6 security.webauthn.* rows (got ${webauthnRows.length})`,
+    webauthnRows.length >= 6,
+  );
+
+  const untenanted = webauthnRows.filter((r) => r.tenantId === undefined || r.tenantId === "");
+  check(
+    "audit: EVERY security.webauthn.* row carries a tenantId (none would land tenant_id NULL)",
+    untenanted.length === 0,
+  );
+  check(
+    "audit: every security.webauthn.* row carries THIS ceremony's tenant, not some other value",
+    webauthnRows.every((r) => r.tenantId === TENANT),
+  );
+
+  // The two clone-detection rows by name, because they are the ones an investigator
+  // comes looking for and the ones the NULL made unreachable.
+  const cloneReasons = new Set(
+    webauthnRows
+      .filter((r) => r.tenantId === TENANT)
+      .map((r) => (r.meta as { reason?: string } | undefined)?.reason)
+      .filter((x): x is string => typeof x === "string"),
+  );
+  check(
+    "audit: the counter_regression clone detection is recorded AND tenant-readable",
+    cloneReasons.has("counter_regression"),
+  );
+  check(
+    "audit: the counter_reset_to_zero clone detection is recorded AND tenant-readable",
+    cloneReasons.has("counter_reset_to_zero"),
+  );
+
+  // FAIL-CLOSED on a missing tenant: a ceremony that cannot be attributed does not
+  // run at all, rather than writing the untenanted row that caused this whole
+  // finding. Both verify entrypoints refuse.
+  const refusedReg = await webauthn
+    .verifyRegistration(userId, randomBytes(16).toString("base64url"), {
+      id: credIdStr, rawId: credIdStr, type: "public-key",
+      response: { clientDataJSON: "e30", attestationObject: "oA" },
+    }, "")
+    .then(() => false)
+    .catch(() => true);
+  check("fail-closed: verifyRegistration with a blank tenantId refuses (throws) rather than writing an untenanted row", refusedReg);
+  const refusedAuth = await webauthn
+    .verifyAuthentication(userId, randomBytes(16).toString("base64url"), {
+      id: credIdStr, rawId: credIdStr, type: "public-key",
+      response: { clientDataJSON: "e30", authenticatorData: "oA", signature: "oA" },
+    }, "")
+    .then(() => false)
+    .catch(() => true);
+  check("fail-closed: verifyAuthentication with a blank tenantId refuses (throws) rather than writing an untenanted row", refusedAuth);
+
+  // SELF-TEST — the detector must be able to fire: plant an untenanted row and re-run
+  // the SAME predicate. Planted last so nothing above reads the poisoned ledger.
+  await appendAuditRecord(
+    "security.webauthn.step_up.failure",
+    { type: "user", id: "self-test-user" },
+    { meta: { credentialId: "self-test", reason: "synthetic_untenanted_row" } },
+  );
+  const afterPlant = (await getAuditRecords(5000, 0)).filter((r) =>
+    r.eventType.startsWith("security.webauthn."),
+  );
+  check(
+    "self-test: the untenanted-row detector FIRES on a planted untenanted security.webauthn.* row",
+    afterPlant.some((r) => r.tenantId === undefined || r.tenantId === ""),
+  );
 
   const total = passed + failures.length;
   console.log(`WebAuthn verification proof: ${passed}/${total} assertions passed`);

@@ -525,7 +525,13 @@ router.post("/v1/app-workflows/evaluate", (req: Request, res: Response) => {
 function webauthnUserId(req: Request, identityRef: string): string {
   // Tenant from the authenticated token, never from the body — same invariant as
   // every other /v1 route.
-  return `${core.context(token(req)).tenant.id}:${identityRef}`;
+  return `${webauthnTenantId(req)}:${identityRef}`;
+}
+
+/** The ceremony's tenant, from the authenticated token, passed EXPLICITLY into the
+ *  lib's verify calls so no `security.webauthn.*` audit row lands untenanted. */
+function webauthnTenantId(req: Request): string {
+  return core.context(token(req)).tenant.id;
 }
 
 function requireString(body: Record<string, unknown>, key: string): string {
@@ -647,7 +653,7 @@ router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, nex
       );
     }
     const userId = webauthnUserId(req, identityRef);
-    const result = await webauthn.verifyRegistration(userId, challengeId, response as never);
+    const result = await webauthn.verifyRegistration(userId, challengeId, response as never, webauthnTenantId(req));
     if (!result.success) {
       throw new CoreError("forbidden", `Enrollment rejected: ${result.error ?? "verification failed"}.`, 403);
     }
@@ -776,7 +782,7 @@ router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Resp
     // plan attached. The userId is derived from the STORED binding, so the
     // verification target is the identity the challenge was minted for.
     const userId = webauthnUserId(req, ctx.identityRef);
-    const verification = await webauthn.verifyAuthentication(userId, challengeId, assertion as never);
+    const verification = await webauthn.verifyAuthentication(userId, challengeId, assertion as never, tenantId);
     if (!verification.success) {
       throw new CoreError("forbidden", `Step-up assertion rejected: ${verification.error ?? "verification failed"}.`, 403);
     }

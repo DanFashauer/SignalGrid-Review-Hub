@@ -415,7 +415,13 @@ export class SignalGridCore {
   metrics(token: string): MetricsSummary {
     const principal = authenticate(this.store, token);
     authorize(principal, "decision:read");
-    return computeMetrics(this.store.listDecisions(principal.tenantId));
+    // The window comes from the STORE, which is the only thing that knows whether
+    // rows have been evicted — the list alone cannot tell a small tenant from a
+    // truncated one.
+    return computeMetrics(
+      this.store.listDecisions(principal.tenantId),
+      this.store.decisionBound(principal.tenantId),
+    );
   }
 
   /** The Resolution Assistant's plan for a decision (deterministic). */

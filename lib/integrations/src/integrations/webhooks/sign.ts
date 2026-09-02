@@ -65,6 +65,7 @@
  */
 
 import crypto from 'crypto';
+import { ageMs } from '../../utils/freshness';
 
 /** The scheme marker carried by `X-Webhook-Signature` (`v2=<hex>`). */
 export const WEBHOOK_SIGNATURE_SCHEME = 'v2';
@@ -325,7 +326,9 @@ export function verifySignedWebhook(
   if (tolerance === null) {
     return refuse('options.toleranceMs must be a non-negative integer of milliseconds');
   }
+  // freshness: local-by-design — the receiver's skew allowance is a caller option; the comparison itself is the shared ageMs body below
   const futureSkew = options?.futureSkewMs === undefined ? 0 : asTimestampMs(options.futureSkewMs);
+  // freshness: local-by-design — option validation only; a garbled allowance refuses, the age is never computed here
   if (futureSkew === null) {
     return refuse('options.futureSkewMs must be a non-negative integer of milliseconds');
   }
@@ -370,12 +373,16 @@ export function verifySignedWebhook(
     return refuse(`${WEBHOOK_TIMESTAMP_HEADER} must be integer epoch milliseconds`);
   }
 
-  const age = now - timestampMs;
+  // One freshness body for the whole estate: ageMs returns null for a timestamp
+  // ahead of the caller's clock by more than the allowance (and for anything it
+  // cannot read), and never a negative number. Null tightens: a future-dated
+  // signature is refused, it is not "maximally fresh".
+  const age = ageMs(timestampMs, now, futureSkew);
+  if (age === null) {
+    return refuse(`timestamp is in the future beyond the ${futureSkew}ms skew allowance, or unreadable`);
+  }
   if (age > tolerance) {
     return refuse(`timestamp is ${age}ms old, beyond the ${tolerance}ms tolerance (replay window)`);
-  }
-  if (-age > futureSkew) {
-    return refuse(`timestamp is ${-age}ms in the future, beyond the ${futureSkew}ms skew allowance`);
   }
 
   // Freshness is decided BEFORE the MAC so a stale-but-authentic delivery is

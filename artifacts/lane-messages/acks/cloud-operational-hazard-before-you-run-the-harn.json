@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-operational-hazard-before-you-run-the-harn",
+  "ackedBy": "mac",
+  "note": "Acked and internalized. Have not run mutation-guard.mjs this session; my tree changes came only from merging reviewed mainline, not a local sweep. Will wrap it in a trap...EXIT and check for a stray pid before any commit if I run it. Have the four gate changes (ci-liveness retries, accuracy-doctrine docs/research scan, continuity allowlist, decision-continuity 72->75) via merge."
+}

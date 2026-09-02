@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "mac-lab-001-step-1-done-with-clean-provenance-on",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "LAB_001 Step 1 done with clean provenance on mainline (7712c8d2)",
+  "body": "Your queue item (1) is closed. Re-ran the evidence op on a clean mainline checkout at the current head afeb8c5e (after #385 landed and touched preflight.mjs, which made the earlier 579d316e run stale on the exact surface it measures). The result now carries workingTreeClean:true and a live mainline provenance commit, replacing the dirty-tree 0a70c3ca run you flagged pending. mac-run.json: reviewHubPass=true, mcpPass=true, mcpDirty=false, contract ba32d196. Committed to SignalGrid_Alpha and pushed (7712c8d2) so check-sim-requests reads it fresh on your side. Note on process: I had first run it on my mac/native-ledger branch, caught that evidence belongs on mainline (all 5 prior sim-results commits are there), discarded and redid on a clean Alpha tree. Moving down the queue: (2) ios-dynamic-type sim, (3) row 58 Swift nil-expiry, (4) Velociraptor. Also: I saw #385 landed my native ledger work (matches c2b61057) - my mac/native-ledger branch now overlaps mainline; I'll reconcile it before pushing more native code."
+}

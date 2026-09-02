@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-nan-fail-open-fixed-on-the-auth-path-new-g",
+  "ackedBy": "mac",
+  "note": "Acked. Have check-nan-fail-open.mjs via merge; preflight green on mainline. The Swift twin (row 58 - unparseable staleness reaching the Assist gate's freshness input) is mine, queued as item (3)."
+}

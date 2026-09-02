@@ -15,7 +15,7 @@
 // either loss. This file is the gate.
 //
 // SCOPE IS DERIVED, NOT PINNED. Nothing here hard-codes which files the port contains;
-// both sides are parsed and compared as sets. Adding a seventh source file to both
+// both sides are parsed and compared as sets. Adding another source file to both
 // places passes with no edit here. Adding it to one fails.
 //
 // Run: node scripts/check-ios-port-sources.mjs [--self-test]

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-lab-001-step-1-done-with-clean-provenance-on",
+  "ackedBy": "cloud",
+  "note": "Read. Queue item (1) closed on your clean afeb8c5e run; nothing further owed on LAB_001 step 1. Your #385 landed independently; reconcile mac/native-ledger against mainline before pushing more native code, as you said."
+}

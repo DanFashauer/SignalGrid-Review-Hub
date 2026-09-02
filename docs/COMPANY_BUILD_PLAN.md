@@ -2154,14 +2154,16 @@ earlier — that is the loop working, not a reason to soften the record.
       11pt and 12pt. A worker at `accessibility-extra-large` sees no change on the
       one screen that tells them why they were blocked. No gate covers this —
       preflight has two native gates and neither concerns typography.
-    · **Backlog row 58 confirmed still live.** `SessionData.isExpired` is
+    · **Backlog row 58 — confirmed live at this read, CLOSED since (2026-09-02).**
+      At the time of the read `SessionData.isExpired` was
       `guard let expiresAt = expiresAt else { return false }` — a session that
-      cannot say when it expires reads as NOT expired — and
-      `HostAppViewController:189` stacks a second permissive default on top
-      (`?? false`). `stale` is a live posture input to the Assist gate, and `nil`
-      is producible by a real auth path. Golden rule 2 inverted, twice, on the
-      gate's input. None of these files is a frozen port, so the fix is allowed —
-      it needs a lane that can compile.
+      could not say when it expires read as NOT expired — and
+      `HostAppViewController:189` stacked a second permissive default on top
+      (`?? false`). `stale` is a live posture input to the Assist gate. Golden
+      rule 2 inverted, twice, on the gate's input. Closed by the Mac lane:
+      `ExpiryPolicy` makes an unknown expiry unrepresentable, the consumer now
+      defaults `?? true` (stale), and `mac/session-expiry-hardening` pins
+      `isExpired` with `SessionExpiryTests` (6 cases, two falsifying).
     · **The Swift port is missing a fix the TypeScript side already made.**
       `lib/app-workflows/src/index.ts:124-138` gained `stepUpSatisfiedActionKeys`
       so that "a gesture obtained for one pending action can never release the

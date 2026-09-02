@@ -5,18 +5,24 @@ name: Scheduled Verification
 # updates a single tracking issue. It NEVER pushes code or changes the repo —
 # it only reports, so a green main stays trustworthy between PRs.
 #
-# NOT the full suite, and this line used to say it was. `scripts/preflight.mjs`
-# registers 179 gates and `review-hub-ci.yml` runs every one of them per PR, kept
-# in step by `check-preflight-ci-parity.mjs`. This workflow runs the named steps
-# below and nothing else. The job was already renamed once for the same reason —
-# it read "Full gate suite" while running about ten — and this header outlived
-# that correction, which is how a fossil survives: the visible label gets fixed
-# and the prose above it does not.
+# NOT the full suite, and this line used to say it was. For the gate population,
+# read the census — `node scripts/check-gate-census.mjs` — which asserts every
+# gate runs SOMEWHERE; and `check-preflight-ci-parity.mjs`, which asserts every
+# preflight gate is wired into SOME workflow. Neither claims that any single
+# workflow runs all of them: the gates are spread across `review-hub-ci.yml`,
+# the breadth lane and others, and the parity check additionally reports the CI
+# jobs no preflight gate covers. No count is typed here on purpose — the
+# sentence that stood in this slot ("registers 179 gates and `review-hub-ci.yml`
+# runs every one of them per PR") was wrong in both halves by the time anyone
+# read it. This workflow runs the named steps below and nothing else. The job
+# was already renamed once for the same reason — it read "Full gate suite" while
+# running about ten — and this header outlived that correction, which is how a
+# fossil survives: the visible label gets fixed and the prose above it does not.
 #
 # Whether the selection is the RIGHT one is an open question, filed as backlog
-# row 171. Most of the 179 are deterministic over the tree and cannot rot without
-# a commit, so running them daily would mostly repeat what the PR lane already
-# did; the ones that genuinely rot are the time-dependent and
+# row 171. Most registered gates are deterministic over the tree and cannot rot
+# without a commit, so running them daily would mostly repeat what the PR lane
+# already did; the ones that genuinely rot are the time-dependent and
 # externally-dependent ones. The selection below is hand-picked rather than
 # derived from that distinction. Note also that simply adding preflight here
 # would fail every night: `check-ci-liveness.mjs` is FATAL in CI when it cannot

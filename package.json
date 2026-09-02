@@ -17,6 +17,7 @@
     "build:room-console": "pnpm --filter @workspace/scripts run build:room-console",
     "check:assist-conformance": "node scripts/check-assist-conformance.mjs",
     "check:core-normalization-version": "node scripts/generate-core-normalization-version.mjs --check",
+    "check:claim-inventory": "node scripts/gen-claim-inventory-md.mjs --check",
     "check:doc-orphans": "node scripts/check-doc-orphans.mjs",
     "check:ios-port-sources": "node scripts/check-ios-port-sources.mjs",
     "check:demo-flags": "node scripts/check-demo-flags-documented.mjs",

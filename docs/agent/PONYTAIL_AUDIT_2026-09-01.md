@@ -170,7 +170,7 @@ I have everything I need; no further reads are required. Findings follow, ranked
 
 `shrink:` `check-proof-counts` and `check-proof-figures` each `spawnSync("pnpm", ["run", proof])` for overlapping proofs, and preflight/status-summary/build-loop run both — the figure proofs run ≥2× per lane. Parse `summary=… (N/M)` from the run `check-proof-figures` already does; keep one spawner. [scripts/check-proof-counts.mjs:49, scripts/check-proof-figures.mjs:92]
 
-`delete:` `scripts/src/hello.ts` + its `hello` script — scaffolding. Nothing. [scripts/src/hello.ts:1, scripts/package.json:18]
+`delete:` **APPLIED 2026-09-02.** scripts/src/hello.ts + its `hello` script in `scripts/package.json` — scaffolding, printed one line, invoked by nothing. Both are gone. Net: nothing, as predicted. The path above is deliberately NOT backticked: `check-cited-paths.mjs` reads a backticked path as a claim the file is there, and it is not any more — the finding stays, the citation does not. (The very next row anticipated this failure mode for `scripts/cutover/*.sh`.)
 
 `delete:` (candidate) `scripts/cutover/*.sh` — one-shot Phase-6 migration, no runner; retained only because runbook docs cite the paths, so the docs move to an archive note first or `check-cited-paths` fails. Nothing. [scripts/cutover/00-triage-issues.sh:1-53, scripts/cutover/_env.sh:1-54]
 

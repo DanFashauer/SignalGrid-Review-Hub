@@ -21,8 +21,23 @@
 #        (demo) tier. Gating CI red on them produces false signal.
 #      - lib/api-client-react — generated (orval) typed client; regenerated
 #        from the OpenAPI spec, not hand-authored.
-#      - tests/**, **/*.test.ts — test + security-reference fixtures.
-#      - build outputs and vendored bundles.
+#      - tests — the `tests/` tree: `tests/load/` and
+#        `tests/security-reference/` fixtures.
+#      - **/*.test.ts — unit-test files (9 tracked).
+#      - **/*.spec.ts — Playwright specs. TODAY THAT IS EXACTLY THE TEN FILES IN
+#        `scripts/src/e2e/`, so the entire browser E2E suite is outside the
+#        security scan. That is a consequence worth stating rather than
+#        discovering: the suite drives real browsers, handles a WebAuthn step-up
+#        flow, and is the one place a URL or credential is assembled for a live
+#        surface. It is excluded as test code, not because it was judged safe.
+#      - **/dist/**, **/build/** — build output, not authored source.
+#      - **/*.min.js — minified bundles (zero tracked today; the rule is a
+#        standing one, kept so a vendored bundle cannot arrive unnoticed).
+#    The bullets above cover the same entries as `paths-ignore`, in the same order (two bullets each cover a pair of entries)
+#    below, in the same order, and it must stay that way. The previous version of
+#    this comment stopped at "build outputs and vendored bundles", which named
+#    neither `**/*.spec.ts` nor the ten e2e files it removes from the scan — a
+#    scope note that under-reported its own scope.
 #    First-party code (signalgrid-core, orchestration, room-sim, signal-radar,
 #    webauthn, api-server, mcp-server, the apps, scripts, tools) stays fully
 #    security-scanned.

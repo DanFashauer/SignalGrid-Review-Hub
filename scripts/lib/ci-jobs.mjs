@@ -9,9 +9,12 @@
 //
 //     deploy-stack, durable-persistence, secret-scan
 //
-// The repo runs NINETEEN CI jobs. CodeQL, the level-10 audit, the connector emulator
-// smoke, phase-pr-evidence and the entire iOS suite were all absent from a list whose
-// whole purpose is to enumerate what is absent. A reader who takes the disclaimer at
+// The repo runs many more than three CI jobs — `enumerateCiJobs()` below counts them,
+// and `check-preflight-ci-parity.mjs` prints the current figure on every run, so no
+// number is typed here (the sentence in this slot said NINETEEN and was stale within
+// weeks; the count only moves upward). CodeQL, the level-10 audit, the connector
+// emulator smoke, phase-pr-evidence and the entire iOS suite were all absent from a
+// list whose whole purpose is to enumerate what is absent. A reader who takes the disclaimer at
 // face value — the only reasonable reading — concludes everything else IS covered.
 //
 // So the disclaimer had the exact defect the harness around it exists to prevent: a
@@ -78,10 +81,13 @@ export const NOT_A_GATE = new Map([
     "supply-chain.yml:sbom-sync",
     "commits a regenerated SBOM back to a dependabot branch; bot plumbing, and the drift it fixes is gated by supply-chain.yml:sbom",
   ],
-  ["promote.yml:open-promotion-pr", "opens a promotion PR between tiers; release automation"],
   [
+    // NOT "a cron re-run of the same suite" — that reason stood here and contradicted
+    // the workflow's own header, which states in capitals that it is NOT the full
+    // suite and runs a hand-picked selection. It is exempt because it is report-only:
+    // it opens or updates a tracking issue and never blocks a pull request.
     "scheduled-verification.yml:verify",
-    "cron re-run of the same suite; catches rot over time rather than gating a specific push",
+    "report-only rot detection on a hand-picked selection of gates (see the workflow header); opens a tracking issue, never blocks a PR",
   ],
 ]);
 

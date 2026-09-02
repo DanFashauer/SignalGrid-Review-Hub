@@ -45,7 +45,7 @@
       "tier": 2,
       "provenance": "vendored",
       "writeScope": "docs/",
-      "charter": "Keeps prose matching what shipped. Bounded to docs/ so it can never edit the code its claims describe.",
+      "charter": "Keeps prose matching what shipped. Bounded to docs/ so it can never edit the code its claims describe. LOCAL CORRECTION (2026-09-02) to the vendored definition, which is byte-identical to third_party/everything-claude-code/agents/doc-updater.md and must NOT be edited: its \"Analysis Commands\" block runs `npx tsx scripts/codemaps/generate.ts`, and that path does not exist in this repository — there is no codemap generator and no docs/CODEMAPS tree. Ignore that line; build a codemap by reading the tree and write it. The neighbouring `npx madge` and `npx jsdoc2md` are external packages npx fetches, not workspace dependencies, so both need network. The real in-repo generators are `node scripts/generate-sync-manifest.mjs` (never hand-edit its output) and `node scripts/gen-claim-inventory-md.mjs` (`--check` fails on drift).",
       "carvedOutOf": null
     },
     {
@@ -53,7 +53,7 @@
       "tier": 2,
       "provenance": "vendored",
       "writeScope": "scripts/src/e2e/",
-      "charter": "Drives and repairs browser end-to-end specs, and nothing outside that suite.",
+      "charter": "Drives and repairs browser end-to-end specs, and nothing outside that suite. LOCAL CORRECTION (2026-09-02) to the vendored definition, which is byte-identical to third_party/everything-claude-code/agents/e2e-runner.md and must NOT be edited: its Playwright fallback block runs `npx playwright test tests/auth.spec.ts`, and this repository has no tests/ specs at all. The suite is scripts/src/e2e/*.spec.ts (10 files). Run all of it with `pnpm run test:e2e`; run one file with `pnpm --filter @workspace/scripts run test:e2e src/e2e/review-console.spec.ts` — the spec path is relative to scripts/, because that is the package the script runs in. Verified 2026-09-02: that command with --list enumerates 10 tests in review-console.spec.ts.",
       "carvedOutOf": "scripts/"
     },
     {

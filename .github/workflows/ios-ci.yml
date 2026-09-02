@@ -27,13 +27,13 @@ permissions:
 
 on:
   push:
-    branches: [main, SignalGrid_Alpha]
+    branches: [SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
       - '.github/workflows/ios-ci.yml'
       - 'scripts/check-ios-port-sources.mjs'
   pull_request:
-    branches: [main, SignalGrid_Alpha]
+    branches: [SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
       - '.github/workflows/ios-ci.yml'

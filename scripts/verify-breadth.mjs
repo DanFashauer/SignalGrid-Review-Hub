@@ -14,6 +14,17 @@
 // IN PARALLEL with `validation`, so CI wall-clock drops rather than grows) —
 // no longer a serial local tax.
 //
+// THE LANE HOLDS 56 STEPS, NOT 55. 47 + 8 = 55, and this header used to stop
+// there while `STEPS` had a fifty-sixth entry nobody had named: `proof:decision-palette`,
+// registered 2026-08-31. It is neither a deferred family nor a doctrine document
+// — it is a DR-005 design gate (one decision palette, WCAG AA on every ground it
+// renders against) that the gap scan found running in NO always-on lane at all,
+// only through the Mac harness's dynamic `proof:*` enumeration. It was put here
+// because the breadth lane is where an always-on non-launch gate belongs, and it
+// is named here because an unnamed step is how the two categories above start
+// absorbing things that are neither. Count the entries in `STEPS`, not the
+// arithmetic in this sentence.
+//
 // MEMBERSHIP IS DERIVED, NOT REMEMBERED. The 47 deferred-family gates are the
 // 43 deferred families whose proof is named `proof:<family>` one-to-one, plus
 // the four shared gates covering the remaining five deferred families
@@ -54,7 +65,7 @@ const STEPS = [
   { name: "Proof: grid-lifecycle (capstone — 6 models, provision→decommission)", cmd: ["pnpm", "run", "proof:grid-lifecycle"] },
   { name: "Proof: factory-flows (manufacturing/OT workflows)", cmd: ["pnpm", "run", "proof:factory-flows"] },
   { name: "Proof: fabric-scenario (end-to-end fusion → incident)", cmd: ["pnpm", "run", "proof:fabric-scenario"] },
-  // ── The 47 deferred-family gates ────────────────────────────────────────
+  // ── The 47 deferred-family gates, plus the one design gate marked below ──
   { name: "Proof: carrier-reachability (post-exit, gated)", cmd: ["pnpm", "run", "proof:carrier-reachability"] },
   { name: "Proof: location-services (geofence posture, gated)", cmd: ["pnpm", "run", "proof:location-services"] },
   { name: "Proof: vuln-scan (device risk posture, gated)", cmd: ["pnpm", "run", "proof:vuln-scan"] },
@@ -157,5 +168,5 @@ if (failed) {
   console.error(`\nBreadth lane FAILED at: ${failed}.`);
   process.exit(1);
 }
-console.log(`\nBreadth lane PASSED — ${results.length} deferred-family and doctrine proofs green.`);
+console.log(`\nBreadth lane PASSED — ${results.length} breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).`);
 console.log("This says NOTHING about the launch surface — that is preflight's job.");

@@ -5,10 +5,9 @@ name: CodeQL
 on:
   push:
     branches:
-      - dev
-      - alpha
-      - beta
-      - prod
+      # The only long-lived branch. The dev/alpha/beta/prod tier branches were
+      # pruned (docs/BRANCH_HYGIENE.md); triggering on names that resolve to
+      # nothing is a scan that can never run.
       - SignalGrid_Alpha
   pull_request:
   schedule:

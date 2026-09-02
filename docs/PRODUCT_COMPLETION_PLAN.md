@@ -318,6 +318,13 @@ This section is the record, and D2–D4 below are restated in their corrected fo
   three that can be deleted freely; `scheduled-verification.yml` is the sole
   cron, and deleting it or promote without removing their entries from
   `scripts/lib/ci-jobs.mjs` in the same commit fails the preflight parity gate.
+  **Superseded 2026-09-02 on the promote half:** "dispatch-only and maintained"
+  was true and was not the whole test. The four tier branches it dispatches
+  against were pruned, so every input combination names a ref that resolves to
+  nothing and the workflow can only fail — it is now retired. The parity-gate
+  half of this bullet held exactly as written: removing the workflow required
+  deleting its `NOT_A_GATE` entry in `scripts/lib/ci-jobs.mjs` in the same
+  change.
 - **The ~85-doc move was oversold.** Only ~45 docs are genuinely free to move
   (sales/social/founder/competitive/stale-readiness). 25 docs are hard-required
   by literal path in `docs-sanity.mjs`; the orphan gate sits at its 10/10
@@ -409,7 +416,9 @@ Order matters; each step names the gate that would otherwise fail:
    command with a matching CI lane, updating `scripts/lib/ci-jobs.mjs` and both
    parity checks in the same change — kept, runnable, no longer a per-push tax.
 5. `scheduled-verification.yml`: keep or retire deliberately; if retired, its
-   `ci-jobs.mjs` entry goes in the same commit. `promote.yml` stays.
+   `ci-jobs.mjs` entry goes in the same commit. `promote.yml` stays. **(The
+   promote half is superseded — retired 2026-09-02 once its tier branches were
+   pruned; see §11.1. `scheduled-verification.yml` was kept, per §11.4 step 5.)**
 6. The 25 `docs-sanity.mjs` REQUIRED_DOCS stay put for now; touching that list
    is its own reviewed change, not a side effect of a move.
 

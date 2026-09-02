@@ -38,6 +38,7 @@
     "agent-platform-engineer": 1
   },
   "retired": {
-    "web-engineer": 5
+    "web-engineer": 5,
+    "release-engineer": 1
   }
 }

@@ -2621,6 +2621,8 @@
       "reviewedBy": "release-engineer",
       "date": "2026-08-25",
       "depth": "audited",
+      "retiredOn": "2026-09-02",
+      "retiredWhy": "the workflow was retired with the dev/alpha/beta/prod tier branches it dispatched against (docs/BRANCH_HYGIENE.md); the file no longer exists",
       "note": "Tier promotion, the highest-privilege dispatch path. Opens a PR and never merges; both non-failure outcomes (nothing to promote, Actions barred from opening PRs) are caught and reported green with a one-click compare link, and everything else rethrows after logging status and body. The `from`/`to` inputs ARE interpolated straight into a shell arithmetic block, which is safe ONLY because both are type:choice and GitHub constrains them server-side — changing either to type:string turns that line into shell injection against a job holding pull-requests:write."
     },
     {

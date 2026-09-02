@@ -1,10 +1,27 @@
 #!/usr/bin/env node
-// Regenerate docs/CLAIM_INVENTORY.md from its machine twin. The JSON is the
-// source of truth (complete text, structured fields); the Markdown is the
-// human rendering and is ALWAYS derived — never hand-edit a row here, edit
-// the JSON and re-run:
+// Regenerate docs/CLAIM_INVENTORY.md from its machine twin, and GATE that the
+// committed copy still matches. The JSON is the source of truth (complete text,
+// structured fields); the Markdown is the human rendering and is ALWAYS derived
+// — never hand-edit a row here, edit the JSON and re-run:
 //
-//   node scripts/gen-claim-inventory-md.mjs
+//   node scripts/gen-claim-inventory-md.mjs             regenerate (writes)
+//   node scripts/gen-claim-inventory-md.mjs --check     gate: fail on drift (writes nothing)
+//   node scripts/gen-claim-inventory-md.mjs --self-test prove the gate can fail
+//
+// WHY --check EXISTS. The document this script writes says, in its own preamble,
+// that it "is regenerated from [the JSON] by `node scripts/gen-claim-inventory-md.mjs`
+// and must not be row-edited by hand." Nothing enforced either half. The generator
+// was invoked by no lane and no workflow — every reference to it in the repository
+// was inside this file or inside the sentence above — so the JSON could gain, lose
+// or reword a row and the published Markdown would keep saying the old thing, with
+// its own preamble vouching for it. A derived artifact nobody re-derives is a
+// hand-maintained artifact that claims not to be, which is the exact fossil shape
+// CLAUDE.md names.
+//
+// GATED vs REPORTED: this is GATED, and only over an unambiguous question —
+// byte equality between the committed Markdown and the render of the JSON. It
+// judges nothing about whether a claim is TRUE or correctly classified; that is
+// the launch-claims work, and this gate makes no statement about it.
 //
 // Cells render COMPLETE: pipes escaped, newlines collapsed, no length caps.
 // The first version sliced cells at 200-300 chars and paid for it twice —
@@ -15,7 +32,30 @@ import { readFileSync, writeFileSync } from "node:fs";
 const JSON_PATH = "docs/agent/CLAIM_INVENTORY.json";
 const MD_PATH = "docs/CLAIM_INVENTORY.md";
 
-const d = JSON.parse(readFileSync(JSON_PATH, "utf8"));
+const CHECK = process.argv.includes("--check");
+const SELF_TEST = process.argv.includes("--self-test");
+
+// FLOORS, deliberately far below the live numbers (1,023 rows / 87 files at the
+// time of writing) and never equal to them. They exist to catch a render that
+// resolved NOTHING — an empty `rows`, a renamed field, a JSON that parsed but is
+// no longer this shape — because a gate comparing two empty documents passes and
+// is green about nothing. They must NOT track the real count: a floor that equals
+// the current number is a fossil that fails on the next honest edit. Same idiom
+// as AGENT_FLOOR in check-agent-roster.mjs.
+const ROW_FLOOR = 100;
+const FILE_FLOOR = 10;
+
+/**
+ * Pure render: inventory object -> the complete Markdown document.
+ * Pure so the gate and the self-test can exercise it without touching the disk.
+ */
+export function renderInventory(d) {
+  // A stored figure the render never consults is a fossil waiting to happen: the
+  // JSON carries rowCount (and, when present, counts/actions) beside `rows`, and
+  // nothing recomputes them. Refuse to render when they disagree with `rows`.
+  if (d.rowCount !== undefined && d.rowCount !== d.rows.length) {
+    throw new Error(`CLAIM_INVENTORY.json stores rowCount=${d.rowCount} but carries ${d.rows.length} rows — the stored figure drifted from the data it summarises`);
+  }
 const rows = d.rows;
 const n = rows.length;
 
@@ -134,5 +174,111 @@ for (const [f, rs] of bySurface) {
   out.push("");
 }
 
-writeFileSync(MD_PATH, out.join("\n") + "\n");
-console.log(`Regenerated ${MD_PATH}: ${n} rows across ${bySurface.size} files (${JSON.stringify(actions)})`);
+return { text: out.join("\n") + "\n", rows: n, files: bySurface.size, actions };
+}
+
+/** SELF-TEST — a gate that has never failed proves nothing. */
+function selfTest() {
+  const checks = [];
+
+  // 1. The render is non-vacuous over the REAL inventory: above both floors.
+  const live = renderInventory(JSON.parse(readFileSync(JSON_PATH, "utf8")));
+  checks.push([
+    `the real inventory renders above the floors (rows ${live.rows} >= ${ROW_FLOOR}, files ${live.files} >= ${FILE_FLOOR})`,
+    live.rows >= ROW_FLOOR && live.files >= FILE_FLOOR && live.text.length > 0,
+  ]);
+
+  // 2. A SYNTHETIC VIOLATION must be flagged. One character of drift in a cell —
+  //    the smallest edit a hand-editor could make — must not compare equal.
+  const synthetic = {
+    generated: "2026-01-01",
+    rows: [
+      { file: "a.tsx", line: 1, claim: "c", kind: "k", classification: "launch", action: "keep", evidence: "e" },
+    ],
+  };
+  const clean = renderInventory(synthetic).text;
+  const drifted = clean.replace("| c |", "| c! |");
+  checks.push(["a one-character planted drift is DETECTED", drifted !== clean && clean.includes("| c |")]);
+  // 4b. A stored rowCount that drifted from `rows` is REFUSED, not rendered around.
+  let refused = false;
+  try { renderInventory({ ...inventory, rowCount: inventory.rows.length + 1 }); } catch { refused = true; }
+  checks.push(["a stored rowCount that disagrees with rows is refused by the render", refused]);
+
+  // 3. …and an undrifted render compares EQUAL, so the pass is not vacuous.
+  checks.push(["an identical render compares equal (the gate can also pass)", renderInventory(synthetic).text === clean]);
+
+  // 4. The floors themselves can fail: an empty inventory must not clear them.
+  const empty = renderInventory({ generated: "2026-01-01", rows: [] });
+  checks.push(["an EMPTY inventory falls below the floors", !(empty.rows >= ROW_FLOOR && empty.files >= FILE_FLOOR)]);
+
+  let bad = 0;
+  for (const [name, ok] of checks) {
+    console.log(`  ${ok ? "ok  " : "FAIL"}  ${name}`);
+    if (!ok) bad += 1;
+  }
+  if (bad) {
+    console.error(`\nSELF-TEST FAILED — ${bad} check(s). The renderer or the comparison has drifted;`);
+    console.error("a gate that cannot fail is green about nothing.");
+    return 1;
+  }
+  console.log("\nSelf-test green — the check detects planted drift, passes on a match, and refuses an empty render.");
+  return 0;
+}
+
+if (SELF_TEST) process.exit(selfTest());
+
+const inventory = JSON.parse(readFileSync(JSON_PATH, "utf8"));
+const rendered = renderInventory(inventory);
+
+// Floors apply to the GATE too, not only the self-test: a render that resolved
+// nothing must refuse rather than agree with an equally empty file.
+if (rendered.rows < ROW_FLOOR || rendered.files < FILE_FLOOR) {
+  console.error(
+    `✗ ${JSON_PATH} rendered ${rendered.rows} row(s) across ${rendered.files} file(s) — below the floors ` +
+      `(${ROW_FLOOR}/${FILE_FLOOR}). The inventory is unreadable or its shape changed; refusing to ` +
+      "conclude anything from a render that found nothing.",
+  );
+  process.exit(1);
+}
+
+if (CHECK) {
+  let onDisk;
+  try {
+    onDisk = readFileSync(MD_PATH, "utf8");
+  } catch (err) {
+    console.error(`✗ ${MD_PATH} is unreadable (${err.message}) — the derived document is missing.`);
+    process.exit(1);
+  }
+  if (onDisk !== rendered.text) {
+    // Name the FIRST differing line: "run the generator" is advice, "line 412 differs"
+    // is a finding somebody can act on without re-deriving it themselves.
+    const a = onDisk.split("\n");
+    const b = rendered.text.split("\n");
+    let i = 0;
+    while (i < a.length && i < b.length && a[i] === b[i]) i += 1;
+    // Window the excerpt around the first differing COLUMN, not around column 0.
+    // A fixed head-slice printed two identical-looking lines when the drift sat
+    // 300 characters in — a "finding" a reader cannot see is not a finding.
+    const la = a[i] ?? "";
+    const lb = b[i] ?? "";
+    let c = 0;
+    while (c < la.length && c < lb.length && la[c] === lb[c]) c += 1;
+    const from = Math.max(0, c - 40);
+    const win = (l) => (l === undefined ? "<end of file>" : (from > 0 ? "…" : "") + l.slice(from, c + 80) + (l.length > c + 80 ? "…" : ""));
+    console.error(`✗ ${MD_PATH} is STALE — it does not match a fresh render of ${JSON_PATH}.`);
+    console.error(`  First difference at line ${i + 1}, column ${c + 1}:`);
+    console.error(`    committed: ${JSON.stringify(win(a[i]))}`);
+    console.error(`    rendered:  ${JSON.stringify(win(b[i]))}`);
+    console.error(`  The Markdown is DERIVED and its own preamble says so. Edit ${JSON_PATH},`);
+    console.error("  then run `node scripts/gen-claim-inventory-md.mjs` and commit both.");
+    process.exit(1);
+  }
+  console.log(
+    `Claim-inventory drift check passed — ${MD_PATH} matches a fresh render of ${JSON_PATH} ` +
+      `(${rendered.rows} rows across ${rendered.files} files).`,
+  );
+  process.exit(0);
+}
+
+writeFileSync(MD_PATH, rendered.text);
+console.log(`Regenerated ${MD_PATH}: ${rendered.rows} rows across ${rendered.files} files (${JSON.stringify(rendered.actions)})`);

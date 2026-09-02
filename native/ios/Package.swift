@@ -45,6 +45,13 @@ let package = Package(
         .target(
             name: "EnterpriseShellPort",
             path: "EnterpriseShell",
+            // The target path is the app directory, and SwiftPM scans it for
+            // resources even when `sources` is explicit. Settings.bundle carries a
+            // localized strings file for the iOS Settings pane; the port is
+            // Foundation-only and ships no resources, so the bundle is excluded
+            // rather than the manifest growing a `defaultLocalization` it has no
+            // use for. Without this line `swift build` refuses the manifest.
+            exclude: ["Settings.bundle"],
             sources: [
                 "Services/DecisionEngine.swift",
                 "Services/AppWorkflows.swift",

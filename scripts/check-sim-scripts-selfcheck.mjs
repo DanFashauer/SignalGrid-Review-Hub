@@ -225,10 +225,16 @@ function staticChecks(absPath, label) {
 
 function referencedChecks(absPath, label, namedBy, cwd) {
   const problems = [];
-  if (!existsSync(absPath)) {
+  // One stat, then one read; no exists-then-stat-then-read sequence. The file is
+  // absent when the stat throws, and the read is the same call CI's runner would
+  // make — the gate never reports on a file it checked and then lost.
+  let mode;
+  try {
+    mode = statSync(absPath).mode;
+  } catch {
     return [{ label, rule: "a", detail: `named by operation(s) ${namedBy.join(", ")} but does not exist — the request would be accepted and could never run` }];
   }
-  if ((statSync(absPath).mode & 0o111) === 0) {
+  if ((mode & 0o111) === 0) {
     problems.push({ label, rule: "a", detail: `named by operation(s) ${namedBy.join(", ")} but carries no executable bit` });
   }
   const text = readFileSync(absPath, "utf8");

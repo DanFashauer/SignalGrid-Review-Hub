@@ -107,8 +107,11 @@ export function auditScheduledRoutines(registry, heartbeats, rosterText, listHea
           if (Number.isNaN(at)) {
             fatal.push(`${name}: heartbeat carries no parseable firedAt — 'ran at some point' is not evidence`);
           } else if (retired) {
-            if (!Number.isNaN(retiredAt) && at > retiredAt) {
-              fatal.push(`${name}: declared retired at ${r.retiredAt} but its heartbeat fired at ${parsed.firedAt} — the trigger is still running; disable it on the account or un-retire the row`);
+            // Fail-closed spelling: an unparseable retirement instant does not
+            // skip the comparison (that would be the skip-on-unknown shape), it
+            // fails it — on top of the "no ISO retiredAt" fatal already raised.
+            if (!Number.isFinite(retiredAt) || at > retiredAt) {
+              fatal.push(`${name}: declared retired at ${r.retiredAt} but its heartbeat fired at ${parsed.firedAt} — the trigger is still running, or the retirement instant is unreadable; disable it on the account or un-retire the row`);
             }
           } else if (r.cadenceToleranceHours != null) {
             const ageH = (Date.now() - at) / 3_600_000;

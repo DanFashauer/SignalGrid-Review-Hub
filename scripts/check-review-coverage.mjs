@@ -48,21 +48,50 @@ const NOT_REVIEWABLE = [
 /** Depths a review claim may assert, weakest first. */
 export const DEPTHS = ["read", "audited", "verified-live"];
 
+/**
+ * RETIREMENT. A claim is retired when the file it names has been DELETED. The
+ * rule lives in one place — the `$comment` at the top of the ledger — and the
+ * short form is: a deleted surface retires its claims; a retired claim must
+ * name a file that is gone; the ratchet accepts exactly that drop.
+ *
+ * Written 2026-09-02, the first time a reviewed surface was deleted
+ * (`artifacts/mockup-sandbox`, Ponytail cut 3). Before this, the only way to
+ * satisfy this gate after a deletion was to DELETE the review entries — which
+ * silently un-read five files and tripped the role-coverage ratchet with no
+ * mechanism to answer it. Deleting the evidence is not how you record that a
+ * thing is gone.
+ *
+ * An entry carrying EITHER key must carry both, or it is half-retired and that
+ * is a problem: a `retiredWhy` with no date cannot be checked against anything.
+ */
+export function isRetired(e) {
+  return e?.retiredOn !== undefined || e?.retiredWhy !== undefined;
+}
+
+/** YYYY-MM-DD naming a real calendar day. `2026-02-30` is not one. */
+export function isIsoDate(v) {
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
 export function isReviewable(path) {
   return !NOT_REVIEWABLE.some((re) => re.test(path));
 }
 
 /**
  * Pure audit. files: reviewable tracked paths. entries: ledger entries.
- * Returns { problems, coveredCount, total, byArea }.
+ * Returns { problems, coveredCount, total, byArea, retiredCount }. A retired
+ * entry is counted in retiredCount and in NOTHING else — never in coveredCount.
  */
 export function auditReviewCoverage(files, entries) {
   const problems = [];
   const covered = new Set();
+  let retiredCount = 0;
 
   if (!Array.isArray(entries)) {
     problems.push(`${LEDGER}: no \`reviews\` array — the ledger is unreadable`);
-    return { problems, coveredCount: 0, total: files.length, byArea: new Map() };
+    return { problems, coveredCount: 0, total: files.length, byArea: new Map(), retiredCount: 0 };
   }
 
   for (const e of entries) {
@@ -74,6 +103,17 @@ export function auditReviewCoverage(files, entries) {
     }
     if (e?.depth !== undefined && !DEPTHS.includes(e.depth)) {
       problems.push(`${LEDGER}: review of \`${label}\` has unknown depth \`${e.depth}\` (expected ${DEPTHS.join(" | ")})`);
+    }
+
+    const retired = isRetired(e);
+    if (retired) {
+      retiredCount += 1;
+      if (!isIsoDate(e.retiredOn)) {
+        problems.push(`${LEDGER}: review of \`${label}\` has \`retiredOn\` \`${e.retiredOn}\` — a retirement must name the day it happened, as YYYY-MM-DD`);
+      }
+      if (typeof e.retiredWhy !== "string" || e.retiredWhy.trim() === "") {
+        problems.push(`${LEDGER}: review of \`${label}\` is retired with no \`retiredWhy\` — an unexplained retirement is indistinguishable from deleting the evidence`);
+      }
     }
     if (typeof e?.path !== "string") continue;
 
@@ -88,6 +128,22 @@ export function auditReviewCoverage(files, entries) {
     // Found by a reader auditing the web trees, in the ledger rather than in the
     // code — which is the point of having one.
     const matched = files.filter((f) => f === e.path || f.startsWith(e.path.endsWith("/") ? e.path : `${e.path}/`));
+
+    // A RETIRED claim is the mirror image of a live one: it must match nothing.
+    // It covers nothing either — retirement records that a read happened, not
+    // that anything in this checkout is read. If the file is still here, this
+    // is a role narrowing its own surface under the word "retired", which is
+    // exactly the move the ratchet exists to catch.
+    if (retired) {
+      if (matched.length > 0) {
+        problems.push(
+          `${LEDGER}: review of \`${e.path}\` is retired while the file lives — a narrowing, not a retirement. ` +
+            `Retirement is only for a path this checkout no longer contains; if the file is still here the claim still stands.`,
+        );
+      }
+      continue;
+    }
+
     if (matched.length === 0) {
       problems.push(`${LEDGER}: review claims \`${e.path}\`, which matches no reviewable file in this checkout — the ledger rotted, or the claim was always wrong`);
     } else if (matched.length > 1 || !files.includes(e.path)) {
@@ -111,7 +167,7 @@ export function auditReviewCoverage(files, entries) {
     byArea.set(area, cur);
   }
 
-  return { problems, coveredCount: covered.size, total: files.length, byArea };
+  return { problems, coveredCount: covered.size, total: files.length, byArea, retiredCount };
 }
 
 function selfTest() {
@@ -159,7 +215,53 @@ function selfTest() {
   a = auditReviewCoverage(files, []);
   checks.push(["an empty ledger is honest, not fatal — zero coverage is a number", a.problems.length === 0 && a.coveredCount === 0]);
 
+  // RETIREMENT — all three directions, because two of them are the ways this
+  // mechanism could be abused rather than used.
+  const retired = { ...ok, path: "lib/gone.ts", retiredOn: "2026-09-02", retiredWhy: "deleted in cut 3" };
+
+  a = auditReviewCoverage(files, [retired]);
+  checks.push([
+    "a RETIRED review of a file that is GONE is accepted, and covers nothing",
+    a.problems.length === 0 && a.coveredCount === 0 && a.retiredCount === 1,
+  ]);
+
+  a = auditReviewCoverage(files, [{ ...retired, path: "lib/a.ts" }]);
+  checks.push([
+    "a RETIRED review of a file that STILL EXISTS is FATAL — a narrowing, not a retirement",
+    a.problems.some((p) => p.includes("retired while the file lives")) && a.coveredCount === 0,
+  ]);
+
+  a = auditReviewCoverage(files, [{ ...ok, path: "lib/gone.ts" }]);
+  checks.push([
+    "a NON-retired review of a missing file is still FATAL — retirement is the only way to say a file left",
+    a.problems.some((p) => p.includes("matches no reviewable file")),
+  ]);
+
+  a = auditReviewCoverage(files, [{ ...retired, retiredOn: "2026-02-30" }]);
+  checks.push(["a retirement dated to a day that does not exist is FATAL", a.problems.some((p) => p.includes("retiredOn"))]);
+
+  a = auditReviewCoverage(files, [{ ...retired, retiredWhy: "   " }]);
+  checks.push(["a retirement with no reason is FATAL", a.problems.some((p) => p.includes("retiredWhy"))]);
+
+  a = auditReviewCoverage(files, [{ ...ok, path: "lib/gone.ts", retiredWhy: "deleted" }]);
+  checks.push(["half-retired (a why with no date) is FATAL", a.problems.some((p) => p.includes("retiredOn"))]);
+
+  checks.push([
+    "a live entry is not retired; a dated one is; 2026-02-30 is not a date",
+    !isRetired(ok) && isRetired(retired) && isIsoDate("2026-09-02") && !isIsoDate("2026-02-30") && !isIsoDate("2026-9-2"),
+  ]);
+
   checks.push(["generated output is not reviewable surface", !isReviewable("lib/dist/x.js") && !isReviewable("pnpm-lock.yaml") && isReviewable("lib/x.ts")]);
+
+  // LIVE FLOOR. The three cases above are synthetic; this asserts the real
+  // ledger still parses and still carries at least one entry of each kind, so a
+  // schema drift that silently stopped producing retired entries is visible.
+  const liveEntries = JSON.parse(readFileSync(join(repo, LEDGER), "utf8")).reviews ?? [];
+  const liveRetired = liveEntries.filter(isRetired);
+  checks.push([
+    `LIVE: the ledger parses and carries both live and retired claims (${liveEntries.length - liveRetired.length} live, ${liveRetired.length} retired)`,
+    liveEntries.length > 100 && liveRetired.length > 0 && liveRetired.every((e) => isIsoDate(e.retiredOn) && typeof e.retiredWhy === "string" && e.retiredWhy.trim() !== ""),
+  ]);
 
   const failed = checks.filter(([, ok2]) => !ok2);
   for (const [name, ok2] of checks) console.log(`  ${ok2 ? "ok" : "FAIL"} — self-test: ${name}`);
@@ -188,11 +290,14 @@ function runGate() {
     }
   }
 
-  const { problems, coveredCount, total, byArea } = auditReviewCoverage(files, entries);
+  const { problems, coveredCount, total, byArea, retiredCount } = auditReviewCoverage(files, entries);
   const pct = total === 0 ? 0 : ((coveredCount / total) * 100).toFixed(1);
 
   console.log(`Review coverage — ${coveredCount} of ${total} reviewable file(s) have been read by a named role: ${pct}%`);
   console.log("  (a green gate suite is not a reviewed codebase; this is the number that says so)");
+  if (retiredCount > 0) {
+    console.log(`  ${retiredCount} retired claim(s) — files that were read and have since been DELETED. They count as covering nothing.`);
+  }
   const rows = [...byArea].sort((a, b) => b[1].total - a[1].total);
   console.log("\n  BY AREA:");
   for (const [area, s] of rows) {
@@ -205,5 +310,5 @@ function runGate() {
     for (const p of problems) console.error(`  ✗ ${p}`);
     process.exit(1);
   }
-  console.log("\nReview-coverage check passed — every review claim names a real path, a reviewer, a date and a depth.");
+  console.log("\nReview-coverage check passed — every live claim names a real path, a reviewer, a date and a depth; every retired claim names a file that is gone and says why.");
 }

@@ -1,11 +1,11 @@
 {
-  "note": "Per-role files-read high-water mark. Never hand-edit; the gate writes it.",
+  "note": "Per-role files-read high-water mark, and the retirements already absorbed. Never hand-edit; the gate writes it.",
   "read": {
     "principal-engineer": 20,
     "qa-engineer": 18,
     "security-engineer": 17,
     "product-manager": 0,
-    "web-engineer": 60,
+    "web-engineer": 55,
     "sre": 5,
     "mobile-native-engineer": 19,
     "compliance-analyst": 1,
@@ -36,5 +36,8 @@
     "commercial-counsel": 0,
     "mac-lane-steward": 0,
     "agent-platform-engineer": 1
+  },
+  "retired": {
+    "web-engineer": 5
   }
 }

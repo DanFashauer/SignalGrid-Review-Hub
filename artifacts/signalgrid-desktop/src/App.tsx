@@ -1,7 +1,5 @@
 import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import DesktopLayout from "@/components/DesktopLayout";
@@ -14,12 +12,6 @@ const SignalsPage = lazy(() => import("@/pages/Signals"));
 const PoliciesPage = lazy(() => import("@/pages/Policies"));
 const IntegrationsPage = lazy(() => import("@/pages/Integrations"));
 const HandoffPage = lazy(() => import("@/pages/Handoff"));
-
-// Fixture data doesn't change between polls, so a gentle 30s cadence is plenty
-// (was an aggressive 8s that churned the network for a static demo).
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { refetchInterval: 30_000, staleTime: 20_000 } },
-});
 
 function Router() {
   return (
@@ -41,16 +33,13 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <div className="dark min-h-screen bg-background text-foreground overflow-hidden">
-            <Router />
-          </div>
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <TooltipProvider>
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <div className="dark min-h-screen bg-background text-foreground overflow-hidden">
+          <Router />
+        </div>
+      </WouterRouter>
+    </TooltipProvider>
   );
 }
 

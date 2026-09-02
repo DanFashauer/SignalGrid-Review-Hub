@@ -1,9 +1,6 @@
 import { lazy, Suspense } from "react";
 import { MotionConfig } from "framer-motion";
 import { Switch, Route, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 
@@ -14,8 +11,6 @@ const Pricing = lazy(() => import("@/pages/Pricing"));
 const Federal = lazy(() => import("@/pages/Federal"));
 const Downloads = lazy(() => import("@/pages/Downloads"));
 const About = lazy(() => import("@/pages/About"));
-
-const queryClient = new QueryClient();
 
 function Router() {
   return (
@@ -35,21 +30,16 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      {/* `reducedMotion="user"` makes every framer-motion animation on the site
-          honour the visitor's prefers-reduced-motion setting in one place,
-          rather than per-component (and rather than not at all). */}
-      <MotionConfig reducedMotion="user">
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <div className="dark min-h-screen bg-background text-foreground">
-            <Router />
-          </div>
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-      </MotionConfig>
-    </QueryClientProvider>
+    // `reducedMotion="user"` makes every framer-motion animation on the site
+    // honour the visitor's prefers-reduced-motion setting in one place,
+    // rather than per-component (and rather than not at all).
+    <MotionConfig reducedMotion="user">
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <div className="dark min-h-screen bg-background text-foreground">
+          <Router />
+        </div>
+      </WouterRouter>
+    </MotionConfig>
   );
 }
 

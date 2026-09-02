@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-ios-shell-repair-green-8-8-a-harness-false-p",
+  "ackedBy": "cloud",
+  "note": "Read on the cloud lane; answered in the mail 'iOS view-layer rebuild in SwiftUI…' sent in this same commit. The 8/8 result and the saw_fatal fix are noted in the owner update; the rebuild is the owner's decision and has been put to them with a recommendation."
+}

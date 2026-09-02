@@ -35,7 +35,7 @@
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -128,10 +128,135 @@ const ACTION_CALL =
   /\b(quarantineEndpoint|unquarantineEndpoint|quarantine|unquarantine|lockDevice|remoteLock|bypassActivationLock|eraseDevice|wipeDevice|reauthenticate|disconnectEndpoint)\s*\(/i;
 const MUTATING_REQUEST = /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i;
 
-const isComment = (line) => {
-  const t = line.trim();
-  return t.startsWith("//") || t.startsWith("*") || t.startsWith("/*");
-};
+/**
+ * Comments are stripped before ANY rule below looks at a file.
+ *
+ * A comment cannot satisfy a gate, and it cannot commit a device action either.
+ * The previous version dropped whole lines that LOOKED like comments (`//`, `*`,
+ * `/*` at the start), which is not the same thing: a trailing `// see
+ * SIGNALGRID_LIVE_INTEGRATIONS` on a code line, or the interior of a block
+ * comment whose lines are not star-prefixed, both survived and would have read as
+ * a gate. That is a fail-open — the gate would have reported a family disciplined
+ * on the strength of prose ABOUT the discipline. This is a character scanner:
+ * line comments and block comments go, string literals STAY (the real check is
+ * spelled `env["SIGNALGRID_LIVE_INTEGRATIONS"] !== "true"`, so the literal is
+ * load-bearing), and newlines are preserved so reported line numbers are exact.
+ *
+ * A `'`/`"` string is also terminated by a newline, so an unbalanced quote inside
+ * something this scanner does not model (a regex literal, say) can corrupt at most
+ * one line rather than swallowing the rest of the file.
+ */
+function stripComments(source) {
+  let out = "";
+  let i = 0;
+  const n = source.length;
+  while (i < n) {
+    const c = source[i];
+    const d = source[i + 1];
+    if (c === "/" && d === "/") {
+      while (i < n && source[i] !== "\n") i += 1;
+      continue;
+    }
+    if (c === "/" && d === "*") {
+      i += 2;
+      while (i < n && !(source[i] === "*" && source[i + 1] === "/")) {
+        if (source[i] === "\n") out += "\n";
+        i += 1;
+      }
+      i += 2;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      const quote = c;
+      out += c;
+      i += 1;
+      while (i < n) {
+        if (source[i] === "\\") { out += source.slice(i, i + 2); i += 2; continue; }
+        if (quote !== "`" && source[i] === "\n") break;
+        out += source[i];
+        i += 1;
+        if (source[i - 1] === quote) break;
+      }
+      continue;
+    }
+    out += c;
+    i += 1;
+  }
+  return out;
+}
+
+const LIVE_GATE = /SIGNALGRID_LIVE_INTEGRATIONS/;
+
+/**
+ * The identifier of the shared emitter-gate factory. THIS IS THE ONLY THING
+ * HARDCODED — the file it lives in is derived by following the family's own
+ * import, so moving or renaming the module cannot silently orphan this check.
+ *
+ * WHY THIS EXISTS. Ponytail cut 4 (ff27e75) folded six byte-identical emitter
+ * gates — itsm, siem, syslog, telemetry, webhooks, caep-events — into
+ * `createEmitterResolver()`. The discipline did not change: the same
+ * tier / SIGNALGRID_LIVE_INTEGRATIONS / token / injected-transport chain runs, once
+ * instead of six times. But this gate tested the family's OWN file bodies, so five
+ * families reported "no SIGNALGRID_LIVE_INTEGRATIONS gate" the moment the duplication
+ * they were being credited for went away. A gate that punishes a correct refactor is
+ * measuring the copy, not the control.
+ *
+ * (webhooks kept passing, and for a reason worth naming: `webhooks/dispatch.ts`
+ * still performs its own inline `env.SIGNALGRID_LIVE_INTEGRATIONS !== 'true'` check
+ * in real code. It was never passing on the comment in its resolve.ts — but nothing
+ * stopped it from doing so until the stripper above, which is why both halves of
+ * this fix had to land together.)
+ */
+const RESOLVER_FACTORY = "createEmitterResolver";
+
+/** Follow `import { createEmitterResolver, … } from "<specifier>"` out of a family
+ *  file to the module that defines it. Returns the tracked repo-relative path and
+ *  its source, or null if the import cannot be resolved to a file in this tree —
+ *  unresolvable is NOT gated. */
+function resolveFactoryModule(fromRel, source) {
+  const importOfFactory = new RegExp(
+    `import\\s*(?:type\\s*)?\\{[^}]*\\b${RESOLVER_FACTORY}\\b[^}]*\\}\\s*from\\s*['"]([^'"]+)['"]`,
+  );
+  const m = importOfFactory.exec(source);
+  if (!m) return null;
+  const spec = m[1];
+  if (!spec.startsWith(".")) return null; // a package specifier is not a file in this tree
+  const base = resolve(dirname(join(repo, fromRel)), spec);
+  for (const candidate of [`${base}.ts`, join(base, "index.ts")]) {
+    const rel = relative(repo, candidate);
+    if (!tracked.has(rel)) continue;
+    return { rel, source: readFileSync(candidate, "utf8") };
+  }
+  return null;
+}
+
+/**
+ * Does this family carry the live-call gate, and in which of the two legitimate
+ * forms? Pure: the caller supplies the family's files and a module reader, so the
+ * self-test drives THIS function rather than a paraphrase of it.
+ *
+ *   own                → the check is in the family's own code (comments stripped)
+ *   via <path>         → the family calls the shared factory, and the FACTORY's own
+ *                        code (comments stripped) carries the check
+ *   null               → not gated
+ *
+ * The factory form is checked, never assumed: calling something named
+ * `createEmitterResolver` proves nothing if the thing it resolves to has lost the
+ * check. That is self-test case (b).
+ */
+function gateFormOf(files, readModule) {
+  for (const f of files) {
+    if (LIVE_GATE.test(stripComments(f.source))) return "own";
+  }
+  for (const f of files) {
+    const code = stripComments(f.source);
+    if (!new RegExp(`\\b${RESOLVER_FACTORY}\\s*[<(]`).test(code)) continue;
+    const mod = readModule(f.rel, f.source);
+    if (!mod) continue;
+    if (LIVE_GATE.test(stripComments(mod.source))) return `via ${mod.rel}`;
+  }
+  return null;
+}
 
 const tracked = new Set(
   execFileSync("git", ["ls-files"], { cwd: repo, encoding: "utf8" }).split("\n").filter(Boolean),
@@ -139,21 +264,26 @@ const tracked = new Set(
 
 function analyzeFamily(name) {
   const dir = join(familyDir, name);
-  const files = readdirSync(dir).filter((f) => f.endsWith(".ts"));
-  let gated = false;
+  const sources = readdirSync(dir)
+    .filter((f) => f.endsWith(".ts"))
+    .map((f) => ({ rel: `lib/integrations/src/integrations/${name}/${f}`, file: f }))
+    .filter((f) => tracked.has(f.rel))
+    .map((f) => ({ ...f, source: readFileSync(join(dir, f.file), "utf8") }));
+
+  // The live-call gate, in either legitimate form — the family's own code, or the
+  // shared factory it imports. Comments are stripped in BOTH, so prose about the
+  // gate can never stand in for the gate.
+  const gateForm = gateFormOf(sources, resolveFactoryModule);
+  const gated = gateForm !== null;
+
   let performsAction = false;
   const actionSites = [];
-
-  for (const f of files) {
-    const rel = `lib/integrations/src/integrations/${name}/${f}`;
-    if (!tracked.has(rel)) continue;
-    const lines = readFileSync(join(dir, f), "utf8").split("\n");
-    const code = lines.filter((l) => !isComment(l));
-    const body = code.join("\n");
-    if (/SIGNALGRID_LIVE_INTEGRATIONS/.test(body)) gated = true;
-    if (ACTION_CALL.test(body) && MUTATING_REQUEST.test(body)) {
+  for (const f of sources) {
+    const code = stripComments(f.source);
+    if (ACTION_CALL.test(code) && MUTATING_REQUEST.test(code)) {
       performsAction = true;
-      code.forEach((l, i) => { if (ACTION_CALL.test(l)) actionSites.push(`${f}:~${i + 1}`); });
+      // Line numbers are exact: the stripper preserves newlines.
+      code.split("\n").forEach((l, i) => { if (ACTION_CALL.test(l)) actionSites.push(`${f.file}:${i + 1}`); });
     }
   }
 
@@ -164,7 +294,7 @@ function analyzeFamily(name) {
     .filter((f) => f.endsWith("-proof.ts"))
     .some((f) => new RegExp(`@workspace/integrations/${name}\\b`).test(readFileSync(join(proofDir, f), "utf8")));
 
-  return { name, gated, proven: conventional || importedByAProof, performsAction, actionSites,
+  return { name, gated, gateForm, proven: conventional || importedByAProof, performsAction, actionSites,
            consumers: consumersOf(name) };
 }
 
@@ -196,6 +326,85 @@ function consumersOf(name) {
     if (needle.test(text)) hits.push(rel);
   }
   return hits;
+}
+
+/**
+ * SELF-TEST — a gate nobody has watched fail is a gate nobody should trust.
+ *
+ * Runs on EVERY invocation (a wrong answer here fails the gate) and printable in
+ * full with `--self-test`. It drives the real `gateFormOf` / `stripComments`, not a
+ * paraphrase, against four synthetic families:
+ *
+ *   a  calls the factory, factory carries the check      → gated via the factory
+ *   b  calls the factory, factory's check REMOVED        → NOT gated  (the fold is
+ *                                                          verified, not trusted)
+ *   c  the string appears only in a COMMENT              → NOT gated  (prose about a
+ *                                                          gate is not a gate)
+ *   d  the check is in the family's own code             → gated: own
+ *
+ * (b) and (c) are the two ways this gate could fail open, and they are the two
+ * cases the version before this fix would have got wrong.
+ */
+const FACTORY_WITH_CHECK = `
+export function ${RESOLVER_FACTORY}(config) {
+  return (env = process.env) => {
+    if (env["SIGNALGRID_LIVE_INTEGRATIONS"] !== "true") return { mode: "fixture" };
+    return { mode: "live" };
+  };
+}
+`;
+const FACTORY_WITHOUT_CHECK = `
+export function ${RESOLVER_FACTORY}(config) {
+  return (env = process.env) => ({ mode: "live" });
+}
+`;
+const FAMILY_CALLING_FACTORY = `
+// Live-call gate: dev/alpha never emit; beta/prod need SIGNALGRID_LIVE_INTEGRATIONS=true.
+import { ${RESOLVER_FACTORY} } from "../adapters/emitter-resolver";
+export const resolveFakeEmitter = ${RESOLVER_FACTORY}({ tokenEnvVar: "FAKE_TOKEN" });
+`;
+
+function selfTestCases() {
+  const factoryReader = (source) => (_fromRel, _familySource) =>
+    source === null ? null : { rel: "lib/integrations/src/integrations/adapters/emitter-resolver.ts", source };
+  const family = (source) => [{ rel: "lib/integrations/src/integrations/fake/resolve.ts", source }];
+
+  const a = gateFormOf(family(FAMILY_CALLING_FACTORY), factoryReader(FACTORY_WITH_CHECK));
+  const b = gateFormOf(family(FAMILY_CALLING_FACTORY), factoryReader(FACTORY_WITHOUT_CHECK));
+  const c = gateFormOf(
+    family(`// beta/prod may, but only with SIGNALGRID_LIVE_INTEGRATIONS=true and a credential.\n` +
+           `/* block comment mentioning SIGNALGRID_LIVE_INTEGRATIONS */\n` +
+           `export const x = 1; // trailing SIGNALGRID_LIVE_INTEGRATIONS mention\n`),
+    () => null,
+  );
+  const d = gateFormOf(
+    family(`export const live = (env) => env["SIGNALGRID_LIVE_INTEGRATIONS"] === "true";\n`),
+    () => null,
+  );
+  return [
+    { id: "a", want: "via lib/integrations/src/integrations/adapters/emitter-resolver.ts", got: a,
+      what: "family calls the factory and the factory carries the check → gated via factory" },
+    { id: "b", want: null, got: b,
+      what: "same family, factory's check removed → NOT gated (a factory call is not evidence)" },
+    { id: "c", want: null, got: c,
+      what: "the string only in line/block/trailing COMMENTS → NOT gated" },
+    { id: "d", want: "own", got: d,
+      what: "the check in the family's own code → gated: own" },
+  ];
+}
+
+const selfTest = selfTestCases();
+const selfTestOk = selfTest.every((t) => t.got === t.want);
+
+if (process.argv.includes("--self-test")) {
+  for (const t of selfTest) {
+    console.log(`  ${t.got === t.want ? "PASS" : "FAIL"}  (${t.id}) ${t.what}` +
+      (t.got === t.want ? "" : `  — wanted ${JSON.stringify(t.want)}, got ${JSON.stringify(t.got)}`));
+  }
+  console.log(selfTestOk
+    ? "\nPASS  self-test — the live-gate check follows a resolver fold and refuses a comment."
+    : "\nFAIL  self-test — the live-gate check has drifted; its verdicts cannot be trusted.");
+  process.exit(selfTestOk ? 0 : 1);
 }
 
 console.log("Connector-discipline gate — every family gated and proven, none acting on a device\n");
@@ -233,10 +442,9 @@ const looseFiles = readdirSync(familyDir, { withFileTypes: true })
 let looseProblems = 0;
 for (const name of looseFiles) {
   const path = join(familyDir, name);
-  const lines = readFileSync(path, "utf8").split("\n");
-  const code = lines.filter((l) => !isComment(l)).join("\n");
+  const code = stripComments(readFileSync(path, "utf8"));
   const outbound = MUTATING_REQUEST.test(code) && /\bfetch\s*\(/.test(code);
-  const gated = /SIGNALGRID_LIVE_INTEGRATIONS/.test(code);
+  const gated = LIVE_GATE.test(code);
   if (outbound && !gated) {
     looseProblems += 1;
     bad(
@@ -354,6 +562,30 @@ for (const r of results) {
       `it to UNWIRED_OK in this file with a reason.`,
   );
 }
+
+if (selfTestOk) {
+  ok(`self-test: the live-gate check follows a resolver fold (a) and refuses a stripped factory (b), a comment (c); own-code check still counts (d)`);
+} else {
+  bad(
+    `SELF-TEST FAILED — ${selfTest.filter((t) => t.got !== t.want).map((t) => t.id).join(", ")}. ` +
+      `The live-gate detection has drifted, so every "gated" verdict below is unreliable. ` +
+      `Run \`node scripts/check-connector-discipline.mjs --self-test\` for the detail.`,
+  );
+}
+
+// WHICH FORM satisfied the gate, per family — so a fold is VISIBLE, not silent.
+// When six families' gates were folded into one factory this gate said nothing and
+// then said "no gate"; the point of printing the form is that the next fold shows up
+// as a changed line here instead of as a failure nobody expected.
+console.log("\n  live-call gate, per family (own code, or the shared factory it imports):");
+for (const r of results) {
+  console.log(`    ${r.name.padEnd(26)} ${r.gateForm ? `gated: ${r.gateForm}` : "NOT GATED"}`);
+}
+const viaFactory = results.filter((r) => r.gateForm && r.gateForm !== "own");
+console.log(
+  `    → ${results.filter((r) => r.gateForm === "own").length} gated in their own code, ` +
+    `${viaFactory.length} via a shared factory, ${results.filter((r) => !r.gateForm).length} not gated.\n`,
+);
 
 ok(`${disciplined.length} of ${families.length} families are gated, proven and action-free`);
 

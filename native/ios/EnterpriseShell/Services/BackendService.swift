@@ -46,12 +46,12 @@ final class BackendService {
     ///      local/offline mode: no network call is made anywhere, the lock screen
     ///      says so in its footer, and audit stays on the device.
     ///
-    /// Throws `BackendError.insecureBaseURL` for a non-https URL, except that
-    /// `http://` is permitted for loopback (127.0.0.1 / localhost / ::1) so a
+    /// Throws `BackendError.insecureBaseURL` for a non-https URL, except that the
+    /// plain http scheme is permitted for loopback (127.0.0.1 / localhost / ::1) so a
     /// developer can point at a local api-server. A thrown error is a
     /// CONFIGURATION problem that is reported — the `fatalError` this replaces
     /// took the whole app down ~30 s after launch from the audit timer, even in
-    /// demo mode, whenever a local `http://` backend was configured.
+    /// demo mode, whenever a local plain-http backend was configured.
     static func resolveBaseURL() throws -> ResolvedBackend? {
         if let managed = KioskConfig.backendBaseURL,
            !managed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

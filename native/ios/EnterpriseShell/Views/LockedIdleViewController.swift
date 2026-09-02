@@ -446,7 +446,8 @@ final class LockedIdleViewController: UIViewController {
                 if KioskConfig.localSessionAllowed {
                     lines.append("Unmanaged device (kiosk unavailable). Local sign-in is enabled in iOS Settings → Enterprise Shell.")
                 } else {
-                    lines.append("Unmanaged device (no managed app configuration; kiosk unavailable). Local sign-in is off — enable it in iOS Settings → Enterprise Shell → “Allow local sign-in on this unmanaged device”.")
+                    lines.append("Unmanaged device (no managed app configuration; kiosk unavailable). Local sign-in is off — "
+                        + "enable it in iOS Settings → Enterprise Shell → “Allow local sign-in on this unmanaged device”.")
                 }
             }
         }

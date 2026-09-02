@@ -43,7 +43,8 @@ final class EnrollingViewController: UIViewController {
         // no badge-enrollment route (BackendService.checkBadgeEnrollment), so
         // enrollment is an administrator's action in the SignalGrid console — never
         // something this screen can finish or wait on.
-        label.text = "This badge is not enrolled. This backend does not support enrollment from the device — an administrator enrolls badges in the SignalGrid console. Try another badge, or go back to the lock screen."
+        label.text = "This badge is not enrolled. This backend does not support enrollment from the device — "
+            + "an administrator enrolls badges in the SignalGrid console. Try another badge, or go back to the lock screen."
         label.font = SG.sans(16, .regular)
         label.adjustsFontForContentSizeCategory = true
         label.textAlignment = .center

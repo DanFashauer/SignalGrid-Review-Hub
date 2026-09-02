@@ -51,21 +51,25 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-02 - Mac lane cleared the native ledger on branch
-              mac/native-ledger-2026-09-02 (c2b61057 + 04c911e3): both standing
-              HIGHs closed, three BackendService paths corrected against the
-              served route table and three URLs that NO route serves marked
-              declared-not-implemented rather than prefixed, the silent 404 on
-              audit upload closed, four MDM facts a launch argument could forge
-              made simulator-only, the binding key's attestation recorded
-              instead of a random UUID standing in for a missing serial, 317
-              lines of USB-C reader made reachable, and Managed App Config
-              wired where a comment had promised a fallback that was never
-              written. New shared surface: check-ios-dead-stored-properties,
-              which rediscovers the reported HIGH at its exact lines and found
-              six more. BUILD SUCCEEDED, 57/57 iOS tests, preflight 217/0,
-              validate-sim-macos.sh 140/0/7 with the derived count confirmed
-              at 5. Five lane messages acknowledged.
+LAST TOUCHED: 2026-09-02 (Mac lane, later session) - synced mainline into the
+              lane, then delivered LAB_001 Step 1 with CLEAN provenance on
+              mainline: the evidence op re-run on a clean afeb8c5e tree after
+              #385 landed (reviewHubPass+mcpPass true), replacing the dirty-tree
+              0a70c3ca run cloud had flagged pending. Refreshed the
+              ios-dynamic-type sim result on current head. Closed backlog row 58,
+              which the ExpiryPolicy type change had MOVED, not closed:
+              SessionData is Codable and KeychainService.getSession restores it
+              by decode, so a tampered blob decodes to .nonExpiring("") - the
+              ignorance case relocated into persistence, granting a permanent
+              session on the Assist gate's stale input. Hardened isExpired (a
+              blank justification reads EXPIRED) and wrote the missing
+              SessionExpiryTests (6 cases, falsified against the old fail-open),
+              on branch mac/session-expiry-hardening - CI-green (swift 63/0,
+              xcodebuild TEST SUCCEEDED 63/0, preflight PASSED, breadth 56/0) -
+              mailed to cloud to review+land like #385. Also closed a delivery
+              gap: evidence and acks had been landing on a side branch cloud
+              cannot read; moved them to mainline and re-acked seven messages
+              there. #385 landed the earlier native-ledger work independently.
               Before that, cloud's second full DR-024 cycle, eight PRs merged (#369-#376):
               Ponytail cut 3 and cut 4 (-20,300 dead lines), README rebuilt,
               DR-025 follow-ups, the docs truth sweep, batches A/B/C of the
@@ -86,7 +90,8 @@ BLOCKED ON: the simulator remediation-allow path, and the block has MOVED to
               verified on the simulator, and the equalToConstant rows at
               accessibility-extra-large - HostAppViewController has 5 fixed
               heights and 0 flexible, which is a live truncation risk now that
-              the fonts scale.
+              the fonts scale. Row 58 (the Swift nil-expiry fail-open) is now
+              FIXED on branch mac/session-expiry-hardening, pending cloud land.
 NEXT ACTION: owner: discovery conversations (0 of 15) - nothing substitutes.
               owner decisions pending: fork or delete the two vendored agent
               definitions; the four pasted chat files under attached_assets/.

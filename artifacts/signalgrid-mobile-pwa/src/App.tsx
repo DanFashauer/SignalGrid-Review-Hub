@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { lazy, Suspense, useState } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LifeBuoy, Home, List, Activity, Plug } from "lucide-react";
@@ -51,10 +52,16 @@ function TabButton({ icon, label, active, onClick }: { icon: React.ReactNode, la
   );
 }
 
+// The tabs' data hooks are generated into @workspace/api-client-react on top of
+// react-query; this QueryClient is the data path (see the desktop App.tsx note).
+const queryClient = new QueryClient();
+
 function App() {
   return (
     <ErrorBoundary>
-      <MainLayout />
+      <QueryClientProvider client={queryClient}>
+        <MainLayout />
+      </QueryClientProvider>
     </ErrorBoundary>
   );
 }

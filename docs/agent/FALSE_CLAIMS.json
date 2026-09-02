@@ -182,6 +182,27 @@
         "emitter\\.ts \\(whole file\\)",
         "(cut 2|second cut|#366)[^.\\n]{0,60}\\b(deleted|removed)\\b[^.\\n]{0,40}emitter\\.ts"
       ]
+    },
+    {
+      "id": "cut-4-queryclientprovider-zero-consumers",
+      "claimed": "Ponytail cut 4 (commit ff27e75) removed QueryClientProvider from signalgrid-desktop and signalgrid-mobile-pwa as a provider with zero consumers",
+      "assertedBy": "the cut-4 record in docs/BUILD_BACKLOG.md and the ff27e75 commit message, 2026-09-02",
+      "assertedOn": "2026-09-02",
+      "whyItHappened": "The consumer count was a grep for useQuery/useMutation over the app's own src, which is zero; every page's data hook is generated into @workspace/api-client-react on top of react-query, so the provider was the data path. The vite build stayed green because the hooks resolve without a client at build time; only the client-surfaces E2E (desktop reached the api-server: 0 calls) saw it.",
+      "refutation": {
+        "kind": "file_contains",
+        "file": "docs/BUILD_BACKLOG.md",
+        "contains": "generated into `@workspace/api-client-react` on top of react-query",
+        "paths": [
+          "artifacts/signalgrid-desktop/src/App.tsx",
+          "artifacts/signalgrid-mobile-pwa/src/App.tsx"
+        ],
+        "$why": "the corrected record names the consumer; the two App.tsx files mount the provider again"
+      },
+      "denials": [
+        "QueryClientProvider[^.\\n]{0,80}\\b(zero|no)[- ]consumer",
+        "(zero|no)[- ]consumer[^.\\n]{0,60}QueryClientProvider"
+      ]
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import DesktopLayout from "@/components/DesktopLayout";
@@ -31,15 +32,26 @@ function Router() {
   );
 }
 
+// Every page's data hook (useListDecisions, useGetDecision, ...) is generated into
+// @workspace/api-client-react ON TOP OF react-query, so this QueryClient is the
+// data path even though no file in this app imports useQuery directly. Cut 4
+// removed it on that grep and every /api call stopped while the build stayed
+// green; the client-surfaces E2E is what caught it.
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { refetchInterval: 30_000, staleTime: 20_000 } },
+});
+
 function App() {
   return (
-    <TooltipProvider>
-      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-        <div className="dark min-h-screen bg-background text-foreground overflow-hidden">
-          <Router />
-        </div>
-      </WouterRouter>
-    </TooltipProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <div className="dark min-h-screen bg-background text-foreground overflow-hidden">
+            <Router />
+          </div>
+        </WouterRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
   );
 }
 

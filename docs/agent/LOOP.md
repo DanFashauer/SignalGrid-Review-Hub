@@ -51,7 +51,22 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-02 - second full DR-024 cycle, eight PRs merged (#369-#376):
+LAST TOUCHED: 2026-09-02 - Mac lane cleared the native ledger on branch
+              mac/native-ledger-2026-09-02 (c2b61057 + 04c911e3): both standing
+              HIGHs closed, three BackendService paths corrected against the
+              served route table and three URLs that NO route serves marked
+              declared-not-implemented rather than prefixed, the silent 404 on
+              audit upload closed, four MDM facts a launch argument could forge
+              made simulator-only, the binding key's attestation recorded
+              instead of a random UUID standing in for a missing serial, 317
+              lines of USB-C reader made reachable, and Managed App Config
+              wired where a comment had promised a fallback that was never
+              written. New shared surface: check-ios-dead-stored-properties,
+              which rediscovers the reported HIGH at its exact lines and found
+              six more. BUILD SUCCEEDED, 57/57 iOS tests, preflight 217/0,
+              validate-sim-macos.sh 140/0/7 with the derived count confirmed
+              at 5. Five lane messages acknowledged.
+              Before that, cloud's second full DR-024 cycle, eight PRs merged (#369-#376):
               Ponytail cut 3 and cut 4 (-20,300 dead lines), README rebuilt,
               DR-025 follow-ups, the docs truth sweep, batches A/B/C of the
               full-file sweep, the native sweep mailed to the Mac lane, the
@@ -60,10 +75,18 @@ LAST TOUCHED: 2026-09-02 - second full DR-024 cycle, eight PRs merged (#369-#376
               independent reviews; two real fail-opens closed, one of them
               present at the merged head). Every landing reviewed before it
               landed; preflight + breadth green on every push; CI green.
-BLOCKED ON: nothing cloud-side. Mac lane (lane mail 2026-09-02, two messages):
-              the simulator remediation-allow path (byte-parity; fix goes
-              around the engine on both sides), the native ledger's Swift
-              items, one validate-sim-macos.sh run.
+BLOCKED ON: the simulator remediation-allow path, and the block has MOVED to
+              the cloud lane by agreement: cloud writes the TS wrapper and its
+              proof first, the Mac lane ports the Swift twin second, because
+              the wrapper's shape is a design call and a Swift half written
+              against a guess is byte-parity only by luck. Cloud mails the
+              vector list when it lands.
+              Still Mac-side, reported not fixed: MockSignalGridAPI's replayed
+              vectors (waiting on cloud's parity gate), the DemoMode flag table
+              verified on the simulator, and the equalToConstant rows at
+              accessibility-extra-large - HostAppViewController has 5 fixed
+              heights and 0 flexible, which is a live truncation risk now that
+              the fonts scale.
 NEXT ACTION: owner: discovery conversations (0 of 15) - nothing substitutes.
               owner decisions pending: uninstall the retired Codex reviewer's
               GitHub app (it still posts "usage limits" on PRs); fork or

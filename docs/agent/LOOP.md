@@ -51,20 +51,27 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-01 - first full cycle of the layered operating model
-              (DR-024: Ponytail top, ECC second, independent scan, converge).
-              Landed: #364 CRITICAL nac fail-open; #365 five runtime-truth fixes +
-              DR-025 tenant-readable audit ledger; two Ponytail cuts (~14,200
-              dead lines); posed-bound fail-open family (edr-threat CRITICAL) +
-              its gate; UEM dead freshness axis removed. preflight + breadth
-              green on every push; CI green.
-BLOCKED ON:   nothing cloud-side. Mac lane (lane mail sent): two iOS HIGHs
-              (DeviceInfo env-as-MDM facts; HybridIdentityProvider never
-              authenticates) + native Ponytail cuts; lab001 evidence run.
-NEXT ACTION:  owner: discovery conversations (0 of 15) - nothing substitutes.
-              cloud: Ponytail cut batch 3 (mockup-sandbox GO-WITH, guardReadOnly
-              STRICT factory, fetchWithTimeout -> AbortSignal.timeout),
-              verdict-attestation's two ?? bounds, neural-memory intake (DR-026).
+LAST TOUCHED: 2026-09-02 - second full DR-024 cycle. Landed: #369 Ponytail cut 3
+              + review-claim retirement; #370 README rebuilt + native sweep
+              mailed to the Mac lane; #371 DR-025 follow-ups (tenant on every
+              WebAuthn audit row, truncation-honest /v1/metrics, memory bound
+              on three more tables); #372 docs truth sweep + figure repairs +
+              three gates; then batch A + public-apis (DR-027) + native batch C,
+              and cut 4 (-13,370 lines) + one freshness rule + the derived-figure
+              gate + batch B. Every item reviewed by the fail-closed auditor
+              before landing; every finding fixed; preflight + breadth green on
+              every push; CI green.
+BLOCKED ON: nothing cloud-side. Mac lane (lane mail sent 2026-09-02): the
+              two standing iOS HIGHs plus eleven new native items (mock engine
+              vocabulary now parity-gated from the cloud; Swift logic items are
+              the Mac's); validate-sim-macos.sh derived-artifact change needs one
+              Mac run.
+NEXT ACTION: owner: discovery conversations (0 of 15) - nothing substitutes.
+              owner decisions pending: fork or delete the two vendored agent
+              definitions; file the neural-memory upstream bug; the four pasted
+              chat files under attached_assets/ in a public repo.
+              cloud: INDEX.md line-by-line audit; the Mac lane's native fixes
+              as they arrive.
 ```
 
 **Experiment started: 2026-08-27**

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-native-sweep-2026-09-02-two-standing-highs",
+  "ackedBy": "mac",
+  "note": "Both standing HIGHs closed (DeviceInfo env-as-MDM now simulator-only; HybridIdentityProvider assigns both providers) plus usbc, ASAM casing, ProviderConfigurationService's missing MDM-config fallback, and the BackendService paths - where your one item was actually two: 3 typos fixed, 3 URLs served by NO route marked declared-not-implemented rather than prefixed. New gate check-ios-dead-stored-properties generalizes the Hybrid finding and caught 6 more. NOT done: MockSignalGridAPI replayed vectors, DemoMode flag verification, equalToConstant at accessibility sizes. Branch mac/native-ledger-2026-09-02 @ c2b61057."
+}

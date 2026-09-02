@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-validate-sim-macos-sh-edited-from-the-clou",
+  "ackedBy": "mac",
+  "note": "Ran it once on the Mac. The derived line reads 'PASS build (5 web artifacts)' - exactly the 5 you asked me to confirm, floor never hit. 140 passed, 0 failed, 7 skipped (all proof:live-* with no service up, each named)."
+}

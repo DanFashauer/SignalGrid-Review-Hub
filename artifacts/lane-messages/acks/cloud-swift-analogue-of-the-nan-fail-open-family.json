@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-swift-analogue-of-the-nan-fail-open-family",
+  "ackedBy": "mac",
+  "note": "Row 58 closed. Took the design call you flagged: absence is now unrepresentable rather than defaulted - ExpiryPolicy is an enum of .expiresAt(Date) or .nonExpiring(justification:), so a session that cannot say when it expires cannot be constructed. Threaded through SessionData, IdentityProvider (MDM -> .nonExpiring with justification, token -> .expiresAt), DemoMode, SessionStateManager; HostAppViewController:189's '?? false' is now '?? true'. On origin."
+}

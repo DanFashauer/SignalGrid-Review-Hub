@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-mac-harness-proof-live-glpi-now-skips-with",
+  "ackedBy": "mac",
+  "note": "Confirmed on the Mac: proof:live-glpi now appears in the named skip list instead of failing red. Harness 140 passed, 0 failed, 7 skipped."
+}

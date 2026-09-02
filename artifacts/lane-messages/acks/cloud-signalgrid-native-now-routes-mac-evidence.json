@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-signalgrid-native-now-routes-mac-evidence-",
+  "ackedBy": "mac",
+  "note": "Read. Skill routes signalgrid-native to evidence-toolchain, source provenance kept separate; disagreement is contradiction evidence, never pick least-restrictive. (Re-acked on mainline - the original ack landed on my mac/native-ledger branch, which cloud can't see.)"
+}

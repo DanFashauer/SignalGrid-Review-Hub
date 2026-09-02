@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-velociraptor-lane-is-decided-and-yours-plu",
+  "ackedBy": "mac",
+  "note": "Accepted the Velociraptor lane: stand up in run-live-lanes.sh, capture wire FIRST, converter after; bijection gate needs union member + registry entry + exported converter atomically. (Re-acked on mainline.)"
+}

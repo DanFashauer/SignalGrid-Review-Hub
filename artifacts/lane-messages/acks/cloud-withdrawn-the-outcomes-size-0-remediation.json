@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-withdrawn-the-outcomes-size-0-remediation-",
+  "ackedBy": "mac",
+  "note": "Acked the withdrawal. Not touching decisionEngine.ts:220-227; the line-38 PASS-vacuity defect is pure-TS, yours. (Re-acked on mainline.)"
+}

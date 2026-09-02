@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-your-cwd-bug-had-a-twin-in-live-glpi-proof",
+  "ackedBy": "mac",
+  "note": "Acked. live-glpi-proof.ts cwd twin fixed with the CAPTURE_DIR/dirname(fileURLToPath) pattern; inheriting it for the Velociraptor capture path. (Re-acked on mainline.)"
+}

@@ -933,23 +933,27 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
         case .lockedIdle:
             return LockedIdleView.hostingController()
         case .badgeCaptured:
-            // Guard against nil badge ID - should not happen in normal flow
-            guard let badgeId = capturedBadgeId else {
-                // Return to locked idle if no badge ID
+            // Fail-closed guard the UIKit init(badgeId:) relied on, PRESERVED across
+            // the SwiftUI swap: .badgeCaptured with no captured badge cannot happen in
+            // normal flow, and if it does we return to lockedIdle rather than render a
+            // masked-empty badge and auto-advance. BadgeCapturedView reads capturedBadgeId
+            // itself, so the id is not threaded through — but dropping this guard would
+            // silently delete the missing-badge path, with no diff in the view to show it.
+            guard capturedBadgeId != nil else {
                 transition(to: .lockedIdle, error: SessionError.missingBadgeId)
                 return LockedIdleView.hostingController()
             }
-            return BadgeCapturedViewController(badgeId: badgeId)
+            return BadgeCapturedView.hostingController()
         case .authenticating:
-            return AuthenticatingViewController()
+            return AuthenticatingView.hostingController()
         case .enrolling:
-            return EnrollingViewController(badgeId: capturedBadgeId ?? "Unknown")
+            return EnrollingView.hostingController()
         case .provisioning:
-            return ProvisioningViewController()
+            return ProvisioningView.hostingController()
         case .activeSession:
             return ActiveSessionViewController()
         case .terminating:
-            return TerminatingViewController()
+            return TerminatingView.hostingController()
         }
     }
     

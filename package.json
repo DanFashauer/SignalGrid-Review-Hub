@@ -187,6 +187,7 @@
     "proof:signal-radar": "pnpm --filter @workspace/scripts run proof:signal-radar",
     "proof:signalgrid-core": "pnpm --filter @workspace/scripts run proof:signalgrid-core",
     "proof:signalgrid-grid": "pnpm --filter @workspace/scripts run proof:signalgrid-grid",
+    "proof:remediation-allow": "pnpm --filter @workspace/scripts run proof:remediation-allow",
     "proof:signalgrid-simulator": "pnpm --filter @workspace/scripts run proof:signalgrid-simulator",
     "proof:lane-messages": "pnpm --filter @workspace/scripts run proof:lane-messages",
     "proof:sim-requests": "pnpm --filter @workspace/scripts run proof:sim-requests",

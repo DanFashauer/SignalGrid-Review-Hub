@@ -611,7 +611,7 @@ check(
     } catch { /* the spy throws by design */ }
     check(
       "control: zendesk WITH a credential at prod+live does attempt a fetch (the spy can fire)",
-      attempts.length === 1 && attempts[0].includes("acme.zendesk.com"),
+      attempts.length === 1 && new URL(attempts[0]).hostname === "acme.zendesk.com",
     );
 
     for (const [label, run] of ITSM_VECTORS) {

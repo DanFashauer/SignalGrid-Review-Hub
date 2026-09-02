@@ -1,9 +1,13 @@
-# SignalGridMobile — canonical native iOS app (converged into the monorepo)
+# SignalGridMobile — the `/v1`-contract iOS package (Operator + Wardlink)
 
-This package is the **single source of truth** for the native iOS surfaces. It was
-brought into the repo to end the drift caused by parallel iOS codebases: everything
-now shares one Swift core (`SignalGridMobileCore`) that models the repo's real `/v1`
-contract, so the app can't silently diverge from the API it consumes.
+This package is the **intended convergence target** for the native iOS surfaces, not
+the state of the tree today: the gated ports and the iOS gates
+(`scripts/check-decision-port-parity.mjs`, `scripts/check-ios-port-sources.mjs`,
+`scripts/check-ios-dynamic-type.mjs`) all point at **EnterpriseShell**, which holds
+the byte-faithful `DecisionEngine` / `AppWorkflows` ports. What this package
+contributes now is one Swift core (`SignalGridMobileCore`) modelling the repo's real
+`/v1` contract, so the surfaces built on it cannot silently diverge from the API they
+consume. See *Relationship to EnterpriseShell* below.
 
 ## Why this exists
 
@@ -17,7 +21,8 @@ The iOS app kept "not playing out" for two structural reasons, now addressed:
    tests on Linux** with the open-source Swift toolchain — so its correctness is
    verified where the code is written, not hoped-for downstream.
 2. **Fragmentation.** Multiple parallel iOS efforts with overlapping models. This
-   package is now the canonical one; see *Relationship to EnterpriseShell* below.
+   package is where they are meant to converge; EnterpriseShell holds the gated ports
+   until that happens. See *Relationship to EnterpriseShell* below.
 
 ## Layout
 
@@ -34,10 +39,16 @@ The iOS app kept "not playing out" for two structural reasons, now addressed:
 ./scripts/verify.sh
 ```
 
-On Linux this runs the **8 core tests** (deterministic scenario outcomes, session
-lifecycle, evidence↔decision linkage, step-up gating, sensitive-actions-never-auto-run,
-public-safe fixture markers, **/v1 envelope-shape decode**, and **enum wire-value
-contract**) and parses all SwiftUI sources. On macOS it additionally generates the
+On Linux this runs the **14 core tests** — measured, not remembered:
+`grep -c "func test"
+SignalGridMobileCore/Tests/SignalGridMobileCoreTests/SignalGridMobileCoreTests.swift`
+→ 14, in two groups. `SignalGridMobileCoreTests` (8): deterministic scenario outcomes,
+session lifecycle, evidence↔decision linkage, step-up gating,
+sensitive-actions-never-auto-run, public-safe fixture markers, **/v1 envelope-shape
+decode**, and **enum wire-value contract**. `StepUpGateTests` (6): only step_up
+challenges, allow never prompts, satisfied permits, refused withholds, an unavailable
+authenticator is not a free pass, and every reason carries a specific prompt. The
+script also parses all SwiftUI sources. On macOS it additionally generates the
 Xcode project and builds both app targets for the iOS Simulator.
 
 The two contract tests are the anti-drift guard: `testDecodesRepoV1EnvelopeShape`

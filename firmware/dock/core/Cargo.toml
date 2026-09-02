@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.74"
 description = "SmartDock firmware core: sensor readings to a custody event, no_std, no allocator."
-license = "UNLICENSED"
+license = "MIT"
 publish = false
 
 # NO DEPENDENCIES, deliberately. This is the code that decides what a dock reports

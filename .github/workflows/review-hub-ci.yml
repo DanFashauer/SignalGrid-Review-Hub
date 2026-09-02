@@ -218,6 +218,8 @@ jobs:
         run: node scripts/check-ios-dynamic-type.mjs --self-test
       - name: iOS dynamic type (no raw system font outside DesignSystem.swift)
         run: node scripts/check-ios-dynamic-type.mjs
+      - name: iOS demo flags (every simulator flag the shell reads is documented, and vice versa)
+        run: node scripts/check-demo-flags-documented.mjs
       - name: Lab registry self-test (the gate must be able to fail)
         run: node scripts/check-lab-registry.mjs --self-test
       - name: Lab registry (both halves agree; every deployment claim cites evidence on disk)
@@ -497,7 +499,7 @@ jobs:
         run: node scripts/check-it-layer-model.mjs
       - name: "IT-layer model self-test (the gate can actually fail)"
         run: node scripts/check-it-layer-model.mjs --self-test
-      - name: "Port parity (DecisionEngine + AppWorkflows vs their TS originals)"
+      - name: "Port parity (DecisionEngine + AppWorkflows vs their TS originals; SignalGridMobile mock vs the core vocabulary)"
         run: node scripts/check-decision-port-parity.mjs
       - name: "Read-error swallowing (a failed lookup must not report nothing-found)"
         run: node scripts/check-read-error-swallowing.mjs

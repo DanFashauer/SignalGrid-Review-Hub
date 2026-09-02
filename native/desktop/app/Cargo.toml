@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.77"
 description = "A reference desktop host-app shell showing an Assist decision. Windows and Linux."
-license = "UNLICENSED"
+license = "MIT"
 publish = false
 
 # Deliberately NOT a cargo workspace member with ../core. Keeping the two crates

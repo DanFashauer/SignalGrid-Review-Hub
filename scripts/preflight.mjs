@@ -128,6 +128,7 @@ const STEPS = [
   { name: "Retention claims (no surface sells a duration nothing implements)", cmd: ["node", "scripts/check-retention-claims.mjs"] },
   { name: "iOS dynamic type self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-dynamic-type.mjs", "--self-test"] },
   { name: "iOS dynamic type (no raw system font outside DesignSystem.swift)", cmd: ["node", "scripts/check-ios-dynamic-type.mjs"] },
+  { name: "iOS demo flags (every simulator flag the shell reads is documented, and vice versa)", cmd: ["node", "scripts/check-demo-flags-documented.mjs"] },
   { name: "Pagination-truncation guard (a capped read must not look complete)", cmd: ["node", "scripts/check-pagination-truncation.mjs"] },
   { name: "Absent-collection law (nothing observed ≠ nothing wrong)", cmd: ["pnpm", "run", "proof:absent-collection"] },
   // The doctrine-document proofs (zero-trust, security-operations-evidence,
@@ -148,7 +149,7 @@ const STEPS = [
   { name: "Row-citation gate self-test (it can actually fail)", cmd: ["node", "scripts/check-row-citations.mjs", "--self-test"] },
   { name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)", cmd: ["node", "scripts/check-it-layer-model.mjs"] },
   { name: "IT-layer model self-test (the gate can actually fail)", cmd: ["node", "scripts/check-it-layer-model.mjs", "--self-test"] },
-  { name: "Port parity (DecisionEngine + AppWorkflows must not drift from their TS originals)", cmd: ["node", "scripts/check-decision-port-parity.mjs"] },
+  { name: "Port parity (DecisionEngine + AppWorkflows vs their TS originals; SignalGridMobile's mock vs the core vocabulary)", cmd: ["node", "scripts/check-decision-port-parity.mjs"] },
   // Sibling of the gate above, one level down. That one keeps the Swift port faithful
   // to the TypeScript reference; this one keeps the two BUILD SYSTEMS that compile the
   // Swift port compiling the same files — the Xcode test target and the SwiftPM package

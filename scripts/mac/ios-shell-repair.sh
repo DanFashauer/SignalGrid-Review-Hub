@@ -167,7 +167,13 @@ saw_available() { grep -q 'manual_login_available=true' "$OUT_ABS/$1.log" 2>/dev
 # The SAME row must carry the OS's explicit refusal — the only path that makes
 # Manual login legitimately available on the simulator.
 saw_available_via_probe() { grep 'manual_login_available=true' "$OUT_ABS/$1.log" 2>/dev/null | grep -q 'asam_probe=unavailable'; }
-saw_fatal() { grep -Eiq 'fatal error|fatalError|crash' "$OUT_ABS/$1.log" 2>/dev/null; }
+# The capture PREDICATE filters FOR the words "fatal"/"crash", and `log stream`
+# echoes it back as a "Filtering the log data using …" header line — which then
+# matches a naive fatal/crash grep. That made step 6 (the only step that checks
+# saw_fatal) FAIL on every run whatever the app did: it was matching its own
+# predicate echo, not a crash. Strip that header line before looking for a real
+# fatal/crash entry.
+saw_fatal() { grep -v 'Filtering the log data using' "$OUT_ABS/$1.log" 2>/dev/null | grep -Eiq 'fatal error|fatalError|crash'; }
 
 # --- 4. demo path --------------------------------------------------------------
 if launch 04-demo-lifecycle 8 -DemoMode YES -SimulateBadge 04A3F291 && alive; then

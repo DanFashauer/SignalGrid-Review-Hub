@@ -679,14 +679,24 @@ earlier — that is the loop working, not a reason to soften the record.
     a defect against it. Also open: mutation coverage still does not reach the
     verdict core, and 21 of 50 check-gates carry no self-test.
     The unexecuted-test half is now DISPOSITIONED rather than merely known.
-    Reading the eight `tests/security-reference/` suites settled what they are:
-    not portable, and honestly labelled. They are Vitest specs against the
-    retired DEV Next.js server — `/api/session/start`, `/api/health`,
-    `badgeUid`, launched with `bun run scripts/test-server.ts` — and none of
-    those endpoints exist on this monorepo's `/v1` surface. One of them tests
-    step-up enforcement, a DEFERRED family, so there is no shipping surface to
-    port it onto yet. Their README already says "reference to port, not yet
-    wired into CI", and it is true.
+    Reading the eight `tests/security-reference/` suites settled what they were:
+    Vitest specs against the retired DEV Next.js server — `/api/session/start`,
+    `/api/health`, `badgeUid`, launched with `bun run scripts/test-server.ts` —
+    none of whose endpoints exist on this monorepo's `/v1` surface.
+    CORRECTED 2026-09-02, and the correction matters because this entry was
+    read as a disposition. Both of its verdicts failed: the portability verdict
+    was wrong for seven of the eight specs, and the claim about step-up having
+    nothing to port onto was wrong as stated —
+    FOUR step-up routes are live in `artifacts/api-server/src/routes/v1.ts:622`,
+    `:640`, `:682` and `:745` (`/v1/step-up/enroll/options`, `/enroll/verify`,
+    `/challenge`, `/v1/app-workflows/complete-step-up`), with coverage beside
+    them, LIVE UNDER REVIEW-DEMO AND NOT ON THE LIMITED GA FENCE — `GA_ALLOWED_ROUTES`
+    in `artifacts/api-server/src/lib/profile.ts` lists no `/v1/step-up` path, and
+    `lib/assurance.ts:52-55` reports `stepUpAnswerable` from exactly that fact. So
+    the family ships as a demo surface and is not claimable as GA; building and
+    claiming are different acts. What was unportable was the ENDPOINT SHAPE, not
+    the invariant. All seven are now ported and executed; the directory is
+    deleted; see row 71.
     That truthfulness was the problem: prose does not fail a build, and nothing
     stopped those eight from being written and never run, or an eleventh from
     joining them. `scripts/check-test-execution.mjs` (preflight + CI, parity
@@ -1849,7 +1859,8 @@ earlier — that is the loop working, not a reason to soften the record.
     and `signalgrid-desktop/index.html` — three trees, four files.
 
 71. **Five of eight security reference tests cannot fail against broken code.**
-    — OPEN, security-engineer. Found by the first `security-engineer` read of
+    — FIXED 2026-09-02 by porting and deleting; see the disposition at the foot
+    of this row. Originally raised by security-engineer. Found by the first `security-engineer` read of
     `tests/security-reference/**`, assigned to that role only on 2026-08-24, and
     INDEPENDENTLY VALIDATED by a second agent that re-derived every claim from
     source and was asked to refute them.
@@ -1874,10 +1885,36 @@ earlier — that is the loop working, not a reason to soften the record.
     here. The validator added a caveat the first agent missed: the three GOOD
     files cannot run here either, for a different reason — their imports do not
     resolve in this monorepo.
-    THE ACTION IS TRIAGE, NOT REPAIR: mark which specs are worth porting
-    (`admin-auth-hardening`, `fail-closed-fallbacks`, `webauthn-request-identity`
-    carry real falsifiable assertions) and which are tautologies that must not be
-    ported as-is and mistaken for coverage.
+    THE ACTION WAS TRIAGE, NOT REPAIR, and the triage is now done — by porting
+    the INVARIANTS onto the live surface rather than the FILES, which is what
+    made the tautologies harmless: every ported assertion was falsified once
+    against the real tree before being kept.
+    · Ported to `artifacts/api-server/test/api.test.mjs` (346 → 363 assertions):
+      the auth boundary, DERIVED from the position of `requireTenantContext` in
+      `routes/v1.ts` so all 34 guarded routes are covered rather than the 3 the
+      spec hand-listed (this replaces `stepup-enforcement` and the fail-closed
+      half of `webauthn-request-identity`); and wire-level secret redaction —
+      no response body may echo the caller's credential or a stack frame, which
+      is the assertion `secret-redaction.test.ts:60-68` only appeared to make.
+    · Ported to `scripts/src/webhooks-proof.ts` (90 → 116 assertions): the
+      missing-signing-secret refusal at `webhooks/dispatch.ts:247`, live code no
+      lane had ever driven; its permanence branch; and real signing coverage
+      against `sign.ts` — the tautology in `webhook-signing.test.ts` is answered
+      by driving the repository's own `signPayload`/`createSignedHeaders` and
+      cross-checking against an independent HMAC. The secret path is proven
+      END TO END THROUGH THE TRANSPORT offline, with a record-and-throw `fetch`
+      spy: the signature that reaches the wire is verified against the body that
+      reaches the wire.
+    · Already held elsewhere, verified by citation rather than by name:
+      `replay-attack` (idempotency, api.test.mjs), `rate-limit` (api.test.mjs),
+      `admin-auth-hardening` (`"unknown token is 401"`), and the ITSM
+      encryption-key block (`proof:itsm-credential-crypto`).
+    · NOT ported, deliberately: `fail-closed-fallbacks` block 1 (`checkApiKey`,
+      `ADMIN_API_KEY`). Neither symbol exists anywhere in this repository, so
+      there is no surface to hold the invariant. Deleted rather than carried.
+    The directory is gone. `check-test-execution.mjs` now enforces the reverse
+    direction it always claimed — a DECLARED_UNEXECUTED key matching no file is
+    fatal — which is what a stale exemption for this directory would have been.
 
 72. **The org published four of its own agent definitions under another author's
     MIT grant, and told a re-vendor operator to overwrite five first-party

@@ -1964,6 +1964,188 @@ async function run() {
     check(`exempt route still registered: ${r} (${why})`, registered.includes(r));
   }
 
+  // ── the auth boundary, DERIVED: everything below the guard refuses anonymity ──
+  //
+  // PORTED from tests/security-reference/stepup-enforcement.test.ts ("should require
+  // authentication for protected endpoints" / "should reject write operations without
+  // proper auth") and the fail-closed half of webauthn-request-identity.test.ts
+  // ("fails closed when no user identity is provided"). Those specs named three
+  // Next.js admin paths that do not exist here, and — more to the point — named them
+  // BY HAND. A hand-listed set of protected endpoints is a fossil the day a route is
+  // added: the new route is the one nobody listed, and the gate stays green about it.
+  //
+  // So the set is DERIVED from the registration order in the router source. The /v1
+  // auth boundary IS a position in that file: `router.use("/v1", …
+  // requireTenantContext …)` at v1.ts, and every route registered after it is behind
+  // the guard while everything before it is public. This repository has already been
+  // bitten there once — /v1/keys sat above the guard publishing raw owner bearers for
+  // seven tenants, and the suite certified it (see the gateway-profile block above).
+  // Position is the real rule, so position is what is read.
+  //
+  // On this surface the identity for a WebAuthn/step-up ceremony comes from the
+  // verified principal and nowhere else: there is no ENABLE_DEV_BYPASS, no header
+  // fallback identity, and no default user in this tree (searched: the string appears
+  // in no source file). The reference spec's fail-closed clause therefore reduces to
+  // exactly this — no bearer, no identity, 401 before any ceremony work — and it is
+  // asserted for the step-up routes as members of the derived set rather than as a
+  // special case.
+  const guardMatches = [...routeSrc.matchAll(/router\.use\(\s*"\/v1"[^)]*requireTenantContext/g)];
+  check("the /v1 auth guard is registered exactly once and can be located in the router source",
+    guardMatches.length === 1);
+  const guardIdx = guardMatches.length === 1 ? guardMatches[0].index : -1;
+
+  const positioned = [...routeSrc.matchAll(/router\.(get|post|put|delete|patch)\(\s*"(\/v1\/[^"]*)"/g)]
+    .map((m) => ({ route: `${m[1].toUpperCase()} ${m[2]}`, index: m.index }));
+  const publicRoutes = positioned.filter((r) => guardIdx >= 0 && r.index < guardIdx).map((r) => r.route);
+  const guardedRoutes = positioned.filter((r) => guardIdx >= 0 && r.index > guardIdx).map((r) => r.route);
+
+  // The public surface is PINNED, not derived, and deliberately so: this is the one
+  // place where "derive it" would defeat the purpose. Deriving the expectation from
+  // the same source that declares the routes makes any newly-public route
+  // self-approving. Adding a route above the guard must break this line and require a
+  // person to say why.
+  check(`exactly one /v1 route is public (above the auth guard); found ${publicRoutes.length}: ${publicRoutes.join(", ")}`,
+    publicRoutes.length === 1 && publicRoutes[0] === "GET /v1/keys");
+  // FLOOR — the derivation must actually have found the surface. A regex that
+  // silently stops matching yields an empty set, and an empty set passes every
+  // assertion in the loop below while proving nothing.
+  check(`the guarded set is non-empty and covers the whole router (${guardedRoutes.length} routes, ${positioned.length} registered)`,
+    guardedRoutes.length >= 30 && guardedRoutes.length + publicRoutes.length === positioned.length);
+
+  const anonFailures = [];
+  for (const r of guardedRoutes) {
+    const [method, pattern] = r.split(" ");
+    const concrete = pattern.split("/").map((s) => (s.startsWith(":") ? "anon-probe" : s)).join("/");
+    const res = await fetch(`${BASE}${concrete}`, {
+      method,
+      // A body on the writes, so the refusal cannot be an accident of parsing: the
+      // guard must answer before the payload is ever looked at.
+      ...(method === "GET" ? {} : { headers: { "content-type": "application/json" }, body: "{}" }),
+    });
+    if (res.status !== 401) anonFailures.push(`${r} → ${res.status}`);
+  }
+  for (const f of anonFailures) console.error(`  anonymous request not refused: ${f}`);
+  // The failing route NAMES go in the label, not only in the console.error above: a
+  // truncated CI log keeps the assertion line and drops the preamble, and "3 of 34
+  // failed" without saying which is a result nobody can act on.
+  check(`every guarded /v1 route refuses an anonymous caller with 401 (${guardedRoutes.length - anonFailures.length}/${guardedRoutes.length})` +
+    (anonFailures.length > 0 ? ` — NOT REFUSED: ${anonFailures.join(", ")}` : ""),
+    anonFailures.length === 0);
+  // NON-VACUITY: the loop above would pass identically against a server that
+  // 401s everything. One guarded route must answer a VALID bearer with something
+  // other than 401.
+  const guardOpens = await fetch(`${BASE}/v1/context`, { headers: { authorization: `Bearer ${KEYS.operator}` } });
+  check("the guard is a guard, not a wall — a valid bearer gets past it (/v1/context is not 401)",
+    guardOpens.status !== 401 && guardOpens.status === 200);
+
+  // ── secret redaction on the wire: a response never echoes the caller's credential ──
+  //
+  // PORTED from tests/security-reference/secret-redaction.test.ts. That spec checked
+  // an error body for the literal strings "Bearer " and "Basic " — which would pass
+  // against a server that echoed the token itself without its scheme prefix, i.e.
+  // against the leak that actually matters. Rewritten to hunt the CREDENTIAL VALUE.
+  //
+  // Distinct from proof:audit-ledger, which proves secret-named keys are redacted
+  // before they are PERSISTED (lib/audit redacts `authorization`, `token`, `secret`
+  // … at any depth). Nothing covered the HTTP response surface: an error path that
+  // quotes back the rejected credential writes it into every client log, proxy log
+  // and bug report, and 401 bodies are the most-copied bodies there are.
+  //
+  // The canary is a fixed literal that appears in no fixture, so a hit is a leak and
+  // never a coincidence. /v1/keys is excluded by construction — it PUBLISHES demo
+  // bearers on purpose, which is the whole subject of the gateway-profile block.
+  {
+    const CANARY = "sgk_canary_must_never_be_echoed_9f3a";
+
+    // ONE definition of each detector, called by the sweep, the named probes AND the
+    // positive control below. The control used to re-implement the check against a
+    // literal, which meant it proved `String.prototype.includes` works and would have
+    // stayed green if the real predicate were weakened — the exact shape of
+    // self-test this repository treats as no self-test at all.
+    const echoesCredential = (text, token) => text.includes(token);
+    // Paren-less and `async` frames count. The first version required " (" and so
+    // missed `at /srv/app/dist/index.mjs:10:5` and `at async file:///…`, which is
+    // precisely what a BUNDLED ESM build emits — this server ships as
+    // dist/index.mjs, so the misses were the frames it actually produces.
+    //
+    // THE ESCAPED NEWLINE IS THE WHOLE POINT, found by planting a frame into the
+    // error envelope and watching the suite stay green at 363/363. Every body on
+    // this surface is JSON, and `res.json` escapes a real newline to the two
+    // characters \ and n — so a regex anchored on \n cannot match a stack trace
+    // that leaked INSIDE a JSON string, which is the only way one can leak here.
+    // A detector that only reads pretty-printed text is a detector for a body this
+    // server never sends.
+    const hasStackFrame = (text) => /(\n|\\n)\s+at\s+(async\s+)?\S/.test(text);
+
+    // DERIVED SWEEP: the canary bearer at EVERY guarded route, reusing the set
+    // computed above rather than hand-picking two. A leak is a property of an error
+    // path, and error paths differ route by route — the route that echoes is by
+    // definition the one nobody thought to list.
+    const echoRoutes = [];
+    const frameRoutes = [];
+    let sweepRejected = 0;
+    for (const r of guardedRoutes) {
+      const [method, pattern] = r.split(" ");
+      const concrete = pattern.split("/").map((seg) => (seg.startsWith(":") ? "anon-probe" : seg)).join("/");
+      const res = await fetch(`${BASE}${concrete}`, {
+        method,
+        headers: { authorization: `Bearer ${CANARY}`, ...(method === "GET" ? {} : { "content-type": "application/json" }) },
+        ...(method === "GET" ? {} : { body: "{}" }),
+      });
+      const text = await res.text();
+      if (res.status >= 400) sweepRejected += 1;
+      if (echoesCredential(text, CANARY)) echoRoutes.push(r);
+      if (hasStackFrame(text)) frameRoutes.push(r);
+    }
+    check(`no guarded /v1 route echoes a rejected credential (${guardedRoutes.length} routes swept)` +
+      (echoRoutes.length > 0 ? ` — ECHOED BY: ${echoRoutes.join(", ")}` : ""),
+      echoRoutes.length === 0);
+    check(`no guarded /v1 route returns a stack frame (${guardedRoutes.length} routes swept)` +
+      (frameRoutes.length > 0 ? ` — FRAMES FROM: ${frameRoutes.join(", ")}` : ""),
+      frameRoutes.length === 0);
+    // FLOOR: the sweep must have been REJECTED everywhere. A 200 body that happens
+    // not to contain the canary would satisfy both assertions while proving nothing.
+    check(`the credential sweep was rejected at every route (${sweepRejected}/${guardedRoutes.length} were 4xx)`,
+      sweepRejected === guardedRoutes.length);
+
+    // NAMED PROBES for the shapes the derived sweep cannot reach: a path that matches
+    // no route at all, and the error classes a VALID bearer produces (a 400 is
+    // generated by different code from a 401, and it is the branch that historically
+    // quotes the request back).
+    const probes = [
+      ["a rejected bearer on an unknown /v1 path", "GET", "/v1/zzz-not-a-route", CANARY, undefined],
+      ["a VALID bearer on a 400 (malformed JSON)", "POST", "/v1/decisions/evaluate", KEYS.operator, "{not json"],
+      ["a VALID bearer on a 400 (schema rejection)", "POST", "/v1/decisions/evaluate", KEYS.operator, JSON.stringify({ nope: 1 })],
+    ];
+    let probeRejected = 0;
+    for (const [label, method, path, token, body] of probes) {
+      const res = await fetch(`${BASE}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${token}`, ...(body ? { "content-type": "application/json" } : {}) },
+        ...(body ? { body } : {}),
+      });
+      const text = await res.text();
+      if (res.status >= 400) probeRejected += 1;
+      check(`${label} → the response body does not echo the credential`, echoesCredential(text, token) === false);
+      check(`${label} → the response body carries no stack frame`, hasStackFrame(text) === false);
+    }
+    check(`every named redaction probe was actually a rejection (${probeRejected}/${probes.length} were 4xx)`,
+      probeRejected === probes.length);
+
+    // POSITIVE CONTROL, through the SAME two predicates the assertions above call.
+    // The synthetic body carries a credential and a real paren-less bundled frame,
+    // so weakening either detector turns this line red instead of turning the whole
+    // block silently green.
+    const synthetic =
+      `{"error":"internal","message":"failed for ${CANARY}"}\n` +
+      "    at /srv/app/dist/index.mjs:10:5\n" +
+      "    at async file:///srv/app/dist/index.mjs:22:7\n";
+    check("the credential detector can fire (synthetic positive control)",
+      echoesCredential(synthetic, CANARY) === true);
+    check("the stack-frame detector can fire on a paren-less bundled frame (synthetic positive control)",
+      hasStackFrame(synthetic) === true);
+  }
+
   // The docs quote this route count as evidence. A number stated as a measurement
   // and then left behind is the exact rot the figure guard exists to stop — but
   // that guard only inspects numbers >= 1,000, so "33" is invisible to it. This

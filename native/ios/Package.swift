@@ -11,7 +11,7 @@ import PackageDescription
 //
 // Two things follow from that, and this package fixes both:
 //
-//   1. PLATFORM. The port is pure Foundation — every one of the seven files below
+//   1. PLATFORM. The port is pure Foundation — every one of the files below
 //      imports Foundation and nothing else (DeviceBindingCrypto also imports
 //      CommonCrypto, an Apple system module present on both iOS and macOS). That is a claim, and a claim nothing
 //      checks is a claim that decays: one `import UIKit` added for convenience and
@@ -59,7 +59,8 @@ let package = Package(
                 "Services/SignalContext.swift",
                 "Services/ScreenCapturePolicy.swift",
                 "Services/DeviceBindingCrypto.swift",
-                "Models/SessionState.swift"
+                "Models/SessionState.swift",
+                "Models/SessionData.swift"
             ]
         ),
         .testTarget(

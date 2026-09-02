@@ -71,6 +71,7 @@ targets:
       - path: EnterpriseShell/Services/ScreenCapturePolicy.swift
       - path: EnterpriseShell/Services/DeviceBindingCrypto.swift
       - path: EnterpriseShell/Models/SessionState.swift
+      - path: EnterpriseShell/Models/SessionData.swift
     settings:
       base:
         # The hermetic test bundle keeps a literal id; it never installs on a device.

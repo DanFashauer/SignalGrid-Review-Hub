@@ -63,12 +63,29 @@ struct SessionData: Codable {
     
     /// Whether the session token is expired. No ignorance branch: a session that
     /// cannot state a concrete expiry is `.nonExpiring` with a justification, not a
-    /// silent "not expired". An unknown expiry can never reach here — it is
-    /// unrepresentable in `ExpiryPolicy`.
+    /// silent "not expired".
+    ///
+    /// The type removes the *in-code* ignorance case. The justification is the
+    /// only thing that makes a `.nonExpiring` session a deliberate state rather
+    /// than an unknown one, so a blank justification reads as EXPIRED: an
+    /// unjustified "never expires" is the fail-OPEN on the Assist gate's staleness
+    /// input this type exists to remove. The sole in-code producer
+    /// (`IdentityProvider`'s MDM branch) always states a full reason.
+    ///
+    /// Scope, stated honestly: this is a VALUE invariant, not a persistence
+    /// defence. `ExpiryPolicy` is `Codable` and `KeychainService.getSession`
+    /// decodes `SessionData` from the Keychain, but that read path has no caller
+    /// today — a session is only ever assigned from a fresh authenticate. A
+    /// malformed blob does not decode to a blank justification; the synthesized
+    /// decoder throws and `try?` yields nil, which the consumer reads as stale.
+    /// And a writer who can tamper with the blob can write any justification.
+    /// What the check closes is a future producer, in code or from a server,
+    /// that mints an unjustified `.nonExpiring`.
     var isExpired: Bool {
         switch expiry {
         case .expiresAt(let date): return Date() >= date
-        case .nonExpiring: return false
+        case .nonExpiring(let justification):
+            return justification.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 

@@ -1022,7 +1022,23 @@
       "reviewedBy": "mobile-native-engineer",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Layout and color only: all label/button declarations, profile header and status bar constraints, showToast, plus greps for every heightAnchor and SG.primary use. Collection-view data sources and session lifecycle NOT read."
+      "note": "Layout and color only: all label/button declarations, profile header and status bar constraints, showToast, plus greps for every heightAnchor and SG.primary use. Collection-view data sources and session lifecycle NOT read.",
+      "retiredOn": "2026-09-03",
+      "retiredWhy": "Retired in the SwiftUI view-layer rebuild (Phase 3); replaced by ActiveSessionView.swift."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Views/ActiveSessionView.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-09-03",
+      "depth": "audited",
+      "note": "SwiftUI port of the retired ActiveSessionViewController — adversarially verified against the UIKit original (fidelity of every audit row / timer / SessionStateManager call / string / app-launch branch, colour + Dynamic-Type doctrine, iOS-15 compile) with its findings folded: UIColor(hex:) relocated, stable restriction ids, toast inside the type cap, tenant-luminance header text."
+    },
+    {
+      "path": "native/ios/EnterpriseShell/Utilities/UIColor+Hex.swift",
+      "reviewedBy": "mobile-native-engineer",
+      "date": "2026-09-03",
+      "depth": "read",
+      "note": "The UIColor(hex:) extension that DesignSystem.swift parses every SG token through, relocated here whole from the retired ActiveSessionViewController so the design system keeps its only definition."
     },
     {
       "path": "native/ios/EnterpriseShell/Views/ManagedAppViewController.swift",

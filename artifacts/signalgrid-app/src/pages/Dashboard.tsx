@@ -22,7 +22,7 @@ export function Dashboard() {
   // remain labelled fixture telemetry until their own /v1 series exists.
   const { data: v1Decisions } = useQuery({ queryKey: ["v1-decisions"], queryFn: listDecisionsV1, refetchInterval: 15_000 });
   const { data: integrationsData } = useListIntegrations();
-  const { data: signalsData } = useListLatestSignals({ limit: 10 });
+  const { data: signalsData, isLoading: isLoadingSignals, error: signalsError } = useListLatestSignals({ limit: 10 });
   // Screen 2's summary embed (wireframe screen 1's named gap): launch-family
   // health from the same truth sources the setup page uses — the server's own
   // mode resolution off /v1/context and the real connector records off
@@ -198,22 +198,33 @@ export function Dashboard() {
               <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Stale / non-compliant</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {(signalsData?.signals ?? []).filter(s => s.status === 'anomalous' || s.status === 'critical').slice(0, 3).map(s => (
-                  <div key={s.id} className="p-2 text-sm border border-border rounded flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <SignalStatusBadge status={s.status} />
-                      <span className="font-mono">{s.platform}</span>
+              {/* Unknown never renders as the good state: loading and error are
+                  their own arms; "No stale…" shows only once the query has
+                  RETURNED and nothing anomalous was in it. */}
+              {isLoadingSignals ? (
+                <div className="text-sm text-muted-foreground p-4 text-center">Loading…</div>
+              ) : signalsError ? (
+                <div className="text-sm text-muted-foreground font-mono p-4 text-center border border-dashed border-border rounded">
+                  {String(signalsError instanceof Error ? signalsError.message : signalsError)}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(signalsData?.signals ?? []).filter(s => s.status === 'anomalous' || s.status === 'critical').slice(0, 3).map(s => (
+                    <div key={s.id} className="p-2 text-sm border border-border rounded flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <SignalStatusBadge status={s.status} />
+                        <span className="font-mono">{s.platform}</span>
+                      </div>
+                      <span className="font-mono text-xs text-muted-foreground">{formatTimeAgo(s.receivedAt)}</span>
                     </div>
-                    <span className="font-mono text-xs text-muted-foreground">{formatTimeAgo(s.receivedAt)}</span>
-                  </div>
-                ))}
-                {(!signalsData?.signals || signalsData.signals.filter(s => s.status === 'anomalous' || s.status === 'critical').length === 0) && (
-                  <div className="text-sm text-muted-foreground p-4 text-center border border-dashed border-border rounded">
-                    No stale or non-compliant signals
-                  </div>
-                )}
-              </div>
+                  ))}
+                  {(signalsData?.signals ?? []).filter(s => s.status === 'anomalous' || s.status === 'critical').length === 0 && (
+                    <div className="text-sm text-muted-foreground p-4 text-center border border-dashed border-border rounded">
+                      No stale or non-compliant signals
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -225,6 +236,9 @@ export function Dashboard() {
   );
 }
 
+// Static demo mock for a DEFERRED capability (device custody + shift handoff);
+// the zones and custody state here are illustrative fixture data, not evaluated
+// by the decision core.
 const HANDOFF_DEVICES = [
   { id: "SG-0847", zone: "ICU", status: "docked" as const, user: "USR1001", next: "USR2001", lastSeen: 3 },
   { id: "SG-0912", zone: "ER", status: "docked" as const, user: "USR1002", next: "USR2002", lastSeen: 7 },
@@ -250,7 +264,7 @@ function ShiftHandoffPanel() {
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
           <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">Shift Handoff</CardTitle>
-          <p className="text-xs text-muted-foreground font-mono mt-0.5">DEVICE CUSTODY (STATIC DEMO MOCK — illustrative, not from the decision core)</p>
+          <p className="text-xs text-muted-foreground font-mono mt-0.5">DEVICE CUSTODY — DEFERRED capability · static demo mock, illustrative, not from the decision core</p>
         </div>
         <div className="flex gap-4 text-xs font-mono">
           <span className="text-green-400">{docked.length} DOCKED</span>

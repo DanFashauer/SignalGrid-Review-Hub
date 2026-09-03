@@ -39,7 +39,47 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const ROOTS = ["artifacts/signalgrid-web/src"];
+// The published web surface is not just the marketing site. `Dockerfile.web`
+// builds each app and COPYs its `dist/public` into the served nginx image
+// (signalgrid-web at "/", signalgrid-app at "/app/"), so every app whose built
+// output ships is buyer-reachable and must be scanned. ROOTS is DERIVED from
+// those COPY lines rather than hand-listed, for the same reason the published-
+// pages set is derived from pages.yml below: a hand copy of a deploy manifest is
+// a fossil waiting to happen. Each `artifacts/<pkg>/dist/public/` copy maps to
+// that package's SOURCE root `artifacts/<pkg>/src` — the gate scans source, not
+// built output — and a mapped source that is missing is fatal, never silently
+// dropped (that would scan less without saying so).
+const WEB_DOCKERFILE = "Dockerfile.web";
+let ROOTS = [];
+try {
+  const df = readFileSync(WEB_DOCKERFILE, "utf8");
+  ROOTS = [
+    ...new Set(
+      [...df.matchAll(/artifacts\/([A-Za-z0-9._-]+)\/dist\/public\//g)].map(
+        (m) => `artifacts/${m[1]}/src`,
+      ),
+    ),
+  ];
+} catch {
+  console.error(
+    `✗ ${WEB_DOCKERFILE} unreadable — cannot derive the served web roots, and guessing them would defeat the gate.`,
+  );
+  process.exit(1);
+}
+if (ROOTS.length === 0) {
+  console.error(
+    `✗ no served web roots derived from ${WEB_DOCKERFILE} — the COPY … dist/public lines changed shape; fix this derivation, do not silently scan less.`,
+  );
+  process.exit(1);
+}
+for (const r of ROOTS) {
+  if (!existsSync(r)) {
+    console.error(
+      `✗ derived web root ${r} does not exist — the Dockerfile COPYs its dist/public but its source is gone; fix the derivation, do not silently scan less.`,
+    );
+    process.exit(1);
+  }
+}
 const files = [];
 const walk = (d) => {
   for (const e of readdirSync(d)) {
@@ -244,8 +284,17 @@ const LAUNCH_IDS = new Set(["device-posture", "management-health", "local-author
 // `rtls.wrong_zone`), Python's `timezone`, a hostname (`techzone.omnissa.com`), and
 // two vendor PRODUCT names (AWS `DataZone`, Bitdefender `GravityZone`). Not one of
 // them asserts that zone capability ships. No claim stopped matching.
+//
+// `custody` IS WORD-ANCHORED FOR THE SAME REASON, added when the served operator
+// console (artifacts/signalgrid-app, now a derived ROOT) was first scanned. Bare
+// `custody` matched the TAIL and HEAD of identifiers that only NAME the reason-code
+// family — a TypeScript interface `CustodyGap`, its field `custodyGaps`, and the
+// SCREAMING_SNAKE reason-code keys `CUSTODY_OVERDUE`/`CUSTODY_EXCEPTION`/
+// `CUSTODY_MAINTENANCE` in the IT-layer owner map — none of which assert the custody
+// signal ships. `\bcustody\b` leaves those (a word char sits on one side) while still
+// flagging genuine prose: "device custody", "physical custody:", "Custody gaps".
 const DEFERRED_NOUNS =
-  /badge\s?(binding|state|tap|present)|custody|geofence|\bzone\b|shift window|shift-scoped|BLE proximity|proximity confirm|tamper (sensor|witness|detection)|GPS|RTLS/i;
+  /badge\s?(binding|state|tap|present)|\bcustody\b|geofence|\bzone\b|shift window|shift-scoped|BLE proximity|proximity confirm|tamper (sensor|witness|detection)|GPS|RTLS/i;
 // Hedges the copy ACTUALLY uses. Tightening rule 3 to block scope exposed that
 // this vocabulary was too narrow in the other direction: Hardware.tsx hedges with
 // "candidate signals, not evaluated today" and IntegrationsSection with "candidate
@@ -583,6 +632,12 @@ const CODE_LABEL_EXEMPT = new Map([
     violationsIn("stZ0", "| `siem` | `LocationZone, LocationBuilding` | the declared column set |").length === 0 &&
     violationsIn("stZ1", "Python's `timezone.utc`, AWS DataZone and Bitdefender GravityZone are product names.").length === 0 &&
     violationsIn("stZ2", "The zone a worker stands in decides the verdict today.").length > 0 &&
+    // The custody identifier idiom, both directions (added with the signalgrid-app root).
+    // A TypeScript interface / field / reason-code key NAMING the family is a string, not a
+    // claim; genuine prose custody is a claim.
+    violationsIn("stCust0", "export interface CustodyGap { custodyGaps: CustodyGap[] }").length === 0 &&
+    violationsIn("stCust1", '  CUSTODY_OVERDUE: "facilities_operations_owner",').length === 0 &&
+    violationsIn("stCust2", "Device custody is confirmed before every session today.").length > 0 &&
     violationsIn("st6.html", farHedge).length > 0 &&
     violationsIn("st7.html", nearHedge).length === 0 &&
     violationsIn("st8.html", pageBanner).length === 0 &&

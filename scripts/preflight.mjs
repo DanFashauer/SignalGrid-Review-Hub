@@ -379,6 +379,10 @@ const STEPS = [
   // is not a preflight-only gate — the CI step below is what check-test-execution
   // reads to see this file as reached.
   { name: "MCP server unit tests (tool/resource contract + annotations)", cmd: ["pnpm", "--filter", "@workspace/mcp-server", "run", "test"] },
+  { name: "Console routes self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-console-routes.mjs", "--self-test"] },
+  { name: "Console routes (every console fetch target maps to a served route: method + path)", cmd: ["node", "scripts/check-console-routes.mjs"] },
+  { name: "Dead nav self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-dead-nav.mjs", "--self-test"] },
+  { name: "Dead nav (a *_NAV/*_GROUPS array in components/layout rendered nowhere is dead code)", cmd: ["node", "scripts/check-dead-nav.mjs"] },
   { name: "OIDC middleware test (the PRODUCTION auth branch actually executes)", cmd: ["pnpm", "run", "test:oidc"] },
   { name: "Bruno collection live run (the committed contract, executed both profiles)", cmd: ["node", "scripts/run-bruno-collection.mjs"] },
   { name: "Proof: observability (metrics endpoint)", cmd: ["pnpm", "run", "proof:observability"] },

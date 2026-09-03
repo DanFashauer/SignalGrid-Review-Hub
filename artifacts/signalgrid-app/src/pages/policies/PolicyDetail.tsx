@@ -100,11 +100,19 @@ export function PolicyDetail() {
             <CardHeader>
               <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">
                 Policy tests against v{current?.version ?? "…"}{" "}
-                {tests.data && (
+                {tests.data ? (
                   <Badge variant="outline" className={`ml-2 font-mono text-[10px] uppercase border-transparent ${tests.data.passed ? "bg-status-allow" : "bg-status-deny"}`}>
                     {tests.data.results.filter((r) => r.passed).length}/{tests.data.results.length} {tests.data.passed ? "passed" : "FAILING"}
                   </Badge>
-                )}
+                ) : tests.isError ? (
+                  <Badge
+                    variant="outline"
+                    className="ml-2 font-mono text-[10px] uppercase border-transparent bg-signal-unknown"
+                    title="GET /v1/policies/:id/tests failed — the pinned tests could not be run"
+                  >
+                    unverified
+                  </Badge>
+                ) : null}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-1">
@@ -117,7 +125,12 @@ export function PolicyDetail() {
                   </span>
                 </div>
               ))}
-              {tests.isLoading && <div className="text-muted-foreground text-xs font-mono">Running tests server-side…</div>}
+              {/* A failed test run is surfaced, never left blank or "running…". */}
+              {tests.isError ? (
+                <div className="text-muted-foreground text-xs font-mono">{String(tests.error instanceof Error ? tests.error.message : tests.error)}</div>
+              ) : tests.isLoading ? (
+                <div className="text-muted-foreground text-xs font-mono">Running tests server-side…</div>
+              ) : null}
             </CardContent>
           </Card>
         </div>

@@ -77,7 +77,11 @@ export function Fleet() {
                 </div>
               </div>
             ))}
-            {!h && <div className="text-sm text-muted-foreground p-4">Loading fleet health…</div>}
+            {health.isError ? (
+              <div className="text-sm text-muted-foreground font-mono p-4">{String(health.error instanceof Error ? health.error.message : health.error)}</div>
+            ) : !h ? (
+              <div className="text-sm text-muted-foreground p-4">Loading fleet health…</div>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -111,7 +115,7 @@ export function Fleet() {
               ))}
               {ops.data && ops.data.postureDrift.length === 0 && <div className="text-xs text-muted-foreground">All nodes on target bundle</div>}
             </div>
-            {/* Custody gaps */}
+            {/* Custody gaps — DEFERRED capability, fixture rollup (not evaluated by the core) */}
             <div className="border border-border rounded-lg p-4">
               <div className="font-mono text-xs uppercase tracking-wider text-red-400 mb-2">Custody gaps</div>
               {(ops.data?.custodyGaps ?? []).slice(0, 4).map((g) => (
@@ -123,7 +127,11 @@ export function Fleet() {
               {ops.data && ops.data.custodyGaps.length === 0 && <div className="text-xs text-muted-foreground">No custody gaps</div>}
             </div>
           </div>
-          {!ops.data && <div className="text-sm text-muted-foreground mt-2">Loading operational intelligence…</div>}
+          {ops.isError ? (
+            <div className="text-sm text-muted-foreground font-mono mt-2">{String(ops.error instanceof Error ? ops.error.message : ops.error)}</div>
+          ) : !ops.data ? (
+            <div className="text-sm text-muted-foreground mt-2">Loading operational intelligence…</div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -204,7 +212,11 @@ export function Fleet() {
               </div>
             );
           })}
-          {!tenants.data && <div className="text-sm text-muted-foreground p-4">Loading tenants…</div>}
+          {tenants.isError ? (
+            <div className="text-sm text-muted-foreground font-mono p-4">{String(tenants.error instanceof Error ? tenants.error.message : tenants.error)}</div>
+          ) : !tenants.data ? (
+            <div className="text-sm text-muted-foreground p-4">Loading tenants…</div>
+          ) : null}
         </CardContent>
       </Card>
 

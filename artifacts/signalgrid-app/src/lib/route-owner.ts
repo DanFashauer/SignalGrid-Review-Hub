@@ -12,7 +12,12 @@
  * classified, and the owner agrees. Edit the model first; this file follows.
  */
 
-/** The model's closed set of owner roles, with console display labels. */
+/**
+ * The model's closed set of owner roles, with console display labels. A role's
+ * "covers" names the org domain that OWNS a refusal — including deferred
+ * reason-code families such as physical custody and tamper — not a capability
+ * SignalGrid evaluates today.
+ */
 export const OWNER_ROLE_LABELS: Record<string, { label: string; covers: string }> = {
   it_governance_owner: { label: "IT governance", covers: "Policy, standards, risk acceptance, exceptions." },
   network_infrastructure_owner: { label: "Network infrastructure", covers: "Network, connectivity, egress, local-network reachability." },

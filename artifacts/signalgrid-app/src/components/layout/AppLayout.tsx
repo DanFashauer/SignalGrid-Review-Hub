@@ -4,8 +4,6 @@ import {
   Activity,
   ShieldAlert,
   Settings,
-  Network,
-  Server,
   Grid,
   AppWindow,
   Sparkles,
@@ -61,19 +59,16 @@ type NavEntry = { href: string; label: string; icon: React.ComponentType<{ class
  * Settings. Devices are entities involved in sessions, reachable by search and
  * from session context, not a peer of the product itself.
  */
-const LAUNCH_NAV: NavEntry[] = [
+// Exported so the PreviewBanner (App.tsx) derives its "launch surfaces are …"
+// sentence from the SAME array that is rendered here — the banner cannot drift
+// from the nav. Configuration surfaces (sources, connectors, integrations,
+// fleet, assurance, audit) are reached THROUGH Settings (see pages/settings)
+// and are deliberately not primary navigation, so there is no SETTINGS_NAV: a
+// second nav array rendered nowhere was dead code the dead-nav gate now forbids.
+export const LAUNCH_NAV: NavEntry[] = [
   { href: "/sessions", label: "Sessions", icon: ShieldAlert, match: "/sessions" },
   { href: "/policies", label: "Policies", icon: FileCode, match: "/policies" },
   { href: "/settings", label: "Settings", icon: Settings, match: "/settings" },
-];
-
-/** Configuration, reached through Settings — never primary navigation. */
-const SETTINGS_NAV: NavEntry[] = [
-  { href: "/connectors/setup", label: "Sources & connectors", icon: Network, match: "/connectors" },
-  { href: "/integrations", label: "Integrations", icon: Network, match: "/integrations" },
-  { href: "/fleet", label: "Fleet & tenants", icon: Server, match: "/fleet" },
-  { href: "/status", label: "Assurance", icon: Activity, match: "/status" },
-  { href: "/audit", label: "Audit", icon: ShieldAlert, match: "/audit" },
 ];
 
 const PREVIEW_NAV: NavEntry[] = [

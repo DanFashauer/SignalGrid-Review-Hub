@@ -128,18 +128,29 @@ export function DecisionDetail() {
             <CardHeader>
               <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">
                 Evidence snapshot{" "}
-                {ev && (
+                {ev ? (
                   <Badge
                     variant="outline"
                     className={`ml-2 font-mono text-[10px] uppercase border-transparent ${ev.verified ? "bg-status-allow" : "bg-status-deny"}`}
                   >
                     {ev.verified ? "digest verified" : "DIGEST MISMATCH"}
                   </Badge>
-                )}
+                ) : evidenceQ.isError ? (
+                  <Badge
+                    variant="outline"
+                    className="ml-2 font-mono text-[10px] uppercase border-transparent bg-signal-unknown"
+                    title="GET /v1/decisions/:id/evidence failed — the evidence digest could not be verified"
+                  >
+                    unverified
+                  </Badge>
+                ) : null}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {!ev ? (
+              {/* A failed evidence fetch is UNVERIFIED, not "loading forever". */}
+              {evidenceQ.isError ? (
+                <div className="text-muted-foreground text-sm font-mono">{String(evidenceQ.error instanceof Error ? evidenceQ.error.message : evidenceQ.error)}</div>
+              ) : !ev ? (
                 <div className="text-muted-foreground text-sm font-mono">Loading evidence…</div>
               ) : (
                 <div className="space-y-4">

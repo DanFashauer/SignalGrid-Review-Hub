@@ -3,8 +3,6 @@ import { Link, useLocation } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useCreatePolicy, getListPoliciesQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,13 +11,14 @@ import { Switch } from "@/components/ui/switch";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 
 const policySchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
   workflowPattern: z.string().min(1, "Workflow pattern is required"),
-  failMode: z.enum(["fail-open", "fail-closed"]),
+  // fail-open is forbidden by golden rule 2 (fail-closed doctrine); the enum admits
+  // nothing else, so the concept cannot be selected or submitted.
+  failMode: z.enum(["fail-closed"]),
   active: z.boolean().default(true),
   rules: z.array(
     z.object({
@@ -33,9 +32,6 @@ const policySchema = z.object({
 
 export function PolicyCreate() {
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const createPolicy = useCreatePolicy();
 
   const form = useForm<z.infer<typeof policySchema>>({
     resolver: zodResolver(policySchema),
@@ -56,18 +52,12 @@ export function PolicyCreate() {
     name: "rules"
   });
 
-  function onSubmit(values: z.infer<typeof policySchema>) {
-    createPolicy.mutate({ data: values }, {
-      onSuccess: () => {
-        toast({ title: "Policy created", description: "The policy has been saved successfully." });
-        queryClient.invalidateQueries({ queryKey: getListPoliciesQueryKey() });
-        setLocation("/policies");
-      },
-      onError: (err: any) => {
-        toast({ title: "Error", description: err?.message || "Failed to create policy", variant: "destructive" });
-      }
-    });
-  }
+  // No submit handler: there is no served route that creates a new policy. POSTing
+  // to /api/policies (the generated useCreatePolicy target) 404s — the server serves
+  // GET /api/policies only, and the sole policies POST, /api/v1/policies/:id/versions,
+  // adds a VERSION to an EXISTING policy. So the form builds a policy for preview and
+  // the submit is disabled with an honest in-UI notice, rather than 404-ing after the
+  // fact. Policy changes ride the repository.
 
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-6">
@@ -83,7 +73,7 @@ export function PolicyCreate() {
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-8">
           <Card className="border-border">
             <CardHeader>
               <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">General Settings</CardTitle>
@@ -147,7 +137,7 @@ export function PolicyCreate() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="fail-open">FAIL-OPEN</SelectItem>
+                          {/* fail-open removed — golden rule 2 forbids the concept */}
                           <SelectItem value="fail-closed">FAIL-CLOSED</SelectItem>
                         </SelectContent>
                       </Select>
@@ -291,11 +281,25 @@ export function PolicyCreate() {
             </CardContent>
           </Card>
 
-          <div className="flex justify-end gap-4">
-            <Button type="button" variant="outline" onClick={() => setLocation("/policies")}>Cancel</Button>
-            <Button type="submit" disabled={createPolicy.isPending} className="font-mono uppercase tracking-wider text-xs">
-              {createPolicy.isPending ? "Saving..." : "Create Policy"}
-            </Button>
+          <div className="space-y-3">
+            <div className="border border-amber-400/30 bg-amber-400/5 rounded px-3 py-2 font-mono text-[11px] text-amber-400/90">
+              Route not served yet — no API endpoint accepts a NEW policy. The server
+              serves GET /api/policies only; the sole POST on a policies path is
+              /api/v1/policies/:id/versions, which adds a new VERSION to an EXISTING
+              policy, not a new one. This form builds a policy for preview but cannot
+              save it — policy changes ride the repository.
+            </div>
+            <div className="flex justify-end gap-4">
+              <Button type="button" variant="outline" onClick={() => setLocation("/policies")}>Back to Policies</Button>
+              <Button
+                type="button"
+                disabled
+                title="No server route serves creating a policy — POST /api/policies is not served."
+                className="font-mono uppercase tracking-wider text-xs"
+              >
+                Create Policy · route not served
+              </Button>
+            </div>
           </div>
         </form>
       </Form>

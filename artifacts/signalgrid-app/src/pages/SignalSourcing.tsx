@@ -37,7 +37,7 @@ export function SignalSourcing() {
         <Metric label="Wireable" value={s ? `${s.wireable}/${s.total}` : "-"} accent={s ? (s.unavailable ? "text-amber-400" : "text-emerald-400") : undefined} sub={s ? (s.unavailable ? `${s.unavailable} gap${s.unavailable === 1 ? "" : "s"}` : "no gaps") : ""} />
         <Metric label="Vendor-integrated" value={s ? String(s.vendorIntegrated) : "-"} accent="text-emerald-400" sub="api + native · high fidelity" />
         <Metric label="Grid-lifted" value={s ? String(s.gridCollected) : "-"} accent={s && s.gridCollected ? "text-primary" : undefined} sub="the Grid does the lifting" />
-        <Metric label="Gaps" value={s ? String(s.unavailable) : "-"} accent={s && s.unavailable ? "text-red-400" : "text-emerald-400"} sub="cannot be wired" />
+        <Metric label="Gaps" value={s ? String(s.unavailable) : "-"} accent={s ? (s.unavailable ? "text-red-400" : "text-emerald-400") : undefined} sub="cannot be wired" />
       </div>
 
       {gaps.length > 0 && (

@@ -12,8 +12,11 @@ import { controlPlane, type SelfAuditPlainLine } from "@/lib/control-plane";
 // arranges it. No status codes, no jargon, no manual required.
 
 function lineTone(line: SelfAuditPlainLine): { dot: string; text: string } {
-  if (!line.needsAttention) return { dot: "bg-emerald-400", text: "text-emerald-300" };
+  // "Not checked" is an UNKNOWN state and must never paint green — tested BEFORE the
+  // all-clear branch, because a not-yet-checked area can carry needsAttention=false
+  // and would otherwise render as verified-healthy.
   if (line.state === "Not checked") return { dot: "bg-slate-400", text: "text-slate-300" };
+  if (!line.needsAttention) return { dot: "bg-emerald-400", text: "text-emerald-300" };
   if (line.state === "Needs a look") return { dot: "bg-amber-400", text: "text-amber-300" };
   return { dot: "bg-red-400", text: "text-red-300" };
 }

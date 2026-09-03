@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "requestId": "2026-09-03-post-outage-mac-truth",
+  "completedAt": "2026-09-03T17:58:46.878Z",
+  "provenance": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "nodeVersion": "v24.18.0",
+    "macosVersion": "26.6.2",
+    "commit": "7b80a646444ccbf20f95977e7fa31132b2556781",
+    "branch": "worktree-mac-lane-work",
+    "workingTreeClean": true
+  },
+  "runs": [
+    {
+      "operation": "evidence",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 191511,
+      "tail": [
+        "This says NOTHING about the launch surface — that is preflight's job.",
+        "",
+        "signalgrid-mcp found at <HOME>/Public/Projects/SignalGrid/signalgrid-mcp (python: <HOME>/Public/Projects/SignalGrid/signalgrid-mcp/.venv/bin/python)",
+        "",
+        "=== signalgrid-mcp pytest (+ posture-report contract) ===",
+        "$ <HOME>/Public/Projects/SignalGrid/signalgrid-mcp/.venv/bin/python -m pytest -q",
+        "........................................................................ [ 72%]",
+        "...........................                                              [100%]",
+        "=============================== warnings summary ===============================",
+        ".venv/lib/python3.12/site-packages/pydantic_settings/sources/utils.py:47",
+        "  <HOME>/Public/Projects/SignalGrid/signalgrid-mcp/.venv/lib/python3.12/site-packages/pydantic_settings/sources/utils.py:47: IncompleteFieldDefinitionWarning: Field 'lifespan' has an incomplete definition: its annotation contains an unresolved forward reference, so settings sources may fail to correctly resolve its value. Call `model_rebuild()` on the model where the field is defined, once all the referenced types are defined.",
+        "    warnings.warn(",
+        "",
+        "-- Docs: <URL>",
+        "99 passed, 1 warning in 1.69s",
+        "",
+        "=== verify:all summary ===",
+        "  mcp tool count:       PASS (22 tools, derived and matching the doc)",
+        "  Review-Hub preflight: PASS",
+        "  Review-Hub breadth:   PASS",
+        "  signalgrid-mcp:       PASS",
+        "  shared contract:      <HOME>/Public/Projects/SignalGrid/SignalGrid-Review-Hub/.claude/worktrees/mac-lane-<REDACTED-BLOB>-posture/contract/posture-report.contract.json",
+        "",
+        "--emit-evidence: wrote <HOME>/Public/Projects/SignalGrid/SignalGrid-Review-Hub/.claude/worktrees/mac-lane-work/artifacts/live-evidence/mac-run.json (manifestFingerprint=7fad717f24d8…).",
+        "  Commit artifacts/live-evidence/ to publish the run as repo evidence."
+      ]
+    },
+    {
+      "operation": "docker",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 15596,
+      "tail": [
+        "Container verification — the real deployment topology, against a real database",
+        "",
+        "  ok   — container engine reachable — podman 6.0.2 (auto-detected, daemonless)",
+        "  ok   — postgres:16 container started",
+        "  ok   — postgres accepting connections",
+        "  ok   — redis:7 container started",
+        "  ok   — redis accepting connections",
+        "  ok   — proof:audit-ledger-pg — durable audit ledger (durability, tamper-evidence, redaction, concurrency)",
+        "  ok   — proof:decision-store-pg — durable decision + evidence store (isolation, tamper-evident snapshots)",
+        "  ok   — proof:session-store-pg — durable session lifecycle (start/refresh/expire/end, isolation)",
+        "  ok   — proof:enrollment-race — concurrent enrollment loses no credential",
+        "",
+        "engine=podman version=6.0.2 pgProofs=3 pgAssertions=41 raceAssertions=4 result=pass"
+      ]
+    },
+    {
+      "operation": "proofs-full",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 99583,
+      "tail": [
+        "   ",
+        "   1. RUN THE TWO PENDING SIM-REQUESTS (this is your queued work):",
+        "      - 2026-09-02-android-desktop-first-run (android-core-tests, desktop-core-tests, desktop-window-smoke).",
+        "      - 2026-09-03-post-outage-mac-truth (evidence, docker, proofs-full) — NEW today.",
+        "      `pnpm run sim:run-requests --plan` first, then run; results commit + push (that is how cloud learns they ran). desktop-window-smoke needs Screen Recording permission for the terminal; the docker op needs Docker Desktop running — if either is missing it REFUSES honestly, note it and I will ask the owner.",
+        "   ",
+        "   2. FOLD THE #402/#403 SwiftUI REVIEW NOTES (mailed earlier). Note 1 (Provisioning checkmark sgAllow->sgAccent) is done (9a01263). Remaining: type-scale drift, the one inline font, the button contrast to eyeball, the equalToConstant rows at accessibility-XL; the twin test per-field checks are conditional (make them unconditional); MockSignalGridAPI replayed vectors; the DemoMode flag table on the simulator.",
+        "   ",
+        "   3. LAND OR REPORT mac/native-ledger-2026-09-02 — it has been open since 09-02.",
+        "   ",
+        "   4. KEEP LIVE EVIDENCE FRESH — re-emit artifacts/live-evidence/mac-run.json (the evidence op) after any Alpha change that touches a decision path. You are the only lane that can.",
+        "   ",
+        "   INSTALLS/PERMISSIONS — I am surfacing to the owner now: Firecrawl API key (research MCP), Screen Recording permission for the terminal (desktop-window-smoke), Docker Desktop running (docker op). If you hit any other missing tool, name it in a lane message to cloud and I will relay to the owner.",
+        "",
+        "   acknowledge with: pnpm run lane:ack cloud-standing-agenda-run-the-2-pending-sims-fol \"what you did\"",
+        "",
+        "",
+        "== NOTE: the web build now RUNS here (it used to be skipped) ==",
+        "   — the vite/rollup/lightningcss/tailwind darwin binaries this repo strips are",
+        "     added to node_modules for the run, exactly as tsx's esbuild binary always",
+        "     was. Nothing about the sources is linux-only; all 5 web artifacts build on arm64.",
+        "",
+        "== SUMMARY: 140 passed, 0 failed, 8 skipped ==",
+        "   skipped (NOT verified by this run): proof:enrollment-race proof:live-edr proof:live-fleet proof:live-glpi proof:live-headwind proof:live-fleet-workflow proof:live-keycloak proof:live-location",
+        "✅ Nothing failed — but see the skipped gate(s) above."
+      ]
+    }
+  ]
+}

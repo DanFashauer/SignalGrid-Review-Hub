@@ -38,11 +38,16 @@ extension Color {
 /// UIKit gate exists to catch, and `scripts/check-ios-dynamic-type.mjs` now catches
 /// the SwiftUI spelling too. Each role names the UIKit design size it stands in for.
 enum SGType {
-    static let title: Font        = .title.weight(.bold)        // SG.sans(28, .bold)
-    static let instruction: Font  = .title3.weight(.medium)     // SG.sans(18, .medium)
-    static let body: Font         = .subheadline                // SG.sans(14)
-    static let bodyEmphasis: Font = .subheadline.weight(.medium)
-    static let caption: Font      = .caption                    // SG.sans(12)
+    static let title: Font           = .title.weight(.bold)        // SG.sans(28, .bold)
+    static let instruction: Font     = .title3.weight(.medium)     // SG.sans(18, .medium)
+    static let callout: Font         = .callout                    // SG.sans(16)
+    static let calloutEmphasis: Font = .callout.weight(.medium)    // SG.sans(16, .medium)
+    static let body: Font            = .subheadline                // SG.sans(14)
+    static let bodyEmphasis: Font    = .subheadline.weight(.medium)
+    static let caption: Font         = .caption                    // SG.sans(12)
+    /// Monospaced value display (badge ids, codes) — the SwiftUI twin of SG.mono(16).
+    /// A text STYLE, so it scales with Dynamic Type; `.system(size:)` would not.
+    static let mono: Font            = .system(.callout, design: .monospaced)
 }
 
 extension View {

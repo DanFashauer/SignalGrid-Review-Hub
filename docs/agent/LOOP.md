@@ -51,7 +51,7 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-03 (cloud lane) - seven PRs merged, each independently
+LAST TOUCHED: 2026-09-03 (cloud lane) - nine PRs merged, each independently
               reviewed before landing, preflight+breadth green on every push,
               the branch restarted from Alpha after each. #399 gate-suite
               hardening (the coverage ratchet cannot be hand-lowered; three gates
@@ -82,23 +82,31 @@ LAST TOUCHED: 2026-09-03 (cloud lane) - seven PRs merged, each independently
               local-authority freshness survivor and registering the emitter
               factory in place of eleven zero-mutation shells. Sweep re-dispatched,
               green across all four shards; ci-liveness fresh; Alpha carries the
-              fix so its daily sweep stays green.
-BLOCKED ON: nothing cloud-side; the merge outage is resolved. One SEPARATE
-              standing red, pre-existing and non-required: the daily image
-              vulnerability gate (a critical CVE with a fix available) fails the
-              scheduled run - orthogonal to the sweep, does not gate merges, and
-              auto-files its own tracking issue. Mac lane, non-blocking, from the
-              mailed review notes: the SwiftUI Phase 2 nits (a decision colour on
-              one non-decision checkmark, type-scale drift, one inline font, a
-              button contrast to eyeball); the twin's ISO8601 parser is stricter
-              than JS Date.parse on non-RFC3339 instants (now MATCHED cloud-side by
-              #406, both strict); the twin test's per-field checks are conditional;
-              and the older open items (MockSignalGridAPI replayed vectors,
-              DemoMode flag table on the simulator, the equalToConstant rows at
-              accessibility-XL).
-NEXT ACTION: cloud: the critical image-vulnerability gate (fix available) - a
-              base-image/dependency bump, own PR. owner: discovery conversations
-              (0 of 15) - nothing substitutes.
+              fix so its daily sweep stays green. #407 patched the critical image
+              vuln the daily gate flagged - CVE-2026-63073 / CVE-2026-75803 in the
+              node:22-alpine OpenSSL (libssl3/libcrypto3 3.5.7-r0 -> 3.5.8-r0) via
+              apk upgrade in Dockerfile.api; verified by dispatching the daily gate
+              on the branch (job went green on the rebuilt image). #408 (owner
+              directive 2026-09-03: keep the Mac lane fully utilized) shipped the
+              Mac lane's standing agenda + a sim-request bundling the uniquely-Mac
+              verifications (evidence, docker, proofs-full) + the held steward
+              heartbeat.
+BLOCKED ON: nothing cloud-side; the merge outage and the critical image vuln are
+              both resolved and merged. Mac lane, non-blocking, from the mailed
+              review notes and the #408 agenda: run the two pending sim-requests
+              (android-desktop-first-run, post-outage-mac-truth); the SwiftUI
+              Phase 2 nits (type-scale drift, one inline font, a button contrast to
+              eyeball; note-1 checkmark colour already fixed); the twin test's
+              per-field checks are conditional; land or report
+              mac/native-ledger-2026-09-02; the older open items (MockSignalGridAPI
+              replayed vectors, DemoMode flag table, the equalToConstant rows at
+              accessibility-XL). Owner, optional (lets the Mac use everything):
+              Firecrawl API key, Screen Recording permission for the terminal,
+              Docker Desktop running.
+NEXT ACTION: cloud: process the Mac lane's results as they return (sim-results,
+              lane mail, commits); then the launch-claims engineering-doc carve-out
+              (task #67). owner: discovery conversations (0 of 15) - nothing
+              substitutes.
               owner: publish the MCP marketplace listing
               (docs/SIGNALGRID_MCP_MARKET_LISTING.md) on the creator page - only
               the owner has the login. owner decisions still pending: fork or

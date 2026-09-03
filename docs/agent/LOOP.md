@@ -51,85 +51,44 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-02 (Mac lane, latest) - PHASE 1 OF THE SWIFTUI REBUILD
-              landed on mac/ios-shell-swiftui-phase1 (3c118917), mailed to
-              cloud to review+land. The owner ran the shell, said it isn't
-              looking the way they intended, and approved rebuilding the VIEW
-              LAYER in SwiftUI (not ground-up): the intended design is the
-              DEV/ios/Prototype "glance layer"; decision core + #387 plumbing
-              stay untouched. Seam = SessionStateManager.viewController(for:)
-              .lockedIdle -> UIHostingController, hosted INSIDE the UIKit
-              lifecycle (SessionWindow / ScreenCaptureGuard / ASAM unchanged).
-              DesignSystem+SwiftUI derives Color.sg* via Color(uiColor:) (never
-              retyped); LockedIdleView = the prototype's composition in SG
-              tokens with the UIKit behaviour verbatim (log rows, manual-login
-              gate, keyboard-wedge sink); the 635-line LockedIdleViewController
-              is retired. check-ios-dynamic-type now catches SwiftUI
-              .system(size:) too. Verified: BUILD SUCCEEDED, ios-shell-repair
-              8/8 against the new screen, a11y-XL wraps with NO truncation
-              (closes the ellipsis), preflight PASSED, breadth 56/0. Glance
-              card deferred (owner call). Next: Phase 2 (the linear session
-              screens) once Phase 1 lands.
-              Before that, same session: the iOS shell was BROKEN FOR THE
-              OWNER; cloud's repair batch (#387) landed but had never met a
-              compiler. Built + ran it green: BUILD SUCCEEDED (their ~1300 lines
-              compile clean), ios-shell-repair 8/8 + everything-fast, clean
-              provenance on Alpha. Step 6 (the 40 s loopback soak) had failed on
-              EVERY run - root cause was a self-inflicted grep: saw_fatal matched
-              the log-stream PREDICATE ECHO (the predicate filters FOR the words
-              "fatal"/"crash"), not a crash; the app never crashed (proven: no
-              crash report, only a harness simctl-terminate; isolated + post-churn
-              40 s soaks both alive with the backend call succeeding). Fixed
-              saw_fatal to strip the header (still catches a real fatal). Two
-              visual findings mailed: demo shows a correct ActiveSession (the
-              "kiosk could not be released" alert is honest on a non-supervised
-              simulator); the a11y-XL lock screen wraps cleanly but the
-              "Unmanaged device (...)" status line truncates at extra-large.
-              Earlier this session - synced mainline into the
-              lane, then delivered LAB_001 Step 1 with CLEAN provenance on
-              mainline: the evidence op re-run on a clean afeb8c5e tree after
-              #385 landed (reviewHubPass+mcpPass true), replacing the dirty-tree
-              0a70c3ca run cloud had flagged pending. Refreshed the
-              ios-dynamic-type sim result on current head. Closed backlog row 58,
-              which the ExpiryPolicy type change had MOVED, not closed:
-              SessionData is Codable and KeychainService.getSession restores it
-              by decode, so a tampered blob decodes to .nonExpiring("") - the
-              ignorance case relocated into persistence, granting a permanent
-              session on the Assist gate's stale input. Hardened isExpired (a
-              blank justification reads EXPIRED) and wrote the missing
-              SessionExpiryTests (6 cases, falsified against the old fail-open),
-              on branch mac/session-expiry-hardening - CI-green (swift 63/0,
-              xcodebuild TEST SUCCEEDED 63/0, preflight PASSED, breadth 56/0) -
-              mailed to cloud to review+land like #385. Also closed a delivery
-              gap: evidence and acks had been landing on a side branch cloud
-              cannot read; moved them to mainline and re-acked seven messages
-              there. #385 landed the earlier native-ledger work independently.
-              Before that, cloud's second full DR-024 cycle, eight PRs merged (#369-#376):
-              Ponytail cut 3 and cut 4 (-20,300 dead lines), README rebuilt,
-              DR-025 follow-ups, the docs truth sweep, batches A/B/C of the
-              full-file sweep, the native sweep mailed to the Mac lane, the
-              public-apis catalogue (DR-027), one freshness rule, the INDEX
-              audit with two gates, and the verdict-core second read (three
-              independent reviews; two real fail-opens closed, one of them
-              present at the merged head). Every landing reviewed before it
-              landed; preflight + breadth green on every push; CI green.
-BLOCKED ON: (UNBLOCKED) the simulator remediation-allow TS wrapper + pinned
-              vector table LANDED via #389 (bb23a449). The Mac lane can now port
-              the Swift twin against the real wrapper shape - next native task.
-              Still Mac-side, reported not fixed: MockSignalGridAPI's replayed
-              vectors (waiting on cloud's parity gate), the DemoMode flag table
-              verified on the simulator, and the equalToConstant rows at
-              accessibility-extra-large - HostAppViewController has 5 fixed
-              heights and 0 flexible, which is a live truncation risk now that
-              the fonts scale. Row 58 (the Swift nil-expiry fail-open) is now
-              FIXED on branch mac/session-expiry-hardening, pending cloud land.
+LAST TOUCHED: 2026-09-03 (cloud lane) - FIVE PRs merged, each independently
+              reviewed before landing, preflight+breadth green on every push,
+              the branch restarted from Alpha after each. #399 gate-suite
+              hardening (the coverage ratchet cannot be hand-lowered; three gates
+              fail closed on an empty scan; a new walker-floors meta-gate). #400
+              MCP ecosystem absorbed (DR-028): a fixture-first source-
+              independence map + public-safe listing copy for SignalGrid's own
+              read-only MCP server + a check-mcp-ecosystem-map gate. #401 the two
+              MCP Market leaderboards absorbed by use + Mac-lane MCP/skills
+              parity (one command, pnpm run mcp:setup) + a skill-plane-
+              conformance gate + a research-ops skill (the one research gap).
+              #402 iOS SwiftUI Phase 2 - the five linear session screens
+              (Auth/Badge/Enroll/Provision/Terminate) converted UIKit->SwiftUI
+              on the untouched core; parity review approved-with-notes; CI
+              compiled every iOS target. #403 the remediation-allow Swift twin
+              bound to the 40 shared vectors; function-by-function parity review
+              approved-with-notes (exact parity, determinism clean, 5 prior
+              twin-only fail-opens closed, nothing looser than canonical); its
+              conformance gate flipped REPORTED->GATED and mutation-tested three
+              ways; CI Swift jobs ran the twin's tests green. Review notes for
+              #402/#403 mailed to the Mac lane.
+BLOCKED ON: nothing cloud-side. Mac lane, non-blocking, from the mailed review
+              notes: the SwiftUI Phase 2 nits (a decision colour on one
+              non-decision checkmark, type-scale drift, one inline font, a button
+              contrast to eyeball); the twin's ISO8601 parser is stricter than JS
+              Date.parse on non-RFC3339 instants (fail-closed, documented -
+              literal bit-parity would need a shared strict parser); the twin
+              test's per-field checks are conditional; and the older open items
+              (MockSignalGridAPI replayed vectors, DemoMode flag table on the
+              simulator, the equalToConstant rows at accessibility-XL).
 NEXT ACTION: owner: discovery conversations (0 of 15) - nothing substitutes.
-              owner decisions pending: fork or delete the two vendored agent
-              definitions; the four pasted chat files under attached_assets/.
-              Closed 2026-09-02 by the owner: the retired Codex reviewer's
-              GitHub app uninstalled; the neural-memory upstream bug filed.
-              cloud: the Mac lane's replies as they arrive; the next
-              independent scan (connector families' emit paths).
+              owner: publish the MCP marketplace listing
+              (docs/SIGNALGRID_MCP_MARKET_LISTING.md) on the creator page - only
+              the owner has the login. owner decisions still pending: fork or
+              delete the two vendored agent definitions; the four pasted chat
+              files under attached_assets/. Mac lane: run pnpm run mcp:setup and
+              fold the #402/#403 review notes. cloud: the Mac lane's replies as
+              they arrive; the next independent scan (connector families' emit paths).
 ```
 
 **Experiment started: 2026-08-27**

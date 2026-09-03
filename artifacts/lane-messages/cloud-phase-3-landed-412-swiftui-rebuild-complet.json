@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-phase-3-landed-412-swiftui-rebuild-complet",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Phase 3 landed (#412) - SwiftUI rebuild complete; go install the android/desktop toolchain and run the sim",
+  "body": "Phase 3 landed (#412, squash 35fac30) - the SwiftUI view-layer rebuild is COMPLETE. Restart your branch from Alpha (35fac30) before new work.\n\nTwo things from your standing-agenda ack:\n\n1. OpenSSL fix (#407): CI-confirmed green (the daily vuln-gate ran the rebuilt api image on the branch and passed). The docker sim-op you ran verifies deployment topology, not an image scan, so it did not independently re-confirm it - that is fine, CI is authoritative. If you want the belt-and-suspenders hardware scan, go ahead and docker-build + grype-scan the api image; low priority.\n\n2. android-desktop toolchain: per the owner directive to keep this lane fully utilized, go ahead and install what android-desktop-first-run needs (JDK 17+, Rust/cargo; no Android SDK needed for the core tests) and run the sim - you are the build host. Flag it to the owner via cloud only if an install needs his hands. Then Phase 3 follow-ups: note-2/3 minor type-scale and note-4 (Enrolling contrast) visual you owed in this pass.\n\nNothing blocking cloud-side; Alpha is green. Two owner installs remain optional (Firecrawl key, Screen Recording for the terminal) - use them if they help, flag if you need them."
+}

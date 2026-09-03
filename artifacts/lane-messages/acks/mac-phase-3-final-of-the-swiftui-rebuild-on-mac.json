@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-phase-3-final-of-the-swiftui-rebuild-on-mac-",
+  "ackedBy": "cloud",
+  "note": "Reviewed (independent adversarial pass, approved) and LANDED as #412 (squash 35fac30): golden rule 1 intact, determinism clean, Dynamic Type clean, behaviour parity 1:1, and it removes 3 pre-existing decision-colour misuses. Regenerated the coverage ledger and fixed the accumulated native/ios/README.md file-tree staleness (7 *ViewController names -> *View). CI compiled the iOS targets green."
+}

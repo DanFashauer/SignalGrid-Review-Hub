@@ -148,11 +148,13 @@ trusting this table's age.
 ## Simulator vocabulary — a DIFFERENT engine's codes, catalogued so nobody reads them as the core's
 
 The tables above are the **launch decision core** (`lib/signalgrid-core`). The
-**fixture simulator** — `lib/signalgrid-simulator/src/decisionEngine.ts` — is a second, separate engine.
-It emits its own 18 reason codes. 2 of them the core also emits
-(`CUSTODY_EXCEPTION`, `POSTURE_STALE`); the other 16
-appear nowhere above. The list is parsed from that file's emit sites by this
-generator, not maintained by hand. Several of them name **deferred** families
+**fixture simulator** surface — the engine `lib/signalgrid-simulator/src/decisionEngine.ts` plus the
+remediation-allow wrapper `lib/signalgrid-simulator/src/remediation-allow.ts` — is a second, separate
+decision path. Together they emit 25 reason codes. 2 of them the core also emits
+(`CUSTODY_EXCEPTION`, `POSTURE_STALE`); the other 23
+appear nowhere above. The lists are parsed from those files by this generator —
+the engine's emit sites and the wrapper's declared `REMEDIATION_ALLOW_REASONS` —
+not maintained by hand. Several of them name **deferred** families
 (custody, dock, location) — the simulator is a fixture harness, so it models
 families the launch profile does not serve.
 
@@ -165,12 +167,16 @@ API vocabulary, and a host app must not build against them as if they were.
 They are also not renameable at will: `native/ios/EnterpriseShell/Services/DecisionEngine.swift`
 is a byte-faithful port of the simulator engine (CLAUDE.md golden rule 1), so the
 iOS app's reason codes ARE these spellings. Aligning them with the core's would
-break the parity the port exists to prove.
+break the parity the port exists to prove. The wrapper's eight codes have the same
+constraint by a different mechanism: `native/ios/EnterpriseShell/Services/RemediationAllow.swift`
+is held to the wrapper by the shared vector table and `scripts/check-remediation-allow-conformance.mjs`,
+so the spellings are a contract there too.
 
-The 16 the core never emits — none of them a launch
+The 23 the core never emits — none of them a launch
 surface, and the custody/dock/location ones name **deferred** families:
 - `ALLOW_REMOVED_DUE_TO_CUSTODY_FAILURE` — simulator/iOS only
 - `ALLOW_REMOVED_DUE_TO_HIGHER_RISK` — simulator/iOS only
+- `ALLOW_WITHHELD_CONCURRENT_FAILURE` — simulator/iOS only
 - `APPLE_DECLARED_STATE_TRUSTED` — simulator/iOS only
 - `BATTERY_WORKFLOW_RISK` — simulator/iOS only
 - `DEVICE_NON_COMPLIANT` — simulator/iOS only
@@ -181,6 +187,12 @@ surface, and the custody/dock/location ones name **deferred** families:
 - `INTEGRATION_ROUTE_DEGRADED` — simulator/iOS only
 - `LOCATION_EXCEPTION` — simulator/iOS only
 - `OPERATIONAL_HEALTH_DEGRADED` — simulator/iOS only
+- `REMEDIATION_ABSENT_WHERE_REQUIRED` — simulator/iOS only
+- `REMEDIATION_EVIDENCE_STALE` — simulator/iOS only
+- `REMEDIATION_NOT_REQUIRED` — simulator/iOS only
+- `REMEDIATION_RECORDED_NOT_VERIFIED` — simulator/iOS only
+- `REMEDIATION_STATE_ILLEGIBLE` — simulator/iOS only
+- `REMEDIATION_VERIFICATION_FAILED` — simulator/iOS only
 - `REMEDIATION_VERIFIED` — simulator/iOS only
 - `SECURITY_RISK_ESCALATION` — simulator/iOS only
 - `STATE_FRESHNESS_FAILURE` — simulator/iOS only

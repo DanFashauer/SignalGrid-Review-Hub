@@ -350,6 +350,10 @@ jobs:
         run: node scripts/check-accuracy-doctrine.mjs
       - name: Agent roster (DR-016 — tier, charter, disjoint write boundary)
         run: node scripts/check-agent-roster.mjs
+      - name: Skill-plane conformance self-test (the gate must be able to fail)
+        run: node scripts/check-skill-plane-conformance.mjs --self-test
+      - name: Skill-plane conformance (every skill/agent carries the name+description the harness selects it by)
+        run: node scripts/check-skill-plane-conformance.mjs
       - name: Positioning trace (every ratified claim resolves by id in the launch profile)
         run: node scripts/check-positioning-trace.mjs
       - name: Module init order (a const read before it is initialised)

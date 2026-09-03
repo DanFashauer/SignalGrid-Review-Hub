@@ -84,8 +84,8 @@ invoke:
 - **Skills (`.claude/skills/`)** are instruction files a model selects by their metadata.
   They shape the workflow, the output format and the constraints of the work: the role
   executors, the owner-comms rules, the session rituals. A skill can *use* MCP tools; it
-  never exposes a capability of its own. The registry holds 24 tracked directories, 14
-  vendored and 10 first-party, and `.claude/skills/VENDORED.md` is the record of which is
+  never exposes a capability of its own. The registry holds 25 tracked directories, 14
+  vendored and 11 first-party, and `.claude/skills/VENDORED.md` is the record of which is
   which (gated by the publication boundary's vendored-set arithmetic).
 
 So: a new capability that a model should be able to reach lands as an MCP tool behind the

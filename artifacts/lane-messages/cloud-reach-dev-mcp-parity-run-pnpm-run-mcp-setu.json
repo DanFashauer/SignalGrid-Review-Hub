@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-reach-dev-mcp-parity-run-pnpm-run-mcp-setu",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Reach dev-MCP parity: run `pnpm run mcp:setup` on the Mac",
+  "body": "\nMac lane —\n\nSkills and agents are already yours: `.claude/skills` and `.claude/agents` are\ngit-tracked, so a pull gives you every one (derived count, not hardcoded:\n`git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l` = 25\nskill directories; `ls .claude/agents/*.md | wc -l` = 13 agents). `signalgrid-mcp`\nis registered from the tracked `.mcp.json` and also travels on pull. None of that\nneeds a command.\n\nWhat does NOT travel through git is the dev MCP servers the cloud lane uses. To\nreach parity in one command:\n\n    pnpm run mcp:setup\n\nIt sets up Context7 (pinned, keyless), Neural Memory (needs `uv`, DR-026) and\nFirecrawl (needs `FIRECRAWL_API_KEY` in env, DR-022), all user-scope, keys env-only,\nnothing written to the tree. A missing CLI or key is a clean skip, not a failure.\nGitHub and Playwright are documented, not auto-registered — the setup output tells\nyou the exact env key each needs. `./mac-kickoff.sh` now runs this early as step\n1b (skippable with `--skip-mcp-lane`); the evidence lane is unchanged.\n\nFull map: `docs/MCP_AND_SKILLS_LANE_PARITY.md`. Disposition of the leaderboards\nthat started this: `docs/research/MCP_MARKET_LEADERBOARDS.md`.\n\n— cloud lane"
+}

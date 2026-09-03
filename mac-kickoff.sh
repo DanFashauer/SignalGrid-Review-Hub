@@ -29,6 +29,10 @@
 # the `claude mcp` re-registration in step 4, which is announced and skippable.
 #
 # Flags:
+#   --skip-mcp-lane       skip `pnpm run mcp:setup` (step 1b becomes a no-op). The
+#                         dev MCP servers (Context7, Neural Memory, Firecrawl) are
+#                         set up by default so a cold Mac reaches lane parity in one
+#                         command; this leaves them alone.
 #   --skip-mcp-register   leave `claude mcp` alone (step 4 becomes a no-op)
 #   --with-docker         also run the Docker lane (step 6) — the durable half
 #                         against a real Postgres, in the deployed topology
@@ -43,16 +47,18 @@ MCP_REMOTE="https://github.com/DanFashauer/signalgrid-mcp.git"
 MCP_SERVER_NAME="signalgrid-macos"
 
 SKIP_REGISTER=0
+SKIP_MCP_LANE=0
 NO_PUSH=0
 ASSUME_YES=0
 WITH_DOCKER=0
 for arg in "$@"; do
   case "$arg" in
+    --skip-mcp-lane)     SKIP_MCP_LANE=1 ;;
     --skip-mcp-register) SKIP_REGISTER=1 ;;
     --with-docker)       WITH_DOCKER=1 ;;
     --no-push)           NO_PUSH=1 ;;
     --yes|-y)            ASSUME_YES=1 ;;
-    -h|--help)           sed -n '2,42p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)           sed -n '2,46p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown flag: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -93,6 +99,23 @@ else
     || warn "could not fast-forward $BRANCH (diverged or offline) — continuing with what is here"
 fi
 ok "at $(git -C "$REPO_ROOT" rev-parse --short HEAD) on $BRANCH"
+
+# ---------------------------------------------------------------------------
+# 1b. Dev MCP lane parity. Sets up the per-machine dev MCP servers (Context7,
+#     Neural Memory, Firecrawl) so a cold Mac reaches parity with the cloud lane
+#     in one command. NON-FATAL and skippable on purpose: the evidence lane below
+#     does not depend on these servers, and mcp:setup already skips cleanly on a
+#     missing CLI or key. See docs/MCP_AND_SKILLS_LANE_PARITY.md.
+# ---------------------------------------------------------------------------
+step "1b/7  dev MCP lane (pnpm run mcp:setup)"
+if [ "$SKIP_MCP_LANE" = "1" ]; then
+  ok "skipped (--skip-mcp-lane)"
+elif ( cd "$REPO_ROOT" && pnpm run mcp:setup ); then
+  ok "dev MCP servers set up (any skips inside are clean — see the summary above)"
+else
+  warn "mcp:setup reported a failure — continuing; the evidence lane does not depend on it."
+  warn "re-run 'pnpm run mcp:setup' after fixing the cause, or pass --skip-mcp-lane."
+fi
 
 # ---------------------------------------------------------------------------
 # 2. The signalgrid-mcp checkout, at a path verify-all can actually find.

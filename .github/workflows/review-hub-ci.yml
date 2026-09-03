@@ -613,7 +613,9 @@ jobs:
       # hardware can refresh that, so staleness never blocks a commit.
       - name: Live-sync manifest drift (Mac MCP + iOS instructions current)
         run: node scripts/check-live-sync.mjs
-      - name: MCP surface drift gate (server = docs = ready message = manifest)
+      - name: MCP surface self-test (coverage + resource parity can fail)
+        run: node scripts/check-mcp-surface.mjs --self-test
+      - name: MCP surface drift gate (server = docs = ready message = manifest = resources = exercised)
         run: node scripts/check-mcp-surface.mjs
 
       - name: Figure-guard self-test (the baseline-age report must be able to fail)
@@ -649,6 +651,13 @@ jobs:
 
       - name: API integration test
         run: pnpm run test:api
+
+      # The MCP server's own node:test suite — wire-visible tool/resource contract
+      # and read-only annotations (incl. the deliberately not-read-only
+      # bruno_collection_run). It was executed by no lane until 2026-09-02;
+      # check-test-execution.mjs now reads this line to see it reached.
+      - name: MCP server unit tests (tool/resource contract + annotations)
+        run: pnpm --filter @workspace/mcp-server run test
 
       - name: OIDC middleware test (the production auth branch actually executes)
         run: pnpm run test:oidc

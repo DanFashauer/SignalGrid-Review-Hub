@@ -95,6 +95,22 @@ function ledgerSummary(): unknown {
   const read = readText("docs/INTAKE_LEDGER.md");
   if (!read.ok) return { unavailable: read.error };
   const rows = read.value.split("\n").filter((l) => /^\|\s*\d+\s*\|/.test(l));
+  // A file that read NON-EMPTY but yielded no numbered table rows is a total
+  // parse miss, not a ledger of nothing — the row pattern (or the table shape)
+  // moved out from under this parser. Reporting rowsRecorded:0 / highestRow:0
+  // here would be the absent-collection law inverted: a complete tally of zero
+  // rendered over a document that plainly has content. Say the read succeeded
+  // but the parse found nothing, and name the file.
+  if (rows.length === 0 && read.value.trim().length > 0) {
+    return {
+      parseFailed: true,
+      unavailable:
+        "docs/INTAKE_LEDGER.md read non-empty but no numbered table rows matched — " +
+        "the ledger's row shape moved out from under this parser; not reported as an empty tally",
+      file: "docs/INTAKE_LEDGER.md",
+      bytesRead: read.value.length,
+    };
+  }
   const verdictCounts: Record<string, number> = {};
   let highest = 0;
   let unparsed = 0;
@@ -271,8 +287,24 @@ server.registerTool(
   },
   async ({ spaceId, vendorNamespace, vendorKey, vendorId }) => {
     const g = FIXTURE_HOSPITAL_GRAPH;
-    if (vendorNamespace && vendorKey && vendorId) {
-      const hit = g.resolveVendorRef(vendorNamespace, vendorKey, vendorId);
+    // A vendor resolution needs ALL THREE of namespace/key/id. A PARTIAL vendor
+    // query used to fall through to the full-graph dump, so asking to resolve a
+    // reader id but forgetting the key returned the entire space model as if the
+    // question had been "list everything" — a silent, over-broad answer to a
+    // narrower question. If ANY of the three is supplied, require all three;
+    // otherwise refuse and name what is missing rather than guess the intent.
+    const vendorParts = { vendorNamespace, vendorKey, vendorId };
+    const vendorGiven = Object.entries(vendorParts).filter(([, v]) => v !== undefined && v !== "");
+    if (vendorGiven.length > 0) {
+      const missing = Object.entries(vendorParts)
+        .filter(([, v]) => v === undefined || v === "")
+        .map(([k]) => k);
+      if (missing.length > 0) {
+        return asError(
+          `A vendor resolution requires all of vendorNamespace, vendorKey, and vendorId. Missing: ${missing.join(", ")}.`,
+        );
+      }
+      const hit = g.resolveVendorRef(vendorNamespace as string, vendorKey as string, vendorId as string);
       return asText({ resolved: hit, note: hit === null ? "unmapped vendor id — null, never a guess" : undefined });
     }
     if (spaceId) {
@@ -393,14 +425,28 @@ server.registerTool(
       return { isError: true, content: [{ type: "text" as const, text: manifest.error }] };
     }
     const body = manifest.value.body ?? {};
+    // Treat an ABSENT manifest key as unavailable-with-the-key-named, never as an
+    // empty collection. A renamed key read through `?? []` rendered "0 kinds" —
+    // the absent-collection law inverted, a confident zero over a field the
+    // generator no longer writes. filedCatalogs() already reports an unreadable
+    // directory this way; the manifest body earns the same treatment.
+    const absent = (key: string) => ({
+      unavailable:
+        `live-sync manifest carries no body.${key} — the manifest generator's key moved ` +
+        "(run: node scripts/generate-sync-manifest.mjs); not reported as an empty result",
+    });
     return asText({
       manifestVersion: manifest.value.manifestVersion,
       manifestFingerprint: manifest.value.fingerprint,
-      signalKinds: { count: (body.signalKinds ?? []).length, kinds: body.signalKinds ?? [] },
-      signalCategories: { count: (body.signalCategories ?? []).length, categories: body.signalCategories ?? [] },
-      mcpTools: body.mcpTools ?? [],
-      proofCounts: body.proofCounts ?? {},
-      sharedPostureContract: body.contract ?? {},
+      signalKinds:
+        body.signalKinds === undefined ? absent("signalKinds") : { count: body.signalKinds.length, kinds: body.signalKinds },
+      signalCategories:
+        body.signalCategories === undefined
+          ? absent("signalCategories")
+          : { count: body.signalCategories.length, categories: body.signalCategories },
+      mcpTools: body.mcpTools === undefined ? absent("mcpTools") : body.mcpTools,
+      proofCounts: body.proofCounts === undefined ? absent("proofCounts") : body.proofCounts,
+      sharedPostureContract: body.contract === undefined ? absent("contract") : body.contract,
       filedCatalogs: filedCatalogs(),
       intakeLedger: ledgerSummary(),
       boundary:
@@ -427,11 +473,23 @@ const asError = (message: string) => ({
   content: [{ type: "text" as const, text: message }],
 });
 
-/** Shared read-only annotations for the agent-plane tools. `openWorldHint:
- *  false` is a claim the tools can actually keep: every read below is the
- *  in-memory demo core or a committed repository file — nothing leaves the
- *  process. */
+/** Shared read-only annotations for the agent-plane READ tools. `readOnlyHint:
+ *  true` and `openWorldHint: false` are claims these tools can actually keep:
+ *  every read below is the in-memory demo core or a committed repository file,
+ *  and nothing is written, spawned, or sent anywhere — nothing leaves the
+ *  process. The ONE tool that does not qualify — `bruno_collection_run`, which
+ *  builds the api-server, boots a localhost server, and writes a results file —
+ *  carries HARNESS_RUN instead, so it is never announced as read-only. */
 const READ_ONLY = { readOnlyHint: true, openWorldHint: false } as const;
+
+/** Annotations for `bruno_collection_run` alone. It is NOT read-only: through
+ *  scripts/run-bruno-collection.mjs it runs `pnpm --filter @workspace/api-server
+ *  run build` (writing dist/), spawns a fixture-mode api-server on a localhost
+ *  port, and writes a gitignored results file under artifacts/bruno/ — so
+ *  `readOnlyHint` is false and honest. `openWorldHint` stays false: its only
+ *  traffic is localhost to a process the harness itself started, and it reaches
+ *  no external peer. */
+const HARNESS_RUN = { readOnlyHint: false, openWorldHint: false } as const;
 
 const INSPECTION_ONLY = "Evidence collection / inspection only — grants nothing.";
 
@@ -526,6 +584,20 @@ server.registerTool(
         return asError(doc.error);
       }
       const catalog = parseReasonCatalog(doc.value);
+      if (catalog.length === 0) {
+        // docs/REASON_CODES.md is byte-pinned against a fresh generation by
+        // scripts/check-reason-codes.mjs, so a doc that read non-empty yet parsed
+        // to ZERO entries means this parser's section headings or table shape
+        // moved out from under the document — not that the engine emits no codes.
+        // Mapping every requested code to catalog:null with a reassuring "not
+        // engine-emitted" note would manufacture a confident answer over a broken
+        // parse. Refuse instead.
+        return asError(
+          `Parsed zero entries from ${REASON_CODES_DOC} (it read non-empty) — the catalog's ` +
+            "section headings or table shape moved out from under this parser. Refusing to report " +
+            "every code as 'not engine-emitted' over a broken parse.",
+        );
+      }
       let decision: Record<string, unknown> | undefined;
       let codes = reasonCodes ?? [];
       if (decisionId) {
@@ -582,13 +654,22 @@ server.registerTool(
       const decision = core.getDecision(token, decisionId);
       const snapshot = core.getSnapshot(token, decision.evidenceSnapshotId);
       const digestVerified = core.verifyEvidence(token, snapshot.id);
+      // Guard the age subtraction. An unparseable capturedAt makes Date.parse
+      // return NaN, the subtraction NaN, Math.round(NaN) NaN, and JSON.stringify
+      // serializes NaN to null — a computed-looking absence. Report the
+      // uncomputable case as exactly that. (DEMO_CLOCK_ISO is a fixed, parseable
+      // constant, so only capturedAt can poison this.)
+      const ageMs = Date.parse(DEMO_CLOCK_ISO) - Date.parse(snapshot.capturedAt);
+      const ageSecondsAtReferenceClock = Number.isFinite(ageMs)
+        ? Math.round(ageMs / 1000)
+        : "uncomputable (capturedAt unparseable)";
       return asText({
         decisionId: decision.id,
         snapshotId: snapshot.id,
         capturedAt: snapshot.capturedAt,
         decisionCreatedAt: decision.createdAt,
         referenceClock: DEMO_CLOCK_ISO,
-        ageSecondsAtReferenceClock: Math.round((Date.parse(DEMO_CLOCK_ISO) - Date.parse(snapshot.capturedAt)) / 1000),
+        ageSecondsAtReferenceClock,
         digestVerified,
         signalsUsed: snapshot.signalsUsed.length,
         sourceReferences: snapshot.sourceReferences,
@@ -821,14 +902,17 @@ server.registerTool(
     title: "Run the Bruno collection against a fixture server",
     description:
       "Execute the committed API collection as ONE harnessed run: delegates to " +
-      "scripts/run-bruno-collection.mjs, which boots its own fixture-mode api-server " +
-      "(in-memory demo core, intentionally-public sgk_demo_* tokens), runs every request " +
-      "under both product profiles including the negative tests, tears the server down, " +
-      "and fails on any transport error, any 5xx, or any failed assertion. Nothing outside " +
-      "localhost is touched and no durable state changes — the run IS the evidence. " +
-      "Takes on the order of a minute. " + INSPECTION_ONLY,
+      "scripts/run-bruno-collection.mjs, which BUILDS the api-server (writing dist/), boots " +
+      "its own fixture-mode api-server on a localhost port (in-memory demo core, " +
+      "intentionally-public sgk_demo_* tokens), runs every request under both product " +
+      "profiles including the negative tests, tears the server down, and fails on any " +
+      "transport error, any 5xx, or any failed assertion. This is the ONE tool here that is " +
+      "NOT read-only: it writes dist/ and a gitignored results file under artifacts/bruno/, " +
+      "and spawns a subprocess (readOnlyHint is false). Its only traffic is localhost — no " +
+      "external peer, and no product, tenant, or vendor state changes; the run IS the " +
+      "evidence and it grants nothing. Takes on the order of a minute.",
     inputSchema: z.object({}).strict(),
-    annotations: READ_ONLY,
+    annotations: HARNESS_RUN,
   },
   async () => {
     try {

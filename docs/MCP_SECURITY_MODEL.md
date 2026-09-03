@@ -37,9 +37,17 @@ against that file and `scripts/mac/mcp-up.sh`:
   scenarios, read the signal catalog, classify signals, inspect the fixture
   facility graph, report fabric status, and run evaluations. An evaluation
   *computes* a verdict in the in-memory core; nothing any tool does survives
-  process exit, and no tool writes files, calls the network, or changes
-  durable state. Adding a mutation tool requires a decision record and an
-  approval-gate design first (`docs/MCP_ARCHITECTURE.md`, "What this
+  process exit, and no tool changes durable product, tenant, or vendor state,
+  reaches an external network peer, or writes any committed file. **One tool is
+  not read-only, and says so:** `bruno_collection_run` executes the committed API
+  collection by running `pnpm --filter @workspace/api-server run build` (writing
+  `dist/`), booting a fixture-mode api-server on a localhost port, and writing a
+  gitignored results file under `artifacts/bruno/`. It touches the filesystem and
+  a localhost socket — never an external peer, never any committed or durable
+  product state — and it carries `readOnlyHint: false` (`openWorldHint: false`)
+  in its annotations, so no client is told it is read-only. Adding a *mutation*
+  tool — one that changes durable product state — requires a decision record and
+  an approval-gate design first (`docs/MCP_ARCHITECTURE.md`, "What this
   architecture forbids"). `scripts/check-mcp-surface.mjs` keeps the tool
   surface from drifting silently, so a new tool cannot appear without the
   docs and manifest moving with it — which is where a reviewer would catch a

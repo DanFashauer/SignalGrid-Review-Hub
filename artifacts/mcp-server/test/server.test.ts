@@ -29,8 +29,10 @@ async function call(name: string, args: Record<string, unknown> = {}) {
   return { res, text, json: () => JSON.parse(text) as Record<string, unknown> };
 }
 
-/** The agent-plane tools this change adds. Every one must be registered,
- *  carry the read-only annotations, and say so in its description. */
+/** The agent-plane tools this change adds. Every one must be registered. All but
+ *  bruno_collection_run carry the read-only annotations and say so; that one is
+ *  the deliberate exception — it builds, spawns a localhost server, and writes a
+ *  results file — and is asserted NOT read-only separately below. */
 const NEW_TOOLS = [
   "explain_decision",
   "evidence_freshness",
@@ -41,6 +43,10 @@ const NEW_TOOLS = [
   "bruno_request_get",
   "bruno_collection_run",
 ];
+
+/** The subset of NEW_TOOLS that is genuinely read-only. bruno_collection_run is
+ *  excluded on purpose (see the dedicated test below). */
+const READ_ONLY_NEW_TOOLS = NEW_TOOLS.filter((t) => t !== "bruno_collection_run");
 
 const PREEXISTING_TOOLS = [
   "list_room_scenarios",
@@ -61,15 +67,28 @@ test("every tool is registered, and no pre-existing tool was dropped", async () 
   }
 });
 
-test("every new tool is read-only per its wire-visible metadata", async () => {
+test("every read-only new tool is read-only per its wire-visible metadata", async () => {
   const { tools } = await client.listTools();
-  for (const name of NEW_TOOLS) {
+  for (const name of READ_ONLY_NEW_TOOLS) {
     const tool = tools.find((t) => t.name === name);
     assert.ok(tool, `tool "${name}" missing`);
     assert.equal(tool.annotations?.readOnlyHint, true, `"${name}" must carry readOnlyHint: true`);
     assert.equal(tool.annotations?.openWorldHint, false, `"${name}" must carry openWorldHint: false`);
     assert.match(tool.description ?? "", /grants nothing/, `"${name}" description must carry the inspection-only label`);
   }
+});
+
+test("bruno_collection_run is declared NOT read-only, and its description says why", async () => {
+  const { tools } = await client.listTools();
+  const tool = tools.find((t) => t.name === "bruno_collection_run");
+  assert.ok(tool, "bruno_collection_run missing");
+  // It builds the api-server (writes dist/), spawns a localhost server, and writes
+  // a results file — so announcing readOnlyHint:true would be a lie to any client.
+  assert.equal(tool.annotations?.readOnlyHint, false, "bruno_collection_run must carry readOnlyHint: false");
+  // openWorldHint stays false: its only traffic is localhost to a process it started.
+  assert.equal(tool.annotations?.openWorldHint, false, "bruno_collection_run must carry openWorldHint: false");
+  assert.match(tool.description ?? "", /NOT read-only/i, "description must disclose it is not read-only");
+  assert.match(tool.description ?? "", /grants nothing/, "description must still carry the no-grant label");
 });
 
 test("all four resources are registered at their signalgrid:// URIs", async () => {

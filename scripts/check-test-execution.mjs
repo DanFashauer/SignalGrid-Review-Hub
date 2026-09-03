@@ -65,18 +65,14 @@ const TEST_FILE = /\.(test|spec)\.(ts|mts|mjs|js|tsx)$/;
 const SKIP_DIR = /(^|\/)(node_modules|dist|build|\.git|coverage|\.claude\/worktrees)(\/|$)/;
 
 // An unexecuted test file may exist ONLY with a reason and a named disposition.
-// Empty is the goal state.
-const DECLARED_UNEXECUTED = new Map([
-  [
-    "artifacts/mcp-server/test/server.test.ts",
-    "Org sweep 2026-08-23: the package declares `test: tsx --test test/server.test.ts`, " +
-      "but no root script, preflight gate, workflow or validate-sim-macos.sh line invokes " +
-      "it, so the declaration is unreachable from anything that runs. `proof:mcp-server` " +
-      "covers this surface from a DIFFERENT file (scripts/src/mcp-server-proof.ts) and IS " +
-      "gated. Disposition: fold the unique assertions into the proof, then delete the " +
-      "orphan — tracked in docs/COMPANY_BUILD_PLAN.md row 43.",
-  ],
-]);
+// Empty is the goal state — and it is empty now: the one prior entry,
+// artifacts/mcp-server/test/server.test.ts, was WIRED UP (preflight +
+// review-hub-ci.yml, `pnpm --filter @workspace/mcp-server run test`) rather than
+// folded-and-deleted, so it is reached by a runner and no longer needs a
+// declaration. The disposition it named ("fold the unique assertions into the
+// proof, then delete the orphan") is superseded: the test carries wire-visible
+// annotation coverage the proofs do not, so it earns its keep as an executed test.
+const DECLARED_UNEXECUTED = new Map([]);
 
 // ── build the corpus of everything the repository actually runs ──────────────
 function readIfExists(p) {

@@ -2,11 +2,11 @@
 //
 // `artifacts/mcp-server` is the plugin path — the decision core exposed as Model
 // Context Protocol tools over stdio, so an assistant can query the grid directly.
-// `artifacts/sync/live-sync-manifest.json` DECLARES its five tools to external
+// `artifacts/sync/live-sync-manifest.json` DECLARES its tools to external
 // builders, and `check-live-sync` hard-fails if that list drifts from the source.
 //
 // But the manifest is derived by scraping `server.registerTool("...")` out of the
-// file. That proves five string literals exist. It does not prove the server
+// file. That proves those string literals exist. It does not prove the server
 // starts, speaks the protocol, or that any handler returns something rather than
 // throwing — and nothing else did either: the server was typechecked and bundled,
 // and never once run. A published integration whose only evidence is that its
@@ -92,7 +92,17 @@ async function main(): Promise<void> {
   );
 
   // ── 2. Each tool actually answers ──────────────────────────────────────────
-  const scenarios = payload(await client.callTool({ name: "list_room_scenarios", arguments: {} }));
+  // The set of tools this proof actually EXERCISES (calls and reads an answer
+  // from). It is a subset of the served surface on purpose — bruno_collection_run
+  // and the read-only agent-plane tools are covered by other proofs and by
+  // artifacts/mcp-server/test/server.test.ts — so the closing sentence names the
+  // measured number rather than implying it answered "each one" of the whole set.
+  const exercised = new Set<string>();
+  const answer = async (name: string, args: Record<string, unknown> = {}) => {
+    exercised.add(name);
+    return payload(await client.callTool({ name, arguments: args }));
+  };
+  const scenarios = await answer("list_room_scenarios", {});
   const scenarioList = (scenarios.scenarios ?? []) as { id?: string }[];
   check("list_room_scenarios returns scenarios", Array.isArray(scenarioList) && scenarioList.length > 0,
     `count=${scenarioList.length}`);
@@ -100,33 +110,29 @@ async function main(): Promise<void> {
   const firstId = scenarioList[0]?.id ?? "";
   check("…and each carries an id the other tools can take", firstId.length > 0, firstId);
 
-  const entry = payload(await client.callTool({ name: "evaluate_room_entry", arguments: { scenarioId: firstId } }));
+  const entry = await answer("evaluate_room_entry", { scenarioId: firstId });
   check(
     "evaluate_room_entry runs the real decision core and returns a verdict",
     JSON.stringify(entry).length > 2 && /allow|step_up|restrict|deny/.test(JSON.stringify(entry)),
     JSON.stringify(entry).slice(0, 90),
   );
 
-  const catalog = payload(await client.callTool({ name: "signal_catalog", arguments: {} }));
+  const catalog = await answer("signal_catalog", {});
   check("signal_catalog returns the signal vocabulary", JSON.stringify(catalog).length > 2);
 
   // scan_signals REQUIRES a signals array — calling it with `{}` is rejected, which
   // is the schema doing its job. (My first version passed `{}` and read the
   // rejection as a broken tool; the server was right and the test was wrong.)
-  const scan = payload(
-    await client.callTool({
-      name: "scan_signals",
-      arguments: { signals: [{ category: "device_compliance" }, { category: "totally_novel_category" }] },
-    }),
-  );
+  const scan = await answer("scan_signals", {
+    signals: [{ category: "device_compliance" }, { category: "totally_novel_category" }],
+  });
   check("scan_signals classifies a batch of incoming signals", JSON.stringify(scan).length > 2, JSON.stringify(scan).slice(0, 80));
 
-  const decision = payload(
-    await client.callTool({
-      name: "evaluate_decision",
-      arguments: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
-    }),
-  );
+  const decision = await answer("evaluate_decision", {
+    identityRef: "nurse.compliant",
+    deviceRef: "ipad-ward-01",
+    workflowKey: "clinical-session",
+  });
   check(
     "evaluate_decision returns an outcome with reason codes",
     typeof decision.outcome === "string" && Array.isArray(decision.reasonCodes),
@@ -153,7 +159,12 @@ async function main(): Promise<void> {
   try {
     const bogus = await client.callTool({ name: "evaluate_room_entry", arguments: { scenarioId: "no-such-scenario" } });
     refusalText = JSON.stringify(payload(bogus));
-    refused = (bogus as { isError?: boolean }).isError === true || !/"outcome"\s*:\s*"allow"/.test(refusalText);
+    // Assert the ERROR flag directly. The earlier disjunction accepted "no
+    // 'outcome':'allow' in the text" as a pass — and payload() returns {} for a
+    // non-JSON body, so that disjunct was satisfiable by garbage (an empty
+    // object trivially lacks an allow verdict). The handler catches an unknown
+    // scenario and returns isError:true, so that is the exact, non-vacuous claim.
+    refused = (bogus as { isError?: boolean }).isError === true;
   } catch (e) {
     refused = true;
     refusalText = e instanceof Error ? e.message : String(e);
@@ -169,7 +180,9 @@ async function main(): Promise<void> {
     for (const f of failures) console.error(`  - ${f}`);
     process.exit(1);
   }
-  console.log("The published MCP server boots, serves exactly the declared tools, and answers each one.");
+  console.log(
+    `The published MCP server boots, serves exactly the declared tools, and answers each of the ${exercised.size} it exercises here.`,
+  );
 }
 
 main().catch((err) => {

@@ -147,9 +147,15 @@ list):
 - The deterministic core and its invariant/proof gates.
 - **The Bruno execute-bridge** (`bruno_collection_run`): an agent can run the
   committed collection as ONE harnessed run — `scripts/run-bruno-collection.mjs`
-  boots its own fixture-mode api-server, executes every request under both
-  product profiles (negative tests included), and tears it down. Localhost
-  only; nothing durable changes; the harness's verdict is the tool's answer.
+  runs `pnpm --filter @workspace/api-server run build` (writing `dist/`), boots
+  its own fixture-mode api-server on a localhost port, executes every request
+  under both product profiles (negative tests included), tears it down, and
+  writes a gitignored results file under `artifacts/bruno/`. It is the one tool
+  here that is **not read-only** — it builds, spawns a subprocess, and writes
+  files, and carries `readOnlyHint: false` to say so (see
+  `docs/MCP_SECURITY_MODEL.md`). Its traffic is localhost only, it reaches no
+  external peer, and no product, tenant, or vendor state and nothing committed
+  changes; the harness's verdict is the tool's answer.
 
 **Deferred — design intent only, not served, and no document may use present
 tense for these.** No gate scans for this specific drift yet — the ban is

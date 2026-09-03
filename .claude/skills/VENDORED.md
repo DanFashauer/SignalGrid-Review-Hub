@@ -2,15 +2,16 @@
 
 Third-party work, copied in unmodified. **Not ours.**
 
-> **TEN exceptions in this directory — read this before any re-vendor.** These are
+> **ELEVEN exceptions in this directory — read this before any re-vendor.** These are
 > FIRST-PARTY, written in this repository and NOT part of the upstream set. They live
 > here because the harness loads skills from this directory. Everything else below
 > describes the other 14. Counted, not remembered: `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`
-> lists 24 tracked directories = 14 upstream + the 10 in the table (tracked, because only
+> lists 25 tracked directories = 14 upstream + the 11 in the table (tracked, because only
 > tracked paths publish; section E of `scripts/check-publication-boundary.mjs` holds this
 > table, this count and the carve-outs to one another since 2026-09-02). This line said SEVEN until 2026-09-02,
-> three skills after it stopped being true — the same drift that took it from "one
-> exception" to seven, recorded below.
+> then TEN, then ELEVEN on 2026-09-03 when `research-ops/` was authored — the same drift
+> that took it from "one exception" to seven, recorded below and now caught by section E
+> the moment the count and the carve-outs disagree.
 >
 > **The seventh, `signalgrid-master/`, arrived 2026-08-25 under DR-018 and is a
 > MIRROR, not an original.** The owner's synced copy at
@@ -40,6 +41,7 @@ Third-party work, copied in unmodified. **Not ours.**
 > | `signalgrid-evidence-toolchain/` | 2026-08-26 | the evidence toolchain a role uses to produce provable output (#321) |
 > | `loop-start/` | 2026-08-31 | the session-start ritual — handoff enforcement pack, DR-021 |
 > | `loop-end/` | 2026-08-31 | the session-end ritual — handoff enforcement pack, DR-021 |
+> | `research-ops/` | 2026-09-03 | evidence-first market/competitive/discovery research discipline (MCP Market leaderboards intake) |
 >
 > **This note said "one exception" until 2026-08-24, and it was true when written on
 > 08-20.** The five `signalgrid-*` skills landed on 08-22, after it, and nothing

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-09-03-post-outage-mac-truth",
+  "requestedBy": "cloud lane",
+  "reason": "Two blockers cleared on Alpha today (mutation-sweep CI outage #406; a critical OpenSSL image vuln #407), both verified in CI. This request asks the Mac for the truth CI cannot produce: a freshly-emitted live-evidence artifact, an on-hardware build+scan of the api image that independently confirms the #407 OpenSSL fix, and the full macOS proof suite. Owner directive 2026-09-03: keep this lane fully utilized on the work only it can run.",
+  "runs": [
+    "evidence",
+    "docker",
+    "proofs-full"
+  ],
+  "notes": [
+    "evidence (macOS-only): the ONLY lane that can refresh artifacts/live-evidence/mac-run.json (verify:all --require-mcp --emit-evidence; refuses on CI, refuses unless both halves are green). The current artifact predates #406/#407 — this re-mints it against Alpha head 6e47cae.",
+    "docker (any): builds Dockerfile.api and grype-scans the image. #407 added `apk upgrade --no-cache libssl3 libcrypto3` to fix CVE-2026-63073 / CVE-2026-75803 (OpenSSL 3.5.7-r0 -> 3.5.8-r0). CI's daily vuln-gate already went green on this on the branch run; this is the independent on-hardware confirmation cloud cannot produce (no docker daemon). If Docker Desktop is not running the op REFUSES honestly (not fatal) - flag it in the result and to the owner.",
+    "proofs-full (macOS-only): the full proof suite natively, the darwin truth for the deterministic core.",
+    "Provenance is sampled BEFORE the runs, from git status --porcelain (untracked included). Run from a clean tree so evidence/docker output does not stamp the result dirty; native/ios/build and native/android build dirs are gitignored."
+  ]
+}

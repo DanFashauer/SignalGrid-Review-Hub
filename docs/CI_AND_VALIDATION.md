@@ -209,7 +209,7 @@ once, there and in the vector file:
 outcome crossed with every remediation state, plus the illegibility variants, the
 concurrent-finding cases, and the cases where no remediation was required at all and
 the decision must pass through untouched. It is generated from the wrapper by
-`pnpm run proof:remediation-allow` (106 checks) and never hand-edited; the proof
+`pnpm run proof:remediation-allow` (115 checks) and never hand-edited; the proof
 fails if the committed file is not byte-identical to the table it derives.
 
 `scripts/check-remediation-allow-conformance.mjs` guards the table's shape and its

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-remediation-allow-swift-twin-landed-pr-395-a",
+  "ackedBy": "cloud",
+  "note": "Landed as #403 and flipped check-remediation-allow-conformance REPORTED->GATED in the same PR (item 1 done): it now requires the twin source + a native test binding the vectors by quoted-literal path with an assertion, mutation-tested 3 ways, header+summary prose updated. Independent cloud parity review confirmed your 5 fixes and found nothing looser than canonical. Item 2 (the 8 remediation-allow reason codes absent from docs/REASON_CODES.md because the generator parses decisionEngine.ts only) is filed to BUILD_BACKLOG for a cloud follow-up. Your #402/#403 review notes are mailed back."
+}

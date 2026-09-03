@@ -122,6 +122,12 @@ const STEPS = [
   // citation that resolves to nothing reads as evidence and is not.
   { name: "Cited paths (a doc may not cite a file that does not exist)", cmd: ["node", "scripts/check-cited-paths.mjs"] },
   { name: "Cited-path self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-paths.mjs", "--self-test"] },
+  // The MCP-ecosystem source-independence map: every externally-sourced connector
+  // family must have a row in docs/research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md (an MCP
+  // server or an explicit gap marker), and the map may not name a family the tree
+  // does not have. Derived from the family directories, self-tested both directions.
+  { name: "MCP-ecosystem-map self-test (the gate can fail both directions)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs", "--self-test"] },
+  { name: "MCP-ecosystem map (every externally-sourced family has an ecosystem row or a stated gap)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs"] },
   { name: "Absence-check self-test (a word in a disclaimer is not the thing existing)", cmd: ["node", "scripts/agent/absence-check.mjs", "--self-test"] },
   { name: "Package reachability (a library nobody ships is a library nobody runs)", cmd: ["node", "scripts/check-package-reachability.mjs"] },
   { name: "Core normalization-version (the provenance stamp must track the code it names)", cmd: ["node", "scripts/generate-core-normalization-version.mjs", "--check"] },

@@ -951,7 +951,7 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
         case .provisioning:
             return ProvisioningView.hostingController()
         case .activeSession:
-            return ActiveSessionViewController()
+            return ActiveSessionView.hostingController()
         case .terminating:
             return TerminatingView.hostingController()
         }

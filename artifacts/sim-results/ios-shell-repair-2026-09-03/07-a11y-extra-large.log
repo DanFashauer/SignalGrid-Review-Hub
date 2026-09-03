@@ -1,0 +1,7 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "subsystem == "com.enterprise.shell" OR (process == "EnterpriseShell" AND (composedMessage CONTAINS[c] "fatal" OR composedMessage CONTAINS[c] "crash"))"
+Timestamp               Ty Process[PID:TID]
+2026-09-03 15:58:02.406 Df EnterpriseShell[82027:eb7992] [com.enterprise.shell:lockscreen] lock_screen_presented trigger=did_appear manual_login_available=false managed=false kiosk_active=false asam_probe=notAttempted local_session_allowed=false
+2026-09-03 15:58:02.517 Df EnterpriseShell[82027:eb7992] [com.enterprise.shell:lockscreen] lock_screen_presented trigger=did_become_active manual_login_available=false managed=false kiosk_active=false asam_probe=notAttempted local_session_allowed=false
+2026-09-03 15:58:02.560 Df EnterpriseShell[82027:eb7992] [com.enterprise.shell:lockscreen] lock_screen_presented trigger=asam_probe_changed manual_login_available=false managed=false kiosk_active=false asam_probe=unavailable local_session_allowed=false
+Child process terminated with signal 15: Terminated

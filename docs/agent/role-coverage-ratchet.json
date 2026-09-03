@@ -7,7 +7,7 @@
     "product-manager": 0,
     "web-engineer": 55,
     "sre": 5,
-    "mobile-native-engineer": 19,
+    "mobile-native-engineer": 20,
     "compliance-analyst": 1,
     "performance-engineer": 3,
     "release-engineer": 0,
@@ -38,6 +38,7 @@
     "agent-platform-engineer": 1
   },
   "retired": {
+    "mobile-native-engineer": 1,
     "web-engineer": 5,
     "release-engineer": 1
   }

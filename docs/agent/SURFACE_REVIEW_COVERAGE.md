@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **4 of 100 surfaces have been read. 6 are partially read. 90 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2160 of 2160 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2163 of 2163 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -36,7 +36,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/build-loop` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/connector-emulator` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/lab-collections` | tree | 42 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/lane-messages` | tree | 133 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/lane-messages` | tree | 135 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/live-captures` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/live-evidence` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/mcp-server` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -49,7 +49,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/signalgrid-review` | package | 44 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/signalgrid-web` | package | 32 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/sim-requests` | tree | 16 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/sim-results` | tree | 30 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/sim-results` | tree | 31 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/sync` | tree | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `config` | tree | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docker` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |

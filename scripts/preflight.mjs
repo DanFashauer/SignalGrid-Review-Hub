@@ -274,6 +274,7 @@ const STEPS = [
   { name: "Docs\u2194proof FIGURE guard (a measured number must still be one)", cmd: ["node", "scripts/check-proof-figures.mjs"] },
   { name: "Proof-count sync (documented check counts match their proofs)", cmd: ["node", "scripts/check-proof-counts.mjs"] },
   { name: "Live-sync manifest (external builders see current contracts)", cmd: ["node", "scripts/check-live-sync.mjs"] },
+  { name: "MCP surface self-test (coverage + resource parity must be able to fail)", cmd: ["node", "scripts/check-mcp-surface.mjs", "--self-test"] },
   { name: "MCP surface (chat connection must match the fabric)", cmd: ["node", "scripts/check-mcp-surface.mjs"] },
   { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"] },
   // needsNativeBuild: rollup/esbuild/lightningcss/oxide platform binaries. The
@@ -371,6 +372,13 @@ const STEPS = [
   { name: "Proof: connector-emulator", cmd: ["pnpm", "run", "proof:connector-emulator"] },
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
+  // The MCP server's own node:test suite (wire-visible tool/resource contract +
+  // read-only annotations, incl. the not-read-only bruno_collection_run). It sat
+  // executed by no lane until 2026-09-02; wired here and in CI beside the
+  // api-server suite. The parity gate does not track `pnpm --filter` steps, so it
+  // is not a preflight-only gate — the CI step below is what check-test-execution
+  // reads to see this file as reached.
+  { name: "MCP server unit tests (tool/resource contract + annotations)", cmd: ["pnpm", "--filter", "@workspace/mcp-server", "run", "test"] },
   { name: "OIDC middleware test (the PRODUCTION auth branch actually executes)", cmd: ["pnpm", "run", "test:oidc"] },
   { name: "Bruno collection live run (the committed contract, executed both profiles)", cmd: ["node", "scripts/run-bruno-collection.mjs"] },
   { name: "Proof: observability (metrics endpoint)", cmd: ["pnpm", "run", "proof:observability"] },

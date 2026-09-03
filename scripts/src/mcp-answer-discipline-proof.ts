@@ -212,8 +212,10 @@ const EXPECTED_TOOLS = [
   "facility_graph",
   "evaluate_location_certainty",
   "fabric_status",
-  // The DR-008 agent-plane additions (all read-only by doctrine — a tool
-  // appearing here without readOnly discipline still fails the checks below):
+  // The DR-008 agent-plane additions (read-only by doctrine EXCEPT
+  // bruno_collection_run, which runs the committed contract and is annotated
+  // readOnlyHint:false — see index.ts HARNESS_RUN; the checks below do not
+  // assert readOnly on this list, they assert schema/answer discipline):
   "explain_decision",
   "evidence_freshness",
   "list_connectors",

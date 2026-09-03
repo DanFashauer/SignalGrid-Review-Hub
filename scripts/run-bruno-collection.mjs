@@ -106,8 +106,22 @@ function auditResults(outFile, label) {
 }
 
 async function pass(profile, targets, outPrefix) {
+  // EXPLICIT MINIMAL ENV for the child, not `...process.env`. The api-server here
+  // runs in fixture mode (in-memory demo core), so it needs only its port, the
+  // product profile, and a log level — plus PATH so `node` itself resolves.
+  // Forwarding the parent's whole environment handed a public-safe fixture server
+  // every ambient secret and credential the runner happened to hold (METRICS_TOKEN,
+  // SIGNALGRID_ENROLLMENT_SECRET, any DB URL, …); the harness starts a fixture
+  // process and its environment should say exactly that. Omitting SIGNALGRID_TIER
+  // and SIGNALGRID_LIVE_INTEGRATIONS is deliberate: tier then resolves to "dev",
+  // which can never make a live vendor call — the fixture-safe direction.
   const server = spawn("node", ["--enable-source-maps", SERVER], {
-    env: { ...process.env, PORT: String(PORT), SIGNALGRID_PRODUCT_PROFILE: profile, LOG_LEVEL: "silent" },
+    env: {
+      PATH: process.env.PATH ?? "",
+      PORT: String(PORT),
+      SIGNALGRID_PRODUCT_PROFILE: profile,
+      LOG_LEVEL: "silent",
+    },
     stdio: "ignore",
   });
   const problems = [];

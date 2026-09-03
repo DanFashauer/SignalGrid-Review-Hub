@@ -700,18 +700,21 @@ earlier — that is the loop working, not a reason to soften the record.
     That truthfulness was the problem: prose does not fail a build, and nothing
     stopped those eight from being written and never run, or an eleventh from
     joining them. `scripts/check-test-execution.mjs` (preflight + CI, parity
-    green at 212 gates) now derives what actually runs — expanding package
+    green) now derives what actually runs — expanding package
     scripts transitively from preflight, the CI workflows and
-    validate-sim-macos.sh, 110 scripts reached — and requires every
+    validate-sim-macos.sh, every queued script reached — and requires every
     test-shaped file to be REACHED or DECLARED with a reason and a disposition.
-    It reports 21 test files: 12 reached, 9 declared. A declaration that
-    outlives its reason fails, so porting a suite retires its line and the last
-    one out deletes the entry. Falsified three ways: a planted orphan test →
-    exit 1; a declared file that IS reached → exit 1; restored → exit 0.
-    STILL OPEN under this row: `artifacts/mcp-server/test/server.test.ts` (its
-    unique assertions want folding into the gated `proof:mcp-server`, then the
-    orphan deleted) and the k6 scripts in `tests/load/`, which the gate
-    deliberately does not pattern-match and says so in its own header.
+    It reports every test file as REACHED or DECLARED with a reason and prints
+    the live tally on each run (14 files, all reached, 0 declared as of
+    2026-09-02). A declaration that outlives its reason fails, so porting a suite
+    retires its line and the last one out deletes the entry. Falsified three ways:
+    a planted orphan test → exit 1; a declared file that IS reached → exit 1;
+    restored → exit 0. RESOLVED 2026-09-02: `artifacts/mcp-server/test/server.test.ts`
+    was WIRED UP (preflight + review-hub-ci.yml, `pnpm --filter @workspace/mcp-server
+    run test`) rather than folded-and-deleted — it carries wire-visible annotation
+    coverage the proofs do not — so its declaration is gone. Only the k6 scripts in
+    `tests/load/` remain unexecuted, which the gate deliberately does not
+    pattern-match and says so in its own header.
 44. **Two ungated contracts in the governance layer** — devex-tooling-engineer (the gates) + principal-engineer (the records). HALF DONE
     2026-08-23: the decision-record format contract now has
     scripts/check-decision-record-format.mjs (preflight + CI). DR-010 through

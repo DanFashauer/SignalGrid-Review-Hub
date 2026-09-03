@@ -51,7 +51,7 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-03 (cloud lane) - FIVE PRs merged, each independently
+LAST TOUCHED: 2026-09-03 (cloud lane) - seven PRs merged, each independently
               reviewed before landing, preflight+breadth green on every push,
               the branch restarted from Alpha after each. #399 gate-suite
               hardening (the coverage ratchet cannot be hand-lowered; three gates
@@ -71,17 +71,34 @@ LAST TOUCHED: 2026-09-03 (cloud lane) - FIVE PRs merged, each independently
               twin-only fail-opens closed, nothing looser than canonical); its
               conformance gate flipped REPORTED->GATED and mutation-tested three
               ways; CI Swift jobs ran the twin's tests green. Review notes for
-              #402/#403 mailed to the Mac lane.
-BLOCKED ON: nothing cloud-side. Mac lane, non-blocking, from the mailed review
-              notes: the SwiftUI Phase 2 nits (a decision colour on one
-              non-decision checkmark, type-scale drift, one inline font, a button
-              contrast to eyeball); the twin's ISO8601 parser is stricter than JS
-              Date.parse on non-RFC3339 instants (fail-closed, documented -
-              literal bit-parity would need a shared strict parser); the twin
-              test's per-field checks are conditional; and the older open items
-              (MockSignalGridAPI replayed vectors, DemoMode flag table on the
-              simulator, the equalToConstant rows at accessibility-XL).
-NEXT ACTION: owner: discovery conversations (0 of 15) - nothing substitutes.
+              #402/#403 mailed to the Mac lane. #405 the eight remediation-allow
+              reason codes joined docs/REASON_CODES.md (generator was parsing
+              decisionEngine.ts only), byte-equality + floor gated. #406 closed
+              the CI OUTAGE and the determinism note in one: remediation-allow's
+              instantMs now rejects zoneless instants as illegible (golden rule 2,
+              twin already strict, 40 vectors byte-identical); and the daily
+              mutation sweep - red on Alpha since 2026-09-02, which had blocked
+              every merge once its 48h grace expired - was revived by pinning the
+              local-authority freshness survivor and registering the emitter
+              factory in place of eleven zero-mutation shells. Sweep re-dispatched,
+              green across all four shards; ci-liveness fresh; Alpha carries the
+              fix so its daily sweep stays green.
+BLOCKED ON: nothing cloud-side; the merge outage is resolved. One SEPARATE
+              standing red, pre-existing and non-required: the daily image
+              vulnerability gate (a critical CVE with a fix available) fails the
+              scheduled run - orthogonal to the sweep, does not gate merges, and
+              auto-files its own tracking issue. Mac lane, non-blocking, from the
+              mailed review notes: the SwiftUI Phase 2 nits (a decision colour on
+              one non-decision checkmark, type-scale drift, one inline font, a
+              button contrast to eyeball); the twin's ISO8601 parser is stricter
+              than JS Date.parse on non-RFC3339 instants (now MATCHED cloud-side by
+              #406, both strict); the twin test's per-field checks are conditional;
+              and the older open items (MockSignalGridAPI replayed vectors,
+              DemoMode flag table on the simulator, the equalToConstant rows at
+              accessibility-XL).
+NEXT ACTION: cloud: the critical image-vulnerability gate (fix available) - a
+              base-image/dependency bump, own PR. owner: discovery conversations
+              (0 of 15) - nothing substitutes.
               owner: publish the MCP marketplace listing
               (docs/SIGNALGRID_MCP_MARKET_LISTING.md) on the creator page - only
               the owner has the login. owner decisions still pending: fork or

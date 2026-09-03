@@ -105,17 +105,18 @@ native/ios/
     │   ├── SignalContext.swift
     │   └── USBCBadgeReaderProvider.swift
     ├── Utilities/
-    │   └── DeviceInfo.swift
+    │   ├── DeviceInfo.swift
+    │   └── UIColor+Hex.swift
     ├── Views/
-    │   ├── ActiveSessionViewController.swift
-    │   ├── AuthenticatingViewController.swift
-    │   ├── BadgeCapturedViewController.swift
-    │   ├── EnrollingViewController.swift
+    │   ├── ActiveSessionView.swift
+    │   ├── AuthenticatingView.swift
+    │   ├── BadgeCapturedView.swift
+    │   ├── EnrollingView.swift
     │   ├── HostAppViewController.swift
-    │   ├── LockedIdleViewController.swift
+    │   ├── LockedIdleView.swift
     │   ├── ManagedAppViewController.swift
-    │   ├── ProvisioningViewController.swift
-    │   └── TerminatingViewController.swift
+    │   ├── ProvisioningView.swift
+    │   └── TerminatingView.swift
     └── Resources/
         ├── Assets.xcassets/
         ├── EnterpriseShell-Kiosk.mobileconfig

@@ -57,6 +57,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Invariant review self-test (a default-less switch / stray clock read must fail)
+        run: node scripts/review-invariants.mjs --self-test
       - name: Invariant review (fail-closed / determinism / Assist / truth)
         run: pnpm run review:invariants
 
@@ -352,6 +354,10 @@ jobs:
         run: node scripts/check-positioning-trace.mjs
       - name: Module init order (a const read before it is initialised)
         run: node scripts/check-module-init-order.mjs
+      - name: Walker-floor self-test (a floorless roots-array walk must fail)
+        run: node scripts/check-walker-floors.mjs --self-test
+      - name: Walker floors (every ROOTS/roots-array walk declares a non-vacuity floor)
+        run: node scripts/check-walker-floors.mjs
       - name: NaN fail-open (an unparseable expiry must read as EXPIRED)
         run: node scripts/check-nan-fail-open.mjs
       - name: Posed-bound self-test (the gate must be able to fail)
@@ -603,6 +609,8 @@ jobs:
       # And the ratchet for the ratchets: fails if a future preflight gate is added
       # without being wired into a workflow. It has to run HERE, not only in
       # preflight, or it would be the very thing it exists to prevent.
+      - name: "Preflight↔CI parity self-test (a comment mention is not a run)"
+        run: node scripts/check-preflight-ci-parity.mjs --self-test
       - name: "Preflight↔CI parity (a gate that runs only locally is not a gate)"
         run: node scripts/check-preflight-ci-parity.mjs
 
@@ -631,6 +639,8 @@ jobs:
 
       # Documented proof check-counts are evidence; evidence that silently drifts is
       # worse than none. Fails if any "(N checks)" in docs/ disagrees with the proof.
+      - name: Proof-count self-test (a zeroed claim scan fails via the floor)
+        run: node scripts/check-proof-counts.mjs --self-test
       - name: Proof-count sync (docs match their proofs)
         run: pnpm run check:proof-counts
 
@@ -902,6 +912,8 @@ jobs:
       - name: CI↔preflight drift (every proof runs in both places)
         run: node scripts/check-ci-preflight-sync.mjs
 
+      - name: Docs-sanity self-test (a planted over-claim fails; empty scan roots fail via the floor)
+        run: node scripts/docs-sanity.mjs --self-test
       - name: Docs sanity (required docs + unsafe-claim scan)
         run: node scripts/docs-sanity.mjs
 

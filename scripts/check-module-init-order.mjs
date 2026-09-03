@@ -49,9 +49,17 @@
 // SELF-TEST: both real defects must be detected from synthetic reconstructions,
 // and the CORRECTED order must pass. A gate that cannot fail proves nothing.
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
+// ROOTS are resolved against THIS SCRIPT's repo, not process.cwd(). Walking
+// relative to the cwd meant a run from anywhere but the repo root reached zero
+// files and passed — the vacuity this gate exists to prevent, in the gate itself.
+const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROOTS = ["lib", "artifacts", "scripts"];
+// A scanned-file floor, the same control as check-nan-fail-open.mjs (FILE_FLOOR
+// 200): a walk that reaches almost nothing is broken, not a clean tree.
+const FILE_FLOOR = 200;
 const SKIP = /(^|\/)(node_modules|dist|build|coverage|third_party)(\/|$)|\.d\.ts$/;
 const SOURCE = /\.(ts|mts|mjs|js)$/;
 
@@ -182,21 +190,30 @@ function analyse(text) {
 }
 
 const files = [];
-const walk = (d) => {
-  for (const e of readdirSync(d)) {
-    const p = join(d, e);
-    if (SKIP.test(p)) continue;
-    if (statSync(p).isDirectory()) walk(p);
-    else if (SOURCE.test(p)) files.push(p);
+const walk = (abs, rel) => {
+  for (const e of readdirSync(abs)) {
+    const p = join(abs, e);
+    const r = rel ? `${rel}/${e}` : e;
+    if (SKIP.test(r)) continue;
+    if (statSync(p).isDirectory()) walk(p, r);
+    else if (SOURCE.test(r)) files.push(r);
   }
 };
-for (const r of ROOTS) { try { walk(r); } catch { /* absent root */ } }
+for (const root of ROOTS) { try { walk(join(repo, root), root); } catch { /* absent root */ } }
+
+if (files.length < FILE_FLOOR) {
+  console.error(
+    `✗ Only ${files.length} source files scanned (floor ${FILE_FLOOR}) — the walk is not reaching ` +
+      "the tree it is supposed to cover (ROOTS are resolved against the script's own repo, so this is a real break).",
+  );
+  process.exit(1);
+}
 
 console.log("Module init order — a const read before it is initialised\n");
 let problems = 0;
 for (const f of files) {
   if (f.endsWith("check-module-init-order.mjs")) continue;
-  for (const d of analyse(readFileSync(f, "utf8"))) {
+  for (const d of analyse(readFileSync(join(repo, f), "utf8"))) {
     console.error(
       `  ✗ ${f}:${d.callLine}: \`${d.call}()\` runs at module load and reads \`${d.constName}\`, ` +
         `declared at line ${d.constLine}.\n` +

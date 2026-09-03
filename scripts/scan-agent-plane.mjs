@@ -217,6 +217,10 @@ function reportMirrorDrift() {
   }
 }
 
+// walker-floor: not needed — this is a REPORTED-only tool (never fatal, never in
+// CI), and it does not fail on scanning nothing. Each root is reported SCANNED or
+// NOT SCANNED individually (see the per-root `scanned` field), so an empty or
+// absent root is surfaced by name rather than hidden behind a green count.
 const ROOTS = [
   join(homedir(), ".claude", "skills"),
   join(homedir(), ".claude", "skills", "synced"),

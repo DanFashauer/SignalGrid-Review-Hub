@@ -49,12 +49,25 @@ import { MIRRORED, NOT_A_GATE, classifyCiJobs } from "./lib/ci-jobs.mjs";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOW_DIR = join(repo, ".github/workflows");
 
-// Gates that intentionally run ONLY locally. Empty on purpose: every entry here
-// is a gate that cannot fail a pull request, so each needs a stated reason rather
-// than a silent omission. Add the reason with the entry, or wire the gate up.
+// Gates that intentionally run ONLY locally. DELIBERATELY EMPTY, and asserted so
+// below: every entry here is a gate that cannot fail a pull request, so the honest
+// default is that there are none. The staleness loop over this map therefore
+// asserts nothing today — that is correct, not an oversight, and the assertion
+// after this map states the reason rather than leaving an empty loop to read as a
+// forgotten TODO. Add an entry (with the reason it cannot run in CI) only when a
+// gate genuinely cannot, and the loop will start guarding it.
 const LOCAL_ONLY = new Map([
   // ["some:gate", "why it cannot run in CI"],
 ]);
+// The reason the map is empty, made checkable: if it is EVER non-empty, every
+// entry must carry a non-empty reason. This keeps "empty on purpose" honest
+// without pretending there is a local-only gate when there is not.
+for (const [gate, reason] of LOCAL_ONLY) {
+  if (!reason || !String(reason).trim()) {
+    console.error(`  ✗ LOCAL_ONLY entry "${gate}" has no reason — a silent exemption is the thing this gate forbids.`);
+    process.exit(1);
+  }
+}
 
 const preflight = readFileSync(join(repo, "scripts/preflight.mjs"), "utf8");
 
@@ -81,12 +94,20 @@ for (const [name, cmd] of Object.entries(pkgScripts)) {
 
 // Each STEPS entry is `cmd: ["node", "scripts/x.mjs"]` or `["pnpm", "run", "x"]`.
 // Reduce both to the identifying token a workflow would have to mention.
+//
+// THE `--self-test` FLAG IS PRESERVED, not dropped. A gate is registered TWICE in
+// preflight — the real run and its `--self-test` — and dropping the flag collapsed
+// both to one token, so a workflow that ran only the real gate credited the
+// self-test step too, even though CI never executed it. The token now carries
+// ` --self-test` so a self-test step is only satisfied by a workflow that actually
+// runs `--self-test`. CI already registers every self-test step this way.
 function gatesIn(source) {
   const out = [];
   for (const m of source.matchAll(/cmd:\s*\[([^\]]+)\]/g)) {
     const parts = m[1].replace(/["']/g, "").split(",").map((s) => s.trim());
-    if (parts[0] === "node" && parts[1]) out.push(parts[1]);
-    else if (parts[0] === "pnpm" && parts[1] === "run" && parts[2]) out.push(parts[2]);
+    const suffix = parts.includes("--self-test") ? " --self-test" : "";
+    if (parts[0] === "node" && parts[1]) out.push(parts[1] + suffix);
+    else if (parts[0] === "pnpm" && parts[1] === "run" && parts[2]) out.push(parts[2] + suffix);
     else if (parts[0] === "bash") {
       // A `bash -c "…"` gate used to be dropped here while the comment claimed the
       // workflow scan caught it "via the script names it invokes" — it did not: a
@@ -130,15 +151,86 @@ if (gates.length === 0) {
 let problems = 0;
 const localOnlyHit = [];
 
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// YAML comments must not count as invocations. A workflow that merely NAMES a gate
+// in a `# comment` was credited by the old `blob.includes(gate)`, so a gate could
+// be de-registered in CI while this check stayed green — the same defect
+// check-gate-census.mjs fixed with run-position matching. `#` opens a comment at
+// line start or after whitespace (standard YAML), and the gate invocations here
+// never depend on a literal `#`, so truncating there is safe for matching.
+export function stripYamlComments(text) {
+  return text
+    .split("\n")
+    .map((line) => line.replace(/(^|\s)#.*$/, "$1"))
+    .join("\n");
+}
+
+// Does `text` INVOKE this head in a run position? Ported from check-gate-census's
+// invokesByName and widened to the path form preflight uses. `head` is a script
+// path (`scripts/x.mjs`) or an npm-script name (`review:invariants`).
+function invokes(head, wantsSelfTest, text) {
+  const g = escapeRe(head);
+  if (head.includes("/")) {
+    const base = head.endsWith(".mjs")
+      ? String.raw`node\s+${g}` // node scripts/x.mjs
+      : String.raw`(?:^|\s)${g}`; // a .sh or other path, run directly
+    if (wantsSelfTest) return new RegExp(`${base}(?:\\s+--?[\\w=-]+)*\\s+--self-test\\b`).test(text);
+    return new RegExp(`${base}(?!\\s+--self-test)(?![\\w./-])`).test(text);
+  }
+  // npm-script name: `pnpm|npm|$PNPM run <name>`, flags allowed, run position only.
+  const run = String.raw`(?:\$PNPM|pnpm|npm)(?:\s+--?[\w-]+(?:=\S+)?)*\s+run\s+(?:--?[\w-]+\s+)*${g}(?![\w:-])`;
+  if (wantsSelfTest) return new RegExp(`${run}(?:\\s+--)?\\s+--self-test\\b`).test(text);
+  return new RegExp(`${run}(?!(?:\\s+--)?\\s+--self-test)`).test(text);
+}
+
+/** Pure: is `gate` invoked (not merely mentioned) in the workflow text, by path
+ *  or by any npm-script alias? Exported so the self-test drives it directly. */
+export function gateWiredIn(gate, rawWorkflowText, aliasMap = new Map()) {
+  const text = stripYamlComments(rawWorkflowText);
+  const wantsSelfTest = / --self-test$/.test(gate);
+  const head = gate.replace(/ --self-test$/, "");
+  if (invokes(head, wantsSelfTest, text)) return true;
+  if (head.includes("/")) {
+    const file = head.split("/").pop();
+    for (const alias of aliasMap.get(file) ?? []) {
+      if (invokes(alias, wantsSelfTest, text)) return true;
+    }
+  }
+  return false;
+}
+
 /** True when a workflow invokes this gate by path OR by any npm-script alias —
  *  or, for a breadth-lane gate, when the lane runner itself is wired. */
 const breadthRunnerWired = blob.includes("verify:breadth") || blob.includes("verify-breadth.mjs");
 function wired(gate) {
   if (breadthGates.has(gate) && breadthRunnerWired) return true;
-  if (blob.includes(gate)) return true;
-  const file = gate.split("/").pop();
-  return (aliasesFor.get(file) ?? []).some((alias) => blob.includes(alias));
+  return gateWiredIn(gate, blob, aliasesFor);
 }
+
+// ── self-test: a mention is not a run, and a --self-test step needs its own run ─
+function selfTest() {
+  const checks = [];
+  const aliasMap = new Map([["review-invariants.mjs", ["review:invariants"]]]);
+
+  checks.push(["a gate named only in a YAML comment is NOT credited", gateWiredIn("scripts/check-x.mjs", "steps:\n  # runs scripts/check-x.mjs by hand\n") === false]);
+  checks.push(["a real `node` run is credited", gateWiredIn("scripts/check-x.mjs", "  - run: node scripts/check-x.mjs\n") === true]);
+  checks.push(["a real run with a trailing YAML comment is still credited", gateWiredIn("scripts/check-x.mjs", "  - run: node scripts/check-x.mjs  # nightly\n") === true]);
+  checks.push(["a plain run does not credit a separately-registered --self-test step", gateWiredIn("scripts/check-x.mjs --self-test", "  - run: node scripts/check-x.mjs\n") === false]);
+  checks.push(["a --self-test run credits the --self-test step", gateWiredIn("scripts/check-x.mjs --self-test", "  - run: node scripts/check-x.mjs --self-test\n") === true]);
+  checks.push(["a lone --self-test run does not credit the plain gate", gateWiredIn("scripts/check-x.mjs", "  - run: node scripts/check-x.mjs --self-test\n") === false]);
+  checks.push(["a path gate run via its pnpm alias is credited", gateWiredIn("scripts/review-invariants.mjs", "  - run: pnpm run review:invariants\n", aliasMap) === true]);
+  checks.push(["a shorter gate name does not borrow a longer one's invocation", gateWiredIn("proof:live", "  - run: pnpm run proof:live-fleet\n") === false]);
+
+  checks.push([`LIVE: ${gates.length} preflight gate token(s) parsed`, gates.length > 0]);
+
+  const failed = checks.filter(([, k]) => !k);
+  for (const [n, k] of checks) console.log(`  ${k ? "ok" : "FAIL"} — self-test: ${n}`);
+  console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
+  return failed.length === 0 ? 0 : 1;
+}
+
+if (process.argv.includes("--self-test")) process.exit(selfTest());
 
 for (const gate of gates) {
   if (wired(gate)) continue;

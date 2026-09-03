@@ -1,8 +1,29 @@
 #!/usr/bin/env node
 // Role coverage — has each role actually READ the portion it is answerable for?
 //
-//   node scripts/check-role-coverage.mjs              # report + ratchet
+//   node scripts/check-role-coverage.mjs              # report + CHECK (never writes)
+//   node scripts/check-role-coverage.mjs --write      # regenerate the ratchet (the ONLY writer)
 //   node scripts/check-role-coverage.mjs --self-test  # prove the gate can fail
+//
+// CHECK MODE NEVER MUTATES THE TREE, added 2026-09-02. Until then this gate WROTE
+// docs/agent/role-coverage-ratchet.json on every normal run — a gate that mutates
+// the tree it is asked to verify, which dirties provenance and lets the ratchet
+// (the only control preventing coverage being un-read) heal itself silently. The
+// ratchet is now a REGENERATE-AND-DIFF artifact, the same pattern preflight uses
+// for the Postman collection and the SBOM: `--write` is the sole writer, and the
+// default (check) mode recomputes the ratchet from the ledger and FAILS if the
+// committed file differs from that recompute, or is untracked. A legitimate RISE
+// is clean because `--write` reproduces it exactly; a hand-lowered ratchet fails
+// because the recompute from the ledger no longer matches it.
+//
+// LIMIT, stated rather than pretended away: the recompute is a pure function of
+// the LEDGER, so lowering a role's read count AND regenerating the ratchet in the
+// same commit still produces a self-consistent pair. That is caught upstream —
+// deleting a live claim leaves the file present, so `--write` REFUSES to lower a
+// role below its committed floor unless the drop is covered by RETIRED claims
+// (files that are genuinely gone). What committed-diff alone cannot catch is a
+// hand-edit of BOTH the ledger and this file at once; that residue is a
+// ledger-integrity question for review, not one a working-tree diff can decide.
 //
 // WHY THIS EXISTS, in the owner's words on 2026-08-24: "not everyone in the org
 // is reviewing the entire repo and providing real updates and then locking down
@@ -129,6 +150,42 @@ export function retiredCounts(entries, isGone = () => true) {
   return out;
 }
 
+// The note the ratchet file carries. Part of the byte string the check diffs, so
+// it lives here as the single source of truth for both --write and the check.
+const RATCHET_NOTE =
+  "Per-role files-read high-water mark, and the retirements already absorbed. DERIVED " +
+  "from the ledger by this gate; never hand-edit. Regenerate with " +
+  "`node scripts/check-role-coverage.mjs --write` and commit the result.";
+
+/** The exact object --write persists; also what the check recomputes and diffs. */
+export function ratchetObject(readByRole, retired) {
+  return { note: RATCHET_NOTE, read: readByRole, retired };
+}
+
+/** The exact bytes the ratchet file must hold (2-space JSON + trailing newline). */
+export function serializeRatchet(obj) {
+  return `${JSON.stringify(obj, null, 2)}\n`;
+}
+
+/**
+ * Pure verdict for check mode — no I/O, so the self-test drives it directly.
+ * A gate that never mutates the tree can only conclude from the committed file
+ * versus the recompute:
+ *   untracked  → a control that is not committed controls nothing.
+ *   backwards  → committed differs AND the recompute fell below the committed
+ *                floor beyond the retirement allowance (a real un-read).
+ *   stale      → committed differs but coverage did not fall (a rise not yet
+ *                blessed by `--write`, or a hand-edit that raised/scrambled it).
+ */
+export function ratchetVerdict({ committedRaw, tracked: isTracked, expectedRaw, before, now, allowed }) {
+  if (!isTracked) return { ok: false, kind: "untracked", dropped: [] };
+  if (committedRaw !== expectedRaw) {
+    const dropped = regressions(before, now, allowed);
+    return { ok: false, kind: dropped.length > 0 ? "backwards" : "stale", dropped };
+  }
+  return { ok: true, kind: "ok", dropped: [] };
+}
+
 function tracked() {
   const out = execFileSync("git", ["ls-files"], { cwd: repo, encoding: "utf8" });
   return out.trim().split("\n").filter((f) => f && !/(^|\/)(node_modules|dist|build|coverage)\//.test(f));
@@ -242,6 +299,49 @@ function selfTest() {
     !liveLedger.filter(isRetired).some((e) => liveTracked.has(e.path)),
   ]);
 
+  // ── the ratchet is a REGENERATE-AND-DIFF artifact; the check must never write ──
+  {
+    const expectedRaw = serializeRatchet(ratchetObject({ a: 10 }, {}));
+    // Hand-lowered ratchet, ledger UNCHANGED: committed says 5, the recompute
+    // from the ledger says 10. The diff fails → RED.
+    const handLowered = serializeRatchet(ratchetObject({ a: 5 }, {}));
+    let v = ratchetVerdict({ committedRaw: handLowered, tracked: true, expectedRaw, before: { a: 5 }, now: { a: 10 }, allowed: {} });
+    checks.push(["a hand-lowered ratchet is RED — the committed file disagrees with the recompute", !v.ok]);
+
+    // The recompute reproduces the committed file exactly → GREEN. This is the
+    // legitimate-rise path: run --write, commit, and the check passes.
+    v = ratchetVerdict({ committedRaw: expectedRaw, tracked: true, expectedRaw, before: { a: 10 }, now: { a: 10 }, allowed: {} });
+    checks.push(["the recompute equals the committed file — GREEN", v.ok]);
+
+    // An untracked ratchet controls nothing.
+    v = ratchetVerdict({ committedRaw: "", tracked: false, expectedRaw, before: {}, now: { a: 10 }, allowed: {} });
+    checks.push(["an untracked ratchet is RED — a control that is not committed controls nothing", !v.ok && v.kind === "untracked"]);
+
+    // The ledger itself dropped (a role un-read) without a covering retirement:
+    // committed floor 10, recompute 4 → classified BACKWARDS, not merely stale.
+    v = ratchetVerdict({
+      committedRaw: serializeRatchet(ratchetObject({ a: 10 }, {})),
+      tracked: true,
+      expectedRaw: serializeRatchet(ratchetObject({ a: 4 }, {})),
+      before: { a: 10 },
+      now: { a: 4 },
+      allowed: {},
+    });
+    checks.push(["a drop below the committed floor is classified BACKWARDS, not stale", !v.ok && v.kind === "backwards"]);
+
+    // A drop exactly covered by retirements is not backwards — it is a stale
+    // ratchet awaiting --write, never a violation.
+    v = ratchetVerdict({
+      committedRaw: serializeRatchet(ratchetObject({ a: 10 }, {})),
+      tracked: true,
+      expectedRaw: serializeRatchet(ratchetObject({ a: 5 }, { a: 5 })),
+      before: { a: 10 },
+      now: { a: 5 },
+      allowed: { a: 5 },
+    });
+    checks.push(["a drop fully covered by retirements is stale (awaiting --write), not backwards", !v.ok && v.kind === "stale"]);
+  }
+
   const failed = checks.filter(([, k]) => !k);
   for (const [n, k] of checks) console.log(`  ${k ? "ok" : "FAIL"} — self-test: ${n}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -250,9 +350,12 @@ function selfTest() {
 
 const runAsCli = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (runAsCli && process.argv.includes("--self-test")) process.exit(selfTest());
-if (runAsCli) runGate();
+else if (runAsCli && process.argv.includes("--write")) writeRatchet();
+else if (runAsCli) runGate();
 
-function runGate() {
+/** Reads roster + ledger + tree and returns the per-role rows plus retirements.
+ *  Shared by the report, the check, and --write so all three see one truth. */
+function computeRows() {
   const roster = JSON.parse(readFileSync(`${repo}/${ROSTER}`, "utf8")).roles;
   const ledger = JSON.parse(readFileSync(`${repo}/${LEDGER}`, "utf8")).reviews;
   const reviewedBy = new Map();
@@ -279,7 +382,25 @@ function runGate() {
       activated: Boolean(role.activated),
     });
   }
+  return { rows, retiredNow };
+}
 
+/** The `{ read }` map the ratchet records — one entry per role with a surface. */
+function readMapOf(rows) {
+  return Object.fromEntries(rows.map((r) => [r.id, r.read]));
+}
+
+/** True iff docs/agent/role-coverage-ratchet.json is a tracked file. */
+function ratchetTracked() {
+  try {
+    execFileSync("git", ["ls-files", "--error-unmatch", RATCHET], { cwd: repo, stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function printReport(rows) {
   console.log("Role coverage — has each role read the portion it is answerable for?\n");
   const withSurface = rows.filter((r) => r.owned > 0);
   const totalOwned = withSurface.reduce((a, r) => a + r.owned, 0);
@@ -302,26 +423,45 @@ function runGate() {
 
   const pct = totalOwned === 0 ? 0 : (100 * totalRead) / totalOwned;
   console.log(`\n  ${totalRead} of ${totalOwned} owned file(s) read across ${withSurface.length} roles with a surface (${pct.toFixed(1)}%).`);
+}
 
-  // RATCHET, stored PER ROLE so widening a surface cannot dilute a percentage
-  // into looking like progress, and so nobody can un-read what was read.
-  const now = Object.fromEntries(rows.map((r) => [r.id, r.read]));
-  const prior = existsSync(`${repo}/${RATCHET}`) ? JSON.parse(readFileSync(`${repo}/${RATCHET}`, "utf8")) : {};
+// ── CHECK MODE — recompute, diff, NEVER write ────────────────────────────────
+function runGate() {
+  const { rows, retiredNow } = computeRows();
+  printReport(rows);
+
+  const now = readMapOf(rows);
+  const expectedRaw = serializeRatchet(ratchetObject(now, retiredNow));
+  const isTracked = ratchetTracked();
+  const committedRaw = existsSync(`${repo}/${RATCHET}`) ? readFileSync(`${repo}/${RATCHET}`, "utf8") : "";
+  const prior = committedRaw ? JSON.parse(committedRaw) : {};
   const before = prior.read ?? {};
   const allowed = retiredSince(retiredNow, prior.retired ?? {});
 
   const spent = Object.entries(allowed).filter(([role]) => (now[role] ?? 0) < (before[role] ?? 0));
   if (spent.length > 0) {
-    console.log("\n  RETIRED SINCE THE LAST RATCHET — a deleted surface retires its claims, and buys exactly that drop:");
+    console.log("\n  RETIRED SINCE THE COMMITTED RATCHET — a deleted surface retires its claims, and buys exactly that drop:");
     for (const [role, n] of spent) {
       console.log(`    ${role.padEnd(28)} ${before[role]} -> ${now[role]} read, ${n} claim(s) retired`);
     }
   }
 
-  const dropped = regressions(before, now, allowed);
-  if (dropped.length > 0) {
+  const verdict = ratchetVerdict({ committedRaw, tracked: isTracked, expectedRaw, before, now, allowed });
+  if (verdict.ok) {
+    console.log("\nRole-coverage check passed — the committed ratchet equals the recompute from the ledger.");
+    return;
+  }
+  if (verdict.kind === "untracked") {
+    console.error(
+      `\nRole-coverage check FAILED — ${RATCHET} is not a tracked file.\n` +
+        "  A ratchet that is not committed controls nothing. Run\n" +
+        "  `node scripts/check-role-coverage.mjs --write` and commit the result.",
+    );
+    process.exit(1);
+  }
+  if (verdict.kind === "backwards") {
     console.error("\nRole-coverage check FAILED — coverage went BACKWARDS:");
-    for (const d of dropped) {
+    for (const d of verdict.dropped) {
       const slack = d.allowed > 0 ? ` (${d.allowed} retirement(s) allowed for, ${d.was - d.is} lost)` : "";
       console.error(`  x ${d.role}: ${d.was} -> ${d.is} file(s) read${slack}`);
     }
@@ -329,22 +469,43 @@ function runGate() {
       "  A review claim was deleted, a path was renamed out from under one, or a surface was\n" +
         "  narrowed to flatter the number. Restore the claim, or — if the FILE ITSELF is gone —\n" +
         "  retire the claim in the ledger with `retiredOn` and `retiredWhy` (see its `$comment`),\n" +
-        "  which buys exactly that many and no more. Never hand-edit this ratchet.\n" +
+        "  then run `node scripts/check-role-coverage.mjs --write` to bless exactly that drop.\n" +
         "  Coverage is allowed to rise and to stand still. It is not allowed to fall.",
     );
     process.exit(1);
   }
-  writeFileSync(
-    `${repo}/${RATCHET}`,
-    JSON.stringify(
-      {
-        note: "Per-role files-read high-water mark, and the retirements already absorbed. Never hand-edit; the gate writes it.",
-        read: now,
-        retired: retiredNow,
-      },
-      null,
-      2,
-    ) + "\n",
+  // stale — the committed file differs but coverage did not fall (a rise not yet
+  // blessed, or a hand-edit that scrambled/raised it).
+  console.error(
+    `\nRole-coverage check FAILED — ${RATCHET} does not match the recompute from the ledger.\n` +
+      "  Coverage rose, or the file was hand-edited. This gate never writes the tree; run\n" +
+      "  `node scripts/check-role-coverage.mjs --write` and commit the regenerated ratchet.",
   );
-  console.log("\nRole-coverage check passed — no role has read less than it had, beyond claims retired because the file is gone.");
+  process.exit(1);
+}
+
+// ── WRITE MODE — the SOLE writer. Refuses to launder an un-read. ──────────────
+function writeRatchet() {
+  const { rows, retiredNow } = computeRows();
+  const now = readMapOf(rows);
+  const prior = existsSync(`${repo}/${RATCHET}`) ? JSON.parse(readFileSync(`${repo}/${RATCHET}`, "utf8")) : {};
+  const before = prior.read ?? {};
+  const allowed = retiredSince(retiredNow, prior.retired ?? {});
+
+  const dropped = regressions(before, now, allowed);
+  if (dropped.length > 0) {
+    console.error("Refusing to write — the recompute lowers coverage below the committed floor:");
+    for (const d of dropped) {
+      const slack = d.allowed > 0 ? ` (${d.allowed} retirement(s) allowed for, ${d.was - d.is} lost)` : "";
+      console.error(`  x ${d.role}: ${d.was} -> ${d.is} file(s) read${slack}`);
+    }
+    console.error(
+      "  A live claim was removed while its file still exists — retiring buys nothing for a\n" +
+        "  file that is still here. Restore the claim, or delete the file and retire the claim,\n" +
+        "  then run --write again. --write records reads; it does not launder an un-read.",
+    );
+    process.exit(1);
+  }
+  writeFileSync(`${repo}/${RATCHET}`, serializeRatchet(ratchetObject(now, retiredNow)));
+  console.log(`Wrote ${RATCHET} — ${Object.keys(now).length} role(s), ${Object.keys(retiredNow).length} with retirements.`);
 }

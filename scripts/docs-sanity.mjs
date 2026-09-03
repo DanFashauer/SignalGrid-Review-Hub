@@ -23,7 +23,7 @@
 // C and D are the ones that matter: they show the lead-in rule exempts a DENIED
 // claim, not any claim that happens to be in a list.
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -58,6 +58,11 @@ const REQUIRED_DOCS = [
   "docs/SECURITY_BASELINE_ALIGNMENT.md",
   "docs/APP_SUITE_MATRIX.md",
   "docs/WHAT_SIGNALGRID_DOES_TODAY.md",
+  // CLAUDE.md names this as the doc to "start at"; a required-docs list that omits
+  // the entry point is a list that lets the entry point be deleted. Added directly
+  // rather than derived: CLAUDE.md names it in prose, not a machine-readable list,
+  // so deriving REQUIRED_DOCS from it is not cheap and would itself need a parser.
+  "docs/CI_AND_VALIDATION.md",
   "SECURITY.md",
 ];
 for (const doc of REQUIRED_DOCS) {
@@ -212,15 +217,106 @@ function listLeadIn(path, lineNo) {
   return null;
 }
 
-const SCAN_PATHS = [
-  "README.md",
-  "docs",
-  "artifacts/signalgrid-review/src",
-  "artifacts/signalgrid-web/src",
-  "artifacts/signalgrid-app/src",
-  "artifacts/signalgrid-desktop/src",
-  "artifacts/signalgrid-mobile-pwa/src",
-];
+// SCAN ROOTS ARE DERIVED FROM THE TREE, not hand-listed. The old five-entry list
+// was a fossil: it named only the five signalgrid-* web trees, so api-server/src
+// and mcp-server/src (added later) were never scanned, and a new web artifact
+// would silently sit outside the gate. The rule now, stated exactly:
+//
+//   README.md  +  docs/ (recursively)  +  every artifacts/<pkg>/src that exists.
+//
+// git grep scans every file under those roots (tracked + untracked-not-ignored),
+// so a new doc or a new artifact source joins the scan the moment it lands.
+function deriveScanRoots() {
+  const roots = ["README.md", "docs"];
+  let pkgs = [];
+  try {
+    pkgs = readdirSync(resolve(repo, "artifacts"), { withFileTypes: true });
+  } catch {
+    pkgs = [];
+  }
+  for (const e of pkgs) {
+    if (e.isDirectory() && existsSync(resolve(repo, "artifacts", e.name, "src"))) {
+      roots.push(`artifacts/${e.name}/src`);
+    }
+  }
+  return roots;
+}
+const SCAN_PATHS = deriveScanRoots();
+
+// How many files the roots actually resolve to (tracked + untracked-not-ignored).
+// A scan that reaches almost nothing is the failure this repo keeps finding — a
+// gate green about a docset it stopped reading. The floor is far below the real
+// count (500+ today) and only catches roots that rotted to nothing.
+const SCANNED_FLOOR = 200;
+function scannedFileCount(roots) {
+  let out = "";
+  try {
+    out = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "--", ...roots], {
+      cwd: repo,
+      encoding: "utf8",
+    });
+  } catch {
+    return 0;
+  }
+  return out.split("\n").filter(Boolean).length;
+}
+
+// The per-line decision, extracted pure so --self-test can drive it directly: is
+// this occurrence of a denylist phrase a BARE over-claim (fail) rather than a
+// disclaimer, a quoted-row inventory entry, a meta reference, or a claim launder-
+// ed by a negated/meta list lead-in?
+function isBareOverclaim(phrase, path, content, leadIn) {
+  if (META_FILES.has(path)) return false;
+  const rowExempt = QUOTED_ROW_FILES.get(path);
+  if (rowExempt && rowExempt(content)) return false;
+  if (META.test(content)) return false;
+  if (!hasBareClaim(content, phrase)) return false;
+  if (leadIn !== null && (NEGATOR.test(leadIn) || META.test(leadIn))) return false;
+  return true;
+}
+
+// ── self-test: the exemptions and the floor must each be able to fail ────────
+function selfTest() {
+  const checks = [];
+
+  // A bare over-claim is FLAGGED.
+  checks.push([
+    "a bare denylist claim is flagged",
+    isBareOverclaim("SignalGrid is production-ready", "docs/x.md", "SignalGrid is production-ready in every deployment", null) === true,
+  ]);
+  // The honest idiom is NOT punished: a negated claim on the same line.
+  checks.push([
+    "a negated claim on the same line is not flagged",
+    isBareOverclaim("SignalGrid is production-ready", "docs/x.md", "SignalGrid is not production-ready today", null) === false,
+  ]);
+  // A denied claim under a colon lead-in that negates it is not flagged.
+  checks.push([
+    "a bullet under a negating lead-in is not flagged",
+    isBareOverclaim("autonomous production remediation", "docs/x.md", "- Autonomous production remediation.", "This pack explicitly does not claim:") === false,
+  ]);
+  // The meta guardrails doc is exempt (it enumerates forbidden phrases).
+  checks.push([
+    "the guardrails doc is exempt from its own denylist",
+    isBareOverclaim("the grid runs itself", "docs/PUBLIC_MESSAGING_GUARDRAILS.md", "the grid runs itself", null) === false,
+  ]);
+
+  // THE FLOOR CAN FAIL: roots that resolve to nothing fall below it.
+  const empty = scannedFileCount(["no-such-root-xyzzy-9000"]);
+  checks.push([`roots resolving to nothing scan 0 files, below the floor (${SCANNED_FLOOR})`, empty === 0 && empty < SCANNED_FLOOR]);
+
+  // LIVE: the derived roots clear the floor, or the derivation is broken.
+  const live = scannedFileCount(SCAN_PATHS);
+  checks.push([`LIVE: the derived roots reach ${live} file(s) (floor ${SCANNED_FLOOR})`, live >= SCANNED_FLOOR]);
+  checks.push([`LIVE: ${SCAN_PATHS.length} scan root(s) derived, incl. every artifacts/*/src`, SCAN_PATHS.length >= 7]);
+
+  const failed = checks.filter(([, ok]) => !ok);
+  for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
+  console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
+  return failed.length === 0 ? 0 : 1;
+}
+
+if (process.argv.includes("--self-test")) process.exit(selfTest());
+
 let claimHits = 0;
 for (const phrase of DENYLIST) {
   let out = "";
@@ -243,18 +339,26 @@ for (const phrase of DENYLIST) {
     const path = m ? m[1] : "";
     const lineNo = m ? Number(m[2]) : 0;
     const content = m ? m[3] : line;
-    if (META_FILES.has(path)) continue;
-    const rowExempt = QUOTED_ROW_FILES.get(path);
-    if (rowExempt && rowExempt(content)) continue;
-    if (META.test(content)) continue;
-    if (!hasBareClaim(content, phrase)) continue;
     const leadIn = lineNo > 0 ? listLeadIn(path, lineNo) : null;
-    if (leadIn !== null && (NEGATOR.test(leadIn) || META.test(leadIn))) continue;
+    if (!isBareOverclaim(phrase, path, content, leadIn)) continue;
     problems.push(`Unsafe direct claim found for '${phrase}': ${line}`);
     claimHits += 1;
   }
 }
-if (claimHits === 0) console.log("  ✓ Unsafe-claim scan: no affirmative over-reach claims in docs/app source");
+
+// NON-VACUITY: the scan must actually have reached the tree.
+const scannedCount = scannedFileCount(SCAN_PATHS);
+if (scannedCount < SCANNED_FLOOR) {
+  problems.push(
+    `Unsafe-claim scan reached only ${scannedCount} file(s) across ${SCAN_PATHS.length} root(s) ` +
+      `(floor ${SCANNED_FLOOR}) — the derived scan roots resolved to nearly nothing, so a green here is green about nothing`,
+  );
+}
+if (claimHits === 0) {
+  console.log(
+    `  ✓ Unsafe-claim scan: no affirmative over-reach claims (${scannedCount} file(s) across ${SCAN_PATHS.length} derived root(s))`,
+  );
+}
 
 console.log("");
 if (problems.length) {

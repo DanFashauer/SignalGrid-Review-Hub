@@ -44,15 +44,23 @@ const tracked = execFileSync(
 ).split("\n").filter(Boolean);
 const read = (f) => { try { return readFileSync(resolve(repo, f), "utf8"); } catch { return ""; } };
 
-// The pure planner/decision libs: no side effects, no wall-clock, fail closed.
+// The three narrowest planner/decision libs, kept as their own name because a
+// couple of rules below key off exactly them.
 const GATING_LIBS = [
   "lib/app-workflows/src/",
   "lib/orchestration/src/",
   "lib/flows/src/",
 ];
-// PURE_LIBS stays a HAND-LISTED, NARROW set on purpose: checks 1 and 3 assert
-// fail-closed switch shapes that are only meaningful for the planner libs, and
-// widening those to every package would flag correct code everywhere.
+// PURE_LIBS is the SCOPE OF CHECK 1 (fail-closed switches). It stays a HAND-
+// LISTED, NARROW set on purpose: a `switch` with no `default:` arm is only a
+// defect in a decision/gating/planner lib, and widening the scan to every package
+// would flag correct exhaustive switches everywhere. It was documented as
+// governing check 1 for a long time while check 1 actually scanned only
+// GATING_LIBS — so recommendations, signal-discovery, event-contract,
+// posture-composition and incident-playbook were named here and scanned nowhere.
+// Check 1 now scans this full set (verified: the only switches under the wider
+// scope are the four in lib/incident-playbook/src/map.ts, all with default arms).
+// Check 3 is scoped to the app-workflows catalog and does NOT use this list.
 const PURE_LIBS = [
   ...GATING_LIBS,
   "lib/recommendations/src/",
@@ -231,37 +239,117 @@ function findSwitchBlocks(code) {
   return blocks;
 }
 
+// Every `switch (...) { ... }` in a scanned lib must contain its OWN `default:`
+// arm. Returns the 1-based line numbers of switches that lack one. `code` must
+// already be comment-stripped and literal-masked. Extracted so check 1 and the
+// self-test exercise the same matcher.
+function switchViolations(code) {
+  const blocks = findSwitchBlocks(code);
+  const out = [];
+  for (const b of blocks) {
+    // Check THIS switch's own default arm — blank any nested switch blocks so a
+    // nested `default:` cannot satisfy an outer switch that lacks its own.
+    const body = code.slice(b.open, b.end + 1).split("");
+    for (const c of blocks) {
+      if (c === b) continue;
+      if (c.kw > b.open && c.end < b.end) {
+        for (let k = c.open; k <= c.end; k++) {
+          const idx = k - b.open;
+          if (body[idx] !== "\n") body[idx] = " ";
+        }
+      }
+    }
+    if (!/\bdefault\s*:/.test(body.join(""))) {
+      out.push(code.slice(0, b.kw).split("\n").length);
+    }
+  }
+  return out;
+}
+
+// Split a package→lines map against the declared clock-read exemptions. Pure, so
+// the self-test can prove an undeclared read (a clock outside the pinned set) is
+// flagged. `byPackage`: Map(pkgPrefix -> string[] of "file:line"). `declared`:
+// the DECLARED_CLOCK_READS map.
+function classifyClockReads(byPackage, declared) {
+  const undeclared = [];
+  const drifted = [];
+  for (const [pkg, lines] of byPackage) {
+    const d = declared.get(pkg);
+    if (!d) undeclared.push({ pkg, count: lines.length, lines });
+    else if (d.count !== lines.length) drifted.push({ pkg, declared: d.count, found: lines.length });
+  }
+  const stale = [...declared.keys()].filter((pkg) => !byPackage.has(pkg));
+  return { undeclared, drifted, stale };
+}
+
+// ── self-test: the two gated shapes must each be able to fail ────────────────
+if (process.argv.includes("--self-test")) {
+  const checks = [];
+
+  // A default-less switch is flagged; a defaulted one is not — the matcher check 1
+  // relies on. Run through the same mask/strip path check 1 uses.
+  const prep = (src) => maskLiterals(stripComments(src));
+  checks.push([
+    "a switch with NO default arm is flagged",
+    switchViolations(prep("function f(x){ switch (x) { case 1: return 1; } }")).length === 1,
+  ]);
+  checks.push([
+    "a switch WITH a default arm is not flagged",
+    switchViolations(prep("function f(x){ switch (x) { case 1: return 1; default: return 0; } }")).length === 0,
+  ]);
+  // The fail-closed scope names each planner lib, and each is a real directory —
+  // so a default-less switch planted in ANY named scope would be scanned.
+  checks.push([
+    `fail-closed scope covers all ${PURE_LIBS.length} named planner libs, each present on disk`,
+    PURE_LIBS.length >= 8 && PURE_LIBS.every((p) => existsSync(resolve(repo, p))),
+  ]);
+
+  // A clock read in a package OUTSIDE the pinned set is flagged as undeclared.
+  const undecl = classifyClockReads(
+    new Map([["lib/not-a-declared-pkg/src/", ["lib/not-a-declared-pkg/src/x.ts:5"]]]),
+    DECLARED_CLOCK_READS,
+  );
+  checks.push(["a clock read outside the pinned set is flagged (undeclared)", undecl.undeclared.length === 1 && undecl.drifted.length === 0]);
+  // A declared package whose count no longer matches is drift.
+  const firstDeclared = [...DECLARED_CLOCK_READS.keys()][0];
+  const drift = classifyClockReads(
+    new Map([[firstDeclared, Array(DECLARED_CLOCK_READS.get(firstDeclared).count + 1).fill("x")]]),
+    DECLARED_CLOCK_READS,
+  );
+  checks.push(["a declared count that no longer matches is drift", drift.drifted.length === 1]);
+  // A declared package that reads NO clock is a stale exemption.
+  const staleR = classifyClockReads(new Map(), DECLARED_CLOCK_READS);
+  checks.push(["a declared package that no longer reads a clock is stale", staleR.stale.length === DECLARED_CLOCK_READS.size]);
+  // A pinned package at exactly its declared count is clean.
+  const clean = classifyClockReads(
+    new Map([[firstDeclared, Array(DECLARED_CLOCK_READS.get(firstDeclared).count).fill("x")]]),
+    DECLARED_CLOCK_READS,
+  );
+  checks.push([
+    "a pinned package at its declared count is clean",
+    clean.undeclared.length === 0 && clean.drifted.length === 0,
+  ]);
+
+  const failed = checks.filter(([, k]) => !k);
+  for (const [n, k] of checks) console.log(`  ${k ? "ok" : "FAIL"} — self-test: ${n}`);
+  console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
+  process.exit(failed.length === 0 ? 0 : 1);
+}
+
 // 1 — fail-closed switches ─────────────────────────────────────────────────────
-// Every `switch (...) { ... }` in the gating libs must contain a `default:` arm.
+// Every `switch (...) { ... }` in the pure planner/decision libs must contain a
+// `default:` arm. Scope is PURE_LIBS (see its note), not just GATING_LIBS.
 {
   const violations = [];
-  const files = tracked.filter((f) => isTs(f) && inAny(f, GATING_LIBS));
+  const files = tracked.filter((f) => isTs(f) && inAny(f, PURE_LIBS));
   for (const f of files) {
     // Mask literals AFTER stripping comments so neither prose nor string/template
     // contents can spoof (or hide) a `{`, `}`, `switch`, or `default:`.
     const code = maskLiterals(stripComments(read(f)));
-    const blocks = findSwitchBlocks(code);
-    for (const b of blocks) {
-      // Check THIS switch's own default arm — blank any nested switch blocks so a
-      // nested `default:` cannot satisfy an outer switch that lacks its own.
-      const body = code.slice(b.open, b.end + 1).split("");
-      for (const c of blocks) {
-        if (c === b) continue;
-        if (c.kw > b.open && c.end < b.end) {
-          for (let k = c.open; k <= c.end; k++) {
-            const idx = k - b.open;
-            if (body[idx] !== "\n") body[idx] = " ";
-          }
-        }
-      }
-      if (!/\bdefault\s*:/.test(body.join(""))) {
-        const line = code.slice(0, b.kw).split("\n").length;
-        violations.push(`${f}:${line}`);
-      }
-    }
+    for (const line of switchViolations(code)) violations.push(`${f}:${line}`);
   }
-  if (violations.length) bad(`Fail-closed: switch without a default arm in a gating lib — ${violations.join(", ")}`);
-  else ok("Fail-closed: every switch in the gating libs has a default arm");
+  if (violations.length) bad(`Fail-closed: switch without a default arm in a planner lib — ${violations.join(", ")}`);
+  else ok(`Fail-closed: every switch in the ${PURE_LIBS.length} pure planner libs has a default arm`);
 }
 
 // 2 — determinism in the pure planners ─────────────────────────────────────────
@@ -285,19 +373,13 @@ function findSwitchBlocks(code) {
     });
   }
 
-  const undeclared = [];
-  const drifted = [];
-  for (const [pkg, lines] of byPackage) {
-    const declared = DECLARED_CLOCK_READS.get(pkg);
-    if (!declared) {
-      undeclared.push(`${pkg} (${lines.length}) — ${lines.slice(0, 3).join(", ")}${lines.length > 3 ? ", …" : ""}`);
-    } else if (declared.count !== lines.length) {
-      drifted.push(`${pkg}: declared ${declared.count}, found ${lines.length}`);
-    }
-  }
   // An exemption for a package that no longer reads the clock at all has outlived
   // its reason and must be removed, the same as every other declared exemption here.
-  const stale = [...DECLARED_CLOCK_READS.keys()].filter((pkg) => !byPackage.has(pkg));
+  const { undeclared: undeclaredRaw, drifted: driftedRaw, stale } = classifyClockReads(byPackage, DECLARED_CLOCK_READS);
+  const undeclared = undeclaredRaw.map(
+    (u) => `${u.pkg} (${u.count}) — ${u.lines.slice(0, 3).join(", ")}${u.lines.length > 3 ? ", …" : ""}`,
+  );
+  const drifted = driftedRaw.map((d) => `${d.pkg}: declared ${d.declared}, found ${d.found}`);
 
   if (undeclared.length || drifted.length || stale.length) {
     const parts = [];

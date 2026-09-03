@@ -68,6 +68,27 @@ FROM docker.io/library/node:22-alpine AS runtime
 
 WORKDIR /app
 
+# PATCH THE BASE OS's OpenSSL. The daily image-vulnerability gate
+# (scheduled-verification.yml, `grype --fail-on critical --only-fixed`) went red
+# on two CRITICALs carried by this base image — CVE-2026-63073 and
+# CVE-2026-75803 in libssl3/libcrypto3, installed 3.5.7-r0, fixed 3.5.8-r0.
+#
+# Same shape as the npm/tar removal below: "bump the base layer" could not be
+# followed because the `node:22-alpine` tag still ships 3.5.7-r0, so the fix is a
+# targeted `apk upgrade` that pulls the patched package straight from the Alpine
+# repo (grype's "FIXED IN 3.5.8-r0" is that repo's own secdb saying the fix is
+# published). Unpinned on purpose: a hard `=3.5.8-r0` breaks the day Alpine GCs
+# that exact -rN, and the intent here is "take the published OpenSSL patch", not
+# a specific byte. `--no-cache` leaves no apk index in the shipped layer.
+#
+# Scoped to the two flagged packages rather than a blanket `apk upgrade`: the
+# same targeted-and-provable stance as the tar removal. A future base-OS critical
+# with a fix available goes red on the daily gate and gets its own bump, which is
+# the gate working. This cannot be built in the cloud lane (no docker daemon);
+# it is verified by dispatching scheduled-verification.yml on the branch and
+# watching the vuln-gate job, exactly as the tar removal was.
+RUN apk upgrade --no-cache libssl3 libcrypto3
+
 RUN corepack enable pnpm
 
 COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-lock.yaml /app/package.json ./

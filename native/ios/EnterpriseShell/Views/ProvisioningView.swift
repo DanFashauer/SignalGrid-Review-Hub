@@ -77,16 +77,19 @@ struct ProvisioningView: View {
     private func stepRow(index: Int, step: String) -> some View {
         let done = model.completed[index]
         return HStack(alignment: .center, spacing: 12) {
-            // Completed → filled allow-green check; pending → a faint placeholder
-            // ring in the border token, so pending RECEDES and the completed check
-            // advances (the whole staggered reveal exists to show that hierarchy).
-            // sgMutedFg here would render the pending ring as heavy as readable
+            // Completed → filled check in the brand ACCENT (not sgAllow): a
+            // provisioning step finishing is not an allow/deny verdict, and "risk
+            // colours only for decisions" (DesignSystem.swift) — TerminatingView uses
+            // sgAccent for the same "done" semantic, so this matches it. Pending → a
+            // faint placeholder ring in the border token, so pending RECEDES and the
+            // completed check advances (the staggered reveal exists to show that
+            // hierarchy); sgMutedFg would render the pending ring as heavy as readable
             // status text and flatten the distinction.
             Image(systemName: done ? "checkmark.circle.fill" : "circle")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 24, height: 24)
-                .foregroundColor(done ? .sgAllow : .sgBorder)
+                .foregroundColor(done ? .sgAccent : .sgBorder)
                 .accessibilityHidden(true)
             Text(step)
                 .font(SGType.callout)                           // SG.sans(16)

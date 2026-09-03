@@ -51,7 +51,7 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-03 (cloud lane) - nine PRs merged, each independently
+LAST TOUCHED: 2026-09-03 (cloud lane) - eleven PRs merged, each independently
               reviewed before landing, preflight+breadth green on every push,
               the branch restarted from Alpha after each. #399 gate-suite
               hardening (the coverage ratchet cannot be hand-lowered; three gates
@@ -90,30 +90,33 @@ LAST TOUCHED: 2026-09-03 (cloud lane) - nine PRs merged, each independently
               directive 2026-09-03: keep the Mac lane fully utilized) shipped the
               Mac lane's standing agenda + a sim-request bundling the uniquely-Mac
               verifications (evidence, docker, proofs-full) + the held steward
-              heartbeat.
-BLOCKED ON: nothing cloud-side; the merge outage and the critical image vuln are
-              both resolved and merged. Mac lane, non-blocking, from the mailed
-              review notes and the #408 agenda: run the two pending sim-requests
-              (android-desktop-first-run, post-outage-mac-truth); the SwiftUI
-              Phase 2 nits (type-scale drift, one inline font, a button contrast to
-              eyeball; note-1 checkmark colour already fixed); the twin test's
-              per-field checks are conditional; land or report
-              mac/native-ledger-2026-09-02; the older open items (MockSignalGridAPI
-              replayed vectors, DemoMode flag table, the equalToConstant rows at
-              accessibility-XL). Owner, optional (lets the Mac use everything):
-              Firecrawl API key, Screen Recording permission for the terminal,
-              Docker Desktop running.
+              heartbeat. #410 the launch-claims engineering-doc carve-out (task #67):
+              an explicit verified path-map (mirroring CODE_LABEL_EXEMPT, three
+              fail-safes falsified) so engine-branch prose in engineering docs no
+              longer counts against the buyer-claim ceiling; independently reviewed,
+              approved. #412 the Mac lane's Phase 3 (final SwiftUI screen,
+              ActiveSession UIKit->SwiftUI) reviewed (approved - core untouched,
+              deterministic, removes 3 old colour bugs) and landed; the iOS SwiftUI
+              view-layer rebuild is now COMPLETE, and native/ios/README's file-tree
+              was corrected to match.
+BLOCKED ON: nothing cloud-side; Alpha is green. Mac lane, non-blocking (directed
+              in the Phase-3-landed reply): install the android/desktop toolchain
+              (JDK 17+, Rust/cargo) and run android-desktop-first-run; optional
+              belt-and-suspenders api-image grype scan for #407; the residual
+              Phase 2/3 nits (minor type-scale, the Enrolling contrast visual); the
+              twin test's per-field checks are conditional; land or report
+              mac/native-ledger-2026-09-02; older items (MockSignalGridAPI replayed
+              vectors, DemoMode flag table). Owner, optional (lets the Mac use
+              everything): Firecrawl API key, Screen Recording permission for the
+              terminal, Docker Desktop running.
 NEXT ACTION: cloud: process the Mac lane's results as they return (sim-results,
-              lane mail, commits); then the launch-claims engineering-doc carve-out
-              (task #67). owner: discovery conversations (0 of 15) - nothing
-              substitutes.
+              lane mail, commits); next backlog pickup when the owner points. owner:
+              discovery conversations (0 of 15) - nothing substitutes.
               owner: publish the MCP marketplace listing
               (docs/SIGNALGRID_MCP_MARKET_LISTING.md) on the creator page - only
               the owner has the login. owner decisions still pending: fork or
               delete the two vendored agent definitions; the four pasted chat
-              files under attached_assets/. Mac lane: run pnpm run mcp:setup and
-              fold the #402/#403 review notes. cloud: the Mac lane's replies as
-              they arrive; the next independent scan (connector families' emit paths).
+              files under attached_assets/.
 ```
 
 **Experiment started: 2026-08-27**

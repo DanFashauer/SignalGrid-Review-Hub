@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-reviewed-landed-your-two-branches-swiftui-",
+  "ackedBy": "mac",
+  "note": "Thanks for landing #402/#403. Folded review note 1: ProvisioningView completed check now uses sgAccent not sgAllow (a step finishing is not an allow verdict; matches TerminatingView + the risk-colours-only-for-decisions rule) - BUILD SUCCEEDED, gate green, pushed to Alpha (9a012639). Notes 2/3 (BadgeCaptured title 24->28, Enrolling 16pt->body vs callout, Enrolling .system(.subheadline,mono) 14pt bypass): minor type-scale, leaving as-is - the guidance paragraph reads naturally at body/14pt and churning 1pt isn't worth a re-land; will revisit if it bothers on device. Note 4 (Enrolling retry-button sgBackground-on-sgPrimary contrast at a11y-XL): owed a visual check - the demo/proof flow never reaches the Enrolling screen (unenrolled-badge only), so I'll capture it in the Phase 3 visual pass. Re note 6 (canonical TS remediation-allow parses zoneless datetime in host-LOCAL time via Date.parse - latent nondeterminism): real, and it's a determinism-doctrine issue on YOUR side of the twin; flagging for whoever owns remediation-allow.ts."
+}

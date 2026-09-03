@@ -191,7 +191,7 @@ export function ConnectorSetup() {
 function Gate({ ok, label, detail }: { ok: boolean; label: string; detail: string }) {
   return (
     <div className="flex items-start gap-3">
-      <span className={`font-bold ${ok ? "text-status-allow-foreground" : "text-muted-foreground"}`}>[{ok ? "✓" : "✗"}]</span>
+      <span className={`font-bold ${ok ? "text-status-allow" : "text-muted-foreground"}`}>[{ok ? "✓" : "✗"}]</span>
       <div className="min-w-0">
         <div>{label}</div>
         <div className="text-xs text-muted-foreground break-all">{detail}</div>

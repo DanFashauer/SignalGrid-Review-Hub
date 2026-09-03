@@ -92,8 +92,11 @@ export function Intelligence() {
 
       {/* Rollup — the few numbers that matter */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Metric label="Grid smartness" value={grid ? `${grid.smartnessScore}` : "-"} sub={grid ? `${grid.signalsHealthy}/${grid.signalsWired} signals healthy` : ""} accent={grid && grid.smartnessScore >= 66 ? "text-emerald-400" : "text-amber-400"} />
-        <Metric label="Flows healthy" value={grid ? `${grid.flowsHealthy}/${grid.flowsTotal}` : "-"} sub={attention.length ? `${attention.length} need attention` : "all clear"} accent={attention.length ? "text-amber-400" : "text-emerald-400"} />
+        <Metric label="Grid smartness" value={grid ? `${grid.smartnessScore}` : "-"} sub={grid ? `${grid.signalsHealthy}/${grid.signalsWired} signals healthy` : ""} accent={!grid ? undefined : grid.smartnessScore >= 66 ? "text-emerald-400" : "text-amber-400"} />
+        {/* "all clear" is EARNED, not defaulted: with flows.data absent (error or
+            loading) the emerald branch is unreachable — a failed flow-health query
+            must never read as a healthy grid. */}
+        <Metric label="Flows healthy" value={grid ? `${grid.flowsHealthy}/${grid.flowsTotal}` : "-"} sub={!flows.data ? (flows.isError ? "unavailable" : "…") : attention.length ? `${attention.length} need attention` : "all clear"} accent={!flows.data ? undefined : attention.length ? "text-amber-400" : "text-emerald-400"} />
         <Metric label="Recommendations" value={String(recList.length)} sub="ranked by confidence" />
         <Metric label="New signals" value={disc.data ? `${disc.data.summary.autoOnboardable}` : "-"} sub={disc.data ? `auto-onboardable · ${disc.data.summary.needsAdmin} need admin` : ""} />
       </div>
@@ -106,6 +109,18 @@ export function Intelligence() {
           </CardHeader>
           <CardContent className="space-y-2">
             {attention.map((f) => <FlowAttentionRow key={f.flow.id} row={f} />)}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* A failed flow-health read is surfaced, never swallowed into "all clear". */}
+      {flows.isError && (
+        <Card className="border-red-400/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-mono uppercase tracking-wider text-red-400">Flow health unavailable</CardTitle>
+          </CardHeader>
+          <CardContent className="font-mono text-xs text-muted-foreground">
+            {String(flows.error instanceof Error ? flows.error.message : flows.error)}
           </CardContent>
         </Card>
       )}

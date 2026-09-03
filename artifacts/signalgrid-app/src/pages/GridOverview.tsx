@@ -99,10 +99,10 @@ export function GridOverview() {
       {/* Pillars — each links to its surface */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <PillarCard href="/intelligence" title="Grid intelligence" line={coverage ? `${coverage.coveragePct}% ${covProjected ? "ceiling" : "coverage"} · ${coverage.handled}/${coverage.total} ${covProjected ? "reachable" : "handled"}` : "flow health · recommendations"} />
-        <PillarCard href="/signal-sourcing" title="Signal sourcing" line={sourcing ? `${sourcing.wireable}/${sourcing.total} wireable · ${gaps} gap${gaps === 1 ? "" : "s"}` : "how each signal reaches the grid"} tone={gaps > 0 ? "warn" : "ok"} />
+        <PillarCard href="/signal-sourcing" title="Signal sourcing" line={sourcing ? `${sourcing.wireable}/${sourcing.total} wireable · ${gaps} gap${gaps === 1 ? "" : "s"}` : "how each signal reaches the grid"} tone={sourcing ? (gaps > 0 ? "warn" : "ok") : undefined} />
         <PillarCard href="/grid-config" title="Grid config" line={config ? `${config.summary.workflows} workflows · ${config.summary.signals} signals · ${configOk ? "valid" : "invalid"}` : "workflows as code"} tone={config ? (configOk ? "ok" : "bad") : undefined} />
         <PillarCard href="/provisioning" title="Device recorder" line={plan ? `${plan.steps.length} steps · ${plan.matched ? "matched" : "no match"} · simulated` : "zero-touch provisioning"} />
-        <PillarCard href="/app-resilience" title="App resilience" line={fleet ? `${fleet.workable}/${fleet.total} workable · ${blocked} blocked` : "work through cloud downtime"} tone={blocked > 0 ? "warn" : "ok"} />
+        <PillarCard href="/app-resilience" title="App resilience" line={fleet ? `${fleet.workable}/${fleet.total} workable · ${blocked} blocked` : "work through cloud downtime"} tone={fleet ? (blocked > 0 ? "warn" : "ok") : undefined} />
       </div>
     </div>
   );

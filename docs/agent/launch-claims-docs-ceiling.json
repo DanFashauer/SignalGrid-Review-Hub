@@ -1,7 +1,7 @@
 {
   "note": "DEBT CEILING for docs/**/*.md, not a high-water mark: the COUNT OF unhedged deferred-capability mentions, not the count of files carrying them — a new claim in an already-listed document must fail, and counting files hid exactly that. A RISE is fatal; a drop is recorded automatically. Never hand-edit; the gate writes it.",
-  "unhedgedDeferredMentions": 516,
-  "filesCarryingThem": 123,
+  "unhedgedDeferredMentions": 503,
+  "filesCarryingThem": 122,
   "worst": [
     {
       "file": "docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md",
@@ -12,12 +12,12 @@
       "blocks": 18
     },
     {
-      "file": "docs/DOCKBRIDGE_PRODUCT_CONNECTOR.md",
+      "file": "docs/INTEGRATION_CATALOG.md",
       "blocks": 13
     },
     {
-      "file": "docs/INTEGRATION_CATALOG.md",
-      "blocks": 13
+      "file": "docs/DOCKBRIDGE_PRODUCT_CONNECTOR.md",
+      "blocks": 12
     },
     {
       "file": "docs/HARDWARE_PARTNER_MATRIX.md",
@@ -56,12 +56,12 @@
       "blocks": 10
     },
     {
-      "file": "docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md",
-      "blocks": 9
+      "file": "docs/BUILD_BACKLOG.md",
+      "blocks": 8
     },
     {
-      "file": "docs/SIGNALGRID_SMARTDOCK.md",
-      "blocks": 9
+      "file": "docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md",
+      "blocks": 8
     }
   ]
 }

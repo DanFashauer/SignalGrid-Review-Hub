@@ -32,6 +32,8 @@ const SIGNAL_TYPE_COLORS: Record<string, string> = {
   "physical-access": "text-orange-400 bg-orange-400/10 border-orange-400/20",
 };
 
+// Describes each signal CATEGORY, including sub-attributes that are on the roadmap /
+// deferred (e.g. shift window, access zone) — not a claim that each is evaluated today.
 const SIGNAL_TYPE_DESCRIPTIONS: Record<string, string> = {
   "identity": "User identity, MFA status, role assignments, and session attributes from the IDP",
   "device-posture": "Device compliance, encryption, patch level, and enrollment status",
@@ -43,8 +45,23 @@ const SIGNAL_TYPE_DESCRIPTIONS: Record<string, string> = {
 
 export function IntegrationDetail() {
   const { id } = useParams();
-  const { data: integrationRaw, isLoading } = useGetIntegration(id || "");
+  const { data: integrationRaw, isLoading, isError, error } = useGetIntegration(id || "");
   const integration = integrationRaw as ExtendedIntegration | undefined;
+
+  // A failed fetch is its own state — not an animated skeleton that pulses forever
+  // as if the load were still in flight.
+  if (isError) {
+    return (
+      <div className="p-8 max-w-5xl mx-auto space-y-6">
+        <Link href="/integrations" className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1 font-mono uppercase tracking-wider">
+          <ArrowLeft className="w-4 h-4" /> Back to Integrations
+        </Link>
+        <div className="text-sm text-muted-foreground font-mono p-4 border border-dashed border-border rounded">
+          {String(error instanceof Error ? error.message : error)}
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading || !integration) {
     return (

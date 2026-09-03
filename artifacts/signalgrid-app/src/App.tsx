@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import { AppLayout } from "@/components/layout/AppLayout";
+import { AppLayout, LAUNCH_NAV } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Route-level code splitting: each page (and its heavy deps, e.g. the charting
@@ -47,12 +47,20 @@ const queryClient = new QueryClient();
  * just can never be mistaken for the shipped surface.
  */
 function PreviewBanner() {
+  // The launch-surface list is DERIVED from the rendered launch nav, so the banner
+  // can never again drift from what the sidebar actually shows (it previously named
+  // six surfaces the nav did not render). Configuration surfaces are reached through
+  // Settings, which is itself named here.
+  const labels = LAUNCH_NAV.map((e) => e.label);
+  const surfaces =
+    labels.length > 1
+      ? `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`
+      : labels.join("");
   return (
     <div className="px-8 pt-4">
       <div className="border border-amber-400/30 bg-amber-400/5 rounded px-3 py-2 font-mono text-[11px] text-amber-400/90">
         PREVIEW — fixture-backed demo surface, not part of the launch console.
-        The launch surfaces are Overview, Decisions, Audit, Connector setup,
-        Policies, and Assurance.
+        The launch surfaces are {surfaces} (configuration is reached through Settings).
       </div>
     </div>
   );

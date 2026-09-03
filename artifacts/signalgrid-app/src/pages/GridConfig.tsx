@@ -44,7 +44,7 @@ export function GridConfig() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Metric label="Signals" value={data ? String(data.summary.signals) : "-"} />
             <Metric label="Workflows" value={data ? String(data.summary.workflows) : "-"} />
-            <Metric label="Errors" value={data ? String(data.summary.errors) : "-"} accent={data && data.summary.errors ? "text-red-400" : "text-emerald-400"} />
+            <Metric label="Errors" value={data ? String(data.summary.errors) : "-"} accent={data ? (data.summary.errors ? "text-red-400" : "text-emerald-400") : undefined} />
             <Metric label="Warnings" value={data ? String(data.summary.warnings) : "-"} accent={data && data.summary.warnings ? "text-amber-400" : undefined} />
           </div>
           {(errors.length > 0 || warnings.length > 0) && (

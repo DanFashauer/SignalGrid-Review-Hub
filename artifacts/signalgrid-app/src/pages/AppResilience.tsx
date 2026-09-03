@@ -40,7 +40,7 @@ export function AppResilience() {
         <Metric label="Apps workable" value={fleet ? `${fleet.workable}/${fleet.total}` : "-"} accent={fleet ? (fleet.blocked ? "text-amber-400" : "text-emerald-400") : undefined} sub={fleet ? (fleet.allWorkable ? "all have a safe path" : `${fleet.blocked} blocked`) : ""} />
         <Metric label="On fallback" value={fleet ? String(fleet.onFallback) : "-"} accent={fleet && fleet.onFallback ? "text-sky-400" : undefined} sub="downtime path" />
         <Metric label="Degraded" value={fleet ? String(fleet.degraded) : "-"} accent={fleet && fleet.degraded ? "text-amber-400" : undefined} sub="proceed · watched" />
-        <Metric label="Blocked" value={fleet ? String(fleet.blocked) : "-"} accent={fleet && fleet.blocked ? "text-red-400" : "text-emerald-400"} sub="no safe path" />
+        <Metric label="Blocked" value={fleet ? String(fleet.blocked) : "-"} accent={fleet ? (fleet.blocked ? "text-red-400" : "text-emerald-400") : undefined} sub="no safe path" />
       </div>
 
       {/* Blocked — the loud part, only when something has no safe path */}

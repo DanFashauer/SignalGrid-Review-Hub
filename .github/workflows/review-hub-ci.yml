@@ -658,6 +658,14 @@ jobs:
       # check-test-execution.mjs now reads this line to see it reached.
       - name: MCP server unit tests (tool/resource contract + annotations)
         run: pnpm --filter @workspace/mcp-server run test
+      - name: Console routes self-test (the gate must be able to fail)
+        run: node scripts/check-console-routes.mjs --self-test
+      - name: Console routes (every console fetch target maps to a served route)
+        run: node scripts/check-console-routes.mjs
+      - name: Dead nav self-test (the gate must be able to fail)
+        run: node scripts/check-dead-nav.mjs --self-test
+      - name: Dead nav (a *_NAV/*_GROUPS array rendered nowhere is dead code)
+        run: node scripts/check-dead-nav.mjs
 
       - name: OIDC middleware test (the production auth branch actually executes)
         run: pnpm run test:oidc

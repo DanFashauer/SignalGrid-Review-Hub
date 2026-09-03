@@ -273,11 +273,14 @@ export const TARGETS = [
   {
     proof: "proof:emitter-discipline",
     files: [
-      "lib/integrations/src/integrations/itsm/resolve.ts",
-      "lib/integrations/src/integrations/siem/resolve.ts",
-      "lib/integrations/src/integrations/syslog/resolve.ts",
-      "lib/integrations/src/integrations/telemetry/resolve.ts",
-      "lib/integrations/src/integrations/webhooks/resolve.ts",
+      // Ponytail cut 4 (2026-09-02) folded the six near-identical emitter bodies into
+      // one factory. Each family's resolve.ts is now a thin binding — config literals
+      // only, zero mutable guards (mutationsFor === 0) — so registering them was a
+      // false coverage claim. The falsifiable logic (tier/flag/token/transport checks,
+      // the fixture recorder) lives in the factory, which this proof exercises via
+      // resolveItsmEmitter; register THAT. Fixed 2026-09-03 after the sweep flagged the
+      // five empty bindings and the whole daily sweep went red.
+      "lib/integrations/src/integrations/adapters/emitter-resolver.ts",
     ],
   },
 
@@ -305,7 +308,9 @@ export const TARGETS = [
     proof: "proof:caep-events",
     files: [
       "lib/integrations/src/integrations/caep-events/format.ts",
-      "lib/integrations/src/integrations/caep-events/resolve.ts",
+      // resolve.ts dropped 2026-09-03: a thin createEmitterResolver binding (0 mutable
+      // guards) after the emitter fold; its logic is the shared factory registered under
+      // proof:emitter-discipline. format.ts carries this family's mutable logic.
     ],
   },
   {
@@ -398,7 +403,9 @@ export const TARGETS = [
     proof: "proof:oauth-consent",
     files: [
       "lib/integrations/src/integrations/oauth-consent/evaluate.ts",
-      "lib/integrations/src/integrations/oauth-consent/oauth-consent-connector.ts",
+      // oauth-consent-connector.ts dropped 2026-09-03: read-only normalize/transport in
+      // typeof/allowlist/ternary shapes the mutators do not express, 0 mutations — a false
+      // coverage claim. evaluate.ts carries this family's mutable guards.
       "lib/integrations/src/integrations/oauth-consent/index.ts",
     ],
   },
@@ -414,7 +421,10 @@ export const TARGETS = [
     proof: "proof:access-governance",
     files: [
       "lib/integrations/src/integrations/access-governance/evaluate.ts",
-      "lib/integrations/src/integrations/access-governance/access-governance-connector.ts",
+      // access-governance-connector.ts dropped 2026-09-03: its normalize/transport is
+      // defensive parsing (typeof / allowlist / ternary) the mutators do not express, so
+      // it registered 0 mutations — a false coverage claim. The proof still asserts its
+      // behaviour; evaluate.ts carries this family's mutable decision guards.
       "lib/integrations/src/integrations/access-governance/index.ts",
     ],
   },
@@ -453,7 +463,9 @@ export const TARGETS = [
     proof: "proof:ot-posture",
     files: [
       "lib/integrations/src/integrations/ot-posture/evaluate.ts",
-      "lib/integrations/src/integrations/ot-posture/ot-connector.ts",
+      // ot-connector.ts dropped 2026-09-03: same reason as access-governance's connector
+      // — defensive parsing the mutators do not express, 0 mutations. evaluate.ts carries
+      // the mutable guards.
       "lib/integrations/src/integrations/ot-posture/index.ts",
     ],
   },
@@ -462,7 +474,8 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/token-binding/index.ts",
       "lib/integrations/src/integrations/token-binding/evaluate.ts",
-      "lib/integrations/src/integrations/token-binding/token-binding-connector.ts",
+      // token-binding-connector.ts dropped 2026-09-03: same reason — defensive parsing the
+      // mutators do not express, 0 mutations. evaluate.ts carries the mutable guards.
     ],
   },
   {
@@ -521,7 +534,9 @@ export const TARGETS = [
       // mutated at all: the registration named `index.ts`, which re-exports it.
       // Mutation operates on files, so a barrel buys nothing.
       "lib/integrations/src/integrations/device-attestation/evaluate.ts",
-      "lib/integrations/src/integrations/device-attestation/device-attestation-connector.ts",
+      // device-attestation-connector.ts dropped 2026-09-03: same reason — defensive
+      // parsing the mutators do not express, 0 mutations. evaluate.ts carries the
+      // mutable guards.
       "lib/integrations/src/integrations/device-attestation/index.ts",
     ],
   },

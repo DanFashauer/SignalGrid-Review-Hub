@@ -339,6 +339,43 @@ for (const v of vectors) {
   );
 }
 
+// ── 1b. DETERMINISM: an instant with no explicit zone is illegible ───────────
+// Date.parse reads a zoneless date-time in the HOST's LOCAL time and a bare date as
+// UTC — a machine- and clock-dependent parse golden rule 2 forbids in a decision
+// path, and a form the Swift twin's ISO8601 parser rejects. Every such instant must
+// read as illegible (raise, never lower), the same in every timezone. Falsifiable:
+// before instantMs required a zone, a fresh-looking zoneless verifiedAt classified as
+// verified/stale by the runner's own offset, so this block went green in some zones
+// and red in others; now it is green everywhere. Confirmed by the Mac lane (note 6).
+const ZONELESS_INSTANTS = ["2026-06-09T14:00:00", "2026-06-09T14:00:00.000", "2026-06-09", "06/09/2026"];
+for (const ts of ZONELESS_INSTANTS) {
+  check(
+    `determinism: verifiedAt "${ts}" (no explicit zone) is illegible, never read against the host clock`,
+    classifyRemediation({ id: "det", status: "verified", verifiedAt: ts }, { asOf: AS_OF, evidenceMaxAgeMs: MAX_AGE_MS }) ===
+      "illegible",
+  );
+  check(
+    `determinism: asOf "${ts}" (no explicit zone) is illegible`,
+    classifyRemediation({ id: "det", status: "verified", verifiedAt: AS_OF }, { asOf: ts, evidenceMaxAgeMs: MAX_AGE_MS }) ===
+      "illegible",
+  );
+}
+{
+  const out = resolveRemediationAllow({
+    decision: { outcomes: ["allow"] },
+    record: { id: "det", status: "verified", verifiedAt: "2026-06-09T14:00:00" },
+    asOf: AS_OF,
+    evidenceMaxAgeMs: MAX_AGE_MS,
+    policyRequiresRemediation: true,
+  });
+  check(
+    "determinism: an engine allow on a zoneless verification instant is withheld to step_up/illegible",
+    out.hostOutcome === "step_up" &&
+      out.reasonCode === "REMEDIATION_STATE_ILLEGIBLE" &&
+      out.allowWithheld === true,
+  );
+}
+
 // ── 2. NEVER UPWARD ──────────────────────────────────────────────────────────
 const upgraded = vectors.filter((v) => {
   const out = resolveRemediationAllow({

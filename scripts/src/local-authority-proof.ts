@@ -190,6 +190,21 @@ check(
   normalizeLocalAuthority({ ...base, grantIssuedAt: "2026-01-01T11:00:00.000Z" }, REF).standing ===
     "no_grant_policy",
 );
+
+// The no_grant_policy branch still PUBLISHES the grant age when a grant instant is
+// present — the standing says nobody set a disconnect budget, but the age is a fact
+// worth reporting. Asserting the age (not just the standing) is what makes the
+// `if (issued !== null)` guard inside that branch falsifiable: mutating it to `false`
+// drops grantAgeSeconds to null, which only THIS check catches (the standing is
+// no_grant_policy either way). Added 2026-09-03 after the mutation sweep found the
+// guard the 2026-09-02 future-guard fold left uncovered.
+check(
+  "no_grant_policy with a grant instant present still publishes grantAgeSeconds (the age, not dropped to null)",
+  ((): boolean => {
+    const n = normalizeLocalAuthority({ ...base, grantIssuedAt: "2026-01-01T11:00:00.000Z" }, REF);
+    return n.standing === "no_grant_policy" && n.grantAgeSeconds === 3600;
+  })(),
+);
 // NEITHER a policy NOR a grant → `no_grant_policy`, NOT `never_issued`.
 //
 // This pair is what separates the two branches. `never_issued` says a policy

@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 53,
-  "fingerprint": "8efad77e876c41d32c1522ac2447492763356558eeee2fa5ffef598286aa9820",
+  "manifestVersion": 54,
+  "fingerprint": "7fad717f24d8bf1b3dd177b65b569b264f9b8f4cd209a8af00a87a0ca19b5336",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -143,7 +143,7 @@
       "provisioning-order": 42,
       "provisioning-teardown": 25,
       "reliability": 28,
-      "remediation-allow": 106,
+      "remediation-allow": 115,
       "response-accountability": 82,
       "self-audit": 56,
       "service-lifecycle": 82,

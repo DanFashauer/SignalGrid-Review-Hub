@@ -24,7 +24,7 @@
 //      HAND-EDIT that deletes cases from the committed file, and it cannot catch the
 //      table itself shrinking, because the floor shrinks with it. The independent
 //      brake on shrinkage is `scripts/check-proof-counts.mjs` — the docs advertise
-//      `proof:remediation-allow` (106 checks), the gate re-runs the proof and compares,
+//      `proof:remediation-allow` (115 checks), the gate re-runs the proof and compares,
 //      and dropping vectors drops the check count and fails there. Two cases removed
 //      from the generator is a red build in the counts gate, not here.
 //   2. it is non-vacuous in the direction that matters: some case must expect

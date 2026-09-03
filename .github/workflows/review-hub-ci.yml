@@ -549,6 +549,15 @@ jobs:
         run: node scripts/check-cited-paths.mjs
       - name: "Cited-path self-test (the gate can actually fail)"
         run: node scripts/check-cited-paths.mjs --self-test
+      # The MCP-ecosystem source-independence map: every externally-sourced connector
+      # family must carry a row in docs/research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md (an
+      # MCP server or an explicit gap marker), and the map may not name a family the
+      # tree does not have. Derived from the family directories under
+      # lib/integrations/src/integrations, self-tested both directions (DR-028).
+      - name: "MCP-ecosystem-map self-test (the gate can fail both directions)"
+        run: node scripts/check-mcp-ecosystem-map.mjs --self-test
+      - name: "MCP-ecosystem map (every externally-sourced family has an ecosystem row or a stated gap)"
+        run: node scripts/check-mcp-ecosystem-map.mjs
       - name: "Absence-check self-test (a word in a disclaimer is not the thing existing)"
         run: node scripts/agent/absence-check.mjs --self-test
       # The same shape one level down: doc-orphans asks whether a reader can reach a

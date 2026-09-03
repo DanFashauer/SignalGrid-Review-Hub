@@ -61,6 +61,7 @@ Everything below is the full catalog, deepest first.
 
 - [Three-plane architecture](MCP_ARCHITECTURE.md): the ratified Bruno contract plane / MCP agent plane / deterministic trust plane split (DR-008) — "MCP is an orchestration interface, not a new trust authority" — with the evidence-boundary pipeline and the built-vs-deferred line (execute-bridge, HTTP transport, OAuth scopes are deferred).
 - [MCP security model](MCP_SECURITY_MODEL.md): what protects the agent plane today (local stdio process via `scripts/mac/mcp-up.sh`, no authentication because the process boundary is the boundary, read-only tools, no mutation tools) and the deferred enterprise model (HTTPS, OAuth, tenant-bound scopes, invocation audit) marked as design intent only.
+- [SignalGrid Fabric MCP — marketplace listing](SIGNALGRID_MCP_MARKET_LISTING.md): the public-safe copy the owner can paste into his own creator page to offer SignalGrid's existing read-only MCP server, describing the real tool surface (drift-gated by `scripts/check-mcp-surface.mjs`, never hand-counted), stdio transport, env-only no-secrets configuration, and the honest boundary — a fixture-backed prototype, not a production or certified service (DR-028).
 
 ### The decision fabric — build the grid
 
@@ -376,6 +377,7 @@ records rather than current guidance.
 - [LAB 001 cloud rehearsal](lab/LAB_001_CLOUD_REHEARSAL.md): Step 1's verification protocol proven over the real MCP stdio wire — baseline plus four forced-unknown probes, every one tightening; the Mac's real-posture run is queued against it as the known-good baseline.
 - [IAM core-architecture coverage map](research/IAM_CORE_COVERAGE_MAP.md): an owner-supplied IAM framework held against the tree cell by cell — 92 concepts, 83 proven with cited evidence, six that are work (DR-021 intake).
 - [Enterprise security stack coverage map](research/ENTERPRISE_SECURITY_STACK_COVERAGE_MAP.md): an owner-supplied five-layer industry architecture held against the tree — SignalGrid maps as the decision layer (weight in Zero Trust Identity Mesh), reaching the other four layers as fail-closed evidence sources, not replacing any of them; every row cites a real `proof:*` (DR-021 intake).
+- [MCP ecosystem signal-source map](research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md): a fixture-first source-independence map — for each externally-sourced connector family (identity, EDR, SIEM, ITSM, network, physical access, UEM, vulnerability scanning, observability), the MCP servers in the ecosystem that expose that system's signals, with DLP, peripheral control and carrier named as explicit gaps; SignalGrid decides on top of these and never replaces them, and none is wired (held by `scripts/check-mcp-ecosystem-map.mjs`; DR-028 intake).
 
 ## Reachability sweep — 2026-09-02
 

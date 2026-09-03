@@ -1540,3 +1540,69 @@ read and named here; the family type files cited row by row in the brief.
 **Reversal.** The owner reverses by saying so: delete the brief, this record, the intake row
 and the index line, and strike the row-97 annotation. Nothing in the product depends on it,
 by construction.
+
+## DR-028 — The MCP ecosystem is absorbed as a fixture-first signal-source map, and SignalGrid's own MCP server is prepared for a public marketplace listing (owner-directed 2026-09-02)
+
+**Question.** The owner's directive, in substance: *search MCP Market
+(app.mcpmarket.com) for anything that adds value to SignalGrid so I can offer it as a
+solution.* Two questions fall out of it. First, what does the Model Context Protocol
+ecosystem add to a product whose decision core is deterministic, offline and
+fixture-backed — where does it fit, and what has to be true for it to strengthen the
+tree rather than dilute it? Second, SignalGrid already ships its own read-only MCP
+server (`artifacts/mcp-server/`, DR-008): can it be offered on the owner's creator page
+without overstating what it is?
+
+**What was established, by use.** The public MCP directories and vendor documentation
+were read on 2026-09-02. The creator/deploy side of MCP Market
+(`app.mcpmarket.com/dan-fashauer/mcp/new`) is authentication-walled and was not
+enumerated; only the public directory and vendor docs were. The finding: the ecosystem
+is not a new signal SOURCE for SignalGrid — the systems of record already named in
+`docs/SIGNAL_SOURCE_CATALOG.md` are, and no MCP server substitutes for their
+credentials. What the ecosystem adds is a way to make source-independence CONCRETE:
+for each externally-sourced connector family, there is (or is provably not) a
+third-party MCP server that exposes that system's signals. That mapping is exactly the
+DR-027 `public-apis` pattern one layer up — a candidate read-only transport, not a
+system of record.
+
+**Call: absorbed on two tracks, both documentation-only.**
+
+1. **A fixture-first source-independence map** at
+   `docs/research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md`: for each ecosystem-mapped family,
+   the MCP servers in the wider ecosystem that expose that system's signals, grouped by
+   external product category (identity/SSO/IAM, EDR/endpoint, SIEM, ITSM, network,
+   physical access, UEM, vulnerability scanning, observability), with the three
+   categories that have no widely-adopted MCP server named as explicit gaps rather than
+   omitted. Every row makes one claim only: SignalGrid ingests the vendor-neutral signal
+   these produce and decides on top of it; it does not replace the producing system.
+2. **A public-safe marketplace listing** at `docs/SIGNALGRID_MCP_MARKET_LISTING.md`:
+   the copy the owner can paste into his creator page to offer SignalGrid's existing
+   read-only MCP server. It describes the real tool surface — the set drift-gated by
+   `scripts/check-mcp-surface.mjs`, never a hand-counted number — over stdio, configured
+   by environment only, and it states the honest boundary: a fixture-backed
+   deterministic decision core, a public-safe prototype, not a production or certified
+   service.
+
+**Rationale.** Source-independence is the thesis PURPOSE.md and DR-020 already state;
+until now it was prose. The map turns it into something a buyer can check, and the
+machine gate keeps it from rotting. The listing is a distribution channel for a surface
+that already exists — no new product, no new claim — and offering it is the owner's own
+directive answered with an artifact rather than a memo (DR-021, the absorption rule).
+
+**Boundary.** No live external MCP server is wired into this repository. Wiring one
+would send data to an external service and needs the owner's explicit go-ahead, behind
+tier + `SIGNALGRID_LIVE_INTEGRATIONS` + a configured opt-in and the ungated-fetch gate,
+as every connector already is (golden rule 2; the DR-027 fixture-first rule). This
+record adds documentation, one machine gate
+(`scripts/check-mcp-ecosystem-map.mjs`, in preflight and CI, self-tested both
+directions) and its index and intake lines — no code in a decision path, no dependency,
+no connector family, no partnership or certification claim.
+
+**Evidence.** The two documents named above; the gate and its `--self-test`; the tool
+surface parsed from `artifacts/mcp-server/src/index.ts` and held by
+`scripts/check-mcp-surface.mjs`; the live-lab families cited in the map
+(`docs/KEYCLOAK_LIVE_INTEGRATION.md`, `docs/FLEET_LIVE_INTEGRATION.md`); the family set
+derived from `lib/integrations/src/integrations/` on 2026-09-02.
+
+**Reversal.** The owner reverses by saying so: delete the two documents, this record,
+the gate and its preflight/CI registration, the intake row and the index lines. Nothing
+in the product depends on any of it, by construction.

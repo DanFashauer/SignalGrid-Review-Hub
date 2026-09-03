@@ -335,6 +335,15 @@ jobs:
         run: node scripts/check-decision-record-format.mjs
       - name: Test execution (a test no runner reaches is not coverage)
         run: node scripts/check-test-execution.mjs
+      # Surface-level sibling of the file-level review-coverage gate. The owner's
+      # worry, verbatim: "only a select portion of the repo vs the full repo".
+      # Validation is whole-repo; the deep reads are not, and nothing showed which
+      # surfaces had ever been read. Self-test first, so a drifted derivation
+      # cannot report green about a surface set it no longer computes.
+      - name: Surface-read-coverage self-test (the gate must be able to fail)
+        run: node scripts/check-surface-review-coverage.mjs --self-test
+      - name: Surface read coverage (an unread surface is named, never silent)
+        run: node scripts/check-surface-review-coverage.mjs
       - name: Accuracy doctrine (DR-015 — unsourced citations, bare external statistics)
         run: node scripts/check-accuracy-doctrine.mjs
       - name: Agent roster (DR-016 — tier, charter, disjoint write boundary)

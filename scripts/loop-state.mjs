@@ -107,6 +107,24 @@ if (existsSync(logPath)) {
   add("warn", "Discovery log", "docs/agent/DISCOVERY_LOG.md not in the repo yet");
 }
 
+// ── 4b. How much of the repo has actually been READ? ────────────────────────
+// Whole-repo validation is not whole-repo reading. Derived live from the tree by
+// the gate itself rather than restated here, so this row cannot fossilise.
+// REPORTED, never a failure — an unread surface is a place to spend an hour, not
+// a broken seam, and the gate that owns the number is the one that fails.
+try {
+  const { deriveSurfaces, auditSurfaceCoverage, coverTracked, listTracked } = await import("./check-surface-review-coverage.mjs");
+  const ledger = JSON.parse(readFileSync(resolve(repo, "docs/agent/SURFACE_REVIEW_COVERAGE.json"), "utf8"));
+  const tracked = listTracked(repo);
+  const surfaces = deriveSurfaces(repo, tracked);
+  const a = auditSurfaceCoverage(surfaces, ledger, { cover: coverTracked(surfaces, tracked) });
+  add("ok", "Review coverage", `${a.readCount} of ${a.total} surfaces read, ${a.partial.length} partial, ${a.notRead.length} not read`);
+} catch (e) {
+  // Fail LOUD rather than skip: a silently absent row would read as "nothing to
+  // report", which is the one thing this number must never be able to say.
+  add("warn", "Review coverage", `could not be derived — ${e.message}`);
+}
+
 // ── 5. Are the doctrine gates still holding? ────────────────────────────────
 for (const [label, script] of [
   ["Decision vocabulary", "scripts/check-decision-vocabulary.mjs"],

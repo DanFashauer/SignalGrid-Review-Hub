@@ -73,6 +73,10 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
+// walker-floor: not needed — a coverage self-test below asserts docs/research/ is
+// among the scanned files (`covers("docs/research/")`), which is false and FATAL
+// when the walk reaches nothing. That is a stricter non-vacuity control than a
+// count floor: it names the specific tree that must stay in scope.
 const ROOTS = ["docs"];
 const SKIP = /(^|\/)(node_modules|dist|build|\.git)(\/|$)|^docs\/inspiration\//;
 const VENDORED = /^(vendor|\.claude\/skills)\//;

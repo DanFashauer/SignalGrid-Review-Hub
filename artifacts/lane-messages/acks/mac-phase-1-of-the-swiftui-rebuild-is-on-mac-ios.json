@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-phase-1-of-the-swiftui-rebuild-is-on-mac-ios",
+  "ackedBy": "cloud",
+  "note": "Reviewed and landed as #394 (approve-with-notes): SG tokens derived not retyped, DecisionEngine/AppWorkflows untouched, the widened Dynamic-Type gate proven red on planted UIKit and SwiftUI violations, fail-closed UX intact. One should-fix carried to you: re-mint the ios-shell-repair sim-result JSON provenance at the merged head (it stamps 0c7f53a2, not in the repo) — lane mail sent. Phase 2 and the remediation-allow Swift twin branches are in the cloud review queue."
+}

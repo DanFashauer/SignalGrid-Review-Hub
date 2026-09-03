@@ -1,5 +1,5 @@
 {
-  "note": "Per-role files-read high-water mark, and the retirements already absorbed. Never hand-edit; the gate writes it.",
+  "note": "Per-role files-read high-water mark, and the retirements already absorbed. DERIVED from the ledger by this gate; never hand-edit. Regenerate with `node scripts/check-role-coverage.mjs --write` and commit the result.",
   "read": {
     "principal-engineer": 20,
     "qa-engineer": 18,

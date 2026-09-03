@@ -588,6 +588,55 @@ const CODE_LABEL_EXEMPT = new Map([
   ],
 ]);
 
+// ── ENGINEERING DOCS ARE CARVED OUT OF THE DEFERRED-NOUN CEILING (task #67) ──
+//
+// The docs/**/*.md ceiling below counts an unhedged deferred-capability NOUN in
+// any doc as a mention. That rule cannot tell a BUYER CLAIM ("SignalGrid
+// evaluates device custody today") from ENGINEERING PROSE naming the same word
+// as an ENGINE BRANCH or an integration subject. docs/REASON_CODES.md is the
+// engine's own GENERATED catalogue and lists CUSTODY_EXCEPTION / DOCK_OFFLINE
+// because those reason codes EXIST in the deterministic core; the RTLS
+// integration notes and the live-test matrix say "zone" and "custody" because
+// that is the subsystem they specify and test (several lines mark it still
+// unmet). None is a buyer surface, and each legitimately names the family, so
+// counting them meant an honest engineering edit could push the ceiling and fail
+// a build on true prose — the "gate that punishes honest writing" this file
+// warns against three times over.
+//
+// WHY AN EXPLICIT VERIFIED PATH-MAP — not a folder rule, not a banner. This
+// mirrors CODE_LABEL_EXEMPT exactly, because both alternatives are worse here:
+//   * A FOLDER exemption (docs/research/ …) is the blanket-immunity-by-name this
+//     gate refuses elsewhere; a buyer doc dropped into the folder inherits it
+//     silently.
+//   * A DOCUMENT BANNER (the PAGE_SCOPE pattern) cannot survive on a GENERATED
+//     doc — docs/REASON_CODES.md is rewritten by gen-reason-codes.mjs and a hand
+//     banner would be erased on the next regen — and REASON_CODES is the single
+//     clearest engine-branch case.
+// So the carve-out is an explicit list, one line per file with the reason it is
+// engineering-not-buyer, and it is only as safe as its fail-safes (all checked
+// below, each fatal): (a) the file EXISTS; (b) it STILL carries a deferred noun,
+// or the entry is a fossil widening nothing; (c) it is NEVER also in the
+// buyer-facing `files` set — an overclaim on a stranger-facing surface may not
+// hide behind an engineering label. It applies ONLY to the REPORTED ceiling; the
+// buyer-facing hard gate and the retired-label scans are untouched, so nothing a
+// stranger reads loses coverage.
+const ENGINEERING_DOCS_EXEMPT = new Map([
+  ["docs/REASON_CODES.md", "generated engine reason-code catalogue (gen-reason-codes.mjs); CUSTODY_*/DOCK_* are real engine outputs, and a generated file cannot carry a hand banner"],
+  ["docs/KONTAKT_RTLS_INTEGRATION_NOTES.md", "RTLS integration engineering notes; zone/proximity name the subsystem being specified, not a shipped signal"],
+  ["docs/ZERO_COST_LIVE_TEST_MATRIX.md", "test-planning matrix; custody/RTLS name the dimensions under test, several marked still-unmet on the same line"],
+  ["docs/INTEGRATION_CATALOG.md", "connector architecture catalogue; custody/zone name connector inputs (rtls-custody, pacs-access) beside their lib/ paths"],
+  ["docs/DOCKBRIDGE_PRODUCT_CONNECTOR.md", "dock-custody connector specification; custody is the connector's own subject"],
+]);
+
+// Pure: the ceiling mentions a doc contributes — zero if it is engineering-exempt,
+// else its full violation count. Kept a hair's-breadth from violationsIn so the
+// self-test can prove the exemption reaches the CEILING ONLY and never the
+// buyer-facing hard gate (which calls violationsIn directly).
+function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
+  if (exempt.has(name)) return 0;
+  return violationsIn(name, body).length;
+}
+
 // ── self-test ────────────────────────────────────────────────────────────────
 {
   const bad0 = "6 evaluated-today signal dimensions";
@@ -703,7 +752,15 @@ const CODE_LABEL_EXEMPT = new Map([
     codeRetiredViolations("stC1.mjs", '// this constant once read "SignalGrid Shared-Device Trust Gateway"\nexport const PRODUCT_NAME = "SignalGrid";').length === 0 &&
     codeRetiredViolations("stC2.mjs", "const re = /Shared-Device Trust Gateway/i;").length > 0 &&
     codeRetiredViolations("stC3.mjs", 'const note = "the Shared-Device Trust Gateway label is superseded by DR-020";').length === 0 &&
-    codeRetiredViolations("stC4.ts", 'const product = "SignalGrid";').length === 0;
+    codeRetiredViolations("stC4.ts", 'const product = "SignalGrid";').length === 0 &&
+    // ── engineering-docs carve-out (task #67): CEILING ONLY, never the buyer gate ──
+    // A doc in the exempt map contributes ZERO ceiling mentions for engine-branch prose…
+    ceilingMentions("docs/REASON_CODES.md", "Device custody is confirmed today.", new Map([["docs/REASON_CODES.md", "x"]])) === 0 &&
+    // …the SAME prose in a NON-exempt doc still counts…
+    ceilingMentions("docs/SOME_BUYER_DOC.md", "Device custody is confirmed today.", new Map([["docs/REASON_CODES.md", "x"]])) > 0 &&
+    // …and the exemption NEVER reaches violationsIn, so the buyer-facing hard gate
+    // still flags the very same file and prose (the carve-out is ceiling-only).
+    violationsIn("docs/REASON_CODES.md", "Device custody is confirmed today.").length > 0;
   if (!st) {
     console.error("✗ SELF-TEST FAILED: a rule no longer flags its synthetic violation. A gate that cannot fail proves nothing.");
     process.exit(1);
@@ -964,15 +1021,47 @@ let codeScanned = 0;
 const DOCS_CEILING_FILE = "docs/agent/launch-claims-docs-ceiling.json";
 let docsMentions = 0;
 let docsFiles = 0;
+let engExemptMentions = 0;
+let engExemptFiles = 0;
 const docsWorst = [];
 {
   const docFiles = execSync("git ls-files docs", { encoding: "utf8" })
     .trim().split("\n").filter((f) => f.endsWith(".md"));
   for (const f of docFiles) {
-    const n = violationsIn(f, readFileSync(f, "utf8")).length;
-    if (n > 0) { docsFiles += 1; docsMentions += n; docsWorst.push([f, n]); }
+    // A raw count first, so an engineering-exempt file still counts toward the
+    // REPORTED exemption tally (an exemption nobody can see is a fail-open, F2b).
+    const raw = violationsIn(f, readFileSync(f, "utf8")).length;
+    if (raw === 0) continue;
+    if (ENGINEERING_DOCS_EXEMPT.has(f)) { engExemptMentions += raw; engExemptFiles += 1; continue; }
+    docsFiles += 1; docsMentions += raw; docsWorst.push([f, raw]);
   }
   docsWorst.sort((a, b) => b[1] - a[1]);
+
+  // The carve-out is only as safe as its fail-safes (task #67). Each is fatal,
+  // and each mirrors CODE_LABEL_EXEMPT: an entry that no longer earns its keep is
+  // a hole standing open with a reason attached.
+  for (const [f, why] of ENGINEERING_DOCS_EXEMPT) {
+    if (!existsSync(f)) {
+      console.error(`  ✗ engineering-docs exemption names a missing file: ${f} — delete the entry (${why}).`);
+      problems += 1;
+      continue;
+    }
+    if (files.includes(f)) {
+      console.error(
+        `  ✗ engineering-docs exemption ${f} is ALSO a buyer-facing surface — an overclaim there reaches a stranger, ` +
+          `so it may not hide behind an engineering label. Remove the entry or the file from the buyer set (${why}).`,
+      );
+      problems += 1;
+      continue;
+    }
+    if (violationsIn(f, readFileSync(f, "utf8")).length === 0) {
+      console.error(
+        `  ✗ engineering-docs exemption for ${f} is a FOSSIL — it no longer carries a deferred-capability noun, ` +
+          `so the exemption widens nothing. Delete it (${why}).`,
+      );
+      problems += 1;
+    }
+  }
 }
 
 console.log(
@@ -1005,6 +1094,7 @@ console.log(
   const ceiling = prior.unhedgedDeferredMentions;
   console.log(
     `  docs/**/*.md (REPORTED, not gated): ${docsMentions} unhedged deferred-capability mention(s) across ${docsFiles} file(s)` +
+      ` (${engExemptMentions} more mention(s) in ${engExemptFiles} engineering-doc(s) carved out per task #67, each verified)` +
       (typeof ceiling === "number" ? ` (ceiling ${ceiling})` : " (no baseline yet)"),
   );
   for (const [f, n] of docsWorst.slice(0, 5)) console.log(`      ${String(n).padStart(3)}  ${f}`);

@@ -126,6 +126,16 @@ export function parseFixtures() {
  *  NOTHING here edits or imports the engine; it is read as text. */
 export const SIMULATOR_ENGINE = "lib/signalgrid-simulator/src/decisionEngine.ts";
 
+// The remediation-allow WRAPPER is a third reason-code-emitting surface under the
+// same simulator subsystem: it decides whether an `allow` the engine offered
+// survives contact with the remediation record. It DECLARES its full vocabulary in
+// one exported array (`REMEDIATION_ALLOW_REASONS`), and its Swift twin
+// `native/ios/EnterpriseShell/Services/RemediationAllow.swift` is held to parity by
+// the shared vectors + `scripts/check-remediation-allow-conformance.mjs`. Its codes
+// are simulator/iOS-surface, not launch /v1 vocabulary — catalogued here so they are
+// not read as the core's, and so the seven the engine never emits stop being absent.
+export const REMEDIATION_ALLOW_WRAPPER = "lib/signalgrid-simulator/src/remediation-allow.ts";
+
 export function parseSimulatorVocabulary(coreCodes) {
   const src = readFileSync(SIMULATOR_ENGINE, "utf8");
   const codes = new Set();
@@ -145,6 +155,31 @@ export function parseSimulatorVocabulary(coreCodes) {
       problems.push(`${SIMULATOR_ENGINE}:${line} constructs a simulator reason code non-literally (${args.trim().slice(0, 60)}…)`);
     }
   }
+  // Fold in the remediation-allow wrapper's DECLARED vocabulary (its source of
+  // truth is the exported array, not scattered emit sites — one push is computed,
+  // `REASON_FOR_STATE[state]`, which a literal-after-paren scan cannot read).
+  const wrapperSrc = readFileSync(REMEDIATION_ALLOW_WRAPPER, "utf8");
+  const declMatch = wrapperSrc.match(/REMEDIATION_ALLOW_REASONS\s*=\s*\[([\s\S]*?)\]\s*as const/);
+  if (!declMatch) {
+    problems.push(`${REMEDIATION_ALLOW_WRAPPER}: REMEDIATION_ALLOW_REASONS array not found — the wrapper vocabulary cannot be derived`);
+  } else {
+    const declared = [...declMatch[1].matchAll(CODE_LIT)].map((x) => x[1]);
+    if (declared.length === 0) problems.push(`${REMEDIATION_ALLOW_WRAPPER}: REMEDIATION_ALLOW_REASONS declares no reason code`);
+    const declaredSet = new Set(declared);
+    for (const c of declared) codes.add(c);
+    // DRIFT GUARD: every reason-code literal ANYWHERE in the wrapper must be named
+    // in the declared array. An emit site (or the REASON_FOR_STATE map) that uses a
+    // code the array does not declare is a code no catalog can promise, so it fails
+    // generation rather than shipping an uncatalogued code. (The state array is
+    // lowercase, so CODE_LIT does not match it.)
+    for (const m of wrapperSrc.matchAll(CODE_LIT)) {
+      if (!declaredSet.has(m[1])) {
+        const line = wrapperSrc.slice(0, m.index).split("\n").length;
+        problems.push(`${REMEDIATION_ALLOW_WRAPPER}:${line} uses reason code "${m[1]}" not declared in REMEDIATION_ALLOW_REASONS`);
+      }
+    }
+  }
+
   const all = [...codes].sort();
   const core = new Set(coreCodes);
   // Two codes that differ ONLY by punctuation, case or underscore are one code
@@ -370,11 +405,13 @@ trusting this table's age.
 ## Simulator vocabulary — a DIFFERENT engine's codes, catalogued so nobody reads them as the core's
 
 The tables above are the **launch decision core** (\`lib/signalgrid-core\`). The
-**fixture simulator** — \`${SIMULATOR_ENGINE}\` — is a second, separate engine.
-It emits its own ${simulator.codes.length} reason codes. ${simulator.shared.length} of them the core also emits
+**fixture simulator** surface — the engine \`${SIMULATOR_ENGINE}\` plus the
+remediation-allow wrapper \`${REMEDIATION_ALLOW_WRAPPER}\` — is a second, separate
+decision path. Together they emit ${simulator.codes.length} reason codes. ${simulator.shared.length} of them the core also emits
 (${simulator.shared.map((c) => `\`${c}\``).join(", ")}); the other ${simulator.simulatorOnly.length}
-appear nowhere above. The list is parsed from that file's emit sites by this
-generator, not maintained by hand. Several of them name **deferred** families
+appear nowhere above. The lists are parsed from those files by this generator —
+the engine's emit sites and the wrapper's declared \`REMEDIATION_ALLOW_REASONS\` —
+not maintained by hand. Several of them name **deferred** families
 (custody, dock, location) — the simulator is a fixture harness, so it models
 families the launch profile does not serve.
 
@@ -387,7 +424,10 @@ API vocabulary, and a host app must not build against them as if they were.
 They are also not renameable at will: \`native/ios/EnterpriseShell/Services/DecisionEngine.swift\`
 is a byte-faithful port of the simulator engine (CLAUDE.md golden rule 1), so the
 iOS app's reason codes ARE these spellings. Aligning them with the core's would
-break the parity the port exists to prove.
+break the parity the port exists to prove. The wrapper's eight codes have the same
+constraint by a different mechanism: \`native/ios/EnterpriseShell/Services/RemediationAllow.swift\`
+is held to the wrapper by the shared vector table and \`scripts/check-remediation-allow-conformance.mjs\`,
+so the spellings are a contract there too.
 
 The ${simulator.simulatorOnly.length} the core never emits — none of them a launch
 surface, and the custody/dock/location ones name **deferred** families:

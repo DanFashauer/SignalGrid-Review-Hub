@@ -68,6 +68,7 @@ targets:
       - path: EnterpriseShell/Services/AppWorkflows.swift
       - path: EnterpriseShell/Services/DecisionService.swift
       - path: EnterpriseShell/Services/SignalContext.swift
+      - path: EnterpriseShell/Services/RemediationAllow.swift
       - path: EnterpriseShell/Services/ScreenCapturePolicy.swift
       - path: EnterpriseShell/Services/DeviceBindingCrypto.swift
       - path: EnterpriseShell/Models/SessionState.swift

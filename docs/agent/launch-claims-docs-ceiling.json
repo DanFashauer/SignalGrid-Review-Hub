@@ -1,7 +1,7 @@
 {
   "note": "DEBT CEILING for docs/**/*.md, not a high-water mark: the COUNT OF unhedged deferred-capability mentions, not the count of files carrying them — a new claim in an already-listed document must fail, and counting files hid exactly that. A RISE is fatal; a drop is recorded automatically. Never hand-edit; the gate writes it.",
-  "unhedgedDeferredMentions": 503,
-  "filesCarryingThem": 122,
+  "unhedgedDeferredMentions": 453,
+  "filesCarryingThem": 117,
   "worst": [
     {
       "file": "docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md",
@@ -12,27 +12,11 @@
       "blocks": 18
     },
     {
-      "file": "docs/INTEGRATION_CATALOG.md",
-      "blocks": 13
-    },
-    {
-      "file": "docs/DOCKBRIDGE_PRODUCT_CONNECTOR.md",
-      "blocks": 12
-    },
-    {
       "file": "docs/HARDWARE_PARTNER_MATRIX.md",
       "blocks": 12
     },
     {
-      "file": "docs/KONTAKT_RTLS_INTEGRATION_NOTES.md",
-      "blocks": 12
-    },
-    {
       "file": "docs/OPERATIONAL_TRUST_ORCHESTRATION.md",
-      "blocks": 12
-    },
-    {
-      "file": "docs/ZERO_COST_LIVE_TEST_MATRIX.md",
       "blocks": 12
     },
     {
@@ -61,6 +45,22 @@
     },
     {
       "file": "docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md",
+      "blocks": 8
+    },
+    {
+      "file": "docs/SIGNALGRID_CLOUD_PLATFORM_AND_CYBER_RESILIENCE_ARCHITECTURE.md",
+      "blocks": 8
+    },
+    {
+      "file": "docs/SIGNALGRID_SMARTDOCK.md",
+      "blocks": 8
+    },
+    {
+      "file": "docs/company/ROLE_CATALOG.md",
+      "blocks": 8
+    },
+    {
+      "file": "docs/research/COMPETITIVE_IMPRIVATA.md",
       "blocks": 8
     }
   ]

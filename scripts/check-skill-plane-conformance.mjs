@@ -167,7 +167,7 @@ function selfTest() {
     [`${SKILLS_DIR}/nofm/SKILL.md`, "no frontmatter here"],
   ]);
   const agents = new Map([
-    [`${AGENTS_DIR}/good.md`, good.replace("name: good", "name: good")],
+    [`${AGENTS_DIR}/good.md`, good],
     [`${AGENTS_DIR}/noname.md`, "---\ndescription: d\n---\nbody"],
   ]);
   const fio = {

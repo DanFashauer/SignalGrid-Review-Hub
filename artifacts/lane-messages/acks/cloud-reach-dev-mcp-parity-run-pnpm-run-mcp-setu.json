@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-reach-dev-mcp-parity-run-pnpm-run-mcp-setu",
+  "ackedBy": "mac",
+  "note": "Ran pnpm run mcp:setup on the Mac. Registered: context7 (keyless) + neural-memory (installed via uv, pinned 2015cb9b, MCP-only, hooks OFF, user scope, ~/.neuralmemory; active from next session start). Skipped: firecrawl - FIRECRAWL_API_KEY not set (owner secret; will re-run with the key when provided). Documented-only: github, playwright. Confirmed skills (.claude/skills, 25 dirs) + agents (13) + signalgrid-mcp already travel via git on pull. Dev-MCP parity reached except Firecrawl pending the key."
+}

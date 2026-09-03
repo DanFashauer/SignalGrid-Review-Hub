@@ -32,15 +32,16 @@
 //   3. the TypeScript proof binds to the file BY PATH, so the table cannot become a
 //      document nothing executes.
 //
-// WHAT IS REPORTED, not gated: the SWIFT twin. It does not exist yet. The lane order
-// was agreed in `artifacts/lane-messages/` — the cloud lane writes the TS wrapper and
-// its proof first because the wrapper's shape is a design decision, and the Mac lane
-// ports the Swift twin second against these pinned vectors. Failing on its absence
-// today would fail every build for work that is correctly sequenced elsewhere;
-// staying silent about it would let the port be forgotten. So it is named on every
-// run, with the count of native clients bound. When the Swift twin lands, the
-// REPORTED line becomes a GATED one and this comment is what tells the next reader
-// that the change was always the plan.
+// WHAT IS NOW GATED: the SWIFT twin. It has landed (mac/remediation-allow-swift-twin —
+// `native/ios/EnterpriseShell/Services/RemediationAllow.swift` plus its XCTest bound to
+// this table). The lane order was agreed in `artifacts/lane-messages/`: the cloud lane
+// wrote the TS wrapper and proof first because the wrapper's shape is a design decision,
+// and the Mac lane ported the Swift twin second against these pinned vectors. While the
+// port was pending this rule was REPORTED, not fatal, so a correctly-sequenced build
+// would not fail on its absence. Now that it is here, its presence and its binding to
+// the shared file are REQUIRED — deleting the twin, or a test that stops reading the
+// pinned file by path, fails this gate rather than drifting back to a TS-only rule. This
+// gate argues the twin is bound; the Swift XCTest argues its behaviour matches.
 //
 //   node scripts/check-remediation-allow-conformance.mjs [--self-test]
 
@@ -52,6 +53,7 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const VECTORS = "native/shared/remediation-allow-vectors.json";
 const TS_PROOF = "scripts/src/remediation-allow-proof.ts";
 const TS_SOURCE = "lib/signalgrid-simulator/src/remediation-allow.ts";
+const SWIFT_TWIN = "native/ios/EnterpriseShell/Services/RemediationAllow.swift";
 const NATIVE_ROOT = "native";
 
 /** Every file under `dir`, skipping build output. */
@@ -217,20 +219,44 @@ function main() {
   }
   console.log(`  ✓ ${TS_PROOF} binds to the vectors; ${TS_SOURCE} is the module under test`);
 
-  // REPORTED: native clients. See the header for why this is not fatal today.
+  // GATED: the Swift twin has landed (mac/remediation-allow-swift-twin), so its
+  // presence AND its binding to the shared table are now required — the transition this
+  // gate's header always described ("when the Swift twin lands, the REPORTED line becomes
+  // a GATED one"). Deleting the twin, or a test that stops reading the shared file by
+  // path, now fails here instead of drifting silently back to a TypeScript-only rule.
   const nativeFiles = existsSync(join(REPO, NATIVE_ROOT)) ? walk(join(REPO, NATIVE_ROOT)) : [];
-  const bound = nativeFiles.filter(
-    (f) => /\.(swift|kt|rs|java|ts)$/.test(f) && readFileSync(f, "utf8").includes("remediation-allow-vectors.json"),
-  );
-  console.log(
-    bound.length === 0
-      ? `\n  REPORTED (not gated): no native client is bound to these vectors yet.\n` +
-          `  The Swift twin of ${TS_SOURCE} is the Mac lane's half of this work — the agreed\n` +
-          `  order is TS wrapper and vectors first, Swift port second against the pinned file.\n` +
-          `  Until it lands, this rule is enforced in TypeScript ONLY, and the iOS Assist gate\n` +
-          `  still resolves the remediation allow the way the ported engine does.`
-      : `\n  ✓ ${bound.length} native client(s) bound: ${bound.map((f) => relative(REPO, f)).join(", ")}`,
-  );
+  if (!existsSync(join(REPO, SWIFT_TWIN))) {
+    console.error(
+      `\nFAIL: the Swift twin ${SWIFT_TWIN} is missing.\n` +
+        `It landed against these vectors and must not vanish. If it is being retired on\n` +
+        `purpose, retire this Swift assertion in the same change and say so here.`,
+    );
+    process.exit(1);
+  }
+  // A real binding is a TEST that CONSUMES the table, not a doc comment that names it —
+  // so require a test-path file that references the pinned file AND carries an assertion.
+  // (RemediationAllow.swift mentions the path in its header comment; that must not count.)
+  const bound = nativeFiles.filter((f) => {
+    if (!/\.(swift|kt|rs|java)$/.test(f)) return false;
+    if (!/[Tt]est/.test(relative(REPO, f))) return false;
+    const txt = readFileSync(f, "utf8");
+    // The path must appear as a QUOTED string literal (the actual load), not only in a
+    // backtick/prose doc comment, and the file must carry an assertion — so a comment
+    // that merely names the pinned file cannot satisfy the binding.
+    const loadsByLiteral = /["'\''][^"'\'']*remediation-allow-vectors\.json["'\'']/.test(txt);
+    const asserts = /XCTAssert|#\[test\]|@Test|assert\(/.test(txt);
+    return loadsByLiteral && asserts;
+  });
+  if (bound.length === 0) {
+    console.error(
+      `\nFAIL: ${SWIFT_TWIN} exists but no native TEST consumes ${VECTORS}.\n` +
+        `A twin unbound from the shared table is a port that no longer proves it matches\n` +
+        `the canonical — a test must read the pinned file by path and assert on it, the way\n` +
+        `the TypeScript proof does. A doc comment naming the file does not count.`,
+    );
+    process.exit(1);
+  }
+  console.log(`  ✓ Swift twin present; ${bound.length} native client(s) bound: ${bound.map((f) => relative(REPO, f)).join(", ")}`);
 
   // The gate's own teeth, on every run rather than only under a flag.
   const failed = selfTest();
@@ -239,15 +265,17 @@ function main() {
     process.exit(1);
   }
 
-  console.log(`\nRemediation-allow conformance passed — ${doc.cases.length} shared cases, TS bound, native port REPORTED as pending.`);
+  console.log(`\nRemediation-allow conformance passed — ${doc.cases.length} shared cases, TS bound, Swift twin bound.`);
   console.log(`
   NOT established by a green here:
     · that the vectors are RIGHT. They are generated from the TypeScript wrapper, so a
       case that misreads the product would be wrong in the wrapper and in the file at
       once, and consistently. \`pnpm run proof:remediation-allow\` is what argues the
       wrapper's behaviour; this gate argues the table's shape and its bindings.
-    · anything about iOS. No Swift file reads this table today, and the line above says
-      so on every run rather than in a comment nobody opens.
+    · that the Swift twin's LOGIC matches the canonical. This gate proves the twin exists
+      and is bound to the shared table by path; whether its behaviour agrees is argued by
+      the Swift XCTest suite (RemediationAllowTests) running every case in the iOS/macOS CI
+      jobs — not by this Node gate, which reads no Swift semantics.
     · that the ENGINE was fixed. It was not, deliberately: DecisionEngine.swift is a
       byte-faithful port of decisionEngine.ts (CLAUDE.md golden rule 1), so the rule
       lives around the engine on both sides, not inside it.`);

@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "requestId": "2026-09-02-ios-shell-repair",
-  "completedAt": "2026-09-02T20:17:18.468Z",
+  "completedAt": "2026-09-03T17:43:14.776Z",
   "provenance": {
     "platform": "darwin",
     "arch": "arm64",
     "nodeVersion": "v24.18.0",
     "macosVersion": "26.6.2",
-    "commit": "0c7f53a23ac832e2192d58463da9a490ed3ddc5b",
-    "branch": "SignalGrid_Alpha",
+    "commit": "ebf341d5faea1e559ec8903bbdc03da50e70fcb5",
+    "branch": "worktree-mac-lane-work",
     "workingTreeClean": true
   },
   "runs": [
@@ -16,18 +16,18 @@
       "operation": "ios-shell-repair",
       "status": "passed",
       "exitCode": 0,
-      "durationMs": 88261,
+      "durationMs": 100771,
       "tail": [
-        "PASS  1 xcodegen generate (log: artifacts/sim-results/ios-shell-repair-2026-09-02/01-xcodegen.log)",
-        "PASS  2 xcodebuild EnterpriseShell for 'iPhone 17' (log: artifacts/sim-results/ios-shell-repair-2026-09-02/02-build.log)",
+        "PASS  1 xcodegen generate (log: artifacts/sim-results/ios-shell-repair-2026-09-03/01-xcodegen.log)",
+        "PASS  2 xcodebuild EnterpriseShell for 'iPhone 17' (log: artifacts/sim-results/ios-shell-repair-2026-09-03/02-build.log)",
         "PASS  3 booted 'iPhone 17' (1136868E-27C2-4CC8-93B3-BFC7144A3577) and installed com.enterprise.shell",
-        "PASS  4 launched demo path (-DemoMode YES -SimulateBadge 04A3F291), alive after 8 s (visual check owed: artifacts/sim-results/ios-shell-repair-2026-09-02/04-demo-lifecycle.png should show ActiveSession)",
-        "PASS  5a no-flag launch: lock_screen_presented rows seen, none with manual_login_available=true — artifacts/sim-results/ios-shell-repair-2026-09-02/05a-noflags-toggle-off.png",
-        "PASS  5b toggle ON: a row with manual_login_available=true AND asam_probe=unavailable — artifacts/sim-results/ios-shell-repair-2026-09-02/05b-noflags-toggle-on.png",
-        "PASS  6 -DemoBackendURL <URL> alive after 40 s, no fatal/crash line — artifacts/sim-results/ios-shell-repair-2026-09-02/06-loopback-backend.png; EXPECT footer 'Backend: 127.0.0.1:8080 — launch argument -DemoBackendURL'",
-        "PASS  7 launched at accessibility-extra-large (visual check owed: artifacts/sim-results/ios-shell-repair-2026-09-02/07-a11y-extra-large.png — report overlap/truncation by element)",
+        "PASS  4 launched demo path (-DemoMode YES -SimulateBadge 04A3F291), alive after 8 s (visual check owed: artifacts/sim-results/ios-shell-repair-2026-09-03/04-demo-lifecycle.png should show ActiveSession)",
+        "PASS  5a no-flag launch: lock_screen_presented rows seen, none with manual_login_available=true — artifacts/sim-results/ios-shell-repair-2026-09-03/05a-noflags-toggle-off.png",
+        "PASS  5b toggle ON: a row with manual_login_available=true AND asam_probe=unavailable — artifacts/sim-results/ios-shell-repair-2026-09-03/05b-noflags-toggle-on.png",
+        "PASS  6 -DemoBackendURL <URL> alive after 40 s, no fatal/crash line — artifacts/sim-results/ios-shell-repair-2026-09-03/06-loopback-backend.png; EXPECT footer 'Backend: 127.0.0.1:8080 — launch argument -DemoBackendURL'",
+        "PASS  7 launched at accessibility-extra-large (visual check owed: artifacts/sim-results/ios-shell-repair-2026-09-03/07-a11y-extra-large.png — report overlap/truncation by element)",
         "",
-        "Screenshots + logs: artifacts/sim-results/ios-shell-repair-2026-09-02/  (evidence — COMMIT them with the result JSON; an",
+        "Screenshots + logs: artifacts/sim-results/ios-shell-repair-2026-09-03/  (evidence — COMMIT them with the result JSON; an",
         "uncommitted directory stamps every later result as minted from a dirty tree)",
         "== SUMMARY: 8 passed, 0 failed =="
       ]
@@ -36,7 +36,7 @@
       "operation": "everything-fast",
       "status": "passed",
       "exitCode": 0,
-      "durationMs": 12667,
+      "durationMs": 16998,
       "tail": [
         "   -DemoAssistAuto, -DemoIdleLock, -DemoBackendURL <URL>",
         "",
@@ -60,7 +60,7 @@
         "  dist/pino-pretty.mjs.map           204.0kb",
         "  dist/thread-stream-worker.mjs.map   12.0kb",
         "",
-        "⚡ Done in 84ms",
+        "⚡ Done in 80ms",
         "SignalGrid MCP server ready (stdio). Tools: list_room_scenarios, evaluate_room_entry, signal_catalog, scan_signals, evaluate_decision, facility_graph, evaluate_location_certainty, fabric_status, explain_decision, evidence_freshness, list_connectors, list_policies, query_audit, bruno_collection_list, bruno_request_get, bruno_collection_run.",
         "Resources: <URL> <URL> <URL> <URL>"
       ]

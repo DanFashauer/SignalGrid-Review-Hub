@@ -427,3 +427,32 @@ MUTATION TEST: restoring listSites's `!tenantId` -> "empty-string tenant scope r
 edge nodes" both FAIL (40/42, exit 1). typecheck green; edge-sync proof still 17/17.
 ```
 Verdict:  **fixed and gated — an unresolved (empty) scope now fails closed to no rows, distinct from undefined (all).**
+
+## 2026-09-04 — "lib/api-zod is fail-closed by construction, but mostly dead as an input guard; the live /v1 boundary is hand-rolled and fail-closed end-to-end"
+Command (fail-closed audit of the Zod surface + verification of the real boundary):
+```
+lib/api-zod/src/generated/api.ts (355 lines, the whole runtime Zod surface; the other 45 src/generated/types/*.ts are pure interfaces, no runtime)
+artifacts/api-server/src/routes/{v1.ts,integrations.ts,health.ts,monitoring.ts}   lib/signalgrid-core/src/decision.ts
+```
+Output:
+```
+api-zod schemas: fail-closed by construction (verified vs zod 3.25.76) — objects STRIP unknown fields (no
+  .passthrough anywhere); enums REJECT unrecognized values (no .catch/fallback); z.coerce.date rejects NaN/""
+  (the expiry-NaN shape, safe here); z.coerce.number rejects "abc"/"false"; no refine/superRefine can fail open.
+SYSTEMIC FINDING (architectural, not a loosening): the generated *Body/*QueryParams schemas are DEAD as input
+  guards. Only GetIntegrationParams.safeParse runs on live input (a read-only id lookup, safe). The live /v1
+  decision/ingest/policy/reconcile routes do NOT import api-zod — they hand-roll validation in v1.ts.
+REAL BOUNDARY (v1.ts) verified fail-closed end-to-end: parseEvaluate rejects a non-object body and non-string
+  identityRef/deviceRef/workflowKey; clampTtl maps non-finite -> 900 and clamps [60s,86400s] (no zero/unbounded
+  TTL); parseReconcile bounds records to 64 and REFUSES rather than truncates (truncating would silently drop a
+  restriction). An EMPTY binding string passes parseEvaluate but the core's validateRequest (decision.ts:208,
+  `typeof value !== "string" || value.trim().length === 0` -> 400) and findIdentityByRef (unknown ref -> not
+  found -> error) reject it. No live fail-open.
+LATENT (only if the api-zod schemas are ever wired to the boundary; the file is orval-GENERATED, so fixes belong
+  in the OpenAPI source): z.string() with no .min(1) on identity/device/tenant/workflow fields; z.coerce.number
+  limit with ""->0 and no int/min/max; sourceTimestamp with no upper bound (far-future = "always fresh").
+```
+Verdict:  **approved — no live fail-open. api-zod is fail-closed by shape; the /v1 boundary is fail-closed end-to-end.**
+Backlog (design targets, deferred): a wiring gate that flags an orphaned generated input schema (a defined-but-
+dead validator masquerading as coverage); the latent schema tightenings in the OpenAPI source; and a
+defense-in-depth empty-binding reject at parseEvaluate (currently caught only by the core).

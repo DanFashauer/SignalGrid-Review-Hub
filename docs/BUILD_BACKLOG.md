@@ -1071,6 +1071,17 @@ _These need the owner's call — an agent should not act on them unsupervised._
 
 ## Discovered
 
+### api-zod / v1 input-validation hardening — design targets (2026-09-04, from the fail-closed audit)
+
+Filed from the `lib/api-zod` fail-closed audit (recorded in `docs/agent/EVIDENCE.md`). No
+live fail-open — the schemas are fail-closed by construction and the live `/v1` boundary
+(`v1.ts` → core `validateRequest`) is fail-closed end-to-end. **These are design targets,
+not shipped, and none is a live loosening.** Public-safe and fixture-first.
+
+- [ ] **api-zod wiring gate — a defined-but-dead input validator must not masquerade as coverage (design target, MEDIUM).** The generated `*Body`/`*QueryParams`/`*Params` schemas in `lib/api-zod/src/generated/api.ts` are mostly never invoked; the live `/v1` routes hand-roll validation in `artifacts/api-server/src/routes/v1.ts`. Add a gate that derives the exported generated input schemas and asserts each is referenced by a `.parse`/`.safeParse` in `artifacts/api-server/src/routes/**` (flagging orphans), OR deliberately mark the api-zod input schemas client/type-only. Must not assert *where* or *that the call is correct* — only non-orphaned. gate-and-proof-engineer.
+- [ ] **Latent api-zod schema tightenings — fix in the OpenAPI source, not the generated file (design target, LOW; deferred until the schemas are wired to a boundary).** `z.string()` with no `.min(1)` on identity/device/tenant/workflow fields; `z.coerce.number()` `limit` with `""`→0 and no `.int().min().max()`; `sourceTimestamp` `z.coerce.date()` with no upper bound (far-future reads as always-fresh). The file is orval-generated ("Do not edit manually"), so the durable fix is the OpenAPI spec + regenerate; a gate on the generated output will re-fire until the spec is corrected, which is correct.
+- [ ] **Defense-in-depth: reject empty bindings at the `/v1` boundary too (design target, LOW).** `parseEvaluate` (`v1.ts`) accepts an empty-string `identityRef`/`deviceRef`/`workflowKey`; the core's `validateRequest` already rejects it (`decision.ts:208`, `.trim().length === 0` → 400), so this is not a live fail-open — but rejecting at the boundary too matches the empty-scope-is-not-a-wildcard lesson (control-plane Finding 3).
+
 ### Shared-device custody fidelity — design targets (2026-09-04, from the owner's real runbooks)
 
 Filed from [`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`](research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md),

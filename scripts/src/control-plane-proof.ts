@@ -39,6 +39,23 @@ function main() {
   check("tenant edge-node scoping stays within the tenant", nwNodes.length > 0 && nwNodes.every((n) => nwSiteIds.has(n.siteId)));
   check("another tenant's sites are excluded", !cp.listSites("tenant_northwind").some((s) => s.tenantId === "tenant_atlas"));
 
+  // 2b. An EMPTY scope is not a wildcard (Finding 3, 2026-09-04). `undefined` = no
+  // scope given ⇒ everything (the admin fleet view); "" or whitespace-only = an
+  // UNRESOLVED scope ⇒ nothing, so a caller that derived a tenant/site id and
+  // forgot to check it for emptiness gets no rows rather than every tenant's data.
+  // The pre-fix `!tenantId` / `!siteId` filters treated "" identically to undefined;
+  // these assertions fail if that wildcard behavior returns.
+  check("undefined tenant scope returns all sites", cp.listSites(undefined).length === cp.listSites().length && cp.listSites().length > nwSites.length);
+  check("empty-string tenant scope returns NO sites (not a wildcard)", cp.listSites("").length === 0);
+  check("whitespace-only tenant scope returns NO sites", cp.listSites("   ").length === 0);
+  check("empty-string tenant scope returns NO edge nodes", cp.listEdgeNodes("").length === 0);
+  check("undefined site scope returns all fleet devices", cp.listFleet(undefined).length === cp.listFleet().length && cp.listFleet().length > 0);
+  check("empty-string site scope returns NO fleet devices", cp.listFleet("").length === 0);
+  check("undefined tenant scope in fleetHealth spans all six verticals", cp.fleetHealth(undefined).byVertical.length === 6);
+  check("empty-string tenant scope in fleetHealth yields no tenants", cp.fleetHealth("").byVertical.length === 0);
+  const emptyOps = cp.operationalIntelligence("");
+  check("empty-string tenant scope in operationalIntelligence yields nothing", emptyOps.hotspots.length === 0 && emptyOps.postureDrift.length === 0 && emptyOps.custodyGaps.length === 0);
+
   // 3. Deterministic policy-bundle checksum.
   const b1 = cp.getPolicyBundle("tenant_northwind");
   const b2 = cp.getPolicyBundle("tenant_northwind");

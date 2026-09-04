@@ -286,7 +286,16 @@
           "reviewer": "cloud lane",
           "record": "docs/agent/EVIDENCE.md",
           "scope": "surface",
-          "open": 1,
+          "open": 0,
+          "closed": 2
+        },
+        {
+          "date": "2026-09-04",
+          "read": "Follow-up (owner-requested): fixed Finding 3 from the control-plane read. Empty-string tenant/site scope in listSites/listEdgeNodes/listFleet/fleetHealth/operationalIntelligence resolved to a cross-tenant wildcard (`!tenantId`). Replaced with a scopeIncludes helper (undefined->all, empty/whitespace->none, else exact) and added 9 mutation-proven control-plane-proof assertions (restoring the old filter -> 40/42). No open findings remain on this surface.",
+          "reviewer": "cloud lane",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "partial: the tenant/site scope filters (Finding 3 fix), building on the 2026-09-04 full read",
+          "open": 0,
           "closed": 1
         }
       ]

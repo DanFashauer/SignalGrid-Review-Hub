@@ -623,6 +623,7 @@ const CODE_LABEL_EXEMPT = new Map([
 const ENGINEERING_DOCS_EXEMPT = new Map([
   ["docs/REASON_CODES.md", "generated engine reason-code catalogue (gen-reason-codes.mjs); CUSTODY_*/DOCK_* are real engine outputs, and a generated file cannot carry a hand banner"],
   ["docs/KONTAKT_RTLS_INTEGRATION_NOTES.md", "RTLS integration engineering notes; zone/proximity name the subsystem being specified, not a shipped signal"],
+  ["docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md", "engineering fidelity map (DR-021 intake); custody/zone/badge/RTLS name the subsystem being MAPPED against the tree's real surfaces, not shipped signals — the buyer-facing scan finds 0 violations here and the page states 'Nothing here is a claim that SignalGrid runs in this or any deployment'"],
   ["docs/ZERO_COST_LIVE_TEST_MATRIX.md", "test-planning matrix; custody/RTLS name the dimensions under test, several marked still-unmet on the same line"],
   ["docs/INTEGRATION_CATALOG.md", "connector architecture catalogue; custody/zone name connector inputs (rtls-custody, pacs-access) beside their lib/ paths"],
   ["docs/DOCKBRIDGE_PRODUCT_CONNECTOR.md", "dock-custody connector specification; custody is the connector's own subject"],

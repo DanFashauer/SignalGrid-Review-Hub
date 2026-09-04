@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **11 of 100 surfaces have been read. 7 are partially read. 82 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2182 of 2182 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2183 of 2183 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -66,7 +66,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `docs/outreach` | docs family | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/postman` | docs family | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/preview` | docs family | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `docs/research` | docs family | 48 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `docs/research` | docs family | 49 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `firmware` | tree | 8 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `fixtures` | tree | 9 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `fleet` | tree | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |

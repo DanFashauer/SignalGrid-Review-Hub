@@ -1,7 +1,7 @@
 // Reliability, said plainly — so an owner reads the error-budget picture without
 // knowing what an SLO is.
 
-import type { BudgetStatus, ErrorBudgetResult, ReliabilityReport } from "./types";
+import { BUDGET_STATUS_RANK, type BudgetStatus, type ErrorBudgetResult, type ReliabilityReport } from "./types";
 
 const STATUS_WORD: Readonly<Record<BudgetStatus, string>> = Object.freeze({
   healthy: "On track",
@@ -45,15 +45,20 @@ function sentenceFor(b: ErrorBudgetResult): string {
 
 /** Turn a reliability report into plain language. Pure and deterministic. */
 export function summarizeReliability(report: ReliabilityReport): ReliabilityPlain {
-  const lines: ReliabilityPlainLine[] = report.budgets
+  // Worst-first by the shared status rank: exhausted, then unknown, then at_risk,
+  // then on-track — the most critical objective leads, since an owner reads the top
+  // line first. A binary needs-attention/not sort is not enough: with two attention
+  // lines it leaves them in input order, so a critical fail-closed breach could sit
+  // BELOW a merely "getting close" one. Array.prototype.sort is stable, so equal-rank
+  // lines keep their input order. (report.budgets is deep-frozen; sort a copy.)
+  const lines: ReliabilityPlainLine[] = [...report.budgets]
+    .sort((a, b) => BUDGET_STATUS_RANK[b.status] - BUDGET_STATUS_RANK[a.status])
     .map((b) => ({
       objective: b.slo.description,
       state: STATUS_WORD[b.status],
       needsAttention: ATTENTION.has(b.status),
       sentence: sentenceFor(b),
-    }))
-    // Worst-first: exhausted, then unknown, then at_risk, then on-track.
-    .sort((a, b) => Number(b.needsAttention) - Number(a.needsAttention));
+    }));
 
   const attention = report.budgets.filter((b) => ATTENTION.has(b.status)).length;
   const allOnTrack = attention === 0;

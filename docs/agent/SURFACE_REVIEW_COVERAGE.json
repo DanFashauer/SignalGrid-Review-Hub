@@ -452,7 +452,17 @@
     },
     "lib/reliability": {
       "path": "lib/reliability",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Firsthand read of the whole SLO/error-budget module. Fail-closed core intact (unknown outranks at_risk and is attention; zero-tolerance integrity un-buyable; empty window unknown; clock-free). One drift fixed: the owner-facing plain summary was sorted binary needs-attention/not, not worst-first as its comment claimed, so a critical fail-closed breach could render below an at_risk line on the operator surface (control-plane.ts).",
+          "reviewer": "cloud lane",
+          "record": "lib/reliability/src/summarize.ts",
+          "scope": "surface",
+          "open": 1,
+          "closed": 1
+        }
+      ]
     },
     "lib/room-sim": {
       "path": "lib/room-sim",
@@ -460,7 +470,17 @@
     },
     "lib/self-audit": {
       "path": "lib/self-audit",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Fail-closed audit of the self-integrity module. Probe path sound (missing/malformed -> unknown; unknown never healthy; heal lifecycle human-gated, no self-heal edge; clock-free). One fail-open fixed: runAudit seeded overall + every layer to healthy and only moved them worse, and summarizePlain derived allClear from per-item counts only, so an audit that checked NOTHING reported 'Everything is working.' Functional layers now seed unknown (meta stays healthy-when-empty); overall folds layer statuses; allClear requires overall healthy.",
+          "reviewer": "cloud lane",
+          "record": "lib/self-audit/src/audit.ts",
+          "scope": "surface",
+          "open": 1,
+          "closed": 1
+        }
+      ]
     },
     "lib/signal-discovery": {
       "path": "lib/signal-discovery",

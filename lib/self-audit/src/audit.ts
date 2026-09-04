@@ -78,21 +78,37 @@ export function runAudit(
   const counts: Record<CheckStatus, number> = { healthy: 0, drifted: 0, unknown: 0, broken: 0 };
   for (const ci of items) counts[ci.status] += 1;
 
-  // Per-layer worst status. A layer with no items is `healthy` by vacuous truth —
-  // there is nothing to be unhealthy — but the coverage-gap machinery ensures the
-  // `meta` layer surfaces any dimension that SHOULD have produced items.
+  // Per-layer worst status. A green check must be POSITIVELY EARNED (see the module
+  // header): the three FUNCTIONAL layers with no items were not checked at all, so they
+  // are `unknown` (never a vacuous `healthy` — "nothing checked" is not "all clear").
+  // The `meta` layer is the one exception: the coverage-gap machinery runs on EVERY
+  // audit, so an empty meta layer genuinely means "no meta-level problems found", which
+  // is healthy, not unverified. Functional layers seed `unknown` and the first item
+  // REPLACES the seed (worst(unknown, healthy) would wrongly stay unknown).
   const byLayer: Record<AuditLayer, CheckStatus> = {
-    backend: "healthy",
-    frontend: "healthy",
-    api_integration: "healthy",
+    backend: "unknown",
+    frontend: "unknown",
+    api_integration: "unknown",
     meta: "healthy",
   };
+  const layerSeen: Record<AuditLayer, boolean> = {
+    backend: false,
+    frontend: false,
+    api_integration: false,
+    meta: false,
+  };
   for (const ci of items) {
-    byLayer[ci.item.layer] = worst(byLayer[ci.item.layer], ci.status);
+    const layer = ci.item.layer;
+    byLayer[layer] = layerSeen[layer] ? worst(byLayer[layer], ci.status) : ci.status;
+    layerSeen[layer] = true;
   }
 
+  // Overall folds the per-layer statuses rather than the raw items, so an unchecked
+  // FUNCTIONAL layer (unknown) makes the whole audit `unknown` — an audit that verified
+  // nothing (or left a whole layer unverified) can never read `healthy`. Folding items
+  // directly, as before, missed the empty case entirely and reported a false all-clear.
   let overall: CheckStatus = "healthy";
-  for (const ci of items) overall = worst(overall, ci.status);
+  for (const layer of AUDIT_LAYERS) overall = worst(overall, byLayer[layer]);
 
   return deepFreeze({
     items,

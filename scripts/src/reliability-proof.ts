@@ -20,7 +20,10 @@ import {
   computeReliability,
   summarizeReliability,
   BUDGET_STATUS_RANK,
+  type BudgetStatus,
   type DecisionRecord,
+  type ErrorBudgetResult,
+  type ReliabilityReport,
   type Slo,
 } from "@workspace/reliability";
 
@@ -112,6 +115,31 @@ check("plain: a fail-open breach is worded as critical", plainBreach.lines.some(
 // not an enum leak — so the check is scoped to the status label + headline.)
 check("plain: the status labels never expose the raw status enum",
   !/\b(healthy|at_risk|unknown|exhausted)\b/.test(plainBreach.headline + " " + plainBreach.lines.map((l) => l.state).join(" ")));
+
+// The plain summary orders lines strictly WORST-FIRST by status rank, not by a binary
+// needs-attention split. With several attention lines of differing severity the most
+// critical must lead — a fail-closed breach ("critical") can never sit below a merely
+// "getting close" one on the operator's summary. Feed a deliberately scrambled report
+// and assert the exact display order; a binary sort would leave the attention lines in
+// input order and fail this.
+const mkBudget = (id: string, status: BudgetStatus, zeroTolerance = false): ErrorBudgetResult => ({
+  slo: { id, description: id, kind: "availability", objective: 0.999, ...(zeroTolerance ? { zeroTolerance } : {}) },
+  sampleCount: 1, sli: 1, budgetEvents: 0, consumedEvents: 0, remainingEvents: 0, burnRate: 0, status,
+});
+const scrambled: ReliabilityReport = {
+  budgets: [mkBudget("a", "healthy"), mkBudget("b", "at_risk"), mkBudget("c", "exhausted"), mkBudget("d", "unknown")],
+  overall: "exhausted",
+};
+const scrambledPlain = summarizeReliability(scrambled);
+check("plain: lines are strictly worst-first by status rank (exhausted>unknown>at_risk>healthy)",
+  scrambledPlain.lines.map((l) => l.state).join("|") === "Over budget|Not measured|Getting close|On track");
+// Ties keep input order (stable): two at_risk lines stay in the order given.
+const tied: ReliabilityReport = {
+  budgets: [mkBudget("first-at-risk", "at_risk"), mkBudget("second-at-risk", "at_risk")],
+  overall: "at_risk",
+};
+check("plain: equal-rank lines keep input order (stable sort)",
+  summarizeReliability(tied).lines.map((l) => l.objective).join("|") === "first-at-risk|second-at-risk");
 
 // ── (5) DETERMINISM + IMMUTABILITY ─────────────────────────────────────────────────
 check("computeReliability is deterministic",

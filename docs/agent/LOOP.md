@@ -51,7 +51,26 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-03 (cloud lane) - eleven PRs merged, each independently
+LAST TOUCHED: 2026-09-04 (cloud lane) - three PRs merged, preflight+breadth green
+              on every push, branch restarted from Alpha after each. #414 OmniRoute
+              absorbed as the org's agent/build AI-gateway (DR-029, keys-out-of-tree,
+              may never enter the decision path). #415 surface-review sweep findings
+              1+3: verdict-attestation fail-open (a non-finite options.now/maxAgeMs/
+              maxSkewMs silently disabled BOTH freshness checks - x > NaN is false -
+              so a stale or future attestation verified; now fails closed to expired,
+              proof 76->82) + a webauthn fossil-figure comment. #416 sweep finding 2,
+              the one held for an on-tree mutation run: dual-control's authorizer
+              `!plain` and `readThrew` disjuncts were labelled "genuinely inert" (a
+              239-shape behavioural diff) but each is the SOLE guard on one shape the
+              diff never generated - a NULL authorizer body and a throwing accessor.
+              The null case was a live fail-open on the highest-blast-radius grant
+              (with `!plain` forced false, approver:null read clean). Both proven
+              load-bearing (proof 58->60, mutation killed 25->26), removed from the
+              inert allowlist; the identical top-level twins ARE inert and now carry
+              an inert-at-top marker so the allowlist can never launder the load-
+              bearing terms. Lesson recorded in SELF_REVIEW.md: a behavioural diff
+              proves nothing about a shape it did not enumerate. Prior 2026-09-03
+              (cloud lane) - eleven PRs merged, each independently
               reviewed before landing, preflight+breadth green on every push,
               the branch restarted from Alpha after each. #399 gate-suite
               hardening (the coverage ratchet cannot be hand-lowered; three gates

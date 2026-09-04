@@ -374,3 +374,36 @@ apple-schema compile-time provenance map with exhaustiveness teeth against DdmDe
 ```
 Verdict:  **approved — zero fail-open defects; every unknown/missing/stale/unverifiable input tightens (raises assurance).**
 No defects and no material NOTES (the connector's guarantees block comment is met by the code).
+
+## 2026-09-04 — "The control-plane bundle-authenticity check failed OPEN for unprovisioned tenants — fixed and gated"
+Command (adversarial read via fail-closed-auditor, reproduced + fixed + mutation-tested):
+```
+lib/control-plane/src/index.ts   (598 lines)   consumers: artifacts/api-server/src/routes/control-plane.ts, scripts/src/edge-sync-proof.ts
+```
+Output:
+```
+FINDING 1 (fixed) — bundleSignature() used FIXTURE_SIGNING_KEYS[tenantId] ?? "cpk_demo_unknown_signing",
+  and verifyBundleSignature() calls that same function. A bundle for any tenant NOT in the six-key registry
+  therefore verified against a shared, source-literal fallback: an attacker naming an unprovisioned tenant,
+  computing its (public) checksum and signing with that public constant, produced a bundle that VERIFIED —
+  an unknown signal loosening the authenticity answer (golden rule 2 inverted). Structural, survives the
+  move to real per-tenant secrets the comment anticipates.
+  FIX: signingKeyFor() returns undefined for an unprovisioned (or prototype-named) tenant via
+  hasOwnProperty; bundleSignature() returns undefined with NO fallback; verifyBundleSignature() returns
+  false when expected is undefined; getPolicyBundle() returns null rather than mint an unsignable bundle.
+FINDING 2 (fixed) — edge-sync-proof only forged by MUTATING content (breaks the recomputed hash regardless
+  of key) or zeroing the signature, so it never exercised the unprovisioned-tenant path and certified
+  nothing about the fallback. FIX: an assertion constructs a checksum-valid bundle for an unprovisioned
+  tenant signed with the (now-removed) shared fallback and asserts verifyBundleSignature === false.
+  MUTATION TEST: restoring the fallback -> "unprovisioned tenant fails authenticity" FAILS (16/17, exit 1);
+  with the fix, 17/17.
+FINDING 3 (latent, NOT fixed here) — listSites/listEdgeNodes/listFleet/fleetHealth/operationalIntelligence
+  filter with `!tenantId || s.tenantId === tenantId`, so an empty-string tenant returns EVERY tenant's data
+  (same as undefined). Not a live breach: the HTTP route normalizes "" -> undefined and the plane has no
+  per-caller authz (all fixture data is public). Deferred to a follow-up: treat "" as invalid (empty result),
+  distinct from undefined (all). Recorded, not fixed, to keep this PR the reachable security fix.
+Fail-CLOSED and verified correct: verifyBundleChecksum, the signature length/hex-parse/timingSafeEqual
+guards (catch -> false), ingestTelemetry nonNeg (NaN/Inf/neg -> 0), getPolicyBundle/applyBundle/syncPlan
+(unknown -> null, version only advances), custodyGaps (status !== "healthy" -> gap), no allow-default switch.
+```
+Verdict:  **one real fail-open on the authenticity boundary, FIXED and now gated by a mutation-proven proof assertion; one latent caller-gated note deferred; everything else fail-closed.**

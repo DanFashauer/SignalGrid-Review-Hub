@@ -279,7 +279,17 @@
     },
     "lib/control-plane": {
       "path": "lib/control-plane",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Adversarial fail-closed audit of the cloud control plane (index.ts, 598 lines). Found and FIXED a real fail-open: bundle signature verification used a shared source-literal fallback key for any tenant absent from the signing registry, so a forged bundle for an unprovisioned tenant verified (golden rule 2 inverted on the authenticity boundary). Fix removes the fallback (signingKeyFor via hasOwnProperty -> undefined; verify fails closed; mint returns null), and adds a mutation-proven edge-sync-proof assertion (restoring the fallback -> 16/17 fail). Finding 2 (the proof could not catch it) fixed alongside. Finding 3 latent/deferred: empty-string tenantId resolves to a cross-tenant wildcard in five list methods (caller-gated today; follow-up to treat empty distinct from undefined). Rest verified fail-closed (checksum/signature guards, telemetry nonNeg, unknown->null, custodyGaps).",
+          "reviewer": "cloud lane",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 1,
+          "closed": 1
+        }
+      ]
     },
     "lib/ddm-connector": {
       "path": "lib/ddm-connector",

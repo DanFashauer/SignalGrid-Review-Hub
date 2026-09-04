@@ -12,7 +12,8 @@
 //
 // Run: pnpm --filter @workspace/scripts run proof:edge-sync
 
-import { ControlPlane, verifyBundleChecksum, verifyBundleSignature, type PolicyBundle } from "@workspace/control-plane";
+import { createHmac } from "crypto";
+import { ControlPlane, bundleChecksum, verifyBundleChecksum, verifyBundleSignature, type PolicyBundle } from "@workspace/control-plane";
 
 let passed = 0;
 const failures: string[] = [];
@@ -49,6 +50,28 @@ function main() {
     const forgedSig: PolicyBundle = { ...bundle, signature: "0".repeat(bundle.signature.length) };
     check("valid checksum but forged signature fails closed", verifyBundleChecksum(forgedSig) === true && verifyBundleSignature(forgedSig) === false);
     check("tampered workflows fail signature too", verifyBundleSignature(tamperedWorkflows) === false);
+
+    // An UNPROVISIONED tenant must fail authenticity even with a self-consistent
+    // checksum AND a signature an attacker computed against the old shared fallback
+    // key ("cpk_demo_unknown_signing"). The checksum is over public content and the
+    // fallback was a public source constant, so the attacker can satisfy BOTH the
+    // integrity gate and the pre-fix signature check. verifyBundleSignature must
+    // still refuse it, because the tenant has no trusted signing key. This assertion
+    // fails the instant that shared fallback is restored — the case the earlier
+    // forgery checks (which only mutate content) could never catch.
+    const evilTenant = "tenant_unprovisioned_attacker";
+    const evilVersion = 1;
+    const evilWorkflows = ["exfiltrate"];
+    const evilCanonical = `${evilTenant}:${evilVersion}:${evilWorkflows.join(",")}`;
+    const evilBundle: PolicyBundle = {
+      tenantId: evilTenant,
+      version: evilVersion,
+      workflows: evilWorkflows,
+      checksum: bundleChecksum(evilTenant, evilVersion, evilWorkflows),
+      signature: createHmac("sha256", "cpk_demo_unknown_signing").update(evilCanonical).digest("hex"),
+    };
+    check("unprovisioned tenant has valid integrity but a self-forged signature", verifyBundleChecksum(evilBundle) === true);
+    check("unprovisioned tenant fails authenticity — no shared fallback key", verifyBundleSignature(evilBundle) === false);
   }
 
   // Apply the verified bundle → node advances to target.

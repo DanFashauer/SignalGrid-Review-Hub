@@ -544,3 +544,37 @@ MUTATION TEST: removing mapVersionShapeBad from the malformed disjunction -> the
   FAIL (121/124, exit 1); the absent-case assertion correctly stays green (the fix does not over-tighten).
 ```
 Verdict:  **fixed and gated — an unparseable map_version now fails closed like every sibling field; garbage can no longer out-grant a well-formed conflict.**
+
+## 2026-09-04 — "lib/posture-composition fuses correctly (strongest action wins), but an OFF-LADDER action NaN-sorted into an undefined riskTier"
+Command (fail-closed audit of all 4 files + fix + mutation-proof):
+```
+lib/posture-composition/src/{types,compose,adapters,index}.ts
+scripts/src/posture-composition-proof.ts
+```
+Output:
+```
+CLEAN (verified): composeDeviceRisk takes the MAX rank across signals (strongest concern wins, never
+  diluted); fromDevicePosture requires positive confirmation on all five Graph fields (only
+  enabled x compliant x managed x registered x userRisk<=medium reaches the `none` seed); the other ~40
+  adapters are pure pass-throughs whose action unions are subsets of UNIFIED_ACTIONS; no Date.now/Math.random;
+  ACTION_RANK is built from UNIFIED_ACTIONS order (no key-order dependence).
+FINDING (latent fail-open + determinism, behind 40 `as UnifiedAction` casts): an action NOT on the unified
+  ladder (reachable via any adapter's cast or a hand-built ComposableSignal) made ACTION_RANK[action]
+  undefined -> the sort comparator `b.rank - a.rank` returned NaN (order-DEPENDENT result, violating the
+  module's own determinism contract) and TIER_BY_ACTION[strongestAction] === undefined riskTier (a consumer
+  reads undefined as the permissive side). No live path produces an off-ladder action today (all unions are
+  subsets), so this is LATENT — the exposure is the cast, and a future integration whose action union grows a
+  member (e.g. "deny") would flow straight through with zero compile error.
+FIX (compose.ts): rankOf()/tierOf() helpers — an action absent from ACTION_RANK/TIER_BY_ACTION is treated as
+  the MOST severe (rank = UNIFIED_ACTIONS.length, tier "blocked"), never NaN/undefined. Fail closed: an unknown
+  concern outranks every known one and yields a defined, order-independent verdict.
+GATE: posture-composition-proof gains 3 assertions (off-ladder -> blocked/defined; off-ladder outranks a
+  genuine escalate; order-independent across [off,escalate] vs [escalate,off]). 78/78.
+MUTATION TEST: reverting to ACTION_RANK[s.action] / TIER_BY_ACTION[strongestAction] -> all 3 FAIL (75/78,
+  exit 1). typecheck green.
+NOTE (not fixed here, filed): composeDeviceRisk's empty-input contract returns ok/none with signalCount 0 —
+  deliberate and documented, guarded correctly by pim-activation but relied-on-caller by work-context; a
+  fusion-contract gate (every call site reads signalCount, or the module returns unknown for signalCount 0)
+  is a design-target for whoever owns the contract, not this fix.
+```
+Verdict:  **fixed and gated — an off-ladder action now fails closed to the most-severe, order-independent verdict instead of a NaN sort and an undefined tier.**

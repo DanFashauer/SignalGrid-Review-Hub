@@ -232,6 +232,26 @@ const withThreat = composeDeviceRisk([
 check("an active critical EDR threat (escalate) drives the fused verdict", withThreat.strongestAction === "escalate" && withThreat.riskTier === "blocked");
 check("the threat signal is retained as a driver, tagged kind 'threat'", withThreat.drivers.some((d) => d.kind === "threat" && d.action === "escalate"));
 
+// ── off-ladder action must FAIL CLOSED (not NaN-sort into an undefined tier) ────
+// An action not on the unified ladder reaches composition only through an adapter's
+// `as UnifiedAction` cast (40 of them) or a hand-built signal — the compiler never
+// proved it valid. Before the fix ACTION_RANK[unknown] was undefined → a NaN sort
+// comparator (order-dependent result, a determinism violation) and TIER_BY_ACTION
+// [unknown] === undefined riskTier (a consumer reads undefined as the permissive side).
+// It must be treated as the MOST severe: top rank, `blocked` tier, order-independent.
+const offLadder = { kind: "threat", action: "deny" } as unknown as ComposableSignal;
+const escalateSig = fromThreat(threat({ posture: "critical_compromise", reasonCode: "CRITICAL_ACTIVE_THREAT", recommendedAction: "escalate", activeThreatCount: 1, threatCount: 1 }));
+const offSolo = composeDeviceRisk([offLadder]);
+check("an off-ladder action yields a DEFINED most-severe riskTier (blocked), never undefined",
+  offSolo.riskTier === "blocked" && (offSolo.strongestAction as string) === "deny");
+const offFirst = composeDeviceRisk([offLadder, escalateSig]);
+const offLast = composeDeviceRisk([escalateSig, offLadder]);
+check("an off-ladder action outranks a genuine escalate (unknown treated as most severe)",
+  (offFirst.strongestAction as string) === "deny" && (offLast.strongestAction as string) === "deny");
+check("composition is ORDER-INDEPENDENT with an off-ladder action present (no NaN sort)",
+  offFirst.riskTier === "blocked" && offLast.riskTier === "blocked" &&
+  offFirst.strongestAction === offLast.strongestAction);
+
 // identity/SSO sign-in risk fuses in: a compliant, reachable device whose USER
 // is confirmed-compromised composes to escalate/blocked — device fine, identity not.
 const withIdentity = composeDeviceRisk([

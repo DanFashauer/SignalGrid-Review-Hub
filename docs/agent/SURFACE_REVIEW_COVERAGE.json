@@ -454,7 +454,17 @@
     },
     "lib/posture-composition": {
       "path": "lib/posture-composition",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Fail-closed audit of all 4 files. Fusion is directionally correct (strongest action wins; device-posture adapter requires positive confirmation on every field). One latent hole fixed: an off-ladder action (behind 40 `as UnifiedAction` casts) made ACTION_RANK[x] undefined -> NaN sort (order-dependent) + undefined riskTier. rankOf/tierOf now treat an unknown action as most-severe (top rank, blocked tier). Empty-input contract noted as a caller-relied design target, not changed.",
+          "reviewer": "cloud lane",
+          "record": "lib/posture-composition/src/compose.ts",
+          "scope": "surface",
+          "open": 1,
+          "closed": 1
+        }
+      ]
     },
     "lib/recommendations": {
       "path": "lib/recommendations",

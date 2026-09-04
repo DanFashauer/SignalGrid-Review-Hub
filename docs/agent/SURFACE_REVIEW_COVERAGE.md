@@ -6,7 +6,7 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**15 of 100 surfaces have been read. 7 are partially read. 78 have not been read at all.**
+**16 of 100 surfaces have been read. 7 are partially read. 77 have not been read at all.**
 
 Coverage of the tree is asserted, not assumed: **2187 of 2187 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
@@ -93,7 +93,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/orchestration` | package | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/persistence` | package | 8 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/pim-activation` | package | 6 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `lib/posture-composition` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/posture-composition` | package | 5 | read | 1 | 2026-09-04 | cloud lane | lib/posture-composition/src/compose.ts | 1 | 1 |
 | `lib/recommendations` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/reliability` | package | 5 | read | 1 | 2026-09-04 | cloud lane | lib/reliability/src/summarize.ts | 1 | 1 |
 | `lib/room-sim` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -131,7 +131,7 @@ A named slice was read. The rest of the surface has not been.
 - `lib/signalgrid-simulator` (package)
 - `lib/webauthn` (package)
 
-## Not read (78)
+## Not read (77)
 
 - `.agents` (tree)
 - `.claude/*` (loose files)
@@ -196,7 +196,6 @@ A named slice was read. The rest of the surface has not been.
 - `lib/orchestration` (package)
 - `lib/persistence` (package)
 - `lib/pim-activation` (package)
-- `lib/posture-composition` (package)
 - `lib/recommendations` (package)
 - `lib/room-sim` (package)
 - `lib/signal-discovery` (package)

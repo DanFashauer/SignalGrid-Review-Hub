@@ -28,6 +28,24 @@ const TIER_BY_ACTION: Record<UnifiedAction, RiskTier> = {
   escalate: "blocked",
 };
 
+// An action that is not on the unified ladder is UNKNOWN — it reached here through an
+// adapter's `as UnifiedAction` cast (40 of them) or a hand-built ComposableSignal, so the
+// compiler never proved it valid. An unknown concern must fail CLOSED: treat it as the most
+// severe, never let it become a NaN rank (which makes the sort order-dependent — a violation
+// of determinism) or an `undefined` tier (which a downstream consumer reads as the permissive
+// side). It ranks above every real rung and maps to the `blocked` tier.
+const OFF_LADDER_RANK = UNIFIED_ACTIONS.length;
+function rankOf(action: string): number {
+  return Object.prototype.hasOwnProperty.call(ACTION_RANK, action)
+    ? ACTION_RANK[action as UnifiedAction]
+    : OFF_LADDER_RANK;
+}
+function tierOf(action: string): RiskTier {
+  return Object.prototype.hasOwnProperty.call(TIER_BY_ACTION, action)
+    ? TIER_BY_ACTION[action as UnifiedAction]
+    : "blocked";
+}
+
 /**
  * Fuse the per-dimension signals into one unified posture. Deterministic: the
  * strongest action across all signals wins (fail-safe — the most severe concern
@@ -37,7 +55,7 @@ const TIER_BY_ACTION: Record<UnifiedAction, RiskTier> = {
  * caller can distinguish from an explicit clean signal by `signalCount`.
  */
 export function composeDeviceRisk(signals: readonly ComposableSignal[]): UnifiedPosture {
-  const drivers: RiskDriver[] = signals.map((s) => ({ ...s, rank: ACTION_RANK[s.action] }));
+  const drivers: RiskDriver[] = signals.map((s) => ({ ...s, rank: rankOf(s.action) }));
 
   // Stable sort by rank descending: preserve input order within equal ranks.
   const sorted = drivers
@@ -47,7 +65,7 @@ export function composeDeviceRisk(signals: readonly ComposableSignal[]): Unified
 
   const strongestAction: UnifiedAction = sorted.length > 0 ? sorted[0].action : "none";
   return {
-    riskTier: TIER_BY_ACTION[strongestAction],
+    riskTier: tierOf(strongestAction),
     strongestAction,
     drivers: sorted,
     signalCount: signals.length,

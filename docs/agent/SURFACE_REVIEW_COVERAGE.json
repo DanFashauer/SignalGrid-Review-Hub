@@ -257,7 +257,17 @@
     },
     "lib/api-zod": {
       "path": "lib/api-zod",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Fail-closed audit of the Zod validation surface (the whole runtime surface is one orval-generated file, api.ts, 355 lines; the 45 generated types are pure interfaces). Schemas are fail-closed by construction (no passthrough, no enum catch, coerce.date/number reject NaN). Systemic finding: the *Body/*QueryParams input schemas are DEAD as guards \u2014 the live /v1 routes hand-roll validation in v1.ts, which is itself fail-closed end-to-end (bounded TTL, bounded+refusing reconcile, core validateRequest rejects empty bindings). No live fail-open. Latent generated-schema tightenings + a dead-validator wiring gate filed to the backlog as design targets.",
+          "reviewer": "cloud lane",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 0
+        }
+      ]
     },
     "lib/app-workflows": {
       "path": "lib/app-workflows",

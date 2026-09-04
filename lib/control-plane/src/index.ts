@@ -400,6 +400,25 @@ function buildSeed(): Seed {
 
 // ── the control plane ────────────────────────────────────────────────────────
 
+/**
+ * Whether `rowValue` is in scope for a tenant/site filter.
+ *
+ *   • scope === undefined  → NO scope given ⇒ include everything (the admin
+ *                            "whole fleet" view).
+ *   • scope is empty / whitespace-only → an INVALID scope, not a wildcard ⇒ match
+ *     NOTHING. `!scope` treated "" the same as undefined, so a caller passing a
+ *     tenant/site id it derived from a token or parse and forgot to check for
+ *     emptiness got EVERY tenant's rows instead of none — a silent cross-tenant
+ *     read the moment this plane gains per-caller authorization. An unresolved
+ *     scope must fail closed to empty, distinct from "no scope".
+ *   • otherwise → exact match.
+ */
+function scopeIncludes(rowValue: string, scope: string | undefined): boolean {
+  if (scope === undefined) return true;
+  if (scope.trim() === "") return false;
+  return rowValue === scope;
+}
+
 export class ControlPlane {
   private constructor(private readonly seed: Seed) {}
 
@@ -412,7 +431,7 @@ export class ControlPlane {
   }
 
   listSites(tenantId?: string): Site[] {
-    return this.seed.sites.filter((s) => !tenantId || s.tenantId === tenantId);
+    return this.seed.sites.filter((s) => scopeIncludes(s.tenantId, tenantId));
   }
 
   listEdgeNodes(tenantId?: string): EdgeNode[] {
@@ -421,7 +440,7 @@ export class ControlPlane {
   }
 
   listFleet(siteId?: string): FleetDevice[] {
-    return this.seed.devices.filter((d) => !siteId || d.siteId === siteId);
+    return this.seed.devices.filter((d) => scopeIncludes(d.siteId, siteId));
   }
 
   /** The config bundle to push DOWN to a tenant's edge nodes. */
@@ -506,7 +525,7 @@ export class ControlPlane {
 
   /** Fleet-wide health rollup across every tenant, with a per-vertical breakdown. */
   fleetHealth(tenantId?: string): FleetHealth {
-    const tenants = this.seed.tenants.filter((t) => !tenantId || t.id === tenantId);
+    const tenants = this.seed.tenants.filter((t) => scopeIncludes(t.id, tenantId));
     const tenantIds = new Set(tenants.map((t) => t.id));
     const sites = this.seed.sites.filter((s) => tenantIds.has(s.tenantId));
     const siteIds = new Set(sites.map((s) => s.id));
@@ -551,7 +570,7 @@ export class ControlPlane {
    * derived from ingested telemetry + node status + sync state. Deterministic.
    */
   operationalIntelligence(tenantId?: string): OpsIntelligence {
-    const tenants = this.seed.tenants.filter((t) => !tenantId || t.id === tenantId);
+    const tenants = this.seed.tenants.filter((t) => scopeIncludes(t.id, tenantId));
     const tenantById = new Map(tenants.map((t) => [t.id, t]));
     const sites = this.seed.sites.filter((s) => tenantById.has(s.tenantId));
     const siteById = new Map(sites.map((s) => [s.id, s]));

@@ -76,7 +76,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/api-zod` | package | 48 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/app-workflows` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/audit` | package | 6 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |
-| `lib/control-plane` | package | 3 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 1 | 1 |
+| `lib/control-plane` | package | 3 | read | 2 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |
 | `lib/ddm-connector` | package | 4 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |
 | `lib/dual-control` | package | 5 | read | 1 | 2026-09-04 | cloud lane (adversarial sweep + on-tree mutation verify) | docs/SELF_REVIEW.md | 1 | 0 |
 | `lib/enterprise-auth` | package | 8 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |

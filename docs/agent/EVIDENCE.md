@@ -407,3 +407,23 @@ guards (catch -> false), ingestTelemetry nonNeg (NaN/Inf/neg -> 0), getPolicyBun
 (unknown -> null, version only advances), custodyGaps (status !== "healthy" -> gap), no allow-default switch.
 ```
 Verdict:  **one real fail-open on the authenticity boundary, FIXED and now gated by a mutation-proven proof assertion; one latent caller-gated note deferred; everything else fail-closed.**
+
+## 2026-09-04 — "Finding 3 fixed: control-plane empty-string scope no longer reads as a cross-tenant wildcard"
+Command (fix + mutation-proven proof, follow-up to the 2026-09-04 control-plane read; owner-requested):
+```
+lib/control-plane/src/index.ts   scripts/src/control-plane-proof.ts
+```
+Output:
+```
+listSites/listFleet/fleetHealth/operationalIntelligence filtered with `!tenantId || ...` (and listFleet
+`!siteId || ...`), so `!"" === true` made an empty-string scope return EVERY tenant's/site's rows — same as
+undefined. listEdgeNodes delegates to listSites, so it inherited it too. Caller-gated today (the HTTP route
+maps "" -> undefined) but a latent cross-tenant wildcard the moment any caller passes an unresolved id.
+FIX: one scopeIncludes(rowValue, scope) helper — undefined -> include all; "" or whitespace-only -> include
+NONE; else exact match — applied to all four filters (listEdgeNodes covered via listSites).
+GATE: 9 assertions added to control-plane-proof (undefined -> all; "" and "   " -> none, across sites, edge
+nodes, fleet devices, fleetHealth verticals, operationalIntelligence). 42/42 with the fix.
+MUTATION TEST: restoring listSites's `!tenantId` -> "empty-string tenant scope returns NO sites" and "... NO
+edge nodes" both FAIL (40/42, exit 1). typecheck green; edge-sync proof still 17/17.
+```
+Verdict:  **fixed and gated — an unresolved (empty) scope now fails closed to no rows, distinct from undefined (all).**

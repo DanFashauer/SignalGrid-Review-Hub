@@ -294,3 +294,33 @@ holds all mapped roles and the JWKS is IdP-controlled):
      tie-break would be the more deterministic fail-closed choice on a multi-role token.
   2. jwt.ts selectKey filters kty/n/e but not use==="sig"; an enc-designated RSA key in the JWKS
      could be selected (low risk — the IdP controls the JWKS).
+
+## 2026-09-04 — "The audit-ledger surface (lib/audit) is a fail-closed, provably append-only hash chain"
+Command (adversarial read of the whole surface):
+```
+lib/audit/src/{index,backend,types}.ts   (672 lines)
+```
+Output (fail-closed / integrity properties checked):
+```
+index.ts   canonical JSON sorts keys AT EVERY DEPTH incl. inside arrays; keys AND values escaped (a crafted
+           key can't forge neighbouring framing); MAX_CANONICAL_DEPTH=32 -> append REFUSES rather than hash
+           over a truncated serialization; secrets redacted BEFORE hashing (never enter hash input in clear)
+           verifySegment re-derives the record field-set identically to append (append<->verify hash match);
+           verifyLedger is cap-HONEST (truncated:true means "prefix intact", not a clean-chain all-clear);
+           verifyLedgerFull paginates the whole chain in bounded memory
+           new Date()/uuidv4() are appropriate here (an audit record captures real time/id — NOT a decision
+           path, so golden rule 2 does not apply)
+backend.ts appendWithChain is ATOMIC: BEGIN + pg_advisory_xact_lock + read-head + insert + COMMIT, so the
+           chain cannot fork under concurrent writers; Postgres gated on DATABASE_URL, in-memory default
+           readiness ASSERTS the append-only boundary: SELECT+INSERT+seq USAGE required, and UPDATE/DELETE/
+           TRUNCATE (table/column/PUBLIC/sequence-setval) FORBIDDEN -> not ready. The runtime role provably
+           cannot delete tail records, which is the structural tail-truncation defense.
+           rejected-init retried single-flight; ts re-serialized to the exact ISO the hash was computed over
+```
+Verdict:  **approved — zero fail-open / integrity defects; the append-only boundary is actively enforced at readiness.**
+Two NOTE-level, non-defect observations:
+  1. The hash chain alone cannot detect TAIL truncation (deleting the most-recent K records leaves a valid
+     shorter chain); this is mitigated structurally by the forbidden-DELETE/TRUNCATE readiness check rather
+     than by a persisted external head-hash/count anchor. An admin-level DB actor is outside that boundary.
+  2. Secret redaction matches SECRET_KEYS as a substring ("key" matches "monkey"/"keyboard"): over-redacts,
+     which is the safe direction for an audit trail.

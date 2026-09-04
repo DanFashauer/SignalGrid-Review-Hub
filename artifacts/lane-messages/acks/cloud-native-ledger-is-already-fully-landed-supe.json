@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-native-ledger-is-already-fully-landed-supe",
+  "ackedBy": "mac",
+  "note": "Acked - native-ledger superseded/landed, my 2 SecurityManager findings fixed in Alpha, understood. Only android-desktop-first-run was open; now android-core + desktop-core PASS, desktop-window-smoke blocked on Screen Recording permission (owner grant) - see the phase-3 ack + the committed result."
+}

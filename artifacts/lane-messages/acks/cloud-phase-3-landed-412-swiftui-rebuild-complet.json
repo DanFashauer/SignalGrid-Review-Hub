@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-phase-3-landed-412-swiftui-rebuild-complet",
+  "ackedBy": "mac",
+  "note": "Confirmed Phase 3 landed (#412) - SwiftUI view-layer rebuild is complete on Alpha. Installed the android/desktop toolchain on the Mac (JDK 17 + Gradle 9.7.1 + Rust 1.98 via brew; no Android SDK - the android op is the pure-Kotlin core) and ran android-desktop-first-run: android-core-tests PASS, desktop-core-tests PASS, both clean provenance (6272d71d). desktop-window-smoke built the Tauri release + launched (process lived) but FAILS its mandatory screenshot - the terminal lacks Screen Recording permission; that is an owner grant (System Settings -> Privacy & Security -> Screen Recording). Request stays pending until that one op is green; result committed. Note Gradle 9.7.1 (not the 8.14.3 the op names) - android-core built + tested clean on it, only a Gradle-10 deprecation warning."
+}

@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 54,
-  "fingerprint": "7fad717f24d8bf1b3dd177b65b569b264f9b8f4cd209a8af00a87a0ca19b5336",
+  "manifestVersion": 55,
+  "fingerprint": "6a5396e41331af1ff06e4fde63175bff14ed1c11979f969787ffd46394078685",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -155,7 +155,7 @@
       "token-binding": 61,
       "uem": 76,
       "unsafe-claim": 40,
-      "verdict-attestation": 76,
+      "verdict-attestation": 82,
       "webhooks": 201,
       "work-context": 52
     },

@@ -184,6 +184,16 @@ export function verifyVerdict<T>(
 
   const maxAge = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
   const maxSkew = options.maxSkewMs ?? DEFAULT_MAX_SKEW_MS;
+  // An unreadable verification CLOCK or BOUND cannot establish freshness, and NaN
+  // comparisons are false in the permissive direction (`x > NaN` and `NaN > x` are both
+  // false), so a non-finite `options.now`, `maxAge` or `maxSkew` would silently DISABLE
+  // both freshness checks below and let a stale or future attestation verify. isMalformed
+  // (attest.ts:128-129) guards `att.issuedAt`, but NOT these caller-supplied values —
+  // `??` only fills null/undefined, so a caller's `NaN` survives. Fail closed on them
+  // here, treating an unreadable clock as expired (golden rule 2).
+  if (!Number.isFinite(options.now) || !Number.isFinite(maxAge) || !Number.isFinite(maxSkew)) {
+    return fail("expired");
+  }
   // freshness: local-by-design — same rule, but this package cannot import @workspace/integrations without a new workspace dependency and a lockfile regeneration; folded copy pending that change — and it is the THIRD hand-rolled skew tolerance, DEFAULT_MAX_SKEW_MS = 60_000, the same value as the shared constant
   if (att.issuedAt > options.now + maxSkew) return fail("issued_in_future");
   // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (DEFAULT_MAX_AGE_MS = 5 * 60_000 is a staleness BOUND, not a skew tolerance). CORRECTED 2026-09-02: this marker used to name check-nan-fail-open.mjs as its gate, and that gate has nothing to key on here — `att.issuedAt` never passes through Date.parse or .getTime(). The real guard is `isMalformed` at attest.ts:128-129, which rejects any attestation whose issuedAt is not a finite number BEFORE this comparison runs; naming a gate that cannot see the site is the defect this file's own doctrine exists to prevent.

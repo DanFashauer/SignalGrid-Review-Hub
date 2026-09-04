@@ -142,9 +142,11 @@ export async function saveUser(user: WebAuthnUser): Promise<void> {
  * has nothing valid left to do. Here both appends are legitimate and commutative, so a
  * loser has to retry, and retrying is where WATCH breaks down: under concurrent writers
  * on one key the aborts cascade and some writers exhaust their attempts having done
- * nothing wrong. `proof:enrollment-race` measured exactly that against a real Redis —
- * a WATCH/MULTI version with 5 attempts persisted 7 of 12 concurrent enrollments and
- * threw for the rest. Raising the retry count would move the failure, not remove it:
+ * nothing wrong. A one-off experiment against a real Redis (a WATCH/MULTI version with
+ * 5 attempts) persisted only some of the concurrent enrollments and threw for the rest;
+ * that discarded variant is NOT what `proof:enrollment-race` reproduces — the proof
+ * measures the SHIPPED lock and asserts every concurrent enrollment survives
+ * (`concurrency=12 survived=12`). Raising the retry count would move the failure, not remove it:
  * optimistic locking under contention is livelock-prone by construction. A mutual
  * exclusion lock serialises the appends instead, so every writer commits exactly once.
  *

@@ -2336,7 +2336,8 @@ earlier — that is the loop working, not a reason to soften the record.
       before its read-modify-write, and carries a long comment explaining exactly
       why: "each read the user, append a credential, and each write the whole
       thing back. The later SET erases the earlier." It even records that a
-      WATCH/MULTI version "persisted 7 of 12 concurrent enrollments".
+      discarded WATCH/MULTI variant persisted only some concurrent enrollments
+      (the shipped lock's proof, proof:enrollment-race, asserts all survive).
     · `advanceCredentialCounter` (`:301-357`) uses WATCH/MULTI, correctly — the
       counter must fail closed on a lost race.
     · `removeCredential` (`:241-277`) does neither. Plain `getUser()` -> splice ->

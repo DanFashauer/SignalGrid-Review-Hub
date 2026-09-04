@@ -755,16 +755,19 @@ const ALLOWED = [
       'Genuinely inert, verified by diffing all 6,480 enumerated states with the term mutated to `true`: ZERO verdicts changed. The guard as a whole is live (it fails a "none" report that carries positive risky detail), but this TERM cannot matter, because the risky-field checks above already push a candidate for broad/full_access scope, an unverified publisher, or an unmanaged workload secret whenever grants === "present" — so the disjunct it scopes can only be true when grants is already "none", and an "unknown" grants value has returned before reaching here. Kept because it states the scope exactly and becomes load-bearing the moment the risky-field block\'s own scoping changes.',
   },
   {
+    // Covers ONLY the TOP-LEVEL `readThrew`/`!plain` disjuncts, whose lines carry an
+    // `inert-at-top` block-comment marker so this substring cannot match the bare, identical
+    // authorizer-normalizer terms above them. Those authorizer terms are LOAD-BEARING (a
+    // throwing accessor is caught only by `readThrew`; a null authorizer body only by
+    // `!plain`) and are killed by proof:dual-control, so they are deliberately NOT here — and
+    // the marker stops this entry from silently laundering them if either ever regresses to
+    // surviving. A prior version of this entry claimed to cover BOTH occurrences as "genuinely
+    // inert", which a 239-shape behavioural diff wrongly corroborated; the null-authorizer and
+    // throwing-accessor cases it missed are now pinned as proof vectors.
     file: "lib/dual-control/src/normalize.ts",
-    line: "!plain ||",
+    line: "inert-at-top: request refused by the authorizer normalizer first */ ||",
     reason:
-      "Covers BOTH occurrences (the authorizer normalizer and the top-level request normalizer) — same term, same justification. Genuinely inert, verified by diffing 239 hostile shapes (non-objects, null, arrays, Object.prototype, a getPrototypeOf Proxy, throwing accessors, and every field-corruption crossed pair) with the term mutated to `false`: ZERO outputs changed. When the input is not a plain object every field read yields undefined, and the per-field refMalformed/enumMalformed checks below already mark the report malformed on that alone. Kept as defence in depth: it encodes the rule directly instead of relying on a downstream check to imply it, and becomes load-bearing the moment any field check is narrowed to tolerate undefined.",
-  },
-  {
-    file: "lib/dual-control/src/normalize.ts",
-    line: "readThrew ||",
-    reason:
-      "Genuinely inert, verified by the same 239-shape diff with the term mutated to `false`: ZERO outputs changed. A throwing accessor forces every field to undefined in the catch block, and the per-field checks below already mark the report malformed on that alone. Kept for the same reason as the !plain term beside it — a read that THREW is a distinct fact from a read that returned nothing, and stating it here keeps the integrity flag honest if the field checks ever stop covering undefined.",
+      "Genuinely inert at the TOP-LEVEL request normalizer, verified by mutation: forcing either term to `false` and running proof:dual-control leaves it at pass. A non-plain or throwing request reaches normalizeAuthorizer(undefined) for BOTH initiator and approver before these terms matter — a string/array/undefined body via hasUnrecognizedKey throwing on a non-object ownKeys, a null body via that authorizer normalizer's own (load-bearing) !plain — so `initiator.malformed || approver.malformed` folded in at the end already marks the request malformed. Pinned by the 'a null/undefined/string/array/number request body is malformed' vectors. Kept as defence in depth; it becomes load-bearing only if the authorizer normalizer's own guards are removed, which those vectors also forbid.",
   },
   {
     file: 'lib/integrations/src/integrations/change-window/evaluate.ts',

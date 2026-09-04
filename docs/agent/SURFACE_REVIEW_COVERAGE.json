@@ -277,7 +277,17 @@
     },
     "lib/dual-control": {
       "path": "lib/dual-control",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Adversarial read of the two-person normalizer/evaluator in the same sweep, confirmed by on-tree mutation. The authorizer normalizer's `!plain` and `readThrew` disjuncts were labelled 'genuinely inert' (a 239-shape behavioural diff) but are each the SOLE guard on one shape the diff never generated: a NULL authorizer body (hasUnrecognizedKey(null) never enters its walk) and a throwing accessor on a known key. Both are load-bearing; pinned with proof vectors, killed by the mutation guard, removed from the inert allowlist. Only the top-level twins are inert - now carrying an inert-at-top marker so the allowlist cannot launder the load-bearing terms.",
+          "reviewer": "cloud lane (adversarial sweep + on-tree mutation verify)",
+          "record": "docs/SELF_REVIEW.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 1
+        }
+      ]
     },
     "lib/enterprise-auth": {
       "path": "lib/enterprise-auth",
@@ -430,11 +440,31 @@
     },
     "lib/verdict-attestation": {
       "path": "lib/verdict-attestation",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Adversarial read of the attestation verifier as part of a security/decision-lib sweep: verifyVerdict's freshness/skew checks read against non-finite caller inputs. Found a real fail-open - a NaN or Infinity options.now/maxAgeMs/maxSkewMs silently disabled BOTH freshness comparisons (x > NaN is false), so a stale or future attestation verified. Fixed to fail closed to expired, six proof vectors added, proof 76 -> 82.",
+          "reviewer": "cloud lane (adversarial sweep + independent verify)",
+          "record": "#415",
+          "scope": "surface",
+          "open": 0,
+          "closed": 1
+        }
+      ]
     },
     "lib/webauthn": {
       "path": "lib/webauthn",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Read of the credential store's addCredential/enrollment-race path in the same sweep. Found a fossil figure: the addCredential comment attributed a discarded '7 of 12' WATCH/MULTI measurement to proof:enrollment-race, which actually measures the shipped lock at 12/12 and never emits that number. Comment reworded; the propagated copy in COMPANY_BUILD_PLAN.md corrected.",
+          "reviewer": "cloud lane (adversarial sweep + independent verify)",
+          "record": "#415",
+          "scope": "partial: the addCredential/enrollment-race path and its proof-figure attribution; the full registration/assertion ceremony verification was not re-read.",
+          "open": 0,
+          "closed": 1
+        }
+      ]
     },
     "lib/work-context": {
       "path": "lib/work-context",

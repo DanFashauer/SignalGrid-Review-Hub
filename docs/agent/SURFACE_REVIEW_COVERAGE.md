@@ -6,7 +6,7 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**4 of 100 surfaces have been read. 6 are partially read. 90 have not been read at all.**
+**6 of 100 surfaces have been read. 7 are partially read. 87 have not been read at all.**
 
 Coverage of the tree is asserted, not assumed: **2182 of 2182 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
@@ -78,7 +78,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/audit` | package | 6 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/control-plane` | package | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/ddm-connector` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `lib/dual-control` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/dual-control` | package | 5 | read | 1 | 2026-09-04 | cloud lane (adversarial sweep + on-tree mutation verify) | docs/SELF_REVIEW.md | 1 | 0 |
 | `lib/enterprise-auth` | package | 8 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/event-contract` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/facility-trust-graph` | package | 9 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -102,8 +102,8 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/signal-radar` | package | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/signalgrid-core` | package | 23 | **partial** | 2 | 2026-09-02 | cloud lane (three independent reviews) | #376 | 4 | 0 |
 | `lib/signalgrid-simulator` | package | 9 | **partial** | 1 | 2026-09-02 | cloud lane (three independent reviews) | #376 | 0 | 0 |
-| `lib/verdict-attestation` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `lib/webauthn` | package | 8 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/verdict-attestation` | package | 5 | read | 1 | 2026-09-04 | cloud lane (adversarial sweep + independent verify) | #415 | 1 | 0 |
+| `lib/webauthn` | package | 8 | **partial** | 1 | 2026-09-04 | cloud lane (adversarial sweep + independent verify) | #415 | 1 | 0 |
 | `lib/work-context` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/android` | native | 24 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 2 | 0 |
 | `native/desktop` | native | 21 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 2 | 0 |
@@ -119,7 +119,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `tests` | tree | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `tools` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 
-## Partially read (6)
+## Partially read (7)
 
 A named slice was read. The rest of the surface has not been.
 
@@ -129,8 +129,9 @@ A named slice was read. The rest of the surface has not been.
 - `lib/integrations` (package)
 - `lib/signalgrid-core` (package)
 - `lib/signalgrid-simulator` (package)
+- `lib/webauthn` (package)
 
-## Not read (90)
+## Not read (87)
 
 - `.agents` (tree)
 - `.claude/*` (loose files)
@@ -189,7 +190,6 @@ A named slice was read. The rest of the surface has not been.
 - `lib/audit` (package)
 - `lib/control-plane` (package)
 - `lib/ddm-connector` (package)
-- `lib/dual-control` (package)
 - `lib/enterprise-auth` (package)
 - `lib/event-contract` (package)
 - `lib/facility-trust-graph` (package)
@@ -210,8 +210,6 @@ A named slice was read. The rest of the surface has not been.
 - `lib/self-audit` (package)
 - `lib/signal-discovery` (package)
 - `lib/signal-radar` (package)
-- `lib/verdict-attestation` (package)
-- `lib/webauthn` (package)
 - `lib/work-context` (package)
 - `native/ios/*` (loose files)
 - `native/ios/EnterpriseShellTests` (native)

@@ -513,3 +513,34 @@ MUTATION TEST: reverting the functional seeds to "healthy" and allClear to item-
   assertions FAIL (57/61, exit 1). typecheck green.
 ```
 Verdict:  **fixed and gated — the self-audit can no longer show a false all-clear; nothing-checked reads as unverified.**
+
+## 2026-09-04 — "lib/facility-trust-graph is fail-closed except one field: a present-but-unparseable map_version granted, while a well-formed-wrong one restricted"
+Command (fail-closed audit of all 8 files + fix + mutation-proof):
+```
+lib/facility-trust-graph/src/{graph,evaluate,correlate,clinical,transition,gateway,fixture,index}.ts (1846 lines)
+scripts/src/facility-trust-graph-proof.ts
+```
+Output:
+```
+CLEAN (verified): no Date.now/Math.random; all four Date.parse calls are regex+Number.isFinite guarded
+  (instantOf) so a bad instant is null and every comparison is null-guarded; graph loader refuses empty/
+  blank/unknown-kind/dup-id/multi-root/cycle and resolves ambiguous vendor refs to null (never a guess);
+  evaluate's severity ladder raises on every non-affirmative axis with a positivelyCertain fallback;
+  correlate/transition/clinical/gateway all fail closed on unreadable/unknown/future/unmapped inputs.
+FINDING (fail-open, decision-adjacent): map_version was the ONLY externally-typed observation field with no
+  "shapeBad" tripwire. accuracy_class/source_health/observed_at/confidence each fold a *ShapeBad term into
+  `malformed`; map_version did not. textOf(raw.map_version) maps a number / "" / whitespace to null, and
+  null reads mapVersionMatch="unassessed" — which the grant path accepts. So a PRESENT-but-unparseable
+  map_version produced SUFFICIENT_CERTAINTY (grant), while a well-formed-but-WRONG one produced
+  MAP_VERSION_MISMATCH (restrict): garbage wire data was strictly MORE permissive than bad data. Reproduced
+  by the sub-agent against the fixture graph via the real normalize->evaluate path.
+FIX: added mapVersionShapeBad = (map_version present && not null && textOf === null) folded into `malformed`
+  (evaluate.ts). A present, illegible map_version now -> malformed -> REPORT_MALFORMED -> step_up. An ABSENT
+  map_version stays "unassessed"/grant-eligible by design (no requirement lever forces map assessment; only
+  present garbage raises).
+GATE: facility-trust-graph-proof gains 3 present-garbage assertions (123, "", "   " -> malformed + step_up +
+  REPORT_MALFORMED) + 1 absent-stays-grant-eligible assertion. 124/124. grantingCombos figure unchanged (24).
+MUTATION TEST: removing mapVersionShapeBad from the malformed disjunction -> the 3 present-garbage assertions
+  FAIL (121/124, exit 1); the absent-case assertion correctly stays green (the fix does not over-tighten).
+```
+Verdict:  **fixed and gated — an unparseable map_version now fails closed like every sibling field; garbage can no longer out-grant a well-formed conflict.**

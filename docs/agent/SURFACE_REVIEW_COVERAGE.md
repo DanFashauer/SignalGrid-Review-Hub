@@ -6,7 +6,7 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**14 of 100 surfaces have been read. 7 are partially read. 79 have not been read at all.**
+**15 of 100 surfaces have been read. 7 are partially read. 78 have not been read at all.**
 
 Coverage of the tree is asserted, not assumed: **2187 of 2187 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
@@ -81,7 +81,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/dual-control` | package | 5 | read | 1 | 2026-09-04 | cloud lane (adversarial sweep + on-tree mutation verify) | docs/SELF_REVIEW.md | 1 | 0 |
 | `lib/enterprise-auth` | package | 8 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |
 | `lib/event-contract` | package | 5 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |
-| `lib/facility-trust-graph` | package | 9 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/facility-trust-graph` | package | 9 | read | 1 | 2026-09-04 | cloud lane | lib/facility-trust-graph/src/evaluate.ts | 1 | 1 |
 | `lib/fleet-connector` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/flows` | package | 13 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/handoff-sim` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -131,7 +131,7 @@ A named slice was read. The rest of the surface has not been.
 - `lib/signalgrid-simulator` (package)
 - `lib/webauthn` (package)
 
-## Not read (79)
+## Not read (78)
 
 - `.agents` (tree)
 - `.claude/*` (loose files)
@@ -186,7 +186,6 @@ A named slice was read. The rest of the surface has not been.
 - `lib/api-client-react` (package)
 - `lib/api-spec` (package)
 - `lib/app-workflows` (package)
-- `lib/facility-trust-graph` (package)
 - `lib/fleet-connector` (package)
 - `lib/flows` (package)
 - `lib/handoff-sim` (package)

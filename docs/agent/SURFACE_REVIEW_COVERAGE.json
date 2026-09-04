@@ -368,7 +368,17 @@
     },
     "lib/facility-trust-graph": {
       "path": "lib/facility-trust-graph",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Fail-closed audit of all 8 files (graph/evaluate/correlate/clinical/transition/gateway/fixture/index). Clean throughout except one field: map_version had no shape tripwire, so a present-but-unparseable value (number/empty/whitespace) collapsed to 'unassessed' and GRANTED, while a well-formed-wrong value restricted. Added mapVersionShapeBad -> present garbage now fails closed to malformed/step_up; absent stays grant-eligible by design.",
+          "reviewer": "cloud lane",
+          "record": "lib/facility-trust-graph/src/evaluate.ts",
+          "scope": "surface",
+          "open": 1,
+          "closed": 1
+        }
+      ]
     },
     "lib/fleet-connector": {
       "path": "lib/fleet-connector",

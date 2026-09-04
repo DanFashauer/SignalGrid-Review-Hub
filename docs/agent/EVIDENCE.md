@@ -266,3 +266,31 @@ same spec and the whole suite pass locally on the same tree, and the api-server 
 301/301. The re-run then failed on the unrelated 403 above rather than repeating it,
 so the E2E failure has been observed ONCE and never reproduced. Recorded as an
 unexplained single occurrence, not as a flake I have proven.
+
+## 2026-09-04 — "The enterprise-auth (OIDC/JWT) sign-in surface is fail-closed with no fail-open defects"
+Command (adversarial read of the whole surface against the repo's known defect classes):
+```
+lib/enterprise-auth/src/{jwt,jwks,claims,config,provider,base64url}.ts   (653 lines)
+```
+Output (what each fail-closed property was checked to hold):
+```
+jwt.ts    alg gate FIRST: header.alg !== "RS256" -> reject, before key material (none/HS* blocked)
+          signature verified BEFORE claims; RSA-SHA256 (PKCS1-v1_5) only
+          exp REQUIRED (missing exp -> fail); exp/nbf/iat use injected nowMs (deterministic), tol default 60s
+          no-kid header accepted only when JWKS has exactly ONE usable RSA key; else reject
+          iss exact-match, aud contains, sub non-empty — every default REJECT
+jwks.ts   never caches a failed fetch (throws on !ok); unknown-kid refetch is cooldown-limited (forged-kid DoS guard)
+          kid-miss after cooldown -> serve cache -> caller rejects (fail-closed); fetch + clock injected
+config.ts OIDC OFF unless OIDC_ISSUER set; partial config -> invalid (not silently enabled)
+          empty tenant/role map -> invalid; blank OIDC_CLOCK_TOLERANCE_SEC -> 60, NOT Number("")===0 (the fail-open class, handled)
+          role-map values validated against VALID_ROLES
+claims.ts deny-by-default: missing/unmapped tenant or role -> reject; hasOwnProperty.call guards prototype pollution
+provider  JWKS fetch failure -> {ok:false}; verify->map all fail-closed; authenticateOrThrow -> CoreError(401); logs subject, never token
+```
+Verdict:  **approved — zero fail-open, non-determinism, or unknown-treated-as-permissive defects.**
+Two NOTE-level, non-defect observations (recorded, not filed as defects; the identity legitimately
+holds all mapped roles and the JWKS is IdP-controlled):
+  1. claims.ts grants the FIRST token-order role value that maps; a least-privilege-among-mapped
+     tie-break would be the more deterministic fail-closed choice on a multi-role token.
+  2. jwt.ts selectKey filters kty/n/e but not use==="sig"; an enc-designated RSA key in the JWKS
+     could be selected (low risk — the IdP controls the JWKS).

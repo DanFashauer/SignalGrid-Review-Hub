@@ -603,7 +603,7 @@ in one place.
 - **Dual control** ([DUAL_CONTROL.md](DUAL_CONTROL.md)) — two-person integrity for the
   highest-blast-radius actions: two distinct identities, distinct credential instances, user
   verification, action binding, role, co-presence, clean parse. `proof:dual-control`
-  (58 checks).
+  (60 checks).
 
 ## DockBridge candidate integration
 

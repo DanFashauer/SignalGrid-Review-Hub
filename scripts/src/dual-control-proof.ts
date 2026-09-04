@@ -137,6 +137,16 @@ check("a non-object authorizer body is malformed",
   normalizeDualControlRequest("np", { ...CONFIRMED, approver: "nope" as never }).requestIntegrity === "malformed");
 check("a non-object request body is malformed",
   normalizeDualControlRequest("npr", "nope" as never).requestIntegrity === "malformed");
+// A NULL authorizer body is the one non-object shape `hasUnrecognizedKey` cannot catch:
+// its bounded prototype walk never enters the loop for `null` (the `o !== null` guard is
+// false on entry) and returns false, and every field read yields undefined (absent, not
+// malformed). So the authorizer-level `!plain` term is the SOLE guard on a null authorizer
+// — LOAD-BEARING, not inert. Confirmed by mutation: with that term forced to `false`,
+// `approver:null`/`initiator:null` read `clean`, a fail-open. Both slots pinned.
+check("a null approver body is malformed (only the authorizer !plain catches a null body)",
+  normalizeDualControlRequest("an", { ...CONFIRMED, approver: null as never }).requestIntegrity === "malformed");
+check("a null initiator body is malformed (only the authorizer !plain catches a null body)",
+  normalizeDualControlRequest("in", { ...CONFIRMED, initiator: null as never }).requestIntegrity === "malformed");
 
 const hidden = new Proxy({ ...CONFIRMED }, { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined }) as DualControlRequestRaw;
 check("a Proxy hiding its own descriptors reads as ABSENT and cannot Grant", evaluateDualControl(normalizeDualControlRequest("px", hidden)).outcome !== "Granted");

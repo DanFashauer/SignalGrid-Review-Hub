@@ -121,14 +121,19 @@ function normalizeAuthorizer(raw: unknown): { value: NormalizedAuthorizer; malfo
     userVerified = boundToAction = roleAuthorized = undefined;
   }
 
-  // The first two terms are INERT at today's field checks and are kept deliberately:
-  // when the input is not a plain object every read yields undefined, and a throwing
-  // accessor forces the same, so the per-field checks below already mark the report
-  // malformed on that alone. Verified by behavioural diff, not by reading — mutating
-  // either to `false` changes ZERO outputs across 239 hostile shapes. They stay because
-  // they state the rule directly rather than relying on a downstream check to imply it,
-  // and become load-bearing the moment a field check tolerates undefined. Registered in
-  // the mutation guard's allowlist with the same reasoning.
+  // The first two terms here are LOAD-BEARING, each the SOLE guard on one shape (an earlier
+  // comment called them inert — a behavioural diff of 239 hostile shapes missed both cases):
+  //   `readThrew` — a throwing ACCESSOR on a known key. `hasUnrecognizedKey` reads `ownKeys`,
+  //     not values, so it does not throw; every field is reset to undefined in the catch and
+  //     the per-field checks read that as absent, not malformed. Only `readThrew` catches it
+  //     (proof: "a throwing ACCESSOR inside an authorizer ... marked malformed").
+  //   `!plain`   — a NULL authorizer body. `hasUnrecognizedKey(null)` never enters its walk
+  //     and returns false, and every field read yields undefined. Only `!plain` catches it
+  //     (proof: "a null approver/initiator body is malformed"). A string/array/undefined body
+  //     is instead caught by `hasUnrecognizedKey` throwing on a non-object `ownKeys`.
+  // Both are pinned by proof vectors and killed by the mutation guard, so neither is on its
+  // allowlist. The identical-looking terms in the top-level normalizer below ARE inert (a
+  // non-plain or throwing request reaches this normalizer with undefined authorizers first).
   const malformed =
     readThrew ||
     !plain ||
@@ -191,11 +196,18 @@ export function normalizeDualControlRequest(
   const initiator = normalizeAuthorizer(initiatorRaw);
   const approver = normalizeAuthorizer(approverRaw);
 
-  // Same two inert-but-kept terms as the authorizer normalizer above, same verification
-  // and same justification.
+  // These two terms ARE genuinely inert here (unlike their load-bearing twins in the
+  // authorizer normalizer above), verified by mutation: a non-plain or throwing REQUEST
+  // reaches `normalizeAuthorizer(undefined)` for both slots first — a string/array/undefined
+  // via `hasUnrecognizedKey` throwing, a null via that normalizer's own `!plain` — so
+  // `initiator.malformed || approver.malformed` already marks it malformed on that alone
+  // (proof: "a null/undefined/string/array/number request body is malformed"). Kept as
+  // defence in depth and allowlisted in the mutation guard. The trailing `/* inert-at-top */`
+  // markers make each line textually distinct from the load-bearing authorizer terms so the
+  // allowlist matches ONLY these inert occurrences, never launders a regression of the twins.
   const topMalformed =
-    readThrew ||
-    !plain ||
+    readThrew /* inert-at-top: request refused by the authorizer normalizer first */ ||
+    !plain /* inert-at-top: request refused by the authorizer normalizer first */ ||
     hasUnrecognizedKey(request, DUAL_CONTROL_REQUEST_KEYS) ||
     refMalformed(actionIdRaw) ||
     enumMalformed(actionClassRaw, ACTION_CLASS) ||

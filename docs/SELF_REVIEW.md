@@ -180,17 +180,21 @@ nobody re-derived whether the justification still holds.
 That leaves one judgement the guard cannot make for you. A survivor is *either* inert
 *or* real-behaviour-with-no-test, and it looks identical either way — the proof passed, and
 that is all the guard observes. Deciding by reading the code is exactly the reasoning that
-put the untested condition there in the first place, so the four survivors in the most
-recent sweep were each classified by **behavioural diff** instead: apply the mutation, dump
-the FULL output over the connector's whole input space, and compare. `oauth-consent`'s
-`grants === "none"` term changed zero of 6,480 enumerated verdicts; the two `!plain` terms
-and the `readThrew` term in `dual-control`'s normalizers changed zero of 239 hostile shapes
-(non-objects, `Object.prototype`, a `getPrototypeOf` Proxy, throwing accessors, and every
-field-corruption crossed pair). All four are genuinely inert — each is caught downstream by
-a per-field check before the term can matter — and all four are kept as defence in depth,
-because they state the rule directly rather than relying on a downstream check to imply it.
-The allowlist entries record the diff, so the next reader can re-run the reason rather than
-take it on trust.
+put the untested condition there in the first place, so the survivors in that sweep were
+each classified by **behavioural diff** instead: apply the mutation, dump the FULL output
+over the connector's whole input space, and compare. `oauth-consent`'s `grants === "none"`
+term changed zero of 6,480 enumerated verdicts and is genuinely inert. `dual-control`'s
+`!plain`/`readThrew` terms are the cautionary case: the same 239-shape diff reported all four
+inert, and it was **wrong on two of them**. A later adversarial read found each authorizer-
+normalizer term is the SOLE guard on one shape the diff never generated — a NULL authorizer
+body (`hasUnrecognizedKey(null)` never enters its prototype walk, so only `!plain` catches
+it) and a throwing ACCESSOR on a known key (`ownKeys` does not read values, so only
+`readThrew` catches it). Both are LOAD-BEARING, now pinned by proof vectors and killed by the
+guard, and are not on its allowlist. Only the top-level normalizer's twin terms are inert —
+a non-plain request reaches the authorizer normalizer first — and they carry an
+`inert-at-top` marker so the allowlist matches only them, never launders the load-bearing
+authorizer terms. The lesson: a behavioural diff proves nothing about a shape it did not
+enumerate, and "changed zero outputs" is only as strong as the input set behind it.
 
 It found real gaps immediately, including in code written an hour earlier: 13 of 19
 mutations survived in `verdict-attestation` on first run. Most were type checks whose

@@ -1606,3 +1606,68 @@ derived from `lib/integrations/src/integrations/` on 2026-09-02.
 **Reversal.** The owner reverses by saying so: delete the two documents, this record,
 the gate and its preflight/CI registration, the intake row and the index lines. Nothing
 in the product depends on any of it, by construction.
+
+## DR-029 — OmniRoute is adopted as the org's agent/build AI-gateway (the model-access layer for the coding lanes), by reference and keys-out-of-tree; it may NEVER enter the decision path (owner-directed 2026-09-04)
+
+**Question.** The owner's directive, in substance: *"add [OmniRoute] as part of the
+stack for tools to building and completing the project … used across all lanes and all
+layers within the repo and org."* Two questions fall out of it. What is OmniRoute, by
+use? And where does an AI gateway fit a product whose decision core is deterministic,
+offline and fixture-backed — such that it strengthens how the project is BUILT without
+touching what the product DECIDES?
+
+**What was established, by use.** `github.com/diegosouzapw/OmniRoute` was read on
+2026-09-04 (README + feature surface; MIT). It is a self-hosted **AI gateway**: one
+OpenAI-compatible endpoint in front of ~352 upstream providers / 1200+ models, with
+routing strategies (priority, round-robin, cost-optimised, fusion, pipeline…), free-tier
+token aggregation, token-compression engines, three-layer resilience (circuit breakers,
+cooldowns, model lockout), and its own MCP server (110 tools) plus an A2A agent protocol.
+Node 18+/Docker/Bun; optional Redis. It **requires upstream provider API keys or OAuth**
+and forwards requests to the selected provider. Its stated purpose is "never stop
+coding" — keep an agent working across provider rate limits and outages. So by use it is
+**agent/build infrastructure**: the model-ACCESS layer the coding lanes and org agents
+run on. It is not a signal source (it connects to no system of record SignalGrid
+decides on), not a connector family, and not a decision component.
+
+**Call: adopted as the org's agent/build AI-gateway, by reference.** OmniRoute is the
+sanctioned model-access layer for the SignalGrid coding lanes (cloud + Mac) and the
+org's agents: a lane routes its model traffic through the gateway (one endpoint, provider
+fallback, free-tier aggregation) so work does not stall on a single provider's limit or
+outage. Adopted **by reference** — self-hosted from upstream, MIT — not vendored into
+this repository and not added as a package dependency. `docs/AGENT_GATEWAY.md` is the
+adoption record: what it is, how a lane points at it, and the boundary below.
+
+**Boundary — this is the load-bearing half.** OmniRoute lives ENTIRELY on the build/agent
+side and may never reach the product:
+
+- **Never in the decision path.** Golden rule 2: the decision core is deterministic,
+  offline and fixture-backed — no `Date.now()`/`Math.random()`, and an unknown signal
+  tightens, never loosens. An AI gateway is nondeterministic model routing by design, so
+  nothing under `lib/*`, `artifacts/api-server`'s `/v1` decision path, a connector, or a
+  proof may call it, import it, or depend on it. It decides nothing; it only carries the
+  BUILDERS' model traffic.
+- **Keys out of the tree.** Provider keys/OAuth are owner secrets — environment-only,
+  never committed, exactly as every connector credential already is.
+- **Runtime adoption is owner infra.** Actually routing all lanes through it needs the
+  owner to self-host the gateway and provision provider keys; a lane's model endpoint is
+  set by its environment, not by this repository, so the repo can ratify and document the
+  adoption but cannot itself provision it.
+- **No claim moves.** Adopting a build tool asserts nothing about the product; no
+  production/certification/partnership claim, no new capability, no launch-profile change.
+
+**Rationale.** "Tools to building and completing the project" is exactly the build/agent
+layer, and provider fallback + free-tier aggregation is what keeps two always-on coding
+lanes from stalling. MIT and self-hosted means no lock-in and no data leaving the owner's
+own infrastructure by default. Adopting by reference keeps the gateway's own dependencies
+and its 352-provider surface OUT of this repo's supply chain — the repo gains the tool
+without carrying its blast radius. And the boundary is what lets "use it everywhere the
+org builds" be true without contradicting the one thing that makes SignalGrid itself
+trustworthy: its decisions are deterministic and do not depend on any model.
+
+**Evidence.** The OmniRoute README/feature surface read on 2026-09-04; `docs/AGENT_GATEWAY.md`;
+the intake row in `docs/agent/RESOURCE_INTAKE.md`. No code, no dependency, no connector
+family, no proof, no gate — a build tool adopted by reference changes none of those.
+
+**Reversal.** The owner reverses by saying so: delete `docs/AGENT_GATEWAY.md`, this
+record, the intake row and the index line. Nothing in the product depends on any of it,
+by construction — the boundary above guarantees it.

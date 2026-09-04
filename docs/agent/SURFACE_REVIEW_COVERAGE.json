@@ -291,7 +291,17 @@
     },
     "lib/enterprise-auth": {
       "path": "lib/enterprise-auth",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Adversarial fail-closed read of the OIDC/JWT enterprise sign-in surface (jwt/jwks/claims/config/provider/base64url): alg gate rejects none/HS* before key material, signature before claims, exp required, nowMs injected; JWKS never caches a failed fetch, cooldown-limited refetch; config OIDC-off by default, partial/empty maps invalid, blank clock-tolerance->60 not 0; claim->principal deny-by-default with hasOwnProperty guard. Zero fail-open/non-determinism/unknown-permissive defects; 2 non-defect notes recorded.",
+          "reviewer": "cloud lane",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 0
+        }
+      ]
     },
     "lib/event-contract": {
       "path": "lib/event-contract",

@@ -75,7 +75,7 @@ names, under the same governance.
 
 ## The proof
 
-`pnpm run proof:self-audit` (56 checks) proves every invariant above over a
+`pnpm run proof:self-audit` (61 checks) proves every invariant above over a
 representative four-layer checklist, and prints its live figures so a stale quote is
 catchable:
 
@@ -103,7 +103,7 @@ The load-bearing assertions:
 Run it directly:
 
 ```bash
-cd scripts && npx tsx ./src/self-audit-proof.ts    # proof:self-audit (56 checks)
+cd scripts && npx tsx ./src/self-audit-proof.ts    # proof:self-audit (61 checks)
 ```
 
 ## Running it for real

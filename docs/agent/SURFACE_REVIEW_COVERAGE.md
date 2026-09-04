@@ -6,7 +6,7 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**12 of 100 surfaces have been read. 7 are partially read. 81 have not been read at all.**
+**14 of 100 surfaces have been read. 7 are partially read. 79 have not been read at all.**
 
 Coverage of the tree is asserted, not assumed: **2184 of 2184 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
@@ -95,9 +95,9 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/pim-activation` | package | 6 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/posture-composition` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/recommendations` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `lib/reliability` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/reliability` | package | 5 | read | 1 | 2026-09-04 | cloud lane | lib/reliability/src/summarize.ts | 1 | 1 |
 | `lib/room-sim` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `lib/self-audit` | package | 8 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/self-audit` | package | 8 | read | 1 | 2026-09-04 | cloud lane | lib/self-audit/src/audit.ts | 1 | 1 |
 | `lib/signal-discovery` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/signal-radar` | package | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/signalgrid-core` | package | 23 | **partial** | 2 | 2026-09-02 | cloud lane (three independent reviews) | #376 | 4 | 0 |
@@ -131,7 +131,7 @@ A named slice was read. The rest of the surface has not been.
 - `lib/signalgrid-simulator` (package)
 - `lib/webauthn` (package)
 
-## Not read (81)
+## Not read (79)
 
 - `.agents` (tree)
 - `.claude/*` (loose files)
@@ -199,9 +199,7 @@ A named slice was read. The rest of the surface has not been.
 - `lib/pim-activation` (package)
 - `lib/posture-composition` (package)
 - `lib/recommendations` (package)
-- `lib/reliability` (package)
 - `lib/room-sim` (package)
-- `lib/self-audit` (package)
 - `lib/signal-discovery` (package)
 - `lib/signal-radar` (package)
 - `lib/work-context` (package)

@@ -330,6 +330,29 @@ const plainAfterApprove = summarizePlain(brokenReport, [approvedHeal, ...heals.s
 check("an approved heal drops out of the open 'suggested fixes' list",
   !plainAfterApprove.suggestedFixes.some((f) => f.proposalId === approvedHeal.proposalId));
 
+// ── (7) NOTHING CHECKED IS NEVER ALL-CLEAR (fail-closed reporting) ──────────────
+// An audit that examined zero items must not report the calm all-clear: "nothing
+// checked" is not "everything working". A functional layer with no items was NOT
+// verified → unknown; the meta layer is the one exception (its coverage-gap machinery
+// runs on every audit, so empty meta = "no meta problems" = healthy).
+const emptyReport = runAudit([], {});
+check("an empty audit is overall unknown, never healthy", emptyReport.overall === "unknown");
+check("an empty audit leaves each FUNCTIONAL layer unknown (unchecked, not vacuously healthy)",
+  emptyReport.byLayer.backend === "unknown" && emptyReport.byLayer.frontend === "unknown" && emptyReport.byLayer.api_integration === "unknown");
+check("an empty audit keeps meta healthy (the coverage machinery runs every audit)",
+  emptyReport.byLayer.meta === "healthy");
+const emptyPlain = summarizePlain(emptyReport, []);
+check("an empty audit NEVER summarizes as a false all-clear",
+  emptyPlain.allClear === false && emptyPlain.headline === "The system could not fully check itself.");
+// A single unchecked functional layer taints overall even when the rest are green:
+// probe only the backend item; frontend/api_integration go unverified.
+const backendOnly = runAudit(
+  checklist.filter((i) => i.layer === "backend"),
+  { "api:v1-evaluate": { status: "healthy", detail: "137/137" } },
+);
+check("an audit that leaves a functional layer unchecked is overall unknown, not healthy",
+  backendOnly.overall === "unknown" && backendOnly.byLayer.frontend === "unknown");
+
 // ── figures (guarded against the docs) ─────────────────────────────────────────
 const declaredCount = DECLARED.length;
 const gapCount = gapItems.length;

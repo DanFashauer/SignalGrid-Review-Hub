@@ -52,7 +52,7 @@ reliability slots into the "just works" surface without new vocabulary.
 
 ## The proof
 
-`pnpm run proof:reliability` (28 checks) proves the budget math, the zero-tolerance
+`pnpm run proof:reliability` (30 checks) proves the budget math, the zero-tolerance
 invariant (including the window-size sweep), the fail-safe-on-no-data behavior, the
 plain-language wording, and determinism/immutability. It prints its live figures:
 
@@ -63,7 +63,7 @@ figures=slos=3,zeroToleranceSlos=1,statuses=4
 Run it directly:
 
 ```bash
-cd scripts && npx tsx ./src/reliability-proof.ts    # proof:reliability (28 checks)
+cd scripts && npx tsx ./src/reliability-proof.ts    # proof:reliability (30 checks)
 ```
 
 ## Public-safety boundaries

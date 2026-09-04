@@ -129,12 +129,19 @@ export function summarizePlain(
     });
 
   const attentionCount = report.counts.broken + report.counts.drifted + report.counts.unknown;
-  const allClear = attentionCount === 0;
+  // allClear reflects the WHOLE report, not just per-item counts. An audit that checked
+  // nothing (or left a functional layer unverified) has zero attention ITEMS but is not
+  // "all clear" — its overall is `unknown`. Requiring overall === "healthy" makes a
+  // false all-clear impossible, honoring "never be shown a false all-clear" above.
+  const allClear = report.overall === "healthy" && attentionCount === 0;
   const headline = allClear
     ? "Everything is working."
-    : attentionCount === 1
-      ? "1 thing needs your attention."
-      : `${attentionCount} things need your attention.`;
+    : attentionCount === 0
+      ? // No item flagged, yet the report is not healthy — a layer went unchecked.
+        "The system could not fully check itself."
+      : attentionCount === 1
+        ? "1 thing needs your attention."
+        : `${attentionCount} things need your attention.`;
 
   const suggestedFixes: PlainFix[] = heals
     .filter((h) => h.status === "proposed")

@@ -456,3 +456,60 @@ Verdict:  **approved — no live fail-open. api-zod is fail-closed by shape; the
 Backlog (design targets, deferred): a wiring gate that flags an orphaned generated input schema (a defined-but-
 dead validator masquerading as coverage); the latent schema tightenings in the OpenAPI source; and a
 defense-in-depth empty-binding reject at parseEvaluate (currently caught only by the core).
+
+## 2026-09-04 — "lib/reliability is fail-closed by construction; one real drift — the owner-facing plain summary was not actually worst-first"
+Command (firsthand read of the whole surface + fix + mutation-proof):
+```
+lib/reliability/src/{index,types,slo,summarize}.ts (291 lines, the whole module)
+scripts/src/reliability-proof.ts   artifacts/api-server/src/routes/control-plane.ts (the live consumer)
+```
+Output:
+```
+FAIL-CLOSED CORE (verified, unchanged): `unknown` (rank 2) outranks `at_risk` (1) and is in the attention
+  set — not-measured is treated as worse than fine; the zero-tolerance integrity SLO has a zero budget so a
+  single fail-open exhausts it at any window size and can never be bought down; an empty window is `unknown`,
+  never `healthy`; no Date.now/Math.random — SLIs are computed from the supplied record window only.
+FINDING (drift, owner-facing): summarize.ts:55-56 claimed the plain lines are "Worst-first: exhausted, then
+  unknown, then at_risk" but the sort key was binary — `Number(b.needsAttention) - Number(a.needsAttention)`.
+  With TWO attention lines of differing severity it left them in input order, so a critical fail-closed breach
+  ("Treat as critical.") could render BELOW a merely "Getting close" at_risk line. summarizeReliability is
+  consumed by control-plane.ts (the operator surface), so the mis-order reaches a real reader.
+FIX: sort by the shared BUDGET_STATUS_RANK descending (exhausted>unknown>at_risk>healthy); Array.sort is stable
+  so equal-rank lines keep input order.
+GATE: reliability-proof gains a scrambled-report assertion (healthy,at_risk,exhausted,unknown in -> the plain
+  states must read "Over budget|Not measured|Getting close|On track") plus a tie-stability assertion. 30/30.
+MUTATION TEST: restoring the binary needsAttention sort -> the worst-first assertion FAILS (29/30, exit 1).
+```
+Verdict:  **fixed and gated — the operator's plain reliability summary now leads with the most critical objective, matching its stated contract.**
+
+## 2026-09-04 — "lib/self-audit's probe path is fail-closed, but an audit that checked NOTHING reported the calm all-clear (nothing-checked read as all-clear)"
+Command (fail-closed audit of the integrity module + firsthand repro + fix + mutation-proof):
+```
+lib/self-audit/src/{audit,summarize,types,checklist,heal,defaults,index}.ts
+scripts/src/self-audit-proof.ts
+repro: runAudit([], {}) -> overall=healthy, counts all 0; summarizePlain(...).allClear=true, headline="Everything is working."
+```
+Output:
+```
+FAIL-CLOSED PROBE PATH (verified, unchanged): resolveStatus forces absent/malformed/unrecognized results to
+  `unknown`; `unknown` outranks `drifted`; the heal lifecycle has no proposed->applied edge and re-checks the
+  approver ref in applyHeal; no Date.now/Math.random. That half is sound.
+FINDING (fail-open reporting, the system's OWN integrity module): runAudit seeded `overall` and every per-layer
+  status to "healthy" and only ever moved them WORSE as items were seen (audit.ts:84-95). A scope with zero
+  items left the seed intact, and summarizePlain derived allClear purely from per-ITEM counts (summarize.ts:132),
+  so an empty audit read allClear=true / "Everything is working." An audit that verified nothing affirmed the
+  whole system green — "a green check must be positively earned" (the module's own header) violated for the one
+  input where nothing was earned. Reproduced firsthand (quoted above).
+FIX: the three FUNCTIONAL layers now seed `unknown` (unchecked, not vacuously healthy) with the first item
+  REPLACING the seed; `meta` stays healthy-when-empty (its coverage-gap machinery runs on every audit, so empty
+  meta genuinely means no meta problems — this avoids forcing a noisy "Not checked" on a clean run). `overall`
+  folds the per-layer statuses, so any unchecked functional layer taints it to `unknown`. summarizePlain's
+  allClear now requires overall==="healthy"; a not-healthy report with zero attention items gets the honest
+  headline "The system could not fully check itself."
+GATE: self-audit-proof section (7): empty audit -> overall unknown, functional layers unknown, meta healthy,
+  allClear false with the honest headline; and a backend-only audit (frontend/api_int unchecked) -> overall
+  unknown. 61/61. Existing all-healthy/broken/gap-unknown assertions still hold (populated audits unchanged).
+MUTATION TEST: reverting the functional seeds to "healthy" and allClear to item-count-only -> the four new
+  assertions FAIL (57/61, exit 1). typecheck green.
+```
+Verdict:  **fixed and gated — the self-audit can no longer show a false all-clear; nothing-checked reads as unverified.**

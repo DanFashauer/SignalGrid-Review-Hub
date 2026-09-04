@@ -197,6 +197,22 @@ check("a room CONFIRMED fix still cannot satisfy bed_confirmed — confirmed-at-
 const wrongMap = ev(clean({ map_version: "2025.11.02" }));
 check("a fix located on LAST YEAR'S MAP → restrict (MAP_VERSION_MISMATCH, state conflicted) — the wrong-map case is the platform-mismatch of physical space",
   wrongMap.recommendedAction === "restrict" && wrongMap.reasonCode === "MAP_VERSION_MISMATCH" && wrongMap.state === "conflicted");
+// A PRESENT-but-unparseable map_version must fail closed (malformed → REPORT_MALFORMED →
+// step_up), never collapse to a grant-eligible "unassessed". Before this, textOf() mapped a
+// number/empty/whitespace to null → "unassessed" → SUFFICIENT_CERTAINTY grant, so garbage
+// wire data was strictly MORE permissive than the well-formed-wrong case above (restrict).
+for (const bad of [123 as unknown as string, "", "   "]) {
+  const n = normalizeLocationObservation("w", graph, clean({ map_version: bad }), { requirement: MED_REQ, referenceTime: REF });
+  const r = evaluateLocationCertainty(n, MED_REQ);
+  check(`a present-but-unparseable map_version (${JSON.stringify(bad)}) is malformed → step_up, never a silent 'unassessed' grant`,
+    n.reportIntegrity === "malformed" && n.mapVersionMatch === "unassessed" &&
+    r.recommendedAction === "step_up" && r.reasonCode === "REPORT_MALFORMED");
+}
+check("an ABSENT map_version stays unassessed and grant-eligible — no requirement lever forces map assessment (only present garbage raises)",
+  (() => {
+    const n = normalizeLocationObservation("w", graph, clean({ map_version: undefined }), { requirement: MED_REQ, referenceTime: REF });
+    return n.reportIntegrity === "clean" && n.mapVersionMatch === "unassessed" && evaluateLocationCertainty(n, MED_REQ).recommendedAction === "none";
+  })());
 const unmapped = ev(clean({ space_id: "SG-DEMOLISHED-WING" }));
 check("a space the graph does not carry → alert (SPACE_UNMAPPED): measurement broken at operator scale",
   unmapped.recommendedAction === "alert" && unmapped.reasonCode === "SPACE_UNMAPPED" && unmapped.state === "conflicted");

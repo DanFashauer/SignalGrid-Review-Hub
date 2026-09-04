@@ -229,6 +229,13 @@ export function normalizeLocationObservation(
   const mapVersion = textOf(raw["map_version"]);
   const mapVersionMatch: NormalizedLocationObservation["mapVersionMatch"] =
     mapVersion === null ? "unassessed" : mapVersion === graph.mapVersion ? "matched" : "mismatched";
+  // A PRESENT-but-unparseable map_version (a number, "", whitespace) is malformed, the
+  // same as every sibling field above — otherwise textOf collapses it to null and it
+  // reads "unassessed" (grant-eligible), so garbage wire data would be strictly MORE
+  // permissive than a well-formed-but-wrong version (which reads "mismatched" -> restrict).
+  // An ABSENT map_version stays "unassessed" by design (no requirement lever forces map
+  // assessment); only a present, illegible value raises.
+  const mapVersionShapeBad = raw["map_version"] !== undefined && raw["map_version"] !== null && mapVersion === null;
 
   const observedRaw = raw["observed_at"];
   const observedMs = instantOf(observedRaw);
@@ -258,7 +265,7 @@ export function normalizeLocationObservation(
 
   const malformed =
     readThrew || !plain || accuracyShapeBad || healthShapeBad || timeShapeBad || confShapeBad ||
-    hasUnrecognizedKey(report, LOCATION_OBSERVATION_KEYS);
+    mapVersionShapeBad || hasUnrecognizedKey(report, LOCATION_OBSERVATION_KEYS);
 
   return {
     subjectRef,

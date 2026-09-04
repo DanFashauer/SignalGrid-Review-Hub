@@ -311,7 +311,7 @@ and own-property-only, so a polluted prototype cannot change what a signature co
 it returns an `UNCANONICAL` sentinel rather than throwing — a hostile value fails closed
 inside a verification path instead of exploding out of it.
 
-Proven offline by `pnpm run proof:verdict-attestation` (76 checks): 288 envelope states
+Proven offline by `pnpm run proof:verdict-attestation` (82 checks): 288 envelope states
 enumerated across tamper site, key, algorithm, clock and replay, with **exactly one**
 verifying, and — separately asserted through `openVerdict` — **exactly one** yielding a
 usable `none`.

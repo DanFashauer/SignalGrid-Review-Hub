@@ -140,6 +140,19 @@ check("small clock skew is tolerated rather than treated as forgery", verifyVerd
 check("a replayed nonce is refused when the caller supplies a seen-set", (verifyVerdict(sealed, RING, opts({ seenNonce: (n: string) => n === "nonce-1" })) as { failure: string }).failure === "nonce_replayed");
 check("...and an unseen nonce passes, so the hook is not vacuous", verifyVerdict(sealed, RING, opts({ seenNonce: () => false })).verified === true);
 
+// ── the verification CLOCK/BOUND must be finite, or freshness fails OPEN ───────
+// isMalformed guards att.issuedAt, but `options.now`, `maxAgeMs` and `maxSkewMs` are
+// caller-supplied and `??` only fills null/undefined — a caller's NaN survives. Because
+// `x > NaN` and `NaN > x` are both false, a non-finite clock or bound would silently
+// disable BOTH comparisons and let a stale or future attestation verify. Fail closed:
+// an unreadable clock reads EXPIRED (golden rule 2; closes the posed-`??`-bound backlog row).
+check("a NON-FINITE verification clock (now=NaN) is EXPIRED, not silently fresh", (verifyVerdict(sealed, RING, opts({ now: NaN })) as { failure: string }).failure === "expired");
+check("...and never returns verified on a NaN clock", verifyVerdict(sealed, RING, opts({ now: NaN })).verified === false);
+check("an Infinity verification clock is EXPIRED too", (verifyVerdict(sealed, RING, opts({ now: Infinity })) as { failure: string }).failure === "expired");
+check("a non-finite maxAgeMs bound cannot switch the expiry check off", (verifyVerdict(sealed, RING, opts({ maxAgeMs: NaN })) as { failure: string }).failure === "expired");
+check("a non-finite maxSkewMs bound cannot switch the skew check off", (verifyVerdict(sealed, RING, opts({ maxSkewMs: NaN })) as { failure: string }).failure === "expired");
+check("openVerdict on a NaN clock DEGRADES to step_up, never grants", openVerdict<Verdict>(sealed, RING, opts({ now: NaN }), rank).verdict.recommendedAction === "step_up");
+
 // ── malformed envelopes fail closed, never throw ──────────────────────────────
 const malformed: [string, unknown][] = [
   ["null", null],

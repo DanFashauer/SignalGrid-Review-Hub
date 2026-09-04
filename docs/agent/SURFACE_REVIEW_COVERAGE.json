@@ -265,7 +265,17 @@
     },
     "lib/audit": {
       "path": "lib/audit",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Adversarial fail-closed read of the audit-ledger surface (index/backend/types): canonical JSON sorts keys at every depth incl. inside arrays and escapes keys+values, depth-bounded (append refuses rather than hash a truncated form), secrets redacted before hashing; verifySegment field-set matches append; verifyLedger cap-honest, verifyLedgerFull paginates whole chain. backend appendWithChain atomic (advisory xact lock) so the chain can't fork; readiness asserts append-only (SELECT/INSERT/seq-USAGE required, UPDATE/DELETE/TRUNCATE forbidden -> not ready), which is the structural tail-truncation defense. Zero fail-open/integrity defects; 2 non-defect notes (no external head anchor for admin-level tail truncation; substring secret-key match over-redacts).",
+          "reviewer": "cloud lane",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 0
+        }
+      ]
     },
     "lib/control-plane": {
       "path": "lib/control-plane",

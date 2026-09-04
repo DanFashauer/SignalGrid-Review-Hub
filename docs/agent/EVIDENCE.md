@@ -324,3 +324,53 @@ Two NOTE-level, non-defect observations:
      than by a persisted external head-hash/count anchor. An admin-level DB actor is outside that boundary.
   2. Secret redaction matches SECRET_KEYS as a substring ("key" matches "monkey"/"keyboard"): over-redacts,
      which is the safe direction for an audit trail.
+
+## 2026-09-04 — "The event-contract surface (lib/event-contract) is fail-closed input validation + pure detection"
+Command (adversarial read of the whole surface):
+```
+lib/event-contract/src/{validate,detect,types}.ts   (381 lines)
+```
+Output (fail-closed properties checked):
+```
+validate.ts non-object/array input -> reject; required fields missing -> error; enum fields reject any value
+            not in the frozen domain (unknown -> error, never admitted); id fields use a length-bounded
+            ReDoS-safe regex; FORBIDDEN_KEYS (__proto__/constructor/prototype) rejected and the result is
+            built from validated locals only (no dynamic obj[key] write) -> no prototype pollution;
+            batteryPercent Number.isFinite + [0,100] (NaN/Infinity rejected); unknown fields dropped;
+            never throws on hostile input
+detect.ts   pure/deterministic (no clock, no randomness), set-based; detections are ALARMS (info..critical),
+            not grants — a missing signal fails to FIRE an alarm, it never loosens a decision; unknown MDM
+            state ("unmanaged"/"unknown") is treated as DARK and fires the alarm (the tightening direction)
+types.ts    EVENT_TYPES/MDM_STATES/CARRIER_STATES/TAMPER_STATES/CHARGE_STATES const arrays match the union
+            types exactly; the "unknown" members are in-domain and drive fail-closed detection
+```
+Verdict:  **approved — zero fail-open defects; unknown/malformed input is rejected and unknown states tighten.**
+Two NOTE-level, non-defect observations:
+  1. isoField validates occurredAt with Date.parse, which is engine-lenient — a parseable but non-strict
+     timestamp is admitted despite the "ISO-8601" field contract (downstream freshness is fail-closed on
+     future/unknown, so this is a contract-tightness gap, not a decision fail-open).
+  2. detectCrossDomain uses events[0].correlationId for all detections without asserting every event shares
+     it — a single-timeline caller contract, not enforced here.
+
+## 2026-09-04 — "The DDM connector (lib/ddm-connector) normalizes fail-closed: unknown/stale posture only RAISES assurance"
+Command (adversarial read of the whole surface):
+```
+lib/ddm-connector/src/{index,apple-schema,fixture}.ts   (~380 lines)
+```
+Output (fail-closed properties checked):
+```
+index.ts     deviceManaged = (enrolled === true) — strict; any non-true (undefined/"true"/truthy) -> unmanaged
+             health: healthy->compliant, degraded->non_compliant, ELSE (unreporting/unknown/anything)->unknown
+             binaryControl: enforced->aligned, permissive/disabled->drifted, ELSE->unknown
+             freshnessOf: null->missing, Date.parse NaN->unknown, future(age<0)->unknown, <=24h fresh,
+               <=72h stale, else expired; a malformed nowIso (NaN) lands on "expired" via the NaN-compare
+               chain -> non-fresh -> raise (still fail-closed)
+             enforcementCurrencyOf: ONLY exact "declarative"->current; legacy on OS>=27->dead, legacy pre-27
+               or unknown-OS->at_risk, none->dead, unmapped/unknown->unknown (never current)
+             `weak` ORs every weak-posture condition; assurance is advisory and can only move auto->step-up,
+               never relax; "standard" requires enrolled+enforced+declared+healthy+fresh+current all true
+apple-schema compile-time provenance map with exhaustiveness teeth against DdmDeviceReport (missing/extra
+             field = build error); no runtime logic, no fail-open surface
+```
+Verdict:  **approved — zero fail-open defects; every unknown/missing/stale/unverifiable input tightens (raises assurance).**
+No defects and no material NOTES (the connector's guarantees block comment is met by the code).

@@ -27,8 +27,10 @@ function fnv1a(input: string): string {
   return h.toString(16).padStart(8, "0");
 }
 
-/** Canonical checksum over a bundle's content (tenant + version + workflows). */
-function bundleChecksum(tenantId: string, version: number, workflows: string[]): string {
+/** Canonical checksum over a bundle's content (tenant + version + workflows).
+ *  Exported so the edge-sync proof can mint a checksum-consistent bundle for an
+ *  UNPROVISIONED tenant and prove it still fails authenticity. */
+export function bundleChecksum(tenantId: string, version: number, workflows: string[]): string {
   return fnv1a(`${tenantId}:${version}:${workflows.join(",")}`);
 }
 
@@ -63,8 +65,33 @@ function canonicalBundle(tenantId: string, version: number, workflows: string[])
   return `${tenantId}:${version}:${workflows.join(",")}`;
 }
 
-function bundleSignature(tenantId: string, version: number, workflows: string[]): string {
-  const key = FIXTURE_SIGNING_KEYS[tenantId] ?? "cpk_demo_unknown_signing";
+/**
+ * The signing key for a tenant, or undefined when the tenant is not provisioned
+ * with one. `hasOwnProperty` is load-bearing: a plain `FIXTURE_SIGNING_KEYS[tenantId]`
+ * resolves `"constructor"`/`"__proto__"` to an inherited value, so an unprovisioned
+ * tenant with a crafted name could otherwise pick up a truthy key. An unprovisioned
+ * tenant has NO key, full stop.
+ */
+function signingKeyFor(tenantId: string): string | undefined {
+  return Object.prototype.hasOwnProperty.call(FIXTURE_SIGNING_KEYS, tenantId)
+    ? FIXTURE_SIGNING_KEYS[tenantId]
+    : undefined;
+}
+
+/**
+ * HMAC signature over the canonical bundle, or undefined when the tenant has no
+ * signing key. There is deliberately NO shared fallback key. This function backs
+ * BOTH signing and verification (verifyBundleSignature calls it), so a fallback
+ * made every unprovisioned tenant verify against a public constant — an attacker
+ * naming any un-provisioned tenant, computing its checksum and signing with the
+ * shared default, produced a bundle that VERIFIED. That inverts golden rule 2 (an
+ * unknown signal must raise assurance, never lower it) on the authenticity boundary
+ * an edge node runs before applying pulled config. Guarded by
+ * scripts/src/edge-sync-proof.ts.
+ */
+function bundleSignature(tenantId: string, version: number, workflows: string[]): string | undefined {
+  const key = signingKeyFor(tenantId);
+  if (key === undefined) return undefined;
   return createHmac("sha256", key).update(canonicalBundle(tenantId, version, workflows)).digest("hex");
 }
 
@@ -76,6 +103,9 @@ function bundleSignature(tenantId: string, version: number, workflows: string[])
 export function verifyBundleSignature(bundle: PolicyBundle): boolean {
   if (!verifyBundleChecksum(bundle)) return false;
   const expected = bundleSignature(bundle.tenantId, bundle.version, bundle.workflows);
+  // No trusted signing key for this tenant ⇒ it cannot be authentic. Fail closed
+  // rather than accept a signature computed against any shared/default key.
+  if (expected === undefined) return false;
   if (typeof bundle.signature !== "string" || bundle.signature.length !== expected.length) return false;
   try {
     return timingSafeEqual(Buffer.from(bundle.signature, "hex"), Buffer.from(expected, "hex"));
@@ -398,12 +428,17 @@ export class ControlPlane {
   getPolicyBundle(tenantId: string): PolicyBundle | null {
     const b = this.seed.bundles.get(tenantId);
     if (!b) return null;
+    const signature = bundleSignature(tenantId, b.version, b.workflows);
+    // A seeded bundle whose tenant has no signing key is a control-plane
+    // misconfiguration — refuse to mint a bundle no edge node could authenticate,
+    // rather than emit one signed with a shared/absent key.
+    if (signature === undefined) return null;
     return {
       tenantId,
       version: b.version,
       workflows: b.workflows,
       checksum: bundleChecksum(tenantId, b.version, b.workflows),
-      signature: bundleSignature(tenantId, b.version, b.workflows),
+      signature,
     };
   }
 

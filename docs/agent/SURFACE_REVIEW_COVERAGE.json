@@ -279,11 +279,31 @@
     },
     "lib/control-plane": {
       "path": "lib/control-plane",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Adversarial fail-closed audit of the cloud control plane (index.ts, 598 lines). Found and FIXED a real fail-open: bundle signature verification used a shared source-literal fallback key for any tenant absent from the signing registry, so a forged bundle for an unprovisioned tenant verified (golden rule 2 inverted on the authenticity boundary). Fix removes the fallback (signingKeyFor via hasOwnProperty -> undefined; verify fails closed; mint returns null), and adds a mutation-proven edge-sync-proof assertion (restoring the fallback -> 16/17 fail). Finding 2 (the proof could not catch it) fixed alongside. Finding 3 latent/deferred: empty-string tenantId resolves to a cross-tenant wildcard in five list methods (caller-gated today; follow-up to treat empty distinct from undefined). Rest verified fail-closed (checksum/signature guards, telemetry nonNeg, unknown->null, custodyGaps).",
+          "reviewer": "cloud lane",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 1,
+          "closed": 1
+        }
+      ]
     },
     "lib/ddm-connector": {
       "path": "lib/ddm-connector",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Adversarial fail-closed read of the DDM connector (index/apple-schema/fixture): deviceManaged is enrolled===true strictly; unknown/unreporting health and non-enforced binaryControl resolve to unknown/drifted; freshnessOf handles null/NaN/future (missing/unknown), and a malformed nowIso lands on expired via NaN-compare; enforcementCurrencyOf trusts only exact 'declarative' as current (legacy->dead/at_risk, unmapped->unknown); the `weak` OR can only raise assurance auto->step-up, never relax. apple-schema is a compile-time exhaustive provenance map. Zero fail-open defects; no material notes.",
+          "reviewer": "cloud lane",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 0
+        }
+      ]
     },
     "lib/dual-control": {
       "path": "lib/dual-control",
@@ -315,7 +335,17 @@
     },
     "lib/event-contract": {
       "path": "lib/event-contract",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-04",
+          "read": "Adversarial fail-closed read of the event-contract surface (validate/detect/types): validateEvent rejects non-objects, unknown enum values, and malformed ids (ReDoS-safe bounded regex), guards prototype pollution (FORBIDDEN_KEYS + no dynamic writes), range/finite-checks batteryPercent, drops unknown fields, never throws; detectCrossDomain is pure/deterministic and its detections are alarms not grants, treating unknown MDM state as dark (tightening). Zero fail-open defects; 2 non-defect notes (Date.parse leniency vs the ISO-8601 contract; correlationId taken from events[0] unasserted).",
+          "reviewer": "cloud lane",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 0
+        }
+      ]
     },
     "lib/facility-trust-graph": {
       "path": "lib/facility-trust-graph",

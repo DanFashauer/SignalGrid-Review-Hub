@@ -6,7 +6,7 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**8 of 100 surfaces have been read. 7 are partially read. 85 have not been read at all.**
+**11 of 100 surfaces have been read. 7 are partially read. 82 have not been read at all.**
 
 Coverage of the tree is asserted, not assumed: **2182 of 2182 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
@@ -76,11 +76,11 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/api-zod` | package | 48 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/app-workflows` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/audit` | package | 6 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |
-| `lib/control-plane` | package | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `lib/ddm-connector` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/control-plane` | package | 3 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 1 | 1 |
+| `lib/ddm-connector` | package | 4 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |
 | `lib/dual-control` | package | 5 | read | 1 | 2026-09-04 | cloud lane (adversarial sweep + on-tree mutation verify) | docs/SELF_REVIEW.md | 1 | 0 |
 | `lib/enterprise-auth` | package | 8 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |
-| `lib/event-contract` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/event-contract` | package | 5 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |
 | `lib/facility-trust-graph` | package | 9 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/fleet-connector` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/flows` | package | 13 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -131,7 +131,7 @@ A named slice was read. The rest of the surface has not been.
 - `lib/signalgrid-simulator` (package)
 - `lib/webauthn` (package)
 
-## Not read (85)
+## Not read (82)
 
 - `.agents` (tree)
 - `.claude/*` (loose files)
@@ -187,9 +187,6 @@ A named slice was read. The rest of the surface has not been.
 - `lib/api-spec` (package)
 - `lib/api-zod` (package)
 - `lib/app-workflows` (package)
-- `lib/control-plane` (package)
-- `lib/ddm-connector` (package)
-- `lib/event-contract` (package)
 - `lib/facility-trust-graph` (package)
 - `lib/fleet-connector` (package)
 - `lib/flows` (package)

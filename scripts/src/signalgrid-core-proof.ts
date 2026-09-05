@@ -3629,7 +3629,7 @@ const monotonicityTable: string[] = [];
   if (fixtureConnector) {
     const orphan = {
       deviceRef: "no-such-device", identityRef: "no-such-identity", identityEnabled: true, managed: true,
-      compliance: "compliant" as const, encrypted: true, osSupported: true, lastSyncAt: "2026-07-13T14:00:00.000Z",
+      compliance: "compliant" as const, encrypted: true, osSupported: true, lastSyncAt: "2026-07-13T14:00:00.000Z", sourceReference: "fixture:orphan",
     };
     const run = runFixtureSync(syncStore, fixedClock("2026-07-13T15:00:00.000Z"), fixtureConnector, [orphan, orphan]);
     check("sync: a run that skipped EVERY record reports partial, not success", run.status === "partial" && run.recordsProcessed === 0 && run.signalsNormalized === 0);

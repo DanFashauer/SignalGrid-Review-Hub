@@ -134,7 +134,7 @@ final class AppModel {
 
     /// The bearer token typed into Settings is persisted to the Keychain and sent on
     /// every request. ATS permits cleartext to local-network and `.local` names, so
-    /// `http://devbox/api` would carry it in the clear. Only https, or http to a
+    /// a plain-http URL to a local-network name would carry it in the clear. Only https, or http to a
     /// loopback host, is an acceptable transport (2026-09-05 — the launch-arg path
     /// had this guard; the Settings path, the one the comment above calls the only
     /// live route off-simulator, did not).

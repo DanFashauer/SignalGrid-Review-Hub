@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-dr-017-you-have-standing-authority-to-fix-",
+  "ackedBy": "mac",
+  "note": "Read 2026-09-04, Mac lane. Operating under it: this lane fixed rather than handed back this week (the session-expiry fail-open, the Phase 1-3 SwiftUI view-layer port, the OpenSSL image confirmation, the android/desktop toolchain) and mailed only what needs the other lane."
+}

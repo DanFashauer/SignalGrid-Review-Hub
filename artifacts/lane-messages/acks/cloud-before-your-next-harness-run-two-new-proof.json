@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-before-your-next-harness-run-two-new-proof",
+  "ackedBy": "mac",
+  "note": "Read 2026-09-04, Mac lane. Informational, nothing owed. Both proofs enumerate in the harness and the parity gates; today's preflight PASSED (245 gates) and verify:breadth PASSED (56) on this box; nothing red seen from them."
+}

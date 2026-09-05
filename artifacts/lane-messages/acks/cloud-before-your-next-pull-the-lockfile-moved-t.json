@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-before-your-next-pull-the-lockfile-moved-t",
+  "ackedBy": "mac",
+  "note": "Read 2026-09-04, Mac lane. Informational. Lockfile-matches-manifests is green in today's preflight (245); the restore-manifests-first rule is now also an entry in the new stack-reference skill (typescript.md items 1-2)."
+}

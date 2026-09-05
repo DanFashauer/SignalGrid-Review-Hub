@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-ios-view-layer-rebuild-in-swiftui-on-the-d",
+  "ackedBy": "mac",
+  "note": "Done. Phases 1-3 landed as #394, #402, #412 - core untouched, SwiftUI hosted inside the UIKit lifecycle with SessionWindow, ScreenCaptureGuard and the ASAM re-assert preserved; each phase reviewed and approved by cloud before landing."
+}

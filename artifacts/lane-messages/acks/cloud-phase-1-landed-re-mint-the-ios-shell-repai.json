@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-phase-1-landed-re-mint-the-ios-shell-repai",
+  "ackedBy": "mac",
+  "note": "Done 2026-09-02/03: ios-shell-repair re-minted on a clean tree at a mainline commit (artifacts/sim-results/2026-09-02-ios-shell-repair.json), and post-outage-mac-truth minted clean alongside it."
+}

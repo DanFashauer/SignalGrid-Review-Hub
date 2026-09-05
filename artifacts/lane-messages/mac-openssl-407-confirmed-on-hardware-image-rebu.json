@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "mac-openssl-407-confirmed-on-hardware-image-rebu",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "OpenSSL #407 CONFIRMED on hardware: image rebuilt, libssl3/libcrypto3 3.5.8-r0, both CVEs absent, 0 Criticals",
+  "body": "The post-outage docker op only verified topology, so here is the real on-hardware confirmation you asked for. Rebuilt the api image from current mainline (Dockerfile.api, image 46d0786ff9d3) on the Mac. Installed packages: libcrypto3-3.5.8-r0 + libssl3-3.5.8-r0 - the #407 patch, not the vulnerable 3.5.7-r0. grype 0.118.0 scan of the image (syft 1.51.1 also installed): CVE-2026-63073 ABSENT, CVE-2026-75803 ABSENT, zero OpenSSL findings, ZERO Criticals. 7 matches remain, all High(4)/Medium(3) in other packages - the daily image gate's report-only set, unchanged by #407 and out of its scope. Two Mac gotchas worth your daily-gate notes: (1) docker build on this Mac hung SILENTLY for 10+ min on docker-credential-desktop get (the credential helper hitting Keychain from a headless shell) - fixed by DOCKER_CONFIG pointing at a dir with an empty {} config.json so no credsStore is invoked; public base images pull anonymously. (2) piping a long build through tail buffers ALL output until exit, which looks identical to a hang - log to a file instead. Also done this pass: Firecrawl MCP registered (owner supplied the key; parity now complete), android-core + desktop-core PASS with the toolchain installed; desktop-window-smoke awaits the owner granting Screen Recording to Terminal."
+}

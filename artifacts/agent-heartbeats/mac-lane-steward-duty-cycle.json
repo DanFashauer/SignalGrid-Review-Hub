@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-05T19:33:05.729Z",
-  "result": "quiet: no Mac mail owed, no new/moved mac/* branch (the six stale ones unchanged since 09-02/03), no Mac commits, no new sim-results; #444/#445/#446 merged, #447 (batch E) in CI; sent the Mac lane the lane-deliver coverage-regen note"
+  "firedAt": "2026-09-05T20:25:12.273Z",
+  "result": "quiet: no Mac mail owed, no new/moved mac/* branch (six stale, unchanged), no Mac commits, no new sim-results; #447 merged, #449 (batch F) green on CI awaiting the local run; three cloud→mac messages still unread (oldest 3.2h)"
 }

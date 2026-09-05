@@ -130,6 +130,22 @@ branch. Verified 2026-09-04.
     workflow view`, `gh run view <id> --log-failed`, `gh run watch`. To stop a scheduled
     workflow, edit its `on:` in a reviewed commit so the change is visible in history.
 
+## Found while landing this skill (2026-09-04) — not from the sheets
+
+18. **SAYS** `git switch <branch>` / `git checkout <branch>` — a plain, safe command.
+    **BREAKS** inside the Claude Code Bash sandbox, writes under `.claude/skills` and
+    `.claude/hooks` are DENIED. A switch that must rewrite a file there aborts AFTER
+    updating the index and part of the working tree and BEFORE moving HEAD. Verified:
+    `git status` then shows staged deletions of files that are also present untracked,
+    and `MM` on the one file it could not write — with rc 0 if the output was piped
+    through `tail` (`shell.md` 30).
+    **DO** run every git command that can write under `.claude/` — switch, checkout,
+    restore, merge, pull — with the sandbox off, and print its full output. If it has
+    already happened: nothing is lost while the commit exists. `git restore --source=HEAD
+    --staged --worktree -- <named paths>` (sandbox off) puts index and tree back; then
+    redo the switch. Never reach for the banned hard reset to "clean up" — the named
+    restore is the whole fix.
+
 ## Forms that survived — keep these
 
 - `git ls-remote origin refs/heads/<branch>` — this repo's definition of DONE, and absent

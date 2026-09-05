@@ -161,6 +161,19 @@ the script under `/bin/bash` does. Verified 2026-09-04 on this Mac unless stated
     **DO** `chmod +x path/to/one-script.sh`. For trees, `find dir -type d -exec chmod 755 {} +`
     and `find dir -type f -exec chmod 644 {} +` separately — and outside tracked source.
 
+## Found while landing this skill (2026-09-04) — not from the sheets
+
+30. **SAYS** every sheet's examples shorten output with `cmd | tail -3` or `cmd | head`.
+    **BREAKS** a pipeline's exit status is the LAST command's — `tail` returns 0 — and the
+    error line you needed is usually ABOVE what tail keeps. Verified the expensive way: a
+    `git switch … | tail -3` that had aborted on EPERM printed a hint, one `M` line and rc 0;
+    the half-finished switch (index moved, HEAD not) surfaced only in the next `git status`.
+    A long `docker build | tail` additionally BUFFERS every line until exit.
+    **DO** print the whole output and `echo "rc=$?"` on the next line; or redirect to a log
+    file and grep it afterwards. If you must pipe, read `${PIPESTATUS[0]}` — never the
+    pipeline's own status. The repo's gates already print their own verdict line for this
+    reason: grep for it, do not infer it from silence.
+
 ## Forms that survived — keep these
 
 - Strict-mode skeleton, 3.2-safe: `set -euo pipefail; set -o errtrace; trap 'echo "ERROR:

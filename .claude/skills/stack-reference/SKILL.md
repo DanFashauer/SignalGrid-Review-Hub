@@ -19,8 +19,9 @@ This skill is the map of those failures. It was built on 2026-09-04 by holding
 the 215 sheets of the owner-shared Fechin/reference site against this tree —
 nine reader agents, one per domain, each running the doubtful commands on the
 Mac lane and citing the gate or doctrine that governs — and keeping only the
-CONTRADICTIONS (102) plus the items that survived contact. It inherits the base
-`signalgrid` skill and does not repeat it. Intake record:
+CONTRADICTIONS (102 from the sheets; the few found while landing the skill itself
+are marked as such in their own section) plus the items that survived contact. It
+inherits the base `signalgrid` skill and does not repeat it. Intake record:
 `docs/agent/RESOURCE_INTAKE.md` (2026-09-04).
 
 ## Five laws that every domain file is an instance of

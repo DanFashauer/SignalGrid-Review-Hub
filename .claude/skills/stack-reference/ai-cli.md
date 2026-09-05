@@ -77,7 +77,11 @@ hooks, prompts or CLAUDE.md is therefore recommending that the rules be skipped.
 - Worktrees live at `.claude/worktrees/<name>/` (gitignored) and branch from `origin/HEAD`;
   `git remote set-head origin -a` re-syncs it. Auto memory persists across worktrees of the
   same repo and is machine-local. The worktree guard refuses compound git chains, `export
-  PATH=` and `curl | sh` — plain single commands.
+  PATH=` and `curl | sh` — plain single commands. It also refuses `pnpm run lane:send
+  "subject" "<long body>"` because it cannot prove the pnpm script is not git (verified
+  three ways, 2026-09-04); call the script directly — `node scripts/lane-message.mjs send
+  …` / `ack …` / `inbox` — then commit the message file on MAINLINE, where the other lane
+  reads; a message committed on a side branch is undelivered.
 - Hook contract: exit 0 = success (JSON decision), 2 = BLOCK (stderr goes to the model), other
   = non-blocking error; `$CLAUDE_PROJECT_DIR` inside hooks; `claude --debug "api,hooks"` and
   `/hooks` show which hook decided. Events beyond the three in use: `WorktreeCreate` /

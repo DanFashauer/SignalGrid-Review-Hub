@@ -842,3 +842,29 @@ GATES TO SPECIFY, not built here: check-nan-fail-open following ONE level of sam
 coverage gate: 34 read, 10 partial, 56 not read, of 100 surfaces (+4 full reads).
 ```
 Verdict:  **fixed and gated — four shipping libraries whose green proofs had never fed the unknown, and a web client that had never been asked anything; every fix now has an assertion that fails when it is reverted.**
+
+## 2026-09-05 — "The three gates the fourth round specified, built: a parse hidden behind a helper, a sort that follows the machine, a line count quoted forever"
+Command:
+```
+scripts/check-nan-fail-open.mjs (same-file helper hop)   scripts/review-invariants.mjs (check 2b: localeCompare)
+scripts/check-doc-line-counts.mjs (NEW, --self-test)      11 localeCompare sites → cmpCodepoint (control-plane ×3, self-audit ×4, core store.ts ×4)
+```
+Output:
+```
+NaN GATE: `const exp = toMs(x)` where toMs is a same-file `return Date.parse(x)` (function, arrow, or typed) now
+  taints the call site like a literal parse; a helper that guards inside, and a call into another file, are not
+  followed (documented ceiling). Self-test +6 cases; 974 files scanned, 0 violations. MUTATION: hop removed → the
+  three helper cases fail the self-test.
+COLLATION: review:invariants check 2b — `.localeCompare(` in lib/*/src is a failure (comment-stripped, literal-masked,
+  so a comment NAMING it is not a hit; self-test +3). Sites fixed: control-plane nodeId tiebreaks ×3, self-audit
+  proposalId/id/area ×4, signalgrid-core store.ts ISO-timestamp sorts ×4 (codepoint order on an ISO string IS
+  chronological; localeCompare's was locale-dependent). 475 planner files, 0 sites. Proofs: control-plane 42/42,
+  self-audit 61/61, signalgrid-core exit 0; typecheck 0. MUTATION: one site restored → "localeCompare in 1 site(s)".
+LINE COUNTS: 29 `path (N)` figures in the tree, 20 wrong (evidence.ts 340 → 750, v1.ts 923 → 1023, preflight.mjs 377
+  → 577, audit backend 185 → 318 …). New gate re-measures every figure against wc -l on every push; EVIDENCE.md is the
+  one exemption (a dated ledger records the count AT THAT READ), with its reason, and a stale exemption is a failure;
+  .json fixtures excluded (their (N) is a record count — CLAIM_INVENTORY.md:1597 proved it). Self-test 10/10 incl. a
+  hit-count floor of 20 and the real-tree positive control. MUTATION: engine.ts (572) → (560) in the real tree → FAIL
+  naming the real count. Registered in preflight + CI; parity gate 0 unwired.
+```
+Verdict:  **built and gated — each of the three was specified by an audit that had proven the gap with a planted defect, and each gate now fails on that exact plant.**

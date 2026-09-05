@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **34 of 100 surfaces have been read. 10 are partially read. 56 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2220 of 2220 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2222 of 2222 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -114,7 +114,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/shared` | native | 2 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 381 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 4 | 0 |
+| `scripts` | package | 382 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 4 | 0 |
 | `site` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `tests` | tree | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |

@@ -100,12 +100,42 @@ const RULE4 =
 const ASSIGN = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:Date\.parse\s*\(|new\s+Date\s*\([^)]*\)\s*\.getTime\s*\()/;
 const RULE3_WINDOW = 20;
 
+// ONE HOP OF SAME-FILE INDIRECTION. `const exp = toMs(r.expiresAt)` where `toMs`
+// is a same-file function whose body is `return Date.parse(x)` (or the getTime
+// form, or the arrow spelling) is the rule-3 shape with the parse moved one call
+// away. Rule 3 keyed on the literal parse expression in the assignment, so that
+// refactor made a live guard invisible to this gate: an audit on 2026-09-05
+// planted exactly it against lib/persistence/src/session-store.ts and the gate
+// reported 0 violations while the runtime served an unparseable expiry as ACTIVE.
+// Cross-module calls are deliberately NOT followed (unbounded; the manifest is the
+// wrong instrument) — a helper must be visible in the same file to count.
+const HELPER_FN =
+  /function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)[^{;]*\{\s*return\s+(?:Date\.parse\s*\(|new\s+Date\s*\([^)]*\)\s*\.getTime\s*\()/g;
+const HELPER_ARROW =
+  /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*(?::[^=>]*)?=>\s*(?:Date\.parse\s*\(|new\s+Date\s*\([^)]*\)\s*\.getTime\s*\()/g;
+function parseHelpers(text) {
+  const names = new Set();
+  for (const m of text.matchAll(HELPER_FN)) names.add(m[1]);
+  for (const m of text.matchAll(HELPER_ARROW)) names.add(m[1]);
+  return [...names];
+}
+
 function findViolations(source) {
-  const lines = sanitize(source).split("\n");
+  const text = sanitize(source);
+  const lines = text.split("\n");
   const hits = [];
+  const helpers = parseHelpers(text);
+  // Helper names are identifiers (word characters and `$`), but they are spliced
+  // into a pattern, so every regex metacharacter is escaped — not only `$`.
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const ASSIGN_VIA_HELPER =
+    helpers.length > 0
+      ? new RegExp(`(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?:${helpers.map(escapeRe).join("|")})\\s*\\(`)
+      : null;
+  const assignment = (line) => ASSIGN.exec(line) ?? (ASSIGN_VIA_HELPER ? ASSIGN_VIA_HELPER.exec(line) : null);
   const parsedNames = [];
   for (const line of lines) {
-    const m = ASSIGN.exec(line);
+    const m = assignment(line);
     if (m) parsedNames.push(m[1]);
   }
   lines.forEach((line, i) => {
@@ -118,9 +148,10 @@ function findViolations(source) {
     if (RULE4.test(line) && !/Number\.isFinite/.test(line)) {
       hits.push({ line: i + 1, rule: 4, text: line.trim() });
     }
-    const m = ASSIGN.exec(line);
+    const m = assignment(line);
     if (m) {
       const name = m[1];
+      const viaHelper = !ASSIGN.test(line);
       // Widened with rule 2, and for the same reason: the comparison target is
       // any operand, not the literal clock.
       const cmp = new RegExp(`\\b${name}\\b\\s*[<>]=?\\s*[^=]|[^<>=!]\\s*[<>]=?\\s*\\b${name}\\b`);
@@ -143,7 +174,12 @@ function findViolations(source) {
         // is handled here — it is how a proof comparing two timestamps got
         // flagged on the first widening.
         if (j > i && cmp.test(lines[j])) {
-          hits.push({ line: j + 1, rule: 3, text: lines[j].trim(), via: `${name} (assigned line ${i + 1})` });
+          hits.push({
+            line: j + 1,
+            rule: 3,
+            text: lines[j].trim(),
+            via: `${name} (assigned line ${i + 1}${viaHelper ? ", through a same-file parse helper" : ""})`,
+          });
           break;
         }
       }
@@ -196,6 +232,37 @@ function findViolations(source) {
     ],
     ["forward construction is still NOT flagged", "const expiresAt = new Date(now.getTime() + ttl * 1000);", false],
     ["comment describing the bug is NOT flagged", "// was: if (!Number.isNaN(exp) && exp <= Date.now())", false],
+    // One hop of same-file indirection — the shape that hid a live guard from rule 3.
+    [
+      "rule 3 through a same-file helper function (one hop)",
+      "function toMs(x) {\n  return Date.parse(x);\n}\nconst exp = toMs(r.expiresAt);\nif (exp < nowMs) return null;",
+      true,
+    ],
+    [
+      "rule 3 through a same-file arrow helper",
+      "const toMs = (x) => Date.parse(x);\nconst exp = toMs(r.expiresAt);\nif (exp < nowMs) return null;",
+      true,
+    ],
+    [
+      "rule 3 through a typed helper (annotation between the parameters and the body)",
+      "function toMs(x: string): number {\n  return new Date(x).getTime();\n}\nconst exp = toMs(r.expiresAt);\nif (exp < nowMs) return null;",
+      true,
+    ],
+    [
+      "helper hop, guarded at the call site — not flagged",
+      "function toMs(x) {\n  return Date.parse(x);\n}\nconst exp = toMs(r.expiresAt);\nif (!Number.isFinite(exp) || exp < nowMs) return null;",
+      false,
+    ],
+    [
+      "a helper that guards INSIDE (returns null on NaN) is not a parse helper — not flagged",
+      "function toMs(x) {\n  const t = Date.parse(x);\n  return Number.isFinite(t) ? t : null;\n}\nconst exp = toMs(r.expiresAt);\nif (exp === null || exp < nowMs) return null;",
+      false,
+    ],
+    [
+      "a call to a helper defined in ANOTHER file is not followed (documented ceiling)",
+      "const exp = parseExpiry(r.expiresAt);\nif (exp < nowMs) return null;",
+      false,
+    ],
   ];
   const failures = cases.filter(([, src, shouldFlag]) => findViolations(src).length > 0 !== shouldFlag);
   if (failures.length > 0) {

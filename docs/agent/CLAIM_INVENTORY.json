@@ -153,10 +153,10 @@
   {
    "file": "README.md",
    "line": "62",
-   "claim": "\"proof: `pnpm run proof:iac` (67 checks)\"",
+   "claim": "\"proof: `pnpm run proof:iac` (72 checks)\"",
    "kind": "count",
    "classification": "launch",
-   "evidence": "Verified this session: `pnpm run proof:iac` \u2192 `summary=pass (67/67)`. The script exists in package.json and the figure is pinned by the docs\u2194proof figure guard (scripts/check-proof-figures.mjs:53 lists proof:iac).",
+   "evidence": "Verified this session: `pnpm run proof:iac` \u2192 `summary=pass (72/72) (re-measured 2026-09-05 after the empty-desired-state assertions)`. The script exists in package.json and the figure is pinned by the docs\u2194proof figure guard (scripts/check-proof-figures.mjs:53 lists proof:iac).",
    "action": "keep"
   },
   {
@@ -453,7 +453,7 @@
    "claim": "\"and real WebAuthn step-up verification (exact-origin + User-Verification-required)\"",
    "kind": "capability",
    "classification": "deferred",
-   "evidence": "The verifier is real (`pnpm run proof:webauthn-verify` in package.json), but every step-up route is deferred, not launch: scripts/launch-profile.mjs:400-403 (/v1/step-up/enroll/options, /v1/step-up/enroll/verify, /v1/step-up/challenge, /v1/app-workflows/complete-step-up), all present in lib/api-spec/v1-openapi.yaml:510-597 as published-but-deferred paths. Listing it under Security reads as a shipped launch control.",
+   "evidence": "The verifier is real (`pnpm run proof:webauthn-verify` in package.json), but every step-up route is deferred, not launch: scripts/launch-profile.mjs:400-403 (/v1/step-up/enroll/options, /v1/step-up/enroll/verify, /v1/step-up/challenge, /v1/app-workflows/complete-step-up), all present in lib/api-spec/v1-openapi.yaml:556-675 as published-but-deferred paths. Listing it under Security reads as a shipped launch control.",
    "action": "rewrite"
   },
   {
@@ -525,7 +525,7 @@
    "claim": "\"policy editor\" is included in the Starter tier",
    "kind": "capability",
    "classification": "unsubstantiated",
-   "evidence": "No policy editor exists anywhere in the repo \u2014 a repo-wide search for \"policy editor\"/policyEditor hits only Pricing.tsx:17 and :37; the published policy surface is read-only: lib/api-spec/v1-openapi.yaml:301 /v1/policies and :309 /v1/policies/{id}/versions, described at scripts/launch-profile.mjs:351-361 as \"Read-only policy inventory\" / \"Read-only versioned rule sets\", and the activate route /v1/policies/{id}/versions/{versionId}/activate is deferred at scripts/launch-profile.mjs:391",
+   "evidence": "No policy editor exists anywhere in the repo \u2014 a repo-wide search for \"policy editor\"/policyEditor hits only Pricing.tsx:17 and :37; the published policy surface is read-only: lib/api-spec/v1-openapi.yaml:334 /v1/policies and :309 /v1/policies/{id}/versions, described at scripts/launch-profile.mjs:351-361 as \"Read-only policy inventory\" / \"Read-only versioned rule sets\", and the activate route /v1/policies/{id}/versions/{versionId}/activate is deferred at scripts/launch-profile.mjs:391",
    "action": "rewrite"
   },
   {
@@ -552,7 +552,7 @@
    "claim": "\"Tamper-evident audit ledger \u2014 hash-chained, independently verifiable\" (Starter)",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "pnpm run proof:audit-ledger and pnpm run proof:audit-ledger-pg (package.json:67-68), pnpm run db:verify-ledger (package.json:30) and pnpm run verify:ledger-export (package.json:33); published route lib/api-spec/v1-openapi.yaml:393 /v1/audit (\"List audit events and verify the tamper-evident chain\"), launch at scripts/launch-profile.mjs:330-338 \u2014 with the caveat recorded there that /v1/audit serves the in-process digest chain, not the durable Postgres ledger | CRITIC: overstated-true \u2014 /v1/audit serves the in-process digest chain that does not survive a restart; the DURABLE Postgres hash-chain ledger has no route (scripts/launch-profile.mjs:330-338; export is CLI-only, scripts/src/export-ledger-cli.ts).",
+   "evidence": "pnpm run proof:audit-ledger and pnpm run proof:audit-ledger-pg (package.json:67-68), pnpm run db:verify-ledger (package.json:30) and pnpm run verify:ledger-export (package.json:33); published route lib/api-spec/v1-openapi.yaml:426 /v1/audit (\"List audit events and verify the tamper-evident chain\"), launch at scripts/launch-profile.mjs:330-338 \u2014 with the caveat recorded there that /v1/audit serves the in-process digest chain, not the durable Postgres ledger | CRITIC: overstated-true \u2014 /v1/audit serves the in-process digest chain that does not survive a restart; the DURABLE Postgres hash-chain ledger has no route (scripts/launch-profile.mjs:330-338; export is CLI-only, scripts/src/export-ledger-cli.ts).",
    "action": "rewrite",
    "resolution": "RESOLVED 2026-08-21 (this PR): bullet reworded to hash-chained + independently verifiable only"
   },
@@ -599,7 +599,7 @@
    "claim": "\"Custom alert routing\" named as a product capability (excluded from Starter)",
    "kind": "capability",
    "classification": "deferred",
-   "evidence": "The delivery surface it would require is deferred: lib/api-spec/v1-openapi.yaml:430 /v1/webhooks and :438 /v1/webhooks/deliveries are listed deferred at scripts/launch-profile.mjs:394-395; no routing configuration surface exists in the repo",
+   "evidence": "The delivery surface it would require is deferred: lib/api-spec/v1-openapi.yaml:476 /v1/webhooks and :438 /v1/webhooks/deliveries are listed deferred at scripts/launch-profile.mjs:394-395; no routing configuration surface exists in the repo",
    "action": "remove"
   },
   {
@@ -698,7 +698,7 @@
    "claim": "\"Tamper-evident audit ledger \u2014 hash-chained, independently verifiable\" (Enterprise)",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "pnpm run proof:audit-ledger / proof:audit-ledger-pg (package.json:67-68), pnpm run db:verify-ledger (package.json:30); lib/api-spec/v1-openapi.yaml:393 /v1/audit, launch at scripts/launch-profile.mjs:330-338 | CRITIC: overstated-true \u2014 /v1/audit serves the in-process digest chain that does not survive a restart; the DURABLE Postgres hash-chain ledger has no route (scripts/launch-profile.mjs:330-338; export is CLI-only, scripts/src/export-ledger-cli.ts).",
+   "evidence": "pnpm run proof:audit-ledger / proof:audit-ledger-pg (package.json:67-68), pnpm run db:verify-ledger (package.json:30); lib/api-spec/v1-openapi.yaml:426 /v1/audit, launch at scripts/launch-profile.mjs:330-338 | CRITIC: overstated-true \u2014 /v1/audit serves the in-process digest chain that does not survive a restart; the DURABLE Postgres hash-chain ledger has no route (scripts/launch-profile.mjs:330-338; export is CLI-only, scripts/src/export-ledger-cli.ts).",
    "action": "rewrite",
    "resolution": "RESOLVED 2026-08-21 (this PR): bullet reworded to hash-chained + independently verifiable only"
   },
@@ -1217,7 +1217,7 @@
    "claim": "\"Tamper-evident hash-chained audit ledger with an independent paginating verifier and signed export\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "`pnpm run proof:audit-ledger` and `pnpm run verify:ledger-export` exist in package.json; OpenAPI path lib/api-spec/v1-openapi.yaml:393-397 `/v1/audit` \u2014 \"List audit events and verify the tamper-evident chain\". True as written. | DEDUP (second extraction): POSSIBLE DUPLICATE (Federal rows not visible). This one is largely TRUE and needs the grounded-true treatment rather than a blanket Federal-page sweep: `pnpm run db:verify-ledger` and `pnpm run verify:ledger-export` both exist in package.json, alongside proof:audit-ledger / proof:audit-ledger-pg. The overstatement is only that it is listed as an air-gap DEPLOYMENT feature of an offering Pricing.tsx:85 says does not exist.",
+   "evidence": "`pnpm run proof:audit-ledger` and `pnpm run verify:ledger-export` exist in package.json; OpenAPI path lib/api-spec/v1-openapi.yaml:426-430 `/v1/audit` \u2014 \"List audit events and verify the tamper-evident chain\". True as written. | DEDUP (second extraction): POSSIBLE DUPLICATE (Federal rows not visible). This one is largely TRUE and needs the grounded-true treatment rather than a blanket Federal-page sweep: `pnpm run db:verify-ledger` and `pnpm run verify:ledger-export` both exist in package.json, alongside proof:audit-ledger / proof:audit-ledger-pg. The overstatement is only that it is listed as an air-gap DEPLOYMENT feature of an offering Pricing.tsx:85 says does not exist.",
    "action": "rewrite"
   },
   {
@@ -1298,7 +1298,7 @@
    "claim": "Deployment Architecture row \u2014 Audit Storage: \"Hash-chained ledger \u00b7 verified + signed export\" (rendered in the green available color)",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "`pnpm run proof:audit-ledger` + `pnpm run verify:ledger-export` in package.json; OpenAPI lib/api-spec/v1-openapi.yaml:393-397 `/v1/audit`. The only row in this table entitled to the green treatment.",
+   "evidence": "`pnpm run proof:audit-ledger` + `pnpm run verify:ledger-export` in package.json; OpenAPI lib/api-spec/v1-openapi.yaml:426-430 `/v1/audit`. The only row in this table entitled to the green treatment.",
    "action": "keep"
   },
   {
@@ -1703,7 +1703,7 @@
    "claim": "Pillar \"Governance\": \"Keep decisions auditable, explainable, and reviewable.\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "lib/api-spec/v1-openapi.yaml:180 `/v1/decisions/{id}/evidence` and :393 `/v1/audit` (both launch, scripts/launch-profile.mjs:324, 331); `pnpm run proof:audit-ledger`.",
+   "evidence": "lib/api-spec/v1-openapi.yaml:213 `/v1/decisions/{id}/evidence` and :393 `/v1/audit` (both launch, scripts/launch-profile.mjs:324, 331); `pnpm run proof:audit-ledger`.",
    "action": "keep"
   },
   {
@@ -1838,7 +1838,7 @@
    "claim": "\"\u2026policy lab\u2026\" as a feature of the web admin console.",
    "kind": "capability",
    "classification": "demo-only",
-   "evidence": "\"Policy Lab\" exists only in the demo-only review deck: artifacts/signalgrid-review/src/components/sections/OperatorConsoleSection.tsx:711 (signalgrid-review = demo_only, scripts/launch-profile.mjs:479-485). The launch console's read-only equivalent is `/v1/policies/{id}/tests` (lib/api-spec/v1-openapi.yaml:353) \u2014 not a lab.",
+   "evidence": "\"Policy Lab\" exists only in the demo-only review deck: artifacts/signalgrid-review/src/components/sections/OperatorConsoleSection.tsx:711 (signalgrid-review = demo_only, scripts/launch-profile.mjs:479-485). The launch console's read-only equivalent is `/v1/policies/{id}/tests` (lib/api-spec/v1-openapi.yaml:386) \u2014 not a lab.",
    "action": "rewrite"
   },
   {
@@ -1847,7 +1847,7 @@
    "claim": "\"\u2026tamper-evident audit ledger\u2026\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "lib/api-spec/v1-openapi.yaml:393 `/v1/audit` (launch, scripts/launch-profile.mjs:331); `pnpm run proof:audit-ledger` and `pnpm run proof:audit-ledger-pg`.",
+   "evidence": "lib/api-spec/v1-openapi.yaml:426 `/v1/audit` (launch, scripts/launch-profile.mjs:331); `pnpm run proof:audit-ledger` and `pnpm run proof:audit-ledger-pg`.",
    "action": "keep"
   },
   {
@@ -1928,7 +1928,7 @@
    "claim": "Included feature: \"Audit ledger\".",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "lib/api-spec/v1-openapi.yaml:393 `/v1/audit`; `pnpm run proof:audit-ledger`.",
+   "evidence": "lib/api-spec/v1-openapi.yaml:426 `/v1/audit`; `pnpm run proof:audit-ledger`.",
    "action": "keep"
   },
   {
@@ -2018,7 +2018,7 @@
    "claim": "Included feature: \"Decision + evidence trace\".",
    "kind": "capability",
    "classification": "demo-only",
-   "evidence": "artifacts/signalgrid-desktop/src/pages/Decisions.tsx contains no fetch/`/v1` call \u2014 fixture-fed inside the demo_only desktop surface (scripts/launch-profile.mjs:487-489). The grounded equivalent is the launch console against lib/api-spec/v1-openapi.yaml:180.",
+   "evidence": "artifacts/signalgrid-desktop/src/pages/Decisions.tsx contains no fetch/`/v1` call \u2014 fixture-fed inside the demo_only desktop surface (scripts/launch-profile.mjs:487-489). The grounded equivalent is the launch console against lib/api-spec/v1-openapi.yaml:213.",
    "action": "rewrite"
   },
   {
@@ -2891,7 +2891,7 @@
    "claim": "\"Every high-risk action stays approval-gated and simulated \u2014 SignalGrid recommends and records; the choice is always yours.\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "docs/SECURITY_BASELINE_ALIGNMENT.md:132 (\"approval-gated and simulated, with no autonomous production remediation\"); the recording half is the launch audit surface `/v1/audit` (scripts/launch-profile.mjs:331, lib/api-spec/v1-openapi.yaml:393)",
+   "evidence": "docs/SECURITY_BASELINE_ALIGNMENT.md:132 (\"approval-gated and simulated, with no autonomous production remediation\"); the recording half is the launch audit surface `/v1/audit` (scripts/launch-profile.mjs:331, lib/api-spec/v1-openapi.yaml:426)",
    "action": "keep"
   },
   {
@@ -3557,7 +3557,7 @@
    "claim": "\"Decision evidence exportable to your ITSM / SIEM (candidate integrations)\"",
    "kind": "capability",
    "classification": "deferred",
-   "evidence": "itsm and siem are deferred families (scripts/launch-profile.mjs:212, 231) and the delivery routes /v1/webhooks and /v1/webhooks/deliveries are deferred paths (scripts/launch-profile.mjs:392-393). Only in-product read of evidence is launch (/v1/decisions/{id}/evidence, lib/api-spec/v1-openapi.yaml:180).",
+   "evidence": "itsm and siem are deferred families (scripts/launch-profile.mjs:212, 231) and the delivery routes /v1/webhooks and /v1/webhooks/deliveries are deferred paths (scripts/launch-profile.mjs:392-393). Only in-product read of evidence is launch (/v1/decisions/{id}/evidence, lib/api-spec/v1-openapi.yaml:213).",
    "action": "rewrite"
   },
   {
@@ -3800,7 +3800,7 @@
    "claim": "\"logs every evaluation to a tamper-evident audit trail\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "`GET /v1/audit` is a launch path \u2014 lib/api-spec/v1-openapi.yaml:393, scripts/launch-profile.mjs:331-337 (per-tenant digest chain); `pnpm run proof:audit-ledger`. Note the profile's own caveat at :333-337 \u2014 the served chain is in-process and does not survive a restart, so \"durable\" must not be added.",
+   "evidence": "`GET /v1/audit` is a launch path \u2014 lib/api-spec/v1-openapi.yaml:426, scripts/launch-profile.mjs:331-337 (per-tenant digest chain); `pnpm run proof:audit-ledger`. Note the profile's own caveat at :333-337 \u2014 the served chain is in-process and does not survive a restart, so \"durable\" must not be added.",
    "action": "keep"
   },
   {
@@ -3872,7 +3872,7 @@
    "claim": "\"CAT III FINDINGS \u2192 Monitor \u2192 Logged, remediation flagged\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "`pnpm run proof:audit-ledger` + `GET /v1/audit` (lib/api-spec/v1-openapi.yaml:393); remediation is flagged-only by design \u2014 docs/SECURITY_BASELINE_ALIGNMENT.md:132 (approval-gated and simulated, no autonomous remediation)",
+   "evidence": "`pnpm run proof:audit-ledger` + `GET /v1/audit` (lib/api-spec/v1-openapi.yaml:426); remediation is flagged-only by design \u2014 docs/SECURITY_BASELINE_ALIGNMENT.md:132 (approval-gated and simulated, no autonomous remediation)",
    "action": "keep"
   },
   {
@@ -4646,7 +4646,7 @@
    "claim": "\"You add signals and workflows. The grid evaluates \u2014 and shows its evidence.\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "lib/api-spec/v1-openapi.yaml:180 (/v1/decisions/{id}/evidence) \u2014 digest-verified evidence is a launch route; launch-profile app-surfaces entry `signalgrid-app` (scripts/launch-profile.mjs:452-460).",
+   "evidence": "lib/api-spec/v1-openapi.yaml:213 (/v1/decisions/{id}/evidence) \u2014 digest-verified evidence is a launch route; launch-profile app-surfaces entry `signalgrid-app` (scripts/launch-profile.mjs:452-460).",
    "action": "keep"
   },
   {
@@ -5114,7 +5114,7 @@
    "claim": "Rendered pill \u2014 \"Orchestration \u00b7 <mode>\" (presents an orchestration mode as a product output alongside the decision)",
    "kind": "capability",
    "classification": "demo-only",
-   "evidence": "No orchestration route exists in the launch API path list (lib/api-spec/v1-openapi.yaml:74-190 launch block; scripts/launch-profile.mjs:313+); the mode comes from the in-page bundle, and docs/room-entry-console.html:95 states SignalGrid never actuates.",
+   "evidence": "No orchestration route exists in the launch API path list (lib/api-spec/v1-openapi.yaml:74-243 launch block; scripts/launch-profile.mjs:313+); the mode comes from the in-page bundle, and docs/room-entry-console.html:95 states SignalGrid never actuates.",
    "action": "rewrite"
   },
   {
@@ -5132,7 +5132,7 @@
    "claim": "Rendered control \u2014 \"Complete step-up \u00b7 badge tap\"",
    "kind": "capability",
    "classification": "deferred",
-   "evidence": "Badge/PACS is deferred: scripts/launch-profile.mjs:221 (`pacs-access` family) and :283 (`pacs_access` signal kind); docs/DECISION_RECORDS.md:236 DR-005 removes present-tense badge claims. The launch step-up path is WebAuthn-shaped (lib/api-spec/v1-openapi.yaml:568 /v1/step-up/challenge), not a badge tap.",
+   "evidence": "Badge/PACS is deferred: scripts/launch-profile.mjs:221 (`pacs-access` family) and :283 (`pacs_access` signal kind); docs/DECISION_RECORDS.md:236 DR-005 removes present-tense badge claims. The launch step-up path is WebAuthn-shaped (lib/api-spec/v1-openapi.yaml:614 /v1/step-up/challenge), not a badge tap.",
    "action": "rewrite"
   },
   {
@@ -5282,7 +5282,7 @@
    "claim": "\"the hardware+software ecosystem flow & Resolution Assistant (docs/ECOSYSTEM_FLOW_AND_RESOLUTION.md) design\" \u2014 a named Resolution Assistant capability",
    "kind": "capability",
    "classification": "deferred",
-   "evidence": "Both routes the assistant would need are deferred: scripts/launch-profile.mjs:392-393 defer /v1/decisions/{id}/resolution and /v1/decisions/{id}/resolve (published in lib/api-spec/v1-openapi.yaml:410 and :420, i.e. visible to an integrator reading the contract). \"design\" is the honest half; the product-name framing is not. Missed by the extraction, which took four other rows from :136.",
+   "evidence": "Both routes the assistant would need are deferred: scripts/launch-profile.mjs:392-393 defer /v1/decisions/{id}/resolution and /v1/decisions/{id}/resolve (published in lib/api-spec/v1-openapi.yaml:456 and :420, i.e. visible to an integrator reading the contract). \"design\" is the honest half; the product-name framing is not. Missed by the extraction, which took four other rows from :136.",
    "action": "rewrite",
    "source": "critic"
   },
@@ -5342,7 +5342,7 @@
    "claim": "\"SignalGrid Second-Opinion Review \u2014 independent runtime decision review for shared and frontline devices.\" (page title, meta description, og:title/description, twitter card)",
    "kind": "status",
    "classification": "unsubstantiated",
-   "evidence": "\"Independent\" is asserted for a deck that ships inside the vendor's own monorepo at artifacts/signalgrid-review/ and is classified demo_only by the vendor's own gate (scripts/launch-profile.mjs:479, 486). Nothing in the tree records a third-party author, engagement, or reviewer. Mitigation: none on this surface \u2014 the meta tags carry no fixture/demo qualifier and index.html:8 sets robots \"index, follow\", so this is the string a search engine surfaces.",
+   "evidence": "\"Independent\" is asserted for a deck that ships inside the vendor's own monorepo at artifacts/signalgrid-review/ and is classified demo_only by the vendor's own gate (scripts/launch-profile.mjs:479, 486). Nothing in the tree records a third-party author, engagement, or reviewer. Mitigation (re-measured 2026-09-05): index.html:18 sets robots \"noindex, nofollow\" (owner call 2026-08-25, backlog row 160) and public/robots.txt disallows crawling, so a search engine that honours either does not surface the string; the meta tags still carry no fixture/demo qualifier for a direct visitor.",
    "action": "rewrite"
   },
   {

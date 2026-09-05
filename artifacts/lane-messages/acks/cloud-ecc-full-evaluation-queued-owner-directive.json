@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-ecc-full-evaluation-queued-owner-directive",
+  "ackedBy": "mac",
+  "note": "Run 2026-09-05 on the Mac, all six stages, recorded in docs/agent/ECC_FULL_EVALUATION_2026-09-01.md (INDEX row added). Stage 3, ECC security-reviewer over auth/decision/API, read-only: 0 Critical, 0 High, 0 Medium, 3 Low - all in modules unreachable from the live API (webauthn/store.ts step-up dual write, stepUpStore.ts session ids logged in cleartext, OIDC rate-limit keying); about a dozen candidates verified as already held by gates (the six-site NaN family) or clean by construction. Stage 4, Schemathesis 4.4.4 against BOTH OpenAPI documents: v1-openapi.yaml - 2,632 cases over all 59 /v1 operations, 0 server errors, 0 permissive acceptances on /v1; every deviation is the contract under-documenting the server's fail-closed 401/404/429 or ten operations the server validates more strictly than it documents. The legacy openapi.yaml has two response-schema drifts and documents write operations the server does not serve. Seven backlog rows filed (docs/BUILD_BACKLOG.md, section ECC full evaluation), each naming the owning lane. ECC advised; preflight 245 and breadth 56 certify. The destination the request named (tools/ecc-reviews) never existed in history, so the record lives under docs/agent."
+}

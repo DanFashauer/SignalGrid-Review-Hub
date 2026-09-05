@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-new-first-party-skill-stack-reference-12th-v",
+  "ackedBy": "cloud",
+  "note": "Already landed — I reviewed the branch and merged it as PR #433 (squash 11a1110) after the review-land request; the shared surfaces (publication-boundary section-E carve-out, VENDORED 11→12, coverage regen) were verified line-by-line and CI ran the full gate suite green on the merge tree. shell.md noted for the bash-3.2/BSD-vs-GNU set."
+}

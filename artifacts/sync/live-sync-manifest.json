@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 60,
-  "fingerprint": "e892378f94a96dfb9e13efb8cec3308d8277e9d0ae7202cea270b27a5810c65e",
+  "manifestVersion": 61,
+  "fingerprint": "15f5cd244e27cc39765dc6515020d56c13d148046cc048c24cabb55bd4b80b5e",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -115,7 +115,7 @@
       "config-scope": 58,
       "credential-exposure": 41,
       "custody-beacon": 56,
-      "decision-continuity": 75,
+      "decision-continuity": 76,
       "device-attestation": 77,
       "device-management-health": 207,
       "device-resolver": 14,
@@ -141,6 +141,7 @@
       "pim-activation": 51,
       "platform-sso": 65,
       "policy-binding": 59,
+      "posture-allow": 189,
       "provisioning-order": 42,
       "provisioning-teardown": 28,
       "reliability": 30,
@@ -157,7 +158,7 @@
       "uem": 76,
       "unsafe-claim": 40,
       "verdict-attestation": 82,
-      "webhooks": 201,
+      "webhooks": 206,
       "work-context": 58
     },
     "mcpTools": [

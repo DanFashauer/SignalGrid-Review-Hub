@@ -19,13 +19,11 @@
 //   3. the TypeScript proof binds to the file BY PATH, and the module it describes
 //      exists.
 //
-// WHAT IS REPORTED, not gated, and said out loud: the Swift twin. The lane order is
-// the one `remediation-allow` used — the cloud lane writes the TS wrapper and proof
-// first (the wrapper's shape is a design decision), the Mac lane ports the Swift twin
-// second against these pinned vectors. Until it lands, a correctly-sequenced build
-// must not fail on its absence; the gate prints PENDING by name so the gap is never
-// silent. When it lands, flip `SWIFT_TWIN_REQUIRED` to true in the same change — the
-// remediation gate's header records that exact transition.
+// THE SWIFT TWIN IS GATED. It landed in the same batch as the TS wrapper, written by
+// the cloud lane and compiled + tested by ios-ci.yml's macOS runners (both the Xcode
+// test bundle and the SwiftPM package). The earlier "Mac lane ports it second" order
+// cost days on remediation-allow; a port CI can verify does not wait for a human's
+// Mac. `SWIFT_TWIN_REQUIRED` stays as the documented switch for a future retirement.
 //
 //   node scripts/check-posture-allow-conformance.mjs [--self-test]
 
@@ -39,8 +37,10 @@ const TS_PROOF = "scripts/src/posture-allow-proof.ts";
 const TS_SOURCE = "lib/signalgrid-simulator/src/posture-allow.ts";
 const SWIFT_TWIN = "native/ios/EnterpriseShell/Services/PostureAllow.swift";
 const NATIVE_ROOT = "native";
-/** Flip to true in the change that lands the Swift twin. */
-const SWIFT_TWIN_REQUIRED = false;
+/** Flipped to true in the change that landed the Swift twin (2026-09-05, the cloud
+ *  lane wrote it; ios-ci.yml's macOS runners compile and test it — the Mac lane is
+ *  no longer on the critical path for a port CI can verify). */
+const SWIFT_TWIN_REQUIRED = true;
 
 function walk(dir, out = []) {
   const SKIP = new Set(["build", "target", ".gradle", "node_modules", ".build", "DerivedData"]);

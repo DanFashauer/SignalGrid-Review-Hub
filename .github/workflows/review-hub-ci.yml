@@ -89,7 +89,7 @@ jobs:
       - name: Posture-allow proof (an unknown or illegible posture must not buy the allow the engine offers on its presence)
         run: pnpm run proof:posture-allow
 
-      - name: Posture-allow conformance (shared vectors bound; Swift twin REPORTED as pending)
+      - name: Posture-allow conformance (shared vectors bound on both sides — TS proof and Swift XCTest)
         run: node scripts/check-posture-allow-conformance.mjs
 
       - name: Posture-allow conformance self-test (the gate can fail)

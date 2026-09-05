@@ -258,14 +258,18 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Terminal (System Settings > Privacy & Security > Screen Recording, then
               relaunch Terminal) - closes 2026-09-02-android-desktop-first-run; and
               the Fleet Premium decision above before 2026-09-16.
-NEXT ACTION: cloud: land batch J (PR open), then keep reading unread surfaces (the
-              docs families, the data directories, .claude/skills content, the
-              remainder of lib/integrations, scripts and signalgrid-app); Mac: port
-              PostureAllow.swift against native/shared/posture-allow-vectors.json
-              (same lane order as remediation-allow), build SignalGridMobile after
-              batch J lands (four Swift edits are unbuilt on the cloud), and fix
-              validate-sim-macos.sh --sim-only's unqualified GREEN banner + the
-              hand-pinned "11 scenarios" label (lane mail). EARLIER: land batch E, then keep reading unread surfaces (56 left; next
+NEXT ACTION: cloud: land batch J (PR #456, carries the Mac-lane second revision:
+              PostureAllow.swift + its XCTest written here and proven by ios-ci,
+              the launchd tick, the --sim-only banner fix), then keep reading
+              unread surfaces (the docs families, the data directories,
+              .claude/skills content, the remainder of lib/integrations, scripts
+              and signalgrid-app). OWNER, once, on the Mac:
+              `bash scripts/mac/install-launchd.sh` — after that the Mac runs
+              queued sim requests and heartbeats every 30 min with no session
+              open, and the steward tells you if it stops. Mac lane (a person):
+              only judgment calls and physical actions come by mail now; the
+              six unread messages can be acked with `pnpm run lane:inbox`.
+              EARLIER: land batch E, then keep reading unread surfaces (56 left; next
               lib/api-spec, lib/iac, then the docs families) and build the three
               gates batch E specified (NaN gate follows one helper hop;
               review-invariants flags localeCompare in lib/*/src with the five

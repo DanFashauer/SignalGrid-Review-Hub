@@ -1146,3 +1146,43 @@ Verdict:  **the unknown loosened the answer in the engine itself, and in the pho
   persistence stores is unproven without Postgres; the dead step-up-session surface and the 18 lib packages without
   a tsconfig (typecheck coverage unverified) are recorded, not resolved; validate-sim-macos.sh --sim-only prints an
   unqualified GREEN and hand-pins "11 scenarios" (Mac-owned file, mailed).
+
+## 2026-09-05 — "The Mac lane, second revision: everything CI's macOS runners can verify moves to the cloud lane; what needs the physical Mac runs from a launchd tick, unattended"
+Command:  measured the loop the first revision left behind (owner, same day: "this isn't working and causing delay"), then built and gated the replacement:
+```
+node scripts/check-lane-messages.mjs                 # six cloud→mac messages unread, oldest 1.8h+; no Mac commit since 09-03
+git log origin/mac/* -1 --format=%cI                 # six mac/* branches unmoved since 09-02/03
+gh: ios-ci.yml on PR #456 head 0660892               # SignalGridMobile + EnterpriseShell (iPhone, iPad) + macOS SwiftPM: ALL GREEN on the cloud's seven Swift edits
+node scripts/check-posture-allow-conformance.mjs     # after the twin: "Swift twin present; 1 native test(s) bound: …/PostureAllowTests.swift"
+bash -n scripts/mac/lane-tick.sh scripts/mac/install-launchd.sh validate-sim-macos.sh   # syntax under bash
+node scripts/check-scheduled-routines.mjs            # mac-lane-tick declared; "no heartbeat written yet" REPORTED, as designed
+```
+Output:
+```
+WHAT WAS WAITING ON A HUMAN-STARTED MAC SESSION, and should not have been: (1) a Swift twin the cloud had pinned with 52
+  vectors and then mailed away — remediation-allow's twin took three days the same way; (2) "please build the seven Swift
+  files" — ios-ci.yml had ALREADY built and tested them on macos-latest on the PR, green, while the mail sat unread; (3) a
+  two-line banner fix in validate-sim-macos.sh, deferred because "Mac owns the file". None of the three needs a physical Mac.
+DONE IN THE CLOUD, PROVEN BY CI: native/ios/EnterpriseShell/Services/PostureAllow.swift (twin of posture-allow.ts; reuses
+  RemediationAllow's outcome ladder so there is one projection, not two) + PostureAllowTests.swift (loads the vectors BY PATH,
+  asserts every case's five pinned fields, holds the Swift postureBearing table equal to the file's, and three Swift-only
+  edges: non-object attributes, a boolean attribute, deficiency order); registered in Package.swift and project.yml;
+  SWIFT_TWIN_REQUIRED flipped — the conformance gate now FAILS if the twin or its test vanishes. validate-sim-macos.sh:
+  --sim-only now prints "MODE: --sim-only — ONLY the four simulator gates above ran", names what did not run, and its
+  SUMMARY line says partial; "11 scenarios" derived from scenarios.ts. Both verified by mac-lane.yml / check-shell on CI.
+THE PHYSICAL MAC, UNATTENDED: scripts/mac/lane-tick.sh (bash 3.2) — every 30 min from launchd: fetch --prune; refuse a dirty
+  or non-Alpha checkout (a person's work is never pulled over) and SAY so; fast-forward Alpha; install only when the lockfile
+  moved; run every pending sim request; push results on mac/tick-<stamp> (gh opens the PR when present, else the steward
+  does within the hour); print unread cloud→mac mail WITHOUT acking it (a machine is not the addressee); heartbeat on EVERY
+  path through lane:deliver so "ran, nothing to do" ≠ "never ran". scripts/mac/install-launchd.sh — one command, once
+  (--status, --uninstall). Declared in scheduled-routines.json (mac-lane-tick, tolerance 3h). The steward routine now reads
+  that heartbeat and escalates to the owner once per day, with the one command, when the Mac has gone silent.
+PROTOCOL (docs/LANE_COORDINATION.md, second revision; CLAUDE.md row): Rule 1 the cloud does what CI can verify; Rule 2 the
+  physical-Mac work runs from the tick; Rule 3 mail asks a person only for judgment or a physical action — never a build.
+  The steward trigger prompt carries the same three rules and the tick-staleness escalation.
+NOT VERIFIED HERE, said plainly: the tick and the installer have not been executed on a Mac (no macOS in this container);
+  bash -n and the shell gate hold their syntax, and the first heartbeat is the proof of the rest — its absence is what the
+  steward now escalates. The Swift twin is compiled and tested by ios-ci.yml on the PR, not on this lane.
+```
+Verdict:  **the Mac is no longer on the critical path for anything a runner can do, and its silence is now a measured
+  signal rather than a wait.** What the owner does once: on the Mac, `bash scripts/mac/install-launchd.sh`.

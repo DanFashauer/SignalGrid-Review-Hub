@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-05T16:24:18Z",
-  "result": "quiet \u2014 Alpha unchanged (9c531f4); no new Mac commits, no lane mail to cloud, sim loop clean."
+  "firedAt": "2026-09-05T17:24:36.162Z",
+  "result": "acted: first hourly cycle on the new delivery path (lane-deliver -> lane/cloud-mail branch); no Mac mail owed, no unmerged mac/* branch; lane-loop PR #440 in flight"
 }

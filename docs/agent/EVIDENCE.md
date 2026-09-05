@@ -622,3 +622,66 @@ NOTED, not changed (design targets): (1) the default LOCATION_MODE="presence" vs
   the validator DROPPED the record, so a fail-closed rejection reads as success to the caller.
 ```
 Verdict:  **fixed and gated — a replayed or stale NAC record can no longer re-stamp itself fresh; the freshness guard now has something to bite on.**
+
+## 2026-09-05 — "One family, six libraries: an unknown, off-ladder or zero-signal input read as the permissive answer"
+Command (firsthand reads + four independent audits + fix + proof + mutation on each):
+```
+lib/orchestration/src/index.ts (499)   lib/work-context/src/{reevaluate,types,assemble}.ts   lib/pim-activation/src/from-posture.ts
+lib/handoff-sim/src/{release,simulate,types}.ts   lib/incident-playbook/src/map.ts   lib/integration-bridge/src/{index,evidence}.ts
+lib/fleet-connector/src/{index,client}.ts   lib/posture-composition/src/compose.ts (rankOf/tierOf now exported)
+```
+Output:
+```
+REACHABILITY (bounds every severity): every finding below is LATENT. orchestration, work-context, handoff-sim,
+  incident-playbook and integration-bridge are imported only by @workspace/scripts (check-package-reachability);
+  pim-activation's only signalCount producer is composeDeviceRisk; fleet-connector's parser cannot emit NaN. None is
+  exploitable from a shipped artifact today. Each becomes REAL the day a product integration inherits it whole.
+orchestration  F1 `sensitivity === "controlled"` at 3 catalog entries + the catalog selector: an unrecognised or
+               absent sensitivity got the STANDARD room's plan (no cabinet, no witness, device.assign auto). Now
+               fail-closed: controlled unless a recognised LOWER tier. F2 `CATALOGS[room.domain]` on an unknown
+               domain destructured undefined and THREW — no plan, no audit record; now enumerated against the default
+               catalog with every action blocked and mode deny. F3 `firstReason(codes)` crashed on a non-array and
+               produced "Denied — undefined" on a holey one; now type-guarded. 41 -> 48 checks incl. a full-ladder
+               monotonicity sweep (drops=0, gains=0 over 4 outcomes x 3 rungs).
+work-context   F1 a device with ZERO signals composed `none` and, under a `none` ceiling, walked away with a `none`
+               decision and an `ok` tier — the proof PINNED it (rank none at line 218). Now a dark device is graded
+               step_up with the step_up tier, guard `!(count > 0)` so an unreadable count is dark too. F2 four raw
+               `ACTION_RANK[x]` sites (worstAction, ceilingFromAction, worstCeiling, assemble) read undefined for an
+               off-ladder action and `undefined >= n` is false; all four now rank through the composer's exported
+               rankOf. 52 -> 58 checks: absolute dark-device assertion over 6 contexts + off-ladder at all four sites.
+pim-activation F1 `signalCount <= 0` read undefined/NaN/"3" as a confirmation; now typeof number && > 0, and the
+               tier is checked against the known set. F2 the exhaustive sweep's hand-listed domains are pinned to
+               PIM_ACTIVATION_REQUEST_KEYS so a new ignored field cannot hide. 43 -> 51.
+handoff-sim    F1 release trusted a zero-signal device and, via a raw rank, an off-ladder one; now judged on
+               drivers.length and rankOf. F4 an unknown step kind was recorded APPLIED; now refused `unknown_step_kind`.
+               F5 handoff.deviceRef and verify.verificationEvidenceRef were the unswept ingress refs; swept. F6 the
+               vocabulary is HANDOFF_SIM_ERROR_CODES (as const, type derived) and the proof iterates it — the hand
+               copy claimed "every" while two codes were missing and its size===7 pin resisted correction. 55 -> 59,
+               refusals figure 7 -> 10 (docs updated).
+incident-playbook F1/F2 the default arms of urgencyFromAction/urgencyFromDetection returned null — an off-ladder
+               action the composer tiers `blocked` at the maximum rank opened NO incident while a milder step_up
+               opened a P2; now critical. F3/F7 empty drivers and unknown driver kinds routed to the Service Desk;
+               now SecOps. F6 a prototype-key impact yielded a ticket with no priority, no SLA, escalate:false;
+               matrix lookup now guarded, unknown -> P1. 49 -> 60. Accepted as design, not changed: absent impact
+               defaults to medium (pinned); zero-signal postures open no incident (the no-noise rule).
+integration-bridge F1 `device_management: true` asserted UNCONDITIONALLY from FleetDMPostureSignal, which has no
+               enrollment field — moved a verdict from step_up to allow on a fact nobody read. Removed (silence is
+               the rule); launch-seam gains the guard (45 -> 46). F4 policyState now gated on enrolment like
+               compliance. F7 an empty-string provenance no longer skips the fallback. Design targets NOT changed,
+               recorded: draft observedAt is the read instant not the sighting (F2/F3), `partial` quality keeps
+               positives with no stated reason (F5), `source_verified` is a literal (F6), FILE_FLOOR comment claims a
+               detection it lacks (F8).
+fleet-connector F1 `typeof x === "number"` read NaN as OBSERVED on both OS-floor guards; now Number.isFinite.
+               F2 the osFloor comment claimed the normalizer answered `unknown` for an absent floor; the code never
+               did — comment made true (absent floor = not enforced). F5 fleetSummary gains complianceUnknown so
+               "3 of 8 non-compliant" no longer implies 5 healthy. 63 -> 67. F3 (/^on/ prefix), F4 (hostRef
+               collapse), F6 (envelope assertion shape) recorded, not changed.
+MUTATION (each fix reverted alone on a backup copy; its proof must fail):
+  wc dark=false 56/58 FAIL · wc raw worstAction 57/58 FAIL · wc raw ceilingFromAction 55/58 FAIL
+  orch sensitivity===controlled 46/48 FAIL · orch domain unguarded CRASH · orch firstReason unguarded CRASH
+  pim count<=0 48/51 FAIL · handoff release guard reverted 56/59 FAIL · incident defaults->null 41/60 FAIL
+  incident empty-drivers->general 59/60 FAIL · fleet typeof-number 66/67 FAIL · bridge device_management restored 45/46 FAIL
+  All twelve killed; zero .mutbak left in the tree.
+review:invariants passed. typecheck exit 0.
+```
+Verdict:  **fixed and gated across all six — the same inversion in six places, each now refusing on the unknown instead of waving it through, and each refusal proven load-bearing.**

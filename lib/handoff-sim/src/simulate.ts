@@ -24,7 +24,7 @@ import {
   type DeviceDecision,
   type PortableWorkContext,
 } from "@workspace/work-context";
-import { ACTION_RANK, fromTaskException, type ComposableSignal } from "@workspace/posture-composition";
+import { ACTION_RANK, fromTaskException, rankOf, type ComposableSignal } from "@workspace/posture-composition";
 import { evaluateTaskException, normalizeReport } from "@workspace/integrations/task-exception";
 import { releaseHeldTask } from "./release";
 import {
@@ -90,6 +90,10 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
           break;
         }
         case "handoff": {
+          // The device ref lands verbatim in the deep-frozen trace — the audit story —
+          // so it is swept like every other ingress ref (review found it as the one
+          // ingress the "every ref is swept" claim did not cover).
+          refuseCredentialMaterial(step.deviceRef, "handoff.deviceRef");
           const result = reevaluateForDevice(context as PortableWorkContext, step.deviceSignals);
           context = result.nextContext;
           deviceRef = step.deviceRef;
@@ -111,7 +115,9 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
           const verdict = evaluateTaskException(normalized);
           const signal = fromTaskException(verdict);
           const carriedEntry = `${verdict.reasonCode}:${step.exceptionRef}`;
-          const holds = ACTION_RANK[signal.action] >= HOLD_RANK;
+          // Guarded rank: an off-ladder action holds (it ranks above every rung)
+          // rather than `undefined >= 5` quietly not holding.
+          const holds = rankOf(signal.action) >= HOLD_RANK;
 
           // A hold-grade exception is a work transition: the named task moves
           // active→held and the entry joins the travelling exceptions BEFORE the
@@ -156,6 +162,7 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
           break;
         }
         case "verify": {
+          refuseCredentialMaterial(step.verificationEvidenceRef, "verify.verificationEvidenceRef");
           verifications[step.exceptionRef] = step.verificationEvidenceRef;
           break;
         }
@@ -168,6 +175,14 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
           });
           break;
         }
+        default:
+          // The union is exhaustive for the compiler; at the untyped boundary (a
+          // script loaded from JSON) a kind this simulator does not know must be a
+          // REFUSED entry in the audit story, never an "applied" one that did nothing.
+          throw new HandoffSimError(
+            "unknown_step_kind",
+            "cannot apply this step: its kind is not one the simulator knows — recorded as a refusal, never as applied.",
+          );
       }
     } catch (err) {
       // Typed refusals are part of the story; anything else is a bug and escapes.

@@ -94,17 +94,20 @@ export function normalizeFleetReport(report: FleetHostReport, nowIso: string): F
   const nowMs = Date.parse(nowIso);
   const deviceManaged = report.mdmEnrolled === true;
 
+  // `Number.isFinite`, not `typeof === "number"`: `typeof NaN === "number"`, so a
+  // NaN major (or floor) used to read as OBSERVED, both guards below went quiet, and
+  // the host graded compliant with an OS nobody had actually read.
   const belowFloor =
-    typeof report.osMajor === "number" &&
-    typeof report.osFloor === "number" &&
-    report.osMajor < report.osFloor;
+    Number.isFinite(report.osMajor) &&
+    Number.isFinite(report.osFloor) &&
+    (report.osMajor as number) < (report.osFloor as number);
 
   // A configured OS floor with NO observed OS version is an UNKNOWN high-risk input,
   // not a pass. `belowFloor` is false here only because we cannot SEE the version —
   // which must never read as compliant. When a floor is enforced the observed OS must
   // be positively confirmed, exactly as screen lock must be observed "on" below.
   const osUnknownUnderFloor =
-    typeof report.osFloor === "number" && typeof report.osMajor !== "number";
+    Number.isFinite(report.osFloor) && !Number.isFinite(report.osMajor);
 
   const hasKnownViolation =
     report.diskEncryption === "off" || belowFloor || report.screenLock === "off";
@@ -182,6 +185,8 @@ export interface FleetSummary {
   enforceable: number;
   diskEncrypted: number;
   nonCompliant: number;
+  /** Hosts whose compliance could not be verified — absent evidence, named. */
+  complianceUnknown: number;
   raiseStepUp: number;
 }
 
@@ -192,6 +197,9 @@ export function fleetSummary(signals: FleetSignal[], reports: FleetHostReport[])
     enforceable: signals.filter((s) => s.enforceable).length,
     diskEncrypted: reports.filter((r) => r.diskEncryption === "on").length,
     nonCompliant: signals.filter((s) => s.deviceCompliance === "non_compliant").length,
+    // Never verified is not "fine". Without this count an operator reading "3 of 8
+    // non-compliant" infers 5 are healthy while 2 were never seen.
+    complianceUnknown: signals.filter((s) => s.deviceCompliance === "unknown").length,
     raiseStepUp: signals.filter((s) => s.assurance === "raise_step_up").length,
   };
 }

@@ -10,6 +10,7 @@ import {
   mapDetectionToIncident,
   mapPostureToIncident,
   urgencyFromAction,
+  urgencyFromDetection,
   type Impact,
   type Priority,
   type Urgency,
@@ -109,6 +110,29 @@ const det = (severity: Detection["severity"]): Detection => ({ code: "DOCK_TAMPE
 const critInc = mapDetectionToIncident(det("critical"), { impact: "high", correlationId: "c5", subjectLabel: "cart-15" });
 check("critical detection + high impact → P1 SecOps", critInc?.priority === "P1" && critInc?.assignmentGroup === "Security Operations (SecOps)");
 check("info detection opens NO incident", mapDetectionToIncident(det("info"), { impact: "high", correlationId: "c6" }) === null);
+
+// ── the DEFAULT arms fail closed (2026-09-05) ─────────────────────────────────
+// Every switch on this surface had a default arm, and three of the four defaulted to
+// the WEAKEST answer: an off-ladder action opened NO incident (the composer ranks it
+// above every rung and tiers it `blocked`), an unknown detection severity opened
+// none, and an unknown driver kind or an empty driver list routed to the Service Desk.
+const offLadder = mapPostureToIncident({ riskTier: "blocked", strongestAction: "quarantine" as never, drivers: [{ kind: "threat" as never, posture: "p", action: "quarantine" as never, reason: "R", rank: 8 }], signalCount: 1 }, { impact: "high", correlationId: "c9" });
+check("an OFF-LADDER action opens an incident at CRITICAL urgency — at least as severe as escalate, never silence",
+  offLadder !== null && offLadder.urgency === "critical" && offLadder.priority === "P1" && offLadder.escalate === true);
+check("urgency(<off-ladder>) → critical", urgencyFromAction("isolate" as never) === "critical");
+const noDrivers = mapPostureToIncident({ riskTier: "blocked", strongestAction: "escalate", drivers: [], signalCount: 0 }, { impact: "high", correlationId: "c10" });
+check("an escalate posture with NO drivers routes to SecOps, not the generic Service Desk",
+  noDrivers?.assignmentGroup === "Security Operations (SecOps)" && noDrivers?.priority === "P1");
+check("an UNRECOGNIZED driver kind routes to SecOps, not the generic Service Desk", routeOf("ransomware_detected") === "Security Operations (SecOps)");
+for (const [sev, want] of [["critical", "critical"], ["high", "high"], ["medium", "medium"], ["info", null]] as const) {
+  check(`detection urgency(${sev}) → ${want}`, urgencyFromDetection(sev) === want);
+}
+check("an UNRECOGNIZED detection severity is critical, never info", urgencyFromDetection("severe" as never) === "critical");
+const protoImpact = mapPostureToIncident(posture("escalate"), { impact: "constructor" as never, correlationId: "c11" });
+check("a prototype-key impact yields a P1 with an SLA and escalation — never a priority-less, SLA-less, non-escalating ticket",
+  protoImpact?.priority === "P1" && protoImpact?.sla !== undefined && protoImpact?.escalate === true);
+const garbageSev = mapDetectionToIncident({ ...det("critical"), severity: "severe" as never }, { impact: "low", correlationId: "c12" });
+check("...and a garbage detection severity is normalized to critical BEFORE the matrix (low impact × critical → P2), never dropped", garbageSev?.urgency === "critical" && garbageSev?.priority === "P2");
 
 // ── default impact + determinism ──────────────────────────────────────────────
 const def = mapPostureToIncident(posture("alert"), { correlationId: "c7" });

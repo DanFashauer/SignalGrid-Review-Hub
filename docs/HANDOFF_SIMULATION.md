@@ -116,7 +116,7 @@ between shared iPads. Nothing is wrong with the work; one device is stale.
 
 ## What the proof checks
 
-Proved by `pnpm run proof:handoff-sim` (55 checks) —
+Proved by `pnpm run proof:handoff-sim` (59 checks) —
 `scripts/src/handoff-sim-proof.ts`, fully offline and deterministic. It replays
 both scenarios above and asserts, among others:
 
@@ -136,7 +136,7 @@ both scenarios above and asserts, among others:
   changing only at explicit hold/release steps, exception refs supersets except
   at an applied release (which removes exactly one), and byte-identical traces
   across repeated runs. The proof's `figures=` line reports the counters
-  (`scenarios=2`, `steps=17`, `refusals=7`, all violation counters `=0`).
+  (`scenarios=2`, `steps=17`, `refusals=10`, all violation counters `=0`).
 
 ## Public-safety boundaries
 

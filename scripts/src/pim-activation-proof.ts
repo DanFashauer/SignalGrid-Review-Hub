@@ -233,6 +233,23 @@ check("an EMPTY grid still reports riskTier 'ok' (composeDeviceRisk is right to)
 check("...but maps to 'unknown', because no signals is not a clean bill of health", deviceRiskTierFromPosture(emptyPosture) === "unknown");
 check("...so an unonboarded or unreachable device routes to the approver group, never auto-approved", activationFor(deviceRiskTierFromPosture(emptyPosture)).outcome === "Approved");
 
+// A count that could not be READ is not a count of confirmations. `count <= 0` read
+// undefined and NaN as "some signals" and fell through to the tier — the trusting side.
+for (const bad of [undefined, NaN, -1, 0, "3"]) {
+  check(`a posture whose signalCount is ${String(bad)} (${typeof bad}) maps to 'unknown' — an unreadable count is not a confirmation`,
+    deviceRiskTierFromPosture({ ...emptyPosture, signalCount: bad as never }) === "unknown");
+}
+check("a posture with signals but an off-tier riskTier maps to 'unknown', never 'ok'",
+  deviceRiskTierFromPosture({ ...emptyPosture, signalCount: 1, riskTier: "green" as never }) === "unknown");
+check("...and a real count with a real tier still passes the tier through (the guard is not vacuous)",
+  deviceRiskTierFromPosture({ ...emptyPosture, signalCount: 1, riskTier: "watch" }) === "watch");
+// The exhaustive sweep's domains are HAND-LISTED above. A request field added
+// tomorrow and silently ignored by the evaluator would not be in that list, so the
+// 3240-state sweep could not see it. Pin the list to the request's own key set.
+const { PIM_ACTIVATION_REQUEST_KEYS } = await import("@workspace/pim-activation");
+check("the exhaustive sweep's domains are exactly the request's declared keys plus requestIntegrity — a new field cannot be ignored unseen",
+  JSON.stringify(Object.keys(domains).sort()) === JSON.stringify([...PIM_ACTIVATION_REQUEST_KEYS, "requestIntegrity"].sort()));
+
 // Worst-concern-wins survives the bridge: one blocked signal among healthy ones still blocks.
 const mixedTier = deviceRiskTierFromPosture(composeDeviceRisk([fromAgentIdentity(governedAgent), fromDeviceManagementHealth(retiredDevice)]));
 check("worst-concern-wins survives the bridge: one blocked dimension among healthy ones still refuses", mixedTier === "blocked" && activationFor(mixedTier).outcome === "Denied");

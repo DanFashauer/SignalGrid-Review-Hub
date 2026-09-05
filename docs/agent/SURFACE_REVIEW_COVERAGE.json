@@ -382,7 +382,17 @@
     },
     "lib/fleet-connector": {
       "path": "lib/fleet-connector",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Full read. typeof-number read NaN as observed on both OS-floor guards (Number.isFinite now); osFloor comment made true; summary names unverified hosts. 63->67. Three hardening items recorded.",
+          "reviewer": "cloud lane",
+          "record": "lib/fleet-connector/src/index.ts",
+          "scope": "surface",
+          "open": 3,
+          "closed": 3
+        }
+      ]
     },
     "lib/flows": {
       "path": "lib/flows",
@@ -390,7 +400,17 @@
     },
     "lib/handoff-sim": {
       "path": "lib/handoff-sim",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Full read of 4 files. Release trusted a zero-signal or off-ladder device; unknown step kind recorded applied; two unswept refs; proof vocabulary hand-copied. All fixed, vocabulary derived. 55->59.",
+          "reviewer": "cloud lane",
+          "record": "lib/handoff-sim/src/release.ts",
+          "scope": "surface",
+          "open": 1,
+          "closed": 4
+        }
+      ]
     },
     "lib/iac": {
       "path": "lib/iac",
@@ -398,11 +418,31 @@
     },
     "lib/incident-playbook": {
       "path": "lib/incident-playbook",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Full read. Default arms of 3 of 4 switches returned the weakest answer (no incident / Service Desk); prototype impact yielded a priority-less ticket. Fixed. 49->60.",
+          "reviewer": "cloud lane",
+          "record": "lib/incident-playbook/src/map.ts",
+          "scope": "surface",
+          "open": 2,
+          "closed": 4
+        }
+      ]
     },
     "lib/integration-bridge": {
       "path": "lib/integration-bridge",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Full read of both files. device_management:true asserted from a source with no enrolment field (removed, guarded in launch-seam); policyState ungated on enrolment; empty provenance skipped the fallback. 5 design targets recorded.",
+          "reviewer": "cloud lane",
+          "record": "lib/integration-bridge/src/index.ts",
+          "scope": "surface",
+          "open": 5,
+          "closed": 3
+        }
+      ]
     },
     "lib/integrations": {
       "path": "lib/integrations",
@@ -452,7 +492,17 @@
     },
     "lib/orchestration": {
       "path": "lib/orchestration",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Full read. Sensitivity compared === controlled at 4 sites (unknown -> standard plan), unknown domain threw, malformed reasonCodes crashed; all fail-closed now, monotonicity sweep added. 41->48.",
+          "reviewer": "cloud lane",
+          "record": "lib/orchestration/src/index.ts",
+          "scope": "surface",
+          "open": 0,
+          "closed": 3
+        }
+      ]
     },
     "lib/persistence": {
       "path": "lib/persistence",
@@ -460,7 +510,17 @@
     },
     "lib/pim-activation": {
       "path": "lib/pim-activation",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Full read; grant is a seven-way conjunction with no reachable fail-open. Latent count<=0 inversion and hand-listed proof domains fixed. 43->51.",
+          "reviewer": "cloud lane",
+          "record": "lib/pim-activation/src/from-posture.ts",
+          "scope": "surface",
+          "open": 0,
+          "closed": 2
+        }
+      ]
     },
     "lib/posture-composition": {
       "path": "lib/posture-composition",
@@ -587,7 +647,17 @@
     },
     "lib/work-context": {
       "path": "lib/work-context",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Full read of reevaluate/types/assemble. Zero-signal device graded none (proof pinned it); four raw ACTION_RANK lookups. Dark device now step_up; all sites rank through rankOf. 52->58.",
+          "reviewer": "cloud lane",
+          "record": "lib/work-context/src/reevaluate.ts",
+          "scope": "surface",
+          "open": 0,
+          "closed": 2
+        }
+      ]
     },
     "native/android": {
       "path": "native/android",

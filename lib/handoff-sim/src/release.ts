@@ -39,7 +39,7 @@
 // `contextVersion` exactly once, and returns a deep-frozen context with
 // everything else carried.
 
-import { ACTION_RANK } from "@workspace/posture-composition";
+import { ACTION_RANK, rankOf } from "@workspace/posture-composition";
 import { resolveException, type PortableWorkContext } from "@workspace/work-context";
 import { HandoffSimError, type ReleaseLedger } from "./types";
 
@@ -126,11 +126,17 @@ export function releaseHeldTask(
 
   // (4) the device in the person's hands right now must not itself be judged
   // restrict-or-worse by its own composition.
+  //     POSITIVELY evaluated, too: a decision composed from zero signals is a device
+  //     the fabric knows nothing about — every connector unreachable, not onboarded, a
+  //     misrouted id — which is the `decision === null` case wearing a decision object.
+  //     And the rank is read through the composer's guarded lookup, so an off-ladder
+  //     action (which the composer ranks ABOVE every real rung and tiers `blocked`)
+  //     refuses here instead of `undefined >= 6` reading as false.
   const decision = ledger.currentDeviceDecision;
-  if (decision === null || ACTION_RANK[decision.deviceAction] >= ACTION_RANK.restrict) {
+  if (decision === null || decision.drivers.length === 0 || rankOf(decision.deviceAction) >= ACTION_RANK.restrict) {
     throw new HandoffSimError(
       "device_not_trusted_for_release",
-      "cannot release: the current device's own composition is restrict-grade or worse (or no device has been evaluated) — held work is not released into a device the fabric is currently restricting.",
+      "cannot release: the current device's own composition is restrict-grade or worse, or rests on no signals at all, or no device has been evaluated — held work is not released into a device the fabric is restricting or cannot see.",
     );
   }
 

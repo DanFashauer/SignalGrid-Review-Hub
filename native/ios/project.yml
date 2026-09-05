@@ -7,9 +7,12 @@ options:
   xcodeVersion: "15.0"
   generateEmptyDirectories: true
 
-# SIGNING lives in the xcconfig chain and NOWHERE in this file's `settings`:
-# project-level build settings override a project xcconfig, so a value here would
-# silently win. `Signing.xcconfig` (TRACKED) holds the simulator defaults — no
+# SIGNING IDENTITY, TEAM AND BUNDLE ID live in the xcconfig chain and not in this
+# file's `settings`: project-level build settings override a project xcconfig,
+# so a value here would silently win. Two signing-ADJACENT keys ARE set here on
+# purpose and are not in the xcconfig — CODE_SIGN_ENTITLEMENTS (settings.base)
+# and CODE_SIGN_STYLE: Automatic (the EnterpriseShell target) — so the invariant
+# is "no team / identity / bundle id here", not "nothing signing-related here". `Signing.xcconfig` (TRACKED) holds the simulator defaults — no
 # team, ad-hoc identity, signing not required, bundle id com.enterprise.shell —
 # and ends with `#include? "Signing.local.xcconfig"`, Xcode's optional include: a
 # later assignment overrides an earlier one, and a missing file is not an error.

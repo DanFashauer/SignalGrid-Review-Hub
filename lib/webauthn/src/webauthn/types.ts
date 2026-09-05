@@ -38,7 +38,11 @@ export interface WebAuthnChallenge {
   challenge: string;
   expiresAt: string;
   purpose: 'registration' | 'authentication';
-  userId?: string;
+  /** The user this challenge was minted for. REQUIRED (2026-09-05): the guard used
+   *  to read `userId !== undefined && userId !== caller`, so a challenge saved with
+   *  no binding was checked against nobody and a genuinely signed assertion under an
+   *  unrelated user was accepted. Reproduced through the public `saveChallenge`. */
+  userId: string;
   /** Server-persisted binding of this challenge to the EXACT action it was minted
    *  for (tenant, identity, integration, device). Verified at completion time so a
    *  gesture signed for one pending action can never release a different one — the
@@ -101,6 +105,10 @@ export interface VerificationResult {
   success: boolean;
   userId?: string;
   credentialId?: string;
+  /** Registration only: true when this credential id was ALREADY enrolled and the
+   *  store kept the existing key unchanged. The ceremony verified, nothing was
+   *  stored — reported rather than folded into an unearned "enrolled". */
+  alreadyEnrolled?: boolean;
   error?: string;
   timestamp: string;
 }

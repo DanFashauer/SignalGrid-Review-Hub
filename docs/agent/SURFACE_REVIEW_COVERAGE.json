@@ -4,8 +4,17 @@
  "surfaces": {
   "(root)": {
    "path": ".",
-   "note": "The 26 tracked files at the repository root - package.json, the lockfile, the Dockerfiles, validate-sim-macos.sh, CLAUDE.md, README.md. Individually gated in several places and never read as one surface.",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Every tracked root file read as one surface. CLAUDE.md understated the harness↔preflight gap ~5x ('roughly thirty-five' vs 182 of 257 by the parity extractor), carried a superseded breadth sum (47+8 vs 56 STEPS) and a SUMMARY literal without the skipped field; README quoted the same literal; .gitignore ignored the directory holding the TRACKED build-loop history. All corrected. Verified clean: package.json's 253 targets, Dockerfiles, compose healthchecks, SECURITY.md artifacts, bash-3.2 discipline. Recorded open (Mac-owned file, mailed): validate-sim-macos.sh --sim-only prints an unqualified GREEN and hand-pins '11 scenarios'. Not verified: 18 lib packages without a tsconfig — whether typecheck covers them.",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 2,
+     "closed": 5
+    }
+   ]
   },
   ".agents": {
    "path": ".agents",
@@ -23,11 +32,31 @@
   },
   ".claude/*": {
    "path": ".claude",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "settings.json, COMMANDS.md read as one surface. settings.json's Bash deny list held two patterns (sudo, git branch -D) the hook did not enforce and nothing compared the lists → the hook-denylist gate now feeds every settings deny pattern to the hook behaviourally (9/9). COMMANDS.md's 'nine commands' verified (9 files).",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   ".claude/agents": {
    "path": ".claude/agents",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "All 13 definitions read. verdict-core-reader's reason-to-exist ('no named reader') was discharged 2026-08-23 and still dispatched a finished read → premise dated and re-scoped; gate-and-proof-engineer '317 files' (386) → derived wording; tdd-guide bounded to a directory with no test suite and citing npm scripts that do not exist → LOCAL CORRECTION in its charter; build-error-resolver / refactor-cleaner / security-reviewer charters corrected for absent tooling (vendored bodies untouched). Roster gate green.",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 5
+    }
+   ]
   },
   ".claude/commands": {
    "path": ".claude/commands",
@@ -54,6 +83,15 @@
      "read": "All three hooks read. verify-done.sh's gate arm could never fire (loop:state had no exit code), it never checked the working tree, and cd \"\" on an unset CLAUDE_PROJECT_DIR succeeded; block-dangerous.sh allowed any pattern behind sh -c, two-space variants, and unreadable stdin; session-start.sh grepped a hardcoded lane direction and truncated pending sim requests. All fixed; deny-list self-test 16/16 registered.",
      "open": 0,
      "closed": 8
+    },
+    {
+     "date": "2026-09-05",
+     "read": "Re-read after the sixth round's rewrite: block-dangerous.sh allowed valid JSON whose command field was absent/renamed and, with jq off PATH, could not emit its deny (exit 0 = allow) — both reproduced, both deny now (self-test 23/23); session-start.sh's loop:state fallback bound || to the pipeline and could never fire.",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the three hooks after the sixth-round rewrite",
+     "open": 0,
+     "closed": 3
     }
    ]
   },
@@ -169,6 +207,15 @@
      "scope": "partial: the mounted route stack and the webhook-signing path. The middleware, persistence and connector wiring were not read.",
      "open": 0,
      "closed": 0
+    },
+    {
+     "date": "2026-09-05",
+     "read": "Middlewares, persistence wiring, health, simulator, control-plane telemetry and connector wiring read (route bodies past control-plane.ts:130 and the INTEGRATIONS fixture skimmed). /readyz unauthenticated + limiter-exempt + seven DB round-trips per call → coalesced probe (probedAt shared across a burst); x-request-id hashed into the audit chain unbounded → shape-bounded, asserted by value; /simulator/run's catch-all 404 → existence by lookup; telemetry folded unreadable counts to zero → 400. Read clean: auth path, secret comparisons, idempotency, rate-limit env parsing, error handler, NaN family. test:api 384/384.",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: middlewares, persistence wiring, health, simulator, control-plane telemetry, connector wiring",
+     "open": 0,
+     "closed": 4
     }
    ]
   },
@@ -215,6 +262,15 @@
      "reviewer": "cloud lane",
      "record": "docs/agent/EVIDENCE.md",
      "scope": "partial: the demo-key lookup in src/index.ts only.",
+     "open": 0,
+     "closed": 1
+    },
+    {
+     "date": "2026-09-05",
+     "read": "Remainder after #72: every read goes through tenant-scoped core methods, no mutating tool, no catch returns ok, no Math.random. Tenancy stated at DEFAULT_TENANT: the tenant comes from the model's arguments with no session to check it against — a fixture choice today, an authorization hole under any multi-tenant transport.",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
      "open": 0,
      "closed": 1
     }
@@ -783,6 +839,15 @@
      "scope": "surface",
      "open": 0,
      "closed": 5
+    },
+    {
+     "date": "2026-09-05",
+     "read": "Readiness verified the ledger's schema and never the other three tables' (CREATE TABLE IF NOT EXISTS is a no-op against an older shape) → assertSchema on decisions/evidence_snapshots/sessions, on init and every ping. UNPROVEN here (no Postgres): needs the durable CI job's drop-a-column case.",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the two Postgres stores' readiness probes",
+     "open": 1,
+     "closed": 1
     }
    ]
   },
@@ -918,6 +983,15 @@
      "scope": "partial: evidence.ts, resolution.ts and types.ts - the outcome-order, evidence-composition and resolution rules.",
      "open": 0,
      "closed": 2
+    },
+    {
+     "date": "2026-09-05",
+     "read": "The slices #376 did not cover: evidence tie-break (first-inserted WON on an exact observedAt tie — array order deciding in the permissive direction; now worst-wins), getResolution's fallback autoProposeEnabled:true for an unconfigured tenant, raw role/standing-bound indexes, all-skipped syncs reporting success+healthy, the unproven webhook dead-letter arm, shift.ts unexported. Each fixed and mutation-proven by name; proof 489.",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 1,
+     "closed": 6
     }
    ]
   },
@@ -932,6 +1006,15 @@
      "scope": "partial: the decision vocabulary and monotonicity properties, reached through the simulator proof rather than by reading the package.",
      "open": 0,
      "closed": 0
+    },
+    {
+     "date": "2026-09-05",
+     "read": "decisionEngine base-trust allow fires on the PRESENCE of a posture signal and reads attributes only for bad literals: compliance unknown/expired/absent/non-string ALLOWS (measured live). Engine frozen → posture-allow wrapper + proof (189) + shared vectors (52) + conformance gate; the four constant `auditEvidence.length > 0` assertions in the simulator proof replaced with falsifiable ones. Recorded open: SignalGridDecision.confidence 'low' is unconstructible and the default explanation text says 'aligned' for zero signals — both inside the frozen body.",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 2,
+     "closed": 3
     }
    ]
   },
@@ -960,6 +1043,15 @@
      "scope": "partial: the addCredential/enrollment-race path and its proof-figure attribution; the full registration/assertion ceremony verification was not re-read.",
      "open": 0,
      "closed": 1
+    },
+    {
+     "date": "2026-09-05",
+     "read": "Full ceremony read (index, stepUpStore, server, store, types, verify + the /v1 caller + both proofs). Six checks the proof could not distinguish from their absence (mutated to `if (false)`, 56/56 still green) now pinned by reason string; the challenge user-binding guard skipped when the binding was absent (a signed assertion under an unrelated user ACCEPTED — reproduced) → binding mandatory; no-id registration stored `undefined`, and the stored id must equal the attested one; 32-byte authData threw instead of refusing; re-enrollment reported success while storing nothing. 72/72.",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 1,
+     "closed": 5
     }
    ]
   },
@@ -1007,7 +1099,17 @@
   },
   "native/ios/*": {
    "path": "native/ios",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "All 12 loose files read. project.yml's 'signing NOWHERE in this file' overstated (CODE_SIGN_ENTITLEMENTS and CODE_SIGN_STYLE are set there) → invariant restated as team/identity/bundle-id; Signing.xcconfig header agrees with proof:mdm-profile's reading; README platform honesty confirmed.",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "native/ios/EnterpriseShell": {
    "path": "native/ios/EnterpriseShell",
@@ -1034,12 +1136,32 @@
   },
   "native/ios/EnterpriseShellTests": {
    "path": "native/ios/EnterpriseShellTests",
-   "note": "NOT READ. The Mac lane wrote SessionExpiryTests here on branch mac/session-expiry-hardening (LOOP.md, 2026-09-02), which had not landed on the default branch when this ledger was seeded. Writing tests for one fail-open is not a read of the test target.",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "All 9 files read. Assertion quality high (SecurityManager/RemediationAllow/DecisionService pin verdicts and reason codes); one exception — testUnobservedPostureFailsClosed asserted only not-allow, satisfied by any of three outcomes with the base-trust reason still present → pins the absent reasons. Date() uses are margin-guarded, not flaky.",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "native/ios/SignalGridMobile": {
    "path": "native/ios/SignalGridMobile",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "All 46 tracked files read (source-level; no Swift toolchain here). The evidence seal was hardcoded green while the server's verified flag was decoded and dropped; StepUpGate had zero production callers while WardlinkModel hand-rolled LAContext inverted (cannot-ask → a button that granted); connectLive accepted any URL scheme; lastRefresh computed and never rendered; verify.sh exited 0 with both app targets unbuilt; README figure 6 (14) and 15 endpoints (20); CONVERGENCE.md's legacy-endpoint claim refuted by the tree. All edited; UNBUILT here — Mac build requested by lane mail.",
+     "reviewer": "cloud lane (five independent audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 1,
+     "closed": 8
+    }
+   ],
+   "note": "Edits of 2026-09-05 are source-level and unbuilt on the cloud lane; the Mac lane's xcodebuild is the verification."
   },
   "native/ios/mdm": {
    "path": "native/ios/mdm",

@@ -4,7 +4,7 @@ import SignalGridMobileCore
 struct DecisionDetailView: View {
     @Environment(AppModel.self) private var model
     let decision: Decision
-    @State private var evidence: EvidenceSnapshot?
+    @State private var evidence: EvidenceFetch?
     @State private var loadingEvidence = false
 
     var body: some View {
@@ -99,20 +99,30 @@ struct DecisionDetailView: View {
                     HStack {
                         SectionHeading(title: "Evidence snapshot", subtitle: "Signals captured at decision time")
                         Spacer()
-                        Label("Verified", systemImage: "checkmark.seal.fill")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color.sgAllow)
+                        // The seal is the SERVER's digest verdict, never a constant. It was
+                        // a hardcoded green "Verified" while the API's `verified: false` was
+                        // decoded and discarded — a failed tamper check rendered as a pass.
+                        if evidence.verified {
+                            Label("Verified", systemImage: "checkmark.seal.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.sgAllow)
+                        } else {
+                            Label("Digest check FAILED", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.sgDeny)
+                        }
                     }
-                    KeyValueRow(key: "Snapshot", value: evidence.id)
-                    KeyValueRow(key: "Digest", value: evidence.digest)
-                    KeyValueRow(key: "Policy version", value: "v\(evidence.policyVersion)")
+                    KeyValueRow(key: "Snapshot", value: evidence.snapshot.id)
+                    KeyValueRow(key: "Digest", value: evidence.snapshot.digest)
+                    KeyValueRow(key: "Digest check", value: evidence.verified ? "recomputed by the server" : "FAILED — the stored snapshot does not match its digest")
+                    KeyValueRow(key: "Policy version", value: "v\(evidence.snapshot.policyVersion)")
                     Divider().overlay(Color.sgBorder)
-                    evidenceGrid(evidence.evidence)
+                    evidenceGrid(evidence.snapshot.evidence)
                     Divider().overlay(Color.sgBorder)
                     Text("NORMALIZED SIGNALS")
                         .font(.caption2.monospaced().weight(.semibold))
                         .foregroundStyle(Color.sgMuted)
-                    ForEach(evidence.signalsUsed) { signal in
+                    ForEach(evidence.snapshot.signalsUsed) { signal in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text(signal.category.replacingOccurrences(of: "_", with: " ").uppercased())

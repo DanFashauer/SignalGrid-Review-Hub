@@ -398,6 +398,8 @@ async function run() {
   check("simulator run → 200 with audit evidence", simRun.status === 200 && Array.isArray(simRun.json?.auditEvidence));
   const simBad = await req("POST", "/simulator/run", { body: {} });
   check("simulator run without scenarioId → 400", simBad.status === 400);
+  const simUnknown = await req("POST", "/simulator/run", { body: { scenarioId: "no-such-scenario" } });
+  check("simulator run with an unknown scenarioId → 404 not_found, decided by lookup (not by whatever the run threw)", simUnknown.status === 404 && simUnknown.json?.error === "not_found");
   const simReset = await req("POST", "/simulator/reset", { body: {} });
   check("simulator reset → 200", simReset.status === 200 && Array.isArray(simReset.json?.auditEvidence));
 
@@ -888,6 +890,13 @@ async function run() {
   check("atlas key cannot resolve northwind subjects (404)", atlasEval.status === 404);
 
   // ── DDM (macOS 27) — enforcement-currency fail-safe ──────────────────────
+  // Telemetry UP: an unreadable count is a malformed report, never a measured zero.
+  const telBad = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "node-test", windowMins: 60, decisions: "many", allow: 1, stepUp: 0, restrict: 0, deny: 0 } });
+  check("telemetry with a non-numeric count → 400 naming the field (not ingested as zero)", telBad.status === 400 && /decisions/.test(telBad.json?.message ?? ""));
+  const telMissing = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "node-test", windowMins: 60, decisions: 3, allow: 1, stepUp: 1, restrict: 1 } });
+  check("telemetry with a MISSING count → 400 naming the field", telMissing.status === 400 && /deny/.test(telMissing.json?.message ?? ""));
+  const telOk = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "node-test", windowMins: 60, decisions: 3, allow: 1, stepUp: 1, restrict: 1, deny: 0 } });
+  check("telemetry with every count readable → 200 ingested (the two refusals above are not the route being closed)", telOk.status === 200 && telOk.json?.ingested !== undefined);
   const ddm = await req("GET", "/cp/v1/ddm");
   check("ddm surfaces update-enforcement currency + a dead-enforcement count", ddm.status === 200 && typeof ddm.json?.summary?.enforcementDead === "number" && ddm.json.summary.enforcementDead >= 1);
   const deadEnf = (ddm.json?.signals ?? []).find((s) => s.enforcementCurrency === "dead");
@@ -1075,6 +1084,18 @@ async function run() {
   });
   check("step-up enrollment verifies a genuine attestation", enrollVerify.status === 200 && enrollVerify.json?.enrolled === true);
   check("enrollment is attributed to the minting principal", enrollVerify.json?.enrolledByRef === "user_northwind_operator");
+  check("a first enrollment is not reported as alreadyEnrolled", enrollVerify.json?.alreadyEnrolled === false);
+  // Re-enrolling the SAME credential id: the ceremony verifies, the store keeps the
+  // existing key, and the route says so — `enrolled: false, alreadyEnrolled: true`
+  // rather than an unearned second "enrolled" (2026-09-05).
+  {
+    const opts2 = await req("POST", "/v1/step-up/enroll/options", { token: KEYS.operator, body: { identityRef: suIdentity } });
+    const again = await req("POST", "/v1/step-up/enroll/verify", {
+      token: KEYS.operator,
+      body: { identityRef: suIdentity, challengeId: opts2.json?.challengeId, response: authenticator.registration(opts2.json?.publicKey?.challenge) },
+    });
+    check("re-enrolling an already-enrolled credential id → 200 with enrolled:false, alreadyEnrolled:true", again.status === 200 && again.json?.enrolled === false && again.json?.alreadyEnrolled === true);
+  }
 
   // The evaluate route must NEVER release from a request flag, even enrolled.
   const flagSmuggled = await req("POST", "/v1/app-workflows/evaluate", {
@@ -1507,6 +1528,19 @@ async function run() {
       // the failed readiness probe — the 503 was a verdict, not a crash.
       const stillAlive = await fetch(`${BASE5}/healthz`);
       check("DB-loss: liveness still green after the failed readiness probe", stillAlive.status === 200);
+
+      // PROBE COALESCING (2026-09-05): /readyz is unauthenticated and exempt from
+      // both limiters, and each uncoalesced call cost seven database round-trips.
+      // N concurrent calls inside one TTL window must share ONE probe — observable
+      // as one `probedAt` instant across all of them — and a call after the window
+      // must probe again.
+      await new Promise((r) => setTimeout(r, 1100));
+      const burst = await Promise.all(Array.from({ length: 8 }, () => fetch(`${BASE5}/readyz`).then((x) => x.json().catch(() => null))));
+      const instants = new Set(burst.map((b) => b?.probedAt));
+      check("readyz: 8 concurrent calls share ONE probe (one probedAt across the burst)", burst.every((b) => typeof b?.probedAt === "string") && instants.size === 1);
+      await new Promise((r) => setTimeout(r, 1100));
+      const later = await fetch(`${BASE5}/readyz`).then((x) => x.json().catch(() => null));
+      check("readyz: after the TTL the probe runs again (a fresh probedAt) — coalescing is not caching forever", typeof later?.probedAt === "string" && !instants.has(later.probedAt));
     } finally {
       server5.kill("SIGTERM");
     }
@@ -1817,6 +1851,19 @@ async function run() {
   check("security header x-content-type-options set", allow.headers.get("x-content-type-options") === "nosniff");
   check("framework header x-powered-by is not disclosed", allow.headers.get("x-powered-by") === null);
   check("request id echoed", typeof allow.headers.get("x-request-id") === "string");
+  // The echo is bounded BY SHAPE (2026-09-05): the header is hashed into the audit
+  // chain as the row's provenance, so a free-form value let a caller choose the
+  // correlation id of a tamper-evident record. "Is a string" cannot see that.
+  {
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const forged = "a".repeat(129);
+    const r1 = await fetch(`${BASE}/healthz`, { headers: { "x-request-id": forged } });
+    check("x-request-id over 128 chars is NOT echoed; a uuid is minted instead", r1.headers.get("x-request-id") !== forged && UUID.test(r1.headers.get("x-request-id") ?? ""));
+    const r2 = await fetch(`${BASE}/healthz`, { headers: { "x-request-id": "a b\tc" } });
+    check("x-request-id with whitespace is NOT echoed; a uuid is minted instead", r2.headers.get("x-request-id") !== "a b\tc" && UUID.test(r2.headers.get("x-request-id") ?? ""));
+    const r3 = await fetch(`${BASE}/healthz`, { headers: { "x-request-id": "trace-1.2_3" } });
+    check("a conforming x-request-id IS echoed (the boundary is a shape, not a refusal of correlation)", r3.headers.get("x-request-id") === "trace-1.2_3");
+  }
 
   // ── the five routes the coverage check found unexercised ─────────────────
   // Registered and documented, never called. Found by the check below rather than

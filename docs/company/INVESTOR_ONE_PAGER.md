@@ -35,7 +35,7 @@ findable from documentation; both took a wire capture. Committed at
 
 ## Why now / why us
 
-- **Proof-first, in public**: 142 proof gates (the figure `docs/STATUS.md`
+- **Proof-first, in public**: 143 proof gates (the figure `docs/STATUS.md`
   publishes and `check-status-figures.mjs` keeps true — this page cites it
   rather than keeping a second copy that can drift), fail-closed
   by doctrine, tamper-evident audit ledger, signed release artifacts — the

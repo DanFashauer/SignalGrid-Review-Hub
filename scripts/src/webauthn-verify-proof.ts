@@ -298,6 +298,140 @@ async function main() {
   const badOrigin = await runAssertion({ signer: privateKey, signCount: 9, originForAuth: origin + ".evil.com" });
   check("look-alike origin (prefix) rejected", badOrigin.success === false);
 
+  // ── 7b. The checks the proof never distinguished from their absence ────────
+  // Eighth audit round (2026-09-05): six conditions in server.ts were replaced
+  // with `if (false)` and this proof still passed 56/56 — registration type,
+  // registration rpId, registration UV, user presence on both paths, and the
+  // assertion ceremony type. Each is now pinned BY REASON STRING, so a check
+  // that stops firing (or fires for the wrong reason) is a red proof.
+  async function registerCustom(who: string, opts: { type?: string; rpIdForReg?: string; flags?: number; originForReg?: string; id?: string | null; credIdOverride?: Buffer; challengeUserId?: string | null }) {
+    const chId = randomBytes(16).toString("base64url");
+    const ch = randomBytes(32).toString("base64url");
+    const challenge: Record<string, unknown> = {
+      challenge: ch,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      purpose: "registration",
+    };
+    if (opts.challengeUserId !== null) challenge.userId = opts.challengeUserId ?? who;
+    await webauthnStore.saveChallenge(chId, challenge as unknown as Parameters<typeof webauthnStore.saveChallenge>[1]);
+    const useCredId = opts.credIdOverride ?? credId;
+    const authData = buildAuthData(opts.rpIdForReg ?? rpId, opts.flags ?? 0x45, 0, attestedCredentialData(useCredId, cose));
+    const cd = clientData(opts.type ?? "webauthn.create", ch, opts.originForReg ?? origin);
+    const attObj = cborMap([
+      ["fmt", cborText("none")],
+      ["attStmt", cborMap([])],
+      ["authData", cborBytes(authData)],
+    ]).toString("base64url");
+    const idField = opts.id === undefined ? useCredId.toString("base64url") : opts.id;
+    const body: Record<string, unknown> = {
+      type: "public-key",
+      response: { clientDataJSON: cd.toString("base64url"), attestationObject: attObj },
+    };
+    if (idField !== null) {
+      body.id = idField;
+      body.rawId = idField;
+    }
+    return webauthn.verifyRegistration(who, chId, body as never, TENANT);
+  }
+  const regGetType = await registerCustom("user-reg-type", { type: "webauthn.get" });
+  check("registration with a webauthn.get ceremony type is rejected BY REASON", regGetType.success === false && regGetType.error === "Invalid credential type");
+  const regEvilRp = await registerCustom("user-reg-rp", { rpIdForReg: "evil.example" });
+  check("registration bound to a foreign rpId is rejected BY REASON", regEvilRp.success === false && regEvilRp.error === "rpId hash mismatch");
+  const regNoUv = await registerCustom("user-reg-nouv", { flags: 0x41 });
+  check("registration without user verification is rejected BY REASON", regNoUv.success === false && regNoUv.error === "User verification required for registration");
+  const regNoUp = await registerCustom("user-reg-noup", { flags: 0x44 });
+  check("registration without user presence is rejected BY REASON", regNoUp.success === false && regNoUp.error === "User presence flag not set");
+  const regBadOrigin = await registerCustom("user-reg-origin", { originForReg: origin + ".evil.com" });
+  check("registration from a look-alike origin is rejected BY REASON", regBadOrigin.success === false && regBadOrigin.error === "Invalid origin");
+  const regOk = await registerCustom("user-reg-ok", {});
+  check("the same builder with a clean ceremony REGISTERS (the five refusals above are not the builder failing)", regOk.success === true);
+
+  const authNoUp = await runAssertion({ signer: privateKey, signCount: 10, flags: 0x04 }); // UV without UP
+  check("assertion without user presence is rejected BY REASON", authNoUp.success === false && authNoUp.error === "User presence flag not set");
+
+  // Ceremony-type confusion on the assertion side: a packed self-attestation
+  // signs the same construction as an assertion, so the type check is one of
+  // two barriers against replaying a captured registration as a login.
+  {
+    const chId = randomBytes(16).toString("base64url");
+    const ch = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chId, { challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId });
+    const cd = clientData("webauthn.create", ch, origin);
+    const authData = buildAuthData(rpId, 0x05, 11);
+    const signature = createSign("SHA256").update(Buffer.concat([authData, sha256(cd)])).sign(privateKey);
+    const wrongType = await webauthn.verifyAuthentication(userId, chId, {
+      id: credIdStr, rawId: credIdStr, type: "public-key",
+      response: { clientDataJSON: cd.toString("base64url"), authenticatorData: authData.toString("base64url"), signature: signature.toString("base64url") },
+    }, TENANT);
+    check("assertion carrying a webauthn.create ceremony type is rejected BY REASON", wrongType.success === false && wrongType.error === "Invalid credential type");
+  }
+
+  // ── 7c. The unbound challenge (finding 2): a challenge saved with NO userId
+  // used to be checked against nobody. The binding is mandatory now.
+  {
+    const chId = randomBytes(16).toString("base64url");
+    const ch = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chId, { challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication" } as unknown as Parameters<typeof webauthnStore.saveChallenge>[1]);
+    const cd = clientData("webauthn.get", ch, origin);
+    const authData = buildAuthData(rpId, 0x05, 12);
+    const signature = createSign("SHA256").update(Buffer.concat([authData, sha256(cd)])).sign(privateKey);
+    const unbound = await webauthn.verifyAuthentication(userId, chId, {
+      id: credIdStr, rawId: credIdStr, type: "public-key",
+      response: { clientDataJSON: cd.toString("base64url"), authenticatorData: authData.toString("base64url"), signature: signature.toString("base64url") },
+    }, TENANT);
+    check("a challenge saved with NO user binding is rejected, not skipped (mandatory binding)", unbound.success === false && unbound.error === "Challenge user mismatch");
+    const regUnbound = await registerCustom("user-reg-unbound", { challengeUserId: null });
+    check("...and the same on the registration path", regUnbound.success === false && regUnbound.error === "Challenge user mismatch");
+  }
+
+  // ── 7d. Credential id shape and attested-id binding (finding 3) ────────────
+  const regNoId = await registerCustom("user-reg-noid", { id: null });
+  check("registration with no id/rawId is malformed, not stored under undefined", regNoId.success === false && regNoId.error === "Malformed WebAuthn registration response");
+  const regEmptyId = await registerCustom("user-reg-emptyid", { id: "" });
+  check("registration with an empty id is malformed", regEmptyId.success === false && regEmptyId.error === "Malformed WebAuthn registration response");
+  const regWrongId = await registerCustom("user-reg-wrongid", { id: randomBytes(16).toString("base64url") });
+  check("registration whose id differs from the ATTESTED credential id is rejected BY REASON", regWrongId.success === false && regWrongId.error === "Credential id does not match the attested credential");
+
+  // ── 7e. Short authenticatorData is a refusal, not a RangeError (finding 4) ──
+  {
+    const chId = randomBytes(16).toString("base64url");
+    const ch = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chId, { challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "authentication", userId });
+    const cd = clientData("webauthn.get", ch, origin);
+    const short = sha256(Buffer.from(rpId, "utf8")); // exactly 32 bytes: rpIdHash matches, no flags byte
+    const signature = createSign("SHA256").update(Buffer.concat([short, sha256(cd)])).sign(privateKey);
+    let threw = false;
+    let shortResult: { success: boolean; error?: string } = { success: true };
+    try {
+      shortResult = await webauthn.verifyAuthentication(userId, chId, {
+        id: credIdStr, rawId: credIdStr, type: "public-key",
+        response: { clientDataJSON: cd.toString("base64url"), authenticatorData: short.toString("base64url"), signature: signature.toString("base64url") },
+      }, TENANT);
+    } catch {
+      threw = true;
+    }
+    check("32-byte authenticatorData is REFUSED with a reason, never thrown out of as a RangeError", !threw && shortResult.success === false && shortResult.error === "Unreadable authenticator data");
+  }
+
+  // ── 7f. Re-enrolling an existing credential id reports the truth (finding 5)
+  {
+    const { privateKey: otherPriv, publicKey: otherPub } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    void otherPriv;
+    const otherJwk = otherPub.export({ format: "jwk" }) as { x: string; y: string };
+    const otherCose = coseFromJwk(otherJwk);
+    const chId = randomBytes(16).toString("base64url");
+    const ch = randomBytes(32).toString("base64url");
+    await webauthnStore.saveChallenge(chId, { challenge: ch, expiresAt: new Date(Date.now() + 60_000).toISOString(), purpose: "registration", userId });
+    const authData = buildAuthData(rpId, 0x45, 0, attestedCredentialData(credId, otherCose));
+    const cd = clientData("webauthn.create", ch, origin);
+    const attObj = cborMap([["fmt", cborText("none")], ["attStmt", cborMap([])], ["authData", cborBytes(authData)]]).toString("base64url");
+    const before = (await webauthnStore.getCredentialsForUser(userId)).find((c) => c.id === credIdStr)?.publicKey;
+    const again = await webauthn.verifyRegistration(userId, chId, { id: credIdStr, rawId: credIdStr, type: "public-key", response: { clientDataJSON: cd.toString("base64url"), attestationObject: attObj } }, TENANT);
+    const after = (await webauthnStore.getCredentialsForUser(userId)).find((c) => c.id === credIdStr)?.publicKey;
+    check("re-enrolling an existing credential id with a DIFFERENT key reports alreadyEnrolled and stores nothing", again.success === true && again.alreadyEnrolled === true && before !== undefined && after === before);
+    check("...while the first enrollment of this proof reported alreadyEnrolled false (the flag can be false)", reg.alreadyEnrolled === false);
+  }
+
   // ── Challenge-lifecycle negatives: replay, expiry, purpose/user binding ────
   // Build a genuinely-signed assertion for a given saved challenge id, so we can
   // exercise the lifecycle guards independently of the signature check.

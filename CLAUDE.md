@@ -46,26 +46,32 @@ proofs miss:
 
 ```bash
 ./validate-sim-macos.sh          # full suite → the harness prints
-                                 # "== SUMMARY: N passed, M failed =="; compare M
-                                 # against 0. Do NOT compare N against a total quoted
-                                 # here — the suite grows, and a pinned total silently
-                                 # turns a regression into a pass.
+                                 # "== SUMMARY: N passed, M failed, S skipped =="; compare
+                                 # M against 0 AND read S — a skip is not a pass, and the
+                                 # skipped gates are named above the line. Do NOT compare
+                                 # N against a total quoted here — the suite grows, and a
+                                 # pinned total silently turns a regression into a pass.
                                  # (--sim-only for just the scenarios)
 ```
 
 **`validate-sim-macos.sh` green is NARROWER than preflight green, and the
 difference is not small.** The harness enumerates every `proof:*` script, so a
-new proof joins it automatically — but roughly thirty-five preflight gates are
-not proofs and it never runs them: the docs↔proof figure guard, the launch
-profile, both preflight↔CI parity checks, the guard registries, the publication
-boundary, the simulation-request gate, `test:load`, the benches. A branch can
-therefore pass the harness and fail CI on a gate the harness has no concept of.
-Run BOTH before pushing anything that touches gates, docs figures, or the
-launch surface:
+new proof joins it automatically — but MOST preflight gates are not proofs and
+it never runs them: the docs↔proof figure guard, the launch profile, both
+preflight↔CI parity checks, the guard registries, the publication boundary, the
+simulation-request gate, `test:load`, the benches, and well over a hundred more.
+(An earlier version of this paragraph said "roughly thirty-five"; measured with
+the parity gate's own extractor on 2026-09-05 the non-proof count was 182 of 257
+— the paragraph that warned the difference was not small had quantified it as
+small. Do not retype a number here: `node scripts/check-preflight-ci-parity.mjs`
+prints the current one.) A branch can therefore pass the harness and fail CI on
+a gate the harness has no concept of. Run BOTH before pushing anything that
+touches gates, docs figures, or the launch surface:
 
 ```bash
-node scripts/preflight.mjs       # the per-push lane CI mirrors (~35 non-proof gates)
-pnpm run verify:breadth          # 47 deferred families + 8 doctrine proofs, its own CI job
+node scripts/preflight.mjs       # the per-push lane CI mirrors (every non-proof gate lives here)
+pnpm run verify:breadth          # every STEPS entry in scripts/verify-breadth.mjs, its own CI job
+                                 # (count the entries, not this comment — the header there says why)
 ```
 
 ### Commands worth knowing, and when

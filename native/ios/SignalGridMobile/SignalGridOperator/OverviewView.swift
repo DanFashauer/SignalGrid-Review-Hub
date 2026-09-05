@@ -21,6 +21,14 @@ struct OverviewView: View {
                         ErrorCard(message: message) {
                             Task { await model.refresh() }
                         }
+                        // A failed refresh leaves the sections below holding the PREVIOUS
+                        // load. Say so beside the error, and date it, rather than letting
+                        // stale figures read as current under a small error card.
+                        if let last = model.lastRefresh {
+                            Text("Figures below are from the last successful refresh at \(last.formatted(date: .omitted, time: .standard)), not from this attempt.")
+                                .font(.caption2)
+                                .foregroundStyle(Color.sgStepUp)
+                        }
                     }
 
                     if model.isLoading && model.metrics == nil {
@@ -48,6 +56,10 @@ struct OverviewView: View {
                     .font(.title2.weight(.bold))
                 Text(model.context?.tenant.name ?? "Operator Console")
                     .font(.caption)
+                    .foregroundStyle(Color.sgMuted)
+                // `lastRefresh` was computed on every load and read by nothing.
+                Text(model.lastRefresh.map { "Refreshed \($0.formatted(date: .omitted, time: .standard))" } ?? "Not yet refreshed")
+                    .font(.caption2.monospaced())
                     .foregroundStyle(Color.sgMuted)
             }
             Spacer()

@@ -165,7 +165,9 @@ const LOCK_RETRY_MS = 25;
 const RELEASE_LOCK_LUA =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
-export async function addCredential(userId: string, credential: WebAuthnCredential): Promise<void> {
+/** Returns `stored: false` when a credential with this id was already enrolled and
+ *  the existing record was kept unchanged — the caller must not report a store. */
+export async function addCredential(userId: string, credential: WebAuthnCredential): Promise<{ stored: boolean }> {
   const key = `${USER_PREFIX}${userId}`;
 
   if (redisConfigured()) {
@@ -202,6 +204,7 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
         : { userId, credentials: [], createdAt: new Date().toISOString() };
       // Re-entrant safety: a retried request or a duplicate delivery must not append
       // the same credential twice.
+      let stored = false;
       if (!user.credentials.some((c) => c.id === credential.id)) {
         user.credentials.push(credential);
         // Durable, no TTL — matching saveUser. A credential is an enrollment record,
@@ -210,15 +213,16 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
         if (setRes !== "OK") {
           throw new Error("WebAuthn credential persistence failed");
         }
+        stored = true;
       }
       inMemoryUsers.set(userId, user); // keep the mirror consistent, as saveUser does
+      return { stored };
     } finally {
       if (held) {
         await redis!.eval(RELEASE_LOCK_LUA, 1, lockKey, lockToken).catch(() => undefined);
       }
       await redis!.quit().catch(() => undefined);
     }
-    return;
   }
 
   // No Redis configured: single-process in-memory mode. Read-check-write with NO await
@@ -227,17 +231,17 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
   // code awaited getUser() here, which opened exactly the interleave it needed to avoid.)
   const existing = inMemoryUsers.get(userId);
   if (existing) {
-    if (!existing.credentials.some((c) => c.id === credential.id)) {
-      existing.credentials.push(credential);
-    }
+    const stored = !existing.credentials.some((c) => c.id === credential.id);
+    if (stored) existing.credentials.push(credential);
     inMemoryUsers.set(userId, existing);
-    return;
+    return { stored };
   }
   inMemoryUsers.set(userId, {
     userId,
     credentials: [credential],
     createdAt: new Date().toISOString(),
   });
+  return { stored: true };
 }
 
 export async function removeCredential(userId: string, credentialId: string): Promise<boolean> {

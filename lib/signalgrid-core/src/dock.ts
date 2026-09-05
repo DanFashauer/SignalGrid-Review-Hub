@@ -74,10 +74,16 @@ export function runDockSync(
 
   const startedAt = clock.now().toISOString();
   let signalsNormalized = 0;
+  // A record whose subject the store does not know is SKIPPED, and a skip is
+  // counted: a run that applied nothing reports "partial", not "success", and the
+  // connector is "degraded", not "healthy" (eighth-round verdict-core finding,
+  // 2026-09-05 — every record skipped used to read as a clean sync).
+  let recordsSkipped = 0;
 
   for (const record of records) {
     const device = store.findDeviceByRef(connector.tenantId, record.deviceRef);
     if (!device) {
+      recordsSkipped += 1;
       continue;
     }
     const freshness = classifyFreshness(
@@ -135,12 +141,12 @@ export function runDockSync(
     connectorId: connector.id,
     startedAt,
     completedAt,
-    status: "success",
-    recordsProcessed: records.length,
+    status: recordsSkipped === 0 ? "success" : "partial",
+    recordsProcessed: records.length - recordsSkipped,
     signalsNormalized,
-    note: `DockBridge fixture sync (${connector.ingestionMode ?? "app_in_dock"}): synthetic custody events only, read-only, no dock action.`,
+    note: `DockBridge fixture sync (${connector.ingestionMode ?? "app_in_dock"}): synthetic custody events only, read-only, no dock action.${recordsSkipped === 0 ? "" : ` ${recordsSkipped} of ${records.length} record(s) named a device this tenant does not hold and were skipped.`}`,
   };
   store.putSyncRun(run);
-  store.putConnector({ ...connector, status: "healthy", lastSyncAt: completedAt });
+  store.putConnector({ ...connector, status: recordsSkipped === 0 ? "healthy" : "degraded", lastSyncAt: completedAt });
   return run;
 }

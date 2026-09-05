@@ -67,9 +67,10 @@ public actor MockSignalGridAPI: SignalGridAPI {
         return decision
     }
 
-    public func fetchEvidence(decisionId: String) async throws -> EvidenceSnapshot {
+    public func fetchEvidence(decisionId: String) async throws -> EvidenceFetch {
         let decision = try await fetchDecision(id: decisionId)
-        return Self.evidenceSnapshot(for: decision)
+        // Fixture snapshots are minted in-process; nothing can have altered them.
+        return EvidenceFetch(snapshot: Self.evidenceSnapshot(for: decision), verified: true)
     }
 
     public func evaluate(_ request: EvaluateRequest) async throws -> EvaluateResult {

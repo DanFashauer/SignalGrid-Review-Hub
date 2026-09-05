@@ -38,7 +38,29 @@ const assertions: Assertion[] = [];
 for (const result of results) {
   const expected = expectedOutcomeSets[result.scenario.id];
   assertions.push(assertion(`${result.scenario.id}: exact outcome set`, expected !== undefined && sameOutcomeSet(result.decision.outcomes, expected)));
-  assertions.push(assertion(`${result.scenario.id}: audit evidence exists`, result.auditEvidence.length > 0));
+  // `createAuditEvidence` returns an unconditional two-element array, so
+  // `auditEvidence.length > 0` could never fail (eighth verdict-core round). What
+  // CAN fail: the decision trace must reference the decision AND every starting
+  // signal, the routing trace must reference every routed action, and the two
+  // records must carry distinct ids.
+  const trace = result.auditEvidence.find((r) => r.evidenceType === "decision_trace");
+  const routing = result.auditEvidence.find((r) => r.evidenceType === "routing_trace");
+  assertions.push(assertion(
+    `${result.scenario.id}: decision trace references the decision and every starting signal`,
+    trace !== undefined &&
+      trace.references.includes(result.decision.id) &&
+      result.scenario.startingSignals.every((sig) => trace.references.includes(sig.id)),
+  ));
+  assertions.push(assertion(
+    `${result.scenario.id}: routing trace references every routed action, and only those`,
+    routing !== undefined &&
+      routing.references.length === result.routedActions.length &&
+      result.routedActions.every((a) => routing.references.includes(a.id)),
+  ));
+  assertions.push(assertion(
+    `${result.scenario.id}: audit record ids are distinct`,
+    new Set(result.auditEvidence.map((r) => r.id)).size === result.auditEvidence.length,
+  ));
 
   const needsOwner = result.routedActions.some((action) => action.kind !== "record_audit");
   if (needsOwner) {
@@ -49,7 +71,7 @@ for (const result of results) {
 const byId = Object.fromEntries(results.map((result) => [result.scenario.id, result]));
 
 assertions.push(assertion("non-compliant cannot allow", !hasOutcome(byId["non-compliant-clinical-device"], "allow")));
-assertions.push(assertion("Apple declared state supports allow with audit", hasOutcome(byId["apple-ddm-platform-sso-state"], "allow") && (byId["apple-ddm-platform-sso-state"]?.auditEvidence.length ?? 0) > 0));
+assertions.push(assertion("Apple declared state supports allow with audit", hasOutcome(byId["apple-ddm-platform-sso-state"], "allow") && hasOutcome(byId["apple-ddm-platform-sso-state"], "record_audit") && byId["apple-ddm-platform-sso-state"]?.decision.reasonCodes.includes("APPLE_DECLARED_STATE_TRUSTED") === true));
 assertions.push(assertion("stale posture cannot fully trust", hasOutcome(byId["stale-checkin-shared-device"], "step_up") && !hasOutcome(byId["stale-checkin-shared-device"], "allow")));
 assertions.push(assertion("security risk escalates", hasOwner(byId["edr-security-risk"], "Security operations")));
 assertions.push(assertion("missing dock event routes action", hasOutcome(byId["dock-missing-overdue-device"], "route_to_owner")));
@@ -57,8 +79,8 @@ assertions.push(assertion("edr-security-risk never allows", !hasOutcome(byId["ed
 assertions.push(assertion("wrong-zone-rtls-event never allows", !hasOutcome(byId["wrong-zone-rtls-event"], "allow")));
 assertions.push(assertion("dock-missing-overdue-device never allows", !hasOutcome(byId["dock-missing-overdue-device"], "allow")));
 assertions.push(assertion("integration outage does not crash", byId["api-integration-outage"]?.status === "PASS"));
-assertions.push(assertion("remediation verified records audit", hasOutcome(byId["remediation-verified"], "verify_remediation") && (byId["remediation-verified"]?.auditEvidence.length ?? 0) > 0));
-assertions.push(assertion("all scenarios produce audit evidence", results.every((result) => result.auditEvidence.length > 0)));
+assertions.push(assertion("remediation verified records audit", hasOutcome(byId["remediation-verified"], "verify_remediation") && hasOutcome(byId["remediation-verified"], "record_audit")));
+assertions.push(assertion("every scenario's decision trace names its own decision id (no cross-scenario reference)", results.every((result) => result.auditEvidence.some((r) => r.evidenceType === "decision_trace" && r.references[0] === `decision:${result.scenario.id}`))));
 
 // NEGATIVE CONTROL (review finding): remediation evidence WITHOUT base trust must
 // never allow. The shipping remediation scenario now carries an authenticated

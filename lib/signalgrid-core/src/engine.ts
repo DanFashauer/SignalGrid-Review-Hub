@@ -432,10 +432,16 @@ export class SignalGridCore {
     if (!decision) {
       throw new CoreError("not_found", `Decision "${decisionId}" not found.`, 404);
     }
+    // A tenant with NO resolution configuration gets the restrictive default:
+    // no auto-proposed resolution, operator console as the channel. The default
+    // used to be `autoProposeEnabled: true` — an ABSENT configuration switched
+    // the most permissive resolution class on, which is the unknown loosening
+    // the answer (eighth-round verdict-core finding, 2026-09-05). Absence of a
+    // decision is not a decision to propose.
     const config = this.store.getResolutionConfig(principal.tenantId) ?? {
       tenantId: principal.tenantId,
       primaryHardwareChannel: "operator_console" as const,
-      autoProposeEnabled: true,
+      autoProposeEnabled: false,
     };
     return buildResolutionPlan(decision, config);
   }

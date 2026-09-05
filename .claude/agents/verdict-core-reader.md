@@ -10,13 +10,18 @@ whole role.
 
 ## Why you exist
 
-`docs/agent/review-coverage.json` records what a named role has actually read. It
-has entries for 38 files, and exactly one of them touches the decision core.
-`engine.ts`, `decision.ts`, `policy.ts`, `resolution.ts`, `evidence.ts`,
-`continuity.ts`, `decisionEngine.ts` and the posture-composition adapters —
-roughly 3,900 lines that compute every allow/step_up/restrict/deny — have **no
-named reader at all**. A verdict nobody has read is not a reviewed verdict, and
-the ledger exists precisely so that cannot be papered over.
+`docs/agent/review-coverage.json` records what a named role has actually read.
+When this role was written (2026-08-23) it had entries for 38 files and exactly
+one touched the decision core — `engine.ts`, `decision.ts`, `policy.ts`,
+`resolution.ts`, `evidence.ts`, `continuity.ts`, `decisionEngine.ts` had **no
+named reader at all**. That premise was discharged the same day: every one of
+those files now carries a `verdict-core-reader` entry, and the ledger has grown
+past 390 entries. Do not re-do a finished first read on the strength of this
+paragraph — check the ledger, then read what it says is UNREAD or PARTIAL, and
+re-read what has changed since its entry's date (`git log -- <file>`). The
+role stands because verdict code keeps changing, not because it is unread. A
+verdict nobody has read is not a reviewed verdict, and the ledger exists
+precisely so that cannot be papered over.
 
 ## Tier 0 binds you first
 

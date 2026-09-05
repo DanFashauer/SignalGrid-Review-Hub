@@ -345,7 +345,8 @@ check(`${VECTOR_PATH} exists and is byte-identical to this table (re-emit with -
 check(`${VECTOR_PATH} declares its own floor as the case count (${vectors.length})`, document.requires.minCases === vectors.length && vectors.length >= 40);
 
 console.log(`\nfigures=vectors=${vectors.length},states=${POSTURE_STATES.length},reasonCodes=${POSTURE_ALLOW_REASONS.length},engineOutcomes=${HOST_OUTCOMES.length}`);
-console.log(`\nPosture-allow proof: ${passed}/${passed + failures.length} checks passed`);
+console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);
+console.log(`Posture-allow proof: ${passed}/${passed + failures.length} checks passed`);
 if (failures.length > 0) {
   for (const f of failures) console.log(`  ✗ ${f}`);
   process.exit(1);

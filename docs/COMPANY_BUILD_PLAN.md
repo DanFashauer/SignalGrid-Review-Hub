@@ -2712,13 +2712,15 @@ earlier — that is the loop working, not a reason to soften the record.
     via `middlewares/context.ts:31-36`. Not XSS — the API answers JSON with `nosniff` — but in a
     repo whose stated position is "provenance is the product", a caller-chosen
     provenance field is worth closing. Accept the header only when it matches
-    `^[A-Za-z0-9._-]{1,128}$`, else mint a uuid. — FIXED 2026-09-05 (eighth
-    audit round): `middlewares/context.ts` now honours the header only in that
-    shape and mints otherwise; three assertions in `test/api.test.mjs` hold the
-    boundary BY VALUE (129 chars and whitespace are replaced with a uuid, a
-    conforming id is echoed) — the previous "is a string" assertion could not
-    distinguish the fix from the bug.
-    ALSO CLOSED the same day, second door from row 94's fix: `/api/readyz` was
+    `^[A-Za-z0-9._-]{1,128}$`, else mint a uuid. This RELATED half landed
+    2026-09-05 in PR #456 (eighth audit round; the row itself stays OPEN for the
+    `sim.ts` envelope deviation above): artifacts/api-server/src/middlewares/context.ts
+    now honours the header only in that shape and mints otherwise; three
+    assertions in artifacts/api-server/test/api.test.mjs hold the boundary BY
+    VALUE (129 chars and whitespace are replaced with a uuid, a conforming id is
+    echoed) — the previous "is a string" assertion could not distinguish the
+    change from the defect.
+    Also landed the same day in PR #456, second door from row 94's change: `/api/readyz` was
     exempt from both limiters AND cost seven database round-trips per anonymous
     call (measured: 40 calls, 0 × 429, 280 probe units against pools of ten).
     The composite probe is now coalesced — concurrent callers share one in-flight

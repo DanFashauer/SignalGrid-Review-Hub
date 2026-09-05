@@ -184,6 +184,7 @@
     "@workspace/incident-playbook": "workspace:*",
     "@workspace/integration-bridge": "workspace:*",
     "@workspace/integrations": "workspace:*",
+    "@workspace/location": "workspace:*",
     "@workspace/orchestration": "workspace:*",
     "@workspace/persistence": "workspace:*",
     "@workspace/pim-activation": "workspace:*",

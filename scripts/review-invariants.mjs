@@ -129,10 +129,17 @@ const DECLARED_CLOCK_READS = new Map([
   [
     "lib/location/src/",
     {
-      count: 5,
+      count: 3,
       reason:
-        "Signal observation stamps and the TTL sweep. Reading the clock is the point of an age check; " +
-        "what must not happen is a DECISION reading it, and location emits signals rather than verdicts.",
+        "The freshness/age checks and the TTL sweep. Reading the clock is the point of an age check; " +
+        "what must not happen is a DECISION reading it, and location emits signals rather than verdicts. " +
+        "DROPPED to 3 (2026-09-05, location ingest freshness): radius-dhcp.ts ingestRADIUS/ingestDHCP " +
+        "stamped `observedAt: Date.now()` — the INGEST instant, not the event's — so validate.ts's age " +
+        "check compared now against now and could never fire; a replayed accounting record or lease " +
+        "from yesterday became a FRESH presence fact. Both reads are REMOVED, not injected: observedAt " +
+        "is now Date.parse() of the schema-required eventTimestamp/timestamp, and an unparseable value " +
+        "is NaN, which the validator's Number.isFinite guard rejects. proof:location-services asserts " +
+        "the replay refusal by name. The three that remain are the age comparisons themselves.",
       retires:
         "Retires when location-services stops being a DEFERRED family and its clock reads move behind " +
         "an injected clock. NOT by deleting the package — that deletion was considered and REJECTED " +

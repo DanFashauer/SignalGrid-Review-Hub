@@ -193,9 +193,15 @@ export async function ingestRADIUS(
     return null;
   }
   
+  // The observation instant is the EVENT's own timestamp, never the ingest clock.
+  // Stamping `Date.now()` here made validateLocationSignal's age check compare now
+  // against now, so it could never fire: a late-delivered or replayed accounting
+  // record from yesterday became a FRESH presence fact. The schema already requires
+  // eventTimestamp as an ISO datetime; an unparseable value is NaN and the
+  // validator's Number.isFinite guard rejects it — fail closed, never re-stamped.
   const signal: LocationSignal = {
     deviceId: networkLocation.deviceId,
-    observedAt: Date.now(),
+    observedAt: Date.parse(radius.eventTimestamp),
     source: 'nac-radius',
     mode: 'coarse',
     zoneId: networkLocation.zoneId,
@@ -232,9 +238,11 @@ export async function ingestDHCP(
     return null;
   }
   
+  // Same rule as the RADIUS path: the lease's own timestamp is the observation
+  // instant, so a stale or replayed lease cannot re-stamp itself fresh.
   const signal: LocationSignal = {
     deviceId: networkLocation.deviceId,
-    observedAt: Date.now(),
+    observedAt: Date.parse(dhcp.timestamp),
     source: 'nac-dhcp',
     mode: 'coarse',
     zoneId: networkLocation.zoneId,

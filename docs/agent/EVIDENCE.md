@@ -578,3 +578,47 @@ NOTE (not fixed here, filed): composeDeviceRisk's empty-input contract returns o
   is a design-target for whoever owns the contract, not this fix.
 ```
 Verdict:  **fixed and gated — an off-ladder action now fails closed to the most-severe, order-independent verdict instead of a NaN sort and an undefined tier.**
+
+## 2026-09-05 — "lib/location's NAC ingest validated the event timestamp and then discarded it — the freshness guard compared now against now and could never fire"
+Command (firsthand read of the whole surface + fix + proof + mutation):
+```
+lib/location/src/{config,index,radius-dhcp,store,types,validate}.ts (444 lines, 6 files)
+scripts/src/location-services-proof.ts   scripts/review-invariants.mjs (the lib/location/src/ clock-read pin)
+```
+Output:
+```
+CLEAN (verified): store.ts guards NaN on both the read TTL and the sweep (Number.isFinite, keyed by
+  check-nan-fail-open); validate.ts rejects a non-finite observedAt, a future instant beyond 30s, an age
+  beyond LOCATION_MAX_AGE_SECONDS, and a mode mismatch; config.ts clamps a garbled max-age to 120 and
+  refuses < 30; an empty deviceId is dropped, never fabricated as "unknown". No decision consumes stored
+  presence today (zero importers — the invariant pin records this as the EXPECTED state of a deferred
+  family, not evidence the package is dead).
+FINDING (latent fail-open, freshness): RADIUSAccountingSchema requires eventTimestamp and DHCPLeaseSchema
+  requires timestamp as ISO datetimes — then ingestRADIUS/ingestDHCP stamped `observedAt: Date.now()`, the
+  INGEST instant, and never read them. validateLocationSignal's age check therefore compared the receiving
+  clock against itself: a late-delivered or replayed Accounting-Start / lease from yesterday became a FRESH
+  coarse presence fact, and the future-instant check could never fire either. A guard that cannot fire.
+  Neither location proof covered this path (both exercise lib/integrations' evaluateLocation).
+FIX: observedAt is Date.parse() of the event's own required timestamp (the schema already guarantees an ISO
+  string; an unparseable value is NaN and the validator's Number.isFinite guard rejects it — fail closed,
+  never re-stamped). Two clock reads REMOVED, not injected; the lib/location/src/ pin in
+  review-invariants dropped 5 -> 3 with the drop documented in its reason (the three that remain are the
+  age comparisons themselves, which are the point).
+GATE: proof:location-services (the same deferred family, so no new proof name — breadth membership is
+  derived one-to-one from family names and the census would refuse an orphan) gains 8 assertions: a current
+  Start/lease is accepted with observedAt === the event instant; a replayed record beyond the max age is
+  REFUSED; a future-dated record beyond the skew tolerance is REFUSED; Stop/expire still create no presence.
+  LOCATION_MODE is read at module load and defaults to "presence" while the ingest emits "coarse" — a
+  mismatch that would mask the freshness verdict — so the proof sets the env and imports the package
+  dynamically. 40/40 -> 48/48. review:invariants clean at count 3. scripts gained the @workspace/location
+  dependency; lockfile regenerated (pnpm install --lockfile-only) and the workspace link verified.
+MUTATION TEST: restoring `observedAt: Date.now()` on both paths -> 4 assertions FAIL (44/48, exit 1): both
+  replay refusals, the future-instant refusal, and the DHCP observedAt-is-the-lease-instant check.
+NOTED, not changed (design targets): (1) the default LOCATION_MODE="presence" vs the ingest's hardcoded
+  "coarse" means the NAC ingest is inert out of the box — fail-closed, but a config coupling worth a
+  startup-time refusal rather than silent total rejection; (2) an Accounting-Stop / lease release does not
+  CLEAR presence, so departure is invisible until the store's 24h TTL — a stale-true presence if a decision
+  ever consumes getLast; (3) handleNetworkLocationIngest reports success:true with location undefined when
+  the validator DROPPED the record, so a fail-closed rejection reads as success to the caller.
+```
+Verdict:  **fixed and gated — a replayed or stale NAC record can no longer re-stamp itself fresh; the freshness guard now has something to bite on.**

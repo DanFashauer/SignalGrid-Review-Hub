@@ -571,10 +571,15 @@ time measured rather than reasoned about.
 ### Where new work is allowed to land
 
 `node scripts/check-package-reachability.mjs` computes the transitive closure from the
-shipped artifacts and reports every `lib/*` package none of them can reach. Eight of
+shipped artifacts and reports every `lib/*` package none of them can reach. Thirteen of
 thirty-five are unreachable today — one with no importers at all, the rest imported only
-by the proof harness — and the check is a ratchet pinned at that count rather than a hard
-gate, because unreachable is a requirement to *look*, not a verdict to delete.
+by the proof harness or by other unreachable libraries — and the check is a ratchet pinned
+at that count rather than a hard gate, because unreachable is a requirement to *look*, not
+a verdict to delete. Edges are read from import positions only (`from "@workspace/x"`,
+`import("…")`, `require("…")`, `export … from`); until 2026-09-05 a package merely
+*named* in a comment counted as an edge, which reported six libraries as shipped that
+nothing ships, and the pinned ceiling rose from eight to thirteen when the extractor was
+corrected. `node scripts/check-package-reachability.mjs --self-test` pins the shapes.
 
 Before building into a library, ask it how that library ships:
 

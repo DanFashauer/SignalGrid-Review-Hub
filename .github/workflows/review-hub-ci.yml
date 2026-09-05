@@ -569,6 +569,8 @@ jobs:
       # the failure mode that never announces itself — everything green, nothing
       # arrives. Added after a design pass found `lib/dual-control` had zero shipped
       # consumers AFTER the work to wire it had already been scoped.
+      - name: "Package reachability self-test (a comment naming a package is not an import)"
+        run: node scripts/check-package-reachability.mjs --self-test
       - name: "Package reachability (a library nobody ships is a library nobody runs)"
         run: node scripts/check-package-reachability.mjs
       # The provenance stamp is GENERATED, so the gate is "regenerate and compare
@@ -857,6 +859,15 @@ jobs:
           git ls-files --error-unmatch docs/evidence-coverage.html > /dev/null || (echo "::error::docs/evidence-coverage.html is not tracked — generated pages must be committed." && exit 1)
           pnpm run build:evidence-coverage
           git diff --exit-code -- docs/evidence-coverage.html || (echo "::error::docs/evidence-coverage.html out of date — run 'pnpm run build:evidence-coverage' and commit." && exit 1)
+
+      # The Room Entry console inlines the WHOLE decision core; a stale committed copy
+      # ships old verdict logic to the public page. The build also runs the shell's
+      # signal-colour vectors (non_compliant must never render green).
+      - name: Room Entry console is committed in sync
+        run: |
+          git ls-files --error-unmatch docs/room-entry-console.html > /dev/null || (echo "::error::docs/room-entry-console.html is not tracked — generated pages must be committed." && exit 1)
+          pnpm run build:room-console
+          git diff --exit-code -- docs/room-entry-console.html || (echo "::error::docs/room-entry-console.html out of date — run 'pnpm run build:room-console' and commit." && exit 1)
 
       # docs/STATUS.md is generated, but deliberately NOT gated by regenerate-and-diff
       # like the three checks above: it embeds the HEAD sha as its own staleness tell,

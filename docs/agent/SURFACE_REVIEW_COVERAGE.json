@@ -119,7 +119,17 @@
     },
     "artifacts/mcp-server": {
       "path": "artifacts/mcp-server",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "tokenForTenant returned '' for a tenant with no seeded demo key and the empty string travelled into runRoomEntry as a credential; it now throws a configuration error (no tenant echoed).",
+          "reviewer": "cloud lane",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "partial: the demo-key lookup in src/index.ts only.",
+          "open": 0,
+          "closed": 1
+        }
+      ]
     },
     "artifacts/outreach-log": {
       "path": "artifacts/outreach-log",
@@ -135,7 +145,17 @@
     },
     "artifacts/signalgrid-app": {
       "path": "artifacts/signalgrid-app",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "pages/Intelligence.tsx: three panels rendered 'Loading…' forever on a control-plane error (recommendations, coverage, discovery), so an unreachable plane read as pending and an absent recommendation list as health; each now names the error.",
+          "reviewer": "cloud lane",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "partial: the three query-error states in pages/Intelligence.tsx only.",
+          "open": 0,
+          "closed": 1
+        }
+      ]
     },
     "artifacts/signalgrid-desktop": {
       "path": "artifacts/signalgrid-desktop",
@@ -270,7 +290,7 @@
       "reads": [
         {
           "date": "2026-09-04",
-          "read": "Fail-closed audit of the Zod validation surface (the whole runtime surface is one orval-generated file, api.ts, 355 lines; the 45 generated types are pure interfaces). Schemas are fail-closed by construction (no passthrough, no enum catch, coerce.date/number reject NaN). Systemic finding: the *Body/*QueryParams input schemas are DEAD as guards \u2014 the live /v1 routes hand-roll validation in v1.ts, which is itself fail-closed end-to-end (bounded TTL, bounded+refusing reconcile, core validateRequest rejects empty bindings). No live fail-open. Latent generated-schema tightenings + a dead-validator wiring gate filed to the backlog as design targets.",
+          "read": "Fail-closed audit of the Zod validation surface (the whole runtime surface is one orval-generated file, api.ts, 355 lines; the 45 generated types are pure interfaces). Schemas are fail-closed by construction (no passthrough, no enum catch, coerce.date/number reject NaN). Systemic finding: the *Body/*QueryParams input schemas are DEAD as guards — the live /v1 routes hand-roll validation in v1.ts, which is itself fail-closed end-to-end (bounded TTL, bounded+refusing reconcile, core validateRequest rejects empty bindings). No live fail-open. Latent generated-schema tightenings + a dead-validator wiring gate filed to the backlog as design targets.",
           "reviewer": "cloud lane",
           "record": "docs/agent/EVIDENCE.md",
           "scope": "surface",
@@ -797,7 +817,17 @@
     },
     "scripts": {
       "path": "scripts",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "check-package-reachability.mjs (edge extractor credited a package NAMED in a comment as an import - six libraries reported shipped that nothing ships, pin 8 -> 13 measured from import positions, --self-test with 13 shapes registered in preflight and CI), build-room-console.mjs (silent no-op on a missing bundle marker, no scenario markers, no sigClass test - all three added), lane-deliver.mjs (a new message file staled the coverage page and failed the mail PR - the page is now regenerated inside the worktree), src/room-sim-proof.ts (cross-tenant refusals were bare catches that an empty token would also satisfy - now assert the tenant-boundary message, a non-empty token and the positive control).",
+          "reviewer": "cloud lane",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "partial: four scripts - the reachability gate, the room-console builder, lane-deliver and the room-sim proof. The other ~150 gates and proofs were not in this read.",
+          "open": 0,
+          "closed": 4
+        }
+      ]
     },
     "site": {
       "path": "site",
@@ -810,7 +840,17 @@
     },
     "tools": {
       "path": "tools",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Both shells read in full. room-console/shell.html: sigClass coloured a signal by raw substring, so non_compliant and not_present rendered GREEN (they contain 'compliant'/'present') and unknown/missing/expired rendered blank; rewritten (separators stripped, exact good values first, every bad/warn word beats every good word, unlisted negations bad, unrecognised amber) with 41 vectors run by the build and mutation-proven (original defect: 4 failures; negation rule dropped: 3). evidence-coverage/shell.html holds no logic. The committed docs/room-entry-console.html was STALE against the core and is now gated in preflight and CI like the evidence page.",
+          "reviewer": "cloud lane",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 3
+        }
+      ]
     }
   }
 }

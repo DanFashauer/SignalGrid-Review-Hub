@@ -6,6 +6,8 @@
 //   pnpm run lane:deliver heartbeat <routine-id> "quiet | acted: what"
 //   pnpm run lane:deliver batch ops.json        # [{op:"ack",id,note},{op:"send",subject,body},{op:"heartbeat",routine,result}]
 //
+//   The commit carries the mail directories and, when a message file was added,
+//   the regenerated docs/agent/SURFACE_REVIEW_COVERAGE.md (its file count moved).
 //   flags: --dry-run        build and gate the commit, push nothing, keep nothing
 //          --via-pr         push a lane/<lane>-mail-<stamp> branch even on the Mac
 //          --trailer "K: v" append a commit trailer (repeatable)
@@ -49,6 +51,8 @@ import { currentLane } from "./lib/lane-identity.mjs";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MAINLINE = "SignalGrid_Alpha";
 const MAIL_DIRS = ["artifacts/lane-messages", "artifacts/agent-heartbeats"];
+const COVERAGE_SCRIPT = "scripts/check-surface-review-coverage.mjs";
+const COVERAGE_PAGE = "docs/agent/SURFACE_REVIEW_COVERAGE.md";
 const MAILBOX_FILE = "docs/agent/lane-mailbox.json";
 const ROUTINES_FILE = "docs/agent/scheduled-routines.json";
 
@@ -207,9 +211,26 @@ let pushedSha = null;
 
   // ── 4. the commit ───────────────────────────────────────────────────────────
   mustGit(["add", "--", ...MAIL_DIRS.filter((d) => existsSync(join(wt, d)))], wt, "staging");
+  // The surface-review coverage page counts files per surface, and a NEW message
+  // file changes artifacts/lane-messages' count — so a delivery that adds one
+  // stales docs/agent/SURFACE_REVIEW_COVERAGE.md and the coverage gate fails the
+  // mail PR (#445 did exactly that). Regenerate it here, AFTER the mail is staged
+  // (the derivation reads the tracked set), with mainline's own generator, and let
+  // that one file ride along. A generator that refuses (a ledger the gate rejects)
+  // refuses the delivery: mail must never ship a page the gate will not accept.
+  const stagedMail = mustGit(["diff", "--cached", "--name-only"], wt, "listing the stage").split("\n").filter(Boolean);
+  const allowed = [...MAIL_DIRS];
+  if (stagedMail.length > 0 && existsSync(join(wt, COVERAGE_SCRIPT))) {
+    const r = run("node", [COVERAGE_SCRIPT, "--write"], { cwd: wt, env });
+    if (r.code !== 0) die(`the surface-review coverage page could not be regenerated for this delivery:\n${r.out}${r.err}`, 1);
+    mustGit(["add", "--", COVERAGE_PAGE], wt, "staging the coverage page");
+    allowed.push(COVERAGE_PAGE);
+    const pageChanged = mustGit(["diff", "--cached", "--name-only", "--", COVERAGE_PAGE], wt, "checking the coverage page").trim() !== "";
+    console.log(`  coverage    ${COVERAGE_PAGE} ${pageChanged ? "regenerated (the file count moved)" : "unchanged"}`);
+  }
   const staged = mustGit(["diff", "--cached", "--name-only"], wt, "listing the stage").split("\n").filter(Boolean);
   if (staged.length === 0) die("nothing to deliver — the operations produced no change against mainline", 1);
-  const outside = staged.filter((f) => !MAIL_DIRS.some((d) => f.startsWith(`${d}/`)));
+  const outside = staged.filter((f) => !allowed.some((d) => f === d || f.startsWith(`${d}/`)));
   if (outside.length > 0) die(`refusing to deliver files outside the lane directories: ${outside.join(", ")}`, 1);
   const title = `Lane mail (${lane}): ${summary.join(", ")}`.slice(0, 120);
   const bodyLines = [

@@ -6,7 +6,7 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**29 of 100 surfaces have been read. 7 are partially read. 64 have not been read at all.**
+**30 of 100 surfaces have been read. 10 are partially read. 60 have not been read at all.**
 
 Coverage of the tree is asserted, not assumed: **2219 of 2219 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
@@ -39,11 +39,11 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/lane-messages` | tree | 162 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/live-captures` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/live-evidence` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/mcp-server` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/mcp-server` | package | 4 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/outreach-log` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/sbom` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/scanner-comparison` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/signalgrid-app` | package | 65 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/signalgrid-app` | package | 65 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/signalgrid-desktop` | package | 22 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/signalgrid-mobile-pwa` | package | 23 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/signalgrid-review` | package | 44 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -114,24 +114,27 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/shared` | native | 2 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 380 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `scripts` | package | 380 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 4 | 0 |
 | `site` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `tests` | tree | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `tools` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |
 
-## Partially read (7)
+## Partially read (10)
 
 A named slice was read. The rest of the surface has not been.
 
 - `.claude/skills` (tree)
 - `.github/workflows` (tree)
 - `artifacts/api-server` (package)
+- `artifacts/mcp-server` (package)
+- `artifacts/signalgrid-app` (package)
 - `lib/integrations` (package)
 - `lib/signalgrid-core` (package)
 - `lib/signalgrid-simulator` (package)
 - `lib/webauthn` (package)
+- `scripts` (package)
 
-## Not read (64)
+## Not read (60)
 
 - `.agents` (tree)
 - `.claude/*` (loose files)
@@ -151,11 +154,9 @@ A named slice was read. The rest of the surface has not been.
 - `artifacts/lane-messages` (tree)
 - `artifacts/live-captures` (tree)
 - `artifacts/live-evidence` (tree)
-- `artifacts/mcp-server` (package)
 - `artifacts/outreach-log` (tree)
 - `artifacts/sbom` (tree)
 - `artifacts/scanner-comparison` (tree)
-- `artifacts/signalgrid-app` (package)
 - `artifacts/signalgrid-desktop` (package)
 - `artifacts/signalgrid-mobile-pwa` (package)
 - `artifacts/signalgrid-review` (package)
@@ -193,10 +194,8 @@ A named slice was read. The rest of the surface has not been.
 - `native/ios/mdm` (native)
 - `native/ios/scripts` (native)
 - `native/ios/SignalGridMobile` (native)
-- `scripts` (package)
 - `site` (tree)
 - `tests` (tree)
-- `tools` (tree)
 
 ## Execution records (1)
 

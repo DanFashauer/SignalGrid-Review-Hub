@@ -750,3 +750,47 @@ MUTATION (each fix reverted alone on a backup copy; its proof must fail):
 typecheck exit 0; test:api 370/370; the ten flows-family proofs all green.
 ```
 Verdict:  **fixed and gated across all four — and two of the four are shipping packages whose proofs had been green for the whole life of the defects, because every negative test fed a KNOWN value.**
+
+## 2026-09-05 — "Third audit round, one level out from room-sim: the console coloured non_compliant green, the reachability gate counted comments as imports, and the public console page shipped stale"
+Command (firsthand reads of every edit site + fix + gate + mutation):
+```
+tools/room-console/shell.html (sigClass)      scripts/build-room-console.mjs      scripts/check-package-reachability.mjs
+scripts/lane-deliver.mjs                      scripts/src/room-sim-proof.ts       artifacts/mcp-server/src/index.ts (tokenForTenant)
+artifacts/signalgrid-app/src/pages/Intelligence.tsx (three "Loading…" sites)     docs/COMPANY_BUILD_PLAN.md items 101 + x-request-id
+```
+Output:
+```
+CONSOLE COLOUR: sigClass matched raw substrings — "non_compliant" contains "compliant" and "not_present" contains
+  "present", so both rendered GREEN on the public page; unknown/missing/expired rendered blank. Rewritten (separators
+  stripped, exact good values first, every bad/warn word beats every good word, unlisted negations bad, unrecognised
+  amber, null/undefined amber). 41 vectors now run INSIDE the build, plus a "nothing non-good is green" sweep.
+  MUTATION: the original function body → 4 wrong colours, build exit 1 · negation rule dropped → 3 wrong colours,
+  exit 1 · strip-only reverted → SURVIVES (the negation rule covers it: defence in depth, stated).
+STALE PAGE: a fresh `pnpm run build:room-console` differed from the committed docs/room-entry-console.html BEFORE any
+  shell change — the public console had been shipping an older decision core. Gated now in preflight and CI exactly
+  like the evidence page ("Room Entry console committed in sync"); the build also refuses a missing /*__BUNDLE__*/
+  marker (String.replace no-ops silently) and a bundle without three scenario ids.
+REACHABILITY: the edge extractor matched `@workspace/x` ANYWHERE in the text, comments included. Six libraries were
+  reported shipped on the strength of prose (adaptive-proposals, event-contract, integrations, location,
+  posture-composition, work-context) and the gate said "Unreachable fell from 8 to 7" on the day the fix landed.
+  Import positions only now (from / import / import() / require / export-from, subpaths); --self-test with 13 shapes
+  registered in preflight and CI; measured count 7 → 13; pin raised 8 → 13 with the reason in the script header,
+  BUILD_BACKLOG.md and CI_AND_VALIDATION.md. One non-import mention survives in the tree (ConnectorSetup.tsx JSX prose).
+LANE LOOP: a NEW message file moves artifacts/lane-messages' file count, which stales SURFACE_REVIEW_COVERAGE.md and
+  failed mail PR #445 on the coverage gate. lane-deliver now regenerates the page inside the worktree after staging
+  the mail and lets that one file ride; dry run shows "coverage … regenerated (the file count moved)".
+PROOF: room-sim's two cross-tenant refusals were bare catches — an EMPTY token or an unknown scenario id would have
+  satisfied them. Now: token non-empty, message contains "not found in tenant" and not "Unknown scenario", and the
+  positive control (the tenant's own token runs the scenario). proof:room-sim 43/43.
+SMALLER: mcp-server tokenForTenant returned "" for an unseeded tenant (now throws, no tenant echoed; proof 11/11) ·
+  Intelligence.tsx three panels said "Loading…" forever on a control-plane error (now name the error) · "20 scenarios"
+  → 19 (SCENARIOS.length) in package.json and PRODUCT_COMPLETION_PLAN.md · item 101 cites HostAppViewController.swift:685
+  and v1.ts:813 (were 631/723); the x-request-id item cites middlewares/context.ts:31-36 (was v1.ts:749-762, moved).
+FOUND, NOT FIXED (owner setting): every "pages build and deployment" run on SignalGrid_Alpha in the 30 listed (back to
+  2026-09-04 12:37Z) FAILED at "Build with Jekyll" — Liquid chokes on third_party/everything-claude-code/skills/
+  frontend-patterns/SKILL.md line 368. That is GitHub's legacy branch build; pages.yml is manual by design and expects
+  Settings → Pages → Source = "GitHub Actions". Until that setting flips, the branch-source site never updates.
+typecheck 0 errors · reachability self-test 13/13 · proof-count 58/58 · cited-paths 1734 resolve · coverage gate passed:
+  30 read, 10 partial, 60 not read, of 100 surfaces (tools now read in full; scripts, mcp-server, signalgrid-app partial).
+```
+Verdict:  **fixed and gated — the console's colour law and the reachability count were both wrong in the permissive direction, and each now has a test that fails when it lies; the stale public page can no longer ship.**

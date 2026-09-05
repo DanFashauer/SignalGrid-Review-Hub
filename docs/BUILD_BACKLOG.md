@@ -530,8 +530,12 @@ only), and the DDM rig is gated on an APNs push certificate.
       full design pass to answer when it is derivable in a second.
       `scripts/check-package-reachability.mjs` computes the transitive closure from
       `artifacts/*` and reports every `lib/*` package no shipped artifact can reach —
-      eight of thirty-five today, `dual-control` among them, and it prints WHY (no
-      importers at all, versus imported only by the proof harness). It is a ratchet
+      thirteen of thirty-five today, `dual-control` among them, and it prints WHY (no
+      importers at all, versus imported only by the proof harness). The figure read
+      eight until 2026-09-05, when the extractor stopped crediting a package NAMED in a
+      comment as an imported one: six libraries had been reported shipped on the
+      strength of prose, and the count is now measured from import positions only
+      (`--self-test` pins the shapes). It is a ratchet
       pinned at the current count, not a hard gate: unreachable is a requirement to
       look before building, not a verdict to delete. It also corrected a hand count
       made during that pass — `lib/db` is untracked build residue (`dist/` and

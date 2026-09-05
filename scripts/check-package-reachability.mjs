@@ -36,6 +36,14 @@
 // need them yet — manufacturing exactly the fake edges this check exists to detect.
 // The pin is a CEILING that may only fall.
 //
+// THE ONE TIME IT ROSE (8 → 13, 2026-09-05) was a correction of the measurement, not
+// of the tree: the edge extractor had credited every textual mention of a package —
+// comments included — as an import, so six libraries reached only through prose
+// ("mirrors @workspace/adaptive-proposals", "cannot import @workspace/integrations
+// without…") were reported shipped, and the count read 7 on the day the fix landed.
+// Nothing became unreachable; five packages had never been reachable and the gate
+// had been saying otherwise. `--self-test` now pins the extractor's shapes.
+//
 // EDGES ARE DERIVED TWICE, and the union is used. A `workspace:*` entry in
 // package.json is a declared edge; a `@workspace/x` specifier in source is a real
 // one. They disagree in both directions (an undeclared import still runs; a declared
@@ -108,22 +116,74 @@ function declaredEdges(dir, known) {
 }
 
 /**
- * Real edges: a `@workspace/x` specifier anywhere in the package's source.
+ * Real edges: a `@workspace/x` specifier in an IMPORT POSITION in the package's source —
+ * `import … from "@workspace/x"`, `import "@workspace/x"`, `import("@workspace/x")`,
+ * `require("@workspace/x")`, `export … from "@workspace/x"`, and the subpath forms of
+ * each (`@workspace/x/sub`).
  *
  * Matched against the FULL specifier with a boundary, so `@workspace/api-spec` is
  * never credited to `@workspace/api` — a prefix match would silently invent edges
  * and make an unreachable package look reachable, the exact direction of error this
  * gate must not have.
+ *
+ * WHY THE POSITION MATTERS. The first version matched the specifier ANYWHERE in the
+ * text, so a comment that merely NAMED a package ("mirrors @workspace/x's ladder")
+ * became an edge. A package nothing imports then read as shipped — the phantom edge
+ * hid exactly the finding this gate exists to surface — and the ceiling "improved"
+ * by one on a comment. A mention is not a dependency; only an import can carry code.
  */
+const IMPORT_POSITION =
+  /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*|\bimport\s+type\s+)["'](@workspace\/[a-z0-9][a-z0-9-]*)(?:\/[^"']*)?["']/g;
+
+function importedEdgesInText(text, known) {
+  const out = new Set();
+  for (const match of text.matchAll(IMPORT_POSITION)) {
+    if (known.has(match[1])) out.add(match[1]);
+  }
+  return out;
+}
+
 function importedEdges(dir, known) {
   const out = new Set();
   for (const file of sourceFiles(dir)) {
-    const text = readFileSync(file, "utf8");
-    for (const match of text.matchAll(/@workspace\/[a-z0-9][a-z0-9-]*/g)) {
-      if (known.has(match[0])) out.add(match[0]);
-    }
+    for (const name of importedEdgesInText(readFileSync(file, "utf8"), known)) out.add(name);
   }
   return out;
+}
+
+// `--self-test` — the extractor against the shapes that must and must not count.
+// A gate whose only evidence of working is "the count looked right" is the gate
+// that credited a comment for a week.
+if (process.argv.includes("--self-test")) {
+  const known = new Set(["@workspace/alpha", "@workspace/alpha-beta", "@workspace/gamma"]);
+  const cases = [
+    ['import { x } from "@workspace/alpha";', ["@workspace/alpha"], "named import"],
+    ["import x from '@workspace/alpha'", ["@workspace/alpha"], "default import, single quotes"],
+    ['import "@workspace/alpha";', ["@workspace/alpha"], "side-effect import"],
+    ['import type { T } from "@workspace/alpha";', ["@workspace/alpha"], "type-only import"],
+    ['export { y } from "@workspace/alpha";', ["@workspace/alpha"], "re-export"],
+    ['export * from "@workspace/alpha/sub";', ["@workspace/alpha"], "re-export of a subpath"],
+    ['const m = await import("@workspace/alpha");', ["@workspace/alpha"], "dynamic import"],
+    ['const m = require("@workspace/alpha/deep/path");', ["@workspace/alpha"], "require of a subpath"],
+    ['import { z } from "@workspace/alpha-beta";', ["@workspace/alpha-beta"], "hyphenated name is not credited to its prefix"],
+    ["// mirrors @workspace/alpha's ladder; see @workspace/gamma", [], "a comment mention is not an edge"],
+    ['const doc = "see @workspace/alpha for the shape";', [], "a string literal outside an import is not an edge"],
+    ['/* import { x } from "@workspace/gamma" */', ["@workspace/gamma"], "an import inside a block comment still counts (documented ceiling of a regex extractor)"],
+    ['import { q } from "@workspace/unknown-pkg";', [], "an unknown package is never credited"],
+  ];
+  let failed = 0;
+  for (const [text, expected, label] of cases) {
+    const got = [...importedEdgesInText(text, known)].sort();
+    const ok = JSON.stringify(got) === JSON.stringify([...expected].sort());
+    console.log(`  ${ok ? "✓" : "✗"} ${label}${ok ? "" : ` — expected [${expected}] got [${got}]`}`);
+    if (!ok) failed += 1;
+  }
+  if (failed > 0) {
+    console.error(`\nPackage-reachability self-test FAILED — ${failed} extractor case(s) wrong.`);
+    process.exit(1);
+  }
+  console.log(`\nPackage-reachability self-test passed — ${cases.length} extractor cases.`);
+  process.exit(0);
 }
 
 const packages = discoverPackages();

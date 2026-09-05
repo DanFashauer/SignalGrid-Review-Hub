@@ -129,6 +129,7 @@ const STEPS = [
   { name: "MCP-ecosystem-map self-test (the gate can fail both directions)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs", "--self-test"] },
   { name: "MCP-ecosystem map (every externally-sourced family has an ecosystem row or a stated gap)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs"] },
   { name: "Absence-check self-test (a word in a disclaimer is not the thing existing)", cmd: ["node", "scripts/agent/absence-check.mjs", "--self-test"] },
+  { name: "Package reachability self-test (a comment naming a package is not an import)", cmd: ["node", "scripts/check-package-reachability.mjs", "--self-test"] },
   { name: "Package reachability (a library nobody ships is a library nobody runs)", cmd: ["node", "scripts/check-package-reachability.mjs"] },
   { name: "Core normalization-version (the provenance stamp must track the code it names)", cmd: ["node", "scripts/generate-core-normalization-version.mjs", "--check"] },
   // Same shape as the stamp above, one document over. docs/CLAIM_INVENTORY.md is
@@ -450,6 +451,11 @@ const STEPS = [
   // move one of the pinned figures. esbuild's output is byte-stable for a given input,
   // which is what makes the diff a usable gate rather than a flake.
   { name: "Evidence Coverage page committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch docs/evidence-coverage.html >/dev/null && pnpm run build:evidence-coverage && git diff --exit-code -- docs/evidence-coverage.html"] },
+  // Same shape for the Room Entry console: it inlines the WHOLE decision core, so a
+  // stale committed copy ships old verdict logic to the public page. It sat stale for
+  // weeks before this gate — every core change since the last rebuild was invisible
+  // in the console. The build also runs the shell's sigClass vectors.
+  { name: "Room Entry console committed in sync (and its signal colours pass their vectors)", cmd: ["bash", "-c", "git ls-files --error-unmatch docs/room-entry-console.html >/dev/null && pnpm run build:room-console && git diff --exit-code -- docs/room-entry-console.html"] },
   // NOT a regenerate-and-diff gate, unlike the three above, and the difference is
   // load-bearing: docs/STATUS.md embeds the HEAD sha by design (its own staleness
   // tell), so the commit that adds it changes HEAD and it can never equal its own

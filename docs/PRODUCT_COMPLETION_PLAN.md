@@ -213,7 +213,7 @@ proofs sit in the critical path — including three added the same week the free
 was being written to stop exactly that category.
 
 **The demo already exists and is buried.** `docs/room-entry-console.html` — the
-decision core inlined into one offline HTML file, 20 scenarios across three
+decision core inlined into one offline HTML file, 19 scenarios across three
 settings — plus `docker-compose.sim.yml` (one container, fixture-safe,
 `/console`). Referenced once, in a Mac runbook. `pnpm run demo` now names it.
 

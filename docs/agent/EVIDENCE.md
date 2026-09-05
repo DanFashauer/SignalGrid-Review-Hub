@@ -916,3 +916,88 @@ typecheck 0 · contract holds across 2 documents · emulator pass · iac 72/72 �
   exempt · coverage ledger 40 read / 10 partial / 50 not read of 100 (+6 full reads).
 ```
 Verdict:  **fixed and gated at the edges — the surfaces a reviewer actually runs (the emulator, the deck, the compose file) and the document two shipping clients are generated from had each been telling a smaller truth than the core, and each now has a gate that fails when it does.**
+
+## 2026-09-05 — "Sixth audit round, the operating floor: a Stop hook whose gate could never fire, a deny-list any wrapper walked past, a desktop that said all-clear to a dead feed, an MDM proof holding its rule on the wrong profile"
+Command (four independent read-only audits + firsthand reads of every edit site + fix + proof + mutation):
+```
+.claude/hooks/** .githooks/** .github/**   artifacts/signalgrid-desktop/** artifacts/signalgrid-mobile-pwa/**
+artifacts/signalgrid-web/** site/**   fleet/** firmware/** native/ios/mdm/** native/ios/scripts/**
+tests/** fixtures/** .agents/** .claude/commands/**
+```
+Output:
+```
+HOOKS: verify-done.sh ran `pnpm run loop:state` as its gate; loop-state.mjs had no exit code at all — it printed
+  "3 thing(s) need you." and returned 0 — so the arm CLAUDE.md calls "enforced by hooks" could never fire (reproduced:
+  three failing rows, empty hook output, session allowed to end). It also never looked at the working tree, so an
+  uncommitted edit satisfied "done", and `cd ""` on an unset CLAUDE_PROJECT_DIR succeeded into whatever directory the
+  hook started in. loop-state now sets exit 1 on a failing SEAM (unpushed work, origin, framing, PURPOSE.md, an
+  unreachable Hub — which was a `warn` that SKIPPED the unpushed-work check); the discovery rows are reported and do
+  not move it. The hook consults `git status --porcelain` first and quotes the failing rows.
+  block-dangerous.sh stripped quoted spans before matching, and a wrapped command lives in a quoted span:
+  `bash -c 'rm -rf /tmp/x'` was ALLOWED, as was every pattern behind `sh -c`, the force-push pattern with two spaces
+  in it, and any non-JSON stdin (jq failed, cmd empty, nothing matched — unreadable meant allowed). Now: whitespace
+  collapsed, `-c`/`-lc` payloads unwrapped to a fixpoint before quotes are stripped, whole-token patterns
+  (`git stash-list-helper` is not `git stash`), unreadable input DENIES. `--self-test` 16/16, in preflight + CI.
+  The new hook blocked THIS entry's first append — the heredoc body named the force-push pattern in an unquoted
+  position — which is the hook working, not a defect; heredoc bodies stay in scope because `bash <<EOF` executes them.
+  session-start.sh grepped a hardcoded "→ cloud (from mac)": on the Mac lane it was structurally incapable of
+  reporting mail, and a node failure printed the same "none". Lane derived (scripts/lib/lane-identity.mjs), an
+  unreadable mailbox reads UNKNOWN; pending sim requests counted in full (the old `-A 2 | head -3` showed two of five).
+WORKFLOWS: ios-ci.yml's two GATED scans passed green on a scan root that did not exist (inside `if`, errexit never
+  trips and pipefail hides grep's exit 2) — reproduced with a renamed directory; roots asserted, 20-file floor, and
+  SignalGridMobile (never scanned) added. supply-chain.yml's two `git diff --quiet` SBOM checks were blind to an
+  untracked file; `ls-files --error-unmatch` first, as the three review-hub-ci regenerate steps already do.
+  mac-lane.yml's summary never mentioned the seven env-guarded proofs the harness skips; it now quotes the harness's
+  SUMMARY and skipped lines and fails if there is no SUMMARY line; "6 non-proof gates" → 7 (the harness runs 7).
+DESKTOP/PWA: DesktopLayout rendered a GREEN check and "No active alerts" when the signal feed had FAILED (react-query
+  `data` is undefined for a 404 and for loading alike; `?? []` made both "no anomalies") — zero uses of isError in
+  either tree. Three states now: unreachable (amber, "alert state UNKNOWN — not an all-clear"), loading, known.
+  Desktop Decisions.tsx carried a local verdict map with `?? "text-muted-foreground"` and PWA OutcomeBadge seeded
+  `text-zinc-500` — the desktop's own outcome-tone.ts had written "an unrecognised verdict resolves to the
+  RESTRICTIVE tone" and reached three of five sites. Both route through a tone module now (PWA gained one); the
+  review deck's FOUR local maps (one a Partial with a neutral fallback) route through a third. PWA formatNumber
+  rendered an absent count as "0" and Overview `|| 0` rendered "0.0%" for a feed that never answered — dashes now,
+  as the desktop already did. Handoff mock minted Date.now() and threw on an unknown status; desktop Integrations
+  emitted the class `undefined` for an unknown status (renders as healthy) — restrictive arms. PWA manifest named
+  two icon files that do not exist — dropped. List pages render an explicit unreachable row instead of a blank list.
+  check-verdict-tone-source.mjs widened: PWA tree scanned; a verdict→class MAP outside a tone module is a finding
+  (comparison rule alone missed both shapes); inside a tone module every `??` fallback must be status-restrict or
+  status-deny. Self-test 27/27; neutral-fallback mutation and local-map mutation both fail by file:line.
+FLEET/MDM: proof:mdm-profile asserted no-app_lock / System scope / removal-disallowed on the KIOSK profile only and
+  read the Fleet profile's PayloadContent[0] only — a planted `com.apple.app_lock` SECOND payload in the profile
+  Fleet actually ships passed 18/18. The profile set is now derived from `git ls-files '*.mobileconfig'`; every
+  payload of every profile: admitted type, no app_lock anywhere in the file, System scope, removal disallowed,
+  PayloadUUID/Identifier unique across all profiles. The Fleet profile carried neither scope nor removal key
+  (added: the next holder could have deleted it). 40/40; app_lock plant → 41/43 FAIL; removal key removed → 39/40.
+  check-demo-flags-documented.mjs gated one of three copies of the managed-key table; all three now, a dropped row in
+  mdm/README fails by key. FLEET_MDM.md showed a three-file GitOps sketch under the real team file's name — none of
+  the files existed and the schema was not Fleet's — rewritten to point at the tracked files. The team yml's comment
+  named 3 of 8 keys and omitted BackendBaseURL (required, or no session ever starts) and applied an iOS-only profile
+  to macOS as if it restricted Macs — said plainly now; `../profiles/` path resolution is UNVERIFIED (no fleetctl
+  here) and marked for the Mac lane. mdm/README's MDM list gains Fleet, the chosen MDM.
+  proof comment corrected: it binds ASAM to Signing.xcconfig, the SIMULATOR id; Signing.local.xcconfig (gitignored,
+  wins on device builds) is invisible to it. firmware/dock/core, pick-simulator.py, both profiles' supervision
+  caveats, the 8-key parity: CLEAN (28 tests claimed = 28 counted).
+TESTS/FIXTURES/AGENTS/COMMANDS: tests/load k6 drivers could not fail (see COMPANY_BUILD_PLAN row 43) — fixed 4b50c4d;
+  retirement is the owner's. .agents/agent_assets_metadata.toml: both entries point at images that never existed,
+  nothing reads it (row 73, re-verified) — deletion is the owner's. fixtures/: microsoft-graph packs read in full,
+  every expectedDecision asserted by proof:microsoft-graph-sandbox; emulator packs read in the fifth round. CLEAN.
+  .claude/commands/: nine prompts, no claims, CLEAN.
+FOUND, NOT FIXED (next PR, batch I — the shipping site): 13 evidence links on signalgrid.app point at
+  `blob|tree/main/…` and there is no `main` branch — every one 404s live (the hero CTAs, API reference, Security,
+  launch plan, validation, both Federal CTAs, both SmartDock links); `site/index.html` is not deployed by pages.yml
+  AND is outside check-launch-claims' derived scope while asserting three deferred signals under "the core reasons
+  over today"; About.tsx claims location/identity as current with no hedge and the noun list cannot see "location";
+  "SIGNALS FUSED 7" beside a 4-row array, "16 candidate source categories" beside 5 groups, CLAIM_INVENTORY:1194
+  says the 17 is guarded by guard:figures (it reads docs/*.md only); LIVE_VERIFIED matches "Fleet" against the label
+  "Fleet (live-proven)"; Federal.tsx STATUS_META unguarded with an unused green arm.
+mutations: hook self-test 16/16 · verdict gate 27/27 + 2 mutations · mdm 40/40 + 2 mutations · demo-flags 3 docs + 1
+  mutation · loop:state exit 1 on a failing seam, 0 otherwise (verified both) · typecheck 0.
+coverage ledger: 58 read / 9 partial / 33 not read of 100 (+18 reads, 17 surfaces newly read in full).
+```
+Verdict:  **fixed and gated on the floor the lanes stand on** — the hook that was supposed to hold "done" could not
+  hold anything, and the deny-list held nothing a wrapper could carry; both now fail their own self-tests when
+  loosened. The desktop's all-clear for a dead feed is the room-console defect from the third round in a second
+  tree, and the verdict fallback is the same defect in a third; the widened gate holds all four trees. Two surfaces
+  are owner decisions (delete), one is the next PR (the site), and every remaining not-read surface is a docs family
+  or a data directory.

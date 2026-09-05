@@ -5,14 +5,7 @@ import {
   connectorEmulatorScenarios,
   type ConnectorDecision,
 } from "@/data/connectorEmulatorData";
-
-const decisionStyles: Record<ConnectorDecision, string> = {
-  allowCandidate: "border-teal-500/50 bg-teal-950/30 text-teal-200",
-  deny: "bg-status-deny",
-  restrict: "bg-status-restrict",
-  stepUp: "border-sky-500/50 bg-sky-950/30 text-sky-200",
-  approvalRequired: "border-violet-500/50 bg-violet-950/30 text-violet-200",
-};
+import { connectorDecisionTone } from "@/lib/outcome-tone";
 
 const flow = ["signals", "evaluation", "decision", "route", "verification"];
 // The guardrail pills are COMPUTED over the committed proof results (see
@@ -106,7 +99,7 @@ export default function ConnectorEmulatorDashboard() {
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {decisions.map((decision) => (
-              <Pill key={decision} className={decisionStyles[decision]}>
+              <Pill key={decision} className={connectorDecisionTone(decision)}>
                 {decision}
               </Pill>
             ))}
@@ -209,7 +202,7 @@ export default function ConnectorEmulatorDashboard() {
                         scenario.actualDecision === "unverified"
                           ? "border-amber-500/50 bg-amber-950/30 text-amber-200"
                           : scenario.actualDecision === scenario.expectedDecision
-                            ? decisionStyles[scenario.actualDecision]
+                            ? connectorDecisionTone(scenario.actualDecision)
                             : "border-red-500/50 bg-red-950/30 text-red-200"
                       }
                     >

@@ -1,7 +1,7 @@
 # Mac lane — run the FULL gate suite on macOS.
 #
 # WHY THIS EXISTS. `validate-sim-macos.sh` is the repo's full suite (4 simulator
-# gates + every looped `proof:*` gate + 6 non-proof gates) and until now it ran
+# gates + every looped `proof:*` gate + 7 non-proof gates) and until now it ran
 # ONLY on the owner's laptop. That made the largest gate set in the repo the one
 # least often run, and made "the suite is green" a claim resting on whoever last
 # remembered to run it by hand. This runs it on every dispatch and weekly.
@@ -94,10 +94,14 @@ jobs:
           # proof:enrollment-race reads this and refuses without it.
           REDIS_URL: redis://127.0.0.1:6379
         run: |
+          # The harness output is kept so the step summary below can quote the
+          # SUMMARY line and the skipped gates verbatim rather than describing
+          # a run it did not read.
+          set -o pipefail
           if [ "${{ inputs.sim_only }}" = "true" ]; then
-            ./validate-sim-macos.sh --sim-only
+            ./validate-sim-macos.sh --sim-only 2>&1 | tee harness.log
           else
-            ./validate-sim-macos.sh
+            ./validate-sim-macos.sh 2>&1 | tee harness.log
           fi
 
       # The harness snapshots and restores package.json + pnpm-lock.yaml around its
@@ -118,10 +122,29 @@ jobs:
       - name: State plainly what this run did and did not prove
         if: always()
         run: |
+          # The harness skips a gate whose live service is absent (WAZUH_URL,
+          # FLEET_URL, HMDM_URL, TRACCAR_URL, KEYCLOAK_URL, GLPI_URL — seven
+          # guarded proofs) and says so in its own output, but until 2026-09-05
+          # this summary — the thing a human reads — never mentioned a skip, so
+          # a green run with seven gates unrun read as the full suite. The
+          # SUMMARY and skipped lines are quoted from the log; a log with no
+          # SUMMARY line fails this step rather than summarising nothing.
+          SUMMARY_LINE=$(grep -E '^== SUMMARY:' harness.log 2>/dev/null || true)
+          SKIPPED_LINE=$(grep -E 'skipped \(NOT verified by this run\):' harness.log 2>/dev/null || true)
           {
             echo "### Mac lane — rehearsal, not evidence"
             echo
-            echo "The full gate suite ran on \`macos-latest\`. That proves the gates pass on macOS."
+            if [ -n "$SUMMARY_LINE" ]; then
+              echo "\`$SUMMARY_LINE\`"
+            else
+              echo "**No SUMMARY line in harness.log — the harness did not finish; nothing below is proven.**"
+            fi
+            if [ -n "$SKIPPED_LINE" ]; then
+              echo
+              echo "**Skipped, NOT verified by this run:** \`$SKIPPED_LINE\` — a skip is not a pass."
+            fi
+            echo
+            echo "The gate suite ran on \`macos-latest\`. That proves the gates that RAN pass on macOS."
             echo
             echo "It does **not** prove anything about real hardware. A hosted runner is a"
             echo "throwaway VM — not MDM-enrolled, not a managed device, not the machine whose"

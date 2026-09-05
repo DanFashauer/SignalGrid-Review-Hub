@@ -13,14 +13,30 @@
 // would simply not grant ASAM, the shell would fail to lock, and every gate in
 // this repo would still be green.
 //
-// This asserts the profile against the SOURCE OF TRUTH for the bundle id
-// (native/ios/project.yml) rather than against a second copy of the string, so
-// renaming the app breaks this proof instead of breaking a device.
+// This asserts the profile against the TRACKED source for the bundle id
+// (native/ios/Signing.xcconfig) rather than against a second copy of the string,
+// so renaming the app breaks this proof instead of breaking a device. Said
+// plainly, because the earlier version of this comment claimed more: that file's
+// own header names an optional, gitignored `Signing.local.xcconfig` whose
+// assignments WIN, and that is the file a real device build is signed with. So
+// this proof binds the ASAM allow-lists to the identifier of the SIMULATOR
+// build. It cannot see the identifier of the one configuration where ASAM has
+// any effect. That is a limit of CI, not a coverage this proof has.
 //
 // Pure and offline: it parses the committed files. No device, no MDM server, no
 // supervision required — this is exactly the part that can be proven before the
 // hardware exists.
+//
+// EVERY PROFILE, EVERY PAYLOAD (2026-09-05). Until the sixth audit round the
+// load-bearing assertions — no `com.apple.app_lock`, System scope, removal
+// disallowed — ran against the kiosk profile only, and the Fleet profile was
+// read at `PayloadContent[0]` only. Planting a real app_lock payload as a
+// SECOND payload in the profile Fleet actually ships passed 18/18. The profile
+// list is now derived from `git ls-files '*.mobileconfig'`, and every payload
+// of every profile is held to the same rules, with UUID/identifier uniqueness
+// across all of them.
 
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -217,6 +233,41 @@ check(
   `fleet: every ASAM-permitted app is also allow-listed (offenders: ${asamNotAllowed.join(", ") || "none"})`,
   asamNotAllowed.length === 0,
 );
+
+// ── Every profile, every payload ─────────────────────────────────────────────
+// Derived from the index, not hand-listed, so a third profile joins the rules
+// by existing. A payload type outside the allow-list is a finding, not a skip:
+// a new payload kind must be admitted here on purpose, with its own assertions.
+const PAYLOAD_TYPES_ALLOWED = new Set(["com.apple.applicationaccess"]);
+const profilePaths = execFileSync("git", ["ls-files", "*.mobileconfig"], { cwd: repo, encoding: "utf8" })
+  .split("\n")
+  .map((l) => l.trim())
+  .filter(Boolean)
+  .sort();
+check(`the tracked profile set is non-empty and derived from git ls-files (${profilePaths.length} profile(s))`, profilePaths.length >= 2);
+check("both known profiles are in the derived set", profilePaths.includes("native/ios/mdm/EnterpriseShell-Kiosk.mobileconfig") && profilePaths.includes("fleet/profiles/signalgrid-restrictions.mobileconfig"));
+
+const seenIds = new Map<string, string>();
+for (const rel of profilePaths) {
+  const raw = readFileSync(resolve(repo, rel), "utf8");
+  const top = asDict(parsePlist(raw));
+  check(`${rel}: is a Configuration profile`, top.PayloadType === "Configuration");
+  check(`${rel}: System scope (device-wide, not per-user)`, top.PayloadScope === "System");
+  check(`${rel}: removal disallowed (a holder-removable lockdown is not a lockdown)`, top.PayloadRemovalDisallowed === true);
+  check(`${rel}: does NOT install hard Single App Mode (com.apple.app_lock) ANYWHERE in the file`, !/<string>com\.apple\.app_lock<\/string>/.test(raw));
+  const content = Array.isArray(top.PayloadContent) ? top.PayloadContent.map(asDict) : [];
+  check(`${rel}: carries at least one payload`, content.length > 0);
+  for (const [uuid, id, where] of [[top.PayloadUUID, top.PayloadIdentifier, `${rel} (top)`], ...content.map((p, i) => [p.PayloadUUID, p.PayloadIdentifier, `${rel} payload[${i}]`])] as [PlistValue, PlistValue, string][]) {
+    for (const [label, v] of [["PayloadUUID", uuid], ["PayloadIdentifier", id]] as [string, PlistValue][]) {
+      const key = `${label}:${String(v)}`;
+      check(`${where}: ${label} is present and unique across every profile (${String(v)})`, typeof v === "string" && v.length > 0 && !seenIds.has(key));
+      if (typeof v === "string") seenIds.set(key, where);
+    }
+  }
+  content.forEach((p, i) => {
+    check(`${rel} payload[${i}]: type "${String(p.PayloadType)}" is an admitted payload type`, typeof p.PayloadType === "string" && PAYLOAD_TYPES_ALLOWED.has(p.PayloadType));
+  });
+}
 
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);

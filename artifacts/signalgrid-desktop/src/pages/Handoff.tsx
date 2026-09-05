@@ -9,12 +9,20 @@ const DEVICE_IDS = [
   "SG-0289", "SG-0441", "SG-0678", "SG-0123", "SG-0556",
 ];
 
+// A FIXED instant, not Date.now(). This mock is labelled static on the page, and
+// a static mock must render the same bytes on every load; a wall-clock read in a
+// rendering module is the shape that must never reach a real path, so it is not
+// tolerated in the demo either. `status` is assigned by index for the same
+// reason — it is illustrative, and deriving it from `lastSeen` would make the
+// page look like it computes staleness when it does not.
+const MOCK_NOW_MS = Date.parse("2026-06-15T12:00:00.000Z");
+
 function mockHandoffState() {
   return DEVICE_IDS.map((id, i) => ({
     deviceId: id,
     zone: SHIFT_ZONES[i % SHIFT_ZONES.length],
     status: i < 6 ? "checked-in" : i < 8 ? "overdue" : "in-progress",
-    lastSeen: new Date(Date.now() - (i * 8 + 3) * 60_000).toISOString(),
+    lastSeen: new Date(MOCK_NOW_MS - (i * 8 + 3) * 60_000).toISOString(),
     assignedTo: `USR${String(1000 + i).padStart(4, "0")}`,
     nextShift: `USR${String(2000 + i).padStart(4, "0")}`,
     badgeStatus: i < 7 ? "docked" : "field",
@@ -89,7 +97,10 @@ export default function HandoffPage() {
         </div>
         <div className="divide-y divide-border/50 max-h-80 overflow-y-auto">
           {handoffs.map(h => {
-            const meta = STATUS_META[h.status];
+            // An unrecognised status is rendered as OVERDUE, the restrictive arm —
+            // never thrown on (`meta.icon` of undefined blanked the page; the
+            // desktop has no error boundary) and never shown as docked.
+            const meta = STATUS_META[h.status] ?? STATUS_META["overdue"];
             const Icon = meta.icon;
             return (
               <div key={h.deviceId} className="grid grid-cols-[100px_80px_120px_120px_100px_100px] px-3 py-2 hover:bg-muted/20 transition-colors text-xs font-mono">

@@ -21,14 +21,22 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
   const [time, setTime] = useState(new Date());
   const [notifOpen, setNotifOpen] = useState(false);
   const { data: metrics } = useGetDashboardMetrics({ window: "1h" });
-  const { data: signals } = useListLatestSignals({ limit: 5 });
+  const { data: signals, isError: feedUnreachable, isLoading: feedLoading } = useListLatestSignals({ limit: 5 });
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
+  // The alert state has THREE answers, not two. `signals` is undefined both while
+  // the feed is loading and after it has FAILED (a 404 from a server that does
+  // not mount the monitoring router, a refused connection, CORS), and the old
+  // `?? []` turned both into "no anomalous signals" — a green check and "No
+  // active alerts" for a feed nobody had heard from. An unreachable feed is not
+  // a quiet one; it is rendered as its own state below and the bell carries a
+  // marker for it.
   const anomalous = signals?.signals.filter(s => s.status === "anomalous" || s.status === "critical") ?? [];
+  const alertsKnown = !feedUnreachable && !feedLoading && signals !== undefined;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
@@ -72,7 +80,14 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
             className="relative p-1 rounded hover:bg-muted/50 transition-colors"
           >
             <Bell className="w-3.5 h-3.5 text-muted-foreground" />
-            {anomalous.length > 0 && (
+            {!alertsKnown ? (
+              <span
+                title={feedUnreachable ? "Signal feed unreachable — alert state unknown" : "Signal feed loading"}
+                className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-500 rounded-full text-[9px] font-bold text-black flex items-center justify-center"
+              >
+                ?
+              </span>
+            ) : anomalous.length > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center">
                 {anomalous.length}
               </span>
@@ -142,10 +157,21 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
               <button onClick={() => setNotifOpen(false)} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
             </div>
             <div className="flex-1 overflow-auto p-3 space-y-2">
-              {anomalous.length === 0 ? (
+              {feedUnreachable ? (
+                <div className="flex flex-col items-center justify-center h-32 gap-2 text-center px-4">
+                  <AlertTriangle className="w-8 h-8 text-amber-400" />
+                  <span className="text-sm text-amber-300">Signal feed unreachable</span>
+                  <span className="text-xs font-mono text-muted-foreground">Alert state UNKNOWN — this is not an all-clear.</span>
+                </div>
+              ) : feedLoading || signals === undefined ? (
+                <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-2">
+                  <span className="text-sm">Loading signal feed…</span>
+                </div>
+              ) : anomalous.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-2">
                   <CheckCircle2 className="w-8 h-8 text-green-400" />
                   <span className="text-sm">No active alerts</span>
+                  <span className="text-xs font-mono">{signals.signals.length} signal(s) read, none anomalous</span>
                 </div>
               ) : (
                 anomalous.map(s => (

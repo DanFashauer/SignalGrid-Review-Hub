@@ -101,6 +101,11 @@ jobs:
           # and `${{ }}` inside `run:` is exactly how that becomes shell injection.
           IS_DEPENDABOT_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository }}
         run: |
+          # `git diff --quiet` is silent about an UNTRACKED file: a regenerated
+          # SBOM that was never committed reports "in sync". The three
+          # regenerate-and-compare steps in review-hub-ci.yml guard this with
+          # ls-files; this one did not.
+          git ls-files --error-unmatch artifacts/sbom/cyclonedx.json > /dev/null || (echo "::error::artifacts/sbom/cyclonedx.json is not tracked — a generated SBOM must be committed." && exit 1)
           if git diff --quiet -- artifacts/sbom/cyclonedx.json; then
             echo "drifted=false" >> "$GITHUB_OUTPUT"
             echo "SBOM is in sync with the lockfile."
@@ -234,6 +239,7 @@ jobs:
           path: artifacts/sbom
       - name: Commit the refreshed SBOM
         run: |
+          git ls-files --error-unmatch artifacts/sbom/cyclonedx.json > /dev/null || (echo "::error::artifacts/sbom/cyclonedx.json is not tracked — nothing to refresh against." && exit 1)
           if git diff --quiet -- artifacts/sbom/cyclonedx.json; then
             echo "SBOM already in sync - nothing to commit."
             exit 0

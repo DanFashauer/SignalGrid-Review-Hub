@@ -714,7 +714,16 @@ earlier — that is the loop working, not a reason to soften the record.
     run test`) rather than folded-and-deleted — it carries wire-visible annotation
     coverage the proofs do not — so its declaration is gone. Only the k6 scripts in
     `tests/load/` remain unexecuted, which the gate deliberately does not
-    pattern-match and says so in its own header.
+    pattern-match and says so in its own header. 2026-09-05 (sixth audit
+    round): those three drivers were read for the first time and could not
+    FAIL — 401/404/400 counted as success, so a server that never served
+    `/api/session/start` or `/api/location/report` (this api-server serves
+    `/v1/*`, neither route) scored a perfect run, and `webhooks.js` defaulted
+    its target to a third-party host. Predicates are 2xx-only now and the
+    receiver is required (4b50c4d). Their RETIREMENT is an owner decision:
+    they are invoked by nothing, target routes that do not exist, and
+    `pnpm run test:load` already covers the served surface — the cloud lane
+    cannot delete tracked files, so the drivers stay until the owner says.
 44. **Two ungated contracts in the governance layer** — devex-tooling-engineer (the gates) + principal-engineer (the records). HALF DONE
     2026-08-23: the decision-record format contract now has
     scripts/check-decision-record-format.mjs (preflight + CI). DR-010 through
@@ -1945,7 +1954,15 @@ earlier — that is the loop working, not a reason to soften the record.
     · agent-platform-engineer: `.agents/agent_assets_metadata.toml` is 100% of
       that surface and both its entries point at images that do not exist
       (verified five ways, including `find` and `git ls-files`). Nothing in the
-      repo reads the file. Delete it or restore the images.
+      repo reads the file. Delete it or restore the images. RE-VERIFIED
+      2026-09-05 (sixth audit round): still both entries, still no such
+      images (`git ls-files | grep -i architecture.png` empty), still no
+      reader. The images cannot be restored — they never existed in the
+      tree — so deletion is the only closing move, and it is the OWNER's: the
+      cloud lane's permission classifier refuses tracked-file deletion.
+      Remove `.agents/` and the `.agents/**` lines in
+      `docs/agent/org-roster.json`, `docs/agent/agent-tiers.json` and
+      `.claude/agents/agent-platform-steward.md` in the same commit.
     · agent-platform-engineer: `signalgrid/SKILL.md:197` says "~1,800 files,
       ~131 proofs"; the tree has 2,328 and 139. A fossil inside a bullet whose
       argument is that surface area is a cost.
@@ -4857,7 +4874,7 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (309) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (581) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (582) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (755) — the 174-item classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (188) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

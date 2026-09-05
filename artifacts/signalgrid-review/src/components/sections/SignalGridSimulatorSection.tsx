@@ -4,6 +4,7 @@ import {
   runSimulatorScenario,
 } from "@/lib/simulator/decisionEngine";
 import type { DecisionOutcome, SignalGridLayer, SimulatorRunResult } from "@/lib/simulator/types";
+import { simulatorOutcomeTone } from "@/lib/outcome-tone";
 
 const layerLabels: Record<SignalGridLayer, string> = {
   identity: "Identity Trust",
@@ -16,19 +17,6 @@ const layerLabels: Record<SignalGridLayer, string> = {
   integration: "Integration Health",
   decision: "Decision Engine",
   audit: "Audit Evidence",
-};
-
-const outcomeTone: Partial<Record<DecisionOutcome, string>> = {
-  allow: "bg-status-allow",
-  step_up: "bg-status-step-up",
-  restrict: "bg-status-restrict",
-  deny: "bg-status-deny",
-  alert_operator: "text-sky-300 bg-sky-950/40 border-sky-700/50",
-  create_ticket: "text-violet-300 bg-violet-950/40 border-violet-700/50",
-  route_to_owner: "text-stone-200 bg-stone-800/60 border-stone-700",
-  request_remediation: "text-amber-200 bg-amber-950/30 border-amber-700/50",
-  verify_remediation: "text-teal-200 bg-teal-950/30 border-teal-700/50",
-  record_audit: "text-stone-300 bg-stone-900 border-stone-700",
 };
 
 const suiteCards = [
@@ -277,7 +265,7 @@ function DecisionSummary({ result }: { result: SimulatorRunResult }) {
         {result.decision.outcomes.map((outcome) => (
           <span
             key={outcome}
-            className={`text-xs px-2 py-1 rounded border font-semibold ${outcomeTone[outcome] ?? "text-stone-300 bg-stone-900 border-stone-700"}`}
+            className={`text-xs px-2 py-1 rounded border font-semibold ${simulatorOutcomeTone(outcome)}`}
           >
             {outcome}
           </span>

@@ -9,7 +9,7 @@ export default function Decisions() {
   const [filter, setFilter] = useState<ListDecisionsOutcome | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { data, isLoading, refetch } = useListDecisions({ 
+  const { data, isLoading, isError, refetch } = useListDecisions({
     limit: 100, 
     outcome: filter === "all" ? undefined : filter 
   });
@@ -55,6 +55,11 @@ export default function Decisions() {
         {isLoading ? (
           <div className="p-4 space-y-4">
             {[1,2,3,4,5].map(i => <div key={i} className="h-20 bg-card border rounded-xl animate-pulse" />)}
+          </div>
+        ) : isError ? (
+          // A failed fetch used to render the same blank list as "no decisions".
+          <div className="p-6 text-sm text-status-restrict">
+            Decision log unreachable — nothing is known about recent decisions. Refresh, or check the control plane.
           </div>
         ) : (
           <div className="divide-y divide-border/50 pb-safe">

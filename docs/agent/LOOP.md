@@ -51,10 +51,27 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-05 (cloud lane, latest) - five audit batches landed in one
-              day (#438, #443, #444, #446 merged; batch E on its PR): the unknown
-              loosened the answer in fourteen libraries and two consoles, each fix
-              mutation-proven (docs/agent/EVIDENCE.md, four entries dated today).
+LAST TOUCHED: 2026-09-05 (cloud lane, latest) - EIGHT audit batches landed in one
+              day (#438, #443, #444, #446, #447, #449, #451 merged; batch H on its
+              PR): the unknown loosened the answer in fourteen libraries, two
+              consoles, the desktop and PWA apps, the emulator and the Stop hook,
+              each fix mutation-proven (docs/agent/EVIDENCE.md, six entries dated
+              today). Batch H (sixth round) read the operating floor itself: the
+              Stop hook's gate arm could never fire (loop:state exited 0 on every
+              outcome), the Bash deny-list allowed any pattern behind `sh -c`,
+              the SessionStart hook could not report Mac-lane mail, the iOS
+              security scan passed green on a missing directory, the MDM proof
+              held its load-bearing rule on the profile Fleet does NOT ship, the
+              desktop rendered a green "No active alerts" for an unreachable
+              feed, and two verdict sites fell back to neutral grey. All fixed and
+              gated. FOUND, NOT FIXED, next PR (batch I): the shipping site links
+              13 evidence URLs to a `main` branch that does not exist (every one
+              404s live), `site/index.html` is unpublished AND outside the
+              launch-claims scan while asserting deferred capability, About.tsx
+              claims a deferred signal. OWNER DECISIONS: delete tests/load/ (k6
+              drivers targeting unserved routes) and .agents/ (metadata for
+              images that never existed) - the cloud lane cannot delete tracked
+              files. Coverage ledger after H: 58 read / 9 partial / 33 not read.
               Also today: the public Room Entry console had coloured non_compliant
               GREEN and shipped a stale core (now gated), the reachability gate
               credited comments as imports (pin 8 -> 13, honestly), and the web

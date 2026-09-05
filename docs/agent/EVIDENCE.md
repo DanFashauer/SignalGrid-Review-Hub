@@ -1102,7 +1102,7 @@ API-SERVER + PERSISTENCE: /api/readyz unauthenticated, exempt from BOTH limiters
   (measured by the audit: 40 calls, 0 × 429, 280 probe units against pools of ten) → one coalesced composite probe,
   shared in-flight, reused 1s, `probedAt` in both bodies; api test: 8 concurrent calls share ONE probedAt, a call
   after the TTL probes again. x-request-id accepted unbounded and hashed into the audit chain (a 429-char forged id
-  landed in the ledger) → honoured only in ^[A-Za-z0-9._-]{1,128}$, else minted; three assertions BY VALUE (the
+  landed in the ledger) → honoured only in the bounded id shape REQUEST_ID_SHAPE exports (letters, digits, dot, underscore, dash; at most 128 chars), else minted; three assertions BY VALUE (the
   old one was "is a string"). Readiness verified the ledger's schema and never the other three tables' →
   assertSchema on decisions/evidence_snapshots/sessions, on init and every ping (unproven here: no Postgres;
   needs the durable CI job — OPEN). POST /simulator/run's catch answered "scenario not found" to every failure →

@@ -266,7 +266,7 @@ enum DemoMode {
 final class DemoIdentityProvider: IdentityProvider {
     var providerId: String { "demo" }
     var displayName: String { "Demo Identity Provider" }
-    var providerType: IdentityProviderType { .mdm }
+    var providerType: IdentityProviderType { .controlPlaneSession }
     var isAuthenticated: Bool { true }
     var currentAccessToken: String? { "demo-access-token" }
 

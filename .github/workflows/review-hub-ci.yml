@@ -331,6 +331,14 @@ jobs:
         run: node scripts/check-openapi-valid.mjs
       - name: Launch claims (nothing deferred presented as current)
         run: node scripts/check-launch-claims.mjs
+      - name: Repo links self-test (a blob/main link must be caught)
+        run: node scripts/check-repo-links.mjs --self-test
+      - name: Repo links (every link into this repository names the default branch and a tracked path)
+        run: node scripts/check-repo-links.mjs
+      - name: Site figures self-test (a stale count must be caught)
+        run: node scripts/check-site-figures.mjs --self-test
+      - name: Site figures (a number on the site is bound to the artifact it counts)
+        run: node scripts/check-site-figures.mjs
       - name: Permission enforcement (DR-002 — no scope granted that no surface demands)
         run: node scripts/check-permission-enforcement.mjs
       - name: Decision-record format (every call states how it gets undone)

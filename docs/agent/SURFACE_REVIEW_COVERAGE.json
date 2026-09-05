@@ -299,6 +299,15 @@
      "read": "All 24 source files read. 13 evidence links point at blob|tree/main and there is no main branch (every one 404s live); About.tsx claims location/identity as current with no hedge; SIGNALS FUSED 7 beside a 4-row array; 16 candidate categories beside 5 groups; LIVE_VERIFIED matches the label Fleet against \"Fleet (live-proven)\"; Federal STATUS_META unguarded. No fetch surface, no client verdicts, vite config clean. Fixes are batch I (the next PR).",
      "open": 6,
      "closed": 0
+    },
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (firsthand read of every edit site; fixes + gates)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "Seventh round: the sixth round's six open findings closed. 13 blob|tree/main links repointed to the default branch and gated (check-repo-links.mjs); SIGNALS FUSED computed from the panel; 17 and 16 bound to their sources (check-site-figures.mjs); About.tsx location/custody hedged where the claims are; LIVE_VERIFIED matches product names; Federal STATUS_META falls back restrictive with the unused green arm removed.",
+     "open": 0,
+     "closed": 6
     }
    ]
   },
@@ -1099,6 +1108,15 @@
      "read": "Both files read. site/index.html is NOT deployed by pages.yml (only CNAME is used) and is outside check-launch-claims' derived scope while asserting three deferred signals as what the core reasons over today, plus dead ./console.html, ./battlecard.html and docs/IGA_ADJACENCY.md links. Fix is batch I.",
      "open": 2,
      "closed": 0
+    },
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (firsthand read of every edit site; fixes + gates)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "Seventh round: site/index.html put inside check-launch-claims' derived scope (every tracked site/*.html); two unhedged blocks it found on first contact hedged, the chips section hedged, figures made numberless, dead IGA link repointed, superseded/not-served banner added (worded not to trip the page-scope exemption). Deletion is the owner's.",
+     "open": 1,
+     "closed": 2
     }
    ]
   },

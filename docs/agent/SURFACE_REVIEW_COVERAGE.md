@@ -6,9 +6,9 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**34 of 100 surfaces have been read. 10 are partially read. 56 have not been read at all.**
+**40 of 100 surfaces have been read. 10 are partially read. 50 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2222 of 2222 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2228 of 2228 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -34,7 +34,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/api-collection` | tree | 111 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/api-server` | package | 34 | **partial** | 1 | 2026-09-02 | cloud lane | #384 | 0 | 0 |
 | `artifacts/build-loop` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/connector-emulator` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/connector-emulator` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/lab-collections` | tree | 42 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/lane-messages` | tree | 163 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/live-captures` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -46,13 +46,13 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/signalgrid-app` | package | 65 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/signalgrid-desktop` | package | 22 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/signalgrid-mobile-pwa` | package | 23 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/signalgrid-review` | package | 44 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/signalgrid-review` | package | 44 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
 | `artifacts/signalgrid-web` | package | 32 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/sim-requests` | tree | 16 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/sim-results` | tree | 47 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/sync` | tree | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `config` | tree | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `docker` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `config` | tree | 5 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
+| `docker` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/*` | loose files | 214 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/agent` | docs family | 31 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/assets` | docs family | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -72,8 +72,8 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `fleet` | tree | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/adaptive-proposals` | package | 7 | read | 1 | 2026-09-05 | cloud lane | lib/adaptive-proposals/src/measure.ts | 7 | 0 |
 | `lib/api-client-react` | package | 6 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
-| `lib/api-spec` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `lib/api-zod` | package | 48 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |
+| `lib/api-spec` | package | 5 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 1 |
+| `lib/api-zod` | package | 53 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |
 | `lib/app-workflows` | package | 5 | read | 1 | 2026-09-05 | cloud lane | lib/app-workflows/src/index.ts | 4 | 2 |
 | `lib/audit` | package | 6 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |
 | `lib/control-plane` | package | 3 | read | 2 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |
@@ -85,7 +85,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/fleet-connector` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/fleet-connector/src/index.ts | 3 | 3 |
 | `lib/flows` | package | 13 | read | 1 | 2026-09-05 | cloud lane | lib/flows/src/index.ts | 3 | 2 |
 | `lib/handoff-sim` | package | 5 | read | 1 | 2026-09-05 | cloud lane | lib/handoff-sim/src/release.ts | 4 | 1 |
-| `lib/iac` | package | 8 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/iac` | package | 8 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `lib/incident-playbook` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/incident-playbook/src/map.ts | 4 | 2 |
 | `lib/integration-bridge` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/integration-bridge/src/index.ts | 3 | 5 |
 | `lib/integrations` | package | 278 | **partial** | 3 | 2026-09-02 | cloud lane (independent review, notes folded) | #388 | 24 | 1 |
@@ -114,7 +114,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/shared` | native | 2 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 382 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 4 | 0 |
+| `scripts` | package | 383 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 4 | 0 |
 | `site` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `tests` | tree | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |
@@ -134,7 +134,7 @@ A named slice was read. The rest of the surface has not been.
 - `lib/webauthn` (package)
 - `scripts` (package)
 
-## Not read (56)
+## Not read (50)
 
 - `.agents` (tree)
 - `.claude/*` (loose files)
@@ -149,7 +149,6 @@ A named slice was read. The rest of the surface has not been.
 - `artifacts/agent-heartbeats` (tree)
 - `artifacts/api-collection` (tree)
 - `artifacts/build-loop` (tree)
-- `artifacts/connector-emulator` (tree)
 - `artifacts/lab-collections` (tree)
 - `artifacts/lane-messages` (tree)
 - `artifacts/live-captures` (tree)
@@ -159,13 +158,10 @@ A named slice was read. The rest of the surface has not been.
 - `artifacts/scanner-comparison` (tree)
 - `artifacts/signalgrid-desktop` (package)
 - `artifacts/signalgrid-mobile-pwa` (package)
-- `artifacts/signalgrid-review` (package)
 - `artifacts/signalgrid-web` (package)
 - `artifacts/sim-requests` (tree)
 - `artifacts/sim-results` (tree)
 - `artifacts/sync` (tree)
-- `config` (tree)
-- `docker` (tree)
 - `docs/*` (loose files)
 - `docs/agent` (docs family)
 - `docs/assets` (docs family)
@@ -183,8 +179,6 @@ A named slice was read. The rest of the surface has not been.
 - `firmware` (tree)
 - `fixtures` (tree)
 - `fleet` (tree)
-- `lib/api-spec` (package)
-- `lib/iac` (package)
 - `native/ios/*` (loose files)
 - `native/ios/EnterpriseShellTests` (native)
 - `native/ios/mdm` (native)

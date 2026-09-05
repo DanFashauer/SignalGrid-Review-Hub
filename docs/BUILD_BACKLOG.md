@@ -1175,9 +1175,19 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       honoring any window or DSAR needs an admin-credential job that does not
       exist. `check-retention-claims` keeps surfaces honest meanwhile. See
       `docs/DATA_RETENTION_AND_PERSONAL_DATA.md`.
-- [ ] **The legacy OpenAPI spec generates a TypeScript SDK with six operations the
+- [x] **The legacy OpenAPI spec generates a TypeScript SDK with six operations the
       server never serves, and a shipped page calls one. 2026-09-01 (contract-drift
-      sweep, HIGH).** `lib/api-spec/openapi.yaml` is orval's input for
+      sweep, HIGH).** **DONE 2026-09-05, one sub-item open:** the six operations are
+      pruned from `openapi.yaml` and the served-but-undocumented routes added (`/readyz`,
+      `/signals/catalog`, `/signals/radar`, the five `/simulator/*`); `api-contract-proof`
+      now holds BOTH documents, each against its own router set, with a route-file
+      registry (`sim.ts` undocumented by design, with the reason) — a planted spec-only
+      op fails it. `@workspace/api-client-react` regenerated (orval 8.24, typecheck 0).
+      OPEN: `@workspace/api-zod` could NOT be regenerated — orval 8.24 emits the zod-v4
+      API (`z.int()`) against the workspace's zod 3.25, so its output fails typecheck;
+      the committed api-zod output (orval 8.9.1) still carries schemas for the six
+      pruned operations. Closing it needs either zod 4 across the workspace or an orval
+      pin that targets zod 3. Original finding follows. `lib/api-spec/openapi.yaml` is orval's input for
       `@workspace/api-client-react` / `@workspace/api-zod`; it promises `POST /decisions`,
       `POST /signals/ingest`, `POST /policies`, `GET/PUT/DELETE /policies/{id}`, while
       `routes/monitoring.ts` serves only the GETs. `PolicyCreate.tsx` (`/policies/new`,

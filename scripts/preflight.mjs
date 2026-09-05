@@ -116,6 +116,10 @@ const STEPS = [
   // quoted forever — 20 of 29 were wrong on 2026-09-05, three by 100+ lines.
   { name: "Doc line-count self-test (a planted drift must fail; the real tree must be clean)", cmd: ["node", "scripts/check-doc-line-counts.mjs", "--self-test"] },
   { name: "Doc line counts (every `path (N)` figure matches the file it names)", cmd: ["node", "scripts/check-doc-line-counts.mjs"] },
+  // docker-compose.prod.yml explained at length why `api` needs a healthcheck and
+  // added one — there. The review topology had none on any service.
+  { name: "Compose healthcheck self-test (a planted port without a healthcheck must fail)", cmd: ["node", "scripts/check-compose-healthchecks.mjs", "--self-test"] },
+  { name: "Compose healthchecks (every published port has a service that says whether it answers)", cmd: ["node", "scripts/check-compose-healthchecks.mjs"] },
   { name: "Derived doc figures (a stated count equals the artifact it describes)", cmd: ["node", "scripts/check-derived-doc-figures.mjs"] },
   // Two documents stated the four tier branches as live after all four were pruned.
   // Offline by design: it compares prose to the tracked prune record, not to origin.

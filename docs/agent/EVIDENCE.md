@@ -868,3 +868,51 @@ LINE COUNTS: 29 `path (N)` figures in the tree, 20 wrong (evidence.ts 340 → 75
   naming the real count. Registered in preflight + CI; parity gate 0 unwired.
 ```
 Verdict:  **built and gated — each of the three was specified by an audit that had proven the gap with a planted defect, and each gate now fails on that exact plant.**
+
+## 2026-09-05 — "Fifth audit round, the edges: an emulator that allow-candidates on unknown zones, a deck rendering a digest that matches nothing, a spec no gate read, a fleet that 'matches' when nothing is declared"
+Command (two independent read-only audits + firsthand reads of every edit site + fix + proof + mutation):
+```
+artifacts/connector-emulator/** + scripts/src/connector-emulator-{harness,proof,scenarios}.ts   artifacts/signalgrid-review/src/**
+lib/api-spec/** (+ orval)   lib/iac/src/**   config/**   docker/** + docker-compose*.yml
+```
+Output:
+```
+EMULATOR: decide() tested the BAD zone member only ("wrong"/"mismatch"), so custodyZone/networkZone "unknown" slipped past
+  both allow arms — a reader offline or a segmentation lookup that timed out emulated as an allow candidate; the fixture
+  type declared credentialConfidence and badgeEventObservedAt, every row populated them, and nothing read them. Fixed:
+  positive members on both arms; degraded/unknown/ABSENT confidence and an unreadable badge instant step up by name.
+  12 synthetic guardrails (7 reader, 4 posture incl. both-zones-unknown, 1 identity control); fixtures unchanged, hash
+  unchanged (026712a3…), cases 15.
+DECK: connectorEmulatorData.ts carried a hand-typed digest (893c8bb5…), scenarioCount 8 and four packs under "Evidence
+  panel" — the artifact said 15, five packs, a different hash; the credentialReader group (the only one with an
+  approval gate) was absent; guardrail ✓ pills were a string array; the pill labelled decision was the fixture's INTENT.
+  CLAIM_INVENTORY.md:486 had said "unsubstantiated / remove" for weeks and it shipped anyway. Now: scenarios from the
+  five fixture packs, hash/count from results.json, guardrails COMPUTED (a broken property renders ✗), the engine's
+  actual decision rendered with a red mismatch marker. robots.txt now disallows (index.html was noindex since 08-25).
+  Smoke-workflow dispatch list gains credentialReader. Review app builds (vite, 718ms).
+SPEC: openapi.yaml — orval's input for @workspace/api-zod (ships via api-server) and @workspace/api-client-react (ships
+  via signalgrid-app) — documented six write operations the server never served (POST /decisions, /signals/ingest,
+  policy create/get/update/delete) and was read by NO gate; api-contract-proof's scope was ["/v1/","/cp/v1/"] while
+  its header warned against exactly that. Pruned; /readyz, /signals/catalog, /signals/radar and five /simulator/*
+  routes documented; the proof now holds BOTH documents (59 + 17 routes) each against its own router set, with a
+  route-file registry (9 on disk, 7 in a document, sim.ts undocumented by design WITH the reason) and a zero-endpoint
+  floor per document; self-test 10/10; a planted POST /policies fails by name. api-client-react regenerated (orval
+  8.24 vs the committed 8.9.1 output; typecheck 0; no app used the removed hooks). NOT DONE: api-zod — orval 8.24
+  emits z.int() (zod 4) against zod 3.25, so its output fails typecheck; reverted, recorded in BUILD_BACKLOG.
+IAC: detectDrift({resources:[]},{resources:[]}) → in_sync, zero findings, empty probe set: a desired state that failed
+  to load read as a healthy fleet, and the `unknown` rung was producible by nothing. Now one unknown finding named for
+  its cause, overall unknown (outranks unmanaged), summary "cannot be compared", one unknown probe. proof:iac 67 → 72;
+  MUTATION: the synthetic finding disabled → 67/72.
+COMPOSE: docker-compose.yml (the topology a reviewer runs) had NO healthcheck on api/web/nginx while .prod.yml carried
+  22 lines on why one is needed; all three plus the sim service now have one, with service_healthy conditions. New
+  gate check-compose-healthchecks.mjs (line-based, unparseable ≠ passed; migrate.yml's db exempt as an overlay, with the
+  reason; self-test 7/7; a real-tree mutation fails by service name). Registered in preflight + CI.
+DRIFT: 13 stale v1-openapi.yaml line citations in CLAIM_INVENTORY.md re-anchored (393→426 /v1/audit, 180→213 evidence,
+  568→614 challenge …), every anchor verified against the file; row 466's "index.html:8 sets index, follow" re-measured.
+CLEAN: config/ (no secret defaults, live integrations off in all four tiers, the prod "everything is 401" claim
+  verified in context.ts), Dockerfiles pinned, lib/iac lifecycle/plan/validation, emulator route-field checks, the
+  review console e2e spec (the strongest artifact read).
+typecheck 0 · contract holds across 2 documents · emulator pass · iac 72/72 · compose 6 published / 5 checked + 1
+  exempt · coverage ledger 40 read / 10 partial / 50 not read of 100 (+6 full reads).
+```
+Verdict:  **fixed and gated at the edges — the surfaces a reviewer actually runs (the emulator, the deck, the compose file) and the document two shipping clients are generated from had each been telling a smaller truth than the core, and each now has a gate that fails when it does.**

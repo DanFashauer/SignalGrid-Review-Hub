@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 59,
-  "fingerprint": "594cd759d0c109414cb74b55f1853728bd524fa0b7b21688f934be89d5e3c15a",
+  "manifestVersion": 60,
+  "fingerprint": "e892378f94a96dfb9e13efb8cec3308d8277e9d0ae7202cea270b27a5810c65e",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -125,7 +125,7 @@
       "evidence-coverage": 25,
       "factory-flows": 16,
       "handoff-sim": 59,
-      "iac": 67,
+      "iac": 72,
       "link-usability": 167,
       "live-idp": 31,
       "macos-apple-schema": 53,

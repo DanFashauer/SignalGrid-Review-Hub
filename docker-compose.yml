@@ -12,6 +12,17 @@ services:
       PORT: 8080
     ports:
       - "8080:8080"
+    # A container that boots and then fails to listen is indistinguishable from a
+    # working one at the compose level without this — docker-compose.prod.yml
+    # carries the same check and the reasoning (22 lines of it); the review
+    # topology, the one a reviewer actually runs, had none on any service.
+    # wget, not curl: the runtime image is node:22-alpine (BusyBox wget, no curl).
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/api/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
 
   web:
     build:
@@ -22,8 +33,16 @@ services:
       PORT: 3000
     ports:
       - "3000:3000"
+    # nginx:alpine runtime (Dockerfile.web) — BusyBox wget is present.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   nginx:
     image: docker.io/library/nginx:alpine
@@ -34,9 +53,19 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - nginx_certs:/etc/nginx/certs
+    # The entry point: a 502 from a dead upstream makes wget exit non-zero, so
+    # "nginx is up but serves nothing" reads UNHEALTHY, which is the truth.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
     depends_on:
-      - api
-      - web
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
 
 volumes:
   nginx_certs:

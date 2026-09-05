@@ -1,3 +1,26 @@
+// Connector-emulator deck data — DERIVED, not transcribed.
+//
+// This file used to hold a hand-copied digest, a scenario count and a pack list:
+// "893c8bb5…", 8 scenarios, four packs. The committed proof artifact said 15
+// scenarios, five packs and a different hash — the whole credentialReader group
+// (7 of 15, the only one with an approval-gate case) was missing from the deck,
+// under the heading "Evidence panel". docs/CLAIM_INVENTORY.md had recorded it as
+// unsubstantiated weeks earlier and it still shipped. The file next door
+// (credentialReaderDashboardData.ts) already derived from the fixture; this one
+// now does the same, and reads the digest from the proof's own artifact.
+//
+// Expected decisions come from the FIXTURES (what the scenario intends); actual
+// decisions come from artifacts/connector-emulator/results.json (what the engine
+// produced when `pnpm run proof:connector-emulator` last ran). Both are shown, so
+// the deck is a picture of what happened, not only of what was hoped for.
+
+import results from "../../../../artifacts/connector-emulator/results.json";
+import graphPack from "../../../../fixtures/connectors/emulator/microsoft-graph-posture.json";
+import routingPack from "../../../../fixtures/connectors/emulator/workflow-routing.json";
+import custodyPack from "../../../../fixtures/connectors/emulator/physical-custody.json";
+import credentialPack from "../../../../fixtures/connectors/emulator/credential-reader.json";
+import networkPack from "../../../../fixtures/connectors/emulator/network-trust.json";
+
 export type ConnectorDecision =
   | "allowCandidate"
   | "deny"
@@ -11,6 +34,10 @@ export interface ConnectorEmulatorScenario {
   group: string;
   domains: string[];
   expectedDecision: ConnectorDecision;
+  /** What the engine produced in the last committed proof run; "unverified" when
+   *  the artifact carries no row for this scenario (a fixture added after the run). */
+  actualDecision: ConnectorDecision | "unverified";
+  actualReason: string;
   reason: string;
   ownerCategory: string;
   severity: "info" | "medium" | "high" | "critical";
@@ -22,165 +49,95 @@ export interface ConnectorEmulatorScenario {
   apiHealth: "healthy" | "degraded" | "unknown";
 }
 
+interface FixtureRoute {
+  ownerCategory: string;
+  severity: ConnectorEmulatorScenario["severity"];
+  destinationPlaceholder: string;
+  verificationExpectation: string;
+}
+interface FixtureScenario {
+  id: string;
+  title: string;
+  group: string;
+  domains: string[];
+  apiHealth: ConnectorEmulatorScenario["apiHealth"];
+  remediation: { proposed: boolean; highRisk: boolean; approvalRequired: boolean; simulatedFirst: boolean };
+  expected: { decision: ConnectorDecision; reason: string; route: FixtureRoute };
+}
+interface FixturePack {
+  fixtureName: string;
+  scenarios: FixtureScenario[];
+}
+interface ResultRow {
+  id: string;
+  actualDecision: ConnectorDecision;
+  actualReason: string;
+}
+
+const packs: FixturePack[] = [graphPack, routingPack, custodyPack, credentialPack, networkPack] as FixturePack[];
+const resultById = new Map<string, ResultRow>((results.results as ResultRow[]).map((r) => [r.id, r]));
+
+export const connectorEmulatorScenarios: ConnectorEmulatorScenario[] = packs.flatMap((pack) =>
+  pack.scenarios.map((s) => {
+    const actual = resultById.get(s.id);
+    return {
+      id: s.id,
+      title: s.title,
+      group: s.group,
+      domains: s.domains,
+      expectedDecision: s.expected.decision,
+      actualDecision: actual?.actualDecision ?? "unverified",
+      actualReason: actual?.actualReason ?? "no row in the committed proof artifact",
+      reason: s.expected.reason,
+      ownerCategory: s.expected.route.ownerCategory,
+      severity: s.expected.route.severity,
+      destinationPlaceholder: s.expected.route.destinationPlaceholder,
+      verificationExpectation: s.expected.route.verificationExpectation,
+      approvalRequired: s.remediation.approvalRequired,
+      simulatedFirst: s.remediation.simulatedFirst,
+      highRiskRemediation: s.remediation.proposed && s.remediation.highRisk,
+      apiHealth: s.apiHealth,
+    };
+  }),
+);
+
 export const connectorEmulatorProof = {
   command: "pnpm run proof:connector-emulator",
   manualWorkflow: "Connector Emulator Smoke",
   artifact: "connector-emulator-results",
   localArtifactPath: "artifacts/connector-emulator/results.json",
-  deterministicHash:
-    "893c8bb5b56017f24c9f901132bb29457d2e27ad4175b8819680717b1661ed5d",
-  scenarioCount: 8,
-  fixturePacks: [
-    "microsoft-graph-posture",
-    "workflow-routing",
-    "physical-custody",
-    "network-trust",
-  ],
+  /** From the committed artifact — never typed by hand. */
+  deterministicHash: results.hash as string,
+  scenarioCount: results.cases as number,
+  fixturePacks: packs.map((p) => p.fixtureName),
 } as const;
 
-export const connectorEmulatorScenarios: ConnectorEmulatorScenario[] = [
+/** The guardrails the proof asserts, COMPUTED over the committed results rather
+ *  than rendered as a hardcoded row of ticks. A pill that cannot turn red is not
+ *  an indicator. Each `holds` flips false if a result row breaks the property. */
+export const connectorEmulatorGuardrails: ReadonlyArray<{ label: string; holds: boolean }> = [
   {
-    id: "graph-healthy-allow-candidate",
-    title:
-      "Healthy identity plus compliant device plus healthy API produces an allow candidate only",
-    group: "microsoftGraphPosture",
-    domains: ["microsoftGraphIntune", "iamIga", "mdmMam", "securityEdr"],
-    expectedDecision: "allowCandidate",
-    reason: "HEALTHY_IDENTITY_DEVICE_API_ALLOW_CANDIDATE",
-    ownerCategory: "audit",
-    severity: "info",
-    destinationPlaceholder: "audit-evidence-placeholder",
-    verificationExpectation:
-      "Audit record keeps normalized source IDs synthetic.",
-    approvalRequired: false,
-    simulatedFirst: true,
-    highRiskRemediation: false,
-    apiHealth: "healthy",
+    label: "no unsafe allow for degraded/unknown health",
+    holds: connectorEmulatorScenarios.every((s) => !(s.actualDecision === "allowCandidate" && s.apiHealth !== "healthy")),
   },
   {
-    id: "identity-disabled-active-session",
-    title:
-      "Disabled identity with an active session is denied and routed to identity owner",
-    group: "microsoftGraphPosture",
-    domains: ["iamIga", "microsoftGraphIntune"],
-    expectedDecision: "deny",
-    reason: "DISABLED_IDENTITY_ACTIVE_SESSION",
-    ownerCategory: "identity",
-    severity: "high",
-    destinationPlaceholder: "identity-owner-queue-placeholder",
-    verificationExpectation:
-      "Confirm account state and session revocation in the source identity system.",
-    approvalRequired: false,
-    simulatedFirst: true,
-    highRiskRemediation: false,
-    apiHealth: "healthy",
+    label: "high-risk remediation requires approval",
+    holds: connectorEmulatorScenarios.every((s) => !s.highRiskRemediation || s.actualDecision === "approvalRequired"),
   },
   {
-    id: "graph-degraded-confidence-route",
-    title:
-      "Compliant device with degraded Graph health routes integration owner instead of plain allow",
-    group: "microsoftGraphPosture",
-    domains: ["microsoftGraphIntune", "mdmMam"],
-    expectedDecision: "stepUp",
-    reason: "CONNECTOR_HEALTH_DEGRADED_OR_UNKNOWN",
-    ownerCategory: "integration",
-    severity: "medium",
-    destinationPlaceholder: "integration-health-queue-placeholder",
-    verificationExpectation:
-      "Verify connector health before treating posture as current.",
-    approvalRequired: false,
-    simulatedFirst: true,
-    highRiskRemediation: false,
-    apiHealth: "degraded",
+    label: "simulated first",
+    holds: connectorEmulatorScenarios.every((s) => s.simulatedFirst),
   },
   {
-    id: "network-zone-mismatch-high-risk-app",
-    title:
-      "Network zone mismatch for a high-risk app requires step-up and routes network owner",
-    group: "networkTrust",
-    domains: ["networkTrust", "workflowRouting", "securityEdr"],
-    expectedDecision: "stepUp",
-    reason: "NETWORK_ZONE_MISMATCH_HIGH_RISK_APP",
-    ownerCategory: "network",
-    severity: "medium",
-    destinationPlaceholder: "network-owner-ticket-placeholder",
-    verificationExpectation:
-      "Verify expected zone and segmentation source records before reducing step-up.",
-    approvalRequired: false,
-    simulatedFirst: true,
-    highRiskRemediation: false,
-    apiHealth: "healthy",
+    label: "route owner required",
+    holds: connectorEmulatorScenarios.every((s) => s.ownerCategory.length > 0),
   },
   {
-    id: "high-risk-remediation-proposed",
-    title:
-      "High-risk remediation proposal remains approval-required and simulated first",
-    group: "networkTrust",
-    domains: ["networkTrust", "securityEdr", "workflowRouting"],
-    expectedDecision: "approvalRequired",
-    reason: "HIGH_RISK_REMEDIATION_APPROVAL_REQUIRED",
-    ownerCategory: "change-control",
-    severity: "critical",
-    destinationPlaceholder: "approval-queue-placeholder",
-    verificationExpectation:
-      "Review simulated remediation evidence and approve explicitly before any future real action path.",
-    approvalRequired: true,
-    simulatedFirst: true,
-    highRiskRemediation: true,
-    apiHealth: "healthy",
+    label: "verification expectation required",
+    holds: connectorEmulatorScenarios.every((s) => s.verificationExpectation.length > 0),
   },
   {
-    id: "wrong-custody-zone-shared-device",
-    title:
-      "Wrong custody zone for a shared device is restricted and raises a custody alert",
-    group: "physicalCustody",
-    domains: ["physicalCustody", "workflowRouting", "mdmMam"],
-    expectedDecision: "restrict",
-    reason: "WRONG_CUSTODY_ZONE_SHARED_DEVICE",
-    ownerCategory: "custody",
-    severity: "high",
-    destinationPlaceholder: "custody-alert-placeholder",
-    verificationExpectation:
-      "Confirm dock, room, or custody fixture state before clearing shared-device workflow.",
-    approvalRequired: false,
-    simulatedFirst: true,
-    highRiskRemediation: false,
-    apiHealth: "healthy",
-  },
-  {
-    id: "noncompliant-clinical-workflow",
-    title:
-      "Noncompliant device in a clinical workflow is restricted and routed to UEM owner",
-    group: "workflowRouting",
-    domains: ["mdmMam", "workflowRouting", "securityEdr"],
-    expectedDecision: "restrict",
-    reason: "NONCOMPLIANT_DEVICE_CLINICAL_WORKFLOW",
-    ownerCategory: "uem",
-    severity: "high",
-    destinationPlaceholder: "uem-owner-ticket-placeholder",
-    verificationExpectation:
-      "Confirm device compliance in the UEM source system before restoring access.",
-    approvalRequired: false,
-    simulatedFirst: true,
-    highRiskRemediation: false,
-    apiHealth: "healthy",
-  },
-  {
-    id: "missing-mam-sensitive-app",
-    title:
-      "Missing MAM policy for a sensitive app is restricted and routed to app owner",
-    group: "workflowRouting",
-    domains: ["mdmMam", "workflowRouting"],
-    expectedDecision: "restrict",
-    reason: "MISSING_MAM_POLICY_SENSITIVE_APP",
-    ownerCategory: "application",
-    severity: "medium",
-    destinationPlaceholder: "application-owner-ticket-placeholder",
-    verificationExpectation:
-      "Verify app protection assignment before granting sensitive app workflow access.",
-    approvalRequired: false,
-    simulatedFirst: true,
-    highRiskRemediation: false,
-    apiHealth: "healthy",
+    label: "every fixture row has a committed proof result",
+    holds: connectorEmulatorScenarios.every((s) => s.actualDecision !== "unverified"),
   },
 ];

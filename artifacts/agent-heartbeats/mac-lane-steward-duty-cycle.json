@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-04T20:24:07Z",
-  "result": "quiet \u2014 no lane mail addressed to cloud; sim loop 16/16 bound; only Mac activity was the already-merged android-desktop-first-run results (window-smoke needs owner Screen Recording, known). Heartbeat was held during open PR #430, written after it merged."
+  "firedAt": "2026-09-05T00:24:48Z",
+  "result": "quiet \u2014 Alpha unchanged (459aedc); no new Mac commits, branches, sim-results, or lane mail to cloud; sim loop 16/16 bound. (Prior cycle heartbeat rode in #431 after it merged.)"
 }

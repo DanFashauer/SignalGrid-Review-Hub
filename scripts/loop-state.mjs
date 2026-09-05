@@ -27,7 +27,13 @@ const HUB = "https://github.com/DanFashauer/SignalGrid-Review-Hub.git";
 
 const G = "\x1b[32m", R = "\x1b[31m", Y = "\x1b[33m", B = "\x1b[1m", D = "\x1b[2m", X = "\x1b[0m";
 const rows = [];
-const add = (state, what, detail) => rows.push({ state, what, detail });
+// `gated` is whether a `fail` in this row moves the EXIT CODE. Every seam row
+// is gated. The discovery rows are reported — loudly, in red — but do not set
+// the exit code, because the Stop hook (.claude/hooks/verify-done.sh) runs
+// this script as its gate and a hook that blocks every session over a number
+// no session can change teaches bypass. Until 2026-09-05 the script exited 0
+// on EVERY outcome, so the hook's gate arm could never fire at all.
+const add = (state, what, detail, gated = true) => rows.push({ state, what, detail, gated });
 
 const git = (...a) => {
   try {
@@ -47,15 +53,27 @@ try {
   hubBranches = execFileSync("git", ["ls-remote", "--heads", HUB], { encoding: "utf8", timeout: 60000 })
     .split("\n").filter(Boolean).map((l) => l.split("refs/heads/")[1]).filter(Boolean);
 } catch {
-  add("warn", "Review Hub reachable", "could not reach GitHub — check network, then re-run");
+  // FAIL, not warn. An unreachable Hub means the unpushed-work check below did
+  // not run, and "the check that would have caught the lost week did not run"
+  // is a failing state, not a shrug. The old `warn` plus the `if
+  // (hubBranches.length)` guard turned an empty ls-remote into a clean report —
+  // an empty collection concluding no objection, exactly when the network was
+  // the unverifiable input.
+  add("fail", "Review Hub reachable", "could not list the Hub's branches — the unpushed-work check did NOT run; unknown is not clean");
 }
 
 if (hubBranches.length) {
-  const unpushed = localBranches.filter((b) => !hubBranches.includes(b) && b !== "HEAD");
+  // `worktree-agent-*` branches are the Agent tool's ephemeral isolated
+  // checkouts: created for one subagent run, never meant to be pushed, and
+  // deleted with the worktree. They are counted and named here so the
+  // exclusion is visible, not silent.
+  const ephemeral = localBranches.filter((b) => b.startsWith("worktree-agent-"));
+  const unpushed = localBranches.filter((b) => !hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b));
+  const ephemeralNote = ephemeral.length ? ` (${ephemeral.length} ephemeral worktree-agent-* branch(es) not counted)` : "";
   if (unpushed.length) {
-    add("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote`);
+    add("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}`);
   } else {
-    add("ok", "Local branches all present on the Review Hub", `${localBranches.length} branch(es)`);
+    add("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}`);
   }
   // Is 'origin' even pointed at the Hub? A push can "succeed" into the wrong repo.
   const origin = git("remote", "get-url", "origin");
@@ -93,7 +111,7 @@ if (existsSync(logPath)) {
       const days = Math.floor((Date.now() - startMs) / 86400000);
       daysMsg = ` · day ${days}`;
       if (days >= 7 && logged === 0) {
-        add("fail", "DISCOVERY", `${days} days since the freeze and 0 conversations. Nothing else on this list matters.`);
+        add("fail", "DISCOVERY", `${days} days since the freeze and 0 conversations. Nothing else on this list matters.`, false);
       }
     } else {
       // Fail closed: an unparseable start date must surface, never silently skip
@@ -102,7 +120,7 @@ if (existsSync(logPath)) {
     }
   }
   add(logged >= target ? "ok" : logged > 0 ? "warn" : "fail", "Discovery",
-    `${logged}/${target} conversations · ${commits} commitment(s)${daysMsg}`);
+    `${logged}/${target} conversations · ${commits} commitment(s)${daysMsg}`, false);
 } else {
   add("warn", "Discovery log", "docs/agent/DISCOVERY_LOG.md not in the repo yet");
 }
@@ -144,6 +162,7 @@ const icon = { ok: `${G}✓${X}`, warn: `${Y}!${X}`, fail: `${R}✗${X}` };
 for (const r of rows) console.log(`  ${icon[r.state]} ${r.what.padEnd(42)} ${D}${r.detail}${X}`);
 
 const fails = rows.filter((r) => r.state === "fail");
+const gatedFails = fails.filter((r) => r.gated);
 console.log("");
 if (fails.length) {
   console.log(`${R}${B}${fails.length} thing(s) need you.${X} Start at the top of that list.\n`);
@@ -151,4 +170,9 @@ if (fails.length) {
   console.log(`${G}${B}Nothing is silently broken.${X}\n`);
 }
 console.log(`${D}This checks the seams between tools. It cannot tell you whether the work`);
-console.log(`was worth doing — only that nothing fell through a crack.${X}\n`);
+console.log(`was worth doing — only that nothing fell through a crack.${X}`);
+console.log(
+  `${D}exit code: ${gatedFails.length ? 1 : 0} — ${gatedFails.length} failing seam(s) gate it; ` +
+    `the discovery rows are reported here and do not.${X}\n`,
+);
+process.exitCode = gatedFails.length ? 1 : 0;

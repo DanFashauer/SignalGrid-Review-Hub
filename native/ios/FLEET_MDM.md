@@ -86,18 +86,18 @@ command (which the SignalGrid admin console issues over the Fleet API).
 
 ## Fleet GitOps (declarative source of truth)
 
-```yaml
-# fleet/teams/signalgrid-shared-devices.yml
-name: SignalGrid Shared Devices
-controls:
-  macos_settings: {}
-  ios_updates: {}
-  custom_settings:
-    - path: ./profiles/managed-app-config.mobileconfig   # (a)
-    - path: ./profiles/asam-authorization.mobileconfig   # (b)
-    - path: ./profiles/app-allowlist.mobileconfig        # (c)
-```
-`fleetctl apply -f fleet/teams/signalgrid-shared-devices.yml`
+The tracked team file is `fleet/teams/signalgrid-shared-devices.yml` (schema
+`apiVersion: v1 / kind: team / spec.team.mdm`), and the one profile it delivers
+is `fleet/profiles/signalgrid-restrictions.mobileconfig` — ASAM authorization
+(b) and the app allow-list (c) are both payload keys of that single
+`com.apple.applicationaccess` profile. Managed App Configuration (a) is NOT a
+profile in this tree: it is set as the app's managed configuration when Fleet
+installs the shell as a managed app (`native/ios/mdm/README.md`, "Managed App
+Config keys"). An earlier version of this section showed a three-file sketch
+(`managed-app-config`, `asam-authorization`, `app-allowlist`) under the real
+team file's name and a real `fleetctl apply` command; none of the three files
+ever existed, and the schema shown was not Fleet's. Read the tracked files, not
+this page, for what is applied. `proof:mdm-profile` holds the profile's keys.
 
 ## SignalGrid ↔ Fleet connector (backend)
 

@@ -1,956 +1,1135 @@
 {
-  "$comment": "SURFACE-level read ledger. Sibling of docs/agent/review-coverage.json, and NOT the same thing: that one is FILE-level (which individual files a role opened, at what depth); this one is SURFACE-level (which package, directory or docs family has ever had a deep independent read run against it). The owner's worry on 2026-09-02, verbatim: 'only a select portion of the repo vs the full repo'. Validation is whole-repo on every push; the deep reads are chosen surface by surface, and nothing showed which surfaces had been chosen and which had never been looked at. A surface with an empty `reads` array has NOT BEEN READ, and that is the state this file exists to make visible rather than silent. GATED by scripts/check-surface-review-coverage.mjs: every tracked file must belong to a surface, every derived surface must have a row, every row's path must exist, and every read must carry a date (not in the future), a reviewer, a record and a scope. REPORTED, never fatal: how many surfaces are unread or partial, the oldest read, and staleness. SCOPE is required on every read and is the field that stops a slice counting as the whole: 'surface' means the whole surface was read; 'partial: <what>' names the slice and counts as PARTIAL; 'executed' means the surface was BUILT or RUN rather than read, and counts towards nothing. `open` and `closed` are the counts of findings the RECORD ITSELF names as left open / closed - transcribed from the record, not judged here. A row may also carry an optional `note`: one sentence for what an empty `reads` array cannot say on its own, usually that work landed NEAR a surface without being a read OF it. Optional, but never blank. A row says a read HAPPENED; the record is the only thing that proves it was any good.",
-  "version": 1,
-  "surfaces": {
-    "(root)": {
-      "path": ".",
-      "note": "The 26 tracked files at the repository root - package.json, the lockfile, the Dockerfiles, validate-sim-macos.sh, CLAUDE.md, README.md. Individually gated in several places and never read as one surface.",
-      "reads": []
-    },
-    ".agents": {
-      "path": ".agents",
-      "reads": []
-    },
-    ".claude/*": {
-      "path": ".claude",
-      "reads": []
-    },
-    ".claude/agents": {
-      "path": ".claude/agents",
-      "reads": []
-    },
-    ".claude/commands": {
-      "path": ".claude/commands",
-      "reads": []
-    },
-    ".claude/hooks": {
-      "path": ".claude/hooks",
-      "reads": []
-    },
-    ".claude/skills": {
-      "path": ".claude/skills",
-      "reads": [
-        {
-          "date": "2026-09-02",
-          "read": "Publication-boundary read of the skill set: three first-party skills were classified as vendored, and the VENDORED.md exceptions block was repaired.",
-          "reviewer": "cloud lane",
-          "record": "#379",
-          "scope": "partial: the first-party/vendored classification of each skill. The skills' content was not read.",
-          "open": 0,
-          "closed": 3
-        }
-      ]
-    },
-    ".githooks": {
-      "path": ".githooks",
-      "reads": []
-    },
-    ".github/*": {
-      "path": ".github",
-      "reads": []
-    },
-    ".github/ISSUE_TEMPLATE": {
-      "path": ".github/ISSUE_TEMPLATE",
-      "reads": []
-    },
-    ".github/codeql": {
-      "path": ".github/codeql",
-      "reads": []
-    },
-    ".github/workflows": {
-      "path": ".github/workflows",
-      "reads": [
-        {
-          "date": "2026-08-23",
-          "read": "Every workflow job read for an execution bound; nine were unbounded, and the finding was turned into a gate so the class cannot return.",
-          "reviewer": "cloud lane",
-          "record": "#276",
-          "scope": "partial: every job was read, but only for one property - whether it carries a timeout. What the jobs DO was not read.",
-          "open": 0,
-          "closed": 9
-        }
-      ]
-    },
-    "artifacts/agent-heartbeats": {
-      "path": "artifacts/agent-heartbeats",
-      "reads": []
-    },
-    "artifacts/api-collection": {
-      "path": "artifacts/api-collection",
-      "reads": []
-    },
-    "artifacts/api-server": {
-      "path": "artifacts/api-server",
-      "reads": [
-        {
-          "date": "2026-09-02",
-          "read": "Route cross-check - the built server booted and its Express route stack walked, so the routes the process actually mounts are compared against the documented surface rather than against the source that was meant to mount them; unresolvable layers fail the assertion.",
-          "reviewer": "cloud lane",
-          "record": "#384",
-          "scope": "partial: the mounted route stack and the webhook-signing path. The middleware, persistence and connector wiring were not read.",
-          "open": 0,
-          "closed": 0
-        }
-      ]
-    },
-    "artifacts/build-loop": {
-      "path": "artifacts/build-loop",
-      "reads": []
-    },
-    "artifacts/connector-emulator": {
-      "path": "artifacts/connector-emulator",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "results.json and the harness/proof behind it read in full. decide() tested only the BAD zone member, so custodyZone/networkZone 'unknown' reached allowCandidate on both allow arms; credentialConfidence and badgeEventObservedAt were declared, populated in every fixture row, and read nowhere. Fixed (positive members required; degraded/unknown/absent confidence and an unreadable badge time step up); 12 synthetic guardrails added (7 reader, 4 posture, 1 control); fixture results unchanged, hash unchanged.",
-          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 1
-        }
-      ]
-    },
-    "artifacts/lab-collections": {
-      "path": "artifacts/lab-collections",
-      "reads": []
-    },
-    "artifacts/lane-messages": {
-      "path": "artifacts/lane-messages",
-      "reads": []
-    },
-    "artifacts/live-captures": {
-      "path": "artifacts/live-captures",
-      "reads": []
-    },
-    "artifacts/live-evidence": {
-      "path": "artifacts/live-evidence",
-      "reads": []
-    },
-    "artifacts/mcp-server": {
-      "path": "artifacts/mcp-server",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "tokenForTenant returned '' for a tenant with no seeded demo key and the empty string travelled into runRoomEntry as a credential; it now throws a configuration error (no tenant echoed).",
-          "reviewer": "cloud lane",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "partial: the demo-key lookup in src/index.ts only.",
-          "open": 0,
-          "closed": 1
-        }
-      ]
-    },
-    "artifacts/outreach-log": {
-      "path": "artifacts/outreach-log",
-      "reads": []
-    },
-    "artifacts/sbom": {
-      "path": "artifacts/sbom",
-      "reads": []
-    },
-    "artifacts/scanner-comparison": {
-      "path": "artifacts/scanner-comparison",
-      "reads": []
-    },
-    "artifacts/signalgrid-app": {
-      "path": "artifacts/signalgrid-app",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "pages/Intelligence.tsx: three panels rendered 'Loading…' forever on a control-plane error (recommendations, coverage, discovery), so an unreachable plane read as pending and an absent recommendation list as health; each now names the error.",
-          "reviewer": "cloud lane",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "partial: the three query-error states in pages/Intelligence.tsx only.",
-          "open": 0,
-          "closed": 1
-        }
-      ]
-    },
-    "artifacts/signalgrid-desktop": {
-      "path": "artifacts/signalgrid-desktop",
-      "reads": []
-    },
-    "artifacts/signalgrid-mobile-pwa": {
-      "path": "artifacts/signalgrid-mobile-pwa",
-      "reads": []
-    },
-    "artifacts/signalgrid-review": {
-      "path": "artifacts/signalgrid-review",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Every src file read (vendored components/ui skipped, noted). The connector-emulator deck rendered a hand-transcribed digest, count and pack list that matched nothing (8 of 15 scenarios, four of five packs, a stale hash) under 'Evidence panel', with green guardrail ticks from a string array and the fixture's INTENDED decision rendered as the decision. Now derived from the five fixture packs and the committed results.json; guardrails computed; the engine's actual decision rendered with mismatches red. robots.txt aligned with the noindex meta. CLAIM_INVENTORY rows 466/486 re-measured.",
-          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 4
-        }
-      ]
-    },
-    "artifacts/signalgrid-web": {
-      "path": "artifacts/signalgrid-web",
-      "reads": []
-    },
-    "artifacts/sim-requests": {
-      "path": "artifacts/sim-requests",
-      "reads": []
-    },
-    "artifacts/sim-results": {
-      "path": "artifacts/sim-results",
-      "reads": []
-    },
-    "artifacts/sync": {
-      "path": "artifacts/sync",
-      "reads": []
-    },
-    "config": {
-      "path": "config",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "All four tier env examples and the grid config example read. Clean: no secret carries a default, live integrations off in every tier, and the prod example's 'everything is 401 with these unset' claim verified against middlewares/context.ts.",
-          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 0
-        }
-      ]
-    },
-    "docker": {
-      "path": "docker",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "nginx-web.conf, both Dockerfiles and all four compose files read. docker-compose.yml (the review topology) had no healthcheck on any service while .prod.yml explained at length why one is needed; api/web/nginx now carry one with readiness conditions, the sim service too; new gate check-compose-healthchecks.mjs (migrate.yml's db exempt as an overlay, with the reason). Base images pinned, no latest, USER node.",
-          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 1
-        }
-      ]
-    },
-    "docs/*": {
-      "path": "docs",
-      "note": "NOT READ. This row was seeded READ on the strength of #375 and that was wrong, in exactly the way this ledger exists to catch: #375 audited docs/INDEX.md line by line against the entries it routes to, and its squash commit touches three of the 203 top-level documents (INDEX.md, OPEN_SOURCE_LAB_REGISTRY.md, STATUS.md). An index audit is a read of the index, not of what it points at. Downgraded 2026-09-02 by independent review.",
-      "reads": []
-    },
-    "docs/agent": {
-      "path": "docs/agent",
-      "reads": []
-    },
-    "docs/assets": {
-      "path": "docs/assets",
-      "reads": []
-    },
-    "docs/company": {
-      "path": "docs/company",
-      "reads": []
-    },
-    "docs/connectors": {
-      "path": "docs/connectors",
-      "reads": []
-    },
-    "docs/consolidation": {
-      "path": "docs/consolidation",
-      "reads": []
-    },
-    "docs/env": {
-      "path": "docs/env",
-      "reads": []
-    },
-    "docs/estate": {
-      "path": "docs/estate",
-      "reads": []
-    },
-    "docs/inspiration": {
-      "path": "docs/inspiration",
-      "reads": []
-    },
-    "docs/lab": {
-      "path": "docs/lab",
-      "reads": []
-    },
-    "docs/outreach": {
-      "path": "docs/outreach",
-      "reads": []
-    },
-    "docs/postman": {
-      "path": "docs/postman",
-      "reads": []
-    },
-    "docs/preview": {
-      "path": "docs/preview",
-      "reads": []
-    },
-    "docs/research": {
-      "path": "docs/research",
-      "reads": []
-    },
-    "firmware": {
-      "path": "firmware",
-      "note": "NOT READ. #386's summary sentence names 'the dock firmware' alongside the Android and desktop reads, but the only firmware change in that PR was firmware/.gitignore and its workflow - no source file under firmware/dock/core/ was opened.",
-      "reads": []
-    },
-    "fixtures": {
-      "path": "fixtures",
-      "reads": []
-    },
-    "fleet": {
-      "path": "fleet",
-      "reads": []
-    },
-    "lib/adaptive-proposals": {
-      "path": "lib/adaptive-proposals",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Full read of 5 files. Core invariant (no self-activation) holds. Zero prediction made helped unconditionally true; denylist auto-resolution; vacuous simulation passed the gate; raw status lookup; approvedAtRef unvalidated; absent refs counted as a signal; findings overwritable. Fixed; 37->48.",
-          "reviewer": "cloud lane",
-          "record": "lib/adaptive-proposals/src/measure.ts",
-          "scope": "surface",
-          "open": 0,
-          "closed": 7
-        }
-      ]
-    },
-    "lib/api-client-react": {
-      "path": "lib/api-client-react",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "custom-fetch.ts in full plus the generated files. An off-vocabulary responseType resolved undefined AS SUCCESS (no default arm); a 200 with no content-type came back as a raw string the caller read as its typed result. Both fixed; the package had ZERO proofs and now has proof:api-client-react (13 assertions) registered in preflight and CI.",
-          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 2
-        }
-      ]
-    },
-    "lib/api-spec": {
-      "path": "lib/api-spec",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "All three documents and orval.config.ts read. openapi.yaml (orval's input for two shipping packages) documented six write operations the server never served and was read by no gate; pruned, the served-but-undocumented routes added, api-contract-proof extended to hold both documents with a route-file registry. api-client-react regenerated; api-zod NOT (orval 8.24 emits zod-v4 calls against zod 3.25) — recorded in BUILD_BACKLOG. product-openapi.json left as the open backlog row says.",
-          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 1,
-          "closed": 1
-        }
-      ]
-    },
-    "lib/api-zod": {
-      "path": "lib/api-zod",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Fail-closed audit of the Zod validation surface (the whole runtime surface is one orval-generated file, api.ts, 355 lines; the 45 generated types are pure interfaces). Schemas are fail-closed by construction (no passthrough, no enum catch, coerce.date/number reject NaN). Systemic finding: the *Body/*QueryParams input schemas are DEAD as guards — the live /v1 routes hand-roll validation in v1.ts, which is itself fail-closed end-to-end (bounded TTL, bounded+refusing reconcile, core validateRequest rejects empty bindings). No live fail-open. Latent generated-schema tightenings + a dead-validator wiring gate filed to the backlog as design targets.",
-          "reviewer": "cloud lane",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 0
-        }
-      ]
-    },
-    "lib/app-workflows": {
-      "path": "lib/app-workflows",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Full read of 3 files + the Swift port + the parity gate. Empty held-set plus a bogus key minted a step-up-done record; scoped release had no TS coverage; raw confirmer lookup; firstReason crash on restrictive outcomes. Fixed; 43->49. Swift whole-integration release and dead default = Mac lane item 101; parity gate compares shape only (planted 4 behavioural divergences, all green).",
-          "reviewer": "cloud lane",
-          "record": "lib/app-workflows/src/index.ts",
-          "scope": "surface",
-          "open": 2,
-          "closed": 4
-        }
-      ]
-    },
-    "lib/audit": {
-      "path": "lib/audit",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Adversarial fail-closed read of the audit-ledger surface (index/backend/types): canonical JSON sorts keys at every depth incl. inside arrays and escapes keys+values, depth-bounded (append refuses rather than hash a truncated form), secrets redacted before hashing; verifySegment field-set matches append; verifyLedger cap-honest, verifyLedgerFull paginates whole chain. backend appendWithChain atomic (advisory xact lock) so the chain can't fork; readiness asserts append-only (SELECT/INSERT/seq-USAGE required, UPDATE/DELETE/TRUNCATE forbidden -> not ready), which is the structural tail-truncation defense. Zero fail-open/integrity defects; 2 non-defect notes (no external head anchor for admin-level tail truncation; substring secret-key match over-redacts).",
-          "reviewer": "cloud lane",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 0
-        }
-      ]
-    },
-    "lib/control-plane": {
-      "path": "lib/control-plane",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Adversarial fail-closed audit of the cloud control plane (index.ts, 598 lines). Found and FIXED a real fail-open: bundle signature verification used a shared source-literal fallback key for any tenant absent from the signing registry, so a forged bundle for an unprovisioned tenant verified (golden rule 2 inverted on the authenticity boundary). Fix removes the fallback (signingKeyFor via hasOwnProperty -> undefined; verify fails closed; mint returns null), and adds a mutation-proven edge-sync-proof assertion (restoring the fallback -> 16/17 fail). Finding 2 (the proof could not catch it) fixed alongside. Finding 3 latent/deferred: empty-string tenantId resolves to a cross-tenant wildcard in five list methods (caller-gated today; follow-up to treat empty distinct from undefined). Rest verified fail-closed (checksum/signature guards, telemetry nonNeg, unknown->null, custodyGaps).",
-          "reviewer": "cloud lane",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 2
-        },
-        {
-          "date": "2026-09-04",
-          "read": "Follow-up (owner-requested): fixed Finding 3 from the control-plane read. Empty-string tenant/site scope in listSites/listEdgeNodes/listFleet/fleetHealth/operationalIntelligence resolved to a cross-tenant wildcard (`!tenantId`). Replaced with a scopeIncludes helper (undefined->all, empty/whitespace->none, else exact) and added 9 mutation-proven control-plane-proof assertions (restoring the old filter -> 40/42). No open findings remain on this surface.",
-          "reviewer": "cloud lane",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "partial: the tenant/site scope filters (Finding 3 fix), building on the 2026-09-04 full read",
-          "open": 0,
-          "closed": 1
-        }
-      ]
-    },
-    "lib/ddm-connector": {
-      "path": "lib/ddm-connector",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Adversarial fail-closed read of the DDM connector (index/apple-schema/fixture): deviceManaged is enrolled===true strictly; unknown/unreporting health and non-enforced binaryControl resolve to unknown/drifted; freshnessOf handles null/NaN/future (missing/unknown), and a malformed nowIso lands on expired via NaN-compare; enforcementCurrencyOf trusts only exact 'declarative' as current (legacy->dead/at_risk, unmapped->unknown); the `weak` OR can only raise assurance auto->step-up, never relax. apple-schema is a compile-time exhaustive provenance map. Zero fail-open defects; no material notes.",
-          "reviewer": "cloud lane",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 0
-        }
-      ]
-    },
-    "lib/dual-control": {
-      "path": "lib/dual-control",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Adversarial read of the two-person normalizer/evaluator in the same sweep, confirmed by on-tree mutation. The authorizer normalizer's `!plain` and `readThrew` disjuncts were labelled 'genuinely inert' (a 239-shape behavioural diff) but are each the SOLE guard on one shape the diff never generated: a NULL authorizer body (hasUnrecognizedKey(null) never enters its walk) and a throwing accessor on a known key. Both are load-bearing; pinned with proof vectors, killed by the mutation guard, removed from the inert allowlist. Only the top-level twins are inert - now carrying an inert-at-top marker so the allowlist cannot launder the load-bearing terms.",
-          "reviewer": "cloud lane (adversarial sweep + on-tree mutation verify)",
-          "record": "docs/SELF_REVIEW.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 1
-        }
-      ]
-    },
-    "lib/enterprise-auth": {
-      "path": "lib/enterprise-auth",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Adversarial fail-closed read of the OIDC/JWT enterprise sign-in surface (jwt/jwks/claims/config/provider/base64url): alg gate rejects none/HS* before key material, signature before claims, exp required, nowMs injected; JWKS never caches a failed fetch, cooldown-limited refetch; config OIDC-off by default, partial/empty maps invalid, blank clock-tolerance->60 not 0; claim->principal deny-by-default with hasOwnProperty guard. Zero fail-open/non-determinism/unknown-permissive defects; 2 non-defect notes recorded.",
-          "reviewer": "cloud lane",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 0
-        }
-      ]
-    },
-    "lib/event-contract": {
-      "path": "lib/event-contract",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Adversarial fail-closed read of the event-contract surface (validate/detect/types): validateEvent rejects non-objects, unknown enum values, and malformed ids (ReDoS-safe bounded regex), guards prototype pollution (FORBIDDEN_KEYS + no dynamic writes), range/finite-checks batteryPercent, drops unknown fields, never throws; detectCrossDomain is pure/deterministic and its detections are alarms not grants, treating unknown MDM state as dark (tightening). Zero fail-open defects; 2 non-defect notes (Date.parse leniency vs the ISO-8601 contract; correlationId taken from events[0] unasserted).",
-          "reviewer": "cloud lane",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 0
-        }
-      ]
-    },
-    "lib/facility-trust-graph": {
-      "path": "lib/facility-trust-graph",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Fail-closed audit of all 8 files (graph/evaluate/correlate/clinical/transition/gateway/fixture/index). Clean throughout except one field: map_version had no shape tripwire, so a present-but-unparseable value (number/empty/whitespace) collapsed to 'unassessed' and GRANTED, while a well-formed-wrong value restricted. Added mapVersionShapeBad -> present garbage now fails closed to malformed/step_up; absent stays grant-eligible by design.",
-          "reviewer": "cloud lane",
-          "record": "lib/facility-trust-graph/src/evaluate.ts",
-          "scope": "surface",
-          "open": 1,
-          "closed": 1
-        }
-      ]
-    },
-    "lib/fleet-connector": {
-      "path": "lib/fleet-connector",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Full read. typeof-number read NaN as observed on both OS-floor guards (Number.isFinite now); osFloor comment made true; summary names unverified hosts. 63->67. Three hardening items recorded.",
-          "reviewer": "cloud lane",
-          "record": "lib/fleet-connector/src/index.ts",
-          "scope": "surface",
-          "open": 3,
-          "closed": 3
-        }
-      ]
-    },
-    "lib/flows": {
-      "path": "lib/flows",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Full read of all 11 sources. Unknown SignalStatus graded a flow healthy and masked a co-observed broken (REAL, shipping via api-server); prototype-key kind NaN-poisoned the teardown ordering guard; fidelity lookup not own-key. Fixed; 32->35 and 25->28. Break-glass surviving step_up/unparseable outcome recorded for owner doctrine.",
-          "reviewer": "cloud lane",
-          "record": "lib/flows/src/index.ts",
-          "scope": "surface",
-          "open": 2,
-          "closed": 3
-        }
-      ]
-    },
-    "lib/handoff-sim": {
-      "path": "lib/handoff-sim",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Full read of 4 files. Release trusted a zero-signal or off-ladder device; unknown step kind recorded applied; two unswept refs; proof vocabulary hand-copied. All fixed, vocabulary derived. 55->59.",
-          "reviewer": "cloud lane",
-          "record": "lib/handoff-sim/src/release.ts",
-          "scope": "surface",
-          "open": 1,
-          "closed": 4
-        }
-      ]
-    },
-    "lib/iac": {
-      "path": "lib/iac",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "All six files read. detectDrift over an EMPTY desired state returned in_sync with zero findings (a desired state that failed to load read as a healthy fleet; the unknown rung was producible by nothing) — now one unknown finding, overall unknown, summary and probe projection carry it; 5 proof assertions, mutation-proven. lifecycle/plan/defaults/summarize clean.",
-          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 1
-        }
-      ]
-    },
-    "lib/incident-playbook": {
-      "path": "lib/incident-playbook",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Full read. Default arms of 3 of 4 switches returned the weakest answer (no incident / Service Desk); prototype impact yielded a priority-less ticket. Fixed. 49->60.",
-          "reviewer": "cloud lane",
-          "record": "lib/incident-playbook/src/map.ts",
-          "scope": "surface",
-          "open": 2,
-          "closed": 4
-        }
-      ]
-    },
-    "lib/integration-bridge": {
-      "path": "lib/integration-bridge",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Full read of both files. device_management:true asserted from a source with no enrolment field (removed, guarded in launch-seam); policyState ungated on enrolment; empty provenance skipped the fallback. 5 design targets recorded.",
-          "reviewer": "cloud lane",
-          "record": "lib/integration-bridge/src/index.ts",
-          "scope": "surface",
-          "open": 5,
-          "closed": 3
-        }
-      ]
-    },
-    "lib/integrations": {
-      "path": "lib/integrations",
-      "reads": [
-        {
-          "date": "2026-09-02",
-          "read": "Emit side, first directional read - the six emitter families and their shared factory, read for what happens when a credential is absent, whether every outbound fetch is bounded, and whether the dispatcher reports suppression honestly.",
-          "reviewer": "cloud lane (independent review before landing)",
-          "record": "#378",
-          "scope": "partial: the six emitter families and the shared adapter factory - roughly 25 of this package's 278 tracked files. The connector NORMALIZERS, the read paths and the other families were not in this read.",
-          "open": 0,
-          "closed": 5
-        },
-        {
-          "date": "2026-09-02",
-          "read": "Emit side, second read - payload construction: 27 build sites read, 17 whole-object copies found at 7 of them; every builder now declares a closed top-level key set with its open slots named.",
-          "reviewer": "cloud lane (independent review, eight notes folded)",
-          "record": "#383",
-          "scope": "partial: the payload builders of the same six emitter families.",
-          "open": 0,
-          "closed": 17
-        },
-        {
-          "date": "2026-09-02",
-          "read": "Emit side, third read - headers and inbound parsing across the same six families: redirect following, vendor-minted values reaching a header or a path, the two webhook families' URL guard and signature, error-text bounding.",
-          "reviewer": "cloud lane (independent review, notes folded)",
-          "record": "#388",
-          "scope": "partial: outbound headers and inbound response parsing in the same six emitter families.",
-          "open": 1,
-          "closed": 2
-        }
-      ]
-    },
-    "lib/location": {
-      "path": "lib/location",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Firsthand read of all 6 files. Store/validate/config fail closed (NaN-guarded TTLs, non-finite/future/stale/mode rejection, clamped max-age). One latent fail-open fixed: the RADIUS/DHCP ingest validated a required event timestamp then stamped observedAt with the ingest clock, so the freshness guard compared now against now and a replayed record became fresh presence. observedAt is now the event's own instant; 8 replay/future/instant assertions added to proof:location-services (48/48); invariant clock-read pin 5->3.",
-          "reviewer": "cloud lane",
-          "record": "lib/location/src/radius-dhcp.ts",
-          "scope": "surface",
-          "open": 3,
-          "closed": 1
-        }
-      ]
-    },
-    "lib/orchestration": {
-      "path": "lib/orchestration",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Full read. Sensitivity compared === controlled at 4 sites (unknown -> standard plan), unknown domain threw, malformed reasonCodes crashed; all fail-closed now, monotonicity sweep added. 41->48.",
-          "reviewer": "cloud lane",
-          "record": "lib/orchestration/src/index.ts",
-          "scope": "surface",
-          "open": 0,
-          "closed": 3
-        }
-      ]
-    },
-    "lib/persistence": {
-      "path": "lib/persistence",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "All five files in full. refresh() returned the expired/ended session object so the route answered 200 with an audit row for a refresh that never happened (now null -> 404); listDecisions reported a 100-row page length as total (countDecisions added, id tiebreak on the order); role-split COALESCE(..., TRUE) proved schema ownership from a missing row (now FALSE); the unparseable-expiry guard had no assertion holding it (now two). PG proofs extended for CI; not runnable here (no Postgres).",
-          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 5
-        }
-      ]
-    },
-    "lib/pim-activation": {
-      "path": "lib/pim-activation",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Full read; grant is a seven-way conjunction with no reachable fail-open. Latent count<=0 inversion and hand-listed proof domains fixed. 43->51.",
-          "reviewer": "cloud lane",
-          "record": "lib/pim-activation/src/from-posture.ts",
-          "scope": "surface",
-          "open": 0,
-          "closed": 2
-        }
-      ]
-    },
-    "lib/posture-composition": {
-      "path": "lib/posture-composition",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Fail-closed audit of all 4 files. Fusion is directionally correct (strongest action wins; device-posture adapter requires positive confirmation on every field). One latent hole fixed: an off-ladder action (behind 40 `as UnifiedAction` casts) made ACTION_RANK[x] undefined -> NaN sort (order-dependent) + undefined riskTier. rankOf/tierOf now treat an unknown action as most-severe (top rank, blocked tier). Empty-input contract noted as a caller-relied design target, not changed.",
-          "reviewer": "cloud lane",
-          "record": "lib/posture-composition/src/compose.ts",
-          "scope": "surface",
-          "open": 1,
-          "closed": 1
-        }
-      ]
-    },
-    "lib/recommendations": {
-      "path": "lib/recommendations",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Full read. Unreadable denial/override counts flipped a tighten into a relax with a fabricated 'no denials' rationale; unreadable samples cleared the evidence gate; NaN confidence on the wire; locale-sensitive order. Fixed; 15->24. Advisory-only surface verified: no apply path anywhere.",
-          "reviewer": "cloud lane",
-          "record": "lib/recommendations/src/index.ts",
-          "scope": "surface",
-          "open": 2,
-          "closed": 4
-        }
-      ]
-    },
-    "lib/reliability": {
-      "path": "lib/reliability",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Firsthand read of the whole SLO/error-budget module. Fail-closed core intact (unknown outranks at_risk and is attention; zero-tolerance integrity un-buyable; empty window unknown; clock-free). One drift fixed: the owner-facing plain summary was sorted binary needs-attention/not, not worst-first as its comment claimed, so a critical fail-closed breach could render below an at_risk line on the operator surface (control-plane.ts).",
-          "reviewer": "cloud lane",
-          "record": "lib/reliability/src/summarize.ts",
-          "scope": "surface",
-          "open": 1,
-          "closed": 1
-        }
-      ]
-    },
-    "lib/room-sim": {
-      "path": "lib/room-sim",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Full read of both files: scenario data plus delegation to the real core and orchestration; no comparison, lookup, ladder or clock; order-independence verified empirically. Findings are one level out (console sigClass, stale committed bundle, proof assertions) and land in the next batch.",
-          "reviewer": "cloud lane",
-          "record": "lib/room-sim/src/index.ts",
-          "scope": "surface",
-          "open": 7,
-          "closed": 0
-        }
-      ]
-    },
-    "lib/self-audit": {
-      "path": "lib/self-audit",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Fail-closed audit of the self-integrity module. Probe path sound (missing/malformed -> unknown; unknown never healthy; heal lifecycle human-gated, no self-heal edge; clock-free). One fail-open fixed: runAudit seeded overall + every layer to healthy and only moved them worse, and summarizePlain derived allClear from per-item counts only, so an audit that checked NOTHING reported 'Everything is working.' Functional layers now seed unknown (meta stays healthy-when-empty); overall folds layer statuses; allClear requires overall healthy.",
-          "reviewer": "cloud lane",
-          "record": "lib/self-audit/src/audit.ts",
-          "scope": "surface",
-          "open": 1,
-          "closed": 1
-        }
-      ]
-    },
-    "lib/signal-discovery": {
-      "path": "lib/signal-discovery",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Both files in full. Dedupe keyed on the RAW category while the classifier trimmed it (whitespace variants inflated recognized); planOnboarding auto-onboarded on any truthy value; sources configured counted as sources heard from; localeCompare sort. All fixed; 5 proof assertions added.",
-          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 4
-        }
-      ]
-    },
-    "lib/signal-radar": {
-      "path": "lib/signal-radar",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Both files in full. scanSignals answered 'All observed signals are already evaluated' for an EMPTY batch (a dropped body read as a covered grid; POST /api/signals/radar substituted [] for any non-array) - fixed with a scanned count, a coverage-unknown summary and a 400 on a non-array body; localeCompare sort replaced by codepoint order; 4 proof assertions added and pinned in absent-collection-proof. Prototype-key, clock and switch hunts clean.",
-          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 3
-        }
-      ]
-    },
-    "lib/signalgrid-core": {
-      "path": "lib/signalgrid-core",
-      "reads": [
-        {
-          "date": "2026-08-23",
-          "read": "Verdict core, first read - the eleven verdict-computing files read adversarially against the fail-closed invariant; nine file-level entries filed in docs/agent/review-coverage.json.",
-          "reviewer": "verdict-core-reader",
-          "record": "docs/COMPANY_BUILD_PLAN.md",
-          "scope": "partial: the eleven verdict-computing files named in build-plan row 42 (engine, decision, policy, resolution, evidence, continuity), which span three packages; this package's other modules were not in that read.",
-          "open": 0,
-          "closed": 2
-        },
-        {
-          "date": "2026-09-02",
-          "read": "Verdict core, second read - outcome order pinned, five previously unproven rules proven, evidence hardened so the worst input wins in both directions, resolution plan made honest on silence.",
-          "reviewer": "cloud lane (three independent reviews)",
-          "record": "#376",
-          "scope": "partial: evidence.ts, resolution.ts and types.ts - the outcome-order, evidence-composition and resolution rules.",
-          "open": 0,
-          "closed": 2
-        }
-      ]
-    },
-    "lib/signalgrid-simulator": {
-      "path": "lib/signalgrid-simulator",
-      "reads": [
-        {
-          "date": "2026-09-02",
-          "read": "Verdict core, second read, simulator half - the simulator's decision vocabulary catalogued against the core's and monotonicity proven; 89 lines added to the simulator proof.",
-          "reviewer": "cloud lane (three independent reviews)",
-          "record": "#376",
-          "scope": "partial: the decision vocabulary and monotonicity properties, reached through the simulator proof rather than by reading the package.",
-          "open": 0,
-          "closed": 0
-        }
-      ]
-    },
-    "lib/verdict-attestation": {
-      "path": "lib/verdict-attestation",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Adversarial read of the attestation verifier as part of a security/decision-lib sweep: verifyVerdict's freshness/skew checks read against non-finite caller inputs. Found a real fail-open - a NaN or Infinity options.now/maxAgeMs/maxSkewMs silently disabled BOTH freshness comparisons (x > NaN is false), so a stale or future attestation verified. Fixed to fail closed to expired, six proof vectors added, proof 76 -> 82.",
-          "reviewer": "cloud lane (adversarial sweep + independent verify)",
-          "record": "#415",
-          "scope": "surface",
-          "open": 0,
-          "closed": 1
-        }
-      ]
-    },
-    "lib/webauthn": {
-      "path": "lib/webauthn",
-      "reads": [
-        {
-          "date": "2026-09-04",
-          "read": "Read of the credential store's addCredential/enrollment-race path in the same sweep. Found a fossil figure: the addCredential comment attributed a discarded '7 of 12' WATCH/MULTI measurement to proof:enrollment-race, which actually measures the shipped lock at 12/12 and never emits that number. Comment reworded; the propagated copy in COMPANY_BUILD_PLAN.md corrected.",
-          "reviewer": "cloud lane (adversarial sweep + independent verify)",
-          "record": "#415",
-          "scope": "partial: the addCredential/enrollment-race path and its proof-figure attribution; the full registration/assertion ceremony verification was not re-read.",
-          "open": 0,
-          "closed": 1
-        }
-      ]
-    },
-    "lib/work-context": {
-      "path": "lib/work-context",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Full read of reevaluate/types/assemble. Zero-signal device graded none (proof pinned it); four raw ACTION_RANK lookups. Dark device now step_up; all sites rank through rankOf. 52->58.",
-          "reviewer": "cloud lane",
-          "record": "lib/work-context/src/reevaluate.ts",
-          "scope": "surface",
-          "open": 0,
-          "closed": 2
-        }
-      ]
-    },
-    "native/android": {
-      "path": "native/android",
-      "reads": [
-        {
-          "date": "2026-09-02",
-          "read": "The same runtime-breakage read the iOS shell got, applied to the Android client: cleartext policy against the real minSdk, the emulator loopback alias, and whether the client decodes the contract the server serves. Not compiled in this lane.",
-          "reviewer": "cloud lane (two independent passes)",
-          "record": "#386",
-          "scope": "surface",
-          "open": 0,
-          "closed": 2
-        }
-      ]
-    },
-    "native/desktop": {
-      "path": "native/desktop",
-      "reads": [
-        {
-          "date": "2026-09-02",
-          "read": "The same runtime-breakage read applied to the desktop shell: the UI's invoke threw on every launch and the panel showed an error banner, which CI could not see because it never opens a window; an unreadable core now shows deny rather than a blank verdict. Not compiled in this lane.",
-          "reviewer": "cloud lane (two independent passes)",
-          "record": "#386",
-          "scope": "surface",
-          "open": 0,
-          "closed": 2
-        }
-      ]
-    },
-    "native/ios/*": {
-      "path": "native/ios",
-      "reads": []
-    },
-    "native/ios/EnterpriseShell": {
-      "path": "native/ios/EnterpriseShell",
-      "reads": [
-        {
-          "date": "2026-09-02",
-          "read": "Runtime read after the owner ran the app and said it was broken - the lock screen's way in, backend base-URL resolution against the served contract, the OIDC and launcher crash paths, and signing. Source read only; nothing was compiled in this lane.",
-          "reviewer": "cloud lane (independent review, notes folded)",
-          "record": "#387",
-          "scope": "surface",
-          "open": 0,
-          "closed": 4
-        },
-        {
-          "date": "2026-09-02",
-          "read": "The same batch BUILT and RUN on a simulator by the machine that has Xcode: BUILD SUCCEEDED, ios-shell-repair 8/8, clean provenance; step 6's standing failure root-caused to a self-inflicted grep in the harness rather than a crash.",
-          "reviewer": "Mac lane",
-          "record": "6f89457",
-          "scope": "executed",
-          "open": 1,
-          "closed": 1
-        }
-      ]
-    },
-    "native/ios/EnterpriseShellTests": {
-      "path": "native/ios/EnterpriseShellTests",
-      "note": "NOT READ. The Mac lane wrote SessionExpiryTests here on branch mac/session-expiry-hardening (LOOP.md, 2026-09-02), which had not landed on the default branch when this ledger was seeded. Writing tests for one fail-open is not a read of the test target.",
-      "reads": []
-    },
-    "native/ios/SignalGridMobile": {
-      "path": "native/ios/SignalGridMobile",
-      "reads": []
-    },
-    "native/ios/mdm": {
-      "path": "native/ios/mdm",
-      "reads": []
-    },
-    "native/ios/scripts": {
-      "path": "native/ios/scripts",
-      "reads": []
-    },
-    "native/shared": {
-      "path": "native/shared",
-      "reads": [
-        {
-          "date": "2026-09-02",
-          "read": "The shared Assist-wire vector table read against both clients: every vector key must be one the harnesses actually read, and at least one vector must assert the parsed obligations.",
-          "reviewer": "cloud lane (two independent passes)",
-          "record": "#386",
-          "scope": "surface",
-          "open": 0,
-          "closed": 0
-        }
-      ]
-    },
-    "scripts": {
-      "path": "scripts",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "check-package-reachability.mjs (edge extractor credited a package NAMED in a comment as an import - six libraries reported shipped that nothing ships, pin 8 -> 13 measured from import positions, --self-test with 13 shapes registered in preflight and CI), build-room-console.mjs (silent no-op on a missing bundle marker, no scenario markers, no sigClass test - all three added), lane-deliver.mjs (a new message file staled the coverage page and failed the mail PR - the page is now regenerated inside the worktree), src/room-sim-proof.ts (cross-tenant refusals were bare catches that an empty token would also satisfy - now assert the tenant-boundary message, a non-empty token and the positive control).",
-          "reviewer": "cloud lane",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "partial: four scripts - the reachability gate, the room-console builder, lane-deliver and the room-sim proof. The other ~150 gates and proofs were not in this read.",
-          "open": 0,
-          "closed": 4
-        }
-      ]
-    },
-    "site": {
-      "path": "site",
-      "reads": []
-    },
-    "tests": {
-      "path": "tests",
-      "note": "NOT READ as a surface. #380 (e66da87, 2026-09-02) read and dispositioned the tests/security-reference/ SUBTREE - eight specs no runner reached - by porting seven invariants to the live surface and deleting the directory. That subtree is gone, so the read covers nothing that is here now. What remains is tests/load/, the k6 drivers that scripts/check-test-execution.mjs says in its own header are invoked by nothing and are recorded open in docs/COMPANY_BUILD_PLAN.md row 43. A read of a deleted subtree is not a read of this surface.",
-      "reads": []
-    },
-    "tools": {
-      "path": "tools",
-      "reads": [
-        {
-          "date": "2026-09-05",
-          "read": "Both shells read in full. room-console/shell.html: sigClass coloured a signal by raw substring, so non_compliant and not_present rendered GREEN (they contain 'compliant'/'present') and unknown/missing/expired rendered blank; rewritten (separators stripped, exact good values first, every bad/warn word beats every good word, unlisted negations bad, unrecognised amber) with 41 vectors run by the build and mutation-proven (original defect: 4 failures; negation rule dropped: 3). evidence-coverage/shell.html holds no logic. The committed docs/room-entry-console.html was STALE against the core and is now gated in preflight and CI like the evidence page.",
-          "reviewer": "cloud lane",
-          "record": "docs/agent/EVIDENCE.md",
-          "scope": "surface",
-          "open": 0,
-          "closed": 3
-        }
-      ]
+ "$comment": "SURFACE-level read ledger. Sibling of docs/agent/review-coverage.json, and NOT the same thing: that one is FILE-level (which individual files a role opened, at what depth); this one is SURFACE-level (which package, directory or docs family has ever had a deep independent read run against it). The owner's worry on 2026-09-02, verbatim: 'only a select portion of the repo vs the full repo'. Validation is whole-repo on every push; the deep reads are chosen surface by surface, and nothing showed which surfaces had been chosen and which had never been looked at. A surface with an empty `reads` array has NOT BEEN READ, and that is the state this file exists to make visible rather than silent. GATED by scripts/check-surface-review-coverage.mjs: every tracked file must belong to a surface, every derived surface must have a row, every row's path must exist, and every read must carry a date (not in the future), a reviewer, a record and a scope. REPORTED, never fatal: how many surfaces are unread or partial, the oldest read, and staleness. SCOPE is required on every read and is the field that stops a slice counting as the whole: 'surface' means the whole surface was read; 'partial: <what>' names the slice and counts as PARTIAL; 'executed' means the surface was BUILT or RUN rather than read, and counts towards nothing. `open` and `closed` are the counts of findings the RECORD ITSELF names as left open / closed - transcribed from the record, not judged here. A row may also carry an optional `note`: one sentence for what an empty `reads` array cannot say on its own, usually that work landed NEAR a surface without being a read OF it. Optional, but never blank. A row says a read HAPPENED; the record is the only thing that proves it was any good.",
+ "version": 1,
+ "surfaces": {
+  "(root)": {
+   "path": ".",
+   "note": "The 26 tracked files at the repository root - package.json, the lockfile, the Dockerfiles, validate-sim-macos.sh, CLAUDE.md, README.md. Individually gated in several places and never read as one surface.",
+   "reads": []
+  },
+  ".agents": {
+   "path": ".agents",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "agent_assets_metadata.toml read: both entries cite PNGs that never existed in the tree, nothing reads the file (COMPANY_BUILD_PLAN row 73 re-verified). Deletion is the owner's call.",
+     "open": 1,
+     "closed": 0
     }
+   ]
+  },
+  ".claude/*": {
+   "path": ".claude",
+   "reads": []
+  },
+  ".claude/agents": {
+   "path": ".claude/agents",
+   "reads": []
+  },
+  ".claude/commands": {
+   "path": ".claude/commands",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "All nine slash-command prompts read. No claims about the product, no paths. CLEAN.",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  ".claude/hooks": {
+   "path": ".claude/hooks",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "All three hooks read. verify-done.sh's gate arm could never fire (loop:state had no exit code), it never checked the working tree, and cd \"\" on an unset CLAUDE_PROJECT_DIR succeeded; block-dangerous.sh allowed any pattern behind sh -c, two-space variants, and unreadable stdin; session-start.sh grepped a hardcoded lane direction and truncated pending sim requests. All fixed; deny-list self-test 16/16 registered.",
+     "open": 0,
+     "closed": 8
+    }
+   ]
+  },
+  ".claude/skills": {
+   "path": ".claude/skills",
+   "reads": [
+    {
+     "date": "2026-09-02",
+     "read": "Publication-boundary read of the skill set: three first-party skills were classified as vendored, and the VENDORED.md exceptions block was repaired.",
+     "reviewer": "cloud lane",
+     "record": "#379",
+     "scope": "partial: the first-party/vendored classification of each skill. The skills' content was not read.",
+     "open": 0,
+     "closed": 3
+    }
+   ]
+  },
+  ".githooks": {
+   "path": ".githooks",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "pre-push read in full. Its pnpm-absent exit 0 is a stated skip re-enforced by CI's --frozen-lockfile. CLEAN.",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  ".github/*": {
+   "path": ".github",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "dependabot.yml, pull_request_template.md read. CLEAN.",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  ".github/ISSUE_TEMPLATE": {
+   "path": ".github/ISSUE_TEMPLATE",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "partner-feedback.md read. CLEAN.",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  ".github/codeql": {
+   "path": ".github/codeql",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "codeql-config.yml read; its hand-held counts re-derived (1 test.ts, 10 spec.ts, tests/load only, 0 min.js) and correct today; the file says they are ungated. CLEAN.",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  ".github/workflows": {
+   "path": ".github/workflows",
+   "reads": [
+    {
+     "date": "2026-08-23",
+     "read": "Every workflow job read for an execution bound; nine were unbounded, and the finding was turned into a gate so the class cannot return.",
+     "reviewer": "cloud lane",
+     "record": "#276",
+     "scope": "partial: every job was read, but only for one property - whether it carries a timeout. What the jobs DO was not read.",
+     "open": 0,
+     "closed": 9
+    },
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "All 14 workflows read. ios-ci.yml's gated scans passed green on a missing scan root (fixed: roots asserted, floor, SignalGridMobile added); supply-chain.yml's two SBOM diff checks blind to an untracked file (ls-files guard added); mac-lane.yml summary never named the seven skipped proofs and said 6 non-proof gates (7). Every script path and pnpm target resolves; pull_request_target does no checkout; timeouts 31/31 bounded; pinning gate passes.",
+     "open": 0,
+     "closed": 4
+    }
+   ]
+  },
+  "artifacts/agent-heartbeats": {
+   "path": "artifacts/agent-heartbeats",
+   "reads": []
+  },
+  "artifacts/api-collection": {
+   "path": "artifacts/api-collection",
+   "reads": []
+  },
+  "artifacts/api-server": {
+   "path": "artifacts/api-server",
+   "reads": [
+    {
+     "date": "2026-09-02",
+     "read": "Route cross-check - the built server booted and its Express route stack walked, so the routes the process actually mounts are compared against the documented surface rather than against the source that was meant to mount them; unresolvable layers fail the assertion.",
+     "reviewer": "cloud lane",
+     "record": "#384",
+     "scope": "partial: the mounted route stack and the webhook-signing path. The middleware, persistence and connector wiring were not read.",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  "artifacts/build-loop": {
+   "path": "artifacts/build-loop",
+   "reads": []
+  },
+  "artifacts/connector-emulator": {
+   "path": "artifacts/connector-emulator",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "results.json and the harness/proof behind it read in full. decide() tested only the BAD zone member, so custodyZone/networkZone 'unknown' reached allowCandidate on both allow arms; credentialConfidence and badgeEventObservedAt were declared, populated in every fixture row, and read nowhere. Fixed (positive members required; degraded/unknown/absent confidence and an unreadable badge time step up); 12 synthetic guardrails added (7 reader, 4 posture, 1 control); fixture results unchanged, hash unchanged.",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
+  },
+  "artifacts/lab-collections": {
+   "path": "artifacts/lab-collections",
+   "reads": []
+  },
+  "artifacts/lane-messages": {
+   "path": "artifacts/lane-messages",
+   "reads": []
+  },
+  "artifacts/live-captures": {
+   "path": "artifacts/live-captures",
+   "reads": []
+  },
+  "artifacts/live-evidence": {
+   "path": "artifacts/live-evidence",
+   "reads": []
+  },
+  "artifacts/mcp-server": {
+   "path": "artifacts/mcp-server",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "tokenForTenant returned '' for a tenant with no seeded demo key and the empty string travelled into runRoomEntry as a credential; it now throws a configuration error (no tenant echoed).",
+     "reviewer": "cloud lane",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the demo-key lookup in src/index.ts only.",
+     "open": 0,
+     "closed": 1
+    }
+   ]
+  },
+  "artifacts/outreach-log": {
+   "path": "artifacts/outreach-log",
+   "reads": []
+  },
+  "artifacts/sbom": {
+   "path": "artifacts/sbom",
+   "reads": []
+  },
+  "artifacts/scanner-comparison": {
+   "path": "artifacts/scanner-comparison",
+   "reads": []
+  },
+  "artifacts/signalgrid-app": {
+   "path": "artifacts/signalgrid-app",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "pages/Intelligence.tsx: three panels rendered 'Loading…' forever on a control-plane error (recommendations, coverage, discovery), so an unreachable plane read as pending and an absent recommendation list as health; each now names the error.",
+     "reviewer": "cloud lane",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the three query-error states in pages/Intelligence.tsx only.",
+     "open": 0,
+     "closed": 1
+    }
+   ]
+  },
+  "artifacts/signalgrid-desktop": {
+   "path": "artifacts/signalgrid-desktop",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "All 22 files read. DesktopLayout rendered a green all-clear for a FAILED signal feed (fixed: three states); Decisions.tsx local verdict map with a neutral fallback (routed through outcome-tone.ts); Integrations.tsx emitted class undefined for an unknown status (restrictive arm) and rendered 0 CONNECTED for an unloaded catalog; Handoff mock minted Date.now() and threw on an unknown status. Fetch targets all served. No Electron surface exists — it is a Vite web app labelled review build.",
+     "open": 0,
+     "closed": 6
+    }
+   ]
+  },
+  "artifacts/signalgrid-mobile-pwa": {
+   "path": "artifacts/signalgrid-mobile-pwa",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "All 23 files read. OutcomeBadge seeded neutral grey (new lib/outcome-tone.ts, restrictive fallback); formatNumber rendered absent as \"0\" and Overview rendered \"0.0%\" for absent rates (dashes); Decisions/Integrations blank on error (explicit unreachable rows); manifest named two icons that do not exist (dropped). No service worker exists, so no stale-allow offline cache. components.json aliases two paths that do not exist (LOW, left).",
+     "open": 1,
+     "closed": 5
+    }
+   ]
+  },
+  "artifacts/signalgrid-review": {
+   "path": "artifacts/signalgrid-review",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Every src file read (vendored components/ui skipped, noted). The connector-emulator deck rendered a hand-transcribed digest, count and pack list that matched nothing (8 of 15 scenarios, four of five packs, a stale hash) under 'Evidence panel', with green guardrail ticks from a string array and the fixture's INTENDED decision rendered as the decision. Now derived from the five fixture packs and the committed results.json; guardrails computed; the engine's actual decision rendered with mismatches red. robots.txt aligned with the noindex meta. CLAIM_INVENTORY rows 466/486 re-measured.",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 4
+    }
+   ]
+  },
+  "artifacts/signalgrid-web": {
+   "path": "artifacts/signalgrid-web",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "All 24 source files read. 13 evidence links point at blob|tree/main and there is no main branch (every one 404s live); About.tsx claims location/identity as current with no hedge; SIGNALS FUSED 7 beside a 4-row array; 16 candidate categories beside 5 groups; LIVE_VERIFIED matches the label Fleet against \"Fleet (live-proven)\"; Federal STATUS_META unguarded. No fetch surface, no client verdicts, vite config clean. Fixes are batch I (the next PR).",
+     "open": 6,
+     "closed": 0
+    }
+   ]
+  },
+  "artifacts/sim-requests": {
+   "path": "artifacts/sim-requests",
+   "reads": []
+  },
+  "artifacts/sim-results": {
+   "path": "artifacts/sim-results",
+   "reads": []
+  },
+  "artifacts/sync": {
+   "path": "artifacts/sync",
+   "reads": []
+  },
+  "config": {
+   "path": "config",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "All four tier env examples and the grid config example read. Clean: no secret carries a default, live integrations off in every tier, and the prod example's 'everything is 401 with these unset' claim verified against middlewares/context.ts.",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  "docker": {
+   "path": "docker",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "nginx-web.conf, both Dockerfiles and all four compose files read. docker-compose.yml (the review topology) had no healthcheck on any service while .prod.yml explained at length why one is needed; api/web/nginx now carry one with readiness conditions, the sim service too; new gate check-compose-healthchecks.mjs (migrate.yml's db exempt as an overlay, with the reason). Base images pinned, no latest, USER node.",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
+  },
+  "docs/*": {
+   "path": "docs",
+   "note": "NOT READ. This row was seeded READ on the strength of #375 and that was wrong, in exactly the way this ledger exists to catch: #375 audited docs/INDEX.md line by line against the entries it routes to, and its squash commit touches three of the 203 top-level documents (INDEX.md, OPEN_SOURCE_LAB_REGISTRY.md, STATUS.md). An index audit is a read of the index, not of what it points at. Downgraded 2026-09-02 by independent review.",
+   "reads": []
+  },
+  "docs/agent": {
+   "path": "docs/agent",
+   "reads": []
+  },
+  "docs/assets": {
+   "path": "docs/assets",
+   "reads": []
+  },
+  "docs/company": {
+   "path": "docs/company",
+   "reads": []
+  },
+  "docs/connectors": {
+   "path": "docs/connectors",
+   "reads": []
+  },
+  "docs/consolidation": {
+   "path": "docs/consolidation",
+   "reads": []
+  },
+  "docs/env": {
+   "path": "docs/env",
+   "reads": []
+  },
+  "docs/estate": {
+   "path": "docs/estate",
+   "reads": []
+  },
+  "docs/inspiration": {
+   "path": "docs/inspiration",
+   "reads": []
+  },
+  "docs/lab": {
+   "path": "docs/lab",
+   "reads": []
+  },
+  "docs/outreach": {
+   "path": "docs/outreach",
+   "reads": []
+  },
+  "docs/postman": {
+   "path": "docs/postman",
+   "reads": []
+  },
+  "docs/preview": {
+   "path": "docs/preview",
+   "reads": []
+  },
+  "docs/research": {
+   "path": "docs/research",
+   "reads": []
+  },
+  "firmware": {
+   "path": "firmware",
+   "note": "NOT READ. #386's summary sentence names 'the dock firmware' alongside the Android and desktop reads, but the only firmware change in that PR was firmware/.gitignore and its workflow - no source file under firmware/dock/core/ was opened.",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "All 8 files read (dock/core Rust, ~1,190 lines). Model fail-closed code: Reading<T> keeps NotReported and Faulted distinct, every vocabulary carries Unknown, custody refuses to infer from absence, 32 silent-sensor combinations brute-forced, buffer sizes below requirement refuse; no unsafe, no deps, no network. docs claim 28 tests: 28 counted. CLEAN.",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  "fixtures": {
+   "path": "fixtures",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "microsoft-graph packs read in full (every expectedDecision asserted by proof:microsoft-graph-sandbox); emulator packs read in the fifth round through the harness and the deck. Both READMEs accurate. CLEAN.",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  "fleet": {
+   "path": "fleet",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "All three files read. The team yml applied an iOS-only profile under macos_settings as if it restricted Macs and named 3 of 8 managed keys omitting the required BackendBaseURL (comment corrected); ../profiles/ resolution is unverifiable without fleetctl (marked). The profile lacked PayloadScope/PayloadRemovalDisallowed (added; proof now holds every profile, every payload).",
+     "open": 1,
+     "closed": 3
+    }
+   ]
+  },
+  "lib/adaptive-proposals": {
+   "path": "lib/adaptive-proposals",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Full read of 5 files. Core invariant (no self-activation) holds. Zero prediction made helped unconditionally true; denylist auto-resolution; vacuous simulation passed the gate; raw status lookup; approvedAtRef unvalidated; absent refs counted as a signal; findings overwritable. Fixed; 37->48.",
+     "reviewer": "cloud lane",
+     "record": "lib/adaptive-proposals/src/measure.ts",
+     "scope": "surface",
+     "open": 0,
+     "closed": 7
+    }
+   ]
+  },
+  "lib/api-client-react": {
+   "path": "lib/api-client-react",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "custom-fetch.ts in full plus the generated files. An off-vocabulary responseType resolved undefined AS SUCCESS (no default arm); a 200 with no content-type came back as a raw string the caller read as its typed result. Both fixed; the package had ZERO proofs and now has proof:api-client-react (13 assertions) registered in preflight and CI.",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 2
+    }
+   ]
+  },
+  "lib/api-spec": {
+   "path": "lib/api-spec",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "All three documents and orval.config.ts read. openapi.yaml (orval's input for two shipping packages) documented six write operations the server never served and was read by no gate; pruned, the served-but-undocumented routes added, api-contract-proof extended to hold both documents with a route-file registry. api-client-react regenerated; api-zod NOT (orval 8.24 emits zod-v4 calls against zod 3.25) — recorded in BUILD_BACKLOG. product-openapi.json left as the open backlog row says.",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 1,
+     "closed": 1
+    }
+   ]
+  },
+  "lib/api-zod": {
+   "path": "lib/api-zod",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Fail-closed audit of the Zod validation surface (the whole runtime surface is one orval-generated file, api.ts, 355 lines; the 45 generated types are pure interfaces). Schemas are fail-closed by construction (no passthrough, no enum catch, coerce.date/number reject NaN). Systemic finding: the *Body/*QueryParams input schemas are DEAD as guards — the live /v1 routes hand-roll validation in v1.ts, which is itself fail-closed end-to-end (bounded TTL, bounded+refusing reconcile, core validateRequest rejects empty bindings). No live fail-open. Latent generated-schema tightenings + a dead-validator wiring gate filed to the backlog as design targets.",
+     "reviewer": "cloud lane",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  "lib/app-workflows": {
+   "path": "lib/app-workflows",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Full read of 3 files + the Swift port + the parity gate. Empty held-set plus a bogus key minted a step-up-done record; scoped release had no TS coverage; raw confirmer lookup; firstReason crash on restrictive outcomes. Fixed; 43->49. Swift whole-integration release and dead default = Mac lane item 101; parity gate compares shape only (planted 4 behavioural divergences, all green).",
+     "reviewer": "cloud lane",
+     "record": "lib/app-workflows/src/index.ts",
+     "scope": "surface",
+     "open": 2,
+     "closed": 4
+    }
+   ]
+  },
+  "lib/audit": {
+   "path": "lib/audit",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Adversarial fail-closed read of the audit-ledger surface (index/backend/types): canonical JSON sorts keys at every depth incl. inside arrays and escapes keys+values, depth-bounded (append refuses rather than hash a truncated form), secrets redacted before hashing; verifySegment field-set matches append; verifyLedger cap-honest, verifyLedgerFull paginates whole chain. backend appendWithChain atomic (advisory xact lock) so the chain can't fork; readiness asserts append-only (SELECT/INSERT/seq-USAGE required, UPDATE/DELETE/TRUNCATE forbidden -> not ready), which is the structural tail-truncation defense. Zero fail-open/integrity defects; 2 non-defect notes (no external head anchor for admin-level tail truncation; substring secret-key match over-redacts).",
+     "reviewer": "cloud lane",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  "lib/control-plane": {
+   "path": "lib/control-plane",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Adversarial fail-closed audit of the cloud control plane (index.ts, 598 lines). Found and FIXED a real fail-open: bundle signature verification used a shared source-literal fallback key for any tenant absent from the signing registry, so a forged bundle for an unprovisioned tenant verified (golden rule 2 inverted on the authenticity boundary). Fix removes the fallback (signingKeyFor via hasOwnProperty -> undefined; verify fails closed; mint returns null), and adds a mutation-proven edge-sync-proof assertion (restoring the fallback -> 16/17 fail). Finding 2 (the proof could not catch it) fixed alongside. Finding 3 latent/deferred: empty-string tenantId resolves to a cross-tenant wildcard in five list methods (caller-gated today; follow-up to treat empty distinct from undefined). Rest verified fail-closed (checksum/signature guards, telemetry nonNeg, unknown->null, custodyGaps).",
+     "reviewer": "cloud lane",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 2
+    },
+    {
+     "date": "2026-09-04",
+     "read": "Follow-up (owner-requested): fixed Finding 3 from the control-plane read. Empty-string tenant/site scope in listSites/listEdgeNodes/listFleet/fleetHealth/operationalIntelligence resolved to a cross-tenant wildcard (`!tenantId`). Replaced with a scopeIncludes helper (undefined->all, empty/whitespace->none, else exact) and added 9 mutation-proven control-plane-proof assertions (restoring the old filter -> 40/42). No open findings remain on this surface.",
+     "reviewer": "cloud lane",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the tenant/site scope filters (Finding 3 fix), building on the 2026-09-04 full read",
+     "open": 0,
+     "closed": 1
+    }
+   ]
+  },
+  "lib/ddm-connector": {
+   "path": "lib/ddm-connector",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Adversarial fail-closed read of the DDM connector (index/apple-schema/fixture): deviceManaged is enrolled===true strictly; unknown/unreporting health and non-enforced binaryControl resolve to unknown/drifted; freshnessOf handles null/NaN/future (missing/unknown), and a malformed nowIso lands on expired via NaN-compare; enforcementCurrencyOf trusts only exact 'declarative' as current (legacy->dead/at_risk, unmapped->unknown); the `weak` OR can only raise assurance auto->step-up, never relax. apple-schema is a compile-time exhaustive provenance map. Zero fail-open defects; no material notes.",
+     "reviewer": "cloud lane",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  "lib/dual-control": {
+   "path": "lib/dual-control",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Adversarial read of the two-person normalizer/evaluator in the same sweep, confirmed by on-tree mutation. The authorizer normalizer's `!plain` and `readThrew` disjuncts were labelled 'genuinely inert' (a 239-shape behavioural diff) but are each the SOLE guard on one shape the diff never generated: a NULL authorizer body (hasUnrecognizedKey(null) never enters its walk) and a throwing accessor on a known key. Both are load-bearing; pinned with proof vectors, killed by the mutation guard, removed from the inert allowlist. Only the top-level twins are inert - now carrying an inert-at-top marker so the allowlist cannot launder the load-bearing terms.",
+     "reviewer": "cloud lane (adversarial sweep + on-tree mutation verify)",
+     "record": "docs/SELF_REVIEW.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
+  },
+  "lib/enterprise-auth": {
+   "path": "lib/enterprise-auth",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Adversarial fail-closed read of the OIDC/JWT enterprise sign-in surface (jwt/jwks/claims/config/provider/base64url): alg gate rejects none/HS* before key material, signature before claims, exp required, nowMs injected; JWKS never caches a failed fetch, cooldown-limited refetch; config OIDC-off by default, partial/empty maps invalid, blank clock-tolerance->60 not 0; claim->principal deny-by-default with hasOwnProperty guard. Zero fail-open/non-determinism/unknown-permissive defects; 2 non-defect notes recorded.",
+     "reviewer": "cloud lane",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  "lib/event-contract": {
+   "path": "lib/event-contract",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Adversarial fail-closed read of the event-contract surface (validate/detect/types): validateEvent rejects non-objects, unknown enum values, and malformed ids (ReDoS-safe bounded regex), guards prototype pollution (FORBIDDEN_KEYS + no dynamic writes), range/finite-checks batteryPercent, drops unknown fields, never throws; detectCrossDomain is pure/deterministic and its detections are alarms not grants, treating unknown MDM state as dark (tightening). Zero fail-open defects; 2 non-defect notes (Date.parse leniency vs the ISO-8601 contract; correlationId taken from events[0] unasserted).",
+     "reviewer": "cloud lane",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  "lib/facility-trust-graph": {
+   "path": "lib/facility-trust-graph",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Fail-closed audit of all 8 files (graph/evaluate/correlate/clinical/transition/gateway/fixture/index). Clean throughout except one field: map_version had no shape tripwire, so a present-but-unparseable value (number/empty/whitespace) collapsed to 'unassessed' and GRANTED, while a well-formed-wrong value restricted. Added mapVersionShapeBad -> present garbage now fails closed to malformed/step_up; absent stays grant-eligible by design.",
+     "reviewer": "cloud lane",
+     "record": "lib/facility-trust-graph/src/evaluate.ts",
+     "scope": "surface",
+     "open": 1,
+     "closed": 1
+    }
+   ]
+  },
+  "lib/fleet-connector": {
+   "path": "lib/fleet-connector",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Full read. typeof-number read NaN as observed on both OS-floor guards (Number.isFinite now); osFloor comment made true; summary names unverified hosts. 63->67. Three hardening items recorded.",
+     "reviewer": "cloud lane",
+     "record": "lib/fleet-connector/src/index.ts",
+     "scope": "surface",
+     "open": 3,
+     "closed": 3
+    }
+   ]
+  },
+  "lib/flows": {
+   "path": "lib/flows",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Full read of all 11 sources. Unknown SignalStatus graded a flow healthy and masked a co-observed broken (REAL, shipping via api-server); prototype-key kind NaN-poisoned the teardown ordering guard; fidelity lookup not own-key. Fixed; 32->35 and 25->28. Break-glass surviving step_up/unparseable outcome recorded for owner doctrine.",
+     "reviewer": "cloud lane",
+     "record": "lib/flows/src/index.ts",
+     "scope": "surface",
+     "open": 2,
+     "closed": 3
+    }
+   ]
+  },
+  "lib/handoff-sim": {
+   "path": "lib/handoff-sim",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Full read of 4 files. Release trusted a zero-signal or off-ladder device; unknown step kind recorded applied; two unswept refs; proof vocabulary hand-copied. All fixed, vocabulary derived. 55->59.",
+     "reviewer": "cloud lane",
+     "record": "lib/handoff-sim/src/release.ts",
+     "scope": "surface",
+     "open": 1,
+     "closed": 4
+    }
+   ]
+  },
+  "lib/iac": {
+   "path": "lib/iac",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "All six files read. detectDrift over an EMPTY desired state returned in_sync with zero findings (a desired state that failed to load read as a healthy fleet; the unknown rung was producible by nothing) — now one unknown finding, overall unknown, summary and probe projection carry it; 5 proof assertions, mutation-proven. lifecycle/plan/defaults/summarize clean.",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
+  },
+  "lib/incident-playbook": {
+   "path": "lib/incident-playbook",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Full read. Default arms of 3 of 4 switches returned the weakest answer (no incident / Service Desk); prototype impact yielded a priority-less ticket. Fixed. 49->60.",
+     "reviewer": "cloud lane",
+     "record": "lib/incident-playbook/src/map.ts",
+     "scope": "surface",
+     "open": 2,
+     "closed": 4
+    }
+   ]
+  },
+  "lib/integration-bridge": {
+   "path": "lib/integration-bridge",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Full read of both files. device_management:true asserted from a source with no enrolment field (removed, guarded in launch-seam); policyState ungated on enrolment; empty provenance skipped the fallback. 5 design targets recorded.",
+     "reviewer": "cloud lane",
+     "record": "lib/integration-bridge/src/index.ts",
+     "scope": "surface",
+     "open": 5,
+     "closed": 3
+    }
+   ]
+  },
+  "lib/integrations": {
+   "path": "lib/integrations",
+   "reads": [
+    {
+     "date": "2026-09-02",
+     "read": "Emit side, first directional read - the six emitter families and their shared factory, read for what happens when a credential is absent, whether every outbound fetch is bounded, and whether the dispatcher reports suppression honestly.",
+     "reviewer": "cloud lane (independent review before landing)",
+     "record": "#378",
+     "scope": "partial: the six emitter families and the shared adapter factory - roughly 25 of this package's 278 tracked files. The connector NORMALIZERS, the read paths and the other families were not in this read.",
+     "open": 0,
+     "closed": 5
+    },
+    {
+     "date": "2026-09-02",
+     "read": "Emit side, second read - payload construction: 27 build sites read, 17 whole-object copies found at 7 of them; every builder now declares a closed top-level key set with its open slots named.",
+     "reviewer": "cloud lane (independent review, eight notes folded)",
+     "record": "#383",
+     "scope": "partial: the payload builders of the same six emitter families.",
+     "open": 0,
+     "closed": 17
+    },
+    {
+     "date": "2026-09-02",
+     "read": "Emit side, third read - headers and inbound parsing across the same six families: redirect following, vendor-minted values reaching a header or a path, the two webhook families' URL guard and signature, error-text bounding.",
+     "reviewer": "cloud lane (independent review, notes folded)",
+     "record": "#388",
+     "scope": "partial: outbound headers and inbound response parsing in the same six emitter families.",
+     "open": 1,
+     "closed": 2
+    }
+   ]
+  },
+  "lib/location": {
+   "path": "lib/location",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Firsthand read of all 6 files. Store/validate/config fail closed (NaN-guarded TTLs, non-finite/future/stale/mode rejection, clamped max-age). One latent fail-open fixed: the RADIUS/DHCP ingest validated a required event timestamp then stamped observedAt with the ingest clock, so the freshness guard compared now against now and a replayed record became fresh presence. observedAt is now the event's own instant; 8 replay/future/instant assertions added to proof:location-services (48/48); invariant clock-read pin 5->3.",
+     "reviewer": "cloud lane",
+     "record": "lib/location/src/radius-dhcp.ts",
+     "scope": "surface",
+     "open": 3,
+     "closed": 1
+    }
+   ]
+  },
+  "lib/orchestration": {
+   "path": "lib/orchestration",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Full read. Sensitivity compared === controlled at 4 sites (unknown -> standard plan), unknown domain threw, malformed reasonCodes crashed; all fail-closed now, monotonicity sweep added. 41->48.",
+     "reviewer": "cloud lane",
+     "record": "lib/orchestration/src/index.ts",
+     "scope": "surface",
+     "open": 0,
+     "closed": 3
+    }
+   ]
+  },
+  "lib/persistence": {
+   "path": "lib/persistence",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "All five files in full. refresh() returned the expired/ended session object so the route answered 200 with an audit row for a refresh that never happened (now null -> 404); listDecisions reported a 100-row page length as total (countDecisions added, id tiebreak on the order); role-split COALESCE(..., TRUE) proved schema ownership from a missing row (now FALSE); the unparseable-expiry guard had no assertion holding it (now two). PG proofs extended for CI; not runnable here (no Postgres).",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 5
+    }
+   ]
+  },
+  "lib/pim-activation": {
+   "path": "lib/pim-activation",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Full read; grant is a seven-way conjunction with no reachable fail-open. Latent count<=0 inversion and hand-listed proof domains fixed. 43->51.",
+     "reviewer": "cloud lane",
+     "record": "lib/pim-activation/src/from-posture.ts",
+     "scope": "surface",
+     "open": 0,
+     "closed": 2
+    }
+   ]
+  },
+  "lib/posture-composition": {
+   "path": "lib/posture-composition",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Fail-closed audit of all 4 files. Fusion is directionally correct (strongest action wins; device-posture adapter requires positive confirmation on every field). One latent hole fixed: an off-ladder action (behind 40 `as UnifiedAction` casts) made ACTION_RANK[x] undefined -> NaN sort (order-dependent) + undefined riskTier. rankOf/tierOf now treat an unknown action as most-severe (top rank, blocked tier). Empty-input contract noted as a caller-relied design target, not changed.",
+     "reviewer": "cloud lane",
+     "record": "lib/posture-composition/src/compose.ts",
+     "scope": "surface",
+     "open": 1,
+     "closed": 1
+    }
+   ]
+  },
+  "lib/recommendations": {
+   "path": "lib/recommendations",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Full read. Unreadable denial/override counts flipped a tighten into a relax with a fabricated 'no denials' rationale; unreadable samples cleared the evidence gate; NaN confidence on the wire; locale-sensitive order. Fixed; 15->24. Advisory-only surface verified: no apply path anywhere.",
+     "reviewer": "cloud lane",
+     "record": "lib/recommendations/src/index.ts",
+     "scope": "surface",
+     "open": 2,
+     "closed": 4
+    }
+   ]
+  },
+  "lib/reliability": {
+   "path": "lib/reliability",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Firsthand read of the whole SLO/error-budget module. Fail-closed core intact (unknown outranks at_risk and is attention; zero-tolerance integrity un-buyable; empty window unknown; clock-free). One drift fixed: the owner-facing plain summary was sorted binary needs-attention/not, not worst-first as its comment claimed, so a critical fail-closed breach could render below an at_risk line on the operator surface (control-plane.ts).",
+     "reviewer": "cloud lane",
+     "record": "lib/reliability/src/summarize.ts",
+     "scope": "surface",
+     "open": 1,
+     "closed": 1
+    }
+   ]
+  },
+  "lib/room-sim": {
+   "path": "lib/room-sim",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Full read of both files: scenario data plus delegation to the real core and orchestration; no comparison, lookup, ladder or clock; order-independence verified empirically. Findings are one level out (console sigClass, stale committed bundle, proof assertions) and land in the next batch.",
+     "reviewer": "cloud lane",
+     "record": "lib/room-sim/src/index.ts",
+     "scope": "surface",
+     "open": 7,
+     "closed": 0
+    }
+   ]
+  },
+  "lib/self-audit": {
+   "path": "lib/self-audit",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Fail-closed audit of the self-integrity module. Probe path sound (missing/malformed -> unknown; unknown never healthy; heal lifecycle human-gated, no self-heal edge; clock-free). One fail-open fixed: runAudit seeded overall + every layer to healthy and only moved them worse, and summarizePlain derived allClear from per-item counts only, so an audit that checked NOTHING reported 'Everything is working.' Functional layers now seed unknown (meta stays healthy-when-empty); overall folds layer statuses; allClear requires overall healthy.",
+     "reviewer": "cloud lane",
+     "record": "lib/self-audit/src/audit.ts",
+     "scope": "surface",
+     "open": 1,
+     "closed": 1
+    }
+   ]
+  },
+  "lib/signal-discovery": {
+   "path": "lib/signal-discovery",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Both files in full. Dedupe keyed on the RAW category while the classifier trimmed it (whitespace variants inflated recognized); planOnboarding auto-onboarded on any truthy value; sources configured counted as sources heard from; localeCompare sort. All fixed; 5 proof assertions added.",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 4
+    }
+   ]
+  },
+  "lib/signal-radar": {
+   "path": "lib/signal-radar",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Both files in full. scanSignals answered 'All observed signals are already evaluated' for an EMPTY batch (a dropped body read as a covered grid; POST /api/signals/radar substituted [] for any non-array) - fixed with a scanned count, a coverage-unknown summary and a 400 on a non-array body; localeCompare sort replaced by codepoint order; 4 proof assertions added and pinned in absent-collection-proof. Prototype-key, clock and switch hunts clean.",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 3
+    }
+   ]
+  },
+  "lib/signalgrid-core": {
+   "path": "lib/signalgrid-core",
+   "reads": [
+    {
+     "date": "2026-08-23",
+     "read": "Verdict core, first read - the eleven verdict-computing files read adversarially against the fail-closed invariant; nine file-level entries filed in docs/agent/review-coverage.json.",
+     "reviewer": "verdict-core-reader",
+     "record": "docs/COMPANY_BUILD_PLAN.md",
+     "scope": "partial: the eleven verdict-computing files named in build-plan row 42 (engine, decision, policy, resolution, evidence, continuity), which span three packages; this package's other modules were not in that read.",
+     "open": 0,
+     "closed": 2
+    },
+    {
+     "date": "2026-09-02",
+     "read": "Verdict core, second read - outcome order pinned, five previously unproven rules proven, evidence hardened so the worst input wins in both directions, resolution plan made honest on silence.",
+     "reviewer": "cloud lane (three independent reviews)",
+     "record": "#376",
+     "scope": "partial: evidence.ts, resolution.ts and types.ts - the outcome-order, evidence-composition and resolution rules.",
+     "open": 0,
+     "closed": 2
+    }
+   ]
+  },
+  "lib/signalgrid-simulator": {
+   "path": "lib/signalgrid-simulator",
+   "reads": [
+    {
+     "date": "2026-09-02",
+     "read": "Verdict core, second read, simulator half - the simulator's decision vocabulary catalogued against the core's and monotonicity proven; 89 lines added to the simulator proof.",
+     "reviewer": "cloud lane (three independent reviews)",
+     "record": "#376",
+     "scope": "partial: the decision vocabulary and monotonicity properties, reached through the simulator proof rather than by reading the package.",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  "lib/verdict-attestation": {
+   "path": "lib/verdict-attestation",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Adversarial read of the attestation verifier as part of a security/decision-lib sweep: verifyVerdict's freshness/skew checks read against non-finite caller inputs. Found a real fail-open - a NaN or Infinity options.now/maxAgeMs/maxSkewMs silently disabled BOTH freshness comparisons (x > NaN is false), so a stale or future attestation verified. Fixed to fail closed to expired, six proof vectors added, proof 76 -> 82.",
+     "reviewer": "cloud lane (adversarial sweep + independent verify)",
+     "record": "#415",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
+  },
+  "lib/webauthn": {
+   "path": "lib/webauthn",
+   "reads": [
+    {
+     "date": "2026-09-04",
+     "read": "Read of the credential store's addCredential/enrollment-race path in the same sweep. Found a fossil figure: the addCredential comment attributed a discarded '7 of 12' WATCH/MULTI measurement to proof:enrollment-race, which actually measures the shipped lock at 12/12 and never emits that number. Comment reworded; the propagated copy in COMPANY_BUILD_PLAN.md corrected.",
+     "reviewer": "cloud lane (adversarial sweep + independent verify)",
+     "record": "#415",
+     "scope": "partial: the addCredential/enrollment-race path and its proof-figure attribution; the full registration/assertion ceremony verification was not re-read.",
+     "open": 0,
+     "closed": 1
+    }
+   ]
+  },
+  "lib/work-context": {
+   "path": "lib/work-context",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Full read of reevaluate/types/assemble. Zero-signal device graded none (proof pinned it); four raw ACTION_RANK lookups. Dark device now step_up; all sites rank through rankOf. 52->58.",
+     "reviewer": "cloud lane",
+     "record": "lib/work-context/src/reevaluate.ts",
+     "scope": "surface",
+     "open": 0,
+     "closed": 2
+    }
+   ]
+  },
+  "native/android": {
+   "path": "native/android",
+   "reads": [
+    {
+     "date": "2026-09-02",
+     "read": "The same runtime-breakage read the iOS shell got, applied to the Android client: cleartext policy against the real minSdk, the emulator loopback alias, and whether the client decodes the contract the server serves. Not compiled in this lane.",
+     "reviewer": "cloud lane (two independent passes)",
+     "record": "#386",
+     "scope": "surface",
+     "open": 0,
+     "closed": 2
+    }
+   ]
+  },
+  "native/desktop": {
+   "path": "native/desktop",
+   "reads": [
+    {
+     "date": "2026-09-02",
+     "read": "The same runtime-breakage read applied to the desktop shell: the UI's invoke threw on every launch and the panel showed an error banner, which CI could not see because it never opens a window; an unreadable core now shows deny rather than a blank verdict. Not compiled in this lane.",
+     "reviewer": "cloud lane (two independent passes)",
+     "record": "#386",
+     "scope": "surface",
+     "open": 0,
+     "closed": 2
+    }
+   ]
+  },
+  "native/ios/*": {
+   "path": "native/ios",
+   "reads": []
+  },
+  "native/ios/EnterpriseShell": {
+   "path": "native/ios/EnterpriseShell",
+   "reads": [
+    {
+     "date": "2026-09-02",
+     "read": "Runtime read after the owner ran the app and said it was broken - the lock screen's way in, backend base-URL resolution against the served contract, the OIDC and launcher crash paths, and signing. Source read only; nothing was compiled in this lane.",
+     "reviewer": "cloud lane (independent review, notes folded)",
+     "record": "#387",
+     "scope": "surface",
+     "open": 0,
+     "closed": 4
+    },
+    {
+     "date": "2026-09-02",
+     "read": "The same batch BUILT and RUN on a simulator by the machine that has Xcode: BUILD SUCCEEDED, ios-shell-repair 8/8, clean provenance; step 6's standing failure root-caused to a self-inflicted grep in the harness rather than a crash.",
+     "reviewer": "Mac lane",
+     "record": "6f89457",
+     "scope": "executed",
+     "open": 1,
+     "closed": 1
+    }
+   ]
+  },
+  "native/ios/EnterpriseShellTests": {
+   "path": "native/ios/EnterpriseShellTests",
+   "note": "NOT READ. The Mac lane wrote SessionExpiryTests here on branch mac/session-expiry-hardening (LOOP.md, 2026-09-02), which had not landed on the default branch when this ledger was seeded. Writing tests for one fail-open is not a read of the test target.",
+   "reads": []
+  },
+  "native/ios/SignalGridMobile": {
+   "path": "native/ios/SignalGridMobile",
+   "reads": []
+  },
+  "native/ios/mdm": {
+   "path": "native/ios/mdm",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "Both files read. README's MDM list omitted Fleet (added); 8 managed keys documented and read, none stray; the kiosk profile states supervision. The managed-key table copy here was ungated (now one of three copies the demo-flags gate holds).",
+     "open": 0,
+     "closed": 2
+    }
+   ]
+  },
+  "native/ios/scripts": {
+   "path": "native/ios/scripts",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "pick-simulator.py read in full: raises rather than falling back, six negative controls, self-test run in CI before it is trusted. CLEAN (one comment sits above the wrong check; cosmetic).",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  "native/shared": {
+   "path": "native/shared",
+   "reads": [
+    {
+     "date": "2026-09-02",
+     "read": "The shared Assist-wire vector table read against both clients: every vector key must be one the harnesses actually read, and at least one vector must assert the parsed obligations.",
+     "reviewer": "cloud lane (two independent passes)",
+     "record": "#386",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
+  },
+  "scripts": {
+   "path": "scripts",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "check-package-reachability.mjs (edge extractor credited a package NAMED in a comment as an import - six libraries reported shipped that nothing ships, pin 8 -> 13 measured from import positions, --self-test with 13 shapes registered in preflight and CI), build-room-console.mjs (silent no-op on a missing bundle marker, no scenario markers, no sigClass test - all three added), lane-deliver.mjs (a new message file staled the coverage page and failed the mail PR - the page is now regenerated inside the worktree), src/room-sim-proof.ts (cross-tenant refusals were bare catches that an empty token would also satisfy - now assert the tenant-boundary message, a non-empty token and the positive control).",
+     "reviewer": "cloud lane",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: four scripts - the reachability gate, the room-console builder, lane-deliver and the room-sim proof. The other ~150 gates and proofs were not in this read.",
+     "open": 0,
+     "closed": 4
+    }
+   ]
+  },
+  "site": {
+   "path": "site",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "Both files read. site/index.html is NOT deployed by pages.yml (only CNAME is used) and is outside check-launch-claims' derived scope while asserting three deferred signals as what the core reasons over today, plus dead ./console.html, ./battlecard.html and docs/IGA_ADJACENCY.md links. Fix is batch I.",
+     "open": 2,
+     "closed": 0
+    }
+   ]
+  },
+  "tests": {
+   "path": "tests",
+   "note": "NOT READ as a surface. #380 (e66da87, 2026-09-02) read and dispositioned the tests/security-reference/ SUBTREE - eight specs no runner reached - by porting seven invariants to the live surface and deleting the directory. That subtree is gone, so the read covers nothing that is here now. What remains is tests/load/, the k6 drivers that scripts/check-test-execution.mjs says in its own header are invoked by nothing and are recorded open in docs/COMPANY_BUILD_PLAN.md row 43. A read of a deleted subtree is not a read of this surface.",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "read": "tests/load/*.js read in full. The three k6 drivers could not fail: 401/404/400 counted as success against routes this api-server never served, and webhooks.js defaulted to a third-party host. Predicates 2xx-only, receiver required (4b50c4d). Retirement is the owner's call (COMPANY_BUILD_PLAN row 43).",
+     "open": 1,
+     "closed": 3
+    }
+   ]
+  },
+  "tools": {
+   "path": "tools",
+   "reads": [
+    {
+     "date": "2026-09-05",
+     "read": "Both shells read in full. room-console/shell.html: sigClass coloured a signal by raw substring, so non_compliant and not_present rendered GREEN (they contain 'compliant'/'present') and unknown/missing/expired rendered blank; rewritten (separators stripped, exact good values first, every bad/warn word beats every good word, unlisted negations bad, unrecognised amber) with 41 vectors run by the build and mutation-proven (original defect: 4 failures; negation rule dropped: 3). evidence-coverage/shell.html holds no logic. The committed docs/room-entry-console.html was STALE against the core and is now gated in preflight and CI like the evidence page.",
+     "reviewer": "cloud lane",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 3
+    }
+   ]
   }
+ }
 }

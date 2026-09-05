@@ -72,10 +72,15 @@ export default function sessionStartLoadTest() {
 
   sessionLatency.add(duration);
 
+  // FAIL-CLOSED. The original predicate counted 401 and 404 as success, so a
+  // server that never served this route at all (this repo's api-server serves
+  // /v1/*, not /api/session/start) passed the error-rate threshold with a
+  // perfect score. A load test that cannot tell "the route is missing" from
+  // "the route is fast" measures nothing. Only a 200 with a session id counts.
   var success = check(response, {
-    'status is 200 or 401 or 404': function(r) { return [200, 401, 404].includes(r.status); },
-    'has sessionId when successful': function(r) {
-      if (r.status !== 200) return true;
+    'status is 200': function(r) { return r.status === 200; },
+    'has sessionId': function(r) {
+      if (r.status !== 200) return false;
       try {
         var body = JSON.parse(r.body);
         return !!body.sessionId;

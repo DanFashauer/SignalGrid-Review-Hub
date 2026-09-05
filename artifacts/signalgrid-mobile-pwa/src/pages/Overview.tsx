@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useGetDashboardMetrics, useGetDecisionSeries, useListIntegrations } from "@workspace/api-client-react";
-import { formatNumber, formatLatency } from "@/lib/format";
+import { formatNumber, formatLatency, formatRate } from "@/lib/format";
 import { ResponsiveContainer, BarChart, Bar } from "recharts";
 import { StatusDot } from "@/components/StatusDot";
 
@@ -12,7 +12,7 @@ export default function Overview() {
     return () => clearInterval(timer);
   }, []);
 
-  const { data: metrics, isLoading: metricsLoading } = useGetDashboardMetrics();
+  const { data: metrics, isLoading: metricsLoading, isError: metricsUnreachable } = useGetDashboardMetrics();
   const { data: series } = useGetDecisionSeries({ window: "24h", granularity: "hour" });
   const { data: integrationsData } = useListIntegrations();
 
@@ -28,12 +28,19 @@ export default function Overview() {
           {[1,2,3,4].map(i => <div key={i} className="h-24 bg-card border rounded-xl animate-pulse" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
-          <MetricCard title="Total Decisions" value={formatNumber(metrics?.totalDecisions)} />
-          <MetricCard title="Allow Rate" value={`${((metrics?.allowRate || 0) * 100).toFixed(1)}%`} />
-          <MetricCard title="Restrict/Deny" value={`${((metrics?.restrictDenyRate || 0) * 100).toFixed(1)}%`} />
-          <MetricCard title="Avg Latency" value={formatLatency(metrics?.avgLatencyMs)} />
-        </div>
+        <>
+          {metricsUnreachable && (
+            <p className="text-xs font-mono text-status-restrict">
+              Metrics unreachable — the figures below are absent, not zero.
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            <MetricCard title="Total Decisions" value={formatNumber(metrics?.totalDecisions)} />
+            <MetricCard title="Allow Rate" value={formatRate(metrics?.allowRate)} />
+            <MetricCard title="Restrict/Deny" value={formatRate(metrics?.restrictDenyRate)} />
+            <MetricCard title="Avg Latency" value={formatLatency(metrics?.avgLatencyMs)} />
+          </div>
+        </>
       )}
 
       {series && (

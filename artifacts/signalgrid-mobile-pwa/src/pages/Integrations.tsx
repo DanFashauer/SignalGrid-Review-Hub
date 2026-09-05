@@ -6,7 +6,7 @@ import { SignalBadge } from "@/components/SignalBadge";
 import { BottomSheet } from "@/components/BottomSheet";
 
 export default function Integrations() {
-  const { data, isLoading } = useListIntegrations();
+  const { data, isLoading, isError } = useListIntegrations();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data: detailData, isLoading: detailLoading } = useGetIntegration(selectedId || "", {
@@ -51,6 +51,10 @@ export default function Integrations() {
         {isLoading ? (
           <div className="p-4 space-y-4">
             {[1,2,3,4].map(i => <div key={i} className="h-24 bg-card border rounded-xl animate-pulse" />)}
+          </div>
+        ) : isError ? (
+          <div className="p-6 text-sm text-status-restrict">
+            Integration catalog unreachable — the state of every source is unknown, not healthy.
           </div>
         ) : (
           <div className="p-4 space-y-8">

@@ -22,6 +22,14 @@
   <string>7B0E9F52-2C41-4A0E-9E2C-000000000001</string>
   <key>PayloadVersion</key>
   <integer>1</integer>
+  <!-- Device-wide, and not removable by the holder. Absent until 2026-09-05:
+       the kiosk profile carried both keys and the proof asserted them there,
+       but this — the profile Fleet actually ships — carried neither, so the
+       next badge holder could have deleted it and kept the device. -->
+  <key>PayloadScope</key>
+  <string>System</string>
+  <key>PayloadRemovalDisallowed</key>
+  <true/>
   <key>PayloadContent</key>
   <array>
     <dict>

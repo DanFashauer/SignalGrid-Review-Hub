@@ -1,13 +1,16 @@
 import React, { useState } from "react";
 import { useListDecisions } from "@workspace/api-client-react";
+import { outcomeTone } from "../lib/outcome-tone";
 
 const OUTCOMES = ["all", "allow", "step-up", "restrict", "deny"] as const;
 type Filter = typeof OUTCOMES[number];
 
-const OUTCOME_COLOR: Record<string, string> = {
-  allow: "text-status-allow", deny: "text-status-deny",
-  "step-up": "text-status-step-up", restrict: "text-status-restrict",
-};
+// The verdict→tone decision lives in lib/outcome-tone.ts and nowhere else. This
+// page used to carry its own map with a NEUTRAL fallback (`?? "text-muted-
+// foreground"`), so a verdict the map did not name — `step_up` spelled with an
+// underscore, `escalate`, an empty string — rendered in the same grey as a
+// timestamp. The doctrine in outcome-tone.ts is that an unrecognised verdict
+// takes the RESTRICTIVE tone; it was written there and never carried here.
 
 type DecRow = { id: string; identityId: string; deviceId: string; workflowId: string; outcome: string; latencyMs: number; evaluatedAt: string };
 
@@ -26,7 +29,7 @@ function exportCSV(rows: DecRow[]) {
 
 export default function DecisionsPage() {
   const [filter, setFilter] = useState<Filter>("all");
-  const { data, isLoading } = useListDecisions({
+  const { data, isLoading, isError } = useListDecisions({
     limit: 200,
     outcome: filter === "all" ? undefined : filter as any,
   });
@@ -77,9 +80,15 @@ export default function DecisionsPage() {
             Array.from({ length: 10 }).map((_, i) => (
               <div key={i} className="h-9 bg-muted/10 animate-pulse mx-3 my-1 rounded" />
             ))
+          ) : isError ? (
+            // A failed fetch used to render the same empty list as "no decisions".
+            // An unreachable log is not an empty log; say which one this is.
+            <div className="px-3 py-6 text-xs font-mono text-status-restrict">
+              DECISION LOG UNREACHABLE — nothing below is known. Retry, or check the control plane.
+            </div>
           ) : data?.decisions.map(d => (
             <div key={d.id} className="grid grid-cols-[120px_1fr_1fr_160px_80px_120px] px-3 py-2 hover:bg-muted/20 transition-colors text-xs font-mono decision-row">
-              <span className={`font-semibold ${OUTCOME_COLOR[d.outcome] ?? "text-muted-foreground"}`}>{d.outcome.toUpperCase()}</span>
+              <span className={`font-semibold ${outcomeTone(d.outcome)}`}>{d.outcome.toUpperCase()}</span>
               <span className="text-foreground/80 truncate pr-2">{d.identityId}</span>
               <span className="text-muted-foreground truncate pr-2">{d.deviceId}</span>
               <span className="text-muted-foreground truncate pr-2">{d.workflowId}</span>
@@ -90,7 +99,7 @@ export default function DecisionsPage() {
         </div>
       </div>
       <div className="text-xs font-mono text-muted-foreground">
-        {data?.total.toLocaleString() ?? 0} total decisions · {data?.decisions.length ?? 0} shown
+        {data ? `${data.total.toLocaleString()} total decisions · ${data.decisions.length} shown` : "– total decisions · – shown"}
       </div>
     </div>
   );

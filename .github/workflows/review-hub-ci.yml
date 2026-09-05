@@ -872,6 +872,9 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
           node scripts/check-shell.mjs
 
+      - name: Bash deny-list hook self-test (a wrapped `sh -c` payload and unreadable input must DENY)
+        run: node scripts/check-hook-denylist.mjs
+
       - name: Evidence Coverage page is committed in sync
         run: |
           git ls-files --error-unmatch docs/evidence-coverage.html > /dev/null || (echo "::error::docs/evidence-coverage.html is not tracked — generated pages must be committed." && exit 1)

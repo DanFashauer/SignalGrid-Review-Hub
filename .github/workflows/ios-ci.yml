@@ -212,9 +212,25 @@ jobs:
           # current tree is clean under them, and planted bad lines are caught.
           set -euo pipefail
           fail=0
+          # THE SCAN ROOTS MUST EXIST AND MUST CONTAIN SWIFT. Inside an `if`
+          # condition errexit never trips, and pipefail hides grep's exit 2
+          # ("no such directory") behind the `grep -v` that follows it — so
+          # renaming native/ios/EnterpriseShell made both gated scans print
+          # "none" and exit 0 forever (reproduced 2026-09-05). Both apps are
+          # scanned now; SignalGridMobile was outside the scan entirely.
+          ROOTS="native/ios/EnterpriseShell native/ios/SignalGridMobile"
+          for root in $ROOTS; do
+            test -d "$root" || { echo "::error::scan root $root does not exist — the scan would be green about nothing"; exit 1; }
+          done
+          swift_count=$(find $ROOTS -name '*.swift' | wc -l | tr -d ' ')
+          if [ "$swift_count" -lt 20 ]; then
+            echo "::error::only $swift_count Swift file(s) under $ROOTS; the floor is 20 — the walk is broken, not the code"
+            exit 1
+          fi
+          echo "scanning $swift_count Swift file(s) under: $ROOTS"
           echo "=== hardcoded credential-shaped literals (GATED) ==="
           if grep -rnE '(password|secret|apiKey|token)[[:space:]]*=[[:space:]]*"[^"]{4,}"' \
-               native/ios/EnterpriseShell --include="*.swift" \
+               $ROOTS --include="*.swift" \
              | grep -vE '//|TODO|FIXME|placeholder|example|demo'; then
             echo "::error::credential-shaped literal(s) above — move to configuration or the demo fixtures"
             fail=1
@@ -222,11 +238,13 @@ jobs:
             echo "none"
           fi
           echo "=== insecure http:// URLs outside localhost (GATED) ==="
-          if grep -rn "http://" native/ios/EnterpriseShell --include="*.swift" \
+          if grep -rn "http://" $ROOTS --include="*.swift" \
              | grep -vE '//.*http://|localhost|127\.0\.0\.1'; then
             echo "::error::non-local plaintext URL(s) above"
             fail=1
+          else
+            echo "none"
           fi
           echo "=== TODO/FIXME (REPORTED, not gated) ==="
-          grep -rc "TODO:" native/ios/EnterpriseShell --include="*.swift" 2>/dev/null | grep -v ':0$' || echo "none"
+          grep -rc "TODO:" $ROOTS --include="*.swift" 2>/dev/null | grep -v ':0$' || echo "none"
           exit $fail

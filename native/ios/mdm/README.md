@@ -33,7 +33,10 @@ permanently trapping the device.
 1. **Supervise the device** — via Apple Business/School Manager + Automated Device
    Enrollment (preferred, for fleets) or Apple Configurator (for a few devices).
    ASAM authorization requires supervision; it is refused otherwise.
-2. **Enroll in your MDM** (Jamf, Intune, Kandji, Mosyle, …).
+2. **Enroll in your MDM** — Fleet is the MDM this repo is built against (see
+   `fleet/README.md` and `fleet/profiles/signalgrid-restrictions.mobileconfig`,
+   the Fleet-delivered twin of this profile); Jamf, Intune, Kandji, Mosyle and
+   the rest deliver the same payload.
 3. **Install this profile** through the MDM (or scope it to the kiosk device
    group). Push the Enterprise Shell app as a **managed, non-removable** app.
 4. Verify: at badge-idle the device is locked to Enterprise Shell (Home

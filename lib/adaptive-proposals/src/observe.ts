@@ -50,6 +50,9 @@ export function deriveProposals(auditEvents: readonly AuditEvent[]): AdaptivePro
   const bySubject = new Map<string, AuditEvent[]>();
   for (const event of auditEvents) {
     if (!MANUAL_RESOLUTION_TYPES.includes(event.type)) continue;
+    // A subject that is not a non-empty string cannot name a pattern: it used to mint
+    // `prop-undefined` / `prop-` proposals targeting nothing.
+    if (typeof event.subject !== "string" || event.subject.trim() === "") continue;
     const bucket = bySubject.get(event.subject);
     if (bucket) bucket.push(event);
     else bySubject.set(event.subject, [event]);
@@ -70,7 +73,12 @@ export function deriveProposals(auditEvents: readonly AuditEvent[]): AdaptivePro
     // The "signals" that preceded/accompanied the manual resolutions: the distinct
     // opaque refs those events carried. These are handles into the ledger, never the
     // event bodies.
-    const signalRefs = stableUnique(events.flatMap((e) => e.references));
+    // Only real refs count: an ABSENT references array used to flatMap to `[undefined]`,
+    // which `stableUnique` kept, so the operator-facing count read "these 1 signal(s) []"
+    // — the evidence that was missing was counted as the evidence present.
+    const signalRefs = stableUnique(
+      events.flatMap((e) => (Array.isArray(e.references) ? e.references : [])).filter((r): r is string => typeof r === "string" && r.length > 0),
+    );
     const signalList = signalRefs.length > 0 ? signalRefs.join(", ") : "(no referenced signals)";
 
     const correlationSummary =
@@ -98,7 +106,10 @@ export function deriveProposals(auditEvents: readonly AuditEvent[]): AdaptivePro
     );
   }
 
-  // Deterministic order — two runs over identical input are byte-identical.
-  proposals.sort((a, b) => a.proposalId.localeCompare(b.proposalId));
+  // Deterministic order — two runs over identical input are byte-identical, on ANY
+  // machine: codepoint order, not `localeCompare`, whose collation follows the process
+  // locale (verified: `sv_SE` sorts "ä" after "z", `de_DE` before it). Subjects are
+  // tenant-supplied, so non-ASCII is reachable.
+  proposals.sort((a, b) => (a.proposalId < b.proposalId ? -1 : a.proposalId > b.proposalId ? 1 : 0));
   return proposals;
 }

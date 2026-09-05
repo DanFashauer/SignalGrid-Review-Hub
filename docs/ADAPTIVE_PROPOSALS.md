@@ -98,7 +98,7 @@ advanced by one.
 `scripts/src/adaptive-proposals-proof.ts` — run it directly:
 
 ```
-cd scripts && npx tsx ./src/adaptive-proposals-proof.ts    # proof:adaptive-proposals (37 checks)
+cd scripts && npx tsx ./src/adaptive-proposals-proof.ts    # proof:adaptive-proposals (48 checks)
 ```
 
 It narrates the full happy path (mine synthetic audit history → a proposal with

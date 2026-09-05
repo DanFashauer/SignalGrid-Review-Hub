@@ -95,6 +95,40 @@ check("completeAppStepUp releases held actions (mode assist)", suDone.mode === "
 check("SAFETY: step-up completion never auto-runs a sensitive action",
   suDone.actions.every((x) => !(x.sensitive && x.disposition === "auto")));
 
+// ── the SCOPED release, asserted in the TS lane (2026-09-05) ─────────────────
+// The per-action release exists because of a review finding, and deleting it left
+// this proof and the port-parity gate green — only the api-server suite noticed. Now
+// the reason is asserted here too: a gesture bound to ONE action frees that action
+// only, every other held action stays held, and the mode stays honest.
+const scoped = planAppSession({ ...base("step_up", ["BASELINE_DRIFTED"]), stepUpSatisfiedActionKeys: ["chart.open"] });
+const otherHeld = stepUp.actions.filter((x) => x.disposition === "step_up" && x.key !== "chart.open").map((x) => x.key);
+check("a scoped release frees ONLY the bound action: chart.open runs, every other held action stays step_up, and mode stays step_up",
+  scoped.actions.find((x) => x.key === "chart.open")?.disposition !== "step_up" &&
+  otherHeld.length > 0 && otherHeld.every((k) => scoped.actions.find((x) => x.key === k)?.disposition === "step_up") &&
+  scoped.mode === "step_up");
+// An integration with NO held actions has nothing a gesture could satisfy. `[].every()`
+// is vacuously true, so a key the integration does not even contain used to turn a live
+// step_up decision into `mode: "proceed"` with a summary asserting a step-up that never
+// happened — the linter blessed the shape with zero warnings.
+const readOnly = {
+  ...sensitiveUngated, id: "test-ro",
+  actions: [
+    { key: "view.a", label: "a", riskTier: "standard" as const, sensitive: false, gatedByStepUp: false },
+    { key: "view.b", label: "b", riskTier: "standard" as const, sensitive: false, gatedByStepUp: false },
+  ],
+};
+check("SAFETY: an integration with NO held actions never reports a step-up as done — a bogus key leaves mode step_up, never proceed",
+  planAppSession({ integration: readOnly, outcome: "step_up", reasonCodes: [], stepUpSatisfiedActionKeys: ["key.that.does.not.exist"] }).mode === "step_up");
+const bogus = planAppSession({ ...base("step_up"), stepUpSatisfiedActionKeys: ["key.that.does.not.exist"] });
+check("SAFETY: a key the integration does not contain releases nothing, even where held actions exist",
+  bogus.mode === "step_up" && bogus.actions.find((x) => x.key === "chart.open")?.disposition === "step_up");
+check("SAFETY: `stepUpSatisfied` must be strictly true — a truthy string does not release",
+  planAppSession({ ...base("step_up"), stepUpSatisfied: "yes" as never }).mode === "step_up");
+check("SAFETY: a malformed reasonCodes does not crash the restrictive outcomes — deny still blocks everything with the fallback reason",
+  planAppSession({ ...base("deny"), reasonCodes: undefined as never }).actions.every((x) => x.disposition === "blocked" && x.reason.includes("trust conditions not met")));
+check("an unrecognized vertical never puts \"undefined\" in the sentence a confirmer reads",
+  !JSON.stringify(planAppSession({ integration: { ...emr, vertical: "aviation" as never }, outcome: "allow", reasonCodes: [] })).includes("undefined"));
+
 // ── single-action gate ────────────────────────────────────────────────────────
 check("gateAppAction returns one action's disposition",
   gateAppAction(base("allow"), "order.place")?.disposition === "assist");

@@ -6,7 +6,7 @@ On macOS an installed security agent is not one thing. It is a **system extensio
 
 SignalGrid's zero-touch provisioning records a device setup once and replays it ([Open orchestration vision](OPEN_ORCHESTRATION_VISION.md)). **Teardown-proof** makes the *reversal* a first-class, validated artifact: a recording is not deploy-ready until its decommission path is recorded and **proven** — dependency-ordered, fail-safe, and approval-gated — so the retreat is confirmed *before* 560 Macs are waiting on it, not during an incident.
 
-Built in `lib/flows/src/provisioning-teardown.ts`; proven fully offline by `pnpm run proof:provisioning-teardown` (25 checks).
+Built in `lib/flows/src/provisioning-teardown.ts`; proven fully offline by `pnpm run proof:provisioning-teardown` (28 checks).
 
 ## The deploy-readiness gate
 

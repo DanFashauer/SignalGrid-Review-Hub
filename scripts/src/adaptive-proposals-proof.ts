@@ -160,6 +160,50 @@ check("an approved+activated change that did NOT help is a surfaced FINDING (hel
 check("...and the finding is legible: it names the shortfall against the prediction in its summary",
   (measuredFinding?.measurement?.summary ?? "").startsWith("FINDING:"));
 
+// ── the measurement verdict cannot be satisfied by ABSENT evidence (2026-09-05) ──
+// A simulation that predicted ZERO benefit made the threshold `helpedRate >= 0`, which
+// every realization satisfies: twenty incidents that all fell back to a human reported
+// `helped: true`, "realizing the simulation's 0% prediction". Planted-and-verified: the
+// fix left the previous 37 checks byte-identical, so none of them could see it.
+const target = activated.recommendation.target;
+const zeroDraft = deriveProposals(history).find((p) => p.recommendation.target === target)!;
+const zeroPrediction = simulateProposal(zeroDraft, history.map((e) => ({ ...e, references: [] })));
+check("control: a history whose incidents carry no signal refs simulates to a 0% prediction",
+  zeroPrediction.simulation?.helpedRate === 0 && (zeroPrediction.simulation?.observedIncidentCount ?? 0) > 0);
+const zeroActivated = activate(approve(requestApproval(zeroPrediction), "user:owner-dan", "asm-zero"));
+const nothingResolved: AuditEvent[] = Array.from({ length: 20 }, (_, i) => ({ ...history[0], id: `post-${i}`, type: "remediation.approved" as const, subject: target, references: ["signal-bin-mismatch"] }));
+const zeroMeasured = measureActivated(zeroActivated, nothingResolved);
+check("SAFETY: a 0% prediction realized at 0% is a FINDING (helped=false), never 'realized the prediction'",
+  zeroMeasured.measurement?.helped === false && (zeroMeasured.measurement?.summary ?? "").startsWith("FINDING:") && (zeroMeasured.measurement?.summary ?? "").includes("predicted no benefit"));
+check("SAFETY: a proposal with NO simulation attached (hand-crafted) measures as a finding, not helped",
+  measureActivated({ ...activated, simulation: null }, goodPostActivation).measurement?.helped === false);
+// Auto-resolution is an ALLOWLIST: a connector sync on the target subject is not the
+// automation resolving an incident, and a type added to core later does not join the
+// success column silently.
+const syncedOnly = measureActivated(activated, [{ ...history[0], type: "connector.synced", subject: target, references: ["signal-x"] }]);
+check("SAFETY: a non-resolution event type on the target subject does NOT count as auto-resolved (allowlist, not denylist)",
+  syncedOnly.measurement?.helpedCount === 0 && syncedOnly.measurement?.helped === false);
+check("control: decision.evaluated with a signal ref DOES count (the allowlist is not vacuous)",
+  measureActivated(activated, [{ ...history[0], type: "decision.evaluated", subject: target, references: ["signal-x"] }]).measurement?.helpedCount === 1);
+// A standing finding is not overwritten by a kinder later fixture.
+check("a finding STANDS: re-measuring a proposal already found not to help keeps helped=false",
+  measureActivated(measuredFinding!, goodPostActivation).measurement?.helped === false);
+// Vacuous simulation: a projection over an EMPTY history is not a simulation.
+check("SAFETY: a simulation over zero incidents cannot reach pending_approval (typed refusal simulation_required)",
+  codeOf(() => requestApproval(simulateProposal(zeroDraft, []))) === "simulation_required");
+// Unknown status is a TYPED refusal, not a TypeError a caller catching the package's error class never sees.
+check("SAFETY: an unrecognized status (\"Approved\", a prototype key) refuses with illegal_transition, not a crash",
+  codeOf(() => activate({ ...approved, status: "Approved" as never })) === "illegal_transition" &&
+  codeOf(() => activate({ ...approved, status: "constructor" as never })) === "illegal_transition");
+check("SAFETY: an empty approval sequence ref is refused like an empty approver ref",
+  codeOf(() => approve(pending, "user:owner-dan", "")) === "approver_required" && codeOf(() => approve(pending, "user:owner-dan", "   ")) === "approver_required");
+// Absent evidence is not counted as evidence in the explain step.
+const noRefs = deriveProposals(history.map((e) => ({ ...e, references: undefined as never })));
+check("an ABSENT references array yields 0 signals in the explain text, not '1 signal(s) []'",
+  noRefs.length > 0 && noRefs.every((p) => p.provenance.correlationSummary.startsWith("these 0 signal(s)")));
+check("an event with no readable subject mints no proposal (no 'prop-undefined')",
+  deriveProposals(history.map((e) => ({ ...e, subject: undefined as never }))).length === 0);
+
 // ── THE SAFETY INVARIANT, negative-controlled every way it could be bypassed ─────
 
 check("(a) activating a pending_approval proposal directly → typed refusal illegal_transition",

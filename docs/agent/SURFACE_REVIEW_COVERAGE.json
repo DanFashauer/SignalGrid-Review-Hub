@@ -245,7 +245,17 @@
     },
     "lib/adaptive-proposals": {
       "path": "lib/adaptive-proposals",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Full read of 5 files. Core invariant (no self-activation) holds. Zero prediction made helped unconditionally true; denylist auto-resolution; vacuous simulation passed the gate; raw status lookup; approvedAtRef unvalidated; absent refs counted as a signal; findings overwritable. Fixed; 37->48.",
+          "reviewer": "cloud lane",
+          "record": "lib/adaptive-proposals/src/measure.ts",
+          "scope": "surface",
+          "open": 0,
+          "closed": 7
+        }
+      ]
     },
     "lib/api-client-react": {
       "path": "lib/api-client-react",
@@ -271,7 +281,17 @@
     },
     "lib/app-workflows": {
       "path": "lib/app-workflows",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Full read of 3 files + the Swift port + the parity gate. Empty held-set plus a bogus key minted a step-up-done record; scoped release had no TS coverage; raw confirmer lookup; firstReason crash on restrictive outcomes. Fixed; 43->49. Swift whole-integration release and dead default = Mac lane item 101; parity gate compares shape only (planted 4 behavioural divergences, all green).",
+          "reviewer": "cloud lane",
+          "record": "lib/app-workflows/src/index.ts",
+          "scope": "surface",
+          "open": 2,
+          "closed": 4
+        }
+      ]
     },
     "lib/audit": {
       "path": "lib/audit",
@@ -396,7 +416,17 @@
     },
     "lib/flows": {
       "path": "lib/flows",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Full read of all 11 sources. Unknown SignalStatus graded a flow healthy and masked a co-observed broken (REAL, shipping via api-server); prototype-key kind NaN-poisoned the teardown ordering guard; fidelity lookup not own-key. Fixed; 32->35 and 25->28. Break-glass surviving step_up/unparseable outcome recorded for owner doctrine.",
+          "reviewer": "cloud lane",
+          "record": "lib/flows/src/index.ts",
+          "scope": "surface",
+          "open": 2,
+          "closed": 3
+        }
+      ]
     },
     "lib/handoff-sim": {
       "path": "lib/handoff-sim",
@@ -538,7 +568,17 @@
     },
     "lib/recommendations": {
       "path": "lib/recommendations",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Full read. Unreadable denial/override counts flipped a tighten into a relax with a fabricated 'no denials' rationale; unreadable samples cleared the evidence gate; NaN confidence on the wire; locale-sensitive order. Fixed; 15->24. Advisory-only surface verified: no apply path anywhere.",
+          "reviewer": "cloud lane",
+          "record": "lib/recommendations/src/index.ts",
+          "scope": "surface",
+          "open": 2,
+          "closed": 4
+        }
+      ]
     },
     "lib/reliability": {
       "path": "lib/reliability",
@@ -556,7 +596,17 @@
     },
     "lib/room-sim": {
       "path": "lib/room-sim",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Full read of both files: scenario data plus delegation to the real core and orchestration; no comparison, lookup, ladder or clock; order-independence verified empirically. Findings are one level out (console sigClass, stale committed bundle, proof assertions) and land in the next batch.",
+          "reviewer": "cloud lane",
+          "record": "lib/room-sim/src/index.ts",
+          "scope": "surface",
+          "open": 7,
+          "closed": 0
+        }
+      ]
     },
     "lib/self-audit": {
       "path": "lib/self-audit",

@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 57,
-  "fingerprint": "f19bc22f987c923c25d11e61387012c3940808ab997dc52a08d5bdc20e337cb7",
+  "manifestVersion": 58,
+  "fingerprint": "ba57b3e064c9c78937ab9582200b4111957a04847fcbe28eb3f7227f645c4dc3",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -97,7 +97,8 @@
       "verification_missing",
       "verification_not_independent",
       "device_not_trusted_for_release",
-      "step_before_assemble"
+      "step_before_assemble",
+      "unknown_step_kind"
     ],
     "proofCounts": {
       "access-governance": 84,
@@ -123,7 +124,7 @@
       "entitlement-binding": 59,
       "evidence-coverage": 25,
       "factory-flows": 16,
-      "handoff-sim": 55,
+      "handoff-sim": 59,
       "iac": 67,
       "link-usability": 167,
       "live-idp": 31,
@@ -137,7 +138,7 @@
       "ot-posture": 46,
       "pacs-access": 103,
       "passkey-assurance": 114,
-      "pim-activation": 43,
+      "pim-activation": 51,
       "platform-sso": 65,
       "policy-binding": 59,
       "provisioning-order": 42,
@@ -157,7 +158,7 @@
       "unsafe-claim": 40,
       "verdict-attestation": 82,
       "webhooks": 201,
-      "work-context": 52
+      "work-context": 58
     },
     "mcpTools": [
       "list_room_scenarios",

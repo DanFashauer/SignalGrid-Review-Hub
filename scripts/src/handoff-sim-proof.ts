@@ -28,6 +28,7 @@ import {
   type HandoffTrace,
   type HandoffTraceEntry,
   type ReleaseLedger,
+  HANDOFF_SIM_ERROR_CODES,
 } from "@workspace/handoff-sim";
 import {
   WorkContextError,
@@ -351,10 +352,13 @@ const fullLedger = (decision: ReleaseLedger["currentDeviceDecision"]): ReleaseLe
 });
 
 const refusalMessages: string[] = [];
+const refusalCodes: string[] = []; // every code any refusal below produced — the vocabulary check derives from these
+const refusalsFromHardening: string[] = [];
 const refusalOf = (fn: () => unknown): { code: string; message: string } | null => {
   try { fn(); } catch (err) {
     if (err instanceof HandoffSimError || err instanceof WorkContextError) {
       refusalMessages.push(err.message);
+      refusalCodes.push(err.code);
       return { code: err.code, message: err.message };
     }
     return null;
@@ -456,16 +460,45 @@ const callerRefs = ["task-zz-9876", "task-0200", CTRL_ENTRY, "exc-ctrl-4410", GH
 check(`no refusal message echoes a caller-supplied ref (${refusalMessages.length} messages swept against ${callerRefs.length} refs)`,
   refusalMessages.length >= 8 && refusalMessages.every((m) => callerRefs.every((r) => !m.includes(r))));
 
+// A device that contributed ZERO signals (2026-09-05). It composes `none` — nothing is
+// KNOWN to be wrong — and used to be trusted for release exactly like a device that
+// reported clean across the board. It is the unevaluated device wearing a decision
+// object, and release now judges the drivers, not the bare action.
+const darkDecision = reevaluateForDevice(heldCtx, []).decision;
+const dark = refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, fullLedger(darkDecision)));
+check("release on a device that contributed ZERO signals → `device_not_trusted_for_release` (its decision carries no drivers)",
+  darkDecision.drivers.length === 0 && dark?.code === "device_not_trusted_for_release");
+refusalsFromHardening.push(dark?.code ?? "MISSING");
+// And an action OFF the ladder: the composer ranks it above every rung and tiers it
+// `blocked`; a raw `ACTION_RANK[x]` read `undefined >= 6 → false` and RELEASED.
+const offDecision = { ...trustedDecision, deviceAction: "quarantine" as never, riskTier: "blocked" as const, drivers: [{ kind: "threat" as never, posture: "p", action: "quarantine" as never, reason: "EDR_Q", rank: 8 }] };
+const off = refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, fullLedger(offDecision)));
+check("release on a device whose own action is OFF the ladder → refused through the guarded rank, never `undefined >= 6 → false`",
+  off?.code === "device_not_trusted_for_release");
+// A step kind the simulator does not know is a REFUSED entry, never "applied".
+const weird = runHandoffScript({ scriptRef: "script-ctrl-weird", steps: [{ kind: "assemble", inputs: pickerInputs() }, { kind: "teleport" } as never] });
+check("an unknown step kind → refused trace entry `unknown_step_kind`, never an applied step that did nothing",
+  weird.trace.entries[1]?.status === "refused" && weird.trace.entries[1]?.refusalCode === "unknown_step_kind");
+refusalsFromHardening.push(weird.trace.entries[1]?.refusalCode ?? "MISSING");
+// The handoff device ref lands verbatim in the deep-frozen trace, so it is swept.
+const jwtish = runHandoffScript({ scriptRef: "script-ctrl-jwt", steps: [{ kind: "assemble", inputs: pickerInputs() }, { kind: "handoff", deviceRef: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.abcdefghijklmnopqrstuvwxyz012345", deviceSignals: healthyHandheld }] });
+check("a handoff whose deviceRef smells like a token is refused, and the ref never reaches the trace",
+  jwtish.trace.entries[1]?.status === "refused" && !JSON.stringify(jwtish.trace).includes("eyJhbGciOiJIUzI1NiJ9"));
+
 // The refusal vocabulary, counted for the figures line: every reason exercised.
 const refusalsExercised = new Set<string>([
   ...w.filter((e) => e.refusalCode !== null).map((e) => e.refusalCode as string),
   ...[notHeld, unresolved, noEvidence, selfCited, ghost].map((r) => r?.code ?? "MISSING"),
   ...(orphan.trace.entries[0].refusalCode ? [orphan.trace.entries[0].refusalCode] : []),
-  "device_not_trusted_for_release",
+  ...refusalCodes,
+  ...refusalsFromHardening,
 ]);
-check("every refusal reason in the vocabulary was exercised: task_not_held, exception_unresolved, verification_missing, verification_not_independent, device_not_trusted_for_release, unknown_exception_ref, step_before_assemble",
-  ["task_not_held", "exception_unresolved", "verification_missing", "verification_not_independent", "device_not_trusted_for_release", "unknown_exception_ref", "step_before_assemble"].every((c) => refusalsExercised.has(c)) &&
-  refusalsExercised.size === 7);
+// Derived from the package's own exported code list, never restated: the previous
+// hand-copy claimed "every" while two codes it asserted elsewhere were missing from
+// the list, and its `size === 7` pin actively resisted the correction. A literal
+// pushed into the set is not evidence either; every entry above came from a refusal.
+check(`every refusal reason in the vocabulary was exercised — all ${HANDOFF_SIM_ERROR_CODES.length} HANDOFF_SIM_ERROR_CODES plus the work-context door's unknown_exception_ref (missing: ${HANDOFF_SIM_ERROR_CODES.filter((c) => !refusalsExercised.has(c)).join(",") || "none"})`,
+  HANDOFF_SIM_ERROR_CODES.every((c) => refusalsExercised.has(c)) && refusalsExercised.has("unknown_exception_ref") && !refusalsExercised.has("MISSING"));
 
 // ── summary ───────────────────────────────────────────────────────────────────
 

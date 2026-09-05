@@ -28,6 +28,7 @@ import {
 } from "@workspace/signalgrid-core";
 import {
   deviceManagementHealthToDrafts,
+  fleetDMToPostureDrafts,
   graphPostureToDrafts,
   localAuthorityToDrafts,
   type PostureSignalDraft,
@@ -128,6 +129,16 @@ async function main(): Promise<void> {
   check("bridge: disabled identity maps to identity_state=false", valueOf(graphPostureToDrafts(disabled!), "identity_state") === false);
   check("bridge: unmanaged maps to device_management=false", valueOf(graphPostureToDrafts(unmanaged!), "device_management") === false);
   check("bridge: missing compliance maps to the honest 'unknown', never 'compliant'", valueOf(graphPostureToDrafts(missing!), "device_compliance") === "unknown");
+  // The Fleet posture signal carries NO enrollment field. Until 2026-09-05 the adapter
+  // asserted `device_management: true` from it unconditionally — derived from "Fleet
+  // returned a host row", not from an answer about management — and that literal
+  // satisfied the healthy-allow rule, moving a verdict from step_up to allow on a fact
+  // nobody had read. Silence is the rule where a source did not answer.
+  const fleetDrafts = fleetDMToPostureDrafts({ hostUuid: "h-1", platform: "darwin", compliant: true, lastCheckAt: OBSERVED, policies: [{ response: "pass" }] } as never);
+  check(
+    "bridge: the Fleet posture signal (no enrollment field) emits NO device_management draft — silence, never an asserted `true` — while compliance still maps",
+    !fleetDrafts.some((d) => d.category === "device_management") && valueOf(fleetDrafts, "device_compliance") === "compliant",
+  );
 
   // ── 3. In-code fixture dataset must not drift from the committed JSON ──────
   const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");

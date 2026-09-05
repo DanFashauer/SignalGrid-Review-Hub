@@ -59,7 +59,13 @@ export function urgencyFromAction(action: UnifiedAction): Urgency | null {
     case "none":
       return null;
     default:
-      return null;
+      // NOT on the ladder. The composer ranks an unknown action ABOVE every real rung
+      // and tiers it `blocked` (posture-composition/compose.ts); the playbook must not
+      // turn that into silence, because silence is the one answer that guarantees no
+      // human looks. Until 2026-09-05 this arm returned null — a device the fusion
+      // layer declared blocked at the maximum rank opened no incident at all, while
+      // a milder, recognised `step_up` opened a P2.
+      return "critical";
   }
 }
 
@@ -75,7 +81,10 @@ export function urgencyFromDetection(severity: Detection["severity"]): Urgency |
     case "info":
       return null;
     default:
-      return null;
+      // An unrecognised severity is not `info`. The compiler makes this arm
+      // unreachable from typed callers; at the untyped boundary (JSON) the safe
+      // reading is the loud one.
+      return "critical";
   }
 }
 
@@ -98,7 +107,11 @@ export function mapPostureToIncident(posture: UnifiedPosture, opts: MapOptions):
   }
   const impact = opts.impact ?? "medium";
   const topDriver = posture.drivers[0];
-  const category = topDriver ? categoryForKind(topDriver.kind, topDriver.reason) : "general";
+  // An actionable action with NO driver behind it is a posture the composer never
+  // produces (every non-`none` composition has a driver); it reached here hand-built
+  // or deserialised. Nothing to route by is not a reason to route to the Service
+  // Desk: the security owner triages the inconsistency.
+  const category = topDriver ? categoryForKind(topDriver.kind, topDriver.reason) : "security_incident";
   const drivers = posture.drivers.map((d) => `${d.kind}:${d.reason}`);
   const subject = opts.subjectLabel ?? "device";
   const shortDescription = `${category.replace(/_/g, " ")} — ${posture.strongestAction} on ${subject} (${posture.riskTier})`;
@@ -132,7 +145,13 @@ function buildIncident(input: {
   shortDescription: string;
   drivers: string[];
 }): Incident {
-  const priority = PRIORITY_MATRIX[input.impact][input.urgency];
+  // Guarded matrix lookup. A prototype key (`"constructor"`, `"toString"`) as impact
+  // used to yield an incident with NO priority and NO SLA and `escalate: false`, and
+  // nothing threw — a non-escalating, priority-less ticket for the most severe posture.
+  // An impact or urgency the matrix does not know is P1: the unknown is the loud one.
+  const hasOwn = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
+  const row = hasOwn(PRIORITY_MATRIX, input.impact) ? PRIORITY_MATRIX[input.impact] : undefined;
+  const priority: Priority = row && hasOwn(row, input.urgency) ? row[input.urgency] : "P1";
   return {
     priority,
     impact: input.impact,
@@ -325,7 +344,10 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     case "agent_behavior":
       return "security_incident";
     default:
-      return "general";
+      // A driver kind this table does not know is a NEW signal dimension, not a
+      // general request. The file says "never the generic Service Desk" a dozen
+      // times while justifying the named arms; the default arm now agrees.
+      return "security_incident";
   }
 }
 

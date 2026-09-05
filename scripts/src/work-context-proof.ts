@@ -215,7 +215,13 @@ check("the sweep guards EVERY ingress: a device signal whose reason smells like 
 
 interface DeviceSet { label: string; signals: ComposableSignal[]; rank: number }
 const deviceSets: DeviceSet[] = [
-  { label: "no-signals", signals: [], rank: ACTION_RANK.none },
+  // A device that contributed NO signals is a device the fabric knows nothing about.
+  // composeDeviceRisk() composes it `none` (nothing is KNOWN to be wrong) and says so
+  // through signalCount; reevaluateForDevice grades that gap `step_up`, per this
+  // module's own doctrine. So the set ranks at step_up for the monotonicity sweep, and
+  // the compose-consistency check below asserts the COUNT for it, not the rank.
+  // (Until 2026-09-05 this line pinned it at `none` — the proof was defending the defect.)
+  { label: "no-signals", signals: [], rank: ACTION_RANK.step_up },
   ...UNIFIED_ACTIONS.map((action): DeviceSet => ({
     label: `single-${action}`,
     signals: [{ kind: "device_posture", posture: `fixture-${action}`, action, reason: `DEV_${action.toUpperCase()}` }],
@@ -226,7 +232,9 @@ const deviceSets: DeviceSet[] = [
 // assume what composeDeviceRisk will say.
 for (const s of deviceSets) {
   const composed = composeDeviceRisk(s.signals);
-  if (ACTION_RANK[composed.strongestAction] !== s.rank) failures.push(`device set ${s.label} composed unexpectedly`);
+  if (s.signals.length === 0) {
+    if (composed.signalCount !== 0 || composed.strongestAction !== "none") failures.push("the empty composition changed shape — the dark-device rule rests on signalCount");
+  } else if (ACTION_RANK[composed.strongestAction] !== s.rank) failures.push(`device set ${s.label} composed unexpectedly`);
 }
 
 const contexts: { label: string; ctx: PortableWorkContext }[] = [];
@@ -292,6 +300,44 @@ check("(b) ...and not vacuously: bad devices RAISE the carried ceiling somewhere
 check(`(c) EXCEPTIONS TRAVEL: across all ${matrixCells} reevaluations, unresolved exceptions and active restrictions are supersets of the input's (dropped=${carryDrops})`,
   carryDrops === 0);
 check("the WORK is identical wherever the person goes: the work section survives every cell of the matrix byte-for-byte", workDrifts === 0);
+
+// A DARK device — zero signals — is not a clean device. Asserted ABSOLUTELY, not only
+// by ordering: for every context, the decision is at least step_up, the device action
+// reported is step_up, the tier is not `ok`, and the ceiling that moves on is at least
+// step_up. Before 2026-09-05 a dark device composed `none` and, under a `none`
+// ceiling, walked away with a `none` decision and an `ok` tier.
+let darkLoose = 0;
+for (const { ctx } of contexts) {
+  const { decision, nextContext } = reevaluateForDevice(ctx, []);
+  if (
+    ACTION_RANK[decision.finalRequiredAction] < ACTION_RANK.step_up ||
+    decision.deviceAction !== "step_up" ||
+    decision.riskTier === "ok" ||
+    ACTION_RANK[nextContext.trust.requiredStepUpLevel] < ACTION_RANK.step_up
+  ) darkLoose += 1;
+}
+check(`a device with ZERO signals is graded step_up in every one of ${contexts.length} contexts — a gap, never a clean bill (loose=${darkLoose})`, darkLoose === 0 && contexts.length > 0);
+
+// OFF-LADDER: an action the compiler never proved (an adapter's cast, a hand-built
+// signal) must fail CLOSED at every rank lookup — the composer already ranks it above
+// every rung; the four raw `ACTION_RANK[x]` sites in this package read `undefined`
+// and `undefined >= n` is false, the permissive side.
+const wc = await import("@workspace/work-context");
+const offLadder = reevaluateForDevice(calm, [{ kind: "threat", posture: "p", action: "quarantine" as never, reason: "EDR_QUARANTINE" }]);
+check("an off-ladder device action is the WORST action (it is the decision), raises the travelling ceiling to restrict, and its reason travels as a restriction",
+  offLadder.decision.finalRequiredAction === ("quarantine" as never) &&
+  offLadder.nextContext.trust.requiredStepUpLevel === "restrict" &&
+  offLadder.nextContext.trust.activeRestrictions.includes("EDR_QUARANTINE"));
+check("ceilingFromAction projects an off-ladder action to `restrict`, never `none`", wc.ceilingFromAction("quarantine" as never) === "restrict");
+check("worstCeiling with an off-ladder operand returns the off-ladder operand (it ranks highest)", wc.worstCeiling("none", "quarantine" as never) === ("quarantine" as never));
+let lowerRefused = false;
+try { wc.lowerTrustCeiling(contexts.find((c) => c.label === "restrict")!.ctx, "quarantine" as never, "res-0001"); }
+catch (err) { lowerRefused = err instanceof WorkContextError && err.code === "not_a_lowering"; }
+check("lowerTrustCeiling refuses an off-ladder target as `not_a_lowering` — it cannot be laundered through the resolution door", lowerRefused);
+const offInputs = makeInputs("none", false);
+const offAssembled = assembleWorkContext({ ...offInputs, sourceVerdicts: [{ ...offInputs.sourceVerdicts[0], strongestAction: "quarantine" as never, reasonCodes: ["OFF_LADDER_REASON"] }] });
+check("assembleWorkContext from an off-ladder verdict: ceiling restrict and the reason collected as a restriction",
+  offAssembled.trust.requiredStepUpLevel === "restrict" && offAssembled.trust.activeRestrictions.includes("OFF_LADDER_REASON"));
 
 // A restrict-grade device finding is a CONFIRMED fact, so its reason joins the
 // travelling restrictions — the superset may grow, never shrink.

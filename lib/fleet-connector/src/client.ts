@@ -34,8 +34,11 @@ export interface FleetClientConfig {
   /** Team provisioned with the LOCKED-DOWN restrictions (kiosk/allowlist/non-removable). */
   restrictedTeamId: number;
   /** Org-required minimum OS major, stamped onto every fetched report so the
-   *  normalizer can grade the floor. Absent → floor not enforced (and the
-   *  normalizer says so via `unknown` rather than passing the host). */
+   *  normalizer can grade the floor. Absent → the floor is NOT enforced and the OS
+   *  axis contributes nothing to the grade either way: a host with no OS evidence
+   *  can still grade `compliant` on the other axes. (This comment used to claim the
+   *  normalizer answered `unknown` here; the code never did. A deployment that wants
+   *  the floor enforced must configure it.) */
   osFloor?: number;
 }
 

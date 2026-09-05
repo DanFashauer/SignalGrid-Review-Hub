@@ -198,6 +198,25 @@ const fullyHealthy = { ...inconsistentUnknownCompliance, deviceCompliance: "comp
 check("a positively-confirmed-healthy signal still derives allow (allow path stays reachable)", fleetOutcome(fullyHealthy) === "allow");
 
 
+// ── `typeof NaN === "number"` (2026-09-05) ────────────────────────────────────
+// Both OS-floor guards used `typeof x === "number"` as "observed", so a NaN major or
+// floor read as observed, both guards went quiet, and the host graded COMPLIANT on an
+// OS nobody had read. `Number.isFinite` now decides what counts as observed.
+const fc = await import("@workspace/fleet-connector");
+const healthyReport = DEMO_FLEET_REPORTS.find((r) => r.hostRef === "ipad-ward-01")!;
+const nanMajor = fc.normalizeFleetReports([{ ...healthyReport, osMajor: NaN, osFloor: 26 }], FLEET_OBSERVED_AT)[0];
+check("SAFETY: a NaN osMajor under a configured floor is UNKNOWN compliance, never compliant", nanMajor.deviceCompliance === "unknown" && fleetOutcome(nanMajor) !== "allow");
+const nanFloor = fc.normalizeFleetReports([{ ...healthyReport, osMajor: 10, osFloor: NaN }], FLEET_OBSERVED_AT)[0];
+const noFloor = fc.normalizeFleetReports([{ ...healthyReport, osMajor: 10, osFloor: undefined }], FLEET_OBSERVED_AT)[0];
+check("a NaN osFloor is a floor that cannot be stated, and behaves exactly like an ABSENT one (not enforced) — never a floor of NaN that every major clears",
+  nanFloor.deviceCompliance === noFloor.deviceCompliance && fleetOutcome(nanFloor) === fleetOutcome(noFloor));
+check("positive control: the same host with a finite major at the floor still derives allow", fleetOutcome(fc.normalizeFleetReports([{ ...healthyReport, osMajor: 26, osFloor: 26 }], FLEET_OBSERVED_AT)[0]) === "allow");
+// Absent evidence, NAMED: the summary now counts hosts whose compliance was never verified.
+const summary = fc.fleetSummary(signals, DEMO_FLEET_REPORTS);
+const compliantCount = signals.filter((s) => s.deviceCompliance === "compliant").length;
+check(`the fleet summary names the unverified hosts: compliant + nonCompliant + complianceUnknown = hosts (${compliantCount}+${summary.nonCompliant}+${summary.complianceUnknown}=${summary.hosts})`,
+  compliantCount + summary.nonCompliant + summary.complianceUnknown === summary.hosts && summary.complianceUnknown > 0);
+
 const total = passed + failures.length;
 console.log(`Fleet-connector proof: ${passed}/${total} assertions passed`);
 if (failures.length) {

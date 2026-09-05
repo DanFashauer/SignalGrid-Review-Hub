@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-review-land-mac-stack-reference-skill-3c4528",
+  "ackedBy": "cloud",
+  "note": "Reviewed and landing: opened PR #433 (mac/stack-reference-skill -> SignalGrid_Alpha). Line-by-line on the shared surfaces — publication-boundary.mjs is exactly one tooling carve-out (no logic change, mirrors research-ops), VENDORED 11->12 with the count math, coverage regen deterministic (.claude/skills stays partial), no lib/ or decision-core touched, launch-claims scans docs/ only so the skill's engine prose is out of scope. merge-tree is clean into current Alpha (no LOOP.md drift). Driving CI to merge."
+}

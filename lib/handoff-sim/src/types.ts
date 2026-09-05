@@ -185,9 +185,29 @@ export const HANDOFF_SIM_ERROR_CODES = [
   /** A step whose kind the simulator does not know (possible only past the type
    *  system — a script loaded from JSON). Refused, never recorded as applied. */
   "unknown_step_kind",
-] as const;
+] as const satisfies readonly HandoffSimErrorCode[];
 
-export type HandoffSimErrorCode = (typeof HANDOFF_SIM_ERROR_CODES)[number];
+/** The union is spelled out rather than derived from the array because the live-sync
+ *  manifest generator extracts these members from the `export type … = | "…"` shape
+ *  (it refused a derived alias: "extracted zero members — extraction anchor
+ *  drifted"). The two are pinned to each other at compile time: `satisfies` above
+ *  proves every array entry is a union member, and `AllHandoffSimCodesListed` below
+ *  proves every union member is in the array — so neither can drift from the other. */
+export type HandoffSimErrorCode =
+  | "task_not_held"
+  | "exception_does_not_hold_task"
+  | "verification_evidence_reused"
+  | "exception_unresolved"
+  | "verification_missing"
+  | "verification_not_independent"
+  | "device_not_trusted_for_release"
+  | "step_before_assemble"
+  | "unknown_step_kind";
+
+type AllHandoffSimCodesListed =
+  Exclude<HandoffSimErrorCode, (typeof HANDOFF_SIM_ERROR_CODES)[number]> extends never ? true : never;
+/** Compile-time witness that the array lists every union member (see above). */
+export const ALL_HANDOFF_SIM_CODES_LISTED: AllHandoffSimCodesListed = true;
 
 /** WorkContextError-style typed refusal. Messages NEVER echo caller-supplied refs
  *  — the no-echo discipline `@workspace/work-context` enforces (an error that

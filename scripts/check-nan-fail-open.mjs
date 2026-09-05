@@ -125,9 +125,12 @@ function findViolations(source) {
   const lines = text.split("\n");
   const hits = [];
   const helpers = parseHelpers(text);
+  // Helper names are identifiers (word characters and `$`), but they are spliced
+  // into a pattern, so every regex metacharacter is escaped — not only `$`.
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const ASSIGN_VIA_HELPER =
     helpers.length > 0
-      ? new RegExp(`(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?:${helpers.map((h) => h.replace(/\$/g, "\\$")).join("|")})\\s*\\(`)
+      ? new RegExp(`(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?:${helpers.map(escapeRe).join("|")})\\s*\\(`)
       : null;
   const assignment = (line) => ASSIGN.exec(line) ?? (ASSIGN_VIA_HELPER ? ASSIGN_VIA_HELPER.exec(line) : null);
   const parsedNames = [];

@@ -380,8 +380,17 @@ async function run() {
   check("radar → 200 flags the novel signal", radar.status === 200 && radar.json?.novel?.some((o) => o.category === "smart_bed_occupancy"));
   check("radar does not flag an evaluated signal as novel", !radar.json?.novel?.some((o) => o.category === "identity_state"));
   check("radar raises a first-seen alert for the novel signal", (radar.json?.alerts ?? []).some((a) => a.includes("smart_bed_occupancy")));
-  const emptyRadar = await req("POST", "/signals/radar", { body: {} });
-  check("radar with no signals → 200 empty report", emptyRadar.status === 200 && Array.isArray(emptyRadar.json?.observations) && emptyRadar.json.observations.length === 0);
+  // A body with NO signals array is malformed, not an empty scan: it used to be
+  // substituted with [] and answered "All observed signals are already evaluated".
+  const noSignals = await req("POST", "/signals/radar", { body: {} });
+  check("radar without a signals array → 400 (a dropped body is not a covered grid)", noSignals.status === 400 && noSignals.json?.error === "validation");
+  const stringSignals = await req("POST", "/signals/radar", { body: { signals: "all" } });
+  check("radar with a non-array signals field → 400", stringSignals.status === 400);
+  const emptyRadar = await req("POST", "/signals/radar", { body: { signals: [] } });
+  check("radar with an explicit empty batch → 200, scanned 0, and the summary says coverage is UNKNOWN, never 'already evaluated'",
+    emptyRadar.status === 200 && emptyRadar.json?.scanned === 0 && Array.isArray(emptyRadar.json?.observations) && emptyRadar.json.observations.length === 0
+    && typeof emptyRadar.json?.summary === "string" && emptyRadar.json.summary.includes("coverage unknown") && !emptyRadar.json.summary.includes("already evaluated"));
+  check("radar reports how many signals it scanned", radar.json?.scanned === 3);
 
   const scenarios = await req("GET", "/simulator/scenarios");
   check("simulator scenarios → 200", scenarios.status === 200 && Array.isArray(scenarios.json?.scenarios));
@@ -1701,7 +1710,12 @@ async function run() {
   // The one that would actually hurt: an ended session must not be revivable, or
   // "end" is advisory rather than an control.
   const refreshAfterEnd = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.operator, body: { ttlSeconds: 900 } });
-  check("an ENDED session cannot be refreshed back to active", !(refreshAfterEnd.status === 200 && refreshAfterEnd.json?.session?.status === "active"));
+  // 404, specifically — not merely "not a 200 with active". The store used to hand
+  // the ENDED session object back and the route answered 200 with status "ended"
+  // plus a session.refresh audit row for a refresh that never happened; the old
+  // assertion here accepted that.
+  check("an ENDED session cannot be refreshed: 404, no cheerful echo of the dead session",
+    refreshAfterEnd.status === 404 && refreshAfterEnd.json?.session === undefined);
 
   const sessionNoAuth = await req("POST", "/v1/sessions/start", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" } });
   check("session start without a token → 401", sessionNoAuth.status === 401);

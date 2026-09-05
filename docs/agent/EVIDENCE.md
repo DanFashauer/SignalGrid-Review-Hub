@@ -794,3 +794,51 @@ typecheck 0 errors · reachability self-test 13/13 · proof-count 58/58 · cited
   30 read, 10 partial, 60 not read, of 100 surfaces (tools now read in full; scripts, mcp-server, signalgrid-app partial).
 ```
 Verdict:  **fixed and gated — the console's colour law and the reachability count were both wrong in the permissive direction, and each now has a test that fails when it lies; the stale public page can no longer ship.**
+
+## 2026-09-05 — "Fourth audit round, four shipping libraries: an empty radar batch read as a covered grid, a dead session refreshed to 200, the web client resolved undefined as success"
+Command (two independent read-only audits + firsthand reads of every edit site + fix + proof + mutation):
+```
+lib/signal-radar/src/**  lib/signal-discovery/src/**  lib/persistence/src/**  lib/api-client-react/src/**
+artifacts/api-server/src/routes/{radar,v1}.ts   artifacts/signalgrid-app/src/pages/Dashboard.tsx
+reachability (--why): all four SHIP — radar/discovery/persistence via api-server, api-client-react via signalgrid-app
+```
+Output:
+```
+RADAR: scanSignals([]) → "All observed signals are already evaluated by the grid." A dropped body, a broken collector
+  and a covered feed read the same, and POST /api/signals/radar substituted [] for ANY non-array (`{}`, null, "all").
+  Fixed: `scanned` on the report, a coverage-UNKNOWN summary at zero, 400 on a non-array body (an explicit [] stays
+  200). localeCompare → codepoint order (radar + discovery, two sites); the two-calls-in-one-process determinism
+  assertions could not see it, so the ORDER is pinned ("Zebra" < "a" < "z" < "ä"). Pinned in absent-collection-proof
+  too, whose header claimed "every place in the repo that grades a collection" and had never named radar.
+DISCOVERY: dedupe keyed on the RAW category while the classifier trimmed it — " x", "x", "x " were three detections
+  and three "recognized"; planOnboarding auto-onboarded on any truthy value ("false" onboarded a no-API signal);
+  four configured sources with zero detections read "sources: 4". Fixed: trimmed key, `=== true`, sourcesObserved.
+PERSISTENCE: refresh() returned the EXPIRED/ENDED session object, so POST /v1/sessions/:id/refresh answered 200 and
+  wrote a session.refresh audit row for a refresh that never happened (the api test accepted "not a 200-with-active");
+  now null → 404, test asserts 404. listDecisions' 100-row page length was reported as `total` (in-memory branch
+  reports the whole set) — countDecisions added, `id DESC` tiebreak; role-split COALESCE(pg_has_role(...), TRUE)
+  proved schema ownership from a MISSING pg_namespace row — now FALSE. The unparseable-expiry guard was correct and
+  unheld (every fixture used iso()): an assertion now fails if it goes.
+CLIENT: custom-fetch.ts, the generated client's one hand-written file, had ZERO proofs. responseType "JSON"/"xml"
+  fell out of the switch and resolved undefined AS SUCCESS; a 200 with no content-type came back as a string typed as
+  the result (health.status → undefined; a captive-portal page typed itself as HealthStatus). Fixed: default arm
+  throws by name; no content-type → JSON-shaped parsed, else ResponseParseError. proof:api-client-react (13) NEW,
+  registered in preflight + CI (parity gate: 304 gates, 0 unwired). Dashboard "Stale / non-compliant" card excluded
+  `unknown` from both the list and the emptiness test — now everything not `nominal`.
+PROOFS: signal-radar 22/22 (+4) · signal-discovery 21/21 (+5) · absent-collection 32/32 (+2) · session-store 13/13
+  (+4) · api-client-react 13/13 (new) · mcp-server 11/11 · test:api 373/373 (+3) · typecheck 0 · PG proofs extended
+  (refresh-after-expiry null; two-row newest-first + count) — NOT runnable here (no Postgres), CI runs them.
+MUTATION (each fix reverted alone on a .mutbak copy; its proof must fail): radar empty arm 20/22 + absent 31/32 ·
+  radar localeCompare 21/22 · discovery raw key 20/21 · truthy autoOnboardable 20/21 · discovery localeCompare 20/21 ·
+  refresh returns dead session 10/13 · NaN expiry guard 11/13 · client default arm 10/13 · client no-content-type 9/13.
+  Ten reversions, ten kills; zero .mutbak left. NOT mutated: the radar route's 400 and the countDecisions wiring
+  (test:api and the PG proof assert them directly; a reversion run of the full api suite was not repeated).
+DOCS: REPO_LAYOUT.md called api-client-react "bindings for the /v1 API" — it is generated from openapi.yaml for /api
+  (PURPOSE.md and CI_AND_VALIDATION.md already said so); build-plan line counts 174/228/136 → 245/305/175 (measured).
+GATES TO SPECIFY, not built here: check-nan-fail-open following ONE level of same-file helper indirection (a
+  `toMs()` wrapper hides the parse from rule 3 today — planted and confirmed by the auditor); review-invariants
+  flagging localeCompare in lib/*/src with dispositions for the 5 existing sites (self-audit ×4, control-plane ×1);
+  a docs↔filesystem re-measure of `path (N)` line-count figures.
+coverage gate: 34 read, 10 partial, 56 not read, of 100 surfaces (+4 full reads).
+```
+Verdict:  **fixed and gated — four shipping libraries whose green proofs had never fed the unknown, and a web client that had never been asked anything; every fix now has an assertion that fails when it is reverted.**

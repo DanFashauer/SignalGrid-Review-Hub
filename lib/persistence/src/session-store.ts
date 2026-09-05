@@ -36,7 +36,11 @@ export interface SessionStore {
   start(session: Session): Promise<void>;
   /** A session by id (only within the tenant), with expiry applied as of nowMs. */
   get(tenantId: string, id: string, nowMs: number): Promise<Session | null>;
-  /** Extend an ACTIVE, unexpired session's TTL; returns the session or null. */
+  /** Extend an ACTIVE, unexpired session's TTL; returns the refreshed session, or
+   *  null when there is nothing to refresh — unknown, another tenant's, expired or
+   *  ended. It used to return the expired/ended session object itself, so the
+   *  route answered 200 and wrote a `session.refresh` audit row for a refresh that
+   *  never happened. */
   refresh(tenantId: string, id: string, ttlSeconds: number, nowMs: number): Promise<Session | null>;
   /** End a session (sign-out). Returns the ended session or null. */
   end(tenantId: string, id: string): Promise<Session | null>;
@@ -84,7 +88,7 @@ export class InMemorySessionStore implements SessionStore {
 
   async refresh(tenantId: string, id: string, ttlSeconds: number, nowMs: number): Promise<Session | null> {
     const current = await this.get(tenantId, id, nowMs);
-    if (!current || current.status !== "active") return current;
+    if (!current || current.status !== "active") return null;
     const next: Session = {
       ...current,
       lastSeenAt: new Date(nowMs).toISOString(),
@@ -266,7 +270,7 @@ export class PostgresSessionStore implements SessionStore {
   async refresh(tenantId: string, id: string, ttlSeconds: number, nowMs: number): Promise<Session | null> {
     await this.ensureReady();
     const current = await this.get(tenantId, id, nowMs);
-    if (!current || current.status !== "active") return current;
+    if (!current || current.status !== "active") return null;
     const lastSeenAt = new Date(nowMs).toISOString();
     const expiresAt = new Date(nowMs + ttlSeconds * 1000).toISOString();
     await this.pool.query(

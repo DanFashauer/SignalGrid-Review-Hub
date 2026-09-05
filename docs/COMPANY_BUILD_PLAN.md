@@ -4853,8 +4853,8 @@ Auth chain (bearer token to tenant principal):
 Served surface and durable path:
 17. artifacts/api-server/src/routes/v1.ts (923) — every served /v1 route including evaluate and the release-path re-evaluation; the spec was audited, the implementation was not.
 18. lib/audit/src/backend.ts (185) — the Postgres ledger WRITE path; the audited verify path is provably blind to tail truncation, so append guarantees live only here.
-19. lib/persistence/src/decision-store.ts (174) — durable decision writes.
-20. lib/persistence/src/session-store.ts (228) — durable session writes and tenant scoping.
+19. lib/persistence/src/decision-store.ts (245) — durable decision writes.
+20. lib/persistence/src/session-store.ts (305) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
 21. scripts/preflight.mjs (377) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
@@ -4867,7 +4867,7 @@ Meta-gates (what green means) and launch connectors:
 Rest of signalgrid-core: continuity.ts (409), seed.ts (1065), types.ts (840), connector.ts (218), remediation.ts (189), webhooks.ts (78), dock.ts (137), shift.ts (99), audit.ts (93), util.ts (129), metrics.ts (55), simulate.ts (35).
 Rest of simulator: routing.ts (211), scenarios.ts (186), types.ts (173), audit.ts (27).
 Rest of api-server: app.ts (123), routes/control-plane.ts (524), routes/integrations.ts (2042 — the largest unread file in artifacts), routes/monitoring.ts, health.ts, sim.ts, simulator.ts, radar.ts; middlewares/errors.ts (104 — error envelope, a leak and fail-open vector), deprecation.ts, metrics.ts; lib/assurance.ts, tier.ts, logger.ts, metrics.ts.
-Auth/step-up periphery: lib/enterprise-auth/src/config.ts, provider.ts, base64url.ts; lib/webauthn/src/stepUpStore.ts (283) + webauthn/; lib/verdict-attestation/src/attest.ts (263), canonical.ts, types.ts; lib/dual-control/src/evaluate.ts, normalize.ts, types.ts; lib/persistence/src/migrations.ts (136); lib/audit/src/types.ts.
+Auth/step-up periphery: lib/enterprise-auth/src/config.ts, provider.ts, base64url.ts; lib/webauthn/src/stepUpStore.ts (283) + webauthn/; lib/verdict-attestation/src/attest.ts (263), canonical.ts, types.ts; lib/dual-control/src/evaluate.ts, normalize.ts, types.ts; lib/persistence/src/migrations.ts (175); lib/audit/src/types.ts.
 Launch connector remainder: graph/posture-connector.ts (254), graph/types.ts, graph/mock-transport.ts; device-management-health/graph-transport.ts (199, the Blocker-5 gap), device-management-health-connector.ts; local-authority/normalize.ts (154).
 Native seam: SignalContext.swift (135), DemoMode.swift (291), plus read-verify of DecisionEngine.swift (190) and AppWorkflows.swift (332) against their TS sources.
 Meta-gate remainder: check-launch-profile.mjs (327), check-preflight-ci-parity.mjs (190), check-publication-boundary.mjs (232), check-decision-port-parity.mjs (298), check-connector-discipline.mjs; validate-sim-macos.sh; .githooks/pre-push; threat_model.md.

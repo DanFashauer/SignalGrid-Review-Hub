@@ -257,6 +257,28 @@ for (const [gate, reason] of LOCAL_ONLY) {
   }
 }
 
+// ── Every `pnpm run <script>` the gates name must EXIST at the root ──────────
+//
+// Wiring is not enough: a step can be registered in preflight AND in a workflow
+// and still be a script nobody defined. proof:api-client-react was added to the
+// scripts package and to both registrations on 2026-09-05 without its root
+// forwarder, so the local proof ran (invoked through --filter) while CI failed at
+// the gate itself with "Missing script" — after 200 gates, on a PR that had been
+// verified. The parity check above was green, because it only asks whether the
+// name appears in a workflow, not whether the name resolves.
+const namedScripts = new Set([
+  ...gates.filter((g) => !g.includes("/") && !g.startsWith("__")).map((g) => g.replace(/ --self-test$/, "")),
+  ...[...blob.matchAll(/(?<![\w-])pnpm run ([a-z0-9:_-]+)/g)].map((m) => m[1]),
+]);
+for (const name of [...namedScripts].sort()) {
+  if (name in pkgScripts) continue;
+  console.error(
+    `  ✗ ${name}: named by preflight or a workflow as \`pnpm run ${name}\` but the root package.json defines no such script — ` +
+      `CI fails with "Missing script" at that step. Add the root forwarder.`,
+  );
+  problems += 1;
+}
+
 // ── The other direction: preflight's own "not covered" disclaimer ────────────
 //
 // That footer is the most load-bearing line the harness prints — it is read at the

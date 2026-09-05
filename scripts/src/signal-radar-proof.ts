@@ -41,10 +41,27 @@ const known = scanSignals([{ category: "device_compliance" }, { category: "custo
 check("all-evaluated batch has no novel signals", known.novel.length === 0);
 check("all-evaluated batch summary is reassuring", known.summary.includes("already evaluated"));
 
+check("report carries how many signals were scanned", report.scanned === 5 && known.scanned === 2);
+
+// ── an EMPTY batch is not a covered grid ──────────────────────────────────────
+// The all-known assertion above is satisfied by ZERO signals too: the old else-arm
+// answered "All observed signals are already evaluated" for an empty batch, so a
+// broken collector, a dropped body and a fully-covered feed read the same.
+const empty = scanSignals([]);
+check("empty batch: scanned is 0 and nothing is observed", empty.scanned === 0 && empty.observations.length === 0 && empty.novel.length === 0);
+check("empty batch: the summary says coverage is UNKNOWN", empty.summary.includes("coverage unknown"));
+check("empty batch: the summary NEVER says the grid is covered", !empty.summary.includes("already evaluated"));
+
 // ── determinism ──────────────────────────────────────────────────────────────
 const a = JSON.stringify(scanSignals([{ category: "z_new" }, { category: "a_new" }]));
 const b = JSON.stringify(scanSignals([{ category: "z_new" }, { category: "a_new" }]));
 check("radar reports are deterministic", a === b);
+// Two calls in ONE process share a locale, so the assertion above cannot see a
+// locale-dependent sort. Pin the ORDER itself: codepoint, where "Z" < "a" < "z" < "ä"
+// — `localeCompare` under sv_SE puts "ä" after "z" and under en-US before "a".
+const order = scanSignals([{ category: "ätemp_sensor" }, { category: "zone_probe" }, { category: "Zebra_tag" }, { category: "a_new" }])
+  .observations.map((o) => o.category).join(",");
+check("observations are in CODEPOINT order on any machine, not the process locale's collation", order === "Zebra_tag,a_new,zone_probe,ätemp_sensor");
 
 // ── catalog ──────────────────────────────────────────────────────────────────
 check("catalog lists the 17 evaluated categories (15 + the two launch families wired into the core on 2026-08-10)", signalCatalog().evaluated.length === 17);

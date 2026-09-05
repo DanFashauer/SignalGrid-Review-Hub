@@ -91,7 +91,7 @@ the proof harnesses and gates.)
 | Package | What it is |
 | --- | --- |
 | `adaptive-proposals` | The governed lifecycle around a recommendation |
-| `api-client-react` | React client bindings for the /v1 API |
+| `api-client-react` | Generated React client + hooks for the `/api` surface (orval, from `lib/api-spec/openapi.yaml`) — not the `/v1` decision API |
 | `api-spec` | The OpenAPI contract (`v1-openapi.yaml`) |
 | `api-zod` | Zod schemas mirroring the API contract |
 | `app-workflows` | Public-safe catalog of integrated application workflows, by vertical |

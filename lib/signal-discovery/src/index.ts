@@ -57,17 +57,22 @@ export function discover(observed: ObservedSignal[], sources: DiscoverySource[])
   const out: DiscoveredSignal[] = [];
 
   for (const o of observed) {
-    const key = `${o.sourceId}:${o.category}`;
+    // The SAME normalisation radar applies (trim, "(empty)" for nothing): the dedupe
+    // key used to be the raw string while the classifier trimmed it, so " x", "x"
+    // and "x " were three detections and three "recognized" — the looks-covered count
+    // inflated by whitespace. Key, classify and emit the one normalised value.
+    const category = String(o.category ?? "").trim() || "(empty)";
+    const key = `${o.sourceId}:${category}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
     const source = sourceById.get(o.sourceId);
     const sourceName = source?.name ?? o.sourceId;
-    const cls = classifyCategory(o.category);
+    const cls = classifyCategory(category);
 
     if (cls === "evaluated") {
       out.push({
-        category: o.category, sourceId: o.sourceId, sourceName, class: cls,
+        category, sourceId: o.sourceId, sourceName, class: cls,
         lifecycle: "active", autoOnboardable: false,
         recommendation: "Already an active grid signal — no action needed.",
       });
@@ -75,19 +80,22 @@ export function discover(observed: ObservedSignal[], sources: DiscoverySource[])
     }
     const canPull = !!source && source.hasApi;
     out.push({
-      category: o.category, sourceId: o.sourceId, sourceName, class: cls,
+      category, sourceId: o.sourceId, sourceName, class: cls,
       lifecycle: "proposed",
       autoOnboardable: canPull,
       recommendation: canPull
         ? `Auto-onboard from ${sourceName} via ${source!.pullMethod} — ${cls === "candidate" ? "a known candidate signal" : "a newly detected signal"}.`
-        : `Needs an admin: ${sourceName} has no API/connector to pull "${o.category}" automatically — wire it manually.`,
+        : `Needs an admin: ${sourceName} has no API/connector to pull "${category}" automatically — wire it manually.`,
     });
   }
-  // Stable order: unrecognised-but-actionable first, then by source + category.
+  // Stable order: unrecognised-but-actionable first, then by source + category —
+  // in CODEPOINT order, not `localeCompare`, whose collation follows the process
+  // locale; source ids and categories are tenant-supplied, so non-ASCII is reachable.
+  const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   return out.sort((a, b) =>
     Number(b.autoOnboardable) - Number(a.autoOnboardable) ||
-    a.sourceId.localeCompare(b.sourceId) ||
-    a.category.localeCompare(b.category));
+    cmp(a.sourceId, b.sourceId) ||
+    cmp(a.category, b.category));
 }
 
 export interface OnboardingResult {
@@ -111,14 +119,22 @@ export function planOnboarding(discovered: DiscoveredSignal[]): OnboardingResult
   const alreadyActive: DiscoveredSignal[] = [];
   for (const d of discovered) {
     if (d.class === "evaluated") alreadyActive.push(d);
-    else if (d.autoOnboardable) onboarded.push({ ...d, lifecycle: "onboarded" });
+    // Strictly `true`: this is an exported entry point, and a truthy non-boolean
+    // (the string "false", an object) used to auto-onboard a signal nobody could
+    // pull. Anything but a literal true waits for an admin.
+    else if (d.autoOnboardable === true) onboarded.push({ ...d, lifecycle: "onboarded" });
     else needsAdmin.push(d);
   }
   return { onboarded, needsAdmin, alreadyActive };
 }
 
 export interface DiscoverySummary {
+  /** Sources CONFIGURED. Not the same as sources heard from — see sourcesObserved. */
   sources: number;
+  /** Sources that actually contributed at least one detection. A configured source
+   *  that is down, credential-less or silent is counted in `sources` and NOT here,
+   *  so silence is visible instead of reading as a healthy source with nothing new. */
+  sourcesObserved: number;
   detected: number;
   recognized: number;
   candidate: number;
@@ -131,6 +147,7 @@ export interface DiscoverySummary {
 export function discoverySummary(discovered: DiscoveredSignal[], sources: DiscoverySource[]): DiscoverySummary {
   return {
     sources: sources.length,
+    sourcesObserved: new Set(discovered.map((d) => d.sourceId)).size,
     detected: discovered.length,
     recognized: discovered.filter((d) => d.class === "evaluated").length,
     candidate: discovered.filter((d) => d.class === "candidate").length,

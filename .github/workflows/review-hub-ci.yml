@@ -674,6 +674,12 @@ jobs:
       - name: OpenAPI contract check
         run: pnpm run proof:api-contract
 
+      # The generated web client's one hand-written file (custom-fetch.ts) had no
+      # test: an unknown responseType resolved undefined as success, and a 200 with
+      # no content-type came back as a string typed as the caller's result.
+      - name: "Proof: api-client-react (the fetch boundary refuses what it cannot vouch for)"
+        run: pnpm run proof:api-client-react
+
       - name: API integration test
         run: pnpm run test:api
 

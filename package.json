@@ -69,6 +69,7 @@
     "proof:adaptive-proposals": "pnpm --filter @workspace/scripts run proof:adaptive-proposals",
     "proof:agent-behavior": "pnpm --filter @workspace/scripts run proof:agent-behavior",
     "proof:agent-identity": "pnpm --filter @workspace/scripts run proof:agent-identity",
+    "proof:api-client-react": "pnpm --filter @workspace/scripts run proof:api-client-react",
     "proof:api-contract": "pnpm --filter @workspace/scripts run proof:api-contract",
     "proof:app-resilience": "pnpm --filter @workspace/scripts run proof:app-resilience",
     "proof:app-update": "pnpm --filter @workspace/scripts run proof:app-update",

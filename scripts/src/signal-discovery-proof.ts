@@ -47,8 +47,32 @@ check("summary counts add up", sum.recognized + sum.candidate + sum.novel === su
 check("summary: 2 recognised, 2 candidate, 2 novel", sum.recognized === 2 && sum.candidate === 2 && sum.novel === 2);
 check("summary: 2 auto-onboardable, 2 need admin", sum.autoOnboardable === 2 && sum.needsAdmin === 2);
 
+check("summary: sources heard from is counted separately from sources configured",
+  sum.sourcesObserved === new Set(discovered.map((d) => d.sourceId)).size && sum.sourcesObserved <= sum.sources);
+// Four configured sources and NO detections used to read "sources: 4" and nothing
+// else — a source that is down or credential-less looked exactly like a healthy one.
+const silent = discoverySummary([], DEMO_SOURCES);
+check("summary over no detections: configured 4, observed 0 — silence is visible", silent.sources === DEMO_SOURCES.length && silent.sourcesObserved === 0 && silent.detected === 0);
+
 // ── dedup + determinism ──────────────────────────────────────────────────────
 check("duplicate observations collapse to one", discover([...DEMO_OBSERVED, ...DEMO_OBSERVED], DEMO_SOURCES).length === discovered.length);
+// Byte-identical duplicates are the KNOWN value; whitespace variants are the one
+// that used to inflate "recognized" to three for one signal type (the dedupe key
+// was the raw string while the classifier trimmed it).
+const variants = discover([
+  { sourceId: DEMO_OBSERVED[0]!.sourceId, category: "identity_state" },
+  { sourceId: DEMO_OBSERVED[0]!.sourceId, category: " identity_state" },
+  { sourceId: DEMO_OBSERVED[0]!.sourceId, category: "identity_state " },
+], DEMO_SOURCES);
+check("whitespace variants of one category are ONE detection, emitted trimmed", variants.length === 1 && variants[0]!.category === "identity_state");
+// planOnboarding is an exported entry point: a truthy non-boolean used to auto-onboard.
+const forged = planOnboarding([{ ...discovered.find((d) => d.class === "novel")!, autoOnboardable: "false" as unknown as boolean }]);
+check("planOnboarding: only a literal true auto-onboards — the string \"false\" waits for an admin", forged.onboarded.length === 0 && forged.needsAdmin.length === 1);
+// Codepoint order, pinned (two calls in one process share a locale and cannot see a
+// locale-dependent sort): "Z" < "a" < "z" < "ä".
+const srcId = DEMO_SOURCES.find((s) => s.hasApi)!.id;
+const ordered = discover(["ätemp", "zone", "Zebra", "a_new"].map((category) => ({ sourceId: srcId, category })), DEMO_SOURCES).map((d) => d.category).join(",");
+check("discovered signals are in CODEPOINT order, not the process locale's collation", ordered === "Zebra,a_new,zone,ätemp");
 check("discovery is deterministic", JSON.stringify(discover(DEMO_OBSERVED, DEMO_SOURCES)) === JSON.stringify(discovered));
 check("auto-onboardable signals are listed first", (() => { const firstNonAuto = discovered.findIndex((d) => !d.autoOnboardable); return firstNonAuto === -1 || discovered.slice(firstNonAuto).every((d) => !d.autoOnboardable); })());
 

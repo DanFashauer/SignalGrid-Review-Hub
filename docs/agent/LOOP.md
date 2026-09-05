@@ -51,7 +51,18 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-05 (cloud lane, latest) - the lane loop rebuilt on the
+LAST TOUCHED: 2026-09-05 (cloud lane, latest) - five audit batches landed in one
+              day (#438, #443, #444, #446 merged; batch E on its PR): the unknown
+              loosened the answer in fourteen libraries and two consoles, each fix
+              mutation-proven (docs/agent/EVIDENCE.md, four entries dated today).
+              Also today: the public Room Entry console had coloured non_compliant
+              GREEN and shipped a stale core (now gated), the reachability gate
+              credited comments as imports (pin 8 -> 13, honestly), and the web
+              client's fetch boundary got its first proof. Coverage ledger 34 read /
+              10 partial / 56 not read of 100. FOUND, NOT FIXED (owner setting): the
+              legacy Pages Jekyll build fails on every Alpha push; pages.yml expects
+              Settings > Pages > Source = "GitHub Actions". Earlier today: the lane
+              loop rebuilt on the
               owner's "not working and causing delay": scripts/lane-deliver.mjs
               (write + gate + commit + push + wake in one step, from a worktree at
               origin/SignalGrid_Alpha; Mac pushes mainline, cloud pushes a
@@ -207,15 +218,19 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Terminal (System Settings > Privacy & Security > Screen Recording, then
               relaunch Terminal) - closes 2026-09-02-android-desktop-first-run; and
               the Fleet Premium decision above before 2026-09-16.
-NEXT ACTION: cloud: land the lane-loop PR, then the unknown-as-permissive fix
-              batch (orchestration sensitivity + domain + reasonCodes; work-context
-              zero-signal + raw ACTION_RANK sites; pim-activation count guard;
-              handoff-sim release guard; incident-playbook off-ladder/empty-drivers
-              arms; integration-bridge constant device_management) with mutation
-              proofs; the hourly steward opens a draft PR for every mac/* branch
-              on sight. Mac: use `pnpm run lane:deliver` and say whether gh is on
-              PATH. owner: to wake the cloud lane at any moment, comment on PR
-              #439 from the phone. owner:
+NEXT ACTION: cloud: land batch E, then keep reading unread surfaces (56 left; next
+              lib/api-spec, lib/iac, then the docs families) and build the three
+              gates batch E specified (NaN gate follows one helper hop;
+              review-invariants flags localeCompare in lib/*/src with the five
+              existing sites dispositioned; docs `path (N)` line counts
+              re-measured); the hourly steward opens a draft PR for every mac/*
+              branch on sight. Mac: use `pnpm run lane:deliver` and say whether gh
+              is on PATH. owner: flip Settings > Pages > Source to "GitHub Actions"
+              (the branch build has failed on every push since at least 09-04),
+              then say so and the cloud lane runs the deploy workflow; say whether
+              the three stale claude/* branches (ruleset-probe, two
+              steward-heartbeat) may be deleted. owner: to wake the cloud lane at
+              any moment, comment on PR #439 from the phone. owner:
               discovery conversations (0 of 15) - nothing substitutes.
               owner: publish the MCP marketplace listing
               (docs/SIGNALGRID_MCP_MARKET_LISTING.md) on the creator page - only
@@ -249,7 +264,7 @@ NEXT ACTION: cloud: land the lane-loop PR, then the unknown-as-permissive fix
    frozen" until 2026-09-02 — two days after this file's own STATE section
    recorded DR-021 — which is the contradiction a doc can hold against itself
    when no gate reads English.*
-3. **Nobody has used the product.** 141 proof gates and four native surfaces do
+3. **Nobody has used the product.** 142 proof gates and four native surfaces do
    not change that number. Only a conversation does.
 
 ---

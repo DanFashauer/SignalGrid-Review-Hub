@@ -279,7 +279,17 @@
     },
     "lib/api-client-react": {
       "path": "lib/api-client-react",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "custom-fetch.ts in full plus the generated files. An off-vocabulary responseType resolved undefined AS SUCCESS (no default arm); a 200 with no content-type came back as a raw string the caller read as its typed result. Both fixed; the package had ZERO proofs and now has proof:api-client-react (13 assertions) registered in preflight and CI.",
+          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 2
+        }
+      ]
     },
     "lib/api-spec": {
       "path": "lib/api-spec",
@@ -556,7 +566,17 @@
     },
     "lib/persistence": {
       "path": "lib/persistence",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "All five files in full. refresh() returned the expired/ended session object so the route answered 200 with an audit row for a refresh that never happened (now null -> 404); listDecisions reported a 100-row page length as total (countDecisions added, id tiebreak on the order); role-split COALESCE(..., TRUE) proved schema ownership from a missing row (now FALSE); the unparseable-expiry guard had no assertion holding it (now two). PG proofs extended for CI; not runnable here (no Postgres).",
+          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 5
+        }
+      ]
     },
     "lib/pim-activation": {
       "path": "lib/pim-activation",
@@ -644,11 +664,31 @@
     },
     "lib/signal-discovery": {
       "path": "lib/signal-discovery",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Both files in full. Dedupe keyed on the RAW category while the classifier trimmed it (whitespace variants inflated recognized); planOnboarding auto-onboarded on any truthy value; sources configured counted as sources heard from; localeCompare sort. All fixed; 5 proof assertions added.",
+          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 4
+        }
+      ]
     },
     "lib/signal-radar": {
       "path": "lib/signal-radar",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Both files in full. scanSignals answered 'All observed signals are already evaluated' for an EMPTY batch (a dropped body read as a covered grid; POST /api/signals/radar substituted [] for any non-array) - fixed with a scanned count, a coverage-unknown summary and a 400 on a non-array body; localeCompare sort replaced by codepoint order; 4 proof assertions added and pinned in absent-collection-proof. Prototype-key, clock and switch hunts clean.",
+          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 3
+        }
+      ]
     },
     "lib/signalgrid-core": {
       "path": "lib/signalgrid-core",

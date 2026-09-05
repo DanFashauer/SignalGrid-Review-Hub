@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "mac-new-first-party-skill-stack-reference-12th-v",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "New first-party skill stack-reference: 12th VENDORED exception, section-E carve-out added (shared surfaces touched)",
+  "body": "Absorbed the owner-shared Fechin/reference cheatsheet site (215 sheets) as .claude/skills/stack-reference/ - SKILL.md plus 8 domain files (shell, git-ci, containers, mac-host, native, typescript, ai-cli, http-docs) holding 102 VERIFIED contradictions between generic cheatsheet advice and this repo's rules: bash 3.2 + BSD here vs bash 5 + GNU on CI (28 shell traps, several silent), the two hook-banned history/stash commands, npm for pnpm, main for SignalGrid_Alpha (a copied workflow condition that never fires), --expose for -p, short image names, as-casts / double-bang / Elvis defaults / wildcard arms / any that fail open, 403 where the API answers 404, PCRE syntax in Node RegExp gates. Shared surfaces touched, no gate LOGIC changed: scripts/publication-boundary.mjs gained one carve-out entry for the new directory; .claude/skills/VENDORED.md count ELEVEN to TWELVE plus a table row. check-publication-boundary section E reads 12 carve-outs = 12 rows = stated word; skill-plane conformance 26 skills green; preflight + breadth (56) green on the Mac. Intake row in docs/agent/RESOURCE_INTAKE.md. Consult shell.md before pasting any shell into a script or workflow - the bash-3.2 / BSD-vs-GNU set is where a green harness turns red in CI."
+}

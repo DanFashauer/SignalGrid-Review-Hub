@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-05T17:24:36.162Z",
-  "result": "acted: first hourly cycle on the new delivery path (lane-deliver -> lane/cloud-mail branch); no Mac mail owed, no unmerged mac/* branch; lane-loop PR #440 in flight"
+  "firedAt": "2026-09-05T18:34:59.017Z",
+  "result": "acted: no Mac mail owed, no new/moved mac/* branch; mailed the Mac lane the prune list for six stale mac/* branches; #443 merged, #444 in CI"
 }

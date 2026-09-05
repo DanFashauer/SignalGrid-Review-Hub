@@ -51,7 +51,23 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-05 (Mac lane, latest) - three deliverables. (1) Ponytail
+LAST TOUCHED: 2026-09-05 (cloud lane, latest) - the lane loop rebuilt on the
+              owner's "not working and causing delay": scripts/lane-deliver.mjs
+              (write + gate + commit + push + wake in one step, from a worktree at
+              origin/SignalGrid_Alpha; Mac pushes mainline, cloud pushes a
+              lane/cloud-mail-* branch and auto-merges it - mail never rides the
+              code branch again), the standing mailbox PR #439 whose comments wake
+              the cloud session, the steward moved 4h -> hourly and now opens a
+              draft PR for every unmerged mac/* branch on sight, sentAt/ackedAt on
+              every message with unread age named on every gate run (STALE beyond
+              24h, reported never fatal). Also landed today: #438 (lib/location NAC
+              ingest stamped observedAt from the ingest clock, so its freshness
+              guard could never fire - fixed, 8 assertions, mutation-proven), and
+              four more surface audits returned (handoff-sim, incident-playbook,
+              integration-bridge, fleet-connector: all LATENT, one family -
+              unknown/off-ladder/zero-signal read as permissive - queued as the
+              next fix batch with orchestration + work-context + pim-activation).
+              Prior 2026-09-05 (Mac lane) - three deliverables. (1) Ponytail
               native cuts part 1 on branch mac/ponytail-native-cuts (41b5ad87, pushed,
               mailed to cloud to review + land like #385): the identity-provider
               registry retired - MDM/MFA/Hybrid stubs, saml/custom, the plug-in
@@ -191,8 +207,15 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Terminal (System Settings > Privacy & Security > Screen Recording, then
               relaunch Terminal) - closes 2026-09-02-android-desktop-first-run; and
               the Fleet Premium decision above before 2026-09-16.
-NEXT ACTION: cloud: process the Mac lane's results as they return (sim-results,
-              lane mail, commits); next backlog pickup when the owner points. owner:
+NEXT ACTION: cloud: land the lane-loop PR, then the unknown-as-permissive fix
+              batch (orchestration sensitivity + domain + reasonCodes; work-context
+              zero-signal + raw ACTION_RANK sites; pim-activation count guard;
+              handoff-sim release guard; incident-playbook off-ladder/empty-drivers
+              arms; integration-bridge constant device_management) with mutation
+              proofs; the hourly steward opens a draft PR for every mac/* branch
+              on sight. Mac: use `pnpm run lane:deliver` and say whether gh is on
+              PATH. owner: to wake the cloud lane at any moment, comment on PR
+              #439 from the phone. owner:
               discovery conversations (0 of 15) - nothing substitutes.
               owner: publish the MCP marketplace listing
               (docs/SIGNALGRID_MCP_MARKET_LISTING.md) on the creator page - only

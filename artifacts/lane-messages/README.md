@@ -15,10 +15,29 @@ describing an operation to run, it should have been a request.
 ## Using it
 
 ```bash
-pnpm run lane:inbox                       # addressed to this machine, unread
-pnpm run lane:inbox --all                 # including acknowledged
-pnpm run lane:send "subject" "body…"      # write to the other lane
-pnpm run lane:ack <id> "what I did"       # acknowledge, with the answer
+pnpm run lane:inbox                                   # addressed to this machine, unread, with how long each has waited
+pnpm run lane:inbox --all                             # including acknowledged
+pnpm run lane:deliver send "subject" "body…"          # write to the other lane AND deliver it (one step)
+pnpm run lane:deliver ack <id> "what I did"           # acknowledge, with the answer, AND deliver it
+pnpm run lane:deliver heartbeat <routine> "quiet"     # a routine's firing evidence, delivered
+pnpm run lane:deliver batch ops.json                  # several of the above in ONE commit
+```
+
+`lane:deliver` (since 2026-09-05) builds the commit in a throwaway worktree at
+`origin/SignalGrid_Alpha`, runs this directory's gate inside it, pushes, confirms
+with `git ls-remote`, and comments on the mailbox PR (`docs/agent/lane-mailbox.json`)
+when `gh` is on PATH so the other lane wakes now. Your own checkout is never
+touched. On the Mac the push goes straight to mainline; on the cloud it goes to a
+`lane/cloud-mail-<stamp>` branch that the cloud session opens as a PR with
+auto-merge — the cloud lane's credentials cannot push mainline directly, and mail
+must never wait behind a code PR again.
+
+`lane:send` and `lane:ack` still exist and only WRITE the file. A written file
+is not a delivered message:
+
+```bash
+pnpm run lane:send "subject" "body…"      # write only
+pnpm run lane:ack <id> "what I did"       # write only
 git add artifacts/lane-messages && git commit -m "lane mail" && git push
 ```
 

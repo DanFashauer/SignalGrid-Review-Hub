@@ -310,8 +310,6 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
                 badgeId: badgeId,
                 sessionToken: sessionToken,
                 deviceId: DeviceInfo.identifier,
-                mdmUserId: nil,
-                mfaToken: nil,
                 additionalData: startSessionResponse.expiresAt.map { ["expiresAt": ISO8601Wire.string($0)] }
             )
             

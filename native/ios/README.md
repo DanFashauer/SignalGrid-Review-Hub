@@ -59,9 +59,7 @@ device-side half is documented in `native/ios/mdm/README.md`.
 native/ios/
 ├── project.yml                  # XcodeGen configuration
 ├── Package.swift                # SwiftPM manifest
-├── setup.sh                     # Generates the Xcode project
 ├── run-ios.sh                   # Build + boot a simulator
-├── run-code-analysis.sh
 ├── README.md                    # This file
 ├── MDM_CONFIGURATION.md         # Management-profile keys
 ├── FLEET_MDM.md                 # Fleet-specific enrollment notes
@@ -272,10 +270,12 @@ profile had to grant before the app would install.
    All paths below are repo-relative — run them from the root of the checked-out
    revision, never from a stray copy of the iOS tree.
    ```bash
-   cd native/ios
-   chmod +x setup.sh
-   ./setup.sh
+   cd native/ios && xcodegen generate
    ```
+   (The former `setup.sh` wrapper and `run-code-analysis.sh` are gone: the first
+   only wrapped this command with stale hints, the second re-implemented the seven
+   `custom_rules` already in `.swiftlint.yml` — run
+   `swiftlint --config native/ios/.swiftlint.yml` instead.)
 
 3. **Open in Xcode**
    ```bash

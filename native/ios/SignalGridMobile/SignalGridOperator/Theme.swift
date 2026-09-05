@@ -2,7 +2,9 @@ import SwiftUI
 import SignalGridMobileCore
 
 extension Color {
-    static let sgBackground = Color(red: 0.075, green: 0.090, blue: 0.102)
+    // #15181B — the canonical charcoal 950 (DesignSystem.swift `SG.background`
+    // dark). Decoded to #13171A until 2026-09-05 (review row 104).
+    static let sgBackground = Color(red: 0.082, green: 0.094, blue: 0.106)
     static let sgPanel = Color(red: 0.102, green: 0.122, blue: 0.133)
     // #1D2226 — the canonical card (DesignSystem.swift). The prior #1E2428
     // measured deny at 4.45:1 — under AA — on the ground decision rows

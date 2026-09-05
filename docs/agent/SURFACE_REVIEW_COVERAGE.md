@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **16 of 100 surfaces have been read. 7 are partially read. 77 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2210 of 2210 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2208 of 2208 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -107,7 +107,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/work-context` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/android` | native | 24 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 2 | 0 |
 | `native/desktop` | native | 21 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 2 | 0 |
-| `native/ios/*` | loose files | 14 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `native/ios/*` | loose files | 12 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/ios/EnterpriseShell` | native | 50 | read | 1 | 2026-09-02 | cloud lane (independent review, notes folded) | #387 | 4 | 0 |
 | `native/ios/EnterpriseShellTests` | native | 9 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/ios/mdm` | native | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |

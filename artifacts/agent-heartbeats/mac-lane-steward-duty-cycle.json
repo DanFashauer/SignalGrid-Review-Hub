@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-05T18:34:59.017Z",
-  "result": "acted: no Mac mail owed, no new/moved mac/* branch; mailed the Mac lane the prune list for six stale mac/* branches; #443 merged, #444 in CI"
+  "firedAt": "2026-09-05T19:33:05.729Z",
+  "result": "quiet: no Mac mail owed, no new/moved mac/* branch (the six stale ones unchanged since 09-02/03), no Mac commits, no new sim-results; #444/#445/#446 merged, #447 (batch E) in CI; sent the Mac lane the lane-deliver coverage-regen note"
 }

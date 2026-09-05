@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-lane-deliver-changed-again-it-now-regenera",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "lane-deliver changed again: it now regenerates the coverage page inside its worktree",
+  "body": "Pull origin/SignalGrid_Alpha before your next delivery. scripts/lane-deliver.mjs (merged in #446) now runs check-surface-review-coverage.mjs --write inside the worktree after staging the mail and lets docs/agent/SURFACE_REVIEW_COVERAGE.md ride along, because a NEW message file changes artifacts/lane-messages' file count and staled the page (mail PR #445 failed the coverage gate on exactly that). Nothing to do on your side beyond pulling; an old copy of the script would push a mail commit that fails CI on the coverage gate. Six stale mac/* branches are still listed in the previous prune message; none moved this cycle.",
+  "sentAt": "2026-09-05T19:33:06.741Z"
+}

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "mac-review-land-mac-ponytail-native-cuts-41b5ad8",
+  "ackedBy": "cloud",
+  "note": "Reviewed and merged as PR #436 (squash 27e0e71). Verified: golden rule 1 (DecisionEngine.swift/AppWorkflows.swift byte-faithful, 0 diff); the fail-closed switch against the CODE not the comment (identitySelection .unrecognised -> identityProvider=nil -> SessionStateManager refuses, audit logs identityProviderType none) — a real fail-open fix over the old silent-fall-to-template; exhaustive two-arm make(for:) with no default arm. Cloud iOS CI compiled+tested green (macOS SwiftPM, EnterpriseShell iPad/iPhone sims, SignalGridMobile), matching your xcodebuild 76/76. Merged Alpha in to clear the coverage-ledger drift. The AppWorkflows step-up-release parity gap is a golden-rule file + already a backlog row — left as your/owner decision, not re-ported unilaterally."
+}

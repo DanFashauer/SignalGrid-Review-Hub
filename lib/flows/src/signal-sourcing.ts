@@ -56,9 +56,10 @@ const BASE_FIDELITY: Record<AcquisitionMethod, Fidelity> = {
 /** Fidelity of a source's signal. api/native → high; grid-collected → medium (low if degraded); unavailable → none. */
 export function fidelityOf(source: SignalSource): Fidelity {
   if (source.method === "grid_collected" && source.degraded === true) return "low";
-  // `?? "none"` fails closed on an unknown/undefined method (untyped JSON) —
-  // never leak `undefined` as a fidelity.
-  return BASE_FIDELITY[source.method] ?? "none";
+  // Own-key lookup, then "none": `??` alone failed closed on undefined but not on a
+  // prototype key — `BASE_FIDELITY["constructor"]` is a function, not nullish, and
+  // JSON.stringify then dropped the `fidelity` field from the served response entirely.
+  return Object.prototype.hasOwnProperty.call(BASE_FIDELITY, source.method) ? BASE_FIDELITY[source.method] : "none";
 }
 
 /**

@@ -54,7 +54,11 @@ export const LEGAL_TRANSITIONS: Record<ProposalStatus, readonly ProposalStatus[]
 /** Is `to` a legal successor of `from`? Pure lookup over the table above — exported so
  *  the proof can enumerate the entire (status × status) space against it. */
 export function isLegalTransition(from: ProposalStatus, to: ProposalStatus): boolean {
-  return LEGAL_TRANSITIONS[from].includes(to);
+  // Own-key lookup: a status the table does not know (a caller-supplied object with
+  // "Approved", "constructor", …) is NOT a legal source of any transition — it used to
+  // be an untyped TypeError on `.includes`, which a caller catching the package's own
+  // error class never sees. Now it is the typed `illegal_transition` refusal.
+  return Object.prototype.hasOwnProperty.call(LEGAL_TRANSITIONS, from) && LEGAL_TRANSITIONS[from].includes(to);
 }
 
 interface AdvancePatch {
@@ -143,6 +147,17 @@ export function requestApproval(proposal: AdaptiveProposal): AdaptiveProposal {
       "pending_approval",
     );
   }
+  // A simulation over ZERO incidents is a projection over nothing: it satisfied the
+  // "has been simulated" gate while having simulated nothing, and combined with a zero
+  // prediction it carried all the way to `helped: true`. Vacuous is not simulated.
+  if (!(proposal.simulation.observedIncidentCount > 0)) {
+    throw new AdaptiveProposalError(
+      "simulation_required",
+      "cannot request approval: the attached simulation observed zero incidents — a projection over an empty history is not a simulation, and an owner is not asked to approve on it.",
+      proposal.status,
+      "pending_approval",
+    );
+  }
   return advance(proposal, { status: "pending_approval" });
 }
 
@@ -158,10 +173,13 @@ export function approve(
   approvedAtRef: string,
 ): AdaptiveProposal {
   assertLegal(proposal.status, "approved");
-  if (!recorded(approvedByRef)) {
+  // Both refs, to the same standard: `approvedAtRef` is the monotonic sequence handle
+  // that makes ordering provable without a wall clock (types.ts), and an empty one is
+  // an absent ordering handle recorded as a present one.
+  if (!recorded(approvedByRef) || !recorded(approvedAtRef)) {
     throw new AdaptiveProposalError(
       "approver_required",
-      "cannot approve: a non-empty approver ref is required — approval is a human act, and an empty ref is not one.",
+      "cannot approve: a non-empty approver ref AND a non-empty approval sequence ref are required — approval is a human act at a provable point in the ledger, and an empty ref is neither.",
       proposal.status,
       "approved",
     );

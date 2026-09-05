@@ -114,11 +114,21 @@ export interface FlowHealth {
 // as broken. Fail closed: ambiguous/conflicting input never resolves to healthy.
 const SIGNAL_SEVERITY: Record<SignalStatus, number> = { broken: 3, missing: 2, stale: 1, healthy: 0 };
 
+/** A status the vocabulary does not know — untyped JSON, a drifted producer, a
+ *  prototype key — is read as BROKEN, the most restrictive tier. Until 2026-09-05 an
+ *  unknown status counted as "neither broken nor stale" (the flow graded healthy) and,
+ *  because `3 > undefined` is false, an unknown observed FIRST masked a `broken`
+ *  observed second. `SignalStatus` is validated nowhere else in the estate. */
+function normalizeStatus(status: string): SignalStatus {
+  return Object.prototype.hasOwnProperty.call(SIGNAL_SEVERITY, status) ? (status as SignalStatus) : "broken";
+}
+
 function statusOf(signalStates: SignalState[]): Map<string, SignalStatus> {
   const m = new Map<string, SignalStatus>();
   for (const s of signalStates) {
+    const status = normalizeStatus(String(s.status));
     const prev = m.get(s.id);
-    if (prev === undefined || SIGNAL_SEVERITY[s.status] > SIGNAL_SEVERITY[prev]) m.set(s.id, s.status);
+    if (prev === undefined || SIGNAL_SEVERITY[status] > SIGNAL_SEVERITY[prev]) m.set(s.id, status);
   }
   return m;
 }
@@ -135,6 +145,9 @@ export function evaluateFlowHealth(flow: Flow, signalStates: SignalState[]): Flo
     const st = states.get(sig) ?? "missing";
     if (st === "missing" || st === "broken") brokenSignals.push(sig);
     else if (st === "stale") staleSignals.push(sig);
+    // Terminal arm: only an explicit `healthy` is healthy. Anything else that reached
+    // here (it cannot, after normalizeStatus — this is defence in depth) breaks the flow.
+    else if (st !== "healthy") brokenSignals.push(sig);
   }
   const status: FlowStatus = brokenSignals.length > 0 ? "broken" : staleSignals.length > 0 ? "degraded" : "healthy";
   return { flowId: flow.id, status, brokenSignals, staleSignals };

@@ -102,7 +102,21 @@ const DEFAULT_CONFIRMER: Record<AppVertical, string> = {
   government: "authorizing officer",
 };
 
-const firstReason = (codes: string[], fallback: string): string => (codes.length > 0 ? codes[0] : fallback);
+/** Defensive at the untyped boundary, like the physical orchestration's twin: a
+ *  `reasonCodes` that is not an array used to throw on the three RESTRICTIVE outcomes
+ *  and survive on `allow` — the one verdict a malformed input should not favour. */
+const firstReason = (codes: unknown, fallback: string): string => {
+  const first = Array.isArray(codes) ? codes[0] : undefined;
+  return typeof first === "string" && first.trim() !== "" ? first : fallback;
+};
+
+/** The human who confirms a sensitive action, by vertical — own-key guarded so a
+ *  vertical the table does not know reads "an authorized confirmer", never "undefined
+ *  confirmation" in the sentence a person reads before approving an irreversible act. */
+const confirmerFor = (vertical: string): string =>
+  Object.prototype.hasOwnProperty.call(DEFAULT_CONFIRMER, vertical)
+    ? DEFAULT_CONFIRMER[vertical as AppVertical]
+    : "an authorized confirmer";
 
 /**
  * Turn a decision + an app integration into a plan of which of the app's actions
@@ -113,7 +127,7 @@ const firstReason = (codes: string[], fallback: string): string => (codes.length
 export function planAppSession(input: AppPlanInput): AppSessionPlan {
   const { integration, outcome, reasonCodes } = input;
   const confirmed = new Set(input.confirmedActionKeys ?? []);
-  const confirmer = input.confirmer ?? DEFAULT_CONFIRMER[integration.vertical];
+  const confirmer = input.confirmer ?? confirmerFor(integration.vertical);
 
   // A release may be FULL (stepUpSatisfied — the simulated/demo path) or SCOPED to the
   // action keys a verified gesture was actually bound to. A scoped release that happens
@@ -121,9 +135,16 @@ export function planAppSession(input: AppPlanInput): AppSessionPlan {
   // integration still leaves step_up mode); otherwise the plan honestly STAYS in
   // step_up mode with only the bound action released — a gesture for one action must
   // never release the rest of the integration (review finding).
-  const releasedKeys = new Set(input.stepUpSatisfiedActionKeys ?? []);
+  // Only keys the integration actually has can be released — a key it does not contain
+  // releases nothing. And an integration with NO held actions has nothing a gesture
+  // could satisfy, so it never reports a step-up as done: `[].every(...)` is vacuously
+  // true, and until 2026-09-05 a bogus key on a read-only integration turned a live
+  // step_up decision into `mode: "proceed"` with a summary asserting a step-up that
+  // never happened — a ceremony that proves nothing, recorded as though it authorized.
+  const knownKeys = new Set(integration.actions.map((a) => a.key));
+  const releasedKeys = new Set((input.stepUpSatisfiedActionKeys ?? []).filter((k) => knownKeys.has(k)));
   const heldKeys = integration.actions.filter((a) => a.gatedByStepUp || a.sensitive).map((a) => a.key);
-  const allHeldReleased = releasedKeys.size > 0 && heldKeys.every((k) => releasedKeys.has(k));
+  const allHeldReleased = heldKeys.length > 0 && releasedKeys.size > 0 && heldKeys.every((k) => releasedKeys.has(k));
   const stepUpDone = outcome === "step_up" && (input.stepUpSatisfied === true || allHeldReleased);
   const effective: DecisionOutcome = stepUpDone ? "allow" : outcome;
 

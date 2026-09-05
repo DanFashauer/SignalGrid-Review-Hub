@@ -59,6 +59,18 @@ export const TEARDOWN_ORDER: Record<SetupStepKind, number> = {
   profile: 6, // the PPPC/TCC allow profile is removed last
 };
 
+/** Own-key membership with a finite order. A bare `kind in TEARDOWN_ORDER` walks the
+ *  prototype chain: `"toString" in {}` is true and `TEARDOWN_ORDER.toString` is a
+ *  function, so a masked kind passed the unknown-kind guard AND poisoned the ordering
+ *  guard (`Math.max(prev, function)` is NaN, after which every later `order < NaN` is
+ *  false) — `teardownProven` then reported true for a reversal that strands its
+ *  extension. The API route guards the same class at control-plane.ts (`?serial=constructor`). */
+function isKnownSetupKind(kind: unknown): kind is SetupStepKind {
+  return typeof kind === "string" &&
+    Object.prototype.hasOwnProperty.call(TEARDOWN_ORDER, kind) &&
+    Number.isFinite(TEARDOWN_ORDER[kind as SetupStepKind]);
+}
+
 export interface TeardownIssue {
   severity: "error" | "warning";
   code: string;
@@ -128,7 +140,7 @@ export function lintTeardown(rec: DeviceSetupRecording): TeardownIssue[] {
     // order) keys off it, so an unknown/typo'd/masked kind must fail here rather
     // than silently skip those guarantees. Defense-in-depth behind setup lint,
     // which independently rejects such a recording.
-    if (!(setup.kind in TEARDOWN_ORDER)) {
+    if (!isKnownSetupKind(setup.kind)) {
       errors.push({ severity: "error", code: "teardown_unknown_setup_kind", subject: id, message: `Recording "${id}" teardown step "${t.key}" reverses a setup step of unrecognized kind "${String(setup.kind)}"; its reversal cannot be proven safe.` });
     }
     if (!TEARDOWN_ACTIONS.includes(t.action)) {
@@ -164,7 +176,7 @@ export function lintTeardown(rec: DeviceSetupRecording): TeardownIssue[] {
   let prevKey = "";
   for (const t of teardown.steps) {
     const setup = setupByKey.get(t.key);
-    if (!setup || !(setup.kind in TEARDOWN_ORDER)) continue;
+    if (!setup || !isKnownSetupKind(setup.kind)) continue;
     const order = TEARDOWN_ORDER[setup.kind];
     if (order < prevOrder) {
       errors.push({ severity: "error", code: "teardown_order_violation", subject: id, message: `Recording "${id}" teardown removes "${t.key}" (${setup.kind}) after "${prevKey}" — a ${setup.kind} must be torn down before that. Reverse-dependency order is required so nothing is stranded (e.g. deactivate the extension before removing its allow profile).` });

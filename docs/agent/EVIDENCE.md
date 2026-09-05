@@ -685,3 +685,68 @@ MUTATION (each fix reverted alone on a backup copy; its proof must fail):
 review:invariants passed. typecheck exit 0.
 ```
 Verdict:  **fixed and gated across all six — the same inversion in six places, each now refusing on the unknown instead of waving it through, and each refusal proven load-bearing.**
+
+## 2026-09-05 — "Second audit round, four more libraries: the unknown loosens the answer in flows, recommendations, adaptive-proposals and app-workflows"
+Command (five independent audits + firsthand reads of every edit site + fix + proof + mutation):
+```
+lib/flows/src/{index,provisioning-teardown,signal-sourcing}.ts   lib/recommendations/src/index.ts
+lib/adaptive-proposals/src/{measure,lifecycle,observe}.ts         lib/app-workflows/src/index.ts
+(lib/room-sim/src/** read and found CLEAN in itself — its findings sit in the console and proof and land in the next batch)
+```
+Output:
+```
+REACHABILITY: flows, recommendations and app-workflows SHIP via @workspace/api-server; adaptive-proposals is
+  proof-only (the reachability gate said otherwise — it credits `@workspace/…` mentions inside COMMENTS as
+  dependency edges; that gate defect is the next batch's). Each finding's severity below carries its own bound.
+flows          F1 REAL: an unrecognised SignalStatus ("offline", "toString") counted as neither broken nor stale, so
+               the flow graded HEALTHY — and because `3 > undefined` is false, an unknown observed FIRST masked a
+               `broken` observed second: no incident, no self-heal, coverage 100% "auto_handled". SignalStatus was
+               validated nowhere in the estate. Now normalized to `broken` (most restrictive) with a terminal arm.
+               F2 LATENT: `kind in TEARDOWN_ORDER` walks the prototype chain — a "toString" kind passed the unknown-
+               kind guard and `Math.max(prev, function)` NaN-poisoned the ordering guard, so `teardownProven` said
+               true for a reversal that strands its extension. Own-key + finite now. F3 `BASE_FIDELITY[method] ??
+               "none"` — a prototype key is not nullish; own-key now. F4 recorded, owner doctrine: the break-glass
+               arm returns before the outcome switch, so it survives `step_up` (unverified holder) and an
+               UNPARSEABLE outcome. F5 recorded: approval satisfaction is a bare caller boolean (planner has no
+               executor). flows 32 -> 35, provisioning-teardown 25 -> 28.
+recommendations F1 REAL (contained to fixture input today): `denied > 0 || overrides > 0` with an unreadable count
+               skipped the anomaly arm and fell into RELAX — the one field that would have blocked the relaxation
+               was the one that could not be read, and the rationale then asserted "no denials/overrides". Unreadable
+               is now an anomaly (tightened, rationale says the count could not be read). F2 `samples < MIN` let an
+               unreadable count through (defended only by a downstream NaN); positive-form guard now. F3 NaN
+               confidence escaped as `null` on the wire and `NaN%` on the page; `bounded()` now. F7 locale-sensitive
+               tiebreak -> codepoint. Recorded: tighten() has no rung above the downtime override (silence, not a
+               refusal); duplicate ids across duplicate usage rows. 15 -> 24.
+adaptive-proposals F1 REAL: a 0% prediction made the threshold `helpedRate >= 0` — twenty incidents that ALL fell back
+               to a human reported `helped: true` "realizing the simulation's 0% prediction"; the fix left all 37
+               prior checks byte-identical. Now requires incidents > 0, helpedCount > 0, predictedRate > 0. F2 the
+               auto-resolution test was a DENYLIST (connector.synced counted as success); allowlist now. F3 a
+               simulation over ZERO incidents satisfied the step-5 gate; refused. F4 raw LEGAL_TRANSITIONS[from] on an
+               unknown status was an untyped TypeError; typed illegal_transition now. F5 approvedAtRef unvalidated;
+               same standard as approvedByRef now. F6 an ABSENT references array flatMapped to [undefined] and read
+               "these 1 signal(s) []"; a non-string subject minted prop-undefined; both refused. F7 localeCompare ->
+               codepoint. F9 a later kinder fixture overwrote a standing FINDING; a finding now stands. 37 -> 48.
+               The core invariant (a proposal cannot activate itself) HELD throughout — verified by the 7x7 sweep
+               and a planted illegal transition (34/37 with it planted).
+app-workflows  F1 REAL (latent reach): `heldKeys.every(...)` on an integration with NO held actions is vacuously true,
+               and released keys were never checked against the integration's own keys — a key that does not exist
+               turned a live step_up into `mode: "proceed"` with a summary asserting a step-up that never happened,
+               and the linter blessed the shape with zero warnings. Held-set must be non-empty and keys must be the
+               integration's. F3 the scoped release had ZERO coverage in the TS lane (deleting the feature left the
+               proof and the parity gate green; only test:api noticed) — asserted here now. F4 raw
+               DEFAULT_CONFIRMER[vertical] wrote "undefined confirmation" into the sentence a confirmer reads. F5
+               firstReason threw on the three RESTRICTIVE outcomes and survived on allow. 43 -> 49.
+               F2/F6 are the Swift port's (completeAppStepUp releases the whole integration; a dead permissive
+               default in integration(forVertical:)) — backlog item 101, Mac lane, golden rule 1. The parity gate
+               compares SHAPE ONLY (3 enums + 4 function names): planted P1-P4 behavioural divergences all green,
+               P5/P6 shape controls red. Recorded, not changed here.
+MUTATION (each fix reverted alone on a backup copy; its proof must fail):
+  teardown bare-in 26/28 FAIL · rec anomaly-not-anomalous 20/24 FAIL · rec samples<MIN 23/24 FAIL
+  adaptive zero-prediction / denylist / finding-overwritable / raw-lookup / approvedAtRef / vacuous-sim / unreadable-
+  subject: 47/48 FAIL each (7 of 7) · appwf raw confirmer 48/49 FAIL · appwf firstReason CRASH
+  DEFENCE IN DEPTH, stated honestly: flows' unknown-status fix and app-workflows' release fix each have TWO guards
+  that cover each other, so reverting ONE alone stays green; reverting BOTH fails (flows 32/35, appwf 48/49).
+  Fourteen reversions, fourteen kills counting the two doubles; zero .mutbak left.
+typecheck exit 0; test:api 370/370; the ten flows-family proofs all green.
+```
+Verdict:  **fixed and gated across all four — and two of the four are shipping packages whose proofs had been green for the whole life of the defects, because every negative test fed a KNOWN value.**

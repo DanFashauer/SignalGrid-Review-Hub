@@ -121,6 +121,24 @@ const conflicting: SignalState[] = [
 ];
 check("SAFETY: conflicting signal observations resolve to the most restrictive (broken)",
   evaluateFlowHealth(med, conflicting).status === "broken");
+// An UNKNOWN status (untyped JSON, a drifted producer) is broken, never healthy — and it
+// cannot mask a broken observed after it. Until 2026-09-05 `SIGNAL_SEVERITY[unknown]`
+// was undefined, `3 > undefined` was false, and the unknown-first vector below graded
+// the flow HEALTHY with no incident raised (verified before the fix: this exact vector
+// took the suite from 32/32 to 31/32 once the assertion existed).
+const unknownFirst: SignalState[] = [
+  { id: "identity", status: "offline" as never }, { id: "identity", status: "broken" },
+  { id: "device_compliance", status: "healthy" }, { id: "badge_binding", status: "healthy" }, { id: "baseline", status: "healthy" },
+];
+check("SAFETY: an unknown status observed FIRST does not mask a broken observed second", evaluateFlowHealth(med, unknownFirst).status === "broken");
+const unknownOnly: SignalState[] = [
+  { id: "identity", status: "offline" as never },
+  { id: "device_compliance", status: "healthy" }, { id: "badge_binding", status: "healthy" }, { id: "baseline", status: "healthy" },
+];
+const unknownHealth = evaluateFlowHealth(med, unknownOnly);
+check("SAFETY: an unknown status on a required signal BREAKS the flow (named in brokenSignals), never healthy",
+  unknownHealth.status === "broken" && unknownHealth.brokenSignals.includes("identity"));
+check("SAFETY: a prototype-key status (\"toString\") is unknown, not a severity", evaluateFlowHealth(med, [{ id: "identity", status: "toString" as never }, ...unknownOnly.slice(1)]).status === "broken");
 
 // ── grid intelligence: more signals ⇒ smarter ────────────────────────────────
 const few = gridIntelligence(DEMO_FLOWS, healthy(["identity"]));

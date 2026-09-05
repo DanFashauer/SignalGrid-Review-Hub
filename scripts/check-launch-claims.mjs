@@ -35,7 +35,7 @@
 //
 // SELF-TEST FIRST: each rule must flag a synthetic violation, or the gate
 // refuses to conclude anything.
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -112,6 +112,24 @@ if (publishedPages.length === 0) {
   process.exit(1);
 }
 for (const p of publishedPages) if (existsSync(p) && !files.includes(p)) files.push(p);
+
+// EVERY TRACKED HTML PAGE UNDER site/, deployed or not. `site/index.html` is the
+// pre-SPA landing page: pages.yml uses only `site/CNAME` from that directory, so
+// the page is not served — and it was outside this scan while asserting three
+// deferred signals as "what the core reasons over today" (2026-09-05, sixth
+// audit round). A buyer-facing HTML file that sits next to the CNAME pinning
+// the public domain is one deploy-step edit away from being served; it is
+// scanned whether or not it is served today. Derived from the tree, never
+// hand-listed.
+try {
+  const sitePages = execFileSync("git", ["ls-files", "-z", "--", "site/*.html", "site/**/*.html"], { encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean);
+  for (const p of sitePages) if (existsSync(p) && !files.includes(p)) files.push(p);
+} catch {
+  console.error("✗ could not enumerate site/*.html with git — the landing-page scan cannot be derived, and guessing it would defeat the gate.");
+  process.exit(1);
+}
 
 // THE LANDING PAGE ITSELF, and the reason it is named rather than derived.
 //

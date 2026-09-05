@@ -644,7 +644,7 @@
    "claim": "\"16 candidate source categories\"",
    "kind": "count",
    "classification": "unsubstantiated",
-   "evidence": "No artifact produces 16: artifacts/signalgrid-web/src/components/sections/IntegrationsSection.tsx:45 says \"the core normalizes 17 signal categories today\"; scripts/launch-profile.mjs:156-241 enumerates 3 launch connector families and ~47 deferred ones; signal kinds are 3 launch (:246-259) against 39 deferred (:262-301). The figure matches no gate-checked count",
+   "evidence": "RE-ANCHORED 2026-09-05: the 16 IS an artifact — the integrations catalog in artifacts/api-server/src/routes/integrations.ts carries exactly 16 distinct `category` values (IGA / IDP … GRC / Compliance), and scripts/check-site-figures.mjs now binds this string, the IntegrationsSection heading and its stat tile to that count. Earlier evidence, superseded: No artifact produces 16: artifacts/signalgrid-web/src/components/sections/IntegrationsSection.tsx:45 says \"the core normalizes 17 signal categories today\"; scripts/launch-profile.mjs:156-241 enumerates 3 launch connector families and ~47 deferred ones; signal kinds are 3 launch (:246-259) against 39 deferred (:262-301). The figure matches no gate-checked count",
    "action": "rewrite"
   },
   {
@@ -2387,7 +2387,7 @@
    "claim": "Stat tile: \"SIGNALS FUSED = 7\"",
    "kind": "count",
    "classification": "demo-only",
-   "evidence": "The 7 is the length of the LIVE_SIGNALS mock array (lines 5-13); four of the seven (badge, location, shift, custody) are deferred kinds per scripts/launch-profile.mjs:275-294, so no shipped evaluation fuses seven",
+   "evidence": "REWRITTEN 2026-09-05: the tile is now COMPUTED from the LIVE_SIGNALS panel (every row except the verdict), so it reads 3 for the three Limited-GA signals and cannot drift from the panel again. Earlier evidence, superseded (the array had been rewritten and the tile left at 7): The 7 is the length of the LIVE_SIGNALS mock array (lines 5-13); four of the seven (badge, location, shift, custody) are deferred kinds per scripts/launch-profile.mjs:275-294, so no shipped evaluation fuses seven",
    "action": "rewrite"
   },
   {
@@ -2927,7 +2927,7 @@
    "claim": "\"the core normalizes 17 signal categories today\"",
    "kind": "count",
    "classification": "launch",
-   "evidence": "EVALUATED_CATEGORIES has exactly 17 entries (lib/signal-radar/dist/index.d.ts:8, lib/signal-radar/src/index.ts); documented at docs/WHAT_SIGNALGRID_DOES_TODAY.md:41 and pinned by `pnpm run guard:figures` (package.json:42 \u2192 scripts/check-proof-figures.mjs).",
+   "evidence": "EVALUATED_CATEGORIES has exactly 17 entries (lib/signal-radar/dist/index.d.ts:8, lib/signal-radar/src/index.ts); documented at docs/WHAT_SIGNALGRID_DOES_TODAY.md:41 (that figure is pinned by `pnpm run guard:figures`, which reads docs/**/*.md ONLY); the bare \"17\" in this .tsx was guarded by NOTHING until 2026-09-05 — scripts/check-site-figures.mjs now binds it to EVALUATED_CATEGORIES.length.",
    "action": "keep"
   },
   {
@@ -3053,7 +3053,7 @@
    "claim": "stat tile: \"17 / Core signal categories\"",
    "kind": "count",
    "classification": "launch",
-   "evidence": "EVALUATED_CATEGORIES = 17 entries (lib/signal-radar/dist/index.d.ts:8); docs/WHAT_SIGNALGRID_DOES_TODAY.md:41; guarded by `pnpm run guard:figures` (package.json:42).",
+   "evidence": "EVALUATED_CATEGORIES = 17 entries (lib/signal-radar/dist/index.d.ts:8); docs/WHAT_SIGNALGRID_DOES_TODAY.md:41. CORRECTED 2026-09-05: guard:figures reads docs/**/*.md only and never held this tile; scripts/check-site-figures.mjs binds it to EVALUATED_CATEGORIES.length now.",
    "action": "keep"
   },
   {

@@ -5,6 +5,12 @@ import { motion } from "framer-motion";
 //   Fleet   — real Fleet server + a real enrolled osqueryd agent over TLS (proof:live-fleet)
 //   Traccar — real Traccar server over its genuine OsmAnd device protocol (proof:live-location)
 const LIVE_VERIFIED = new Set(["Fleet", "Traccar"]);
+// Chips carry display labels ("Fleet (live-proven)"); the live-verified set
+// holds product names. Matching the whole label meant the Fleet chip — the one
+// the paragraph below is about — never rendered its badge, and the next rename
+// would flip a badge the other way. Match on the name before any parenthetical.
+const productName = (label: string) => label.replace(/\s*\(.*$/, "");
+const isLiveVerified = (label: string) => LIVE_VERIFIED.has(productName(label));
 
 const CATEGORY_GROUPS = [
   {
@@ -42,7 +48,7 @@ export default function IntegrationsSection() {
           <div className="max-w-2xl">
             <h2 className="text-3xl font-bold tracking-tight mb-4">16 Candidate Source Categories Across Your Stack.</h2>
             <p className="text-muted-foreground text-lg">
-              SignalGrid is designed to consume signals from across your security stack — identity, endpoint, physical access &amp; custody, SIEM, SOAR, DR, and GRC — and route every alert to the team that owns that signal source. These are the candidate source-category taxonomy (the repository carries these families as gate-checked code; what SHIPS at Limited GA is three — see <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/main/docs/WHAT_SIGNALGRID_DOES_TODAY.md" className="text-primary underline">what ships today</a>). The vendors below are candidate categories, not live integrations; systems of record remain external.
+              SignalGrid is designed to consume signals from across your security stack — identity, endpoint, physical access &amp; custody, SIEM, SOAR, DR, and GRC — and route every alert to the team that owns that signal source. These are the candidate source-category taxonomy (the repository carries these families as gate-checked code; what SHIPS at Limited GA is three — see <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/docs/WHAT_SIGNALGRID_DOES_TODAY.md" className="text-primary underline">what ships today</a>). The vendors below are candidate categories, not live integrations; systems of record remain external.
             </p>
           </div>
           <div className="font-mono text-sm px-4 py-2 rounded border border-border bg-card inline-flex self-start md:self-end gap-2">
@@ -75,13 +81,13 @@ export default function IntegrationsSection() {
                   <span
                     key={item}
                     className={
-                      LIVE_VERIFIED.has(item)
+                      isLiveVerified(item)
                         ? "px-3 py-1.5 rounded-md border border-emerald-400/40 bg-emerald-400/5 text-sm font-medium text-foreground inline-flex items-center gap-2"
                         : "px-3 py-1.5 rounded-md border border-border bg-background text-sm font-medium text-foreground/80 hover:text-foreground hover:border-primary/50 transition-colors"
                     }
                   >
                     {item}
-                    {LIVE_VERIFIED.has(item) && (
+                    {isLiveVerified(item) && (
                       <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400">Live-verified</span>
                     )}
                   </span>

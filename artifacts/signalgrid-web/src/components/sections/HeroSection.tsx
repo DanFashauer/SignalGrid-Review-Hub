@@ -41,10 +41,10 @@ export default function HeroSection() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-              <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/main/docs/PARTNER_ONBOARDING.md" target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
+              <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/docs/PARTNER_ONBOARDING.md" target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
                 Start with the fixture demo — zero install, zero accounts
               </a>
-              <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/main/docs" target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">
+              <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/docs" target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">
                 Read Architecture Docs
               </a>
             </div>
@@ -106,7 +106,10 @@ export default function HeroSection() {
 
               <div className="grid grid-cols-3 gap-px bg-border/30 border-t border-border/30">
                 {[
-                  { label: "SIGNALS FUSED", value: "7" },
+                  // Counted from the panel above, never typed: the tile said "7"
+                  // beside a four-row array (three signals and the verdict) after
+                  // the array was rewritten to the Limited-GA signals.
+                  { label: "SIGNALS FUSED", value: String(LIVE_SIGNALS.filter((s) => s.label !== "VERDICT").length) },
                   { label: "CORE SIGNAL CATEGORIES", value: "17" },
                   { label: "EVALUATION", value: "FIXTURE" },
                 ].map((s) => (

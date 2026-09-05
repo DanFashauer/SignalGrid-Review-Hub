@@ -17,11 +17,15 @@ const COMPLIANCE_STATUS = [
   { framework: "ITAR / EAR", status: "in-progress", detail: "Air-gap deployment is designed to keep data domestic; export-control posture is a design goal", badge: "DESIGN TARGET" },
 ];
 
+// No `available` arm: nothing on this page is available, and a green arm that
+// no row uses is the shape that becomes a fail-open the day someone types a
+// status. An unrecognised status renders as `planned`, the most restrictive
+// reading, instead of throwing on `meta.icon` and blanking the page.
 const STATUS_META: Record<string, { color: string; icon: React.ComponentType<{className?: string}> }> = {
-  available: { color: "text-green-400 border-green-400/20 bg-green-400/5", icon: CheckCircle2 },
   "in-progress": { color: "text-yellow-400 border-yellow-400/20 bg-yellow-400/5", icon: Clock },
   planned: { color: "text-muted-foreground border-border bg-muted/10", icon: AlertCircle },
 };
+const statusMeta = (status: string) => STATUS_META[status] ?? STATUS_META.planned;
 
 const VEHICLES = [
   { name: "GSA Schedule 70", desc: "IT Products and Services · Not pursued yet — under consideration", status: "planned" },
@@ -70,8 +74,8 @@ export default function Federal() {
                 ))}
               </div>
               <div className="flex gap-3">
-                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/main/docs/PARTNER_ONBOARDING.md" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Start with the fixture demo — zero install, zero accounts</a>
-                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/main/docs" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 border border-border rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Read the approach</a>
+                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/blob/SignalGrid_Alpha/docs/PARTNER_ONBOARDING.md" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Start with the fixture demo — zero install, zero accounts</a>
+                <a href="https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/docs" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 border border-border rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Read the approach</a>
               </div>
             </div>
           </div>
@@ -83,7 +87,7 @@ export default function Federal() {
             <h2 className="text-2xl font-bold tracking-tight mb-10">Compliance Status</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {COMPLIANCE_STATUS.map((item, idx) => {
-                const meta = STATUS_META[item.status];
+                const meta = statusMeta(item.status);
                 const Icon = meta.icon;
                 return (
                   <motion.div
@@ -159,7 +163,7 @@ export default function Federal() {
             <p className="text-muted-foreground mb-8">No contract vehicle is held or in progress today — these are the paths under consideration.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {VEHICLES.map(v => {
-                const meta = STATUS_META[v.status];
+                const meta = statusMeta(v.status);
                 const Icon = meta.icon;
                 return (
                   <div key={v.name} className="bg-card border border-border rounded-lg p-5">

@@ -1001,3 +1001,51 @@ Verdict:  **fixed and gated on the floor the lanes stand on** — the hook that 
   tree, and the verdict fallback is the same defect in a third; the widened gate holds all four trees. Two surfaces
   are owner decisions (delete), one is the next PR (the site), and every remaining not-read surface is a docs family
   or a data directory.
+
+## 2026-09-05 — "Seventh round, the shipping site: thirteen evidence links to a branch that does not exist, a landing page outside the scan, a figure with a false provenance badge"
+Command (the sixth round's web+site audit, then firsthand reads of every edit site + fix + gate + mutation):
+```
+artifacts/signalgrid-web/src/**   site/**   docs/{pitch-deck,fabric-console,evidence-coverage}.html   docs/inspiration/*_CATALOG.md (links only)
+```
+Output:
+```
+LINKS: the SPA linked thirteen evidence URLs — both hero CTAs, API reference, Security, launch plan, "what ships today",
+  both Federal CTAs, both SmartDock links, CI_AND_VALIDATION — to blob|tree/main/…; there is no main branch (the default
+  is SignalGrid_Alpha) and every one 404'd live on the page whose whole argument is "every claim traces to a proof you
+  can open". The pitch deck, the fabric console and the GENERATED evidence-coverage page (its builder) carried the same
+  ref; four inspiration catalogues linked tree/…/signalgrid-app etc. without the artifacts/ prefix, and two named docs
+  that do not exist (IGA_ADJACENCY.md, SIGNALGRID_V0_2_READINESS_PLAN.md). check-cited-paths resolves repo-relative
+  backtick paths and has no concept of a ref segment, so none of this sat inside any gate. All repointed. NEW GATE
+  scripts/check-repo-links.mjs: every blob/tree/raw/commits link into this repo (literal URL or the SPA's `${REPO}/…`
+  template form) must name the default branch — pinned, and checked against origin/HEAD when the clone carries it —
+  and a path tracked at HEAD (tree: a file or a directory holding tracked files). Offline. Self-test 16/16; its own
+  first version scanned zero SPA files (git's :(glob) has no brace expansion) and reported a pass over four links —
+  caught by the "template form is caught" control before it shipped. Mutation: blob/main planted in Footer.tsx →
+  fails by file:line.
+LANDING PAGE: site/index.html is not served (pages.yml deploys the SPA and takes only site/CNAME) and was outside
+  check-launch-claims' derived scope. Put in scope (every tracked site/*.html, derived) it produced two violations on
+  first contact — "badge tap" and "custody lost" as current in the outcome cards — beside the "reasons over today"
+  chips the audit named. Hedged where the claims are; a banner marks the page superseded and not served (worded so
+  the page-scope exemption does NOT fire — a banner must not be the way a page passes); "Twelve signal categories" and
+  "Eight scenarios" (17 and 19 in the tree) replaced with numberless copy; "independent project" → "founder-built".
+  Deletion of the page is the honest end state and is the owner's (tracked-file deletion refused to this lane).
+FIGURES: HeroSection "SIGNALS FUSED 7" sat over a four-row panel (three signals + verdict) — now COMPUTED from the
+  panel (3). "16 candidate source categories" (heading, stat tile, Pricing) matched no artifact the inventory could
+  name — it IS one: the api-server integrations catalog carries exactly 16 distinct categories. CLAIM_INVENTORY said
+  the "17 core signal categories" tile was "guarded by guard:figures" — that gate reads docs/**/*.md only and never
+  held a .tsx. NEW GATE scripts/check-site-figures.mjs binds 17 to EVALUATED_CATEGORIES.length and 16 to the catalog's
+  distinct-category count, every site named; self-test 9/9; a stale 12 on the hero fails by file. Four inventory rows
+  re-anchored (16 substantiated; 7 rewritten as computed; two "guard:figures" provenance claims corrected).
+ABOUT/INTEGRATIONS/FEDERAL: About.tsx claimed location as a current input with no hedge anywhere in the file (the
+  noun list cannot see "location", and widening it would raise the docs ceiling by hundreds of legitimate engineering
+  mentions — recorded as the gate's limit, not changed); hedged where the claims are. LIVE_VERIFIED matched the label
+  "Fleet (live-proven)" against "Fleet" so the Fleet chip never earned its badge — matched on the product name now.
+  Federal STATUS_META threw on an unknown status and carried an unused green `available` arm — restrictive fallback,
+  arm removed.
+launch-claims 100 files / 0 violations (was 99) · repo-links 16/16 self-test, 0 dead across the scan set · site figures
+  17 and 16 bound · typecheck 0 · claim-inventory drift 0 · line counts (586) · parity, census, cited paths green.
+```
+Verdict:  **the evidentiary spine of the public site is reattached and gated** — a buyer who clicks "Read Architecture
+  Docs" now reaches the docs, and the next branch rename or moved file fails a gate instead of a visitor. The landing
+  page can no longer assert a deferred family as current without failing the same gate the SPA answers to. Left open,
+  named: site/index.html should be deleted (owner); the noun list does not see "location" (gate limit, recorded).

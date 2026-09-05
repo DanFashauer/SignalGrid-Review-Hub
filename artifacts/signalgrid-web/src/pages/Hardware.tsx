@@ -130,7 +130,7 @@ export default function Hardware() {
                 </div>
                 <div className="flex gap-3">
                   <a href={REPO} target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">Talk to us about a design pilot</a>
-                  <a href={`${REPO}/blob/main/docs/SIGNALGRID_SMARTDOCK.md`} target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 border border-border text-foreground rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Read the SmartDock design</a>
+                  <a href={`${REPO}/blob/SignalGrid_Alpha/docs/SIGNALGRID_SMARTDOCK.md`} target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 border border-border text-foreground rounded-md text-sm font-medium hover:border-primary/50 transition-colors">Read the SmartDock design</a>
                 </div>
               </div>
 
@@ -267,7 +267,7 @@ export default function Hardware() {
             </div>
             <div className="flex gap-3 shrink-0">
               <a href={REPO} target="_blank" rel="noopener noreferrer" className="px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors">Explore the repo</a>
-              <a href={`${REPO}/blob/main/docs/SIGNALGRID_SMARTDOCK.md`} target="_blank" rel="noopener noreferrer" className="px-6 py-3 border border-border rounded-md font-medium hover:border-primary/50 transition-colors">SmartDock design</a>
+              <a href={`${REPO}/blob/SignalGrid_Alpha/docs/SIGNALGRID_SMARTDOCK.md`} target="_blank" rel="noopener noreferrer" className="px-6 py-3 border border-border rounded-md font-medium hover:border-primary/50 transition-colors">SmartDock design</a>
             </div>
           </div>
         </section>

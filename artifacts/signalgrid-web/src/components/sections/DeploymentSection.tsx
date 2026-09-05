@@ -125,7 +125,7 @@ export default function DeploymentSection() {
 
               <a
                 href={opt.cta === "View Docs"
-                  ? "https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/main/docs"
+                  ? "https://github.com/DanFashauer/SignalGrid-Review-Hub/tree/SignalGrid_Alpha/docs"
                   : "https://github.com/DanFashauer/SignalGrid-Review-Hub"}
                 target="_blank"
                 rel="noopener noreferrer"

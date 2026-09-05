@@ -64,14 +64,19 @@ LAST TOUCHED: 2026-09-05 (cloud lane, latest) - EIGHT audit batches landed in on
               held its load-bearing rule on the profile Fleet does NOT ship, the
               desktop rendered a green "No active alerts" for an unreachable
               feed, and two verdict sites fell back to neutral grey. All fixed and
-              gated. FOUND, NOT FIXED, next PR (batch I): the shipping site links
-              13 evidence URLs to a `main` branch that does not exist (every one
-              404s live), `site/index.html` is unpublished AND outside the
-              launch-claims scan while asserting deferred capability, About.tsx
-              claims a deferred signal. OWNER DECISIONS: delete tests/load/ (k6
-              drivers targeting unserved routes) and .agents/ (metadata for
-              images that never existed) - the cloud lane cannot delete tracked
-              files. Coverage ledger after H: 58 read / 9 partial / 33 not read.
+              gated (#452 merged). Batch I (seventh round, on its PR): the
+              shipping site linked 13 evidence URLs to a `main` branch that does
+              not exist (every one 404'd live) - repointed and GATED
+              (check-repo-links.mjs: default branch + tracked path, offline);
+              site/index.html put inside the launch-claims scan (two violations
+              on first contact, hedged); "17"/"16" on the site bound to their
+              sources (check-site-figures.mjs), SIGNALS FUSED computed. OWNER
+              DECISIONS: delete tests/load/ (k6 drivers targeting unserved
+              routes), .agents/ (metadata for images that never existed) and
+              site/index.html (superseded, not served) - the cloud lane cannot
+              delete tracked files. Coverage ledger: 58 read / 9 partial / 33 not
+              read; every remaining not-read surface is a docs family or a data
+              directory.
               Also today: the public Room Entry console had coloured non_compliant
               GREEN and shipped a stale core (now gated), the reachability gate
               credited comments as imports (pin 8 -> 13, honestly), and the web

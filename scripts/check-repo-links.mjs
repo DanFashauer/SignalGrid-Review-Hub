@@ -105,9 +105,14 @@ export function judgeLink(link, tracked, defaultBranch = DEFAULT_BRANCH) {
   return isFile || isDir ? null : `path "${link.path}" is neither a tracked file nor a directory holding tracked files`;
 }
 
+/** This file's own path — its self-test carries deliberately dead links as fixtures. */
+const SELF = "scripts/check-repo-links.mjs";
+
 function scanFiles() {
   const patterns = SCAN_GLOBS.map((g) => `:(glob)${g}`);
-  return git(["ls-files", "-z", "--", ...patterns]).split("\0").filter(Boolean);
+  // The gate never judges its own fixtures. The first tracked run flagged six
+  // links in this file — every one a self-test control that MUST be dead.
+  return git(["ls-files", "-z", "--", ...patterns]).split("\0").filter(Boolean).filter((f) => f !== SELF);
 }
 
 function selfTest() {
@@ -134,6 +139,7 @@ function selfTest() {
   try { symref = git(["symbolic-ref", "refs/remotes/origin/HEAD"]); } catch { /* absent in a shallow clone */ }
   t(`the pinned default branch agrees with origin/HEAD (${symref || "symref absent here — not checkable"})`, symref === "" || symref === `refs/remotes/origin/${DEFAULT_BRANCH}`);
   t(`the real scan set is non-empty (${scanFiles().length} files)`, scanFiles().length > 50);
+  t("the gate does not scan its own self-test fixtures", !scanFiles().includes(SELF));
   const failed = checks.filter(([, ok]) => !ok);
   for (const [n, ok] of checks) console.log(`  ${ok ? "✓" : "✗"} ${n}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);

@@ -90,6 +90,10 @@ never a wall-clock — determinism stays provable end to end.
 - **missing** — declared in Git but absent on the fleet (the worst: the control
   isn't there at all).
 - **unmanaged** — present on the fleet but not declared in Git.
+- **unknown** — nothing is declared: the desired state is empty or failed to
+  load, so the fleet cannot be compared. It outranks drift and never reads as
+  "matches" (an empty/empty comparison used to; a Git repo declaring nothing is
+  indistinguishable from one that failed to load).
 
 Aggregation is worst-status-wins. `toProbeResults()` projects the report into the
 self-audit vocabulary (`missing → broken`, `drifted`/`unmanaged → drifted`,
@@ -108,7 +112,7 @@ from a simulator.
 
 ## Proofs and surfaces
 
-- `pnpm run proof:iac` (67 checks) — plan/diff correctness and determinism,
+- `pnpm run proof:iac` (72 checks) — plan/diff correctness and determinism,
   validation fail-closed (unknown kind / duplicate / empty id / malformed spec
   refused), the governed lifecycle, the trust gate (every non-`allow` outcome
   blocks), drift classification and worst-status-wins, and the self-audit

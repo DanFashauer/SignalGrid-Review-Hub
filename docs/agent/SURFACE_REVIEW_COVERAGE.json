@@ -99,7 +99,17 @@
     },
     "artifacts/connector-emulator": {
       "path": "artifacts/connector-emulator",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "results.json and the harness/proof behind it read in full. decide() tested only the BAD zone member, so custodyZone/networkZone 'unknown' reached allowCandidate on both allow arms; credentialConfidence and badgeEventObservedAt were declared, populated in every fixture row, and read nowhere. Fixed (positive members required; degraded/unknown/absent confidence and an unreadable badge time step up); 12 synthetic guardrails added (7 reader, 4 posture, 1 control); fixture results unchanged, hash unchanged.",
+          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 1
+        }
+      ]
     },
     "artifacts/lab-collections": {
       "path": "artifacts/lab-collections",
@@ -167,7 +177,17 @@
     },
     "artifacts/signalgrid-review": {
       "path": "artifacts/signalgrid-review",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Every src file read (vendored components/ui skipped, noted). The connector-emulator deck rendered a hand-transcribed digest, count and pack list that matched nothing (8 of 15 scenarios, four of five packs, a stale hash) under 'Evidence panel', with green guardrail ticks from a string array and the fixture's INTENDED decision rendered as the decision. Now derived from the five fixture packs and the committed results.json; guardrails computed; the engine's actual decision rendered with mismatches red. robots.txt aligned with the noindex meta. CLAIM_INVENTORY rows 466/486 re-measured.",
+          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 4
+        }
+      ]
     },
     "artifacts/signalgrid-web": {
       "path": "artifacts/signalgrid-web",
@@ -187,11 +207,31 @@
     },
     "config": {
       "path": "config",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "All four tier env examples and the grid config example read. Clean: no secret carries a default, live integrations off in every tier, and the prod example's 'everything is 401 with these unset' claim verified against middlewares/context.ts.",
+          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 0
+        }
+      ]
     },
     "docker": {
       "path": "docker",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "nginx-web.conf, both Dockerfiles and all four compose files read. docker-compose.yml (the review topology) had no healthcheck on any service while .prod.yml explained at length why one is needed; api/web/nginx now carry one with readiness conditions, the sim service too; new gate check-compose-healthchecks.mjs (migrate.yml's db exempt as an overlay, with the reason). Base images pinned, no latest, USER node.",
+          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 1
+        }
+      ]
     },
     "docs/*": {
       "path": "docs",
@@ -293,7 +333,17 @@
     },
     "lib/api-spec": {
       "path": "lib/api-spec",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "All three documents and orval.config.ts read. openapi.yaml (orval's input for two shipping packages) documented six write operations the server never served and was read by no gate; pruned, the served-but-undocumented routes added, api-contract-proof extended to hold both documents with a route-file registry. api-client-react regenerated; api-zod NOT (orval 8.24 emits zod-v4 calls against zod 3.25) — recorded in BUILD_BACKLOG. product-openapi.json left as the open backlog row says.",
+          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 1,
+          "closed": 1
+        }
+      ]
     },
     "lib/api-zod": {
       "path": "lib/api-zod",
@@ -474,7 +524,17 @@
     },
     "lib/iac": {
       "path": "lib/iac",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "All six files read. detectDrift over an EMPTY desired state returned in_sync with zero findings (a desired state that failed to load read as a healthy fleet; the unknown rung was producible by nothing) — now one unknown finding, overall unknown, summary and probe projection carry it; 5 proof assertions, mutation-proven. lifecycle/plan/defaults/summarize clean.",
+          "reviewer": "cloud lane (independent audit + firsthand read of every edit site)",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 1
+        }
+      ]
     },
     "lib/incident-playbook": {
       "path": "lib/incident-playbook",

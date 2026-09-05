@@ -546,6 +546,12 @@ jobs:
         run: node scripts/check-doc-line-counts.mjs --self-test
       - name: "Doc line counts (every path (N) figure matches the file it names)"
         run: node scripts/check-doc-line-counts.mjs
+      # The review compose had no healthcheck on any service; "Up" meant the
+      # process existed, not that the server answered.
+      - name: "Compose healthcheck self-test (a planted port without a healthcheck must fail)"
+        run: node scripts/check-compose-healthchecks.mjs --self-test
+      - name: "Compose healthchecks (every published port has a service that says whether it answers)"
+        run: node scripts/check-compose-healthchecks.mjs
       # Two documents stated the four tier branches as live after all four were
       # pruned, while BRANCH_HYGIENE.md recorded the opposite. Offline by design.
       - name: "Documented-branch self-test (the gate can actually fail)"

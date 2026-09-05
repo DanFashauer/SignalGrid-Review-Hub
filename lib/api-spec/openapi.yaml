@@ -20,6 +20,8 @@ tags:
     description: Policy configuration
   - name: metrics
     description: Dashboard metrics and analytics
+  - name: simulator
+    description: Deterministic fixture scenarios run through the real decision core (deferred surface)
 
 paths:
   /healthz:
@@ -34,6 +36,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /readyz:
+    get:
+      operationId: readinessCheck
+      tags: [health]
+      summary: Readiness — a configured durable store must round-trip; the in-memory core is always ready
+      responses:
+        "200":
+          description: Ready
+        "503":
+          description: Not ready — a configured store is unreachable (never swallowed into a 200)
 
   # ── Decisions ──────────────────────────────────────────────────────────────
 
@@ -73,23 +86,6 @@ paths:
                     type: integer
                 required: [decisions, total]
 
-    post:
-      operationId: evaluateDecision
-      tags: [decisions]
-      summary: Evaluate an access decision request
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DecisionRequest"
-      responses:
-        "200":
-          description: Decision evaluated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Decision"
 
   /decisions/{id}:
     get:
@@ -164,31 +160,6 @@ paths:
 
   # ── Signals ─────────────────────────────────────────────────────────────────
 
-  /signals/ingest:
-    post:
-      operationId: ingestSignal
-      tags: [signals]
-      summary: Ingest a signal from an integration source
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SignalIngestionRequest"
-      responses:
-        "202":
-          description: Signal accepted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  signalId:
-                    type: string
-                  accepted:
-                    type: boolean
-                required: [signalId, accepted]
-
   /signals/latest:
     get:
       operationId: listLatestSignals
@@ -219,6 +190,145 @@ paths:
                       $ref: "#/components/schemas/Signal"
                 required: [signals]
 
+  /signals/catalog:
+    get:
+      operationId: getSignalCatalog
+      tags: [signals]
+      summary: The signal categories the grid evaluates today and the candidate categories it knows of
+      responses:
+        "200":
+          description: Catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  demo:
+                    type: boolean
+                  evaluated:
+                    type: array
+                    items:
+                      type: string
+                  candidate:
+                    type: array
+                    items:
+                      type: string
+                required: [demo, evaluated, candidate]
+
+  /signals/radar:
+    post:
+      operationId: scanSignalRadar
+      tags: [signals]
+      summary: Classify a batch of incoming signals as evaluated / candidate / novel and raise first-seen alerts
+      description: >-
+        `signals` must be an array; a body without one is 400, never an empty scan.
+        An explicit empty batch is 200 with `scanned: 0` and a summary that says
+        coverage is unknown — an empty batch never reads as a covered grid.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                signals:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      category:
+                        type: string
+                      sourceReference:
+                        type: string
+                      observedAt:
+                        type: string
+                    required: [category]
+              required: [signals]
+      responses:
+        "200":
+          description: Radar report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  demo:
+                    type: boolean
+                  scanned:
+                    type: integer
+                  summary:
+                    type: string
+                required: [demo, scanned, summary]
+        "400":
+          description: signals is not an array
+
+  # ── Simulator (deterministic fixture scenarios; deferred surface) ──────────
+
+  /simulator/scenarios:
+    get:
+      operationId: listSimulatorScenarios
+      tags: [simulator]
+      summary: The deterministic fixture scenarios the simulator can run
+      responses:
+        "200":
+          description: Scenario list
+
+  /simulator/scenarios/{id}:
+    get:
+      operationId: getSimulatorScenario
+      tags: [simulator]
+      summary: One scenario by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scenario
+        "404":
+          description: Unknown scenario
+
+  /simulator/run:
+    post:
+      operationId: runSimulatorScenario
+      tags: [simulator]
+      summary: Run one scenario through the real decision core and return its audit evidence
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scenarioId:
+                  type: string
+              required: [scenarioId]
+      responses:
+        "200":
+          description: Run result with audit evidence
+        "400":
+          description: scenarioId missing
+
+  /simulator/audit:
+    get:
+      operationId: getSimulatorAudit
+      tags: [simulator]
+      summary: The simulator's audit trail so far
+      responses:
+        "200":
+          description: Audit entries
+
+  /simulator/reset:
+    post:
+      operationId: resetSimulator
+      tags: [simulator]
+      summary: Reset the simulator's in-memory state
+      responses:
+        "200":
+          description: Reset
+
   # ── Policies ─────────────────────────────────────────────────────────────────
 
   /policies:
@@ -240,78 +350,6 @@ paths:
                       $ref: "#/components/schemas/Policy"
                 required: [policies]
 
-    post:
-      operationId: createPolicy
-      tags: [policies]
-      summary: Create a new access policy
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PolicyInput"
-      responses:
-        "201":
-          description: Policy created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Policy"
-
-  /policies/{id}:
-    get:
-      operationId: getPolicy
-      tags: [policies]
-      summary: Get policy detail
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Policy
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Policy"
-    put:
-      operationId: updatePolicy
-      tags: [policies]
-      summary: Update a policy
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PolicyInput"
-      responses:
-        "200":
-          description: Updated policy
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Policy"
-    delete:
-      operationId: deletePolicy
-      tags: [policies]
-      summary: Delete a policy
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        "204":
-          description: Deleted
 
   # ── Metrics ──────────────────────────────────────────────────────────────────
 

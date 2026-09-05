@@ -109,6 +109,94 @@ const syntheticCredentialReaderGuardrails: Array<{
         decision: "stepUp",
         reason: "AMBIGUOUS_CREDENTIAL_READER_EVIDENCE",
       },
+      // The zone guards test the BAD member; "unknown" used to slip past both and
+      // reach allowCandidate. A reader offline or a segmentation lookup that timed
+      // out (200-with-null from the real vendor) must NOT emulate as an allow.
+      {
+        id: "credential-reader-synthetic-unknown-custody-zone",
+        patch: { custodyZone: "unknown" },
+        decision: "stepUp",
+        reason: "AMBIGUOUS_CREDENTIAL_READER_EVIDENCE",
+      },
+      {
+        id: "credential-reader-synthetic-unknown-network-zone",
+        patch: { networkZone: "unknown" },
+        decision: "stepUp",
+        reason: "AMBIGUOUS_CREDENTIAL_READER_EVIDENCE",
+      },
+      // Declared-but-never-read evidence: confidence and the badge-event instant.
+      {
+        id: "credential-reader-synthetic-unknown-confidence",
+        patch: { credentialConfidence: "unknown" },
+        decision: "stepUp",
+        reason: "CREDENTIAL_CONFIDENCE_DEGRADED_OR_UNKNOWN",
+      },
+      {
+        id: "credential-reader-synthetic-degraded-confidence-healthy-api",
+        patch: { credentialConfidence: "degraded", apiHealth: "healthy" },
+        decision: "stepUp",
+        reason: "CREDENTIAL_CONFIDENCE_DEGRADED_OR_UNKNOWN",
+      },
+      {
+        id: "credential-reader-synthetic-absent-confidence",
+        patch: { credentialConfidence: undefined },
+        decision: "stepUp",
+        reason: "CREDENTIAL_CONFIDENCE_DEGRADED_OR_UNKNOWN",
+      },
+      {
+        id: "credential-reader-synthetic-absent-badge-time",
+        patch: { badgeEventObservedAt: undefined },
+        decision: "stepUp",
+        reason: "BADGE_EVENT_TIME_UNREADABLE",
+      },
+      {
+        id: "credential-reader-synthetic-unparseable-badge-time",
+        patch: { badgeEventObservedAt: "not-a-date" },
+        decision: "stepUp",
+        reason: "BADGE_EVENT_TIME_UNREADABLE",
+      },
+    ]
+  : [];
+
+// The same zone rule on the OTHER allow arm (the Graph/Intune posture path), which
+// had no unknown-zone check at all: only the credentialReader group was checked,
+// and only for fixture rows, none of which carry "unknown".
+const graphBase = scenarios.find(
+  (scenario) => scenario.id === "graph-healthy-allow-candidate",
+);
+const syntheticPostureGuardrails: Array<{
+  id: string;
+  patch: Partial<ConnectorScenario>;
+  decision: Decision;
+  reason: string;
+}> = graphBase
+  ? [
+      {
+        id: "graph-synthetic-unknown-custody-zone-shared-device",
+        patch: { custodyZone: "unknown", workflowContext: "sharedDevice" },
+        decision: "stepUp",
+        reason: "AMBIGUOUS_CONNECTOR_POSTURE",
+      },
+      {
+        id: "graph-synthetic-unknown-network-zone-high-risk-app",
+        patch: { networkZone: "unknown", appRisk: "high" },
+        decision: "stepUp",
+        reason: "AMBIGUOUS_CONNECTOR_POSTURE",
+      },
+      {
+        id: "graph-synthetic-both-zones-unknown",
+        patch: { custodyZone: "unknown", networkZone: "unknown" },
+        decision: "stepUp",
+        reason: "AMBIGUOUS_CONNECTOR_POSTURE",
+      },
+      // The control: an unknown IDENTITY was already refused, because that arm
+      // demanded the positive member. The zone fix makes the arms consistent.
+      {
+        id: "graph-synthetic-unknown-identity-control",
+        patch: { identity: "unknown" as ConnectorScenario["identity"] },
+        decision: "stepUp",
+        reason: "AMBIGUOUS_CONNECTOR_POSTURE",
+      },
     ]
   : [];
 
@@ -192,6 +280,30 @@ if (!credentialReaderBase) {
   failures.push(
     "missing credential-reader base scenario for synthetic guardrail proof",
   );
+}
+if (!graphBase) {
+  failures.push("missing graph-healthy base scenario for synthetic posture guardrail proof");
+}
+for (const synthetic of syntheticPostureGuardrails) {
+  const scenario: ConnectorScenario = {
+    ...graphBase!,
+    ...synthetic.patch,
+    id: synthetic.id,
+    expected: {
+      ...graphBase!.expected,
+      decision: synthetic.decision,
+      reason: synthetic.reason,
+    },
+  };
+  const result = evaluateScenario(scenario);
+  if (
+    result.actualDecision !== synthetic.decision ||
+    result.actualReason !== synthetic.reason
+  ) {
+    failures.push(
+      `${synthetic.id} expected ${synthetic.decision}/${synthetic.reason} got ${result.actualDecision}/${result.actualReason}`,
+    );
+  }
 }
 for (const synthetic of syntheticCredentialReaderGuardrails) {
   const scenario: ConnectorScenario = {

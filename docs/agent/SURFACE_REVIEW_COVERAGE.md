@@ -6,7 +6,7 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**16 of 100 surfaces have been read. 7 are partially read. 77 have not been read at all.**
+**17 of 100 surfaces have been read. 7 are partially read. 76 have not been read at all.**
 
 Coverage of the tree is asserted, not assumed: **2215 of 2215 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
@@ -89,7 +89,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/incident-playbook` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/integration-bridge` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/integrations` | package | 278 | **partial** | 3 | 2026-09-02 | cloud lane (independent review, notes folded) | #388 | 24 | 1 |
-| `lib/location` | package | 8 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/location` | package | 8 | read | 1 | 2026-09-05 | cloud lane | lib/location/src/radius-dhcp.ts | 1 | 3 |
 | `lib/orchestration` | package | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/persistence` | package | 8 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/pim-activation` | package | 6 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -131,7 +131,7 @@ A named slice was read. The rest of the surface has not been.
 - `lib/signalgrid-simulator` (package)
 - `lib/webauthn` (package)
 
-## Not read (77)
+## Not read (76)
 
 - `.agents` (tree)
 - `.claude/*` (loose files)
@@ -192,7 +192,6 @@ A named slice was read. The rest of the surface has not been.
 - `lib/iac` (package)
 - `lib/incident-playbook` (package)
 - `lib/integration-bridge` (package)
-- `lib/location` (package)
 - `lib/orchestration` (package)
 - `lib/persistence` (package)
 - `lib/pim-activation` (package)

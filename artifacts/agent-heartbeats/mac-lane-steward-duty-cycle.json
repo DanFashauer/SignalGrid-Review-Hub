@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-05T08:24:40Z",
-  "result": "acted: reviewed+landed mac/ponytail-native-cuts (#436, identity-provider registry retired, fail-open closed) and mac/stack-reference (#433 earlier); acked both + OpenSSL confirmation. Prior cycle heartbeat was held under open PR #435, now merged."
+  "firedAt": "2026-09-05T16:24:18Z",
+  "result": "quiet \u2014 Alpha unchanged (9c531f4); no new Mac commits, no lane mail to cloud, sim loop clean."
 }

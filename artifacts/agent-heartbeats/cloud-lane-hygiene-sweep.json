@@ -1,1 +1,4 @@
-{"firedAt":"2026-09-04T09:40:55Z","result":"acted: freed ~1.6G — session scratchpad cleaned of files >24h old (2.5G -> 880M: stale patches, logs, a leftover freshclone4 tree), pnpm store pruned (60 files, 1 package). No docker daemon and no /var/lib/docker layer cache present. 21G free on / (46% used), well above the 1GB floor."}
+{
+  "firedAt": "2026-09-05T09:40:13Z",
+  "result": "freed ~2.47G scratchpad (old clones/worktrees/node_modules + logs >24h) + pnpm store prune (60 files); / now 22G free (44%). Docker skipped (no daemon, 116K)."
+}

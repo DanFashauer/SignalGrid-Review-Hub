@@ -438,7 +438,17 @@
     },
     "lib/location": {
       "path": "lib/location",
-      "reads": []
+      "reads": [
+        {
+          "date": "2026-09-05",
+          "read": "Firsthand read of all 6 files. Store/validate/config fail closed (NaN-guarded TTLs, non-finite/future/stale/mode rejection, clamped max-age). One latent fail-open fixed: the RADIUS/DHCP ingest validated a required event timestamp then stamped observedAt with the ingest clock, so the freshness guard compared now against now and a replayed record became fresh presence. observedAt is now the event's own instant; 8 replay/future/instant assertions added to proof:location-services (48/48); invariant clock-read pin 5->3.",
+          "reviewer": "cloud lane",
+          "record": "lib/location/src/radius-dhcp.ts",
+          "scope": "surface",
+          "open": 3,
+          "closed": 1
+        }
+      ]
     },
     "lib/orchestration": {
       "path": "lib/orchestration",

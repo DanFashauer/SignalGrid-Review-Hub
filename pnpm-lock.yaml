@@ -1040,6 +1040,9 @@ importers:
       '@workspace/integrations':
         specifier: workspace:*
         version: link:../lib/integrations
+      '@workspace/location':
+        specifier: workspace:*
+        version: link:../lib/location
       '@workspace/orchestration':
         specifier: workspace:*
         version: link:../lib/orchestration

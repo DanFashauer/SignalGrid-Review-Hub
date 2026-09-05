@@ -214,6 +214,55 @@ await checkCollectionRefusals({
   }
 }
 
+// ── NAC ingest freshness (@workspace/location, the same deferred family) ──────────
+// ingestRADIUS/ingestDHCP once stamped `observedAt: Date.now()` — the INGEST instant —
+// so validateLocationSignal's age check compared now against now and could never
+// fire: a replayed accounting record or lease from yesterday became a FRESH presence
+// fact. The observation instant must be the event's own required timestamp, so the
+// existing guard applies and a stale, replayed, or future-dated record is REFUSED.
+// LOCATION_MODE is read at module load and defaults to "presence" while the ingest
+// emits "coarse" (a mode mismatch that would mask the freshness verdict), so the env
+// is set BEFORE the package is loaded — hence the dynamic import.
+process.env.LOCATION_MODE = "coarse";
+{
+  type RADIUSAccounting = import("@workspace/location").radiusDhcp.RADIUSAccounting;
+  type DHCPLease = import("@workspace/location").radiusDhcp.DHCPLease;
+  const { radiusDhcp, config } = await import("@workspace/location");
+  const maxAgeMs = config.LOCATION_MAX_AGE_SECONDS * 1000;
+  const nowMs = Date.now();
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const radiusAt = (eventTimestamp: string, eventType: RADIUSAccounting["eventType"] = "Start"): RADIUSAccounting => ({
+    eventType, callingStationId: "AA-BB-CC-DD-EE-01", tunnelPrivateGroupId: "vlan-42",
+    framedIPAddress: "10.0.0.7", calledStationId: "corp-wifi:ap-3f", eventTimestamp,
+  });
+  const leaseAt = (timestamp: string, eventType: DHCPLease["eventType"] = "lease"): DHCPLease => ({
+    eventType, macAddress: "aa:bb:cc:dd:ee:02", ipAddress: "10.0.0.8", circuitId: "BLDG7-F3", timestamp,
+  });
+
+  // Control: a record whose event instant is NOW is accepted, and observedAt IS that
+  // instant — not an ingest-clock read that happens to be close to it.
+  const freshTs = iso(nowMs);
+  const fresh = await radiusDhcp.ingestRADIUS(radiusAt(freshTs));
+  check("RADIUS ingest: a current Accounting-Start is accepted as coarse presence", fresh !== null && fresh.source === "nac-radius" && fresh.zoneId === "vlan-42");
+  check("RADIUS ingest: observedAt is the EVENT timestamp, not the ingest clock", fresh !== null && fresh.observedAt === Date.parse(freshTs));
+
+  // THE FINDING: a replayed / late-delivered record older than the max age must be
+  // refused. Under ingest-clock stamping this was ACCEPTED as fresh presence.
+  const replayed = await radiusDhcp.ingestRADIUS(radiusAt(iso(nowMs - maxAgeMs - 3_600_000)));
+  check("RADIUS ingest: a replayed Accounting-Start from beyond the max age is REFUSED, never re-stamped fresh", replayed === null);
+  // A future-dated instant beyond the skew tolerance is refused too.
+  const future = await radiusDhcp.ingestRADIUS(radiusAt(iso(nowMs + 120_000)));
+  check("RADIUS ingest: a future-dated Accounting-Start beyond the skew tolerance is REFUSED", future === null);
+  // Existing behaviour preserved: a session end creates no presence.
+  check("RADIUS ingest: an Accounting-Stop creates no presence (unchanged)", (await radiusDhcp.ingestRADIUS(radiusAt(freshTs, "Stop"))) === null);
+
+  // The DHCP path holds the same rule.
+  const leaseFresh = await radiusDhcp.ingestDHCP(leaseAt(freshTs));
+  check("DHCP ingest: a current lease is accepted with observedAt = the lease timestamp", leaseFresh !== null && leaseFresh.observedAt === Date.parse(freshTs) && leaseFresh.buildingId === "BLDG7");
+  check("DHCP ingest: a replayed lease from beyond the max age is REFUSED", (await radiusDhcp.ingestDHCP(leaseAt(iso(nowMs - maxAgeMs - 3_600_000)))) === null);
+  check("DHCP ingest: a lease expiry creates no presence (unchanged)", (await radiusDhcp.ingestDHCP(leaseAt(freshTs, "expire"))) === null);
+}
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

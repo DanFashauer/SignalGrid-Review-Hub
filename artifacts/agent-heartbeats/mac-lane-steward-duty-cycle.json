@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-05T22:25:31.197Z",
-  "result": "quiet: no Mac commits since the last cycle, no new or moved mac/* branch (six stale, unchanged since 09-02/03, already landed by cloud PRs — prune list stands), no new sim-results, no mail addressed to cloud; five cloud→mac messages unread (oldest 5.2h). Cloud landed #452 (batch H) and #454 (batch I) and merged mail PR #453 this hour; sent the Mac lane the landed-note with the Fleet profile change and the two new gates."
+  "firedAt": "2026-09-05T23:25:25.123Z",
+  "result": "quiet: no Mac commits since the last cycle, no new or moved mac/* branch (six stale, unchanged since 09-02/03, already landed by cloud PRs — prune list stands), no new sim-results, no mail addressed to cloud; six cloud→mac messages unread (oldest 1.8h for the hooks note; the batch-J request delivered 23:15Z on PR #457). Cloud merged mail PRs #455 and #457 this hour and has batch J (eighth audit round) on draft PR #456 driving to green."
 }

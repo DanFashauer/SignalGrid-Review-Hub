@@ -227,11 +227,15 @@ if (cmd === "send") {
   })();
   if (unmerged === null) console.log("  (could not list origin branches — is this a git checkout?)");
   else if (unmerged.length > 0) {
-    console.log(`  Your branches on origin NOT yet in SignalGrid_Alpha (as of the last fetch): ${unmerged.length}`);
+    // "Not an ancestor of mainline" is what git can say offline. It is NOT
+    // "awaiting review": a branch landed by squash or by copying its commits
+    // through another PR stays on this list until somebody deletes it. So the
+    // line names both readings and the one action that resolves the ambiguity.
+    console.log(`  Your branches on origin that mainline does not carry as ancestors (as of the last fetch): ${unmerged.length}`);
     for (const b of unmerged) console.log(`    · ${b}`);
     console.log(me === "mac"
-      ? "  The cloud lane opens a draft PR for each within its hourly cycle; comment on the mailbox PR to wake it sooner."
-      : "  Open the PR (create_pull_request) and land it, or restart the branch if it is stale.");
+      ? "  A NEW or MOVED one is picked up by the cloud lane's hourly cycle (draft PR opened at once; comment on the mailbox PR to wake it sooner).\n  One whose work already landed through another PR is STALE — delete it (git push origin --delete <name>) so this list stays honest."
+      : "  Open the PR (create_pull_request) and land it, or delete the branch if its work already landed another way.");
   }
 } else {
   console.error(`unknown command "${cmd}". Try: inbox | send | ack`);

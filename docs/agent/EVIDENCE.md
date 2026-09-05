@@ -877,7 +877,7 @@ lib/api-spec/** (+ orval)   lib/iac/src/**   config/**   docker/** + docker-comp
 ```
 Output:
 ```
-EMULATOR: decide() tested the BAD zone member only ("wrong"/"mismatch"), so custodyZone/networkZone "unknown" slipped past
+EMULATOR: decide() tested only the BAD member of custodyZone/networkZone ("wrong"/"mismatch"), so "unknown" slipped past
   both allow arms — a reader offline or a segmentation lookup that timed out emulated as an allow candidate; the fixture
   type declared credentialConfidence and badgeEventObservedAt, every row populated them, and nothing read them. Fixed:
   positive members on both arms; degraded/unknown/ABSENT confidence and an unreadable badge instant step up by name.

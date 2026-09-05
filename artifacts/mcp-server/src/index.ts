@@ -37,7 +37,12 @@ const demoKeys = core.demoApiKeys();
 // under their own tenant (cross-tenant evaluation is refused by design).
 function tokenForTenant(tenantId: string): string {
   const preferred = demoKeys.find((k) => k.tenantId === tenantId && (k.role === "operator" || k.role === "owner"));
-  return (preferred ?? demoKeys.find((k) => k.tenantId === tenantId))?.token ?? "";
+  const token = (preferred ?? demoKeys.find((k) => k.tenantId === tenantId))?.token;
+  // No demo key for the tenant is a configuration fault, not an empty credential to
+  // hand the core: an empty token used to travel into runRoomEntry and surface as an
+  // authentication refusal that read like the caller's mistake.
+  if (!token) throw new Error("no demo API key is seeded for the scenario's tenant; the demo core cannot evaluate it");
+  return token;
 }
 
 const asText = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] });

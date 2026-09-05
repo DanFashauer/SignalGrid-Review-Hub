@@ -94,16 +94,30 @@
   const SG = window.SignalGridSim;
   const byId = (s,el)=> (el||document).querySelector(s);
   let current=null, confirmed=new Set(), stepUp=false;
+  /*sigClass:start*/
   function sigClass(v){
-    const bad=['disabled','noncompliant','absent','withdrawn','forced','tampered','drifted','offline','faulted','stale'];
-    const ok=['enabled','compliant','present','bound','aligned','fresh','docked','nominal','supported'];
-    const s=String(v).toLowerCase();
-    if(v===false) return 'bad';
-    if(bad.some(b=>s.includes(b)))return 'bad';
+    // Colour for a signal value. The rule this must never break: a value that is
+    // not a known-good one is NEVER rendered green. `non_compliant` once rendered
+    // green because the match ran on the raw string and "non_compliant" contains
+    // "compliant"; `not_present` the same. Separators are stripped before matching,
+    // exact good values win first, every bad/warn word beats every good word, a
+    // negated word the lists do not know is bad, and an unrecognised value is amber —
+    // never blank and never green. build-room-console.mjs runs these vectors.
     if(v===true) return 'ok';
-    if(ok.some(o=>s.includes(o)))return 'ok';
-    return '';
+    if(v===false) return 'bad';
+    if(v===null||v===undefined) return 'warn'; // evidence that never arrived: amber, like 'unknown'
+    const s=String(v).toLowerCase().replace(/[^a-z]/g,'');
+    const ok=['enabled','compliant','present','bound','aligned','fresh','docked','nominal','supported','enrolled','healthy','ok'];
+    const bad=['disabled','noncompliant','notpresent','absent','withdrawn','forced','tampered','drifted','offline','faulted','stale','expired','removed','revoked','misfit','unsupported','undocked','unbound','unenrolled','denied','blocked'];
+    const warn=['unknown','missing','suspected','degraded','pending','unverified','partial'];
+    if(ok.includes(s)) return 'ok';
+    if(bad.some(b=>s.includes(b))) return 'bad';
+    if(warn.some(w=>s.includes(w))) return 'warn';
+    if(/^(un|non|not|no)/.test(s)) return 'bad';
+    if(ok.some(o=>s.includes(o))) return 'ok';
+    return 'warn';
   }
+  /*sigClass:end*/
   function load(){
     const box=byId('#scenarios'); box.innerHTML='';
     const LABEL={clinical:'Smart hospital',warehouse:'Warehouse',global_fleet:'Global fleet'};

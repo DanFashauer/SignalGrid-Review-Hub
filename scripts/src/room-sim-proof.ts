@@ -80,9 +80,15 @@ check("SAFETY: no sensitive fleet action is ever auto on an allow",
   checkout.plan.actions.every((a) => !(a.sensitive && a.disposition === "auto")));
 check("fleet plan speaks of a dispatcher, not a clinician/supervisor",
   checkout.plan.summary.includes("dispatcher") && !checkout.plan.summary.includes("clinician") && !checkout.plan.summary.includes("supervisor"));
-let fleetRefused = false;
-try { runRoomEntry(core, tokenFor("tenant_northwind"), "gf-compliant-field"); } catch { fleetRefused = true; }
-check("cross-tenant: hospital token cannot run a fleet scenario", fleetRefused);
+// The refusal must be the TENANT boundary, not a missing token or an unknown scenario:
+// `tokenFor` returning "" would also throw, and the old bare `catch` counted that as
+// the boundary holding. Assert the token exists and the message names the boundary.
+check("cross-tenant: the hospital demo token is non-empty (a refusal on an empty token proves nothing)", tokenFor("tenant_northwind").length > 0);
+let fleetRefusal = "";
+try { runRoomEntry(core, tokenFor("tenant_northwind"), "gf-compliant-field"); } catch (e) { fleetRefusal = e instanceof Error ? e.message : String(e); }
+check("cross-tenant: hospital token cannot run a fleet scenario", fleetRefusal !== "");
+check("cross-tenant: the fleet refusal is the tenant boundary ('not found in tenant'), not an unknown scenario",
+  fleetRefusal.includes("not found in tenant") && !fleetRefusal.includes("Unknown scenario"));
 
 // 3. Warehouse plans use the warehouse catalog + supervisor language + Assist safety.
 const cage = run("wh-compliant-cage");
@@ -105,9 +111,14 @@ check("non-compliant picker: gate blocked, lighting still auto",
   restricted.plan.actions.find((a) => a.kind === "environment.lighting")?.disposition === "auto");
 
 // 4. Cross-tenant refusal — the hospital token cannot evaluate a warehouse subject.
-let refused = false;
-try { runRoomEntry(core, tokenFor("tenant_northwind"), "wh-compliant-pick"); } catch { refused = true; }
-check("cross-tenant: hospital token cannot run a warehouse scenario", refused);
+let refusal = "";
+try { runRoomEntry(core, tokenFor("tenant_northwind"), "wh-compliant-pick"); } catch (e) { refusal = e instanceof Error ? e.message : String(e); }
+check("cross-tenant: hospital token cannot run a warehouse scenario", refusal !== "");
+check("cross-tenant: the warehouse refusal is the tenant boundary, not an unknown scenario",
+  refusal.includes("not found in tenant") && !refusal.includes("Unknown scenario"));
+// And the positive control: the warehouse token DOES run it — otherwise "refused" could
+// mean the scenario is broken for everyone.
+check("cross-tenant control: the warehouse tenant's own token runs the same scenario", (() => { try { return typeof run("wh-compliant-pick").decision.outcome === "string"; } catch { return false; } })());
 
 // 5. Determinism of the decision + plan (decisionId / latencyMs are per-call).
 const stable = (id: string) => {

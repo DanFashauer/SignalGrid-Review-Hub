@@ -2692,7 +2692,7 @@ earlier — that is the loop working, not a reason to soften the record.
     RELATED, filed here rather than as its own row: the client picks the audit
     correlation id. `x-request-id` is accepted unvalidated and unbounded, reflected
     verbatim at 900 characters, and lands in the durable ledger's correlation field
-    via `v1.ts:749-762`. Not XSS — the API answers JSON with `nosniff` — but in a
+    via `middlewares/context.ts:31-36`. Not XSS — the API answers JSON with `nosniff` — but in a
     repo whose stated position is "provenance is the product", a caller-chosen
     provenance field is worth closing. Accept the header only when it matches
     `^[A-Za-z0-9._-]{1,128}$`, else mint a uuid.
@@ -2727,9 +2727,9 @@ earlier — that is the loop working, not a reason to soften the record.
     The TS comment at `:118-122` records this as a review finding — "a gesture for one
     action must never release the rest of the integration." The port omits it.
     HONESTLY SCOPED: latent, not live. The one shipping caller
-    (`HostAppViewController.swift:631`) reads exactly one action out of the returned
+    (`HostAppViewController.swift:685`) reads exactly one action out of the returned
     plan, and `plan.mode`/`plan.summary` are read nowhere in EnterpriseShell. But the
-    control plane already speaks the scoped form (`v1.ts:723`), so the two sides can
+    control plane already speaks the scoped form (`v1.ts:813`), so the two sides can
     disagree today about what a step-up released.
     FIX: port the missing block — add `stepUpSatisfiedActionKeys` to `AppPlanInput`,
     compute the per-action `eff`, and switch on it rather than `effective`. Do not

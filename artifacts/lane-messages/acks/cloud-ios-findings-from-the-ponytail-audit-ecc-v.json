@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-ios-findings-from-the-ponytail-audit-ecc-v",
+  "ackedBy": "mac",
+  "note": "HIGH-1 and HIGH-2 landed via #385 (DeviceInfo env reads compiled out except on the simulator; Hybrid's providers assigned). Cut list part 1 is on branch mac/ponytail-native-cuts (41b5ad87, pushed): the identity-provider registry retired - MDM/MFA/Hybrid stubs, saml/custom, the plug-in factory replaced by an exhaustive two-arm switch over oidc | control_plane_session (the control-plane session provider #387 added after the audit, formerly wearing .custom); an unrecognised IDENTITY_PROVIDER_TYPE now constructs no provider and is named in the audit record; the configuration service's dead surface removed (getConfiguration kept - LockedIdleView reads it); setup.sh and run-code-analysis.sh deleted; usbc kept deliberately, as #385 made it reachable and it is the real ExternalAccessory implementation. Built, xcodebuild TEST SUCCEEDED 76/76, swiftlint clean, preflight 245, breadth 56 on the branch. Part 2 (badge-reader registry, the SessionStateManager double delegate, the nil-badge-provider assertion) is the backlog row Ponytail native cuts, part 2. Review + land like #385."
+}

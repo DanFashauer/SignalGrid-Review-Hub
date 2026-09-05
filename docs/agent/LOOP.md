@@ -51,7 +51,40 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-04 (Mac lane, latest) - the owner-shared Fechin/reference
+LAST TOUCHED: 2026-09-05 (Mac lane, latest) - three deliverables. (1) Ponytail
+              native cuts part 1 on branch mac/ponytail-native-cuts (41b5ad87, pushed,
+              mailed to cloud to review + land like #385): the identity-provider
+              registry retired - MDM/MFA/Hybrid stubs, saml/custom, the plug-in
+              factory replaced by an exhaustive two-arm switch over oidc |
+              control_plane_session; an unrecognised IDENTITY_PROVIDER_TYPE now
+              constructs NO provider and is named in the audit record, fail closed
+              where the old code silently fell to the template config - plus the
+              configuration service's dead surface (six presets, the updaters,
+              SecurityConfig/BackendConfig and their env reads), setup.sh and
+              run-code-analysis.sh, and the mobile theme's #13171A -> #15181B (review
+              row 104). IdentityProvider.swift 837 -> ~430 lines; 11 files,
+              +293/-1247. xcodebuild TEST SUCCEEDED 76/76 twice, swiftlint clean,
+              the three iOS gates green, preflight PASSED 245, breadth 56 on the
+              branch. (2) The owner-directed ECC full evaluation RUN, all six stages,
+              in docs/agent/ECC_FULL_EVALUATION_2026-09-01.md: ECC security-reviewer
+              over auth/decision/API - 0 Critical/High/Medium, 3 Low, all in modules
+              unreachable from the live API; Schemathesis 4.4.4 against BOTH OpenAPI
+              documents - 2,632 cases over all 59 /v1 operations, 0 server errors, 0
+              permissive acceptances on /v1, the deviations being the contract
+              under-documenting the server's fail-closed 401/404/429 and ten
+              operations the server validates more strictly than it documents; seven
+              backlog rows filed under "ECC full evaluation" in docs/BUILD_BACKLOG.md.
+              (3) Inbox triage against the tree: the native-ledger branch is fully
+              superseded (#385 landed it; its provenance comments and both
+              request-signing findings are on mainline - nothing was undelivered);
+              nine cloud messages acked 09-04, three more today (ECC, Ponytail, the
+              iOS rows) with status; one left open on purpose - Fleet/Headwind's 7
+              dimensions need live servers and the owner's Premium decision by
+              2026-09-16. Found and filed, not fixed: the AppWorkflows port lacks
+              the TS per-action step-up release and check-decision-port-parity
+              compares shape only, so it cannot see it (row 101 -> backlog; cloud's
+              call on a golden-rule file). Prior 2026-09-04 (Mac lane) - the
+              owner-shared Fechin/reference
               cheatsheet site (215 sheets) absorbed BY USE as the twelfth first-party
               skill, .claude/skills/stack-reference/: SKILL.md (five cross-cutting
               laws) + eight domain files holding 102 VERIFIED contradictions between
@@ -141,18 +174,23 @@ LAST TOUCHED: 2026-09-04 (Mac lane, latest) - the owner-shared Fechin/reference
               deterministic, removes 3 old colour bugs) and landed; the iOS SwiftUI
               view-layer rebuild is now COMPLETE, and native/ios/README's file-tree
               was corrected to match.
-BLOCKED ON: nothing cloud-side; Alpha is green. Mac lane, non-blocking - DONE
-              2026-09-04: the android/desktop toolchain installed and
-              android-desktop-first-run run (android-core + desktop-core PASS;
-              window-smoke fails only its mandatory screenshot, owner grant below);
-              the #407 api-image grype scan (clean); Firecrawl key supplied and
-              registered. Still open: the residual Phase 2/3 nits (minor type-scale,
-              the Enrolling contrast visual); the twin test's per-field checks are
-              conditional; land or report mac/native-ledger-2026-09-02; older items
-              (MockSignalGridAPI replayed vectors, DemoMode flag table). Owner, the
-              ONE remaining Mac-lane item: Screen Recording permission for Terminal
-              (System Settings > Privacy & Security > Screen Recording, then relaunch
-              Terminal) - closes 2026-09-02-android-desktop-first-run.
+BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
+              mac/ponytail-native-cuts (41b5ad87). Cloud, to decide: the AppWorkflows
+              per-action step-up re-port and the parity-gate extension (backlog, row
+              101). Mac lane, non-blocking, still open: Ponytail native cuts part 2
+              (badge-reader registry, double delegate, nil-provider assertion); the
+              residual Phase 2/3 nits (minor type-scale, the Enrolling contrast
+              visual); SignalGridMobile adaptive tokens then the .dark pin (row 103);
+              the twin test's per-field checks are conditional; older items
+              (MockSignalGridAPI replayed vectors, DemoMode flag table).
+              mac/native-ledger-2026-09-02 is CLOSED - fully superseded by #385 and
+              later. Fleet/Headwind's 7 device dimensions: needs the live servers
+              stood up on the Mac; the Premium-only getPolicies() branch needs the
+              owner's licence key or, per DR-005, the deferred/unverified-premium
+              mark on 2026-09-16. Owner, two items: Screen Recording permission for
+              Terminal (System Settings > Privacy & Security > Screen Recording, then
+              relaunch Terminal) - closes 2026-09-02-android-desktop-first-run; and
+              the Fleet Premium decision above before 2026-09-16.
 NEXT ACTION: cloud: process the Mac lane's results as they return (sim-results,
               lane mail, commits); next backlog pickup when the owner points. owner:
               discovery conversations (0 of 15) - nothing substitutes.

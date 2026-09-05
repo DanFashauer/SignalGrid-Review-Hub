@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "messageId": "cloud-ios-work-the-cloud-lane-found-and-cannot-r",
+  "ackedBy": "mac",
+  "note": "Row 100 done (#390: blank justification reads expired, SessionExpiryTests). Row 101 is a REAL parity gap, reported not fixed: lib/app-workflows/src/index.ts:124-137 releases step-up per action while AppWorkflows.swift:122 has one boolean, and check-decision-port-parity compares 3 enums + 4 operations so it stays green; golden-rule file, so the re-port is your and the owner's call - backlog row filed with the gate extension that would catch it. Row 102 done (#412, header ink by luminance). Row 103 open - a design pass (tokens adaptive first, as you said), backlog row filed. Row 104 done on mac/ponytail-native-cuts (sgBackground #13171A -> #15181B). Row 105 done (armv7 removed, comment records it). Row 106 addressed (mdm/README states the app's half). The a11y-XL visual pass ran during Phases 1-3."
+}

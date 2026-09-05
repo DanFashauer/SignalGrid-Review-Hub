@@ -249,6 +249,23 @@ function findSwitchBlocks(code) {
 // Every `switch (...) { ... }` in a scanned lib must contain its OWN `default:`
 // arm. Returns the 1-based line numbers of switches that lack one. `code` must
 // already be comment-stripped and literal-masked. Extracted so check 1 and the
+// Locale-dependent collation in a deterministic path. `localeCompare` follows the
+// PROCESS locale — verified: sv_SE sorts "ä" after "z", de_DE before it, en-US
+// case-folds — so the same input orders differently on another machine, and
+// "deterministic" quietly means "on this laptop". Two packages had already fixed
+// it with a comment (adaptive-proposals, recommendations) and two more had not
+// (signal-radar, signal-discovery, both shipping, both caller-fed over HTTP): the
+// rule stopped at its own edge until it became a check. Runs over the same
+// comment-stripped, literal-masked text as the clock scan, so a comment that
+// NAMES the method, or a string containing it, is not a hit.
+function localeCompareViolations(code) {
+  const hits = [];
+  code.split("\n").forEach((line, idx) => {
+    if (/\.localeCompare\s*\(/.test(line)) hits.push(idx + 1);
+  });
+  return hits;
+}
+
 // self-test exercise the same matcher.
 function switchViolations(code) {
   const blocks = findSwitchBlocks(code);
@@ -309,6 +326,20 @@ if (process.argv.includes("--self-test")) {
   checks.push([
     `fail-closed scope covers all ${PURE_LIBS.length} named planner libs, each present on disk`,
     PURE_LIBS.length >= 8 && PURE_LIBS.every((p) => existsSync(resolve(repo, p))),
+  ]);
+
+  // A locale-dependent sort is flagged; a comment naming it and a string containing it are not.
+  checks.push([
+    "a localeCompare sort is flagged",
+    localeCompareViolations(prep("items.sort((a, b) => a.id.localeCompare(b.id));")).length === 1,
+  ]);
+  checks.push([
+    "a comment that NAMES localeCompare is not flagged",
+    localeCompareViolations(prep("// codepoint order, not localeCompare, whose collation follows the locale\nitems.sort();")).length === 0,
+  ]);
+  checks.push([
+    "a string literal containing localeCompare is not flagged",
+    localeCompareViolations(prep('const why = "a.localeCompare(b) is locale-dependent";')).length === 0,
   ]);
 
   // A clock read in a package OUTSIDE the pinned set is flagged as undeclared.
@@ -401,6 +432,25 @@ if (process.argv.includes("--self-test")) {
         `${byPackage.size} with declared clock reads (${declaredTotal} pinned), ` +
         `${scope.length - byPackage.size} at zero`,
     );
+  }
+}
+
+// 2b — collation in the pure planners follows the machine, not the code ───────
+{
+  const scope = determinismScope();
+  const files = tracked.filter((f) => isTs(f) && inAny(f, scope));
+  const hits = [];
+  for (const f of files) {
+    for (const line of localeCompareViolations(maskLiterals(stripComments(read(f))))) hits.push(`${f}:${line}`);
+  }
+  if (hits.length) {
+    bad(
+      `Determinism: localeCompare in ${hits.length} site(s) — collation follows the process locale ` +
+        `(sv_SE sorts "ä" after "z", de_DE before it), so the same input orders differently on another ` +
+        `machine; compare codepoints ((a < b ? -1 : a > b ? 1 : 0)) — ${hits.join(", ")}`,
+    );
+  } else {
+    ok(`Determinism: no localeCompare in ${files.length} planner files (codepoint order everywhere)`);
   }
 }
 

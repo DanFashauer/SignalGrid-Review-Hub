@@ -22,6 +22,13 @@ import type {
 } from "./types";
 import { constantTimeEquals } from "./util";
 
+// Codepoint comparison for sorts that must be DETERMINISTIC on any machine.
+// `localeCompare` follows the process locale (sv_SE sorts "ä" after "z", de_DE
+// before it), so two hosts ordered the same input differently; ISO timestamps
+// and ids compare exactly as intended by codepoint. Gated by review:invariants.
+const cmpCodepoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+
 /**
  * In-memory, tenant-scoped store.
  *
@@ -242,7 +249,7 @@ export class MemoryStore {
       .filter(
         (row) => row.tenantId === tenantId && row.connectorId === connectorId,
       )
-      .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+      .sort((a, b) => cmpCodepoint(b.startedAt, a.startedAt));
   }
 
   // ── Normalized signals ────────────────────────────────────────────────────
@@ -381,7 +388,7 @@ export class MemoryStore {
   listDecisions(tenantId: string): Decision[] {
     return [...this.decisions.values()]
       .filter((row) => row.tenantId === tenantId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => cmpCodepoint(b.createdAt, a.createdAt));
   }
 
   putSnapshot(snapshot: EvidenceSnapshot): void {
@@ -415,7 +422,7 @@ export class MemoryStore {
   listWebhookDeliveries(tenantId: string): WebhookDelivery[] {
     return [...this.webhookDeliveries.values()]
       .filter((row) => row.tenantId === tenantId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => cmpCodepoint(b.createdAt, a.createdAt));
   }
 
   // ── Remediation ───────────────────────────────────────────────────────────
@@ -437,7 +444,7 @@ export class MemoryStore {
   listRemediations(tenantId: string): RemediationAction[] {
     return [...this.remediations.values()]
       .filter((row) => row.tenantId === tenantId)
-      .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+      .sort((a, b) => cmpCodepoint(b.requestedAt, a.requestedAt));
   }
 
   // ── Resolution config ─────────────────────────────────────────────────────

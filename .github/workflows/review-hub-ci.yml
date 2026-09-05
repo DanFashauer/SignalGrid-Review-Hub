@@ -540,6 +540,12 @@ jobs:
         run: node scripts/check-derived-doc-figures.mjs --self-test
       - name: "Derived doc figures (a stated count equals the artifact it describes)"
         run: node scripts/check-derived-doc-figures.mjs
+      # The `path (N)` line counts in the build plan's tier lists were measured
+      # once and quoted forever — 20 of 29 were wrong on 2026-09-05.
+      - name: "Doc line-count self-test (a planted drift must fail; the real tree must be clean)"
+        run: node scripts/check-doc-line-counts.mjs --self-test
+      - name: "Doc line counts (every path (N) figure matches the file it names)"
+        run: node scripts/check-doc-line-counts.mjs
       # Two documents stated the four tier branches as live after all four were
       # pruned, while BRANCH_HYGIENE.md recorded the opposite. Offline by design.
       - name: "Documented-branch self-test (the gate can actually fail)"

@@ -15,6 +15,13 @@ import {
   type SelfAuditReport,
 } from "./types";
 
+// Codepoint comparison for sorts that must be DETERMINISTIC on any machine.
+// `localeCompare` follows the process locale (sv_SE sorts "ä" after "z", de_DE
+// before it), so two hosts ordered the same input differently; ISO timestamps
+// and ids compare exactly as intended by codepoint. Gated by review:invariants.
+const cmpCodepoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+
 /** The legal transitions of a heal proposal. The ONLY route to `applied` is
  *  `approved → applied`, and `approved` is reachable only from `proposed`. There is
  *  no `proposed → applied` edge: application cannot skip approval. */
@@ -53,7 +60,7 @@ export function proposeHeals(report: SelfAuditReport): HealProposal[] {
       }),
     );
   }
-  proposals.sort((a, b) => a.proposalId.localeCompare(b.proposalId));
+  proposals.sort((a, b) => cmpCodepoint(a.proposalId, b.proposalId));
   return proposals;
 }
 

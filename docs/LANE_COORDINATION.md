@@ -23,7 +23,37 @@ Sessions cannot read or message each other (cross-session triggers are
 disabled for this organization). The coordination bus is THIS FILE plus the
 git history — and the owner, who sees both chats.
 
-## Current handoff — read this first (updated 2026-08-12)
+## The loop as of 2026-09-05 — read this first
+
+The owner's verdict on the loop below was "not working and causing delay". The
+evidence agreed, and none of it was about the Mac:
+
+- The cloud lane's acks and heartbeats rode its CODE branch, so they were held
+  whenever that branch carried an open pull request — mail waited behind a
+  ten-minute CI run it had nothing to do with, then behind the merge.
+- Nothing woke the cloud lane when Mac mail or a `mac/*` branch landed. It
+  looked every FOUR hours, then reviewed, then opened a PR, then waited for CI.
+- Messages carried no instant, so nobody could say how long one had waited.
+  "Delay" was a feeling; the gate could only say "unread".
+- Delivery was three commands after the write, and the third was the one that
+  got skipped.
+
+What changed, and what each lane does now:
+
+| | Mac lane | Cloud lane |
+| --- | --- | --- |
+| Write + deliver mail, an ack, a heartbeat | `pnpm run lane:deliver send\|ack\|heartbeat …` — pushed **straight to `SignalGrid_Alpha`** from a throwaway worktree; your checkout is untouched (`git pull --ff-only` when convenient) | same command — pushed to **`lane/cloud-mail-<stamp>`**, then the session opens the PR and enables auto-merge. Never the code branch. |
+| Wake the other lane now | after a delivery, `lane:deliver` comments on the **mailbox PR** (`docs/agent/lane-mailbox.json`, PR #439) if `gh` is on PATH, else prints its URL — one comment there, from any device, wakes the cloud session | subscribed to the mailbox PR every session start and every cycle |
+| A topic branch pushed for review | push `mac/<name>`; `lane:inbox` lists your branches mainline does not carry yet | **hourly** cycle opens a DRAFT PR for every unmerged `mac/*` branch at once (CI starts before the review), subscribes to it, reviews, lands or comments the blocker |
+| How long has this waited | `lane:inbox` shows it per message; `check-lane-messages` names it on every run; unread beyond 24h is STALE (reported, never fatal) | same |
+
+Rules that did not change: the push is the delivery; only the addressee closes
+a message; unread is loud and never fatal; the sim-request loop still carries
+WORK and this channel carries KNOWLEDGE. The mailbox PR is **never merged and
+never closed** — it changes no files, so it never conflicts, and closing it
+removes the wake channel.
+
+## Current handoff — superseded 2026-09-05 by the section above (kept for history)
 
 **The owner is not a message bus.** They are phone-first and at the remote
 office only a few hours a day, so a lane that needs the other lane to know

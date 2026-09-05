@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **17 of 100 surfaces have been read. 7 are partially read. 76 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2215 of 2215 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2218 of 2218 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -36,7 +36,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/build-loop` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/connector-emulator` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/lab-collections` | tree | 42 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/lane-messages` | tree | 160 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/lane-messages` | tree | 161 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/live-captures` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/live-evidence` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/mcp-server` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -54,7 +54,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `config` | tree | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docker` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/*` | loose files | 214 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `docs/agent` | docs family | 30 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `docs/agent` | docs family | 31 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/assets` | docs family | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/company` | docs family | 9 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/connectors` | docs family | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -114,7 +114,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/shared` | native | 2 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 379 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `scripts` | package | 380 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `site` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `tests` | tree | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `tools` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |

@@ -209,6 +209,7 @@
     "sbom": "pnpm --filter @workspace/scripts run sbom",
     "self-audit:run": "pnpm --filter @workspace/scripts run self-audit:run",
     "lane:ack": "node scripts/lane-message.mjs ack",
+    "lane:deliver": "node scripts/lane-deliver.mjs",
     "lane:inbox": "node scripts/lane-message.mjs inbox",
     "lane:messages": "node scripts/check-lane-messages.mjs",
     "lane:send": "node scripts/lane-message.mjs send",

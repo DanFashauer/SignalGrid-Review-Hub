@@ -1,19 +1,19 @@
 {
   "$comment": "The committed registry of ALWAYS-ON agent routines (role-lens review, ai-ops next-work). Every recurring scheduled lane is declared here with its cadence, the human who authorized it, what it may write, where it stops and escalates, and where its firing evidence lands. scripts/check-scheduled-routines.mjs holds this file against the heartbeat artifacts and the org roster; its header states honestly that it gates the DECLARATION and the EVIDENCE OF FIRING \u2014 it cannot read the live account scheduler. Transcribed FROM the live scheduler (list_triggers) on 2026-08-21, not from memory. One-shot self-reminders (send_later check-ins) are deliberately out of scope: they are ephemeral work-pacing, not standing lanes.",
-  "transcribedFrom": "live scheduler, 2026-08-21 (re-transcribed same day on adding cloud-lane-hygiene-sweep)",
+  "transcribedFrom": "live scheduler, 2026-09-05 (re-transcribed on moving mac-lane-steward-duty-cycle to hourly and both self-session routines onto lane-deliver; earlier: 2026-08-21)",
   "routines": [
     {
       "id": "mac-lane-steward-duty-cycle",
       "trigger": "trig_01XqdtQrmMEtUXTS7pCDr8GS",
-      "cron": "24 */4 * * *",
+      "cron": "24 * * * *",
       "binding": "self-session (resumes the operating session)",
       "authorizedBy": "Dan Fashauer (owner)",
       "authorizedOn": "2026-08-21",
-      "authorizationEvidence": "owner message in-session: 'Can you have an employee monitor and administrator for the Mac lane please' \u2014 the role was created in direct response, same day",
-      "writeScope": "artifacts/lane-messages/** and artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json only, committed and pushed to the working branch",
+      "authorizationEvidence": "owner message in-session: 'Can you have an employee monitor and administrator for the Mac lane please' \u2014 the role was created in direct response, same day. Cadence 4h -> hourly on 2026-09-05, owner message: 'Need you to have a better system with local Mac lane cause this is not working and causing delay'",
+      "writeScope": "artifacts/lane-messages/** and artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json, delivered through scripts/lane-deliver.mjs onto a lane/cloud-mail-* branch that is opened as a PR and auto-merged \u2014 NEVER through the code branch (that is what held acks behind open code PRs). Plus: opens a draft PR for every unmerged origin/mac/* branch, subscribes to it, reviews and lands it.",
       "escalationBoundary": "escalates to the owner ONLY what only the owner can clear (credentials, Mac-side actions); a quiet cycle produces no owner message",
       "heartbeatPath": "artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json",
-      "cadenceToleranceHours": 9
+      "cadenceToleranceHours": 4
     },
     {
       "id": "live-sync-loop-keeper",
@@ -55,7 +55,7 @@
       "authorizedBy": "Dan Fashauer (owner)",
       "authorizedOn": "2026-08-21",
       "authorizationEvidence": "owner message in-session: 'clean up anything you need for space and also make this a routine check' \u2014 created in direct response, same day; the docker-cache removal it performs was explicitly authorized in the same message",
-      "writeScope": "the session scratchpad, dead container/package caches on the cloud machine (never the repo tree), and artifacts/agent-heartbeats/cloud-lane-hygiene-sweep.json",
+      "writeScope": "the session scratchpad, dead container/package caches on the cloud machine (never the repo tree), and artifacts/agent-heartbeats/cloud-lane-hygiene-sweep.json — the heartbeat delivered through scripts/lane-deliver.mjs onto a lane/cloud-mail-* branch, never the code branch (since 2026-09-05)",
       "escalationBoundary": "escalates to the owner ONLY if free space stays under 1GB after every cleanup step (environment-level fix); a quiet sweep produces no owner message",
       "heartbeatPath": "artifacts/agent-heartbeats/cloud-lane-hygiene-sweep.json",
       "cadenceToleranceHours": 50

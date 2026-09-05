@@ -67,7 +67,7 @@ check("…and a nonsense override is IGNORED, not obeyed — a typo cannot inven
 check("…and an empty override falls back to the derivation", laneUnder({ SIGNALGRID_LANE: "" }) === derived);
 
 // ── 2. the audit's laws, each against its own failure ────────────────────────
-type Msg = { id: string; __fileId: string; from: string; to: string; subject: string; body: string };
+type Msg = { id: string; __fileId: string; from: string; to: string; subject: string; body: string; sentAt?: string };
 const msg = (id: string, from: string, to: string, extra: Partial<Msg> = {}): Msg =>
   ({ id, __fileId: id, from, to, subject: "s", body: "b", ...extra });
 const ack = (id: string, by: string) => ({ messageId: id, __fileId: id, ackedBy: by });
@@ -158,7 +158,27 @@ const load = (dir: string) =>
   });
 const live = auditLaneMessages(load(MSG_DIR), load(ACK_DIR));
 check("the committed message/ack set has no incoherence", live.problems.length === 0);
-check("every committed message declares a schema version (the channel is versioned, not ad hoc)", load(MSG_DIR).every((m: { schemaVersion?: number }) => m.schemaVersion === 1));
+check("every committed message declares a known schema version (the channel is versioned, not ad hoc)", load(MSG_DIR).every((m: { schemaVersion?: number }) => m.schemaVersion === 1 || m.schemaVersion === 2));
+check(
+  "every schema-2 message carries a parseable sentAt — v2 exists so 'how long has this waited' has an answer",
+  load(MSG_DIR).filter((m: { schemaVersion?: number }) => m.schemaVersion === 2).every((m: { sentAt?: string }) => Number.isFinite(Date.parse(String(m.sentAt)))),
+);
+
+// ── 5. delay is measured, not felt (2026-09-05) ──────────────────────────────
+// The owner's report was "this is causing delay", and nothing in the channel
+// could say how much: messages carried no instant. Now they do, the gate names
+// the wait, and a message unread beyond a day is STALE — still never fatal.
+const T0 = Date.parse("2026-09-05T12:00:00Z");
+const aged = auditLaneMessages([msg("m1", "cloud", "mac", { sentAt: "2026-09-05T09:30:00Z" })], [], T0);
+check("an unread v2 message names how long it has waited", /unread for 2\.5h$/.test(aged.unread[0]) && aged.stale.length === 0);
+const old = auditLaneMessages([msg("m1", "cloud", "mac", { sentAt: "2026-09-01T09:30:00Z" })], [], T0);
+check("unread beyond 24h is STALE and reported, and STILL not a failure — the other machine may be asleep", old.stale.includes("m1") && old.problems.length === 0);
+const junk = auditLaneMessages([msg("m1", "cloud", "mac", { sentAt: "yesterday-ish" })], [], T0);
+check("an unparseable sentAt is 'unknown age' and counts as stale — never read as fresh", /unknown age/.test(junk.unread[0]) && junk.stale.includes("m1"));
+check("a v1 message keeps its exact unread line — age honestly unknown, not invented", auditLaneMessages([msg("m1", "cloud", "mac")], [], T0).unread[0] === "m1 → mac (from cloud): s");
+check("LIVE: send writes schema 2 with a sentAt — refused inputs aside, the CLI is on the new schema", /schemaVersion: 2/.test(cliSrc) && /sentAt: new Date\(\)\.toISOString\(\)/.test(cliSrc));
+check("the delivery script exists and refuses files outside the lane directories", existsSync(join(repo, "scripts/lane-deliver.mjs")) && /refusing to deliver files outside the lane directories/.test(readFileSync(join(repo, "scripts/lane-deliver.mjs"), "utf8")));
+check("the mailbox PR is declared with a positive PR number (the wake channel is named, not remembered)", (() => { try { const m = JSON.parse(readFileSync(join(repo, "docs/agent/lane-mailbox.json"), "utf8")); return Number.isInteger(m.pr) && m.pr > 0 && m.branch === "lane/mailbox"; } catch { return false; } })());
 
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);

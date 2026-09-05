@@ -24,12 +24,18 @@
 // every run. Pending never fails the build: the other lane's machine is not always
 // awake, and blocking CI on somebody else reading their mail would be the same
 // dishonesty running the other way.
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentLane, otherLane, LANES } from "./lib/lane-identity.mjs";
 
-const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// SIGNALGRID_LANE_REPO lets lane-deliver.mjs point this CLI at a throwaway
+// worktree, so the artifact lands where the delivery commit is built and the
+// caller's own checkout is never touched. Unset, the channel is this repository.
+const repo = process.env.SIGNALGRID_LANE_REPO
+  ? resolve(process.env.SIGNALGRID_LANE_REPO)
+  : resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const MSG_DIR = join(repo, "artifacts/lane-messages");
 export const ACK_DIR = join(MSG_DIR, "acks");
 
@@ -44,10 +50,27 @@ export function loadAcks() {
   return listJson(ACK_DIR).map((f) => ({ ...readJson(join(ACK_DIR, f)), __fileId: f.replace(/\.json$/, "") }));
 }
 
-/** Pure, so the gate and its self-test drive the same code path. */
-export function auditLaneMessages(messages, acks) {
+/** How long a message has waited, for a human reading a gate line. */
+export function formatAge(ms) {
+  if (!Number.isFinite(ms)) return "unknown age";
+  if (ms < 0) return "a FUTURE instant (clock skew or a hand-edited sentAt)";
+  const h = ms / 3_600_000;
+  if (h < 1) return `${Math.round(ms / 60_000)}m`;
+  if (h < 48) return `${h.toFixed(1)}h`;
+  return `${(h / 24).toFixed(1)}d`;
+}
+
+/** Unread this long is worth a line of its own: the addressee's machine may be
+ *  asleep, but if it is awake the loop is broken, and either way nobody should
+ *  learn it by scrolling. REPORTED, never fatal — same law as unread itself. */
+export const STALE_AFTER_MS = 24 * 3_600_000;
+
+/** Pure, so the gate and its self-test drive the same code path. `nowMs` is
+ *  injected for the same reason: the audit must be reproducible in a test. */
+export function auditLaneMessages(messages, acks, nowMs = Date.now()) {
   const problems = [];
   const unread = [];
+  const stale = [];
   const byId = new Map(messages.map((m) => [m.id, m]));
 
   for (const m of messages) {
@@ -76,9 +99,20 @@ export function auditLaneMessages(messages, acks) {
   }
 
   for (const m of messages) {
-    if (!ackedIds.has(m.id)) unread.push(`${m.id} → ${m.to} (from ${m.from}): ${m.subject}`);
+    if (ackedIds.has(m.id)) continue;
+    // Schema v1 messages carry no instant, so their age is honestly unknown and
+    // the line is exactly what it always was. A v2 message names how long it has
+    // waited; an unparseable sentAt is reported as such, never read as fresh.
+    let age = "";
+    if (m.sentAt !== undefined) {
+      const sent = Date.parse(String(m.sentAt));
+      const waited = Number.isFinite(sent) && Number.isFinite(nowMs) ? nowMs - sent : NaN;
+      age = ` — unread for ${formatAge(waited)}`;
+      if (!Number.isFinite(waited) || waited >= STALE_AFTER_MS) stale.push(m.id);
+    }
+    unread.push(`${m.id} → ${m.to} (from ${m.from}): ${m.subject}${age}`);
   }
-  return { problems, unread, ackedIds };
+  return { problems, unread, stale, ackedIds };
 }
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
@@ -122,10 +156,19 @@ if (cmd === "send") {
   }
   mkdirSync(MSG_DIR, { recursive: true });
   const path = join(MSG_DIR, `${id}.json`);
-  writeFileSync(path, `${JSON.stringify({ schemaVersion: 1, id, from: me, to: otherLane(me), subject, body }, null, 2)}\n`, "utf8");
+  // schemaVersion 2 adds sentAt (2026-09-05): without an instant, nobody could
+  // say how long a message had waited, and "delay" stayed a feeling. The ID is
+  // still clock-free; only the FIELD carries the instant.
+  writeFileSync(
+    path,
+    `${JSON.stringify({ schemaVersion: 2, id, from: me, to: otherLane(me), subject, body, sentAt: new Date().toISOString() }, null, 2)}\n`,
+    "utf8",
+  );
   console.log(`wrote ${path}`);
-  console.log("Commit and push it — that is the delivery:");
-  console.log("  git add artifacts/lane-messages && git commit -m 'lane message' && git push");
+  if (process.env.SIGNALGRID_LANE_REPO) return;
+  console.log("It is not delivered until it is pushed. One step, off your working branch:");
+  console.log(`  pnpm run lane:deliver send "${subject}" "…"      # (next time — writes, gates, commits, pushes, wakes)`);
+  console.log("or, for this file:  git add artifacts/lane-messages && git commit -m 'lane message' && git push");
 } else if (cmd === "ack") {
   const [messageId, ...noteParts] = rest;
   if (!messageId) {
@@ -148,10 +191,14 @@ if (cmd === "send") {
   // it names must land inside the ack directory.
   writeFileSync(
     join(ACK_DIR, `${slug(messageId)}.json`),
-    `${JSON.stringify({ schemaVersion: 1, messageId, ackedBy: me, note: note || null }, null, 2)}\n`,
+    `${JSON.stringify({ schemaVersion: 2, messageId, ackedBy: me, note: note || null, ackedAt: new Date().toISOString() }, null, 2)}\n`,
     "utf8",
   );
-  console.log(`acknowledged ${messageId}. Commit and push so the other lane can see it.`);
+  console.log(`acknowledged ${messageId}.`);
+  if (process.env.SIGNALGRID_LANE_REPO) return;
+  console.log("It is not delivered until it is pushed. One step, off your working branch:");
+  console.log(`  pnpm run lane:deliver ack ${messageId} "…"      # (next time)`);
+  console.log("or, for this file:  git add artifacts/lane-messages && git commit -m 'lane ack' && git push");
 } else if (cmd === "inbox" || cmd === undefined) {
   const all = rest.includes("--all");
   const messages = loadMessages();
@@ -162,10 +209,29 @@ if (cmd === "send") {
     console.log(all ? "  nothing addressed to this lane." : "  nothing unread. (--all to include acknowledged.)");
   }
   for (const m of mine) {
-    console.log(`── ${m.id}${ackedIds.has(m.id) ? "  [acknowledged]" : ""}`);
+    const sent = m.sentAt ? Date.parse(String(m.sentAt)) : NaN;
+    const waited = Number.isFinite(sent) ? `  (sent ${formatAge(Date.now() - sent)} ago)` : "";
+    console.log(`── ${m.id}${ackedIds.has(m.id) ? "  [acknowledged]" : ""}${waited}`);
     console.log(`   from ${m.from}: ${m.subject}\n`);
     for (const line of String(m.body).split("\n")) console.log(`   ${line}`);
-    console.log(`\n   acknowledge with: pnpm run lane:ack ${m.id} "what you did"\n`);
+    console.log(`\n   acknowledge AND deliver in one step: pnpm run lane:deliver ack ${m.id} "what you did"\n`);
+  }
+  // What this lane has pushed that mainline does not yet carry. A topic branch
+  // sitting on origin unmerged is the other half of "delay": the Mac lane's work
+  // waits on a review it cannot see the status of. Read from the refs already
+  // fetched (the session-start hook fetches; this never reaches the network).
+  const mine2 = me === "mac" ? /^origin\/mac\// : /^origin\/(claude|lane)\//;
+  const unmerged = (() => {
+    const r = spawnSync("git", ["branch", "-r", "--no-merged", "origin/SignalGrid_Alpha", "--format=%(refname:short)"], { cwd: repo, encoding: "utf8" });
+    return r.status === 0 ? r.stdout.split("\n").map((s) => s.trim()).filter((s) => mine2.test(s) && s !== "origin/lane/mailbox") : null;
+  })();
+  if (unmerged === null) console.log("  (could not list origin branches — is this a git checkout?)");
+  else if (unmerged.length > 0) {
+    console.log(`  Your branches on origin NOT yet in SignalGrid_Alpha (as of the last fetch): ${unmerged.length}`);
+    for (const b of unmerged) console.log(`    · ${b}`);
+    console.log(me === "mac"
+      ? "  The cloud lane opens a draft PR for each within its hourly cycle; comment on the mailbox PR to wake it sooner."
+      : "  Open the PR (create_pull_request) and land it, or restart the branch if it is stale.");
   }
 } else {
   console.error(`unknown command "${cmd}". Try: inbox | send | ack`);

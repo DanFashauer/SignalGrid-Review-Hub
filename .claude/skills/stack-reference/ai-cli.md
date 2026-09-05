@@ -79,8 +79,11 @@ hooks, prompts or CLAUDE.md is therefore recommending that the rules be skipped.
   same repo and is machine-local. The worktree guard refuses compound git chains, `export
   PATH=` and `curl | sh` — plain single commands. It also refuses `pnpm run lane:send
   "subject" "<long body>"` because it cannot prove the pnpm script is not git (verified
-  three ways, 2026-09-04); call the script directly — `node scripts/lane-message.mjs send
-  …` / `ack …` / `inbox` — then commit the message file on MAINLINE, where the other lane
+  three ways, 2026-09-04); call the script directly — since 2026-09-05 that is
+  `node scripts/lane-deliver.mjs send …` / `ack …`, which writes, gates, commits, pushes
+  and wakes the other lane from a throwaway worktree, and `node scripts/lane-message.mjs
+  inbox` to read. A file written by `lane-message.mjs send` alone is NOT delivered; it
+  still has to be committed on MAINLINE, where the other lane
   reads; a message committed on a side branch is undelivered.
 - Hook contract: exit 0 = success (JSON decision), 2 = BLOCK (stderr goes to the model), other
   = non-blocking error; `$CLAUDE_PROJECT_DIR` inside hooks; `claude --debug "api,hooks"` and

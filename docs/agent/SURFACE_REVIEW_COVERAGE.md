@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **16 of 100 surfaces have been read. 7 are partially read. 77 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2187 of 2187 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2208 of 2208 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -23,7 +23,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `.claude/agents` | tree | 13 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `.claude/commands` | tree | 9 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `.claude/hooks` | tree | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `.claude/skills` | tree | 64 | **partial** | 1 | 2026-09-02 | cloud lane | #379 | 3 | 0 |
+| `.claude/skills` | tree | 73 | **partial** | 1 | 2026-09-02 | cloud lane | #379 | 3 | 0 |
 | `.githooks` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `.github/*` | loose files | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `.github/codeql` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -36,7 +36,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/build-loop` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/connector-emulator` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/lab-collections` | tree | 42 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/lane-messages` | tree | 140 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/lane-messages` | tree | 152 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/live-captures` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/live-evidence` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/mcp-server` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |

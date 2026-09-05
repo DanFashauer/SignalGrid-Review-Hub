@@ -51,7 +51,30 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-04 (cloud lane) - three PRs merged, preflight+breadth green
+LAST TOUCHED: 2026-09-04 (Mac lane, latest) - the owner-shared Fechin/reference
+              cheatsheet site (215 sheets) absorbed BY USE as the twelfth first-party
+              skill, .claude/skills/stack-reference/: SKILL.md (five cross-cutting
+              laws) + eight domain files holding 102 VERIFIED contradictions between
+              generic cheatsheet advice and this repo's rules, each with the form to
+              use instead - bash 3.2/BSD here vs bash 5/GNU on CI (28 shell traps,
+              several SILENT: a stepped brace range loops once with garbage at exit 0,
+              BSD sed \s matches nothing, GNU-only grep {,m} reports absent for
+              present, BSD find unit suffixes pass here and fail in CI), the two
+              hook-banned history/stash commands, npm for pnpm, main for
+              SignalGrid_Alpha (a copied workflow condition that never fires),
+              --expose for -p, short image names, fail-open casts/defaults/wildcard
+              arms in Swift/Kotlin/Rust/TS, 403 where the API answers 404, PCRE
+              syntax in Node RegExp gates - plus ~140 sheet items that survived
+              contact. Nine reader agents ran the doubtful commands on this Mac.
+              VENDORED.md ELEVEN->TWELVE + table row, section-E carve-out added
+              (gate reads 12 = 12 = 12), skill-plane conformance 26 skills green,
+              intake row logged, lane mail sent. Earlier today (Mac lane): #407
+              OpenSSL confirmed ON HARDWARE (api image rebuilt, libssl3/libcrypto3
+              3.5.8-r0, both CVEs absent, 0 Criticals); Firecrawl lane parity
+              complete (owner key, env-only); android/desktop toolchain installed,
+              android-core + desktop-core PASS, window-smoke blocked on the owner's
+              Screen Recording grant. Prior 2026-09-04 (cloud lane) - three PRs
+              merged, preflight+breadth green
               on every push, branch restarted from Alpha after each. #414 OmniRoute
               absorbed as the org's agent/build AI-gateway (DR-029, keys-out-of-tree,
               may never enter the decision path). #415 surface-review sweep findings
@@ -118,16 +141,18 @@ LAST TOUCHED: 2026-09-04 (cloud lane) - three PRs merged, preflight+breadth gree
               deterministic, removes 3 old colour bugs) and landed; the iOS SwiftUI
               view-layer rebuild is now COMPLETE, and native/ios/README's file-tree
               was corrected to match.
-BLOCKED ON: nothing cloud-side; Alpha is green. Mac lane, non-blocking (directed
-              in the Phase-3-landed reply): install the android/desktop toolchain
-              (JDK 17+, Rust/cargo) and run android-desktop-first-run; optional
-              belt-and-suspenders api-image grype scan for #407; the residual
-              Phase 2/3 nits (minor type-scale, the Enrolling contrast visual); the
-              twin test's per-field checks are conditional; land or report
-              mac/native-ledger-2026-09-02; older items (MockSignalGridAPI replayed
-              vectors, DemoMode flag table). Owner, optional (lets the Mac use
-              everything): Firecrawl API key, Screen Recording permission for the
-              terminal, Docker Desktop running.
+BLOCKED ON: nothing cloud-side; Alpha is green. Mac lane, non-blocking - DONE
+              2026-09-04: the android/desktop toolchain installed and
+              android-desktop-first-run run (android-core + desktop-core PASS;
+              window-smoke fails only its mandatory screenshot, owner grant below);
+              the #407 api-image grype scan (clean); Firecrawl key supplied and
+              registered. Still open: the residual Phase 2/3 nits (minor type-scale,
+              the Enrolling contrast visual); the twin test's per-field checks are
+              conditional; land or report mac/native-ledger-2026-09-02; older items
+              (MockSignalGridAPI replayed vectors, DemoMode flag table). Owner, the
+              ONE remaining Mac-lane item: Screen Recording permission for Terminal
+              (System Settings > Privacy & Security > Screen Recording, then relaunch
+              Terminal) - closes 2026-09-02-android-desktop-first-run.
 NEXT ACTION: cloud: process the Mac lane's results as they return (sim-results,
               lane mail, commits); next backlog pickup when the owner points. owner:
               discovery conversations (0 of 15) - nothing substitutes.

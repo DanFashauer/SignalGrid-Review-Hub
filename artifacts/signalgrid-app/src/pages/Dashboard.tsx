@@ -209,7 +209,11 @@ export function Dashboard() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {(signalsData?.signals ?? []).filter(s => s.status === 'anomalous' || s.status === 'critical').slice(0, 3).map(s => (
+                  {/* Everything that is NOT known-good belongs here: `unknown` (an
+                      unreachable connector) used to be excluded from both the list
+                      and the emptiness test, so the "Stale / non-compliant" card read
+                      "No stale or non-compliant signals" over a dark connector. */}
+                  {(signalsData?.signals ?? []).filter(s => s.status !== 'nominal').slice(0, 3).map(s => (
                     <div key={s.id} className="p-2 text-sm border border-border rounded flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <SignalStatusBadge status={s.status} />
@@ -218,7 +222,7 @@ export function Dashboard() {
                       <span className="font-mono text-xs text-muted-foreground">{formatTimeAgo(s.receivedAt)}</span>
                     </div>
                   ))}
-                  {(signalsData?.signals ?? []).filter(s => s.status === 'anomalous' || s.status === 'critical').length === 0 && (
+                  {(signalsData?.signals ?? []).filter(s => s.status !== 'nominal').length === 0 && (
                     <div className="text-sm text-muted-foreground p-4 text-center border border-dashed border-border rounded">
                       No stale or non-compliant signals
                     </div>

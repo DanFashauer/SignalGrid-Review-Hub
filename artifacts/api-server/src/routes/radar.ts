@@ -19,7 +19,16 @@ router.get("/signals/catalog", (_req, res) => {
  * Scan a batch of signals. Body: { signals: [{ category, sourceReference?, observedAt? }] }
  */
 router.post("/signals/radar", (req, res) => {
-  const raw = Array.isArray(req.body?.signals) ? req.body.signals : [];
+  // A body that names no signals array is a MALFORMED request, not an empty
+  // scan: `{}`, `{"signals":null}`, `{"signals":"all"}` and an unparsed body all
+  // used to be substituted with `[]` and answered 200 "all observed signals are
+  // already evaluated" — a broken collector indistinguishable from a covered grid.
+  // An explicit `[]` is accepted and reported as scanned: 0, coverage unknown.
+  const raw: unknown = (req.body as Record<string, unknown> | undefined)?.signals;
+  if (!Array.isArray(raw)) {
+    res.status(400).json({ error: "validation", message: "signals must be an array of { category, sourceReference?, observedAt? }" });
+    return;
+  }
   const signals: IncomingSignal[] = raw
     .filter((s: unknown): s is Record<string, unknown> => !!s && typeof s === "object")
     .map((s: Record<string, unknown>) => ({

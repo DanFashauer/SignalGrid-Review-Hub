@@ -386,6 +386,7 @@ const STEPS = [
   { name: "Proof: fabric-evals (golden multi-signal decision quality)", cmd: ["pnpm", "run", "proof:fabric-evals"] },
   { name: "Proof: connector-emulator", cmd: ["pnpm", "run", "proof:connector-emulator"] },
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
+  { name: "Proof: api-client-react (the web client's fetch boundary refuses what it cannot vouch for)", cmd: ["pnpm", "run", "proof:api-client-react"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
   // The MCP server's own node:test suite (wire-visible tool/resource contract +
   // read-only annotations, incl. the not-read-only bruno_collection_run). It sat

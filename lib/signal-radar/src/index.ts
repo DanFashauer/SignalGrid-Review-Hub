@@ -95,6 +95,9 @@ export interface RadarObservation {
 }
 
 export interface RadarReport {
+  /** How many signals were scanned. Zero is NOT coverage: a report over nothing
+   *  says nothing about the grid, and the summary says so instead of "all evaluated". */
+  scanned: number;
   observations: RadarObservation[];
   /** Novel categories — new signals to consider bringing into the grid. */
   novel: RadarObservation[];
@@ -130,19 +133,28 @@ export function scanSignals(signals: IncomingSignal[]): RadarReport {
     }
   }
 
-  const observations = [...byCategory.values()].sort((a, b) => a.category.localeCompare(b.category));
+  // Codepoint order, not `localeCompare`: collation follows the process locale
+  // (sv_SE sorts "ä" after "z", de_DE before it), and categories are caller-supplied
+  // over HTTP, so non-ASCII is reachable. "Deterministic" must hold on ANY machine.
+  const observations = [...byCategory.values()].sort((a, b) => (a.category < b.category ? -1 : a.category > b.category ? 1 : 0));
   const novel = observations.filter((o) => o.signalClass === "novel");
   const candidates = observations.filter((o) => o.signalClass === "candidate");
   const alerts = observations.filter((o) => o.alert).map((o) => o.alert as string);
+  const scanned = signals.length;
 
+  // An EMPTY batch is not a covered grid. The old else-arm answered "All observed
+  // signals are already evaluated" for zero signals — a broken collector, a dropped
+  // body and a fully-covered feed all read the same. Absence of evidence is named.
   const summary =
-    novel.length > 0
-      ? `${novel.length} novel signal type(s) detected (${novel.map((o) => o.category).join(", ")}) — not yet in the grid.`
-      : candidates.length > 0
-        ? `No novel signals; ${candidates.length} candidate category(ies) observed.`
-        : "All observed signals are already evaluated by the grid.";
+    scanned === 0
+      ? "No signals were scanned — coverage unknown. An empty batch says nothing about what the grid is or is not watching."
+      : novel.length > 0
+        ? `${novel.length} novel signal type(s) detected (${novel.map((o) => o.category).join(", ")}) — not yet in the grid.`
+        : candidates.length > 0
+          ? `No novel signals; ${candidates.length} candidate category(ies) observed.`
+          : "All observed signals are already evaluated by the grid.";
 
-  return { observations, novel, candidates, alerts, summary };
+  return { scanned, observations, novel, candidates, alerts, summary };
 }
 
 /** The full catalog: what the grid evaluates today and what's on the radar. */

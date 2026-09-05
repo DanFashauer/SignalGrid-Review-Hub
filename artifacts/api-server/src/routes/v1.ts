@@ -146,8 +146,12 @@ router.get("/v1/decisions", async (req: Request, res: Response, next: NextFuncti
       // of which authorizes "decision:read" — so the permission was enforced in memory
       // and skipped on the durable path. See SignalGridCore.authorizedContext.
       const tenantId = core.authorizedContext(token(req), "decision:read").tenant.id;
-      const decisions = await store.listDecisions(tenantId);
-      res.json(envelope(req, { decisions, total: decisions.length }));
+      // `total` is the tenant's REAL count, not the page length: listDecisions
+      // returns at most 100, and `total: decisions.length` reported 100 for a
+      // tenant with 5,000 while the in-memory branch below reported 5,000 — the
+      // two branches this comment block claims are equivalent were not.
+      const [decisions, total] = await Promise.all([store.listDecisions(tenantId), store.countDecisions(tenantId)]);
+      res.json(envelope(req, { decisions, total }));
       return;
     }
     const decisions = core.listDecisions(token(req));
@@ -308,7 +312,10 @@ router.post("/v1/sessions/:id/refresh", async (req: Request, res: Response, next
     const tenantId = refreshCtx.tenant.id;
     const ttlSeconds = clampTtl((req.body as Record<string, unknown>)?.["ttlSeconds"]);
     const session = await getSessionStore().refresh(tenantId, param(req, "id"), ttlSeconds, Date.now());
-    if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found.`, 404);
+    // null covers unknown, another tenant's, EXPIRED and ENDED alike: none of those
+    // can be extended, and the audit row below must only ever record a refresh that
+    // happened.
+    if (!session) throw new CoreError("not_found", `Session "${param(req, "id")}" not found or no longer active.`, 404);
     await audit(req, "session.refresh", refreshCtx.principal.subjectId, { type: "session", id: session.id },
       { ttlSeconds });
     res.json(envelope(req, { session }));

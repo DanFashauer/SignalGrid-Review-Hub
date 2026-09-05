@@ -81,6 +81,16 @@ async function main() {
   // ── 4. LIST ────────────────────────────────────────────────────────────────
   const list = await store.listDecisions(tenantId);
   check("list returns the tenant's decision(s)", list.some((d) => d.id === decision.id));
+  // "Newest first" over ONE row is not an assertion: flipping ORDER BY to ASC left
+  // it green. Two rows with distinct created_at, and the count that pages must not
+  // stand in for.
+  const older = mint();
+  await store.saveDecision({ ...older.decision, createdAt: new Date(Date.parse(decision.createdAt) - 60_000).toISOString() }, older.snapshot);
+  const two = await store.listDecisions(tenantId);
+  check("list is newest first (the older row comes second)", two.length === 2 && two[0]!.id === decision.id && two[1]!.id === older.decision.id);
+  check("list honours its limit (a PAGE, not the whole set)", (await store.listDecisions(tenantId, 1)).length === 1);
+  check("countDecisions is the tenant's real count, independent of any page", (await store.countDecisions(tenantId)) === 2);
+  check("countDecisions is tenant-scoped", (await store.countDecisions("tenant_atlas")) === 0);
 
   // ── 5. DURABILITY: a separate store instance reads the same record ─────────
   const store2 = new PostgresDecisionStore(url!);

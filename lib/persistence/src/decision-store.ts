@@ -19,8 +19,11 @@ export interface DecisionStore {
   saveDecision(decision: Decision, snapshot: EvidenceSnapshot): Promise<void>;
   /** A decision by id, ONLY if it belongs to the tenant (else null). */
   getDecision(tenantId: string, id: string): Promise<Decision | null>;
-  /** A tenant's decisions, newest first. */
+  /** A tenant's decisions, newest first, at most `limit` (default 100). A PAGE:
+   *  callers reporting a total must ask countDecisions, never this array's length. */
   listDecisions(tenantId: string, limit?: number): Promise<Decision[]>;
+  /** How many decisions the tenant has — the real count, independent of any page. */
+  countDecisions(tenantId: string): Promise<number>;
   /** An evidence snapshot by id, ONLY if it belongs to the tenant (else null). */
   getSnapshot(tenantId: string, id: string): Promise<EvidenceSnapshot | null>;
   /**
@@ -194,11 +197,21 @@ export class PostgresDecisionStore implements DecisionStore {
 
   async listDecisions(tenantId: string, limit = 100): Promise<Decision[]> {
     await this.ensureReady();
+    // `id DESC` as the tiebreak: deterministic fixtures make equal created_at
+    // likely, and without it "newest first" was nondeterministic among ties.
     const res = await this.pool.query(
-      "SELECT data FROM public.decisions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2",
+      "SELECT data FROM public.decisions WHERE tenant_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2",
       [tenantId, limit],
     );
     return res.rows.map((r: any) => r.data as Decision);
+  }
+
+  async countDecisions(tenantId: string): Promise<number> {
+    await this.ensureReady();
+    const res = await this.pool.query("SELECT COUNT(*)::int AS n FROM public.decisions WHERE tenant_id = $1", [tenantId]);
+    const n = res.rows[0]?.n;
+    if (typeof n !== "number" || !Number.isFinite(n)) throw new Error("decision count did not come back as a number");
+    return n;
   }
 
   async getSnapshot(tenantId: string, id: string): Promise<EvidenceSnapshot | null> {

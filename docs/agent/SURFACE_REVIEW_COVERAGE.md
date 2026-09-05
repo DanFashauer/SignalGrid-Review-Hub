@@ -6,9 +6,9 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**30 of 100 surfaces have been read. 10 are partially read. 60 have not been read at all.**
+**34 of 100 surfaces have been read. 10 are partially read. 56 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2219 of 2219 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2220 of 2220 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -71,7 +71,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `fixtures` | tree | 9 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `fleet` | tree | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/adaptive-proposals` | package | 7 | read | 1 | 2026-09-05 | cloud lane | lib/adaptive-proposals/src/measure.ts | 7 | 0 |
-| `lib/api-client-react` | package | 6 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/api-client-react` | package | 6 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
 | `lib/api-spec` | package | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `lib/api-zod` | package | 48 | read | 1 | 2026-09-04 | cloud lane | docs/agent/EVIDENCE.md | 0 | 0 |
 | `lib/app-workflows` | package | 5 | read | 1 | 2026-09-05 | cloud lane | lib/app-workflows/src/index.ts | 4 | 2 |
@@ -91,15 +91,15 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/integrations` | package | 278 | **partial** | 3 | 2026-09-02 | cloud lane (independent review, notes folded) | #388 | 24 | 1 |
 | `lib/location` | package | 8 | read | 1 | 2026-09-05 | cloud lane | lib/location/src/radius-dhcp.ts | 1 | 3 |
 | `lib/orchestration` | package | 3 | read | 1 | 2026-09-05 | cloud lane | lib/orchestration/src/index.ts | 3 | 0 |
-| `lib/persistence` | package | 8 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/persistence` | package | 8 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 0 |
 | `lib/pim-activation` | package | 6 | read | 1 | 2026-09-05 | cloud lane | lib/pim-activation/src/from-posture.ts | 2 | 0 |
 | `lib/posture-composition` | package | 5 | read | 1 | 2026-09-04 | cloud lane | lib/posture-composition/src/compose.ts | 1 | 1 |
 | `lib/recommendations` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/recommendations/src/index.ts | 4 | 2 |
 | `lib/reliability` | package | 5 | read | 1 | 2026-09-04 | cloud lane | lib/reliability/src/summarize.ts | 1 | 1 |
 | `lib/room-sim` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/room-sim/src/index.ts | 0 | 7 |
 | `lib/self-audit` | package | 8 | read | 1 | 2026-09-04 | cloud lane | lib/self-audit/src/audit.ts | 1 | 1 |
-| `lib/signal-discovery` | package | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `lib/signal-radar` | package | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `lib/signal-discovery` | package | 4 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
+| `lib/signal-radar` | package | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 0 |
 | `lib/signalgrid-core` | package | 23 | **partial** | 2 | 2026-09-02 | cloud lane (three independent reviews) | #376 | 4 | 0 |
 | `lib/signalgrid-simulator` | package | 9 | **partial** | 1 | 2026-09-02 | cloud lane (three independent reviews) | #376 | 0 | 0 |
 | `lib/verdict-attestation` | package | 5 | read | 1 | 2026-09-04 | cloud lane (adversarial sweep + independent verify) | #415 | 1 | 0 |
@@ -114,7 +114,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `native/shared` | native | 2 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 380 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 4 | 0 |
+| `scripts` | package | 381 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 4 | 0 |
 | `site` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `tests` | tree | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |
@@ -134,7 +134,7 @@ A named slice was read. The rest of the surface has not been.
 - `lib/webauthn` (package)
 - `scripts` (package)
 
-## Not read (60)
+## Not read (56)
 
 - `.agents` (tree)
 - `.claude/*` (loose files)
@@ -183,12 +183,8 @@ A named slice was read. The rest of the surface has not been.
 - `firmware` (tree)
 - `fixtures` (tree)
 - `fleet` (tree)
-- `lib/api-client-react` (package)
 - `lib/api-spec` (package)
 - `lib/iac` (package)
-- `lib/persistence` (package)
-- `lib/signal-discovery` (package)
-- `lib/signal-radar` (package)
 - `native/ios/*` (loose files)
 - `native/ios/EnterpriseShellTests` (native)
 - `native/ios/mdm` (native)

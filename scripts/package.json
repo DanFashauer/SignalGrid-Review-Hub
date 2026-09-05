@@ -24,6 +24,7 @@
     "proof:adaptive-proposals": "tsx ./src/adaptive-proposals-proof.ts",
     "proof:agent-behavior": "tsx ./src/agent-behavior-proof.ts",
     "proof:agent-identity": "tsx ./src/agent-identity-proof.ts",
+    "proof:api-client-react": "tsx ./src/api-client-react-proof.ts",
     "proof:api-contract": "tsx ./src/api-contract-proof.ts",
     "proof:app-resilience": "tsx ./src/app-resilience-proof.ts",
     "proof:app-update": "tsx ./src/app-update-proof.ts",
@@ -169,6 +170,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@workspace/adaptive-proposals": "workspace:*",
+    "@workspace/api-client-react": "workspace:*",
     "@workspace/app-workflows": "workspace:*",
     "@workspace/audit": "workspace:*",
     "@workspace/control-plane": "workspace:*",

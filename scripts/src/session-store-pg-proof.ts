@@ -50,6 +50,8 @@ async function main() {
   await store.start(mk("sess_pg_b", "tenant_northwind", 60));
   check("expired session reads as expired (persisted transition)",
     (await store.get("tenant_northwind", "sess_pg_b", T0 + 120_000))?.status === "expired");
+  check("refresh of an EXPIRED session returns null on Postgres too (nothing was refreshed)",
+    (await store.refresh("tenant_northwind", "sess_pg_b", 900, T0 + 130_000)) === null);
 
   // ── DURABILITY: a fresh instance reads the same sessions ────────────────────
   const store2 = new PostgresSessionStore(url!);

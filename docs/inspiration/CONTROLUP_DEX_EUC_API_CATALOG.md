@@ -53,7 +53,7 @@ Broad best-effort inventory of direct ControlUp ONE competitors, DEX/EUC platfor
 - observability Rum Synthetics: **14**
 - endpoint Automation Adjacent: **10**
 - strong Overlap70 Plus: **23**
-- public Or Documented Api: **54**
+- public Or Documented Api: **54** (the workbook's figure; its derivation rule is not recorded and the filed API-matrix tables re-derive to 57 documented contracts, 55 or 54 depending on how partner-gated rows are treated — unverified 2026-09-06, every other total in this file re-derived exactly)
 - github Coverage Rows: **47**
 - github Resources: **30**
 - standards: **12**

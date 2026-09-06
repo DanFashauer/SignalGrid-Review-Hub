@@ -9,8 +9,14 @@
   as REFERENCE ONLY — nothing in this repository executes this source, and the
   scanner is NOT registered with any gate, proof, or CI job in this tree.
 
-  The actual integration is a QUEUED YELLOW-LANE BUILD (docs/BUILD_BACKLOG.md,
-  "Mobile-app-catalog scanner phase"), because the adversarial intake audit
+  The hardened integration LANDED: `scripts/mobile-app-catalog/scan.py`
+  (v2.0.0), gated by `proof:mobile-app-catalog` in preflight and CI;
+  docs/BUILD_BACKLOG.md records the "Mobile-app-catalog scanner phase" as the
+  scanner half done. This file preserves the UNHARDENED original as the delta
+  that hardening had to close — nothing executes the source below, and the
+  defects listed next are properties of this copy, not of `scan.py`. (This
+  paragraph said "QUEUED YELLOW-LANE BUILD" until 2026-09-06.) The hardening
+  was needed because the adversarial intake audit
   VERIFIED, by execution against this exact source, defects that must be fixed
   before any run whose output is committed or published:
 

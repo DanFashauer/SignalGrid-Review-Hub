@@ -85,7 +85,8 @@ What changed, and what each lane does now:
 | Write + deliver mail, an ack, a heartbeat | `pnpm run lane:deliver send\|ack\|heartbeat …` — pushed **straight to `SignalGrid_Alpha`** from a throwaway worktree; your checkout is untouched (`git pull --ff-only` when convenient) | same command — pushed to **`lane/cloud-mail-<stamp>`**, then the session opens the PR and enables auto-merge. Never the code branch. |
 | Wake the other lane now | after a delivery, `lane:deliver` comments on the **mailbox PR** (`docs/agent/lane-mailbox.json`, PR #439) if `gh` is on PATH, else prints its URL — one comment there, from any device, wakes the cloud session | subscribed to the mailbox PR every session start and every cycle |
 | A topic branch pushed for review | push `mac/<name>`; `lane:inbox` lists your branches mainline does not carry yet | **hourly** cycle opens a DRAFT PR for every unmerged `mac/*` branch at once (CI starts before the review), subscribes to it, reviews, lands or comments the blocker |
-| How long has this waited | `lane:inbox` shows it per message; `check-lane-messages` names it on every run; unread beyond 24h is STALE (reported, never fatal) | same |
+| How long has this waited | `lane:inbox` shows it per message; `check-lane-messages` names it on every run; unread beyond 24h is STALE (reported, never fatal) — for EVERY message: a message with no `sentAt` ages by the commit that delivered it (since 2026-09-06; before that it could never be stale) | same |
+| Withdraw an instruction | `lane:deliver send "…" "…" --supersedes <id>` — the gate names the superseded message, the inbox prints it last under a banner; prose alone does not withdraw anything | same |
 
 Rules that did not change: the push is the delivery; only the addressee closes
 a message; unread is loud and never fatal; the sim-request loop still carries

@@ -33,11 +33,25 @@
   TIER-DRIFT WARNING (found by the row-33 intake audit): this document's
   workflow/action map matches lib/app-workflows/src/catalog.ts key-for-key
   (20 integrations, 77 actions), but its "Derived Risk Tier" column DISAGREES
-  with the canonical catalog in places — e.g. witness.cosign, alarm.silence,
-  log.edit and node.drain read "standard" here while catalog.ts grades them
-  critical. catalog.ts is the canonical source (this file's own repo-scan
+  with the canonical catalog in places. Measured 2026-09-06: seven rows are
+  UNDER-graded here — witness.cosign, alarm.silence, code.broadcast, log.edit
+  and node.drain read "standard" while catalog.ts grades them critical, and
+  door.request and physician.escalate read "standard" against elevated; the
+  other disagreements over-grade. catalog.ts is the canonical source (this file's own repo-scan
   sheet says so); the tiers below are a derived view and must never be
   back-imported into code.
+
+  KEY-REMOVAL DRIFT (measured 2026-09-06): 19 of the 38 "SignalGrid iOS" rows
+  in the configuration-key registry below — the SAML_*, MDM_*, MFA_*,
+  CUSTOM_AUTH_*, SEC_* and BACKEND_TIMEOUT keys — name environment reads that
+  commit 27e0e71 (PR #436, 2026-09-05) deleted from
+  native/ios/EnterpriseShell/Services/ProviderConfigurationService.swift as
+  dead configuration surface; 13 of them now appear nowhere in the tree. The
+  BACKEND_BASE_URL, CERT_PINNING_ENABLED and CERT_HASHES rows are live but are
+  read by native/ios/EnterpriseShell/Services/BackendService.swift, not the
+  cited file. check-cited-paths.mjs cannot see this (the cited PATH exists;
+  only the named symbol is gone). The registry is a dated snapshot
+  (2026-08-01); read the code, not this table, for what the shell reads today.
 -->
 
 # SignalGrid Mobile App & Managed Configuration Master Catalog

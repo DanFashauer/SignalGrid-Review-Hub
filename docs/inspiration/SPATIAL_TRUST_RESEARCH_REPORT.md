@@ -12,7 +12,13 @@ the research tool that produced the report and are preserved as-is.*
 all mechanics were already built as `@workspace/facility-trust-graph` phases
 1–3; its one genuine mechanical gap — the geofence entry/exit state machine
 (dwell, grace, hysteresis) — was built as `transition.ts`; CAEP/Shared Signals
-and TAP-style bootstrap credentials are positioned as roadmap.*
+and TAP-style bootstrap credentials are positioned as roadmap. One paragraph
+is explicitly NOT adopted: the report's "safe default should be
+risk-dependent, not universally 'fail open' or 'fail closed'" (§ Failure modes
+and safe defaults). This fabric's rule is unconditional — unknown, stale or
+unreachable evidence raises the assurance requirement and never lowers it
+(`pnpm run review:invariants`). Read that paragraph as the external author's
+position, not as guidance for this tree.*
 
 ---
 

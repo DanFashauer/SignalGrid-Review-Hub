@@ -6,11 +6,23 @@
 > physical-access catalog of row 26, the endpoint-management catalog of row 27) and
 > expands across identity, RTLS/IoT, network, security operations, ITSM, healthcare,
 > warehouse/logistics, manufacturing/OT, cloud/DevOps, AI agents, hardware, workforce,
-> compliance, open source, and the SignalGrid repository map — 423 master entries with
-> row-level source URLs and per-row access classification. This file is the mechanical
+> compliance, open source, and the SignalGrid repository map — 423 master rows. Measured
+> 2026-09-06: 352 of them carry a source URL and 399 an access class (the workbook's own
+> methodology row says "when available", a qualifier this line used to drop), and 134 rows —
+> the MDM/UEM/EMM block — carry an API description, access model, priority and docs URL but
+> no vendor, product or category name; one row is a content-free placeholder, which is why
+> the sheet's own priority distribution sums to 422. Count the rows before quoting 423 as a
+> count of identified products. This file is the mechanical
 > sheet-by-sheet markdown extraction, filed verbatim EXCEPT the Partner-Buyer-MA sheet
 > (see its section note: business-strategy hypotheses about named third parties stay out
 > of the public tree).
+>
+> Measured note on one sheet (2026-09-06): the SignalGrid-Repos sheet is filed at 37 rows,
+> of which 31 are byte-identical content-free placeholder rows carrying no repository, path
+> or URL (`sort -u` over them returns one line). Six rows carry content (Issue #136, Issue
+> #141, the /v1 API, signalgrid-mcp, DEV, VaultLens), and those six are what the master
+> sheet consolidates. Read "37" — and the sheet's own "source URLs included row-wise" — as
+> a row count, never as a count of mapped repositories.
 >
 > **The owner's own framing is binding: this is a strategy and sequencing map, NOT a
 > build queue.** The launch path stays: Microsoft Entra ID + Intune → one shared-device

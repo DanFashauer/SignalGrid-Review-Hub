@@ -56,6 +56,22 @@ lanes.
   every run. It does not fail the build: the other lane's machine is not always
   awake, and failing CI because somebody has not read their mail would be the
   dishonesty running the other way. Naming it is how it stays non-silent.
+- **Every unread message has an age, and unread beyond 24h is STALE** (reported,
+  never fatal). The instant is `sentAt` when the message carries one (schema 2,
+  since 2026-09-05), else the commit that delivered it — the commit *is* the
+  delivery. Until 2026-09-06 a message without `sentAt` could never be stale
+  while one with an unparseable `sentAt` correctly was; the oldest unread message
+  in the tree (13 days) printed with no age at all. Absent is never fresh.
+- **A message can supersede another.** `lane:deliver send … --supersedes <id>`
+  (or `"supersedes": ["<id>"]` in a batch op) withdraws an earlier message by
+  reference: the gate names the superseded one, the inbox prints it last under a
+  banner, and an id that names no message is fatal. A withdrawal that lives only
+  as prose in a later body is not a withdrawal the reader can find — the inbox
+  once printed a three-part work order above the notice cancelling it.
+- **An ack carries a note.** The writer refuses a blank one (schema 2), the gate
+  fails a blank schema-2 note and reports a blank schema-1 one — "I read it" must
+  not look like "I did it". Round-trip time is measured from `ackedAt`, or from
+  the ack's commit date for the 79 acks written before that field existed.
 - **A lane cannot acknowledge its own message.** Only the addressee closes one.
   A sender's ack is refused and the message stays unread — otherwise "delivered"
   is self-certified, which is this repository's recurring defect wearing a hat.

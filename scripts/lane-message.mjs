@@ -41,13 +41,51 @@ export const ACK_DIR = join(MSG_DIR, "acks");
 
 const listJson = (dir) =>
   existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".json")).sort() : [];
-const readJson = (p) => JSON.parse(readFileSync(p, "utf8"));
+// A truncated file used to throw a bare SyntaxError naming `<anonymous_script>`
+// and the file's CONTENTS, never its path — with 168 files the operator had to
+// eyeball bodies to find the culprit. Direction was right (exit 1); the name was
+// missing.
+const readJson = (p) => {
+  try {
+    return JSON.parse(readFileSync(p, "utf8"));
+  } catch (e) {
+    throw new Error(`${p} does not parse: ${e instanceof Error ? e.message : String(e)}`);
+  }
+};
+
+/**
+ * The instant each mail file first entered history — the commit IS the delivery,
+ * so for a schema-v1 message (no sentAt) or a v1 ack (no ackedAt) this is the
+ * honest "sent"/"acked" instant rather than no instant at all. One `git log` for
+ * the whole directory (newest first; the LAST line seen for a path is its oldest
+ * add). Empty when git cannot answer — every reader treats a missing instant as
+ * unknown, never as fresh.
+ */
+let addDates = null;
+export function gitAddDates() {
+  if (addDates) return addDates;
+  addDates = new Map();
+  const r = spawnSync("git", ["log", "--diff-filter=A", "--format=%x01%aI", "--name-only", "--", "artifacts/lane-messages"], { cwd: repo, encoding: "utf8" });
+  if (r.status !== 0) return addDates;
+  let current = null;
+  for (const line of r.stdout.split("\n")) {
+    if (line.startsWith("\u0001")) {
+      current = line.slice(1).trim();
+      continue;
+    }
+    const f = line.trim();
+    if (f && current) addDates.set(f, current);
+  }
+  return addDates;
+}
 
 export function loadMessages() {
-  return listJson(MSG_DIR).map((f) => ({ ...readJson(join(MSG_DIR, f)), __fileId: f.replace(/\.json$/, "") }));
+  const dates = gitAddDates();
+  return listJson(MSG_DIR).map((f) => ({ ...readJson(join(MSG_DIR, f)), __fileId: f.replace(/\.json$/, ""), __addedAt: dates.get(`artifacts/lane-messages/${f}`) }));
 }
 export function loadAcks() {
-  return listJson(ACK_DIR).map((f) => ({ ...readJson(join(ACK_DIR, f)), __fileId: f.replace(/\.json$/, "") }));
+  const dates = gitAddDates();
+  return listJson(ACK_DIR).map((f) => ({ ...readJson(join(ACK_DIR, f)), __fileId: f.replace(/\.json$/, ""), __addedAt: dates.get(`artifacts/lane-messages/acks/${f}`) }));
 }
 
 /** How long a message has waited, for a human reading a gate line. */
@@ -67,11 +105,33 @@ export const STALE_AFTER_MS = 24 * 3_600_000;
 
 /** Pure, so the gate and its self-test drive the same code path. `nowMs` is
  *  injected for the same reason: the audit must be reproducible in a test. */
+/** The instant a message was sent: its sentAt when it carries one (unparseable
+ *  stays NaN — never fall through to a kinder source), else the commit that
+ *  delivered it, else nothing. `source` says which, so a line can say so too. */
+export function sentInstant(m) {
+  if (m.sentAt !== undefined) return { ms: Date.parse(String(m.sentAt)), source: "sentAt" };
+  if (m.__addedAt) return { ms: Date.parse(String(m.__addedAt)), source: "commit" };
+  return { ms: NaN, source: "none" };
+}
+
+/** `supersedes` may be one id or a list; anything else is a shape, not a reference. */
+export function supersededIds(m) {
+  if (m.supersedes === undefined || m.supersedes === null) return [];
+  return Array.isArray(m.supersedes) ? m.supersedes.map(String) : [String(m.supersedes)];
+}
+
 export function auditLaneMessages(messages, acks, nowMs = Date.now()) {
   const problems = [];
+  const reported = [];
   const unread = [];
   const stale = [];
   const byId = new Map(messages.map((m) => [m.id, m]));
+  // id → the id that withdrew it. A withdrawal used to exist only as prose inside
+  // a later message's body, and the inbox printed by FILENAME — so a three-part
+  // work order sat 2nd of 9 and the notice cancelling it 9th of 9
+  // (artifacts/lane-messages read, 2026-09-06). A field the audit can read is
+  // how the withdrawn message stops being an instruction.
+  const superseded = new Map();
 
   for (const m of messages) {
     if (m.id !== m.__fileId) problems.push(`message ${m.__fileId}: id "${m.id}" does not match its filename`);
@@ -80,9 +140,15 @@ export function auditLaneMessages(messages, acks, nowMs = Date.now()) {
     if (m.from === m.to) problems.push(`message ${m.__fileId}: addressed to its own sender`);
     if (!m.subject || String(m.subject).trim() === "") problems.push(`message ${m.__fileId}: no subject`);
     if (!m.body || String(m.body).trim() === "") problems.push(`message ${m.__fileId}: no body — an empty message is worse than none, it looks answered`);
+    for (const s of supersededIds(m)) {
+      if (s === m.id) problems.push(`message ${m.__fileId}: supersedes itself`);
+      else if (!byId.has(s)) problems.push(`message ${m.__fileId}: supersedes "${s}", which does not exist — a withdrawal that names nothing leaves the live instruction standing`);
+      else superseded.set(s, m.id);
+    }
   }
 
   const ackedIds = new Set();
+  const latency = new Map();
   for (const a of acks) {
     const m = byId.get(a.messageId);
     if (!m) {
@@ -95,24 +161,36 @@ export function auditLaneMessages(messages, acks, nowMs = Date.now()) {
       problems.push(`ack ${a.__fileId}: acknowledged by "${a.ackedBy}" but the message was addressed to "${m.to}"`);
       continue;
     }
+    // A heartbeat is refused without a result; an ack was never asked for a note,
+    // and a null-note ack is "I read it" indistinguishable from "I did it". The
+    // rule the writer enforces from schema 2 on is FATAL there; a v1 ack is a
+    // record of its time and is REPORTED.
+    const blank = !a.note || String(a.note).trim() === "";
+    if (blank && Number(a.schemaVersion ?? 1) >= 2) problems.push(`ack ${a.__fileId}: no note — "I read it" is indistinguishable from "I did it"; say what was done`);
+    else if (blank) reported.push(`ack ${a.__fileId} (schema ${a.schemaVersion ?? 1}) carries no note — accepted as a record of its time, not as evidence of what was done`);
     ackedIds.add(a.messageId);
+    const sent = sentInstant(m).ms;
+    const acked = a.ackedAt !== undefined ? Date.parse(String(a.ackedAt)) : a.__addedAt ? Date.parse(String(a.__addedAt)) : NaN;
+    if (Number.isFinite(sent) && Number.isFinite(acked)) latency.set(a.messageId, acked - sent);
   }
 
   for (const m of messages) {
     if (ackedIds.has(m.id)) continue;
-    // Schema v1 messages carry no instant, so their age is honestly unknown and
-    // the line is exactly what it always was. A v2 message names how long it has
-    // waited; an unparseable sentAt is reported as such, never read as fresh.
-    let age = "";
-    if (m.sentAt !== undefined) {
-      const sent = Date.parse(String(m.sentAt));
-      const waited = Number.isFinite(sent) && Number.isFinite(nowMs) ? nowMs - sent : NaN;
-      age = ` — unread for ${formatAge(waited)}`;
-      if (!Number.isFinite(waited) || waited >= STALE_AFTER_MS) stale.push(m.id);
-    }
-    unread.push(`${m.id} → ${m.to} (from ${m.from}): ${m.subject}${age}`);
+    // EVERY unread message has an age and is eligible for stale. The instant is
+    // sentAt when the message carries one, else the commit that delivered it (the
+    // commit is the delivery). Until 2026-09-06 the clock was nested inside
+    // `if (m.sentAt !== undefined)`, so a v1 message could never be stale while an
+    // UNPARSEABLE sentAt correctly was — absent evidence treated better than
+    // corrupt evidence. The oldest unread message in the tree (13 days) printed
+    // with no age at all, and the self-test asserted that as correct.
+    const { ms: sent, source } = sentInstant(m);
+    const waited = Number.isFinite(sent) && Number.isFinite(nowMs) ? nowMs - sent : NaN;
+    const age = ` — unread for ${formatAge(waited)}${source === "commit" ? " (by its commit date; sent before sentAt existed)" : ""}`;
+    if (!Number.isFinite(waited) || waited >= STALE_AFTER_MS) stale.push(m.id);
+    const tag = superseded.has(m.id) ? ` [SUPERSEDED by ${superseded.get(m.id)}]` : "";
+    unread.push(`${m.id} → ${m.to} (from ${m.from}): ${m.subject}${age}${tag}`);
   }
-  return { problems, unread, stale, ackedIds };
+  return { problems, reported, unread, stale, ackedIds, superseded, latency };
 }
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
@@ -139,7 +217,24 @@ if (cmd === "send") {
     console.error("--id needs a value");
     process.exit(2);
   }
-  const words = idFlag >= 0 ? [...rest.slice(0, idFlag), ...rest.slice(idFlag + 2)] : rest;
+  let words = idFlag >= 0 ? [...rest.slice(0, idFlag), ...rest.slice(idFlag + 2)] : rest;
+  // `--supersedes <id>` (repeatable) withdraws an earlier message by reference:
+  // the audit marks it, the inbox prints it last under a banner. It must name a
+  // message that exists — a withdrawal of nothing is a typo hiding a live order.
+  const supersedes = [];
+  for (let k = words.indexOf("--supersedes"); k >= 0; k = words.indexOf("--supersedes")) {
+    const target = words[k + 1];
+    if (!target) {
+      console.error("--supersedes needs a message id");
+      process.exit(2);
+    }
+    if (!loadMessages().some((x) => x.id === target)) {
+      console.error(`--supersedes "${target}": no such message. Run: pnpm run lane:inbox --all`);
+      process.exit(2);
+    }
+    supersedes.push(target);
+    words = [...words.slice(0, k), ...words.slice(k + 2)];
+  }
   const [subject, ...bodyParts] = words;
   const body = bodyParts.join(" ");
   if (!subject || !body) {
@@ -161,7 +256,7 @@ if (cmd === "send") {
   // still clock-free; only the FIELD carries the instant.
   writeFileSync(
     path,
-    `${JSON.stringify({ schemaVersion: 2, id, from: me, to: otherLane(me), subject, body, sentAt: new Date().toISOString() }, null, 2)}\n`,
+    `${JSON.stringify({ schemaVersion: 2, id, from: me, to: otherLane(me), subject, body, sentAt: new Date().toISOString(), ...(supersedes.length > 0 ? { supersedes } : {}) }, null, 2)}\n`,
     "utf8",
   );
   console.log(`wrote ${path}`);
@@ -187,11 +282,17 @@ if (cmd === "send") {
   }
   mkdirSync(ACK_DIR, { recursive: true });
   const note = noteParts.join(" ");
+  // Same rule the heartbeat writer already enforces on `result`: an ack with no
+  // note is "I read it" indistinguishable from "I did it".
+  if (!note.trim()) {
+    console.error(`an ack needs a note — say what you did about "${messageId}" (or "read, nothing owed")`);
+    process.exit(2);
+  }
   // Slugged for the same reason `send` slugs: the id names a file, and the file
   // it names must land inside the ack directory.
   writeFileSync(
     join(ACK_DIR, `${slug(messageId)}.json`),
-    `${JSON.stringify({ schemaVersion: 2, messageId, ackedBy: me, note: note || null, ackedAt: new Date().toISOString() }, null, 2)}\n`,
+    `${JSON.stringify({ schemaVersion: 2, messageId, ackedBy: me, note, ackedAt: new Date().toISOString() }, null, 2)}\n`,
     "utf8",
   );
   console.log(`acknowledged ${messageId}.`);
@@ -202,16 +303,27 @@ if (cmd === "send") {
 } else if (cmd === "inbox" || cmd === undefined) {
   const all = rest.includes("--all");
   const messages = loadMessages();
-  const { ackedIds } = auditLaneMessages(messages, loadAcks());
-  const mine = messages.filter((m) => m.to === me && (all || !ackedIds.has(m.id)));
+  const { ackedIds, superseded, latency } = auditLaneMessages(messages, loadAcks());
+  // Oldest first by the instant it was sent (sentAt, else its commit date), never
+  // by filename — alphabetical order put a withdrawn work order above the notice
+  // withdrawing it. Superseded messages print LAST, under a banner.
+  const instant = (m) => {
+    const { ms } = sentInstant(m);
+    return Number.isFinite(ms) ? ms : Number.POSITIVE_INFINITY;
+  };
+  const mine = messages
+    .filter((m) => m.to === me && (all || !ackedIds.has(m.id)))
+    .sort((x, y) => Number(superseded.has(x.id)) - Number(superseded.has(y.id)) || instant(x) - instant(y) || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
   console.log(`Lane inbox — this machine is the ${me.toUpperCase()} lane (override with SIGNALGRID_LANE)\n`);
   if (mine.length === 0) {
     console.log(all ? "  nothing addressed to this lane." : "  nothing unread. (--all to include acknowledged.)");
   }
   for (const m of mine) {
-    const sent = m.sentAt ? Date.parse(String(m.sentAt)) : NaN;
-    const waited = Number.isFinite(sent) ? `  (sent ${formatAge(Date.now() - sent)} ago)` : "";
-    console.log(`── ${m.id}${ackedIds.has(m.id) ? "  [acknowledged]" : ""}${waited}`);
+    const { ms: sent, source } = sentInstant(m);
+    const waited = Number.isFinite(sent) ? `  (sent ${formatAge(Date.now() - sent)} ago${source === "commit" ? ", by its commit date" : ""})` : "  (sent at an unknown instant)";
+    const acked = ackedIds.has(m.id) ? `  [acknowledged${latency.has(m.id) ? ` after ${formatAge(latency.get(m.id))}` : ""}]` : "";
+    console.log(`── ${m.id}${acked}${waited}`);
+    if (superseded.has(m.id)) console.log(`   [SUPERSEDED by ${superseded.get(m.id)} — read that one; this is kept as the record]`);
     console.log(`   from ${m.from}: ${m.subject}\n`);
     for (const line of String(m.body).split("\n")) console.log(`   ${line}`);
     console.log(`\n   acknowledge AND deliver in one step: pnpm run lane:deliver ack ${m.id} "what you did"\n`);

@@ -66,7 +66,7 @@ Broad best-effort public catalog of IT asset management, CMDB/discovery, softwar
 - public Or Detailed Api Paths: **330**
 - non Blank Official Api Docs: **330**
 - github Or Repository Rows: **203**
-- open Source Or Open Standard Rows: **114**
+- open Source Or Open Standard Rows: **114** (the workbook's figure; its derivation rule is not recorded and no rule tried against the filed tables reproduces it — rows mentioning open source/standard in any cell 69, in API Availability 33, in Caveats 16, rows with a GitHub URL 203 — unverified 2026-09-06, every other total in this file re-derived exactly)
 - standards Frameworks: **28**
 - github Oss Resources: **40**
 - signal Grid Repo Mappings: **10**

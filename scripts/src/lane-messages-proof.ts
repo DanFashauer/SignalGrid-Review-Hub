@@ -86,7 +86,7 @@ check(
   "an unacknowledged message is REPORTED as unread and does not fail the build (the other machine is not always awake)",
   unread.unread.length === 1 && unread.problems.length === 0,
 );
-check("…and the unread line names the id, the addressee, the sender and the subject", /^m1 → mac \(from cloud\): s$/.test(unread.unread[0]));
+check("…and the unread line names the id, the addressee, the sender, the subject and its age (unknown here — no sentAt, no commit)", /^m1 → mac \(from cloud\): s — unread for unknown age$/.test(unread.unread[0]));
 
 check("an ack for a message that was never sent is refused", auditLaneMessages([], [ack("ghost", "mac")]).problems.some((p: string) => p.includes("does not exist")));
 check("a message addressed to a lane that does not exist is refused", auditLaneMessages([msg("m1", "cloud", "orbit")], []).problems.some((p: string) => p.includes("not a known lane")));
@@ -175,7 +175,18 @@ const old = auditLaneMessages([msg("m1", "cloud", "mac", { sentAt: "2026-09-01T0
 check("unread beyond 24h is STALE and reported, and STILL not a failure — the other machine may be asleep", old.stale.includes("m1") && old.problems.length === 0);
 const junk = auditLaneMessages([msg("m1", "cloud", "mac", { sentAt: "yesterday-ish" })], [], T0);
 check("an unparseable sentAt is 'unknown age' and counts as stale — never read as fresh", /unknown age/.test(junk.unread[0]) && junk.stale.includes("m1"));
-check("a v1 message keeps its exact unread line — age honestly unknown, not invented", auditLaneMessages([msg("m1", "cloud", "mac")], [], T0).unread[0] === "m1 → mac (from cloud): s");
+// Until 2026-09-06 this line asserted that a v1 message "keeps its exact unread
+// line — age honestly unknown, not invented" with stale.length === 0, and it
+// passed while the oldest unread message in the tree (13 days, no sentAt) sat
+// with no age and could never be stale. Absent is never fresh.
+const v1 = auditLaneMessages([msg("m1", "cloud", "mac")], [], T0);
+check("a v1 message with no sentAt and no commit date is 'unknown age' AND stale — absent evidence is never fresher than corrupt evidence", /unknown age/.test(v1.unread[0]) && v1.stale.includes("m1"));
+const v1Committed = auditLaneMessages([msg("m1", "cloud", "mac", { __addedAt: "2026-09-03T12:00:00Z" } as never)], [], T0);
+check("a v1 message ages by the commit that delivered it, says so, and is stale after a day", /unread for 2\.0d \(by its commit date/.test(v1Committed.unread[0]) && v1Committed.stale.includes("m1"));
+const withdrawn = auditLaneMessages([msg("m1", "cloud", "mac"), msg("m2", "cloud", "mac", { supersedes: "m1" } as never)], [], T0);
+check("a message that supersedes another marks it by reference — the inbox no longer relies on prose to find a withdrawal", withdrawn.superseded.get("m1") === "m2" && /\[SUPERSEDED by m2\]$/.test(withdrawn.unread[0]));
+check("superseding a message that does not exist is refused", auditLaneMessages([msg("m2", "cloud", "mac", { supersedes: "ghost" } as never)], [], T0).problems.some((p: string) => p.includes('supersedes "ghost"')));
+check("LIVE: the CLI refuses an ack with no note — 'I read it' must not look like 'I did it'", (() => { const r = cli(["ack", someone.id], { SIGNALGRID_LANE: someone.to }); return r.code === 2 && r.out.includes("an ack needs a note"); })());
 check("LIVE: send writes schema 2 with a sentAt — refused inputs aside, the CLI is on the new schema", /schemaVersion: 2/.test(cliSrc) && /sentAt: new Date\(\)\.toISOString\(\)/.test(cliSrc));
 check("the delivery script exists and refuses files outside the lane directories", existsSync(join(repo, "scripts/lane-deliver.mjs")) && /refusing to deliver files outside the lane directories/.test(readFileSync(join(repo, "scripts/lane-deliver.mjs"), "utf8")));
 check("the mailbox PR is declared with a positive PR number (the wake channel is named, not remembered)", (() => { try { const m = JSON.parse(readFileSync(join(repo, "docs/agent/lane-mailbox.json"), "utf8")); return Number.isInteger(m.pr) && m.pr > 0 && m.branch === "lane/mailbox"; } catch { return false; } })());

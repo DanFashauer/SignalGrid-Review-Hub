@@ -51,7 +51,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `OIDC_AUDIENCE` | Expected token audience (the API's app/client id). | unset |
 | `OIDC_JWKS_URI` | IdP JWKS endpoint (discovery `jwks_uri`). | unset |
 | `OIDC_TENANT_CLAIM` / `OIDC_ROLE_CLAIM` | Claims carrying the IdP tenant / role. | `tid` / `roles` |
-| `METRICS_TOKEN` | Set ⇒ `/metrics` requires this bearer. | unset (open on the internal port) |
+| `METRICS_TOKEN` | Set ⇒ `/metrics` requires this bearer. Set but BLANK ⇒ the server refuses to boot (since 2026-09-06; a blank token is an operator who believes the endpoint is protected). `docker-compose.prod.yml` passes it key-only so an unset host variable stays unset in the container. | unset (open on the internal port) |
 | `NODE_ENV` | Standard Node environment switch; the compose file sets `production`. | unset |
 | `SIGNALGRID_DEPRECATED_ROUTES` | Comma-separated route ids to serve with a `Deprecation` header during a migration window. | unset |
 | `SIGNALGRID_V1_RATE_LIMIT` | Requests/min/bearer on `/v1`. Malformed values fall back — never to "unlimited". | `240` |

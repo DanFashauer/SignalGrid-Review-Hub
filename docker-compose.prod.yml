@@ -89,7 +89,11 @@ services:
       WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-}
       WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN: ${WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN:-}
       SIGNALGRID_ENROLLMENT_SECRET: ${SIGNALGRID_ENROLLMENT_SECRET:-}
-      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      # Key-only on purpose: Compose passes a bare key through ONLY when the host sets it.
+      # `${METRICS_TOKEN:-}` handed the server an EMPTY string, and since 2026-09-06 a blank
+      # token refuses to boot (an operator who set it and got the quoting wrong believed
+      # /metrics was protected while it was open). Unset ⇒ open on the internal port.
+      METRICS_TOKEN:
       # Enabling durable persistence: with DATABASE_URL set, the audit ledger,
       # decision/evidence store, and session store persist to Postgres.
       #

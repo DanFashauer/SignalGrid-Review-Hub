@@ -68,8 +68,10 @@ const GENERATED_FROM = new Map([
 /** Strip markup and entities down to the text a reader actually sees. */
 function visibleText(html) {
   return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    // `</script >` (whitespace before the closing bracket) is a valid end tag; a regexp
+    // that requires `</script>` exactly leaves the script body in the "visible" text.
+    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/&mdash;/g, "—")

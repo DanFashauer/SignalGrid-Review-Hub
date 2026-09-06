@@ -1186,3 +1186,29 @@ NOT VERIFIED HERE, said plainly: the tick and the installer have not been execut
 ```
 Verdict:  **the Mac is no longer on the critical path for anything a runner can do, and its silence is now a measured
   signal rather than a wait.** What the owner does once: on the Mac, `bash scripts/mac/install-launchd.sh`.
+
+## 2026-09-06 — "Fleet Premium, verified in the cloud lab the day the owner handed over the key: the unlocked transfer endpoint, the team branch nobody could run, and the inherited policies it was dropping"
+Command:  the owner shared the Premium trial JWT (sub signalgrid.app, 10 devices, exp 2026-09-16) and a Fleet server-configuration reference; the key went into a session scratch file (mode 600, outside the tree), the container's Docker daemon was started, and the pinned lab came up with `FLEET_LICENSE_KEY` on the server only:
+```
+docker … fleetdm/fleet:v4.89.2 … -e FLEET_LICENSE_KEY=<from scratch file>     # + mysql:8, redis:7, osqueryd 5.17.0, per-run TLS
+iptables -I DOCKER-USER -s <fleet ip> ! -d 172.16.0.0/12 -j DROP                # Premium cannot disable usage statistics; the firewall can
+curl …/api/v1/fleet/config                                                       # license tier
+pnpm run proof:live-fleet ; pnpm run proof:live-fleet-workflow                   # against the Premium lab, host inside a team
+raw probes: POST /teams, POST /teams/1/policies, GET /teams/1/policies, POST /hosts/transfer, GET /hosts/2
+tsx probe through the real adapter with teamId: 1                               # the branch marked UNVERIFIED since 2026-08-12
+```
+Output:
+```
+"license":{"tier":"premium","organization":"signalgrid.app","device_count":10,"expiration":"2026-09-16T18:57:56Z"}
+PATCH server_settings.enable_analytics=false → still true (Premium keeps statistics on; egress blocked instead)
+POST /api/v1/fleet/teams                       → 200  {"team":{"id":1,"name":"SG Clinical"…}}        (Free: refused)
+GET  /api/v1/fleet/teams/1/policies            → 200  keys: ['policies', 'inherited_policies']        own 1, inherited 1
+adapter getPolicies() with teamId:1            → [ { id: 2, name: 'Team: screen lock', team_id: 1 } ]  ← inherited global policy DROPPED
+POST /api/v1/fleet/hosts/transfer {team_id:1}  → 200  {}   host 2 team_id 1 "SG Clinical"           (Free: 422, measured 2026-08-12)
+host policy results through the team adapter   → [ [ 'Team: screen lock', 'fail' ] ]   posture { compliant: false, platform: 'ubuntu' }
+fleet-connector exports: 8, write-shaped: []   adapter methods matching transfer|move|assign|team: []
+POST /api/v1/fleet/hosts/transfer {team_id:null} → 200   host 2 team_id None   (lab restored)
+proof:live-fleet            summary=pass (37/37) before the section; summary=pass (52/52) with it (premium section: RAN); 37/37 + "SKIPPED … FLEET_LAB_WRITE_OK" without the write flag
+proof:live-fleet-workflow   summary=pass (21/21)   (FLEET_HOST_UUID = the live agent, inside the team)
+```
+Verdict:  **the trial bought exactly what the 2026-08-12 note said it would — evidence, not enforcement — plus one bug the Free server could never have shown.** Under Premium the transfer endpoint SUCCEEDS, so the connector's refusal is now provably the product's choice rather than Fleet's 422; SignalGrid's public packages carry no path to it at all. The team branch of `getPolicies()` worked as far as it went and no further: Fleet reports a team's policies in two lists, and the adapter returned only the first, so a team-scoped catalogue omitted every global policy the team inherits — fewer policies than Fleet applies to the host. Fixed to fold both (more policies known is the strict direction), asserted live in the new Premium section of `proof:live-fleet`, which skips LOUDLY and uncounted on a Free server or without `FLEET_LAB_WRITE_OK=true`. The key never touched the tree, a commit, a log or a result file; the lab could not phone home. Not verified: the Free-tier skip of the new section (this lab is Premium, so only the no-write-flag skip was run for real). One more wire fact the section caught on its first run: a team with no policies of its own answers with `inherited_policies` ONLY — Fleet omits the `policies` key rather than sending `[]` — so the adapter's `?? []` is load-bearing, and the proof now pins that shape too. The trial's clock ends 2026-09-16.

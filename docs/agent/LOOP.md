@@ -146,8 +146,8 @@ LAST TOUCHED: 2026-09-05 (cloud lane, latest) - Batch J (eighth round, on its PR
               request-signing findings are on mainline - nothing was undelivered);
               nine cloud messages acked 09-04, three more today (ECC, Ponytail, the
               iOS rows) with status; one left open on purpose - Fleet/Headwind's 7
-              dimensions need live servers and the owner's Premium decision by
-              2026-09-16. Found and filed, not fixed: the AppWorkflows port lacks
+              dimensions need live servers; the Fleet Premium half was CLOSED
+              2026-09-06 in the cloud lab with the owner's key. Found and filed, not fixed: the AppWorkflows port lacks
               the TS per-action step-up release and check-decision-port-parity
               compares shape only, so it cannot see it (row 101 -> backlog; cloud's
               call on a golden-rule file). Prior 2026-09-04 (Mac lane) - the
@@ -251,13 +251,14 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               the twin test's per-field checks are conditional; older items
               (MockSignalGridAPI replayed vectors, DemoMode flag table).
               mac/native-ledger-2026-09-02 is CLOSED - fully superseded by #385 and
-              later. Fleet/Headwind's 7 device dimensions: needs the live servers
-              stood up on the Mac; the Premium-only getPolicies() branch needs the
-              owner's licence key or, per DR-005, the deferred/unverified-premium
-              mark on 2026-09-16. Owner, two items: Screen Recording permission for
-              Terminal (System Settings > Privacy & Security > Screen Recording, then
-              relaunch Terminal) - closes 2026-09-02-android-desktop-first-run; and
-              the Fleet Premium decision above before 2026-09-16.
+              later. Fleet/Headwind's 7 device dimensions: the Fleet half is DONE -
+              the owner handed the Premium key to the cloud lane 2026-09-06; teams,
+              inherited policies and the unlocked transfer endpoint are measured and
+              proven (proof:live-fleet section 11, docs/FLEET_LIVE_INTEGRATION.md);
+              Headwind's dimensions still need its live server. Owner, one item:
+              Screen Recording permission for Terminal (System Settings > Privacy &
+              Security > Screen Recording, then relaunch Terminal) - closes
+              2026-09-02-android-desktop-first-run.
 NEXT ACTION: cloud: land batch J (PR #456, carries the Mac-lane second revision:
               PostureAllow.swift + its XCTest written here and proven by ios-ci,
               the launchd tick, the --sim-only banner fix), then keep reading

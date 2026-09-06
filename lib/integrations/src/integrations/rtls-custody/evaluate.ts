@@ -106,14 +106,24 @@ export function evaluateCustodyPosture(
   }
   // Fail-safe: an unconfirmable fix age (null) is treated as stale — we never
   // report good custody when the location's freshness can't be confirmed.
-  if (loc.fixAgeSeconds === null || staleFix === null || loc.fixAgeSeconds >= staleFix) {
+  //
+  // An UNREADABLE age (NaN) is the same blind spot and must grade the same way.
+  // Until 2026-09-06 the test was `=== null || … >= staleFix`: `NaN >= n` is
+  // false, neither arm fires, and an unreadable fix age read as FRESH — the
+  // shape check-nan-fail-open rule 5 now flags. Number.isFinite rejects null,
+  // NaN and ±Infinity in one predicate; the wire normaliser already guards this
+  // field, so the hole was live for every direct caller of the evaluator.
+  const fixStale = !Number.isFinite(loc.fixAgeSeconds) || staleFix === null || (loc.fixAgeSeconds as number) >= staleFix;
+  if (fixStale) {
     candidates.push({ posture: "stale_fix", action: "locate", reason: "STALE_FIX" });
   }
   // Abandonment: no associated badge AND a long dwell (or an unconfirmable dwell,
-  // fail-safe) — a device sitting unattended without its checkout badge.
-  if (loc.badgeAssociated === false && (loc.dwellSeconds === null || abandonDwell === null || loc.dwellSeconds >= abandonDwell)) {
+  // fail-safe) — a device sitting unattended without its checkout badge. Same
+  // predicate discipline as the fix age: unreadable is unconfirmable.
+  const dwellLong = !Number.isFinite(loc.dwellSeconds) || abandonDwell === null || (loc.dwellSeconds as number) >= abandonDwell;
+  if (loc.badgeAssociated === false && dwellLong) {
     candidates.push({ posture: "abandoned", action: "alert", reason: "ABANDONED" });
-  } else if (loc.badgeAssociated === null && (loc.dwellSeconds === null || abandonDwell === null || loc.dwellSeconds >= abandonDwell)) {
+  } else if (loc.badgeAssociated === null && dwellLong) {
     // Badge association UNREPORTED over an abandonment-length (or unconfirmable)
     // dwell (wedge #11, caught by the shift-1 sweep): `=== false` alone let null
     // fall through, so a device sitting for hours with an unverifiable badge

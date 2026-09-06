@@ -52,8 +52,31 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
 LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
-              M (#466) and N (#468) LANDED. Batch O (thirteenth round, on its
-              PR) read both plans end to end and the remainders: the EDR threat
+              M (#466), N (#468) and O (#470) LANDED. Batch P (fourteenth round,
+              on its PR) built the three gates O specified and each found more
+              than its brief: check-nan-fail-open rule 5 (a number|null field
+              compared before Number.isFinite, in the evaluators) fired on nine
+              sites in six evaluators against the O head - the deferred RTLS
+              family graded a NaN fix age FRESH and a NaN dwell SHORT, macos-posture a NaN
+              residual count HARDENED, app-update a NaN crash count "unstable"
+              for the wrong reason, entitlement-binding a NaN depth or budget
+              GOVERNABLE, session-readiness a NaN elapsed time READY; all five
+              fixed with the honest grade, proofs extended (56/56, 73/73, 71/71,
+              62/62 over 2,160 states, 63/63), each assertion fails by name
+              against the reverted evaluator, mutation guard 0 survivors.
+              check-claim-inventory-anchors (new) measured the claim inventory
+              against its surfaces for the first time: 57 of the 58 README rows
+              quoted the README #370 rebuilt on 2026-09-01 with no resolution
+              (resolved), 46 line citations had drifted (re-anchored), 334 quoted
+              claims are absent elsewhere and 64 remove-actioned claims still
+              render (both RATCHETED, not fixed - Batch Q below); 58 README rows
+              re-extracted against the current README, every quotation anchored
+              and every cited path:line opened, and five README lines corrected
+              from that evidence (:48, :60, :79, :103-105, :172).
+              launch-profile.mjs said native/shared held one JSON file and 42
+              vectors; it holds three files and the fixture 44.
+              Batch O (thirteenth round, #470) read both plans end to end and
+              the remainders: the EDR threat
               evaluator graded a NaN signature age PROTECTED (null → step_up;
               NaN fell between the arms) - Number.isFinite, proven, mutation
               fails by name; the morning's markdown-link repair had rewritten
@@ -342,17 +365,25 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land batch O, then Batch P = the three specified-not-built
-              items: (1) regenerate CLAIM_INVENTORY.json's 58 README rows against
-              the 2026-09-01 README (45 quotations no longer present, 2 rows past
-              EOF, 13 remove-actioned buyer-facing quotes still rendering);
-              (2) check-claim-inventory-anchors — a fully-quoted claim must still
-              appear in its file within ±10 lines, ratcheted on "absent";
-              (3) check-nan-fail-open rule 5 — a `number | null` field compared
-              with </>/<=/>= in lib/*/src/**/evaluate.ts needs Number.isFinite
-              unless it came through posedBound (must fire on the pre-fix
-              edr-threat line). Then the inspiration catalogs' prose and
-              whatever the ledger still marks not read. OWNER: the ICP
+NEXT ACTION: cloud: land Batch P (on its PR), then Batch Q = what the anchor
+              gate ratcheted rather than fixed: (1) the 334 quoted claims absent
+              from their surfaces without a resolution (per-file figures in
+              docs/agent/claim-inventory-anchors-ratchet.json; largest:
+              SignalTypesSection 36, VerticalsSection 32, fabric-console 29,
+              DifferentiatorsSection 25, OutcomesSection 23) — resolve or
+              re-extract surface by surface, the way the README rows were;
+              (2) the 64 remove-actioned rows whose copy is still on the surface
+              — each gets the copy removed or its action revised with a
+              resolution; (3) an evidence-citation anchor check — a path:line
+              inside an `evidence` field must still hold the text the row
+              attributes to it (the README re-extraction found
+              WHAT_SIGNALGRID_DOES_TODAY.md citations that no longer do);
+              (4) README:198-203 — say whether /v1/authorize is one of the
+              "decision" paths or name it. Then the inspiration catalogs' prose
+              and whatever the ledger still marks not read. (The Batch P spec's
+              "2 rows past EOF" and "13 remove-actioned quotes" were estimates;
+              measured by the gate: 0 README rows past EOF, 64 remove-actioned
+              rows still present across all surfaces.) OWNER: the ICP
               segment ("75-1,000 employees, 1-10 in IT") is stated flatly in
               INVESTOR_ONE_PAGER while ICP_EVIDENCE calls it an assumption -
               your call, not a gate's. OWNER, once, on the Mac, now that

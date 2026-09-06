@@ -13,6 +13,15 @@
      "scope": "surface",
      "open": 2,
      "closed": 5
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Fourteenth round: README.md re-extracted claim by claim (58 rows) and five lines corrected from the evidence: :48 signalgrid-desktop called 'the operator console' while the profile reserves that for signalgrid-app; :60 `tests/` described as harvested security specs the tree no longer holds; :79 /console unlabelled as the demo it is; :103-105 the win32 bindings the desktop shell's Windows CI keeps were omitted; :172 lane:deliver, the one-step delivery since 2026-09-05, was not named.",
+     "reviewer": "cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: README.md in full by claim; the other root files as the eighth round left them.",
+     "open": 0,
+     "closed": 5
     }
    ]
   },
@@ -589,6 +598,15 @@
      "scope": "partial: CLAIM_INVENTORY.json by four programmatic properties + ~70 hand-verified rows; EVIDENCE.md, LOOP.md, the registries as before.",
      "open": 3,
      "closed": 3
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Fourteenth round: CLAIM_INVENTORY.json's quotations checked against their surfaces for the first time. 57 of the 58 README rows quoted the README that #370 rebuilt on 2026-09-01 and none carried a resolution — resolved, naming the rebuild; 46 rows sat more than ten lines from their citation — re-anchored; 58 rows re-extracted against the current README (every quotation anchored, every cited path:line opened, five README lines corrected on the way and their rows entered resolved). Ratcheted and NOT resolved: 334 quoted claims absent from the web, review and app surfaces, and 64 remove-actioned claims still on their surface. No gate yet checks the `evidence` citations themselves; the re-extraction found WHAT_SIGNALGRID_DOES_TODAY.md citations that no longer hold the text attributed to them.",
+     "reviewer": "cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: CLAIM_INVENTORY.json by anchors over every quoted row (the 148 unquoted rows are reported, not judged); EVIDENCE.md, LOOP.md and the registries as before.",
+     "open": 3,
+     "closed": 3
     }
    ]
   },
@@ -1129,6 +1147,15 @@
      "scope": "surface",
      "open": 0,
      "closed": 7
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Fourteenth round: check-nan-fail-open rule 5 over the 47 evaluate.ts files and the 46 `number | null` fields declared beside them. Five more evaluators carried the EDR shape (a null arm, then a bare comparison): rtls-custody graded a NaN fix age FRESH and a NaN dwell SHORT, macos-posture graded a NaN residual extension count HARDENED, app-update graded a NaN crash count 'unstable' for the wrong reason, entitlement-binding graded a NaN depth or a NaN budget GOVERNABLE, session-readiness graded a NaN elapsed time READY under a posed budget. All five fixed with the honest grade, each proof extended, each new assertion fails by name against the reverted evaluator, mutation guard 0 survivors across the six families.",
+     "reviewer": "cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the 47 evaluators by rule 5 (a lexical, single-file rule — a field typed plain `number` and a comparison further than thirty lines from its guard are outside it); the families otherwise as the eleventh and thirteenth rounds left them.",
+     "open": 0,
+     "closed": 5
     }
    ]
   },
@@ -1548,6 +1575,15 @@
      "scope": "partial: four scripts - the reachability gate, the room-console builder, lane-deliver and the room-sim proof. The other ~150 gates and proofs were not in this read.",
      "open": 0,
      "closed": 4
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Fourteenth round: check-nan-fail-open gained rule 5 (nine self-test cases plus a declaration probe; must fire on the pre-fix edr-threat line and does; nine hits against the Batch-O head, zero after the fixes). check-claim-inventory-anchors.mjs is new (15/15 self-test; regenerate-and-diff ratchet, the role-coverage pattern; importable, live only as the entry point). launch-profile.mjs carried two fossils about native/shared — 'One JSON file' where three sit, '42 shared conformance vectors' where the fixture holds 44 — corrected.",
+     "reviewer": "cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the two gates in full and launch-profile.mjs's native/shared reasons; the rest of scripts/ as the fourth and tenth rounds left them.",
+     "open": 0,
+     "closed": 3
     }
    ]
   },

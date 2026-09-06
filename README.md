@@ -45,7 +45,7 @@ the tree; [`docs/REPO_LAYOUT.md`](docs/REPO_LAYOUT.md) carries the full table.
 | `artifacts/signalgrid-app` | The operator console, bound to the served `/v1` API. |
 | `artifacts/signalgrid-review` | The zero-network review deck (demo-only per the launch profile). |
 | `artifacts/signalgrid-web` | The public website source. |
-| `artifacts/signalgrid-desktop` | The desktop-shaped operator console (Vite web app). |
+| `artifacts/signalgrid-desktop` | The desktop-shaped console (Vite web app; demo-only per the launch profile — `signalgrid-app` is the operator console). |
 | `artifacts/signalgrid-mobile-pwa` | The mobile PWA surface. |
 | `artifacts/mcp-server` | The read-only MCP gateway ([`docs/MCP_SECURITY_MODEL.md`](docs/MCP_SECURITY_MODEL.md)). |
 | `artifacts/*` (data) | Committed records, not packages: `lane-messages`, `sim-requests`, `sim-results`, `live-evidence`, `live-captures`, `api-collection` and `lab-collections` (Bruno), `agent-heartbeats`, `outreach-log`, `sbom`, `scanner-comparison`, `connector-emulator`, `build-loop`, `sync` (generated manifests and pins). |
@@ -57,7 +57,7 @@ the tree; [`docs/REPO_LAYOUT.md`](docs/REPO_LAYOUT.md) carries the full table.
 | `docs/` | Product, design and operating docs — the de-facto PRD. Start at [`docs/INDEX.md`](docs/INDEX.md). |
 | `third_party/` | Vendored developer tooling (a Claude Code skill pack); not product code, not shipped. |
 | `config/` | Tier environment examples (`config/tiers`) and the example grid config (`config/grid`). |
-| `fixtures/`, `fleet/`, `tests/`, `tools/` | Public-safe Graph fixtures; example Fleet config; harvested security test specs and load tests; the self-contained room-console and evidence-coverage pages. |
+| `fixtures/`, `fleet/`, `tests/`, `tools/` | Public-safe Graph fixtures; example Fleet config; the k6 load tests (`tests/load/`); the self-contained room-console and evidence-coverage pages. |
 | `site/`, `docker/`, `docker-compose.*.yml` | GitHub Pages landing, nginx config, and the compose stacks CI smoke-tests. |
 | `.github/workflows` | Review Hub CI, breadth lane, Apple lane, Android, desktop, firmware, supply chain, CodeQL, Pages. |
 
@@ -76,7 +76,7 @@ the tree; [`docs/REPO_LAYOUT.md`](docs/REPO_LAYOUT.md) carries the full table.
 
 ```bash
 pnpm install --frozen-lockfile                          # Node 22, pnpm (see packageManager)
-PORT=8080 pnpm --filter @workspace/api-server run dev   # /v1 API + console at /console; PORT is required
+PORT=8080 pnpm --filter @workspace/api-server run dev   # /v1 API + the demo console at /console; PORT is required
 pnpm run dev:simulator                                   # review UI + API together (5173 / 5174)
 pnpm run proof:signalgrid-simulator                      # one proof; every proof is a proof:* script
 pnpm run typecheck && pnpm run review:invariants         # the two cheapest gates
@@ -101,8 +101,9 @@ boundary). Run both before pushing anything that touches gates, docs figures
 or the launch surface. Details: [`docs/CI_AND_VALIDATION.md`](docs/CI_AND_VALIDATION.md).
 
 **Toolchain wrinkle.** `pnpm-workspace.yaml` strips every native binary except
-linux-x64-gnu, so `pnpm run build` (the Vite web build) runs only on linux-x64
-or in CI; `validate-sim-macos.sh` supplies the darwin binaries for its own run.
+linux-x64-gnu (and the win32 bindings the desktop shell's Windows CI builds
+with), so `pnpm run build` (the Vite web build) runs only on linux-x64 or in
+CI; `validate-sim-macos.sh` supplies the darwin binaries for its own run.
 Shell scripts must stay bash 3.2 compatible (see CLAUDE.md).
 
 **Postgres proofs.** `proof:*-pg`, `proof:db-role-split` and
@@ -169,7 +170,7 @@ parallel and cannot message each other; git is the bus. Protocol:
 
 | Channel | Commands | Rule |
 | --- | --- | --- |
-| Lane messages (`artifacts/lane-messages/`) | `pnpm run lane:inbox` first every session; `lane:send`, `lane:ack` | Only the addressee closes a message; the push is the delivery. |
+| Lane messages (`artifacts/lane-messages/`) | `pnpm run lane:inbox` first every session; `pnpm run lane:deliver send\|ack\|heartbeat\|batch` is the one-step delivery (`lane:send`/`lane:ack` only write the file) | Only the addressee closes a message; the push is the delivery. |
 | Simulation requests (`artifacts/sim-requests/` → `artifacts/sim-results/`) | `pnpm run sim:run-requests` on the Mac; `node scripts/check-sim-requests.mjs` for what is owed | A refusal or skip never closes a request. See [`docs/LIVE_SYNC_LOOP.md`](docs/LIVE_SYNC_LOOP.md). |
 | Session state | `pnpm run loop:state`; [`docs/agent/LOOP.md`](docs/agent/LOOP.md) | Read at start, update last. |
 

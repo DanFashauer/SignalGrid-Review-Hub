@@ -465,7 +465,7 @@ in one place.
 - **App-update currency** ([APP_UPDATE_CURRENCY.md](APP_UPDATE_CURRENCY.md)) — the honest
   half of "custom OTA updates". An iOS app cannot install or replace itself; distribution
   stays with itms-services / MDM InstallApplication / ABM. What *is* posture: `min_version`
-  floors, `force_update`, and install-channel provenance. `proof:app-update` (70 checks).
+  floors, `force_update`, and install-channel provenance. `proof:app-update` (71 checks).
 
 - **Platform SSO** ([PLATFORM_SSO.md](PLATFORM_SSO.md)) — "passwordless" and "satisfies MFA"
   are not automatic; the **method** decides the credential's worth. Only a user-registered
@@ -641,7 +641,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   proof rather than the source: the clean set was pinned by negative conditions
   (`scope !== "broad"`), which `unknown` satisfies, and is now pinned by EQUALITY to one
   enumerated shape.
-- **`proof:session-readiness` (62 checks)** — the DEX/EUC readiness dimension, from the
+- **`proof:session-readiness` (63 checks)** — the DEX/EUC readiness dimension, from the
   IGEL + ControlUp tap-to-app work (intake ledger row 57). A **1,728-state exhaustive
   sweep** whose clean set is pinned to exact SHAPES rather than a count. The headline law
   is that SILENCE IS NEVER READINESS: an endpoint nobody instrumented, a DEX plane that
@@ -700,7 +700,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   by *nothing*: reverting the fix left this proof passing at the identical count. The
   dead parameters are removed so the echo is unrepresentable rather than merely absent,
   and the reads-from-the-response property is now asserted for both vendors.
-- **`proof:entitlement-binding` (59 checks)** — whether a grant is *reviewable*, not
+- **`proof:entitlement-binding` (62 checks)** — whether a grant is *reviewable*, not
   merely correct. Includes a **1,200-state sweep** with the clean path pinned to
   *exactly 18*, plus coherence checks that reject a report contradicting itself.
 - **`proof:service-lifecycle` (82 checks)** — whether the *service* plane still agrees

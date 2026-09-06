@@ -330,8 +330,9 @@ export const SURFACES = [
     id: "/v1/authorize",
     reason:
       "The same gate, in the shape a host app obeys: {assist, reasons, decisionId}. " +
-      "The wire the Kotlin and Rust SDKs bind and the 42 shared conformance vectors " +
-      "hold. Declared a gap by DR-007 while the surface was frozen; served under DR-023.",
+      "The wire the Kotlin and Rust SDKs bind and the shared conformance vectors under " +
+      "native/shared hold (the count lives in the fixture, not here — it read 42 while the " +
+      "file carried 44). Declared a gap by DR-007 while the surface was frozen; served under DR-023.",
   },
   {
     id: "/v1/decisions",
@@ -615,9 +616,11 @@ export const SURFACES = [
   {
     id: "native:shared",
     reason:
-      "One JSON file: the assist-wire conformance fixture every native port (iOS, Android, " +
-      "desktop) must parse identically, so the ports cannot drift apart on the wire. A " +
-      "contract fixture between surfaces, not a surface — no person opens it.",
+      "Three JSON files (it said one until 2026-09-06): the assist-wire conformance fixture " +
+      "every native port (iOS, Android, desktop) must parse identically, plus the " +
+      "posture-allow and remediation-allow vector sets the Swift twins are pinned to, so the " +
+      "ports cannot drift apart on the wire. Contract fixtures between surfaces, not a " +
+      "surface — no person opens them.",
   },
   {
     id: "tools:evidence-coverage",

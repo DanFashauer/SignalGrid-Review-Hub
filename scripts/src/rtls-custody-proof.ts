@@ -92,6 +92,16 @@ check("an unreported fix age is treated as stale → locate (never in_zone)", no
 const noBadgeNoDwell = evaluateCustodyPosture(normalizeLocation({ deviceId: "d", zoneType: "public", zoneAuthorized: true, fixAgeSeconds: 30, badgeAssociated: false, present: true }));
 check("no badge with an unreported dwell is treated as abandoned", noBadgeNoDwell.posture === "abandoned" && noBadgeNoDwell.reasonCode === "ABANDONED");
 
+// Fail-safe (regression, 2026-09-06): an UNREADABLE fix age or dwell — NaN, the
+// value a failed upstream parse produces — must grade exactly like an unreported
+// one. `=== null || >= bound` let NaN fall through both arms: a NaN fix age read
+// FRESH and a NaN dwell read SHORT. Number.isFinite closes both. Mutation record:
+// with either predicate reverted to `=== null`, its assertion fails by name.
+const nanFix = evaluateCustodyPosture({ ...normalizeLocation({ deviceId: "d", zoneType: "clinical", zoneAuthorized: true, fixAgeSeconds: 5, badgeAssociated: true, present: true }), fixAgeSeconds: Number.NaN });
+check("an UNREADABLE fix age (NaN) is stale → locate, never in_zone", nanFix.posture === "stale_fix" && nanFix.recommendedAction === "locate");
+const nanDwell = evaluateCustodyPosture({ ...normalizeLocation({ deviceId: "d", zoneType: "public", zoneAuthorized: true, fixAgeSeconds: 30, dwellSeconds: 10, badgeAssociated: false, present: true }), dwellSeconds: Number.NaN });
+check("no badge with an UNREADABLE dwell (NaN) is abandoned, never in_zone", nanDwell.posture === "abandoned" && nanDwell.reasonCode === "ABANDONED");
+
 // Order-proof: at egress (alert) co-present with a stale fix (locate) → the
 // stronger alert wins, regardless of check order.
 const egressAndStale = evaluateCustodyPosture(normalizeLocation({ deviceId: "d", zoneType: "egress", zoneAuthorized: true, fixAgeSeconds: 5000, badgeAssociated: true, atEgress: true, present: true }));

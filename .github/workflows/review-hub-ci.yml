@@ -663,6 +663,11 @@ jobs:
         run: node scripts/gen-claim-inventory-md.mjs --check
       - name: "Claim-inventory self-test (the drift check can actually fail)"
         run: node scripts/gen-claim-inventory-md.mjs --self-test
+      # The inventory's quotations were never checked against their surfaces.
+      - name: "Claim-inventory anchors (a quoted claim is still a quotation; absent is ratcheted)"
+        run: node scripts/check-claim-inventory-anchors.mjs
+      - name: "Claim-inventory anchors self-test (the check can actually fail)"
+        run: node scripts/check-claim-inventory-anchors.mjs --self-test
       - name: "Proof — dual control"
         run: pnpm run proof:dual-control
       - name: "Pagination-truncation guard (a capped read must not look complete)"

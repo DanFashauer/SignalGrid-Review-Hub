@@ -1,7 +1,7 @@
 {
   "note": "DEBT CEILING for retired category labels in docs/**/*.md: the COUNT OF mentions that survive RETIRED_OK, the quote idiom, the avoid-list idiom and a superseded-history page banner. A RISE is fatal; a drop is recorded automatically. Never hand-edit; the gate writes it. docs/**/*.html is NOT here — it is at zero and gated hard.",
-  "retiredLabelMentions": 29,
-  "filesCarryingThem": 17,
+  "retiredLabelMentions": 27,
+  "filesCarryingThem": 16,
   "pagesExemptByBanner": 2,
   "worst": [
     {
@@ -11,10 +11,6 @@
     {
       "file": "docs/research/STRATEGIC_BUYER_PARTNER_PITCH_PACK.md",
       "mentions": 5
-    },
-    {
-      "file": "docs/CLAIM_INVENTORY.md",
-      "mentions": 2
     },
     {
       "file": "docs/research/APPLE_OPEN_SOURCE_PLATFORM_STRATEGY.md",
@@ -62,6 +58,10 @@
     },
     {
       "file": "docs/research/FOUNDER_CONTROL_REQUIREMENTS.md",
+      "mentions": 1
+    },
+    {
+      "file": "docs/research/FOUNDER_STRATEGIC_OPTIONS.md",
       "mentions": 1
     }
   ]

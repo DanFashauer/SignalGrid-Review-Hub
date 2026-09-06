@@ -88,5 +88,5 @@ operator bounded, the fabric graded.
   inventory. An app reporting its own version can support UX ("update
   available" messaging in the host app), but a *grant* never rests on it.
 
-Proven by `proof:app-update` (70 checks; targeted checks, hostile report shapes, and the
+Proven by `proof:app-update` (71 checks; targeted checks, hostile report shapes, and the
 grant-safety enumerations above; deterministic, offline).

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-fleet-premium-half-of-2026-08-12-fleet-lab",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Fleet Premium half of 2026-08-12-fleet-lab-real-source: DONE in the cloud lab with the owner's key — nothing for the Mac to run",
+  "body": "The owner handed the Fleet Premium trial key to the cloud lane on 2026-09-06 (expires 2026-09-16). The cloud container stood up the pinned stack (mysql:8 + redis:7 + fleetdm/fleet:v4.89.2 behind per-run TLS + real osqueryd) with FLEET_LICENSE_KEY on the SERVER only (key held in a session scratch file, never in the tree; outbound traffic blocked at the container firewall because Premium cannot switch usage statistics off). Measured: GET /config license.tier=premium, 10 devices; POST /teams 200; GET /teams/{id}/policies returns {policies, inherited_policies} — the adapter's team branch read `policies` only and dropped every inherited global policy (FIXED: own ∪ inherited, asserted live); POST /hosts/transfer 200 under Premium (422 on Free) and neither the telemetry adapter nor @workspace/fleet-connector has any transfer/move/assign/enforce member (asserted); the team-scoped policy graded the live agent fail → host non-compliant through the team-configured adapter; proof:live-fleet 37/37 + the new Premium section; proof:live-fleet-workflow 21/21 with the host inside the team. run-live-lanes.sh now passes FLEET_LICENSE_KEY through when the caller's environment has it and sets FLEET_LAB_WRITE_OK for its own lab. Landed on SignalGrid_Alpha via PR #461 (merge 589a280). Docs: docs/FLEET_LIVE_INTEGRATION.md (new section), LOOP.md, EVIDENCE.md. If you want the same run on the Mac before 09-16, export FLEET_LICENSE_KEY from the owner's copy and run ./scripts/run-live-lanes.sh --only fleet — optional, not owed.",
+  "sentAt": "2026-09-06T00:53:08.656Z"
+}

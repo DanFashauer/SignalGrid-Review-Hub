@@ -83,9 +83,75 @@ export function deriveRoots(root = ROOT) {
   return [...tops].filter((d) => !d.startsWith(".")).sort();
 }
 
+const esc = (r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 export function buildPattern(roots) {
-  const alt = roots.map((r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const alt = roots.map(esc).join("|");
   return new RegExp("`((?:" + alt + ")\\/[A-Za-z0-9._\\/-]+\\.[A-Za-z0-9]{1,6})`", "g");
+}
+
+// ── LINE CITATIONS (2026-09-06) ──────────────────────────────────────────────
+// `path:N` and `path:N-M` are the most precise citations a document makes and, until
+// this date, the least checked: the rule above asked only whether the FILE exists.
+// 3,080 such citations sat in the tracked docs; ten reached past the end of the file
+// they named (two in the live CLAIM_INVENTORY, eight in a dated audit record), and
+// nothing could tell a range measured against today's file from one measured against
+// a revision four cuts ago. The bound is the file's line count — cheap, exact, and
+// the only property a line range claims.
+//
+// A document whose ranges are a DATED RECORD declares it with the marker below and is
+// REPORTED, not failed: rewriting an audit's ranges to today's file would falsify the
+// record it is part of, while leaving them unmarked would let the next reader act on
+// them. Backticked or not — a bracketed `[lib/x.ts:12-40]` is the audit skill's own form.
+export function buildLineRefPattern(roots) {
+  const alt = roots.map(esc).join("|");
+  return new RegExp(`(?<![A-Za-z0-9_/.-])((?:${alt})\\/[A-Za-z0-9._\\/-]+\\.[A-Za-z0-9]{1,6}):(\\d+)(?:-(\\d+))?`, "g");
+}
+
+/** Pure: every `path:N[-M]` citation in `text`. */
+export function lineRefsIn(text, pattern) {
+  return [...text.matchAll(pattern)].map((m) => ({
+    path: m[1],
+    from: Number(m[2]),
+    to: Number(m[3] ?? m[2]),
+    index: m.index,
+  }));
+}
+
+/** Pure: how a line citation stands against the line count of the file it names. */
+export function classifyLineRef(ref, lineCount) {
+  if (!Number.isInteger(lineCount)) return { state: "unresolved" };
+  const hi = Math.max(ref.from, ref.to);
+  if (ref.from < 1 || hi > lineCount) return { state: "past-eof", lineCount };
+  return { state: "within", lineCount };
+}
+
+/** Pure: lines in a file — a trailing newline ends the last line rather than starting an empty one. */
+export function countLines(content) {
+  if (content.length === 0) return 0;
+  const n = content.split("\n").length;
+  return content.endsWith("\n") ? n - 1 : n;
+}
+
+/** The declaration a dated record carries so its ranges are reported rather than failed. */
+export const HISTORICAL_LINES = /<!--\s*line-citations:\s*as measured (\d{4}-\d{2}-\d{2}),\s*not maintained\s*-->/;
+
+// ── MACHINE-LOCAL PREFIXES (2026-09-06) ──────────────────────────────────────
+// `/home/user/SignalGrid-Review-Hub/artifacts/api-server/src/app.ts:108-112` is one
+// container's path, not a citation: it resolves on no other machine, the backticked
+// rule above never sees it (no backtick, no derived root at the front), and one
+// audit record carried 44 of them. A path that reaches a repository root THROUGH
+// `/home/<user>/…` or `/Users/<user>/…` is rejected wherever it stands. An absolute
+// path that names a directory OUTSIDE this tree (the owner's Mac checkout in
+// RUN_ON_MAC.md) is not matched — nothing after it is a root of this repository.
+export function buildMachineLocalPattern(roots) {
+  const alt = roots.map(esc).join("|");
+  return new RegExp(`\\/(?:home|Users)\\/[^\\s\`'"()\\[\\]]*?\\/(?:${alt})\\/[A-Za-z0-9._\\/-]+`, "g");
+}
+
+/** Pure: every citation that reaches a repository path through a machine-local prefix. */
+export function machineLocalCitationsIn(text, pattern) {
+  return [...text.matchAll(pattern)].map((m) => ({ text: m[0], index: m.index }));
 }
 
 // Citations that legitimately name a path this checkout does not contain. Keep SHORT
@@ -319,12 +385,30 @@ export function scanRepo(root) {
   // directories somebody maintains: whatever a repo generates, it is untracked, and
   // untracked is what a fresh clone does not have.
   const exists = (p) => existsSync(join(root, p));
+  const linePattern = buildLineRefPattern(roots);
+  const machinePattern = buildMachineLocalPattern(roots);
+  const lineCounts = new Map();
+  const lineCountOf = (p) => {
+    if (!lineCounts.has(p)) {
+      try {
+        lineCounts.set(p, countLines(readFileSync(join(root, p), "utf8")));
+      } catch {
+        lineCounts.set(p, undefined);
+      }
+    }
+    return lineCounts.get(p);
+  };
+  const lineOf = (text, index) => text.slice(0, index).split("\n").length;
 
   const missing = [];
   const exempted = [];
+  const historicalPastEof = [];
   let checked = 0;
   let intakeDocs = 0;
   let generated = 0;
+  let lineRefs = 0;
+  let lineRefsUnresolved = 0;
+  let historicalDocs = 0;
 
   for (const rel of docs) {
     if (INTAKE_PREFIXES.some((p) => rel.startsWith(p))) {
@@ -350,6 +434,34 @@ export function scanRepo(root) {
           c.state === "generated"
             ? `resolves ONLY to generated, untracked output (${c.at}) — absent from a fresh clone`
             : "points at nothing",
+      });
+    }
+    // Line citations: bounded by the named file's line count. Untracked targets are
+    // counted, not judged — the file rule above owns "does it exist".
+    const historical = HISTORICAL_LINES.exec(text);
+    if (historical) historicalDocs += 1;
+    for (const ref of lineRefsIn(text, linePattern)) {
+      lineRefs += 1;
+      if (!tracked.has(ref.path)) {
+        lineRefsUnresolved += 1;
+        continue;
+      }
+      const c = classifyLineRef(ref, lineCountOf(ref.path));
+      if (c.state !== "past-eof") continue;
+      const range = `${ref.path}:${ref.from}${ref.to !== ref.from ? `-${ref.to}` : ""}`;
+      if (historical) {
+        historicalPastEof.push({ doc: `${rel}:${lineOf(text, ref.index)}`, range, lineCount: c.lineCount, asOf: historical[1] });
+        continue;
+      }
+      bad.push({
+        path: `${range} (line ${lineOf(text, ref.index)} of the doc)`,
+        why: `cites past the end of a ${c.lineCount}-line file — the range was measured against an older revision`,
+      });
+    }
+    for (const m of machineLocalCitationsIn(text, machinePattern)) {
+      bad.push({
+        path: `${m.text} (line ${lineOf(text, m.index)} of the doc)`,
+        why: "reaches a repository path through a MACHINE-LOCAL absolute prefix — resolves on one machine only; write it repo-relative",
       });
     }
     if (bad.length === 0) continue;
@@ -398,6 +510,10 @@ export function scanRepo(root) {
     roots: roots.length,
     checked,
     generated,
+    lineRefs,
+    lineRefsUnresolved,
+    historicalDocs,
+    historicalPastEof,
     missing,
     exempted,
   };
@@ -457,6 +573,55 @@ function selfTest() {
   checks.push(["unbackticked prose is NOT a citation", citationsIn("the file lib/foo/src/index.ts is interesting", pattern).length === 0]);
   checks.push(["a path outside the derived roots is NOT a citation", citationsIn("`nowhere/thing/file.ts`", pattern).length === 0]);
   checks.push(["a bare directory is NOT a citation", citationsIn("`lib/signalgrid-core/src/`", pattern).length === 0]);
+
+  // ── line citations and machine-local prefixes (2026-09-06) ────────────────
+  const lp = buildLineRefPattern(["lib", "scripts", "artifacts", "docs"]);
+  const refs = lineRefsIn("see `lib/a/x.ts:129-138` and [artifacts/b/y.ts:42] and location-services/evaluate.ts:72-81", lp);
+  checks.push([
+    "A LINE CITATION IS EXTRACTED, backticked or bracketed, with its range — a rootless one is not",
+    refs.length === 2 && refs[0].path === "lib/a/x.ts" && refs[0].from === 129 && refs[0].to === 138 && refs[1].from === 42 && refs[1].to === 42,
+  ]);
+  checks.push([
+    "A RANGE PAST THE END OF THE FILE IS CAUGHT — metrics.ts:183-192 against a 181-line file, the planted miss",
+    classifyLineRef({ from: 183, to: 192 }, 181).state === "past-eof",
+  ]);
+  checks.push([
+    "…a range ending exactly on the last line is within (the bound is inclusive), and line 0 is past",
+    classifyLineRef({ from: 147, to: 184 }, 184).state === "within" && classifyLineRef({ from: 0, to: 3 }, 10).state === "past-eof",
+  ]);
+  checks.push([
+    "…and a file whose length cannot be read is UNRESOLVED, never silently within",
+    classifyLineRef({ from: 1, to: 1 }, undefined).state === "unresolved",
+  ]);
+  checks.push([
+    "line counting: a trailing newline ends the last line rather than adding an empty one",
+    countLines("a\nb\n") === 2 && countLines("a\nb") === 2 && countLines("") === 0,
+  ]);
+  checks.push([
+    "the historical marker is recognized only in its exact dated shape",
+    HISTORICAL_LINES.test("<!-- line-citations: as measured 2026-09-01, not maintained -->") &&
+      !HISTORICAL_LINES.test("these line citations are historical") &&
+      !HISTORICAL_LINES.test("<!-- line-citations: not maintained -->"),
+  ]);
+  const mp = buildMachineLocalPattern(["lib", "artifacts", "docs"]);
+  checks.push([
+    "A MACHINE-LOCAL PREFIX IN FRONT OF A REPOSITORY PATH IS CAUGHT — the 44-row defect",
+    machineLocalCitationsIn("[/home/user/SignalGrid-Review-Hub/artifacts/api-server/src/app.ts:108-112]", mp).length === 1 &&
+      machineLocalCitationsIn("/Users/someone/src/hub/lib/x.ts", mp).length === 1,
+  ]);
+  checks.push([
+    "…and an absolute path that names a directory OUTSIDE this tree is not (the owner's Mac checkout in RUN_ON_MAC.md)",
+    machineLocalCitationsIn("cd /Users/danfashauer/Public/Projects/SignalGrid   # the owner's working copy", mp).length === 0 &&
+      machineLocalCitationsIn("`artifacts/api-server/src/app.ts:108-112` repo-relative", mp).length === 0,
+  ]);
+  checks.push([
+    "LIVE: the tracked docs carry line citations, some past-EOF only inside declared historical records, and none machine-local",
+    (() => {
+      const r = scanRepo(SELF_ROOT);
+      return r.lineRefs > 1000 && r.historicalDocs >= 1 && r.historicalPastEof.length >= 1 &&
+        !r.missing.some((m) => m.why.includes("MACHINE-LOCAL") || m.why.includes("past the end"));
+    })(),
+  ]);
 
   // The regression this gate caused before it caught anything. A nested README linked
   // `docs/REPO_ALIGNMENT.md`, which sits beside it; root-only resolution called that
@@ -720,12 +885,26 @@ if (r.exempted.length > 0) {
   for (const e of r.exempted) console.log(`  · ${e.doc} — ${e.count} path(s) describing ${e.reason}`);
   console.log("");
 }
+// The line-citation half. Counted on every run; past-EOF ranges inside a declared
+// historical record are REPORTED here and never counted clean.
+console.log(
+  `Line citations (path:N, path:N-M): ${r.lineRefs} found, each bounded by the named file's line count; ` +
+    `${r.lineRefsUnresolved} name untracked paths (owned by the file rule above).`,
+);
+if (r.historicalPastEof.length > 0) {
+  console.log(`  REPORTED — ${r.historicalPastEof.length} range(s) past EOF inside ${r.historicalDocs} document(s) declared "as measured <date>, not maintained":`);
+  for (const h of r.historicalPastEof) console.log(`    · ${h.doc} → ${h.range} (file has ${h.lineCount} lines; measured ${h.asOf})`);
+}
 
 if (r.missing.length > 0) {
   console.error(`Cited-path check FAILED for ${r.repo}: ${r.missing.length} citation(s) do not resolve to a tracked file.\n`);
   for (const { doc, path, why } of r.missing.slice(0, 60)) console.error(`  ✗ ${doc}  →  ${path}  (${why})`);
   if (r.missing.length > 60) console.error(`    … and ${r.missing.length - 60} more`);
-  console.error("\nA citation that points nowhere reads as evidence and is not.");
+  console.error("\nA citation that points nowhere reads as evidence and is not. A line range past");
+  console.error("the end of its file was measured against a revision that is gone; re-measure it,");
+  console.error("or — for a dated audit record — declare `<!-- line-citations: as measured");
+  console.error("YYYY-MM-DD, not maintained -->` so it is reported instead. A machine-local");
+  console.error("prefix (/home/<user>/…, /Users/<user>/…) is never a citation: write it repo-relative.");
   console.error("A citation that resolves only to GENERATED, UNTRACKED output is the same");
   console.error("defect wearing a green: it reads fine on the machine that ran the producer");
   console.error("and fails on a fresh clone. Name the producing command in prose instead of");

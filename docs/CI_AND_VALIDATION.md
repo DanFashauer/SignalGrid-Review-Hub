@@ -15,7 +15,7 @@ the truth; what this page owes you is the shape:
   `breadth` (the deferred connector families and doctrine proofs),
   `docs-sanity`, `durable-persistence` (the Postgres-backed gates),
   `podman-stack` and `deploy-stack` (the compose smokes).
-- **Fifteen workflow files total** — the Apple lane, Android, supply-chain
+- **Fourteen workflow files total** — the Apple lane, Android, supply-chain
   (SBOM + image evidence + keyless signing), CodeQL, scheduled verification,
   windows desktop, and the rest.
 - **The guarantee that keeps this page honest**:

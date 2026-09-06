@@ -131,6 +131,11 @@ const STEPS = [
   // citation that resolves to nothing reads as evidence and is not.
   { name: "Cited paths (a doc may not cite a file that does not exist)", cmd: ["node", "scripts/check-cited-paths.mjs"] },
   { name: "Cited-path self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-paths.mjs", "--self-test"] },
+  // A document that instructs `SIGNALGRID_X=…` names a control; if nothing reads X the
+  // control does not exist. SIGNALGRID_SANITIZE_OUTPUT was "required" in two documents
+  // and read by nothing, anywhere, for as long as the documents existed.
+  { name: "Env-doc readers (an instructed SIGNALGRID_* variable must be read by something)", cmd: ["node", "scripts/check-env-doc-readers.mjs"] },
+  { name: "Env-doc-reader self-test (the gate can actually fail)", cmd: ["node", "scripts/check-env-doc-readers.mjs", "--self-test"] },
   // The MCP-ecosystem source-independence map: every externally-sourced connector
   // family must have a row in docs/research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md (an MCP
   // server or an explicit gap marker), and the map may not name a family the tree

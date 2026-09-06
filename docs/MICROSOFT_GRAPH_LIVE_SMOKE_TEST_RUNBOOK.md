@@ -18,7 +18,8 @@ Required placeholder names:
 - `GRAPH_CLIENT_ID_PLACEHOLDER`
 - `GRAPH_AUTH_MODE_PLACEHOLDER`
 - `GRAPH_SCOPE_PLACEHOLDER`
-- `SIGNALGRID_SANITIZE_OUTPUT=true`
+
+(A fifth line, `SIGNALGRID_SANITIZE_OUTPUT` set to true, stood here until 2026-09-06. Nothing reads it — sanitization of generated output is not a switch, and a variable nothing reads is a control that does not exist. See `docs/env/MICROSOFT_GRAPH_ENV_EXAMPLE.md`.)
 
 Use sandbox values only. Never commit any local env file or copied values from it. Before staging changes, run `git status --short --ignored` and confirm any local Graph env file is ignored rather than listed as an untracked committable file.
 

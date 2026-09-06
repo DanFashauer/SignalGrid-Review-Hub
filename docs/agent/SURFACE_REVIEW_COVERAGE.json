@@ -530,11 +530,31 @@
   "docs/*": {
    "path": "docs",
    "note": "NOT READ. This row was seeded READ on the strength of #375 and that was wrong, in exactly the way this ledger exists to catch: #375 audited docs/INDEX.md line by line against the entries it routes to, and its squash commit touches three of the 203 top-level documents (INDEX.md, OPEN_SOURCE_LAB_REGISTRY.md, STATUS.md). An index audit is a read of the index, not of what it points at. Downgraded 2026-09-02 by independent review.",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Tenth round. Mechanical sweep across all 214 loose files (cited gate scripts exist and are wired; proof-figure occurrences consistent; two fail-open-instruction greps returned nothing), close read of 10 (CI_AND_VALIDATION first screen, STATUS, REPO_LAYOUT, ZERO_COST row, PROOF_COVERAGE_AUDIT header, INDEX, architecture.html step 2, DELIVERY_GAP_ANALYSIS header, CLAIM_INVENTORY rows 785/2058, the Graph runbook). Found: CI_AND_VALIDATION.md:18 'Fifteen workflow files' (14 since promote.yml retired 2026-09-02; the sweep could not see a word numeral); ZERO_COST_LIVE_TEST_MATRIX.md:16 '140 are scripts/src/*-proof.ts' (143, never added up); two CLAIM_INVENTORY line ranges past EOF; SIGNALGRID_SANITIZE_OUTPUT instructed by the Graph runbook with zero readers. The audit also reported 'no gate reads docs HTML' — REFUTED by the tree: scripts/check-doc-html-figures.mjs has gated architecture.html's dimension count since 2026-09-02, with a self-test. All fixed and gated (derived-doc-figures rows + word-numeral sweep; cited-paths line-range bound + machine-local prefix rule; check-env-doc-readers). BUILD_BACKLOG.md, COMPANY_BUILD_PLAN.md and CLAIM_INVENTORY.md bodies (~10k lines) were sampled by the numeral scans only.",
+     "reviewer": "cloud lane (one independent docs audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: mechanical figure/path/gate-wiring sweep across all 214 loose files, close read of 10; the three largest bodies (BUILD_BACKLOG, COMPANY_BUILD_PLAN, CLAIM_INVENTORY) not read.",
+     "open": 0,
+     "closed": 6
+    }
+   ]
   },
   "docs/agent": {
    "path": "docs/agent",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Tenth round, partial. EVIDENCE.md:4 says every entry carries the exact command; check-known-false-claims parsed only '^Command:' and reported 19 of 33 dated headings incomplete while every one carried all three fields under 'Command (…):' headings — detector widened, count now ratcheted at zero (rise or unlowered fall both fatal). PONYTAIL_AUDIT_2026-09-01.md cited 44 paths through this container's absolute prefix and eight line ranges past today's EOF — prefix stripped, historical marker declared, item 15 recorded done. DISCOVERY_LOG format vs the loop-state parser, LOOP.md STATE vs live loop:state, agent-tiers charters, org-roster resolution, the ratchet JSONs and the consolidation README were read and hold. The remaining agent markdown (role queues, review notes) was not opened.",
+     "reviewer": "cloud lane (one independent docs audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: EVIDENCE.md, PONYTAIL_AUDIT_2026-09-01.md, DISCOVERY_LOG.md, LOOP.md STATE, the JSON registries and their schema comments; the other agent markdown not opened.",
+     "open": 0,
+     "closed": 3
+    }
+   ]
   },
   "docs/assets": {
    "path": "docs/assets",
@@ -554,7 +574,17 @@
   },
   "docs/env": {
    "path": "docs/env",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Read in full (one file). MICROSOFT_GRAPH_ENV_EXAMPLE.md instructed 'keep SIGNALGRID_SANITIZE_OUTPUT=true' and nothing in the repository read the variable — a control whose only implementation was the sentence. Removed from the example and the runbook; check-env-doc-readers.mjs now fails on any instructed SIGNALGRID_*= assignment with no reader (placeholders and same-document proposed-env declarations are reported, not failed).",
+     "reviewer": "cloud lane (one independent docs audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "docs/estate": {
    "path": "docs/estate",
@@ -566,7 +596,17 @@
   },
   "docs/lab": {
    "path": "docs/lab",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Partial. LAB_001.md instructs two SIGNALGRID_* variables (MACOS_POSTURE, MCP_CMD) that no file reads; the lab plan meant them as the flag to build — now declared proposed-env in the document so the gate reports them and a reader who sets them is told nothing changes yet. The other lab files not read.",
+     "reviewer": "cloud lane (one independent docs audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: LAB_001.md step 1 only.",
+     "open": 1,
+     "closed": 0
+    }
+   ]
   },
   "docs/outreach": {
    "path": "docs/outreach",

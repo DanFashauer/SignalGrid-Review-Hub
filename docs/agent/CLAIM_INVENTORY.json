@@ -198,7 +198,7 @@
   {
    "file": "README.md",
    "line": "70",
-   "claim": "\"Published at `https://signalgrid.app/fabric.html` once the [Pages workflow](.github/workflows/pages.yml) is run\"",
+   "claim": "\"Published at `https://signalgrid.app/fabric.html` once the [Pages workflow](../.github/workflows/pages.yml) is run\"",
    "kind": "availability",
    "classification": "launch",
    "evidence": "Correctly conditional and grounded: .github/workflows/pages.yml exists; the sentence does not assert the URL is live today.",
@@ -414,7 +414,7 @@
   {
    "file": "README.md",
    "line": "140",
-   "claim": "\"Open source under the [MIT License](LICENSE).\"",
+   "claim": "\"Open source under the [MIT License](../LICENSE).\"",
    "kind": "status",
    "classification": "launch",
    "evidence": "Grounded: LICENSE:1 is \"MIT License\" (Copyright (c) 2026 Daniel Fashauer).",

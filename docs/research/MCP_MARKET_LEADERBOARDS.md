@@ -11,7 +11,7 @@ enterprise access-decision fabric.
 
 This follows the intake doctrine (DR-021, `docs/agent/RESOURCE_INTAKE.md`): a
 resource is absorbed **by use**, wired into the tree where it strengthens it, and
-never answered with a memo of reasons. The repository is already saturated — 25
+never answered with a memo of reasons. The repository is already saturated — 26
 tracked skill directories, 13 dispatchable agents, and the dev MCP servers the
 cloud lane uses — so most of the leaderboard is *already covered*, and the honest
 disposition for it is to say so and point at the surface that does the job.

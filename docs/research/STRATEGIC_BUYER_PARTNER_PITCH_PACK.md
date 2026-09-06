@@ -1,5 +1,10 @@
 # Strategic Buyer / Partner Pitch Pack
 
+> **SUPERSEDED 2026-09-06 — do not send from this file.**
+> The live outreach surface is `docs/outreach/` (claim-scanned on every push). This pack
+> keeps a ready subject line under a retired category label and was never inside that scan;
+> kept for provenance only. `scripts/check-send-copy-banner.mjs` holds the rule.
+
 This pack is a public-safe, docs-only pitch scaffold built from the current validated SignalGrid Review Hub state. It is intended for strategic buyer, partner, investor, and design-partner conversations without claiming live integrations, production readiness, certification, current partnerships, valuation, or legal outcomes.
 
 ## One-page positioning

@@ -95,7 +95,7 @@ replace it.
 - Vendor names appear only as the widely-known systems a buyer likely runs, to
   make the adjacency concrete.
 
-See also: [`ECOSYSTEM_POSITIONING.md`](./ECOSYSTEM_POSITIONING.md) (the full
+See also: [`ECOSYSTEM_POSITIONING.md`](../ECOSYSTEM_POSITIONING.md) (the full
 category matrix) and
-[`OPERATIONAL_TRUST_ORCHESTRATION.md`](./OPERATIONAL_TRUST_ORCHESTRATION.md)
+[`OPERATIONAL_TRUST_ORCHESTRATION.md`](../OPERATIONAL_TRUST_ORCHESTRATION.md)
 (the category definition).

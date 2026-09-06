@@ -595,6 +595,23 @@ jobs:
         run: node scripts/check-env-doc-readers.mjs
       - name: "Env-doc-reader self-test (the gate can actually fail)"
         run: node scripts/check-env-doc-readers.mjs --self-test
+      # A browser follows `](FOO.md)` from the document's own directory and nowhere
+      # else; 35 relocation fossils were dead links for four weeks.
+      - name: "Markdown links (a relative link resolves from its own document to a tracked file)"
+        run: node scripts/check-markdown-links.mjs
+      - name: "Markdown-link self-test (the gate can actually fail)"
+        run: node scripts/check-markdown-links.mjs --self-test
+      # The Graph permission page told an administrator to grant two scopes while
+      # the connector read three. Tables ⇔ connector reads, both directions.
+      - name: "Graph permission boundary (the page names exactly what the connector reads)"
+        run: node scripts/check-graph-permission-boundary.mjs
+      - name: "Graph-permission-boundary self-test (the gate can actually fail)"
+        run: node scripts/check-graph-permission-boundary.mjs --self-test
+      # A `Subject:` line is a template; a template is claim-scanned or bannered.
+      - name: "Send-copy banner (a send template is claim-scanned or bannered do-not-send)"
+        run: node scripts/check-send-copy-banner.mjs
+      - name: "Send-copy-banner self-test (the gate can actually fail)"
+        run: node scripts/check-send-copy-banner.mjs --self-test
       # The MCP-ecosystem source-independence map: every externally-sourced connector
       # family must carry a row in docs/research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md (an
       # MCP server or an explicit gap marker), and the map may not name a family the

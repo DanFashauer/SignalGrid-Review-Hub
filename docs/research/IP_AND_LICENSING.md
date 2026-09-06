@@ -5,9 +5,9 @@ property is currently held, and the open decisions to settle with a licensed
 attorney. This is engineering/business documentation to make counsel meetings
 faster — it is **not legal advice**, and nothing here is a filed claim.
 
-Companion: [`REPO_LINEAGE.md`](REPO_LINEAGE.md) (which repo holds what),
-[`PUBLIC_MESSAGING_GUARDRAILS.md`](PUBLIC_MESSAGING_GUARDRAILS.md) (what to say
-publicly), and the root [`NOTICE`](../NOTICE) and [`LICENSE`](../LICENSE).
+Companion: [`REPO_LINEAGE.md`](../REPO_LINEAGE.md) (which repo holds what),
+[`PUBLIC_MESSAGING_GUARDRAILS.md`](../PUBLIC_MESSAGING_GUARDRAILS.md) (what to say
+publicly), and the root [`NOTICE`](../../NOTICE) and [`LICENSE`](../../LICENSE).
 
 ## What is protected, and how
 

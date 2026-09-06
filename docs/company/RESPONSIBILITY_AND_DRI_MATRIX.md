@@ -86,7 +86,7 @@ substitute for any of them.
 | Decision class | DRI role | Consulted | Must approve (DRI cannot act alone) | Today that means |
 | --- | --- | --- | --- | --- |
 | **Hiring: opening a role** | Chief Executive Officer (founder), exercising the Head of People duty | The hiring division's lead duty; Workforce planning partner; Talent Acquisition Lead (FRACTIONAL, per search) | **Founder alone** — funding and the offer are both signatures. The role's own activation trigger must have fired first; a trigger is a precondition, not an approval | No role is open. There are no employees and no recurring contractors, so no offer letter, payroll, benefits, or personnel record exists. The catalog's hiring sequence is an ordering for when triggers fire, not a plan to hire now. |
-| **Org-chart or role-catalog change** — adding a role, changing a trigger, changing a status or coverage line | Workforce Planning and Organizational Design Partner | Division lead duties; records-archivist lane; program-manager lane | **Founder alone** — this is company design | The founder holds it; agent lanes draft and maintain the documents. `docs/agent/org-roster.json` (41 duties) records what the lanes actually do; this catalog is the company design above it. Moving a role from FUTURE to COVERED is a claim about reality and is checked like any other claim. |
+| **Org-chart or role-catalog change** — adding a role, changing a trigger, changing a status or coverage line | Workforce Planning and Organizational Design Partner | Division lead duties; records-archivist lane; program-manager lane | **Founder alone** — this is company design | The founder holds it; agent lanes draft and maintain the documents. `docs/agent/org-roster.json` (42 duties) records what the lanes actually do; this catalog is the company design above it. Moving a role from FUTURE to COVERED is a claim about reality and is checked like any other claim. |
 | **Strategy and positioning** — what company to become, what posture to take, what to call the product | Corporate strategy lead | competitive-analyst, positioning-messaging, and pricing-packaging-analyst lanes | **Founder alone.** A lane may recommend and must say plainly that it is recommending | The founder holds this directly. The positioning lane records multiple incompatible product labels still in circulation; the launch-claims gate is the mechanical containment, not the decision. |
 | **Owner-only records and access** — billing figures, credentials, owner accounts, repository settings, the Mac | Chief Executive Officer (founder) | Chief of Staff duty; Internal IT and business systems administrator duty | **Founder alone** — capability, not policy: no lane holds the credentials | One human identity. No directory, no SSO, no access review cycle, no fleet, no help desk. A second identity in any company system activates the internal security and identity administrator role. |
 
@@ -107,8 +107,8 @@ Nothing in this matrix changes because a decision was inconvenient to route.
 
 Stating this is part of the design, not a caveat added to it:
 
-- **One approver.** The founder is the sole human approver on 12 of the 23
-  classes here. That is correct for a one-person company and is also single-point
+- **One approver.** The founder is the sole human approver on 17 of the 23
+  classes here (every class whose approval column opens "Founder alone"; four are mechanical, two name nobody — counted 2026-09-06, the figure said 12). That is correct for a one-person company and is also single-point
   concentration with no succession or access-recovery plan. Business continuity
   is a FUTURE role and its trigger has not fired.
 - **Compliance review is unsigned.** The founder approves compliance-shaped

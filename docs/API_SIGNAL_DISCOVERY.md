@@ -253,7 +253,7 @@ The framing that "device compliance data is meaningless in isolation; its value 
 realized when the health proof reaches the identity plane before access is granted" is
 the same thesis this product is built on, and the Conditional Access comparison it
 implies is already handled honestly in
-[COMPETITIVE_ENTRA](COMPETITIVE_ENTRA.md) — including the note that SignalGrid must
+[COMPETITIVE_ENTRA](research/COMPETITIVE_ENTRA.md) — including the note that SignalGrid must
 *stop* claiming Entra cannot do per-action step-up. The real-time health telemetry it
 names (firewall state, BitLocker/encryption, antivirus health, OS patch level) is
 already carried by `macos-posture` and `intune-entra-posture`.

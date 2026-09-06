@@ -324,7 +324,7 @@ No guard reads a sentence.
 The macOS device-trust signals come from the companion open-source
 [`signalgrid-mcp`](https://github.com/DanFashauer/signalgrid-mcp) server, which
 lives in its own repo (the public/private boundary stays intact — see
-[IP_AND_LICENSING](IP_AND_LICENSING.md)). `verify:all` runs **both** halves in one
+[IP_AND_LICENSING](research/IP_AND_LICENSING.md)). `verify:all` runs **both** halves in one
 shot: the Review-Hub `preflight` above, then the MCP server's `pytest`, tied
 together by the shared **posture-report contract**
 (`lib/integrations/src/integrations/macos-posture/contract/posture-report.contract.json`).

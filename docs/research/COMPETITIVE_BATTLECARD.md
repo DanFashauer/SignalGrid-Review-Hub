@@ -10,7 +10,7 @@
 > competitor already wins, say so and reframe.
 >
 > **Visual version:** a self-contained, theme-aware HTML rendering of this card is
-> at [`competitive-battlecard.html`](./competitive-battlecard.html) (open in a
+> at [`competitive-battlecard.html`](../competitive-battlecard.html) (open in a
 > browser) — it renders the competitor threat levels in SignalGrid's own
 > allow/step-up/deny decision colors.
 
@@ -27,7 +27,7 @@
 
 ## 2. The three-pillar moat — always anchor here
 
-Every serious player now says "runtime access decision," "device trust," "step-up." That is **not** our moat. Our defensible ground is exactly three things competitors don't fuse:
+Every serious player now says "runtime access decision," "device trust," "step-up." That is **not** our moat. Our defensible ground is three things we have found no competitor fusing (the research briefs say "no evidence", and so does this card):
 
 1. **Physical custody + tamper as a decision input** — is the shared device docked / charging / in-hand / **tampered**, and is the badged-in holder still the one using it? (Others use charge/dock state for *logout hygiene*, not as a *gating signal in the verdict*.)
 2. **CIS / security-baseline drift fused into the decision** — not just "is the device enrolled," but "has it drifted from baseline," as a weighted input.
@@ -65,7 +65,7 @@ Green flags: mixed multi-vendor fleet · non-EPCS high-risk workflows · retail/
 
 ### 🟥 OLOID — threat HIGH (closest thesis-twin)
 - **Their strength (concede it):** owns the passwordless-frontline-login + badge-attribution frame, HIPAA/21 CFR Part 11 story, real logos, Okta/Entra/Ping/Workday certs, and hardware (readers/time-clocks). Their **FIL** (May 2026) is moving toward per-action governance.
-- **Our wedge:** OLOID *attributes at login*; we *decide per action*. We fuse **custody/tamper + CIS baseline** (they don't) and are a **neutral overlay** (they're auth-led + hardware-led). FIL routes high-risk actions to a **human for approval**; we **compute** a multi-signal verdict and escalate to a human only as one outcome.
+- **Our wedge:** OLOID *attributes at login*; we *decide per action*. We fuse **custody/tamper + CIS baseline** (no evidence they do — `COMPETITIVE_OLOID.md`) and are a **neutral overlay** (they're auth-led + hardware-led). FIL routes high-risk actions to a **human for approval**; we **compute** a multi-signal verdict and escalate to a human only as one outcome.
 - **If they say "OLOID already does this":** "OLOID resolves *who's logged in* and logs it — brilliantly. We decide *whether this specific action should proceed* given device custody and baseline, across your whole stack, and can take OLOID's badge event as an input. Different job, same shift."
 - **Walk/partner:** if the whole ask is passwordless login + attribution, it's theirs. Offer coexistence (consume their attribution).
 - **Watch:** FIL roadmap — the feature most likely to erode our edge. Don't claim "per-action" as unique; claim **automated multi-signal fusion incl. custody/baseline** as unique.

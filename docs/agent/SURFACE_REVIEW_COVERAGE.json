@@ -562,11 +562,31 @@
   },
   "docs/company": {
    "path": "docs/company",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Eleventh round, partial (5 of 9 read line by line: ICP_EVIDENCE, INVESTOR_ONE_PAGER, FUNDING_READINESS, ORG_STRUCTURE, RESPONSIBILITY_AND_DRI_MATRIX; ROLE_CATALOG 3,745 lines, ROLE_ACTIVATION_MATRIX, ROLE_LENS_REVIEW and HIRING_SEQUENCE by structure and grep). Found: five files said 41 agent duties after the roster went to 42 on 2026-08-24 while the investor one-pager beside them said 42 (ten sites corrected; ten derived-figure rows + a sweep probe hold them now); FUNDING_READINESS listed 'Keycloak 15 dimensions' as live proof when 2 of the 15 iam dimensions have had live contact (restated); the DRI matrix said the founder is sole approver on 12 of 23 classes — the table gives 17 (corrected with the counting rule stated). ICP finding numbering (1-4, 8) noted as never contiguous. Segment-size tension between ICP_EVIDENCE and the one-pager left for the owner's eye (an ICP definition is not an evidence claim).",
+     "reviewer": "cloud lane (one independent fail-closed audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: 5 of 9 files read in full; ROLE_CATALOG, ROLE_ACTIVATION_MATRIX, ROLE_LENS_REVIEW_2026-08-21 and HIRING_SEQUENCE by structure and targeted grep only.",
+     "open": 1,
+     "closed": 3
+    }
+   ]
   },
   "docs/connectors": {
    "path": "docs/connectors",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Read in full (4 of 4). MICROSOFT_GRAPH_PERMISSION_BOUNDARY.md told an administrator to grant two scopes and 'nothing else' while the connector had read three endpoints since Batch K (#463) landed hours earlier — the riskyUsers read needs IdentityRiskyUser.Read.All and answers 403 → unknown without it; the page's own last paragraph said no gate read it. Fixed (third row in both tables, dated note) and gated: check-graph-permission-boundary.mjs holds tables ⇔ connector reads in both directions, plus a derived-figure row on the headline count. The other three connector pages hold.",
+     "reviewer": "cloud lane (one independent fail-closed audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "docs/consolidation": {
    "path": "docs/consolidation",
@@ -592,7 +612,17 @@
   },
   "docs/inspiration": {
    "path": "docs/inspiration",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Eleventh round, partial (INSPIRATION.md read in full; the 11 catalogs by structure, count derivation and grep). Every stated catalog count (PACS 61/24/10/13; COMMS 441/71/97/71/66) derives exactly from its own tables; the three catalogs touched after their 'verified' dates changed only by the 2026-09-05 URL fix. No fail-open instruction; the SPATIAL_TRUST report's 'not universally fail open or fail closed' sentence prescribes a constrained mode, not an allow. Residual risk: a prose claim buried mid-table in the four largest catalogs would have survived the sweeps.",
+     "reviewer": "cloud lane (one independent fail-closed audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: INSPIRATION.md in full; the eleven catalogs by structure, count derivation and grep only.",
+     "open": 0,
+     "closed": 0
+    }
+   ]
   },
   "docs/lab": {
    "path": "docs/lab",
@@ -622,7 +652,17 @@
   },
   "docs/research": {
    "path": "docs/research",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Eleventh round, partial (32 of 49 read line by line; 17 grepped and partially read). Found: MCP_MARKET_LEADERBOARDS said 25 skill directories beside the command that derives 26 (row added); 12 relative links dead since the 2026-08-10 relocation (all fixed; check-markdown-links.mjs is new and found 35 repo-wide); README said no gate/script/workflow references this directory while check-mcp-ecosystem-map.mjs has been a hard gate since 2026-09-02 (reworded, dated); PRODUCT_REALITY_CHECKLIST:23 prescribed 'configurable fail-open/fail-closed' (rewritten fail-closed; the code never had the switch); the battlecard turned the briefs' 'no evidence' into 'they don't' (hedges restored); STRATEGIC_BUYER_PARTNER_PITCH_PACK held a ready subject line under a retired label with no banner (bannered do-not-send; check-send-copy-banner.mjs is new); ENTERPRISE_SECURITY_STACK_COVERAGE_MAP claimed a proof registry would catch a dead proof name (no such gate; reworded to the hand verification). Clean: all 19 DR citations resolve; 219 self-repo URLs resolve; no exclusivity/partnership/certification/customer claim; IAM_CORE_COVERAGE_MAP and the inspiration catalogs derive from their own tables.",
+     "reviewer": "cloud lane (one independent fail-closed audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: 32 of 49 files read in full (all COMPETITIVE_*, MARKET_LANDSCAPE, the coverage maps, the strategy and readiness files); 17 send-copy/founder/social files grepped and partially read only.",
+     "open": 0,
+     "closed": 7
+    }
+   ]
   },
   "firmware": {
    "path": "firmware",

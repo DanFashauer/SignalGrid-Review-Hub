@@ -64,7 +64,7 @@ LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463) and L (#465)
               ready subject line under a retired label outside every claim
               scan (bannered; check-send-copy-banner is new); a checklist
               prescribed configurable fail-open; the battlecard turned "no
-              evidence" into "they don't". Coverage: 84 / 9 / 8 of 100.
+              evidence" into "they don't". Coverage: 83 / 10 / 7 of 100.
               Batch L (tenth round) read the loose docs: CI_AND_VALIDATION
               said "Fifteen workflow files" four days after the fifteenth was
               retired - a WORD numeral the figure sweep could not see (it reads

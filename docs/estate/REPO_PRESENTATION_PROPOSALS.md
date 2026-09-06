@@ -1,7 +1,7 @@
 # Repo presentation proposals — descriptions, topics, homepages
 
-> **What this file is.** The estate audit (ESTATE_SYNC_REPORT.md §4) found five
-> of seven repositories describing themselves with their own name repeated, two
+> **What this file is.** The estate audit (ESTATE_SYNC_REPORT.md §4) found three
+> of the six repositories in that table describing themselves with their own name repeated (four, counting one that repeats "SignalGrid" inside a different string), two
 > homepages pointing at replit.com, and zero topics anywhere. The App cannot
 > edit repository metadata, so these are ready-to-paste proposals — one block
 > per repository. Applying each takes under a minute from any browser, phone

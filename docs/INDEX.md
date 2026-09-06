@@ -356,9 +356,9 @@ records rather than current guidance.
 
 **Consolidation records (Phase 6 cutover).**
 
-- [Consolidation records overview](consolidation/README.md): what the auditable cutover artifacts are and how they were produced.
-- [Issue migration checklist](consolidation/MIGRATION_CHECKLIST.md): pre-filled migrate/close triage of the open issues across the consolidation sources, snapshotted 2026-07-14.
-- [Home-repo README draft](consolidation/HOME_REPO_README.md): a DRAFT post-cutover README for the home repo, kept here so it is reviewable and nothing is destroyed before cutover. It is not this repo's README.
+- [Consolidation records overview](consolidation/README.md): **SUPERSEDED 2026-08-19 — do not execute.** The cutover these records prepared plans the opposite of the current decision; kept as a dated record of what the artifacts were.
+- [Issue migration checklist](consolidation/MIGRATION_CHECKLIST.md): **SUPERSEDED 2026-08-19 — do not execute**; a record of the pre-filled migrate/close triage of the open issues across the consolidation sources, snapshotted 2026-07-14.
+- [Home-repo README draft](consolidation/HOME_REPO_README.md): **SUPERSEDED 2026-08-19 — do not execute.** A draft README for a cutover that will not happen (the plan inverted); kept as a record. It is not this repo's README.
 
 **Preview assets.**
 
@@ -400,4 +400,4 @@ reader could find it from any index.
 - [Dev dispatch](DEV_DISPATCH.md): when to build in the cloud lane and when to build locally, and why git is the only bridge between them. The practical companion to `LANE_COORDINATION.md`.
 - [SignalGrid grid proof harness](SIGNALGRID_GRID_PROOF.md): what `pnpm run proof:signalgrid-grid` replays and asserts — every simulator scenario, one mutated signal layer at a time, on public-safe fixtures only.
 - [Profile README draft](estate/PROFILE_README_DRAFT.md): a ready-to-paste draft for the owner's GitHub profile repository, which the estate audit named the highest-leverage missing portfolio artifact. An owner action; nothing here applies it.
-- [Repo presentation proposals](estate/REPO_PRESENTATION_PROPOSALS.md): ready-to-paste descriptions, topics and homepages for the seven repositories in the estate — the audit found five describing themselves with their own name and two homepages pointing at replit.com. Owner actions, one block per repository.
+- [Repo presentation proposals](estate/REPO_PRESENTATION_PROPOSALS.md): ready-to-paste descriptions, topics and homepages for the seven repositories in the estate — the audit found three of six describing themselves with their own name and two homepages pointing at replit.com. Owner actions, one block per repository.

@@ -129,8 +129,9 @@ pnpm --filter @workspace/api-server run test:api    # if you touched the API
 Changed deps? `pnpm install --lockfile-only` and commit the lockfile. On macOS,
 restore manifests **first**, regenerate **after** — the other order re-diverges it.
 
-Note plainly which CI jobs you could not run locally: `durable-persistence`
-(Postgres), `deploy-stack` (Docker), `secret-scan` (gitleaks).
+Note plainly which CI jobs you could not run locally — take the list from `node
+scripts/check-preflight-ci-parity.mjs`, never from memory (a hand-typed list of
+three sat here while the derived answer was 23).
 
 ## Scope (amended 2026-08-31 — DR-021 lifted the engineering freeze)
 

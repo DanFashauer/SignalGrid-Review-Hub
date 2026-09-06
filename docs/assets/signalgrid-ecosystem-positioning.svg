@@ -81,14 +81,11 @@
     <rect x="344" y="610" width="170" height="70" rx="20" fill="#d6a85b"/>
     <text x="391" y="653" class="outcome">Step-Up</text>
 
-    <rect x="546" y="610" width="170" height="70" rx="20" fill="#c7645c"/>
-    <text x="602" y="653" class="outcome">Deny</text>
+    <rect x="546" y="610" width="170" height="70" rx="20" fill="#c98f3e"/>
+    <text x="602" y="653" class="outcome">Restrict</text>
 
-    <rect x="748" y="610" width="170" height="70" rx="20" fill="#7fb3aa"/>
-    <text x="788" y="653" class="outcome">Remediate</text>
-
-    <rect x="950" y="610" width="170" height="70" rx="20" fill="#d9d1c1"/>
-    <text x="1004" y="653" class="outcome">Record</text>
+    <rect x="748" y="610" width="170" height="70" rx="20" fill="#c7645c"/>
+    <text x="788" y="653" class="outcome">Deny</text>
   </g>
 
   <text x="72" y="724" class="note">Connected systems stay systems of record. SignalGrid consumes signals, decides at runtime, and emits decisions, audit context, and action requests.</text>

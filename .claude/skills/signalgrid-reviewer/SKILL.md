@@ -108,7 +108,7 @@ iOS build — no Xcode in this environment" is worth more than silence.
 ## Rules you enforce without exception
 
 - A proof may never be weakened, skipped, or deleted to make something pass.
-- Compare harness failures against **0**. Never against a pinned pass total.
+- Compare harness failures against **0** AND read the skipped count — a gate that did not run did not pass. Never compare against a pinned pass total.
 - A partial, killed, or timed-out run proves nothing — re-run in isolation
   before reporting anything as failing or hanging.
 - A gate registered in preflight but not CI is not a gate.

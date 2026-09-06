@@ -46,16 +46,17 @@ Claim trace: "last state it recorded" ↔ POSITIONING.md freshness clause;
 
 > Subject: re: shared devices at {Company}
 >
-> One data point and I'll leave you alone: in our lab, a device that looked
-> "compliant" in the management console had actually gone unverified for
-> hours — every console stayed green because green is just the last thing
-> anyone recorded. That's the gap we measure.
+> One data point and I'll leave you alone: the scenario we build for is a device
+> that looks "compliant" in the management console but has gone unverified for
+> hours — every console stays green because green is just the last thing anyone
+> recorded. That's the gap we measure.
 >
 > If it's ever bitten you — a stale device doing something it shouldn't
 > have — I'd genuinely like to hear how it played out, pilot or no pilot.
 
-Claim trace: the lab scenario ↔ ProblemSection's staleness scenario (itself
-launch-true); no capability claims made.
+Claim trace: the staleness scenario ↔ ProblemSection's (illustrative, launch-true) —
+written as the SCENARIO it is, not as an observed lab run (it read "in our lab" until
+2026-09-06 and no lab record backs that tense); no capability claims made.
 
 ## T3 — Reply to interest
 

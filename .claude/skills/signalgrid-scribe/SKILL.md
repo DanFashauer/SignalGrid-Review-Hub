@@ -26,8 +26,9 @@ sentence is not. That gap has produced real, surviving falsehoods:
 
 - `docs/DELIVERY_GAP_ANALYSIS.md` said Android did not exist. A native Android
   app landed hours later, the same day. The doc read as current for weeks.
-- `docs/SELF_REVIEW.md` said preflight mirrored all CI jobs. False in both
-  halves — there are six jobs and preflight mirrors three.
+- `docs/SELF_REVIEW.md` said preflight mirrored all CI jobs. False — and the
+  correction typed here ("six jobs, mirrors three") went stale too; the only
+  honest form is the command: `node scripts/check-preflight-ci-parity.mjs`.
 - Docs quoted "166 assertions" while the proof emitted 213.
 
 Each was written accurately and became false without anyone touching it.

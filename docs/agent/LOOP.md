@@ -68,7 +68,7 @@ LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
               "lane:inbox acks in one go" instruction is corrected by a
               superseding message, never by editing a record. Every fixed shape
               fails by name with the old code planted back (19/19 → 16/19,
-              28/28 → 25/28); proof:lane-messages 44/44. Catalogs: three said
+              28/28 → 25/28); the lane-messages proof 44/44. Catalogs: three said
               a thing did not exist that did (change-window family, hardened
               scanner, normalization-version stamping - the first registered
               in FALSE_CLAIMS.json), "423 entries with per-row URLs" measured

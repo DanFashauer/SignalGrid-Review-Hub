@@ -32,6 +32,7 @@
  */
 
 import Redis from 'ioredis';
+import { ageMs, FUTURE_SKEW_TOLERANCE_MS } from './utils/freshness';
 
 // ============================================================================
 // Types
@@ -139,8 +140,14 @@ export function parseStaleSeconds(raw: string | undefined): number {
   return n;
 }
 
-/** Tolerance for a `lastSeenAt` slightly ahead of this clock (two hosts' clocks). */
-export const FUTURE_SKEW_MS = 5 * 60 * 1000;
+/**
+ * The future-skew tolerance is the repository's ONE shared value, not a local
+ * copy: `utils/freshness.ts` holds the single body of the rule "a sighting
+ * timestamped in the future, beyond an allowed skew, is not evidence of freshness"
+ * (`scripts/check-freshness-divergence.mjs` refuses a hand-rolled copy). Re-exported
+ * under the name the proof reads.
+ */
+export const FUTURE_SKEW_MS = FUTURE_SKEW_TOLERANCE_MS;
 
 /**
  * The allow decision, pure: the device record (or null), the parsed mode, the
@@ -154,10 +161,12 @@ export function isAllowedByPolicy(
 ): boolean {
   if (mode === 'open') return true;
   if (!device || device.enrolled !== true) return false;
-  const seen = Date.parse(device.lastSeenAt ?? '');
-  if (!Number.isFinite(seen)) return false;          // never seen, or unreadable: not fresh
-  if (seen > nowMs + FUTURE_SKEW_MS) return false;    // a future stamp is a broken clock, not freshness
-  return nowMs - seen <= staleSeconds * 1000;
+  // One body for the age: absent, unparseable, an unreadable clock, or a stamp
+  // further ahead than the shared skew tolerance all come back `null` — never a
+  // number, never negative — and null is not fresh.
+  const age = ageMs(device.lastSeenAt ?? null, nowMs);
+  if (age === null) return false;
+  return age <= staleSeconds * 1000;
 }
 
 // ============================================================================

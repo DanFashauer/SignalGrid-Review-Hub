@@ -159,7 +159,7 @@ export function Fleet() {
                   <span className="font-mono text-[0.6rem] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border text-muted-foreground">tier {t.tier}</span>
                   {/* "signature present", not "signed": PolicyBundle carries checksum and
                       signature STRINGS and no verification result (lib/control-plane.ts).
-                      Nothing here checked them, so the badge states presence in a neutral
+                      Nothing here checked them, so the chip says "present" in a neutral
                       tone — the verified tone belongs to a surface that re-verifies, like
                       the audit chain banner. */}
                   {bundle && (

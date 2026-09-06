@@ -11,25 +11,25 @@ const PLATFORMS = [
     icon: Monitor,
     name: "Web Admin Console",
     subtitle: "Any modern browser",
-    desc: "The administrative surface: decision stream, evidence inspection (including the security-baseline/CIS signal), policy lab, tamper-evident audit ledger, and approval-gated remediation. Runs as a responsive web app today.",
+    desc: "The administrative surface: decision stream, evidence inspection (including the security-baseline/CIS signal), policy lab, and a tamper-evident audit ledger. Runs as a responsive web app today.",
     version: "Web · pre-announcement",
     options: [
       { label: "Open the web console", ext: "", size: "", badge: "WEB" },
       { label: "Self-host (Docker / Helm)", ext: "", size: "", badge: "DESIGN" },
     ],
-    features: ["Decision feed + evidence", "Security-baseline (CIS) row", "Policy lab (v1 vs v2)", "Audit ledger", "Approval-gated remediation"],
+    features: ["Decision feed + evidence", "Security-baseline (CIS) row", "Policy lab (v1 vs v2)", "Audit ledger"],
   },
   {
     icon: Monitor,
     name: "Desktop (macOS / Windows)",
     subtitle: "Desktop-chromed operator console",
-    desc: "The operator/admin surface framed for macOS and Windows, adding an ITSM hand-off view. Delivered today as a desktop-chromed web app; native shells (Tauri/Electron) are a documented next step, not shipped.",
+    desc: "The operator/admin surface framed for macOS and Windows. Delivered today as a desktop-chromed web app; native shells (Tauri/Electron) are a documented next step, not shipped.",
     version: "Desktop · pre-announcement",
     options: [
       { label: "macOS shell", ext: "", size: "", badge: "PLANNED" },
       { label: "Windows shell", ext: "", size: "", badge: "PLANNED" },
     ],
-    features: ["Operator dashboard", "Shift hand-off view", "Decision + evidence trace", "Audit export"],
+    features: ["Operator dashboard", "Decision + evidence trace"],
   },
   {
     icon: Smartphone,
@@ -41,7 +41,7 @@ const PLATFORMS = [
       { label: "Install via browser (Add to Home Screen)", ext: "", size: "", badge: "PWA" },
       { label: "Native iOS / Android shell", ext: "", size: "", badge: "PLANNED" },
     ],
-    features: ["Access-support triage", "Guidance to relay to workers", "Operator monitoring tabs", "Offline-capable (PWA)"],
+    features: ["Access-support triage", "Guidance to relay to workers", "Operator monitoring tabs", "Installable (PWA)"],
   },
 ];
 

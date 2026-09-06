@@ -7,13 +7,13 @@ import Footer from "@/components/layout/Footer";
 // framework in its decision model, not certifications held or product
 // availability. Everything here is modeled on public-safe fixtures.
 const COMPLIANCE_STATUS = [
-  { framework: "DISA STIG", status: "in-progress", detail: "STIG-oriented base image · SCAP/XCCDF benchmark mapping · CAT I/II/III decision mapping", badge: "SIGNAL MAPPING" },
+  { framework: "DISA STIG", status: "in-progress", detail: "SCAP/XCCDF benchmark mapping · CAT I/II/III decision mapping (the images are stock node:22 — no hardened base image exists)", badge: "SIGNAL MAPPING" },
   { framework: "DoD IL2 – IL5", status: "in-progress", detail: "Air-gap-oriented architecture · no external data transmission by design · offline license model", badge: "DESIGN TARGET" },
   { framework: "CMMC 2.0 Level 3", status: "in-progress", detail: "NIST SP 800-171 controls mapped into the policy model across the practice domains", badge: "CONTROL MAPPING" },
   { framework: "FedRAMP Moderate", status: "planned", detail: "Authorization is a roadmap target that would require a separate, formal process — not claimed today", badge: "ROADMAP" },
   { framework: "FedRAMP High", status: "planned", detail: "Roadmap target following any Moderate authorization; air-gap deployment is the design path", badge: "PLANNED" },
-  { framework: "NIST SP 800-53 Rev 5", status: "in-progress", detail: "Control-mapping document in progress · controls mapped into the policy model", badge: "CONTROL MAPPING" },
-  { framework: "NIST SP 800-171", status: "in-progress", detail: "110-control baseline mapped · CUI handling modeled in the policy engine", badge: "CONTROL MAPPING" },
+  { framework: "NIST SP 800-53 Rev 5", status: "in-progress", detail: "Controls mapped into the policy model · no control-mapping document exists yet", badge: "CONTROL MAPPING" },
+  { framework: "NIST SP 800-171", status: "in-progress", detail: "Configuration-management controls mapped into the baseline dimension (SECURITY_BASELINE_ALIGNMENT.md) · the full 110-control baseline and CUI handling are design goals, not modeled", badge: "CONTROL MAPPING" },
   { framework: "ITAR / EAR", status: "in-progress", detail: "Air-gap deployment is designed to keep data domestic; export-control posture is a design goal", badge: "DESIGN TARGET" },
 ];
 
@@ -36,10 +36,9 @@ const VEHICLES = [
 
 const DEPLOYMENT_FEATURES = [
   "Zero external network connectivity — classified-enclave-oriented design",
-  "Offline license model — no phone-home by design",
-  "DISA STIG-oriented Ubuntu or RHEL base image",
+  "Offline license model — design intent, not built",
   "SCAP 1.3 / XCCDF / OVAL benchmark mapping",
-  "FIPS 140-2-oriented cryptographic module design",
+  "FIPS 140-2-oriented cryptographic module — design target, no module selected",
   "Air-gap software update via signed bundle transfer (design intent)",
   "Tamper-evident hash-chained audit ledger with an independent paginating verifier and signed export",
   "CAC / PIV credential support (candidate PACS signal category)",
@@ -140,10 +139,10 @@ export default function Federal() {
                     { label: "License Validation", value: "Offline · Signed bundle (design intent)", color: "text-primary" },
                     { label: "Update Path", value: "Signed air-gap transfer (design intent)", color: "text-primary" },
                     { label: "Audit Storage", value: "Hash-chained ledger · verified + signed export", color: "text-green-400" },
-                    { label: "Crypto Module", value: "FIPS 140-2-oriented", color: "text-primary" },
-                    { label: "OS Baseline", value: "DISA STIG-oriented", color: "text-primary" },
+                    { label: "Crypto Module", value: "FIPS 140-2-oriented (design target)", color: "text-primary" },
+                    { label: "OS Baseline", value: "Stock node:22 images (hardened baseline: design)", color: "text-primary" },
                     { label: "Container", value: "Podman rootless", color: "text-primary" },
-                    { label: "Auth", value: "CAC / PIV + LDAP", color: "text-primary" },
+                    { label: "Auth", value: "CAC / PIV — candidate PACS signal category (design)", color: "text-primary" },
                   ].map(row => (
                     <div key={row.label} className="flex justify-between border-b border-border/40 pb-2">
                       <span className="text-muted-foreground">{row.label}</span>

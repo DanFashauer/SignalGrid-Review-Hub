@@ -430,6 +430,15 @@
      "read": "All 22 files read. DesktopLayout rendered a green all-clear for a FAILED signal feed (fixed: three states); Decisions.tsx local verdict map with a neutral fallback (routed through outcome-tone.ts); Integrations.tsx emitted class undefined for an unknown status (restrictive arm) and rendered 0 CONNECTED for an unloaded catalog; Handoff mock minted Date.now() and threw on an unknown status. Fetch targets all served. No Electron surface exists — it is a Vite web app labelled review build.",
      "open": 0,
      "closed": 6
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Sixteenth round: DesktopLayout.tsx:198 status bar no longer names Linux — 'macOS / Windows (desktop-chromed web console)'; no native shell exists for any of the three.",
+     "reviewer": "cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the one remove-actioned row; the app otherwise as the seventh and ninth rounds left it.",
+     "open": 0,
+     "closed": 1
     }
    ]
   },
@@ -467,6 +476,15 @@
      "scope": "partial: the three data files by their remove-actioned rows; the deck otherwise as the fifth and eighth rounds left it.",
      "open": 14,
      "closed": 1
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Sixteenth round: the 14 still-asserted dispositions in demoData.ts (12), architectureData.ts and competitiveData.ts applied. The prepared answers no longer make vendor API calls SignalGrid has no connector for (Workspace ONE, Hexnode, Tanium, MaaS360 — each now a fixture-shaped payload that says so), no longer send push notifications, webhooks or automated remediation tasks (the evidence records the recommendation; the source system acts), and no longer quote latencies no harness measured or a vendor's '#1 use case'. Identity sources cut to Entra ID and Fleet; the objection response names Intune and Entra as consumed today and the rest as designed and deferred. Ratchet remove-actioned still present 14 → 0 on this surface.",
+     "reviewer": "cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the three data files at every remove-actioned row; the deck otherwise as the fifth and eighth rounds left it.",
+     "open": 0,
+     "closed": 14
     }
    ]
   },
@@ -499,6 +517,15 @@
      "scope": "partial: the four sections in full by claim; the pages by their remove-actioned rows at the cited lines; the rest of the site as the seventh round left it.",
      "open": 37,
      "closed": 5
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Sixteenth round: the 37 still-asserted dispositions on Pricing, Federal, About, Downloads, ProblemSection, VerticalsSection and DeploymentSection applied. Removed: tier features nobody built (shift handoff, compliance export, alert routing, the desktop client in Enterprise), approval-gated remediation, the ITSM hand-off view, PHI-access controls, bring-your-own PKI, the STIG base image, the FIPS crypto line. Hedged in their own line: the mobile PWA (demo surface, ok:false), the air-gap tier line, the FIPS and IL4/IL5 design targets, the air-gapped card (now a DESIGN), CAC/PIV as a candidate PACS signal category, the badge-case binding in the FAQ as a design target. Corrected: 'All 7 signal sources fused' → three Limited GA, four deferred; 800-171 to what SECURITY_BASELINE_ALIGNMENT actually maps. VerticalsSection:16 reclassified rewrite — the buyer's own scanners read through the management plane. Ratchet remove-actioned still present 37 → 0 on this surface.",
+     "reviewer": "cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the seven pages at every remove-actioned row; the four sections re-extracted in the fifteenth round unchanged; the rest of the site as the seventh round left it.",
+     "open": 0,
+     "closed": 37
     }
    ]
   },
@@ -643,6 +670,15 @@
      "scope": "partial: CLAIM_INVENTORY.json by anchors over every quoted row and every fragment-bearing citation; unfragmented citations are existence-checked only (28 launch-profile line cites in the remove rows land on unrelated lines while their membership claims hold — a membership check is specified); EVIDENCE.md, LOOP.md, the registries as before.",
      "open": 2,
      "closed": 4
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Sixteenth round: CLAIM_INVENTORY.json — 47 remove-actioned rows resolved because their quotation no longer renders (decided by the gate's match after the edits, never by eye), 6 reclassified remove → rewrite with the hedge named, 2 older rewrite rows resolved when the same edits removed their sentence; actions remove 142 / rewrite 578 / keep 481; ratchet remove-actioned still present 53 → 0, absent 0, evidence fragments absent 12 → 11. CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json carries the applied outcome per count.",
+     "reviewer": "cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: CLAIM_INVENTORY.json by anchors as before; the membership check for launch-profile citations is still specified, not built; EVIDENCE.md, LOOP.md, the registries as before.",
+     "open": 2,
+     "closed": 1
     }
    ]
   },

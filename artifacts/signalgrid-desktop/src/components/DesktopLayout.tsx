@@ -195,7 +195,7 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
       <div className="h-6 bg-[hsl(222.2_84%_3.2%)] border-t border-border flex items-center px-4 gap-6 shrink-0">
         <div className="flex items-center gap-1.5">
           <Monitor className="w-3 h-3 text-muted-foreground/60" />
-          <span className="text-xs font-mono text-muted-foreground/60">SignalGrid Desktop · macOS / Windows / Linux</span>
+          <span className="text-xs font-mono text-muted-foreground/60">SignalGrid Desktop · macOS / Windows (desktop-chromed web console)</span>
         </div>
         <div className="flex items-center gap-1.5 ml-auto">
           <Database className="w-3 h-3 text-muted-foreground/60" />

@@ -44,17 +44,17 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/sbom` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/scanner-comparison` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/signalgrid-app` | package | 65 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 1 | 0 |
-| `artifacts/signalgrid-desktop` | package | 22 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 6 | 0 |
+| `artifacts/signalgrid-desktop` | package | 22 | read | 2 | 2026-09-06 | cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match) | docs/agent/EVIDENCE.md | 7 | 0 |
 | `artifacts/signalgrid-mobile-pwa` | package | 24 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 1 |
-| `artifacts/signalgrid-review` | package | 45 | read | 2 | 2026-09-06 | cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 5 | 14 |
-| `artifacts/signalgrid-web` | package | 32 | read | 3 | 2026-09-06 | cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 11 | 43 |
+| `artifacts/signalgrid-review` | package | 45 | read | 3 | 2026-09-06 | cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match) | docs/agent/EVIDENCE.md | 19 | 14 |
+| `artifacts/signalgrid-web` | package | 32 | read | 4 | 2026-09-06 | cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match) | docs/agent/EVIDENCE.md | 48 | 43 |
 | `artifacts/sim-requests` | tree | 16 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/sim-results` | tree | 47 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/sync` | tree | 5 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `config` | tree | 5 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `docker` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/*` | loose files | 214 | **partial** | 3 | 2026-09-06 | cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 19 | 0 |
-| `docs/agent` | docs family | 33 | **partial** | 4 | 2026-09-06 | cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 13 | 8 |
+| `docs/agent` | docs family | 33 | **partial** | 5 | 2026-09-06 | cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match) | docs/agent/EVIDENCE.md | 14 | 10 |
 | `docs/assets` | docs family | 1 | **partial** | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/company` | docs family | 9 | **partial** | 2 | 2026-09-06 | cloud lane (two independent fail-closed audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 1 |
 | `docs/connectors` | docs family | 4 | read | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |

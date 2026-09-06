@@ -20,7 +20,14 @@ export const LANES = Object.freeze(["cloud", "mac"]);
 export function currentLane() {
   const declared = process.env.SIGNALGRID_LANE;
   if (declared && LANES.includes(declared)) return declared;
-  return process.platform === "darwin" ? "mac" : "cloud";
+  const derived = process.platform === "darwin" ? "mac" : "cloud";
+  // An override that names no real lane is IGNORED, never obeyed (a typo must not
+  // invent a third lane nobody reads) — but ignored out loud: `SIGNALGRID_LANE=Mac`
+  // on the Linux workstation the header contemplates silently became "cloud",
+  // and the ack-authorship rule was the only thing that would have said so
+  // (artifacts/lane-messages read, 2026-09-06).
+  if (declared) console.warn(`SIGNALGRID_LANE="${declared}" names no lane (${LANES.join(", ")}) — ignored; acting as the ${derived} lane`);
+  return derived;
 }
 
 export function otherLane(lane = currentLane()) {

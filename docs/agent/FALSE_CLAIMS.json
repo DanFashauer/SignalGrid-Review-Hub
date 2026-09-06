@@ -316,6 +316,28 @@
     "six jobs and preflight mirrors three"
    ],
    "$scope": "Scoped to the typed coverage list; ci-jobs.mjs quoting the bad array as history and this registry are the two places the words legitimately remain."
+  },
+  {
+   "id": "change-window-queued-not-built",
+   "claimed": "the change-window question (are we inside the approved change window right now?) is answered by nothing in the tree; it is queued in BUILD_BACKLOG.md, not built here",
+   "assertedBy": "docs/inspiration/OT_ICS_SCADA_API_CATALOG.md (section 'The one genuine near-term gap: change-window currency') and docs/inspiration/INSPIRATION.md (the OT catalog's disposition line)",
+   "assertedOn": "2026-08-02",
+   "whyItHappened": "True the day the catalog was compiled and never revisited: the change-window family landed on 2026-08-02 (lib/integrations/src/integrations/change-window/, proof:change-window, BUILD_BACKLOG row marked DONE) and the catalog kept describing it as a queued gap for five weeks. A reference document that states an absence is a claim with a shelf life, and nothing re-ran check:absence on it (eighteenth audit round, 2026-09-06).",
+   "refutation": {
+    "kind": "path_exists",
+    "file": "lib/integrations/src/integrations/change-window/index.ts",
+    "paths": [
+     "lib/integrations/src/integrations/change-window/index.ts",
+     "lib/integrations/src/integrations/change-window/types.ts",
+     "lib/integrations/src/integrations/change-window/evaluate.ts"
+    ],
+    "$why": "the family's own source is the refutation; its types.ts defines ChangeWindowStanding = inside | outside | unknown, which is the question the catalog said nothing answered."
+   },
+   "denials": [
+    "change[- ]window[^.\\n]{0,80}(not built here|queued in)",
+    "nothing answers[^.\\n]{0,80}change window"
+   ],
+   "$scope": "docs/**/*.md except this registry and docs/agent/EVIDENCE.md; a sentence in the past tense that names the date it was corrected is not a denial"
   }
  ]
 }

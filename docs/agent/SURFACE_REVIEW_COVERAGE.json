@@ -310,7 +310,19 @@
   },
   "artifacts/lane-messages": {
    "path": "artifacts/lane-messages",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Eighteenth round: the whole channel read for the first time — 88 messages and 79 acks parsed programmatically (schema, id↔filename, lanes, dangling acks, secrets — all clean), ~8 bodies read as text, the 16 newest messages' factual claims checked against the tree. One false claim: the newest instruction to the Mac says lane:inbox acks in one go (it only prints) and counts six unread where there were seven — the seventh being the one message the old clock rendered without an age. Fixed in the owning code: absent sentAt now ages by the delivering commit and can be stale (the 13-day Fleet handoff is the tree's one STALE line), a supersedes field withdraws by reference and the inbox orders by sent instant, acks need a note, v1 ack round trips measured from the commit. The false instruction is corrected by a superseding message, never by editing a delivered record.",
+     "reviewer": "fail-closed-auditor agent (cloud lane), every finding re-run firsthand; every fixed shape has an assertion that fails against the old code",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 1,
+     "closed": 8,
+     "scopeNote": "every file parsed; bodies read where a claim was checkable; the owning code (lane-message.mjs, check-lane-messages.mjs, lane-deliver.mjs, lib/lane-identity.mjs) read in full."
+    }
+   ],
+   "status": "read"
   },
   "artifacts/live-captures": {
    "path": "artifacts/live-captures",
@@ -795,6 +807,15 @@
      "scope": "partial: INSPIRATION.md in full; the eleven catalogs by structure, count derivation and grep only.",
      "open": 0,
      "closed": 0
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Eighteenth round: the eleven catalogs' PROSE read line by line (every preamble, summary, repo map, priority list, guardrail, methodology, and every table row naming a SignalGrid path or symbol; the ~1,900 vendor rows counted and their figure/classification columns tallied, not read as prose). Findings fixed: OT_ICS_SCADA_API_CATALOG said 'queued, not built here' of the change-window question five weeks after lib/integrations/src/integrations/change-window/ landed (registered in FALSE_CLAIMS.json with denial patterns); MOBILE_APP_CATALOG_AGENT and INSPIRATION called the hardened scanner 'queued' after scan.py + proof:mobile-app-catalog shipped; MOBILE_CONFIG_RECORDER_CONTRACT posed normalization-version stamping as open after row 27a was built; TECHNOLOGY_ECOSYSTEM_MASTER_CATALOG claimed '423 master entries with row-level source URLs and per-row access classification' — measured 352 with a URL, 399 with an access class, 134 rows with no vendor/product/category, and a 37-row repos sheet that is 31 identical placeholders; MOBILE_APP_CONFIGURATION_CATALOG's tier-drift warning named four under-graded actions where there are seven (code.broadcast critical→standard among them) and its iOS config-key registry names 19 environment keys PR #436 deleted (13 nowhere in the tree; three live keys cite the wrong file); SPATIAL_TRUST_RESEARCH_REPORT's 'safe default should be risk-dependent, not universally fail closed' paragraph is now marked NOT adopted in the preamble; two workbook totals (ControlUp 54, ASSET 114) that no rule reproduces are marked unverified; one sandbox:/mnt/data citation named in COMMUNICATIONS' preamble. Clean: no deferred capability presented as current (every deferred noun sits in a hedged frame), no unsourced superlative, no cross-catalog figure contradiction beyond the propagations fixed.",
+     "reviewer": "fail-closed-auditor agent (cloud lane); every figure re-counted and every citation opened, the counts re-measured firsthand before the edits",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the eleven catalogs' prose in full (every non-table line and every SignalGrid-facing row); the vendor-row bodies (~2.4MB of 2.6MB) counted and column-tallied, not read — a false vendor-capability claim buried in one of ~1,900 rows would not have been caught.",
+     "open": 0,
+     "closed": 10
     }
    ]
   },
@@ -1683,6 +1704,15 @@
      "scope": "partial: the anchor gate and the generator in full; the rest of scripts/ as the fourth, tenth, fourteenth and fifteenth rounds left them.",
      "open": 0,
      "closed": 1
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Eighteenth round: lane-message.mjs (absent sentAt never stale → every unread message ages by sentAt, else its commit; supersedes; ack note required; readJson names the file), check-lane-messages.mjs (the self-test that asserted the defect inverted; 19/19, 16/19 with the old guard planted), check-scheduled-routines.mjs (a routine with no heartbeat measured from authorizedOn — mac-lane-tick and live-sync-loop-keeper now REPORTED as never fired; 28/28, 25/28 with the old branch planted), lane-deliver.mjs (a missing gate refused by name, --allow-ungated to override; supersedes passed through), lib/lane-identity.mjs (an ignored override warns). proof:lane-messages 44/44.",
+     "reviewer": "fail-closed-auditor agent (cloud lane), every finding re-run firsthand; every fixed shape has an assertion that fails against the old code",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the lane channel's five scripts in full; the rest of scripts/ as the earlier rounds left them.",
+     "open": 0,
+     "closed": 6
     }
    ]
   },

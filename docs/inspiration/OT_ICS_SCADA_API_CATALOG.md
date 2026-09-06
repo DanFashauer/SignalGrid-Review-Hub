@@ -303,16 +303,20 @@ section is a build commitment.
 | **1 Process** | PLC, RTU, IED, protection relays, local HMI, safety controller, transient cyber assets | **Partly covered, partly refused.** Device role is carried; device hygiene is `ot-posture` (firmware currency/patchability, segmentation, insecure protocol exposure, gateway liveness). Process-control evidence is the plant's own. **Safety state is refused — see below.** |
 | **0 Equipment** | Valves, actuators, breakers, sensors | **Out of scope by design.** Physical consequence and safety impact are properties of the plant and its safety systems. Verification state — did the expected outcome actually occur — is covered generically by the response-accountability and remediation-verification machinery, which grades *the response*, never the physics. |
 
-### The one genuine near-term gap: change-window currency
+### The one genuine near-term gap when this was compiled: change-window currency — since CLOSED
 
-`change_window` exists today only as a declared flow signal id carrying a health
-status — not a window fact. `pim-activation` grades ticket validity and change
-class, but nothing answers **"are we inside the approved change window right
-now?"** The shape is already built and proven elsewhere: `shift-context` derives
-schedule standing from a source-reported window plus a caller-supplied reference
-instant, with no clock in any decision path. This is not OT-specific — it serves
-the launch path's own change-control story — and it is queued in
-[BUILD_BACKLOG.md](../BUILD_BACKLOG.md), not built here.
+When this catalog was compiled, `change_window` was only a declared flow signal
+id carrying a health status — not a window fact — and `pim-activation` graded
+ticket validity and change class without answering **"are we inside the approved
+change window right now?"** That gap is closed: the `change-window` family
+(`lib/integrations/src/integrations/change-window/`) derives window standing
+(`inside` / `outside` / `unknown`) from the record's bounds at a caller-supplied
+reference instant, with no clock in any decision path — the same shape
+`shift-context` uses for schedule standing — and is proven by
+`proof:change-window`; [BUILD_BACKLOG.md](../BUILD_BACKLOG.md) records it DONE.
+It is `deferred` in `scripts/launch-profile.mjs`, not Limited GA. (This section
+said "queued, not built here" until 2026-09-06, two weeks after the family
+landed — the false-absence class `docs/agent/FALSE_CLAIMS.json` records.)
 
 ### Safety boundary
 

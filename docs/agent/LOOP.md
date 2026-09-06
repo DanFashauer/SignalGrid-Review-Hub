@@ -52,8 +52,31 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
 LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
-              M (#466), N (#468), O (#470), P (#471), Q (#473) and R (#474)
-              LANDED. Batch S (seventeenth round, on its PR) built the
+              M (#466), N (#468), O (#470), P (#471), Q (#473), R (#474) and
+              S (#476) LANDED. Batch T (eighteenth round, on its PR) read the
+              lane mail channel as a whole for the first time and the eleven
+              inspiration catalogs' prose. Mail: a message with no sentAt could
+              never go stale (the 13-day-unread Fleet handoff printed with no
+              age; the self-test asserted that as correct) - every unread
+              message now ages by sentAt or by the commit that delivered it;
+              a routine that never fired was exempt from the routines gate's
+              clock - measured from authorizedOn now (mac-lane-tick and
+              live-sync-loop-keeper REPORTED as never fired); lane-deliver
+              skipped a missing gate in silence - refused unless
+              --allow-ungated; a supersedes field withdraws by reference and
+              the inbox orders by sent instant; an ack needs a note; the false
+              "lane:inbox acks in one go" instruction is corrected by a
+              superseding message, never by editing a record. Every fixed shape
+              fails by name with the old code planted back (19/19 → 16/19,
+              28/28 → 25/28); proof:lane-messages 44/44. Catalogs: three said
+              a thing did not exist that did (change-window family, hardened
+              scanner, normalization-version stamping - the first registered
+              in FALSE_CLAIMS.json), "423 entries with per-row URLs" measured
+              352/399/134, the tier-drift warning named four of seven
+              under-graded actions, 19 iOS config keys deleted by #436 still
+              listed, the spatial report's risk-dependent fail-open paragraph
+              marked NOT adopted.
+              Batch S (seventeenth round, #476) built the
               membership check the auditor specified: a citation into the
               launch profile that names an id and an arm is tested by importing
               SURFACES (180 ids, floored) and pairing the id with the status
@@ -411,10 +434,15 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land Batch S (on its PR - the launch-profile membership
-              check and the last absent evidence fragments), then the
-              inspiration catalogs' prose and whatever the ledger still marks
-              not read or partial (1 not read, 12 partial on 2026-09-06 -
+NEXT ACTION: cloud: land Batch T (on its PR - the lane mail channel's three
+              fail-open shapes and the catalogs' expired absences), deliver the
+              steward batch that supersedes both batch-J messages, then (1) the
+              gate the catalog auditor specified: a document that cites a
+              repository file AND names a symbol inside it must name a symbol
+              the file still contains (check-cited-paths proves the path and
+              stops; three of this round's findings passed it) - match code,
+              not comments; verbatim imports get a visible per-file opt-out;
+              (2) whatever the ledger still marks partial (12 on 2026-09-06 -
               `node scripts/check-surface-review-coverage.mjs` names them);
               the 213 unasserted membership clauses are REPORTED, not owed -
               an evidence sentence that names an id without an arm is not

@@ -18,6 +18,11 @@
 >
 > Binding readings, none of which the catalog body may be quoted against:
 >
+> - **One citation in the body resolves for nobody.** The Sources table's last
+>   row cites a generator-local `sandbox:/mnt/data/…` path — an artifact of the
+>   tool that produced the workbook. The in-repo equivalent is
+>   `docs/inspiration/MOBILE_APP_CONFIGURATION_CATALOG.md` (noted 2026-09-06;
+>   the body is verbatim and is not edited).
 > - **Reference inventory, not a build queue.** No dependency is taken on any
 >   listed vendor, operator, or aggregator. The owner's own boundary is
 >   preserved and binds here: this is "a massive best-effort communications

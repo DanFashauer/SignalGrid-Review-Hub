@@ -97,7 +97,32 @@ export function auditScheduledRoutines(registry, heartbeats, rosterText, listHea
     } else {
       const hb = heartbeats[r.heartbeatPath];
       if (hb === undefined) {
-        reported.push(`${name}: no heartbeat written yet at ${r.heartbeatPath} — declared but not yet evidenced firing (the next fire writes the first)`);
+        // A routine that has NEVER fired was permanently exempt from the only
+        // clock in this gate: cadenceToleranceHours was consulted only in the
+        // else branch, and the absent case was described as young ("the next
+        // fire writes the first") rather than measured. The Mac tick (tolerance
+        // 3h) sat absent for a day with a human carrying the escalation the gate
+        // could not raise (artifacts/lane-messages read, 2026-09-06). The clock
+        // for a routine with no heartbeat is its authorization instant — the
+        // same skip-on-absent shape the sibling at the tolerance check already
+        // names. Staleness stays REPORTED; an unreadable baseline is FATAL.
+        if (retired) {
+          reported.push(`${name}: retired, no heartbeat at ${r.heartbeatPath} — consistent with never having fired`);
+        } else if (!(Number.isFinite(r.cadenceToleranceHours) && r.cadenceToleranceHours > 0)) {
+          fatal.push(`${name}: active routine with no heartbeat and no positive cadenceToleranceHours — without a bound, "never fired" can never become "overdue"`);
+        } else {
+          const since = Date.parse(r.authorizedOn ?? "");
+          if (!Number.isFinite(since)) {
+            fatal.push(`${name}: no heartbeat at ${r.heartbeatPath} and no parseable authorizedOn — with neither instant, "not yet" is unmeasurable and would read as fresh forever`);
+          } else {
+            const ageH = (Date.now() - since) / 3_600_000;
+            if (ageH > r.cadenceToleranceHours) {
+              reported.push(`${name}: NEVER fired — authorized ${ageH.toFixed(1)}h ago, tolerance ${r.cadenceToleranceHours}h, no heartbeat at ${r.heartbeatPath} (REPORTED, never silent: the lane is not running)`);
+            } else {
+              reported.push(`${name}: no heartbeat written yet at ${r.heartbeatPath} — authorized ${ageH.toFixed(1)}h ago, inside its ${r.cadenceToleranceHours}h tolerance (the next fire writes the first)`);
+            }
+          }
+        }
       } else {
         let parsed;
         try {
@@ -204,6 +229,14 @@ function selfTest() {
   checks.push(["a stale heartbeat is REPORTED and exits 0", r.fatal.length === 0 && r.reported.some((x) => x.includes("beyond its"))]);
   r = auditScheduledRoutines({ transcribedFrom: "x", routines: [] }, {}, "");
   checks.push(["an empty registry with no heartbeats is clean", r.fatal.length === 0 && r.reported.length === 0]);
+  // Never fired: the routine's authorization instant is its clock.
+  const dayAgo = new Date(Date.now() - 26 * 3_600_000).toISOString().slice(0, 10);
+  r = auditScheduledRoutines({ ...good, routines: [{ ...good.routines[0], cadenceToleranceHours: 3, authorizedOn: dayAgo }, good.routines[1]] }, {}, "");
+  checks.push(["a routine authorized 26h ago with a 3h tolerance and NO heartbeat is REPORTED as never fired — not 'not yet'", r.fatal.length === 0 && r.reported.some((x) => x.includes("NEVER fired"))]);
+  r = auditScheduledRoutines({ ...good, routines: [{ ...good.routines[0], cadenceToleranceHours: 50, authorizedOn: new Date().toISOString().slice(0, 10) }, good.routines[1]] }, {}, "");
+  checks.push(["…one authorized today inside a 50h tolerance is still 'the next fire writes the first' (the honest young case)", r.fatal.length === 0 && r.reported.some((x) => x.includes("inside its 50h tolerance")) && !r.reported.some((x) => x.includes("NEVER fired"))]);
+  r = auditScheduledRoutines({ ...good, routines: [{ ...good.routines[0], cadenceToleranceHours: 3, authorizedOn: undefined }, good.routines[1]] }, {}, "");
+  checks.push(["…and one with no heartbeat AND no authorizedOn is FATAL — with neither instant it would read as fresh forever", r.fatal.some((x) => x.includes("no parseable authorizedOn"))]);
   r = auditScheduledRoutines({ ...good, routines: [{ ...good.routines[1], heartbeatPathReason: undefined }] }, {}, "");
   checks.push(["a null heartbeat path WITHOUT a reason is FATAL", r.fatal.some((x) => x.includes("no reason"))]);
   const retiredGood = { ...good.routines[0], id: "c", status: "retired", retiredAt: "2026-09-01T12:00Z", retiredBy: "Owner", retiredReason: "designed before the lane could open pull requests itself; it fired and left nothing behind", heartbeatPath: "artifacts/agent-heartbeats/c.json" };

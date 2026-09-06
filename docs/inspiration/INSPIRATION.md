@@ -157,7 +157,9 @@ It also anchors the honest register: continuous *verification*, least privilege,
   repositories, and 28 rows honestly recorded as "no detailed public contract
   located". Paywalled bodies (IEC 62443, ISA-95/99, ISO) appear by title and
   scope only. It carries the Purdue-level mapping against the fabric that
-  actually exists, the change-window gap, and the **safety-state refusal** —
+  actually exists, the change-window gap (since closed by the `change-window`
+  family — `docs/BUILD_BACKLOG.md` records it DONE; the catalog said "queued,
+  not built here" until 2026-09-06), and the **safety-state refusal** —
   SignalGrid gates who may attempt a bypass; the plant's safety system decides
   whether the machine is safe to move.
 - [Asset Management & IT Governance API & GitHub catalog](ASSET_MANAGEMENT_IT_GOVERNANCE_API_CATALOG.md)
@@ -194,9 +196,11 @@ It also anchors the honest register: continuous *verification*, least privilege,
   — the owner's repository-scanner source and catalog JSON Schema, preserved
   verbatim with SHA-256 provenance and the intake audit's VERIFIED defect list
   (secret-leak path, symlink escape, non-determinism). Reference only; the
-  hardened integration is the queued YELLOW-lane scanner phase in
-  `docs/BUILD_BACKLOG.md`, and the scheduled PR-creating workflow is
-  deliberately unwritten pending explicit owner approval.
+  hardened integration landed as `scripts/mobile-app-catalog/scan.py`, gated by
+  `proof:mobile-app-catalog` (`docs/BUILD_BACKLOG.md` records the scanner half
+  done; this entry said "queued" until 2026-09-06), and the scheduled
+  PR-creating workflow is deliberately unwritten pending explicit owner
+  approval.
 - [Mobile post-configuration recorder — reference contract](MOBILE_CONFIG_RECORDER_CONTRACT.md)
   — the recorder JSON Schema + PostgreSQL model, preserved verbatim behind a
   binding preamble: nothing in this repository consumes them, the tenant
@@ -206,7 +210,9 @@ It also anchors the honest register: continuous *verification*, least privilege,
 - [Technology Ecosystem Master Catalog](TECHNOLOGY_ECOSYSTEM_MASTER_CATALOG.md)
   — the owner-compiled 21-sheet consolidation of the CIS, physical-access and
   endpoint catalogs, expanded across sixteen ecosystem domains (423 master
-  entries with per-row source URLs and access classes; verified 2026-07-31).
+  rows — measured 2026-09-06: 352 with a source URL, 399 with an access class,
+  and 134 unnamed MDM/UEM rows; the row count was verified 2026-07-31, the
+  "per-row URLs" qualifier was not).
   Filed as the ecosystem STRATEGY map, explicitly not a build queue — the
   launch path stays Entra+Intune → one shared-device workflow → one pilot →
   demand-driven expansion. The partner/buyer sheet is deliberately omitted

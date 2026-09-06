@@ -11,6 +11,8 @@
 //   flags: --dry-run        build and gate the commit, push nothing, keep nothing
 //          --via-pr         push a lane/<lane>-mail-<stamp> branch even on the Mac
 //          --trailer "K: v" append a commit trailer (repeatable)
+//          --allow-ungated  deliver even when mainline lacks a gate script (named
+//                           in the output; never the default — see step 3)
 //          --no-wake        skip the mailbox-PR comment
 //
 // WHY THIS EXISTS (2026-09-05, owner: "this is not working and causing delay").
@@ -76,13 +78,14 @@ function mustGit(args, cwd, what) {
 
 // ── argument parsing ──────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
-const flags = { dryRun: false, viaPr: false, noWake: false, trailers: [] };
+const flags = { dryRun: false, viaPr: false, noWake: false, allowUngated: false, trailers: [] };
 const positional = [];
 for (let i = 0; i < argv.length; i += 1) {
   const a = argv[i];
   if (a === "--dry-run") flags.dryRun = true;
   else if (a === "--via-pr") flags.viaPr = true;
   else if (a === "--no-wake") flags.noWake = true;
+  else if (a === "--allow-ungated") flags.allowUngated = true;
   else if (a === "--trailer") {
     const v = argv[i + 1];
     if (!v) die("--trailer needs a value");
@@ -91,6 +94,7 @@ for (let i = 0; i < argv.length; i += 1) {
   } else positional.push(a);
 }
 const [cmd, ...rest] = positional;
+const ALLOW_UNGATED = flags.allowUngated;
 
 /** @returns {Array<{op:string,[k:string]:string}>} */
 function parseOps() {
@@ -171,7 +175,12 @@ let pushedSha = null;
   let touchesHeartbeat = false;
   for (const o of ops) {
     if (o.op === "send") {
-      const r = run("node", [join(repo, "scripts/lane-message.mjs"), "send", o.subject, o.body], { cwd: wt, env });
+      // `supersedes` (one id or a list) withdraws earlier messages by reference —
+      // the writer refuses an id that does not exist in the worktree's mailbox.
+      const sup = o.supersedes === undefined ? [] : Array.isArray(o.supersedes) ? o.supersedes : [o.supersedes];
+      const args = [join(repo, "scripts/lane-message.mjs"), "send", o.subject, o.body];
+      for (const s of sup) args.push("--supersedes", String(s));
+      const r = run("node", args, { cwd: wt, env });
       if (r.code !== 0) die(`send refused:\n${r.err || r.out}`, r.code);
       const id = /wrote .*[\\/]([^\\/]+)\.json/.exec(r.out)?.[1] ?? "(id?)";
       summary.push(`send ${id}`);
@@ -203,7 +212,16 @@ let pushedSha = null;
   const gates = [["scripts/check-lane-messages.mjs", "lane messages"]];
   if (touchesHeartbeat) gates.push(["scripts/check-scheduled-routines.mjs", "scheduled routines"]);
   for (const [script, label] of gates) {
-    if (!existsSync(join(wt, script))) continue; // an older mainline without the gate has nothing to fail
+    if (!existsSync(join(wt, script))) {
+      // A check that did not run is not a check that passed. This used to
+      // `continue` silently — "an older mainline without the gate has nothing to
+      // fail" — and the run still ended "done" with no gate line at all, under a
+      // header that promises FAIL CLOSED (artifacts/lane-messages read,
+      // 2026-09-06). Now the skip is named and refused unless asked for.
+      if (!ALLOW_UNGATED) die(`the ${label} gate is absent at origin/${MAINLINE}:${script} — refusing to deliver ungated (pass --allow-ungated to override, and say why in the message)`, 1);
+      console.log(`  gate        ${label}: SKIPPED — script absent at ${script} (--allow-ungated)`);
+      continue;
+    }
     const r = run("node", [script], { cwd: wt, env });
     if (r.code !== 0) die(`the ${label} gate refused this delivery:\n${r.out}${r.err}`, 1);
     console.log(`  gate        ${label}: passed`);
@@ -220,6 +238,12 @@ let pushedSha = null;
   // refuses the delivery: mail must never ship a page the gate will not accept.
   const stagedMail = mustGit(["diff", "--cached", "--name-only"], wt, "listing the stage").split("\n").filter(Boolean);
   const allowed = [...MAIL_DIRS];
+  if (stagedMail.length > 0 && !existsSync(join(wt, COVERAGE_SCRIPT))) {
+    // Same rule as the gates above: a generator that is not there is not a page
+    // that is current. Named, and refused unless asked for.
+    if (!ALLOW_UNGATED) die(`the coverage generator is absent at origin/${MAINLINE}:${COVERAGE_SCRIPT} — refusing to deliver a page it cannot regenerate (pass --allow-ungated to override)`, 1);
+    console.log(`  coverage    SKIPPED — generator absent at ${COVERAGE_SCRIPT} (--allow-ungated)`);
+  }
   if (stagedMail.length > 0 && existsSync(join(wt, COVERAGE_SCRIPT))) {
     const r = run("node", [COVERAGE_SCRIPT, "--write"], { cwd: wt, env });
     if (r.code !== 0) die(`the surface-review coverage page could not be regenerated for this delivery:\n${r.out}${r.err}`, 1);

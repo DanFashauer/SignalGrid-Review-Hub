@@ -52,8 +52,29 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
 LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
-              M (#466), N (#468) and O (#470) LANDED. Batch P (fourteenth round,
-              on its PR) built the three gates O specified and each found more
+              M (#466), N (#468), O (#470) and P (#471) LANDED. Batch Q
+              (fifteenth round, on its PR) held the claim inventory to its
+              evidence as well as its surfaces: 1,066 citations checked (none
+              missing, none past EOF; 53 drifted fragments re-anchored, 12 absent
+              ratcheted, the rest of the first 67 were the gate's own heuristics
+              and are fixed - backtick identifiers, nearest-citation windows,
+              entities and source seams); 325 vanished quotations resolved with
+              their removing commit (125 of them #253, the 2026-08-22 site
+              rewrite); five site surfaces re-extracted (120 rows) and the
+              findings fixed - OutcomesSection's exit-violation block asserted a
+              dock/badge/location/PACS flow no noun in check-launch-claims
+              matched (widened, measured first), "Nobody Owns This Gap" against
+              MARKET_LANDSCAPE, two more unbacked clauses, an og:description
+              without its hedge; the 64 remove-actioned rows still rendering read
+              one by one: 54 STILL ASSERT what the tree does not back (queued
+              with current text + proposed edit in
+              docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json), 9 were
+              hedged at extraction (reclassified), and demoData.ts:465 - a
+              prepared prospect answer calling fail-open "configurable per
+              workflow category" - was fixed on sight. The anchor gate now fails
+              a remove-actioned row that carries a resolution while its words
+              still render.
+              Batch P (fourteenth round, #471) built the three gates O specified and each found more
               than its brief: check-nan-fail-open rule 5 (a number|null field
               compared before Number.isFinite, in the evaluators) fired on nine
               sites in six evaluators against the O head - the deferred RTLS
@@ -365,25 +386,27 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land Batch P (on its PR), then Batch Q = what the anchor
-              gate ratcheted rather than fixed: (1) the 334 quoted claims absent
-              from their surfaces without a resolution (per-file figures in
-              docs/agent/claim-inventory-anchors-ratchet.json; largest:
-              SignalTypesSection 36, VerticalsSection 32, fabric-console 29,
-              DifferentiatorsSection 25, OutcomesSection 23) — resolve or
-              re-extract surface by surface, the way the README rows were;
-              (2) the 64 remove-actioned rows whose copy is still on the surface
-              — each gets the copy removed or its action revised with a
-              resolution; (3) an evidence-citation anchor check — a path:line
-              inside an `evidence` field must still hold the text the row
-              attributes to it (the README re-extraction found
-              WHAT_SIGNALGRID_DOES_TODAY.md citations that no longer do);
-              (4) README:198-203 — say whether /v1/authorize is one of the
-              "decision" paths or name it. Then the inspiration catalogs' prose
-              and whatever the ledger still marks not read. (The Batch P spec's
-              "2 rows past EOF" and "13 remove-actioned quotes" were estimates;
-              measured by the gate: 0 README rows past EOF, 64 remove-actioned
-              rows still present across all surfaces.) OWNER: the ICP
+NEXT ACTION: cloud: land Batch Q (on its PR), then Batch R = the 54 remove-
+              actioned claims that still render, from
+              docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (each row
+              carries the current text, a proposed edit and an evidence check):
+              Pricing 11 (tier features priced at $14/device with green
+              checkmarks), Federal 10 (:146 "CAC / PIV + LDAP" unhedged beside
+              "(design)" neighbours), DeploymentSection 8 (:40 the air-gapped
+              card with no hedge, :30 "Bring your own PKI" with no PKI code),
+              Downloads 6, demoData 12 more prepared answers, About/Problem/
+              Verticals/architectureData/competitiveData/DesktopLayout 1 each
+              - the copy is removed or hedged in its own block, or the row's
+              action is revised with the reason; never a resolution while the
+              words render (the gate fails that now). Then (2) the membership
+              check the auditor specified: an evidence citation into
+              scripts/launch-profile.mjs that asserts an id's arm must be
+              verified by importing SURFACES and testing membership, never by
+              line number (28 such citations in the remove rows land on
+              unrelated lines while every membership claim still holds; start
+              REPORT-only, ratchet); (3) the 12 evidence fragments still absent
+              in 2026-08-21 rows. Then the inspiration catalogs' prose and
+              whatever the ledger still marks not read. OWNER: the ICP
               segment ("75-1,000 employees, 1-10 in IT") is stated flatly in
               INVESTOR_ONE_PAGER while ICP_EVIDENCE calls it an assumption -
               your call, not a gate's. OWNER, once, on the Mac, now that

@@ -458,6 +458,15 @@
      "scope": "surface",
      "open": 0,
      "closed": 4
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Fifteenth round: the remove-actioned rows in demoData.ts (13), architectureData.ts and competitiveData.ts read at their lines. Fixed on sight: demoData.ts:465, a prepared prospect answer saying fail-open is 'configurable per workflow category' — the mode golden rule 2 makes structural — now says fail-closed by construction and not configurable. The other fourteen (five identity sources as chips with only graph reachable, 'consumes Okta session state', twelve more prepared answers asserting deferred families) are recorded with current text and proposed edit for the next batch.",
+     "reviewer": "cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the three data files by their remove-actioned rows; the deck otherwise as the fifth and eighth rounds left it.",
+     "open": 14,
+     "closed": 1
     }
    ]
   },
@@ -481,6 +490,15 @@
      "read": "Seventh round: the sixth round's six open findings closed. 13 blob|tree/main links repointed to the default branch and gated (check-repo-links.mjs); SIGNALS FUSED computed from the panel; 17 and 16 bound to their sources (check-site-figures.mjs); About.tsx location/custody hedged where the claims are; LIVE_VERIFIED matches product names; Federal STATUS_META falls back restrictive with the unused green arm removed.",
      "open": 0,
      "closed": 6
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Fifteenth round: SignalTypes, Verticals, Differentiators and Outcomes sections re-extracted claim by claim (84 rows) and every remove-actioned row on Pricing, Federal, About, Downloads, Problem, Deployment, Compliance and Hardware read at its line. Fixed: OutcomesSection's exit-violation block asserted a dock/badge/location/PACS flow with no hedge in its own block (now labelled deferred roadmap, illustrative; the chip that 'routed' a badge suspension to the PACS names the PACS as the actor; 'Session close recorded' is now the host app's act); Differentiators' 'Nobody Owns This Gap. Yet.' contradicted docs/research/MARKET_LANDSCAPE.md; SignalTypes' market-share clause and its 'every claim traces to a proof' sentence; Verticals' 'the management plane the MSP already runs'. Still asserted and recorded for the next batch: Pricing 11, Federal 10, DeploymentSection 8, Downloads 6, About/Problem/Verticals 1 each — tier features, an air-gapped card with no hedge, CAC/PIV + LDAP in a table whose neighbours say '(design)', 'All 7 signal sources fused'.",
+     "reviewer": "cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the four sections in full by claim; the pages by their remove-actioned rows at the cited lines; the rest of the site as the seventh round left it.",
+     "open": 37,
+     "closed": 5
     }
    ]
   },
@@ -575,6 +593,15 @@
      "scope": "partial: BUILD_BACKLOG.md and COMPANY_BUILD_PLAN.md in full; the other loose files as the tenth round left them (mechanical sweep + close read of 10).",
      "open": 0,
      "closed": 12
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Fifteenth round: docs/fabric-console.html re-extracted (36 rows: 14 launch, 11 deferred, 10 demo-only, 1 unsubstantiated) — the page-level banner at :140 and footer at :185 hedge every deferred family it names; the og:description did not carry the hedge onto the social card and now does.",
+     "reviewer": "cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: fabric-console.html in full by claim; the other loose files as the thirteenth round left them.",
+     "open": 0,
+     "closed": 1
     }
    ]
   },
@@ -607,6 +634,15 @@
      "scope": "partial: CLAIM_INVENTORY.json by anchors over every quoted row (the 148 unquoted rows are reported, not judged); EVIDENCE.md, LOOP.md and the registries as before.",
      "open": 3,
      "closed": 3
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Fifteenth round: CLAIM_INVENTORY.json held to its evidence as well as its surfaces. 1,066 root-anchored citations in unresolved rows: none missing, none past EOF; of 217 carrying a quoted fragment, 53 had drifted (re-anchored in the evidence text) and 67 were absent — 55 of those were the gate's own heuristics (backtick identifiers read as quotations, a fragment handed to the wrong citation, entities and source seams read as rewrites), corrected; 12 remain, all in 2026-08-21 rows, ratcheted. 325 quoted claims absent from their surfaces resolved with their removing commit where pickaxe could name it (125 of them the 2026-08-22 site rewrite). New fatal rule: a remove-actioned row may not carry a resolution while its quotation still renders. Dispositions of the 64 remove-actioned rows persisted in CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json: 54 still asserted (the next batch), 9 reclassified, 1 fixed.",
+     "reviewer": "cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: CLAIM_INVENTORY.json by anchors over every quoted row and every fragment-bearing citation; unfragmented citations are existence-checked only (28 launch-profile line cites in the remove rows land on unrelated lines while their membership claims hold — a membership check is specified); EVIDENCE.md, LOOP.md, the registries as before.",
+     "open": 2,
+     "closed": 4
     }
    ]
   },
@@ -1584,6 +1620,15 @@
      "scope": "partial: the two gates in full and launch-profile.mjs's native/shared reasons; the rest of scripts/ as the fourth and tenth rounds left them.",
      "open": 0,
      "closed": 3
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Fifteenth round: check-claim-inventory-anchors gained evidence-citation checking (root-anchored path:line, double-quoted fragment within ±10 lines, drift re-anchored by --write, absence ratcheted), an entity- and seam-aware normalizer, a nearest-citation fragment window, and a fatal rule against resolving a remove-actioned row whose copy still renders; self-test 26/26. check-launch-claims' DEFERRED_NOUNS widened by four phrases the site's exit-violation block used, measured on a scratch copy first (docs ceiling unchanged), three self-test cases.",
+     "reviewer": "cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the two gates in full; the rest of scripts/ as the fourth, tenth and fourteenth rounds left them.",
+     "open": 0,
+     "closed": 2
     }
    ]
   },

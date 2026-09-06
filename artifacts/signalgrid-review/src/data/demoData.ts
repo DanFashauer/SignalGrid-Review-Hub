@@ -462,7 +462,7 @@ export const demoObjectionResponses = [
   {
     objection: "\"What happens if SignalGrid goes down? Do all workflows stop?\"",
     response:
-      "SignalGrid is designed as a policy enforcement point, not as the authentication layer itself. The fail-open vs. fail-closed behavior is configurable per workflow category. High-sensitivity workflows can be fail-closed; operational continuity workflows can be fail-open with an audit event. Your existing auth stack continues to function independently.",
+      "SignalGrid is designed as a policy decision point, not as the authentication layer itself. It is fail-closed by construction and that is not configurable: an unknown, stale or unreachable signal raises the assurance required, never lowers it. Your existing auth stack continues to function independently.",
   },
   {
     objection: "\"We already have Conditional Access doing most of this.\"",

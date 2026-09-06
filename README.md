@@ -198,8 +198,9 @@ as readiness.
 
 **Limited GA is deliberately narrow:** one read-only Entra/Intune connector
 (`graph`) with the device-management-health and local-authority families; the
-three signal kinds they produce; the `/v1` decision, evidence, audit, context,
-metrics, connector-read and policy-read paths; and three app surfaces —
+three signal kinds they produce; the `/v1` decision paths (`/v1/decisions/*`
+and `/v1/authorize`, the host-app shape of the same gate), evidence, audit,
+context, metrics, connector-read and policy-read paths; and three app surfaces —
 `api-server`, `signalgrid-app`, and `EnterpriseShell` as the host-app
 reference. Everything else in the tree is `deferred` (real, gated, proven,
 staying — not shipping), `demo_only`, or `internal`. The counts per status are

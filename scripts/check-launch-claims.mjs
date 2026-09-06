@@ -311,8 +311,14 @@ const LAUNCH_IDS = new Set(["device-posture", "management-health", "local-author
 // `CUSTODY_MAINTENANCE` in the IT-layer owner map — none of which assert the custody
 // signal ships. `\bcustody\b` leaves those (a word char sits on one side) while still
 // flagging genuine prose: "device custody", "physical custody:", "Custody gaps".
+// `badge checkout`, `not docked`, `location escalation` and `routed to the PACS`
+// joined on 2026-09-06: the site's exit-violation scenario asserted all four as a
+// present-tense flow and none matched — "badge" only counted with binding/state/
+// tap/present, and dock, location and PACS were not nouns here at all. Measured
+// before adopting: the docs ceiling did not move (453 → 453), the buyer gate
+// gained exactly the one block.
 const DEFERRED_NOUNS =
-  /badge\s?(binding|state|tap|present)|\bcustody\b|geofence|\bzone\b|shift window|shift-scoped|BLE proximity|proximity confirm|tamper (sensor|witness|detection)|GPS|RTLS/i;
+  /badge\s?(binding|state|tap|present|checkout|suspension)|\bcustody\b|not docked|location escalation|routed to the PACS|geofence|\bzone\b|shift window|shift-scoped|BLE proximity|proximity confirm|tamper (sensor|witness|detection)|GPS|RTLS/i;
 // Hedges the copy ACTUALLY uses. Tightening rule 3 to block scope exposed that
 // this vocabulary was too narrow in the other direction: Hardware.tsx hedges with
 // "candidate signals, not evaluated today" and IntegrationsSection with "candidate
@@ -722,6 +728,12 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
     violationsIn("st10.html", honestIdiom).length === 0 &&
     violationsIn("st11.html", avoidList).length === 0 &&
     violationsIn("st12.html", avoidList.replace("Trap phrases to avoid", "Signals we fuse")).length > 0 &&
+    // The 2026-09-06 nouns: the site's exit-violation block asserted a dock/badge/
+    // location/PACS flow that no earlier noun matched. It must flag bare and pass
+    // once its own block carries the hedge.
+    violationsIn("st13.tsx", '<div>Device not docked by end of shift — no badge checkout recorded</div>').length > 0 &&
+    violationsIn("st14.tsx", '<div>Badge suspension routed to the PACS</div>').length > 0 &&
+    violationsIn("st15.tsx", '<div>EXIT VIOLATION SCENARIO — DEFERRED ROADMAP, ILLUSTRATIVE</div><div>Device not docked by end of shift — no badge checkout recorded</div>').length === 0 &&
     // Retired category label — flagged in live copy, exempt when named as retired.
     retiredLabelViolations("stR0", "SignalGrid is a Zero Trust orchestration platform.").length > 0 &&
     retiredLabelViolations("stR1", "The Operational Trust Orchestration label is retired; DR-004 renamed it Shared-Device Trust Gateway.").length === 0 &&

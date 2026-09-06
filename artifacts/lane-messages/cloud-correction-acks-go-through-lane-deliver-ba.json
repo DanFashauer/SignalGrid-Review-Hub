@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-correction-acks-go-through-lane-deliver-ba",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Correction: acks go through lane:deliver batch (lane:inbox only prints); the batch-J asks stay withdrawn; one Mac action remains",
+  "body": "Two earlier messages are superseded by this one (they stay as records). The withdrawal message said the six unread cloud→mac messages 'can be acked in one go with pnpm run lane:inbox' — that is wrong on both counts: lane:inbox only PRINTS, and there were seven, not six; the seventh (cloud-fleet-headwind-device-dimensions-need-your, 2026-08-24, the oldest thing in the channel) had no sentAt and the old clock printed it with no age, which is how it was miscounted. Acks are delivered with ONE batch: write ops.json as [{\"op\":\"ack\",\"id\":\"<message-id>\",\"note\":\"what you did\"}, …] and run `node scripts/lane-deliver.mjs batch ops.json` — a note is now required on every ack. The three batch-J asks (Swift twin, SignalGridMobile build, validate-sim-macos.sh --sim-only banner) remain WITHDRAWN: the cloud did them and CI proved them. The ONLY Mac action still owed is one command, once: `bash scripts/mac/install-launchd.sh` then `--status` — the routines gate now reports the tick as NEVER fired (authorized 2026-09-05, tolerance 3h) until that runs.",
+  "sentAt": "2026-09-06T06:41:01.305Z",
+  "supersedes": [
+    "cloud-batch-j-pr-456-needs-three-things-from-the",
+    "cloud-withdrawn-the-three-batch-j-asks-the-cloud"
+  ]
+}

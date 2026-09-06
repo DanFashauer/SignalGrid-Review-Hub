@@ -59,6 +59,22 @@ export function GridOverview() {
   // gaps/blocked default to 0) is still pending. Require all five.
   const anyLoaded = cov.data || src.data || cfg.data || prov.data || res.data;
   const allLoaded = cov.data && src.data && cfg.data && prov.data && res.data;
+  // A settled error is not "loading": with every /cp/v1 read 404ing (the
+  // shared-device-gateway profile does not mount the control-plane router) this
+  // hero read "Loading the grid…" forever, and a partial failure read "no issues in
+  // what has loaded so far" — a pending word over a dead surface. Name the surfaces
+  // that did not answer; nothing here can be called clear until they do.
+  const failed = (
+    [
+      [cov, "coverage"],
+      [src, "sourcing"],
+      [cfg, "config"],
+      [prov, "provisioning"],
+      [res, "app resilience"],
+    ] as const
+  )
+    .filter(([q]) => q.isError)
+    .map(([, name]) => name);
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8">
@@ -80,7 +96,12 @@ export function GridOverview() {
             <Metric label="Apps workable" value={fleet ? `${fleet.workable}/${fleet.total}` : "-"} accent={fleet ? (fleet.blocked ? "text-amber-400" : "text-emerald-400") : undefined} sub={fleet ? (fleet.blocked ? `${fleet.blocked} blocked` : "all workable") : ""} />
           </div>
           <p className="text-sm">
-            {!anyLoaded ? (
+            {failed.length > 0 ? (
+              <span className="text-red-400">
+                Grid status unavailable — the control plane did not answer for {failed.join(", ")}.
+                {caveats.length > 0 ? ` Caveats from what did load: ${caveats.join(" · ")}.` : ""} Nothing here reads as clear until every surface answers.
+              </span>
+            ) : !anyLoaded ? (
               <span className="text-muted-foreground">Loading the grid…</span>
             ) : caveats.length > 0 ? (
               <span className="text-amber-400">The grid runs, with named caveats: {caveats.join(" · ")}. Nothing is papered over.</span>

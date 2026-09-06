@@ -24,6 +24,16 @@ export function Audit() {
         </p>
       </div>
 
+      {/* The banner does not disappear on a failed read: an absent qualifier over an
+          empty table is indistinguishable from a page that has not loaded yet, and
+          an unread chain is UNVERIFIED, which is a state worth a banner of its own. */}
+      {error && !data && (
+        <div className="border border-destructive bg-destructive/10 rounded p-4 font-mono text-sm flex items-center gap-3">
+          <Badge variant="outline" className="font-mono uppercase border-transparent bg-status-deny">chain unverified</Badge>
+          <span className="text-muted-foreground">audit read failed — no digest was recomputed on this request</span>
+        </div>
+      )}
+
       {data && (
         <div
           className={`border rounded p-4 font-mono text-sm flex items-center gap-3 ${

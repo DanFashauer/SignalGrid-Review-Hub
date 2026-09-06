@@ -4,7 +4,8 @@ import {
   useGetDashboardMetrics,
   useGetDecisionSeries,
   useListIntegrations,
-  useListLatestSignals
+  useListLatestSignals,
+  IntegrationHealthStatus,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { getContextV1, listConnectorsV1, listDecisionsV1 } from "@/lib/v1";
@@ -15,13 +16,31 @@ import { OutcomeBadge, IntegrationStatusBadge, SignalStatusBadge } from "@/compo
 import { LiveDecisionPanel } from "@/components/LiveDecisionPanel";
 import { formatTimeAgo, formatDate } from "@/lib/format";
 
+// Integration-health buckets, derived from the wire enum (lib/api-zod's generated
+// IntegrationHealthStatus, re-exported by the client) rather than three literals.
+// `Record<IntegrationHealthStatus, …>` is exhaustive by construction — add a member
+// to the enum and this fails to compile until it has a tile. The literal list this
+// replaces knew connected/degraded/disconnected only, so the served payload's 88
+// `not-configured` integrations had no tile anywhere, and DOWN was structurally 0.
+// `rank` orders the not-connected list worst-first so a slice never hides a
+// disconnected integration behind an unconfigured one.
+const HEALTH_BUCKET: Record<IntegrationHealthStatus, { label: string; text: string; dot: string; rank: number }> = {
+  disconnected: { label: "DOWN", text: "text-red-400", dot: "bg-red-400", rank: 0 },
+  degraded: { label: "DEGRADED", text: "text-yellow-400", dot: "bg-yellow-400", rank: 1 },
+  "not-configured": { label: "NOT CONFIGURED", text: "text-muted-foreground", dot: "bg-gray-500", rank: 2 },
+  connected: { label: "CONNECTED", text: "text-green-400", dot: "bg-green-400", rank: 3 },
+};
+const HEALTH_STATUSES = Object.values(IntegrationHealthStatus);
+// A status the enum does not know is treated as the worst bucket, never dropped.
+const bucketOf = (status: string) => HEALTH_BUCKET[status as IntegrationHealthStatus] ?? HEALTH_BUCKET.disconnected;
+
 export function Dashboard() {
   const { data: metrics, isLoading: isLoadingMetrics } = useGetDashboardMetrics({ window: "24h" });
-  const { data: seriesData } = useGetDecisionSeries({ window: "24h", granularity: "hour" });
+  const { data: seriesData, isError: seriesError } = useGetDecisionSeries({ window: "24h", granularity: "hour" });
   // The recent-decisions card reads the REAL /v1 ledger; the charts above it
   // remain labelled fixture telemetry until their own /v1 series exists.
   const { data: v1Decisions } = useQuery({ queryKey: ["v1-decisions"], queryFn: listDecisionsV1, refetchInterval: 15_000 });
-  const { data: integrationsData } = useListIntegrations();
+  const { data: integrationsData, isError: integrationsError } = useListIntegrations();
   const { data: signalsData, isLoading: isLoadingSignals, error: signalsError } = useListLatestSignals({ limit: 10 });
   // Screen 2's summary embed (wireframe screen 1's named gap): launch-family
   // health from the same truth sources the setup page uses — the server's own
@@ -88,7 +107,7 @@ export function Dashboard() {
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">Loading chart...</div>
+            <div className="flex items-center justify-center h-full text-muted-foreground">{seriesError ? "Decision series unavailable — the control plane did not answer." : "Loading chart..."}</div>
           )}
         </CardContent>
       </Card>
@@ -136,17 +155,17 @@ export function Dashboard() {
               {integrationsData ? (
                 <div className="space-y-3">
                   {/* Summary counts */}
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { label: "CONNECTED", count: integrationsData.integrations.filter(i => i.status === "connected").length, color: "text-green-400" },
-                      { label: "DEGRADED", count: integrationsData.integrations.filter(i => i.status === "degraded").length, color: "text-yellow-400" },
-                      { label: "DOWN", count: integrationsData.integrations.filter(i => i.status === "disconnected").length, color: "text-red-400" },
-                    ].map(m => (
-                      <div key={m.label} className="p-3 border border-border rounded text-center">
-                        <div className={`text-2xl font-mono font-bold ${m.color}`}>{m.count}</div>
-                        <div className="text-xs font-mono text-muted-foreground mt-0.5">{m.label}</div>
-                      </div>
-                    ))}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {HEALTH_STATUSES.map((status) => {
+                      const b = HEALTH_BUCKET[status];
+                      const count = integrationsData.integrations.filter(i => i.status === status).length;
+                      return (
+                        <div key={status} className="p-3 border border-border rounded text-center">
+                          <div className={`text-2xl font-mono font-bold ${b.text}`}>{count}</div>
+                          <div className="text-xs font-mono text-muted-foreground mt-0.5">{b.label}</div>
+                        </div>
+                      );
+                    })}
                   </div>
                   {/* Active integrations with signals */}
                   <div className="space-y-1.5 mt-2">
@@ -168,27 +187,42 @@ export function Dashboard() {
                         </div>
                     ))}
                   </div>
-                  {integrationsData.integrations.filter(i => i.status === "degraded" || i.status === "disconnected").length > 0 && (
-                    <div className="space-y-1.5 border-t border-border pt-2">
-                      {integrationsData.integrations
-                        .filter(i => i.status === "degraded" || i.status === "disconnected")
-                        .slice(0, 3)
-                        .map(i => (
-                          <div key={i.id} className="flex items-center justify-between p-2 rounded bg-red-500/5 border border-red-500/10">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${i.status === "degraded" ? "bg-yellow-400" : "bg-red-400"}`} />
-                              <span className="font-mono text-xs font-medium">{i.vendor}</span>
+                  {/* Everything that is NOT connected belongs here — the alert filter
+                      used to name two literals, so `not-configured` was neither a tile
+                      nor an alert and read as fine by omission. Worst-first. */}
+                  {(() => {
+                    const notConnected = integrationsData.integrations
+                      .filter(i => i.status !== "connected")
+                      .slice()
+                      .sort((a, b) => bucketOf(a.status).rank - bucketOf(b.status).rank);
+                    if (notConnected.length === 0) return null;
+                    return (
+                      <div className="space-y-1.5 border-t border-border pt-2">
+                        {notConnected.slice(0, 3).map(i => {
+                          const b = bucketOf(i.status);
+                          return (
+                            <div key={i.id} className="flex items-center justify-between p-2 rounded bg-red-500/5 border border-red-500/10">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${b.dot}`} />
+                                <span className="font-mono text-xs font-medium">{i.vendor}</span>
+                              </div>
+                              <span className={`text-xs font-mono ${b.text}`}>{b.label}</span>
                             </div>
-                            <span className={`text-xs font-mono ${i.status === "degraded" ? "text-yellow-400" : "text-red-400"}`}>
-                              {i.status.toUpperCase()}
-                            </span>
+                          );
+                        })}
+                        {notConnected.length > 3 && (
+                          <div className="text-[10px] font-mono text-muted-foreground px-2">
+                            +{notConnected.length - 3} more not connected
                           </div>
-                      ))}
-                    </div>
-                  )}
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground p-4 text-center">Loading...</div>
+                <div className="text-sm text-muted-foreground p-4 text-center">
+                  {integrationsError ? "Integration health unavailable — the control plane did not answer." : "Loading…"}
+                </div>
               )}
             </CardContent>
           </Card>
@@ -327,7 +361,7 @@ function ShiftHandoffPanel() {
 
 // The three launch connector families, pinned by scripts/launch-profile.mjs.
 // A static list is correct here: family membership is a declared, gated fact,
-// not runtime data — the profile gate fails the build if this set changes.
+// not runtime data — checked by scripts/check-console-launch-families.mjs.
 const LAUNCH_FAMILIES = [
   { id: "graph", reads: "Entra/Intune identity + device posture" },
   { id: "device-management-health", reads: "management-plane health rollup" },

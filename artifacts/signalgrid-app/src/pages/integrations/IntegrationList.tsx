@@ -92,7 +92,7 @@ const SIGNAL_TYPE_COLORS: Record<string, string> = {
 };
 
 export function IntegrationList() {
-  const { data: integrationsData, isLoading } = useListIntegrations();
+  const { data: integrationsData, isLoading, isError, error } = useListIntegrations();
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [, navigate] = useLocation();
@@ -123,6 +123,23 @@ export function IntegrationList() {
   const totalConnected = allIntegrations.filter((i) => i.status === "connected").length;
   const totalDegraded = allIntegrations.filter((i) => i.status === "degraded").length;
 
+  // A failed read is its own state — not TOTAL 0 / CONNECTED 0 over "No integrations
+  // match your search", which is what a dead backend used to render here.
+  if (isError) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
+          <p className="text-muted-foreground mt-1 font-mono text-sm">SIGNAL-SOURCE CATALOG (FIXTURE)</p>
+        </div>
+        <div className="text-sm text-muted-foreground font-mono p-4 border border-dashed border-border rounded">
+          Integrations unavailable — the control plane did not answer.
+          <div className="text-xs mt-1">{String(error instanceof Error ? error.message : error)}</div>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="p-8 max-w-7xl mx-auto">
@@ -141,7 +158,12 @@ export function IntegrationList() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
-          <p className="text-muted-foreground mt-1 font-mono text-sm">CANDIDATE SIGNAL SOURCES (CATALOG — not connected)</p>
+          {/* Says what the CONNECTED tile beside it counts: fixture records whose
+              status field reads "connected" — not live vendor connections. The old
+              line said "not connected" over a green CONNECTED 59 on the same screen. */}
+          <p className="text-muted-foreground mt-1 font-mono text-sm">
+            SIGNAL-SOURCE CATALOG (FIXTURE) — {totalConnected} OF {allIntegrations.length} MARKED CONNECTED IN THE FIXTURE · NO LIVE VENDOR CONNECTION
+          </p>
         </div>
         <div className="flex gap-6 text-right">
           <div>

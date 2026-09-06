@@ -16,6 +16,13 @@ const STATUS_STYLE: Record<EdgeStatus, { dot: string; text: string; label: strin
   degraded: { dot: "bg-amber-400", text: "text-amber-400", label: "DEGRADED" },
   unreachable: { dot: "bg-red-400", text: "text-red-400", label: "UNREACHABLE" },
 };
+// A status outside the union renders as UNKNOWN in the unknown tone with the raw
+// value beside it — never a throw to the ErrorBoundary (which took the whole page
+// down) and never a healthy-looking row.
+const statusStyle = (status: string) =>
+  STATUS_STYLE[status as EdgeStatus] ?? { dot: "bg-gray-500", text: "text-gray-500", label: `UNKNOWN (${status})` };
+// Same for a vertical the label map does not know: the raw value, not "undefined".
+const verticalLabel = (vertical: string) => VERTICAL_LABEL[vertical as keyof typeof VERTICAL_LABEL] ?? vertical;
 
 export function Fleet() {
   const health = useQuery({ queryKey: ["cp-health"], queryFn: () => controlPlane.health() });
@@ -69,7 +76,7 @@ export function Fleet() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {(h?.byVertical ?? []).map((v) => (
               <div key={v.vertical} className="border border-border rounded-lg p-4">
-                <div className="font-mono text-xs uppercase tracking-wider text-primary">{VERTICAL_LABEL[v.vertical]}</div>
+                <div className="font-mono text-xs uppercase tracking-wider text-primary">{verticalLabel(v.vertical)}</div>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                   <Stat n={v.sites} label="sites" />
                   <Stat n={v.devices} label="devices" />
@@ -148,12 +155,17 @@ export function Fleet() {
               <div key={t.id}>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <span className="font-mono text-sm font-semibold">{t.name}</span>
-                  <span className="font-mono text-[0.6rem] uppercase tracking-wider px-1.5 py-0.5 rounded border border-primary/30 text-primary">{VERTICAL_LABEL[t.vertical]}</span>
+                  <span className="font-mono text-[0.6rem] uppercase tracking-wider px-1.5 py-0.5 rounded border border-primary/30 text-primary">{verticalLabel(t.vertical)}</span>
                   <span className="font-mono text-[0.6rem] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border text-muted-foreground">tier {t.tier}</span>
+                  {/* "signature present", not "signed": PolicyBundle carries checksum and
+                      signature STRINGS and no verification result (lib/control-plane.ts).
+                      Nothing here checked them, so the badge states presence in a neutral
+                      tone — the verified tone belongs to a surface that re-verifies, like
+                      the audit chain banner. */}
                   {bundle && (
-                    <span className="font-mono text-[0.6rem] uppercase tracking-wider px-1.5 py-0.5 rounded border border-emerald-400/30 text-emerald-400 inline-flex items-center gap-1" title={`checksum ${bundle.checksum.slice(0, 12)}… · signature ${bundle.signature.slice(0, 12)}…`}>
-                      <span className="w-1 h-1 rounded-full bg-emerald-400" />
-                      bundle v{bundle.version} · signed
+                    <span className="font-mono text-[0.6rem] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border text-muted-foreground inline-flex items-center gap-1" title={`checksum ${bundle.checksum.slice(0, 12)}… · signature ${bundle.signature.slice(0, 12)}… — present on the bundle, not verified by this console`}>
+                      <span className="w-1 h-1 rounded-full bg-muted-foreground" />
+                      bundle v{bundle.version} · signature present
                     </span>
                   )}
                 </div>
@@ -179,7 +191,7 @@ export function Fleet() {
                     </thead>
                     <tbody className="divide-y divide-border/40">
                       {tNodes.map((n: EdgeNode) => {
-                        const st = STATUS_STYLE[n.status];
+                        const st = statusStyle(n.status);
                         const sp = syncByNode.get(n.id);
                         return (
                           <tr key={n.id} className="hover:bg-muted/20">
@@ -187,7 +199,13 @@ export function Fleet() {
                             <td className="py-1.5 text-muted-foreground">{siteById.get(n.siteId)?.name ?? n.siteId}</td>
                             <td className="py-1.5 text-muted-foreground">v{n.coreVersion}</td>
                             <td className="py-1.5">
-                              {sp && sp.updateAvailable ? (
+                              {/* Three-way. An absent sync plan (read failed, or not yet read)
+                                  is NOT "no drift": the old two-way rendered it in the same
+                                  muted current-version form as a node on target, so a dead
+                                  sync route painted the whole fleet as current. */}
+                              {sp === undefined ? (
+                                <span className="text-amber-400" title="the sync plan for this node was not read — target bundle unknown, drift cannot be assessed">v{n.bundleVersion} · target unread</span>
+                              ) : sp.updateAvailable ? (
                                 <span className="text-amber-400">v{n.bundleVersion} → v{sp.targetBundleVersion}</span>
                               ) : (
                                 <span className="text-muted-foreground">v{n.bundleVersion}</span>
@@ -217,6 +235,18 @@ export function Fleet() {
           ) : !tenants.data ? (
             <div className="text-sm text-muted-foreground p-4">Loading tenants…</div>
           ) : null}
+          {/* The sync read's failure was surfaced nowhere; every BUNDLE cell above
+              reads "target unread" because of it, and this line says why. */}
+          {sync.isError && (
+            <div className="text-xs text-amber-400 font-mono px-4 pb-2">
+              Sync plans unreadable — drift cannot be assessed for any node: {String(sync.error instanceof Error ? sync.error.message : sync.error)}
+            </div>
+          )}
+          {bundles.isError && (
+            <div className="text-xs text-amber-400 font-mono px-4 pb-2">
+              Policy bundles unreadable — no tenant above shows a bundle: {String(bundles.error instanceof Error ? bundles.error.message : bundles.error)}
+            </div>
+          )}
         </CardContent>
       </Card>
 

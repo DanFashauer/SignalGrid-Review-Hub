@@ -7475,7 +7475,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": ":41, 42, 43, 44",
+   "line": "60",
    "claim": "Metric tiles \"Total Decisions\", \"Allow Rate\", \"Restrict/Deny Rate\", \"Avg Latency\" as 24h figures",
    "kind": "count",
    "classification": "demo-only",
@@ -7484,7 +7484,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": ":51",
+   "line": "70",
    "claim": "\"Decision Volume\" stacked area chart of allow/stepUp/restrict/deny over 24h",
    "kind": "count",
    "classification": "demo-only",
@@ -7493,7 +7493,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": ":95",
+   "line": "118",
    "claim": "\"Recent decisions · /v1 core\" list linking to decision detail",
    "kind": "capability",
    "classification": "launch",
@@ -7502,7 +7502,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": ":128",
+   "line": "151",
    "claim": "Card \"Integration Health\" on the launch Overview screen",
    "kind": "status",
    "classification": "unsubstantiated",
@@ -7538,7 +7538,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": ":194, 209",
+   "line": "232",
    "claim": "Card \"Stale / non-compliant\" listing anomalous/critical signals, with the empty state \"No stale or non-compliant signals\"",
    "kind": "status",
    "classification": "unsubstantiated",
@@ -7547,7 +7547,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "236",
+   "line": "270",
    "claim": "\"Shift Handoff\" / \"DEVICE CUSTODY (STATIC DEMO MOCK — illustrative, not from the decision core)\"",
    "kind": "status",
    "classification": "demo-only",
@@ -7574,7 +7574,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "346",
+   "line": "380",
    "claim": "Card \"Connector health · launch families\"",
    "kind": "capability",
    "classification": "launch",
@@ -7583,7 +7583,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "332",
+   "line": "366",
    "claim": "Three launch families listed with what each reads: graph — \"Entra/Intune identity + device posture\"; device-management-health — \"management-plane health rollup\"; local-authority — \"offline local-authority grant state\"",
    "kind": "count",
    "classification": "launch",
@@ -7601,7 +7601,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "368",
+   "line": "402",
    "claim": "\"live read-only vendor reads — the connector refuses any non-GET by construction\"",
    "kind": "capability",
    "classification": "launch",
@@ -7675,7 +7675,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/decisions/DecisionDetail.tsx",
-   "line": ":93",
+   "line": "118",
    "claim": "Link \"View tamper-evident audit ledger →\"",
    "kind": "capability",
    "classification": "launch",
@@ -7684,7 +7684,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/decisions/DecisionDetail.tsx",
-   "line": ":130, 134, 137",
+   "line": "155",
    "claim": "\"Evidence snapshot\" with a \"digest verified\" / \"DIGEST MISMATCH\" badge",
    "kind": "capability",
    "classification": "launch",
@@ -7693,7 +7693,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/decisions/DecisionDetail.tsx",
-   "line": ":158, 165, 169",
+   "line": "194",
    "claim": "\"Signals used\" rows with a source-system chip and a freshness badge per signal",
    "kind": "capability",
    "classification": "launch",
@@ -7702,7 +7702,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/decisions/DecisionDetail.tsx",
-   "line": "187",
+   "line": "218",
    "claim": "\"No cached signals — evidence derived from defaults (fail-closed).\"",
    "kind": "status",
    "classification": "launch",
@@ -8190,7 +8190,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Fleet.tsx",
-   "line": ":133, 164, 165, 166, 167, 168, 169",
+   "line": "148",
    "claim": "\"Tenants & edge nodes\" table — EDGE NODE / SITE / CORE / BUNDLE / SYNC / STATUS with HEALTHY, DEGRADED, UNREACHABLE (:15-17)",
    "kind": "availability",
    "classification": "demo-only",
@@ -8209,7 +8209,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Fleet.tsx",
-   "line": "224",
+   "line": "254",
    "claim": "\"The control plane distributes policy and aggregates health; decisions are made by the local decision plane at each site. Data is deterministic public-safe fixtures.\"",
    "kind": "capability",
    "classification": "demo-only",
@@ -8218,7 +8218,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/AppWorkflows.tsx",
-   "line": ":59, 60",
+   "line": "74",
    "claim": "\"App workflows\" / \"TRUST GATEWAY FOR APPLICATION ACTIONS (FIXTURE)\"",
    "kind": "capability",
    "classification": "demo-only",
@@ -8227,7 +8227,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/AppWorkflows.tsx",
-   "line": ":61, 62, 63, 64, 65",
+   "line": "77-79",
    "claim": "\"The same allow / step-up / restrict / deny engine, gating the software people use all shift. An app calls SignalGrid before a sensitive action; sensitive actions never fire automatically — they wait for a human to confirm (the Assist model). Live gating below uses a compliant demo actor per vertical.\"",
    "kind": "capability",
    "classification": "demo-only",
@@ -8245,7 +8245,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/AppWorkflows.tsx",
-   "line": ":107",
+   "line": "122",
    "claim": "\"Catalog view for this vertical — no public demo actor is seeded, so live evaluation stays off here (fail-closed by design). Actions + risk tiers shown; the government tenant gates live via its own workflows once an actor fixture is added.\"",
    "kind": "status",
    "classification": "demo-only",
@@ -8264,7 +8264,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/AppWorkflows.tsx",
-   "line": ":151, 152, 153",
+   "line": "172-173",
    "claim": "\"Generic app categories only — no real product, no PHI, no live vendor calls. Decisions come from the real core; high-risk actions are approval-gated and simulated. Data is deterministic public-safe fixtures.\"",
    "kind": "status",
    "classification": "demo-only",
@@ -8458,7 +8458,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/AppResilience.tsx",
-   "line": ":67",
+   "line": "82",
    "claim": "\"Availability is a sourced signal, not a vendor call. A PHI app is never placed on a fallback without its DR safety nets — it is blocked and surfaced. Nothing here is enforced; fallbacks are described, not executed.\"",
    "kind": "capability",
    "classification": "demo-only",
@@ -8467,7 +8467,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/AppResilience.tsx",
-   "line": ":86, 89",
+   "line": "101",
    "claim": "Per-app reason line and \"requiredSafetyNets\" chips (DR safety nets per application)",
    "kind": "capability",
    "classification": "demo-only",
@@ -8599,7 +8599,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/GridOverview.tsx",
-   "line": ":90",
+   "line": "111",
    "claim": "\"The grid is handling its situations on its own — every dependency holds.\"",
    "kind": "capability",
    "classification": "demo-only",
@@ -8608,7 +8608,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/GridOverview.tsx",
-   "line": ":86",
+   "line": "107",
    "claim": "\"The grid runs, with named caveats: {…}. Nothing is papered over.\"",
    "kind": "status",
    "classification": "demo-only",
@@ -8687,7 +8687,8 @@
    "kind": "capability",
    "classification": "demo-only",
    "evidence": "Asserts an identity-bound approval record and a wired heal lifecycle, on a button that is disabled and inside a demo-labelled surface — the tooltip claims a working integration the control on which it sits cannot exercise. No heal-lifecycle surface is launch.",
-   "action": "rewrite"
+   "action": "rewrite",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch W): the tooltip was rewritten to \"Route not served — no API endpoint records an approval yet. Nothing is wired from this button.\" and the button reads \"Approve · route not served\" beside PolicyCreate's amber notice; the wiring claim no longer renders anywhere."
   },
   {
    "file": "artifacts/signalgrid-desktop/index.html",

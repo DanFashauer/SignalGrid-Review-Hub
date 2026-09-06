@@ -106,6 +106,14 @@ export function SystemHealth() {
                 <p className="text-sm text-slate-400">
                   Nothing here has been done. Each is a change we can make once you approve it.
                 </p>
+                {/* Honest in-UI notice, PolicyCreate's pattern: the buttons are disabled
+                    because no route records an approval. The old tooltip claimed the
+                    button was "wired to the governed heal lifecycle" — it was wired to
+                    nothing, and a disabled control that says it is wired is a lie. */}
+                <p className="rounded border border-amber-400/30 bg-amber-400/5 px-3 py-2 font-mono text-[11px] text-amber-400/90">
+                  Route not served yet — no API endpoint records an approval, so nothing on this
+                  screen can start a fix. The proposals are listed for reading only.
+                </p>
                 {plain.suggestedFixes.map((fix) => (
                   <div key={fix.proposalId} className="rounded-lg border border-slate-700 p-4">
                     <p className="text-sm font-medium text-slate-100">{fix.area}</p>
@@ -115,14 +123,15 @@ export function SystemHealth() {
                         type="button"
                         className="rounded-md bg-emerald-500/90 px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-emerald-400"
                         disabled
-                        title="Approval is recorded against your identity — wired to the governed heal lifecycle."
+                        title="Route not served — no API endpoint records an approval yet. Nothing is wired from this button."
                       >
-                        Approve
+                        Approve · route not served
                       </button>
                       <button
                         type="button"
                         className="rounded-md border border-slate-600 px-3 py-1.5 text-sm font-medium text-slate-300 hover:bg-slate-800"
                         disabled
+                        title="Route not served — no API endpoint records a decline yet. Nothing is wired from this button."
                       >
                         Not now
                       </button>

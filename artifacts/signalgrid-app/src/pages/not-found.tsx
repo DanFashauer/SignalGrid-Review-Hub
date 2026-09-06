@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
 
@@ -12,8 +13,11 @@ export default function NotFound() {
           </div>
 
           <p className="mt-4 text-sm text-muted-foreground">
-            Did you forget to add the page to the router?
+            No console page is served at this address. Check the link you followed, or return to the decisions list.
           </p>
+          <Link href="/" className="mt-4 inline-block text-sm text-primary hover:underline font-mono">
+            ← Decisions
+          </Link>
         </CardContent>
       </Card>
     </div>

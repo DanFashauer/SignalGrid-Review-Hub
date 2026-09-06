@@ -446,6 +446,15 @@
      "scope": "surface",
      "open": 14,
      "closed": 0
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twenty-first round: the twentieth round's fourteen fail-open shapes fixed and gated. Every '{!q.data && \"Loading…\"}' site (eight, six pages) renders a settled error as '<surface> unavailable — the control plane did not answer'; AppResilience renders a red 'resilience posture unreadable — treat every app as blocked' card instead of an empty list; GridOverview's all-clear sentence is unreachable while any of its five reads failed; the Dashboard buckets integration health from the IntegrationHealthStatus enum (a NOT CONFIGURED tile, alert list = everything not connected, worst first, a '+N more' line so the slice hides nothing); Intelligence's recommendations metric reads '-' on a failed fetch; SignalList and IntegrationList render an unavailable state instead of zeros; Fleet's drift column is three-way ('target unread' when the sync plan was not read) and 'signed' became 'signature present'; DecisionDetail tones freshness from a mirror of the core's FRESHNESS_SEVERITY (fresh ok, missing/unknown warning, stale/expired danger); PolicyDetail says 'policies unreadable' before ever saying 'not found'; StatusBadge gives disconnected its own danger label; AppWorkflows maps every wire mode explicitly with hold → blocked and the fallback most restrictive; Audit's chain banner says 'chain unverified' on error instead of vanishing; Fleet's status/vertical lookups fall back instead of throwing; SystemHealth's disabled Approve says 'route not served'; IntegrationDetail carries the visible deferred-categories paragraph; /overview is wrapped in preview() and reachable. Gates: check-console-error-states (a bare-negation pending arm in a component that never reads isError/error/status), check-console-enum-coverage (every IntegrationHealthStatus member bucketed and badged), check-console-routes-reachable (every route reachable; every non-launch route wrapped), check-console-launch-families (LAUNCH_FAMILIES equals the launch connector families both ways). Still open, recorded: connector `status` rendered nowhere (F8, latent — every fixture connector is healthy today); the toaster nothing fires; the CATEGORY_ORDER hand list (complete today).",
+     "reviewer": "cloud lane (fixes by a general-purpose agent with the findings file, gates by the gate engineer; firsthand spot-read of every edit site and every gate run)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 3,
+     "closed": 14
     }
    ]
   },

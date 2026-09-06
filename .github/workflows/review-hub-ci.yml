@@ -692,6 +692,25 @@ jobs:
         run: node scripts/check-gitignore-producers.mjs
       - name: "Gitignore producers self-test (the check can actually fail)"
         run: node scripts/check-gitignore-producers.mjs --self-test
+      # The console rendered a settled control-plane error as "Loading…" at nine sites,
+      # bucketed integration health by three literals of a four-member enum, and
+      # registered two routes nothing linked to (2026-09-06).
+      - name: "Console error states (a settled query error may never render as a pending word)"
+        run: node scripts/check-console-error-states.mjs
+      - name: "Console error states self-test (the check can actually fail)"
+        run: node scripts/check-console-error-states.mjs --self-test
+      - name: "Console enum coverage (every IntegrationHealthStatus member is bucketed and badged)"
+        run: node scripts/check-console-enum-coverage.mjs
+      - name: "Console enum coverage self-test (the check can actually fail)"
+        run: node scripts/check-console-enum-coverage.mjs --self-test
+      - name: "Console routes reachable (every registered route is linked; every non-launch route is preview-wrapped)"
+        run: node scripts/check-console-routes-reachable.mjs
+      - name: "Console routes reachable self-test (the check can actually fail)"
+        run: node scripts/check-console-routes-reachable.mjs --self-test
+      - name: "Console launch families (LAUNCH_FAMILIES equals the launch connector families, both directions)"
+        run: node scripts/check-console-launch-families.mjs
+      - name: "Console launch families self-test (the check can actually fail)"
+        run: node scripts/check-console-launch-families.mjs --self-test
       - name: "Proof — dual control"
         run: pnpm run proof:dual-control
       - name: "Pagination-truncation guard (a capped read must not look complete)"

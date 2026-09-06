@@ -43,6 +43,21 @@ export function AppResilience() {
         <Metric label="Blocked" value={fleet ? String(fleet.blocked) : "-"} accent={fleet ? (fleet.blocked ? "text-red-400" : "text-emerald-400") : undefined} sub="no safe path" />
       </div>
 
+      {/* Unreadable — an unreachable control plane must NOT read as "nothing blocked".
+          `apps` defaults to [] so the blocked card below would simply vanish, which is
+          the same picture an estate with no blocked app paints. Fail-closed: say the
+          posture is unreadable and treat every app as blocked until it answers. */}
+      {q.isError && (
+        <Card className="border-red-400/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-mono uppercase tracking-wider text-red-400">Resilience posture unreadable — treat every app as blocked until the control plane answers</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs font-mono text-muted-foreground">
+            {String(q.error instanceof Error ? q.error.message : q.error)}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Blocked — the loud part, only when something has no safe path */}
       {blocked.length > 0 && (
         <Card className="border-red-400/30">
@@ -62,7 +77,7 @@ export function AppResilience() {
         </CardHeader>
         <CardContent className="space-y-2">
           {working.map((a) => <AppRow key={a.appId} app={a} />)}
-          {!q.data && <div className="text-sm text-muted-foreground">Loading…</div>}
+          {!q.data && <div className="text-sm text-muted-foreground">{q.isError ? "App resilience unavailable — the control plane did not answer." : "Loading…"}</div>}
           <p className="text-[0.68rem] text-muted-foreground font-mono pt-1">
             Availability is a sourced signal, not a vendor call. A PHI app is never placed on a fallback without its DR safety nets — it is blocked and surfaced. Nothing here is enforced; fallbacks are described, not executed. Read live from <span className="text-muted-foreground">/cp/v1/apps/resilience</span>.
           </p>

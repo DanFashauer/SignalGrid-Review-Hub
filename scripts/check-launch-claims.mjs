@@ -267,6 +267,116 @@ const walkDocs = (d) => {
 };
 if (existsSync("docs")) walkDocs("docs");
 
+// ── A FIFTH DERIVATION: THE AUDIENCE THE DOCUMENT DECLARES (2026-09-06) ──────
+//
+// The four rules above find a buyer-facing document by where it is SERVED
+// (Dockerfile.web, pages.yml, site/), by which folder SENDS it (docs/outreach/
+// and the documents those templates cite), or by its PRINTING the public contact
+// address. A document can be addressed to a stranger through none of the three.
+// `docs/company/INVESTOR_ONE_PAGER.md` is written for an investor, sits in no
+// served root, is cited by no template and prints no address — so it was outside
+// every scope this gate had, and so were the funding-readiness memo, the pilot
+// package's readiness criteria and eleven partner/pitch packs. The one thing they
+// all do is SAY WHO THEY ARE FOR, in the file name or in the first heading.
+//
+// DERIVED, NEVER HAND-LISTED. The scope is the token set below applied to two
+// pieces of the document itself — its path and its first heading — so a document
+// named tomorrow is in scope on the next run with no second edit to remember.
+// A hand list of one-pagers is exactly the fossil the pages.yml derivation above
+// exists to avoid.
+//
+// TOKENS, NOT SUBSTRINGS, and this is load-bearing. `PILOT` as a substring matches
+// `AUTOPILOT_BACKLOG_CURATOR.md`, `AUTOPILOT_COMMAND_GUIDE.md`,
+// `AUTOPILOT_INTAKE_BOT.md`, `LEVEL_10_AUTOPILOT_RUNBOOK.md` and
+// `SIGNALGRID_AUTOPILOT_CONTROL_PLANE.md` — five internal agent-runbooks pulled
+// into buyer-facing scope by a word that is not there. The path and heading are
+// normalised to underscore-separated tokens and the token must stand alone
+// (a trailing plural `S` is the one inflection allowed: `..._FOR_PARTNERS.md`).
+//
+// WHAT IS DELIBERATELY *NOT* A TOKEN, recorded rather than left implicit:
+// `PARTNERSHIP` (as in `docs/research/PARTNERSHIP_AND_ACQUISITION_PATHS.md`).
+// A document ABOUT partnership paths is strategy addressed to this company, not
+// copy addressed to a partner, and `PARTNER` deliberately does not match inside
+// it. If that document ever starts being sent out, it will acquire an audience
+// token or the contact address, and rule 4 or this one picks it up then.
+const AUDIENCE_TOKENS = ["INVESTOR", "ONE_PAGER", "PITCH", "PILOT", "PARTNER", "FUNDING"];
+
+/** Pure: text as underscore-separated uppercase tokens — `Design-Partner` → `DESIGN_PARTNER`. */
+function audienceNormalize(text) {
+  return String(text).toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+}
+
+/** Pure: which audience tokens stand as WHOLE tokens in `text`. Never a substring. */
+export function audienceTokensIn(text, tokens = AUDIENCE_TOKENS) {
+  const norm = audienceNormalize(text);
+  return tokens.filter((t) => new RegExp(`(?<![A-Z0-9])${t}S?(?![A-Z0-9])`).test(norm));
+}
+
+/** Pure: the document's first markdown heading, or "" — the line a reader meets first. */
+export function firstHeadingOf(body) {
+  return String(body).split("\n").find((l) => /^#{1,6}\s+\S/.test(l)) ?? "";
+}
+
+/**
+ * Pure: the audience tokens a document declares, from its PATH and its FIRST
+ * HEADING. Both, because either alone leaks: `docs/LAUNCH_PLAN_30D.md` declares
+ * "booked design-partner conversations" in its heading and nothing in its path,
+ * while `docs/PILOT_SCOPE_SKELETON.md` declares it in the path and its heading
+ * says only "Pilot Scope Skeleton — DRAFT".
+ */
+export function externalAudienceOf(rel, body) {
+  // The WHOLE path, extension stripped — a fixture with no directory part must read
+  // the same way a tracked `docs/company/…` path does, and slicing off a leading
+  // segment made a bare `INVESTOR_X.md` normalise to the empty string.
+  const fromPath = audienceTokensIn(rel.replace(/\.[A-Za-z0-9]+$/, ""));
+  const fromHeading = audienceTokensIn(firstHeadingOf(body));
+  return [...new Set([...fromPath, ...fromHeading])];
+}
+
+let audienceScanned = 0;
+const audienceDocs = [];
+{
+  const md = execSync("git ls-files docs", { encoding: "utf8" })
+    .trim()
+    .split("\n")
+    .filter((f) => f.endsWith(".md"));
+  // FATAL AT AN IMPLAUSIBLE FLOOR, the same rule every derivation above follows:
+  // an empty or near-empty listing means `git ls-files docs` changed shape, not
+  // that this repository stopped keeping documentation. Scanning less quietly is
+  // the failure mode; refusing is the honest one.
+  if (md.length < 100) {
+    console.error(
+      `✗ found only ${md.length} docs/**/*.md file(s) for the audience derivation — the listing is broken, ` +
+        "not the tree empty. Fix the derivation; do not silently scan less.",
+    );
+    process.exit(1);
+  }
+  for (const f of md) {
+    let body;
+    try {
+      body = readFileSync(f, "utf8");
+    } catch {
+      continue;
+    }
+    const tokens = externalAudienceOf(f, body);
+    if (tokens.length === 0) continue;
+    audienceDocs.push({ file: f, tokens });
+    if (files.includes(f)) continue;
+    files.push(f);
+    audienceScanned += 1;
+  }
+  // A derivation that finds NOTHING is green about nothing. This repository has
+  // carried an investor one-pager, a funding-readiness memo and a pilot package
+  // for weeks; zero hits means the token rule or the normalisation broke.
+  if (audienceDocs.length === 0) {
+    console.error(
+      "✗ the audience derivation matched ZERO documents — a repository that ships an investor one-pager " +
+        "and a pilot package cannot have none. Fix the rule; do not silently scan less.",
+    );
+    process.exit(1);
+  }
+}
+
 // Case- and separator-insensitive: the first version matched only the exact
 // string "Evaluated today", and the pricing page's "6 evaluated-today signal
 // dimensions" — a claim of SIX current dimensions against a three-signal
@@ -800,7 +910,61 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
     ceilingMentions("docs/SOME_BUYER_DOC.md", "Device custody is confirmed today.", new Map([["docs/REASON_CODES.md", "x"]])) > 0 &&
     // …and the exemption NEVER reaches violationsIn, so the buyer-facing hard gate
     // still flags the very same file and prose (the carve-out is ceiling-only).
-    violationsIn("docs/REASON_CODES.md", "Device custody is confirmed today.").length > 0;
+    violationsIn("docs/REASON_CODES.md", "Device custody is confirmed today.").length > 0 &&
+    // ── RULE 5: the audience the document declares (2026-09-06) ─────────────────
+    // THE PLANTED VIOLATION, in the shape the rule exists for: a document named for
+    // an investor, asserting a deferred capability with no hedge in its block. It
+    // must be IN SCOPE (the derivation) and it must FAIL (the deferred-noun scan).
+    // Both halves, because either alone proves nothing — a rule that selects the
+    // file but cannot flag it is decorative, and a scan that flags text nobody
+    // feeds it is unreachable.
+    externalAudienceOf("docs/company/INVESTOR_X.md", "# Investor X\n").includes("INVESTOR") &&
+    violationsIn(
+      "docs/company/INVESTOR_X.md",
+      "# Investor X\n\nSignalGrid confirms device custody on every shared handset today.\n",
+    ).length > 0 &&
+    // …and the honest twin of the same sentence, in the same fixture, is NOT flagged —
+    // the rule widens SCOPE, it does not change what counts as a claim.
+    violationsIn(
+      "docs/company/INVESTOR_X.md",
+      "# Investor X\n\nDevice custody is a design target, not shipping at Limited GA.\n",
+    ).length === 0 &&
+    // A HEADING alone puts a document in scope (docs/LAUNCH_PLAN_30D.md declares
+    // "design-partner conversations" and its path says nothing) …
+    externalAudienceOf("docs/PLAIN_NAME.md", "# The 30-day push — booked design-partner conversations\n").includes("PARTNER") &&
+    // … and a PATH alone does too (docs/PILOT_SCOPE_SKELETON.md's heading says only "DRAFT").
+    externalAudienceOf("docs/PILOT_SCOPE_SKELETON.md", "# Pilot Scope Skeleton — DRAFT\n").includes("PILOT") &&
+    // A plural inflection is the same declaration: DEMO_SCRIPT_FOR_PARTNERS.md.
+    audienceTokensIn("DEMO_SCRIPT_FOR_PARTNERS").includes("PARTNER") &&
+    // THE SUBSTRING TRAP, both directions and the reason this is tokens not `includes`:
+    // five internal AUTOPILOT runbooks contain the letters of PILOT and are not
+    // addressed to anyone outside this repository.
+    audienceTokensIn("AUTOPILOT_BACKLOG_CURATOR").length === 0 &&
+    audienceTokensIn("LEVEL_10_AUTOPILOT_RUNBOOK").length === 0 &&
+    audienceTokensIn("SIGNALGRID_AUTOPILOT_CONTROL_PLANE").length === 0 &&
+    // …and the declared non-token: a document ABOUT partnership paths is strategy
+    // addressed to this company, not copy addressed to a partner.
+    audienceTokensIn("PARTNERSHIP_AND_ACQUISITION_PATHS").length === 0 &&
+    // An ordinary engineering document is not pulled in by a word in its body — only
+    // the path and the FIRST HEADING declare an audience.
+    externalAudienceOf("docs/REASON_CODES.md", "# Reason codes\n\nSome pilot partners asked about custody.\n").length === 0 &&
+    firstHeadingOf("intro line\n\n## Executive One-Pager\n# later\n") === "## Executive One-Pager" &&
+    // LIVE FLOORS. A derivation that matched nothing, or that swallowed the whole
+    // docs tree, is green about nothing in opposite directions. This repository
+    // carries an investor one-pager, a funding memo, a pilot package and a dozen
+    // partner/pitch packs; it does not carry three hundred buyer-facing documents.
+    audienceDocs.length >= 10 &&
+    audienceDocs.length <= 60 &&
+    // Anchored on the SHAPE, not on one filename: a parallel lane renaming the
+    // one-pager must not fail this gate's self-test, but a derivation that stops
+    // finding the company's investor/funding surface at all must.
+    audienceDocs.some((d) => d.file.startsWith("docs/company/") && (d.tokens.includes("INVESTOR") || d.tokens.includes("FUNDING"))) &&
+    audienceDocs.every((d) => d.tokens.length > 0) &&
+    // AND THEY REACHED THE SCANNED SET. Without this the rule could select every one
+    // of them and push none, and every check above would still be green — a
+    // derivation that reports a set it never feeds is the decorative failure this
+    // whole file keeps warning about. Deleting the `files.push` must fail here.
+    audienceDocs.every((d) => files.includes(d.file));
   if (!st) {
     console.error("✗ SELF-TEST FAILED: a rule no longer flags its synthetic violation. A gate that cannot fail proves nothing.");
     process.exit(1);
@@ -1123,9 +1287,15 @@ const docsWorst = [];
 console.log(
   `launch-claims: ${files.length} buyer-facing files scanned ` +
     `(${publishedPages.length} derived from the Pages deploy, ${outreachScanned} from the outreach surface ` +
-    `and the documents it cites, ${contactScanned} from carrying the public contact address), ` +
+    `and the documents it cites, ${contactScanned} from carrying the public contact address, ` +
+    `${audienceScanned} newly from a DECLARED EXTERNAL AUDIENCE in the path or first heading), ` +
     `${problems} violation(s); self-test green`,
 );
+console.log(
+  `  audience rule (${AUDIENCE_TOKENS.join("/")} as whole tokens): ${audienceDocs.length} document(s) declare one ` +
+    `(${audienceDocs.length - audienceScanned} already in scope through another rule):`,
+);
+for (const d of audienceDocs) console.log(`      ${d.file}  [${d.tokens.join(", ")}]`);
 console.log(
   `  retired category labels: ${retiredScanned} buyer-facing file(s) + ${codeScanned} code file(s) ` +
     `(scripts/*.mjs, artifacts/mcp-server/src/**/*.ts) scanned; ` +

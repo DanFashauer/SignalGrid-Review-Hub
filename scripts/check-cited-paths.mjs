@@ -127,6 +127,50 @@ export function classifyLineRef(ref, lineCount) {
   return { state: "within", lineCount };
 }
 
+// ── UNBACKTICKED CITATIONS, REPORTED (2026-09-06) ────────────────────────────
+// A backticked `lib/x.ts` is GATED by the file rule at the top of this module: it must
+// exist and be tracked. An UNBACKTICKED `lib/x.ts:12` is not — the file rule requires
+// the backticks, and the line rule below counts an untracked target as "unresolved" and
+// walks past it. So the most-cited document in this repository can carry two thousand
+// citations that nothing checks the existence of, and the run still prints a clean
+// total. That is not a defect to fail on — an audit record written in running prose is
+// a legitimate form, and demanding backticks would be a style gate wearing a
+// correctness gate's clothes. It IS a defect to be unable to see, which is what a
+// REPORT is for: the count, and which documents carry it.
+//
+// This changes NOTHING the gate fails on. Every existing failure mode is untouched.
+
+/** Pure: is column `col` inside a backtick span on this line? */
+export function insideBackticks(line, col) {
+  let open = -1;
+  for (let i = 0; i < line.length; i += 1) {
+    if (line[i] !== "`") continue;
+    if (open === -1) open = i;
+    else {
+      if (col > open && col < i) return true;
+      open = -1;
+    }
+  }
+  return false;
+}
+
+/**
+ * Pure: how many of `text`'s line citations stand OUTSIDE backticks. Split out from the
+ * scan so the self-test can plant one and read the count through the same code the gate
+ * reports from — a report computed twice is a report that can disagree with itself.
+ */
+export function unbacktickedLineRefs(text, pattern) {
+  const lines = text.split("\n");
+  let n = 0;
+  for (const ref of lineRefsIn(text, pattern)) {
+    const before = text.slice(0, ref.index);
+    const row = before.split("\n").length;
+    const col = ref.index - (before.lastIndexOf("\n") + 1);
+    if (!insideBackticks(lines[row - 1] ?? "", col)) n += 1;
+  }
+  return n;
+}
+
 /** Pure: lines in a file — a trailing newline ends the last line rather than starting an empty one. */
 export function countLines(content) {
   if (content.length === 0) return 0;
@@ -417,6 +461,8 @@ export function scanRepo(root) {
   let generated = 0;
   let lineRefs = 0;
   let lineRefsUnresolved = 0;
+  let lineRefsUnbackticked = 0;
+  const unbacktickedWorst = [];
   let historicalDocs = 0;
 
   for (const rel of docs) {
@@ -449,6 +495,12 @@ export function scanRepo(root) {
     // counted, not judged — the file rule above owns "does it exist".
     const historical = HISTORICAL_LINES.exec(text);
     if (historical) historicalDocs += 1;
+    // REPORTED, never fatal. Counted through the same helper the self-test plants into.
+    const unb = unbacktickedLineRefs(text, linePattern);
+    if (unb > 0) {
+      lineRefsUnbackticked += unb;
+      unbacktickedWorst.push({ doc: rel, count: unb });
+    }
     for (const ref of lineRefsIn(text, linePattern)) {
       lineRefs += 1;
       if (!tracked.has(ref.path)) {
@@ -521,6 +573,9 @@ export function scanRepo(root) {
     generated,
     lineRefs,
     lineRefsUnresolved,
+    lineRefsUnbackticked,
+    unbacktickedDocs: unbacktickedWorst.length,
+    unbacktickedWorst: unbacktickedWorst.sort((a, b) => b.count - a.count),
     historicalDocs,
     historicalPastEof,
     missing,
@@ -580,6 +635,40 @@ function selfTest() {
   ]);
   checks.push(["multiple citations on one line are each checked", missingIn("`lib/a/x.ts` and `scripts/b/y.mjs`", none, pattern).length === 2]);
   checks.push(["unbackticked prose is NOT a citation", citationsIn("the file lib/foo/src/index.ts is interesting", pattern).length === 0]);
+  // …AND THE SAME SENTENCE IS COUNTED BY THE REPORT. The assertion above is what the
+  // GATE does (a bare path in prose is not a file citation, and demanding backticks
+  // would be a style rule); this one is what the REPORT does, so the blind spot the
+  // first assertion creates is visible rather than silent. Both, or neither means
+  // anything.
+  checks.push([
+    "A PLANTED UNBACKTICKED `path:line` IS COUNTED BY THE REPORT — the blind spot made visible",
+    unbacktickedLineRefs("the audit read lib/foo/src/index.ts:12-40 and moved on", buildLineRefPattern(["lib", "docs"])) === 1,
+  ]);
+  checks.push([
+    "…and a BACKTICKED one is not counted (the report is about the ungated half, not about all citations)",
+    unbacktickedLineRefs("the audit read `lib/foo/src/index.ts:12-40` and moved on", buildLineRefPattern(["lib", "docs"])) === 0 &&
+      insideBackticks("a `lib/x.ts:1` b", 4) &&
+      !insideBackticks("a lib/x.ts:1 b", 4),
+  ]);
+  checks.push([
+    "LIVE: the report is non-zero and names its worst document — a report at zero over 3,000 citations would be a broken counter, not a tidy tree",
+    (() => {
+      const live = scanRepo(SELF_ROOT);
+      return (
+        live.lineRefsUnbackticked > 100 &&
+        live.lineRefsUnbackticked <= live.lineRefs &&
+        live.unbacktickedDocs >= 1 &&
+        live.unbacktickedWorst[0].count >= live.unbacktickedWorst[live.unbacktickedWorst.length - 1].count
+      );
+    })(),
+  ]);
+  checks.push([
+    "…and the report changes NOTHING the gate fails on: a clean tree with unbackticked citations still passes",
+    (() => {
+      const live = scanRepo(SELF_ROOT);
+      return live.lineRefsUnbackticked > 0 && live.missing.length === 0;
+    })(),
+  ]);
   checks.push(["a path outside the derived roots is NOT a citation", citationsIn("`nowhere/thing/file.ts`", pattern).length === 0]);
   checks.push(["a bare directory is NOT a citation", citationsIn("`lib/signalgrid-core/src/`", pattern).length === 0]);
 
@@ -904,6 +993,16 @@ if (r.historicalPastEof.length > 0) {
   console.log(`  REPORTED — ${r.historicalPastEof.length} range(s) past EOF inside ${r.historicalDocs} document(s) declared "as measured <date>, not maintained":`);
   for (const h of r.historicalPastEof) console.log(`    · ${h.doc} → ${h.range} (file has ${h.lineCount} lines; measured ${h.asOf})`);
 }
+// UNBACKTICKED CITATIONS — REPORTED, never fatal, and never counted as a failure above.
+// The file rule GATES a backticked `lib/x.ts`; an unbackticked `lib/x.ts:12` reaches
+// neither it nor a tracked-file check, so these are the citations nothing holds to
+// existing. Printed so "nothing broken" and "nothing checked" stay different claims.
+console.log(
+  `  REPORTED — ${r.lineRefsUnbackticked} of those ${r.lineRefs} line citation(s) stand OUTSIDE backticks, ` +
+    `across ${r.unbacktickedDocs} document(s). Not a failure and not a style rule: the file-existence gate ` +
+    "above only reads BACKTICKED paths, so these are ungated by construction.",
+);
+for (const u of r.unbacktickedWorst.slice(0, 5)) console.log(`    ${String(u.count).padStart(5)}  ${u.doc}`);
 
 if (r.missing.length > 0) {
   console.error(`Cited-path check FAILED for ${r.repo}: ${r.missing.length} citation(s) do not resolve to a tracked file.\n`);

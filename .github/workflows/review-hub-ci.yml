@@ -711,6 +711,13 @@ jobs:
         run: node scripts/check-console-launch-families.mjs
       - name: "Console launch families self-test (the check can actually fail)"
         run: node scripts/check-console-launch-families.mjs --self-test
+      # Three company documents said "No cost or billing figure appears in this repository"
+      # while Pricing.tsx and COST_MODEL.md printed dollars; the 2026-08-21 lens review asked
+      # for this gate (ROLE_LENS_REVIEW:516) and it was never built until 2026-09-06.
+      - name: "Cost figures (every currency amount resolves to docs/COST_MODEL.md's register; no owner-only billing figure is published as our own spend)"
+        run: node scripts/check-cost-figures.mjs
+      - name: "Cost figures self-test (the check can actually fail)"
+        run: node scripts/check-cost-figures.mjs --self-test
       - name: "Proof — dual control"
         run: pnpm run proof:dual-control
       - name: "Pagination-truncation guard (a capped read must not look complete)"

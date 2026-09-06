@@ -36,13 +36,17 @@ findable from documentation; both took a wire capture. Committed at
 ## Why now / why us
 
 - **Proof-first, in public**: 144 proof gates (the figure `docs/STATUS.md`
-  publishes and `check-status-figures.mjs` keeps true — this page cites it
-  rather than keeping a second copy that can drift), fail-closed
+  publishes; this page's own copy is held to the `proof:*` keys in
+  `package.json` by `scripts/check-derived-doc-figures.mjs`, row
+  `proof-scripts-investor`, so it cannot drift silently), fail-closed
   by doctrine, tamper-evident audit ledger, signed release artifacts — the
   entire product is a public repository. Diligence is reading, not trusting.
-- **Open-source-proven** (DR-013): live end-to-end against Fleet, Keycloak,
-  FreeRADIUS, Traccar, Wazuh — zero vendor spend. Paid platforms are thin
-  adapters, not product risk.
+- **Open-source-proven** (DR-013): four standing opt-in live-vendor lanes —
+  `proof:live-fleet`, `proof:live-keycloak`, `proof:live-location` (Traccar),
+  `proof:live-edr` (Wazuh), run by `pnpm run verify:live` — plus RADIUS
+  wire-truth captured once in a lab (`docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md`;
+  no standing lane) — zero vendor spend. Paid platforms are thin adapters,
+  not product risk.
 - **Cost structure**: limiter-bound serving; one small VM over-serves a
   tenant; marginal tenant cost ≈ $0; one identified paid software
   dependency. Published at docs/COST_MODEL.md.
@@ -54,10 +58,13 @@ findable from documentation; both took a wire capture. Committed at
 
 ## Traction (updated at use time — no forward-dated claims)
 
-Shadow-mode pilot program live; first outreach wave to researched lean-IT
-targets in flight; pilot terms published. {AT-USE: pilot count, conversation
-count, any conversion — filled from the outreach log on the day this is
-sent, never projected.}
+Pilot terms published. {AT-USE: pilot status, outreach status, pilot count,
+conversation count, any conversion — read on the day this is sent from two
+places and nowhere else: `artifacts/outreach-log/` (one JSON file per send
+day; as of 2026-09-06 it holds only its README, so no outreach has gone out)
+and the tally line of `docs/agent/DISCOVERY_LOG.md` (0 of 15 conversations
+logged as of 2026-09-06). Write what they say; "live" or "in flight" only
+when the log shows a send, never projected.}
 
 ## The ask (set at use time)
 

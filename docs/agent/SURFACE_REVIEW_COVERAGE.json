@@ -677,6 +677,15 @@
      "scope": "partial: only the lines that pair a symbol with a code citation, mechanically; the prose around them not re-read",
      "open": 0,
      "closed": 3
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twenty-second round: HARDWARE_PARTNER_MATRIX.md read whole after rule 5 flagged twelve blocks — every custody, dock, PACS and RTLS reference now names the family as deferred (design target, not Limited GA), a non-goals bullet says so once, and the custody-schema heading and its anchor were renamed together.",
+     "reviewer": "cloud lane (general-purpose agent working from the launch-claims rule-5 output; every edit site spot-read firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: HARDWARE_PARTNER_MATRIX.md only",
+     "open": 0,
+     "closed": 12
     }
    ]
   },
@@ -791,6 +800,15 @@
      "scope": "surface",
      "open": 12,
      "closed": 0
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twenty-second round: the twentieth round's twelve defects fixed, every figure re-derived before the sentence changed. INVESTOR_ONE_PAGER no longer says the outreach wave is 'in flight' or the pilot program 'live' — the sentence is an {AT-USE} bracket naming artifacts/outreach-log/ (only its README) and the DISCOVERY_LOG tally (0 of 15) as the things to read on send day; 'live end-to-end against FreeRADIUS' became the four standing verify:live lanes plus a one-off RADIUS wire capture; the 144-proofs parenthetical names its real guard (check-derived-doc-figures row proof-scripts-investor). FUNDING_READINESS: 'already running / first sends Monday' → prepared, zero sends logged as of 2026-09-06; iam verification is five of fifteen sourced to the roster (was 2, 5 and 15 across the folder). ROLE_CATALOG: 'No hiring sequence has been published' → HIRING_SEQUENCE's ratified precedence; 'no cost model exists yet' ×2 → landed 2026-08-22 (check:absence INCONCLUSIVE, matches read, refuted); '47 deferred families' → 56 steps, 47 gates over 48 families, 8 doctrine proofs, proof:decision-palette; 'no lint rule yet' ×2 → check-ios-dynamic-type gates it (0 raw calls, 18 on 08-21); 'v4 / 174 classifications' → ratified at v4, v5 with 180 today; 'No cost or billing figure appears in this repository' ×3 → no OWNER-ONLY billing figure (DR-005 item 4) — the product's price points and the cost model do appear, and check-cost-figures now holds the register. ROLE_LENS_REVIEW: twelve fixed findings annotated in place in its own idiom, finance.3 annotated as narrowed this round, ai-ops.4 as 'mechanism live, figures dead' with the measured figures; three dead and five drifted unbackticked citations corrected. Gates: docs/company joins the buyer-facing claims scan by an audience rule derived from path and heading; check-cited-paths REPORTS unbackticked path:line citations per document; check-cost-figures resolves every currency amount against docs/COST_MODEL.md's register and refuses a concrete owner-only billing figure. Still open: ROLE_LENS_REVIEW :498 (:1600/:1633) and :553 (:3468) cite lines whose text is elsewhere today and were left rather than guessed.",
+     "reviewer": "cloud lane (prose by a general-purpose agent working from the findings file with every figure re-derived by command; gates by the gate engineer; firsthand spot-read of every edit site and every gate run)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 1,
+     "closed": 12
     }
    ]
   },
@@ -985,6 +1003,15 @@
      "scope": "partial: 5 of the 17 remainder files in full, 12 by sweep; the other 32 research files as the eleventh round left them.",
      "open": 0,
      "closed": 4
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twenty-second round: the six partner/pitch documents the launch-claims gate's new audience rule (rule 5) pulled into the buyer-facing scan — STRATEGIC_BUYER_PARTNER_PITCH_PACK, BUYER_PARTNER_READINESS_PACK, BEAM_MOBILE_PARTNER_CANDIDATE_BRIEF, PARTNER_AND_ALLIANCE_STRATEGY, TARGET_BUYER_PARTNER_MATRIX, PITCH_TARGET_CATEGORIES — read at every flagged block: eight retired-label lines (the readiness pack's opening sentence and two outreach email drafts among them) rewritten to the PURPOSE §2 sentence with the label recorded as retired under DR-019/DR-020, five deferred nouns stated as the current product marked deferred, the rest honest planning prose hedged in words the gate reads. Both ceilings fell (docs 453 → 418, retired labels 27 → 20).",
+     "reviewer": "cloud lane (general-purpose agent working from the launch-claims rule-5 output; every edit site spot-read firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the six documents rule 5 flagged, at the flagged blocks — not the rest of docs/research",
+     "open": 0,
+     "closed": 43
     }
    ]
   },

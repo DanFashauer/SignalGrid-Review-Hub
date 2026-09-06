@@ -12,7 +12,7 @@ Partner ecosystems matter because SignalGrid depends on signals and workflows ow
 - SIEM/SOAR and security operations platforms.
 - NAC/network platforms.
 - Endpoint telemetry and EDR providers.
-- Physical/shared-device context systems such as badge, QR/NFC, Kontakt.io, and other RTLS providers.
+- Physical/shared-device context systems such as badge, QR/NFC, Kontakt.io, and other RTLS providers — candidate sources for the deferred location and custody families.
 - Dock, charging station, smart cabinet, kiosk, and return-station vendors.
 - Agentic operations, connector marketplace, and MCP-style tool-surface ecosystems where future bounded connectors are validated.
 
@@ -22,17 +22,17 @@ Imprivata is a future candidate healthcare access-management path because many s
 
 Review Hub does not claim any current Imprivata partnership, certification, alliance, marketplace listing, or validated integration.
 
-## Kontakt.io / RTLS candidate ecosystem path
+## Kontakt.io / RTLS candidate ecosystem path (deferred)
 
-Kontakt.io and similar RTLS providers are future candidate ecosystem paths for location, staff-safety, asset tracking, patient journey/location context where approved, equipment movement, and operational workflow signals. The useful SignalGrid role would be narrow: consume RTLS/location/staff-safety context, normalize it, combine it with identity, device posture, session, DockBridge, and operational signals, then produce runtime decisions, operator alerts, ITSM/SIEM handoff requests, and audit evidence.
+Kontakt.io and similar RTLS providers are future candidate ecosystem paths for location, staff-safety, asset tracking, patient journey/location context where approved, equipment movement, and operational workflow signals. The useful SignalGrid role would be narrow: consume RTLS/location/staff-safety context, normalize it, combine it with identity, device posture, session, DockBridge, and operational signals, then produce runtime decisions, operator alerts, ITSM/SIEM handoff requests, and audit evidence. That role is roadmap: location and RTLS are deferred families (Beyond Limited GA), and nothing here moves them.
 
-Kontakt.io or another RTLS source would continue to own RTLS hardware, tags, badges, wearables, location engines, telemetry, infrastructure calibration, APIs/SDKs, and native workflows. Review Hub does not claim a current Kontakt.io partnership, validated integration, certification, marketplace listing, customer deployment, patient-care outcome guarantee, or production-ready capability. A real integration should be evaluated only after API/SDK access, privacy boundaries, partner boundaries, and data handling are validated.
+Kontakt.io or another RTLS source would continue to own RTLS hardware, tags, badges, wearables, location engines, telemetry, infrastructure calibration, APIs/SDKs, and native workflows. A current Kontakt.io partnership, validated integration, certification, marketplace listing, customer deployment, patient-care outcome guarantee, or production-ready capability is not claimed by Review Hub. A real integration should be evaluated only after API/SDK access, privacy boundaries, partner boundaries, and data handling are validated.
 
 ## Operational Health / DEX ecosystem path
 
 The [Operational Health / DEX Layer Strategy](../OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md) creates a future ecosystem path for endpoint health, digital employee experience, monitoring, alerting, API/service health, ITSM ownership, and routed remediation. Candidate signal sources include ControlUp, Nexthink, Riverbed Aternity, Lakeside SysTrack, TeamViewer DEX, Tanium, Ivanti Neurons, Microsoft Intune / Endpoint Analytics, Microsoft Defender for Endpoint, CrowdStrike, SentinelOne, Datadog, Splunk, Azure Monitor, ServiceNow, Jira Service Management, PagerDuty, and Opsgenie.
 
-The useful partner framing is narrow: SignalGrid would consume health, experience, alert, ticket, service, severity, ownership, and impacted-service context; correlate it with identity, posture, session, RTLS/DockBridge, and workflow state; then route decisions, tickets, alerts, review requests, remediation requests, and audit evidence to the correct existing system or team. SignalGrid should not claim that it replaces DEX, RMM, EDR, SIEM, monitoring, observability, ITSM, or endpoint platforms.
+The useful partner framing is narrow: SignalGrid would consume health, experience, alert, ticket, service, severity, ownership, and impacted-service context; correlate it with identity, posture, session, RTLS/DockBridge (both deferred families), and workflow state; then route decisions, tickets, alerts, review requests, remediation requests, and audit evidence to the correct existing system or team. SignalGrid should not claim that it replaces DEX, RMM, EDR, SIEM, monitoring, observability, ITSM, or endpoint platforms.
 
 Real connector implementation belongs in the private/core/local implementation after public documentation settles because partner APIs may require credentials, API keys, tenant data, webhook secrets, monitoring access, source-system permissions, mobile testing, and private test data.
 

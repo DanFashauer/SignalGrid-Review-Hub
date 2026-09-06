@@ -2,16 +2,21 @@
 
 > **SUPERSEDED 2026-09-06 — do not send from this file.**
 > The live outreach surface is `docs/outreach/` (claim-scanned on every push). This pack
-> keeps a ready subject line under a retired category label and was never inside that scan;
+> kept a ready subject line under a retired category label and was never inside that scan;
 > kept for provenance only. `scripts/check-send-copy-banner.mjs` holds the rule.
+> Dated record: until 2026-09-06 the positioning line, the founder-control list, and the
+> subject line and openings of two outreach drafts here used the retired label
+> "operational trust orchestration" (superseded by DR-019/DR-020). Those lines were rewritten
+> to the `docs/PURPOSE.md` product sentence that day, and the deferred signal families they
+> name (custody, network context, credential-reader events) are marked deferred inline.
 
 This pack is a public-safe, docs-only pitch scaffold built from the current validated SignalGrid Review Hub state. It is intended for strategic buyer, partner, investor, and design-partner conversations without claiming live integrations, production readiness, certification, current partnerships, valuation, or legal outcomes.
 
 ## One-page positioning
 
-SignalGrid is **operational trust orchestration for shared, mobile, and frontline environments**.
+SignalGrid connects the systems a building already runs - access control, identity, device management, location, applications, ticketing - into one grid that decides and acts on the person's behalf (`docs/PURPOSE.md` §2, verbatim). It is built for **shared, mobile, and frontline environments**; no category label is ratified (DR-019/DR-020).
 
-In those environments, the operational question is rarely answered by one system alone: should this person, device, credential, custody event, network path, and workflow state be trusted right now, and what approved action should happen next?
+In those environments, the operational question is rarely answered by one system alone: should this person, device, credential, custody event, network path, and workflow state be trusted right now, and what approved action should happen next? Custody events and network path are deferred signal families here — design targets, not Limited GA.
 
 SignalGrid positions itself as the layer that normalizes public-safe signals, evaluates fixture-backed trust decisions, routes approval-required actions, records audit evidence, and verifies expected results while existing enterprise systems remain systems of record.
 
@@ -22,7 +27,7 @@ Current systems each know part of the truth:
 - IAM knows identity.
 - MDM/UEM knows device posture.
 - Credential readers know badge events.
-- Smart lockers/docks know custody.
+- Smart lockers/docks know custody (a deferred input family for SignalGrid, not Limited GA).
 - Network tools know zone/access path.
 - ITSM/SOAR knows workflow ownership.
 - SIEM/evidence systems know audit trails.
@@ -34,7 +39,7 @@ SignalGrid connects those signals into auditable trust decisions. The current Re
 Reference these assets when discussing the current validated state:
 
 - Connector Emulator Harness for deterministic, public-safe connector scenario validation.
-- Connector Emulator Review Dashboard for visual review of synthetic cloud, custody, network, routing, and approval-gate scenarios.
+- Connector Emulator Review Dashboard for visual review of synthetic cloud, custody, network, routing, and approval-gate scenarios (custody and network are deferred families; fixture-backed, not live integrations).
 - Credential Reader Signal Model for vendor-neutral badge, mobile credential, reader, identity-correlation, and event-shape semantics.
 - Credential Reader / Smart Locker Review Dashboard for public-safe badge and custody decision narratives.
 - Phase Automation Orchestrator for the scoped input-to-PR validation loop.
@@ -66,7 +71,7 @@ Use Review Hub to run public-safe walkthroughs, collect workflow feedback, and i
 
 ### OEM / embedded partner path
 
-Explore whether SignalGrid's orchestration, evidence, and approval-gate model can be embedded into another vendor's shared-device, custody, endpoint, identity, or workflow experience. This path should preserve source-system ownership and avoid replacement claims.
+Explore whether SignalGrid's orchestration, evidence, and approval-gate model can be embedded into another vendor's shared-device, custody, endpoint, identity, or workflow experience (custody is a deferred family — roadmap, not Limited GA). This path should preserve source-system ownership and avoid replacement claims.
 
 ### Strategic investment path
 
@@ -86,7 +91,7 @@ The preferred path is a strategic partnership, investment, or acquisition struct
 
 Founder-control priorities:
 
-- Preserve the operational trust orchestration thesis.
+- Preserve the product thesis as `docs/PURPOSE.md` states it (no category label is ratified — DR-019/DR-020).
 - Preserve product and user-experience quality.
 - Keep high-risk actions simulated or approval-required unless separately validated in a private/sandbox context.
 - Avoid unsupported production, certification, partnership, replacement, acquisition, valuation, legal, or financial guarantee claims.
@@ -108,11 +113,11 @@ Suggested sequence for a factual, non-hype walkthrough:
 
 ### Strategic partner draft
 
-Subject: SignalGrid operational trust orchestration discussion
+Subject: SignalGrid access-decision service discussion
 
 Hi [Name],
 
-I am building SignalGrid, an operational trust orchestration layer for shared, mobile, and frontline environments. The current Review Hub uses synthetic, fixture-backed proof assets to show how identity, device posture, credential-reader events, custody, network context, workflow ownership, and audit evidence can be connected into approval-gated trust decisions.
+I am building SignalGrid, an access-decision service for shared, mobile, and frontline environments: it connects the systems a building already runs into one grid that decides and acts on the person's behalf. The current Review Hub uses synthetic, fixture-backed proof assets to show how identity, device posture, workflow ownership, and audit evidence — together with credential-reader events, custody, and network context, which are deferred roadmap signal families — can be connected into approval-gated trust decisions.
 
 I would value a focused discussion on whether this orchestration layer could complement your category without replacing existing systems of record. The current materials are public-safe and do not include live integrations or customer data.
 
@@ -127,7 +132,7 @@ Subject: Design-partner review for shared-device trust workflows
 
 Hi [Name],
 
-I am looking for design feedback on SignalGrid, a public-safe Review Hub for operational trust orchestration in shared, mobile, and frontline environments. The current demo is synthetic and fixture-backed, with dashboards for connector-emulator scenarios and credential-reader / smart-locker custody flows.
+I am looking for design feedback on SignalGrid, a public-safe Review Hub for an access-decision service in shared, mobile, and frontline environments. The current demo is synthetic and fixture-backed, with dashboards for connector-emulator scenarios and credential-reader / smart-locker custody flows (a deferred signal family — roadmap, not Limited GA).
 
 The goal is to validate workflow fit, signal usefulness, approval gates, and evidence needs before any private sandbox or live integration work is considered.
 
@@ -142,7 +147,7 @@ Subject: SignalGrid strategic fit conversation
 
 Hi [Name],
 
-I am preparing SignalGrid for strategic conversations with organizations that understand identity, endpoint posture, shared devices, frontline operations, custody workflows, and audit evidence. The current Review Hub contains validated synthetic proof assets, dashboards, post-merge smoke evidence, and Autopilot workflow scaffolding.
+I am preparing SignalGrid for strategic conversations with organizations that understand identity, endpoint posture, shared devices, frontline operations, custody workflows (deferred on SignalGrid's roadmap), and audit evidence. The current Review Hub contains validated synthetic proof assets, dashboards, post-merge smoke evidence, and Autopilot workflow scaffolding.
 
 I am primarily interested in paths that preserve founder/product leadership and accelerate safe validation: strategic partnership, investment, OEM/embedded collaboration, or an acquisition structure with continued product leadership. This note does not include valuation, legal, or financial guarantee claims.
 

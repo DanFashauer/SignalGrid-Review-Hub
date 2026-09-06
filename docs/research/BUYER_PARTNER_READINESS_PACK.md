@@ -1,12 +1,12 @@
 # Buyer / Partner Readiness Pack
 
-SignalGrid is an operational trust orchestration layer that connects identity, device posture, credential-reader events, custody, network context, workflow ownership, routing, audit evidence, and verification expectations.
+SignalGrid connects the systems a building already runs - access control, identity, device management, location, applications, ticketing - into one grid that decides and acts on the person's behalf (`docs/PURPOSE.md` §2, verbatim; it owns the product sentence, and no category label is ratified — DR-019/DR-020). Limited GA evaluates device posture, device-management health, and local authority; credential-reader events, custody, network context, and location are deferred signal families, proven in fixtures and Beyond Limited GA.
 
 ## Product thesis
 
-SignalGrid is operational trust orchestration for shared, mobile, and frontline environments.
+SignalGrid is built for shared, mobile, and frontline environments: one grid across door, device, room, and app that decides and acts on the person's behalf, invisible to the worker (`docs/PURPOSE.md`; the earlier category label is retired under DR-019/DR-020).
 
-Shared, mobile, and frontline environments fail when identity, device, custody, network, and workflow signals remain separated. SignalGrid normalizes those signals, decides outcomes, routes approved actions, audits events, and verifies expected results while existing enterprise systems remain systems of record.
+Shared, mobile, and frontline environments fail when identity, device, custody, network, and workflow signals remain separated. SignalGrid normalizes those signals, decides outcomes, routes approved actions, audits events, and verifies expected results while existing enterprise systems remain systems of record. Custody and network context are deferred families in this repository (Beyond Limited GA); device posture and management health are the Limited GA inputs.
 
 ## Current validated proof assets
 
@@ -14,7 +14,7 @@ Shared, mobile, and frontline environments fail when identity, device, custody, 
 - Intune / Entra posture proof using public-safe fixtures.
 - SignalGrid grid proof for Review Hub evidence.
 - Microsoft Graph sandbox proof with fixture-backed boundaries.
-- Connector emulator proof for synthetic cloud, custody, routing, and network scenarios.
+- Connector emulator proof for synthetic cloud, custody, routing, and network scenarios (custody and network are deferred families; fixture-backed, not live integrations).
 - Connector Emulator Harness and Connector Emulator Review Dashboard.
 - Credential Reader Signal Model and Credential Reader / Smart Locker dashboard narrative.
 - Phase Automation Orchestrator and Autopilot Control Plane.
@@ -53,7 +53,7 @@ Use the validated proof package, backlog, risk lanes, demo materials, and public
 
 ## Founder / CEO creative-control preference
 
-Preferred paths preserve product direction, user experience quality, public-safety posture, and the founder's ability to guide the operational trust orchestration thesis.
+Preferred paths preserve product direction, user experience quality, public-safety posture, and the founder's ability to guide the product thesis as `docs/PURPOSE.md` states it.
 
 ## What is not yet claimed
 

@@ -1,8 +1,8 @@
 # Hardware Partner Matrix
 
-This matrix is a public-safe planning artifact for SignalGrid's future Physical Custody, DockBridge, and shared-device trust layer. It lists candidate hardware categories that could provide fixture-backed signals for review, design-partner discovery, and later reference-architecture evaluation.
+This matrix is a public-safe planning artifact for SignalGrid's Physical Custody, DockBridge, and shared-device trust layer — deferred families in `scripts/launch-profile.mjs` (Beyond Limited GA), a design target rather than a shipped surface. It lists candidate hardware categories that could provide fixture-backed signals for review, design-partner discovery, and later reference-architecture evaluation.
 
-No entry in this document is a partnership claim, endorsement claim, procurement recommendation, certification claim, or integration announcement. SignalGrid remains the vendor-neutral layer that could normalize custody signals, evaluate trust decisions, route approved actions, audit events, and verify expected results while existing enterprise and hardware systems remain systems of record.
+Partnership, endorsement, procurement recommendation, certification, and integration are not claimed by any entry in this document. SignalGrid's design target is the vendor-neutral layer that normalizes custody signals (a deferred family), evaluates trust decisions, routes approved actions, audits events, and verifies expected results while existing enterprise and hardware systems remain systems of record.
 
 ## Candidate matrix
 
@@ -12,7 +12,7 @@ No entry in this document is a partnership claim, endorsement claim, procurement
 | Healthcare rugged cases and battery systems | Beam Mobile and other healthcare accessory vendors | Case serial, battery serial, charge state, device survivability context, cleaning workflow context | Evaluate only with public docs, sanitized fixtures, or explicitly approved non-production technical materials. |
 | Charging docks | Beam Mobile, LocknCharge, Zebra cradles, Honeywell cradles, Datalogic cradles | Dock ID, bay ID, occupied/empty state, charge state, device return evidence | Start with fixture-backed state models; do not add live hardware calls in Review Hub. |
 | Smart lockers | Traka, Vecos | Locker ID, compartment state, checkout/return event, overdue asset signal | Treat lockers as physical custody source systems, not systems SignalGrid controls directly. |
-| Device-dispensing kiosks and checkout stations | ARC, and other multi-bay dispensing-kiosk vendors | Kiosk ID, bay ID, dispense/return event, per-bay occupancy and charge state, bay-fault indication, unreturned-device signal | Treat the kiosk as the custody system of record and consume it as a **read-only signal source**; no dispensing, release, or bay action is performed from Review Hub. See [Where dispensing-kiosk claims land](#where-dispensing-kiosk-claims-land-in-the-custody-schema). |
+| Device-dispensing kiosks and checkout stations | ARC, and other multi-bay dispensing-kiosk vendors | Kiosk ID, bay ID, dispense/return event, per-bay occupancy and charge state, bay-fault indication, unreturned-device signal | Treat the kiosk as the custody system of record and consume it as a **read-only signal source**; no dispensing, release, or bay action is performed from Review Hub. See [Where dispensing-kiosk claims land](#where-dispensing-kiosk-claims-land-in-the-deferred-custody-schema). |
 | Rugged handheld ecosystems | Zebra, Honeywell, Datalogic | Device identity, cradle state, battery/charging telemetry, shared-device fleet context | Model as candidate source systems for frontline workflows, especially outside Apple fleets. |
 | Kiosk and tablet mounts | Compulocks, Heckler | Mounted/unmounted context, station identity, device-to-location evidence | Use for station or kiosk posture context; do not imply physical security guarantees. |
 | PACS, badge, and access-control systems | HID, LenelS2, Genetec, Gallagher, Brivo, Verkada | Badge event, door/area context, access-control event correlation | Treat PACS as a source of custody-adjacent evidence; SignalGrid does not replace PACS or emergency egress controls. |
@@ -22,11 +22,11 @@ No entry in this document is a partnership claim, endorsement claim, procurement
 
 - **Case signals** can improve survivability context, battery continuity, cleaning durability assumptions, and device usability for shared healthcare iPhone/iPad workflows.
 - **Dock signals** can provide checkout, return, charging, custody, and audit-evidence context when a device is removed from or returned to a known bay.
-- **SignalGrid signals** can combine identity, device posture, workflow risk, dock state, custody state, routed action history, and verification evidence into an explicit trust decision without becoming the hardware system of record.
+- **SignalGrid signals** can combine identity, device posture, workflow risk, dock state, custody state, routed action history, and verification evidence into an explicit trust decision without becoming the hardware system of record. Dock and custody state are deferred families here — a design target, not Limited GA.
 
 ## Candidate decision examples
 
-| Scenario | Example normalized inputs | Candidate outcome |
+| Scenario | Example normalized inputs | Candidate outcome (dock and custody inputs are deferred families; design target, not Limited GA) |
 | --- | --- | --- |
 | Compliant device + valid identity + dock checkout | Valid user session, compliant managed device, known dock ID, expected bay checkout | Allow candidate for the requested workflow, with custody evidence attached to the audit record. |
 | Valid identity + device not returned by SLA | Valid user session, known checked-out device, overdue return timer exceeded | Route owner or alert queue; preserve audit evidence and avoid autonomous remediation. |
@@ -35,10 +35,10 @@ No entry in this document is a partnership claim, endorsement claim, procurement
 | Low battery + critical workflow | Known device has low charge state before a critical workflow | Operational risk; route swap-battery or alternate-device guidance for approval-aware operations. |
 | Unknown dock state + high-risk workflow | Identity and device signals are valid, but dock state is missing or ambiguous | Degraded confidence; step-up, supervisor review, or alternate verification before high-risk workflow access. |
 
-## Where dispensing-kiosk claims land in the custody schema
+## Where dispensing-kiosk claims land in the deferred custody schema
 
 Multi-bay dispensing kiosks are the closest adjacent category to SignalGrid's
-custody plane, so it is worth being precise about which of their capabilities
+custody plane (a deferred family, not Limited GA), so it is worth being precise about which of their capabilities
 already have a home in the custody model and which do not.
 
 Two reading notes, because both directions of this table are easy to get wrong:
@@ -51,10 +51,10 @@ Two reading notes, because both directions of this table are easy to get wrong:
   exists, the rule is implemented in the shared-device baseline policy and
   documented in [DockBridge Product Connector](DOCKBRIDGE_PRODUCT_CONNECTOR.md).
   The vendor-neutral [Physical Custody Signal Model](PHYSICAL_CUSTODY_SIGNAL_MODEL.md)
-  is the *candidate schema* and deliberately contains no rules or outcomes, so it
+  is the *candidate schema* for the deferred custody family and deliberately contains no rules or outcomes, so it
   cannot be used to verify these claims.
 
-| Vendor-stated kiosk capability | Where it lands | Verdict |
+| Vendor-stated kiosk capability | Where it lands (in the deferred custody model, not Limited GA) | Verdict |
 | --- | --- | --- |
 | Confirms a device was returned and is charging | `custodyState = checked_in` + `chargeState = charging` | **Already modeled.** No new signal needed. |
 | Flags a device not returned / returned late | `custodyState = overdue` | **Already modeled**, and already a `restrict` rule (`CUSTODY_OVERDUE`). |
@@ -69,7 +69,7 @@ Two reading notes, because both directions of this table are easy to get wrong:
 
 The honest read: most of what a dispensing kiosk advertises is already a value in
 the custody enums, because both are describing the same physical event stream. That
-makes this category a **signal source and integration candidate** — the kiosk stays
+makes this category a **signal source and integration candidate** for the deferred custody family — the kiosk stays
 the custody system of record, and SignalGrid consumes its events. Whether any vendor
 here is also a competitor is a positioning question that belongs in a
 `COMPETITIVE_*.md` document, not in this matrix.
@@ -81,7 +81,7 @@ Two cautions when reading vendor material in this category:
   or source. Record them as *vendor-stated* if recorded at all, and never carry
   them into SignalGrid's own materials as established fact.
 - **"Over-the-air software updates" from a charging kiosk is a management-plane
-  claim, and it is currently unmodelled.** If a custody device can push software to
+  claim, and it is currently unmodelled** in the deferred custody family. If a custody device can push software to
   the devices it holds, it is an update channel, and a signal source that can also
   change the device is not a read-only signal source. The
   [Product Core Threat Model](PRODUCT_CORE_THREAT_MODEL.md) now analyses this
@@ -93,6 +93,7 @@ Two cautions when reading vendor material in this category:
 ## Non-goals
 
 - No hardware integration is implemented in Review Hub.
+- Custody, dock, PACS, and RTLS signal families are deferred (not Limited GA); nothing in this matrix advances them to a shipped claim.
 - No live vendor API calls, hardware calls, webhook listeners, USB listeners, or production integrations are added.
 - No Beam Mobile partnership, endorsement, reseller, certification, or alliance status is claimed. The same applies to every other vendor named in this document, including any dispensing-kiosk vendor.
 - No procurement recommendation or vendor ranking is made.
@@ -104,7 +105,7 @@ Two cautions when reading vendor material in this category:
 
 - Does the dock expose bay occupied/empty state?
 - Can the dock identify the device, case, or battery in each bay?
-- For a dispensing kiosk: is the dispense/return event exportable per device, or only aggregated into a utilization report? An aggregate is not a custody signal.
+- For a dispensing kiosk: is the dispense/return event exportable per device, or only aggregated into a utilization report? An aggregate is not a custody signal (and custody is itself a deferred family; these questions scope discovery, not a shipped capability).
 - Does the kiosk record *which person* took the device, and by what credential (badge, PIN, employee ID)? Without that binding, a dispense event is inventory movement, not custody.
 - Can a bay fault be read as a discrete state, or is it only surfaced in an operator alert email?
 - Does the custody hardware also act as a software-update or configuration channel to the device? If so, it is a management-plane component and must be threat-modeled as one, not treated as a read-only sensor.

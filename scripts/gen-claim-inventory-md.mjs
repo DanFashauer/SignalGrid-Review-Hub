@@ -208,9 +208,28 @@ function selfTest() {
   const drifted = clean.replace("| c |", "| c! |");
   checks.push(["a one-character planted drift is DETECTED", drifted !== clean && clean.includes("| c |")]);
   // 4b. A stored rowCount that drifted from `rows` is REFUSED, not rendered around.
+  //     The catch is NARROW on purpose: a ReferenceError (or any error that is not
+  //     the guard speaking) means the check itself broke, and a broken check must
+  //     rethrow rather than count itself green. It scored green for exactly that
+  //     reason once — see the note beside the `inventory` declaration below.
   let refused = false;
-  try { renderInventory({ ...inventory, rowCount: inventory.rows.length + 1 }); } catch { refused = true; }
+  try {
+    renderInventory({ ...inventory, rowCount: inventory.rows.length + 1 });
+  } catch (err) {
+    if (err instanceof ReferenceError || err instanceof TypeError) throw err;
+    refused = /rowCount/.test(err.message);
+  }
   checks.push(["a stored rowCount that disagrees with rows is refused by the render", refused]);
+  // …and the guard does not fire on an AGREEING rowCount, so 4b is not vacuous
+  // in the other direction either (a renderer that threw unconditionally would
+  // satisfy the check above while breaking every honest render).
+  let agreed = true;
+  try {
+    renderInventory({ ...inventory, rowCount: inventory.rows.length });
+  } catch {
+    agreed = false;
+  }
+  checks.push(["a stored rowCount that AGREES with rows still renders", agreed]);
 
   // 3. …and an undrifted render compares EQUAL, so the pass is not vacuous.
   checks.push(["an identical render compares equal (the gate can also pass)", renderInventory(synthetic).text === clean]);
@@ -233,9 +252,16 @@ function selfTest() {
   return 0;
 }
 
+// DECLARED BEFORE the self-test dispatch, deliberately. `selfTest()` reads
+// `inventory` (check 4b); while this `const` sat BELOW `if (SELF_TEST)` the
+// reference hit the temporal dead zone, threw a ReferenceError, and the bare
+// `catch` in that check scored the crash as "the render refused" — so check 4b
+// passed with the rowCount guard DELETED from the renderer. A self-test that
+// cannot fail is the defect this file's own header warns about.
+const inventory = JSON.parse(readFileSync(JSON_PATH, "utf8"));
+
 if (SELF_TEST) process.exit(selfTest());
 
-const inventory = JSON.parse(readFileSync(JSON_PATH, "utf8"));
 const rendered = renderInventory(inventory);
 
 // Floors apply to the GATE too, not only the self-test: a render that resolved

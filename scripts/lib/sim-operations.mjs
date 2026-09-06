@@ -159,11 +159,10 @@ export const SIM_OPERATIONS = {
   //
   // A request that needs ONE vendor should be able to say so. `live-lanes` is
   // all-or-nothing: it exits 3 if ANY lane skipped, so a run where Fleet passed
-  // against a real Fleet still recorded refused_missing_prerequisite because
-  // proof:live-edr skipped — and run-live-lanes.sh never starts Wazuh for you
-  // (~2GB image, minutes of boot). That made 2026-08-12-fleet-lab-real-source
-  // permanently unresolvable on this Mac, even though its own notes said "Fleet
-  // is the one that matters here; Wazuh/Keycloak/Traccar skipping is fine".
+  // against a real Fleet still recorded refused_missing_prerequisite because an
+  // unrelated lane skipped. That made 2026-08-12-fleet-lab-real-source permanently
+  // unresolvable on this Mac, even though its own notes said "Fleet is the one that
+  // matters here; Wazuh/Keycloak/Traccar skipping is fine".
   //
   // The coarse status was not wrong — an unrun lane is genuinely not green. The
   // request simply had no way to name the lane it cared about. These are that way.
@@ -171,12 +170,23 @@ export const SIM_OPERATIONS = {
   // other lanes filtered out nothing is skipped, so a lane that passes exits 0 and
   // records `passed` rather than being dragged to refused by an unrelated lane.
   //
-  // THEY ARE NOT INTERCHANGEABLE. Fleet, Keycloak and Traccar stand their own
-  // stacks up in Docker and tear them down. Wazuh does not — the script refuses to
-  // pull a ~2GB image for you — so `live-edr` still records
-  // refused_missing_prerequisite unless WAZUH_URL points at a real server. That is
-  // the honest answer for it, not a gap to paper over with a self-provisioning
-  // claim it cannot keep.
+  // WAZUH SELF-PROVISIONS TOO, since 2026-08-21. Four statements here said the
+  // opposite — "run-live-lanes.sh never starts Wazuh for you", "the script refuses
+  // to pull a ~2GB image for you", "this lane is NOT self-provisioning", and
+  // "refuses (never passes) when WAZUH_URL is unset" — and two of them were the
+  // `needs`/`what` STRINGS the runner prints to the operator, not just prose. The
+  // never-start rule was true of the amd64-only 4.9.0 era; `scripts/run-live-lanes.sh`
+  // has stood Wazuh up itself since the pin moved to 4.14.7
+  // (`SG_IMAGE_WAZUH` in scripts/lib/container-engine.sh), which is native on both
+  // architectures and up in seconds — see run-live-lanes.sh lines 21-23 and the
+  // `if wanted edr` block that runs `$SG_ENGINE run -d --name sg-wazuh`. An operator
+  // reading this file was told to go find a Wazuh server the lane would have
+  // started for them.
+  //
+  // What is still true, and is why the lanes are NOT interchangeable: Wazuh's image
+  // is ~2GB, so its FIRST run is minutes of pull where Fleet, Keycloak and Traccar
+  // are seconds. And a lane whose API never answers is still reported skipped, never
+  // passed.
   "live-headwind": {
     argv: ["./scripts/run-live-lanes.sh", "--only", "headwind"],
     platform: "any",
@@ -216,8 +226,8 @@ export const SIM_OPERATIONS = {
   "live-edr": {
     argv: ["./scripts/run-live-lanes.sh", "--only", "edr"],
     platform: "any",
-    needs: "WAZUH_URL pointing at a real Wazuh — this lane is NOT self-provisioning",
-    what: "the Wazuh EDR lane alone; refuses (never passes) when WAZUH_URL is unset",
+    needs: "a running container engine; the script stands Wazuh up itself (pinned wazuh-manager:4.14.7, ~2GB on the FIRST pull), or WAZUH_URL pointing at one you already run",
+    what: "the Wazuh EDR lane alone, against a real Wazuh; reported skipped — never passed — if the API does not answer",
   },
 };
 

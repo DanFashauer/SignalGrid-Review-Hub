@@ -115,20 +115,41 @@ function readersOf(name) {
   }
 }
 
+/**
+ * Pure: what an unreadable tracked document costs the verdict.
+ *
+ * WHY THIS FUNCTION EXISTS (fixed 2026-09-06). The catch below already said the right
+ * thing — "the assignments it holds are unknown, which is not 'none' — surface it as a
+ * fatal rather than skipping" — and then substituted `""` and printed a `✗` that set no
+ * exit code. `fatal` is built only from assignments FOUND in the text, so an unreadable
+ * document produced an empty text, no assignments, no fatal, and the run exited 0 saying
+ * "every SIGNALGRID_* variable a document instructs is read by something". Demonstrated
+ * through the exported audit: `auditEnvDocReaders({"docs/x.md": ""}, () => 0).fatal` is
+ * empty, while the same document readable and instructing a reader-less variable yields
+ * one. The comment stated the rule; the code implemented its opposite.
+ */
+export function unreadableProblems(unreadable) {
+  return unreadable.map(
+    ({ rel, code }) =>
+      `${rel}: tracked but UNREADABLE (${code}) — the SIGNALGRID_* instructions it holds are unknown, ` +
+      "which is not the same as none. Fix the file, or remove it from the tree.",
+  );
+}
+
 function loadDocs() {
   const docs = {};
+  const unreadable = [];
   for (const rel of git("ls-files -- '*.md'").split("\n").filter(Boolean)) {
     if (SKIP_PREFIXES.some((p) => rel.startsWith(p))) continue;
     try {
       docs[rel] = readFileSync(join(repoRoot, rel), "utf8");
-    } catch {
+    } catch (err) {
       // unreadable tracked doc: the assignments it holds are unknown, which is not "none" —
-      // surface it as a fatal rather than skipping
-      docs[rel] = "";
-      console.error(`  ✗ ${rel}: unreadable`);
+      // surface it as a fatal rather than skipping (see unreadableProblems above)
+      unreadable.push({ rel, code: (err && err.code) || "unknown" });
     }
   }
-  return docs;
+  return { docs, unreadable };
 }
 
 function selfTest() {
@@ -156,6 +177,19 @@ function selfTest() {
   checks.push(["the assignment shape needs the `=` — a bare mention of a name is not an instruction", assignmentsIn("we call it SIGNALGRID_TIER in prose").names.length === 0]);
   checks.push(["LIVE: the real reader lookup finds SIGNALGRID_TIER and finds nothing for a name that does not exist",
     readersOf("SIGNALGRID_TIER") > 0 && readersOf("SIGNALGRID_NO_SUCH_VARIABLE_ZZ") === 0]);
+  // AN UNREADABLE TRACKED DOCUMENT IS FATAL (F7). The pure audit cannot see it — an
+  // unreadable file reaches it as `""` — so the rule lives beside it and is asserted
+  // here, including the wiring, which is the half that was missing.
+  checks.push(["an unreadable tracked document is a PROBLEM, not an empty one",
+    unreadableProblems([{ rel: "docs/x.md", code: "EACCES" }]).length === 1]);
+  checks.push(["…and no unreadable documents means no problems", unreadableProblems([]).length === 0]);
+  checks.push(["the pure audit alone CANNOT see it — which is why the rule is separate",
+    auditEnvDocReaders({ "docs/x.md": "" }, readers).fatal.length === 0]);
+  checks.push(["LIVE: the verdict is wired to unreadableProblems, not only to the audit's fatal list",
+    /const fatal = \[\.\.\.unreadableProblems\(unreadable\), \.\.\.audit\.fatal\]/.test(
+      readFileSync(fileURLToPath(import.meta.url), "utf8"),
+    )]);
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -164,8 +198,12 @@ function selfTest() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
-  const docs = loadDocs();
-  const { fatal, proposals, placeholders, checked } = auditEnvDocReaders(docs, readersOf);
+  const { docs, unreadable } = loadDocs();
+  const audit = auditEnvDocReaders(docs, readersOf);
+  const { proposals, placeholders, checked } = audit;
+  // An unreadable document is a hole in the scan, so it joins the fatal list rather than
+  // being printed beside a passing verdict.
+  const fatal = [...unreadableProblems(unreadable), ...audit.fatal];
   console.log(`Env-doc readers — ${Object.keys(docs).length} tracked document(s) scanned for \`SIGNALGRID_*=\` instructions; ${checked.size} distinct variable(s) checked for a reader.`);
   for (const [name, n] of [...checked.entries()].sort()) console.log(`  ${n > 0 ? "✓" : "✗"} ${name.padEnd(40)} ${n} reader file(s)`);
   if (placeholders.length > 0) console.log(`  REPORTED — ${placeholders.length} \`_PLACEHOLDER\` name(s), the substitute-here convention: ${placeholders.join("; ")}`);

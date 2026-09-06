@@ -36,8 +36,11 @@
 // SELF-TEST FIRST: each rule must flag a synthetic violation, or the gate
 // refuses to conclude anything.
 import { execFileSync, execSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { gitHasHistory, readRatchetFile, refusalLines } from "./lib/ratchet-read.mjs";
 
 // The published surface is not just the marketing site, and it is not just the WEB
 // image. Every `Dockerfile.*` that COPYs a package's BUILT OUTPUT ships that
@@ -1154,7 +1157,55 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
     // of them and push none, and every check above would still be green — a
     // derivation that reports a set it never feeds is the decorative failure this
     // whole file keeps warning about. Deleting the `files.push` must fail here.
-    audienceDocs.every((d) => files.includes(d.file));
+    audienceDocs.every((d) => files.includes(d.file)) &&
+    // THE CEILING READ. Neither ceiling arm had a self-test at all until 2026-09-06,
+    // which is how a comment claiming "an unreadable ceiling can never silently
+    // authorise a rise" sat above code that did exactly that. These cases drive the REAL
+    // reader against REAL files, then pin the two live call sites lexically — the
+    // pure cases alone stay green if someone re-plants the bare catch at the call site.
+    (() => {
+      const tmp = mkdtempSync(join(tmpdir(), "launch-claims-ceiling-"));
+      const w = (n, body) => {
+        const q = join(tmp, n);
+        if (body !== null) writeFileSync(q, body);
+        return q;
+      };
+      const K = "unhedgedDeferredMentions";
+      const ok = readRatchetFile(w("ok.json", `{ "${K}": 5 }`), K);
+      const corrupt = readRatchetFile(w("corrupt.json", "{ this is not json"), K);
+      const shaped = readRatchetFile(w("shape.json", '{ "somethingElse": 5 }'), K);
+      const goneNew = readRatchetFile(w("gone.json", null), K, () => false);
+      const goneTracked = readRatchetFile(w("gone.json", null), K, () => true);
+      rmSync(tmp, { recursive: true, force: true });
+
+      const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
+      // DERIVED, not hand-listed: find every ceiling this file reads through the reader,
+      // resolve each constant to its path, and require it to be tracked. A third ceiling
+      // added later is covered the moment it is wired the same way.
+      const names = [...src.matchAll(/readRatchetFile\((\w+),\s*"(\w+)"\)/g)].map((m) => m[1]);
+      const paths = names.map((n) => (src.match(new RegExp(`const ${n} = "([^"]+)"`)) || [])[1]);
+      const cases = [
+        ["a readable, correctly shaped ceiling is USED", ok.action === "use" && ok.value[K] === 5],
+        ["a CORRUPT ceiling REFUSES rather than rebaselining", corrupt.action === "refuse"],
+        ["a ceiling missing its numeric key REFUSES", shaped.action === "refuse"],
+        ["an absent ceiling with NO git history is genesis", goneNew.action === "genesis"],
+        ["an absent ceiling that HAS git history REFUSES", goneTracked.action === "refuse"],
+        ["both ceiling arms read through the reader", names.length === 2],
+        ["each ceiling constant resolves to a path", paths.every((f) => typeof f === "string" && f.endsWith(".json"))],
+        // Both live ceilings are tracked, so genesis can never legitimately fire for
+        // them; and the probe must still be able to answer "no", or that is a constant.
+        ["every live ceiling file is tracked in git", paths.every((f) => f && gitHasHistory(f))],
+        ["a path that never existed has NO git history", !gitHasHistory("docs/agent/__no-such-ceiling-ever__.json")],
+        // The needle is assembled from pieces so this line is not itself a match.
+        [
+          "no bare catch that resets the ceiling to {} remains",
+          !new RegExp(["catch\\s*\\{\\s*", "prior", "\\s*=\\s*\\{\\}"].join("")).test(src),
+        ],
+      ];
+      const failed = cases.filter(([, pass]) => !pass).map(([label]) => label);
+      for (const label of failed) console.error(`  ✗ ceiling-read self-test: ${label}`);
+      return failed.length === 0;
+    })();
   if (!st) {
     console.error("✗ SELF-TEST FAILED: a rule no longer flags its synthetic violation. A gate that cannot fail proves nothing.");
     process.exit(1);
@@ -1308,8 +1359,18 @@ const RETIRED_CEILING_FILE = "docs/agent/launch-claims-retired-labels-ceiling.js
   }
   worst.sort((a, b) => b[1] - a[1]);
 
-  let prior = {};
-  try { prior = JSON.parse(readFileSync(RETIRED_CEILING_FILE, "utf8")); } catch { prior = {}; }
+  // A ceiling that could not be READ is not a ceiling that is ABSENT — see
+  // scripts/lib/ratchet-read.mjs. The bare catch this replaces (it reset `prior` to an
+  // empty object on ANY error) made an unreadable, corrupt or DELETED ceiling
+  // indistinguishable from a first run, and the
+  // drop-branch below then wrote today's count as the new baseline and exited 0. That is
+  // authorising the rise, in the one file whose comment claimed it could not happen.
+  const priorRead = readRatchetFile(RETIRED_CEILING_FILE, "retiredLabelMentions");
+  if (priorRead.action === "refuse") {
+    for (const line of refusalLines(RETIRED_CEILING_FILE, priorRead.why)) console.error(line);
+    process.exit(1);
+  }
+  const prior = priorRead.value ?? {};
   const ceiling = prior.retiredLabelMentions;
   // SAY WHAT THE IDIOMS TOOK OUT (F2b). "29 unexempted mentions" alone cannot be
   // told apart from "29 mentions and the idioms never fired"; the raw total and the
@@ -1516,15 +1577,29 @@ console.log(
   // exactly this shape here as high severity, and the same pattern was fixed in
   // check-backlog-evidence.mjs earlier today — one attempt, catch the absence.
   //
-  // A read that fails for ANY reason yields no baseline, which means the ceiling
-  // is treated as unset and the current count is recorded. That is the safe
-  // direction: an unreadable ceiling can never silently authorise a rise.
-  let prior = {};
-  try {
-    prior = JSON.parse(readFileSync(DOCS_CEILING_FILE, "utf8"));
-  } catch {
-    prior = {};
+  // WHAT THIS COMMENT USED TO SAY, and why it was exactly backwards (fixed 2026-09-06):
+  //
+  //   "A read that fails for ANY reason yields no baseline, which means the ceiling is
+  //    treated as unset and the current count is recorded. That is the safe direction:
+  //    an unreadable ceiling can never silently authorise a rise."
+  //
+  // Recording the current count IS authorising the rise. With `prior = {}` the ceiling is
+  // `undefined`, the rise branch below (`typeof ceiling === "number" && …`) cannot fire,
+  // and the else-branch writes today's — higher — count as the new baseline, prints
+  // "baseline recorded at N" and exits 0. Corrupt the file, delete it, or make it
+  // unreadable and the ratchet re-arms itself at whatever the debt is that day. The same
+  // arm in `check-doc-orphans.mjs` was reproduced doing precisely that.
+  //
+  // Genesis is now PROVEN, not assumed: only ENOENT with an empty `git log -- <path>` is
+  // a first run. Everything else refuses. (READ, DON'T CHECK-THEN-READ still holds — the
+  // reader makes one syscall; `existsSync(f) ? readFileSync(f) : {}` is the TOCTOU shape
+  // CodeQL flagged here as high severity.)
+  const priorRead = readRatchetFile(DOCS_CEILING_FILE, "unhedgedDeferredMentions");
+  if (priorRead.action === "refuse") {
+    for (const line of refusalLines(DOCS_CEILING_FILE, priorRead.why)) console.error(line);
+    process.exit(1);
   }
+  const prior = priorRead.value ?? {};
   const ceiling = prior.unhedgedDeferredMentions;
   console.log(
     `  docs/**/*.md (REPORTED, not gated): ${docsMentions} unhedged deferred-capability mention(s) across ${docsFiles} file(s)` +

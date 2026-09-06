@@ -53,8 +53,23 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               unchanged.
 LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
               M (#466), N (#468), O (#470), P (#471), Q (#473), R (#474) and
-              S (#476), T (#477), U (#480), V (#482), W (#484) and X (#485) LANDED.
-              Batch Y (twenty-third round, on its PR) read four of the six
+              S (#476), T (#477), U (#480), V (#482), W (#484), X (#485) and
+              Y (#489) LANDED. Batch Z (twenty-fourth round, on its PR) read
+              the LAST TWO partial surfaces WHOLE - all of scripts/ (five
+              independent chunks, ~373 files) and docs/inspiration's vendor-row
+              bodies - and found the guards themselves failing the way
+              everything they watch fails: a breadth self-test that read f.id
+              on id strings so it could not go red, a mutation guard scoring an
+              unrunnable proof as a kill, five DB proofs exiting 0 and counted
+              as passes, a Mac tick grepping '^  PENDING' against a script that
+              says it only in comments, ratchet reads treating a corrupt or
+              deleted ceiling as a fresh start, localeCompare feeding the
+              committed SBOM order. All fixed with plant->red assertions; two
+              new gates (entry-guards, inspiration-catalog-structure) wired
+              into preflight AND CI plus eight existing self-tests; core proof
+              489->495, nac 45->46, unsafe-claim 40->50 (each confirmed against
+              a live run); the ledger now reads 100 of 100 surfaces READ.
+              Batch Y (twenty-third round) had read four of the six
               partial surfaces WHOLE - docs/research, docs/agent, artifacts/
               api-server and every loose docs/* file - with six independent
               fail-closed audits (~90 findings) and fixed them with seven
@@ -571,14 +586,20 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land Batch Y (on its PR), then (1) the two surfaces the
-              ledger still marks partial - scripts (411 files; read the gates
-              nobody has opened whole, in chunks, the way the loose docs were)
-              and docs/inspiration's vendor-row bodies; owner decisions Batch
-              Y recorded rather than made: the custody backstop blind to five
-              custody axes (disclosed, pinned), NOT_COVERED credential
-              exposure resolving to monitor, a GAPS entry for connector
-              families unwired in the served core;
+NEXT ACTION: cloud: land Batch Z (on its PR). Every surface is now READ
+              (100 of 100); the whole-repo review pass is complete. Residual
+              follow-ups, none blocking: (0) STATUS.md's "would run here now"
+              column is cosmetically stale vs the F10 generator fix - no gate
+              reads it and the generator cannot run to completion off a
+              live-lane host, so regenerate it on the Mac lane or when a live
+              lane is reachable; the two remaining localeCompare pinned
+              defects (artifacts/mcp-server directory listing, self-audit
+              fingerprint) are gated against growth, not fixed; the k6 load
+              drivers no runner invokes (tests surface, COMPANY_BUILD_PLAN
+              row 43). Owner decisions still recorded rather than made: the
+              custody backstop blind to five custody axes (disclosed, pinned),
+              NOT_COVERED credential exposure resolving to monitor, a GAPS
+              entry for connector families unwired in the served core;
               (2) the console's remaining open items above (connector status
               rendered, the toaster, CATEGORY_ORDER derived, /sessions/:id
               linked) and Dashboard's chart-style deeper-path pending arms the

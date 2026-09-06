@@ -247,6 +247,20 @@ export const INJECTED_SIGNALS = new Map([
 ]);
 
 /**
+ * How the "cleared BY NAME" count reads. The parenthetical used to be part of the
+ * template literal — printed unconditionally beside an interpolated size — so the day
+ * anyone added the first entry the gate would have reported
+ * `signals cleared BY NAME: 1 (none needed on this tree)`: a count and a denial of that
+ * count on one line, in the gate whose subject is claims that stopped being true. The
+ * sentence is now derived from the map it describes.
+ */
+export function injectedSignalsLine(map) {
+  const n = map.size;
+  if (n === 0) return "0 (none needed on this tree — every `signal:` resolves to an inline bound)";
+  return `${n} (each cleared by an entry below, with its reason)`;
+}
+
+/**
  * Is this identifier bound to a real abort source IN THIS FILE?
  *
  * `signal: s` used to clear the bound on the strength of the property NAME alone, so
@@ -525,6 +539,15 @@ function selfTest() {
     ["a directory NOT in the list is not enforced", !ENFORCED_DIR_RE.test("lib/integrations/src/integrations/telemetry-ish/x.ts")],
     ["the enforced list is non-empty — an empty list would silently make every finding advisory", ENFORCED_DIRS.length > 0],
     ["FETCH_CALL still matches a wrapper callee", FETCH_CALL.test("fetchWithTimeout(")],
+
+    // ── the by-name exemption line describes the map it counts ────────────────
+    // It used to say "(none needed on this tree)" unconditionally, interpolated beside
+    // the size, so one added entry would have printed "1 (none needed on this tree)".
+    ["an EMPTY injected-signal map reads as none needed", /^0 \(none needed/.test(injectedSignalsLine(new Map()))],
+    ["a NON-EMPTY injected-signal map does NOT claim none were needed",
+      (() => { const line = injectedSignalsLine(new Map([["a/b.ts:1", "why"]])); return line.startsWith("1 ") && !/none needed/.test(line); })()],
+    ["the LIVE map and the LIVE line agree (the sentence is derived, not typed)",
+      injectedSignalsLine(INJECTED_SIGNALS).startsWith(`${INJECTED_SIGNALS.size} `)],
     ["FETCH_CALL still matches the bare builtin", FETCH_CALL.test("fetch(")],
 
     // ── assertion 2: is it bounded ────────────────────────────────────────────
@@ -976,7 +999,11 @@ console.log(`  emitter families (DERIVED):       ${EMITTER_FAMILIES.join(", ")}`
 console.log(`  outbound call sites:              ${fetchSites} (${primitiveSites} network primitives, ${delegatedSites.length} delegating to a local declaration)`);
 console.log(`  primitives bounded by a signal:   ${boundedSites}/${primitiveSites}`);
 console.log(`  primitives refusing redirects:    ${redirectRefusingSites}/${primitiveSites}`);
-console.log(`  signals cleared BY NAME:          ${INJECTED_SIGNALS.size} (none needed on this tree)`);
+console.log(`  signals cleared BY NAME:          ${injectedSignalsLine(INJECTED_SIGNALS)}`);
+// An exemption that is GRANTED must be readable, not summarised. The map's own comment
+// says it exists "so the first genuinely INJECTED signal gets an entry a reader can
+// check" — so when there is one, print it.
+for (const [site, reason] of INJECTED_SIGNALS) console.log(`      \u00b7 ${site} — ${reason}`);
 for (const d of injectedSignalSites) console.log(`      ⚠ ${d}`);
 if (delegatedSites.length > 0) {
   console.log(

@@ -633,7 +633,10 @@ export const TARGETS = [
 // Each entry needs a REASON, and the reason has to be the kind a reader can check. "It's
 // fine" is not one. An entry whose `line` no longer matches fails the gate: the code
 // moved and nobody re-derived whether the justification still holds.
-const ALLOWED = [
+// Exported so the scope and staleness rules can be driven on the REAL registry from
+// a probe, without a sweep. A registry checkable only by the thing that consumes it
+// is a registry nobody checks.
+export const ALLOWED = [
   {
     file: "lib/integrations/src/integrations/edr-threat/edr-connector.ts",
     line: 'typeof endpoint.signatureAgeHours === "number" &&',
@@ -1226,6 +1229,49 @@ function runProof(proof) {
 }
 
 /**
+ * THE BASELINE PROBE — this sweep's own control, and the reason it exists.
+ *
+ * `runProof` above reports "killed" for ANYTHING that is not `summary=pass (n/n)`:
+ * a real kill, yes — but equally a crashed proof, a `pnpm run` that cannot resolve
+ * the workspace, a renamed summary line, a `proof:*` script somebody deleted. So a
+ * runner that can no longer run the proof AT ALL reports a perfect kill rate, and
+ * the sweep prints "every registered guard is falsifiable" over zero real
+ * observations. That is the same unfalsifiable-guard defect the whole file exists
+ * to hunt, sitting in the hunter.
+ *
+ * The control is trivial: read the proof UNMUTATED first. On an untouched tree it
+ * must come back "survivor" — the proof passes, so nothing is broken. Any other
+ * verdict means this harness cannot tell a killed mutant from a broken harness, and
+ * the honest move is to refuse rather than to report a kill rate.
+ *
+ * `run` is injected so the probe is provable without executing a sweep: the sweep is
+ * hours long and mutates source, which is precisely the thing you cannot casually
+ * re-run to check a change to it.
+ */
+/**
+ * Every ALLOWED entry must name a file some TARGET actually sweeps.
+ *
+ * The staleness check below asks whether the exempted LINE still exists. It never
+ * asked the prior question: is that file in the sweep at all? An exemption for a
+ * file no target lists is not an exemption — nothing was ever going to mutate that
+ * line — but it reads in the registry as "we looked at this and decided it is
+ * inert", which is a coverage claim about a file outside the population. Same
+ * defect as a stale exemption, one level up: it re-permits nothing, and documents
+ * a decision that was never made.
+ *
+ * Pure and exported so it can be driven on fixtures without a sweep.
+ */
+export function allowlistOutsideSweep(allowed, targets) {
+  const swept = new Set(targets.flatMap((t) => t.files ?? []));
+  return allowed.filter((e) => !swept.has(e.file));
+}
+
+export function baselineProbe(proof, run) {
+  const verdict = run(proof);
+  return { proof, verdict, ok: verdict === "survivor" };
+}
+
+/**
  * The per-line matching core, factored out so a gate can exercise the EXACT code
  * path the sweep uses without needing a file on disk. Returns one entry per
  * mutator that fires on this single line.
@@ -1298,7 +1344,18 @@ export function shardTargets(all, index, count) {
     weight: t.files.reduce((n, f) => n + mutationsFor(f).length, 0),
   }));
   // Longest-processing-time first: heaviest target into the currently lightest bin.
-  weighted.sort((a, b) => b.weight - a.weight || a.target.proof.localeCompare(b.target.proof));
+  // CODEPOINT tie-break, never `localeCompare`. This sort decides WHICH SHARD each
+  // target lands in, so its result is the sweep's partition of the work. ICU
+  // collation differs between builds and locales, so two runners could order equal
+  // weights differently and a target could move shards between runs — or, with the
+  // shard count changed at the same time, be swept twice while another is swept not
+  // at all. The one sort in this file that must be identical everywhere was the one
+  // that followed the machine.
+  weighted.sort(
+    (a, b) =>
+      b.weight - a.weight ||
+      (a.target.proof < b.target.proof ? -1 : a.target.proof > b.target.proof ? 1 : 0),
+  );
   const bins = Array.from({ length: count }, () => ({ load: 0, targets: [] }));
   for (const w of weighted) {
     const lightest = bins.reduce((min, b) => (b.load < min.load ? b : min), bins[0]);
@@ -1357,8 +1414,19 @@ function main() {
       staleAllowlist += 1;
     }
   }
+  // ...and the prior question the staleness loop never asked: is the exempted file
+  // even IN the sweep? Checked against ALL TARGETS, never the shard — a shard is a
+  // scheduling choice and must not make an exemption look in-scope or out of it.
+  const outsideSweep = allowlistOutsideSweep(ALLOWED, TARGETS);
+  for (const entry of outsideSweep) {
+    console.error(`✗ allowlist entry exempts a line in ${entry.file}, which NO TARGET sweeps:`);
+    console.error(`    "${entry.line}"`);
+    console.error("    Nothing was ever going to mutate it, so the entry documents a decision no sweep made.");
+    console.error("    Add the file to a target, or delete the entry.");
+    staleAllowlist += 1;
+  }
   if (staleAllowlist > 0) {
-    console.error(`\nMutation guard FAILED: ${staleAllowlist} stale allowlist entr${staleAllowlist === 1 ? "y" : "ies"}.`);
+    console.error(`\nMutation guard FAILED: ${staleAllowlist} stale or out-of-scope allowlist entr${staleAllowlist === 1 ? "y" : "ies"}.`);
     process.exit(1);
   }
 
@@ -1368,9 +1436,22 @@ function main() {
   let allowed = 0;
   const survivors = [];
   const zeroMutation = [];
+  const baselineFailures = [];
 
   for (const target of targets) {
     console.log(`── ${target.proof}`);
+    // See baselineProbe(): without this, a harness that cannot run the proof at all
+    // reports a 100% kill rate and the sweep's verdict is printed over nothing.
+    const base = baselineProbe(target.proof, runProof);
+    if (!base.ok) {
+      baselineFailures.push(base);
+      console.error(
+        `   ✗ BASELINE  ${target.proof} reads "${base.verdict}" UNMUTATED — every mutation below would ` +
+          `read the same, so this sweep cannot tell a kill from a broken harness. Not swept.`,
+      );
+      continue;
+    }
+    console.log(`   baseline: ${target.proof} passes unmutated — a kill below is a real kill`);
     for (const file of target.files) {
       const mutations = mutationsFor(file);
       console.log(`   ${file} — ${mutations.length} mutations`);
@@ -1427,6 +1508,23 @@ function main() {
   console.log(
     `figures=mutations=${total},killed=${killed},inert=${allowed},survivors=${survivors.length}`,
   );
+
+  // BEFORE the survivor report: a target with no baseline was never swept, and a
+  // partial sweep must never print a whole-population verdict.
+  if (baselineFailures.length > 0) {
+    console.error("\nMutation guard FAILED — no BASELINE, so the kill counts above mean nothing:\n");
+    for (const b of baselineFailures) {
+      console.error(`  ${b.proof} — unmutated verdict "${b.verdict}", expected "survivor"`);
+    }
+    console.error(
+      "\nOn an untouched tree the proof must PASS. It did not, so `killed` here does not mean\n" +
+        "\"the mutation broke it\" — it means this harness cannot run the proof. Fix the proof (or the\n" +
+        "runner: a deleted `proof:*` script, a changed `summary=` line, a workspace pnpm cannot\n" +
+        "resolve) and sweep again. Reporting a kill rate measured through a broken runner is the\n" +
+        "exact unfalsifiable-guard defect this file exists to find.",
+    );
+    process.exit(1);
+  }
 
   if (survivors.length > 0) {
     console.error("\nMutation guard FAILED — these guards are unfalsifiable by their own proof:\n");

@@ -66,8 +66,9 @@ const STEPS = [
   // even with an unwarmed store, exit 1 on a real mismatch. Both verified.
   { name: "Lockfile matches manifests (what CI installs with)", cmd: ["pnpm", "install", "--frozen-lockfile", "--lockfile-only"] },
   // Immediately after the lockfile gate, and for the same reason: the Docker-compose
-  // smoke is one of the three CI jobs this file does NOT mirror, so anything only a
-  // `docker build` can see is invisible here by construction. A root lifecycle hook
+  // smoke is one of the CI jobs this file does NOT mirror (the count is derived and
+  // printed with the verdict — it is not three, and this line used to say it was), so
+  // anything only a `docker build` can see is invisible here by construction. A root lifecycle hook
   // whose entrypoint the Dockerfile does not COPY is exactly that — every source-reading
   // gate stays green and the image build dies on `pnpm install`. Reads two text files.
   { name: "Docker carries every install-hook entrypoint", cmd: ["node", "scripts/check-docker-lifecycle-copy.mjs"] },
@@ -106,6 +107,7 @@ const STEPS = [
   { name: "Gate census (every gate runs somewhere; self-test proves it can fail)", cmd: ["node", "scripts/check-gate-census.mjs"] },
   { name: "Gate census self-test", cmd: ["node", "scripts/check-gate-census.mjs", "--self-test"] },
   { name: "Failure-diagnosis registry audit (evidence paths still exist)", cmd: ["node", "scripts/classify-failure.mjs", "--audit"] },
+  { name: "Failure classifier self-test (exit contract + evidence parser)", cmd: ["node", "scripts/classify-failure.mjs", "--self-test"] },
   { name: "Gap scan (blocking findings fail; degraded scan is blocking)", cmd: ["node", "scripts/scan-gaps.mjs"] },
   { name: "Gap scan self-test", cmd: ["node", "scripts/scan-gaps.mjs", "--self-test"] },
   // PURPOSE.md makes the Decision Envelope the atomic product object; that only
@@ -114,6 +116,7 @@ const STEPS = [
   // PURPOSE.md is canonical (DR-019); current-truth surfaces reference it rather
   // than paraphrase it. Historical records keep their terminology.
   { name: "Product framing (current-truth surfaces reference PURPOSE.md)", cmd: ["node", "scripts/check-product-framing.mjs"] },
+  { name: "Product-framing self-test (a permitted phrase may not match a retired pattern; a single positive is not a pass)", cmd: ["node", "scripts/check-product-framing.mjs", "--self-test"] },
   // Sibling of the docs↔proof figure guard, for the format that guard cannot read.
   // `docs/architecture.html` said "12 dimensions" against a 17-member union for as
   // long as nobody could date, because no gate in this repository read a docs HTML
@@ -200,6 +203,10 @@ const STEPS = [
   { name: "Claim-inventory anchors self-test (the check can actually fail)", cmd: ["node", "scripts/check-claim-inventory-anchors.mjs", "--self-test"] },
   { name: "Cited symbols (a symbol named beside a code citation must still be in that file; missing is ratcheted)", cmd: ["node", "scripts/check-cited-symbols.mjs"] },
   { name: "Cited symbols self-test (the check can actually fail)", cmd: ["node", "scripts/check-cited-symbols.mjs", "--self-test"] },
+  { name: "Inspiration catalog structure (a stated total, a row-wise URL claim, a constant column and a duplicate product, re-derived from the rows)", cmd: ["node", "scripts/check-inspiration-catalog-structure.mjs"] },
+  { name: "Inspiration catalog structure self-test (the check can actually fail)", cmd: ["node", "scripts/check-inspiration-catalog-structure.mjs", "--self-test"] },
+  { name: "Entry guards (a module's gate body runs only when it IS the entry, never on a filename match)", cmd: ["node", "scripts/check-entry-guards.mjs"] },
+  { name: "Entry-guard self-test (the suffix form is flagged, the exact form is not)", cmd: ["node", "scripts/check-entry-guards.mjs", "--self-test"] },
   { name: "Rendered assets (a committed PNG must be a render of the committed HTML; unpinned PNGs reported)", cmd: ["node", "scripts/check-rendered-assets.mjs"] },
   { name: "Rendered assets self-test (the check can actually fail)", cmd: ["node", "scripts/check-rendered-assets.mjs", "--self-test"] },
   { name: "Skill instruction conflicts (no skill may prescribe a command the Bash deny-list hook refuses, unless VENDORED.md Overrides names the site)", cmd: ["node", "scripts/check-skill-instruction-conflicts.mjs"] },
@@ -279,6 +286,7 @@ const STEPS = [
   // cases. It found two real Kotlin defects the day it was written.
   { name: "Assist conformance (every client answers the shared cases the same way)", cmd: ["node", "scripts/check-assist-conformance.mjs"] },
   { name: "Read-error swallowing (a failed lookup must not report \"nothing found\")", cmd: ["node", "scripts/check-read-error-swallowing.mjs"] },
+  { name: "Read-error swallowing self-test (detector + floors)", cmd: ["node", "scripts/check-read-error-swallowing.mjs", "--self-test"] },
   // Every other gate here checks what the text MEANS. This one checks that the text
   // is what it appears to be: no bidirectional control or invisible character may
   // make a tracked file render differently from how it executes (CVE-2021-42574).
@@ -369,6 +377,7 @@ const STEPS = [
   { name: "Proof-count self-test (a zeroed claim scan fails via the floor)", cmd: ["node", "scripts/check-proof-counts.mjs", "--self-test"] },
   { name: "Proof-count sync (documented check counts match their proofs)", cmd: ["node", "scripts/check-proof-counts.mjs"] },
   { name: "Live-sync manifest (external builders see current contracts)", cmd: ["node", "scripts/check-live-sync.mjs"] },
+  { name: "Live-sync evidence-kind self-test (unreadable is not hardware)", cmd: ["node", "scripts/check-live-sync.mjs", "--self-test"] },
   { name: "MCP surface self-test (coverage + resource parity must be able to fail)", cmd: ["node", "scripts/check-mcp-surface.mjs", "--self-test"] },
   { name: "MCP surface (chat connection must match the fabric)", cmd: ["node", "scripts/check-mcp-surface.mjs"] },
   { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"] },
@@ -495,10 +504,26 @@ const STEPS = [
   // exactly why it belongs here rather than on the CI-only exempt list: preflight
   // stays deterministic and needs no Postgres, and an operator who HAS a database
   // gets the restore path exercised locally.
-  { name: "Proof: backup-restore (the restore path, exercised not assumed)", cmd: ["pnpm", "run", "proof:backup-restore"] },
+  //
+  // `selfSkipsWithout` is the CLASSIFICATION, and it is load-bearing. Without it the
+  // proof printed one line saying SKIPPED, exited 0, and this harness ticked it "ok"
+  // — a green row for a gate that never executed an assertion. The runner below turns
+  // that into the `skipped-db` status, which is printed WITH the verdict and never
+  // counted as a pass. `check-preflight-ci-parity.mjs` derives the self-skipping set
+  // from `scripts/src/*.ts` and fails if a proof here self-skips without this marker,
+  // or carries the marker without self-skipping.
+  {
+    name: "Proof: backup-restore (the restore path, exercised not assumed)",
+    cmd: ["pnpm", "run", "proof:backup-restore"],
+    selfSkipsWithout: "DATABASE_URL",
+  },
   // Same self-skip discipline: without DATABASE_URL it skips deterministically;
   // with one, the role split is proven locally in both directions.
-  { name: "Proof: db-role-split (the ledger append-only by privilege)", cmd: ["pnpm", "run", "proof:db-role-split"] },
+  {
+    name: "Proof: db-role-split (the ledger append-only by privilege)",
+    cmd: ["pnpm", "run", "proof:db-role-split"],
+    selfSkipsWithout: "DATABASE_URL",
+  },
   { name: "Proof: audit-ledger", cmd: ["pnpm", "run", "proof:audit-ledger"] },
   { name: "Proof: itsm-credential-crypto (a weak key is refused, not stretched)", cmd: ["pnpm", "run", "proof:itsm-credential-crypto"] },
   { name: "Proof: telemetry-posture-cache (stale posture is never served as current)", cmd: ["pnpm", "run", "proof:telemetry-posture-cache"] },
@@ -597,13 +622,35 @@ for (const step of STEPS) {
     encoding: "utf8",
     env: { ...process.env, ...(step.env ?? {}) },
   });
+  const combined = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  // A proof that SELF-SKIPS prints one line and exits 0. Exit 0 is not evidence:
+  // nothing it claims to prove was executed. Classify it rather than tick it.
+  if (r.status === 0 && step.selfSkipsWithout && !process.env[step.selfSkipsWithout]) {
+    if (!/\bSKIPPED\b/.test(combined)) {
+      // The declaration and the behaviour disagree. Either the proof stopped
+      // self-skipping (drop the marker) or it ran a real path with no database,
+      // which is worse. Fail rather than guess — an unexplained exit 0 from a gate
+      // declared unable to run here is exactly the unearned green this classifies.
+      console.log("FAILED");
+      console.error(
+        `\n─── ${step.name} ───\n` +
+          `declared selfSkipsWithout: "${step.selfSkipsWithout}" (unset here) but exited 0 without printing SKIPPED.\n` +
+          `Either the proof no longer self-skips — remove the marker — or it ran without the input it needs.\n`,
+      );
+      failed = step.name;
+      break;
+    }
+    console.log(`SELF-SKIPPED (${step.selfSkipsWithout} unset — not run, not passed)`);
+    results.push({ name: step.name, status: "skipped-db", env: step.selfSkipsWithout });
+    continue;
+  }
   if (r.status === 0) {
     console.log("ok");
     results.push({ name: step.name, status: "ok" });
   } else {
     console.log("FAILED");
     // Surface the tail of the failing output so the cause is visible inline.
-    const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trimEnd().split("\n").slice(-25).join("\n");
+    const out = combined.trimEnd().split("\n").slice(-25).join("\n");
     console.error(`\n─── ${step.name} output (tail) ───\n${out}\n`);
     failed = step.name;
     break;
@@ -616,6 +663,7 @@ for (const r of results) {
   const note =
     r.status === "skipped" ? " (skipped)"
     : r.status === "unavailable" ? " (UNAVAILABLE on this platform — not run, not passed)"
+    : r.status === "skipped-db" ? ` (SELF-SKIPPED — ${r.env} unset; not run, not passed)`
     : "";
   console.log(`  ${mark} ${r.name}${note}`);
 }
@@ -624,8 +672,13 @@ if (failed) {
   console.error(`\nPreflight FAILED at: ${failed}. Fix before pushing.`);
   process.exit(1);
 }
-// "Safe to push" was an overstatement, and it was believed. This harness mirrors
-// THREE of the six CI jobs; the other three need external services it cannot start.
+// "Safe to push" was an overstatement, and it was believed. The sentence that used
+// to sit here said "This harness mirrors THREE of the six CI jobs; the other three
+// need external services it cannot start" — a hand-typed count in the one comment
+// block whose whole subject is a count going stale. The repo runs far more than six
+// CI jobs now; the true figures are DERIVED and printed by
+// `scripts/check-preflight-ci-parity.mjs` ("CI job coverage: …") and by the
+// `NOT covered by this harness` list below. No number is retyped here.
 // Twice now a green preflight was read as proof and the push went red anyway — once
 // on a lockfile CI could not install, once on a Docker image build. Both times the
 // header already said this. A caveat nobody reads at the moment of decision is not a
@@ -641,7 +694,19 @@ const UNCOVERED = uncoveredLines();
 // could not run is UNAVAILABLE, never passed. Two different honesty problems — what CI
 // covers that preflight does not, and what preflight could not execute here.
 const unavailable = results.filter((r) => r.status === "unavailable");
+// Third honesty problem, and the one this harness got wrong for longest: a proof
+// that decides for itself that it cannot run, says SKIPPED, and exits 0. It was
+// indistinguishable from a pass in every line preflight printed.
+const selfSkipped = results.filter((r) => r.status === "skipped-db");
 console.log(`\nPreflight PASSED${quick ? " (quick — heavy builds skipped)" : ""} — everything it runs is green.`);
+if (selfSkipped.length > 0) {
+  // WITH the verdict, for the same reason as the block below: the caveat has to be
+  // where the decision to push is made, not in a comment nobody opens.
+  console.log(`\n  ${selfSkipped.length} proof(s) SELF-SKIPPED — they exited 0 without running:`);
+  for (const r of selfSkipped) console.log(`    · ${r.name} (${r.env} unset)`);
+  console.log("    Nothing they prove was verified by this run. CI's durable-persistence job");
+  console.log("    runs them against a real Postgres; set DATABASE_URL to run them here.");
+}
 if (unavailable.length > 0) {
   // Stated WITH the verdict, not below it. "Everything it runs is green" is true
   // and also incomplete; a reader deciding whether to trust this run needs to know

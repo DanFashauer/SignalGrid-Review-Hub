@@ -555,6 +555,24 @@
     },
     {
       "type": "library",
+      "name": "cargo-platform",
+      "version": "0.1.9",
+      "bom-ref": "pkg:cargo/cargo-platform@0.1.9",
+      "purl": "pkg:cargo/cargo-platform@0.1.9",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.1.9), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "cargo_metadata",
       "version": "0.19.2",
       "bom-ref": "pkg:cargo/cargo_metadata@0.19.2",
@@ -588,24 +606,6 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 0.22.3), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "cargo-platform",
-      "version": "0.1.9",
-      "bom-ref": "pkg:cargo/cargo-platform@0.1.9",
-      "purl": "pkg:cargo/cargo-platform@0.1.9",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.1.9), recorded 2026-08-21"
         }
       ]
     },
@@ -999,6 +999,26 @@
     },
     {
       "type": "library",
+      "name": "darling",
+      "version": "0.23.0",
+      "bom-ref": "pkg:cargo/darling@0.23.0",
+      "purl": "pkg:cargo/darling@0.23.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.23.0), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "darling_core",
       "version": "0.23.0",
       "bom-ref": "pkg:cargo/darling_core@0.23.0",
@@ -1023,26 +1043,6 @@
       "version": "0.23.0",
       "bom-ref": "pkg:cargo/darling_macro@0.23.0",
       "purl": "pkg:cargo/darling_macro@0.23.0",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.23.0), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "darling",
-      "version": "0.23.0",
-      "bom-ref": "pkg:cargo/darling@0.23.0",
-      "purl": "pkg:cargo/darling@0.23.0",
       "licenses": [
         {
           "license": {
@@ -1227,26 +1227,6 @@
     },
     {
       "type": "library",
-      "name": "dlopen2_derive",
-      "version": "0.4.3",
-      "bom-ref": "pkg:cargo/dlopen2_derive@0.4.3",
-      "purl": "pkg:cargo/dlopen2_derive@0.4.3",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.4.3), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "dlopen2",
       "version": "0.8.2",
       "bom-ref": "pkg:cargo/dlopen2@0.8.2",
@@ -1262,6 +1242,26 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 0.8.2), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "dlopen2_derive",
+      "version": "0.4.3",
+      "bom-ref": "pkg:cargo/dlopen2_derive@0.4.3",
+      "purl": "pkg:cargo/dlopen2_derive@0.4.3",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.4.3), recorded 2026-08-21"
         }
       ]
     },
@@ -1415,24 +1415,6 @@
     },
     {
       "type": "library",
-      "name": "embed_plist",
-      "version": "1.2.2",
-      "bom-ref": "pkg:cargo/embed_plist@1.2.2",
-      "purl": "pkg:cargo/embed_plist@1.2.2",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 1.2.2), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "embed-resource",
       "version": "3.0.11",
       "bom-ref": "pkg:cargo/embed-resource@3.0.11",
@@ -1448,6 +1430,24 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 3.0.11), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "embed_plist",
+      "version": "1.2.2",
+      "bom-ref": "pkg:cargo/embed_plist@1.2.2",
+      "purl": "pkg:cargo/embed_plist@1.2.2",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 1.2.2), recorded 2026-08-21"
         }
       ]
     },
@@ -2213,10 +2213,10 @@
     },
     {
       "type": "library",
-      "name": "gtk",
+      "name": "gtk3-macros",
       "version": "0.18.2",
-      "bom-ref": "pkg:cargo/gtk@0.18.2",
-      "purl": "pkg:cargo/gtk@0.18.2",
+      "bom-ref": "pkg:cargo/gtk3-macros@0.18.2",
+      "purl": "pkg:cargo/gtk3-macros@0.18.2",
       "licenses": [
         {
           "license": {
@@ -2233,10 +2233,10 @@
     },
     {
       "type": "library",
-      "name": "gtk3-macros",
+      "name": "gtk",
       "version": "0.18.2",
-      "bom-ref": "pkg:cargo/gtk3-macros@0.18.2",
-      "purl": "pkg:cargo/gtk3-macros@0.18.2",
+      "bom-ref": "pkg:cargo/gtk@0.18.2",
+      "purl": "pkg:cargo/gtk@0.18.2",
       "licenses": [
         {
           "license": {
@@ -2573,26 +2573,6 @@
     },
     {
       "type": "library",
-      "name": "icu_normalizer_data",
-      "version": "2.2.0",
-      "bom-ref": "pkg:cargo/icu_normalizer_data@2.2.0",
-      "purl": "pkg:cargo/icu_normalizer_data@2.2.0",
-      "licenses": [
-        {
-          "license": {
-            "id": "Unicode-3.0"
-          }
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 2.2.0), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "icu_normalizer",
       "version": "2.2.0",
       "bom-ref": "pkg:cargo/icu_normalizer@2.2.0",
@@ -2613,10 +2593,10 @@
     },
     {
       "type": "library",
-      "name": "icu_properties_data",
+      "name": "icu_normalizer_data",
       "version": "2.2.0",
-      "bom-ref": "pkg:cargo/icu_properties_data@2.2.0",
-      "purl": "pkg:cargo/icu_properties_data@2.2.0",
+      "bom-ref": "pkg:cargo/icu_normalizer_data@2.2.0",
+      "purl": "pkg:cargo/icu_normalizer_data@2.2.0",
       "licenses": [
         {
           "license": {
@@ -2637,6 +2617,26 @@
       "version": "2.2.0",
       "bom-ref": "pkg:cargo/icu_properties@2.2.0",
       "purl": "pkg:cargo/icu_properties@2.2.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "Unicode-3.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 2.2.0), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "icu_properties_data",
+      "version": "2.2.0",
+      "bom-ref": "pkg:cargo/icu_properties_data@2.2.0",
+      "purl": "pkg:cargo/icu_properties_data@2.2.0",
       "licenses": [
         {
           "license": {
@@ -2693,24 +2693,6 @@
     },
     {
       "type": "library",
-      "name": "idna_adapter",
-      "version": "1.2.2",
-      "bom-ref": "pkg:cargo/idna_adapter@1.2.2",
-      "purl": "pkg:cargo/idna_adapter@1.2.2",
-      "licenses": [
-        {
-          "expression": "Apache-2.0 OR MIT"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 1.2.2), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "idna",
       "version": "1.1.0",
       "bom-ref": "pkg:cargo/idna@1.1.0",
@@ -2724,6 +2706,24 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 1.1.0), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "idna_adapter",
+      "version": "1.2.2",
+      "bom-ref": "pkg:cargo/idna_adapter@1.2.2",
+      "purl": "pkg:cargo/idna_adapter@1.2.2",
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 1.2.2), recorded 2026-08-21"
         }
       ]
     },
@@ -3365,42 +3365,6 @@
     },
     {
       "type": "library",
-      "name": "num_enum_derive",
-      "version": "0.7.6",
-      "bom-ref": "pkg:cargo/num_enum_derive@0.7.6",
-      "purl": "pkg:cargo/num_enum_derive@0.7.6",
-      "licenses": [
-        {
-          "expression": "BSD-3-Clause OR MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.7.6), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "num_enum",
-      "version": "0.7.6",
-      "bom-ref": "pkg:cargo/num_enum@0.7.6",
-      "purl": "pkg:cargo/num_enum@0.7.6",
-      "licenses": [
-        {
-          "expression": "BSD-3-Clause OR MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.7.6), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "num-conv",
       "version": "0.2.2",
       "bom-ref": "pkg:cargo/num-conv@0.2.2",
@@ -3432,6 +3396,42 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 0.2.19), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "num_enum",
+      "version": "0.7.6",
+      "bom-ref": "pkg:cargo/num_enum@0.7.6",
+      "purl": "pkg:cargo/num_enum@0.7.6",
+      "licenses": [
+        {
+          "expression": "BSD-3-Clause OR MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.7.6), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "num_enum_derive",
+      "version": "0.7.6",
+      "bom-ref": "pkg:cargo/num_enum_derive@0.7.6",
+      "purl": "pkg:cargo/num_enum_derive@0.7.6",
+      "licenses": [
+        {
+          "expression": "BSD-3-Clause OR MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.7.6), recorded 2026-08-21"
         }
       ]
     },
@@ -3827,24 +3827,6 @@
     },
     {
       "type": "library",
-      "name": "parking_lot_core",
-      "version": "0.9.12",
-      "bom-ref": "pkg:cargo/parking_lot_core@0.9.12",
-      "purl": "pkg:cargo/parking_lot_core@0.9.12",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.9.12), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "parking_lot",
       "version": "0.12.5",
       "bom-ref": "pkg:cargo/parking_lot@0.12.5",
@@ -3863,6 +3845,24 @@
     },
     {
       "type": "library",
+      "name": "parking_lot_core",
+      "version": "0.9.12",
+      "bom-ref": "pkg:cargo/parking_lot_core@0.9.12",
+      "purl": "pkg:cargo/parking_lot_core@0.9.12",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.9.12), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "percent-encoding",
       "version": "2.3.2",
       "bom-ref": "pkg:cargo/percent-encoding@2.3.2",
@@ -3876,6 +3876,26 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 2.3.2), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "phf",
+      "version": "0.13.1",
+      "bom-ref": "pkg:cargo/phf@0.13.1",
+      "purl": "pkg:cargo/phf@0.13.1",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.13.1), recorded 2026-08-21"
         }
       ]
     },
@@ -3945,26 +3965,6 @@
       "version": "0.13.1",
       "bom-ref": "pkg:cargo/phf_shared@0.13.1",
       "purl": "pkg:cargo/phf_shared@0.13.1",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.13.1), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "phf",
-      "version": "0.13.1",
-      "bom-ref": "pkg:cargo/phf@0.13.1",
-      "purl": "pkg:cargo/phf@0.13.1",
       "licenses": [
         {
           "license": {
@@ -4479,24 +4479,6 @@
     },
     {
       "type": "library",
-      "name": "rustc_version",
-      "version": "0.4.1",
-      "bom-ref": "pkg:cargo/rustc_version@0.4.1",
-      "purl": "pkg:cargo/rustc_version@0.4.1",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.4.1), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "rustc-hash",
       "version": "2.1.3",
       "bom-ref": "pkg:cargo/rustc-hash@2.1.3",
@@ -4510,6 +4492,24 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 2.1.3), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rustc_version",
+      "version": "0.4.1",
+      "bom-ref": "pkg:cargo/rustc_version@0.4.1",
+      "purl": "pkg:cargo/rustc_version@0.4.1",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.4.1), recorded 2026-08-21"
         }
       ]
     },
@@ -4548,26 +4548,6 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 1.0.6), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "schemars_derive",
-      "version": "0.8.22",
-      "bom-ref": "pkg:cargo/schemars_derive@0.8.22",
-      "purl": "pkg:cargo/schemars_derive@0.8.22",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.8.22), recorded 2026-08-21"
         }
       ]
     },
@@ -4633,6 +4613,26 @@
     },
     {
       "type": "library",
+      "name": "schemars_derive",
+      "version": "0.8.22",
+      "bom-ref": "pkg:cargo/schemars_derive@0.8.22",
+      "purl": "pkg:cargo/schemars_derive@0.8.22",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.8.22), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "scopeguard",
       "version": "1.2.0",
       "bom-ref": "pkg:cargo/scopeguard@1.2.0",
@@ -4689,10 +4689,64 @@
     },
     {
       "type": "library",
+      "name": "serde-untagged",
+      "version": "0.1.9",
+      "bom-ref": "pkg:cargo/serde-untagged@0.1.9",
+      "purl": "pkg:cargo/serde-untagged@0.1.9",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.1.9), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "serde",
+      "version": "1.0.229",
+      "bom-ref": "pkg:cargo/serde@1.0.229",
+      "purl": "pkg:cargo/serde@1.0.229",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 1.0.229), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "serde_core",
       "version": "1.0.229",
       "bom-ref": "pkg:cargo/serde_core@1.0.229",
       "purl": "pkg:cargo/serde_core@1.0.229",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 1.0.229), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "serde_derive",
+      "version": "1.0.229",
+      "bom-ref": "pkg:cargo/serde_derive@1.0.229",
+      "purl": "pkg:cargo/serde_derive@1.0.229",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -4720,24 +4774,6 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 0.29.1), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "serde_derive",
-      "version": "1.0.229",
-      "bom-ref": "pkg:cargo/serde_derive@1.0.229",
-      "purl": "pkg:cargo/serde_derive@1.0.229",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 1.0.229), recorded 2026-08-21"
         }
       ]
     },
@@ -4815,24 +4851,6 @@
     },
     {
       "type": "library",
-      "name": "serde_with_macros",
-      "version": "3.21.0",
-      "bom-ref": "pkg:cargo/serde_with_macros@3.21.0",
-      "purl": "pkg:cargo/serde_with_macros@3.21.0",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 3.21.0), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "serde_with",
       "version": "3.21.0",
       "bom-ref": "pkg:cargo/serde_with@3.21.0",
@@ -4851,10 +4869,10 @@
     },
     {
       "type": "library",
-      "name": "serde-untagged",
-      "version": "0.1.9",
-      "bom-ref": "pkg:cargo/serde-untagged@0.1.9",
-      "purl": "pkg:cargo/serde-untagged@0.1.9",
+      "name": "serde_with_macros",
+      "version": "3.21.0",
+      "bom-ref": "pkg:cargo/serde_with_macros@3.21.0",
+      "purl": "pkg:cargo/serde_with_macros@3.21.0",
       "licenses": [
         {
           "expression": "MIT OR Apache-2.0"
@@ -4863,25 +4881,7 @@
       "properties": [
         {
           "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.1.9), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "serde",
-      "version": "1.0.229",
-      "bom-ref": "pkg:cargo/serde@1.0.229",
-      "purl": "pkg:cargo/serde@1.0.229",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 1.0.229), recorded 2026-08-21"
+          "value": "crates.io API (versions[].license for 3.21.0), recorded 2026-08-21"
         }
       ]
     },
@@ -5149,24 +5149,6 @@
     },
     {
       "type": "library",
-      "name": "string_cache_codegen",
-      "version": "0.6.1",
-      "bom-ref": "pkg:cargo/string_cache_codegen@0.6.1",
-      "purl": "pkg:cargo/string_cache_codegen@0.6.1",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.6.1), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "string_cache",
       "version": "0.9.0",
       "bom-ref": "pkg:cargo/string_cache@0.9.0",
@@ -5180,6 +5162,24 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 0.9.0), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "string_cache_codegen",
+      "version": "0.6.1",
+      "bom-ref": "pkg:cargo/string_cache_codegen@0.6.1",
+      "purl": "pkg:cargo/string_cache_codegen@0.6.1",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.6.1), recorded 2026-08-21"
         }
       ]
     },
@@ -5701,24 +5701,6 @@
     },
     {
       "type": "library",
-      "name": "tinyvec_macros",
-      "version": "0.1.1",
-      "bom-ref": "pkg:cargo/tinyvec_macros@0.1.1",
-      "purl": "pkg:cargo/tinyvec_macros@0.1.1",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0 OR Zlib"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.1.1), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "tinyvec",
       "version": "1.12.0",
       "bom-ref": "pkg:cargo/tinyvec@1.12.0",
@@ -5732,6 +5714,24 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 1.12.0), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "tinyvec_macros",
+      "version": "0.1.1",
+      "bom-ref": "pkg:cargo/tinyvec_macros@0.1.1",
+      "purl": "pkg:cargo/tinyvec_macros@0.1.1",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0 OR Zlib"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.1.1), recorded 2026-08-21"
         }
       ]
     },
@@ -5772,6 +5772,60 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 1.53.1), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "toml",
+      "version": "0.8.2",
+      "bom-ref": "pkg:cargo/toml@0.8.2",
+      "purl": "pkg:cargo/toml@0.8.2",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.8.2), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "toml",
+      "version": "0.9.12+spec-1.1.0",
+      "bom-ref": "pkg:cargo/toml@0.9.12+spec-1.1.0",
+      "purl": "pkg:cargo/toml@0.9.12+spec-1.1.0",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.9.12+spec-1.1.0), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "toml",
+      "version": "1.1.4+spec-1.1.0",
+      "bom-ref": "pkg:cargo/toml@1.1.4+spec-1.1.0",
+      "purl": "pkg:cargo/toml@1.1.4+spec-1.1.0",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 1.1.4+spec-1.1.0), recorded 2026-08-21"
         }
       ]
     },
@@ -5916,60 +5970,6 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 1.1.2+spec-1.1.0), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "toml",
-      "version": "0.8.2",
-      "bom-ref": "pkg:cargo/toml@0.8.2",
-      "purl": "pkg:cargo/toml@0.8.2",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.8.2), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "toml",
-      "version": "0.9.12+spec-1.1.0",
-      "bom-ref": "pkg:cargo/toml@0.9.12+spec-1.1.0",
-      "purl": "pkg:cargo/toml@0.9.12+spec-1.1.0",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.9.12+spec-1.1.0), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "toml",
-      "version": "1.1.4+spec-1.1.0",
-      "bom-ref": "pkg:cargo/toml@1.1.4+spec-1.1.0",
-      "purl": "pkg:cargo/toml@1.1.4+spec-1.1.0",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 1.1.4+spec-1.1.0), recorded 2026-08-21"
         }
       ]
     },
@@ -6379,26 +6379,6 @@
     },
     {
       "type": "library",
-      "name": "version_check",
-      "version": "0.9.5",
-      "bom-ref": "pkg:cargo/version_check@0.9.5",
-      "purl": "pkg:cargo/version_check@0.9.5",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT/Apache-2.0"
-          }
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.9.5), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "version-compare",
       "version": "0.2.1",
       "bom-ref": "pkg:cargo/version-compare@0.2.1",
@@ -6414,6 +6394,26 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 0.2.1), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "version_check",
+      "version": "0.9.5",
+      "bom-ref": "pkg:cargo/version_check@0.9.5",
+      "purl": "pkg:cargo/version_check@0.9.5",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT/Apache-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.9.5), recorded 2026-08-21"
         }
       ]
     },
@@ -6643,24 +6643,6 @@
     },
     {
       "type": "library",
-      "name": "web_atoms",
-      "version": "0.2.5",
-      "bom-ref": "pkg:cargo/web_atoms@0.2.5",
-      "purl": "pkg:cargo/web_atoms@0.2.5",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.2.5), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "web-sys",
       "version": "0.3.104",
       "bom-ref": "pkg:cargo/web-sys@0.3.104",
@@ -6674,6 +6656,24 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 0.3.104), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "web_atoms",
+      "version": "0.2.5",
+      "bom-ref": "pkg:cargo/web_atoms@0.2.5",
+      "purl": "pkg:cargo/web_atoms@0.2.5",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.2.5), recorded 2026-08-21"
         }
       ]
     },
@@ -6870,276 +6870,6 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 0.6.0), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_aarch64_gnullvm",
-      "version": "0.42.2",
-      "bom-ref": "pkg:cargo/windows_aarch64_gnullvm@0.42.2",
-      "purl": "pkg:cargo/windows_aarch64_gnullvm@0.42.2",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_aarch64_gnullvm",
-      "version": "0.52.6",
-      "bom-ref": "pkg:cargo/windows_aarch64_gnullvm@0.52.6",
-      "purl": "pkg:cargo/windows_aarch64_gnullvm@0.52.6",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_aarch64_msvc",
-      "version": "0.42.2",
-      "bom-ref": "pkg:cargo/windows_aarch64_msvc@0.42.2",
-      "purl": "pkg:cargo/windows_aarch64_msvc@0.42.2",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_aarch64_msvc",
-      "version": "0.52.6",
-      "bom-ref": "pkg:cargo/windows_aarch64_msvc@0.52.6",
-      "purl": "pkg:cargo/windows_aarch64_msvc@0.52.6",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_i686_gnu",
-      "version": "0.42.2",
-      "bom-ref": "pkg:cargo/windows_i686_gnu@0.42.2",
-      "purl": "pkg:cargo/windows_i686_gnu@0.42.2",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_i686_gnu",
-      "version": "0.52.6",
-      "bom-ref": "pkg:cargo/windows_i686_gnu@0.52.6",
-      "purl": "pkg:cargo/windows_i686_gnu@0.52.6",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_i686_gnullvm",
-      "version": "0.52.6",
-      "bom-ref": "pkg:cargo/windows_i686_gnullvm@0.52.6",
-      "purl": "pkg:cargo/windows_i686_gnullvm@0.52.6",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_i686_msvc",
-      "version": "0.42.2",
-      "bom-ref": "pkg:cargo/windows_i686_msvc@0.42.2",
-      "purl": "pkg:cargo/windows_i686_msvc@0.42.2",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_i686_msvc",
-      "version": "0.52.6",
-      "bom-ref": "pkg:cargo/windows_i686_msvc@0.52.6",
-      "purl": "pkg:cargo/windows_i686_msvc@0.52.6",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_x86_64_gnu",
-      "version": "0.42.2",
-      "bom-ref": "pkg:cargo/windows_x86_64_gnu@0.42.2",
-      "purl": "pkg:cargo/windows_x86_64_gnu@0.42.2",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_x86_64_gnu",
-      "version": "0.52.6",
-      "bom-ref": "pkg:cargo/windows_x86_64_gnu@0.52.6",
-      "purl": "pkg:cargo/windows_x86_64_gnu@0.52.6",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_x86_64_gnullvm",
-      "version": "0.42.2",
-      "bom-ref": "pkg:cargo/windows_x86_64_gnullvm@0.42.2",
-      "purl": "pkg:cargo/windows_x86_64_gnullvm@0.42.2",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_x86_64_gnullvm",
-      "version": "0.52.6",
-      "bom-ref": "pkg:cargo/windows_x86_64_gnullvm@0.52.6",
-      "purl": "pkg:cargo/windows_x86_64_gnullvm@0.52.6",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_x86_64_msvc",
-      "version": "0.42.2",
-      "bom-ref": "pkg:cargo/windows_x86_64_msvc@0.42.2",
-      "purl": "pkg:cargo/windows_x86_64_msvc@0.42.2",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "windows_x86_64_msvc",
-      "version": "0.52.6",
-      "bom-ref": "pkg:cargo/windows_x86_64_msvc@0.52.6",
-      "purl": "pkg:cargo/windows_x86_64_msvc@0.52.6",
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "properties": [
-        {
-          "name": "signalgrid:licence-basis",
-          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
         }
       ]
     },
@@ -7518,6 +7248,276 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "crates.io API (versions[].license for 0.61.3), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_aarch64_gnullvm",
+      "version": "0.42.2",
+      "bom-ref": "pkg:cargo/windows_aarch64_gnullvm@0.42.2",
+      "purl": "pkg:cargo/windows_aarch64_gnullvm@0.42.2",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_aarch64_gnullvm",
+      "version": "0.52.6",
+      "bom-ref": "pkg:cargo/windows_aarch64_gnullvm@0.52.6",
+      "purl": "pkg:cargo/windows_aarch64_gnullvm@0.52.6",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_aarch64_msvc",
+      "version": "0.42.2",
+      "bom-ref": "pkg:cargo/windows_aarch64_msvc@0.42.2",
+      "purl": "pkg:cargo/windows_aarch64_msvc@0.42.2",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_aarch64_msvc",
+      "version": "0.52.6",
+      "bom-ref": "pkg:cargo/windows_aarch64_msvc@0.52.6",
+      "purl": "pkg:cargo/windows_aarch64_msvc@0.52.6",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_i686_gnu",
+      "version": "0.42.2",
+      "bom-ref": "pkg:cargo/windows_i686_gnu@0.42.2",
+      "purl": "pkg:cargo/windows_i686_gnu@0.42.2",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_i686_gnu",
+      "version": "0.52.6",
+      "bom-ref": "pkg:cargo/windows_i686_gnu@0.52.6",
+      "purl": "pkg:cargo/windows_i686_gnu@0.52.6",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_i686_gnullvm",
+      "version": "0.52.6",
+      "bom-ref": "pkg:cargo/windows_i686_gnullvm@0.52.6",
+      "purl": "pkg:cargo/windows_i686_gnullvm@0.52.6",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_i686_msvc",
+      "version": "0.42.2",
+      "bom-ref": "pkg:cargo/windows_i686_msvc@0.42.2",
+      "purl": "pkg:cargo/windows_i686_msvc@0.42.2",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_i686_msvc",
+      "version": "0.52.6",
+      "bom-ref": "pkg:cargo/windows_i686_msvc@0.52.6",
+      "purl": "pkg:cargo/windows_i686_msvc@0.52.6",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_x86_64_gnu",
+      "version": "0.42.2",
+      "bom-ref": "pkg:cargo/windows_x86_64_gnu@0.42.2",
+      "purl": "pkg:cargo/windows_x86_64_gnu@0.42.2",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_x86_64_gnu",
+      "version": "0.52.6",
+      "bom-ref": "pkg:cargo/windows_x86_64_gnu@0.52.6",
+      "purl": "pkg:cargo/windows_x86_64_gnu@0.52.6",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_x86_64_gnullvm",
+      "version": "0.42.2",
+      "bom-ref": "pkg:cargo/windows_x86_64_gnullvm@0.42.2",
+      "purl": "pkg:cargo/windows_x86_64_gnullvm@0.42.2",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_x86_64_gnullvm",
+      "version": "0.52.6",
+      "bom-ref": "pkg:cargo/windows_x86_64_gnullvm@0.52.6",
+      "purl": "pkg:cargo/windows_x86_64_gnullvm@0.52.6",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_x86_64_msvc",
+      "version": "0.42.2",
+      "bom-ref": "pkg:cargo/windows_x86_64_msvc@0.42.2",
+      "purl": "pkg:cargo/windows_x86_64_msvc@0.42.2",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.42.2), recorded 2026-08-21"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "windows_x86_64_msvc",
+      "version": "0.52.6",
+      "bom-ref": "pkg:cargo/windows_x86_64_msvc@0.52.6",
+      "purl": "pkg:cargo/windows_x86_64_msvc@0.52.6",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "crates.io API (versions[].license for 0.52.6), recorded 2026-08-21"
         }
       ]
     },

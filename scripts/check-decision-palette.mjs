@@ -23,6 +23,7 @@
 // to the regexes.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const CANON = {
   dark: { allow: "639779", review: "B08B57", deny: "C67070" },
@@ -427,13 +428,31 @@ function selfTest() {
   strayCss[CSS_TREES[4]] = files[CSS_TREES[4]] + "\n.text-deny { color: #ef4444; }\n";
   r = audit(strayCss);
   checks.push(["a verdict-named css class outside the token set fails", r.problems.some((x) => x.includes("second palette"))]);
+  // The ENTRY GUARD itself (F12, 2026-09-06). The suffix form ran this gate from any
+  // entry whose filename ended with this one's — including a script that only imports
+  // it. Needles are escaped, so this assertion is not itself a match.
+  {
+    const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
+    checks.push([
+      "the entry guard is EXACT, not a basename suffix match",
+      /import\.meta\.url === pathToFileURL\(process\.argv\[1\]\)\.href/.test(src) &&
+        !/import\.meta\.url\.endsWith\(/.test(src),
+    ]);
+  }
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
+// Exact-entry guard, not a basename suffix match: an unrelated entry script that merely
+// IMPORTS this module must never trigger the gate, and the suffix form fired for any entry
+// whose filename ends with this one's. Reproduced 2026-09-06: a scratch file named
+// `check-decision-palette.mjs` that only imported this module ran the whole gate, and the
+// same file renamed did not — the gate's scope depended on the caller's filename.
+// `check-lab-registry.mjs` diagnosed this exact hazard and fixed it; these two had not.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const { problems, table } = audit(loadTree());
   console.log("Decision-palette gate v2 — parity, block-scoped contrast, and COMPOSITED chip grounds\n");

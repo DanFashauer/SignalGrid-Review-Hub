@@ -34,7 +34,7 @@
 // self-test asserts this structurally, so the property cannot quietly regress.
 //
 // EXIT CODES:  0 = absence corroborated   1 = refuted (a file exists)   2 = inconclusive
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,31 +42,72 @@ import { fileURLToPath } from "node:url";
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const G = "\x1b[32m", R = "\x1b[31m", Y = "\x1b[33m", B = "\x1b[1m", D = "\x1b[2m", X = "\x1b[0m";
 
-/** Every subprocess: argv array, never a command string. No shell is ever spawned. */
-function gitLines(args) {
+/**
+ * Every subprocess: argv array, never a command string. No shell is ever spawned.
+ *
+ * A PROBE THAT COULD NOT RUN IS NOT A PROBE THAT FOUND NOTHING (fixed 2026-09-06).
+ * This returned `[]` from a bare `catch`, so a git that could not be spawned, a corrupt
+ * index, a rejected pathspec and a genuinely empty result were the same value. Three of
+ * the four probes go through here, and `classify()` reads empty as evidence of absence —
+ * so every failure mode of this call resolved to CORROBORATED, the strongest
+ * safe-to-claim verdict the tool can return, in the tool this repository tells every
+ * agent to run BEFORE writing "X does not exist".
+ *
+ * Reproduced: `node scripts/agent/absence-check.mjs buildCoverageReport` → INCONCLUSIVE,
+ * exit 2. The same command with git removed from PATH → "✓ CORROBORATED across 4
+ * differently-shaped probes. Safe to claim", exit 0. It is the file's own counterexample:
+ * "one empty grep is evidence about that grep".
+ *
+ * `emptyStatus` is how a legitimate no-match is told from an error: `git grep` exits 1
+ * when nothing matched, and that IS a real empty result. Anything else is a failure.
+ *
+ * @returns {{lines: string[], failed: boolean, why: string|null}}
+ */
+function gitLines(args, { emptyStatus = null } = {}) {
   try {
-    const out = execFileSync("git", args, { cwd: REPO, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    return out ? out.trim().split("\n").filter(Boolean) : [];
-  } catch {
-    return [];
+    // stderr is CAPTURED, not inherited: a probe's failure is reported through `why`
+    // below, in the verdict, rather than as loose noise above it.
+    const out = execFileSync("git", args, {
+      cwd: REPO,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { lines: out ? out.trim().split("\n").filter(Boolean) : [], failed: false, why: null };
+  } catch (err) {
+    if (emptyStatus !== null && err && err.status === emptyStatus) {
+      return { lines: [], failed: false, why: null };
+    }
+    const detail = err && (err.code || (err.status !== undefined ? `exit ${err.status}` : err.message));
+    return { lines: [], failed: true, why: `git ${args[0]} could not run (${detail})` };
   }
 }
 
 const trackedFiles = () => gitLines(["ls-files"]);
 
+/** Shape every probe returns, so a caller can never mistake "could not look" for "looked". */
+const probeResult = (hits, failed = false, why = null) => ({ hits, failed, why });
+
 function workflowFilesMentioning(needle) {
   const dir = join(REPO, ".github/workflows");
-  if (!existsSync(dir)) return [];
+  // An absent workflow directory is not an absent workflow: this repository has 14 of
+  // them, so "no directory" means we could not look, not that nothing builds the topic.
+  if (!existsSync(dir)) return probeResult([], true, "no .github/workflows directory — this probe could not look");
   const hits = [];
+  let failed = false;
+  let why = null;
   for (const f of readdirSync(dir)) {
     if (!/\.ya?ml$/.test(f)) continue;
     try {
       if (readFileSync(join(dir, f), "utf8").toLowerCase().includes(needle)) hits.push(`.github/workflows/${f}`);
-    } catch {
-      /* unreadable file is not evidence either way */
+    } catch (err) {
+      // An unreadable workflow is not evidence either way — which is exactly why it may
+      // not be silently dropped into the "found nothing" pile.
+      failed = true;
+      why = `unreadable workflow ${f} (${err && err.code}) — this probe is incomplete`;
     }
   }
-  return hits;
+  return probeResult(hits, failed, why);
 }
 
 /**
@@ -89,13 +130,19 @@ export function probeSpecs(topic) {
       id: "filename",
       strength: "strong",
       how: "a tracked FILE OR DIRECTORY named for it",
-      run: () => trackedFiles().filter((f) => f.toLowerCase().includes(t)),
+      run: () => {
+        const r = trackedFiles();
+        return probeResult(r.lines.filter((f) => f.toLowerCase().includes(t)), r.failed, r.why);
+      },
     },
     {
       id: "extension",
       strength: "strong",
       how: `a tracked file whose EXTENSION is it (.${t})`,
-      run: () => trackedFiles().filter((f) => f.toLowerCase().endsWith(`.${t}`)),
+      run: () => {
+        const r = trackedFiles();
+        return probeResult(r.lines.filter((f) => f.toLowerCase().endsWith(`.${t}`)), r.failed, r.why);
+      },
     },
     {
       id: "ci",
@@ -136,13 +183,23 @@ export function probeSpecs(topic) {
       // tree just as thoroughly. That was a real hole in the first version of
       // the guard below.
       exclusions: CONTENT_EXCLUSIONS,
-      run: () => gitLines(["grep", "-lIi", "-e", String(topic), "--", ...CONTENT_EXCLUSIONS]),
+      // `git grep` exits 1 when nothing matched — a real empty result, not a failure.
+      // Any other non-zero exit (or a git that will not spawn) is a probe that could
+      // not run, and must push the verdict toward inconclusive.
+      run: () => {
+        const r = gitLines(["grep", "-lIi", "-e", String(topic), "--", ...CONTENT_EXCLUSIONS], { emptyStatus: 1 });
+        return probeResult(r.lines, r.failed, r.why);
+      },
     },
   ];
 }
 
 export function classify(results) {
+  // A hit is a hit however the other probes fared: presence needs one.
   if (results.some((r) => r.strength === "strong" && r.hits.length > 0)) return "refuted";
+  // ABSENCE NEEDS EXHAUSTION, so a probe that could not RUN blocks corroboration. This
+  // is the whole of F3: without it, `git` missing from PATH turned exit 2 into exit 0.
+  if (results.some((r) => r.failed)) return "inconclusive";
   if (results.some((r) => r.strength === "weak" && r.hits.length > 0)) return "inconclusive";
   return "corroborated";
 }
@@ -185,7 +242,7 @@ function selfTest() {
   // Live, against this tree: the two claims that were actually made and were actually
   // wrong must both come back refuted.
   for (const topic of ["android", "tauri"]) {
-    const res = probeSpecs(topic).map((s) => ({ ...s, hits: s.run() }));
+    const res = probeSpecs(topic).map((s) => ({ ...s, ...s.run() }));
     checks.push([`LIVE: "${topic} does not exist" is refuted by this tree`, classify(res) === "refuted"]);
   }
   // …and a topic with no artifact must NOT come back refuted, or the tool is a rubber
@@ -222,15 +279,56 @@ function selfTest() {
       !contentSpec.exclusions.some((e) => ["docs", "doc", "documentation"].includes(excludedDir(e))),
   ]);
 
-  const prose = probeSpecs("retired label").map((sp) => ({ ...sp, hits: sp.run() }));
+  const prose = probeSpecs("retired label").map((sp) => ({ ...sp, ...sp.run() }));
   const contentHits = prose.find((r) => r.id === "content").hits;
   checks.push([
     "LIVE: a prose topic is INCONCLUSIVE, and the evidence comes from docs/ — not from this file quoting itself",
     classify(prose) === "inconclusive" && contentHits.some((f) => String(f).startsWith("docs/")),
   ]);
 
-  const fed = probeSpecs("fedramp").map((s) => ({ ...s, hits: s.run() }));
+  const fed = probeSpecs("fedramp").map((s) => ({ ...s, ...s.run() }));
   checks.push(['LIVE: "fedramp" is NOT refuted — mentions exist, artifacts do not', classify(fed) !== "refuted"]);
+
+  // ── A PROBE THAT COULD NOT RUN (F3) ─────────────────────────────────────────
+  // The arm that swallowed every git failure into `[]` had no self-test at all, which
+  // is how the tool built to stop fail-opens shipped one. Pure, then live, then end to
+  // end — the pure cases alone would stay green if the wiring were reverted.
+  checks.push([
+    "a FAILED probe is INCONCLUSIVE even when every probe is empty",
+    classify([{ strength: "strong", hits: [], failed: true }, weak([])]) === "inconclusive",
+  ]);
+  checks.push([
+    "a failed probe still yields REFUTED when another probe found a file",
+    classify([{ strength: "strong", hits: [], failed: true }, strong(["native/android/x.kt"])]) === "refuted",
+  ]);
+  const bogus = gitLines(["ls-files", "--no-such-flag-exists"]);
+  checks.push(["a git invocation that ERRORS reports failed, not empty", bogus.failed === true && bogus.lines.length === 0]);
+  // git grep exits 1 on no-match. If that were read as a failure every clean topic would
+  // be inconclusive and the tool would be useless — the opposite error, equally fatal.
+  const nomatch = probeSpecs(["zzq", "no", "such", "topic", "zzq"].join("-")).find((sp) => sp.id === "content").run();
+  checks.push(["git grep finding NOTHING is an empty probe, not a failed one", nomatch.failed === false && nomatch.hits.length === 0]);
+
+  // END TO END, both directions, on this tree: the reproduction that started this.
+  // The topic is assembled from parts so the literal is not itself tracked content.
+  const absentTopic = ["zzq", "no", "such", "topic", "zzq"].join("-");
+  const self = fileURLToPath(import.meta.url);
+  const clean = spawnSync(process.execPath, [self, absentTopic], { cwd: REPO, encoding: "utf8" });
+  const noGit = spawnSync(process.execPath, [self, absentTopic], {
+    cwd: REPO,
+    encoding: "utf8",
+    env: { ...process.env, PATH: "/nonexistent-dir" },
+  });
+  checks.push(["LIVE: a genuinely absent topic still CORROBORATES (exit 0)", clean.status === 0]);
+  checks.push([
+    "LIVE: the same topic with git unreachable is INCONCLUSIVE (exit 2), never corroborated",
+    noGit.status === 2 && !/CORROBORATED/.test(noGit.stdout ?? ""),
+  ]);
+  // Wiring control: the pure cases above cannot see a re-planted bare catch. Needle
+  // assembled from parts so this line is not itself a match.
+  checks.push([
+    "no bare catch returns an empty array from a git probe",
+    !code.split(/\s+/).join("").includes("catch{" + "return[];}"),
+  ]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
@@ -261,7 +359,10 @@ if (argv[0] === "--patterns") {
       id: `pattern-${i + 1}`,
       strength: "strong",
       how: `a tracked file whose path contains "${p}"`,
-      run: () => trackedFiles().filter((f) => f.toLowerCase().includes(needle)),
+      run: () => {
+        const r = trackedFiles();
+        return probeResult(r.lines.filter((f) => f.toLowerCase().includes(needle)), r.failed, r.why);
+      },
     };
   });
 } else {
@@ -275,10 +376,19 @@ if (argv[0] === "--patterns") {
 
 console.log(`\n${B}Absence check${X} — "${topic}" — presence needs one hit, absence needs exhaustion\n`);
 
-const results = specs.map((s) => ({ ...s, hits: s.run() }));
+const results = specs.map((s) => ({ ...s, ...s.run() }));
 for (const r of results) {
-  const tag = r.hits.length === 0 ? `${G}empty${X}` : r.strength === "strong" ? `${R}FOUND${X}` : `${Y}mentions${X}`;
+  // "unknown" is a THIRD tag on purpose: a probe that could not run must not print the
+  // same word as a probe that ran and found nothing.
+  const tag = r.failed
+    ? `${R}unknown${X}`
+    : r.hits.length === 0
+      ? `${G}empty${X}`
+      : r.strength === "strong"
+        ? `${R}FOUND${X}`
+        : `${Y}mentions${X}`;
   console.log(`  ${tag}  ${r.how}${r.hits.length ? `  ${B}${r.hits.length}${X}` : ""}`);
+  if (r.failed) console.log(`          ${D}${r.why}${X}`);
   r.hits.slice(0, 5).forEach((f) => console.log(`          ${D}${f}${X}`));
   if (r.hits.length > 5) console.log(`          ${D}… and ${r.hits.length - 5} more${X}`);
 }
@@ -290,11 +400,21 @@ if (verdict === "refuted") {
   process.exit(1);
 }
 if (verdict === "inconclusive") {
-  console.log(
-    `${Y}${B}? INCONCLUSIVE${X} — no file, but the word appears in source. That may be a\n` +
-      `  catalogue entry or a disclaimer rather than the thing itself. READ the matches\n` +
-      `  above before claiming absence, and say in your claim which you found.\n`,
-  );
+  const broken = results.filter((r) => r.failed);
+  if (broken.length > 0) {
+    console.log(
+      `${Y}${B}? INCONCLUSIVE${X} — ${broken.length} of ${results.length} probe(s) COULD NOT RUN, so this\n` +
+        `  search was never exhaustive and absence cannot be corroborated from it:\n` +
+        broken.map((r) => `          ${D}${r.why}${X}`).join("\n") +
+        `\n  Fix the probe and re-run before writing anything about absence.\n`,
+    );
+  } else {
+    console.log(
+      `${Y}${B}? INCONCLUSIVE${X} — no file, but the word appears in source. That may be a\n` +
+        `  catalogue entry or a disclaimer rather than the thing itself. READ the matches\n` +
+        `  above before claiming absence, and say in your claim which you found.\n`,
+    );
+  }
   process.exit(2);
 }
 console.log(`${G}${B}✓ CORROBORATED${X} across ${results.length} differently-shaped probes. Safe to claim — cite them.\n`);

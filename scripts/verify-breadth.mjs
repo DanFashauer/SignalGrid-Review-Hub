@@ -123,27 +123,129 @@ const STEPS = [
 // The lane's own claim ("the deferred-family gates live here") is re-derived
 // from the launch profile and package.json rather than trusted, in both
 // directions — the same rule every other coverage list in this repo follows.
+//
+// THE TWO HALVES READ TWO DIFFERENT SHAPES, AND THAT IS WHY THIS BLOCK ONCE
+// PROVED NOTHING. `SURFACES` gives `deferred` as an array of id STRINGS and
+// `launch` as an array of OBJECTS. Until 2026-09-06 both halves did `f.id`, so
+// every deferred probe key was the literal "proof:undefined", no package.json
+// script ever matched it, and the half this lane exists for could not report a
+// violation at all: twelve deferred proofs deleted from STEPS produced ZERO
+// problems while the header above claimed the derivation was enforced. The
+// two shapes are launch-profile.mjs's own decision — the defect was reading
+// them wrongly here. So the id is normalised for BOTH shapes below, and three
+// things keep the block from going inert again:
+//   1. an entry whose id cannot be resolved is a FAILURE, not a skip;
+//   2. the deferred half must have probed at least DEFERRED_PROBE_FLOOR keys
+//      that really exist in package.json (a probe key nothing matches is a
+//      gate scanning nothing);
+//   3. a synthetic violation of EACH half, run through the same function the
+//      live check uses, must be reported — so the self-test cannot pass
+//      against a copy of the logic that has since drifted.
 const inLane = new Set(STEPS.map((s) => s.cmd[2]));
 const pkg = JSON.parse(readFileSync(join(repo, "package.json"), "utf8"));
 const proofScripts = new Set(Object.keys(pkg.scripts ?? {}).filter((k) => k.startsWith("proof:")));
 const families = SURFACES.find((s) => s.key === "connector-families");
-const membershipProblems = [];
-for (const f of families.deferred) {
-  const p = `proof:${f.id}`;
-  if (proofScripts.has(p) && !inLane.has(p)) {
-    membershipProblems.push(`deferred family "${f.id}" has ${p} but this lane does not run it — its coverage just silently left every lane`);
+
+// Measured 2026-09-06: 43 of the 48 deferred families have a one-to-one
+// `proof:<family>` script. The floor is deliberately below that (families are
+// allowed to be retired) but far above zero, which is the only number the
+// broken loop could ever produce. Raise it, never lower it silently.
+const DEFERRED_PROBE_FLOOR = 40;
+
+// A family entry is either the id itself (deferred) or a record carrying it
+// (launch). Anything else is a shape change, and a shape change must fail this
+// gate rather than quietly yield an unmatchable probe key.
+const familyId = (f) =>
+  typeof f === "string" ? f : f && typeof f.id === "string" ? f.id : undefined;
+
+function deriveMembership(deferred, launch, scripts, lane) {
+  const problems = [];
+  let deferredProbesThatExist = 0;
+  let launchProbesResolved = 0;
+  for (const f of deferred) {
+    const id = familyId(f);
+    if (id === undefined) {
+      problems.push(`deferred family entry ${JSON.stringify(f)} carries no resolvable id — launch-profile.mjs changed shape and this consumer is reading it wrongly`);
+      continue;
+    }
+    const p = `proof:${id}`;
+    if (!scripts.has(p)) continue; // one of the families covered by a shared gate
+    deferredProbesThatExist += 1;
+    if (!lane.has(p)) {
+      problems.push(`deferred family "${id}" has ${p} but this lane does not run it — its coverage just silently left every lane`);
+    }
+  }
+  for (const f of launch) {
+    const id = familyId(f);
+    if (id === undefined) {
+      problems.push(`launch family entry ${JSON.stringify(f)} carries no resolvable id — launch-profile.mjs changed shape and this consumer is reading it wrongly`);
+      continue;
+    }
+    launchProbesResolved += 1;
+    const p = `proof:${id}`;
+    if (lane.has(p)) {
+      problems.push(`LAUNCH family "${id}" is in the breadth lane — launch coverage must stay per-push in preflight`);
+    }
+  }
+  return { problems, deferredProbesThatExist, launchProbesResolved };
+}
+
+// ── Self-test: the derivation must flag a planted violation of each half ────
+const SELF_TEST_DEFERRED = "zzz-synthetic-deferred-family";
+const SELF_TEST_LAUNCH = "zzz-synthetic-launch-family";
+const selfTestProblems = [];
+{
+  if (familyId("x") !== "x" || familyId({ id: "x" }) !== "x" || familyId({}) !== undefined || familyId(undefined) !== undefined) {
+    selfTestProblems.push("familyId() does not resolve BOTH shapes launch-profile.mjs uses (string id and { id } record)");
+  }
+  const scripts = new Set([...proofScripts, `proof:${SELF_TEST_DEFERRED}`, `proof:${SELF_TEST_LAUNCH}`]);
+  const lane = new Set([...inLane, `proof:${SELF_TEST_LAUNCH}`]);
+  const st = deriveMembership(
+    [...families.deferred, SELF_TEST_DEFERRED],
+    [...families.launch, { id: SELF_TEST_LAUNCH }],
+    scripts,
+    lane,
+  );
+  if (!st.problems.some((p) => p.startsWith(`deferred family "${SELF_TEST_DEFERRED}"`))) {
+    selfTestProblems.push("planted deferred family with a proof script MISSING from the lane was NOT reported — the deferred half is inert");
+  }
+  if (!st.problems.some((p) => p.startsWith(`LAUNCH family "${SELF_TEST_LAUNCH}"`))) {
+    selfTestProblems.push("planted launch family PRESENT in the lane was NOT reported — the launch half is inert");
+  }
+  const shape = deriveMembership([{ notAnId: 1 }], [{ notAnId: 1 }], scripts, lane);
+  if (shape.problems.length !== 2) {
+    selfTestProblems.push(`an unresolvable family entry must be reported on both halves; got ${shape.problems.length} problem(s), expected 2`);
   }
 }
-for (const f of families.launch) {
-  const p = `proof:${f.id}`;
-  if (inLane.has(p)) {
-    membershipProblems.push(`LAUNCH family "${f.id}" is in the breadth lane — launch coverage must stay per-push in preflight`);
-  }
+if (selfTestProblems.length > 0) {
+  console.error("verify:breadth membership SELF-TEST FAILED — the check cannot be trusted, so nothing was run:");
+  for (const p of selfTestProblems) console.error(`  ✗ ${p}`);
+  process.exit(1);
+}
+
+const live = deriveMembership(families.deferred, families.launch, proofScripts, inLane);
+const membershipProblems = [...live.problems];
+if (live.deferredProbesThatExist < DEFERRED_PROBE_FLOOR) {
+  membershipProblems.push(
+    `deferred half probed only ${live.deferredProbesThatExist} key(s) that exist in package.json (floor ${DEFERRED_PROBE_FLOOR}) — ` +
+      `the derivation found almost nothing, so a green here would be green about nothing`,
+  );
+}
+if (live.launchProbesResolved < 1) {
+  membershipProblems.push("launch half resolved 0 family ids — the derivation found nothing to check");
 }
 if (membershipProblems.length > 0) {
   console.error("verify:breadth membership check FAILED before running anything:");
   for (const p of membershipProblems) console.error(`  ✗ ${p}`);
   process.exit(1);
+}
+console.log(
+  `membership check ok — self-test green; ${live.deferredProbesThatExist} deferred one-to-one proofs probed (floor ${DEFERRED_PROBE_FLOOR}), ` +
+    `all present in this lane; ${live.launchProbesResolved} launch families probed, none leaked here.`,
+);
+if (process.argv.includes("--self-test")) {
+  console.log("--self-test: membership derivation only; NO proofs were run, so this says nothing about the breadth surface.");
+  process.exit(0);
 }
 
 const results = [];

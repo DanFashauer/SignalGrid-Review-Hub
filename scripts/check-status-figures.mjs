@@ -26,9 +26,17 @@
 // 10, and 12 CI workflows against 16. Understating the work is the safe direction,
 // which is precisely why nobody noticed for so long.
 //
-// The three counts below MIRROR scripts/status-summary.mjs exactly (lines 87-92).
-// If that generator's definitions change, this must change with them — a gate that
-// counts differently from the thing it checks would report drift that is not there.
+// The four counts below MIRROR scripts/status-summary.mjs exactly. If that
+// generator's definitions change, this must change with them — a gate that counts
+// differently from the thing it checks would report drift that is not there. The
+// live-vendor lane count is therefore DERIVED FROM THE GENERATOR'S OWN LANE_ENV map
+// rather than re-invented here, for exactly that reason.
+//
+// It was three counts until 2026-09-06, and the fourth is why this note exists: the
+// LINE pattern captured `live-vendor lanes` in group 2 from the first version, and
+// `parseStatus` returned groups 1, 3 and 4. A published figure was parsed and dropped,
+// so it could say anything at all while the gate printed "the inventory line matches
+// the tree".
 
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -36,6 +44,32 @@ import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const STATUS = join(repo, "docs/STATUS.md");
+
+const GENERATOR = join(repo, "scripts/status-summary.mjs");
+
+/**
+ * The live-vendor lane count, DERIVED the way the generator derives it: the keys of
+ * `LANE_ENV` in scripts/status-summary.mjs, intersected with the scripts that actually
+ * exist in package.json.
+ *
+ * WHY NOT just count `proof:live-*` in package.json. Because that is a DIFFERENT
+ * number and the difference is the point: eight `proof:live-*` scripts exist, one
+ * (`proof:live-idp`) runs in-process and is deliberately excluded, and three more are
+ * not declared in LANE_ENV — so a naive count says 7 where the generator says 4, and
+ * this gate would report drift that is not there against an honest page. A gate that
+ * counts differently from the thing it checks manufactures its own findings.
+ *
+ * Fails CLOSED: if `LANE_ENV` cannot be found or yields no keys, the generator's shape
+ * has changed and this returns null so the caller refuses rather than comparing against
+ * a zero it invented.
+ */
+export function liveLaneCount(generatorSrc, pkgScripts) {
+  const block = generatorSrc.match(/const LANE_ENV\s*=\s*\{([\s\S]*?)\n\};/);
+  if (!block) return null;
+  const keys = [...block[1].matchAll(/"(proof:[a-z0-9:-]+)"\s*:/g)].map((m) => m[1]);
+  if (keys.length === 0) return null;
+  return keys.filter((k) => k in (pkgScripts ?? {})).length;
+}
 
 /** Counts, defined identically to status-summary.mjs. */
 function counts() {
@@ -45,7 +79,8 @@ function counts() {
   const specs = existsSync(e2eDir) ? readdirSync(e2eDir).filter((f) => f.endsWith(".spec.ts")).length : 0;
   const wfDir = join(repo, ".github/workflows");
   const workflows = existsSync(wfDir) ? readdirSync(wfDir).filter((f) => f.endsWith(".yml")).length : 0;
-  return { proofs, specs, workflows };
+  const lanes = existsSync(GENERATOR) ? liveLaneCount(readFileSync(GENERATOR, "utf8"), pkg.scripts) : null;
+  return { proofs, specs, workflows, lanes };
 }
 
 /** The one line in STATUS.md that carries the inventory. */
@@ -55,7 +90,25 @@ const LINE =
 function parseStatus(src) {
   const m = src.match(LINE);
   if (!m) return null;
-  return { proofs: Number(m[1]), specs: Number(m[3]), workflows: Number(m[4]) };
+  return { proofs: Number(m[1]), lanes: Number(m[2]), specs: Number(m[3]), workflows: Number(m[4]) };
+}
+
+/**
+ * Every figure on the line, paired with the tree's own count. One row per field
+ * `parseStatus` returns — the self-test asserts that, because the defect this gate
+ * carried was a figure that was PARSED and never compared.
+ */
+export function figureRows(declared, real) {
+  return [
+    ["proof gates", declared.proofs, real.proofs],
+    // Gated since 2026-09-06. The LINE pattern has always CAPTURED this figure and
+    // parseStatus always dropped it, so one of the four numbers on the line was
+    // read and thrown away while the gate reported "the inventory line matches the
+    // tree" — a published figure free to rot behind a green check.
+    ["live-vendor lanes", declared.lanes, real.lanes],
+    ["browser E2E specs", declared.specs, real.specs],
+    ["CI workflows", declared.workflows, real.workflows],
+  ];
 }
 
 function main() {
@@ -73,11 +126,16 @@ function main() {
     process.exit(1);
   }
   const real = counts();
-  const rows = [
-    ["proof gates", declared.proofs, real.proofs],
-    ["browser E2E specs", declared.specs, real.specs],
-    ["CI workflows", declared.workflows, real.workflows],
-  ];
+  if (real.lanes === null) {
+    console.error(
+      "\u2717 the live-vendor lane count could not be derived from scripts/status-summary.mjs\n" +
+        "  (its LANE_ENV map was not found, or parsed to no keys). That figure is PUBLISHED on the\n" +
+        "  status page, so refusing is the only honest answer: comparing it against a count this gate\n" +
+        "  invented would be worse than not checking it.",
+    );
+    process.exit(1);
+  }
+  const rows = figureRows(declared, real);
 
   console.log("STATUS.md inventory:");
   for (const [label, d, r] of rows) console.log(`  ${d === r ? "ok  " : "DRIFT"} — ${label}: says ${d}, repo has ${r}`);
@@ -103,11 +161,43 @@ function selfTest() {
       name: "a line with different numbers parses to those numbers",
       run: () => {
         const p = parseStatus("- proof gates: **7** · live-vendor lanes: **1** · browser E2E specs: **2** · CI workflows: **3**");
-        return p?.proofs === 7 && p.specs === 2 && p.workflows === 3;
+        return p?.proofs === 7 && p.lanes === 1 && p.specs === 2 && p.workflows === 3;
       },
     },
     { name: "a file with no inventory line yields null (the gate fails loudly rather than passing)", run: () => parseStatus("# nothing here") === null },
-    { name: "the counts are non-zero (an empty sweep would pass vacuously)", run: () => { const c = counts(); return c.proofs > 0 && c.specs > 0 && c.workflows > 0; } },
+    { name: "the counts are non-zero (an empty sweep would pass vacuously)", run: () => { const c = counts(); return c.proofs > 0 && c.specs > 0 && c.workflows > 0 && c.lanes > 0; } },
+    {
+      name: "EVERY figure the line carries is compared — none is parsed and dropped",
+      run: () => {
+        // The defect this pins: `live-vendor lanes` was captured and never compared.
+        // Derived from the pattern itself, so a fifth figure added to the line and
+        // forgotten fails here rather than riding along unchecked.
+        const captured = LINE.source.match(/\(\\d\+\)/g)?.length ?? 0;
+        const sample = parseStatus("- proof gates: **1** · live-vendor lanes: **1** · browser E2E specs: **1** · CI workflows: **1**");
+        const parsed = Object.keys(sample ?? {}).length;
+        const compared = figureRows(sample, { proofs: 1, lanes: 1, specs: 1, workflows: 1 }).length;
+        return captured > 0 && captured === parsed && parsed === compared;
+      },
+    },
+    {
+      name: "the live-vendor lane count MIRRORS the generator's LANE_ENV, not a naive proof:live-* count",
+      run: () => {
+        const pkg = JSON.parse(readFileSync(join(repo, "package.json"), "utf8"));
+        const naive = Object.keys(pkg.scripts ?? {}).filter((k) => k.startsWith("proof:live-")).length;
+        const mirrored = liveLaneCount(readFileSync(GENERATOR, "utf8"), pkg.scripts);
+        // They differ today (7 vs 4). If they ever stop differing the check still holds;
+        // what must never happen is this gate using the naive number.
+        return mirrored !== null && mirrored > 0 && mirrored <= naive;
+      },
+    },
+    {
+      name: "a generator whose LANE_ENV cannot be parsed yields null, so the gate REFUSES rather than comparing against 0",
+      run: () => liveLaneCount("const OTHER = { a: 1 };", { "proof:live-edr": "x" }) === null && liveLaneCount("const LANE_ENV = {\n};", {}) === null,
+    },
+    {
+      name: "a lane declared in LANE_ENV but absent from package.json is NOT counted",
+      run: () => liveLaneCount('const LANE_ENV = {\n  "proof:live-a": [],\n  "proof:live-b": [],\n};', { "proof:live-a": "x" }) === 1,
+    },
   ];
   let bad = 0;
   for (const c of controls) {

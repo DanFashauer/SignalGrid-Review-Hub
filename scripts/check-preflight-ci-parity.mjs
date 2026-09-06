@@ -39,7 +39,15 @@
 // is the strongest claim checkable without executing GitHub's workflow semantics,
 // and it catches the real failure — a gate nobody wired up at all.
 //
+// It also carries a SECOND, closely-related law (added 2026-09-06): a proof that
+// decides for itself that it cannot run, prints SKIPPED and exits 0 must be
+// CLASSIFIED as a skip in both runners, never counted green. Same defect shape as
+// an unwired gate — something reporting success while proving nothing. See the
+// "self-skipping proofs" section at the bottom.
+//
 //   node scripts/check-preflight-ci-parity.mjs
+//   node scripts/check-preflight-ci-parity.mjs --self-test
+//   node scripts/check-preflight-ci-parity.mjs --list-self-skipping-proofs
 
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -92,6 +100,94 @@ for (const [name, cmd] of Object.entries(pkgScripts)) {
   aliasesFor.set(m[1], list);
 }
 
+// ── Self-skipping proofs: DERIVED from scripts/src/*.ts, never hand-listed ────
+//
+// Five proofs (audit-ledger-pg, decision-store-pg, session-store-pg,
+// backup-restore, db-role-split) open with
+//
+//     const url = process.env.DATABASE_URL;
+//     if (!url) { console.log("… SKIPPED (DATABASE_URL unset …)"); process.exit(0); }
+//
+// so on any machine without a Postgres they print one line, exit 0, and are
+// indistinguishable from a pass. `validate-sim-macos.sh` counted all five as PASSED
+// and `preflight.mjs` printed "ok" beside each one it runs. That is the exact defect
+// this file already exists to catch, one layer in: a gate reporting success while
+// executing none of what it claims.
+//
+// The set is DERIVED from the sources, so a sixth self-skipping proof cannot arrive
+// unnoticed — it fails this gate until it is classified in both runners.
+// `scripts/src/e2e/` is deliberately out of scope (it belongs to the e2e runner and
+// holds no proofs); the readdir is non-recursive, which is what enforces that.
+const SRC_DIR = join(repo, "scripts/src");
+
+/** Pure. `sources` is a Map of filename -> file text. Returns Map filename -> ENV
+ *  name for every file that self-skips (exits 0) when that env var is missing. */
+export function selfSkippingSources(sources) {
+  const found = new Map();
+  for (const [file, text] of sources) {
+    const lines = text.split("\n");
+    // id -> ENV, from `const id = process.env.ENV;`
+    const envOf = new Map();
+    for (const l of lines) {
+      const m = /^\s*const\s+([A-Za-z_$][\w$]*)\s*=\s*process\.env\.([A-Z][A-Z0-9_]*)\s*;?\s*$/.exec(l);
+      if (m) envOf.set(m[1], m[2]);
+    }
+    for (let i = 0; i < lines.length; i += 1) {
+      const g = /^\s*if\s*\(\s*!\s*([A-Za-z_$][\w$]*)\s*\)\s*\{\s*$/.exec(lines[i]);
+      if (!g || !envOf.has(g[1])) continue;
+      // The skip body is short by construction: a log line and the exit. Six lines
+      // of lookahead is generous and keeps this from matching an unrelated later
+      // `process.exit(0)` further down the file.
+      const body = lines.slice(i + 1, i + 7).join("\n");
+      if (!/console\.log\(.*\bSKIPPED\b/.test(body)) continue;
+      if (!/process\.exit\(\s*0\s*\)/.test(body)) continue;
+      found.set(file, envOf.get(g[1]));
+      break;
+    }
+  }
+  return found;
+}
+
+/** Live: read scripts/src/*.ts (non-recursive) and resolve each self-skipping
+ *  source to the `proof:*` script name that runs it. Returns Map name -> ENV. */
+function liveSelfSkippingProofs() {
+  const files = readdirSync(SRC_DIR).filter((f) => f.endsWith(".ts"));
+  // FLOOR. Finding no sources means the layout moved, not that nothing self-skips.
+  if (files.length < 1) {
+    console.error(`  ✗ scripts/src holds no .ts files — the derivation for self-skipping proofs is broken, not clean.`);
+    process.exit(1);
+  }
+  const sources = new Map(files.map((f) => [f, readFileSync(join(SRC_DIR, f), "utf8")]));
+  const skipping = selfSkippingSources(sources);
+  // source file -> proof script name, from the scripts package's own registrations.
+  const scriptsPkg = JSON.parse(readFileSync(join(repo, "scripts/package.json"), "utf8")).scripts ?? {};
+  const nameOfFile = new Map();
+  for (const [name, cmd] of Object.entries(scriptsPkg)) {
+    const m = /\.\/src\/([A-Za-z0-9._-]+\.ts)/.exec(cmd ?? "");
+    if (m) nameOfFile.set(m[1], name);
+  }
+  const out = new Map();
+  for (const [file, env] of skipping) {
+    const name = nameOfFile.get(file);
+    // A self-skipping source nobody runs is not a gate at all; report it rather
+    // than drop it silently, because dropping it is how the set shrinks unnoticed.
+    if (!name) {
+      out.set(`__UNREGISTERED_SOURCE__:${file}`, env);
+      continue;
+    }
+    out.set(name, env);
+  }
+  return out;
+}
+
+// `--list-self-skipping-proofs` is the machine-readable face of the same
+// derivation, so validate-sim-macos.sh can name its skip rows without typing a
+// list. One `<proof:name> <ENV>` per line. Must print before any other output.
+if (process.argv.includes("--list-self-skipping-proofs")) {
+  for (const [name, env] of [...liveSelfSkippingProofs()].sort()) console.log(`${name} ${env}`);
+  process.exit(0);
+}
+
 // Each STEPS entry is `cmd: ["node", "scripts/x.mjs"]` or `["pnpm", "run", "x"]`.
 // Reduce both to the identifying token a workflow would have to mention.
 //
@@ -101,7 +197,34 @@ for (const [name, cmd] of Object.entries(pkgScripts)) {
 // self-test step too, even though CI never executed it. The token now carries
 // ` --self-test` so a self-test step is only satisfied by a workflow that actually
 // runs `--self-test`. CI already registers every self-test step this way.
-function gatesIn(source) {
+/**
+ * Drop whole-line JS comments before the STEPS scan.
+ *
+ * `stripYamlComments` below exists because "a workflow that merely NAMES a gate in a
+ * `# comment` was credited" — and the identical hole sat on the PREFLIGHT side of the
+ * same file, unstripped. Comment a step out:
+ *
+ *     // TEMPORARILY DISABLED while the fixture is rebuilt:
+ *     // { name: "Proof: audit-ledger", cmd: ["pnpm", "run", "proof:audit-ledger"] },
+ *
+ * and `gatesIn` still extracted `proof:audit-ledger` (verified 2026-09-06), so this
+ * checker — and the "N preflight gates" figure it prints — reported a gate that no
+ * longer runs anywhere. A disabled gate reported as registered is worse than a
+ * missing one: nobody goes looking.
+ *
+ * Deliberately conservative: only lines whose FIRST non-space characters are `//`.
+ * That is exactly the commented-out-code shape, and it cannot touch a `//` inside a
+ * string on a live line (a URL in a `bash -c` gate, for instance).
+ */
+export function stripCommentedLines(source) {
+  return source
+    .split("\n")
+    .map((line) => (/^\s*\/\//.test(line) ? "" : line))
+    .join("\n");
+}
+
+function gatesIn(rawSource) {
+  const source = stripCommentedLines(rawSource);
   const out = [];
   for (const m of source.matchAll(/cmd:\s*\[([^\]]+)\]/g)) {
     const parts = m[1].replace(/["']/g, "").split(",").map((s) => s.trim());
@@ -222,6 +345,51 @@ function selfTest() {
   checks.push(["a path gate run via its pnpm alias is credited", gateWiredIn("scripts/review-invariants.mjs", "  - run: pnpm run review:invariants\n", aliasMap) === true]);
   checks.push(["a shorter gate name does not borrow a longer one's invocation", gateWiredIn("proof:live", "  - run: pnpm run proof:live-fleet\n") === false]);
 
+  // ── self-skipping-proof derivation: it must FIND the shape and REJECT lookalikes
+  const SELF_SKIP_SRC = [
+    'const url = process.env.DATABASE_URL;',
+    'if (!url) {',
+    '  console.log("Thing proof: SKIPPED (DATABASE_URL unset).");',
+    "  process.exit(0);",
+    "}",
+  ].join("\n");
+  checks.push([
+    "SYNTHETIC VIOLATION: a proof that logs SKIPPED and exits 0 on a missing env var is DETECTED",
+    selfSkippingSources(new Map([["thing-proof.ts", SELF_SKIP_SRC]])).get("thing-proof.ts") === "DATABASE_URL",
+  ]);
+  checks.push([
+    "a proof that REFUSES (exit 1) without the env var is not a self-skip",
+    selfSkippingSources(new Map([["r.ts", SELF_SKIP_SRC.replace("process.exit(0)", "process.exit(1)")]])).size === 0,
+  ]);
+  checks.push([
+    "a mid-run section that reports SKIPPED without exiting is not a self-skip",
+    selfSkippingSources(new Map([["s.ts", 'const t = "x";\nconsole.log("  ~ SKIPPED (reported, not counted): no licence");\n']])).size === 0,
+  ]);
+  checks.push([
+    "a guard on a plain local (not process.env) is not a self-skip",
+    selfSkippingSources(new Map([["l.ts", SELF_SKIP_SRC.replace("process.env.DATABASE_URL", 'argv[2] ?? ""')]])).size === 0,
+  ]);
+  // The LIVE half: the derivation must still find the five real sources. A parse
+  // that drifts to zero would make every classification check above vacuous.
+  const liveSkip = [...liveSelfSkippingProofs().keys()].filter((k) => !k.startsWith("__"));
+  checks.push([`LIVE: ${liveSkip.length} self-skipping proof(s) derived from scripts/src/*.ts (floor 1)`, liveSkip.length >= 1]);
+
+  // ── the same comment rule on the PREFLIGHT side, not just the workflow side ──
+  const liveStep = '  { name: "X", cmd: ["pnpm", "run", "proof:x"] },';
+  checks.push(["a live STEPS entry is extracted", stripCommentedLines(liveStep).includes("proof:x")]);
+  checks.push([
+    "SYNTHETIC VIOLATION: a COMMENTED-OUT STEPS entry is NOT counted as a registered gate",
+    stripCommentedLines(`  // ${liveStep.trim()}`).trim() === "",
+  ]);
+  checks.push([
+    "a `//` inside a live line (a URL in a bash gate) is NOT stripped",
+    stripCommentedLines('  { cmd: ["bash", "-c", "curl https://x/y && pnpm run z"] },').includes("https://x/y"),
+  ]);
+  checks.push([
+    "a trailing `//` comment after real code keeps the code",
+    stripCommentedLines(`${liveStep} // note`).includes("proof:x"),
+  ]);
+
   checks.push([`LIVE: ${gates.length} preflight gate token(s) parsed`, gates.length > 0]);
 
   const failed = checks.filter(([, k]) => !k);
@@ -298,6 +466,108 @@ for (const id of ciStale) {
 console.log(
   `CI job coverage: ${ciJobs.length} jobs, ${MIRRORED.size} mirrored by preflight, ` +
     `${NOT_A_GATE.size} not a gate, ${ciUncovered.length} reported as uncovered`,
+);
+
+// ── Self-skipping proofs must be CLASSIFIED in BOTH runners ──────────────────
+//
+// Derived above from scripts/src/*.ts. Two runners enumerate proofs, and both used
+// to count a self-skip as a pass:
+//
+//   · scripts/preflight.mjs — needs `selfSkipsWithout: "<ENV>"` on the step, which
+//     turns the exit-0 into the `skipped-db` status printed with the verdict.
+//   · validate-sim-macos.sh — enumerates EVERY `proof:*` script, so all five reach
+//     it. It needs a named skip row, fed by `--list-self-skipping-proofs`.
+//
+// Both directions are checked: an unclassified self-skipping proof fails, and a
+// classification for a proof that no longer self-skips fails too (a stale exemption
+// re-permits the gap it was granted for — the same rule LOCAL_ONLY follows above).
+const selfSkipping = liveSelfSkippingProofs();
+const problemsBeforeSelfSkip = problems;
+// FLOOR. Zero derived is a broken parse, not a clean tree: the five sources are in
+// the repo and this gate would otherwise go green by finding nothing.
+if (selfSkipping.size < 1) {
+  console.error(
+    "  ✗ derived 0 self-skipping proofs from scripts/src/*.ts — the parse drifted.\n" +
+      "      Refusing to report classification clean over a population this gate could not find.",
+  );
+  problems += 1;
+}
+for (const key of selfSkipping.keys()) {
+  if (!key.startsWith("__UNREGISTERED_SOURCE__:")) continue;
+  console.error(
+    `  ✗ ${key.split(":")[1]}: self-skips (prints SKIPPED, exits 0) but scripts/package.json runs it under no ` +
+      `\`proof:*\` script — it can neither be classified nor run.`,
+  );
+  problems += 1;
+}
+
+// preflight step -> its selfSkipsWithout marker, if any. The property is written
+// immediately after `cmd`, which is what makes this pairing unambiguous.
+const preflightMarker = new Map();
+for (const m of stripCommentedLines(preflight).matchAll(/cmd:\s*\[([^\]]+)\],?\s*(?:selfSkipsWithout:\s*"([A-Z][A-Z0-9_]*)")?/g)) {
+  const parts = m[1].replace(/["']/g, "").split(",").map((s) => s.trim());
+  if (parts[0] === "pnpm" && parts[1] === "run" && parts[2]) preflightMarker.set(parts[2], m[2] ?? null);
+}
+for (const [name, env] of selfSkipping) {
+  if (!preflightMarker.has(name)) continue; // preflight does not run it; nothing to classify here
+  const marker = preflightMarker.get(name);
+  if (marker === env) continue;
+  console.error(
+    marker === null
+      ? `  ✗ ${name}: self-skips when ${env} is unset (exit 0, nothing proven) but its scripts/preflight.mjs step ` +
+          `carries no \`selfSkipsWithout\` — preflight prints "ok" for a proof that never ran.\n` +
+          `      Add \`selfSkipsWithout: "${env}"\` to that step.`
+      : `  ✗ ${name}: scripts/preflight.mjs declares selfSkipsWithout: "${marker}" but the source self-skips on ` +
+          `${env} — the classification names the wrong input.`,
+  );
+  problems += 1;
+}
+for (const [name, marker] of preflightMarker) {
+  if (marker === null) continue;
+  if (selfSkipping.has(name)) continue;
+  console.error(
+    `  ✗ ${name}: scripts/preflight.mjs declares selfSkipsWithout: "${marker}" but scripts/src no longer shows it ` +
+      `self-skipping — remove the marker, or preflight will keep excusing a proof that does run.`,
+  );
+  problems += 1;
+}
+
+// validate-sim-macos.sh enumerates every proof:* script, so it meets all five
+// regardless of what preflight runs. Its classification is structural: it must ASK
+// for the derived list, refuse an empty answer, and route those proofs to `skip`.
+// Checked by required token, so ripping any one of the three out goes red.
+const VALIDATE_SH = "validate-sim-macos.sh";
+const validateSh = readFileSync(join(repo, VALIDATE_SH), "utf8");
+const REQUIRED_IN_VALIDATE = [
+  ["check-preflight-ci-parity.mjs --list-self-skipping-proofs", "the derivation call (the list is never typed by hand)"],
+  ["DB_SELF_SKIP_PROOFS", "the variable holding the derived list"],
+  ["FATAL: derived 0 self-skipping proofs", "the floor that refuses an empty derivation"],
+  ['skip "$p" "self-skips without', "the named skip row itself"],
+];
+for (const [token, why] of REQUIRED_IN_VALIDATE) {
+  if (validateSh.includes(token)) continue;
+  console.error(
+    `  ✗ ${VALIDATE_SH}: missing ${why} — expected to contain \`${token}\`.\n` +
+      `      Without it the harness runs the self-skipping proofs through \`gate\` and counts each exit-0 as PASSED.`,
+  );
+  problems += 1;
+}
+
+// The count CLAUDE.md points at. It said "node scripts/check-preflight-ci-parity.mjs
+// prints the current one" while this gate printed no such line, so the sentence sent
+// a reader to a command that could not answer it. It answers now.
+const preflightOwnGates = gatesIn(preflight);
+const preflightProofGates = preflightOwnGates.filter((g) => g.startsWith("proof:"));
+console.log(
+  `preflight gates: ${preflightOwnGates.length - preflightProofGates.length} non-proof of ` +
+    `${preflightOwnGates.length} (proof:* entries excluded)`,
+);
+const selfSkipUnclassified = problems - problemsBeforeSelfSkip;
+console.log(
+  `self-skipping proofs: ${[...selfSkipping.keys()].filter((k) => !k.startsWith("__")).length} derived from scripts/src/*.ts, ` +
+    (selfSkipUnclassified === 0
+      ? `all classified in preflight.mjs and ${VALIDATE_SH}`
+      : `${selfSkipUnclassified} classification problem(s) above — a self-skip is being counted as a pass`),
 );
 
 console.log(

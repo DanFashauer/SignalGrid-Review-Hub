@@ -10,8 +10,9 @@
 // stops there. On 2026-09-06 the docs/inspiration read found three documents
 // that had passed it while naming symbols the cited file no longer held: a
 // configuration-key registry listing 19 environment reads that PR #436 had
-// deleted from ProviderConfigurationService.swift (13 of them nowhere in the
-// tree), a plan line placing DEFAULT_MAX_SKEW_MS in a file that does not define
+// deleted from ProviderConfigurationService.swift (12 of them nowhere in the
+// tracked tree outside that catalog; a 13th, SEC_RATE_LIMITING, survives only as
+// a fixture inside this gate's own self-test), a plan line placing DEFAULT_MAX_SKEW_MS in a file that does not define
 // it, a lane doc naming a Swift target in the wrong Package.swift. The cited PATH
 // was right every time; only the named symbol was gone.
 //
@@ -61,7 +62,7 @@ const SELF_TEST = process.argv.includes("--self-test");
 const RATCHET = "docs/agent/cited-symbols-ratchet.json";
 const BEFORE = 60;
 export const RECORD_MARKER = /<!--\s*line-citations:\s*as measured \d{4}-\d{2}-\d{2},\s*not maintained\s*-->/;
-export const VERBATIM_MARKER = /<!--\s*cited-symbols:\s*verbatim import, drift recorded in the preamble[^>]*-->/;
+export const VERBATIM_MARKER = /<!--\s*cited-symbols:\s*verbatim import, drift recorded in the preamble[^>]*\bmeasured (\d{4}-\d{2}-\d{2})[^>]*-->/;
 export const DERIVED_OR_RECORD = new Map([
   ["docs/CLAIM_INVENTORY.md", "DERIVED from docs/agent/CLAIM_INVENTORY.json; check-claim-inventory-anchors holds the evidence strings to their files"],
   ["docs/agent/EVIDENCE.md", "a record of commands run and their output on the day; symbols are quoted as they were, not as claims about today's tree"],
@@ -141,7 +142,8 @@ export function auditDocs(docs, readDoc, readCode, docNames) {
     if (text === null) continue;
     if (DERIVED_OR_RECORD.has(doc)) { out.exempt.push({ doc, why: DERIVED_OR_RECORD.get(doc) }); continue; }
     if (RECORD_MARKER.test(text)) { out.exempt.push({ doc, why: "dated record (line-citations marker)" }); continue; }
-    if (VERBATIM_MARKER.test(text)) { out.exempt.push({ doc, why: "verbatim import (cited-symbols marker)" }); continue; }
+    const vm = VERBATIM_MARKER.exec(text);
+    if (vm) { out.exempt.push({ doc, why: `verbatim import (cited-symbols marker, drift measured ${vm[1]})` }); continue; }
     text.split("\n").forEach((line, i) => {
       const { pairs, unpaired } = pairsIn(line, docNames);
       out.unpaired += unpaired;
@@ -203,8 +205,10 @@ function selfTest() {
   checks.push(["a prose table row with one RELATIVE citation is not a registry row — a far cell's symbol stays unpaired, the near one is checked", a.checked === 1 && a.ok === 1 && a.unpaired === 1]);
   a = run("d.md", "<!-- line-citations: as measured 2026-09-01, not maintained -->\n`lib/x/src/a.ts` had `MISSING_KEY` then.");
   checks.push(["a dated record is exempt and NAMED as exempt", a.exempt.length === 1 && a.missing.length === 0]);
-  a = run("d.md", "<!-- cited-symbols: verbatim import, drift recorded in the preamble (2026-09-06) -->\n| x | MISSING_KEY | lib/x/src/a.ts |");
-  checks.push(["a verbatim import with the marker is exempt and NAMED as exempt", a.exempt.length === 1 && a.exempt[0].why.startsWith("verbatim") && a.missing.length === 0]);
+  a = run("d.md", "<!-- cited-symbols: verbatim import, drift recorded in the preamble (KEY-REMOVAL DRIFT, measured 2026-09-06) -->\n| x | MISSING_KEY | lib/x/src/a.ts |");
+  checks.push(["a verbatim import with a DATED marker is exempt and the date is NAMED", a.exempt.length === 1 && a.exempt[0].why === "verbatim import (cited-symbols marker, drift measured 2026-09-06)" && a.missing.length === 0]);
+  a = run("d.md", "<!-- cited-symbols: verbatim import, drift recorded in the preamble -->\n`lib/x/src/a.ts` reads `MISSING_KEY` from the environment.");
+  checks.push(["an UNDATED verbatim marker buys nothing — the exemption is conditional on a recorded measurement date", a.exempt.length === 0 && a.missing.length === 1]);
   a = run("docs/CLAIM_INVENTORY.md", "`lib/x/src/a.ts` reads `MISSING_KEY`");
   checks.push(["the derived inventory page is exempt with its reason printed", a.exempt.length === 1 && a.missing.length === 0]);
   a = run("d.md", "`lib/x/src/nope.ts` defines `REAL_CONST`.");

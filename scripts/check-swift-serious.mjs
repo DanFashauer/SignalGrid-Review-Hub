@@ -76,9 +76,11 @@ const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const IOS_DIR = "native/ios";
 const CONFIG_PATH = `${IOS_DIR}/.swiftlint.yml`;
 
-// Floor: the tree carries 68 tracked .swift files under native/ios today. A scan
-// that suddenly sees a handful of them has lost its scope, and a gate scanning
-// nothing is green about nothing.
+// Floor: a scan that suddenly sees a handful of files has lost its scope, and a gate
+// scanning nothing is green about nothing. The floor is deliberately far below the
+// live count and is NOT a pin on it — this sentence read "the tree carries 68 tracked
+// .swift files today" while the gate was scanning 77, and every run prints the real
+// figure ("scanned N tracked .swift file(s)"). Read that line, not this one.
 const MIN_SWIFT_FILES = 40;
 
 class GateError extends Error {}

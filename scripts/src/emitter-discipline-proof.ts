@@ -26,7 +26,7 @@
 // `delivered: false` — the unearned affirmative is unrepresentable, and this
 // proof pins it at runtime for every family anyway, because a type assertion
 // alone is erased at the boundary the wire crosses.
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveItsmEmitter, type ItsmEmitterResolution, GenericWebhookAdapter } from "@workspace/integrations/itsm";
@@ -92,11 +92,26 @@ const FAMILIES: FamilyUnderTest[] = [
     .filter((d) => d.isDirectory())
     .map((d) => d.name)
     .filter((name) => {
+      // ABSENT AND UNREADABLE ARE DIFFERENT ANSWERS. A directory with no resolve.ts is
+      // simply not an emitter family — a negative result. A resolve.ts that EXISTS and
+      // cannot be read is a measurement failure, and the old catch-all turned it into
+      // the same negative: the family dropped silently out of the derived set and every
+      // "across all N families" claim quietly covered one fewer. The floors below would
+      // catch a drop today, but they would report it as a count that moved rather than
+      // as a file that could not be read.
+      const resolvePath = resolve(repo, FAMILY_ROOT, name, "resolve.ts");
+      if (!existsSync(resolvePath)) return false;
+      let source: string;
       try {
-        return /createEmitterResolver/.test(readFileSync(resolve(repo, FAMILY_ROOT, name, "resolve.ts"), "utf8"));
-      } catch {
-        return false;
+        source = readFileSync(resolvePath, "utf8");
+      } catch (err) {
+        throw new Error(
+          `unreadable resolve.ts for integration family "${name}" (${resolvePath}): ` +
+          `${err instanceof Error ? err.message : String(err)} — a family whose definition ` +
+          `cannot be read is a measurement failure, not a negative result`,
+        );
       }
+      return /createEmitterResolver/.test(source)
     })
     .sort();
   // FLOOR first: a derivation that matched nothing would agree with an empty

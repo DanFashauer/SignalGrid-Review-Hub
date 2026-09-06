@@ -61,7 +61,7 @@ it never runs them: the docs↔proof figure guard, the launch profile, both
 preflight↔CI parity checks, the guard registries, the publication boundary, the
 simulation-request gate, `test:load`, the benches, and well over a hundred more.
 (An earlier version of this paragraph said "roughly thirty-five"; measured with
-the parity gate's own extractor on 2026-09-05 the non-proof count was 182 of 257
+the parity gate's own extractor on 2026-09-06 the non-proof count was 233 of 310
 — the paragraph that warned the difference was not small had quantified it as
 small. Do not retype a number here: `node scripts/check-preflight-ci-parity.mjs`
 prints the current one.) A branch can therefore pass the harness and fail CI on

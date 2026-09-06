@@ -121,11 +121,33 @@ console.log("Merge markers — no tracked file may carry an unresolved conflict\
 const findings = [];
 let scanned = 0;
 let binary = 0;
+// A tracked file this gate could not read is a file whose contents nobody checked.
+// The bare `catch { continue; }` that used to be here dropped it from every count —
+// so `tracked files: 2327 / scanned as text: 2100` reconciled to nothing and the gate
+// still said "no unresolved conflict in ANY tracked file", which it had not looked at.
+// The two cases are not the same and are now separated:
+//   ENOENT   the path is tracked but not in the working tree (mid-rebase, deleted and
+//            unstaged). There is no content, so it cannot carry a marker: REPORTED.
+//   EISDIR   the path is not a regular file — `scripts/mobile-app-catalog/fixtures/evil/
+//   ELOOP    app-dirlink` is a tracked symlink pointing at a DIRECTORY, on purpose, and
+//            the mobile-app-catalog proof asserts the catalog refuses it. It has no
+//            file content to carry a marker either: REPORTED. Failing here would be
+//            this gate flagging a fixture that is exactly right, which is how a gate
+//            earns being switched off.
+//   anything the file is there, is a file, and could not be read. "It is clean" is
+//   else     then a claim with nothing behind it: FATAL.
+const absent = [];
+const notRegularFiles = [];
+const unreadable = [];
 for (const rel of tracked) {
   let buf;
   try {
     buf = readFileSync(join(repoRoot, rel));
-  } catch {
+  } catch (err) {
+    const code = (err && err.code) || "unknown error";
+    if (code === "ENOENT") absent.push(rel);
+    else if (code === "EISDIR" || code === "ELOOP") notRegularFiles.push(`${rel} (${code})`);
+    else unreadable.push(`${rel} (${code})`);
     continue;
   }
   if (buf.includes(0x00)) {
@@ -139,6 +161,31 @@ for (const rel of tracked) {
 console.log(`  tracked files:     ${tracked.length}`);
 console.log(`  scanned as text:   ${scanned}`);
 console.log(`  skipped as binary: ${binary}`);
+console.log(`  absent from tree:  ${absent.length}${absent.length ? ` (${absent.slice(0, 5).join(", ")}${absent.length > 5 ? ", …" : ""})` : ""}`);
+console.log(`  not a regular file:${notRegularFiles.length}${notRegularFiles.length ? ` (${notRegularFiles.join(", ")})` : ""}`);
+console.log(`  UNREADABLE:        ${unreadable.length}`);
+
+// The counts must ACCOUNT for every tracked path. If they do not, a file went
+// somewhere this gate cannot name, and an unexplained gap is the shape of the defect
+// this reconciliation exists to expose.
+const accounted = scanned + binary + absent.length + notRegularFiles.length + unreadable.length;
+if (accounted !== tracked.length) {
+  console.error(
+    `\n✗ accounting gap: ${accounted} of ${tracked.length} tracked files are accounted for. ` +
+      `${tracked.length - accounted} file(s) fell out of the sweep without being classified.`,
+  );
+  process.exit(1);
+}
+
+if (unreadable.length > 0) {
+  console.error(`\n✗ ${unreadable.length} tracked file(s) present but UNREADABLE:\n`);
+  for (const u of unreadable) console.error(`    ${u}`);
+  console.error(
+    "\n  A file that could not be read has not been checked, and reporting a clean sweep\n" +
+      "  over it would be reporting on something nobody looked at.",
+  );
+  process.exit(1);
+}
 
 if (scanned === 0) {
   console.error("\n✗ zero files scanned as text — that is a failure, not a pass.");

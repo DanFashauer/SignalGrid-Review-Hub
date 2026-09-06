@@ -75,12 +75,43 @@ const runnerSrc = readFileSync(join(repo, "scripts/mac/run-requests.mjs"), "utf8
 // helper shells to `git` and `sw_vers`), and a broken check gets relaxed rather
 // than understood. What must stay true is that no spawn takes its program from
 // anything a request supplied.
+//
+// THE COUNT WAS STILL THERE UNTIL 2026-09-06, first in the conjunction, doing exactly
+// what the paragraph above says it does: `spawnTargets.length === 3`. Adding ONE
+// unrelated, fixed-literal `spawnSync("uname", …)` to the runner failed this assertion
+// while the security property still held perfectly. The comment described the fix; the
+// code had not had it applied. What replaces it is the shape of the program expression,
+// which is what actually distinguishes safe from unsafe: the operation map's
+// `op.argv[0]` (whose contents are pinned by the assertions above) or a literal written
+// into the runner. Anything else — `req.cmd`, `body.program`, a template string — is a
+// program the caller chose, and fails.
 const spawnTargets = [...runnerSrc.matchAll(/spawnSync\(\s*([^,]+),/g)].map((m) => m[1].trim());
+const isFixedProgram = (target: string): boolean =>
+  target === "op.argv[0]" || /^"[^"$\\]*"$/.test(target) || /^'[^'$\\]*'$/.test(target);
 check(
   "every spawn in the runner takes its program from the operation map or a fixed literal — never from a request field",
-  spawnTargets.length === 3 &&
-    spawnTargets.every((t) => t === "op.argv[0]" || t === '"git"' || t === '"sw_vers"') &&
+  // NON-VACUITY, replacing the equality: `every()` on an empty array is true, so a
+  // renamed spawn helper or a broken regex would otherwise pass this silently. A floor
+  // of one, not a pin of three — the number of unrelated spawns is not the property.
+  spawnTargets.length >= 1 &&
+    spawnTargets.every(isFixedProgram) &&
     runnerSrc.includes("spawnSync(op.argv[0], op.argv.slice(1)"),
+);
+console.log(`      ↳ spawn program expressions in the runner: ${spawnTargets.join(", ")}`);
+// SELF-TEST on the predicate itself, against synthetic sources. The live check above
+// passes today whether or not the predicate can discriminate; these two cases are what
+// prove it can. Both are strings, not files — nothing is written.
+check(
+  "SELF-TEST: an unrelated fixed-literal spawn does NOT fail the property (the defect the count had)",
+  ['spawnSync("uname", ["-a"])', "spawnSync(op.argv[0], op.argv.slice(1), {})"]
+    .flatMap((src) => [...src.matchAll(/spawnSync\(\s*([^,]+),/g)].map((m) => m[1].trim()))
+    .every(isFixedProgram),
+);
+check(
+  "SELF-TEST: a request-derived program DOES fail the property",
+  !["spawnSync(request.command, request.args)", "spawnSync(`${op.bin}`, [])", "spawnSync(argv0, [])"]
+    .flatMap((src) => [...src.matchAll(/spawnSync\(\s*([^,]+),/g)].map((m) => m[1].trim()))
+    .some(isFixedProgram),
 );
 check("the runner never enables a shell", !runnerSrc.includes("shell: true"));
 

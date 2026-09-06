@@ -107,6 +107,13 @@ fi
 if ! command -v pnpm >/dev/null 2>&1 || ! command -v node >/dev/null 2>&1; then
   RESULT="skipped: pnpm/node not on PATH for launchd (edit PATH at the top of scripts/mac/lane-tick.sh)"
   say "$RESULT"
+  # This arm was the ONE early exit with no heartbeat, and it is the arm most
+  # likely to fire under launchd (a minimal PATH is launchd's default). The cloud
+  # steward escalates on a MISSING heartbeat, so a tick that dies here looked
+  # exactly like a Mac that never ran — the loudest possible failure reported as
+  # silence. `heartbeat` itself shells to node and will WARN if it cannot; that is
+  # still more than nothing, and it costs one line.
+  heartbeat
   exit 0
 fi
 LOCK_SHA="$(shasum -a 256 pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1)"
@@ -126,7 +133,24 @@ if [ -z "$LOCK_SHA" ] || [ ! -f "$INSTALL_STAMP" ] || [ "$(cat "$INSTALL_STAMP" 
 fi
 
 # ── c. run what the cloud asked for ──────────────────────────────────────────
-PENDING="$(node scripts/mac/run-requests.mjs --plan 2>/dev/null | grep -c '^  PENDING' || true)"
+# `--plan` prints one `  PENDING <id> …` line per request it would run, then a
+# `--plan: N request(s) PENDING …` summary. Until 2026-09-06 it printed NEITHER —
+# the word PENDING lived only in that file's `//` comments — so this grep matched
+# nothing on every tick since the tick was written, the count was always 0, and
+# step (c), the only reason this script runs unattended, never once fired.
+#
+# The old line also swallowed a broken planner: `2>/dev/null | grep -c … || true`
+# turns a crash into "0", which reads as "nothing to do". A plan this tick cannot
+# READ is now a failure, never an empty queue — the summary line must be present.
+PLAN_OUT="$(node scripts/mac/run-requests.mjs --plan 2>/dev/null)"
+PLAN_STATUS=$?
+if [ "$PLAN_STATUS" != "0" ] || ! printf '%s\n' "$PLAN_OUT" | grep -q '^--plan: [0-9][0-9]* request'; then
+  RESULT="failed: could not read the sim-request plan (run-requests.mjs --plan exited $PLAN_STATUS with no roster) — pending work was NOT counted, and is NOT known to be zero"
+  say "$RESULT"
+  heartbeat
+  exit 1
+fi
+PENDING="$(printf '%s\n' "$PLAN_OUT" | grep -c '^  PENDING')"
 PENDING="${PENDING:-0}"
 if [ "$PENDING" = "0" ]; then
   say "no pending sim requests"
@@ -151,16 +175,25 @@ if [ -n "$(git status --porcelain -- artifacts/sim-results artifacts/live-eviden
   if [ "$DRY" = "1" ]; then
     say "dry-run: would commit results to $TICK_BRANCH and push"
   else
-    git checkout -q -b "$TICK_BRANCH" \
+    # RESULT used to be assigned AFTER this chain unconditionally, so a checkout,
+    # commit or push that failed still heartbeat "results on mac/tick-<stamp>" — the
+    # cloud lane was told work had been delivered to a branch that does not exist on
+    # origin. The claim now lives INSIDE the success arm, and the failure arm says
+    # what actually happened.
+    if git checkout -q -b "$TICK_BRANCH" \
       && git add artifacts/sim-results artifacts/live-evidence 2>/dev/null \
       && git commit -q -m "Mac tick $STAMP: sim results ($PENDING request(s))" \
-      && git push -q -u origin "$TICK_BRANCH" \
-      && say "pushed $TICK_BRANCH (the cloud steward opens its PR within the hour)"
-    if command -v gh >/dev/null 2>&1; then
-      gh pr create --base SignalGrid_Alpha --head "$TICK_BRANCH" --fill >/dev/null 2>&1 && say "opened the PR for $TICK_BRANCH"
+      && git push -q -u origin "$TICK_BRANCH"; then
+      say "pushed $TICK_BRANCH (the cloud steward opens its PR within the hour)"
+      RESULT="acted: ran $PENDING sim request(s); results on $TICK_BRANCH"
+      if command -v gh >/dev/null 2>&1; then
+        gh pr create --base SignalGrid_Alpha --head "$TICK_BRANCH" --fill >/dev/null 2>&1 && say "opened the PR for $TICK_BRANCH"
+      fi
+    else
+      RESULT="failed: ran $PENDING sim request(s) and produced results, but the $TICK_BRANCH commit/push chain broke — the cloud lane CANNOT see them; they are still in this checkout"
+      say "$RESULT"
     fi
-    git checkout -q SignalGrid_Alpha
-    RESULT="acted: ran $PENDING sim request(s); results on $TICK_BRANCH"
+    git checkout -q SignalGrid_Alpha || say "WARN could not return the checkout to SignalGrid_Alpha"
   fi
 elif [ "$PENDING" != "0" ] && [ "$DRY" = "0" ]; then
   RESULT="acted: ran $PENDING sim request(s); no new result files (see the run log)"

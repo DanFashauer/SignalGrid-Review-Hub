@@ -342,7 +342,26 @@ try {
   committed = "";
 }
 check(`${VECTOR_PATH} exists and is byte-identical to this table (re-emit with --emit if this fails)`, committed === serialized);
-check(`${VECTOR_PATH} declares its own floor as the case count (${vectors.length})`, document.requires.minCases === vectors.length && vectors.length >= 40);
+// THE FLOOR IS READ BACK FROM THE COMMITTED FILE, not from the object just built.
+// `document.requires.minCases === vectors.length` — the shape here until 2026-09-06 —
+// is an assertion on a value assigned four lines earlier and cannot fail; only the
+// `>= 40` conjunct could, so the check read as coverage while proving half of
+// nothing. The committed file is the artifact the Swift twin and every other client
+// actually consume, so that is the subject: its floor must be the case count, and the
+// table must be large enough for the floor to mean something.
+const committedMinCases = ((): unknown => {
+  try {
+    return (JSON.parse(committed) as { requires?: { minCases?: unknown } }).requires?.minCases;
+  } catch {
+    // Unreadable/absent is NOT a pass: undefined can never equal vectors.length.
+    return undefined;
+  }
+})();
+check(
+  `${VECTOR_PATH} as COMMITTED declares its floor as the live case count (${vectors.length}), and the table clears the 40-case evidence floor`,
+  committedMinCases === vectors.length && vectors.length >= 40,
+);
+console.log(`      ↳ committedMinCases=${String(committedMinCases)} vectors=${vectors.length}`);
 
 console.log(`\nfigures=vectors=${vectors.length},states=${POSTURE_STATES.length},reasonCodes=${POSTURE_ALLOW_REASONS.length},engineOutcomes=${HOST_OUTCOMES.length}`);
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);

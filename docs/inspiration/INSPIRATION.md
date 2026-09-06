@@ -133,12 +133,17 @@ It also anchors the honest register: continuous *verification*, least privilege,
   (external validation of the Facility Trust Graph architecture; source of the
   zone-presence state machine built in `transition.ts`).
 - [Communications Systems & Mobile Apps API & GitHub catalog](COMMUNICATIONS_SYSTEMS_API_CATALOG.md)
-  — the owner-compiled 441-system inventory behind intake ledger row 47 (16
+  — the owner-compiled inventory behind intake ledger row 47 (16
   ecosystems from GSMA Open Gateway/CAMARA and CPaaS through mission-critical
-  PTT, clinical communications and mobile-OS push; 71 CAMARA API records, 97
-  mobile applications, 71 open-source resources, 66 standards; verified
-  2026-08-02, all five bundle hashes and every stated count re-derived at
-  intake). Its audit produced zero new verbs: the fabric already covers the
+  PTT, clinical communications and mobile-OS push; 71 CAMARA API records, 71
+  open-source resources, 66 standards; verified 2026-08-02, all five bundle
+  hashes and every stated count re-derived at intake). The bundle counted 441
+  systems and 97 mobile applications; the filed body was de-duplicated on
+  2026-09-06 to 439 master rows (Zello Work and Magma each had two rows) and
+  86 mobile rows (eleven apps each had two), with the merged facts and the
+  three priority conflicts recorded in the kept rows, and its provenance now
+  discloses that eight of the master table's columns are per-ecosystem
+  templates, not per-vendor findings. Its audit produced zero new verbs: the fabric already covers the
   decision-relevant senses of presence, reachability, network quality,
   authorized-region and dispatch ownership. Two boundaries are load-bearing —
   CAMARA availability is commercial rather than technical, and **"verify
@@ -146,16 +151,23 @@ It also anchors the honest register: continuous *verification*, least privilege,
   acknowledgement, and the only thing it would add is permission to stop
   escalating.
 - [OT / ICS / SCADA & Industrial Control API & GitHub catalog](OT_ICS_SCADA_API_CATALOG.md)
-  — the 151-platform industrial inventory behind intake ledger row 45, and the
-  only catalog in this folder **compiled by this repository** rather than
-  supplied by the owner (verified 2026-08-02). Ten sections spanning OT asset
+  — the industrial inventory behind intake ledger row 45 (141 rows, one per
+  product since the 2026-09-06 de-duplication; it was 151 rows with ten
+  products written twice by separate research passes, several with the two
+  rows contradicting each other — the merged rows keep the UNVERIFIED reading
+  where the passes disagreed, e.g. Cisco SEA session APIs and the AVEVA PI
+  access class), and the only catalog in this folder **compiled by this
+  repository** rather than supplied by the owner (verified 2026-08-02). Ten sections spanning OT asset
   visibility and ICS network monitoring, SCADA/HMI/DCS, PLC/RTU/IED and safety
   controllers, historians/gateways/protocol tooling, OT remote access, OT
   segmentation, industrial SIEM, open-source ICS security tooling, digital twin,
   and standards including ATT&CK for ICS. Because the repo authored it, the rows
-  carry the repo's own honesty bar: 120 verified documentation URLs, 76 verified
+  carry the repo's own honesty bar: 113 verified documentation URLs, 70 verified
   repositories, and 28 rows honestly recorded as "no detailed public contract
-  located". Paywalled bodies (IEC 62443, ISA-95/99, ISO) appear by title and
+  located" (re-derived 2026-09-06 after the merge). Its Purdue-level table now
+  marks every connector family it names with its `scripts/launch-profile.mjs`
+  standing — only `device-management-health` is a launch family; the rest are
+  deferred, modeled and proven but not Limited GA. Paywalled bodies (IEC 62443, ISA-95/99, ISO) appear by title and
   scope only. It carries the Purdue-level mapping against the fabric that
   actually exists, the change-window gap (since closed by the `change-window`
   family — `docs/BUILD_BACKLOG.md` records it DONE; the catalog said "queued,
@@ -163,8 +175,11 @@ It also anchors the honest register: continuous *verification*, least privilege,
   SignalGrid gates who may attempt a bypass; the plant's safety system decides
   whether the machine is safe to move.
 - [Asset Management & IT Governance API & GitHub catalog](ASSET_MANAGEMENT_IT_GOVERNANCE_API_CATALOG.md)
-  — the owner-compiled 330-product inventory behind intake ledger row 44
-  (16 ecosystems spanning ITAM/CMDB/SAM, SaaS management, cyber-asset
+  — the owner-compiled inventory behind intake ledger row 44 (320 rows since
+  the 2026-09-06 de-duplication — the bundle's 330 counted nine products two
+  or three times, with conflicting priorities and relevance scores that the
+  kept rows now record; its Authentication column is one constant string on
+  every row and is disclosed as such; 16 ecosystems spanning ITAM/CMDB/SAM, SaaS management, cyber-asset
   intelligence, EAM/CMMS, FinOps/TBM, enterprise architecture, PPM, GRC/IRM,
   TPRM, data governance, policy-as-code, DAM and software supply-chain; 40
   open-source resources; 28 standards; 10 repository mappings; verified
@@ -191,7 +206,18 @@ It also anchors the honest register: continuous *verification*, least privilege,
   distinctions; verified 2026-08-01). Candidate rows are not claims;
   "Intune protected partner app" means Microsoft's catalog, never a
   SignalGrid partnership; companion scanner/recorder artifacts are
-  dispositioned in ledger row 33.
+  dispositioned in ledger row 33. The body is a verbatim import whose rows are
+  not edited, so its defects are recorded as import-source notes in its
+  preamble (measured 2026-09-06): 204 of 760 master rows carry "Unknown / Open
+  ecosystem" as both vendor and product while their own URL names the vendor;
+  all 156 Intune partner rows carry one identical managed-configuration
+  string and all 183 Intune rows point both URL columns at Microsoft's
+  protected-apps page; 195 rows carry no URL at all and several bare-slug
+  rows duplicate a repository already linked earlier; and the ecosystem column
+  was assigned by vendor-name string match (FleetDM filed under fleet
+  logistics, the seven SignalGrid rows under Retail). Its "13 appear nowhere"
+  drift figure is now stated as 12, plus one that survives only as a gate
+  self-test fixture.
 - [Mobile-app catalog agent — unhardened reference source](MOBILE_APP_CATALOG_AGENT.md)
   — the owner's repository-scanner source and catalog JSON Schema, preserved
   verbatim with SHA-256 provenance and the intake audit's VERIFIED defect list
@@ -212,7 +238,10 @@ It also anchors the honest register: continuous *verification*, least privilege,
   endpoint catalogs, expanded across sixteen ecosystem domains (423 master
   rows — measured 2026-09-06: 352 with a source URL, 399 with an access class,
   and 134 unnamed MDM/UEM rows; the row count was verified 2026-07-31, the
-  "per-row URLs" qualifier was not).
+  "per-row URLs" qualifier was not — and on 2026-09-06 every per-sheet header
+  was given its measured URL count: the 61-row Physical-Access sheet carries
+  no vendor, product or URL on any row, and the 79-row OpenSource-GitHub sheet
+  carries a repository URL on 10).
   Filed as the ecosystem STRATEGY map, explicitly not a build queue — the
   launch path stays Entra+Intune → one shared-device workflow → one pilot →
   demand-driven expansion. The partner/buyer sheet is deliberately omitted
@@ -229,5 +258,7 @@ It also anchors the honest register: continuous *verification*, least privilege,
   — the owner-compiled, source-linked inventory behind intake ledger row 26
   (61 vendor/API entries, 24 open-source resources, 10 standards, and the
   recommended SignalGrid integration sequencing with per-tier minimum signal
-  sets; verified 2026-07-31). Reference material only: no dependency taken,
+  sets; verified 2026-07-31; three row-level corrections on 2026-09-06 —
+  Wiegand's URL, Ubiquiti's access class, and the 13-vs-12 P1 count between
+  the vendor table and the owner's sequencing — are recorded in its provenance). Reference material only: no dependency taken,
   and every future adapter stays behind connector discipline.

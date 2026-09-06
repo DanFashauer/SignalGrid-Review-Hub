@@ -690,7 +690,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   model catalog, neither of which is a UEM read. The axis is also proved **carried, not
   graded** — swapping only `cellularHardware` across all 1,440 swept states changes no
   verdict, because a device's radio is not a management-posture fact.
-- **`proof:nac` (45 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
+- **`proof:nac` (46 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
   read-only. Hostile-identifier cases are asserted against the **filter builder**, not
   merely the validator, and fixture lookups are scoped to the identifier kind so a
   certificate query cannot be answered by a MAC match. The normalizers now take **no

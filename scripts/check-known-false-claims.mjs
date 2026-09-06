@@ -92,14 +92,37 @@ export function checkRefutation(c, root = REPO) {
   return { ok: true };
 }
 
+/**
+ * The corpus the re-assertion scan reads. This returned `[]` from a bare `catch` and
+ * nothing floored the result, so the half of this gate its own header calls "the whole
+ * point" could scan ZERO documents and still print the success sentence "no document
+ * re-states one" (fixed 2026-09-06). Reproduced: with git on PATH, "484 tracked
+ * document(s) scanned"; with git removed from PATH, "0 tracked document(s) scanned"
+ * followed by the same "check passed" line and exit 0. The previous version of this file
+ * was retired for exactly this shape — "coverage advertised, not delivered".
+ */
 const trackedDocs = () => {
   try {
     const out = execFileSync("git", ["ls-files", "--", "*.md", "*.markdown"], { cwd: REPO, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    return out ? out.trim().split("\n").filter(Boolean) : [];
-  } catch {
-    return [];
+    return { docs: out ? out.trim().split("\n").filter(Boolean) : [], failed: false, why: null };
+  } catch (err) {
+    return { docs: [], failed: true, why: `git ls-files could not run (${err && (err.code || `exit ${err.status}`)})` };
   }
 };
+
+/**
+ * The floor its sibling `check-documented-branches.mjs` already applies to the same
+ * corpus. Pure so both directions are self-tested: "could not enumerate" and "enumerated
+ * suspiciously few" are the two ways this scan goes green about nothing.
+ */
+export const DOC_FLOOR = 100;
+export function docCorpusVerdict({ count, failed, why }) {
+  if (failed) return `the document corpus could not be enumerated (${why}) — a scan that could not run is not a clean scan`;
+  if (count < DOC_FLOOR) {
+    return `only ${count} tracked document(s) found (floor ${DOC_FLOOR}) — the enumeration has drifted, and a re-assertion scan over a corpus that small proves nothing`;
+  }
+  return null;
+}
 
 function load() {
   if (!existsSync(REGISTRY)) {
@@ -186,6 +209,21 @@ function selfTest() {
     incompleteVerdict(evidenceEntries(readFileSync(resolve(REPO, "docs/agent/EVIDENCE.md"), "utf8")).incomplete.length) === null]);
   checks.push(["LIVE: the committed evidence log holds at least one complete record",
     evidenceEntries(readFileSync(resolve(REPO, "docs/agent/EVIDENCE.md"), "utf8")).complete.length > 0]);
+
+  // ── THE CORPUS THE SCAN READS (F4) ──────────────────────────────────────────
+  // The re-assertion half had no control on its own scope at all, which is how "484
+  // tracked document(s) scanned" and "0 tracked document(s) scanned" both printed the
+  // same passing sentence.
+  checks.push(["a corpus that could not be ENUMERATED is a problem, not a clean scan",
+    (docCorpusVerdict({ count: 0, failed: true, why: "test" }) ?? "").includes("could not be enumerated")]);
+  checks.push(["a corpus below the floor is a problem — a scan over a handful of docs proves nothing",
+    (docCorpusVerdict({ count: DOC_FLOOR - 1, failed: false }) ?? "").includes(`floor ${DOC_FLOOR}`)]);
+  checks.push(["a corpus at or above the floor is accepted", docCorpusVerdict({ count: DOC_FLOOR, failed: false }) === null]);
+  const live = trackedDocs();
+  checks.push([`LIVE: the tree enumerates at least ${DOC_FLOOR} tracked documents`,
+    live.failed === false && live.docs.length >= DOC_FLOOR]);
+  checks.push(["LIVE: the re-assertion scan is wired to that verdict, not merely to the count",
+    /docCorpusVerdict\(\{ count: docs\.length/.test(readFileSync(fileURLToPath(import.meta.url), "utf8"))]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
@@ -313,13 +351,19 @@ for (const c of claims) {
   }
 }
 
-const docs = trackedDocs();
+const { docs, failed: docsFailed, why: docsWhy } = trackedDocs();
+const corpusProblem = docCorpusVerdict({ count: docs.length, failed: docsFailed, why: docsWhy });
+if (corpusProblem) problems.push(corpusProblem);
 let reassertions = 0;
 for (const rel of docs) {
   let text;
   try {
     text = readFileSync(join(REPO, rel), "utf8");
-  } catch {
+  } catch (err) {
+    // An unreadable TRACKED document is not a document with nothing in it. Skipping it
+    // silently is the same fail-open one directory up: the scan would report a count
+    // that includes a file it never read.
+    problems.push(`${rel}: tracked but unreadable (${err && err.code}) — it was NOT scanned for re-assertions`);
     continue;
   }
   for (const c of claims) {

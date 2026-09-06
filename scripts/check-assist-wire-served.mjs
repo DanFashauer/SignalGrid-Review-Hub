@@ -16,6 +16,7 @@
 //     shelter under a gap that does not cover it;
 //   · served-with-stale-gap fails; an emptied vector suite fails (vacuity).
 import { readFileSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const VECTORS = "native/shared/assist-wire-conformance.json";
 const SPEC = "lib/api-spec/v1-openapi.yaml";
@@ -125,13 +126,31 @@ function selfTest() {
   checks.push(["vectors that declare NO minCases FAIL (no invented floor)", r.problems.some((x) => x.includes("declares no requires.minCases"))]);
   r = auditAssistWire({ ...base, vectorsJson: JSON.stringify({ ...JSON.parse(base.vectorsJson), route: undefined }) });
   checks.push(["vectors without a route field FAIL (the wire must be data)", r.problems.some((x) => x.includes("no well-formed \"route\""))]);
+  // The ENTRY GUARD itself (F12, 2026-09-06). The suffix form ran this gate from any
+  // entry whose filename ended with this one's — including a script that only imports
+  // it. Needles are escaped, so this assertion is not itself a match.
+  {
+    const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
+    checks.push([
+      "the entry guard is EXACT, not a basename suffix match",
+      /import\.meta\.url === pathToFileURL\(process\.argv\[1\]\)\.href/.test(src) &&
+        !/import\.meta\.url\.endsWith\(/.test(src),
+    ]);
+  }
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
+// Exact-entry guard, not a basename suffix match: an unrelated entry script that merely
+// IMPORTS this module must never trigger the gate, and the suffix form fired for any entry
+// whose filename ends with this one's. Reproduced 2026-09-06: a scratch file named
+// `check-decision-palette.mjs` that only imported this module ran the whole gate, and the
+// same file renamed did not — the gate's scope depended on the caller's filename.
+// `check-lab-registry.mjs` diagnosed this exact hazard and fixed it; these two had not.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const { problems, boundRoute } = auditAssistWire(load());
   console.log("Assist-wire served-ness — the vector-bound wire is served, or a declared gap (DR-007 / DR-023)");

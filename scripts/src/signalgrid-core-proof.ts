@@ -911,7 +911,15 @@ if (pending) {
     );
   }
 
+  // PREMISE FIRST — the house style in this file, applied consistently 2026-09-06.
+  // Six `const x = decisions.find(...); if (x) { …assertions… }` blocks had no premise
+  // check (this one, IDENTITY_DISABLED, TAMPER_SUSPECTED, BATTERY_CRITICAL, and
+  // TRUST_ESTABLISHED twice), so roughly ten assertions would have vanished WITHOUT A
+  // TRACE the day the subject decision stopped being produced — surfacing, if at all,
+  // as a docs↔proof figure mismatch in a different gate. Every neighbouring block
+  // already guarded its premise; this was an inconsistency inside one file, not a style.
   const ncDec = decisions.find((d) => d.reasonCodes.includes("DEVICE_NONCOMPLIANT"));
+  check("resolution: non-compliant decision found", Boolean(ncDec));
   if (ncDec) {
     const plan = core.getResolution(T.operator, ncDec.id);
     check(
@@ -929,6 +937,7 @@ if (pending) {
   }
 
   const disDec = decisions.find((d) => d.reasonCodes.includes("IDENTITY_DISABLED"));
+  check("resolution: disabled-identity decision found", Boolean(disDec));
   if (disDec) {
     const plan = core.getResolution(T.operator, disDec.id);
     check(
@@ -989,6 +998,7 @@ if (pending) {
   }
 
   const tamper = decisions.find((d) => d.reasonCodes.includes("TAMPER_SUSPECTED"));
+  check("dockbridge: suspected-tamper decision found", Boolean(tamper));
   if (tamper) {
     const plan = core.getResolution(T.operator, tamper.id);
     check(
@@ -998,6 +1008,7 @@ if (pending) {
   }
 
   const battery = decisions.find((d) => d.reasonCodes.includes("BATTERY_CRITICAL"));
+  check("dockbridge: battery-critical decision found", Boolean(battery));
   if (battery) {
     const sim = core.simulateResolution(T.operator, battery.id);
     check(
@@ -1467,6 +1478,7 @@ if (pending) {
   // A bound badge is a positive signal that never blocks on its own; an unknown
   // badge (no reader) never fabricates a healthy state.
   const bound = decisions.find((d) => d.reasonCodes.includes("TRUST_ESTABLISHED"));
+  check("badge: a TRUST_ESTABLISHED decision exists to check the badge on", Boolean(bound));
   if (bound) {
     const snap = core.getSnapshot(T.operator, bound.evidenceSnapshotId);
     check("badge: a healthy allow carries a present (bound) badge", snap.evidence.badgeBinding === "present");
@@ -1527,6 +1539,7 @@ if (pending) {
 
   // A healthy allow carries an occupied dock; an unknown dock never fabricates one.
   const bound = decisions.find((d) => d.reasonCodes.includes("TRUST_ESTABLISHED"));
+  check("smartdock: a TRUST_ESTABLISHED decision exists to check the dock state on", Boolean(bound));
   if (bound) {
     const snap = core.getSnapshot(T.operator, bound.evidenceSnapshotId);
     check("smartdock: a healthy allow carries an occupied dock state", snap.evidence.dockState === "occupied");

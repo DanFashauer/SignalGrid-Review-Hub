@@ -22,6 +22,7 @@
 import {
   evaluatePolicy,
   deriveCriticalSignalsPresent,
+  EVIDENCE_VALUE_MEMBERS,
   seedDemoStore,
   buildResolutionPlan,
   simulateResolution,
@@ -133,6 +134,10 @@ function main() {
     ["encryption unknown", { deviceEncrypted: "unknown" }],
     ["posture missing", { postureFreshness: "missing" }],
     ["posture unknown", { postureFreshness: "unknown" }],
+    // Added 2026-09-06 with the sweep fix below: the backstop reads SEVEN fields and
+    // this list named five of them, spending two of its six rows on postureFreshness.
+    ["os support unknown", { osSupported: "unknown" }],
+    ["dock evidence freshness unknown", { dockEvidenceFreshness: "unknown" }],
   ];
   let earnedAffirmative = true;
   for (const [label, override] of criticalDegradations) {
@@ -436,28 +441,70 @@ function main() {
   // ── The invariant behind all of it, brute-forced ────────────────────────────
   // `deriveCriticalSignalsPresent` is the single gate that makes "missing evidence
   // cannot become allow" true. Enumerate every combination of known/unknown across
-  // the six critical axes and assert: whenever any is unknown, allow is unreachable.
-  // 2^6 = 64 combinations; one of them is the healthy case.
-  const axes: Array<keyof DecisionEvidence> = [
-    "identityEnabled",
-    "deviceManaged",
+  // the critical axes and assert: whenever any is unknown, allow is unreachable.
+  //
+  // THE AXES ARE DERIVED, NOT HAND-LISTED — and until 2026-09-06 they were, wrongly.
+  // The comment here said "the six critical axes … 2^6 = 64 combinations" above a
+  // list of FIVE, so the sweep ran 32 combinations and the printed count said 32. It
+  // never degraded `osSupported` or `dockEvidenceFreshness`, and neither did the
+  // single-axis list above, so two of the backstop's seven inputs were asserted
+  // nowhere in this file. The comment was wrong in both directions at once.
+  //
+  // The derivation is the same probe `signalgrid-core-proof.ts` §22 uses: a field is
+  // an axis iff SOME member of the core's own value domains, substituted into it,
+  // makes `deriveCriticalSignalsPresent` false. A field the ladder starts gating on
+  // is therefore swept here without anyone editing this file — and the derived set is
+  // compared against a PINNED list, so a field silently LEAVING the backstop fails
+  // rather than quietly shrinking the sweep.
+  const probeBase = (() => {
+    const { criticalSignalsPresent: _ignored, ...rest } = healthyEvidence();
+    return rest as Omit<DecisionEvidence, "criticalSignalsPresent">;
+  })();
+  const axes = (Object.keys(probeBase) as Array<keyof DecisionEvidence>)
+    .filter((key) =>
+      EVIDENCE_VALUE_MEMBERS.some(
+        (probe) =>
+          !deriveCriticalSignalsPresent({
+            ...probeBase,
+            [key]: probe,
+          } as unknown as Omit<DecisionEvidence, "criticalSignalsPresent">),
+      ),
+    )
+    .sort();
+  // Declared side of the comparison. Identical to `BACKSTOP_FIELDS` in
+  // signalgrid-core-proof.ts §22; changing the ladder means changing both, deliberately.
+  const DECLARED_AXES: Array<keyof DecisionEvidence> = [
     "deviceCompliance",
     "deviceEncrypted",
+    "deviceManaged",
+    "dockEvidenceFreshness",
+    "identityEnabled",
+    "osSupported",
     "postureFreshness",
   ];
+  check(
+    `the swept axes are DERIVED from the shipped backstop and match the ${DECLARED_AXES.length} fields the ladder names`,
+    JSON.stringify(axes) === JSON.stringify(DECLARED_AXES),
+  );
+  console.log(`      ↳ derived=[${axes.join(", ")}] declared=[${DECLARED_AXES.join(", ")}]`);
   let allowedWithAGap = 0;
   let allowedWithNoGap = 0;
+  let sweptCombinations = 0;
   for (let mask = 0; mask < 1 << axes.length; mask += 1) {
     const override: Partial<DecisionEvidence> = {};
     let anyUnknown = false;
     axes.forEach((axis, i) => {
       if (mask & (1 << i)) {
         anyUnknown = true;
-        (override as Record<string, unknown>)[axis] =
-          axis === "postureFreshness" ? "unknown" : "unknown";
+        // Every axis takes the same degradation. This was written as a ternary with
+        // two identical arms, which is the tell that the list once carried a
+        // non-uniform member; it does not now, and if one is added it needs a real
+        // arm rather than a decorative one.
+        (override as Record<string, unknown>)[axis] = "unknown";
       }
     });
     const r = decide(healthyEvidence(override));
+    sweptCombinations += 1;
     if (r.outcome === "allow") {
       if (anyUnknown) allowedWithAGap += 1;
       else allowedWithNoGap += 1;
@@ -471,6 +518,25 @@ function main() {
     "…and the one combination with no gap DOES reach allow (the sweep is not vacuous)",
     allowedWithNoGap === 1,
   );
+  // NON-VACUITY ON THE ARITHMETIC ITSELF. The printed combination count is derived
+  // from `axes.length`, so a shrunken axis list would shrink the count AND the claim
+  // together and still read as a pass. Pin the floor separately.
+  check(
+    `the sweep actually ran ${sweptCombinations} combinations over ${axes.length} axes (floor: 7 axes / 128 combinations)`,
+    axes.length >= 7 && sweptCombinations === 1 << axes.length && sweptCombinations >= 128,
+  );
+  // AND EACH AXIS ON ITS OWN MUST DISQUALIFY. The mask sweep would still pass if one
+  // axis were inert, because 126 of the 127 gap-states degrade something else too.
+  {
+    const inert = axes.filter(
+      (axis) => decide(healthyEvidence({ [axis]: "unknown" } as Partial<DecisionEvidence>)).outcome === "allow",
+    );
+    check(
+      "every derived axis, degraded ALONE, removes allow — no axis is carried by its neighbours",
+      inert.length === 0,
+    );
+    if (inert.length > 0) console.log(`      ↳ inert axes: ${inert.join(", ")}`);
+  }
 
   const total = passed + failures.length;
   console.log(`\nZero Trust principles proof: ${passed}/${total} assertions passed`);

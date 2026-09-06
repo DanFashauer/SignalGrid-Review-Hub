@@ -35,7 +35,7 @@
  * never any source, secret, or environment value.
  */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -88,11 +88,30 @@ const SWIFT_MANIFESTS = [
   "native/ios/SignalGridMobile/SignalGridMobileCore/Package.swift",
 ];
 
+/**
+ * ABSENT AND CORRUPT ARE DIFFERENT ANSWERS. This used to be one `try/catch` returning
+ * `{ entries: {} }`, so an unreadable or malformed `scripts/data/third-party-licences.json`
+ * was indistinguishable from an empty one — and cargo and maven carry no licence metadata
+ * in their lockfiles at all, so EVERY component from those two ecosystems would emit
+ * unresolved while the generator printed its normal success line. The damage was bounded
+ * (`check-licence-policy.mjs` routes unresolved components to REVIEW, so the SBOM never
+ * silently claimed compliance) but the failure presented as a policy backlog rather than
+ * as a corrupt file. A missing registry is a legitimate genesis state; a present one that
+ * does not parse is a measurement failure and exits 1, the way a failing `pnpm ls` already
+ * does below.
+ */
 function loadRegistry(): LicenceRegistry {
+  if (!existsSync(registryPath)) return { entries: {} };
+  const raw = readFileSync(registryPath, "utf8");
   try {
-    return JSON.parse(readFileSync(registryPath, "utf8")) as LicenceRegistry;
-  } catch {
-    return { entries: {} };
+    return JSON.parse(raw) as LicenceRegistry;
+  } catch (err) {
+    console.error(
+      `generate-sbom: ${registryPath} exists but does not parse — refusing to emit an SBOM whose ` +
+      `unresolved licences would look like a policy backlog instead of a corrupt file.\n` +
+      `  ${err instanceof Error ? err.message : String(err)}`,
+    );
+    process.exit(1);
   }
 }
 
@@ -329,7 +348,7 @@ function main(): void {
     ...collectMaven(registry),
   ]);
 
-  const sorted = [...all.values()].sort((a, b) => a.purl.localeCompare(b.purl));
+  const sorted = [...all.values()].sort((a, b) => (a.purl < b.purl ? -1 : a.purl > b.purl ? 1 : 0));
   const unresolved = sorted.filter((c) => !c.licence);
 
   const bom = {

@@ -44,14 +44,17 @@
 // (`inspiration/INSPIRATION.md`). For a top-level doc the relative path IS the
 // filename, so nothing about the existing 180 changes.
 
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { maskNonProse } from "./lib/markdown-scope.mjs";
+import { gitHasHistory, readRatchetFile, refusalLines } from "./lib/ratchet-read.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const docsDir = join(repoRoot, "docs");
-const PIN_PATH = join(repoRoot, "artifacts/sync/doc-orphan-pin.json");
+const PIN_REL = "artifacts/sync/doc-orphan-pin.json";
+const PIN_PATH = join(repoRoot, PIN_REL);
 
 const INDEX_FILES = ["docs/INDEX.md", "README.md"];
 const readIndex = (p) => {
@@ -100,6 +103,11 @@ export function parseRoutes(rawText, from) {
   return out;
 }
 
+// THE PIN READ. "Could not read the pin" is not "there is no pin" — see
+// scripts/lib/ratchet-read.mjs, which carries the defect this arm shipped with (a
+// corrupt pin was read as a first run, so the gate wrote today's orphan count as the
+// new ceiling and exited 0) and the four-outcome rule that replaced it.
+
 const routes = new Set();
 for (const f of INDEX_FILES) for (const r of parseRoutes(readIndex(f), f)) routes.add(r);
 
@@ -132,7 +140,53 @@ if (process.argv.includes("--self-test")) {
     ["a reference definition is a route", got.has("REFERENCED.md"), true],
     ["README paths resolve from the repo root", parseRoutes("[P](docs/P.md)", "README.md").has("P.md"), true],
   ];
-  console.log("Doc-orphan self-test \u2014 a mention is not a route\n");
+  // \u2500\u2500 the PIN-READ arm \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Added because the parser half was self-tested and the ratchet half was not, and
+  // the unchecked half was the one that was wrong (see ratchetAction). These cases run
+  // the REAL reader against REAL files in a temp directory, not a re-implementation.
+  const tmp = mkdtempSync(join(tmpdir(), "doc-orphan-pin-"));
+  const p = (n, body) => {
+    const f = join(tmp, n);
+    if (body !== null) writeFileSync(f, body);
+    return f;
+  };
+  const good = readRatchetFile(p("good.json", '{ "maxOrphans": 7 }'), "maxOrphans");
+  const corrupt = readRatchetFile(p("corrupt.json", "{ this is not json"), "maxOrphans");
+  const wrongShape = readRatchetFile(p("shape.json", '{ "somethingElse": 7 }'), "maxOrphans");
+  const missingNoHistory = readRatchetFile(p("gone.json", null), "maxOrphans", () => false);
+  const missingWithHistory = readRatchetFile(p("gone.json", null), "maxOrphans", () => true);
+  const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
+  const pinCases = [
+    ["a readable, correctly shaped pin is USED", good.action === "use" && good.value.maxOrphans === 7, true],
+    // The defect itself. If this goes back to "genesis" the gate re-baselines on a
+    // corrupt file \u2014 which is how it turned a 1 into a 0 with the ceiling raised.
+    ["a CORRUPT pin REFUSES (it is not a first run)", corrupt.action === "refuse", true],
+    ["a pin missing its numeric key REFUSES", wrongShape.action === "refuse", true],
+    ["an absent pin with NO git history is genesis", missingNoHistory.action === "genesis", true],
+    ["an absent pin that HAS git history REFUSES", missingWithHistory.action === "refuse", true],
+    // Live controls on the history probe: it must be able to answer both ways, or the
+    // rule above is decided by a constant.
+    ["the real pin file HAS git history (so genesis cannot fire for it)", gitHasHistory(PIN_PATH), true],
+    [
+      "a path that never existed has NO git history",
+      gitHasHistory(join(repoRoot, "artifacts/sync/__no-such-pin-ever__.json")),
+      false,
+    ],
+    // Wiring control: the pure cases above stay green if someone re-plants the bare
+    // catch at the call site, so pin the call site lexically too.
+    ["the live arm reads the pin through readRatchetFile, not a bare JSON.parse", /readRatchetFile\(PIN_PATH, "maxOrphans"\)/.test(src), true],
+    // The needle is assembled from pieces so this line is not itself a match \u2014 spelled
+    // whole, the case flagged its own label and the control could never go green.
+    [
+      "no bare parse of the pin file remains at the call site",
+      new RegExp(["JSON\\.parse\\(\\s*readFileSync\\(", "PIN", "_PATH"].join("")).test(src),
+      false,
+    ],
+  ];
+  rmSync(tmp, { recursive: true, force: true });
+  cases.push(...pinCases);
+
+  console.log("Doc-orphan self-test \u2014 a mention is not a route, and an unreadable pin is not a first run\n");
   let bad = 0;
   for (const [label, actual, expected] of cases) {
     const ok = actual === expected;
@@ -143,7 +197,7 @@ if (process.argv.includes("--self-test")) {
     console.error(`\n\u2717 Self-test FAILED: ${bad} case(s) wrong \u2014 the parser does not do what this gate claims.`);
     process.exit(1);
   }
-  console.log("\nSelf-test passed \u2014 only a clickable link counts as a route.");
+  console.log("\nSelf-test passed \u2014 only a clickable link counts as a route, and only a proven first run rebaselines the pin.");
   process.exit(0);
 }
 
@@ -196,14 +250,21 @@ if (nested.length === 0) {
   process.exit(1);
 }
 
-let pin = null;
-try {
-  pin = JSON.parse(readFileSync(PIN_PATH, "utf8"));
-} catch {
-  /* first run — established below */
+// "Could not read the pin" is not "there is no pin" (scripts/lib/ratchet-read.mjs).
+// `--update` is the explicit human intent to rewrite it, so it still may — everything
+// else refuses rather than re-baselining on a file it could not read.
+const updating = process.argv.includes("--update");
+const pinRead = readRatchetFile(PIN_PATH, "maxOrphans");
+if (!updating && pinRead.action === "refuse") {
+  console.error("");
+  for (const line of refusalLines(PIN_REL, pinRead.why, "node scripts/check-doc-orphans.mjs --update")) {
+    console.error(line);
+  }
+  process.exit(1);
 }
+const pin = pinRead.value;
 
-if (process.argv.includes("--update") || pin === null) {
+if (updating || pin === null) {
   writeFileSync(PIN_PATH, `${JSON.stringify({ maxOrphans: orphans.length }, null, 2)}\n`);
   console.log(`\n  pin set: maxOrphans=${orphans.length}`);
   if (orphans.length > 0) {

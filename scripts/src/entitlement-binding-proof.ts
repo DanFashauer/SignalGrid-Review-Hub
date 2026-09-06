@@ -409,13 +409,18 @@ check("no fixture carries a wall-clock timestamp — depths are counts, not time
     /\bnet\.(?:connect|createConnection)\s*\(/i,
     /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i,
   ];
-    const allowed = (_rel: string): boolean => false;
+  // NO FILE IS EXEMPT HERE, and there is no exemption predicate to copy. This carried
+  // `const allowed = (_rel: string) => false;` and a matching `if (allowed(rel)) return;`
+  // — dead code cloned from nac-proof's §4, where the same shape (evaluated on the
+  // FILENAME, before the pattern test) switched all nine patterns off for an entire file
+  // and hid a planted ISE quarantine call. An exemption that exempts nothing is a
+  // template waiting to be filled in; if this family ever needs one it must be scoped to
+  // the REASON — take the line, test the pattern subset — the way nac-proof's is now.
   for (const f of files) {
     const rel = f.slice(dir.length + 1);
     readFileSync(f, "utf8").split("\n").forEach((line, i) => {
       const t = line.trim();
       if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return;
-      if (allowed(rel) ) return;
       if (banned.some((re) => re.test(line))) offenders.push(`${rel}:${i + 1}`);
     });
   }

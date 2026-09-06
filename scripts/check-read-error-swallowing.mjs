@@ -21,6 +21,17 @@
 // the benign value means "nothing there" rather than "the check failed".
 //
 //   node scripts/check-read-error-swallowing.mjs
+//   node scripts/check-read-error-swallowing.mjs --self-test   # prove the guard can fail
+//
+// NON-VACUITY. The detector is a set of regexes over a fixed tree, and the failure
+// mode of every such gate is that it stops matching and reports a clean sweep over
+// nothing. Two floors close that: FILE_FLOOR on the connector files read, and
+// CATCH_FLOOR on the `catch` blocks actually parsed out of them. Neither tracks the
+// live number (268 files / 148 catches, measured 2026-09-06); they sit far below it
+// so an honest edit never trips them and a broken parser always does. Before they
+// existed the only thing standing between this gate and a vacuous green was the
+// staleness check on KNOWN_SWALLOWERS — which would itself go quiet the day that map
+// is legitimately emptied.
 
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -82,13 +93,14 @@ function catchBodies(src) {
   return out;
 }
 
-let problems = 0;
-const found = new Set();
-
-for (const file of walk(ROOT)) {
-  const src = stripComments(readFileSync(file, "utf8"));
-  const rel = file.replace(ROOT + "/", "");
-  for (const m of catchBodies(src)) {
+/**
+ * Every READ-shaped method in one source that catches an error into a benign value.
+ * Pure over already-stripped source, so `--self-test` can drive it on fixtures rather
+ * than only on whatever the connector tree happens to contain today.
+ */
+export function swallowingReads(strippedSrc) {
+  const out = [];
+  for (const m of catchBodies(strippedSrc)) {
     const body = m.body;
     // Rethrows are the fix, not the defect.
     if (/\bthrow\b/.test(body)) continue;
@@ -99,11 +111,86 @@ for (const file of walk(ROOT)) {
     if (/success:\s*false/.test(body)) continue;
 
     // Name the enclosing method by the nearest preceding Promise-returning signature.
-    const before = src.slice(0, m.index);
+    const before = strippedSrc.slice(0, m.index);
     const sig = [...before.matchAll(/(?:async\s+)?([a-zA-Z][a-zA-Z0-9_]*)\s*\([^)]*\)\s*:\s*Promise/g)].pop();
     const method = sig ? sig[1] : "";
     if (!READ_SHAPED.test(method)) continue;
+    out.push(method);
+  }
+  return out;
+}
 
+// FLOORS — deliberately far below the live figures, never equal to them.
+const FILE_FLOOR = 10;
+const CATCH_FLOOR = 30;
+
+/** SELF-TEST — the detector against the shapes that must and must not be flagged. */
+function selfTest() {
+  const wrap = (method, catchBody) =>
+    stripComments(`class C {\n  async ${method}(): Promise<unknown> {\n    try { await go(); } catch (e) {\n      ${catchBody}\n    }\n  }\n}\n`);
+  const checks = [];
+  const flags = (src) => swallowingReads(src).length > 0;
+
+  checks.push(["a READ that catches into `return []` IS flagged", flags(wrap("getDevices", "return [];"))]);
+  checks.push(["a READ that catches into `return null` IS flagged", flags(wrap("lookupUser", "return null;"))]);
+  checks.push(["a READ that RETHROWS is not flagged (the fix must clear it)", !flags(wrap("getDevices", "throw e;"))]);
+  checks.push(["a healthCheck returning false is NOT flagged — a failed health check IS unhealthy", !flags(wrap("healthCheck", "return false;"))]);
+  checks.push(["a `{ success: false }` report is not silence", !flags(wrap("getDevices", "return { success: false, error: String(e) };"))]);
+  // The false NEGATIVE the header records: a COMMENT containing the word "throw" once
+  // made a re-introduced `return []` read as a rethrow. Comments are stripped, so the
+  // prose cannot vouch for behaviour.
+  checks.push([
+    "a comment mentioning `throw` does NOT launder a `return []` (the recorded false negative)",
+    flags(wrap("getDevices", "// the throw above was decorative\n      return [];")),
+  ]);
+
+  // LIVE floors: the sweep must actually sweep.
+  let filesLive = 0;
+  let catchesLive = 0;
+  for (const file of walk(ROOT)) {
+    filesLive += 1;
+    catchesLive += catchBodies(stripComments(readFileSync(file, "utf8"))).length;
+  }
+  checks.push([`LIVE: ${filesLive} connector file(s) read (floor ${FILE_FLOOR})`, filesLive >= FILE_FLOOR]);
+  checks.push([`LIVE: ${catchesLive} catch block(s) parsed (floor ${CATCH_FLOOR})`, catchesLive >= CATCH_FLOOR]);
+  checks.push([
+    "LIVE: every KNOWN_SWALLOWERS entry still matches a real site (a stale exemption re-permits the defect)",
+    [...KNOWN_SWALLOWERS.keys()].every((key) => {
+      const [rel, method] = key.split(":");
+      try {
+        return swallowingReads(stripComments(readFileSync(join(ROOT, rel), "utf8"))).includes(method);
+      } catch {
+        return false;
+      }
+    }),
+  ]);
+
+  let bad = 0;
+  for (const [name, ok] of checks) {
+    console.log(`  ${ok ? "ok  " : "FAIL"} — ${name}`);
+    if (!ok) bad += 1;
+  }
+  if (bad) {
+    console.error(`\nRead-error-swallowing self-test FAILED — ${bad} of ${checks.length} control(s).`);
+    return 1;
+  }
+  console.log(`\nself-test passed — ${checks.length} controls; the detector flags a swallowed read and clears a rethrow.`);
+  return 0;
+}
+
+if (process.argv.includes("--self-test")) process.exit(selfTest());
+
+let problems = 0;
+const found = new Set();
+let filesRead = 0;
+let catchesParsed = 0;
+
+for (const file of walk(ROOT)) {
+  const src = stripComments(readFileSync(file, "utf8"));
+  const rel = file.replace(ROOT + "/", "");
+  filesRead += 1;
+  catchesParsed += catchBodies(src).length;
+  for (const method of swallowingReads(src)) {
     const key = `${rel}:${method}`;
     found.add(key);
     if (KNOWN_SWALLOWERS.has(key)) continue;
@@ -117,6 +204,17 @@ for (const file of walk(ROOT)) {
   }
 }
 
+// The scan must have actually scanned. A detector that stopped matching reports a
+// clean tree in exactly the same words as a clean tree.
+if (filesRead < FILE_FLOOR || catchesParsed < CATCH_FLOOR) {
+  console.error(
+    `  ✗ the sweep read ${filesRead} connector file(s) and parsed ${catchesParsed} catch block(s) — below the ` +
+      `floors (${FILE_FLOOR}/${CATCH_FLOOR}). The walk or the parser has stopped working, not the tree emptied;\n` +
+      "      refusing to report a pass from a scan that found nothing to judge.",
+  );
+  process.exit(1);
+}
+
 // A stale exemption re-permits the defect it was granted for and reads as
 // intentional forever after — the same rule the pagination guard applies.
 for (const [key, reason] of KNOWN_SWALLOWERS) {
@@ -127,7 +225,8 @@ for (const [key, reason] of KNOWN_SWALLOWERS) {
 }
 
 console.log(
-  `read-error swallowing: ${found.size} read-path site(s), ${KNOWN_SWALLOWERS.size} known, ${problems} problem(s)`,
+  `read-error swallowing: ${filesRead} file(s), ${catchesParsed} catch block(s), ${found.size} read-path site(s), ` +
+    `${KNOWN_SWALLOWERS.size} known, ${problems} problem(s)`,
 );
 
 if (problems > 0) {

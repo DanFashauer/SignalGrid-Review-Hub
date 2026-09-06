@@ -34,11 +34,25 @@
 //
 // Two marker families, deliberately scoped differently, because they fail differently:
 //
-//   NEGATION is POSITIONAL — only counted in the text BEFORE the match, within the same
-//   clause. "not", "never", "no" are ordinary words that appear all over honest prose,
-//   so a sentence-wide search would let "SignalGrid is production-ready and needs no
-//   configuration" launder itself on a trailing "no". Prefix-scoping makes that
-//   impossible: the negation has to actually govern the claim.
+//   NEGATION is POSITIONAL — counted in the text BEFORE the match within the same
+//   clause, and in exactly one place after it (below). "not", "never", "no" are
+//   ordinary words that appear all over honest prose, so a sentence-wide search would
+//   let "SignalGrid is production-ready and needs no configuration" launder itself on a
+//   trailing "no". Positional scoping makes that impossible: the negation has to
+//   actually govern the claim.
+//
+//   THE ONE POSTPOSED CASE, added 2026-09-06. English puts the negator AFTER the verb
+//   when it is the verb's direct object: "SignalGrid replaces no system of record",
+//   "…replaces neither Jamf nor Intune", "…replaces nothing", "…replaces none of them".
+//   Prefix-only scoping filed all four as AFFIRMATIVE, and the first of them is this
+//   repository's own doctrine sentence — quoted in docs/SECURITY_BASELINE_ALIGNMENT.md
+//   and again inside docs/agent/CLAIM_INVENTORY.json, where it was the single
+//   `affirmative` hit the live gate reported. That is precisely the failure mode this
+//   file exists to prevent: a gate punishing an honest sentence. The window is the
+//   IMMEDIATELY following token and nothing else — "and needs no configuration" has a
+//   conjunction and a verb between the claim and the negator, so it stays affirmative,
+//   and "replaces no fewer than three systems" is excluded by name because that idiom
+//   is an assertion wearing a negator.
 //
 //   PROHIBITION is LEXICAL — counted anywhere in the same clause. "avoid", "denylist",
 //   "guardrail", "must not say" cannot plausibly co-occur with a sincere claim; a
@@ -74,6 +88,23 @@ const SELF_REFERENCE_MARKER = 'git grep -nE "SignalGrid is production-ready';
 const NEGATION_MARKERS =
   /\b(?:not|no|never|nothing|none|neither|nor|without|non-|cannot|n't)\b|\bn't\b/i;
 
+/** Negators that can stand as the DIRECT OBJECT of the matched phrase, i.e. the very
+ *  next token after it. Deliberately NARROWER than NEGATION_MARKERS (no "never",
+ *  "without", "cannot" — those are adverbial and would already have been seen in the
+ *  prefix) and required to be a whole word followed by space or punctuation, so
+ *  "replaces no-code tooling" is NOT read as a negation. "no fewer/less than" is
+ *  excluded because it asserts rather than denies. */
+const POSTPOSED_NEGATION =
+  /^\s+(no|none|nothing|neither|nobody|not)(?=[\s,.;:|]|$)(?!\s+(?:fewer|less)\b)/i;
+
+/** The text immediately following the match. Used ONLY by POSTPOSED_NEGATION, whose
+ *  anchor (`^\s+` then one word) cannot reach past a clause boundary anyway. */
+function afterMatch(text: string): string | null {
+  const m = UNSAFE_CLAIM_PATTERN.exec(text);
+  if (!m) return null;
+  return text.slice(m.index + m[0].length);
+}
+
 /** Verbs that can only be talking ABOUT the wording, never asserting it. */
 const PROHIBITION_MARKERS =
   /\b(?:avoid|avoids|avoiding|block|blocks|blocked|prohibit\w*|forbid\w*|ban|bans|banned|denylist\w*|blocklist\w*|guardrail\w*|disclaimer\w*|disallow\w*|refrain|prevent\w*)\b/i;
@@ -82,7 +113,16 @@ const PROHIBITION_MARKERS =
  *  negation in one cell must not disclaim a claim sitting in the next one. */
 const CLAUSE_BOUNDARY = /[.;|]/g;
 
-export type ClaimClass = "affirmative" | "disclaimed" | "self_referential" | "registry";
+/** `not_a_hit` is its OWN class, not a flavour of `disclaimed`: a line the pattern never
+ *  matched was cleared by arithmetic, not by any disclaimer, and folding it into the
+ *  `disclaimed` tally made that printed figure a mixed number a reviewer could not use
+ *  to sanity-check the classifier's reach. */
+export type ClaimClass =
+  | "affirmative"
+  | "disclaimed"
+  | "self_referential"
+  | "registry"
+  | "not_a_hit";
 
 export interface ClassifiedClaim {
   readonly file: string;
@@ -137,11 +177,16 @@ export function classifyClaim(file: string, line: number, text: string): Classif
 
   const before = clauseBefore(text);
   // No match at all — not a hit. Callers only pass real hits, so this is defensive:
-  // returning "affirmative" here would manufacture a finding out of nothing.
-  if (before === null) return { ...base, classification: "disclaimed", marker: "no claim pattern in line" };
+  // returning "affirmative" here would manufacture a finding out of nothing. It is NOT
+  // "disclaimed" either — nothing disclaimed it, and counting it there inflated the
+  // printed disclaimer figure with lines that never contained a claim.
+  if (before === null) return { ...base, classification: "not_a_hit", marker: "no claim pattern in line" };
 
   const neg = NEGATION_MARKERS.exec(before);
   if (neg) return { ...base, classification: "disclaimed", marker: `negated by "${neg[0]}"` };
+
+  const post = POSTPOSED_NEGATION.exec(afterMatch(text) ?? "");
+  if (post) return { ...base, classification: "disclaimed", marker: `negated by postposed "${post[1]}"` };
 
   const around = clauseAround(text) ?? "";
   const pro = PROHIBITION_MARKERS.exec(around);
@@ -173,6 +218,9 @@ export interface ClaimTally {
   readonly disclaimed: number;
   readonly selfReferential: number;
   readonly registry: number;
+  /** Lines the claim pattern never matched. Counted separately so `disclaimed` stays a
+   *  count of RECOGNISED disclaimers and nothing else. */
+  readonly notAHit: number;
   readonly total: number;
 }
 
@@ -182,6 +230,7 @@ export function tallyClaims(claims: readonly ClassifiedClaim[]): ClaimTally {
     disclaimed: claims.filter((c) => c.classification === "disclaimed").length,
     selfReferential: claims.filter((c) => c.classification === "self_referential").length,
     registry: claims.filter((c) => c.classification === "registry").length,
+    notAHit: claims.filter((c) => c.classification === "not_a_hit").length,
     total: claims.length,
   };
 }

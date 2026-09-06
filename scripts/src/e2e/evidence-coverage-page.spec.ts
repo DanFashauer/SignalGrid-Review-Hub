@@ -64,8 +64,9 @@ test("the page reaches nothing outside itself", async ({ page }) => {
 test("the standalone page renders the real model, not an empty shell", async ({ page }) => {
   await expect(page).toHaveTitle("SignalGrid — Evidence Coverage");
 
-  // Eighteen axis rows and seven plane toggles prove the bundled model was linked in and
-  // iterated. A build that resolved the import to nothing produces a valid, blank page.
+  // The axis rows and plane toggles prove the bundled model was linked in and iterated;
+  // the two assertions below carry the counts. A build that resolved the import to
+  // nothing produces a valid, blank page.
   await expect(page.locator("tbody tr")).toHaveCount(21);
   await expect(page.locator("button.p")).toHaveCount(7);
 

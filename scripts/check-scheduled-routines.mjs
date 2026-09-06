@@ -75,6 +75,7 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const REGISTRY = "docs/agent/scheduled-routines.json";
 const HEARTBEATS_DIR = "artifacts/agent-heartbeats";
@@ -611,7 +612,7 @@ function selfTest() {
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const { registry, heartbeats, rosterText } = load();
   const { fatal, reported } = auditScheduledRoutines(registry, heartbeats, rosterText);

@@ -351,16 +351,24 @@ export function isIsoDate(v) {
  * depending on this checkout's actual depth.
  */
 const defaultRecordIO = {
-  /** A squash-merge lands "(#N)" in the commit subject; a `--fixed-strings` grep finds
-   * it. Non-empty output ⇒ the referenced PR is in LOCAL history. */
+  /** GitHub writes a merged PR's number into the commit subject in TWO shapes, and this
+   * probe knew only one of them. A SQUASH merge lands "(#N)"; a MERGE COMMIT lands
+   * "Merge pull request #N from …". Both are in this repository's history (324 and 83
+   * subjects respectively when the second form was added). That mattered the moment the
+   * full-clone rule below became fatal: `#491` is a real, merged, checkable pull request
+   * that lands as a merge commit, so a probe that only knew the squash form would have
+   * called an honest record fabricated. A gate that flags a true statement is wrong, so
+   * the probe learned the second idiom rather than the ledger losing the reference.
+   * `n` is digits-only (anchored `[1-9]\d*` at the call site), so it cannot carry regex.
+   * Non-empty output ⇒ the referenced PR is in LOCAL history. */
   prInHistory(n, root) {
     let out = "";
     try {
-      out = execFileSync("git", ["log", "--all", "--fixed-strings", `--grep=(#${n})`, "--format=%H", "-1"], {
-        cwd: root,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      });
+      out = execFileSync(
+        "git",
+        ["log", "--all", "--extended-regexp", `--grep=(\\(#${n}\\)|^Merge pull request #${n}([^0-9]|$))`, "--format=%H", "-1"],
+        { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      );
     } catch {
       return false;
     }
@@ -376,14 +384,19 @@ const defaultRecordIO = {
       return false;
     }
   },
-  /** True when this clone is shallow — a miss then cannot be told from a PR beyond depth. */
+  /** True when this clone is shallow — a miss then cannot be told from a PR beyond depth.
+   * Reads as "this clone cannot be PROVEN complete": git failing to answer returns TRUE,
+   * not false. The fatal arm below asserts "the clone is full, therefore the number is
+   * fabricated", and that is an affirmative claim; with no answer from git there is no
+   * evidence for it, so the record is REPORTED instead. Nothing passes silently either
+   * way — an unverified record is always printed. */
   isShallow(root) {
     try {
       return (
-        execFileSync("git", ["rev-parse", "--is-shallow-repository"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() === "true"
+        execFileSync("git", ["rev-parse", "--is-shallow-repository"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() !== "false"
       );
     } catch {
-      return false;
+      return true;
     }
   },
 };
@@ -408,17 +421,22 @@ export function resolveRecord(record, root = REPO, io = {}) {
   const r = record.trim();
   const prInHistory = io.prInHistory ?? defaultRecordIO.prInHistory;
   const commitExists = io.commitExists ?? defaultRecordIO.commitExists;
+  const isShallow = io.isShallow ?? defaultRecordIO.isShallow;
   const m = /^#([1-9]\d*)$/.exec(r);
   if (m) {
     const n = m[1];
     if (prInHistory(n, root)) return "pull-request reference";
-    // Clone depth is environment-dependent: CI checks out shallow (depth 1) and
-    // even a local clone may lack older merge commits, so a "(#N)" miss cannot
-    // be told apart from a fabricated number. A miss is therefore REPORTED as
-    // unverified — truthy, never fatal — so a fabricated #NNN surfaces in the
-    // unverified list rather than passing silently, and a real older PR beyond
-    // the fetch depth never false-fails the gate in CI.
-    return `pull-request reference — UNVERIFIED ("(#${n})" not in local history; clone may be shallow)`;
+    // The header's rule, now implemented rather than only described. It was written
+    // here from the first version and never ran: whatever the depth, a miss returned
+    // the UNVERIFIED string, so the FULL-clone arm the header promised was prose.
+    // In a clone git confirms is COMPLETE, a number absent from every subject cannot
+    // be an old PR beyond the fetch depth — the history is all here — so it is
+    // fabricated, and fabricated is fatal.
+    if (!isShallow(root)) return null;
+    // In a SHALLOW clone (this repository, and CI's depth-1 checkout) a real older PR
+    // and a fabricated number are indistinguishable, so the miss is REPORTED as
+    // unverified — truthy, never fatal — and printed rather than swallowed.
+    return `pull-request reference — UNVERIFIED ("(#${n})" not in local history; clone is shallow, so a real older PR cannot be told from a fabricated number)`;
   }
   if (existsSync(join(root, r))) return "path in the tree";
   if (/^[0-9a-f]{7,40}$/i.test(r)) {
@@ -908,6 +926,32 @@ function selfTest() {
       return clean.status === "ok" && dirty.status === "stale" && gone.status === "missing";
     });
 
+    // PLANT 4 — the PR probe and the full-clone rule, against REAL git rather than
+    // injected IO. A freshly `git init`ed tree is not shallow, so this is the only place
+    // the fatal arm runs end to end: the injected checks above pin the decision, this
+    // one pins that the decision is reached from real `git log` / `git rev-parse` output.
+    const commitHere = (subject) =>
+      execFileSync("git", ["-c", "user.email=selftest@local", "-c", "user.name=selftest", "commit", "-q", "--allow-empty", "-m", subject], { cwd: temp });
+    commitHere("core: something (#4242)");
+    commitHere("Merge pull request #4243 from someone/branch");
+    check("the REAL probe finds BOTH subject forms GitHub writes — squash \"(#N)\" and merge-commit \"Merge pull request #N\" — and finds neither for an absent number", () => {
+      return (
+        defaultRecordIO.prInHistory("4242", temp) === true &&
+        defaultRecordIO.prInHistory("4243", temp) === true &&
+        defaultRecordIO.prInHistory("9999", temp) === false
+      );
+    });
+    check("a FULL clone (real git, not injected): a merge-commit PR reference RESOLVES, and an absent number is FATAL", () => {
+      const full = defaultRecordIO.isShallow(temp) === false;
+      const merged = resolveRecord("#4243", temp) === "pull-request reference";
+      const fabricated = resolveRecord("#9999", temp) === null;
+      return full && merged && fabricated;
+    });
+    check("that same absent number in a SHALLOW clone is REPORTED, not fatal (only the depth differs between the two arms)", () => {
+      const r = resolveRecord("#9999", temp, { isShallow: () => true });
+      return typeof r === "string" && /unverified/i.test(r);
+    });
+
     check("listTracked FAILS CLOSED on a directory git cannot enumerate (it never returns [])", () => {
       const notARepo = mkdtempSync(join(tmpdir(), "surface-coverage-notrepo-"));
       try {
@@ -964,9 +1008,22 @@ function selfTest() {
     const a = audit1(withRead({ ...good, record: "#4242" }), { recordOk: recordOkWith({ prInHistory: () => true, isShallow: () => false }) });
     return a.fatal.length === 0 && a.readCount === 1 && a.unverified.length === 0;
   });
-  check("a #NNN NOT in local history is NOT fatal but is REPORTED unverified — regardless of clone depth (a real miss and a fabricated number are indistinguishable, so neither false-fails CI nor passes silently)", () => {
-    const a = audit1(withRead({ ...good, record: "#99999" }), { recordOk: recordOkWith({ prInHistory: () => false }) });
+  check("a #NNN NOT in local history, in a SHALLOW clone, is NOT fatal but is REPORTED unverified (a real older PR cannot be told from a fabricated number at depth 1, so CI never false-fails)", () => {
+    const a = audit1(withRead({ ...good, record: "#99999" }), { recordOk: recordOkWith({ prInHistory: () => false, isShallow: () => true }) });
     return a.fatal.length === 0 && a.unverified.length === 1 && a.unverified[0].record === "#99999" && /unverified/i.test(a.unverified[0].reason);
+  });
+  check("a #NNN NOT in local history, in a FULL clone, is FATAL — the header's rule, and it must be able to fire", () => {
+    const a = audit1(withRead({ ...good, record: "#99999" }), { recordOk: recordOkWith({ prInHistory: () => false, isShallow: () => false }) });
+    return a.fatal.some((f) => f.includes("#99999") && f.includes("resolves to nothing")) && a.unverified.length === 0;
+  });
+  check("git failing to report depth is treated as NOT-PROVEN-FULL: reported, never fatal (the fatal arm is an affirmative claim and needs evidence)", () => {
+    // The REAL depth probe, pointed at a directory that is not a git repository at all,
+    // so `git rev-parse --is-shallow-repository` errors rather than answering.
+    const notARepo = "/nonexistent-root-for-selftest";
+    const a = audit1(withRead({ ...good, record: "#99999" }), {
+      recordOk: (rec) => resolveRecord(rec, notARepo, { prInHistory: () => false, isShallow: defaultRecordIO.isShallow }),
+    });
+    return defaultRecordIO.isShallow(notARepo) === true && a.fatal.length === 0 && a.unverified.length === 1;
   });
   check("a read with no reviewer is FATAL", () => audit1(withRead({ ...good, reviewer: "" })).fatal.some((f) => f.includes("reviewer")));
   check("a read with an impossible date is FATAL", () => audit1(withRead({ ...good, date: "2026-02-30" })).fatal.some((f) => f.includes("must name the day")));

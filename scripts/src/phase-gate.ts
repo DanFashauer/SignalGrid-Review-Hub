@@ -1,6 +1,7 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { classifyScanOutput, tallyClaims, UNSAFE_CLAIM_SOURCE } from "./unsafe-claim-classifier";
 
@@ -111,15 +112,25 @@ const touchesRuntime = changed.some((file) => runtimePattern.test(file));
 const docsOnly =
   changed.length > 0 && changed.every((file) => docsPattern.test(file));
 
-const unsafeClaims = gitOrEmpty([
-  "grep",
-  "-nE",
-  unsafeClaimPattern.source,
-  "--",
-  "README.md",
-  "docs",
-  "artifacts/signalgrid-review/src",
-]);
+// PHASE_GATE_INJECT_SCAN_HIT exists so `--self-test` can prove the exit wiring
+// END TO END, on the real tree, without editing a doc. It can only ADD a scan
+// line, never remove or clear one, so it cannot loosen this gate — the strictest
+// thing it can do is make the run fail. Set by the self-test below and nowhere else.
+const injectedScanHit = process.env.PHASE_GATE_INJECT_SCAN_HIT ?? "";
+const unsafeClaims = [
+  gitOrEmpty([
+    "grep",
+    "-nE",
+    unsafeClaimPattern.source,
+    "--",
+    "README.md",
+    "docs",
+    "artifacts/signalgrid-review/src",
+  ]),
+  injectedScanHit,
+]
+  .filter((part) => part !== "")
+  .join("\n");
 
 const validationDoc = resolve(repoRoot, "docs/VALIDATION_COMMANDS.md");
 // readFileSync, not a spawned `cat` (CodeQL #9): same bytes, no child process.
@@ -130,45 +141,176 @@ const missingValidation = requiredValidation.filter(
   (command) => !validationText.includes(command),
 );
 
-let lane: "GREEN" | "YELLOW" | "RED" = "GREEN";
-const reasons: string[] = [];
+// ── WHAT THIS GATE GATES, AND WHAT IT ONLY REPORTS ──────────────────────────
+//
+// GATED (exit 1): an unsafe file path; an AFFIRMATIVE unsafe claim; a required
+// validation command missing from docs/VALIDATION_COMMANDS.md. Each is an
+// unambiguous defect, and each now sets `blocking`.
+//
+// REPORTED (exit 0): the review lane itself. YELLOW means "a human reads this
+// diff", which is the ordinary state of every non-docs-only pull request — a gate
+// that failed on it would be a gate that fails always, and a gate that fails
+// always gets switched off.
+//
+// THIS DISTINCTION USED TO BE ABSENT AND THE COMMENTS CLAIMED OTHERWISE. Until
+// 2026-09-06 the only exit-setting line was `if (lane === "RED")`, and RED was
+// reachable ONLY from `redFilePattern`. The comment below said escalating to
+// YELLOW was what stopped a dropped validation command from "exiting GREEN"; it
+// exited 0 either way, so the escalation changed a printed string and nothing
+// else. Measured on this tree that same day: the gate printed
+// `unsafeClaims=ASSERTED`, named the offending file and line, and exited 0.
+type Lane = "GREEN" | "YELLOW" | "RED";
+interface LaneInput {
+  readonly changedCount: number;
+  readonly docsOnly: boolean;
+  readonly touchesWorkflow: boolean;
+  readonly touchesScripts: boolean;
+  readonly touchesProof: boolean;
+  readonly touchesRuntime: boolean;
+  readonly unsafePaths: readonly string[];
+  readonly affirmativeClaims: readonly string[];
+  readonly missingValidation: readonly string[];
+}
+interface LaneVerdict {
+  readonly lane: Lane;
+  readonly reasons: readonly string[];
+  /** Non-empty ⇒ exit 1. The gated half. */
+  readonly blocking: readonly string[];
+}
 
-if (changed.length === 0) reasons.push("no changed files detected");
-if (!docsOnly) lane = "YELLOW";
-if (touchesWorkflow) reasons.push("touches GitHub Actions workflows");
-if (touchesScripts) reasons.push("touches scripts");
-if (touchesProof) reasons.push("touches proof, fixture, or scenario files");
-if (touchesRuntime) reasons.push("touches runtime or UI code");
-if (!docsOnly) reasons.push("not docs-only");
-if (changedUnsafe.length > 0 || stagedUnsafe.length > 0) {
-  lane = "RED";
-  reasons.push(`unsafe file path detected: ${changedUnsafe.join(", ")}`);
+/** Pure, so the self-test below drives the SAME function the live run uses rather
+ *  than a re-implementation of it that can drift. */
+function decideLane(input: LaneInput): LaneVerdict {
+  let lane: Lane = "GREEN";
+  const reasons: string[] = [];
+  const blocking: string[] = [];
+
+  if (input.changedCount === 0) reasons.push("no changed files detected");
+  if (!input.docsOnly) lane = "YELLOW";
+  if (input.touchesWorkflow) reasons.push("touches GitHub Actions workflows");
+  if (input.touchesScripts) reasons.push("touches scripts");
+  if (input.touchesProof) reasons.push("touches proof, fixture, or scenario files");
+  if (input.touchesRuntime) reasons.push("touches runtime or UI code");
+  if (!input.docsOnly) reasons.push("not docs-only");
+  if (input.unsafePaths.length > 0) {
+    lane = "RED";
+    const r = `unsafe file path detected: ${input.unsafePaths.join(", ")}`;
+    reasons.push(r);
+    blocking.push(r);
+  }
+  // CLASSIFY, don't just count. The raw grep cannot distinguish "SignalGrid is an
+  // Imprivata partner" from "SignalGrid is NOT an Imprivata partner", so escalating on a
+  // raw hit escalated on every honest disclaimer this repository deliberately publishes —
+  // and, measured, on nothing else. Only an AFFIRMATIVE hit moves the lane now. The other
+  // categories are still counted and printed: a scan that silently dropped them could not
+  // tell a clean repo from a broken scanner.
+  if (input.affirmativeClaims.length > 0) {
+    if (lane === "GREEN") lane = "YELLOW";
+    const r = `unsafe claim asserted (not disclaimed): ${input.affirmativeClaims.join(", ")}`;
+    reasons.push(r);
+    blocking.push(r);
+  }
+  if (input.missingValidation.length > 0) {
+    // Documented-validation drift must actually move the lane AND the exit code.
+    // Escalate to at least YELLOW (manual review); never downgrade an already-RED lane.
+    if (lane === "GREEN") lane = "YELLOW";
+    const r = `validation command documentation missing: ${input.missingValidation.join("; ")}`;
+    reasons.push(r);
+    blocking.push(r);
+  }
+  return { lane, reasons, blocking };
 }
-// CLASSIFY, don't just count. The raw grep cannot distinguish "SignalGrid is an
-// Imprivata partner" from "SignalGrid is NOT an Imprivata partner", so escalating on a
-// raw hit escalated on every honest disclaimer this repository deliberately publishes —
-// and, measured, on nothing else. Only an AFFIRMATIVE hit moves the lane now. The other
-// categories are still counted and printed: a scan that silently dropped them could not
-// tell a clean repo from a broken scanner.
+
+// ── SELF-TEST: each gated condition must actually block, and the routine lane
+// must not. A gate whose escalation cannot be observed is the defect above,
+// returned. `--self-test` runs no git and reads no tree.
+if (process.argv.includes("--self-test")) {
+  const base: LaneInput = {
+    changedCount: 1, docsOnly: true, touchesWorkflow: false, touchesScripts: false,
+    touchesProof: false, touchesRuntime: false, unsafePaths: [], affirmativeClaims: [],
+    missingValidation: [],
+  };
+  const cases: Array<readonly [string, LaneInput, Lane, boolean]> = [
+    ["clean docs-only change", base, "GREEN", false],
+    ["routine non-docs change is REPORTED, not gated",
+      { ...base, docsOnly: false, touchesScripts: true }, "YELLOW", false],
+    ["an unreadable/empty change set is REPORTED as YELLOW, not gated",
+      { ...base, changedCount: 0, docsOnly: false }, "YELLOW", false],
+    ["an affirmative unsafe claim BLOCKS",
+      { ...base, affirmativeClaims: ["docs/X.md:1"] }, "YELLOW", true],
+    ["a missing documented validation command BLOCKS",
+      { ...base, missingValidation: ["pnpm run typecheck"] }, "YELLOW", true],
+    ["an unsafe file path BLOCKS and is RED",
+      { ...base, unsafePaths: [".env.production"] }, "RED", true],
+    ["RED is never downgraded by a later escalation",
+      { ...base, unsafePaths: [".env"], affirmativeClaims: ["docs/X.md:1"], missingValidation: ["x"] },
+      "RED", true],
+  ];
+  const failures: string[] = [];
+  for (const [name, input, expectLane, expectBlock] of cases) {
+    const v = decideLane(input);
+    const ok = v.lane === expectLane && v.blocking.length > 0 === expectBlock;
+    console.log(`  ${ok ? "ok" : "FAIL"} — ${name} (lane=${v.lane} blocking=${v.blocking.length})`);
+    if (!ok) failures.push(name);
+  }
+  // Non-vacuity: the two escalations that were unobservable before this change must
+  // differ from the routine lane in EXIT, not merely in printed text.
+  const routine = decideLane({ ...base, docsOnly: false });
+  const claimed = decideLane({ ...base, docsOnly: false, affirmativeClaims: ["docs/X.md:1"] });
+  if (routine.lane !== claimed.lane) failures.push("expected both to print YELLOW — the printed lane is not the discriminator");
+  if (routine.blocking.length !== 0 || claimed.blocking.length !== 1) {
+    failures.push("an affirmative claim must be distinguishable from a routine YELLOW by the EXIT CODE");
+  }
+  // ── AND THE WIRING, END TO END ────────────────────────────────────────────
+  // Everything above tests decideLane(). The defect this file was carrying lived
+  // in the LAST LINE of the file, not in the lane arithmetic: `blocking` can be
+  // computed perfectly and still be thrown away by `if (lane === "RED")`. So the
+  // self-test re-runs this very script as a child, once clean and once with a
+  // synthetic affirmative claim injected into the scan output, and compares the
+  // real process exit codes.
+  const SYNTH = "docs/__phase_gate_self_test__.md:1:SignalGrid is MFi certified.";
+  const self = fileURLToPath(import.meta.url);
+  const run = (env: NodeJS.ProcessEnv) =>
+    spawnSync(process.execPath, [...process.execArgv, self], {
+      encoding: "utf8",
+      env: { ...process.env, PHASE_GATE_INJECT_SCAN_HIT: "", ...env },
+    });
+  const baseline = run({});
+  const planted = run({ PHASE_GATE_INJECT_SCAN_HIT: SYNTH });
+  const blockingOf = (out: string) =>
+    (out.split("\n").find((l) => l.startsWith("blockingReasons=")) ?? "blockingReasons=<absent>").slice("blockingReasons=".length);
+  const baseBlocking = blockingOf(baseline.stdout ?? "");
+  const plantBlocking = blockingOf(planted.stdout ?? "");
+  console.log(`  baseline: exit=${baseline.status} blockingReasons=${baseBlocking}`);
+  console.log(`  planted : exit=${planted.status} blockingReasons=${plantBlocking}`);
+  if (baseBlocking.includes("__phase_gate_self_test__")) {
+    failures.push("the synthetic claim appeared in the BASELINE run — the injection leaked");
+  }
+  if (!plantBlocking.includes("__phase_gate_self_test__")) {
+    failures.push("a planted affirmative claim did not reach blockingReasons — the scan or the classifier is inert");
+  }
+  if (planted.status !== 1) {
+    failures.push(`a planted affirmative claim must exit 1; got ${planted.status} — the lane escalation is not wired to the exit code`);
+  }
+  const wiringCases = 3;
+  const total = cases.length + 1 + wiringCases;
+  console.log(`\nphase-gate self-test ${failures.length === 0 ? "pass" : "FAIL"} (${total - failures.length}/${total})`);
+  for (const f of failures) console.error(`  - ${f}`);
+  process.exit(failures.length === 0 ? 0 : 1);
+}
+
 const claimTally = tallyClaims(classifyScanOutput(unsafeClaims));
-if (claimTally.affirmative.length > 0) {
-  if (lane === "GREEN") lane = "YELLOW";
-  reasons.push(
-    `unsafe claim asserted (not disclaimed): ${claimTally.affirmative
-      .map((c) => `${c.file}:${c.line}`)
-      .join(", ")}`,
-  );
-}
-if (missingValidation.length > 0) {
-  // Documented-validation drift must actually move the lane, not just log a
-  // reason — otherwise a change that drops a required validation command from
-  // docs/VALIDATION_COMMANDS.md exits GREEN. Escalate to at least YELLOW (manual
-  // review); never downgrade an already-RED lane.
-  if (lane === "GREEN") lane = "YELLOW";
-  reasons.push(
-    `validation command documentation missing: ${missingValidation.join("; ")}`,
-  );
-}
+const { lane, reasons, blocking } = decideLane({
+  changedCount: changed.length,
+  docsOnly,
+  touchesWorkflow,
+  touchesScripts,
+  touchesProof,
+  touchesRuntime,
+  unsafePaths: uniqueSorted([...changedUnsafe, ...stagedUnsafe]),
+  affirmativeClaims: claimTally.affirmative.map((c) => `${c.file}:${c.line}`),
+  missingValidation,
+});
 
 console.log("Phase gate");
 console.log(`changedSource=${changedSource}`);
@@ -187,9 +329,15 @@ console.log(`touchesRuntime=${touchesRuntime}`);
 console.log(`unsafeClaims=${claimTally.affirmative.length > 0 ? "ASSERTED" : "clean"}`);
 console.log(
   `unsafeClaimMentions=total:${claimTally.total} affirmative:${claimTally.affirmative.length} ` +
-    `disclaimed:${claimTally.disclaimed} selfReferential:${claimTally.selfReferential} registry:${claimTally.registry}`,
+    `disclaimed:${claimTally.disclaimed} selfReferential:${claimTally.selfReferential} ` +
+    `registry:${claimTally.registry} notAHit:${claimTally.notAHit}`,
 );
 console.log(`phaseLane=${lane}`);
 if (reasons.length > 0) console.log(`reasons=${reasons.join(" | ")}`);
+console.log(`blockingReasons=${blocking.length === 0 ? "none" : blocking.join(" | ")}`);
+console.log(
+  "GATED (exit 1): unsafe file path, affirmative unsafe claim, missing documented validation command. " +
+    "REPORTED (exit 0): the review lane — YELLOW means a human reads this diff, which is the ordinary state of a code change.",
+);
 
-if (lane === "RED") process.exitCode = 1;
+if (blocking.length > 0) process.exitCode = 1;

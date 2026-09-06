@@ -92,7 +92,43 @@ export function scanSkillRoot(root, io) {
       lines: body.replace(/\n$/, "").split("\n").length,
     });
   }
+  // CODEPOINT-SORTED BY NAME. The records came back in `readdirSync` order, which
+  // is filesystem-dependent (ext4 hashes, APFS does not), so the same home directory
+  // printed its skills in a different order on two machines and a diff of two runs
+  // was unreadable. Nothing downstream re-sorted: the report loop's own
+  // `sort(Number(b.namesRepo) - Number(a.namesRepo))` is not a total order — every
+  // tie keeps whatever order arrived here.
+  skills.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   return { root, scanned: true, skills };
+}
+
+/** Bytes of SKILL.md this scanner will read. A skill is prose; anything past this
+ *  is not a skill file, and reading it partially would report on a fragment while
+ *  looking like a full read. Over-cap is REPORTED UNREADABLE, never truncated. */
+export const READ_CAP_BYTES = 512 * 1024;
+
+/**
+ * Which readdir entries are skill directories. Pure over an injected `statOf` so
+ * the symlink cases are provable without making symlinks on disk.
+ *
+ * A skill directory may legitimately be a SYMLINK — that is how a synced set is
+ * usually wired. The old `readdirSync(p).filter((n) => statSync(join(p, n)).isDirectory())`
+ * followed them correctly and threw on a BROKEN one, and that throw happened inside
+ * `io.list`, whose only caller wraps it in the try/catch that marks the WHOLE ROOT
+ * "NOT SCANNED". So one dangling symlink — a skill deleted while its link remained,
+ * the ordinary way this breaks — hid every other skill under that root behind a
+ * single unreadable line.
+ */
+export function listSkillDirs(entries, statOf) {
+  const out = [];
+  for (const e of entries) {
+    if (e.isDirectory()) { out.push(e.name); continue; }
+    if (!e.isSymbolicLink()) continue;
+    // A dangling link is not a skill and cannot contain one; it is skipped, and it
+    // no longer takes the rest of the root with it.
+    try { if (statOf(e.name).isDirectory()) out.push(e.name); } catch { /* dangling */ }
+  }
+  return out;
 }
 
 /** A skill is THIS REPO'S business when it cites repo paths, whatever its name. */
@@ -100,8 +136,14 @@ export const claimsThisRepo = (s) => s.readable && s.cites.length > 0;
 
 const io = {
   exists: (p) => existsSync(p),
-  list: (p) => readdirSync(p).filter((n) => statSync(join(p, n)).isDirectory()),
-  read: (p) => readFileSync(p, "utf8"),
+  list: (p) => listSkillDirs(readdirSync(p, { withFileTypes: true }), (n) => statSync(join(p, n))),
+  read: (p) => {
+    const size = statSync(p).size;
+    if (size > READ_CAP_BYTES) {
+      throw new Error(`${size} bytes, over the ${READ_CAP_BYTES}-byte read cap — reported unreadable rather than read in part`);
+    }
+    return readFileSync(p, "utf8");
+  },
 };
 
 function selfTest() {
@@ -171,6 +213,53 @@ function selfTest() {
   r = scanSkillRoot("/fake", { ...fio, list: () => { throw new Error("EACCES"); } });
   checks.push(["an UNREADABLE root is NOT SCANNED, not clean", r.scanned === false && /EACCES/.test(r.reason)]);
 
+  // ── DETERMINISM: the record order must not be the filesystem's ──────────────
+  const reversed = scanSkillRoot("/fake", { ...fio, list: () => [...names].reverse() });
+  checks.push([
+    "records come back CODEPOINT-SORTED whatever order the directory listed them in",
+    JSON.stringify(reversed.skills.map((x) => x.name)) === JSON.stringify([...names].sort()),
+  ]);
+
+  // ── READ CAP: an oversized SKILL.md is reported unreadable, never truncated ─
+  const capped = scanSkillRoot("/fake", {
+    ...fio,
+    read: (p) => {
+      if (p === "/fake/good/SKILL.md") throw new Error(`900000 bytes, over the ${READ_CAP_BYTES}-byte read cap`);
+      return files.get(p);
+    },
+  });
+  const cappedGood = capped.skills.find((x) => x.name === "good");
+  checks.push([
+    "a SKILL.md over the read cap is reported UNREADABLE with the reason, never read in part",
+    cappedGood.readable === false && /read cap/.test(cappedGood.reason) && cappedGood.cites.length === 0,
+  ]);
+  checks.push([
+    "...and one over-cap skill does not sink the root or its siblings",
+    capped.scanned === true && capped.skills.length === names.length &&
+      capped.skills.find((x) => x.name === "stale").readable === true,
+  ]);
+  checks.push([`the read cap is a real bound, not zero (${READ_CAP_BYTES} bytes)`, READ_CAP_BYTES > 0]);
+
+  // ── SYMLINKS: a dangling link must not take the whole root with it ──────────
+  const dirent = (name, kind) => ({
+    name,
+    isDirectory: () => kind === "dir",
+    isSymbolicLink: () => kind === "link" || kind === "dangling",
+  });
+  const statOf = (n) => {
+    if (n === "linked") return { isDirectory: () => true };
+    if (n === "dangling") throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    return { isDirectory: () => false };
+  };
+  const listed = listSkillDirs(
+    [dirent("plain", "dir"), dirent("linked", "link"), dirent("dangling", "dangling"), dirent("afile", "file")],
+    statOf,
+  );
+  checks.push(["SYNTHETIC VIOLATION: a DANGLING symlink is skipped, not thrown — the root survives it", !listed.includes("dangling")]);
+  checks.push(["...and a symlink to a real directory is still a skill dir", listed.includes("linked")]);
+  checks.push(["...and a plain directory still is", listed.includes("plain")]);
+  checks.push(["...and a plain file is not", !listed.includes("afile")]);
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [label, ok] of checks) console.log(`  ${ok ? "✓" : "✗"} ${label}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -239,7 +328,12 @@ for (const root of ROOTS) {
     console.log(`NOT SCANNED  ${root} — ${r.reason}`);
     continue;
   }
-  const relevant = r.skills.filter(claimsThisRepo).sort((a, b) => Number(b.namesRepo) - Number(a.namesRepo));
+  // Total order. `Number(b.namesRepo) - Number(a.namesRepo)` alone leaves every tie
+  // to arrival order, which is the filesystem's — the tie-break on name is what
+  // makes two runs of this report comparable.
+  const relevant = r.skills
+    .filter(claimsThisRepo)
+    .sort((a, b) => Number(b.namesRepo) - Number(a.namesRepo) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   console.log(`SCANNED      ${root} — ${r.skills.length} skill(s), ${relevant.length} citing this repository`);
   for (const s of relevant) {
     claiming += 1;

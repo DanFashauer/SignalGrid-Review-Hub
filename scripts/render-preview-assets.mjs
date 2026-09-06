@@ -134,7 +134,11 @@ export function discoverSources(repoRoot = REPO_ROOT) {
     }
     found.push({ source: rel, output, viewport: { width, height } });
   }
-  found.sort((a, b) => a.output.localeCompare(b.output));
+  // CODEPOINT order, never `localeCompare`: this is the order the assets are
+  // rendered and reported in, and it follows the process locale and the ICU build
+  // otherwise — two machines, two orders, in a script whose entire product is
+  // byte-comparable committed PNGs.
+  found.sort((a, b) => (a.output < b.output ? -1 : a.output > b.output ? 1 : 0));
 
   const dupes = found.map((f) => f.output).filter((o, i, a) => a.indexOf(o) !== i);
   if (dupes.length) {
@@ -211,7 +215,12 @@ async function main(argv) {
 
   console.log('render-preview-assets — HTML preview sources -> committed PNGs');
   console.log(`  scope: DERIVED from tracked docs/**/*.html declaring <!-- render-viewport --> +`);
-  console.log('         <!-- render-output -->; deviceScaleFactor=1, fullPage=false,');
+  // INTERPOLATED, not typed. This line said `deviceScaleFactor=1` while
+  // DEVICE_SCALE_FACTOR was 2 and every PNG was rendered at 2× — the banner that
+  // describes the run stated the one parameter that decides the output size, and
+  // stated it wrong. A reader checking a committed PNG's dimensions against this
+  // header would have concluded the files were double what they should be.
+  console.log(`         <!-- render-output -->; deviceScaleFactor=${DEVICE_SCALE_FACTOR}, fullPage=false,`);
   console.log('         prefers-reduced-motion=reduce, each page rendered twice and compared.');
   console.log('');
 

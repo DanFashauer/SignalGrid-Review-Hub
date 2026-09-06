@@ -17,6 +17,7 @@
 // fail, not just code-name drift.
 import { readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 const FILES = {
   "lib/signalgrid-core/src/decision.ts": "decision",
@@ -168,6 +169,7 @@ export function parseSimulatorVocabulary(coreCodes) {
   // Fold in the remediation-allow wrapper's DECLARED vocabulary (its source of
   // truth is the exported array, not scattered emit sites — one push is computed,
   // `REASON_FOR_STATE[state]`, which a literal-after-paren scan cannot read).
+  const wrapperCounts = [];
   for (const wrapper of SIMULATOR_WRAPPERS) {
     const wrapperSrc = readFileSync(wrapper.path, "utf8");
     const declMatch = wrapperSrc.match(new RegExp(`${wrapper.array}\\s*=\\s*\\[([\\s\\S]*?)\\]\\s*as const`));
@@ -176,6 +178,7 @@ export function parseSimulatorVocabulary(coreCodes) {
       continue;
     }
     const declared = [...declMatch[1].matchAll(CODE_LIT)].map((x) => x[1]);
+    wrapperCounts.push({ array: wrapper.array, path: wrapper.path, count: declared.length });
     if (declared.length === 0) problems.push(`${wrapper.path}: ${wrapper.array} declares no reason code`);
     const declaredSet = new Set(declared);
     for (const c of declared) codes.add(c);
@@ -210,6 +213,7 @@ export function parseSimulatorVocabulary(coreCodes) {
     shared: all.filter((c) => core.has(c)),
     simulatorOnly: all.filter((c) => !core.has(c)),
     nearCollisions,
+    wrapperCounts,
     problems,
   };
 }
@@ -437,7 +441,7 @@ API vocabulary, and a host app must not build against them as if they were.
 They are also not renameable at will: \`native/ios/EnterpriseShell/Services/DecisionEngine.swift\`
 is a byte-faithful port of the simulator engine (CLAUDE.md golden rule 1), so the
 iOS app's reason codes ARE these spellings. Aligning them with the core's would
-break the parity the port exists to prove. The wrapper's eight codes have the same
+break the parity the port exists to prove. The wrapper's ${simulator.wrapperCounts.find((w) => w.array === "REMEDIATION_ALLOW_REASONS")?.count ?? "?"} codes have the same
 constraint by a different mechanism: \`native/ios/EnterpriseShell/Services/RemediationAllow.swift\`
 is held to the wrapper by the shared vector table and \`scripts/check-remediation-allow-conformance.mjs\`,
 so the spellings are a contract there too.
@@ -486,4 +490,4 @@ function generate() {
   );
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) generate();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) generate();

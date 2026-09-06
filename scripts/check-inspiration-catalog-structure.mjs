@@ -503,7 +503,7 @@ function selfTest() {
   checks.push(["PLANT: one row with no URL under a row-wise claim is FATAL and names the row", fatals(r).length === 1 && (fatals(r)[0]?.rule ?? "") === "rowwise-url" && /first at line 10/.test(msg(fatals(r)))]);
   r = one(T("# D", "", "## S", "", "3 entries · 2 source URLs, carried row-wise.", holed));
   checks.push(["stating the measured count (\"2 source URLs\") next to the URL noun downgrades it to REPORTED", fatals(r).length === 0 && /states its measured count/.test(msg(of(r, "rowwise-url")))]);
-  r = one(T("# D", "", "## S", "", "3 entries · source URLs included row-wise.", holed.replace("| C Corp | Gamma | public |  |", "| C Corp | Gamma | public |  |").replace("Official Docs URL", "Official Docs URL")));
+  r = one(T("# D", "", "## S", "", "3 entries · source URLs included row-wise.", holed));
   checks.push(["the count in \"3 entries\" does NOT exempt the URL claim — the figure must sit beside the URL noun", fatals(r).length === 1]);
   r = one(T("# D", "", "## S", "", "|Sheet|||||", "|---|---|---|---|---|", "|3 entries · 2 of 3 rows carry a source URL (measured 2026-09-06; the sheet's own header said \"source URLs included row-wise\") — 1 row carries none.|||||", "|Vendor|Product / Platform|Access class|Official Docs URL|", "|A|Alpha|public|https://a.example/|", "|B|Beta|public|https://b.example/|", "|C|Gamma|public||"));
   checks.push(["the \"N of M rows carry a source URL\" fix, QUOTING the old claim it replaces, is REPORTED — a header that measures itself is the fix, not the defect", fatals(r).length === 0 && /states its measured count/.test(msg(of(r, "rowwise-url")))]);

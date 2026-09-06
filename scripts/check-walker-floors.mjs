@@ -53,7 +53,7 @@
 // control must pass; a mention of the word "floor" must NOT pass; a vocabulary array
 // that is never walked must not be a walker; and the live detector must still find the
 // real walkers, in subdirectories included.
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -63,7 +63,7 @@ const SELF = "check-walker-floors.mjs";
 
 // A hand-listed array of STRING LITERALS bound to a const — the fossil shape. The
 // identifier's name is captured, never assumed.
-export const ARRAY_OF_STRINGS = /\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*\[(?:\s*(?:\/\/[^\n]*)?\n)*\s*["'`]/g;
+export const ARRAY_OF_STRINGS = /\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*\[(?:[^\S\n]*(?:\/\/[^\n]*)?\n)*[^\S\n]*["'`]/g;
 // A filesystem walk, by any of the names this repository's gates give one.
 export const WALK_CALL = /\breaddirSync\s*\(|\bwalk[A-Za-z]*\s*\(|\bcollectFiles\s*\(|\blistFiles\s*\(/;
 export const WALKS = /\breaddirSync\b/;
@@ -142,12 +142,12 @@ const NESTED_FLOOR = 6;
 function scriptSources() {
   const out = [];
   const walk = (dir) => {
-    for (const entry of readdirSync(dir)) {
-      if (entry === "node_modules" || entry === ".git") continue;
-      const full = join(dir, entry);
-      if (statSync(full).isDirectory()) walk(full);
-      // skip self: our self-test embeds walker strings
-      else if (entry.endsWith(".mjs") && entry !== SELF) out.push([relative(scriptsDir, full), readFileSync(full, "utf8")]);
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      // skip self: our self-test embeds walker strings (dirent type avoids a stat-then-read race)
+      else if (entry.name.endsWith(".mjs") && entry.name !== SELF) out.push([relative(scriptsDir, full), readFileSync(full, "utf8")]);
     }
   };
   walk(scriptsDir);

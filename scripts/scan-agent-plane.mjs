@@ -30,7 +30,7 @@
 //   node scripts/scan-agent-plane.mjs
 //   node scripts/scan-agent-plane.mjs --self-test   # prove it can report
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, openSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -138,11 +138,18 @@ const io = {
   exists: (p) => existsSync(p),
   list: (p) => listSkillDirs(readdirSync(p, { withFileTypes: true }), (n) => statSync(join(p, n))),
   read: (p) => {
-    const size = statSync(p).size;
-    if (size > READ_CAP_BYTES) {
-      throw new Error(`${size} bytes, over the ${READ_CAP_BYTES}-byte read cap — reported unreadable rather than read in part`);
+    // One open handle for fstat and read, so the size cap and the read see the
+    // same file — no stat-then-read race (CodeQL flagged the two-step form).
+    const fd = openSync(p, "r");
+    try {
+      const size = fstatSync(fd).size;
+      if (size > READ_CAP_BYTES) {
+        throw new Error(`${size} bytes, over the ${READ_CAP_BYTES}-byte read cap — reported unreadable rather than read in part`);
+      }
+      return readFileSync(fd, "utf8");
+    } finally {
+      closeSync(fd);
     }
-    return readFileSync(p, "utf8");
   },
 };
 

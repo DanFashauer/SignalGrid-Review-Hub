@@ -10112,7 +10112,7 @@
    "claim": "\"`scripts/check-review-coverage.mjs` prints review\" — \"coverage beside every green preflight\"; \"nothing skips silently.\"",
    "kind": "availability",
    "classification": "launch",
-   "evidence": "Grounded: scripts/check-review-coverage.mjs exists and preflight runs it beside its self-test at scripts/preflight.mjs:406-407 (\"a green gate suite is not a reviewed codebase\"). \"A proof that refuses … exits 1 by name; nothing skips silently\": scripts/src/lib/db-guard.ts:19-25 (named REFUSING, exit 1); validate-sim-macos.sh:302 prints the skipped count and names the skipped gates above it.",
+   "evidence": "Grounded: scripts/check-review-coverage.mjs exists and preflight runs it beside its self-test at scripts/preflight.mjs:418 (\"a green gate suite is not a reviewed codebase\"). \"A proof that refuses … exits 1 by name; nothing skips silently\": scripts/src/lib/db-guard.ts:19-25 (named REFUSING, exit 1); validate-sim-macos.sh:302 prints the skipped count and names the skipped gates above it.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },

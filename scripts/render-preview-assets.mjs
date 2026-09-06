@@ -104,8 +104,13 @@ export function discoverSources(repoRoot = REPO_ROOT) {
   for (const rel of trackedFiles(repoRoot, 'docs')) {
     if (!rel.endsWith('.html')) continue;
     const abs = path.join(repoRoot, rel);
-    if (!fs.existsSync(abs)) continue; // tracked but deleted in the worktree
-    const text = fs.readFileSync(abs, 'utf8');
+    let text;
+    try {
+      text = fs.readFileSync(abs, 'utf8');
+    } catch (err) {
+      if (err && err.code === 'ENOENT') continue; // tracked but deleted in the worktree
+      throw err;
+    }
     const vp = text.match(VIEWPORT_RE);
     const outDirective = text.match(OUTPUT_RE);
     if (!vp && !outDirective) continue;
@@ -237,7 +242,12 @@ async function main(argv) {
   try {
     for (const entry of entries) {
       const outAbs = path.join(REPO_ROOT, entry.output);
-      const before = fs.existsSync(outAbs) ? fs.readFileSync(outAbs) : null;
+      let before = null;
+      try {
+        before = fs.readFileSync(outAbs); // absent on a first render — read, never exists-then-read
+      } catch (err) {
+        if (!err || err.code !== 'ENOENT') throw err;
+      }
 
       const a = await renderOnce(browser, entry);
       const b = await renderOnce(browser, entry);
@@ -301,12 +311,10 @@ async function main(argv) {
   if (!checkOnly && !failures) {
     // Only rewrite entries this run produced; keep any others already pinned.
     let existing = { renders: {} };
-    if (fs.existsSync(manifestAbs)) {
-      try {
-        existing = JSON.parse(fs.readFileSync(manifestAbs, 'utf8'));
-      } catch {
-        existing = { renders: {} };
-      }
+    try {
+      existing = JSON.parse(fs.readFileSync(manifestAbs, 'utf8')); // absent or unparseable → start empty
+    } catch {
+      existing = { renders: {} };
     }
     const merged = { ...(existing.renders || {}), ...renders };
     const ordered = {};

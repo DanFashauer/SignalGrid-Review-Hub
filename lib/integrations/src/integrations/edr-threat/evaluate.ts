@@ -87,8 +87,17 @@ export function evaluateThreatPosture(
   // Fail-safe: an UNREPORTED signature age (null) is treated as stale. We never
   // report protection as fresh when its freshness cannot be confirmed — the same
   // "can't-see ≠ clean" discipline as the not-reporting and absent-agent paths.
+  //
+  // An UNREADABLE age (NaN — a source that sent "unknown", a parse that failed
+  // upstream) is the same blind spot and must grade the same way. Until 2026-09-06
+  // the test was `=== null || … >= staleHours`: `NaN >= n` is false, neither null
+  // arm fires, and an unreadable age graded `protected` while an honestly absent
+  // one graded `step_up` — the fifth NaN variant this repository has met, and the
+  // one `check-nan-fail-open` cannot see because no Date is parsed here (the NaN
+  // arrives as a plain `number | null` field). Number.isFinite rejects null, NaN
+  // and ±Infinity in one predicate.
   const signaturesStale =
-    endpoint.signatureAgeHours === null || staleHours === null || endpoint.signatureAgeHours >= staleHours;
+    !Number.isFinite(endpoint.signatureAgeHours) || staleHours === null || (endpoint.signatureAgeHours as number) >= staleHours;
   const agentPresent = endpoint.agentInstalled && endpoint.agentRunning;
   const protectionHealthy = agentPresent && endpoint.realtimeProtection && !signaturesStale;
 

@@ -195,8 +195,10 @@ Vite 8's bundler, win32 bindings deliberately kept for the windows desktop CI), 
     against both `SG.background` and `SG.card` in both appearances. `deny` once
     sat at 3.18:1 on card — the weakest contrast in the system on its most
     safety-critical state.
-  - `SignalGridMobile` is pure SwiftUI with semantic colors and needs none of
-    this; it is already adaptive. Do not "fix" it into a UIKit shape.
+  - `SignalGridMobile`'s WardlinkDemo target is pure SwiftUI with semantic colors and
+    needs none of this; it is already adaptive. Do not "fix" it into a UIKit shape.
+    SignalGridOperator is NOT covered by that sentence (BUILD_BACKLOG row 103) — this
+    line named the whole app until 2026-09-06.
 
 ## Simulation results — provenance is the product
 

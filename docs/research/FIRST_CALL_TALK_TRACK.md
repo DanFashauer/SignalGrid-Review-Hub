@@ -6,9 +6,9 @@
 > `scripts/check-launch-claims.mjs` on every build. This document predates
 > DR-011 (one ratified product label), DR-012 (the lean-IT market and the
 > Fleet-first proof stack) and DR-013 (open-source proof IS product proof).
-> It uses a retired label, names deferred signal families as current
-> capability, and describes the proof as synthetic when live open-source proof
-> already exists. It is kept for provenance only. 
+> Its label was corrected on 2026-08-23 (it once used a retired one); it still
+> names deferred signal families as current capability and describes the proof as
+> synthetic when live open-source proof already exists. It is kept for provenance only. 
 > **Nothing here is a claim of current capability**, and no message may be sent from it.
 
 Use this talk track for conservative, factual first calls with strategic partners, design partners, investors, or potential acquirers.

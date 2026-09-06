@@ -115,6 +115,15 @@
      "scope": "partial: all 12 first-party SKILL.md + VENDORED.md + ai-cli.md in full; three stack-reference files partially, four grepped; vendored content not audited.",
      "open": 1,
      "closed": 8
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Thirteenth round: the four stack-reference files the twelfth round grepped only (containers, mac-host, native, typescript) read in full. native.md told every agent the swiftlint force_unwrap rule warns on `.year!` — the rule's regex matched force CASTS and could not; writing planted fixtures found force_cast and weak_delegate broken the same way (three of eight custom rules were decoration) — all three regexes corrected, check-swiftlint-rules.mjs holds each rule to a positive and a negative. mac-host.md's .gitignore warning named `.env*`; the patterns are `.env`, `.env.local`, `.env.*.local` (so `.env.production` is unignored too — the warning now says so). No fail-open instruction; every never-list mention is a prohibition.",
+     "reviewer": "cloud lane (two independent fail-closed audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: all 12 first-party SKILL.md + VENDORED.md + the eight stack-reference files now read in full; vendored content not audited.",
+     "open": 0,
+     "closed": 2
     }
    ]
   },
@@ -548,6 +557,15 @@
      "scope": "partial: mechanical figure/path/gate-wiring sweep across all 214 loose files, close read of 10; the three largest bodies (BUILD_BACKLOG, COMPANY_BUILD_PLAN, CLAIM_INVENTORY) not read.",
      "open": 0,
      "closed": 6
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Thirteenth round: docs/BUILD_BACKLOG.md (1,296 lines) and docs/COMPANY_BUILD_PLAN.md (4,914 lines) read IN FULL, section by section. The pattern: closures propagate into the tree and not back into the rows. BUILD_BACKLOG:286 said check-connector-discipline reports 36/36 families (51/51; flagged by the 2026-08-21 role-lens review and left standing beside its twin, which was fixed and gated on 2026-09-06); :92-94 justified a placement by a reachability reading the same file later retracted; build-plan row 73 carried five closed bullets as open (three closed by the previous HEAD), rows 157/122/113 read OPEN while the tree (and row 160) had closed them; three different preflight-gate counts (175/179/180-odd) and two launch-profile totals (174/179) in one document, none current. All corrected with dates or replaced by the command. Row 127's third reproduction turned out LIVE: edr-threat/evaluate.ts graded a NaN signatureAgeHours PROTECTED (fixed, proven, mutation-tested). CLAUDE.md's SignalGridMobile sentence now names WardlinkDemo as the plan had required since 2026-08-30. The other 212 loose files stand as the tenth round left them.",
+     "reviewer": "cloud lane (two independent fail-closed audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: BUILD_BACKLOG.md and COMPANY_BUILD_PLAN.md in full; the other loose files as the tenth round left them (mechanical sweep + close read of 10).",
+     "open": 0,
+     "closed": 12
     }
    ]
   },
@@ -561,6 +579,15 @@
      "record": "docs/agent/EVIDENCE.md",
      "scope": "partial: EVIDENCE.md, PONYTAIL_AUDIT_2026-09-01.md, DISCOVERY_LOG.md, LOOP.md STATE, the JSON registries and their schema comments; the other agent markdown not opened.",
      "open": 0,
+     "closed": 3
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Thirteenth round, partial: CLAIM_INVENTORY.json (1,023 rows) analysed programmatically on four properties and ~70 rows hand-verified. Found: the 2026-09-06 markdown-link repair had rewritten two QUOTATIONS in the source (README's MIT line and a Pages sentence README no longer carries) — reverted, the MIT row's line corrected 140→234, the Pages row annotated, and the renderer now escapes link syntax inside the claim column so the excerpt is never a navigation target; seven rows cited lib/signal-radar/dist/index.d.ts (untracked build output) → src/index.ts:24; groundTruth dated against v5. Still open and recorded: 58 README rows quote a README rebuilt on 2026-09-01 (45 quotations no longer present), two rows cite lines past EOF, 13 remove-actioned buyer-facing quotes still render — a regeneration of the README rows and a claim-anchor gate are the next batch's work, not this one's.",
+     "reviewer": "cloud lane (two independent fail-closed audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: CLAIM_INVENTORY.json by four programmatic properties + ~70 hand-verified rows; EVIDENCE.md, LOOP.md, the registries as before.",
+     "open": 3,
      "closed": 3
     }
    ]
@@ -590,6 +617,15 @@
      "scope": "partial: 5 of 9 files read in full; ROLE_CATALOG, ROLE_ACTIVATION_MATRIX, ROLE_LENS_REVIEW_2026-08-21 and HIRING_SEQUENCE by structure and targeted grep only.",
      "open": 1,
      "closed": 3
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Thirteenth round: ROLE_CATALOG.md parsed field-by-field across all 164 entries (~120 lines as prose), ROLE_ACTIVATION_MATRIX in full, HIRING_SEQUENCE figure- and script-checked. Catalog↔matrix parity exact (164/164, 0 status or division mismatches); every cited path and 130 script names resolve. Found: two headings read '(engaged)' over tables saying nobody is (removed; check-role-heading-status.mjs is new); '18 raw font calls remain' quoted in three files sixteen days after the gate drove it to zero (dated 0). The premise that the catalog 'declares 42 roles' was wrong — 42 is the agent roster; the catalog says so.",
+     "reviewer": "cloud lane (two independent fail-closed audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: ROLE_CATALOG by structure + ~120 prose lines, ROLE_ACTIVATION_MATRIX in full, HIRING_SEQUENCE by figures; the other company files as the eleventh round left them.",
+     "open": 0,
+     "closed": 2
     }
    ]
   },
@@ -702,6 +738,15 @@
      "scope": "partial: structural parse of both collections; request bodies not read.",
      "open": 0,
      "closed": 0
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Thirteenth round: both collections fully parsed — every request, header, body and event. 74 requests, 52 GET / 22 POST, 0 pre-request scripts, 0 collection events, 0 real credentials (the token is the seeded fixture key). build-postman's spec check was one-directional and path-only — a request for a route the API does not serve, or a POST to a GET-only path, produced no signal (zero live orphans; a planted one went unnoticed) — now checked both ways keyed on method + path, with a --self-test that plants an orphan.",
+     "reviewer": "cloud lane (two independent fail-closed audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
     }
    ]
   },
@@ -730,6 +775,15 @@
      "scope": "partial: 32 of 49 files read in full (all COMPETITIVE_*, MARKET_LANDSCAPE, the coverage maps, the strategy and readiness files); 17 send-copy/founder/social files grepped and partially read only.",
      "open": 0,
      "closed": 7
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Thirteenth round: the 17 files the eleventh round grepped only — 5 read in full (LINKEDIN_POST_DRAFTS, SOCIAL_PLATFORM_MESSAGE_VARIANTS, SOCIAL_MEDIA_PREANNOUNCEMENT_PACKET, STRATEGIC_BUYER_PARTNER_PITCH_PACK, OUTREACH_EMAIL_TEMPLATES), 12 swept for retired labels, banners, send shapes, the five claim categories and tree figures. Found: three unbannered files hold paste-ready DMs, teasers and posts that the send-copy gate could not see (it detected send-readiness by the email idiom alone) — bannered do-not-post, index entries repeat it, and the gate now reads outbound-artifact headings; SOCIAL_VISUAL_CONCEPTS instructed a designer to typeset the retired label twice under the launch-claims quote idiom (captions rewritten to the ratified label; the idiom no longer reaches a typesetting verb); two do-not-send banners justified themselves with a reason that stopped being true (labels corrected). Clean: no exclusivity/partnership/certification/customer/revenue claim, no tree figure in the 12.",
+     "reviewer": "cloud lane (two independent fail-closed audit agents + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: 5 of the 17 remainder files in full, 12 by sweep; the other 32 research files as the eleventh round left them.",
+     "open": 0,
+     "closed": 4
     }
    ]
   },

@@ -51,8 +51,27 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465)
-              and M (#466) LANDED. Batch N (twelfth round, on its PR) read the
+LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
+              M (#466) and N (#468) LANDED. Batch O (thirteenth round, on its
+              PR) read both plans end to end and the remainders: the EDR threat
+              evaluator graded a NaN signature age PROTECTED (null → step_up;
+              NaN fell between the arms) - Number.isFinite, proven, mutation
+              fails by name; the morning's markdown-link repair had rewritten
+              two QUOTATIONS in CLAIM_INVENTORY.json (reverted; the renderer
+              escapes link syntax in the claim column); three of eight swiftlint
+              custom rules could not match their subject (force_unwrap matched
+              casts, force_cast matched nothing, weak_delegate fired on weak) -
+              all three fixed, check-swiftlint-rules holds each to a planted
+              positive and negative; three unbannered social files held
+              paste-ready DMs/posts the send-copy gate could not see (bannered;
+              the gate reads outbound headings now); both plans carried stale
+              gate counts (175/179/180-odd vs 327) and rows still OPEN that the
+              tree had closed (row 73's five bullets, 157, 122, 113) - dated or
+              closed; Postman coverage now checks both directions by method.
+              OPEN, recorded: 58 CLAIM_INVENTORY README rows quote a README
+              rebuilt 2026-09-01; a claim-anchor gate and nan-fail-open rule 5
+              (number|null compared without isFinite) are specified, not built.
+              Batch N (twelfth round) read the
               send surface, the remaining docs families and the skills every
               role loads: four doc gates exempted ALL of .claude/skills as
               vendored while VENDORED.md says 12 are first-party - 96
@@ -323,12 +342,17 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land batch N, then the partial remainders (17 research
-              send-copy files, ROLE_CATALOG body, the inspiration catalogs'
-              prose, the four smaller stack-reference files, Postman request
-              bodies) and the three big docs bodies the tenth round only
-              sampled (BUILD_BACKLOG, COMPANY_BUILD_PLAN, CLAIM_INVENTORY
-              JSON); then whatever the ledger still marks not read. OWNER: the ICP
+NEXT ACTION: cloud: land batch O, then Batch P = the three specified-not-built
+              items: (1) regenerate CLAIM_INVENTORY.json's 58 README rows against
+              the 2026-09-01 README (45 quotations no longer present, 2 rows past
+              EOF, 13 remove-actioned buyer-facing quotes still rendering);
+              (2) check-claim-inventory-anchors — a fully-quoted claim must still
+              appear in its file within ±10 lines, ratcheted on "absent";
+              (3) check-nan-fail-open rule 5 — a `number | null` field compared
+              with </>/<=/>= in lib/*/src/**/evaluate.ts needs Number.isFinite
+              unless it came through posedBound (must fire on the pre-fix
+              edr-threat line). Then the inspiration catalogs' prose and
+              whatever the ledger still marks not read. OWNER: the ICP
               segment ("75-1,000 employees, 1-10 in IT") is stated flatly in
               INVESTOR_ONE_PAGER while ICP_EVIDENCE calls it an assumption -
               your call, not a gate's. OWNER, once, on the Mac, now that

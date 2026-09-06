@@ -35,9 +35,21 @@ const SKIP_PREFIXES = ["attached_assets/", "vendor/", "third_party/", ...vendore
  * into a research doc arrived with the `>` and read as "no send copy here".
  */
 export const SUBJECT_LINE = /^\s*(?:>\s*)*(?:\*\*)?Subject:/;
+/**
+ * A heading that DECLARES an outbound artifact — a DM, a teaser, a blurb, a
+ * snippet, a CTA block, "short posts", or a lettered post draft ("## B. Problem
+ * post"). Detection by the email idiom alone left three social/DM files invisible:
+ * `## Partner DM` with a paste-ready body under it read as "no send copy here"
+ * (thirteenth audit round, 2026-09-06). The nouns are artifact nouns, not tone —
+ * "Post-exit reachability", "Pre-post checklist" and "Drafts produced by this
+ * sweep" are deliberately outside the shape (measured against every tracked
+ * heading before the pattern was set).
+ */
+export const OUTBOUND_HEADING =
+  /^#{2,4}\s+(?:.*\b(?:DM|teaser|blurb|snippet|CTA options|short posts|CTA)\b|[A-Z]\.\s+.*\bposts?\b)/;
 export const BANNER_WINDOW = 30;
 
-/** Pure: does this document hold a send template outside a code fence? */
+/** Pure: does this document hold a send template (a Subject: line or an outbound-artifact heading) outside a code fence? */
 export function hasSendTemplate(text) {
   let fenced = false;
   for (const line of text.split("\n")) {
@@ -45,7 +57,7 @@ export function hasSendTemplate(text) {
       fenced = !fenced;
       continue;
     }
-    if (!fenced && SUBJECT_LINE.test(line)) return true;
+    if (!fenced && (SUBJECT_LINE.test(line) || OUTBOUND_HEADING.test(line))) return true;
   }
   return false;
 }
@@ -108,6 +120,12 @@ function selfTest() {
   checks.push(["a banner below the window does not count — the window is the index-parity gate's", r.fatal.length === 1]);
   r = auditSendCopy({ "docs/research/PACK.md": "# Pack\n\n> Subject: SignalGrid discussion\n>\n> Hi …\n" });
   checks.push(["a BLOCKQUOTED template is a template — the form TEMPLATES.md actually uses, invisible to the first version", r.templates === 1 && r.fatal.length === 1]);
+  r = auditSendCopy({ "docs/research/SOCIAL.md": "# Variants\n\n## Partner DM\n\nHi — I am working on SignalGrid…\n" });
+  checks.push(["a heading that DECLARES an outbound artifact (## Partner DM) is a template — the social/DM shape the email idiom missed", r.templates === 1 && r.fatal.length === 1]);
+  r = auditSendCopy({ "docs/research/POSTS.md": "# Drafts\n\n## B. Problem post: \"Enterprise systems know fragments\"\n\ntext\n" });
+  checks.push(["…and a lettered post draft is one too", r.templates === 1]);
+  r = auditSendCopy({ "docs/x.md": "## Post-exit reachability (carrier connectivity) — gated\n## Pre-post checklist\n## Drafts produced by this sweep\n## Post-configuration recorder model\n" });
+  checks.push(["headings that merely CONTAIN post/draft (Post-exit, Pre-post, Drafts produced) are not outbound artifacts", r.templates === 0]);
   const live = auditSendCopy(loadDocs());
   checks.push(["LIVE: the outreach surface itself is SEEN (≥1 template inside the scanned set) and every template outside it is bannered",
     live.scanned >= 1 && live.templates >= 2 && live.fatal.length === 0]);

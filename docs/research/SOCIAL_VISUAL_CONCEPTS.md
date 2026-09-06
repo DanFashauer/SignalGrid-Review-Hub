@@ -32,7 +32,7 @@ Use a simple equation-like layout:
 
 Identity + Device + Custody + Workflow + Risk Context → Auditable decision
 
-Add a small caption: "Operational trust orchestration for shared, mobile, and frontline environments."
+Add a small caption: "Access-decision orchestration for shared, mobile, and frontline environments." (This line set the retired label until 2026-09-06.)
 
 ## Concept 3: "What should happen next?" decision flow
 
@@ -63,7 +63,7 @@ Show source-system layers at the bottom:
 
 IAM / MDM-UEM / Readers-Lockers / Network / ITSM / SIEM
 
-Place "SignalGrid operational trust orchestration" above them as a neutral orchestration layer. Add arrows upward for signals and downward for approval-required routes or evidence expectations, not direct production actions.
+Place "SignalGrid access-decision orchestration" above them as a neutral orchestration layer. Add arrows upward for signals and downward for approval-required routes or evidence expectations, not direct production actions.
 
 Public-safe note: label all systems generically and avoid implying current integrations, partnerships, or replacement.
 

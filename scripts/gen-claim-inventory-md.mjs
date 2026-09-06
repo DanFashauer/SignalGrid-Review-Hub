@@ -113,7 +113,11 @@ describe the checked-in surfaces. Since 2026-09-06 \`scripts/check-claim-invento
 holds every quoted row to its surface: a quotation more than ten lines from
 its citation fails until \`--write\` re-anchors it, and the count of quotations
 absent without a resolution is ratcheted (it may only fall — the live figures
-are in \`docs/agent/claim-inventory-anchors-ratchet.json\`). Whether a NEW
+are in \`docs/agent/claim-inventory-anchors-ratchet.json\`). The same gate holds
+each row's \`evidence\`: every root-anchored \`path:line\` must exist, a quoted
+fragment must sit within ten lines of it, and a citation into
+\`scripts/launch-profile.mjs\` that names an id and an arm is tested by importing
+the profile's SURFACES — the arm, never the line number. Whether a NEW
 claim on a surface has a row is still nobody's gate; extraction remains a
 manual pass, and the README rows were re-extracted on 2026-09-06 against the
 2026-09-01 rebuild.

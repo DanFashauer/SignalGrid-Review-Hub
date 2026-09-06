@@ -702,7 +702,7 @@
    "claim": "\"16 candidate source categories\"",
    "kind": "count",
    "classification": "unsubstantiated",
-   "evidence": "RE-ANCHORED 2026-09-05: the 16 IS an artifact — the integrations catalog in artifacts/api-server/src/routes/integrations.ts carries exactly 16 distinct `category` values (IGA / IDP … GRC / Compliance), and scripts/check-site-figures.mjs now binds this string, the IntegrationsSection heading and its stat tile to that count. Earlier evidence, superseded: No artifact produces 16: artifacts/signalgrid-web/src/components/sections/IntegrationsSection.tsx:45 says \"the core normalizes 17 signal categories today\"; scripts/launch-profile.mjs:156-241 enumerates 3 launch connector families and ~47 deferred ones; signal kinds are 3 launch (:246-259) against 39 deferred (:262-301). The figure matches no gate-checked count",
+   "evidence": "RE-ANCHORED 2026-09-05: the 16 IS an artifact — the integrations catalog in artifacts/api-server/src/routes/integrations.ts carries exactly 16 distinct `category` values (IGA / IDP … GRC / Compliance), and scripts/check-site-figures.mjs now binds this string, the IntegrationsSection heading and its stat tile to that count. Earlier evidence, superseded: No artifact produces 16: artifacts/signalgrid-web/src/components/sections/IntegrationsSection.tsx (as read on 2026-08-21) said \"the core normalizes 17 signal categories today\" — that sentence is gone; the section now carries the 16-category taxonomy and a \"17 — Core signal categories\" stat tile, both bound by check-site-figures.mjs; scripts/launch-profile.mjs:156-241 enumerates 3 launch connector families and ~47 deferred ones; signal kinds are 3 launch (:246-259) against 39 deferred (:262-301). The figure matches no gate-checked count",
    "action": "rewrite"
   },
   {
@@ -4841,7 +4841,7 @@
    "claim": "After-state: \"One decision layer\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "scripts/launch-profile.mjs:446-449 — api-server is \"one tenant-aware decision service. The whole of 'one product'\"; `POST /v1/decisions/evaluate` (lib/api-spec/v1-openapi.yaml:110)",
+   "evidence": "scripts/launch-profile.mjs:466-467 — api-server (app-surfaces, launch) is \"The product: one tenant-aware decision service\" (re-cited 2026-09-06: the 2026-08-21 lines now hold the published-api-paths list); `POST /v1/decisions/evaluate` (lib/api-spec/v1-openapi.yaml:110)",
    "action": "keep"
   },
   {
@@ -5342,7 +5342,7 @@
    "claim": "\"Sensitive steps (a controlled-room door and PHI display, a high-value cage, or a cross-region cargo seal) are never automatic; they wait for a clinician, supervisor, or dispatcher to confirm.\"",
    "kind": "capability",
    "classification": "demo-only",
-   "evidence": "True of the bundled fixture plan (confirmation gate rendered at docs/room-entry-console.html:180-182) and consistent with docs/SECURITY_BASELINE_ALIGNMENT.md:128 (\"every remediation is approval-gated and simulated\").",
+   "evidence": "True of the bundled fixture plan (confirmation gate rendered at docs/room-entry-console.html:180-182) and consistent with docs/SECURITY_BASELINE_ALIGNMENT.md:132 (\"Every baseline-driven remediation is approval-gated and simulated\" — re-cited 2026-09-06; :128 now carries the no-certification clause).",
    "action": "keep"
   },
   {
@@ -8970,7 +8970,7 @@
    "kind": "capability",
    "classification": "demo-only",
    "action": "rewrite",
-   "evidence": "Implemented client-side over the fixture rows only (:14-25 — Blob, object URL, `decisions-<timestamp>.csv`); it exports whatever the fixture route returned and has no relationship to the audit ledger. CORRECTS A STALE ENTRY: docs/CLAIM_INVENTORY.md:212 states \"there is no audit page and no export path anywhere in artifacts/signalgrid-desktop/src\" — an export path now exists here, though it is not an audit export. The real ledger exporter is the operator-side CLI scripts/src/export-ledger-cli.ts (pnpm run db:export-ledger); lib/api-spec/v1-openapi.yaml has no /v1/audit/export path. MITIGATION ABSENT — the button label does not say fixture."
+   "evidence": "Implemented client-side over the fixture rows only (:14-25 — Blob, object URL, `decisions-<timestamp>.csv`); it exports whatever the fixture route returned and has no relationship to the audit ledger. CORRECTS A STALE ENTRY: docs/CLAIM_INVENTORY.md:224 states \"there is no audit page and no export path anywhere in artifacts/signalgrid-desktop/src\" — an export path now exists here, though it is not an audit export. The real ledger exporter is the operator-side CLI scripts/src/export-ledger-cli.ts (pnpm run db:export-ledger); lib/api-spec/v1-openapi.yaml has no /v1/audit/export path. MITIGATION ABSENT — the button label does not say fixture."
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Decisions.tsx",

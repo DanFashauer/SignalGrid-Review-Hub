@@ -41,6 +41,32 @@
 //   inside the evidence text), a fragment found nowhere is RATCHETED like an
 //   absent claim. Measured before the rule existed: 1,066 citations in
 //   unresolved rows, 217 carrying a fragment, 53 drifted, 67 absent.
+//   A fragment that is the row's OWN claim wording — `scripts/x.mjs:246-259).
+//   Future-tense framing ("being designed")` quotes the surface, not the cited
+//   file — is a CLAIM ECHO and is never held against the citation (nine of the
+//   eleven "absent" fragments left on 2026-09-06 were this shape).
+//   launch-profile membership (added 2026-09-06, Batch S) — a citation into
+//   scripts/launch-profile.mjs almost always asserts an ARM ("graph is launch",
+//   "custody-beacon … deferred"), and the line number is the weakest possible
+//   proof of it: 28 such citations in the remove-actioned rows landed on
+//   unrelated lines while every membership claim they made was still true, and
+//   a line number goes on being "right" after the profile moves the id to
+//   another arm. So the arm is tested by IMPORTING the profile: each profile id
+//   named in the citation's clause is paired with the status word that GOVERNS
+//   it — the nearest one after it with only link material between ("X and Y
+//   are deferred"), else the nearest one before it the same way ("defers X, Y",
+//   "three launch families — X, Y") — and looked up in SURFACES; never a line
+//   number. Nearest-word pairing was tried first and produced 29 false
+//   mismatches on the live inventory ("no alert-routing surface at launch:
+//   /v1/webhooks … are deferred" paired the path with "launch"); the citations
+//   are masked too, because the word "launch" inside "launch-profile.mjs" is a
+//   path, not an arm (four more false mismatches in the first survey); and a
+//   bare dictionary word that is also an id ("network", "identity", "graph")
+//   counts only when the evidence marks it as one — backticked, quoted, or the
+//   subject of is/are. An id with no governing status word is REPORTED as
+//   unasserted, never judged. Mismatches are RATCHETED (first measurement is
+//   the ceiling); the import itself is floored — fewer than 40 ids or fewer than
+//   four arms means the profile's shape changed under the check, FATAL.
 //   The ratchet file is a regenerate-and-diff artifact (same pattern as
 //   role-coverage-ratchet.json): check mode recomputes it and fails on any byte
 //   difference, naming the direction; only `--write` writes it.
@@ -55,6 +81,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { SURFACES, STATUSES } from "./launch-profile.mjs";
 
 const JSON_PATH = "docs/agent/CLAIM_INVENTORY.json";
 const RATCHET = "docs/agent/claim-inventory-anchors-ratchet.json";
@@ -66,7 +93,7 @@ const SELF_TEST = process.argv.includes("--self-test");
 
 const RATCHET_NOTE =
   "Claim-inventory anchor ratchet: quoted claims absent from their surface without a resolution, " +
-  "remove-actioned claims still present, and evidence citations whose quoted fragment is no longer at " +
+  "remove-actioned claims still present, launch-profile arms asserted against the imported profile that it contradicts, and evidence citations whose quoted fragment is no longer at " +
   "the cited file. DERIVED by scripts/check-claim-inventory-anchors.mjs; never hand-edit. No figure " +
   "may rise; a fall is recorded with `--write` and committed.";
 
@@ -262,6 +289,9 @@ export function checkCitations(row, readIndex) {
     if (!index) return { status: "missing", citation: c };
     if (c.hi > index.lines) return { status: "pastEof", citation: c };
     if (!c.seg) return { status: "unfragmented", citation: c };
+    // The row's own claim wording quoted after a citation is the surface
+    // speaking, not the cited file — existence-check the citation and stop.
+    if (norm(String(row.claim ?? "")).includes(c.seg)) return { status: "claimEcho", citation: c };
     const hits = occurrences(index, c.seg);
     if (hits.length === 0) return { status: "absent", citation: c };
     if (hits.some(([s, e]) => e >= c.lo - FRAG_WINDOW && s <= c.hi + FRAG_WINDOW)) return { status: "near", citation: c };
@@ -281,7 +311,146 @@ export function evidenceAll(rows, readIndex) {
     for (const r of checkCitations(row, idx)) results.push({ i, row, ...r });
   });
   const by = (s) => results.filter((r) => r.status === s);
-  return { results, missing: by("missing"), pastEof: by("pastEof"), unfragmented: by("unfragmented"), near: by("near"), moved: by("moved"), absent: by("absent") };
+  return { results, missing: by("missing"), pastEof: by("pastEof"), unfragmented: by("unfragmented"), claimEcho: by("claimEcho"), near: by("near"), moved: by("moved"), absent: by("absent") };
+}
+
+// ── launch-profile membership ────────────────────────────────────────────────
+const PROFILE_CITE_RE = /scripts\/launch-profile\.mjs(?::\d+(?:-\d+)?)?/g;
+const STATUS_RE = /\b(launch|deferred|defers|demo[_ -]only|internal)\b/gi;
+const armOf = (word) => (word.toLowerCase() === "defers" ? "deferred" : word.toLowerCase().replace(/[ -]/, "_"));
+// Words that may stand between an id and the status word that governs it
+// ("X and Y are both deferred", "three launch families — X, Y"); anything else
+// between them means the status word belongs to some other subject.
+const LINK_WORDS = new Set([
+  "and", "or", "both", "all", "are", "is", "was", "were", "remain", "remains", "stay", "stays", "classified", "as", "a", "an", "the",
+  "each", "only", "one", "still", "now", "also", "its", "their", "path", "paths", "family", "families", "kind", "kinds", "surface",
+  "surfaces", "connector", "connectors", "route", "routes", "published", "signal", "signals", "row", "rows", "id", "ids", "entry",
+  "entries", "two", "three", "four", "five", "read-only",
+]);
+// Phrases in which "launch" is a name, not an arm.
+const PHRASE_MASK_RE = /launch[- ](profile|claims?|surface|decision paths?)/gi;
+const PROFILE_ID_FLOOR = 40;
+
+/** id → Set(arm) from the profile's SURFACES (entries are `{ id }` objects or bare id strings). */
+export function profileArms(surfaces, statuses) {
+  const arms = new Map();
+  for (const s of surfaces) {
+    for (const st of statuses) {
+      for (const e of s[st] ?? []) {
+        const id = typeof e === "string" ? e : e?.id;
+        if (!id) continue;
+        if (!arms.has(id)) arms.set(id, new Set());
+        arms.get(id).add(st);
+      }
+    }
+  }
+  return arms;
+}
+
+const maskSpans = (text, re) => text.replace(re, (m) => " ".repeat(m.length));
+
+/** The clause holding offset `at`: bounded by `;`, a newline, or a sentence break (period, space, capital). */
+export function clauseAround(text, at) {
+  let lo = 0;
+  let hi = text.length;
+  for (const m of text.matchAll(/;|\n|\.\s+(?=[A-Z])/g)) {
+    const s = m.index;
+    const e = s + m[0].length;
+    if (e <= at) lo = e;
+    else if (s >= at) {
+      hi = s;
+      break;
+    }
+  }
+  return { lo, hi, clause: text.slice(lo, hi) };
+}
+
+/**
+ * Pure: every launch-profile citation in one evidence string → the arm assertions in its clause.
+ *   { status: "ok" | "mismatch" | "unasserted", citation, id?, asserted?, actual?, clause }
+ */
+export function membershipAssertions(evidence, arms) {
+  const text = String(evidence ?? "");
+  const out = [];
+  const ids = [...arms.keys()].sort((a, b) => b.length - a.length);
+  const idSet = new Set(ids);
+  const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // A bare dictionary word that happens to be a profile id ("network", "identity",
+  // "graph") counts only when the evidence marks it as an id — backticked, quoted,
+  // or sitting in "X is/are …" / "the X connector|family|kind" — "zero network" is English.
+  const plainWord = (id) => !/[-_/:.]/.test(id);
+  const marked = (clause, at, id) => {
+    const before = clause.slice(Math.max(0, at - 24), at);
+    const after = clause.slice(at + id.length, at + id.length + 24);
+    if (/[`"'“‘]$/.test(before) && /^[`"'”’]/.test(after)) return true;
+    if (/^\s+(is|are|remains?|stays?|connector|family|kind)\b/.test(after)) return true;
+    return /\b(family|families|kind|kinds|connector|connectors|id|ids|only)\s+$/.test(before);
+  };
+  // Is `between` (the text from an id to a status word, or back) made only of
+  // separators, link words, numbers, citations and other ids? A sentence break or
+  // any other word means the status governs some other subject.
+  const linked = (between) => {
+    let t = maskSpans(between, PROFILE_CITE_RE).replace(/:\d+(?:-\d+)?/g, " ");
+    for (let k = 0; k < 4; k += 1) t = t.replace(/\([^()]*\)/g, " ");
+    if (/\.\s/.test(t) || /[()]/.test(t)) return false;
+    for (const tok of t.split(/[\s,;:`"'“”‘’*—–\[\]]+/)) {
+      if (tok === "" || tok === "-" || tok === "/" || /^\d+$/.test(tok)) continue;
+      if (LINK_WORDS.has(tok.toLowerCase()) || idSet.has(tok)) continue;
+      return false;
+    }
+    return true;
+  };
+  for (const m of text.matchAll(PROFILE_CITE_RE)) {
+    const { clause } = clauseAround(text, m.index);
+    const masked = maskSpans(maskSpans(clause, PROFILE_CITE_RE), PHRASE_MASK_RE);
+    const statuses = [...masked.matchAll(STATUS_RE)].map((s) => ({ at: s.index, end: s.index + s[0].length, arm: armOf(s[1]) }));
+    const found = [];
+    for (const id of ids) {
+      for (const im of masked.matchAll(new RegExp(`(?<![\\w/-])${escape(id)}(?![\\w/-])`, "g"))) {
+        if (plainWord(id) && !marked(clause, im.index, id)) continue;
+        found.push({ id, at: im.index, end: im.index + id.length });
+      }
+    }
+    let asserted = 0;
+    for (const f of found) {
+      // The status that governs an id: the nearest one AFTER it with only link
+      // material between ("X and Y are deferred"), else the nearest one BEFORE
+      // it the same way ("defers X, Y" / "three launch families — X, Y").
+      const after = statuses.filter((s) => s.at >= f.end).sort((x, y) => x.at - y.at).find((s) => linked(masked.slice(f.end, s.at)));
+      const before = statuses.filter((s) => s.end <= f.at).sort((x, y) => y.at - x.at).find((s) => linked(masked.slice(s.end, f.at)));
+      const gov = after ?? before;
+      if (!gov) continue;
+      asserted += 1;
+      const actual = arms.get(f.id);
+      out.push({
+        status: actual.has(gov.arm) ? "ok" : "mismatch",
+        citation: m[0],
+        id: f.id,
+        asserted: gov.arm,
+        actual: [...actual],
+        clause: clause.trim(),
+      });
+    }
+    if (asserted === 0) out.push({ status: "unasserted", citation: m[0], clause: clause.trim() });
+  }
+  return out;
+}
+
+export function membershipAll(rows, arms) {
+  const results = [];
+  rows.forEach((row, i) => {
+    if (row.resolution) return;
+    // Two citations in one clause yield the same assertions twice; count each (row, id, arm) once.
+    const seen = new Set();
+    for (const r of membershipAssertions(row.evidence, arms)) {
+      const key = `${r.status}|${r.id ?? ""}|${r.asserted ?? ""}|${r.clause}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push({ i, row, ...r });
+    }
+  });
+  const by = (s) => results.filter((r) => r.status === s);
+  return { results, ok: by("ok"), mismatch: by("mismatch"), unasserted: by("unasserted") };
 }
 
 /** `--write`: re-anchor each moved citation's line inside the evidence text, last match first so earlier indices stay valid. */
@@ -305,13 +474,14 @@ export function rewriteCitations(rows, ev) {
   return changed;
 }
 
-export function ratchetObject(a, ev) {
+export function ratchetObject(a, ev, mem) {
   const sortedByFile = Object.fromEntries(Object.entries(a.absentByFile).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)));
   return {
     note: RATCHET_NOTE,
     absent: a.absent.length,
     removeActionedStillPresent: a.removeStillPresent.length,
     evidenceFragmentsAbsent: ev ? ev.absent.length : 0,
+    membershipMismatches: mem ? mem.mismatch.length : 0,
     absentByFile: sortedByFile,
   };
 }
@@ -336,6 +506,9 @@ export function ratchetVerdict({ committedRaw, isTracked, expectedRaw, committed
     }
     if (committed && now.evidenceFragmentsAbsent > (committed.evidenceFragmentsAbsent ?? 0)) {
       rose.push(`evidence fragments absent ${committed.evidenceFragmentsAbsent ?? 0} → ${now.evidenceFragmentsAbsent}`);
+    }
+    if (committed && (now.membershipMismatches ?? 0) > (committed.membershipMismatches ?? 0)) {
+      rose.push(`launch-profile membership mismatches ${committed.membershipMismatches ?? 0} → ${now.membershipMismatches}`);
     }
     return { ok: false, kind: rose.length > 0 ? "rose" : "stale", rose };
   }
@@ -440,6 +613,50 @@ function selfTest() {
   const r1 = { ...r0, evidenceFragmentsAbsent: r0.evidenceFragmentsAbsent + 1 };
   const v3 = ratchetVerdict({ committedRaw: serializeRatchet(r0), isTracked: true, expectedRaw: serializeRatchet(r1), committed: r0, now: r1 });
   checks.push(["a RISE in absent evidence fragments is fatal by name", !v3.ok && v3.kind === "rose" && v3.rose[0].startsWith("evidence fragments absent")]);
+  const echo = evidenceAll(
+    [{ file: "s", line: "1", claim: '"the far away sentence sits here" — gloss', evidence: 'docs/X.md:2 ("the far away sentence sits here" is future-tense framing)' }],
+    readIdx,
+  );
+  checks.push(["a fragment that is the row's own claim wording is a CLAIM ECHO, never an absent citation", echo.claimEcho.length === 1 && echo.absent.length === 0]);
+
+  // ── launch-profile membership ──────────────────────────────────────────────
+  const fakeArms = profileArms(
+    [
+      { key: "connector-families", launch: [{ id: "graph" }], deferred: [{ id: "custody-beacon" }, "pacs-access", { id: "network" }, { id: "itsm" }], demo_only: [{ id: "connector-emulator" }], internal: [] },
+      { key: "published-api-paths", launch: [], deferred: [{ id: "/v1/webhooks" }, { id: "/v1/webhooks/deliveries" }], demo_only: [], internal: [] },
+      { key: "app-surfaces", launch: [], deferred: [], demo_only: [{ id: "signalgrid-desktop" }, { id: "signalgrid-review" }], internal: [] },
+    ],
+    ["launch", "deferred", "demo_only", "internal"],
+  );
+  checks.push(["profile arms read `{ id }` entries and bare-string entries alike", fakeArms.get("pacs-access")?.has("deferred") === true && fakeArms.size === 10]);
+  const memList = membershipAssertions("No alert-routing surface at launch: /v1/webhooks and /v1/webhooks/deliveries are deferred published paths (scripts/launch-profile.mjs:392-393)", fakeArms);
+  checks.push(["a status word governs an id only through link material — 'at launch: X and Y are deferred' asserts deferred, not launch", memList.length === 2 && memList.every((r) => r.status === "ok" && r.asserted === "deferred")]);
+  const memAside = membershipAssertions("Device management is grounded (`graph`, scripts/launch-profile.mjs:158), but the identity leg is deferred", fakeArms);
+  checks.push(["an id with no governing status word is unasserted — 'graph … but the identity leg is deferred' asserts nothing about graph", memAside.every((r) => r.status === "unasserted")]);
+  const memEnglish = membershipAssertions("The zero network browser demo is signalgrid-review, classified demo_only at scripts/launch-profile.mjs:496", fakeArms);
+  checks.push(["a bare dictionary word that is also an id ('zero network') is English unless marked; the marked id is judged", memEnglish.length === 1 && memEnglish[0].id === "signalgrid-review" && memEnglish[0].status === "ok"]);
+  const memDefers = membershipAssertions(":192-232 of scripts/launch-profile.mjs defers `pacs-access`, `itsm` and the rest", fakeArms);
+  checks.push(["'defers X, Y' governs the ids after it", memDefers.length === 2 && memDefers.every((r) => r.status === "ok" && r.asserted === "deferred")]);
+  const memOk = membershipAssertions('graph is the one launch connector (scripts/launch-profile.mjs:160, "The one read-only")', fakeArms);
+  checks.push(["an id whose asserted arm is the profile's arm is ok", memOk.length === 1 && memOk[0].status === "ok" && memOk[0].id === "graph" && memOk[0].asserted === "launch"]);
+  const memForged = membershipAssertions("graph is deferred (scripts/launch-profile.mjs:160)", fakeArms);
+  checks.push(["a FORGED arm is a mismatch naming the id, the asserted arm and the profile's arm", memForged.length === 1 && memForged[0].status === "mismatch" && memForged[0].actual.join() === "launch"]);
+  const memPath = membershipAssertions('signalgrid-desktop is "fixture-fed" (scripts/launch-profile.mjs:487-493)', fakeArms);
+  checks.push(["the word launch inside the cited PATH is not an arm — a clause with no status word is unasserted, not a mismatch", memPath.length === 1 && memPath[0].status === "unasserted"]);
+  const memTwo = membershipAssertions("`custody-beacon` and `pacs-access` are both deferred (scripts/launch-profile.mjs:206, :221)", fakeArms);
+  checks.push(["two ids sharing one status word are each asserted and each ok", memTwo.length === 2 && memTwo.every((r) => r.status === "ok")]);
+  const memClauses = membershipAssertions("connector-emulator is demo_only (scripts/launch-profile.mjs:476); graph is launch (scripts/launch-profile.mjs:160)", fakeArms);
+  checks.push(["each citation is judged in its OWN clause — a status word across a semicolon is not borrowed", memClauses.length === 2 && memClauses.every((r) => r.status === "ok")]);
+  const memCross = membershipAssertions("connector-emulator is launch (scripts/launch-profile.mjs:476); graph is launch (scripts/launch-profile.mjs:160)", fakeArms);
+  checks.push(["…and a wrong arm in one clause is caught without the other clause excusing it", memCross.filter((r) => r.status === "mismatch").length === 1 && memCross.find((r) => r.status === "mismatch").id === "connector-emulator"]);
+  const memRows = membershipAll([{ evidence: "graph is deferred (scripts/launch-profile.mjs:160)" }, { evidence: "graph is deferred (scripts/launch-profile.mjs:160)", resolution: "RESOLVED" }], fakeArms);
+  checks.push(["a resolved row's evidence is a record — its arms are not asserted", memRows.results.length === 1]);
+  const m0 = ratchetObject(a, ev, memRows);
+  const m1 = { ...m0, membershipMismatches: m0.membershipMismatches + 1 };
+  const v4 = ratchetVerdict({ committedRaw: serializeRatchet(m0), isTracked: true, expectedRaw: serializeRatchet(m1), committed: m0, now: m1 });
+  checks.push(["a RISE in membership mismatches is fatal by name", !v4.ok && v4.kind === "rose" && v4.rose[0].startsWith("launch-profile membership mismatches")]);
+  const liveArms = profileArms(SURFACES, STATUSES);
+  checks.push([`the live profile imports at least ${PROFILE_ID_FLOOR} ids across four arms (the floor the check enforces)`, liveArms.size >= PROFILE_ID_FLOOR && STATUSES.length === 4]);
 
   let bad = 0;
   for (const [name, ok] of checks) {
@@ -450,7 +667,7 @@ function selfTest() {
     console.error(`\nSELF-TEST FAILED — ${bad} check(s). A gate that cannot flag a planted drift is green about nothing.`);
     return 1;
   }
-  console.log(`\nSelf-test green — ${checks.length}/${checks.length}: anchored, moved, absent, resolved, unquoted, re-anchor, evidence citations and every ratchet direction behave.`);
+  console.log(`\nSelf-test green — ${checks.length}/${checks.length}: anchored, moved, absent, resolved, unquoted, re-anchor, evidence citations, claim echo, launch-profile membership and every ratchet direction behave.`);
   return 0;
 }
 
@@ -467,6 +684,8 @@ const inventory = JSON.parse(readFileSync(JSON_PATH, "utf8"));
 const readIndex = (f) => (existsSync(f) ? indexFile(readFileSync(f, "utf8")) : null);
 const anchors = anchorAll(inventory.rows, readIndex);
 const evidence = evidenceAll(inventory.rows, readIndex);
+const arms = profileArms(SURFACES, STATUSES);
+const membership = membershipAll(inventory.rows, arms);
 
 console.log("Claim-inventory anchors — a quoted claim must still be a quotation on its surface\n");
 console.log(
@@ -476,7 +695,11 @@ console.log(
 );
 console.log(
   `  evidence citations (unresolved rows): ${evidence.results.length} — missing file ${evidence.missing.length}, past EOF ${evidence.pastEof.length}, ` +
-    `fragment near ${evidence.near.length}, moved ${evidence.moved.length}, absent ${evidence.absent.length}, no fragment ${evidence.unfragmented.length}`,
+    `fragment near ${evidence.near.length}, moved ${evidence.moved.length}, absent ${evidence.absent.length}, claim echo ${evidence.claimEcho.length}, no fragment ${evidence.unfragmented.length}`,
+);
+console.log(
+  `  launch-profile membership (unresolved rows): ${arms.size} profile id(s) imported; ${membership.results.length} citation clause(s) — ` +
+    `asserted arm ok ${membership.ok.length}, MISMATCH ${membership.mismatch.length}, unasserted ${membership.unasserted.length}`,
 );
 
 if (WRITE) {
@@ -484,17 +707,27 @@ if (WRITE) {
   const rewritten = rewriteCitations(inventory.rows, evidence);
   const after = anchorAll(inventory.rows, readIndex);
   const evAfter = evidenceAll(inventory.rows, readIndex);
+  const memAfter = membershipAll(inventory.rows, arms);
   writeFileSync(JSON_PATH, `${JSON.stringify(inventory, null, 1)}\n`);
-  writeFileSync(RATCHET, serializeRatchet(ratchetObject(after, evAfter)));
+  writeFileSync(RATCHET, serializeRatchet(ratchetObject(after, evAfter, memAfter)));
   console.log(
     `\nRe-anchored ${changed} row(s) and ${rewritten} evidence citation(s); wrote ${RATCHET} (absent ${after.absent.length}, ` +
-      `remove-actioned still present ${after.removeStillPresent.length}, evidence fragments absent ${evAfter.absent.length}).`,
+      `remove-actioned still present ${after.removeStillPresent.length}, evidence fragments absent ${evAfter.absent.length}, ` +
+      `membership mismatches ${memAfter.mismatch.length}).`,
   );
   console.log("Now regenerate the derived Markdown: node scripts/gen-claim-inventory-md.mjs — and commit all three.");
   process.exit(0);
 }
 
 let problems = 0;
+if (arms.size < PROFILE_ID_FLOOR || STATUSES.length < 4) {
+  problems += 1;
+  console.error(`\n✗ launch-profile import yielded ${arms.size} id(s) across ${STATUSES.length} arm(s) (floor ${PROFILE_ID_FLOOR} ids, 4 arms) — the profile's shape changed under this check; a membership test over an empty map proves nothing.`);
+}
+if (membership.mismatch.length > 0) {
+  console.error(`\n  launch-profile membership MISMATCH (REPORTED here; the ratchet below fails a rise):`);
+  for (const r of membership.mismatch.slice(0, 20)) console.error(`    ${r.row.file}:${r.row.line} — "${r.id}" asserted ${r.asserted}, profile says ${r.actual.join("/")}: …${r.clause.slice(0, 120)}`);
+}
 if (anchors.resolvedRemoveStillPresent.length > 0) {
   problems += 1;
   console.error(`\n✗ ${anchors.resolvedRemoveStillPresent.length} remove-actioned row(s) carry a resolution while their copy still renders:`);
@@ -527,7 +760,7 @@ if (anchors.moved.length > 0) {
   console.error("  Run `node scripts/check-claim-inventory-anchors.mjs --write` to re-anchor the line citations, then regenerate the Markdown.");
 }
 
-const expected = serializeRatchet(ratchetObject(anchors, evidence));
+const expected = serializeRatchet(ratchetObject(anchors, evidence, membership));
 let committedRaw = null;
 let committed = null;
 try {
@@ -542,7 +775,7 @@ try {
 } catch {
   isTracked = false;
 }
-const verdict = ratchetVerdict({ committedRaw, isTracked, expectedRaw: expected, committed, now: ratchetObject(anchors, evidence) });
+const verdict = ratchetVerdict({ committedRaw, isTracked, expectedRaw: expected, committed, now: ratchetObject(anchors, evidence, membership) });
 if (!verdict.ok) {
   problems += 1;
   if (verdict.kind === "untracked") {
@@ -550,8 +783,9 @@ if (!verdict.ok) {
   } else if (verdict.kind === "rose") {
     console.error(`\n✗ The anchor ratchet ROSE: ${verdict.rose.join("; ")}.`);
     console.error("  A quotation that leaves its surface must take a `resolution` on its row; copy the inventory says must go may not grow;");
-    console.error("  a cited fragment that leaves its file must be re-cited or the row resolved.");
+    console.error("  a cited fragment that leaves its file must be re-cited or the row resolved; an arm asserted against the profile must be the profile's arm.");
     for (const r of evidence.absent.slice(0, 10)) console.error(`    evidence: ${r.row.file}:${r.row.line} → ${r.citation.file}:${r.citation.lo} "${r.citation.seg.slice(0, 70)}"`);
+    for (const r of membership.mismatch.slice(0, 10)) console.error(`    membership: ${r.row.file}:${r.row.line} — "${r.id}" asserted ${r.asserted}, profile says ${r.actual.join("/")}`);
     const prevByFile = committed?.absentByFile ?? {};
     for (const [f, n] of Object.entries(anchors.absentByFile)) {
       if (n > (prevByFile[f] ?? 0)) {

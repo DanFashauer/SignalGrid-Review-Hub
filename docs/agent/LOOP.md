@@ -52,8 +52,21 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
 LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
-              M (#466), N (#468), O (#470), P (#471) and Q (#473) LANDED. Batch R
-              (sixteenth round, on its PR) applied the 53 dispositions Q left:
+              M (#466), N (#468), O (#470), P (#471), Q (#473) and R (#474)
+              LANDED. Batch S (seventeenth round, on its PR) built the
+              membership check the auditor specified: a citation into the
+              launch profile that names an id and an arm is tested by importing
+              SURFACES (180 ids, floored) and pairing the id with the status
+              word that governs it through link material only - nearest-word
+              pairing was measured first and produced 33 false mismatches
+              across two attempts, each now a self-test case; live 246 arms
+              hold, 0 contradict, 213 clauses unasserted and reported; ratchet
+              membershipMismatches starts at 0. The 11 absent evidence
+              fragments were 8 claim echoes (the gate quoting the row's own
+              claim back at the cited file - now a status, not a defect), 2
+              stale citations re-cited, 1 superseded sentence de-cited; ratchet
+              evidence fragments absent 12 → 0. Self-test 41/41.
+              Batch R (sixteenth round, #474) applied the 53 dispositions Q left:
               47 remove-actioned claims no longer render (priced tier features
               nobody built, vendor API calls no connector makes, notifications
               SignalGrid has no surface to send, latency figures no harness
@@ -398,17 +411,14 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land Batch R (on its PR - the 53 remove-actioned claims
-              that still rendered are removed or hedged in their own line,
-              ratchet 53 → 0), then (1) the membership
-              check the auditor specified: an evidence citation into
-              scripts/launch-profile.mjs that asserts an id's arm must be
-              verified by importing SURFACES and testing membership, never by
-              line number (28 such citations in the remove rows land on
-              unrelated lines while every membership claim still holds; start
-              REPORT-only, ratchet); (2) the 11 evidence fragments still absent
-              in 2026-08-21 rows. Then the inspiration catalogs' prose and
-              whatever the ledger still marks not read. OWNER: the ICP
+NEXT ACTION: cloud: land Batch S (on its PR - the launch-profile membership
+              check and the last absent evidence fragments), then the
+              inspiration catalogs' prose and whatever the ledger still marks
+              not read or partial (1 not read, 12 partial on 2026-09-06 -
+              `node scripts/check-surface-review-coverage.mjs` names them);
+              the 213 unasserted membership clauses are REPORTED, not owed -
+              an evidence sentence that names an id without an arm is not
+              wrong, only unchecked. OWNER: the ICP
               segment ("75-1,000 employees, 1-10 in IT") is stated flatly in
               INVESTOR_ONE_PAGER while ICP_EVIDENCE calls it an assumption -
               your call, not a gate's. OWNER, once, on the Mac, now that

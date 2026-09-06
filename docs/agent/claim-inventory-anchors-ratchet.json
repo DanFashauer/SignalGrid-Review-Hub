@@ -1,7 +1,7 @@
 {
   "note": "Claim-inventory anchor ratchet: quoted claims absent from their surface without a resolution, remove-actioned claims still present, and evidence citations whose quoted fragment is no longer at the cited file. DERIVED by scripts/check-claim-inventory-anchors.mjs; never hand-edit. No figure may rise; a fall is recorded with `--write` and committed.",
   "absent": 0,
-  "removeActionedStillPresent": 64,
-  "evidenceFragmentsAbsent": 34,
+  "removeActionedStillPresent": 53,
+  "evidenceFragmentsAbsent": 12,
   "absentByFile": {}
 }

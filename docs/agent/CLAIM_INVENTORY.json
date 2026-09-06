@@ -1,18 +1,18 @@
 {
  "generated": "2026-08-21",
- "derivation": "README.md + artifacts/signalgrid-web/src (pages + sections) + artifacts/{signalgrid-review,signalgrid-app,signalgrid-desktop,signalgrid-mobile-pwa}/src + docs/{fabric,room-entry}-console.html — the union of docs-sanity's app SCAN_PATHS plus README and the consoles; extraction: 9-agent workflow + completeness critic (web/README/consoles), 4-agent second pass (app trees, after review found the first derivation incomplete); corrections per docs/CLAIM_INVENTORY.md honesty note; README rows re-extracted 2026-09-06 against the 2026-09-01 rebuild (the 58 rows of 2026-08-21 kept and resolved — 57 quoted sentences the rebuild removed, one still present; 58 new rows, every quotation anchored by check-claim-inventory-anchors)",
+ "derivation": "README.md + artifacts/signalgrid-web/src (pages + sections) + artifacts/{signalgrid-review,signalgrid-app,signalgrid-desktop,signalgrid-mobile-pwa}/src + docs/{fabric,room-entry}-console.html — the union of docs-sanity's app SCAN_PATHS plus README and the consoles; extraction: 9-agent workflow + completeness critic (web/README/consoles), 4-agent second pass (app trees, after review found the first derivation incomplete); corrections per docs/CLAIM_INVENTORY.md honesty note; README rows re-extracted 2026-09-06 against the 2026-09-01 rebuild (the 58 rows of 2026-08-21 kept and resolved — 57 quoted sentences the rebuild removed, one still present; 58 new rows, every quotation anchored by check-claim-inventory-anchors); five web surfaces (SignalTypes, Verticals, Differentiators, Outcomes sections and docs/fabric-console.html) re-extracted 2026-09-06 — 120 rows, every quotation anchored",
  "groundTruth": "scripts/launch-profile.mjs (DR-005 ratified v4; LAUNCH_PROFILE_VERSION is 5 under DR-023 — rows were classified against v4 on 2026-08-21)",
- "rowCount": 1081,
+ "rowCount": 1201,
  "counts": {
-  "unsubstantiated": 257,
-  "deferred": 294,
-  "launch": 281,
-  "demo-only": 249
+  "unsubstantiated": 263,
+  "deferred": 315,
+  "launch": 364,
+  "demo-only": 259
  },
  "actions": {
-  "rewrite": 556,
-  "keep": 368,
-  "remove": 157
+  "rewrite": 572,
+  "keep": 481,
+  "remove": 148
  },
  "rows": [
   {
@@ -1102,7 +1102,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No licensing subsystem of any kind exists — grep for license key/model/validation/bundle across lib/, scripts/, artifacts/api-server/src and docs/ returns zero hits.",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06: remove → rewrite — the phrase sits inside a card whose own badge renders \"DESIGN TARGET\" beside the framework name, so it reads as an intended design rather than a shipped licensing subsystem."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1336,7 +1337,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No licensing or bundle-signing subsystem exists in the repository (zero grep hits across lib/, scripts/, artifacts/api-server/src).",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06: remove → rewrite — the table cell carries \"(design intent)\" inside the quoted text itself, matching its neighbours at :138, :139 and :141."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1574,7 +1576,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "Unqualified present tense about badge custody — the exact class DR-005 (docs/DECISION_RECORDS.md:201-202, \"Remove present-tense claims for deferred badge, zone, and shift capabilities\") ratifies removing. pacs_access deferred at scripts/launch-profile.mjs:287, custody at :275; no reader case exists.",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06: remove → rewrite — the SmartDock section lede at Hardware.tsx:209 states the dock has never run on real hardware and that the product is software-only today, so only the card's present-tense verbs still need changing."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Hardware.tsx",
@@ -3723,7 +3726,8 @@
    "kind": "status",
    "classification": "launch",
    "evidence": "The boundary statement matches CLAUDE.md golden rule 3/4 and docs/SECURITY_BASELINE_ALIGNMENT.md:132 — SignalGrid records; the identity stack acts.",
-   "action": "keep"
+   "action": "keep",
+   "resolution": "SUPERSEDED 2026-09-06 (this PR): the step now reads \"Your host app closes the session — credential revocation stays with your identity stack\"; no launch route records a session close."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
@@ -3809,7 +3813,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "location and location_certainty are deferred signal kinds (scripts/launch-profile.mjs:281-282); location-services is a deferred family (scripts/launch-profile.mjs:214).",
-   "action": "remove"
+   "action": "keep",
+   "resolution": "RECLASSIFIED 2026-09-06 (this PR): remove → keep — the exit-violation block now carries a deferred-roadmap label and sub-line in its own element; the chip reads as an illustration under it."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
@@ -3818,7 +3823,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "pacs-access deferred family and pacs_access deferred kind (scripts/launch-profile.mjs:221, 287); DR-005 removes present-tense badge claims (docs/DECISION_RECORDS.md:236-259).",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the chip now reads \"Badge suspension recommended — the PACS stays the actor\" under a block labelled deferred roadmap, illustrative."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
@@ -4159,7 +4165,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No disaster-recovery/backup connector family exists anywhere in scripts/launch-profile.mjs:156-241 — not launch, not deferred; telemetry is deferred (:236). RPO/RTO, replication lag and backup-job state are not representable by any signal kind at :246-301.",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06: remove → rewrite — the sub-section lede at ComplianceSection.tsx:151-152 and the closing note at :195 both state that routing is a design and no alerting is wired to external systems today."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/ComplianceSection.tsx",
@@ -4240,7 +4247,8 @@
    "kind": "availability",
    "classification": "unsubstantiated",
    "evidence": "No hosted service and no region exists: docs/DEPLOYMENT_MODELS.md:114-115; the only shipped topology is single-node docker-compose.prod.yml (db + api); docs/INTAKE_LEDGER.md:39 — \"the launch profile claims no multi-node or horizontal scaling\"",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06: remove → rewrite — the quoted sentence is immediately followed, in the same desc string, by \"Availability and operational targets are design goals, not a live service offering\"."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DeploymentSection.tsx",
@@ -4258,7 +4266,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "docs/INTAKE_LEDGER.md:39 (launch configuration is deliberately a single process; no multi-node or horizontal scaling; the capacity ceiling is the rate limiter); docker-compose.prod.yml is a two-service single-node stack",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06: remove → rewrite — the feature text itself says \"design\" and its card declares it is not a live service offering."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DeploymentSection.tsx",
@@ -4276,7 +4285,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "Contradicted in-file at DeploymentSection.tsx:156 (\"no failover machinery ships today\"); docs/INTAKE_LEDGER.md:39 (no multi-node/HA); docker-compose.prod.yml has one api service",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06: remove → rewrite — the feature text names itself a \"design target\" and the same component states at :156 that no failover machinery ships today."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DeploymentSection.tsx",
@@ -4285,7 +4295,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "docs/DEPLOYMENT_MODELS.md:114-115 (no hosted service exists to have regions); docs/DELIVERY_GAP_ANALYSIS.md:93 (no managed-service operations)",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06: remove → rewrite — the bullet sits in a card that declares itself not a live service offering, so \"Regional data residency\" reads as a property of a design."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DeploymentSection.tsx",
@@ -4802,7 +4813,8 @@
    "kind": "status",
    "classification": "unsubstantiated",
    "evidence": "No market-analysis or competitive-verification artifact exists in-repo; the \"gap\" as described rests on badge/zone/custody capabilities that are deferred (scripts/launch-profile.mjs:275,:281,:287)",
-   "action": "rewrite"
+   "action": "rewrite",
+   "resolution": "RESOLVED 2026-09-06 (this PR): heading rewritten to \"The Gap Between Your MDM and Your IdP\" — docs/research/MARKET_LANDSCAPE.md names who else works the gap."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
@@ -4867,7 +4879,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "scripts/launch-profile.mjs:156-190 ratifies exactly three launch connector families (graph, device-management-health, local-authority; DECISION_RECORDS.md:252-255). The \"illustrative\" qualifier present at line 7 and line 183 is absent from this og card, so the breadth claim travels ungrounded.",
-   "action": "rewrite"
+   "action": "rewrite",
+   "resolution": "RESOLVED 2026-09-06 (this PR): og:description now ends \"Illustrative console: nothing here is a claim of current capability.\""
   },
   {
    "file": "docs/fabric-console.html",
@@ -5806,7 +5819,7 @@
    "claim": "\"Named integration targets with editable status tracking. Microsoft Intune / Entra posture is the first concrete proof\"",
    "kind": "status",
    "classification": "launch",
-   "evidence": "Grounded: graph is a ratified launch connector family (scripts/launch-profile.mjs:158, 160-168 — \"the only family in the repository whose live transport actually addresses graph.microsoft.com\"), and .github/workflows/review-hub-ci.yml:67 runs proof:intune-entra-posture. Contradicted internally, however, by src/data/integrationData.ts:38 (status \"in-progress\") and src/data/reviewData.ts:44 (\"No working integration ... has been validated\").",
+   "evidence": "Grounded: graph is a ratified launch connector family (scripts/launch-profile.mjs:175-176, 160-168 — \"the only family in the repository whose live transport actually addresses graph.microsoft.com\"), and .github/workflows/review-hub-ci.yml:67 runs proof:intune-entra-posture. Contradicted internally, however, by src/data/integrationData.ts:38 (status \"in-progress\") and src/data/reviewData.ts:44 (\"No working integration ... has been validated\").",
    "action": "keep"
   },
   {
@@ -7046,7 +7059,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "Configurable fail-open contradicts the product's first invariant: CLAUDE.md golden rule 2 — \"Fail-closed, deterministic, truthful ... an unknown/unreachable signal raises assurance, never lowers it\", enforced by pnpm run review:invariants. It also contradicts this same surface at OperatorConsoleSection.tsx:647 (\"the engine defaulted to step-up (fail-closed)\") and EvidenceCoverageSection.tsx:126-130. This is the single most damaging line on the surface: it is a prepared answer, spoken to a prospect, offering a mode the engine must never have.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the prepared answer now says fail-closed is structural and not configurable — an unknown, stale or unreachable signal raises the assurance required (golden rule 2)."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -9850,7 +9864,7 @@
    "claim": "\"The one wire-conformance case set every client must agree on.\"",
    "kind": "count",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:616-621 (native:shared internal — \"the assist-wire conformance fixture every native port … must parse identically\"). Measured: native/shared holds THREE json files — assist-wire-conformance.json (cases: 44), posture-allow-vectors.json (cases: 52), remediation-allow-vectors.json (cases: 40). README's \"one … case set\" matches the single assist-wire file; the drift is in the ground truth's own prose — scripts/launch-profile.mjs:618 says \"One JSON file\" and :333 says \"42 shared conformance vectors\" against 44 cases in the tree.",
+   "evidence": "Grounded: scripts/launch-profile.mjs:616-621 (native:shared internal — \"the assist-wire conformance fixture every native port … must parse identically\"). Measured: native/shared holds THREE json files — assist-wire-conformance.json (cases: 44), posture-allow-vectors.json (cases: 52), remediation-allow-vectors.json (cases: 40). README's \"one … case set\" matches the single assist-wire file; the drift is in the ground truth's own prose — scripts/launch-profile.mjs:619 now says \"Three JSON files (it said one until 2026-09-06)\" and :333-335 says the count lives in the fixture (it read 42 while the file carried 44) — both corrected in Batch P.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -10023,7 +10037,7 @@
    "claim": "\"`scripts/check-preflight-ci-parity.mjs` fails CI if a gate is registered but unwired.\" — ladder rung 5",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Grounded: scripts/check-preflight-ci-parity.mjs:305 (summary counts `${problems} unwired`; :135 \"every breadth gate reports unwired\"), wired at scripts/preflight.mjs:257-258 with its self-test. \"Postgres, the compose smoke and the secret scan run only in CI\": `grep -i -E \"gitleaks|postgres|compose\" scripts/preflight.mjs` → only comments (:68,:77) and the compose HEALTHCHECK lint (:122-123), no pg proof, no compose smoke, no gitleaks; those live in .github/workflows/supply-chain.yml:22-31 (gitleaks) and review-hub-ci.yml:218 / :1177-1182 (compose and podman stacks).",
+   "evidence": "Grounded: scripts/check-preflight-ci-parity.mjs:305 (summary counts `${problems} unwired`; :135 \"every breadth gate reports unwired\"), wired at scripts/preflight.mjs:257-258 with its self-test. The README clause that Postgres, the compose smoke and the secret scan run only in CI: `grep -i -E \"gitleaks|postgres|compose\" scripts/preflight.mjs` → only comments (:68,:77) and the compose HEALTHCHECK lint (:122-123), no pg proof, no compose smoke, no gitleaks; those live in .github/workflows/supply-chain.yml:22-31 (gitleaks) and review-hub-ci.yml:218 / :1177-1182 (compose and podman stacks).",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -10217,6 +10231,1221 @@
    "evidence": "Grounded: docs/SECURITY_BASELINE_ALIGNMENT.md:107-109 (\"mappings, not certifications … does not assert it is STIG-hardened, CIS-certified, FedRAMP/CMMC-authorized\") and :123-128 (Non-claims: does not replace MDM/UEM, EDR, GRC; \"No compliance, certification, authorization, or partnership is claimed\"); docs/WHAT_SIGNALGRID_DOES_TODAY.md:142 (high-risk actions \"approval-gated and simulated — recorded, never executed on a source system\") and :206; scripts/launch-profile.mjs:703-717 (shadow mode, no enforcement). Consistent with README.md:30-33.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "17",
+   "claim": "\"Read-only from your device-management source\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:144-147 CRITERION \"one read-only device-management evidence source\"; :169-177 `graph` launch family (\"The one read-only Entra/Intune connector\"); `pnpm run proof:graph-connector` (package.json:120)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "18",
+   "claim": "\"Proven live against Fleet\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "docs/DECISION_RECORDS.md:656-658 DR-012 \"already proven LIVE against Fleet (TLS + real osqueryd, proof:live-fleet + live-fleet-workflow)\"; docs/FLEET_LIVE_INTEGRATION.md:13-17 (Fleet v4.89.2, real osqueryd 5.23.1 over TLS) and :23-25 (`listHostPosture()` returned the live host); `pnpm run proof:live-fleet` (package.json:140). MEASURED: `node -e '...2026-08-12-fleet-lab-real-source.json...'` → \"live-lanes => passed | docker => passed\". Note: proof:live-fleet is NOT in CI — grep of .github/workflows/review-hub-ci.yml for `proof:live` matches only proof:live-idp (:800); the live Fleet proof runs in the Mac/lab lane (scripts/run-live-lanes.sh:79-84)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the line now reads \"Proven live against Fleet — an open-source management plane\" — the market-adoption clause is gone."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "18",
+   "claim": "\"the management plane lean IT teams run\" — a market-adoption claim about Fleet",
+   "kind": "status",
+   "classification": "unsubstantiated",
+   "evidence": "No in-repo research artifact backs Fleet as what lean IT teams run: grep -i fleet over docs/company/ICP_EVIDENCE.md and docs/research/MARKET_LANDSCAPE.md returned nothing; MARKET_LANDSCAPE.md:82 names Zebra/SOTI/42Gears as the warehouse/retail UEM incumbents. docs/POSITIONING.md:69 repeats the phrase (\"the management plane lean IT teams actually run\") but is the copy source, not evidence; DR-012 (docs/DECISION_RECORDS.md:648-652) chooses the lean-IT segment and Fleet-first PROOF STACK, not Fleet's market share",
+   "action": "rewrite",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the line now reads \"Proven live against Fleet — an open-source management plane\" — the market-adoption clause is gone."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "19",
+   "claim": "\"Microsoft Intune adapter implemented and wire-hardened, awaiting a customer tenant\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:169-177 `graph` is the launch family and \"the only family in the repository whose live transport actually addresses graph.microsoft.com\"; docs/DECISION_RECORDS.md:659-661 DR-012 \"Intune adapter stays implemented and wire-hardened (12/12 socket proof), honestly described as awaiting a real tenant\"; `pnpm run proof:intune-entra-posture` (package.json:129). Caveat: GAP device-management-health (scripts/launch-profile.mjs:688-697) — the freshness family's live default is still the generic bridge, not Graph",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "20",
+   "claim": "\"Encryption, enrollment, compliance state\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:259-261 `device_posture` launch kind (\"What the one Graph connector produces\"); scripts/src/fleet-connector-proof.ts:4-8 maps managed/compliance/baseline/freshness with encryption-off raising assurance; `pnpm run proof:fleet-connector` runs in CI (.github/workflows/review-hub-ci.yml:915)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "32",
+   "claim": "\"How fresh the compliance answer really is\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:180-185 `device-management-health` launch family (\"Grades whether an Intune compliance answer is CURRENT\"); :263-265 `device_management_health` launch kind; `pnpm run proof:device-management-health` in CI (.github/workflows/review-hub-ci.yml:165)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "33",
+   "claim": "\"A stale “compliant” is the unearned yes in its purest form\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "Near-verbatim from scripts/launch-profile.mjs:182-184 (\"A device reported compliant that has not checked in for weeks is the unearned affirmative in its purest form\"); lib/api-spec/v1-openapi.yaml:1273-1275 SignalUsed.freshness enum [fresh, stale, expired, missing, unknown]",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "34",
+   "claim": "\"Source unreachable or late → the decision tightens\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:573 \"this classification can only ever RAISE assurance, never lower it\"; lib/signalgrid-core/src/continuity.ts:42 \"an unreachable signal raises assurance\"; `pnpm run review:invariants` in CI (.github/workflows/review-hub-ci.yml:63; scripts/review-invariants.mjs:12-17)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "35",
+   "claim": "\"Every verdict records the observation age it acted on\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:1263-1282 SignalUsed carries required `observedAt` and `freshness` per signal; :1284-1313 EvidenceSnapshot.signalsUsed is inside the digest; served by /v1/decisions/{id}/evidence (:213; scripts/launch-profile.mjs:343-346)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "47",
+   "claim": "\"Whether the device may act on its own authority at this moment\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:193-198 `local-authority` launch family; :267-269 `local_authority` launch kind; `pnpm run proof:local-authority` in CI (.github/workflows/review-hub-ci.yml:113)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "48",
+   "claim": "\"Missing or unverifiable → step up, restrict, or deny — never assume\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:573 (raise-only); scripts/src/fleet-connector-proof.ts:6-8 (\"can only RAISE assurance (auto → step-up), never lower it\"); the four verdicts are the DecisionOutcome vocabulary of /v1/authorize (lib/api-spec/v1-openapi.yaml:143-145)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "49",
+   "claim": "\"Evaluated per action, not per login\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:1082-1090 EvaluateRequest requires `workflowKey` per call (identityRef, deviceRef, workflowKey); /v1/decisions/evaluate (:110-114) and /v1/authorize (:137-149) are per-request; scripts/launch-profile.mjs:326-327",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "50",
+   "claim": "\"Reproducible evidence attached to every verdict\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:343-346 /v1/decisions/{id}/evidence (\"explainable and reproducible ... this route is not optional garnish — it is the claim\"); lib/api-spec/v1-openapi.yaml:1284-1290 snapshot digest recomputed per request",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "59-62",
+   "claim": "\"Identity & session state\", \"Badge binding\", \"Physical custody & docks\", \"Security-baseline (CIS) alignment\", \"Shift & role context\", \"Network posture\", \"EDR & threat state\", \"Location & zones\", \"ITSM & operational context\" — nine chips under the Beyond-Limited-GA heading at line 120",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "Every family is in the deferred set of scripts/launch-profile.mjs: identity-risk :222 / sso-session :244, pacs-access :232, custody-beacon :217 / rtls-custody :238 / firmware:dock :646, shift-context :241, nac :227, edr-threat :220, location-services :225, itsm :223; security_baseline is a core category with no launch kind (:257-270). Hedged in place by the heading at :120 and the paragraph at :124-128. MEASURED: `node -e` over the beyondGA array → \"beyondGA entries: 9\"",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "69",
+   "claim": "\"Three Signals, One Honest Answer\"",
+   "kind": "count",
+   "classification": "launch",
+   "evidence": "MEASURED: `node -e \"import('./scripts/launch-profile.mjs')...\"` → \"signal-kinds launch 3 deferred 38 ... total 41\"; \"launch signal kinds: device_posture, device_management_health, local_authority\". MEASURED: the limitedGA flag set cards in this file → 3",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "71-72",
+   "claim": "\"At Limited GA the decision core evaluates\" \"exactly three things\" — the device's compliance, how current that answer is, and whether the device can vouch for itself",
+   "kind": "count",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:257-270 three launch signal kinds; MEASURED via `node -e \"import('./scripts/launch-profile.mjs')...\"` → \"signal-kinds launch 3\"; docs/LAUNCH_PROFILE.md:85-86 \"Signal kinds (3 of 41)\"",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "74",
+   "claim": "\"tightens the answer instead of waving it through\" — anything it can't verify",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:573; lib/signalgrid-core/src/continuity.ts:42; `pnpm run review:invariants` (.github/workflows/review-hub-ci.yml:63)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "75",
+   "claim": "\"every claim on this page traces to a proof that runs on every commit\"",
+   "kind": "status",
+   "classification": "unsubstantiated",
+   "evidence": "Contradicted on this same page: \"Proven live against Fleet\" (:18) traces to proof:live-fleet, which is NOT in CI — `grep -n \"proof:live\" .github/workflows/review-hub-ci.yml` matches only `pnpm run proof:live-idp` (:800); it runs in the lab lane (scripts/run-live-lanes.sh:79-84) and its evidence is a committed sim-result, not a per-commit gate. \"the management plane lean IT teams run\" (:18) and \"awaiting a customer tenant\" (:19) are a market claim and a status, not proofs at all",
+   "action": "rewrite",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the sentence now says the page is held to the launch profile by a gate that runs on every commit (check-launch-claims in preflight and CI), which is the true statement."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "120",
+   "claim": "\"Beyond Limited GA — proven in the repository, not shipping yet\"",
+   "kind": "status",
+   "classification": "deferred",
+   "evidence": "scripts/launch-profile.mjs:152-155 DEFERRED_RATIONALE (\"Real, gated and proven, and outside Limited GA\"); :33-34 status definitions. An accurate deferral disclosure",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "124",
+   "claim": "\"These signal families exist as working, gate-checked code in the public repository\"",
+   "kind": "status",
+   "classification": "deferred",
+   "evidence": "scripts/launch-profile.mjs:152-155 (deferred = exists, gated, proven, proof runs in CI); the repository is public — docs/PUBLICATION_BOUNDARY.md:4 \"this repository is the **public** review surface\"; MEASURED: `curl -sS -o /dev/null -w \"%{http_code}\" https://github.com/DanFashauer/SignalGrid-Review-Hub` → 200",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx",
+   "line": "127",
+   "claim": "\"We would rather show you three signals that are true than nine\" (the sentence continues on line 128 with: that are aspirational)",
+   "kind": "count",
+   "classification": "launch",
+   "evidence": "Three = launch signal kinds (MEASURED \"signal-kinds launch 3\"); nine = the beyondGA chip count (MEASURED \"beyondGA entries: 9\")",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "10, 18, 26, 34, 42, 50",
+   "claim": "Per-vertical badges \"FIRST TARGET\" (x3), \"STRONG FIT\" (x2), \"CHANNEL\" (x1)",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "docs/DECISION_RECORDS.md:648-652 DR-012 owner-directed first market = lean-IT segment; :666-668 outreach targeting \"75–1,000-employee organizations, 1–10 IT people, shared/frontline devices\". MEASURED: `node -e` over the badge fields → \"FIRST TARGET, FIRST TARGET, FIRST TARGET, STRONG FIT, STRONG FIT, CHANNEL count 6\". No artifact ranks the six verticals against each other — the badges are GTM sequencing under DR-012, not a capability status",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "12",
+   "claim": "\"Shared Android scanners and station PCs, small IT team, many sites\" — a target environment SignalGrid is presented as serving",
+   "kind": "surface",
+   "classification": "launch",
+   "evidence": "The decision API is host-agnostic: /v1/authorize is the launch wire a host app obeys (scripts/launch-profile.mjs:330-336; scripts/launch-profile.mjs:333 \"The wire the Kotlin and Rust SDKs bind\"; lib/api-spec/v1-openapi.yaml:137-149). SignalGrid's Android client (native/android, CI-built by .github/workflows/android.yml) is a deferred surface, not a launch host app — native:android is deferred (scripts/launch-profile.mjs:639-644) and the one launch host app is ios:EnterpriseShell (:479-483) — but the sentence describes the buyer's devices, not a SignalGrid surface",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "14",
+   "claim": "\"is this scanner compliant, is that answer current, and may it act right now?\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "The three launch signal kinds — scripts/launch-profile.mjs:259, :263, :267 (device_posture, device_management_health, local_authority)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "14",
+   "claim": "\"A device your management plane hasn't heard from in hours stops reading as trusted — it steps up or restricts, with the evidence attached for whoever owns the fix.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:180-185 device-management-health; `pnpm run proof:device-management-health` in CI (.github/workflows/review-hub-ci.yml:165); the whoever-owns-the-fix half is the console's route-owner mirror (artifacts/signalgrid-app/src/lib/route-owner.ts:1-12 \"the operator should see who picks this up\") — owner routing is on NO /v1 wire by design (route-owner.ts:5-7), so the owner is shown in the console, not carried in the evidence snapshot (lib/api-spec/v1-openapi.yaml:1284-1313 has no owner field)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "22",
+   "claim": "\"Sensitive workflows check the device before proceeding — read-only, shadow-mode first, no clinical data touched.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:707-713 GAP step-up-answerability \"Limited GA ships in SHADOW mode\"; docs/POSITIONING.md:87; lib/api-spec/v1-openapi.yaml:1082-1090 EvaluateRequest carries identityRef/deviceRef/workflowKey only — no clinical field; CLAUDE.md golden rule 3",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "22",
+   "claim": "\"Domain safety stays in your clinical apps; SignalGrid answers only whether this device, in its current state, should proceed.\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "CLAUDE.md golden rule 3 (embedded UX law); docs/POSITIONING.md:73 (\"Domain safety — patient lookup, clinical rules — stays in the host application\"); docs/EMBEDDED_UX_PRINCIPLE.md:30-37",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "22",
+   "claim": "\"Every verdict carries evidence an auditor can reproduce.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:343-346 /v1/decisions/{id}/evidence; lib/api-spec/v1-openapi.yaml:1284-1290 digest recomputed per request",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "30",
+   "claim": "\"SignalGrid treats staleness as a reason to tighten, never to assume\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:180-185; lib/api-spec/v1-openapi.yaml:1273-1275 freshness enum; lib/signalgrid-core/src/evidence.ts:573; `pnpm run proof:device-management-health` (package.json:100)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "30",
+   "claim": "\"the workflow that matters gets a fresh answer or a step-up, not a shrug\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "step_up is a served verdict (lib/api-spec/v1-openapi.yaml:143-145); scripts/launch-profile.mjs:707-713 — at Limited GA the gate RETURNS step_up and no launch route answers it (shadow mode), which the sentence does not claim",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "38",
+   "claim": "\"Production-system actions from shared floor terminals get the same one-question gate: compliant, current, authorized right now.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:259-269 three launch kinds; /v1/decisions/evaluate (:326-327)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "38",
+   "claim": "\"Enforcement on the device itself stays your MDM's job on a supervised device — SignalGrid decides, your app applies.\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "CLAUDE.md golden rule 4 (platform honesty); docs/POSITIONING.md:73 (\"enforcement on the device is your MDM's job on a supervised device\"); docs/EMBEDDED_UX_PRINCIPLE.md:30-37",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "46",
+   "claim": "\"Register and back-office workflows gated by device state at the moment of action — not by who logged in this morning.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:1082-1090 per-request EvaluateRequest with workflowKey; scripts/launch-profile.mjs:259 device_posture launch kind",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "46",
+   "claim": "\"Kiosk mode itself stays a supervised-device control; SignalGrid supplies the decision your POS applies.\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "CLAUDE.md golden rule 4 (self-kiosk is an MDM/OS capability needing a supervised device); docs/POSITIONING.md:73",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "54",
+   "claim": "\"SignalGrid reads the management plane the MSP already runs\" — any MSP's management plane",
+   "kind": "capability",
+   "classification": "unsubstantiated",
+   "evidence": "Only two evidence adapters are exported by the bridge — lib/integration-bridge/src/evidence.ts:173 `fleetHostToDeviceManagementEvidence` and :246 `headwindLabToDeviceManagementEvidence` — plus the Graph/Intune connector (scripts/launch-profile.mjs:169-177); the EvidenceSourceSystem union at evidence.ts:41 also names nanomdm/jamf/omnissa with no adapter function behind them. The CRITERION is ONE read-only source (scripts/launch-profile.mjs:144-147). An MSP on another RMM/MDM is not read",
+   "action": "rewrite",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the sentence now names the connectors it has (Fleet live, Intune implemented and awaiting a tenant) instead of any plane an MSP runs."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "54",
+   "claim": "\"proven live against Fleet\" (MSP card)",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "docs/DECISION_RECORDS.md:656-658; docs/FLEET_LIVE_INTEGRATION.md:13-25; MEASURED sim-result artifacts/sim-results/2026-08-12-fleet-lab-real-source.json → \"live-lanes => passed\"",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the sentence now names the connectors it has (Fleet live, Intune implemented and awaiting a tenant) instead of any plane an MSP runs."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "54",
+   "claim": "\"gives every customer's shared devices the same defensible decision layer without adding a console anyone has to babysit\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "Tenant-aware: /v1/context (scripts/launch-profile.mjs:348) and api-server \"one tenant-aware decision service\" (:466-467). Note: a launch operator console DOES ship — signalgrid-app (:470-476) — the sentence claims no console needs babysitting, not that none exists",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the sentence now names the connectors it has (Fleet live, Intune implemented and awaiting a tenant) instead of any plane an MSP runs."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "63",
+   "claim": "\"Built for Teams With More Devices Than IT Staff\"",
+   "kind": "availability",
+   "classification": "launch",
+   "evidence": "docs/DECISION_RECORDS.md:648-652 DR-012 (first market = \"organizations with LIMITED IT STAFF OR LIMITED RESOURCES\"); :666-668",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "65",
+   "claim": "\"first market is the organization with 75–1,000 people, a handful of IT\" (continues \"generalists\" on line 66)",
+   "kind": "count",
+   "classification": "launch",
+   "evidence": "docs/DECISION_RECORDS.md:666-668 DR-012 \"75–1,000-employee organizations, 1–10 IT people\" — the figure is a ratified targeting range, not a measurement",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
+   "line": "67-68",
+   "claim": "\"management plane you already run — SignalGrid turns its evidence, plus what the device\" \"into one defensible answer per sensitive action\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "docs/POSITIONING.md:73 (\"Fleet, Intune, or Jamf remain your management plane. SignalGrid reads their evidence, read-only\"); scripts/launch-profile.mjs:144-147 CRITERION; local_authority is the what-the-device-can-prove half (:193-198). Same generality caveat as the MSP card (:54): the readable planes today are Fleet (lib/integration-bridge/src/evidence.ts:173) and Graph/Intune (scripts/launch-profile.mjs:169-177)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "7",
+   "claim": "\"Freshness Is a First-Class Signal\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:263-265 `device_management_health` launch kind; :180-185 family; `pnpm run proof:device-management-health` (.github/workflows/review-hub-ci.yml:165)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "9",
+   "claim": "\"SignalGrid treats HOW OLD that answer is as a decision input in its own right\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:1272-1275 SignalUsed.observedAt + freshness; scripts/launch-profile.mjs:180-185",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "9",
+   "claim": "\"it tightens the verdict instead of passing as green\" — a stale compliant",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:573 (\"can only ever RAISE assurance, never lower it\"); `pnpm run proof:device-management-health` (package.json:100)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "11",
+   "claim": "\"Compliant, current, verified now\" (after-state)",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "The three launch kinds, scripts/launch-profile.mjs:259, :263, :267",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "15",
+   "claim": "\"Fail-Closed by Doctrine, Not by Default Config\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "CLAUDE.md golden rule 2; scripts/review-invariants.mjs:12-17 (fail-closed control flow, determinism) run in CI at .github/workflows/review-hub-ci.yml:63",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "17",
+   "claim": "\"Missing, unknown, or contradictory evidence RAISES the assurance required — mechanically, proven by gates that run on every commit.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:573; lib/signalgrid-core/src/continuity.ts:42; `pnpm run review:invariants` (.github/workflows/review-hub-ci.yml:75) and `pnpm run proof:signalgrid-core` (:75) both in CI; scripts/src/fleet-connector-proof.ts:6-8",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "17",
+   "claim": "\"There is no configuration in which absence reads as fine.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:573 — the classification \"can only ever RAISE assurance, never lower it\" is structural, not a setting; lib/posture-composition/src/adapters.ts:221-269 every dimension \"never lowers what any other dimension says\"; scripts/check-ios-policy-defaults.mjs (CLAUDE.md iOS specifics) gates the managed-config default on the host side",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "19",
+   "claim": "\"Absent signal = tighter answer\" (after-state)",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:573; lib/api-spec/v1-openapi.yaml:1273-1275 freshness includes `missing`",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "23",
+   "claim": "\"Every Verdict Carries Its Evidence\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:343-346 /v1/decisions/{id}/evidence; lib/api-spec/v1-openapi.yaml:213",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "25",
+   "claim": "\"Each allow, step-up, restrict, or deny records what was observed, from which source, at what age, under which policy version — in a tamper-evident ledger an operator can replay without reading code.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:1263-1282 SignalUsed {value, sourceReference, observedAt, freshness}; :1303 EvidenceSnapshot.policyVersionId; :1309 digest; :426-439 /v1/audit tamper-evident chain verification (durable Postgres ledger or in-memory demo ledger — `source` names which; DR-025 docs/DECISION_RECORDS.md:1358); console signalgrid-app (scripts/launch-profile.mjs:470-476) renders it",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "27",
+   "claim": "\"Here is exactly why, and who fixes it\" (after-state)",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "\"why\": reasonCodes + evidence (lib/api-spec/v1-openapi.yaml:1259-1261, :1284-1313). who fixes it: artifacts/signalgrid-app/src/lib/route-owner.ts:1-12 — the console maps reason codes to an owner role (screen 3 \"the operator should see who picks this up\"); by design on no /v1 wire (route-owner.ts:5-7)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "31",
+   "claim": "\"Invisible to Workers, Legible to Auditors\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "docs/EMBEDDED_UX_PRINCIPLE.md:30-37 (host app renders every outcome; \"No SignalGrid UI\"); scripts/launch-profile.mjs:470-476 operator console is the auditor-facing surface",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "33",
+   "claim": "\"Workers use the apps they already know; SignalGrid has no end-user surface at all.\"",
+   "kind": "surface",
+   "classification": "launch",
+   "evidence": "CLAUDE.md golden rule 3; docs/EMBEDDED_UX_PRINCIPLE.md:30-37; scripts/launch-profile.mjs:479-483 — ios:EnterpriseShell is the integration reference \"not as an app anyone is asked to adopt\" (it does carry UI, as the reference host)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "33",
+   "claim": "\"The people who DO see it — operators and auditors — get reproducible evidence instead of dashboards.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:470-476 signalgrid-app (decision detail, digest-verified evidence, audit ledger); :343-346 evidence route",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "35",
+   "claim": "\"No new surface for workers at all\" (after-state)",
+   "kind": "surface",
+   "classification": "launch",
+   "evidence": "docs/EMBEDDED_UX_PRINCIPLE.md:30-37; scripts/launch-profile.mjs:479-483",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "39",
+   "claim": "\"Additive — Nothing Replaced\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "docs/POSITIONING.md:73 (\"consumes their evidence rather than replacing them\"); scripts/launch-profile.mjs:144-147 read-only source criterion",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "41",
+   "claim": "\"SignalGrid reads from the management plane you already run — proven live against Fleet, with Microsoft Intune as the enterprise connector on the roadmap — and replaces none of it.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "Fleet: docs/DECISION_RECORDS.md:656-658, docs/FLEET_LIVE_INTEGRATION.md:13-25. Intune on the roadmap: DR-012 :669-673 amended positioning to \"Intune as the enterprise-roadmap connector\" while the launch profile keeps `graph` as the launch family (scripts/launch-profile.mjs:169-177) — consistent with DR-012, and with SignalTypesSection.tsx:19 (\"implemented ... awaiting a customer tenant\"). \"management plane you already run\" carries the same generality caveat as VerticalsSection.tsx:54 (two adapters + Graph)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "41",
+   "claim": "\"Your MDM stays your MDM; your IdP stays your IdP.\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "docs/POSITIONING.md:73 (\"SignalGrid is not an MDM ... It is not an IdP\"); CLAUDE.md golden rule 4",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "41",
+   "claim": "\"Badge, custody, and zone signals are deferred roadmap categories, not Limited GA.\"",
+   "kind": "status",
+   "classification": "deferred",
+   "evidence": "Correct disclosure: pacs_access :298, custody :286, location :292 deferred signal kinds in scripts/launch-profile.mjs; families pacs-access :232, rtls-custody :238, location-services :225",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "43",
+   "claim": "\"One decision layer on your stack\" (after-state)",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:466-467 api-server \"one tenant-aware decision service\"; /v1/decisions/evaluate :326-327",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "52",
+   "claim": "\"Nobody Owns This Gap. Yet.\"",
+   "kind": "status",
+   "classification": "unsubstantiated",
+   "evidence": "Contradicted by the repo's own research: docs/research/MARKET_LANDSCAPE.md:14 \"SignalGrid's one genuinely under-served wedge — but it is not empty. OLOID markets almost the exact thesis ... Imprivata owns the healthcare shared-device beachhead\"; :48 Imprivata \"already does per-transaction step-up (EPCS), posture checks\"; :50 OLOID \"moving toward per-action 'moment of action' governance\"",
+   "action": "rewrite",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): heading rewritten to \"The Gap Between Your MDM and Your IdP\" — MARKET_LANDSCAPE.md names who else works the gap."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "54",
+   "claim": "\"Nobody owns the question that actually matters on a shared device: should THIS action proceed RIGHT NOW? That's SignalGrid.\"",
+   "kind": "capability",
+   "classification": "unsubstantiated",
+   "evidence": "docs/research/MARKET_LANDSCAPE.md:14 (the PDP pattern is \"already occupied\" by Cerbos, SGNL, PlainID, Axiomatics, Oso, AuthZEN), :48 (Imprivata per-transaction step-up), :50 (OLOID per-action governance), :38 (Entra authentication context \"already does per-action step-up\" — \"don't overclaim 'Entra can't'\"). The narrower device-freshness framing in the same paragraph (\"Your MDM knows what it last recorded\") is supportable; the \"nobody\" is not",
+   "action": "rewrite",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): \"Nobody owns\" → \"Neither owns\" — the claim is about the reader's MDM and IdP, not the market."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/DifferentiatorsSection.tsx",
+   "line": "103-105",
+   "claim": "\"Deterministic and fixture-backed today. SignalGrid recommends and records; the systems\" \"named here stay the systems of record, and every high-risk action stays approval-gated\" \"and simulated.\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "`pnpm run proof:signalgrid-simulator` (package.json:194); `pnpm run review:invariants` (:210); lib/api-spec/v1-openapi.yaml:492-507 remediation \"always approval-required and simulated\" / \"never executed\"; scripts/launch-profile.mjs:739-748 GAP non-demo-core-constructor (the served core is the seeded demo factory — \"fixture-backed\" is literally true)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "14",
+   "claim": "\"First sensitive action asks SignalGrid: compliant, current, authorized?\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:259-269 three launch kinds; /v1/authorize (:330-336; lib/api-spec/v1-openapi.yaml:137-149)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "15",
+   "claim": "\"ALLOW recorded with reproducible evidence attached\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:110-114 evaluate, :213 evidence; scripts/launch-profile.mjs:326-327, :343-346",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "16",
+   "claim": "\"A device your management plane hasn't confirmed recently gets STEP UP instead\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:180-185 device-management-health; step_up verdict lib/api-spec/v1-openapi.yaml:143-145; :707-713 GAP — the gate returns step_up, no launch route answers it (shadow mode); the sentence claims the verdict only",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "17",
+   "claim": "\"Your app applies the verdict — SignalGrid stays invisible to the worker\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "docs/EMBEDDED_UX_PRINCIPLE.md:30-37; CLAUDE.md golden rule 3; lib/api-spec/v1-openapi.yaml:143-147 (host app must fail closed on any value outside the vocabulary)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "28",
+   "claim": "\"Every sensitive action re-asks — per action, not per login\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:1082-1090 EvaluateRequest requires workflowKey per call; scripts/launch-profile.mjs:326-327",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "29",
+   "claim": "\"Compliance drifts mid-shift → the next answer tightens to RESTRICT\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "scripts/launch-profile.mjs:259 device_posture; `pnpm run proof:signalgrid-core` in CI (.github/workflows/review-hub-ci.yml:75); restrict is a served verdict (lib/api-spec/v1-openapi.yaml:143-145)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "30",
+   "claim": "\"The evidence names what changed and who owns the fix\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "\"what changed\": lib/api-spec/v1-openapi.yaml:1263-1282 SignalUsed per signal with value/observedAt/freshness/sourceReference. \"who owns the fix\": artifacts/signalgrid-app/src/lib/route-owner.ts:1-12 — the console derives an owner role from reason codes; it is NOT a field of the evidence snapshot (:1284-1313) and is on no /v1 wire by design (route-owner.ts:5-7)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "31",
+   "claim": "\"Source unreachable? The decision tightens — never assumes\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/signalgrid-core/src/continuity.ts:42; lib/signalgrid-core/src/evidence.ts:573; `pnpm run review:invariants` (.github/workflows/review-hub-ci.yml:63)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "32",
+   "claim": "\"Recovery is verified the same way: a fresh answer, not a promise\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "Per-request evaluation (lib/api-spec/v1-openapi.yaml:1082-1090); scripts/launch-profile.mjs:263-265 device_management_health grades currency on every call",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "43",
+   "claim": "\"Session close recorded — credential revocation stays with your identity stack\"",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "\"Session close recorded\" is present tense over a deferred surface: /v1/sessions/start, /v1/sessions/{id}, /v1/sessions/{id}/end are deferred paths (scripts/launch-profile.mjs:447-450; lib/api-spec/v1-openapi.yaml:977-1019); session_readiness :304 and sso_session :307 deferred kinds. No launch route records a session close. The boundary clause (credential revocation stays with the identity stack) is correct (CLAUDE.md golden rule 3). Ambiguity noted: if \"session\" means the host app's own session, the recording is the host's — the sentence sits in SignalGrid's list of actions",
+   "action": "rewrite",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the step now reads \"Your host app closes the session\" — no launch route records a session close."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "44",
+   "claim": "\"Every verdict of the day sits in the audit ledger, tamper-evident\"",
+   "kind": "retention",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:426-439 /v1/audit (durable Postgres ledger → `source: durable`; otherwise the in-memory demo ledger, whose `chain.truncated`/`evictedCount` report eviction — \"every verdict of the day\" holds only for the durable ledger or within the memory bound); DR-025 docs/DECISION_RECORDS.md:1358; scripts/launch-profile.mjs:350-357",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "45",
+   "claim": "\"An operator can reconstruct any decision: source → evidence → policy → verdict\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:1284-1313 EvidenceSnapshot (sourceReferences, evidence, policyVersionId, digest); scripts/launch-profile.mjs:370-380 read-only policy routes; :470-476 console",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "46",
+   "claim": "\"Enforcement on the device itself remained your MDM's job throughout\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "CLAUDE.md golden rule 4; docs/POSITIONING.md:73",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "59",
+   "claim": "\"One shared device, one shift, every sensitive action answered. SignalGrid evaluates per action — so trust reflects the device's state now, not its state at login — and leaves an evidence trail an operator can replay.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:1082-1090 (per-request), :213 evidence, :426-439 audit; scripts/launch-profile.mjs:326-327, :343-346",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "105-106",
+   "claim": "\"EXIT VIOLATION SCENARIO\" — \"Device not docked by end of shift — no badge checkout recorded\"",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "UNHEDGED present-tense deferred premise: dock/custody is `custody` :286 / `custody_beacon` :287 (kinds) and custody-beacon :217 / rtls-custody :238 / firmware:dock :646 (\"no real dock has run it\", :639-643); badge checkout is `pacs_access` :298 / pacs-access :232 — all deferred in scripts/launch-profile.mjs. Contradicts this site's own DifferentiatorsSection.tsx:41 (\"Badge, custody, and zone signals are deferred roadmap categories, not Limited GA\"). Passes scripts/check-launch-claims.mjs only because its DEFERRED_NOUNS regex (:314-315) matches `badge (binding|state|tap|present)` and `\\bcustody\\b`, neither of which appears in \"badge checkout\" / \"not docked\"",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the block's label now reads DEFERRED ROADMAP, ILLUSTRATIVE and a sub-line says dock, badge, location and PACS signals are not Limited GA; check-launch-claims now recognises `not docked` and `badge checkout` as deferred nouns."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "110",
+   "claim": "\"DENY + evidence recorded\" (chip)",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:110-114, :213; scripts/launch-profile.mjs:326-327, :343-346",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "111",
+   "claim": "\"Supervisor notification recommended\" (chip)",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "No launch delivery surface: webhooks family deferred (scripts/launch-profile.mjs:251), /v1/webhooks and /v1/webhooks/deliveries deferred paths (:413-414). Hedged only by the footer at :125-127 (\"ticket, lost-mode, and suspension actions stay approval-gated and simulated\") — which does not name notification",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the chip stands under the block's own deferred-roadmap label; the sub-line says every action stays with its source system."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "112",
+   "claim": "\"MDM Lost Mode recommended (approval-gated)\" (chip)",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "uem deferred family (scripts/launch-profile.mjs:249); /v1/remediation and /v1/remediation/{id}/approve deferred paths (:415-416; lib/api-spec/v1-openapi.yaml:492-507 \"always approval-required and simulated\"). Hedged in place (\"approval-gated\") and by the footer :125-127",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "113",
+   "claim": "\"Location escalation recommended\" (chip)",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "location :292 and location_certainty :293 deferred kinds; location-services :225 deferred family (scripts/launch-profile.mjs). Not named by the footer hedge at :125-127",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the chip stands under the block's own deferred-roadmap label; `location escalation` is now a deferred noun the gate reads."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "114",
+   "claim": "\"Badge suspension routed to the PACS\" (chip)",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "pacs-access :232 deferred family, pacs_access :298 deferred kind (scripts/launch-profile.mjs); \"routed\" is present tense with no launch outbound route (/v1/webhooks deferred :413-414). The footer :125-127 hedges \"suspension actions\" as approval-gated and simulated, but the badge/PACS signal itself is what DifferentiatorsSection.tsx:41 calls deferred",
+   "action": "rewrite",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): the chip now reads \"Badge suspension recommended — the PACS stays the actor\"; `routed to the PACS` is now a deferred noun the gate reads."
+  },
+  {
+   "file": "artifacts/signalgrid-web/src/components/sections/OutcomesSection.tsx",
+   "line": "125-127",
+   "claim": "\"Deterministic and fixture-backed today. The decision and its evidence are recorded;\" \"ticket, lost-mode, and suspension actions stay approval-gated and simulated — executed\" \"by the source system, never by SignalGrid.\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "`pnpm run proof:signalgrid-simulator` (package.json:194); lib/api-spec/v1-openapi.yaml:492-507 remediation simulated/never executed; scripts/launch-profile.mjs:739-748 (served core is the seeded demo factory); CLAUDE.md golden rules 2-3",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "7",
+   "claim": "\"You add signals and workflows; the grid evaluates more situations as you do. Every signal lets it see more; every workflow lets it assess more.\" (meta description)",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "`pnpm run proof:grid-coverage` (package.json:123) runs in CI (.github/workflows/review-hub-ci.yml:891) — monotonic coverage rule over lib/flows; docs/SIGNAL_SOURCING.md:9-11 names the model it exercises",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "7",
+   "claim": "\"Coverage here is illustrative.\" and \"Public-safe: illustrative data, no live tenant, no action taken.\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "Truthful disclaimer; matches the body disclaimers at docs/fabric-console.html:140 and :185. scripts/launch-profile.mjs:739-748 (no customer estate is evaluated by the served core)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "7",
+   "claim": "\"SignalGrid decides and explains — it does not act: high-risk responses are simulated or approval-required.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:110-114 evaluate, :213 evidence, :492-507 remediation \"always approval-required and simulated\"; CLAUDE.md golden rule 3",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "9",
+   "claim": "\"The more you add, the more of your infrastructure it can reason about.\" (og:description — travels on the social card without the page's banner or footer)",
+   "kind": "capability",
+   "classification": "unsubstantiated",
+   "evidence": "scripts/launch-profile.mjs:167-200 three launch connector families and :257-270 three launch signal kinds; everything else deferred (:203-252, :273-312). The page-level hedges at :140 (\"Nothing here is a claim of current capability\") and :185 (\"illustrative catalogue\") are absent from this card, so the breadth claim is unqualified where it is read",
+   "action": "rewrite",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): og:description now ends \"Illustrative console: nothing here is a claim of current capability.\" — the hedge travels with the social card."
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "9",
+   "claim": "\"SignalGrid decides and explains — it does not act.\" (og:description)",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:492-507; CLAUDE.md golden rule 3",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)",
+   "resolution": "RESOLVED 2026-09-06 (this PR): og:description now ends \"Illustrative console: nothing here is a claim of current capability.\" — the hedge travels with the social card."
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "140",
+   "claim": "\"not shipping at Limited GA\" — scope banner: this page demonstrates the full signal fabric, including families that are deferred, proven in the repository",
+   "kind": "status",
+   "classification": "deferred",
+   "evidence": "scripts/launch-profile.mjs:152-155 DEFERRED_RATIONALE; :33-34. An accurate page-level deferral disclosure, and the first thing rendered (scripts/check-launch-claims.mjs:481 BANNER_SCAN_LINES reads it)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "140",
+   "claim": "\"What ships today is three signals: device compliance, how current that answer is, and whether the device can vouch for itself right now\"",
+   "kind": "count",
+   "classification": "launch",
+   "evidence": "MEASURED: `node -e \"import('./scripts/launch-profile.mjs')...\"` → \"signal-kinds launch 3\" (device_posture, device_management_health, local_authority); docs/POSITIONING.md:69 (linked from the banner)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "140",
+   "claim": "\"Nothing here is a claim of current capability.\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "Page-level hedge; scripts/launch-profile.mjs:524-527 (signalgrid-web is the demo_only \"public explanation surface\") and the page's own footer :185 (\"illustrative catalogue ... not the catalogue the proofs check\")",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "148",
+   "claim": "\"You add <b>signals</b> and <b>workflows</b>. The grid <b>evaluates</b> — and shows its evidence.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "`pnpm run proof:grid-coverage` (package.json:123; CI :891); lib/api-spec/v1-openapi.yaml:213 evidence route",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "149",
+   "claim": "\"SignalGrid returns allow / step-up / restrict / deny with the evidence behind it; it does not carry the response out — the host app and the systems of record do, and any high-risk response is simulated or approval-required.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:143-147 (assist vocabulary), :213 evidence, :492-507 remediation simulated; docs/EMBEDDED_UX_PRINCIPLE.md:30-37",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "149",
+   "claim": "\"The more you add, the more of the organization's activity the grid can reason about.\"",
+   "kind": "capability",
+   "classification": "demo-only",
+   "evidence": "Breadth beyond the three launch kinds (scripts/launch-profile.mjs:257-270) is hedged on this page by the banner at :140 (\"Nothing here is a claim of current capability\") and the footer at :185; the rule itself is proof:grid-coverage (package.json:123)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "154",
+   "claim": "\"of situations the grid can evaluate\" — the live percentage readout (rendered at :311-313)",
+   "kind": "count",
+   "classification": "demo-only",
+   "evidence": "docs/fabric-console.html:185 \"Treat the percentage as a demonstration of the rule, not as a measurement of the product\". MEASURED: `node -e` over the in-file arrays with the initial toggles (:244-245) → \"initial handled 2 / 11 = 18%\"",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "156-157",
+   "claim": "\"signals wired\" and \"workflows active\" counters",
+   "kind": "count",
+   "classification": "demo-only",
+   "evidence": "Toggle counts over the in-file arrays (:196-206, :213-223), disclaimed at :185; three launch connector families in scripts/launch-profile.mjs:167-200",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "166",
+   "claim": "\"Signals <span class=\"n\" id=\"sCount\"></span> — click to wire\" — nine wireable signal families offered",
+   "kind": "count",
+   "classification": "demo-only",
+   "evidence": "MEASURED: `node -e` over the SIGNALS array → \"SIGNALS 9\"; disclaimed at :185 (\"an illustrative catalogue written into this file\"); three launch signal kinds (scripts/launch-profile.mjs:257-270)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "170",
+   "claim": "\"Workflows <span class=\"n\" id=\"wCount\"></span> — click to activate\" — nine activatable workflows offered",
+   "kind": "count",
+   "classification": "demo-only",
+   "evidence": "MEASURED: \"WORKFLOWS 9\"; @workspace/flows ships three flows — lib/flows/src/catalog.ts:12 flow_med_admin, :32 flow_network_change, :53 flow_controlled_area (MEASURED by grep); disclaimed at :185",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "176",
+   "claim": "\"What the grid evaluates — situations across the floor\"",
+   "kind": "capability",
+   "classification": "demo-only",
+   "evidence": "The eleven situations are the in-file catalogue (:226-238), disclaimed at :185; MEASURED \"SITUATIONS 11\"",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "182",
+   "claim": "\"then the grid <b>evaluates</b> it and returns allow / step-up / restrict / deny with the evidence behind it. It does not carry the response out: the host app acts, and any high-risk response is simulated or approval-required.\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "lib/api-spec/v1-openapi.yaml:143-147, :213, :492-507; CLAUDE.md golden rules 3-4",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "183",
+   "claim": "\"when it doesn&rsquo;t and the grid does the lifting itself\" — the <code>grid-collected</code> acquisition path",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "docs/SIGNAL_SOURCING.md:15-20 defines the four acquisition paths and :17 `grid_collected` (\"SignalGrid does the lifting itself: a collector/agent, log & syslog ingestion\"); the model is exercised by proof:grid-coverage (SIGNAL_SOURCING.md:9-11). No collector ships at launch — every collection-shaped family is deferred (scripts/launch-profile.mjs:212 carrier, :226 macos-posture, :227 nac, :242 siem, :245 syslog, :247 telemetry, :238 rtls-custody). Hedged on this page by the banner at :140",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "184-185",
+   "claim": "\"The <em>rule</em> this page animates is proven in the\" Review Hub by <code>proof:grid-coverage</code>; \"<code>proof:fabric-scenario</code> proves the signal fusion behind a single verdict.\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "package.json:123 `proof:grid-coverage`, :114 `proof:fabric-scenario` both exist; grid-coverage runs in CI (.github/workflows/review-hub-ci.yml:891)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "185",
+   "claim": "\"the nine signals, nine workflows and eleven situations below are an illustrative catalogue written into this file, and they are not the catalogue the proofs check\"",
+   "kind": "count",
+   "classification": "launch",
+   "evidence": "MEASURED against the file: \"SIGNALS 9 WORKFLOWS 9 SITUATIONS 11\" (node over :196-206, :213-223, :226-238). Accurate demo disclaimer",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "185",
+   "claim": "\"<code>@workspace/flows</code> ships three proven flows — <code>flow_med_admin</code>, <code>flow_network_change</code>, <code>flow_controlled_area</code>\"",
+   "kind": "count",
+   "classification": "launch",
+   "evidence": "MEASURED: `grep -n \"id:\" lib/flows/src/catalog.ts` → :12 flow_med_admin, :32 flow_network_change, :53 flow_controlled_area; `pnpm run proof:flows` (package.json:118; CI :888)",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "185",
+   "claim": "\"Treat the percentage as a demonstration of the rule, not as a measurement of the product. Illustrative data — <b>no live tenant, no action taken</b>.\"",
+   "kind": "status",
+   "classification": "launch",
+   "evidence": "Accurate demo disclaimer; scripts/launch-profile.mjs:739-748 (no customer estate is decided about yet); :524-527",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "197",
+   "claim": "Signal offered: \"Identity / SSO\" — \"sign-in risk\" — via API",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "identity-risk :222 and sso-session :244 deferred families; identity :290, sso_session :307 deferred kinds (scripts/launch-profile.mjs). Hedged by the banner at :140 and footer :185",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "198",
+   "claim": "Signal offered: \"Device posture / EDR\" — \"endpoint threat\" — via API",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "device_posture is launch (scripts/launch-profile.mjs:259) but the EDR/threat half is deferred — edr-threat :220 family, threat :309 and detection :289 kinds. The label fuses a launch kind with a deferred one; hedged page-wide at :140",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "199",
+   "claim": "Signal offered: \"Physical custody / RTLS\" — \"zone & badge\" — grid-collected",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "rtls-custody :238, pacs-access :232 deferred families; custody :286, location :292, pacs_access :298 deferred kinds (scripts/launch-profile.mjs). Hedged by the banner at :140; DifferentiatorsSection.tsx:41 states the same deferral",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "200",
+   "claim": "Signal offered: \"Network / NAC\" — \"access state\" — native",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "nac :227 / network-nac :228 deferred families; network :294 deferred kind (scripts/launch-profile.mjs). \"native\" is the docs/SIGNAL_SOURCING.md:16 acquisition path, not a shipped integration; hedged at :140",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "201",
+   "claim": "Signal offered: \"Data protection / DLP\" — \"data egress\" — via API",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "data-protection :218 deferred family; data_protection :288 deferred kind (scripts/launch-profile.mjs); hedged at :140",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "202",
+   "claim": "Signal offered: \"Credential exposure\" — \"endpoint secrets\" — via API",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "credential-exposure :215 deferred family; credential_exposure :284 deferred kind (scripts/launch-profile.mjs); hedged at :140",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "203",
+   "claim": "Signal offered: \"macOS endpoint hardening\" — \"SIP / FileVault / MDM\" — grid-collected",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "macos-posture :226 deferred family (scripts/launch-profile.mjs); docs/SIGNAL_SOURCING.md:30-38 names signalgrid-mcp as the released grid_collected macOS reader, which is the deferred mcp-server surface (scripts/launch-profile.mjs:637); hedged at :140",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "204",
+   "claim": "Signal offered: \"OT / IIoT device posture\" — \"PLC / edge gateway\" — grid-collected",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "ot-posture :231 deferred family; ot_posture :297 deferred kind (scripts/launch-profile.mjs); hedged at :140",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "205",
+   "claim": "Signal offered: \"Reachability / carrier\" — \"post-exit\" — grid-collected",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "carrier :212 deferred family; reachability :302 deferred kind (scripts/launch-profile.mjs); hedged at :140",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "214-222",
+   "claim": "Nine workflows offered with bare action strings — \"Lost-Device Response\" \"locate → restrict → escalate\", \"Account-Compromise Containment\" \"deny session → isolate → step-up\", \"Data-Exfiltration Response\" \"deny egress → quarantine\", \"Exposed-Credential Containment\" \"restrict app access → step-up → incident\", \"Unmanaged-Access Block\" \"restrict to safe segment → step-up\", \"Baseline-Drift Remediation\" \"step-up → patch\", \"Endpoint-Hardening Enforcement\" \"step-up → restrict on weakened\", \"OT Exposure Containment\" \"restrict exposed device → segment → incident\", \"Tailgate Response\" \"alert → verify badge → restrict door\"",
+   "kind": "capability",
+   "classification": "demo-only",
+   "evidence": "None of the nine is a shipped flow (lib/flows/src/catalog.ts:12, :32, :53 are the three); the footer :185 names them an illustrative in-file catalogue and the banner :140 disclaims current capability; the source comment :209-212 and the rendered board :258 attach \"(simulated or approval-required)\" — the list rows at :276 render the action string without that qualifier. Actuation verbs (isolate, quarantine, patch, restrict door) are the systems of record's, per :182",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "227-237",
+   "claim": "Eleven situations presented as events the grid catches: \"Lost tablet after shift\", \"Compromised sign-in mid-shift\", \"PHI leaving the device\", \"Live cloud key in an AI-agent config\", \"Unauthenticated device on the network\", \"Config drift on a shared workstation\", \"FileVault off / unmanaged on a shared Mac\", \"Security agent stranded after a bad uninstall\", \"A PLC reachable from the office network\", \"Unpatchable legacy machine on the line\", \"Tailgating at a controlled door\"",
+   "kind": "capability",
+   "classification": "demo-only",
+   "evidence": "MEASURED \"SITUATIONS 11\"; disclaimed at :185 and :140; the families they need are deferred (scripts/launch-profile.mjs:212, :215, :218, :220, :222, :226, :227, :231, :232, :238). \"PHI leaving the device\" additionally names a domain-safety concern CLAUDE.md golden rule 3 places in the host app",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "252",
+   "claim": "Rendered state: \"blind spot\" — \"No workflow. Build <b>\" … \"</b> to evaluate this.\"",
+   "kind": "status",
+   "classification": "demo-only",
+   "evidence": "Fixture-driven state over the in-file catalogue; disclaimed at :185",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "258",
+   "claim": "Rendered state: \"evaluates it and recommends\" → action \"(simulated or approval-required)\"",
+   "kind": "capability",
+   "classification": "launch",
+   "evidence": "Correctly scoped to \"recommends\" and marked simulated/approval-required — lib/api-spec/v1-openapi.yaml:492-507; the deferred /v1/decisions/{id}/simulate path (scripts/launch-profile.mjs:409) is not claimed",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "docs/fabric-console.html",
+   "line": "313",
+   "claim": "\"the grid can evaluate every situation on this board\" (rendered at 100%)",
+   "kind": "count",
+   "classification": "demo-only",
+   "evidence": "Reached only when all nine in-file signals and workflows are toggled on; disclaimed at :185 (\"a demonstration of the rule, not ... a measurement of the product\")",
+   "action": "keep",
+   "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   }
  ]
 }

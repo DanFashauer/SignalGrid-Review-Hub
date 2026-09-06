@@ -51,7 +51,7 @@ const VERTICALS = [
     badgeColor: "text-amber-400 bg-amber-400/10 border-amber-400/20",
     useCase: "One MSP, many structurally similar lean-IT customers",
     detail:
-      "SignalGrid reads the management plane the MSP already runs — proven live against Fleet — and gives every customer's shared devices the same defensible decision layer without adding a console anyone has to babysit.",
+      "SignalGrid reads the management plane through the connectors it has — proven live against Fleet, Microsoft Intune implemented and awaiting a tenant — and gives every customer's shared devices the same defensible decision layer without adding a console anyone has to babysit.",
   },
 ];
 

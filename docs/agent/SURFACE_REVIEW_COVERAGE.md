@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **87 of 100 surfaces have been read. 12 are partially read. 1 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2258 of 2258 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2259 of 2259 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -46,15 +46,15 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/signalgrid-app` | package | 65 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/signalgrid-desktop` | package | 22 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 6 | 0 |
 | `artifacts/signalgrid-mobile-pwa` | package | 24 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 1 |
-| `artifacts/signalgrid-review` | package | 45 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
-| `artifacts/signalgrid-web` | package | 32 | read | 2 | 2026-09-05 | cloud lane (firsthand read of every edit site; fixes + gates) | docs/agent/EVIDENCE.md | 6 | 6 |
+| `artifacts/signalgrid-review` | package | 45 | read | 2 | 2026-09-06 | cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 5 | 14 |
+| `artifacts/signalgrid-web` | package | 32 | read | 3 | 2026-09-06 | cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 11 | 43 |
 | `artifacts/sim-requests` | tree | 16 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/sim-results` | tree | 47 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/sync` | tree | 5 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `config` | tree | 5 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `docker` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
-| `docs/*` | loose files | 214 | **partial** | 2 | 2026-09-06 | cloud lane (two independent fail-closed audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 18 | 0 |
-| `docs/agent` | docs family | 32 | **partial** | 3 | 2026-09-06 | cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 9 | 6 |
+| `docs/*` | loose files | 214 | **partial** | 3 | 2026-09-06 | cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 19 | 0 |
+| `docs/agent` | docs family | 33 | **partial** | 4 | 2026-09-06 | cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 13 | 8 |
 | `docs/assets` | docs family | 1 | **partial** | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/company` | docs family | 9 | **partial** | 2 | 2026-09-06 | cloud lane (two independent fail-closed audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 1 |
 | `docs/connectors` | docs family | 4 | read | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
@@ -114,7 +114,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 8 | 1 |
 | `native/shared` | native | 3 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 401 | **partial** | 2 | 2026-09-06 | cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 7 | 0 |
+| `scripts` | package | 401 | **partial** | 3 | 2026-09-06 | cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 9 | 0 |
 | `site` | tree | 2 | read | 2 | 2026-09-05 | cloud lane (firsthand read of every edit site; fixes + gates) | docs/agent/EVIDENCE.md | 2 | 3 |
 | `tests` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 1 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |

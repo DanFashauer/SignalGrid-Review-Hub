@@ -78,7 +78,16 @@ const ENTITIES = [
   [/&amp;/g, "&"], [/&lt;/g, "<"], [/&gt;/g, ">"], [/&quot;/g, '"'], [/&#39;|&apos;/g, "'"], [/&nbsp;/g, " "],
   [/[‘’]/g, "'"], [/[“”]/g, '"'],
 ];
-const demarkup = (s) => ENTITIES.reduce((t, [re, to]) => t.replace(re, to), s.replace(/\*\*/g, "").replace(/\\"/g, '"'));
+// Source-file seams are markup too: a JavaScript string continued with `" +`
+// on the next line, and a `//` comment prefix at the start of a continued
+// line, both split one sentence the reader sees whole. Each substitution keeps
+// its newline, so the offset→line map stays true.
+const SEAMS = [
+  [/"\s*\+\s*(\r?\n)\s*"/g, "$1"],
+  [/(\r?\n)[ \t]*\/\/ ?/g, "$1"],
+];
+const demarkup = (s) =>
+  [...ENTITIES, ...SEAMS].reduce((t, [re, to]) => t.replace(re, to), s.replace(/\*\*/g, "").replace(/\\"/g, '"'));
 const norm = (s) => demarkup(s).replace(/\s+/g, " ").trim();
 
 /** The longest quoted, ellipsis-free segment of a claim (≥ MIN_QUOTE chars), or null. */
@@ -180,6 +189,15 @@ export function anchorAll(rows, readIndex) {
   const removeStillPresent = results.filter(
     (r) => (r.status === "anchored" || r.status === "moved") && (r.row.action ?? "keep") === "remove",
   );
+  // A `resolution` drops a row out of every count above, so it is the one edit
+  // that can silently retire a live defect. A remove-actioned row may carry a
+  // resolution only once its copy is gone: if the quotation still renders, the
+  // resolution is a false statement and this is FATAL, not ratcheted.
+  const resolvedRemoveStillPresent = rows
+    .map((row, i) => ({ i, row }))
+    .filter(({ row }) => row.resolution && (row.action ?? "keep") === "remove")
+    .map(({ i, row }) => ({ i, row, ...anchorRow({ ...row, resolution: undefined }, idx(row.file)) }))
+    .filter((r) => r.status === "anchored" || r.status === "moved");
   const absentByFile = {};
   for (const r of by("absent")) absentByFile[r.row.file] = (absentByFile[r.row.file] ?? 0) + 1;
   return {
@@ -191,6 +209,7 @@ export function anchorAll(rows, readIndex) {
     resolved: by("resolved"),
     nofile: by("nofile"),
     removeStillPresent,
+    resolvedRemoveStillPresent,
     absentByFile,
   };
 }
@@ -202,22 +221,33 @@ export function anchorAll(rows, readIndex) {
 // shorthand is not a claim about a location.
 const CITE_RE =
   /(?<![\w@/.-])((?:artifacts|docs|lib|scripts|native|fixtures|fleet|tests|tools|site|config|docker|firmware|\.github|\.githooks|\.claude)\/[\w./-]+\.(?:tsx|ts|mjs|json|js|md|ya?ml|swift|html|sh|toml|kt|rs)|README\.md|CLAUDE\.md|AGENTS\.md|SECURITY\.md|pnpm-workspace\.yaml|package\.json):(\d+)(?:\s*[-–]\s*(\d+))?/g;
-const FRAG_RE = /^[^"`]{0,40}(?:"([^"]{12,}?)"|`([^`]{12,}?)`)/;
+// Only a DOUBLE-QUOTED fragment (straight or curly) counts as a quotation of the
+// cited file. A backtick span is an identifier or a command — `pnpm run proof:x`
+// after a citation says the proof exists, not that the cited line contains those
+// words — and treating it as a quotation produced 16 false absences on the first
+// re-extraction (2026-09-06).
+const FRAG_RE = /^[^"“`]{0,40}(?:"([^"]{12,}?)"|“([^”]{12,}?)”)/;
 const FRAG_WINDOW = 10;
 
 /** Every root-anchored `path:line[-line]` in an evidence string, with the quoted fragment that follows it (if any). */
 export function citationsIn(evidence) {
   const out = [];
   const text = String(evidence ?? "");
-  for (const m of text.matchAll(CITE_RE)) {
-    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 200);
+  const all = [...text.matchAll(CITE_RE)];
+  all.forEach((m, k) => {
+    // A fragment belongs to the NEAREST citation before it: the window stops at
+    // the next citation, so `a.mjs:683-753); docs/B.md:149 ("four gaps")` does
+    // not hand B's fragment to A (the first re-extraction produced exactly that).
+    const start = m.index + m[0].length;
+    const stop = Math.min(start + 200, all[k + 1]?.index ?? text.length);
+    const after = text.slice(start, stop);
     const fm = FRAG_RE.exec(after);
-    const raw = fm ? (fm[1] ?? fm[2]) : null;
+    const raw = fm ? (fm[1] ?? fm[2]) : null; // group 2 is the curly-quoted form
     const seg = raw
       ? norm(raw).split(/…|\.\.\./).map((s) => s.trim()).filter((s) => s.length >= MIN_QUOTE).sort((x, y) => y.length - x.length)[0] ?? null
       : null;
     out.push({ index: m.index, length: m[0].length, file: m[1], lo: Number(m[2]), hi: Number(m[3] ?? m[2]), seg });
-  }
+  });
   return out;
 }
 
@@ -350,6 +380,20 @@ function selfTest() {
   const ent = anchorAll([{ file: "e", line: "1", claim: '"CIS & DISA STIG as decision signals"', action: "keep" }], () => indexFile("<h3>CIS &amp; DISA STIG as decision signals</h3>\n"));
   checks.push(["an HTML entity on the surface is markup, not a rewrite — the quotation still anchors", ent.anchored.length === 1]);
   checks.push(["a remove-actioned quotation still present is counted", a.removeStillPresent.length === 1 && a.removeStillPresent[0].i === 1]);
+  const rr = anchorAll(
+    [
+      { file: "f", line: "2", claim: '"quoted sentence here"', action: "remove", resolution: "RESOLVED (but the words are still there)" },
+      { file: "f", line: "2", claim: '"quoted sentence here"', action: "keep", resolution: "RECLASSIFIED: hedged in context" },
+      { file: "f", line: "2", claim: '"this sentence was deleted from the file"', action: "remove", resolution: "RESOLVED: removed" },
+    ],
+    () => index,
+  );
+  checks.push([
+    "a remove-actioned row resolved while its copy still renders is caught; a reclassified keep row and a truly removed one are not",
+    rr.resolvedRemoveStillPresent.length === 1 && rr.resolvedRemoveStillPresent[0].i === 0,
+  ]);
+  const twoCites = citationsIn('scripts/a.mjs:683-753); docs/B.md:149-154 ("four declared gaps here", checked)');
+  checks.push(["a fragment belongs to the nearest citation before it, never to an earlier one", twoCites[0].seg === null && twoCites[1].seg === "four declared gaps here"]);
   checks.push(["absent is tallied per file", a.absentByFile.f === 1]);
 
   const copy = rows.map((r) => ({ ...r }));
@@ -380,6 +424,7 @@ function selfTest() {
     { file: "s", line: "1", claim: '"c"', evidence: 'docs/X.md:2 ("a sentence the file never carried at all")' },
     { file: "s", line: "1", claim: '"c"', evidence: "see src/data/shorthand.ts:9 and docs/NOPE.md:1 and docs/X.md:999" },
     { file: "s", line: "1", claim: '"c"', evidence: 'docs/X.md:2 ("a sentence the file never carried at all")', resolution: "RESOLVED" },
+    { file: "s", line: "1", claim: '"c"', evidence: "docs/X.md:2 (`pnpm run proof:something-that-exists` is the command)" },
   ];
   const ev = evidenceAll(evRows, readIdx);
   checks.push(["a fragment within ±10 lines of its citation is near; a citation without a fragment is only existence-checked", ev.near.some((r) => r.i === 0) && ev.unfragmented.some((r) => r.i === 0)]);
@@ -387,6 +432,7 @@ function selfTest() {
   checks.push(["a fragment nowhere in the cited file is ABSENT", ev.absent.some((r) => r.i === 2)]);
   checks.push(["a shorthand path is not a citation; a missing file and a line past EOF are each named", !ev.results.some((r) => r.citation.file.startsWith("src/")) && ev.missing.some((r) => r.i === 3) && ev.pastEof.some((r) => r.i === 3)]);
   checks.push(["a resolved row's evidence is a record, not a citation to hold", !ev.results.some((r) => r.i === 4)]);
+  checks.push(["a backtick span after a citation is an identifier, not a quotation — the citation is only existence-checked", ev.unfragmented.some((r) => r.i === 5) && !ev.absent.some((r) => r.i === 5)]);
   const evCopy = evRows.map((r) => ({ ...r }));
   const n = rewriteCitations(evCopy, ev);
   checks.push(["--write re-anchors exactly the moved citation inside the evidence text", n === 1 && evCopy[1].evidence.startsWith("docs/X.md:34 —") && evCopy[0].evidence === evRows[0].evidence]);
@@ -449,6 +495,12 @@ if (WRITE) {
 }
 
 let problems = 0;
+if (anchors.resolvedRemoveStillPresent.length > 0) {
+  problems += 1;
+  console.error(`\n✗ ${anchors.resolvedRemoveStillPresent.length} remove-actioned row(s) carry a resolution while their copy still renders:`);
+  for (const r of anchors.resolvedRemoveStillPresent.slice(0, 20)) console.error(`    ${r.row.file}:${r.row.line} "${r.seg.slice(0, 70)}"`);
+  console.error("  A resolution retires the row from every count here; write it only once the copy is gone, or revise the action with the reason.");
+}
 if (evidence.missing.length > 0 || evidence.pastEof.length > 0) {
   problems += 1;
   console.error(`\n✗ ${evidence.missing.length} evidence citation(s) name a file that does not exist and ${evidence.pastEof.length} cite a line past its end:`);

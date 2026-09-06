@@ -49,9 +49,9 @@ export default function DifferentiatorsSection() {
     <section className="py-24 bg-background border-b border-border/50">
       <div className="container mx-auto px-4 md:px-8 max-w-screen-xl">
         <div className="text-center mb-16 max-w-3xl mx-auto">
-          <h2 className="text-3xl font-bold tracking-tight mb-4">Nobody Owns This Gap. Yet.</h2>
+          <h2 className="text-3xl font-bold tracking-tight mb-4">The Gap Between Your MDM and Your IdP</h2>
           <p className="text-muted-foreground text-lg">
-            Your MDM knows what it last recorded. Your IdP knows who logged in. Nobody owns the question that actually matters on a shared device: should THIS action proceed RIGHT NOW? That's SignalGrid.
+            Your MDM knows what it last recorded. Your IdP knows who logged in. Neither owns the question that actually matters on a shared device: should THIS action proceed RIGHT NOW? That's SignalGrid.
           </p>
         </div>
 

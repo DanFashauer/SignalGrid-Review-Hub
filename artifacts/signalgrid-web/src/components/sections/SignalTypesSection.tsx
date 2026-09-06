@@ -15,7 +15,7 @@ export default function SignalTypesSection() {
       icon: Shield,
       items: [
         "Read-only from your device-management source",
-        "Proven live against Fleet — the management plane lean IT teams run",
+        "Proven live against Fleet — an open-source management plane",
         "Microsoft Intune adapter implemented and wire-hardened, awaiting a customer tenant",
         "Encryption, enrollment, compliance state",
       ],
@@ -72,7 +72,7 @@ export default function SignalTypesSection() {
             the device&apos;s compliance, how current that compliance answer really is, and whether the
             device can vouch for itself right now. Anything it can&apos;t verify{" "}
             <span className="text-foreground font-medium">tightens the answer instead of waving it through</span>.
-            That narrowness is deliberate — every claim on this page traces to a proof that runs on every commit.
+            That narrowness is deliberate — every claim on this page is held to the ratified launch profile by a gate that runs on every commit.
           </p>
         </div>
 

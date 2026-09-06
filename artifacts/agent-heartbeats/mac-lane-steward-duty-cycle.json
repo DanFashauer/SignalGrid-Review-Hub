@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-06T22:27:46.369Z",
-  "result": "quiet: 22:24Z cycle. fetch/prune clean (deleted origin/lane/cloud-mail-20260906-212741Z, merged as #498). Six origin/mac/* branches unmoved since 2026-09-02/03; none new/moved this cycle; none merged into Alpha -> no PR action (owner-owned stale set). Tick heartbeat ABSENT (Mac not ticking); owner last escalated 2026-09-06T04:26Z, next allowed 2026-09-07T04:26Z -> no re-escalation. live-evidence 2026-09-03 (3d old) but cloud->mac refresh message already unread -> no new send. No mail addressed to cloud; sim requests 16/16 bound, none owed; sync manifest unchanged (v64, no drift)."
+  "firedAt": "2026-09-06T23:27:25.472Z",
+  "result": "quiet: 23:24Z cycle. fetch/prune clean (deleted origin/lane/cloud-mail-20260906-222746Z, merged as #499). Six origin/mac/* branches unmoved since 2026-09-02/03; none new/moved; none merged into Alpha -> no PR action (owner-owned stale set). Tick heartbeat ABSENT (Mac not ticking); owner last escalated 2026-09-06T04:26Z, next allowed 2026-09-07T04:26Z -> no re-escalation. live-evidence 2026-09-03 (3d old) but cloud->mac refresh message already unread -> no new send. No mail addressed to cloud; sim requests 16/16 bound, none owed; sync manifest unchanged (v64, no drift)."
 }

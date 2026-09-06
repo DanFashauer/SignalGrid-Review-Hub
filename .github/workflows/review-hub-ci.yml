@@ -674,7 +674,7 @@ jobs:
         run: node scripts/check-cited-symbols.mjs
       - name: "Cited symbols self-test (the check can actually fail)"
         run: node scripts/check-cited-symbols.mjs --self-test
-      # Two preview PNGs shipped a retired label for five days after their HTML sources
+      # Two preview PNGs shipped a struck category label for five days after their HTML sources
       # were corrected (2026-09-06): no gate read image content. The manifest pins each
       # render to the sha256 of its source; the renderer (Chromium) is NOT run in CI.
       - name: "Rendered assets (a committed PNG must be a render of the committed HTML; unpinned PNGs reported)"

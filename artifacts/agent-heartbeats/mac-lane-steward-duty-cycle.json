@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-06T18:28:09.660Z",
-  "result": "quiet. No new mac/* branches; no Mac commits on Alpha since #494; no mail to cloud; no new sim results; no sync-manifest drift. Tick heartbeat ABSENT (Mac not ticking; owner last escalated 2026-09-06T04:26Z, next allowed 2026-09-07T04:26Z, no re-escalation). live-evidence 3d (2026-09-03); unread cloud->mac refresh request already stands, no new nudge."
+  "firedAt": "2026-09-06T19:28:08.002Z",
+  "result": "quiet. No new mac/* branches; Alpha head is #495 merge; no mail to cloud; no new sim results; no sync-manifest drift. Tick ABSENT (Mac not ticking; owner last escalated 2026-09-06T04:26Z, next allowed 2026-09-07T04:26Z, no re-escalation). live-evidence 3d (2026-09-03); unread cloud->mac refresh request already stands."
 }

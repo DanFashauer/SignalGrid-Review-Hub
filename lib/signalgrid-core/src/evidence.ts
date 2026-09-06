@@ -264,6 +264,15 @@ export function verifySnapshot(snapshot: EvidenceSnapshot): boolean {
 interface CategoryReading {
   /** Latest reading whose `observedAt` parsed, if any. */
   ordered?: NormalizedSignal;
+  /**
+   * Every OTHER reading stamped at exactly the same instant as `ordered`, in
+   * arrival order (2026-09-05, eighth-round finding). Two readings of one
+   * category at one instant have an equal claim to be current, so neither may
+   * be dropped for the other; the readers fold them worst-wins, like `illegible`
+   * but WITHOUT the "unknown" floor — a tied reading is legible and can vouch
+   * for its own currency, it just cannot outrank its twin on time.
+   */
+  tied: NormalizedSignal[];
   /** EVERY reading whose `observedAt` did not parse, in arrival order. */
   illegible: NormalizedSignal[];
 }
@@ -272,10 +281,19 @@ type LatestByCategory = Map<NormalizedSignal["category"], CategoryReading>;
 
 /**
  * One pass over the signals, keeping the latest (max observedAt) entry per
- * category. On an observedAt tie the first entry in the original order wins,
- * which matches the first element of a stable descending sort — so the derived
- * evidence is byte-for-byte identical to the prior filter+sort-per-category
- * approach, at O(n) instead of O(categories · n log n).
+ * category.
+ *
+ * AN EXACT TIE KEEPS BOTH (2026-09-05, eighth-round verdict-core finding). The
+ * previous rule — "on an observedAt tie the first entry in the original order
+ * wins" — was ARRAY ORDER deciding the answer, the same defect finding F-1
+ * removed for illegible peers, and it decided in the fail-open direction: two
+ * `device_compliance` readings at one instant, `compliant` first and
+ * `non_compliant` second, derived `compliant`; swap them and the same evidence
+ * derived `non_compliant`. Measured on `buildEvidence` before the change. A
+ * category cannot be both at once, and nothing can order two readings at one
+ * instant by time, so the second is kept in `tied` and every reader folds it
+ * worst-wins — order-independent by construction. A strictly newer reading
+ * still replaces `ordered` AND clears `tied`: the tie was at the old instant.
  *
  * "Latest" is by PARSED INSTANT (2026-09-02, verdict-core finding V8b), not by
  * string order. The previous `observedAt.localeCompare(...)` was chronological
@@ -309,7 +327,7 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
   for (const signal of signals) {
     let reading = map.get(signal.category);
     if (!reading) {
-      reading = { illegible: [] };
+      reading = { tied: [], illegible: [] };
       map.set(signal.category, reading);
     }
     const observed = Date.parse(signal.observedAt);
@@ -325,7 +343,12 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
     const currentAt = at.get(signal.category);
     if (currentAt === undefined || observed > currentAt) {
       reading.ordered = signal;
+      reading.tied = [];
       at.set(signal.category, observed);
+    } else if (observed === currentAt) {
+      // Same instant, equal claim. Kept, never dropped; folded worst-wins by
+      // every reader, so arrival order cannot pick the answer.
+      reading.tied.push(signal);
     }
   }
   return map;
@@ -377,7 +400,16 @@ function resolveWorst<T extends string | boolean>(
   if (!reading) {
     return undefined;
   }
-  const ordered = reading.ordered ? parse(reading.ordered.value) : undefined;
+  let ordered = reading.ordered ? parse(reading.ordered.value) : undefined;
+  // A same-instant twin has the same claim to be current as `ordered`, so it is
+  // folded worst-wins with NO floor: a good twin changes nothing, a bad one
+  // stands (eighth-round finding — array order used to pick the winner).
+  for (const signal of reading.tied) {
+    const candidate = parse(signal.value);
+    if (severityOf(candidate, good) > severityOf(ordered, good)) {
+      ordered = candidate;
+    }
+  }
   if (reading.illegible.length === 0) {
     return ordered;
   }
@@ -617,6 +649,10 @@ function readDockEvidenceFreshness(latestByCategory: LatestByCategory): Freshnes
     // illegible one ALONE is floored at "unknown" because it cannot vouch for
     // its own currency.
     let freshness = reading.ordered ? asFreshness(reading.ordered.freshness) : undefined;
+    // A same-instant twin folds worst-wins with no floor (eighth-round finding).
+    for (const signal of reading.tied) {
+      freshness = worseFreshness(freshness ?? "fresh", asFreshness(signal.freshness));
+    }
     // EVERY illegible peer is folded, not the first (finding F-1).
     for (const signal of reading.illegible) {
       const stamped = asFreshness(signal.freshness);
@@ -737,7 +773,11 @@ function readFreshness(latestByCategory: LatestByCategory): Freshness {
   }
   // The posture reading states its freshness in its VALUE, not in the `freshness`
   // field, but the out-of-union rule is the same one `asFreshness` applies.
-  const ordered = reading.ordered ? asFreshness(reading.ordered.value) : undefined;
+  let ordered = reading.ordered ? asFreshness(reading.ordered.value) : undefined;
+  // A same-instant twin folds worst-wins with no floor (eighth-round finding).
+  for (const signal of reading.tied) {
+    ordered = worseFreshness(ordered ?? "fresh", asFreshness(signal.value));
+  }
   if (reading.illegible.length === 0) {
     return ordered ?? "unknown";
   }

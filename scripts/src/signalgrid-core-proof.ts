@@ -17,10 +17,13 @@
  * data, no live vendor calls.
  */
 import {
+  authenticate,
+  authorize,
   buildEvidence,
   buildResolutionPlan,
   computeMetrics,
   runDockSync,
+  runFixtureSync,
   foldIdentityEnabled,
   deriveCriticalSignalsPresent,
   FRESHNESS_VALUES,
@@ -54,7 +57,7 @@ import {
   SIGNAL_CATEGORIES,
   EVIDENCE_FIELDS,
 } from "@workspace/signalgrid-core";
-import type { Freshness } from "@workspace/signalgrid-core";
+import type { Freshness, Role } from "@workspace/signalgrid-core";
 
 interface Assertion {
   name: string;
@@ -1383,9 +1386,12 @@ if (pending) {
     gathered[0].id === "s_new" && gathered[1].id === "s_old",
   );
 
-  // Tie-break: on EQUAL observedAt, the first-inserted signal wins — matching a
-  // stable descending sort's first element. Insert in both orders on separate
-  // stores and assert the derived compliance is stable (first-inserted's value).
+  // Tie: on EQUAL observedAt, WORST WINS, in either insertion order (2026-09-05,
+  // eighth verdict-core round). The previous rule — "the first-inserted signal
+  // wins" — was asserted here as a feature, and it was array order deciding the
+  // answer: `compliant` then `non_compliant` derived compliant, the reverse derived
+  // non_compliant. Two readings of one category at one instant have an equal claim
+  // to be current, so neither may be dropped for the other.
   const sameTs = "2026-07-13T12:00:00.000Z";
   const tie = (first: string, second: string): string => {
     const s = new MemoryStore();
@@ -1395,10 +1401,40 @@ if (pending) {
     return buildEvidence(identity, dev, workflow, s.listSignalsForSubject("tenant_a", "device", "dv_x")).deviceCompliance;
   };
   check(
-    "index: equal-observedAt tie resolves to the first-inserted signal",
-    tie("compliant", "non_compliant") === "compliant" &&
+    "index: an equal-observedAt tie resolves WORST-WINS regardless of insertion order",
+    tie("compliant", "non_compliant") === "non_compliant" &&
       tie("non_compliant", "compliant") === "non_compliant",
   );
+  check("index: a tie between two good readings stays good (a twin changes nothing)", tie("compliant", "compliant") === "compliant");
+  // A strictly NEWER reading still replaces both halves of an older tie: the tie
+  // was at the old instant, and a current good reading is the answer.
+  {
+    const s = new MemoryStore();
+    s.putDevice(dev);
+    s.putSignal(mk("t_old_bad", "non_compliant", sameTs));
+    s.putSignal(mk("t_old_good", "compliant", sameTs));
+    s.putSignal(mk("t_new", "compliant", "2026-07-13T13:00:00.000Z"));
+    check(
+      "index: a strictly newer reading replaces an older tie (the tie does not outlive its instant)",
+      buildEvidence(identity, dev, workflow, s.listSignalsForSubject("tenant_a", "device", "dv_x")).deviceCompliance === "compliant",
+    );
+  }
+  // The same rule on the freshness axis: two posture_freshness readings at one
+  // instant, one fresh and one stale, read stale in either order.
+  {
+    const mkF = (id: string, value: string, order: number): NormalizedSignal => ({
+      id, tenantId: "tenant_a", connectorId: "c", subjectType: "device", subjectId: "dv_x",
+      category: "posture_freshness", value, observedAt: sameTs, freshness: "fresh", sourceReference: `fixture-${order}`,
+    });
+    const fr = (first: string, second: string): string => {
+      const s = new MemoryStore();
+      s.putDevice(dev);
+      s.putSignal(mkF("f_a", first, 1));
+      s.putSignal(mkF("f_b", second, 2));
+      return buildEvidence(identity, dev, workflow, s.listSignalsForSubject("tenant_a", "device", "dv_x")).postureFreshness;
+    };
+    check("index: an equal-observedAt freshness tie resolves worst-wins in either order", fr("fresh", "stale") === "stale" && fr("stale", "fresh") === "stale");
+  }
 }
 
 // ── 18. Badge-reader case: identity↔device binding as a decision dimension ────
@@ -3553,6 +3589,73 @@ const monotonicityTable: string[] = [];
     "22 self-test: the verdict classifier is blind to csp and the csp classifier is blind to the verdict — the two dimensions really are independent, which is why sweeping one alone passed every F-A vector",
     violations(synth(true, false, "deny", "step_up"), "criticalSignalsPresent").length === 0 &&
       violations(synth(false, true, "deny", "deny"), "verdict").length === 0,
+  );
+}
+
+// ── 30. Eighth verdict-core round (2026-09-05): four fail-open shapes ──────────
+
+{
+  // (a) A tenant with NO resolution configuration must not get auto-proposed
+  // resolution: the engine's fallback config used to say `autoProposeEnabled:
+  // true`, so an ABSENT configuration switched the most permissive class on.
+  // Exercised on the real engine by hiding the seeded config for one call.
+  const staleDec = decisions.find((d) => d.reasonCodes.includes("POSTURE_STALE"));
+  const hidden = core as unknown as { store: MemoryStore };
+  const original = hidden.store.getResolutionConfig;
+  let planWithout: ReturnType<typeof core.getResolution> | undefined;
+  try {
+    hidden.store.getResolutionConfig = () => undefined;
+    if (staleDec) planWithout = core.getResolution(T.operator, staleDec.id);
+  } finally {
+    hidden.store.getResolutionConfig = original;
+  }
+  check(
+    "resolution: with NO tenant configuration, nothing is auto-proposed (absence of a decision is not a decision to propose)",
+    planWithout !== undefined &&
+      planWithout.steps.length > 0 &&
+      planWithout.steps.every((s) => s.resolutionClass !== "auto_proposed"),
+  );
+  check(
+    "resolution: ...and the SAME decision with the seeded config still auto-proposes (the assertion above can fail)",
+    staleDec !== undefined && core.getResolution(T.operator, staleDec.id).steps.some((s) => s.resolutionClass === "auto_proposed"),
+  );
+
+  // (b) A fixture sync whose EVERY record names an unknown subject used to report
+  // status "success" and mark the connector "healthy" — a sync that applied nothing
+  // reading as a clean sync.
+  const syncStore = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z")).store;
+  const fixtureConnector = syncStore.listConnectors("tenant_northwind").find((c) => c.mode === "fixture" && c.kind !== "dockbridge-custody");
+  check("sync: a fixture posture connector is seeded", fixtureConnector !== undefined);
+  if (fixtureConnector) {
+    const orphan = {
+      deviceRef: "no-such-device", identityRef: "no-such-identity", identityEnabled: true, managed: true,
+      compliance: "compliant" as const, encrypted: true, osSupported: true, lastSyncAt: "2026-07-13T14:00:00.000Z", sourceReference: "fixture:orphan",
+    };
+    const run = runFixtureSync(syncStore, fixedClock("2026-07-13T15:00:00.000Z"), fixtureConnector, [orphan, orphan]);
+    check("sync: a run that skipped EVERY record reports partial, not success", run.status === "partial" && run.recordsProcessed === 0 && run.signalsNormalized === 0);
+    check("sync: ...names the skip count in its note", /2 of 2 record/.test(run.note));
+    check("sync: ...and leaves the connector degraded, not healthy", syncStore.listConnectors("tenant_northwind").find((c) => c.id === fixtureConnector.id)?.status === "degraded");
+    const known = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+    const knownConnector = known.store.listConnectors("tenant_northwind").find((c) => c.id === fixtureConnector.id);
+    const knownRecords = known.fixtureRecords[fixtureConnector.id] ?? [];
+    check("sync: the seeded records are all known subjects (control)", knownConnector !== undefined && knownRecords.length > 0);
+    if (knownConnector) {
+      const clean = runFixtureSync(known.store, fixedClock("2026-07-13T15:00:00.000Z"), knownConnector, knownRecords);
+      check("sync: a run that skipped nothing still reports success and healthy (the assertions above can fail)", clean.status === "success" && clean.recordsProcessed === knownRecords.length);
+    }
+  }
+
+  // (c) A principal whose role is not in the permission table must resolve to NO
+  // permission — never to a prototype member or a thrown TypeError. Reached by
+  // binding a key whose role arrived across a boundary the type cannot see.
+  const roleStore = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z")).store;
+  roleStore.putApiKey({
+    id: "key_bogus_role", tenantId: "tenant_northwind", principalType: "user", subjectId: "user_bogus",
+    role: "constructor" as unknown as Role, token: "sgk_bogus_role", keyReference: "bogus",
+  });
+  const rolePrincipal = authenticate(roleStore, "sgk_bogus_role");
+  expectError("rbac: a role outside the table (\"constructor\") is forbidden, not resolved through the prototype", "forbidden", () =>
+    authorize(rolePrincipal, "decision:read"),
   );
 }
 

@@ -31,6 +31,8 @@ import {
   isUserVerified,
   readSignCount,
   type VerifiableKey,
+  AUTH_DATA_MIN_BYTES,
+  readAttestedCredentialId,
 } from './verify';
 import { appendAuditRecord } from '@workspace/audit';
 
@@ -173,7 +175,13 @@ export async function verifyRegistration(
   // consumed, so a malformed attempt does not burn a valid ceremony.
   if (
     typeof response?.response?.clientDataJSON !== 'string' ||
-    typeof response?.response?.attestationObject !== 'string'
+    typeof response?.response?.attestationObject !== 'string' ||
+    // The credential id is client-supplied and becomes the stored credential's id,
+    // the audit row's credentialId and the release record's credentialId. It used to
+    // be read as `response.id || response.rawId` with no shape check, so a response
+    // with neither stored a credential whose id was `undefined` (2026-09-05).
+    typeof response?.id !== 'string' ||
+    response.id.length === 0
   ) {
     return { success: false, error: 'Malformed WebAuthn registration response', timestamp };
   }
@@ -200,7 +208,8 @@ export async function verifyRegistration(
   if (challengeData.challenge.purpose !== 'registration') {
     return { success: false, error: 'Challenge purpose mismatch', timestamp };
   }
-  if (challengeData.challenge.userId !== undefined && challengeData.challenge.userId !== userId) {
+  // The binding is MANDATORY: a challenge with no userId rejects, it is not skipped.
+  if (typeof challengeData.challenge.userId !== 'string' || challengeData.challenge.userId !== userId) {
     return { success: false, error: 'Challenge user mismatch', timestamp };
   }
 
@@ -258,7 +267,7 @@ export async function verifyRegistration(
   // request `userVerification: required` in the options — the user must have been
   // verified (biometric / PIN). Fail closed if authData can't be read.
   const regAuthData = extractAuthData(response.response.attestationObject);
-  if (!regAuthData) {
+  if (!regAuthData || regAuthData.length < AUTH_DATA_MIN_BYTES) {
     return { success: false, error: 'Unreadable authenticator data', timestamp };
   }
   const config2 = getWebAuthnConfig();
@@ -285,7 +294,17 @@ export async function verifyRegistration(
     };
   }
 
-  const credentialId = response.id || response.rawId;
+  // The stored id is the one the AUTHENTICATOR attested, and the client-supplied
+  // `id` must equal it — a registration whose `id` names a different credential
+  // than the attested one is refused rather than stored under a client-chosen name.
+  const attestedId = readAttestedCredentialId(regAuthData);
+  if (attestedId === null) {
+    return { success: false, error: 'Unreadable attested credential', timestamp };
+  }
+  if (attestedId !== response.id) {
+    return { success: false, error: 'Credential id does not match the attested credential', timestamp };
+  }
+  const credentialId = attestedId;
 
   // Seed the stored counter from the REGISTRATION authenticator data, not 0. An
   // authenticator that ships a non-zero signature counter at registration would
@@ -307,20 +326,22 @@ export async function verifyRegistration(
     createdAt: timestamp,
   };
 
-  // Save credential
-  await addCredential(userId, credential);
+  // Save credential. A credential id already enrolled for this user is NOT
+  // replaced (no silent key swap) — and that is reported, not folded into success.
+  const { stored } = await addCredential(userId, credential);
 
   // Audit
   await appendAuditRecord(
     'security.webauthn.registered',
     { type: 'user', id: userId },
-    { meta: { credentialId: credential.id }, tenantId: tenant }
+    { meta: { credentialId: credential.id, duplicate: !stored }, tenantId: tenant }
   );
 
   return {
     success: true,
     userId,
     credentialId: credential.id,
+    alreadyEnrolled: !stored,
     timestamp,
   };
 }
@@ -416,7 +437,8 @@ export async function verifyAuthentication(
   if (challengeData.challenge.purpose !== 'authentication') {
     return { success: false, error: 'Challenge purpose mismatch', timestamp };
   }
-  if (challengeData.challenge.userId !== undefined && challengeData.challenge.userId !== userId) {
+  // The binding is MANDATORY: a challenge with no userId rejects, it is not skipped.
+  if (typeof challengeData.challenge.userId !== 'string' || challengeData.challenge.userId !== userId) {
     return { success: false, error: 'Challenge user mismatch', timestamp };
   }
 
@@ -475,6 +497,13 @@ export async function verifyAuthentication(
 
   const authenticatorData = Buffer.from(response.response.authenticatorData, 'base64url');
   const signature = Buffer.from(response.response.signature, 'base64url');
+
+  // Shorter than rpIdHash + flags + signCount cannot carry the flags the checks
+  // below read; `readUInt8(32)` on exactly 32 bytes used to throw a RangeError
+  // (a 500, not a refusal). A clean rejection, before any flag is read.
+  if (authenticatorData.length < AUTH_DATA_MIN_BYTES) {
+    return { success: false, error: 'Unreadable authenticator data', timestamp };
+  }
 
   // Bind the assertion to our RP and require user presence.
   if (!rpIdHashMatches(authenticatorData, config.rpId)) {

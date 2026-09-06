@@ -6,9 +6,9 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**58 of 100 surfaces have been read. 9 are partially read. 33 have not been read at all.**
+**68 of 100 surfaces have been read. 5 are partially read. 27 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2237 of 2237 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2245 of 2245 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -19,27 +19,27 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | Surface | Kind | Files | State | Reads | Last read | Reviewer | Record | Closed | Open |
 | --- | --- | ---: | --- | ---: | --- | --- | --- | ---: | ---: |
 | `.agents` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 1 |
-| `.claude/*` | loose files | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `.claude/agents` | tree | 13 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `.claude/*` | loose files | 2 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
+| `.claude/agents` | tree | 13 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 0 |
 | `.claude/commands` | tree | 9 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
-| `.claude/hooks` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 8 | 0 |
+| `.claude/hooks` | tree | 3 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 11 | 0 |
 | `.claude/skills` | tree | 73 | **partial** | 1 | 2026-09-02 | cloud lane | #379 | 3 | 0 |
 | `.githooks` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/*` | loose files | 2 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/codeql` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/ISSUE_TEMPLATE` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/workflows` | tree | 14 | read | 2 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 13 | 0 |
-| `(root)` | loose files | 26 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `(root)` | loose files | 26 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 2 |
 | `artifacts/agent-heartbeats` | tree | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/api-collection` | tree | 111 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/api-server` | package | 34 | **partial** | 1 | 2026-09-02 | cloud lane | #384 | 0 | 0 |
+| `artifacts/api-server` | package | 34 | **partial** | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
 | `artifacts/build-loop` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/connector-emulator` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/lab-collections` | tree | 42 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/lane-messages` | tree | 167 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/live-captures` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/live-evidence` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/mcp-server` | package | 4 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 1 | 0 |
+| `artifacts/mcp-server` | package | 4 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
 | `artifacts/outreach-log` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/sbom` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/scanner-comparison` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -91,7 +91,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/integrations` | package | 278 | **partial** | 3 | 2026-09-02 | cloud lane (independent review, notes folded) | #388 | 24 | 1 |
 | `lib/location` | package | 8 | read | 1 | 2026-09-05 | cloud lane | lib/location/src/radius-dhcp.ts | 1 | 3 |
 | `lib/orchestration` | package | 3 | read | 1 | 2026-09-05 | cloud lane | lib/orchestration/src/index.ts | 3 | 0 |
-| `lib/persistence` | package | 8 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 0 |
+| `lib/persistence` | package | 8 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 6 | 1 |
 | `lib/pim-activation` | package | 6 | read | 1 | 2026-09-05 | cloud lane | lib/pim-activation/src/from-posture.ts | 2 | 0 |
 | `lib/posture-composition` | package | 5 | read | 1 | 2026-09-04 | cloud lane | lib/posture-composition/src/compose.ts | 1 | 1 |
 | `lib/recommendations` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/recommendations/src/index.ts | 4 | 2 |
@@ -100,44 +100,37 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/self-audit` | package | 8 | read | 1 | 2026-09-04 | cloud lane | lib/self-audit/src/audit.ts | 1 | 1 |
 | `lib/signal-discovery` | package | 4 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
 | `lib/signal-radar` | package | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 0 |
-| `lib/signalgrid-core` | package | 23 | **partial** | 2 | 2026-09-02 | cloud lane (three independent reviews) | #376 | 4 | 0 |
-| `lib/signalgrid-simulator` | package | 9 | **partial** | 1 | 2026-09-02 | cloud lane (three independent reviews) | #376 | 0 | 0 |
+| `lib/signalgrid-core` | package | 23 | read | 3 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 10 | 1 |
+| `lib/signalgrid-simulator` | package | 10 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 2 |
 | `lib/verdict-attestation` | package | 5 | read | 1 | 2026-09-04 | cloud lane (adversarial sweep + independent verify) | #415 | 1 | 0 |
-| `lib/webauthn` | package | 8 | **partial** | 1 | 2026-09-04 | cloud lane (adversarial sweep + independent verify) | #415 | 1 | 0 |
+| `lib/webauthn` | package | 8 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 6 | 1 |
 | `lib/work-context` | package | 5 | read | 1 | 2026-09-05 | cloud lane | lib/work-context/src/reevaluate.ts | 2 | 0 |
 | `native/android` | native | 24 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 2 | 0 |
 | `native/desktop` | native | 21 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 2 | 0 |
-| `native/ios/*` | loose files | 12 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `native/ios/EnterpriseShell` | native | 50 | read | 1 | 2026-09-02 | cloud lane (independent review, notes folded) | #387 | 4 | 0 |
-| `native/ios/EnterpriseShellTests` | native | 9 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `native/ios/*` | loose files | 12 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
+| `native/ios/EnterpriseShell` | native | 51 | read | 1 | 2026-09-02 | cloud lane (independent review, notes folded) | #387 | 4 | 0 |
+| `native/ios/EnterpriseShellTests` | native | 10 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `native/ios/mdm` | native | 2 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
 | `native/ios/scripts` | native | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
-| `native/ios/SignalGridMobile` | native | 46 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `native/shared` | native | 2 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 386 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 4 | 0 |
+| `native/ios/SignalGridMobile` | native | 46 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 8 | 1 |
+| `native/shared` | native | 3 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
+| `scripts` | package | 390 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 4 | 0 |
 | `site` | tree | 2 | read | 2 | 2026-09-05 | cloud lane (firsthand read of every edit site; fixes + gates) | docs/agent/EVIDENCE.md | 2 | 3 |
 | `tests` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 1 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |
 
-## Partially read (9)
+## Partially read (5)
 
 A named slice was read. The rest of the surface has not been.
 
 - `.claude/skills` (tree)
 - `artifacts/api-server` (package)
-- `artifacts/mcp-server` (package)
 - `artifacts/signalgrid-app` (package)
 - `lib/integrations` (package)
-- `lib/signalgrid-core` (package)
-- `lib/signalgrid-simulator` (package)
-- `lib/webauthn` (package)
 - `scripts` (package)
 
-## Not read (33)
+## Not read (27)
 
-- `.claude/*` (loose files)
-- `.claude/agents` (tree)
-- `(root)` (loose files)
 - `artifacts/agent-heartbeats` (tree)
 - `artifacts/api-collection` (tree)
 - `artifacts/build-loop` (tree)
@@ -165,9 +158,6 @@ A named slice was read. The rest of the surface has not been.
 - `docs/postman` (docs family)
 - `docs/preview` (docs family)
 - `docs/research` (docs family)
-- `native/ios/*` (loose files)
-- `native/ios/EnterpriseShellTests` (native)
-- `native/ios/SignalGridMobile` (native)
 
 ## Execution records (1)
 
@@ -181,10 +171,9 @@ these count towards nothing above.
 Why a row reads the way it does — usually because work landed NEAR a surface
 without being a read OF it, which an empty `reads` array cannot say on its own.
 
-- `(root)` — The 26 tracked files at the repository root - package.json, the lockfile, the Dockerfiles, validate-sim-macos.sh, CLAUDE.md, README.md. Individually gated in several places and never read as one surface.
 - `docs/*` — NOT READ. This row was seeded READ on the strength of #375 and that was wrong, in exactly the way this ledger exists to catch: #375 audited docs/INDEX.md line by line against the entries it routes to, and its squash commit touches three of the 203 top-level documents (INDEX.md, OPEN_SOURCE_LAB_REGISTRY.md, STATUS.md). An index audit is a read of the index, not of what it points at. Downgraded 2026-09-02 by independent review.
 - `firmware` — NOT READ. #386's summary sentence names 'the dock firmware' alongside the Android and desktop reads, but the only firmware change in that PR was firmware/.gitignore and its workflow - no source file under firmware/dock/core/ was opened.
-- `native/ios/EnterpriseShellTests` — NOT READ. The Mac lane wrote SessionExpiryTests here on branch mac/session-expiry-hardening (LOOP.md, 2026-09-02), which had not landed on the default branch when this ledger was seeded. Writing tests for one fail-open is not a read of the test target.
+- `native/ios/SignalGridMobile` — Edits of 2026-09-05 are source-level and unbuilt on the cloud lane; the Mac lane's xcodebuild is the verification.
 - `tests` — NOT READ as a surface. #380 (e66da87, 2026-09-02) read and dispositioned the tests/security-reference/ SUBTREE - eight specs no runner reached - by porting seven invariants to the live surface and deleting the directory. That subtree is gone, so the read covers nothing that is here now. What remains is tests/load/, the k6 drivers that scripts/check-test-execution.mjs says in its own header are invoked by nothing and are recorded open in docs/COMPANY_BUILD_PLAN.md row 43. A read of a deleted subtree is not a read of this surface.
 
 ## Not a surface

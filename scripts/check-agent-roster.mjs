@@ -52,7 +52,7 @@ function frontmatter(body) {
 
 // Two write scopes may not overlap — with ONE declared exception. A flat
 // no-nesting rule sounded right until the org tried to use it: `scripts/` holds
-// 317 files, every gate and every proof, and it could not be given an owner
+// every gate and every proof (hundreds of files), and it could not be given an owner
 // because `scripts/src/e2e/` was already assigned to the e2e-runner. The rule
 // was forbidding the most ordinary shape an organisation has — a team owns a
 // directory, one specialist owns one subdirectory inside it.

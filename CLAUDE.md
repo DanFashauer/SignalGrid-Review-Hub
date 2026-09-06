@@ -46,32 +46,39 @@ proofs miss:
 
 ```bash
 ./validate-sim-macos.sh          # full suite → the harness prints
-                                 # "== SUMMARY: N passed, M failed =="; compare M
-                                 # against 0. Do NOT compare N against a total quoted
-                                 # here — the suite grows, and a pinned total silently
-                                 # turns a regression into a pass.
+                                 # "== SUMMARY: N passed, M failed, S skipped =="; compare
+                                 # M against 0 AND read S — a skip is not a pass, and the
+                                 # skipped gates are named above the line. Do NOT compare
+                                 # N against a total quoted here — the suite grows, and a
+                                 # pinned total silently turns a regression into a pass.
                                  # (--sim-only for just the scenarios)
 ```
 
 **`validate-sim-macos.sh` green is NARROWER than preflight green, and the
 difference is not small.** The harness enumerates every `proof:*` script, so a
-new proof joins it automatically — but roughly thirty-five preflight gates are
-not proofs and it never runs them: the docs↔proof figure guard, the launch
-profile, both preflight↔CI parity checks, the guard registries, the publication
-boundary, the simulation-request gate, `test:load`, the benches. A branch can
-therefore pass the harness and fail CI on a gate the harness has no concept of.
-Run BOTH before pushing anything that touches gates, docs figures, or the
-launch surface:
+new proof joins it automatically — but MOST preflight gates are not proofs and
+it never runs them: the docs↔proof figure guard, the launch profile, both
+preflight↔CI parity checks, the guard registries, the publication boundary, the
+simulation-request gate, `test:load`, the benches, and well over a hundred more.
+(An earlier version of this paragraph said "roughly thirty-five"; measured with
+the parity gate's own extractor on 2026-09-05 the non-proof count was 182 of 257
+— the paragraph that warned the difference was not small had quantified it as
+small. Do not retype a number here: `node scripts/check-preflight-ci-parity.mjs`
+prints the current one.) A branch can therefore pass the harness and fail CI on
+a gate the harness has no concept of. Run BOTH before pushing anything that
+touches gates, docs figures, or the launch surface:
 
 ```bash
-node scripts/preflight.mjs       # the per-push lane CI mirrors (~35 non-proof gates)
-pnpm run verify:breadth          # 47 deferred families + 8 doctrine proofs, its own CI job
+node scripts/preflight.mjs       # the per-push lane CI mirrors (every non-proof gate lives here)
+pnpm run verify:breadth          # every STEPS entry in scripts/verify-breadth.mjs, its own CI job
+                                 # (count the entries, not this comment — the header there says why)
 ```
 
 ### Commands worth knowing, and when
 
 | Command | When |
 | --- | --- |
+| `bash scripts/mac/install-launchd.sh` | **Mac, once.** Installs the 30-minute lane tick (`scripts/mac/lane-tick.sh`): runs queued sim requests and heartbeats without a Claude session open. The cloud lane does everything CI's macOS runners can verify itself (Swift twins, xcodebuilds, Mac-owned script fixes) and no longer mails the Mac for builds — see `docs/LANE_COORDINATION.md`, second revision. `--status` to check, `--uninstall` to remove. |
 | `pnpm run lane:inbox` | **Run this first, every session.** What the other lane needs you to know, how long it has waited, and which of your branches mainline does not carry yet. The owner is not a message bus; do not ask them to relay. |
 | `pnpm run lane:deliver send\|ack\|heartbeat\|batch …` | **The one-step delivery (2026-09-05).** Writes the artifact in a throwaway worktree at `origin/SignalGrid_Alpha`, gates it, commits, pushes and wakes the other lane — never touching your checkout, never riding a code branch. Mac: pushed straight to mainline. Cloud: pushed to `lane/cloud-mail-<stamp>`, then open the PR + `enable_pr_auto_merge`. `lane:send`/`lane:ack` still only WRITE the file; a written file is not delivered. Wake channel: a comment on the mailbox PR (`docs/agent/lane-mailbox.json`) wakes the cloud lane at once; otherwise it looks hourly. Protocol: `docs/LANE_COORDINATION.md`. |
 | `pnpm run sim:run-requests` | On the Mac: run the verification operations the cloud lane queued in `artifacts/sim-requests/`. `--plan` first to see what would run; `--id <id>` for one. Results land in `artifacts/sim-results/` with provenance and are COMMITTED — that is how the other lane learns the run happened. See `docs/LIVE_SYNC_LOOP.md`. |

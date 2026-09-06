@@ -149,12 +149,13 @@ trusting this table's age.
 
 The tables above are the **launch decision core** (`lib/signalgrid-core`). The
 **fixture simulator** surface — the engine `lib/signalgrid-simulator/src/decisionEngine.ts` plus the
-remediation-allow wrapper `lib/signalgrid-simulator/src/remediation-allow.ts` — is a second, separate
-decision path. Together they emit 25 reason codes. 2 of them the core also emits
-(`CUSTODY_EXCEPTION`, `POSTURE_STALE`); the other 23
+remediation-allow wrapper `lib/signalgrid-simulator/src/remediation-allow.ts` and the posture-allow
+wrapper `lib/signalgrid-simulator/src/posture-allow.ts` — is a second, separate
+decision path. Together they emit 31 reason codes. 2 of them the core also emits
+(`CUSTODY_EXCEPTION`, `POSTURE_STALE`); the other 29
 appear nowhere above. The lists are parsed from those files by this generator —
-the engine's emit sites and the wrapper's declared `REMEDIATION_ALLOW_REASONS` —
-not maintained by hand. Several of them name **deferred** families
+the engine's emit sites and each wrapper's declared reason array
+(`REMEDIATION_ALLOW_REASONS`, `POSTURE_ALLOW_REASONS`) — not maintained by hand. Several of them name **deferred** families
 (custody, dock, location) — the simulator is a fixture harness, so it models
 families the launch profile does not serve.
 
@@ -172,11 +173,13 @@ constraint by a different mechanism: `native/ios/EnterpriseShell/Services/Remedi
 is held to the wrapper by the shared vector table and `scripts/check-remediation-allow-conformance.mjs`,
 so the spellings are a contract there too.
 
-The 23 the core never emits — none of them a launch
+The 29 the core never emits — none of them a launch
 surface, and the custody/dock/location ones name **deferred** families:
 - `ALLOW_REMOVED_DUE_TO_CUSTODY_FAILURE` — simulator/iOS only
 - `ALLOW_REMOVED_DUE_TO_HIGHER_RISK` — simulator/iOS only
 - `ALLOW_WITHHELD_CONCURRENT_FAILURE` — simulator/iOS only
+- `ALLOW_WITHHELD_POSTURE_ILLEGIBLE` — simulator/iOS only
+- `ALLOW_WITHHELD_POSTURE_UNAFFIRMED` — simulator/iOS only
 - `APPLE_DECLARED_STATE_TRUSTED` — simulator/iOS only
 - `BATTERY_WORKFLOW_RISK` — simulator/iOS only
 - `DEVICE_NON_COMPLIANT` — simulator/iOS only
@@ -187,6 +190,10 @@ surface, and the custody/dock/location ones name **deferred** families:
 - `INTEGRATION_ROUTE_DEGRADED` — simulator/iOS only
 - `LOCATION_EXCEPTION` — simulator/iOS only
 - `OPERATIONAL_HEALTH_DEGRADED` — simulator/iOS only
+- `POSTURE_ABSENT` — simulator/iOS only
+- `POSTURE_AFFIRMED` — simulator/iOS only
+- `POSTURE_ILLEGIBLE` — simulator/iOS only
+- `POSTURE_UNAFFIRMED` — simulator/iOS only
 - `REMEDIATION_ABSENT_WHERE_REQUIRED` — simulator/iOS only
 - `REMEDIATION_EVIDENCE_STALE` — simulator/iOS only
 - `REMEDIATION_NOT_REQUIRED` — simulator/iOS only

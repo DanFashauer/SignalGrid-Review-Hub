@@ -58,6 +58,7 @@ let package = Package(
                 "Services/DecisionService.swift",
                 "Services/SignalContext.swift",
                 "Services/RemediationAllow.swift",
+                "Services/PostureAllow.swift",
                 "Services/ScreenCapturePolicy.swift",
                 "Services/DeviceBindingCrypto.swift",
                 "Models/SessionState.swift",

@@ -35,6 +35,58 @@ router.get("/healthz", (_req, res) => {
 // default; the core is in-memory and needs no database), so the instance is
 // ready — and the body says `durableStore: "none"` so a green readyz can never
 // be read as evidence that persistence is up.
+/**
+ * PROBE COALESCING (2026-09-05). /readyz is unauthenticated and, by the same
+ * reasoning that keeps it out of the limiter (rateLimit.ts), exempt from BOTH
+ * limiters — and each call cost seven database round-trips (three `SELECT 1`,
+ * three privilege probes, one schema probe) against pools of ten. Measured:
+ * 40 anonymous calls, 0 × 429, 280 probe units. An unauthenticated caller
+ * could exhaust the pools the authenticated routes need. So one composite
+ * probe is shared: concurrent callers await the SAME in-flight promise, and a
+ * settled result is reused for `PROBE_TTL_MS`. The answer is at most one TTL
+ * stale, which is the interval an orchestrator polls at anyway; a probe that
+ * cannot be shared is a probe that can be weaponised.
+ *
+ * `probedAt` is returned in both bodies so the sharing is observable: N calls
+ * inside one window carry one instant.
+ */
+export const PROBE_TTL_MS = 1000;
+type ProbeResult = { ready: boolean; reason?: string; probedAt: string };
+let lastProbe: { at: number; result: ProbeResult } | null = null;
+let inFlight: Promise<ProbeResult> | null = null;
+
+async function runProbes(store: { ping(): Promise<void> }): Promise<ProbeResult> {
+  const sessions = getSessionStore();
+  const ledger = getAuditBackend();
+  // allSettled, not sequential awaits: every probe must get a handler even
+  // when another has already failed — an abandoned rejected probe is an
+  // unhandledRejection, and that kills the process the route exists to keep
+  // honest.
+  const probes = [store.ping()];
+  if (typeof sessions.ping === "function") probes.push(sessions.ping());
+  if (typeof ledger.ping === "function") probes.push(ledger.ping());
+  const results = await Promise.allSettled(probes);
+  const probedAt = new Date().toISOString();
+  return results.every((r) => r.status === "fulfilled")
+    ? { ready: true, probedAt }
+    : { ready: false, reason: "A durable component is configured but unreachable or under-privileged. Not taking traffic.", probedAt };
+}
+
+function coalescedProbe(store: { ping(): Promise<void> }): Promise<ProbeResult> {
+  const now = Date.now();
+  if (lastProbe && now - lastProbe.at < PROBE_TTL_MS) return Promise.resolve(lastProbe.result);
+  if (inFlight) return inFlight;
+  inFlight = runProbes(store)
+    .then((result) => {
+      lastProbe = { at: Date.now(), result };
+      return result;
+    })
+    .finally(() => {
+      inFlight = null;
+    });
+  return inFlight;
+}
+
 router.get("/readyz", async (req: Request, res: Response) => {
   // Body DETAIL is profile-gated (review finding): under the review-demo
   // profile the durableStore field and failure messages are diagnostic gold;
@@ -42,11 +94,12 @@ router.get("/readyz", async (req: Request, res: Response) => {
   // outages to anonymous callers. The STATUS CODE — the thing an orchestrator
   // keys on — is identical in both profiles; only the prose narrows.
   const verbose = demoSurfacesEnabled();
-  const notReady = (message: string) => {
+  const notReady = (message: string, probedAt?: string) => {
     res.status(503).json({
       requestId: req.requestId ?? null,
       error: "not_ready",
       message: verbose ? message : "Not ready.",
+      ...(probedAt ? { probedAt } : {}),
     });
   };
   // Under the gateway profile the ONLY credentials are verified enterprise
@@ -81,21 +134,14 @@ router.get("/readyz", async (req: Request, res: Response) => {
   // backend expose ping() only in their Postgres forms — the in-memory
   // fixture defaults have nothing durable to probe and are skipped, which is
   // safe precisely because with DATABASE_URL set the selectors return the
-  // Postgres forms.
-  const sessions = getSessionStore();
-  const ledger = getAuditBackend();
-  // allSettled, not sequential awaits: every probe must get a handler even
-  // when another has already failed — an abandoned rejected probe is an
-  // unhandledRejection, and that kills the process the route exists to keep
-  // honest.
-  const probes = [store.ping()];
-  if (typeof sessions.ping === "function") probes.push(sessions.ping());
-  if (typeof ledger.ping === "function") probes.push(ledger.ping());
-  const results = await Promise.allSettled(probes);
-  if (results.every((r) => r.status === "fulfilled")) {
-    res.json(verbose ? { status: "ready", durableStore: "postgres" } : { status: "ready" });
+  // Postgres forms. One composite probe, shared across concurrent callers and
+  // reused for PROBE_TTL_MS (see above).
+  // `store.ping` is narrowed above (a store without a probe is not ready).
+  const probe = await coalescedProbe({ ping: () => store.ping!() });
+  if (probe.ready) {
+    res.json(verbose ? { status: "ready", durableStore: "postgres", probedAt: probe.probedAt } : { status: "ready", probedAt: probe.probedAt });
   } else {
-    notReady("A durable component is configured but unreachable or under-privileged. Not taking traffic.");
+    notReady(probe.reason ?? "Not ready.", probe.probedAt);
   }
 });
 

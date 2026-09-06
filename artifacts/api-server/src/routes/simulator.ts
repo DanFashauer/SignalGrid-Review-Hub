@@ -35,6 +35,14 @@ router.post("/simulator/run", (req, res) => {
     return;
   }
 
+  // Existence is decided BEFORE the run, by lookup — not inferred from whatever
+  // the run threw. The previous catch-all answered "Simulator scenario not
+  // found" to every failure inside runScenario, so an internal defect would
+  // have been reported to the client as a confident negative existence claim.
+  if (!getSimulatorScenario(scenarioId)) {
+    res.status(404).json(envelope({ error: "not_found", message: "Simulator scenario not found." }));
+    return;
+  }
   try {
     const result = runSimulatorScenario(scenarioId);
     auditLedger.push(...result.auditEvidence);
@@ -42,8 +50,8 @@ router.post("/simulator/run", (req, res) => {
       auditLedger.splice(0, auditLedger.length - MAX_LEDGER_ENTRIES);
     }
     res.json(envelope(result));
-  } catch (_err) {
-    res.status(404).json(envelope({ error: "not_found", message: "Simulator scenario not found." }));
+  } catch (err) {
+    res.status(500).json(envelope({ error: "simulator_error", message: err instanceof Error ? err.message : "Simulator run failed." }));
   }
 });
 

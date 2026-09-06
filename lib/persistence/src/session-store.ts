@@ -200,6 +200,28 @@ export class PostgresSessionStore implements SessionStore {
       // surface here as "not ready" instead of as a 42501 mid-request.
       await this.assertPrivileges();
     }
+    // And usability is not SHAPE — see decision-store.ts assertSchema.
+    await this.assertSchema();
+  }
+
+  /** Every column the store's statements bind. */
+  private static readonly BOUND_COLUMNS = [
+    "id", "tenant_id", "identity_ref", "device_ref", "workflow_key", "status", "outcome",
+    "decision_id", "created_at", "last_seen_at", "expires_at",
+  ];
+
+  private async assertSchema(): Promise<void> {
+    const res = await this.pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'sessions'`,
+    );
+    const present = new Set(res.rows.map((r: any) => String(r.column_name)));
+    const missing = PostgresSessionStore.BOUND_COLUMNS.filter((c) => !present.has(c));
+    if (missing.length > 0) {
+      throw new Error(
+        `sessions is missing column(s) ${missing.join(", ")} — the schema is behind the code. ` +
+          "Run `pnpm run db:migrate` with the admin credential; refusing to report ready for statements that would fail.",
+      );
+    }
   }
 
   /** The exact per-table privileges the store's statements need; also run on
@@ -222,6 +244,7 @@ export class PostgresSessionStore implements SessionStore {
     await this.ensureReady();
     await this.pool.query("SELECT 1");
     await this.assertPrivileges();
+    await this.assertSchema();
   }
 
   private rowToSession(r: any): Session {

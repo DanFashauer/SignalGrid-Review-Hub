@@ -44,6 +44,11 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
 };
 
 function roleHasPermission(role: Role, permission: Permission): boolean {
+  // Own-property lookup, never a raw index: a role string that arrived across
+  // a process boundary (a durable principal row, a seed file) and is not in
+  // the table must resolve to NO permissions, not to a prototype member or a
+  // thrown TypeError from `.includes` on `undefined`.
+  if (!Object.prototype.hasOwnProperty.call(ROLE_PERMISSIONS, role)) return false;
   return ROLE_PERMISSIONS[role].includes(permission);
 }
 

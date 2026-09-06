@@ -369,6 +369,23 @@ public struct EvidenceSnapshot: Codable, Hashable, Identifiable, Sendable {
     public let digest: String
 }
 
+/// A snapshot together with the SERVER's verdict on its digest. `GET
+/// /v1/decisions/:id/evidence` recomputes the content digest and answers
+/// `verified: false` on tamper; the client used to decode that flag and drop it,
+/// rendering a green "Verified" seal over a failed check (2026-09-05). The flag
+/// travels with the snapshot so no view can show one without the other.
+public struct EvidenceFetch: Hashable, Sendable {
+    public let snapshot: EvidenceSnapshot
+    /// True only when the server said the digest recomputed. False is a tamper
+    /// signal and must render as one.
+    public let verified: Bool
+
+    public init(snapshot: EvidenceSnapshot, verified: Bool) {
+        self.snapshot = snapshot
+        self.verified = verified
+    }
+}
+
 // MARK: - Sessions
 
 public enum SessionStatus: String, Codable, Hashable, Sendable {

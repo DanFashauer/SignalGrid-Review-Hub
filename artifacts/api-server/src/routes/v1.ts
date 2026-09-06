@@ -674,7 +674,10 @@ router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, nex
     if (!result.success) {
       throw new CoreError("forbidden", `Enrollment rejected: ${result.error ?? "verification failed"}.`, 403);
     }
-    res.json(envelope(req, { enrolled: true, credentialId: result.credentialId, enrolledByRef: storedReg.context.enrolledByRef, demoNote: demoEnrollmentNote() }));
+    // `enrolled` is true only when a credential was STORED by this ceremony. A
+    // re-enrollment of an id already on file verifies and stores nothing (no
+    // silent key swap) — reported as alreadyEnrolled, never as a fresh enrollment.
+    res.json(envelope(req, { enrolled: result.alreadyEnrolled !== true, alreadyEnrolled: result.alreadyEnrolled === true, credentialId: result.credentialId, enrolledByRef: storedReg.context.enrolledByRef, demoNote: demoEnrollmentNote() }));
   } catch (err) {
     next(err);
   }

@@ -86,6 +86,15 @@ jobs:
       - name: Remediation-allow conformance self-test (the gate can fail)
         run: node scripts/check-remediation-allow-conformance.mjs --self-test
 
+      - name: Posture-allow proof (an unknown or illegible posture must not buy the allow the engine offers on its presence)
+        run: pnpm run proof:posture-allow
+
+      - name: Posture-allow conformance (shared vectors bound on both sides — TS proof and Swift XCTest)
+        run: node scripts/check-posture-allow-conformance.mjs
+
+      - name: Posture-allow conformance self-test (the gate can fail)
+        run: node scripts/check-posture-allow-conformance.mjs --self-test
+
       - name: SignalGrid grid proof
         run: pnpm run proof:signalgrid-grid
 

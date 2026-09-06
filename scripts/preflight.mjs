@@ -324,6 +324,11 @@ const STEPS = [
   // vectors the Swift twin will be ported to.
   { name: "Proof: remediation-allow (a recorded-but-unverified remediation never buys an allow)", cmd: ["pnpm", "run", "proof:remediation-allow"] },
   { name: "Remediation-allow conformance (the shared vectors bind the TS side; the native port is REPORTED)", cmd: ["node", "scripts/check-remediation-allow-conformance.mjs"] },
+  // The second guard around the engine (eighth verdict-core round): an UNKNOWN posture
+  // attribute matches none of the engine's bad literals, so the engine allows on it.
+  // Same lane order as remediation-allow — TS wrapper + vectors first, Swift twin second.
+  { name: "Proof: posture-allow (an unknown or illegible posture never buys an allow)", cmd: ["pnpm", "run", "proof:posture-allow"] },
+  { name: "Posture-allow conformance (the shared vectors bind the TS proof AND the Swift twin's XCTest)", cmd: ["node", "scripts/check-posture-allow-conformance.mjs"] },
   { name: "Proof: signalgrid-grid", cmd: ["pnpm", "run", "proof:signalgrid-grid"] },
   { name: "Proof: microsoft-graph-sandbox", cmd: ["pnpm", "run", "proof:microsoft-graph-sandbox"] },
   { name: "Proof: graph-connector (read-only, gated)", cmd: ["pnpm", "run", "proof:graph-connector"] },

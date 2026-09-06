@@ -184,7 +184,11 @@ elif { . "$(dirname "$0")/scripts/lib/container-engine.sh"; sg_resolve_engine; }
 fi
 
 echo; echo "== real-life simulator scenarios =="
-gate "proof:signalgrid-simulator (11 scenarios)" $PNPM run proof:signalgrid-simulator
+# The scenario count is DERIVED from the catalogue, not typed: this line said "11
+# scenarios" by hand in the one file that derives WEB_ARTIFACTS from the filesystem
+# to avoid exactly that (eighth audit round, 2026-09-05).
+SIM_SCENARIOS="$(grep -c '^    id: "' lib/signalgrid-simulator/src/scenarios.ts 2>/dev/null || echo '?')"
+gate "proof:signalgrid-simulator ($SIM_SCENARIOS scenarios)" $PNPM run proof:signalgrid-simulator
 gate "proof:room-sim"                            $PNPM run proof:room-sim
 gate "proof:signalgrid-core"                     $PNPM run proof:signalgrid-core
 gate "proof:signalgrid-grid"                     $PNPM run proof:signalgrid-grid
@@ -277,18 +281,36 @@ echo; echo "== lane inbox =="
 node scripts/lane-message.mjs inbox || true
 
 echo
-echo "== NOTE: the web build now RUNS here (it used to be skipped) =="
-echo "   — the vite/rollup/lightningcss/tailwind darwin binaries this repo strips are"
-echo "     added to node_modules for the run, exactly as tsx's esbuild binary always"
-echo "     was. Nothing about the sources is linux-only; all $WEB_ARTIFACTS web artifacts build on arm64."
+if [ "$SIM_ONLY" = "--sim-only" ]; then
+  # The mode is part of the verdict. This block used to print the full-suite
+  # NOTE ("all N web artifacts build") and "Simulation validation GREEN" after
+  # running four gates of the whole suite — a --sim-only run was indistinguishable
+  # from a full one in its own last lines (eighth audit round, 2026-09-05).
+  echo "== MODE: --sim-only — ONLY the four simulator gates above ran =="
+  echo "   NOT run by this mode: the full proof:* suite, typecheck, the web build, test:api,"
+  echo "   safety:check, docs:sanity, review:invariants, lane:messages. Nothing about them is verified here."
+else
+  echo "== NOTE: the web build now RUNS here (it used to be skipped) =="
+  echo "   — the vite/rollup/lightningcss/tailwind darwin binaries this repo strips are"
+  echo "     added to node_modules for the run, exactly as tsx's esbuild binary always"
+  echo "     was. Nothing about the sources is linux-only; all $WEB_ARTIFACTS web artifacts build on arm64."
+fi
 echo
-echo "== SUMMARY: $pass passed, $fail failed, $SKIPPED skipped =="
+if [ "$SIM_ONLY" = "--sim-only" ]; then
+  echo "== SUMMARY (--sim-only, partial): $pass passed, $fail failed, $SKIPPED skipped =="
+else
+  echo "== SUMMARY: $pass passed, $fail failed, $SKIPPED skipped =="
+fi
 if [ "$fail" -ne 0 ]; then echo "   failed:$failed_gates"; exit 1; fi
 # A skip is not a pass. Green still means "nothing failed", but the skipped gates
 # are named so a reader is never left believing the suite covered them.
 if [ "$SKIPPED" -ne 0 ]; then
   echo "   skipped (NOT verified by this run):$skipped_gates"
   echo "✅ Nothing failed — but see the skipped gate(s) above."
+  exit 0
+fi
+if [ "$SIM_ONLY" = "--sim-only" ]; then
+  echo "✅ Simulator scenarios GREEN (--sim-only: the rest of the suite did NOT run)."
   exit 0
 fi
 echo "✅ Simulation validation GREEN."

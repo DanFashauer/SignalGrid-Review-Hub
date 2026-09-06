@@ -311,7 +311,12 @@ export function reconcileDecisions(
   // ── 2. standing bound ──────────────────────────────────────────────────────
   const effective = [...deduped.values()].map((record) => {
     if (bound === undefined || !record.provenance.evaluatedOffline) return record;
-    const elapsed = bound.elapsedSecondsById[record.id];
+    // Own-property read: a record id that names an inherited member
+    // ("constructor", "toString") must read as UNSTATED, not as a function
+    // that then fails the numeric bound under a misleading reason.
+    const elapsed = Object.prototype.hasOwnProperty.call(bound.elapsedSecondsById, record.id)
+      ? bound.elapsedSecondsById[record.id]
+      : undefined;
     const unstated = elapsed === undefined;
     if (!unstated && elapsed <= bound.maxStandingSeconds) return record;
     const floor = bound.floor ?? "step_up";

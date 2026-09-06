@@ -1049,3 +1049,140 @@ Verdict:  **the evidentiary spine of the public site is reattached and gated** �
   Docs" now reaches the docs, and the next branch rename or moved file fails a gate instead of a visitor. The landing
   page can no longer assert a deferred family as current without failing the same gate the SPA answers to. Left open,
   named: site/index.html should be deleted (owner); the noun list does not see "location" (gate limit, recorded).
+
+## 2026-09-05 — "Eighth round, the partial and unread code: an engine that allows on an unknown posture, a WebAuthn proof that could not tell four checks from their absence, a phone rendering a green seal over a failed digest, a deny-list that allowed what it could not read"
+Command:  five independent audit agents over the partial/unread surfaces, then firsthand reads of every edit site + fix + proof + mutation (every figure below from a run in this session):
+```
+lib/signalgrid-core/src/{evidence,engine,auth,continuity,connector,dock,shift,webhooks,remediation,audit}.ts
+lib/signalgrid-simulator/src/{decisionEngine,remediation-allow,scenarios,types}.ts   lib/webauthn/src/** (full ceremony)
+artifacts/api-server/src/{middlewares,routes/health,routes/simulator,routes/control-plane}  lib/persistence/src/*  artifacts/mcp-server/src
+native/ios/SignalGridMobile/** (46 files)  native/ios/EnterpriseShellTests/*  native/ios/* (12 loose)
+CLAUDE.md AGENTS.md README.md SECURITY.md .claude/agents/*.md .claude/settings.json .claude/hooks/*.sh + every tracked root file
+```
+Output:
+```
+CORE (lib/signalgrid-core): groupLatest kept the FIRST-inserted reading on an exact observedAt tie — the core proof
+  asserted it as a feature ("first-inserted wins") — so `compliant` then `non_compliant` derived compliant and the
+  reverse derived non_compliant: array order deciding the answer, in the permissive direction. Ties are now kept in
+  `tied` and every reader folds them worst-wins (no "unknown" floor — a twin is legible); a strictly newer reading
+  still clears the tie. engine.getResolution's fallback for a tenant with NO resolution config was
+  `autoProposeEnabled: true` (absence switched the most permissive class on) → false. roleHasPermission and the
+  continuity standing bound indexed raw (a "constructor" role/id resolved through the prototype) → own-property.
+  Fixture/dock/shift syncs that SKIPPED every record reported status success + connector healthy → partial +
+  degraded, recordsProcessed excludes skips, the note names the count. shift.ts exported. Webhook dead_letter arm
+  and the exhausted-retry schedule were unproven → 5 assertions. Simulator proof: `auditEvidence.length > 0` ×4
+  were constants (an unconditional two-element literal) → decision trace must name the decision AND every starting
+  signal, routing trace exactly the routed ids, ids distinct. WHAT_SIGNALGRID_DOES_TODAY listed 15 evidence
+  dimensions while EVIDENCE_FIELDS holds 20 → five rows added, count bound to the array.
+  proof:signalgrid-core 489 (was 481) · mutations: tie→first-wins, autoPropose→true, sync→always success,
+  raw role index: each caught BY NAME (4/4) · decision-continuity 76/76 · webhooks 206/206 · simulator 73/73.
+SIMULATOR (lib/signalgrid-simulator): the engine's base-trust allow fires on the PRESENCE of a posture signal and
+  reads its attributes only for bad literals, so compliance "unknown"/"expired"/absent/non-string ALLOWS —
+  measured live: the clinical medication-round scenario with compliance:"unknown" allows exactly as "compliant".
+  Engine frozen (golden rule 1) → NEW WRAPPER lib/signalgrid-simulator/src/posture-allow.ts (states affirmed /
+  unaffirmed / illegible / absent; six declared reason codes; allow withheld one step, never permissive movement),
+  NEW proof:posture-allow 189/189 driving the LIVE engine (the twin still allows BY THE ENGINE — reported; withheld
+  BY THE WRAPPER — gated), NEW native/shared/posture-allow-vectors.json (52 cases, floor = its own count), NEW
+  scripts/check-posture-allow-conformance.mjs (self-test 11/11; Swift twin REPORTED pending, flip
+  SWIFT_TWIN_REQUIRED when the Mac lane lands it). Reason-code catalogue folds every wrapper's declared array
+  (SIMULATOR_WRAPPERS), floor 25 → 31. Mutation: unaffirmed arm disabled → 189 drops with the live-engine
+  withhold assertion named.
+WEBAUTHN (lib/webauthn): six conditions replaced with `if (false)` — registration ceremony type, registration
+  rpId, registration UV, user presence on BOTH paths, assertion ceremony type — and the proof still passed 56/56.
+  Now pinned BY REASON STRING (72/72). Challenge user binding was `userId !== undefined && userId !== caller`: a
+  challenge saved with NO binding was checked against nobody and a genuinely signed assertion under an unrelated
+  user was ACCEPTED (reproduced through the public saveChallenge) → userId required in the type, guard inverted,
+  both paths proven. Registration accepted a response with no id/rawId and stored a credential whose id was
+  undefined → shape guard, and the stored id must EQUAL the attested credential id (a client-chosen name is
+  refused). 32-byte authenticatorData threw a RangeError (a 500) → AUTH_DATA_MIN_BYTES refusal with a reason.
+  Re-enrolling an existing id reported success while storing nothing → alreadyEnrolled reported, /v1 route answers
+  enrolled:false + alreadyEnrolled:true (api test). Dead step-up-session surface (stepUpStore.ts + verifyStepUp,
+  zero callers, Redis error falls through to a per-process map) recorded OPEN — deletion is the owner's.
+API-SERVER + PERSISTENCE: /api/readyz unauthenticated, exempt from BOTH limiters, seven DB round-trips per call
+  (measured by the audit: 40 calls, 0 × 429, 280 probe units against pools of ten) → one coalesced composite probe,
+  shared in-flight, reused 1s, `probedAt` in both bodies; api test: 8 concurrent calls share ONE probedAt, a call
+  after the TTL probes again. x-request-id accepted unbounded and hashed into the audit chain (a 429-char forged id
+  landed in the ledger) → honoured only in the bounded id shape REQUEST_ID_SHAPE exports (letters, digits, dot, underscore, dash; at most 128 chars), else minted; three assertions BY VALUE (the
+  old one was "is a string"). Readiness verified the ledger's schema and never the other three tables' →
+  assertSchema on decisions/evidence_snapshots/sessions, on init and every ping (unproven here: no Postgres;
+  needs the durable CI job — OPEN). POST /simulator/run's catch answered "scenario not found" to every failure →
+  existence by lookup (404), run failure 500 simulator_error. /cp/v1/telemetry folded "many"/null/absent counts to
+  measured zeros → 400 naming the unreadable field. MCP DEFAULT_TENANT comment states the tenancy limit.
+  test:api 384/384 (was 373).
+NATIVE (SignalGridMobile, uncompiled here — no Swift toolchain; Mac build requested): the evidence "Verified"
+  seal was a HARDCODED green Label while the server's `verified` flag was decoded and dropped in fetchEvidence —
+  a failed tamper check rendered identically to a pass → EvidenceFetch carries the flag, the seal branches on it
+  (red "Digest check FAILED"). StepUpGate — the tested fail-closed gate — had ZERO production callers while
+  WardlinkModel hand-rolled LAContext inverted: cannot-ask raised an alert whose button GRANTED the gated action →
+  routed through StepUpGate, .unavailable withholds, the demo-verification alert removed. connectLive accepted any
+  scheme (ATS allows cleartext to .local names; the Keychain token would travel in the clear) → https, or http to
+  loopback only, on connect AND reconnect. lastRefresh computed and read by nothing → rendered in the header, and a
+  failed refresh now says the figures below are from the last successful one. verify.sh exited 0 with both app
+  targets unbuilt → --require-xcode (ios-ci passes it). Tests: testStepUpHoldsGatedActions allSatisfy over a
+  possibly-empty list → non-empty guard; testUnobservedPostureFailsClosed pins the absent base-trust reasons.
+  README "six deterministic tests" (14) and 15 endpoints (20, one outside /v1) corrected; CONVERGENCE.md claimed
+  EnterpriseShell "currently talks to an older /api/sessions/* endpoint" — the tree refutes it (FALSE_CLAIMS).
+INSTRUCTION LAYER + ROOT: block-dangerous.sh allowed valid JSON whose command field was absent or renamed, and
+  with jq off PATH could not emit its deny (exit 0 = allow) → both deny (self-test 23/23); settings.json denied
+  `sudo` and `git branch -D` and the hook did not → added, and check-hook-denylist now feeds every settings.json
+  Bash deny pattern to the hook behaviourally (9/9 held; match made case-sensitive so `git branch -d` stays
+  allowed). session-start.sh's loop:state fallback bound `||` to the pipeline (head's status) → never fired →
+  captures the real exit. CLAUDE.md said "roughly thirty-five" non-proof preflight gates while the parity
+  extractor counts 182 of 257, "47 + 8" breadth while STEPS holds 56, and quoted a SUMMARY literal without the
+  skipped field → reworded to derived. verdict-core-reader's reason-to-exist ("no named reader") was discharged
+  2026-08-23 and still dispatched a finished first read → premise dated, role re-scoped to changed/unread files
+  (FALSE_CLAIMS). gate-and-proof-engineer "317 files" (386) → derived wording in the .md, the charter and the
+  roster gate's comment. tdd-guide bounded to tests/ (three k6 scripts) with npm test that does not exist → LOCAL
+  CORRECTION in its charter; build-error-resolver / refactor-cleaner / security-reviewer charters corrected for
+  tooling this repo does not have (vendored bodies untouched — byte-identity gate). .gitignore ignored the
+  directory holding the TRACKED build-loop history → negation added.
+  typecheck 0 · review:invariants green · reason-codes 31 (floor 31) · port parity green · cited paths 1747 ·
+  launch-claims 0 violations · repo-links 0 dead · figures guard green · proof counts synced (the proof:* key count moved by one; the derived gate holds it).
+```
+Verdict:  **the unknown loosened the answer in the engine itself, and in the phone, and in the hook that guards the
+  session** — each closed around the frozen engine, at the store, or in the view, and each proven by a mutation
+  that fails by name. Left open, named: the Swift twin of posture-allow (Mac lane, vectors pinned); the four
+  SignalGridMobile edits are source-level and unbuilt here (Mac build requested); assertSchema on the two
+  persistence stores is unproven without Postgres; the dead step-up-session surface and the 18 lib packages without
+  a tsconfig (typecheck coverage unverified) are recorded, not resolved; validate-sim-macos.sh --sim-only prints an
+  unqualified GREEN and hand-pins "11 scenarios" (Mac-owned file, mailed).
+
+## 2026-09-05 — "The Mac lane, second revision: everything CI's macOS runners can verify moves to the cloud lane; what needs the physical Mac runs from a launchd tick, unattended"
+Command:  measured the loop the first revision left behind (owner, same day: "this isn't working and causing delay"), then built and gated the replacement:
+```
+node scripts/check-lane-messages.mjs                 # six cloud→mac messages unread, oldest 1.8h+; no Mac commit since 09-03
+git log origin/mac/* -1 --format=%cI                 # six mac/* branches unmoved since 09-02/03
+gh: ios-ci.yml on PR #456 head 0660892               # SignalGridMobile + EnterpriseShell (iPhone, iPad) + macOS SwiftPM: ALL GREEN on the cloud's seven Swift edits
+node scripts/check-posture-allow-conformance.mjs     # after the twin: "Swift twin present; 1 native test(s) bound: …/PostureAllowTests.swift"
+bash -n scripts/mac/lane-tick.sh scripts/mac/install-launchd.sh validate-sim-macos.sh   # syntax under bash
+node scripts/check-scheduled-routines.mjs            # mac-lane-tick declared; "no heartbeat written yet" REPORTED, as designed
+```
+Output:
+```
+WHAT WAS WAITING ON A HUMAN-STARTED MAC SESSION, and should not have been: (1) a Swift twin the cloud had pinned with 52
+  vectors and then mailed away — remediation-allow's twin took three days the same way; (2) "please build the seven Swift
+  files" — ios-ci.yml had ALREADY built and tested them on macos-latest on the PR, green, while the mail sat unread; (3) a
+  two-line banner fix in validate-sim-macos.sh, deferred because "Mac owns the file". None of the three needs a physical Mac.
+DONE IN THE CLOUD, PROVEN BY CI: native/ios/EnterpriseShell/Services/PostureAllow.swift (twin of posture-allow.ts; reuses
+  RemediationAllow's outcome ladder so there is one projection, not two) + PostureAllowTests.swift (loads the vectors BY PATH,
+  asserts every case's five pinned fields, holds the Swift postureBearing table equal to the file's, and three Swift-only
+  edges: non-object attributes, a boolean attribute, deficiency order); registered in Package.swift and project.yml;
+  SWIFT_TWIN_REQUIRED flipped — the conformance gate now FAILS if the twin or its test vanishes. validate-sim-macos.sh:
+  --sim-only now prints "MODE: --sim-only — ONLY the four simulator gates above ran", names what did not run, and its
+  SUMMARY line says partial; "11 scenarios" derived from scenarios.ts. Both verified by mac-lane.yml / check-shell on CI.
+THE PHYSICAL MAC, UNATTENDED: scripts/mac/lane-tick.sh (bash 3.2) — every 30 min from launchd: fetch --prune; refuse a dirty
+  or non-Alpha checkout (a person's work is never pulled over) and SAY so; fast-forward Alpha; install only when the lockfile
+  moved; run every pending sim request; push results on mac/tick-<stamp> (gh opens the PR when present, else the steward
+  does within the hour); print unread cloud→mac mail WITHOUT acking it (a machine is not the addressee); heartbeat on EVERY
+  path through lane:deliver so "ran, nothing to do" ≠ "never ran". scripts/mac/install-launchd.sh — one command, once
+  (--status, --uninstall). Declared in scheduled-routines.json (mac-lane-tick, tolerance 3h). The steward routine now reads
+  that heartbeat and escalates to the owner once per day, with the one command, when the Mac has gone silent.
+PROTOCOL (docs/LANE_COORDINATION.md, second revision; CLAUDE.md row): Rule 1 the cloud does what CI can verify; Rule 2 the
+  physical-Mac work runs from the tick; Rule 3 mail asks a person only for judgment or a physical action — never a build.
+  The steward trigger prompt carries the same three rules and the tick-staleness escalation.
+NOT VERIFIED HERE, said plainly: the tick and the installer have not been executed on a Mac (no macOS in this container);
+  bash -n and the shell gate hold their syntax, and the first heartbeat is the proof of the rest — its absence is what the
+  steward now escalates. The Swift twin is compiled and tested by ios-ci.yml on the PR, not on this lane.
+```
+Verdict:  **the Mac is no longer on the critical path for anything a runner can do, and its silence is now a measured
+  signal rather than a wait.** What the owner does once: on the Mac, `bash scripts/mac/install-launchd.sh`.

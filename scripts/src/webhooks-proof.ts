@@ -40,6 +40,7 @@ import {
 } from "@workspace/integrations/webhooks";
 import { SIGNING_SECRET_MISSING } from "@workspace/integrations/emit-gate/signing";
 import { createWebhook, getDeliveryLogs } from "@workspace/integrations/webhooks/store";
+import { MemoryStore, deliverEvent, fixedClock } from "@workspace/signalgrid-core";
 
 let passed = 0;
 const failures: string[] = [];
@@ -907,6 +908,27 @@ check(
       verifySignedWebhook(good, body, secret, { toleranceMs: 1.5, now: NOW }).valid === false);
   check("every refusal states a reason; the acceptance states none",
     verify(good, body, NOW).reason === undefined && stale.reason !== undefined && noTs.reason !== undefined);
+}
+
+// ── Dead-letter: the exhausted-retry arm exists and is reachable ─────────────
+// `attemptDelivery` initialises status to dead_letter and re-assigns it on the
+// last failed attempt; nothing ever drove an endpoint past maxAttempts, so the
+// arm was unproven (eighth verdict-core round, 2026-09-05).
+{
+  const store = new MemoryStore();
+  const clock = fixedClock("2026-07-13T15:00:00.000Z");
+  const base = { tenantId: "tenant_wh", url: "https://sink.demo.invalid/hook", events: ["decision.evaluated" as const], active: true };
+  store.putWebhookEndpoint({ ...base, id: "wh_dead", failuresBeforeSuccess: 5, maxAttempts: 3 });
+  store.putWebhookEndpoint({ ...base, id: "wh_late", failuresBeforeSuccess: 2, maxAttempts: 3 });
+  store.putWebhookEndpoint({ ...base, id: "wh_off", failuresBeforeSuccess: 0, maxAttempts: 3, active: false });
+  const deliveries = deliverEvent(store, clock, "tenant_wh", "dec_1", "decision.evaluated");
+  const dead = deliveries.find((d) => d.endpointId === "wh_dead");
+  const late = deliveries.find((d) => d.endpointId === "wh_late");
+  check("dead-letter: an endpoint that fails past maxAttempts is DEAD_LETTERED, with every attempt recorded", dead?.status === "dead_letter" && dead.attempts.length === 3 && dead.attempts.every((a) => a.status === "error"));
+  check("dead-letter: ...and its backoff schedule is exponential (1s, 2s, 4s)", dead?.attempts.map((a) => a.backoffSeconds).join(",") === "1,2,4");
+  check("dead-letter: an endpoint that succeeds on its last allowed attempt is DELIVERED (the assertion above can fail)", late?.status === "delivered" && late.attempts.length === 3 && late.attempts[2].status === "ok");
+  check("dead-letter: an inactive endpoint gets no delivery record at all", !deliveries.some((d) => d.endpointId === "wh_off"));
+  check("dead-letter: the delivery record is persisted and tenant-scoped", store.listWebhookDeliveries("tenant_wh").length === 2 && store.listWebhookDeliveries("tenant_other").length === 0);
 }
 
 const total = passed + failures.length;

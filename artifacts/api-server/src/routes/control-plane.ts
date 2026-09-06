@@ -103,15 +103,33 @@ router.post("/cp/v1/telemetry", (req, res) => {
     res.status(400).json({ error: "validation", message: "nodeId is required" });
     return;
   }
-  const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
+  // A count that is absent, null, negative, non-finite or not a number is a
+  // MALFORMED report, not a measured zero. The previous `num()` folded every one
+  // of those to 0, so a broken reporter (`decisions: "many"`, `null`, a missing
+  // field) was ingested as a quiet site and fed fleetHealth / the intelligence
+  // rollup as data — the same shape `routes/radar.ts` was fixed for (2026-09-05).
+  const counts = ["decisions", "allow", "stepUp", "restrict", "deny"] as const;
+  const bad = counts.filter((k) => {
+    const v = (b as Record<string, unknown>)[k];
+    return typeof v !== "number" || !Number.isFinite(v) || v < 0;
+  });
+  if (bad.length > 0) {
+    res.status(400).json({ error: "validation", message: `telemetry counts must be finite non-negative numbers; unreadable: ${bad.join(", ")}` });
+    return;
+  }
+  const window = (b as Record<string, unknown>).windowMins;
+  if (window !== undefined && (typeof window !== "number" || !Number.isFinite(window) || window <= 0)) {
+    res.status(400).json({ error: "validation", message: "windowMins, when given, must be a positive finite number" });
+    return;
+  }
   const stored = cp.ingestTelemetry({
     nodeId: b.nodeId,
-    windowMins: num(b.windowMins) || 1440,
-    decisions: num(b.decisions),
-    allow: num(b.allow),
-    stepUp: num(b.stepUp),
-    restrict: num(b.restrict),
-    deny: num(b.deny),
+    windowMins: typeof window === "number" ? window : 1440,
+    decisions: b.decisions as number,
+    allow: b.allow as number,
+    stepUp: b.stepUp as number,
+    restrict: b.restrict as number,
+    deny: b.deny as number,
   });
   res.json({ ingested: stored });
 });

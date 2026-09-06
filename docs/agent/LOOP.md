@@ -51,7 +51,25 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-05 (cloud lane, latest) - EIGHT audit batches landed in one
+LAST TOUCHED: 2026-09-05 (cloud lane, latest) - Batch J (eighth round, on its PR)
+              read the partial and unread code: the simulator engine ALLOWS on a
+              posture whose compliance is unknown/expired/absent (measured live;
+              engine frozen, so a posture-allow wrapper + proof 189 + shared
+              vectors + conformance gate, Swift twin REQUESTED from the Mac lane);
+              the core kept the first-inserted reading on an exact observedAt tie
+              (array order deciding, permissive direction) - worst-wins now; the
+              WebAuthn proof could not tell six checks from their absence (72/72
+              by reason string), an unbound challenge was checked against nobody,
+              a no-id registration stored undefined; /readyz was limiter-exempt at
+              seven DB round-trips per anonymous call (coalesced); x-request-id was
+              hashed into the audit chain unbounded (shape-bounded); the phone's
+              evidence seal was hardcoded green over a decoded-and-dropped
+              verified:false, and StepUpGate had zero callers while Wardlink's
+              cannot-ask offered a button that granted (uncompiled here - Mac build
+              requested); the Bash hook allowed valid JSON with no command field and
+              could not deny without jq; CLAUDE.md understated the harness gap ~5x.
+              Records: EVIDENCE.md eighth entry, FALSE_CLAIMS +2, ledger +13 reads.
+              EARLIER TODAY - EIGHT audit batches landed in one
               day (#438, #443, #444, #446, #447, #449, #451 merged; batch H on its
               PR): the unknown loosened the answer in fourteen libraries, two
               consoles, the desktop and PWA apps, the emulator and the Stop hook,
@@ -240,7 +258,18 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Terminal (System Settings > Privacy & Security > Screen Recording, then
               relaunch Terminal) - closes 2026-09-02-android-desktop-first-run; and
               the Fleet Premium decision above before 2026-09-16.
-NEXT ACTION: cloud: land batch E, then keep reading unread surfaces (56 left; next
+NEXT ACTION: cloud: land batch J (PR #456, carries the Mac-lane second revision:
+              PostureAllow.swift + its XCTest written here and proven by ios-ci,
+              the launchd tick, the --sim-only banner fix), then keep reading
+              unread surfaces (the docs families, the data directories,
+              .claude/skills content, the remainder of lib/integrations, scripts
+              and signalgrid-app). OWNER, once, on the Mac:
+              `bash scripts/mac/install-launchd.sh` — after that the Mac runs
+              queued sim requests and heartbeats every 30 min with no session
+              open, and the steward tells you if it stops. Mac lane (a person):
+              only judgment calls and physical actions come by mail now; the
+              six unread messages can be acked with `pnpm run lane:inbox`.
+              EARLIER: land batch E, then keep reading unread surfaces (56 left; next
               lib/api-spec, lib/iac, then the docs families) and build the three
               gates batch E specified (NaN gate follows one helper hop;
               review-invariants flags localeCompare in lib/*/src with the five
@@ -286,7 +315,7 @@ NEXT ACTION: cloud: land batch E, then keep reading unread surfaces (56 left; ne
    frozen" until 2026-09-02 — two days after this file's own STATE section
    recorded DR-021 — which is the contradiction a doc can hold against itself
    when no gate reads English.*
-3. **Nobody has used the product.** 142 proof gates and four native surfaces do
+3. **Nobody has used the product.** 143 proof gates and four native surfaces do
    not change that number. Only a conversation does.
 
 ---

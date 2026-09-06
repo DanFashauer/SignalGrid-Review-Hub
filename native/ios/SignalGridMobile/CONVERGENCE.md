@@ -61,10 +61,15 @@ Trust→Action `assist` outcome).
 
 `../EnterpriseShell` is the UIKit **kiosk login shell** — the on-device state machine
 that badge-checks-out a shared iPad (badge → OIDC session → run host apps → teardown).
-It is a different surface from this package's Operator/Wardlink apps, and it currently
-talks to an older `/api/sessions/*` endpoint rather than `/v1`. The convergence target
-is for `EnterpriseShell` to consume `SignalGridMobileCore` and the `/v1` contract too,
-so there is one Swift client across all iOS surfaces.
+It is a different surface from this package's Operator/Wardlink apps. Its service
+layer already calls the `/v1` contract (`api/v1/context`, `api/v1/sessions/start`,
+`…/refresh`, `…/end`, `api/v1/app-workflows/evaluate` — `DecisionServiceTests` pins
+the path); an earlier version of this paragraph said it "currently talks to an older
+`/api/sessions/*` endpoint", which the tree refuted (the only `api/sessions` strings in
+`BackendService.swift` are comments saying the server does NOT serve them). The
+convergence target that remains is for `EnterpriseShell` to consume
+`SignalGridMobileCore` as its client, so there is one Swift client across all iOS
+surfaces — the endpoint half has already converged.
 
 ## Product boundary
 

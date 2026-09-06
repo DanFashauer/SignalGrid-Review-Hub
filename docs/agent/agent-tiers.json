@@ -37,7 +37,7 @@
       "tier": 3,
       "provenance": "vendored",
       "writeScope": null,
-      "charter": "Auth seams, injection, secret handling, supply chain. Reports only.",
+      "charter": "Auth seams, injection, secret handling, supply chain. Reports only. LOCAL CORRECTION (2026-09-05), vendored body must NOT be edited: `npx eslint . --plugin security` and `eslint-plugin-security` are not installed; `npm audit` is `pnpm audit` here. The repo's own scanners are the ones to run: `pnpm run review:invariants`, `node scripts/check-nan-fail-open.mjs`, gitleaks/CodeQL in CI (SECURITY.md).",
       "carvedOutOf": null
     },
     {
@@ -61,7 +61,7 @@
       "tier": 2,
       "provenance": "vendored",
       "writeScope": "tests/",
-      "charter": "Writes failing tests before implementation. Bounded to tests/ so it cannot make an assertion pass by changing the code under test.",
+      "charter": "Writes failing tests before implementation. Bounded to tests/ so it cannot make an assertion pass by changing the code under test. LOCAL CORRECTION (2026-09-05) to the vendored definition, which must NOT be edited: its `npm test` / `npm run test:coverage` do not exist in this repository (root package.json has neither), and tests/ holds three k6 load scripts, not a test suite — this repository's tests are the proof harnesses under scripts/src, owned by gate-and-proof-engineer. Dispatch this role to DESIGN the failing assertion (name, input, expected refusal) and hand it to gate-and-proof-engineer to land; it must not be dispatched expecting a green `npm test`.",
       "carvedOutOf": null
     },
     {
@@ -69,7 +69,7 @@
       "tier": 2,
       "provenance": "vendored",
       "writeScope": "lib/",
-      "charter": "Behaviour-preserving cleanup of the decision fabric only.",
+      "charter": "Behaviour-preserving cleanup of the decision fabric only. LOCAL CORRECTION (2026-09-05), vendored body must NOT be edited: `npx knip`, `npx depcheck`, `npx ts-prune` and `npx eslint` are not installed and must not be added ad hoc — dead-code evidence here comes from `pnpm run typecheck`, the reachability gate in scripts/ (`check-package-reachability.mjs`), and `git grep` for consumers.",
       "carvedOutOf": null
     },
     {
@@ -77,7 +77,7 @@
       "tier": 2,
       "provenance": "vendored",
       "writeScope": "artifacts/",
-      "charter": "Resolves build and type failures in the server and web artifacts.",
+      "charter": "Resolves build and type failures in the server and web artifacts. LOCAL CORRECTION (2026-09-05), vendored body must NOT be edited: `npx eslint`, `npm run build`, `npm install` and the `rm -rf .next node_modules/.cache` recovery do not apply here — there is no ESLint config, no Next.js, installs are pnpm-only (preinstall refuses npm), and the repo's own PreToolUse hook DENIES that recovery line. Use `pnpm run typecheck`, `pnpm run build` (linux-x64 only) and `pnpm install --frozen-lockfile`.",
       "carvedOutOf": null
     },
     {
@@ -86,14 +86,14 @@
       "provenance": "first-party",
       "writeScope": "scripts/",
       "carvedOutOf": null,
-      "charter": "Owns every gate and proof harness in scripts/ (317 files, the largest unowned surface in the tree). Falsifies both directions before claiming a gate works, self-tests every gate, derives scope instead of hand-listing it, and registers in preflight AND CI. Hired 2026-08-23 by the DR-016 loop: most open build-plan rows live in scripts/ and no Tier-2 agent could write there."
+      "charter": "Owns every gate and proof harness in scripts/ (the largest unowned surface in the tree; count it with `git ls-files scripts | wc -l`, never from a charter). Falsifies both directions before claiming a gate works, self-tests every gate, derives scope instead of hand-listing it, and registers in preflight AND CI. Hired 2026-08-23 by the DR-016 loop: most open build-plan rows live in scripts/ and no Tier-2 agent could write there."
     },
     {
       "id": "verdict-core-reader",
       "tier": 3,
       "provenance": "first-party",
       "writeScope": null,
-      "charter": "Reads the ~3,900 lines of decision core that compute every verdict and have no named reader in review-coverage.json, and reports: dead computed fields, unexercised branches, unfailable assertions, and any path where unknown evidence could loosen rather than tighten the answer. Reports only, never fixes. Hired 2026-08-23 by the DR-016 loop to close build-plan row 42.",
+      "charter": "Reads the decision core that computes every verdict — first read completed 2026-08-23 and recorded in review-coverage.json; the role now re-reads what changed since each entry's date and whatever the ledger marks UNREAD or PARTIAL — and reports: dead computed fields, unexercised branches, unfailable assertions, and any path where unknown evidence could loosen rather than tighten the answer. Reports only, never fixes. Hired 2026-08-23 by the DR-016 loop to close build-plan row 42.",
       "carvedOutOf": null
     },
     {

@@ -90,7 +90,7 @@ and are demo surfaces, not shipping product.
 **The harness and the lanes.**
 
 ```bash
-./validate-sim-macos.sh          # macOS: every proof:* natively; read "== SUMMARY: N passed, M failed ==" and compare M to 0
+./validate-sim-macos.sh          # macOS: every proof:* natively; read "== SUMMARY: N passed, M failed, S skipped ==" — M must be 0, and S names gates NOT verified
 node scripts/preflight.mjs       # the per-push gate lane CI mirrors (--quick skips heavy builds)
 pnpm run verify:breadth          # deferred connector families + doctrine proofs; its own CI job
 ```

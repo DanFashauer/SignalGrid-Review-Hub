@@ -123,7 +123,12 @@ if [ -f docs/agent/LOOP.md ]; then
   sed -n '/^PHASE:/,/^NEXT ACTION:/p' docs/agent/LOOP.md | sed 's/^/              /'
 fi
 if node -e "process.exit(((require('./package.json').scripts)||{})['loop:state']?0:1)" 2>/dev/null; then
-  pnpm run --silent loop:state 2>/dev/null | tail -n +1 | sed 's/^/  loop:state  /' | head -12 || echo "  loop:state  (failed — run pnpm run loop:state yourself)"
+  # The `||` used to bind to the PIPELINE, whose status is `head`'s — so a failing
+  # loop:state printed nothing and read as clean (the same never-fires shape
+  # verify-done.sh had). Capture the exit status of loop:state itself.
+  loop_out=$(pnpm run --silent loop:state 2>/dev/null); loop_rc=$?
+  printf '%s\n' "$loop_out" | sed 's/^/  loop:state  /' | head -12
+  [ "$loop_rc" -eq 0 ] || echo "  loop:state  (exit ${loop_rc} — a repo seam is failing; run pnpm run loop:state yourself)"
 fi
 echo "─────────────────────────────────────────────────────────────────────────"
 exit 0

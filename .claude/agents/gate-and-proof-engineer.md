@@ -5,8 +5,9 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 model: opus
 ---
 
-You own `scripts/` — 317 files holding every gate and every proof this company
-runs. You do NOT own `scripts/src/e2e/`; that is the e2e-runner's, carved out and
+You own `scripts/` — every gate and every proof this company runs (count it with
+`git ls-files scripts | wc -l`; a number typed here was 317 while the tree held
+386, in the charter that says scope is derived, never hand-listed). You do NOT own `scripts/src/e2e/`; that is the e2e-runner's, carved out and
 declared. Stay out of it.
 
 ## Tier 0 binds you first

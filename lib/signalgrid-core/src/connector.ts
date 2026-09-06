@@ -77,6 +77,11 @@ export function runFixtureSync(
   const startedAt = clock.now().toISOString();
   const nowIso = startedAt;
   let signalsNormalized = 0;
+  // A record whose subject the store does not know is SKIPPED, and a skip is
+  // counted: a run that applied nothing reports "partial", not "success", and the
+  // connector is "degraded", not "healthy" (eighth-round verdict-core finding,
+  // 2026-09-05 — every record skipped used to read as a clean sync).
+  let recordsSkipped = 0;
 
   for (const record of records) {
     const device = store.findDeviceByRef(connector.tenantId, record.deviceRef);
@@ -86,6 +91,7 @@ export function runFixtureSync(
     );
     if (!device || !identity) {
       // A record referencing an unknown subject is skipped, not trusted.
+      recordsSkipped += 1;
       continue;
     }
 
@@ -171,16 +177,19 @@ export function runFixtureSync(
     connectorId: connector.id,
     startedAt,
     completedAt,
-    status: "success",
-    recordsProcessed: records.length,
+    status: recordsSkipped === 0 ? "success" : "partial",
+    recordsProcessed: records.length - recordsSkipped,
     signalsNormalized,
-    note: "Fixture sync: synthetic posture only, read-only, no Graph call.",
+    note:
+      recordsSkipped === 0
+        ? "Fixture sync: synthetic posture only, read-only, no Graph call."
+        : `Fixture sync: synthetic posture only, read-only, no Graph call. ${recordsSkipped} of ${records.length} record(s) named a device or identity this tenant does not hold and were skipped.`,
   };
   store.putSyncRun(run);
 
   store.putConnector({
     ...connector,
-    status: "healthy",
+    status: recordsSkipped === 0 ? "healthy" : "degraded",
     lastSyncAt: completedAt,
   });
 

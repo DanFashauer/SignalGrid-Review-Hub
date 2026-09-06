@@ -12,7 +12,7 @@
 //      genuine fixture contradictions (checked BEFORE any repair);
 //   3. the OpenAPI x-signalgrid-reason-codes list must equal the emit set.
 import { readFileSync } from "node:fs";
-import { buildCatalog, buildMarkdown, CODE_LIT, SIMULATOR_ENGINE, REMEDIATION_ALLOW_WRAPPER } from "./gen-reason-codes.mjs";
+import { buildCatalog, buildMarkdown, CODE_LIT, SIMULATOR_ENGINE, SIMULATOR_WRAPPERS } from "./gen-reason-codes.mjs";
 
 const CATALOG = "docs/REASON_CODES.md";
 const SPEC = "lib/api-spec/v1-openapi.yaml";
@@ -23,8 +23,10 @@ const FLOOR = 30;
 // so a parser that quietly collapses to a handful cannot read as agreement, and it
 // was 12 while 18 parsed, which is six codes of slack the gate was not watching. It
 // rose 18 -> 25 when the remediation-allow wrapper (remediation-allow.ts) joined the
-// simulator vocabulary — seven codes the engine never emits (2026-09-03).
-const SIM_FLOOR = 25;
+// simulator vocabulary — seven codes the engine never emits (2026-09-03) — and
+// 25 -> 31 when the posture-allow wrapper (posture-allow.ts) joined with six more
+// (2026-09-05).
+const SIM_FLOOR = 31;
 
 // NAMED EXEMPTIONS for simulator↔core codes that differ only by punctuation, case
 // or underscore (verdict-core finding V4, 2026-09-02). One concept wearing two
@@ -209,7 +211,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop()
   });
   console.log(`Reason-code check — ${catalog.rows.length} engine codes; catalog held to byte-faithful generation`);
   console.log(
-    `  simulator vocabulary: ${catalog.simulator.codes.length} code(s) across ${SIMULATOR_ENGINE} + ${REMEDIATION_ALLOW_WRAPPER} (${catalog.simulator.simulatorOnly.length} the core never emits) — REPORTED, not a launch surface`,
+    `  simulator vocabulary: ${catalog.simulator.codes.length} code(s) across ${SIMULATOR_ENGINE} + ${SIMULATOR_WRAPPERS.map((w) => w.path).join(" + ")} (${catalog.simulator.simulatorOnly.length} the core never emits) — REPORTED, not a launch surface`,
   );
   for (const c of catalog.simulator.nearCollisions) {
     const exempt = EXEMPT_NEAR_COLLISIONS.find((e) => e.simulator === c.simulator && e.core === c.core);

@@ -23,7 +23,47 @@ Sessions cannot read or message each other (cross-session triggers are
 disabled for this organization). The coordination bus is THIS FILE plus the
 git history — and the owner, who sees both chats.
 
-## The loop as of 2026-09-05 — read this first
+## The loop as of 2026-09-05, second revision — read this first
+
+The first revision (below) fixed the cloud side: delivery on its own branch, an
+hourly steward, a wake channel. The owner's verdict later the same day was still
+"not working and causing delay". The evidence: six cloud→Mac messages unread for
+hours, no Mac commit since 09-03, a Swift twin the cloud had pinned with vectors
+and then WAITED for. Every one of those waits was on a **human opening a Claude
+session on the Mac**. The fix is to take the human-started session off the path
+of everything that does not need a physical Mac, and to give the physical Mac an
+automatic tick for what does.
+
+**Rule 1 — the cloud lane does anything CI's macOS runners can verify.** Swift
+twins against pinned vectors, `xcodebuild`s, `swift test`, shell-script fixes
+in Mac-owned files: `ios-ci.yml` compiles and tests every one of them on
+`macos-latest` on the PR, and `mac-lane.yml` runs the full harness on dispatch.
+Precedent, same day: `PostureAllow.swift` was written by the cloud lane and
+proven by CI in the batch that pinned its vectors (#456) — the remediation-allow
+twin had waited three days for the Mac. "Mac lane owns this file" now means the
+Mac lane is the reviewer of record, not the only author; the cloud announces the
+edit in the commit and the lane message, per protocol rule 2.
+
+**Rule 2 — what genuinely needs the physical Mac runs from a tick, unattended.**
+`scripts/mac/lane-tick.sh` runs every 30 minutes from launchd
+(`bash scripts/mac/install-launchd.sh`, once, on the Mac): fetch, refuse a dirty
+or non-Alpha checkout, run every pending sim request, push results on a
+`mac/tick-<stamp>` branch, and HEARTBEAT (the mac-lane-tick file under artifacts/agent-heartbeats,
+written by the first tick) on every path — quiet, acted, skipped and why. The cloud steward opens the PR for
+each `mac/tick-*` branch within the hour and, when that heartbeat is older than
+three hours, escalates to the owner once with the one install command: a Mac
+that has gone silent is a signal, not a mystery.
+
+**Rule 3 — mail asks a person for judgment, never for a build.** A cloud→Mac
+message now carries only what a person must decide or physically do (enrol a
+device in Fleet, plug in the dock, approve a deletion). "Please build X",
+"please port Y", "please run the harness" are not mail: the first two are the
+cloud's, the third is a sim request the tick runs.
+
+**What the owner does, once:** on the Mac, `bash scripts/mac/install-launchd.sh`.
+Then nothing — `bash scripts/mac/install-launchd.sh --status` shows it running.
+
+## The loop as of 2026-09-05, first revision (superseded above; kept for history)
 
 The owner's verdict on the loop below was "not working and causing delay". The
 evidence agreed, and none of it was about the Mac:

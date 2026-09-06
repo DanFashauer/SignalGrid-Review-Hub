@@ -68,10 +68,10 @@ const GENERATED_FROM = new Map([
 /** Strip markup and entities down to the text a reader actually sees. */
 function visibleText(html) {
   return html
-    // `</script >` (whitespace before the closing bracket) is a valid end tag; a regexp
-    // that requires `</script>` exactly leaves the script body in the "visible" text.
-    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, " ")
-    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, " ")
+    // `</script >` and `</script\t\n bar>` are valid end tags; a regexp that requires
+    // `</script>` exactly leaves the script body in the "visible" text (CodeQL js/bad-tag-filter).
+    .replace(/<script\b[\s\S]*?<\/script\b[^>]*>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style\b[^>]*>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/&mdash;/g, "—")

@@ -118,10 +118,15 @@ export function auditRunbook({ envVars, runbook, compose }) {
     problems.push("could not locate the api service's environment block in docker-compose.prod.yml — the pass-through direction cannot be verified");
   } else {
     for (const v of envVars) {
-      const line = apiEnv.match(new RegExp(`^\\s+${v}:\\s*(.*)$`, "m"));
+      // `[ \t]*`, not `\s*`: with the multiline flag `\s*` swallows the newline after a
+      // KEY-ONLY entry (`METRICS_TOKEN:`) and captures the NEXT line as its value — the
+      // gate then read a comment as a "fixed value". A key-only entry is Compose's own
+      // pass-through form (present in the container only when the host sets it), which
+      // is exactly the interpolation this direction asks for.
+      const line = apiEnv.match(new RegExp(`^\\s+${v}:[ \\t]*(.*)$`, "m"));
       if (!line) {
         problems.push(`the server boot-reads ${v}; the api service's environment never passes it into the container — exporting it on the host is silently ignored`);
-      } else if (!PINNED.has(v) && !line[1].includes("${" + v)) {
+      } else if (!PINNED.has(v) && line[1].trim() !== "" && !line[1].includes("${" + v)) {
         problems.push(`the api service sets ${v} to a fixed value (${line[1].trim()}) instead of interpolating \${${v}…} — the documented knob is dead`);
       }
     }
@@ -191,6 +196,15 @@ function selfTest() {
   checks.push([
     "a non-pinned var set to a FIXED value FAILS (interpolation required)",
     p.some((x) => x.includes("METRICS_TOKEN") && x.includes("fixed value")),
+  ]);
+  p = auditRunbook({
+    envVars: new Set(["PORT", "METRICS_TOKEN"]),
+    runbook: goodBook,
+    compose: composeWith("      SIGNALGRID_PRODUCT_PROFILE: ${SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway}\n      PORT: 8080\n      METRICS_TOKEN:\n      # a comment on the next line must not be read as the value\n"),
+  });
+  checks.push([
+    "a KEY-ONLY entry (Compose pass-through) PASSES, and the next line is not read as its value",
+    !p.some((x) => x.includes("METRICS_TOKEN")),
   ]);
   p = auditRunbook({ envVars: new Set(["PORT"]), runbook: goodBook, compose: "environment: {}" });
   checks.push(["a compose file without the profile default FAILS", p.some((x) => x.includes("PRODUCT_PROFILE"))]);

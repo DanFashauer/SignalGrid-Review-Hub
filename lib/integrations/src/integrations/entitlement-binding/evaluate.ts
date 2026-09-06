@@ -127,16 +127,25 @@ export function evaluateEntitlementBinding(
   // unmeasured depth is not silently treated as shallow either, since a `group`
   // binding whose depth is unreported still has a confirmed mechanism, carrier and
   // owner, and those are what reviewability turns on.
-  if (binding.nestingDepth === "malformed") {
+  if (binding.nestingDepthBudget !== null && !Number.isFinite(binding.nestingDepthBudget)) {
+    // A budget was POSED and could not be read — a garbled operator parameter (NaN).
+    // Graded regardless of depth, the way session-readiness grades an unreadable
+    // budget: until 2026-09-06 `budget !== null && depth > budget` was simply false
+    // for a NaN budget, so a garbled budget graded exactly like no budget — silence
+    // bought by a typo (the check-nan-fail-open rule 5 shape).
+    candidates.push({ action: "monitor", reason: "NESTING_BUDGET_UNREADABLE" });
+  }
+  if (binding.nestingDepth === "malformed" || (binding.nestingDepth !== null && !Number.isFinite(binding.nestingDepth))) {
     // A depth was ASSERTED and could not be read. Graded even with no budget set,
     // because the defect is the unreadable assertion itself, not the comparison —
     // and it must never be quieter than an honest over-budget report, which is what
-    // collapsing it into `null` achieved.
+    // collapsing it into `null` achieved. A NaN depth is the same defect arriving as
+    // a number: `NaN > budget` is false, and until 2026-09-06 it graded governable.
     candidates.push({ action: "monitor", reason: "NESTING_DEPTH_MALFORMED" });
   } else if (
-    binding.nestingDepthBudget !== null &&
+    Number.isFinite(binding.nestingDepthBudget) &&
     binding.nestingDepth !== null &&
-    binding.nestingDepth > binding.nestingDepthBudget
+    (binding.nestingDepth as number) > (binding.nestingDepthBudget as number)
   ) {
     candidates.push({ action: "monitor", reason: "NESTING_DEPTH_OVER_BUDGET" });
   }
@@ -208,6 +217,7 @@ function postureFor(winner: Candidate): EntitlementBindingPosture {
     // Findable and owned, but further from the principal than the operator can trace.
     case "NESTING_DEPTH_OVER_BUDGET":
     case "NESTING_DEPTH_MALFORMED":
+    case "NESTING_BUDGET_UNREADABLE":
       return "obscured";
     // Driven by an input we could not read. Deliberately NOT one of the affirmative
     // postures above: we do not know the grant is unreviewable, only that we cannot

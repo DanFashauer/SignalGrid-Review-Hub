@@ -136,6 +136,13 @@ const stranded = evaluateMacosPosture(normalizeReport("mac-strand", {
 } as MacosPostureReportRaw));
 check("a stranded security extension → weakened/restrict (blocks protection reinstall)", stranded.posture === "weakened" && stranded.recommendedAction === "restrict" && stranded.reasonCode === "SECURITY_EXTENSION_STRANDED");
 
+// Fail-safe (regression, 2026-09-06): an UNREADABLE residual count (NaN) is an
+// untrustworthy system_extensions section, not "no residual". `!== null && > 0`
+// let NaN fall through and the Mac graded HARDENED. Mutation record: with the
+// Number.isFinite predicate reverted, this assertion fails by name.
+const nanResidual = evaluateMacosPosture({ ...normalizeReport("mac-nan", HARDENED), sysextResidual: Number.NaN });
+check("an UNREADABLE residual extension count (NaN) → unverified/step_up, never hardened", nanResidual.posture !== "hardened" && nanResidual.recommendedAction === "step_up" && nanResidual.controlsUnknown.includes("system_extensions"));
+
 // Two enabled endpoint-security extensions → conflict.
 const conflict = evaluateMacosPosture(normalizeReport("mac-conflict", {
   ...HARDENED,

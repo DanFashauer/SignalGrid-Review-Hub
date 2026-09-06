@@ -272,6 +272,28 @@ check(
   );
 }
 
+// Regression, 2026-09-06: an elapsed time that is PRESENT but unreadable (NaN) is
+// "the plane reported and could not say" — READINESS_UNKNOWN / step_up — never
+// READY. `NaN > threshold` is false, so the EXCEEDED branch stayed silent and, with
+// a budget posed, the UNPOSED fallback was skipped too (check-nan-fail-open rule 5).
+// Mutation record: with the Number.isFinite branch removed, this fails by name.
+{
+  const garbledElapsed = evaluateSessionReadiness({
+    sessionRef: "s",
+    appReadiness: "usable",
+    measurement: "measured",
+    sessionOrigin: "fresh",
+    workflowRisk: "routine",
+    elapsedToUsableSeconds: Number.NaN,
+    budget: { thresholdSeconds: 30 },
+    reportIntegrity: "intact",
+  });
+  check(
+    `an UNREADABLE elapsed time (NaN) under a posed budget is READINESS_UNKNOWN / step_up, never ready (${garbledElapsed.reasonCode})`,
+    garbledElapsed.reasonCode === "READINESS_UNKNOWN" && garbledElapsed.recommendedAction === "step_up",
+  );
+}
+
 // ── 3. AN OMITTED BUDGET CANNOT SUPPRESS ─────────────────────────────────────
 {
   const unposed = evaluateSessionReadinessFixture("measured-with-no-posed-budget")!;

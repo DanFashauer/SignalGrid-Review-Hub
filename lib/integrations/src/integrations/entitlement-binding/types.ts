@@ -148,6 +148,9 @@ export type EntitlementBindingReasonCode =
   | "NESTING_DEPTH_OVER_BUDGET"
   /** A depth was asserted but could not be read. Distinct from "not reported". */
   | "NESTING_DEPTH_MALFORMED"
+  /** A depth BUDGET was posed and could not be read (NaN). Distinct from "no budget":
+   *  a garbled operator parameter must never grade like an absent one (2026-09-06). */
+  | "NESTING_BUDGET_UNREADABLE"
   // Unconfirmed inputs — foreclose the grant, never deny.
   | "BINDING_MECHANISM_UNKNOWN"
   | "CARRIER_TYPE_UNKNOWN"

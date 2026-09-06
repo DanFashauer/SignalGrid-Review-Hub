@@ -85,10 +85,15 @@ export function evaluateAppUpdate(
     stability = "unassessed";
   } else if (typeof bound !== "number" || !Number.isFinite(bound) || bound < 0) {
     stability = "unknown";
-  } else if (report.crashCount === null || report.stabilityWindowHours === null) {
+  } else if (!Number.isFinite(report.crashCount) || !Number.isFinite(report.stabilityWindowHours)) {
+    // null, NaN or an infinite figure: the axis cannot be answered. Until
+    // 2026-09-06 only null took this arm; a NaN count reached the comparison
+    // below and read "unstable" — the right direction, the wrong reason
+    // (check-nan-fail-open rule 5 shape). Unreadable is unknown, and unknown
+    // raises on its own.
     stability = "unknown";
   } else {
-    stability = report.crashCount <= bound ? "stable" : "unstable";
+    stability = (report.crashCount as number) <= bound ? "stable" : "unstable";
   }
 
   if (!covered) {

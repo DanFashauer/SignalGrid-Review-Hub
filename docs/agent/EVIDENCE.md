@@ -1364,3 +1364,44 @@ mac-host.md:62 ".env*" → ".env, .env.local, .env.*.local (so .env.production i
 coverage ledger: docs/* partial (the two plans in full), docs/agent partial, docs/research partial (5 more in full), docs/company partial, .claude/skills partial (all eight stack-reference files now in full), docs/postman surface
 ```
 Verdict:  **the evaluator was fail-open on the one input nobody can honestly report, and the tool that guards prose had rewritten the prose it guards.** `NaN >= n` is false, so an unreadable signature age slipped between the null arm and the comparison and came out `protected`, one predicate away from the doctrine sentence three lines above it — fixed with `Number.isFinite`, proven, and the mutation fails by name. The markdown-link gate, built the same morning, "fixed" two quoted excerpts in the claim inventory's source because the derived table rendered them as links — an excerpt is never a navigation target, and the renderer now escapes the syntax so the gate has nothing to repair. Three of eight SwiftLint custom rules had regexes that could not match their subject, one of them cited by a skill as a working guard; each now has a planted positive and negative it must pass. The plans show the loop's remaining weakness in one shape: closures propagate into the tree and not back into the rows — a HEAD commit closed three bullets of row 73 and edited that file by one unrelated line. Open and recorded, not done: the 58 README rows in CLAIM_INVENTORY.json quote a README rebuilt on 2026-09-01; a claim-anchor gate (a quoted claim must still be a quotation, ratcheted) and check-nan-fail-open rule 5 (a `number | null` field compared without Number.isFinite) are specified for the next batch.
+
+## 2026-09-06 — "Fourteenth round, the three gates Batch O specified: the NaN rule found five more evaluators, the anchor gate found the inventory quoting surfaces that no longer say it, and the README rows were re-extracted against the README that exists"
+Command:  build the three items LOOP.md specified after Batch O, then measure each against the tree before and after:
+```
+node scripts/check-nan-fail-open.mjs                              # rule 5: number|null fields compared in lib/**/src/**/evaluate.ts
+  (then the six evaluators restored to the Batch-O head and the gate re-run — the pre-fix tree must fire)
+pnpm run proof:rtls-custody ; proof:macos-posture ; proof:app-update ; proof:session-readiness ; proof:entitlement-binding
+  (each once fixed, once with its evaluator reverted — a new assertion must fail by name)
+node scripts/mutation-guard.mjs --proof=proof:<family>            # the six families, then the two that overlapped a revert re-run on a quiet tree
+node scripts/check-claim-inventory-anchors.mjs ; --self-test ; --write ; node scripts/gen-claim-inventory-md.mjs
+node scripts/check-preflight-ci-parity.mjs ; check-proof-counts ; check-doc-line-counts ; check-derived-doc-figures ; check-cited-paths ; check-launch-claims
+```
+Output:
+```
+rule 5 against the Batch-O head (edr-threat reverted too): 9 hits in 6 evaluators — app-update:91 crashCount; edr-threat:100 signatureAgeHours;
+  entitlement-binding:139 nestingDepth AND nestingDepthBudget; macos-posture:111 sysextResidual; rtls-custody:109 fixAgeSeconds, :114 and :116 dwellSeconds;
+  session-readiness:145 elapsedToUsableSeconds — 47 evaluator files, 46 nullable-number fields in scope; after the fixes: 0 violations, self-test green
+  what each graded on NaN before: rtls fix age FRESH and dwell SHORT (in_zone); macos residual count "no residual" (hardened); app-update "unstable" (right verdict,
+  wrong reason — unknown is the honest one); entitlement depth or budget GOVERNABLE; session-readiness READY with a budget posed (both the EXCEEDED branch and the
+  UNPOSED fallback switched off, the same double switch-off the budget side had been fixed for on 2026-08-25). Wire normalisers guard four of the fields;
+  entitlement's budget is an operator PARAMETER with no normaliser, and every evaluator is exported and called directly by its proof.
+proofs after: rtls-custody 56/56, macos-posture 73/73, app-update 71/71, session-readiness 63/63, entitlement-binding 62/62 (state space 1200 → 2160 with NaN on both axes; clean stays 18)
+proofs against the pre-fix evaluators: 54/56, 72/73, 70/71, 62/63, 57/62 — every new assertion fails by name (entitlement: the 2160-state enumeration leaks 5 NaN states and "18 reviewable" reads 34)
+mutation-guard: session-readiness 26/25 killed + 1 known-inert, entitlement-binding 20/20, rtls-custody 14/14, macos-posture 16/16, app-update 41/37 + 4 inert, edr-threat 15/14 + 1 inert — survivors 0 (the first two re-run on a quiet tree: identical)
+check-claim-inventory-anchors, first live run over 1,023 rows: anchored 421, moved 46, absent 391, unquoted 148, resolved 17; remove-actioned still present 64
+  README.md: 1 anchored (the MIT line), 57 absent — every one quoting the README that #370 rebuilt on 2026-09-01; none resolved
+  --write: 46 line citations re-anchored (About.tsx:28-31 → 122, ComplianceSection.tsx:4-18 → 90, demoData.ts "~53" → 66, AppLayout.tsx ":45, 116" → 134 …)
+  57 README rows resolved (RESOLVED for the 25 rewrite/remove rows, SUPERSEDED for the 32 keep rows, each naming #370); 58 rows re-extracted against the current README by an
+  agent and verified here: every quotation anchors at its cited line, every path:line cited in evidence exists and is within its file; 47 launch, 6 demo-only, 3 deferred,
+  2 unsubstantiated; 5 rows entered already resolved because the README line they quote was corrected in the same change
+  after: rows 1,081; anchored 520, moved 0, absent 334, resolved 79, unquoted 148; ratchet docs/agent/claim-inventory-anchors-ratchet.json absent=334 removeActionedStillPresent=64
+  self-test 15/15 (anchored / moved / absent / resolved / unquoted / re-flowed "~" range / re-anchor / a RISE is fatal by name / a fall is stale until --write / untracked controls nothing)
+README.md corrected from the re-extraction's evidence: :48 signalgrid-desktop is not "the operator console" (launch-profile.mjs:500-503 demo_only; signalgrid-app is); :60 `tests/`
+  holds the k6 load tests only (`git ls-files tests` → tests/load/*.js, nothing harvested); :79 /console is the demo console (app.ts:96-103); :103-105 the win32 bindings
+  are kept (pnpm-workspace.yaml:107-108, CLAUDE.md); :172 lane:deliver is the one-step delivery, lane:send/ack only write the file (LANE_COORDINATION.md:85)
+scripts/launch-profile.mjs:333 "the 42 shared conformance vectors" (assist-wire-conformance.json holds 44) and :618 "One JSON file" (native/shared holds three: 44 + 52 + 40 vectors) → corrected
+docs/INTEGRATION_CATALOG.md + APP_UPDATE_CURRENCY.md: proof counts 70 → 71, 59 → 62, 62 → 63 (check-proof-counts: all 59 documented counts match)
+check-launch-claims: retired-label mentions 29 → 27 (docs/CLAIM_INVENTORY.md 2 → 0 — the two were in README rows now marked resolved); the deferred-noun ceiling unchanged
+check-preflight-ci-parity: 334 gates, 0 unwired (2026-09-06)
+```
+Verdict:  **the rule Batch O specified against one line found five more, and the inventory that certifies buyer-facing prose had stopped quoting it.** Rule 5 asked one question — is a `number | null` field compared before `Number.isFinite` has seen it — and the answer was yes in six evaluators, five of them still live after the EDR fix: a NaN fix age read fresh, a NaN residual count read hardened, a NaN depth read governable, a NaN elapsed time read ready. Each is the same shape the NaN family has taken since the webauthn sweep, and each was one predicate from the doctrine sentence beside it; all five are fixed with the honest grade (unknown where a reason exists for it, a new `NESTING_BUDGET_UNREADABLE` where none did), proven, and the mutation fails by name. The claim inventory's own preamble had promised a synchronisation gate "until it exists"; measured, 57 of the 58 README rows quoted a document rebuilt five days earlier, 391 quoted claims were absent from their surfaces and 76 sat far from their citation. The anchor gate now holds every quoted row: line drift is fatal until `--write` re-anchors it, and the two absence counts may only fall. What it does NOT do is written in its header — 334 absent rows across the web, review and app surfaces are ratcheted, not resolved, 64 remove-actioned claims still render, and no gate yet checks the `evidence` citations themselves; those are the next batch, by name.

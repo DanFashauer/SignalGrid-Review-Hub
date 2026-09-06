@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **87 of 100 surfaces have been read. 12 are partially read. 1 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2256 of 2256 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2258 of 2258 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -29,7 +29,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `.github/codeql` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/ISSUE_TEMPLATE` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/workflows` | tree | 14 | read | 2 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 13 | 0 |
-| `(root)` | loose files | 26 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 2 |
+| `(root)` | loose files | 26 | read | 2 | 2026-09-06 | cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 10 | 2 |
 | `artifacts/agent-heartbeats` | tree | 3 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
 | `artifacts/api-collection` | tree | 111 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/api-server` | package | 34 | **partial** | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
@@ -54,7 +54,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `config` | tree | 5 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `docker` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/*` | loose files | 214 | **partial** | 2 | 2026-09-06 | cloud lane (two independent fail-closed audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 18 | 0 |
-| `docs/agent` | docs family | 31 | **partial** | 2 | 2026-09-06 | cloud lane (two independent fail-closed audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 6 | 3 |
+| `docs/agent` | docs family | 32 | **partial** | 3 | 2026-09-06 | cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 9 | 6 |
 | `docs/assets` | docs family | 1 | **partial** | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/company` | docs family | 9 | **partial** | 2 | 2026-09-06 | cloud lane (two independent fail-closed audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 1 |
 | `docs/connectors` | docs family | 4 | read | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
@@ -88,7 +88,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/iac` | package | 8 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `lib/incident-playbook` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/incident-playbook/src/map.ts | 4 | 2 |
 | `lib/integration-bridge` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/integration-bridge/src/index.ts | 3 | 5 |
-| `lib/integrations` | package | 278 | read | 4 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 31 | 1 |
+| `lib/integrations` | package | 278 | read | 5 | 2026-09-06 | cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 36 | 1 |
 | `lib/location` | package | 8 | read | 1 | 2026-09-05 | cloud lane | lib/location/src/radius-dhcp.ts | 1 | 3 |
 | `lib/orchestration` | package | 3 | read | 1 | 2026-09-05 | cloud lane | lib/orchestration/src/index.ts | 3 | 0 |
 | `lib/persistence` | package | 8 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 6 | 1 |
@@ -114,7 +114,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 8 | 1 |
 | `native/shared` | native | 3 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 400 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 4 | 0 |
+| `scripts` | package | 401 | **partial** | 2 | 2026-09-06 | cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 7 | 0 |
 | `site` | tree | 2 | read | 2 | 2026-09-05 | cloud lane (firsthand read of every edit site; fixes + gates) | docs/agent/EVIDENCE.md | 2 | 3 |
 | `tests` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 1 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |

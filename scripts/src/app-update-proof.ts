@@ -185,6 +185,14 @@ check("a count WITHOUT its window is uninterpretable (unknown when posed); a gar
   normalizeReport("d", "a", stable({ crash_count: "many" })).reportIntegrity === "malformed" &&
   normalizeReport("d", "a", stable({ stability_window_hours: -2 })).reportIntegrity === "malformed" &&
   normalizeReport("d", "a", stable({ stability_window_hours: 0 })).reportIntegrity === "malformed");
+// Regression, 2026-09-06: an UNREADABLE crash count (NaN) with a posed bound is
+// UNKNOWN, not "unstable" — until then only null took the unknown arm and NaN
+// reached `<= bound`, landing on the right verdict for the wrong reason (the
+// check-nan-fail-open rule 5 shape). Mutation record: with the Number.isFinite
+// arm reverted to `=== null`, this assertion fails by name.
+const nanCrashes = evaluateAppUpdate({ ...normalizeReport("d", "a", stable()), crashCount: Number.NaN }, { maxCrashesInWindow: 1 });
+check("an UNREADABLE crash count (NaN) under a posed bound is STABILITY_UNKNOWN, never stable and never merely unstable",
+  nanCrashes.stability === "unknown" && nanCrashes.reasonCode === "STABILITY_UNKNOWN" && nanCrashes.recommendedAction !== "none");
 
 // ── exhaustive (normalized): the grant is current + managed + clean + stable ────
 const normDomains = {

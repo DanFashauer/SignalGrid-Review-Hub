@@ -64,8 +64,13 @@ export function evaluateMacosPosture(
   if (posture.malwareDefs === "unknown") controlsUnknown.push("xprotect");
   if (posture.autoUpdate === "unknown") controlsUnknown.push("auto_update");
   // A system_extensions section that was provided but could not be trusted raises
-  // the bar (never a silent pass); an ABSENT section is simply not a factor.
-  if (posture.sysextUnreliable) controlsUnknown.push("system_extensions");
+  // the bar (never a silent pass); an ABSENT section is simply not a factor. A
+  // residual count that is present but UNREADABLE (NaN) is an untrustworthy
+  // section by another route: until 2026-09-06 `!== null && > 0` let it fall
+  // through as "no residual" and the Mac graded hardened (check-nan-fail-open
+  // rule 5 shape). Unreadable ≠ zero.
+  const residualUnreadable = posture.sysextResidual !== null && !Number.isFinite(posture.sysextResidual);
+  if (posture.sysextUnreliable || residualUnreadable) controlsUnknown.push("system_extensions");
 
   const base = {
     controlsOff,
@@ -108,7 +113,7 @@ export function evaluateMacosPosture(
   // A stranded security extension (still registered after its app is gone) is a
   // real hardening gap — it occupies the slot and can block reinstall of
   // protection. Treat like a disabled control.
-  if (posture.sysextResidual !== null && posture.sysextResidual > 0) {
+  if (Number.isFinite(posture.sysextResidual) && (posture.sysextResidual as number) > 0) {
     candidates.push({ posture: "weakened", action: "restrict", reason: "SECURITY_EXTENSION_STRANDED" });
   }
 

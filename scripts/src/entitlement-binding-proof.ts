@@ -85,8 +85,10 @@ const OWNERS: CarrierOwnerState[] = ["owner_assigned", "ownerless", "not_applica
 // which is the "a control that barely fires means the gate is barely tested" signal
 // the uem proof was rebuilt around. With 3 in the set the pinned clean count moves
 // too, so the sweep catches the off-by-one as well.
-const DEPTHS: (number | null)[] = [null, 0, 1, 3, 5];
-const BUDGETS: (number | null)[] = [null, 3];
+// NaN on BOTH axes since 2026-09-06: an unreadable depth or an unreadable budget
+// must never be clean, and the pinned totals below move with the sets.
+const DEPTHS: (number | null)[] = [null, 0, 1, 3, 5, Number.NaN];
+const BUDGETS: (number | null)[] = [null, 3, Number.NaN];
 const INTEGRITIES = ["intact", "malformed"] as const;
 
 let total = 0;
@@ -126,7 +128,7 @@ for (const mechanism of MECHANISMS)
             }
           }
 
-check(`state space enumerated (${total} states)`, total === 1200);
+check(`state space enumerated (${total} states)`, total === 2160);
 check(
   `ZERO unjustified clean verdicts across all ${total} states` +
     (unjustified.length ? ` — leaked: ${unjustified.slice(0, 5).join(", ")}` : ""),
@@ -134,7 +136,8 @@ check(
 );
 // Non-vacuity, pinned EXACTLY. "Nothing leaked" passes trivially if nothing is ever
 // clean. 2 security-principal carriers x owner_assigned x 9 depth/budget pairs that
-// clear (all 5 depths against budget=null, plus null/0/1/3 against budget=3) = 18.
+// clear (the 5 finite-or-null depths against budget=null, plus null/0/1/3 against
+// budget=3; a NaN depth clears nothing and nothing clears a NaN budget) = 18.
 check(`...and the clean path is REACHABLE — exactly 18 reviewable states (got ${clean})`, clean === 18);
 
 // ── 3. The boundaries that make this dimension distinct ──────────────────────
@@ -320,6 +323,23 @@ check("...and a malformed depth is GRADED even with no budget, unlike an absent 
   evaluateEntitlementBinding({ principalId: "p", mechanism: "group", carrier: "security_group",
     carrierOwner: "owner_assigned", nestingDepth: "malformed", nestingDepthBudget: null,
     reportIntegrity: "intact" }).reasonCode === "NESTING_DEPTH_MALFORMED");
+  // Regression, 2026-09-06 (check-nan-fail-open rule 5): a NaN on either side of the
+  // depth comparison fell through `budget !== null && depth !== null && depth > budget`
+  // and graded GOVERNABLE. Mutation record: with either Number.isFinite predicate
+  // reverted, its assertion below fails by name.
+  const reviewable = {
+    principalId: "p", mechanism: "group", carrier: "security_group",
+    carrierOwner: "owner_assigned", nestingDepth: 1, nestingDepthBudget: 3,
+    reportIntegrity: "intact",
+  } as const;
+  const nanDepth = evaluateEntitlementBinding({ ...reviewable, nestingDepth: Number.NaN });
+  check("an UNREADABLE depth (NaN) is graded as a malformed depth, never governable",
+    nanDepth.reasonCode === "NESTING_DEPTH_MALFORMED" && nanDepth.recommendedAction === "monitor" && nanDepth.posture === "obscured");
+  const nanBudget = evaluateEntitlementBinding({ ...reviewable, nestingDepthBudget: Number.NaN });
+  check("an UNREADABLE budget (NaN) is its own rung — NESTING_BUDGET_UNREADABLE — never silence",
+    nanBudget.reasonCode === "NESTING_BUDGET_UNREADABLE" && nanBudget.recommendedAction === "monitor");
+  check("…and it is graded even when the depth is unreported (a garbled budget is not an absent one)",
+    evaluateEntitlementBinding({ ...reviewable, nestingDepth: null, nestingDepthBudget: Number.NaN }).reasonCode === "NESTING_BUDGET_UNREADABLE");
 check("a payload with no identifiable principal is malformed, not a verdict about nobody",
   normalizeGraphBinding({ principalType: "Group" }).reportIntegrity === "malformed");
 check("the budget is a PARAMETER, never read from the directory payload",

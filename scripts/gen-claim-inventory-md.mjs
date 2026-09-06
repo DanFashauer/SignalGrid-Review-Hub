@@ -109,10 +109,14 @@ failure \`scripts/launch-profile.mjs:84-90\` records for app-surfaces):
 The inventory records the tree **as of its extraction commit**; a claim a PR
 removes or rewrites keeps its row — marked **✔ RESOLVED** — because the row is
 the evidence the correction answered. Rows without a resolution marker
-describe the checked-in surfaces. The source↔inventory synchronization gate
-(a stale row must fail, a new claim must fail) is backlog row 6's
-launch-claims gate, which consumes this file; until it exists, regeneration
-is manual and marked.
+describe the checked-in surfaces. Since 2026-09-06 \`scripts/check-claim-inventory-anchors.mjs\`
+holds every quoted row to its surface: a quotation more than ten lines from
+its citation fails until \`--write\` re-anchors it, and the count of quotations
+absent without a resolution is ratcheted (it may only fall — the live figures
+are in \`docs/agent/claim-inventory-anchors-ratchet.json\`). Whether a NEW
+claim on a surface has a row is still nobody's gate; extraction remains a
+manual pass, and the README rows were re-extracted on 2026-09-06 against the
+2026-09-01 rebuild.
 
 ## Ground truth
 

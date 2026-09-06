@@ -6,6 +6,7 @@ import {
   createMockGraphTransport,
   type GraphManagedDeviceRaw,
   type GraphPostureSignal,
+  type GraphRiskyUserRaw,
   type GraphUserRaw,
 } from "@workspace/integrations/graph";
 
@@ -196,6 +197,7 @@ console.log("shipped-connector checks");
 interface RawGraphFixture {
   accessToken: string;
   users: GraphUserRaw[];
+  riskyUsers: GraphRiskyUserRaw[];
   devices: GraphManagedDeviceRaw[];
   expectedNormalized: Record<string, Partial<GraphPostureSignal>>;
 }
@@ -211,6 +213,9 @@ const shippedConnector = new GraphPostureConnector(
   createMockGraphTransport({
     users: rawFixture.users,
     devices: rawFixture.devices,
+    // User risk lives on /identityProtection/riskyUsers, not on /users (2026-09-06);
+    // a mock without this list answers 403 and every subject would grade unknown.
+    riskyUsers: rawFixture.riskyUsers,
     expectedToken: rawFixture.accessToken,
     pageSize: 2, // small page size forces real pagination through the connector
     baseUrl: SHIPPED_BASE_URL,

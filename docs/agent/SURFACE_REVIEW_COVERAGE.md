@@ -6,7 +6,7 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**68 of 100 surfaces have been read. 5 are partially read. 27 have not been read at all.**
+**81 of 100 surfaces have been read. 4 are partially read. 15 have not been read at all.**
 
 Coverage of the tree is asserted, not assumed: **2245 of 2245 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
@@ -30,27 +30,27 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `.github/ISSUE_TEMPLATE` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/workflows` | tree | 14 | read | 2 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 13 | 0 |
 | `(root)` | loose files | 26 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 2 |
-| `artifacts/agent-heartbeats` | tree | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/api-collection` | tree | 111 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/agent-heartbeats` | tree | 3 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
+| `artifacts/api-collection` | tree | 111 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/api-server` | package | 34 | **partial** | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
-| `artifacts/build-loop` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/build-loop` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/connector-emulator` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
-| `artifacts/lab-collections` | tree | 42 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/lab-collections` | tree | 42 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/lane-messages` | tree | 167 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/live-captures` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/live-evidence` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/live-captures` | tree | 2 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
+| `artifacts/live-evidence` | tree | 2 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/mcp-server` | package | 4 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
-| `artifacts/outreach-log` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/sbom` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/scanner-comparison` | tree | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/outreach-log` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
+| `artifacts/sbom` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
+| `artifacts/scanner-comparison` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/signalgrid-app` | package | 65 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/signalgrid-desktop` | package | 22 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 6 | 0 |
 | `artifacts/signalgrid-mobile-pwa` | package | 24 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 1 |
 | `artifacts/signalgrid-review` | package | 45 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
 | `artifacts/signalgrid-web` | package | 32 | read | 2 | 2026-09-05 | cloud lane (firsthand read of every edit site; fixes + gates) | docs/agent/EVIDENCE.md | 6 | 6 |
-| `artifacts/sim-requests` | tree | 16 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/sim-results` | tree | 47 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `artifacts/sync` | tree | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `artifacts/sim-requests` | tree | 16 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
+| `artifacts/sim-results` | tree | 47 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
+| `artifacts/sync` | tree | 5 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `config` | tree | 5 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `docker` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/*` | loose files | 214 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -88,7 +88,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/iac` | package | 8 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `lib/incident-playbook` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/incident-playbook/src/map.ts | 4 | 2 |
 | `lib/integration-bridge` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/integration-bridge/src/index.ts | 3 | 5 |
-| `lib/integrations` | package | 278 | **partial** | 3 | 2026-09-02 | cloud lane (independent review, notes folded) | #388 | 24 | 1 |
+| `lib/integrations` | package | 278 | read | 4 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 31 | 1 |
 | `lib/location` | package | 8 | read | 1 | 2026-09-05 | cloud lane | lib/location/src/radius-dhcp.ts | 1 | 3 |
 | `lib/orchestration` | package | 3 | read | 1 | 2026-09-05 | cloud lane | lib/orchestration/src/index.ts | 3 | 0 |
 | `lib/persistence` | package | 8 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 6 | 1 |
@@ -119,31 +119,18 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `tests` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 1 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |
 
-## Partially read (5)
+## Partially read (4)
 
 A named slice was read. The rest of the surface has not been.
 
 - `.claude/skills` (tree)
 - `artifacts/api-server` (package)
 - `artifacts/signalgrid-app` (package)
-- `lib/integrations` (package)
 - `scripts` (package)
 
-## Not read (27)
+## Not read (15)
 
-- `artifacts/agent-heartbeats` (tree)
-- `artifacts/api-collection` (tree)
-- `artifacts/build-loop` (tree)
-- `artifacts/lab-collections` (tree)
 - `artifacts/lane-messages` (tree)
-- `artifacts/live-captures` (tree)
-- `artifacts/live-evidence` (tree)
-- `artifacts/outreach-log` (tree)
-- `artifacts/sbom` (tree)
-- `artifacts/scanner-comparison` (tree)
-- `artifacts/sim-requests` (tree)
-- `artifacts/sim-results` (tree)
-- `artifacts/sync` (tree)
 - `docs/*` (loose files)
 - `docs/agent` (docs family)
 - `docs/assets` (docs family)

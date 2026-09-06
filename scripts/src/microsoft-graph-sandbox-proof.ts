@@ -319,6 +319,12 @@ function liftShippedSignal(
   signal: GraphPostureSignal,
   ctx: { permissionHealth: string; graphApiHealth: string; accessReviewState: string },
 ): NormalizedSignalGridInput {
+  // The shipped signal now carries NULL for a device whose owner could not be
+  // resolved (never the literal "unknown"). The oracle input wants a subject, so
+  // an unresolved one is refused here rather than re-rendered as an identity.
+  if (signal.subjectId === null) {
+    throw new Error(`cannot lift ${signal.deviceId}: no resolved subject — an unresolved identity is not a subjectId`);
+  }
   return {
     caseId: signal.deviceId,
     subjectId: signal.subjectId,

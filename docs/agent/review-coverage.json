@@ -1703,7 +1703,7 @@
       "reviewedBy": "endpoint-uem-domain",
       "date": "2026-08-25",
       "depth": "audited",
-      "note": "Full read. Actuator-method refusal at both entry points; UEM/NAC faults reported not swallowed. The class docstring names a FleetDM source with no code path (row 130). ../deviceRegistry NOT read."
+      "note": "Full read. Actuator-method refusal at both entry points; UEM/NAC faults reported not swallowed. The class docstring names a FleetDM source with no code path (row 130). ../deviceRegistry read 2026-09-06 (ninth round; its own row). The NAC-loop catch arm now reports through onFault instead of a bare continue."
     },
     {
       "path": "lib/integrations/src/integrations/edr-threat/evaluate.ts",
@@ -1735,10 +1735,10 @@
     },
     {
       "path": "lib/integrations/src/integrations/graph/posture-connector.ts",
-      "reviewedBy": "endpoint-uem-domain",
-      "date": "2026-08-25",
+      "reviewedBy": "iam-domain",
+      "date": "2026-09-06",
       "depth": "audited",
-      "note": "Full read + executed against a mock transport. Found normalizeManagement inferring 'managed' from a MISSING managementState (row 125) while its four siblings in the same file all fall to unknown."
+      "note": "Full read (ninth round). userRisk read a field the live $select never requested (fixture-only value; live always unknown): now a real /identityProtection/riskyUsers read, 403 -> unknown, absent-from-list -> none; an unresolved owner was rendered as the identity 'unknown': now null."
     },
     {
       "path": "lib/integrations/src/integrations/graph/types.ts",
@@ -2713,17 +2713,17 @@
     },
     {
       "path": "lib/integrations/src/integrations/graph/mock-transport.ts",
-      "reviewedBy": "qa-engineer",
-      "date": "2026-08-25",
+      "reviewedBy": "iam-domain",
+      "date": "2026-09-06",
       "depth": "audited",
-      "note": "Serves real Graph shapes including @odata.nextLink paging and a 401 for a bad token, so paging and error mapping are exercised offline. A malformed $skiptoken coerces to page 0 rather than throwing; harmless because the connector's loop/DoS guard (proof:graph-wire) stops it following nextLink forever."
+      "note": "Read with the connector; now serves riskyUsers and answers 403 when the caller supplies none (the missing-scope wire fact)."
     },
     {
       "path": "lib/integrations/src/integrations/graph/fixtures.ts",
-      "reviewedBy": "qa-engineer",
-      "date": "2026-08-25",
+      "reviewedBy": "iam-domain",
+      "date": "2026-09-06",
       "depth": "audited",
-      "note": "Seven synthetic cases mirroring the JSON fixture of record case for case, with proof:launch-seam asserting the two do not drift. Page size 3 on purpose so every fixture-mode fetch exercises real pagination. Includes Graph's wire spelling `complianceState: \"unknown\"` so the normalizer's mapping to `missing` is covered."
+      "note": "Read with the connector; riskLevel moved off the users onto FIXTURE_GRAPH_RISKY_USERS, mirrored case for case by launch-seam."
     },
     {
       "path": "lib/integrations/src/integrations/local-authority/index.ts",
@@ -2780,6 +2780,13 @@
       "date": "2026-08-25",
       "depth": "audited",
       "note": "NO DEFECT. The Trust->Action planner. Its disposition switch carries a `default:` arm that blocks on any unrecognized outcome, and deriveMode independently returns \"deny\" for the same case — two fail-closed arms rather than one. Sensitive actions are ALWAYS human-confirmed on an allow, never silently auto. TRACED RATHER THAN ASSUMED: `confirmedActionIds` is caller-supplied and turns a sensitive action's disposition to \"applied\", which reads like a self-confirmation hole. It is not: the only route accepting it is /api/sim/room-entry, a demo surface (demo: true, public-safe tokens) that is not in the published /v1 contract, and the module is a PLANNER that actuates nothing — connector discipline separately proves no connector acts on a device."
+    },
+    {
+      "path": "lib/integrations/src/deviceRegistry.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-09-06",
+      "depth": "audited",
+      "note": "Full read (ninth round). Redis key non-injective (':' and '_' folded), allowlist opened by any value but 'true' and by absence, Redis enroll validated nothing, lastSeenAt never consulted. All fixed behind exported pure helpers; proof:device-registry (52) holds them."
     }
   ]
 }

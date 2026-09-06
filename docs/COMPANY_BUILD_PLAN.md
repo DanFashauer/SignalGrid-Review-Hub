@@ -109,7 +109,7 @@ but skippable; telemetry opt-in). The genuine deltas, filed:
     credentials should be born inside the secret boundary).
 37. **Trivy beside Grype** — release-engineer. DONE 2026-08-22:
     trivy v0.74.0 (sha-recorded) beside grype v0.112.0 over the committed
-    1299-component SBOM — 19 findings each, identical severity histograms,
+    1299-component SBOM (the SBOM of 2026-08-22 — the artifact recorded no digest of its input, so the figure is that day's and `check-licence-policy` reports today's) — 19 findings each, identical severity histograms,
     ZERO true disagreements; the eight per-side deltas are the same
     vulnerabilities under different id schemes (GHSA vs CVE), mapped 1:1 in
     artifacts/scanner-comparison/2026-08-22-grype-vs-trivy.json. DECISION
@@ -4887,7 +4887,7 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (591) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (593) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (755) — the 174-item classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (188) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

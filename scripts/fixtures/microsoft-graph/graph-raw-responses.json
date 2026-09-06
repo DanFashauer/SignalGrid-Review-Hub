@@ -2,12 +2,24 @@
   "fixtureName": "microsoft-graph-read-only-connector",
   "fixtureVersion": "2026-07-19.v1",
   "sourceSystem": "microsoft-graph-fixture",
-  "note": "Public-safe synthetic Microsoft Graph read responses (users + managedDevices). No real tenant, GUIDs, PII, or credentials. Shapes mirror Graph v1.0 so the read-only connector normalizes them exactly as it would live data.",
+  "note": "Public-safe synthetic Microsoft Graph read responses (users + managedDevices). No real tenant, GUIDs, PII, or credentials. Shapes mirror Graph v1.0 so the read-only connector normalizes them exactly as it would live data. Risk lives in `riskyUsers` (Identity Protection), never on `users`: user-0001 is listed remediated (riskLevel none), user-0003 at risk (high), user-0002 is ABSENT from the list, which Graph defines as not flagged \u2014 the connector grades it none only because the risk read succeeded.",
   "accessToken": "graph-fixture-read-token",
   "users": [
-    { "id": "user-0001", "userPrincipalName": "ward.nurse@example.test", "accountEnabled": true, "riskLevel": "none" },
-    { "id": "user-0002", "userPrincipalName": "former.nurse@example.test", "accountEnabled": false, "riskLevel": "none" },
-    { "id": "user-0003", "userPrincipalName": "risky.contractor@example.test", "accountEnabled": true, "riskLevel": "high" }
+    {
+      "id": "user-0001",
+      "userPrincipalName": "ward.nurse@example.test",
+      "accountEnabled": true
+    },
+    {
+      "id": "user-0002",
+      "userPrincipalName": "former.nurse@example.test",
+      "accountEnabled": false
+    },
+    {
+      "id": "user-0003",
+      "userPrincipalName": "risky.contractor@example.test",
+      "accountEnabled": true
+    }
   ],
   "devices": [
     {
@@ -73,10 +85,57 @@
     }
   ],
   "expectedNormalized": {
-    "device-1001": { "subjectId": "user-0001", "identityStatus": "enabled", "userRisk": "none", "deviceComplianceState": "compliant", "deviceManagementState": "managed", "deviceRegistrationState": "registered" },
-    "device-1002": { "subjectId": "user-0002", "identityStatus": "disabled", "userRisk": "none", "deviceComplianceState": "non_compliant", "deviceManagementState": "managed", "deviceRegistrationState": "registered" },
-    "device-1003": { "subjectId": "user-0003", "identityStatus": "enabled", "userRisk": "high", "deviceComplianceState": "compliant", "deviceManagementState": "unmanaged", "deviceRegistrationState": "not_registered" },
-    "device-1004": { "subjectId": "user-0001", "identityStatus": "enabled", "userRisk": "none", "deviceComplianceState": "missing", "deviceManagementState": "managed", "deviceRegistrationState": "registered" },
-    "device-1005": { "subjectId": "user-0001", "identityStatus": "enabled", "userRisk": "none", "deviceComplianceState": "in_grace_period", "deviceManagementState": "managed", "deviceRegistrationState": "registered" }
-  }
+    "device-1001": {
+      "subjectId": "user-0001",
+      "identityStatus": "enabled",
+      "userRisk": "none",
+      "deviceComplianceState": "compliant",
+      "deviceManagementState": "managed",
+      "deviceRegistrationState": "registered"
+    },
+    "device-1002": {
+      "subjectId": "user-0002",
+      "identityStatus": "disabled",
+      "userRisk": "none",
+      "deviceComplianceState": "non_compliant",
+      "deviceManagementState": "managed",
+      "deviceRegistrationState": "registered"
+    },
+    "device-1003": {
+      "subjectId": "user-0003",
+      "identityStatus": "enabled",
+      "userRisk": "high",
+      "deviceComplianceState": "compliant",
+      "deviceManagementState": "unmanaged",
+      "deviceRegistrationState": "not_registered"
+    },
+    "device-1004": {
+      "subjectId": "user-0001",
+      "identityStatus": "enabled",
+      "userRisk": "none",
+      "deviceComplianceState": "missing",
+      "deviceManagementState": "managed",
+      "deviceRegistrationState": "registered"
+    },
+    "device-1005": {
+      "subjectId": "user-0001",
+      "identityStatus": "enabled",
+      "userRisk": "none",
+      "deviceComplianceState": "in_grace_period",
+      "deviceManagementState": "managed",
+      "deviceRegistrationState": "registered"
+    }
+  },
+  "riskyUsers": [
+    {
+      "id": "user-0001",
+      "riskLevel": "none",
+      "riskState": "remediated"
+    },
+    {
+      "id": "user-0003",
+      "riskLevel": "high",
+      "riskState": "atRisk"
+    }
+  ]
 }

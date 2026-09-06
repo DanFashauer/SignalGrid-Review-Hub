@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "2026-09-01-ecc-full-evaluation",
+  "requestedAt": "2026-09-01T01:47:07Z",
   "requestedBy": "cloud lane (owner directive 2026-09-01)",
   "reason": "The owner asked for ECC to do a FULL evaluation and opinion of the whole repo, and for the solution to be driven through the complete sequence build -> test -> secure -> review -> brute-force security testing -> test again -> validate. ECC's real seat is the Mac lane (it runs as a Claude Code plugin there, hooks-off/report-only, and produces committed evidence). The cloud lane is running its own independent six-dimension evaluation in parallel; this request is for the ECC pass so the two verdicts can be compared.",
   "runs": [

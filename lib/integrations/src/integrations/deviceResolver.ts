@@ -142,8 +142,13 @@ export class DeviceIdentityResolver {
         if (fromNAC) {
           return fromNAC;
         }
-      } catch {
-        // Try next adapter
+      } catch (err) {
+        // resolveFromNAC reports its own faults through onFault and returns null,
+        // so this arm is unreachable today. It is kept — and REPORTED rather than
+        // swallowed — because it is exactly the arm that would silently resume if
+        // that contract ever changes: a bare `continue` here would turn a thrown
+        // adapter fault back into "no such device" with no line in any log.
+        this.onFault(`NAC adapter "${name}" threw while resolving ${deviceId}: ${err instanceof Error ? err.message : String(err)}`);
         continue;
       }
     }

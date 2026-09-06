@@ -328,6 +328,7 @@ const STEPS = [
   // attribute matches none of the engine's bad literals, so the engine allows on it.
   // Same lane order as remediation-allow — TS wrapper + vectors first, Swift twin second.
   { name: "Proof: posture-allow (an unknown or illegible posture never buys an allow)", cmd: ["pnpm", "run", "proof:posture-allow"] },
+  { name: "Proof: device-registry (injective keys, an allowlist that opens only on an explicit false, freshness consulted)", cmd: ["pnpm", "run", "proof:device-registry"] },
   { name: "Posture-allow conformance (the shared vectors bind the TS proof AND the Swift twin's XCTest)", cmd: ["node", "scripts/check-posture-allow-conformance.mjs"] },
   { name: "Proof: signalgrid-grid", cmd: ["pnpm", "run", "proof:signalgrid-grid"] },
   { name: "Proof: microsoft-graph-sandbox", cmd: ["pnpm", "run", "proof:microsoft-graph-sandbox"] },
@@ -351,6 +352,7 @@ const STEPS = [
   { name: "Scheduled routines self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-scheduled-routines.mjs", "--self-test"] },
   { name: "Scheduled routines (every always-on lane declared, authorized, scoped, evidenced)", cmd: ["node", "scripts/check-scheduled-routines.mjs"] },
   { name: "Lab registry self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-lab-registry.mjs", "--self-test"] },
+  { name: "Lab source collections are declared, openable, read-only and parseable", cmd: ["node", "scripts/check-lab-collections.mjs"] },
   { name: "Lab registry (both halves agree; every deployment claim cites evidence on disk)", cmd: ["node", "scripts/check-lab-registry.mjs"] },
   { name: "Evidence sources self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-evidence-sources.mjs", "--self-test"] },
   { name: "Evidence sources (the contract's vocabulary matches what exists)", cmd: ["node", "scripts/check-evidence-sources.mjs"] },

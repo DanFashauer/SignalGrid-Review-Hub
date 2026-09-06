@@ -190,11 +190,31 @@
   },
   "artifacts/agent-heartbeats": {
    "path": "artifacts/agent-heartbeats",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Both heartbeats read and well-formed. The GATE over them let a future firedAt read as fresh forever and exempted an active routine with no tolerance from the staleness clock; both fatal now, with controls.",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 2
+    }
+   ]
   },
   "artifacts/api-collection": {
    "path": "artifacts/api-collection",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Read against check-api-collection: 97 requests, 78/78 routes covered in both directions, zero exceptions, demo tokens only. Clean.",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
   },
   "artifacts/api-server": {
    "path": "artifacts/api-server",
@@ -221,7 +241,17 @@
   },
   "artifacts/build-loop": {
    "path": "artifacts/build-loop",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "history.jsonl read: four rows, last 2026-07-28, 'not run' rows rendered distinctly and never counted as pass. Stale, harmless, unread by any gate - recorded as such.",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
   },
   "artifacts/connector-emulator": {
    "path": "artifacts/connector-emulator",
@@ -239,7 +269,17 @@
   },
   "artifacts/lab-collections": {
    "path": "artifacts/lab-collections",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "42 files read: five service folders, 30 request files, environments per folder, README table naming four lanes plus the microsoft-graph exception in prose. NO gate existed; check-lab-collections.mjs now holds structure, parseability, README declaration and the read-only rule (auth bootstraps the only writes).",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "artifacts/lane-messages": {
    "path": "artifacts/lane-messages",
@@ -247,11 +287,31 @@
   },
   "artifacts/live-captures": {
    "path": "artifacts/live-captures",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Both files read: shape-discovery provenance, synthetic lab values, no secrets. Clean; the lab-registry gate that cites them now parses them instead of checking they exist.",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
   },
   "artifacts/live-evidence": {
    "path": "artifacts/live-evidence",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Both files read: mac-run.json is an honest, dated hardware record at manifestVersion 54 against a manifest at 61 - STALE, reported by check-live-sync, and restated as 'fresh' by docs/BUILD_BACKLOG.md until this round (the tool now refuses any doc that restates a status it does not print).",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "artifacts/mcp-server": {
    "path": "artifacts/mcp-server",
@@ -278,15 +338,45 @@
   },
   "artifacts/outreach-log": {
    "path": "artifacts/outreach-log",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "README read: the directory's emptiness is stated as the record, which is the correct handling of an absent input. Clean.",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
   },
   "artifacts/sbom": {
    "path": "artifacts/sbom",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "cyclonedx.json read via check-licence-policy: 1249 components, one named UNRESOLVED, regeneration gated in preflight and supply-chain.yml. The '1299-component' figure quoted twice for 2026-08-22 is that day's and now says so.",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "artifacts/scanner-comparison": {
    "path": "artifacts/scanner-comparison",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "The grype-vs-trivy record read: dated, methodical, but it recorded no digest of the SBOM it consumed, so its component figure can never be reconciled. Left as a dated record; the doc that quotes it now says so.",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
   },
   "artifacts/signalgrid-app": {
    "path": "artifacts/signalgrid-app",
@@ -369,15 +459,45 @@
   },
   "artifacts/sim-requests": {
    "path": "artifacts/sim-requests",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Sixteen requests read against their producer and gate: ids unique and matching filenames, reasons present, no timestamps at all - a request could not be reported overdue. requestedAt added to every file (from its first commit) and required by the gate.",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "artifacts/sim-results": {
    "path": "artifacts/sim-results",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "All sixteen results read for provenance and status honesty: one result names a commit this repository has never held (2026-08-23-headwind-first-capture, da1ee232) with workingTreeClean:false; the gate checked the field was present, never that it resolved. The gate now resolves every commit (fatal on a full clone, REPORTED on a shallow one).",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "artifacts/sync": {
    "path": "artifacts/sync",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "All five files read against their producers: live-sync manifest at version 61, orphan and reachability ceilings pinned, normalization-version generator with six negative controls, prune list records recoverable tips. Clean.",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 0
+    }
+   ]
   },
   "config": {
    "path": "config",
@@ -797,6 +917,15 @@
      "scope": "partial: outbound headers and inbound response parsing in the same six emitter families.",
      "open": 1,
      "closed": 2
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Ninth round - the rest of the package: all 45 evaluate.ts families the emit-side reads never touched (every coverage-flag guard traced to its verdict), deviceRegistry.ts, deviceResolver.ts, store-scope.ts, utils/*, graph/*. Found: a non-injective Redis key (':' and '_' folded), an allowlist opened by any value but the exact string 'true' and by absence, a production enroll that validated nothing, a freshness stamp never consulted, a user-risk field the live $select never requested, an unresolved identity rendered as the identity 'unknown', one bare catch. All fixed; proof:device-registry added (52 assertions), graph proofs extended. With the three emit-side reads above, every tracked file in this package has now had a deep read.",
+     "reviewer": "cloud lane (independent fail-closed auditor, then firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 7
     }
    ]
   },

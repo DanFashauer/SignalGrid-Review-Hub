@@ -36,6 +36,7 @@ import {
 import {
   FIXTURE_GRAPH_DEVICES,
   FIXTURE_GRAPH_USERS,
+  FIXTURE_GRAPH_RISKY_USERS,
   resolveGraphPostureConnector,
 } from "@workspace/integrations/graph";
 import {
@@ -106,7 +107,7 @@ async function main(): Promise<void> {
   check("graph: fixture connector reads the full synthetic inventory (7 devices, paged)", postures.length === 7, `count=${postures.length}`);
   check(
     "graph: every posture signal carries provenance (source, correlation, subject)",
-    postures.every((p) => p.sourceSystem === "microsoft-graph" && p.correlationId.length > 0 && p.subjectId.startsWith("synthetic-user-")),
+    postures.every((p) => p.sourceSystem === "microsoft-graph" && p.correlationId.length > 0 && p.subjectId !== null && p.subjectId.startsWith("synthetic-user-")),
   );
 
   const healthy = postures.find((p) => p.deviceId === "synthetic-device-001");
@@ -148,6 +149,7 @@ async function main(): Promise<void> {
       subjectId: string;
       deviceId: string;
       identityStatus: string;
+      userRisk: string;
       deviceComplianceState: string;
       deviceManagementState: string;
       deviceRegistrationState: string;
@@ -161,12 +163,14 @@ async function main(): Promise<void> {
   const wireComplianceFor = (jsonState: string): string => (jsonState === "missing" ? "unknown" : jsonState);
   for (const c of fixture.cases) {
     const user = FIXTURE_GRAPH_USERS.find((u) => u.id === c.subjectId);
+    const risky = FIXTURE_GRAPH_RISKY_USERS.find((r) => r.id === c.subjectId);
     const device = FIXTURE_GRAPH_DEVICES.find((d) => d.id === c.deviceId);
     check(
       `drift: ${c.deviceId} matches fixtures/microsoft-graph JSON case for case`,
       user !== undefined &&
         device !== undefined &&
         user.accountEnabled === (c.identityStatus === "enabled") &&
+        (risky?.riskLevel ?? "none") === c.userRisk &&
         device.complianceState === wireComplianceFor(c.deviceComplianceState) &&
         device.managementState === c.deviceManagementState &&
         device.deviceRegistrationState === c.deviceRegistrationState &&

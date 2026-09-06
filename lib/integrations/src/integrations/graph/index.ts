@@ -13,6 +13,7 @@ export {
   createFixtureGraphPostureConnector,
   FIXTURE_GRAPH_TOKEN,
   FIXTURE_GRAPH_USERS,
+  FIXTURE_GRAPH_RISKY_USERS,
   FIXTURE_GRAPH_DEVICES,
 } from "./fixtures";
 

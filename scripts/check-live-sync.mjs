@@ -24,6 +24,7 @@
 //
 // Exit code: non-zero ONLY when half (a) fails.
 import { readdirSync, readFileSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { computeBody, fingerprintOf, stableStringify, MANIFEST_PATH } from "./generate-sync-manifest.mjs";
@@ -120,4 +121,37 @@ if (status === "stale") {
 }
 console.log(`liveEvidence=${status}`);
 
+// A DOCUMENT that restates this status is a claim that goes stale the moment the
+// manifest moves — docs/BUILD_BACKLOG.md said "reports `liveEvidence=fresh`" while
+// this script printed STALE, for sixteen days and seven manifest versions (flagged
+// in ROLE_LENS_REVIEW_2026-08-21.md, still there on 2026-09-06). Any doc line that
+// says this tool REPORTS a status must match what it reports right now.
+const restated = findRestatedStatuses(repoRoot);
+for (const { file, line, word } of restated) {
+  if (word !== status) {
+    console.error(`  ✗ ${file}:${line} says check-live-sync reports liveEvidence=${word}; it reports ${status} — a status is printed, never restated`);
+    hardFail = true;
+  }
+}
+
 process.exit(hardFail ? 1 : 0);
+
+/** Every `reports \`liveEvidence=<word>\`` line in tracked markdown under docs/. */
+export function findRestatedStatuses(root, files = null) {
+  const out = [];
+  const list = files ?? execSync("git ls-files -- 'docs/*.md' 'docs/**/*.md'", { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
+  for (const rel of list) {
+    let text;
+    try { text = readFileSync(join(root, rel), "utf8"); } catch { continue; }
+    text.split("\n").forEach((l, i) => {
+      // A QUOTATION of a restated status is a record of the drift, not a
+      // restatement: the 2026-08-21 role-lens review cites the backlog's wrong
+      // sentence verbatim in order to refute it. Citation lines and blockquotes
+      // are therefore exempt; every other line is a live claim.
+      if (/Citation:/.test(l) || /^\s*>/.test(l)) return;
+      const m = l.match(/reports\s+`liveEvidence=(fresh|stale|none)`/);
+      if (m) out.push({ file: rel, line: i + 1, word: m[1] });
+    });
+  }
+  return out;
+}

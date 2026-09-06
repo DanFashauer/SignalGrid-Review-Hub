@@ -24,6 +24,7 @@ import {
   type GraphManagedDeviceRaw,
   type GraphPostureSignal,
   type GraphRequest,
+  type GraphRiskyUserRaw,
   type GraphUserRaw,
 } from "@workspace/integrations/graph";
 import { checkLiveGateIsolated } from "./lib/live-gate.js";
@@ -32,6 +33,7 @@ interface Fixture {
   accessToken: string;
   users: GraphUserRaw[];
   devices: GraphManagedDeviceRaw[];
+  riskyUsers: GraphRiskyUserRaw[];
   expectedNormalized: Record<string, Partial<GraphPostureSignal>>;
 }
 
@@ -63,6 +65,7 @@ console.log(`fixture=${fixture.users.length} users, ${fixture.devices.length} de
 const transport = createMockGraphTransport({
   users: fixture.users,
   devices: fixture.devices,
+  riskyUsers: fixture.riskyUsers,
   expectedToken: fixture.accessToken,
   pageSize: 2,
   baseUrl: BASE_URL,
@@ -99,6 +102,29 @@ check(
 check(
   "device joined to its owner by UPN when userId is absent (device-1005 → user-0001)",
   byDevice.get("device-1005")?.subjectId === "user-0001",
+);
+
+// ── user risk comes from Identity Protection, not from /users ─────────────────
+// user-0002 is ABSENT from the risky-user list: Graph's contract is "not flagged",
+// so it grades `none` — but ONLY because the risk read succeeded (asserted below by
+// taking the scope away). user-0001 is listed remediated with riskLevel none.
+check(
+  "risk: a user absent from /identityProtection/riskyUsers grades none when the risk read succeeded",
+  byDevice.get("device-1002")?.userRisk === "none" && fixture.riskyUsers.every((r) => r.id !== "user-0002"),
+);
+check("risk: a user Identity Protection flags high grades high", byDevice.get("device-1003")?.userRisk === "high");
+const noScopeConnector = new GraphPostureConnector(
+  { accessToken: fixture.accessToken, baseUrl: BASE_URL },
+  createMockGraphTransport({ users: fixture.users, devices: fixture.devices, expectedToken: fixture.accessToken, baseUrl: BASE_URL }),
+);
+const noScopeSignals = await noScopeConnector.fetchPosture(OBSERVED_AT);
+check(
+  "risk: when the tenant has not granted IdentityRiskyUser.Read.All (403), EVERY subject grades unknown — never none",
+  noScopeSignals.length === fixture.devices.length && noScopeSignals.every((s) => s.userRisk === "unknown"),
+);
+check(
+  "risk: …and the two inventory reads still succeed independently of the failed risk read",
+  noScopeSignals.every((s) => s.deviceComplianceState !== undefined && s.identityStatus !== undefined),
 );
 
 // ── read-only enforcement ──────────────────────────────────────────────────────
@@ -207,6 +233,7 @@ checkLiveGateIsolated({
     createMockGraphTransport({
       users: fixture.users,
       devices: craftedDevices,
+      riskyUsers: fixture.riskyUsers,
       expectedToken: fixture.accessToken,
       pageSize: 10,
       baseUrl: BASE_URL,

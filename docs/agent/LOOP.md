@@ -53,7 +53,31 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               unchanged.
 LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
               M (#466), N (#468), O (#470), P (#471), Q (#473), R (#474) and
-              S (#476) LANDED. Batch T (eighteenth round, on its PR) read the
+              S (#476) and T (#477) LANDED. Batch U (nineteenth round, on its
+              PR) built the gate the catalog auditor specified:
+              scripts/check-cited-symbols.mjs - a symbol named beside a
+              code-file citation must be one the file still holds on a
+              non-comment line. It reads no English: pairing is positional
+              (an explicit attribution after the symbol wins, else the nearest
+              citation before it, broken by a `;`, a sentence end, a
+              table-cell bar, a bare file name or a foreign possessive), a
+              registry row pairs every symbol, and everything it cannot pair
+              is counted and printed, never judged (194 unpaired). First live
+              pass 123 pairs / 26 missing: 19 the iOS key registry's deleted
+              keys (verbatim import, now opted out by a visible first-line
+              marker the gate names on every run), 3 the gate mis-pairing
+              sentences a reader gets right - each a self-test case BEFORE
+              the rule moved (13/16 → 16/16) - and one real: MAC_LANE.md:248
+              put SignalGridMobileCore under native/ios/Package.swift
+              (check-cited-paths had passed the line) → both manifests named.
+              After: 82 pairs, 80 hold, missing 0, ratchet committed at 0;
+              a planted line fails by name (ROSE 0 → 1); registered in
+              preflight and CI (parity 336, 0 unwired). Side repairs: the
+              eighteenth-round evidence wrote a message count as a digit
+              beside the lane-messages proof's name and the steward's next delivery
+              broke it (mail PR #479) → words; the "acked with lane:inbox"
+              instruction was still in this file's NEXT ACTION → corrected.
+              Batch T (eighteenth round, #477) read the
               lane mail channel as a whole for the first time and the eleven
               inspiration catalogs' prose. Mail: a message with no sentAt could
               never go stale (the 13-day-unread Fleet handoff printed with no
@@ -434,16 +458,14 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land Batch T (on its PR - the lane mail channel's three
-              fail-open shapes and the catalogs' expired absences), deliver the
-              steward batch that supersedes both batch-J messages, then (1) the
-              gate the catalog auditor specified: a document that cites a
-              repository file AND names a symbol inside it must name a symbol
-              the file still contains (check-cited-paths proves the path and
-              stops; three of this round's findings passed it) - match code,
-              not comments; verbatim imports get a visible per-file opt-out;
-              (2) whatever the ledger still marks partial (12 on 2026-09-06 -
-              `node scripts/check-surface-review-coverage.mjs` names them);
+NEXT ACTION: cloud: land Batch U (on its PR - the cited-symbols gate), then
+              close mail PR #479 (it fails the figure guard on the digit Batch
+              U rewrites) and re-deliver the steward heartbeat from the new
+              mainline, then (1) whatever the ledger still marks partial (12
+              on 2026-09-06 - `node scripts/check-surface-review-coverage.mjs`
+              names them) - read them, not their indexes; (2) the 194 symbols
+              the cited-symbols gate leaves unpaired are REPORTED, not owed -
+              a symbol two clauses from its citation is unchecked, not wrong;
               the 213 unasserted membership clauses are REPORTED, not owed -
               an evidence sentence that names an id without an arm is not
               wrong, only unchecked. OWNER: the ICP
@@ -452,8 +474,10 @@ NEXT ACTION: cloud: land Batch T (on its PR - the lane mail channel's three
               your call, not a gate's. OWNER, once, on the Mac, now that
               the installer is on mainline: `bash scripts/mac/install-launchd.sh`
               then `--status` - the steward escalates once a day while the tick
-              stays silent. Mac lane (a person): nothing is owed; seven unread
-              messages can be acked with `pnpm run lane:inbox`; a Premium
+              stays silent. Mac lane (a person): nothing is owed; `pnpm run lane:inbox`
+              only PRINTS the unread messages - an ack goes through
+              `pnpm run lane:deliver batch <ops.json>` with a note per
+              message (the eighteenth round made a blank note a refusal); a Premium
               re-run on the Mac is optional (FLEET_LICENSE_KEY in the env,
               `./scripts/run-live-lanes.sh --only fleet`) before 2026-09-16.
               EARLIER: land batch E, then keep reading unread surfaces (56 left; next

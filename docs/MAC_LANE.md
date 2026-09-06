@@ -245,7 +245,7 @@ work deferred to nowhere. Checked rather than assumed:
 | Image builds (`Dockerfile.api`, `Dockerfile.web`) | **Cloud, under Podman** | both stages build; image runs and serves `/api/healthz` |
 | `signalgrid-mcp` test suite | **Cloud, on Linux** | **99 passed in 2.76s** — the macOS-only reads exercise their graceful-degradation paths, which is exactly what those tests are for |
 | iOS + iPadOS build and unit tests (EnterpriseShell, SignalGridMobile) | **GitHub `macos-latest` runners** | `ios-ci.yml`, real `xcodebuild` against an **iPhone and an iPad** simulator, on every push/PR touching `native/ios/**` |
-| macOS-native build + tests of the decision port | **GitHub `macos-latest` runners** | `ios-ci.yml` job `macos-native`: `swift test` over `native/ios/Package.swift` and `SignalGridMobileCore`. No simulator, so it also proves the port is genuinely pure Foundation |
+| macOS-native build + tests of the decision port | **GitHub `macos-latest` runners** | `ios-ci.yml` job `macos-native`: `swift test` over `native/ios/Package.swift` (the EnterpriseShell decision port) and over `native/ios/SignalGridMobile/SignalGridMobileCore/Package.swift` (`SignalGridMobileCore`). No simulator, so it also proves the port is genuinely pure Foundation |
 | Full macOS gate suite | **GitHub `macos-latest` runners** | `mac-lane.yml`, weekly + on dispatch |
 | Browser/E2E | **Cloud** | Chromium preinstalled at `/opt/pw-browsers` |
 

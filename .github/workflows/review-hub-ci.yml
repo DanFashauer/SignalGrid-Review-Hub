@@ -668,6 +668,12 @@ jobs:
         run: node scripts/check-claim-inventory-anchors.mjs
       - name: "Claim-inventory anchors self-test (the check can actually fail)"
         run: node scripts/check-claim-inventory-anchors.mjs --self-test
+      # check-cited-paths proves a cited PATH exists and stops; three documents passed it
+      # on 2026-09-06 while naming symbols the cited file no longer held.
+      - name: "Cited symbols (a symbol named beside a code citation must still be in that file; missing is ratcheted)"
+        run: node scripts/check-cited-symbols.mjs
+      - name: "Cited symbols self-test (the check can actually fail)"
+        run: node scripts/check-cited-symbols.mjs --self-test
       - name: "Proof — dual control"
         run: pnpm run proof:dual-control
       - name: "Pagination-truncation guard (a capped read must not look complete)"

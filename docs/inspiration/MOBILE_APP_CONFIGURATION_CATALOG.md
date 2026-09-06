@@ -1,3 +1,4 @@
+<!-- cited-symbols: verbatim import, drift recorded in the preamble (KEY-REMOVAL DRIFT, measured 2026-09-06) -->
 <!--
   PROVENANCE / BOUNDARY PREAMBLE — added at filing time (intake ledger row 33).
 

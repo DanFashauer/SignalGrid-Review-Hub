@@ -1,7 +1,7 @@
 {
  "generated": "2026-08-21",
  "derivation": "README.md + artifacts/signalgrid-web/src (pages + sections) + artifacts/{signalgrid-review,signalgrid-app,signalgrid-desktop,signalgrid-mobile-pwa}/src + docs/{fabric,room-entry}-console.html \u2014 the union of docs-sanity's app SCAN_PATHS plus README and the consoles; extraction: 9-agent workflow + completeness critic (web/README/consoles), 4-agent second pass (app trees, after review found the first derivation incomplete); corrections per docs/CLAIM_INVENTORY.md honesty note",
- "groundTruth": "scripts/launch-profile.mjs (DR-005)",
+ "groundTruth": "scripts/launch-profile.mjs (DR-005 ratified v4; LAUNCH_PROFILE_VERSION is 5 under DR-023 — rows were classified against v4 on 2026-08-21)",
  "rowCount": 1023,
  "counts": {
   "unsubstantiated": 255,
@@ -198,10 +198,10 @@
   {
    "file": "README.md",
    "line": "70",
-   "claim": "\"Published at `https://signalgrid.app/fabric.html` once the [Pages workflow](../.github/workflows/pages.yml) is run\"",
+   "claim": "\"Published at `https://signalgrid.app/fabric.html` once the [Pages workflow](.github/workflows/pages.yml) is run\"",
    "kind": "availability",
    "classification": "launch",
-   "evidence": "Correctly conditional and grounded: .github/workflows/pages.yml exists; the sentence does not assert the URL is live today.",
+   "evidence": "[README no longer carries this sentence — removed in the 2026-09-01 rebuild (PR 370); the row is a record of a claim README no longer makes. Until 2026-09-06 a link repair had rewritten the quotation itself to ../.github/…, falsifying the excerpt; reverted.] Correctly conditional and grounded: .github/workflows/pages.yml exists; the sentence does not assert the URL is live today.",
    "action": "keep"
   },
   {
@@ -413,8 +413,8 @@
   },
   {
    "file": "README.md",
-   "line": "140",
-   "claim": "\"Open source under the [MIT License](../LICENSE).\"",
+   "line": "234",
+   "claim": "\"Open source under the [MIT License](LICENSE).\"",
    "kind": "status",
    "classification": "launch",
    "evidence": "Grounded: LICENSE:1 is \"MIT License\" (Copyright (c) 2026 Daniel Fashauer).",
@@ -2909,7 +2909,7 @@
    "claim": "\"16 Candidate Source Categories Across Your Stack.\"",
    "kind": "count",
    "classification": "unsubstantiated",
-   "evidence": "No artifact defines 16 source categories. The same file renders only 5 CATEGORY_GROUPS (IntegrationsSection.tsx:9-35); the only guarded category figure is 17 evaluated categories (lib/signal-radar/dist/index.d.ts:8).",
+   "evidence": "No artifact defines 16 source categories. The same file renders only 5 CATEGORY_GROUPS (IntegrationsSection.tsx:9-35); the only guarded category figure is 17 evaluated categories (lib/signal-radar/src/index.ts:24).",
    "action": "rewrite"
   },
   {
@@ -2927,7 +2927,7 @@
    "claim": "\"the core normalizes 17 signal categories today\"",
    "kind": "count",
    "classification": "launch",
-   "evidence": "EVALUATED_CATEGORIES has exactly 17 entries (lib/signal-radar/dist/index.d.ts:8, lib/signal-radar/src/index.ts); documented at docs/WHAT_SIGNALGRID_DOES_TODAY.md:41 (that figure is pinned by `pnpm run guard:figures`, which reads docs/**/*.md ONLY); the bare \"17\" in this .tsx was guarded by NOTHING until 2026-09-05 — scripts/check-site-figures.mjs now binds it to EVALUATED_CATEGORIES.length.",
+   "evidence": "EVALUATED_CATEGORIES has exactly 17 entries (lib/signal-radar/src/index.ts:24, lib/signal-radar/src/index.ts); documented at docs/WHAT_SIGNALGRID_DOES_TODAY.md:41 (that figure is pinned by `pnpm run guard:figures`, which reads docs/**/*.md ONLY); the bare \"17\" in this .tsx was guarded by NOTHING until 2026-09-05 — scripts/check-site-figures.mjs now binds it to EVALUATED_CATEGORIES.length.",
    "action": "keep"
   },
   {
@@ -3053,7 +3053,7 @@
    "claim": "stat tile: \"17 / Core signal categories\"",
    "kind": "count",
    "classification": "launch",
-   "evidence": "EVALUATED_CATEGORIES = 17 entries (lib/signal-radar/dist/index.d.ts:8); docs/WHAT_SIGNALGRID_DOES_TODAY.md:41. CORRECTED 2026-09-05: guard:figures reads docs/**/*.md only and never held this tile; scripts/check-site-figures.mjs binds it to EVALUATED_CATEGORIES.length now.",
+   "evidence": "EVALUATED_CATEGORIES = 17 entries (lib/signal-radar/src/index.ts:24); docs/WHAT_SIGNALGRID_DOES_TODAY.md:41. CORRECTED 2026-09-05: guard:figures reads docs/**/*.md only and never held this tile; scripts/check-site-figures.mjs binds it to EVALUATED_CATEGORIES.length now.",
    "action": "keep"
   },
   {
@@ -3431,7 +3431,7 @@
    "claim": "\"SignalGrid evaluates schedule, role, training, and location signals\"",
    "kind": "capability",
    "classification": "unsubstantiated",
-   "evidence": "No `training` signal exists at all \u2014 it is absent from SIGNAL_KINDS (lib/posture-composition/src/types.ts:50-92) and from EVALUATED_CATEGORIES (lib/signal-radar/dist/index.d.ts:8). schedule maps to shift_context and location to location, both deferred (scripts/launch-profile.mjs:294, 281).",
+   "evidence": "No `training` signal exists at all \u2014 it is absent from SIGNAL_KINDS (lib/posture-composition/src/types.ts:50-92) and from EVALUATED_CATEGORIES (lib/signal-radar/src/index.ts:24). schedule maps to shift_context and location to location, both deferred (scripts/launch-profile.mjs:294, 281).",
    "action": "rewrite"
   },
   {
@@ -3521,7 +3521,7 @@
    "claim": "\"Idle and tamper signals fold into the next evaluation\"",
    "kind": "capability",
    "classification": "unsubstantiated",
-   "evidence": "tamper_state is a real evaluated category, but no idle signal exists \u2014 EVALUATED_CATEGORIES (lib/signal-radar/dist/index.d.ts:8) and SIGNAL_KINDS (lib/posture-composition/src/types.ts:50-92) contain no idle entry.",
+   "evidence": "tamper_state is a real evaluated category, but no idle signal exists \u2014 EVALUATED_CATEGORIES (lib/signal-radar/src/index.ts:24) and SIGNAL_KINDS (lib/posture-composition/src/types.ts:50-92) contain no idle entry.",
    "action": "rewrite"
   },
   {
@@ -3539,7 +3539,7 @@
    "claim": "\"Device docked \u2014 dock signals feed a closing evaluation\"",
    "kind": "capability",
    "classification": "deferred",
-   "evidence": "dock_state is a normalized category (lib/signal-radar/dist/index.d.ts:8) but no dock connector family is classified launch (scripts/launch-profile.mjs:156-189); the dock hardware contract has no launch transport.",
+   "evidence": "dock_state is a normalized category (lib/signal-radar/src/index.ts:24) but no dock connector family is classified launch (scripts/launch-profile.mjs:156-189); the dock hardware contract has no launch transport.",
    "action": "rewrite"
   },
   {
@@ -3575,7 +3575,7 @@
    "claim": "\"Re-baseline and charging recommended before next checkout\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "security_baseline and charge_state are normalized evaluated categories (lib/signal-radar/dist/index.d.ts:8); baseline drift \u2192 step-up/restrict with self-service resolution is proven by `pnpm run proof:signalgrid-core` (package.json:174; docs/SECURITY_BASELINE_ALIGNMENT.md:113-116), and the recommend-only framing matches docs/SECURITY_BASELINE_ALIGNMENT.md:132.",
+   "evidence": "security_baseline and charge_state are normalized evaluated categories (lib/signal-radar/src/index.ts:24); baseline drift \u2192 step-up/restrict with self-service resolution is proven by `pnpm run proof:signalgrid-core` (package.json:174; docs/SECURITY_BASELINE_ALIGNMENT.md:113-116), and the recommend-only framing matches docs/SECURITY_BASELINE_ALIGNMENT.md:132.",
    "action": "keep"
   },
   {

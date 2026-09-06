@@ -67,7 +67,7 @@ const actions = { remove: actionCount("remove"), rewrite: actionCount("rewrite")
 // Backslashes FIRST, then pipes — escaping the pipe alone lets a value that
 // ends in a backslash swallow the escape (CodeQL js/incomplete-sanitization).
 const esc = (t) =>
-  String(t ?? "").replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ").trim();
+  String(t ?? "").replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\]\(/g, "]\\(").replace(/\s*\n\s*/g, " ").trim();
 const res = (r) => (r.resolution ? ` ✔ ${esc(r.resolution)}` : "");
 
 const bySurface = new Map();

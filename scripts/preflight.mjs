@@ -154,6 +154,16 @@ const STEPS = [
   // missing, a never-claim drawn in its place — and no gate opened an .svg.
   { name: "SVG outcome ladder (a rendered decision ladder is allow · step_up · restrict · deny)", cmd: ["node", "scripts/check-svg-outcome-ladder.mjs"] },
   { name: "SVG-outcome-ladder self-test (the gate can actually fail)", cmd: ["node", "scripts/check-svg-outcome-ladder.mjs", "--self-test"] },
+  // .swiftlint.yml's `force_unwrap` regex matched force CASTS and never a force
+  // unwrap; a first-party skill told every agent it "warns" on `.year!`.
+  { name: "SwiftLint custom rules (each regex fires on a planted positive, not on a planted negative)", cmd: ["node", "scripts/check-swiftlint-rules.mjs"] },
+  { name: "SwiftLint-rules self-test (the gate can actually fail)", cmd: ["node", "scripts/check-swiftlint-rules.mjs", "--self-test"] },
+  // Two role-catalog headings read "(engaged)" over tables saying nobody is.
+  { name: "Role headings carry no status word (status lives in the entry's table)", cmd: ["node", "scripts/check-role-heading-status.mjs"] },
+  { name: "Role-heading-status self-test (the gate can actually fail)", cmd: ["node", "scripts/check-role-heading-status.mjs", "--self-test"] },
+  // The Postman spec check was one-directional and path-only; a request the API
+  // does not serve produced no signal.
+  { name: "Postman coverage self-test (a planted orphan request must be reported)", cmd: ["node", "scripts/build-postman.mjs", "--self-test"] },
   // The MCP-ecosystem source-independence map: every externally-sourced connector
   // family must have a row in docs/research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md (an MCP
   // server or an explicit gap marker), and the map may not name a family the tree

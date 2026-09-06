@@ -95,7 +95,7 @@ the operator-facing half of the feature never rendered.
 The one-line `SCENARIOS` entry ("Failing battery (SmartDock)",
 `nurse.failbatt`/`ipad-loan-04`) landed in
 `artifacts/signalgrid-review/src/components/sections/OperatorConsoleSection.tsx`
-**in the same change that adds this suite**, and the test was green — 15/15 **at that point** (the suite has since grown to 35).
+**in the same change that adds this suite**, and the test was green — 15/15 **at that point** (the suite has since grown; 41 `test(` declarations across 10 spec files on 2026-09-06).
 An adversarial review then caught an earlier draft of THIS section still
 describing the test as red after the fix had landed, which is its own lesson:
 a README describing a test's live state is a hand-maintained claim, and the

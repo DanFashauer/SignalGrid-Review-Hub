@@ -672,7 +672,7 @@ sequence, not a commitment.
 | Outputs | Measured contrast records; accessibility verification runs; lint rules and automated checks; remediation lists with concrete file and line references. |
 | KPIs | Every decision-state pairing at or above 4.5:1 on `SG.background` and `SG.card` in both appearances; zero raw system-font calls outside the design system; every user-facing change verified at `accessibility-extra-large` before merge. |
 | Activation trigger | Covered and running now — the roster's trigger is "any user-facing surface changes". Becomes a dedicated human or fractional role when a customer procurement process requires an accessibility conformance report, or when a surface ships that automated checks cannot evaluate. |
-| Current coverage | Declared in the agent roster (`accessibility-specialist`) but not yet activated as its own lane; the accessibility work delivered so far was done by the `brand-design`, `mobile-native-engineer`, and `web-engineer` lanes — the Dynamic Type ramp, the `onDeny` foreground fix (white on the dark `deny` fill measures 3.53:1, so the foreground flips instead), and the web pass covering viewport, contrast, live regions, and reduced motion. Eighteen raw font calls remain outside the design system as of 2026-08-21. |
+| Current coverage | Declared in the agent roster (`accessibility-specialist`) but not yet activated as its own lane; the accessibility work delivered so far was done by the `brand-design`, `mobile-native-engineer`, and `web-engineer` lanes — the Dynamic Type ramp, the `onDeny` foreground fix (white on the dark `deny` fill measures 3.53:1, so the foreground flips instead), and the web pass covering viewport, contrast, live regions, and reduced motion. No raw font calls remain outside the design system as of 2026-09-06 (eighteen on 2026-08-21; `scripts/check-ios-dynamic-type.mjs` gates it). |
 | Human / fractional / AI-supported | AI-supported today; fractional human for any conformance report |
 | Hiring priority | 7 |
 | Required competencies | WCAG 2.2 AA in practice; iOS Dynamic Type and Auto Layout failure modes; VoiceOver and screen-reader testing; the habit of converting a finding into a check. |
@@ -1157,7 +1157,7 @@ with the condition that turns them on, and they are off today.
 | Required competencies | Detection engineering; incident command; digital forensics and evidence handling; log integrity design; writing incident communications that are accurate under time pressure |
 | Customer/security implications | A shared-device trust gate failing in a hospital is a clinical continuity event, not only a security one. Detection and honest reconstruction are what let a customer decide whether to keep running. |
 
-### Offensive security specialist — penetration testing and red team (engaged)
+### Offensive security specialist — penetration testing and red team
 
 | Field | Value |
 |---|---|
@@ -1381,7 +1381,7 @@ no auditor, no assessor and no vendor risk program in operation.
 | Required competencies | Regulatory research across healthcare, privacy, AI and public sector; policy writing that engineers will read; obligation mapping; distinguishing what a regulation requires from what a vendor says it requires |
 | Customer/security implications | Customers ask which obligations SignalGrid takes on and which stay with them. The honest boundary — domain safety and clinical decisions sit in host applications — has to be stated the same way every time. |
 
-### External audit, assessment & advisory partners (engaged)
+### External audit, assessment & advisory partners
 
 | Field | Value |
 |---|---|

@@ -546,7 +546,7 @@ earlier — that is the loop working, not a reason to soften the record.
     an uncited claim, because it looks checkable.
     The trace now references the profile BY ID (`launch-profile: \`x\` is
     \`status\``) and `scripts/check-positioning-trace.mjs` (preflight + CI)
-    resolves each against the profile itself: 7 references against 179
+    resolves each against the profile itself: 7 references against 180 (2026-09-06)
     classified items. An id that does not exist fails; an id whose status
     differs fails; a bare export reference that is not exported fails.
     Falsified all three ways. Only launch-profile references are GATED, because
@@ -1963,7 +1963,7 @@ earlier — that is the loop working, not a reason to soften the record.
       Remove `.agents/` and the `.agents/**` lines in
       `docs/agent/org-roster.json`, `docs/agent/agent-tiers.json` and
       `.claude/agents/agent-platform-steward.md` in the same commit.
-    · agent-platform-engineer: `signalgrid/SKILL.md:197` says "~1,800 files,
+    · agent-platform-engineer [half CLOSED 2026-09-06: the proof count is now 144, dated; "~1,800 files" still stands against 2,306 tracked]: `signalgrid/SKILL.md:197` says "~1,800 files,
       ~131 proofs"; the tree has 2,328 and 139. A fossil inside a bullet whose
       argument is that surface area is a cost.
     · agent-platform-engineer: `signalgrid-scribe` and `signalgrid-reviewer` BOTH
@@ -1971,24 +1971,24 @@ earlier — that is the loop working, not a reason to soften the record.
       owns `docs/agent/**` on top. Two lanes editing one registry is the
       eight-file collision shape `LANE_COORDINATION.md` exists for. Decide the
       direction — reviewer appends, scribe maintains — and state it in both.
-    · agent-platform-engineer: two skills list the CI jobs preflight does not
+    · agent-platform-engineer [CLOSED 2026-09-06: FALSE_CLAIMS.json preflight-mirrors-three-of-six-ci-jobs; the skills point at the parity gate]: two skills list the CI jobs preflight does not
       mirror and name `secret-scan`, which is not a `review-hub-ci.yml` job at all
       (it lives in `supply-chain.yml`); the real third service-dependent job is
       `podman-stack`. The correction cited at `signalgrid/SKILL.md:95` has itself
       drifted.
-    · devex-tooling-engineer: `CLAUDE.md:54,63` says "roughly thirty-five
+    · devex-tooling-engineer [CLOSED 2026-09-05: CLAUDE.md:63 dates the old figure and says do not retype one]: `CLAUDE.md:54,63` says "roughly thirty-five
       preflight gates" are outside the harness. Parsed from `preflight.mjs`: 176
       steps, 73 proofs, ~79 distinct non-proof gates, against seven in the
       harness — the gap is ~3x what the number says, in a paragraph whose whole
       job is to stop a reader trusting harness-green.
-    · devex-tooling-engineer: `check-cited-paths.mjs` skips `.claude/skills/`
+    · devex-tooling-engineer [CLOSED 2026-09-06: the exemption is derived from VENDORED.md via scripts/lib/skill-plane.mjs; first-party skills are checked]: `check-cited-paths.mjs` skips `.claude/skills/`
       entirely as "VENDORED third-party work", which has been false for six
       directories since 08-22, so every repo path cited in the first-party skills
       is ungated. Hand-audited: only one stale citation, and it is benign.
     · devex-tooling-engineer: running `check-role-coverage.mjs` WRITES its
       ratchet, so a read-only review run dirties the tree — and
       `provenance.workingTreeClean` in `sim-results` reads `git status`.
-    · security-engineer: the roster gives it `lib/api-auth/**`, which matches
+    · security-engineer [CLOSED: org-roster.json now names lib/enterprise-auth/**]: the roster gives it `lib/api-auth/**`, which matches
       nothing (three searches). Likely meant `lib/enterprise-auth/**`. A surface
       matching no file is a coverage claim about nothing.
     · principal-engineer: `qa-engineer`'s surface is `lib/**` + api-server +
@@ -2122,7 +2122,7 @@ earlier — that is the loop working, not a reason to soften the record.
     `check:absence "web accessibility standard"` returns CORROBORATED across four
     probes. No a11y tooling in any `package.json` (axe, pa11y, lighthouse,
     jest-axe, eslint-plugin-jsx-a11y) — and **no eslint config exists at all**, so
-    no `jsx-a11y` rules. Of 175 preflight gates and 15 workflows,
+    no `jsx-a11y` rules. Of the preflight gates and workflows (327 and 14 on 2026-09-06; `check-preflight-ci-parity.mjs` prints both),
     `check-decision-palette.mjs` is the only accessibility gate.
     WHAT IS RATIFIED IS NARROWER THAN IT LOOKS, and the distinction matters: DR-005
     ratifies WCAG AA for decision-state COLOURS, not conformance; DR-006 says
@@ -2790,7 +2790,7 @@ earlier — that is the loop working, not a reason to soften the record.
     defines every token as a single fixed dark value, so removing the pin alone would
     produce exactly the self-contradicting screen mix the rule exists to prevent. Make
     the tokens adaptive FIRST, then remove line 11.
-    ALSO CORRECTS CLAUDE.md: its exemption says "SignalGridMobile is pure SwiftUI with
+    ALSO CORRECTS CLAUDE.md [APPLIED 2026-09-06]: its exemption says "SignalGridMobile is pure SwiftUI with
     semantic colors and needs none of this." That is true of `WardlinkDemo` and NOT of
     `SignalGridOperator`. The sentence should name the target. Not a UIKit conversion —
     fixable entirely in SwiftUI.
@@ -2881,7 +2881,7 @@ earlier — that is the loop working, not a reason to soften the record.
     claim about the gate is false. FIX: make it true (parse and diff, as
     `check-it-layer-model.mjs` already does for `route-owner.ts`) or delete the sentence.
 
-113. **Web: the PWA manifest points at two icons that do not exist.** — OPEN,
+113. **Web: the PWA manifest points at two icons that do not exist.** — CLOSED as filed (2026-09-06 check: manifest.json:9 now declares `"icons": []` — the dangling references were removed, no icons were added; an empty array satisfies any consumer that only checks the key exists),
     web-engineer. `manifest.json:10-11` declares 192px and 512px icons; neither file is
     tracked or on disk. Without them the PWA cannot be installed to a home screen,
     which is the only reason a manifest exists. Related: `start_url` is `/mobile/` and
@@ -3019,7 +3019,7 @@ earlier — that is the loop working, not a reason to soften the record.
     preflight.
 
 122. **`proof:live-glpi` has never been executable from the path that invokes it.** —
-    OPEN, devex-tooling-engineer. Registered only in `scripts/package.json`, never at
+    CLOSED 2026-09-06 (the root key exists and `pnpm run proof:live-glpi` resolves; note the proposed equality gate would fail on `proof:decision-palette`, a root-only alias — a subset rule is the right shape), devex-tooling-engineer. Registered only in `scripts/package.json`, never at
     the repo root, while `run-live-lanes.sh:387` invokes it after `cd` to the root.
     Verified: `pnpm run proof:live-glpi` -> `ERR_PNPM_NO_SCRIPT`. All seven sibling
     live proofs ARE registered at root; this is the sole scripts-only key.
@@ -3840,7 +3840,7 @@ earlier — that is the loop working, not a reason to soften the record.
     FIX: drop `Partial` so an unhandled outcome is a compile error, and change the
     fallback to the restrictive tone.
 
-157. **Six rendered assertions of a passing CI gate that does not exist.** — OPEN,
+157. **Six rendered assertions of a passing CI gate that does not exist.** — CLOSED 2026-09-06 (row 160 records the removal; `rc:smoke` has zero occurrences in artifacts/signalgrid-review/src — the two rows disagreed for days),
     web-engineer. The Review Hub scorecard cites `rc:smoke` as a passing workflow six
     times, and those citations are load-bearing for two of the eight published scores.
     Absence established three ways: `check:absence` returns INCONCLUSIVE with four
@@ -4173,7 +4173,7 @@ earlier — that is the loop working, not a reason to soften the record.
     IT REPORTS AND NEVER BLOCKS, and that inversion is deliberate. This repository
     is fail-closed everywhere, and a session start is the one place where failing
     closed is wrong: a blocked session cannot be used to fix the thing that blocked
-    it. Every path exits 0. Nothing here gates — preflight's 180-odd gates do that,
+    it. Every path exits 0. Nothing here gates — preflight's gates do that (327 on 2026-09-06; the parity gate prints the live count),
     after there is something to gate.
     THE DEPENDENCY INSTALL IS REMOTE-ONLY, and the exclusion is load-bearing rather
     than lazy. `CLAUDE.md` records that local macOS builds add darwin platform
@@ -4527,7 +4527,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 171. **The daily rot check watches a hand-picked tenth of the gate suite, and its
     own header called that the full suite.** — OPEN, sre. Found by reading
-    `.github/` rather than by a gate. `scripts/preflight.mjs` registers 179 gates
+    `.github/` rather than by a gate. `scripts/preflight.mjs` registers the gates `node scripts/check-preflight-ci-parity.mjs` counts (327 on 2026-09-06)
     and `review-hub-ci.yml` runs every one per PR, kept in step by
     `check-preflight-ci-parity.mjs`. `scheduled-verification.yml` — the only thing
     watching the default branch BETWEEN pull requests — runs about ten named
@@ -4887,8 +4887,8 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (616) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
-22. scripts/launch-profile.mjs (755) — the 174-item classification every launch claim trusts; audit each 'launch' reason against source.
+21. scripts/preflight.mjs (626) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+22. scripts/launch-profile.mjs (755) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (188) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.
 25. lib/integrations/src/integrations/device-management-health/evaluate.ts (290) — launch family; grades whether a compliance answer is CURRENT — the anti-unearned-affirmative connector, which had better not contain one.

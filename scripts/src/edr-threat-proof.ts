@@ -122,6 +122,17 @@ check("an active critical threat outranks degraded protection (escalate, not ste
 const freshSigs = evaluateThreatPosture(normalizeEndpoint({ deviceId: "f", agentInstalled: true, agentRunning: true, realtimeProtection: true, signatureAgeHours: 71, threats: [] }));
 check("signatures under the 72h threshold stay protected", freshSigs.posture === "protected" && freshSigs.protectionHealthy === true);
 
+// Fail-safe (regression, 2026-09-06): an UNREADABLE signature age — NaN, the value a
+// source that sent "unknown" or a failed upstream parse produces — must grade exactly
+// like an unreported one. `=== null || >= stale` let NaN fall through both arms and
+// graded PROTECTED, the fifth NaN variant this repository has met; Number.isFinite
+// closes it. Mutation record: with the isFinite predicate reverted to `=== null`, this
+// assertion fails by name.
+const nanSigs = evaluateThreatPosture({ ...normalizeEndpoint({ deviceId: "nan", agentInstalled: true, agentRunning: true, realtimeProtection: true, signatureAgeHours: 1, threats: [] }), signatureAgeHours: Number.NaN });
+check("an UNREADABLE signature age (NaN) is stale, never protected — it grades like an unreported one", nanSigs.posture !== "protected" && nanSigs.protectionHealthy === false && nanSigs.recommendedAction === "step_up");
+const infSigs = evaluateThreatPosture({ ...normalizeEndpoint({ deviceId: "inf", agentInstalled: true, agentRunning: true, realtimeProtection: true, signatureAgeHours: 1, threats: [] }), signatureAgeHours: Number.POSITIVE_INFINITY });
+check("an infinite signature age is stale too (the same predicate, the other end)", infSigs.posture !== "protected" && infSigs.protectionHealthy === false);
+
 // Fail-safe (regression): an UNREPORTED signature age must NOT read as fresh —
 // unverifiable freshness degrades protection, it never passes as protected.
 const unknownSigAge = evaluateThreatPosture(normalizeEndpoint({ deviceId: "u", agentInstalled: true, agentRunning: true, realtimeProtection: true, threats: [] }));

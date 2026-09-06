@@ -470,6 +470,9 @@ const QUOTE_CONTEXT =
   /["“”‘’'`][^"“”‘’'`]{0,24}(Zero[\s-]Trust orchestration|Operational Trust Orchestration|Shared-Device Trust Gateway)/i;
 const AVOID_CONTEXT =
   /trap phrases|phrases to avoid|words to avoid|never say|do not say|don'?t say|avoid leading with|not an established|collision assessment|invented category/i;
+// A typesetting verb BEFORE the opening quote turns a quotation into copy to set.
+const TYPESET_CONTEXT =
+  /\b(?:caption|headline|tagline|title card|overlay|hero|blurb|place|set|print|render)\b[^"“”‘’'`]{0,40}["“”‘’'`]/i;
 // Deliberately explicit: the banner has to disclaim CURRENT status in so many
 // words, the same bar `PAGE_SCOPE` sets for the deferred-noun rule. "Historical
 // note" further down the page does not buy the whole file an exemption.
@@ -525,7 +528,13 @@ function retiredProseScan(name, body) {
     // always reads as never having fired is one nobody can audit.
     if (bannerIdx >= 0 && lineNo - 1 > bannerIdx) { out.byBanner += 1; continue; }
     if (AVOID_CONTEXT.test(line)) { out.byAvoid += 1; continue; }
-    if (QUOTE_CONTEXT.test(line)) { out.byQuote += 1; continue; }
+    // The quote idiom does not reach a TYPESETTING instruction. `Add a small caption:
+    // "Operational trust orchestration …"` is not a document naming a string — it is
+    // a document telling a designer to print the retired label on a public visual,
+    // and it sat under the quote exemption in docs/research/SOCIAL_VISUAL_CONCEPTS.md
+    // twice (thirteenth audit round, 2026-09-06). Same reasoning the HTML carve-out
+    // above uses: in a design brief the label sits inside quotes BY CONSTRUCTION.
+    if (QUOTE_CONTEXT.test(line) && !TYPESET_CONTEXT.test(line)) { out.byQuote += 1; continue; }
     out.violations.push(v);
   }
   return out;

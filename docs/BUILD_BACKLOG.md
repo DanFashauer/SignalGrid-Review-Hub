@@ -92,6 +92,11 @@ lone repairs into unreachable code).
       Placement was checked before building, using the new reachability ratchet:
       `pim-activation` (where the backlog's own text pointed) is proof-only, so the
       work went to `lib/integrations` + `posture-composition`, both of which ship.
+      (Re-measured 2026-09-06: after the reachability extractor stopped crediting a
+      package named only in a comment (b54be02, 2026-09-05), BOTH `lib/integrations`
+      and `posture-composition` are in the unreachable list — the placement rationale
+      above rested on the credited-by-prose reading. The code is where it is; the
+      claim that both "ship" did not hold when it was written.)
 - [ ] **`ReleaseLedger.holds` loses the second hold on the same task (found by the row-48
       second-pass audit; LATENT, not live — record the distinction).** `holds` is
       `Readonly<Record<string, string>>` (`lib/handoff-sim/src/types.ts:137`) — one
@@ -283,7 +288,7 @@ lone repairs into unreachable code).
       expectation and the SIGNAL_SOURCE_CATALOG row status reconcile in the
       same change; Intune App Protection first, other MAM vendors deferred.
 
-_Derived from repo data, not memory: `check-connector-discipline` reports 36/36
+_Derived from repo data, not memory: `check-connector-discipline` reports 51/51 (2026-09-06; it said 36/36 here from 2026-08-21, flagged by the role-lens review the same day and left standing)
 families with KNOWN_GAPS empty. The live-evidence status is NOT restated here —
 `node scripts/check-live-sync.mjs` prints it (`liveEvidence=fresh|stale|none`), and
 this paragraph once said "fresh" while the tool printed STALE, seven manifest
@@ -1140,8 +1145,9 @@ the surface.
 ### Full-evaluation completion list (2026-09-01) — the real distance to a paying customer
 
 Surfaced by the independent six-dimension evaluation; see
-`docs/agent/SOLUTION_READINESS_ASSESSMENT.md`. Six of seven are self-declared in
-`scripts/launch-profile.mjs` GAPS — the evaluation confirms that accounting is honest.
+`docs/agent/SOLUTION_READINESS_ASSESSMENT.md`. Four gap ids exist in
+`scripts/launch-profile.mjs` GAPS on 2026-09-06 (this said "six of seven"; one of the seven,
+assist-wire-unserved, was retired by DR-023) — the evaluation confirms that accounting is honest.
 
 - [ ] **Non-demo core constructor.** The served API builds `SignalGridCore.demo()`; it never wires the real Graph connector in `lib/`. Largest gap to a real customer. (gap `non-demo-core-constructor`.)
 - [ ] **Verdict enforcement / step-up answerability.** The gate returns `step_up` in shadow mode with no launch route to answer one. (gap `step-up-answerability`.)

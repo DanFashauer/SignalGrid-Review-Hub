@@ -813,17 +813,11 @@ export const COUNTER_EXEMPT = [
       "header already names as the reason a stricter rule was rejected once before. It is true, it scopes " +
       "itself in its own words, and a gate that flags it is the gate that punishes honest writing.",
   },
-  {
-    doc: "docs/MCP_AND_SKILLS_LANE_PARITY.md",
-    near: /25 tracked skill directories/,
-    reason:
-      "\"(25 tracked skill directories at time of writing …)\" — hedged, and printed directly beneath the " +
-      "git command that derives the count, so a reader has the true answer in front of them. It is stale " +
-      "(26 today) and the honest repair is to delete the numeral and keep the command, as docs/INDEX.md did " +
-      "for the lab registry; that is a prose change on a page this gate does not own. Named here rather " +
-      "than made fatal, and it is REPORTED on every run until it is fixed.",
-  },
 ];
+
+// (docs/MCP_AND_SKILLS_LANE_PARITY.md:18 was listed here for a stale "25 tracked skill directories";
+// the twenty-third round rewrote it to the derived count with its date, so the exemption came out —
+// the self-test refuses a listed exemption that no longer matches its document.)
 
 const QUOTED_RULE = "the figure sits inside a double-quoted span — the document is quoting another document, not claiming";
 

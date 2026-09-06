@@ -24,7 +24,7 @@
 //
 //   node scripts/check-lab-collections.mjs [--self-test]
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -79,19 +79,28 @@ export function auditLabCollections(folders, readmeText) {
 }
 
 function loadFolders(root) {
+  // One directory listing per folder answers every question (file / directory /
+  // name) — no check-then-read on a path that could change between the two calls,
+  // which is the race CodeQL flags for exists→read and stat→read pairs. A file that
+  // vanishes between the listing and the read is reported as unreadable, never
+  // skipped: an unreadable request file is a request the collection cannot vouch for.
   const folders = {};
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const dir = join(root, entry.name);
+    const children = readdirSync(dir, { withFileTypes: true });
     const requests = {};
-    for (const file of readdirSync(dir)) {
-      const full = join(dir, file);
-      if (!statSync(full).isFile() || !file.endsWith(".bru") || file === "collection.bru") continue;
-      requests[file] = readFileSync(full, "utf8");
+    for (const child of children) {
+      if (!child.isFile() || !child.name.endsWith(".bru") || child.name === "collection.bru") continue;
+      try {
+        requests[child.name] = readFileSync(join(dir, child.name), "utf8");
+      } catch {
+        requests[child.name] = "";
+      }
     }
     folders[entry.name] = {
-      hasBrunoJson: existsSync(join(dir, "bruno.json")),
-      hasEnvironments: existsSync(join(dir, "environments")) && statSync(join(dir, "environments")).isDirectory(),
+      hasBrunoJson: children.some((c) => c.isFile() && c.name === "bruno.json"),
+      hasEnvironments: children.some((c) => c.isDirectory() && c.name === "environments"),
       requests,
     };
   }

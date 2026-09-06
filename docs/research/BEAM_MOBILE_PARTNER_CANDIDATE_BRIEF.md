@@ -6,20 +6,20 @@ SignalGrid does not claim a current Beam Mobile partnership, endorsement, integr
 
 ## Candidate fit
 
-Beam is a candidate for healthcare shared iPhone/iPad workflows where physical custody and operational readiness matter alongside identity and device posture. The candidate pattern is:
+Beam is a candidate for healthcare shared iPhone/iPad workflows where physical custody and operational readiness matter alongside identity and device posture. Custody is a deferred SignalGrid family (not Limited GA), so the candidate pattern below is a design target:
 
 1. A shared Apple device is protected by a healthcare-appropriate case.
 2. A case or battery identifier helps bind the physical asset to the managed device record.
-3. A charging or dock workflow provides custody evidence for checkout, return, and charging readiness.
+3. A charging or dock workflow provides custody evidence for checkout, return, and charging readiness (deferred family; design target).
 4. SignalGrid evaluates identity, device posture, custody context, workflow risk, and available evidence before producing a routed outcome.
 
 ## Possible SignalGrid value
 
-SignalGrid could add value around a Beam-like hardware layer by normalizing and correlating:
+SignalGrid could add value around a Beam-like hardware layer by normalizing and correlating the following — all deferred families on the roadmap, not Limited GA:
 
 - Identity-bound checkout and session context.
 - Device posture overlays from MDM/UEM or fixture-backed posture proofs.
-- Dock or return state as custody evidence.
+- Dock or return state as custody evidence (a deferred family; design target, not Limited GA).
 - Battery or charging state as an operational signal.
 - Overdue return risk for shared assets.
 - Wrong-device or wrong-bay exceptions.
@@ -28,11 +28,11 @@ SignalGrid could add value around a Beam-like hardware layer by normalizing and 
 
 ## Case + dock strategy
 
-Healthcare shared devices need both physical protection and custody evidence:
+Healthcare shared devices need both physical protection and custody evidence (on the SignalGrid side, custody is a deferred family, not Limited GA):
 
 - **Case:** Supports survivability, battery continuity, cleaning durability, asset labeling, and device usability.
 - **Dock:** Supports checkout, return, charging, bay-level custody signal, and audit evidence.
-- **SignalGrid:** Provides the trust decision, routing, evidence trail, and verification loop across identity, posture, workflow, and physical-custody context.
+- **SignalGrid:** Provides the trust decision, routing, evidence trail, and verification loop across identity, posture, workflow, and physical-custody context — the custody part is a deferred design target.
 
 ## Candidate reference-architecture concept
 
@@ -40,7 +40,7 @@ A future public-safe reference architecture could show a fixture-backed flow lik
 
 1. User signs in or checks out a shared device through an identity-bound session.
 2. MDM/UEM posture confirms the device is compliant for the requested workflow.
-3. DockBridge receives a fixture event showing a known device/case/battery leaving an expected bay.
+3. DockBridge — a deferred connector family, not Limited GA — receives a fixture event showing a known device/case/battery leaving an expected bay.
 4. SignalGrid correlates identity, posture, custody, battery, workflow, and audit evidence.
 5. SignalGrid returns an allow candidate, route-for-review candidate, step-up candidate, or operational-risk candidate.
 6. A verification event confirms the device was returned, charged, swapped, or escalated through an approved process.

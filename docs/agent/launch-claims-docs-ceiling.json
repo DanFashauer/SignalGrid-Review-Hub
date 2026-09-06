@@ -1,7 +1,7 @@
 {
   "note": "DEBT CEILING for docs/**/*.md, not a high-water mark: the COUNT OF unhedged deferred-capability mentions, not the count of files carrying them — a new claim in an already-listed document must fail, and counting files hid exactly that. A RISE is fatal; a drop is recorded automatically. Never hand-edit; the gate writes it.",
-  "unhedgedDeferredMentions": 453,
-  "filesCarryingThem": 117,
+  "unhedgedDeferredMentions": 418,
+  "filesCarryingThem": 110,
   "worst": [
     {
       "file": "docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md",
@@ -10,10 +10,6 @@
     {
       "file": "docs/research/LINKEDIN_POST_DRAFTS.md",
       "blocks": 18
-    },
-    {
-      "file": "docs/HARDWARE_PARTNER_MATRIX.md",
-      "blocks": 12
     },
     {
       "file": "docs/OPERATIONAL_TRUST_ORCHESTRATION.md",
@@ -61,6 +57,10 @@
     },
     {
       "file": "docs/research/COMPETITIVE_IMPRIVATA.md",
+      "blocks": 8
+    },
+    {
+      "file": "docs/research/COMPETITIVE_SGNL.md",
       "blocks": 8
     }
   ]

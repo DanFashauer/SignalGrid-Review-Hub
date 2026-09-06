@@ -53,8 +53,35 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               unchanged.
 LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
               M (#466), N (#468), O (#470), P (#471), Q (#473), R (#474) and
-              S (#476), T (#477), U (#480) and V (#482) LANDED. Batch W
-              (twenty-first round, on its PR) fixed the console's fourteen
+              S (#476), T (#477), U (#480), V (#482) and W (#484) LANDED.
+              Batch X (twenty-second round, on its PR) repaired docs/company's
+              twelve defects with every figure re-derived first: the investor
+              one-pager no longer says the outreach wave is "in flight" or the
+              pilot program "live" (an {AT-USE} bracket names the outreach log
+              - only its README - and the 0-of-15 tally as the things to read
+              on send day); FUNDING_READINESS's "already running / first sends
+              Monday" is "prepared, zero sends logged"; iam verification is
+              five of fifteen sourced to the roster (the folder had said 2, 5
+              and 15); "No cost or billing figure appears in this repository"
+              ×3 narrowed to owner-only billing (the product's own prices and
+              the cost model DO appear) and check-cost-figures now resolves
+              every currency amount in the tree against a register in
+              COST_MODEL.md and refuses a concrete owner-only spend figure;
+              "no cost model exists yet" ×2, "no lint rule yet" ×2, "47
+              deferred families", "v4 / 174", "no hiring sequence published"
+              all corrected to what the tree measures; the lens review's
+              twelve fixed findings annotated in its own idiom, its dead and
+              drifted unbackticked citations corrected, and check-cited-paths
+              now REPORTS unbackticked path:line citations per document (2,535
+              across 8 documents - CLAIM_INVENTORY alone 2,122) rather than
+              being silently green over them. The buyer-facing claims scan
+              gained a fifth rule - a document whose path or first heading
+              names an investor, pitch, pilot, partner or funding audience -
+              which found 43 unhedged deferred-noun and retired-label sites in
+              seven partner/pitch documents outside docs/company (two are
+              literal outreach email drafts opening with the retired label);
+              fixed in the same batch, the ceilings never rose.
+              Batch W (twenty-first round, #484) fixed the console's fourteen
               fail-open shapes and gated them: every "{!q.data && 'Loading…'}"
               site (nine — the read named eight, the gate found a ninth in
               GridConfig) renders a settled control-plane error as "unavailable";
@@ -518,17 +545,11 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land Batch W (on its PR), then (1) Batch X - docs/company
-              (scratchpad batch-x-company-findings.md:
-              the investor one-pager's "in flight"/"live" over an empty
-              outreach log, three false "no cost figure appears" absolutes the
-              2026-08-21 lens review already named, iam 2/5/15, 47 vs 48
-              families, v4/174 vs v5/180) plus docs/company into the buyer-
-              facing claims scan and a REPORT of unbackticked path:line
-              citations; (2) the six surfaces the ledger still marks partial
+NEXT ACTION: cloud: land Batch X (on its PR), then (1) the six surfaces the
+              ledger still marks partial
               (docs/*, docs/agent, docs/inspiration, docs/research,
               artifacts/api-server, scripts) - read them, not their indexes;
-              (3) the console's remaining open items above (connector status
+              (2) the console's remaining open items above (connector status
               rendered, the toaster, CATEGORY_ORDER derived, /sessions/:id
               linked) and Dashboard's chart-style deeper-path pending arms the
               error-state gate deliberately does not judge;

@@ -202,6 +202,8 @@ const STEPS = [
   { name: "Console routes reachable self-test (the check can actually fail)", cmd: ["node", "scripts/check-console-routes-reachable.mjs", "--self-test"] },
   { name: "Console launch families (LAUNCH_FAMILIES equals the launch connector families, both directions)", cmd: ["node", "scripts/check-console-launch-families.mjs"] },
   { name: "Console launch families self-test (the check can actually fail)", cmd: ["node", "scripts/check-console-launch-families.mjs", "--self-test"] },
+  { name: "Cost figures (every currency amount resolves to docs/COST_MODEL.md's register; no owner-only billing figure is published as our own spend)", cmd: ["node", "scripts/check-cost-figures.mjs"] },
+  { name: "Cost figures self-test (the check can actually fail)", cmd: ["node", "scripts/check-cost-figures.mjs", "--self-test"] },
   { name: "Guard-registry drift (coverage lists derived, not trusted)", cmd: ["node", "scripts/check-guard-registries.mjs"] },
   { name: "CI\u2194preflight drift (every proof runs in both places)", cmd: ["node", "scripts/check-ci-preflight-sync.mjs"] },
   // Pure static analysis of the Dockerfiles against pnpm-workspace.yaml — no

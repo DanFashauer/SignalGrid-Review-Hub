@@ -100,3 +100,26 @@ artifacts/bruno/
 
 # Neural Memory (DR-026) writes a store into any `.git`/`package.json` root it is pointed at; the store lives outside the tree.
 .neuralmemory/
+
+# Paths a vendored skill under .claude/skills/ can create INSIDE this repository.
+# Same reason as native/ios/build/ and .obsidian/ above: run-requests.mjs derives
+# provenance.workingTreeClean from `git status --porcelain`, untracked files
+# included, so one leftover directory stamps every LATER sim result as minted from
+# a dirty tree. GATED by scripts/check-gitignore-producers.mjs, which re-checks each
+# rule against the file:line in the vendored source that produces it.
+#
+# brainstorming/visual-companion.md:58, brainstorming/scripts/start-server.sh:117,
+# subagent-driven-development/scripts/sdd-workspace:36
+.superpowers/
+# using-git-worktrees/SKILL.md:76 (default) and :72 (the non-hidden alternative it
+# will use if it already exists). Project root only, hence the leading slash.
+/.worktrees/
+/worktrees/
+# writing-skills/render-graphs.js:131 renders `dot` blocks into a diagrams/
+# directory beside ANY SKILL.md — the wildcard covers every skill, not just the
+# one that happened to be checked first.
+/.claude/skills/*/diagrams/
+# The agent harness's worktree root (stack-reference/ai-cli.md:77). It was ignored
+# only by .git/info/exclude, which lives inside .git/, is never committed, and so
+# does not exist in a fresh clone or on a CI runner: ignored on exactly one machine.
+**/.claude/worktrees/

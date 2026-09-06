@@ -202,6 +202,43 @@ export function auditSimRequests(requests, results, commitExists = null, shallow
   return { problems, pending, superseded, reported };
 }
 
+// ── A document must not still call a request pending after its result passed ──
+//
+// WHY (2026-09-06). docs/lab/LAB_001_CLOUD_REHEARSAL.md named request
+// 2026-08-31-lab001-step1-real-posture and said "real-hardware evidence NOT
+// minted … When that lands, LAB_001 Step 1 is done for real" four days after the
+// Mac ran it (result: passed, exit 0). This gate already knows which requests are
+// closed; a document that names a closed request in the same PARAGRAPH as a
+// pending phrase is a stale promise. Unit is the paragraph — a blank-line block,
+// OR a list item (a backlog of 40 bullets with no blank lines between them is 40
+// paragraphs, not one: the first cut read docs/BUILD_BACKLOG.md's whole list as
+// a single block and paired an id in one bullet with "not yet" in another) —
+// because the id and the phrase were three lines apart. Carve-out: a paragraph
+// that dates itself ("as of YYYY-MM-DD") is a record of the moment and passes —
+// the honest form anyway. NOT covered: whether the result's content is correct.
+export const PENDING_PHRASE_RE = /\bNOT minted\b|\bnot yet\b|\bpending\b|\bwhen (?:that|it) lands\b|\bonce (?:that|it) lands\b|\bwill (?:mint|land|run)\b/i;
+const AS_OF_RE = /\bas of \d{4}-\d{2}-\d{2}\b/i;
+const passedIds = (results) =>
+  new Set(results.filter((r) => (r.runs ?? []).length > 0 && (r.runs ?? []).every((x) => GREEN_STATUSES.includes(x.status))).map((r) => r.requestId));
+
+/** Pure: { [docPath]: text } × results → problems naming doc, paragraph line, request id. */
+export function stalePendingProse(docs, results) {
+  const closed = passedIds(results);
+  const problems = [];
+  for (const [doc, text] of Object.entries(docs)) {
+    let line = 1;
+    for (const para of text.split(/\n\s*\n|\n(?=\s*(?:[-*+]|\d+[.)])\s)/)) {
+      const ids = [...closed].filter((id) => para.includes(id));
+      if (ids.length > 0 && PENDING_PHRASE_RE.test(para) && !AS_OF_RE.test(para)) {
+        const m = para.match(PENDING_PHRASE_RE)[0];
+        problems.push(`${doc}:${line}: names request ${ids[0]} (result PASSED) in a paragraph that still says "${m}" — record the completion, or date the sentence ("as of YYYY-MM-DD")`);
+      }
+      line += para.split("\n").length + 1;
+    }
+  }
+  return problems;
+}
+
 function loadDir(dir) {
   return listJson(dir).map((f) => {
     const parsed = JSON.parse(readFileSync(join(dir, f), "utf8"));
@@ -295,6 +332,17 @@ function selfTest() {
     a.problems.length === 2 && a.pending.length === 2 && a.superseded.length === 0,
   ]);
 
+  // Stale pending prose: the rehearsal-doc shape, in both directions.
+  const passed = [res("2026-08-31-lab001-step1-real-posture", [{ operation: "preflight", status: "passed" }])];
+  let sp = stalePendingProse({ "docs/x.md": "`artifacts/sim-requests/2026-08-31-lab001-step1-real-posture.json` asks the Mac\nto run the real half.\nWhen that lands, Step 1 is done for real.\n\nUnrelated paragraph, pending forever." }, passed);
+  checks.push(["THE SHIPPED SHAPE: a doc paragraph naming a PASSED request three lines from 'When that lands' is a problem, and the unrelated pending paragraph is not",
+    sp.length === 1 && /docs\/x\.md:1: names request 2026-08-31-lab001-step1-real-posture \(result PASSED\).*"When that lands"/.test(sp[0])]);
+  sp = stalePendingProse({ "docs/x.md": "As of 2026-09-06 request 2026-08-31-lab001-step1-real-posture ran; this rehearsal preceded it and said NOT minted." }, passed);
+  checks.push(["a paragraph that dates itself ('as of YYYY-MM-DD') is a record, not a stale promise", sp.length === 0]);
+  sp = stalePendingProse({ "docs/x.md": "Request 2026-08-31-lab001-step1-real-posture: evidence NOT minted yet." }, [res("2026-08-31-lab001-step1-real-posture", [{ operation: "preflight", status: "failed" }])]);
+  checks.push(["a request whose result did NOT pass may still be called pending", sp.length === 0]);
+  sp = stalePendingProse({ "docs/x.md": "- [x] row one names 2026-08-31-lab001-step1-real-posture and is done\n- [ ] row two is not yet verified" }, passed);
+  checks.push(["THE BACKLOG SHAPE: two list items with no blank line between them are two paragraphs — an id in one and 'not yet' in the next do not pair", sp.length === 0]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -309,6 +357,12 @@ const git = (args) => spawnSync("git", args, { cwd: repo, encoding: "utf8" });
 const commitExists = (sha) => git(["cat-file", "-e", `${sha}^{commit}`]).status === 0;
 const shallow = git(["rev-parse", "--is-shallow-repository"]).stdout.trim() === "true";
 const { problems, pending, superseded, reported } = auditSimRequests(requests, results, commitExists, shallow);
+{
+  // Every tracked markdown document, scope derived from git — never a hand list.
+  const docFiles = git(["ls-files", "--", "*.md", "**/*.md"]).stdout.split("\n").filter(Boolean);
+  const docs = Object.fromEntries(docFiles.map((f) => [f, readFileSync(join(repo, f), "utf8")]));
+  for (const p of stalePendingProse(docs, results)) problems.push(p);
+}
 
 console.log(`Simulation request loop — ${requests.length} request(s), ${results.length} result(s)`);
 const greenRuns = results.flatMap((r) => (r.runs ?? []).filter((x) => GREEN_STATUSES.includes(x.status)));

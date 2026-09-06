@@ -884,6 +884,22 @@ for (const f of docsHtml) {
     problems += 1;
   }
 }
+// docs/**/*.svg carry prose too — <title>, <desc>, every <text> — and are linked and
+// screenshotted like HTML. Until 2026-09-06 no scan opened one, while
+// check-svg-outcome-ladder.mjs's header delegated SVG prose to "the retired-label scan"
+// — a handoff to a scope that did not include the file type. Same rule, same hard gate.
+const docsSvg = execSync("git ls-files docs", { encoding: "utf8" })
+  .trim().split("\n").filter((f) => /\.svg$/.test(f));
+if (docsSvg.length < 1) {
+  console.error("✗ found no docs/**/*.svg — the ecosystem-positioning diagram has been tracked since 2026-09-01, so the derivation is broken rather than the tree empty.");
+  process.exit(1);
+}
+for (const f of docsSvg) {
+  for (const v of retiredLabelViolations(f, readFileSync(f, "utf8"))) {
+    console.error(`  ✗ ${v}`);
+    problems += 1;
+  }
+}
 
 // ── docs/**/*.md retired labels — REPORTED against a ceiling, fatal on a RISE ─
 //

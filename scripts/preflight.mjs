@@ -188,6 +188,12 @@ const STEPS = [
   { name: "Claim-inventory anchors self-test (the check can actually fail)", cmd: ["node", "scripts/check-claim-inventory-anchors.mjs", "--self-test"] },
   { name: "Cited symbols (a symbol named beside a code citation must still be in that file; missing is ratcheted)", cmd: ["node", "scripts/check-cited-symbols.mjs"] },
   { name: "Cited symbols self-test (the check can actually fail)", cmd: ["node", "scripts/check-cited-symbols.mjs", "--self-test"] },
+  { name: "Rendered assets (a committed PNG must be a render of the committed HTML; unpinned PNGs reported)", cmd: ["node", "scripts/check-rendered-assets.mjs"] },
+  { name: "Rendered assets self-test (the check can actually fail)", cmd: ["node", "scripts/check-rendered-assets.mjs", "--self-test"] },
+  { name: "Skill instruction conflicts (no skill may prescribe a command the Bash deny-list hook refuses, unless VENDORED.md Overrides names the site)", cmd: ["node", "scripts/check-skill-instruction-conflicts.mjs"] },
+  { name: "Skill instruction conflicts self-test (the check can actually fail)", cmd: ["node", "scripts/check-skill-instruction-conflicts.mjs", "--self-test"] },
+  { name: "Gitignore producers (every path a vendored skill writes into the tree is ignored by the TRACKED ignore files)", cmd: ["node", "scripts/check-gitignore-producers.mjs"] },
+  { name: "Gitignore producers self-test (the check can actually fail)", cmd: ["node", "scripts/check-gitignore-producers.mjs", "--self-test"] },
   { name: "Guard-registry drift (coverage lists derived, not trusted)", cmd: ["node", "scripts/check-guard-registries.mjs"] },
   { name: "CI\u2194preflight drift (every proof runs in both places)", cmd: ["node", "scripts/check-ci-preflight-sync.mjs"] },
   // Pure static analysis of the Dockerfiles against pnpm-workspace.yaml — no

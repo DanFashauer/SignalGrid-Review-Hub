@@ -79,12 +79,11 @@ product's choice, not because the source blocked it. Enforcement on a real devic
 still additionally needs a supervised device (`native/ios/FLEET_MDM.md`); the license
 is only the control-plane half.
 
-The **license half** of this is a Mac-lane exercise (sim-request
-`2026-08-12-fleet-lab-real-source`): the Premium license is a credential the owner
-holds, so the Premium-enabled Fleet server runs on the owner's machine and
-`proof:live-fleet` runs there against it. The free-Fleet half is NOT Mac-only —
-the cloud lane's container can run Docker and has brought up a full live Fleet
-(see the cloud-lane run below). **CI stays fixture-only by rule** either way.
+The **license half** was written up as a Mac-lane exercise (sim-request
+`2026-08-12-fleet-lab-real-source`) because the key was a credential only the owner
+held. On 2026-09-06 the owner handed it to the cloud lane, which ran the Premium
+half in its own container (the section "Cloud-lane run, 2026-09-06" below); the
+key still lives out of tree. **CI stays fixture-only by rule** either way.
 
 ## Validating privately (optional, out-of-tree)
 
@@ -211,11 +210,11 @@ TLS is off here deliberately: this is a disposable local server on the loopback
 interface holding no real data. Point the same proof at a Fleet holding anything real
 only over TLS, with `NODE_EXTRA_CA_CERTS` as in the section above.
 
-One limit remains, stated so it is not mistaken for coverage: **teams are Fleet
-Premium**, so the team-policy branch of `getPolicies()` is UNVERIFIED and was
-deliberately left untouched — changing an unverified path because its sibling was
-wrong is a guess wearing a fix's clothes. Verifying it needs the owner's
-Premium-licensed lab (the Mac-lane exercise above).
+One limit stood here from 2026-08-12 to 2026-09-06: **teams are Fleet Premium**,
+so the team-policy branch of `getPolicies()` was UNVERIFIED and deliberately left
+untouched — changing an unverified path because its sibling was wrong is a guess
+wearing a fix's clothes. It is verified now (the Premium section below): the branch
+reached the right route and read only half of what came back.
 
 ## Cloud-lane run, 2026-08-17: real `osqueryd`, TLS, and the first genuine `pass`
 
@@ -246,6 +245,50 @@ policies, which means:
 All lab credentials in that run (admin password, MySQL passwords, the
 self-signed key, API tokens, enroll secret) are ephemeral in-container values,
 discarded with the container and never committed.
+
+## Cloud-lane run, 2026-09-06: Premium verified — teams, inherited policies, and the unlocked transfer endpoint
+
+The owner handed the trial key to the cloud lane on 2026-09-06, so the "Mac-lane
+exercise" above stopped being Mac-only: the cloud container brought up the same
+stack (`mysql:8` + `redis:7` + `fleetdm/fleet:v4.89.2` behind the per-run TLS
+cert, real `osqueryd`) with `FLEET_LICENSE_KEY` passed to the SERVER ONLY — the key
+lives in a session scratch file outside the tree and appears in no commit, log or
+result. The lab's outbound traffic was blocked at the container firewall for the
+run: Fleet Premium does not let usage statistics be switched off
+(`server_settings.enable_analytics` stayed `true` after a PATCH to `false`), so the
+block is what keeps a licensed lab from phoning home.
+
+What the server said, verbatim from `GET /api/v1/fleet/config`:
+
+```
+"license": {"tier":"premium","organization":"signalgrid.app","device_count":10,
+            "expiration":"2026-09-16T18:57:56Z","managed_cloud":false}
+```
+
+What was measured, and what changed because of it:
+
+| Surface | Free (measured 2026-08-12/17) | Premium (2026-09-06) | Consequence |
+| --- | --- | --- | --- |
+| `POST /api/v1/fleet/teams` | refused (teams are Premium) | **200**, team id 1 | the team branch of `getPolicies()` became verifiable |
+| `GET /api/v1/fleet/teams/{id}/policies` | unreachable | **200**, body has TWO keys: `policies` AND `inherited_policies` — and for a team with no policies of its own the `policies` key is OMITTED, not `[]` (caught by the section's first run) | the adapter read `policies` only, so a team-scoped catalogue silently omitted every global policy the team inherits — fewer policies than Fleet applies to the host. **Fixed**: the team branch now returns own ∪ inherited, asserted in `proof:live-fleet` section 11 (own read, inherited read, count equals the union). |
+| `POST /api/v1/fleet/hosts/transfer` | **422** → connector fails closed | **200**, host `team_id` becomes 1 | the stronger boundary test the trial was wanted for: Fleet now says YES, and SignalGrid still has no way to ask — the proof asserts that neither the telemetry adapter nor `@workspace/fleet-connector` exposes a transfer / move / assign / enforce member. On Free that refusal could have been Fleet's; here it is the product's. |
+| team-scoped policy on the live agent | — | `fail` within one policy cycle; host `compliant: false` through the team-configured adapter | fail-closed survives teams |
+| `proof:live-fleet` | 37/37 | **52/52** — the 37 Free assertions plus 15 in the Premium section (section 11; it skips loudly on a Free server or without `FLEET_LAB_WRITE_OK=true`, and a skip is printed, never counted — the summary line names the tier and whether the section ran) | one proof, two tiers, the tier named in its output |
+| `proof:live-fleet-workflow` | 21/21 | **21/21** with the live host inside the team | the decision path is indifferent to team membership, as it should be |
+
+The Premium section WRITES to the lab (a team, a team policy, one transfer, then
+the transfer back), so it demands `FLEET_LAB_WRITE_OK=true` like the workflow
+proof's flip section; `scripts/run-live-lanes.sh` sets it for the lab it minted
+itself and passes `FLEET_LICENSE_KEY` through to the server when the caller has
+it in the environment — it is never read from a file in the tree.
+
+What Premium did NOT change, restated so the trial is not mistaken for a
+capability: SignalGrid still supplies evidence and never actuates. The transfer
+endpoint being unlocked is a fact about Fleet; on-device enforcement still needs
+a supervised device (`native/ios/FLEET_MDM.md`), and this repository's public
+packages carry no write path to Fleet at all. The trial's clock: the key
+expires 2026-09-16; after that the section skips by tier and the Free
+assertions stand alone.
 
 ## proof:live-fleet-workflow — the live host reaches a real verdict (2026-08-18)
 

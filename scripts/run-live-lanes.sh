@@ -137,6 +137,20 @@ REQCNF
     chmod 755 "$FLEET_TLS_DIR"
     chmod 644 "$FLEET_TLS_DIR/fleet.key" "$FLEET_TLS_DIR/fleet.crt"
     E="-e FLEET_MYSQL_ADDRESS=sg-fleet-mysql:3306 -e FLEET_MYSQL_DATABASE=fleet -e FLEET_MYSQL_USERNAME=fleet -e FLEET_MYSQL_PASSWORD=fleet -e FLEET_REDIS_ADDRESS=sg-fleet-redis:6379 -e FLEET_SERVER_CERT=/fleet-tls/fleet.crt -e FLEET_SERVER_KEY=/fleet-tls/fleet.key"
+    # Fleet Premium (teams, the transfer endpoint) needs a licence key on the SERVER.
+    # Read from the caller's environment only — never from a file in this tree — and
+    # passed straight through; the proof reads the tier the server actually reports
+    # and runs its Premium section only when that says premium. The lab this script
+    # mints is disposable by construction, so it is also marked writable for the
+    # proofs' write-bearing sections (a team, a policy, one host transfer and back).
+    # Verified 2026-09-06 (cloud lane, the owner's trial key, Fleet 4.89.2) — see
+    # docs/FLEET_LIVE_INTEGRATION.md. Note: Premium keeps usage statistics ON
+    # (enable_analytics cannot be set false); block the lab's egress if that matters.
+    if [ -n "${FLEET_LICENSE_KEY:-}" ]; then
+      E="$E -e FLEET_LICENSE_KEY=$FLEET_LICENSE_KEY"
+      export FLEET_LAB_WRITE_OK=true
+      echo "   licence: FLEET_LICENSE_KEY present in the environment (passed to the server; the proof reports the tier)"
+    fi
     # The version the 30 assertions were established against, overridable for a
     # deliberate upstream-drift check. See scripts/lib/container-engine.sh.
     FLEET_IMG="${FLEET_IMAGE:-$SG_IMAGE_FLEET}"

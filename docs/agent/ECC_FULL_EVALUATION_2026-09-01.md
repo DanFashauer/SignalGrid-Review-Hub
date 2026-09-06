@@ -36,7 +36,7 @@ publishable content).
 | Suite | Result |
 | --- | --- |
 | `./validate-sim-macos.sh` (every `proof:*`) | the 2026-09-01 request run: `proofs PASS validate-sim-macos.sh green` (`artifacts/sim-results/2026-09-01-ecc-full-evaluation.json`, operation `everything`, clean tree at `45cdecff`) |
-| `node scripts/preflight.mjs` | `Preflight PASSED — everything it runs is green.` — 245 gates on 2026-09-04 (`11a1110e` tree); re-run on the Ponytail-cut branch on 2026-09-05, result recorded in that branch's commit |
+| `node scripts/preflight.mjs` | `Preflight PASSED — everything it runs is green.` — 245 gates on the 2026-09-05 `11a1110e` tree (an earlier revision of this row dated the SHA 2026-09-04; `git log --format=%cd --date=iso -1 11a1110` → 2026-09-05 00:53:16 -0400, corrected 2026-09-06; today the parity gate counts 352 preflight gates — `node scripts/check-preflight-ci-parity.mjs`, 2026-09-06); re-run on the Ponytail-cut branch on 2026-09-05, result recorded in that branch's commit |
 | `pnpm run verify:breadth` | `Breadth lane PASSED — 56 breadth proofs green` — 2026-09-04 and again 2026-09-05 on the cut branch |
 | `pnpm --filter @workspace/api-server run test:api` | runs inside preflight's api gate; the `everything` run above reports `api PASS test:api green` |
 
@@ -114,7 +114,16 @@ limiter.
   `lib/webauthn/src/webauthn/store.ts:378-380, 448-449`;
   `lib/webauthn/src/stepUpStore.ts:190-191, 206-208`) — all six already fixed, each
   carrying the `scripts/check-nan-fail-open.mjs` marker, and that gate's self-test
-  enumerates this class. HELD.
+  enumerates this class. HELD. *Corrected 2026-09-06 (Batch Y review): the census
+  above says six and lists seven ranges; the count is derived, not remembered —
+  eight marked sites in these three files as of 2026-09-06
+  (`grep -c "check-nan-fail-open" lib/webauthn/src/webauthn/server.ts lib/webauthn/src/webauthn/store.ts lib/webauthn/src/stepUpStore.ts`
+  → 3, 3, 2) and twenty-five estate-wide
+  (`git grep -c "check-nan-fail-open" -- lib artifacts native | awk -F: '{s+=$2} END{print s}'`
+  → 25). The site the census skipped is `lib/webauthn/src/webauthn/store.ts:498`,
+  inside `createStepUpSession` (:489) — the function of open finding 3.1 #1. Its
+  expiry guard is marked and in place; the open finding there is the dual-write,
+  not this class. HELD stands on eight, not six.*
 - WebAuthn `attested` (`lib/webauthn/src/webauthn/verify.ts:259-290`) can be true from a
   self-signed leaf, and nothing reads it: registration gates on `ok` plus rpId/UP/UV
   (`lib/webauthn/src/webauthn/server.ts:242-253`). Info, not open.
@@ -264,7 +273,7 @@ that branch, quoted in its commit.
 
 ## 6. Validate
 
-- `node scripts/preflight.mjs` → `Preflight PASSED — everything it runs is green.` (245 gates, 2026-09-04 mainline tree)
+- `node scripts/preflight.mjs` → `Preflight PASSED — everything it runs is green.` (245 gates, the 2026-09-05 `11a1110e` mainline tree — see §2 for the date correction)
 - `pnpm run verify:breadth` → `Breadth lane PASSED — 56 breadth proofs green` (2026-09-04 and 2026-09-05)
 - iOS: `** TEST SUCCEEDED **`, `Executed 76 tests, with 0 failures` (2026-09-05, twice)
 - Stage 3: 0 Critical, 0 High, 0 Medium, 3 Low (unreachable) — none held; all filed

@@ -8,7 +8,7 @@ The preferred strategic path preserves the founder's CEO, product leadership, or
 
 ## Control requirements
 
-- Preserve the operational trust orchestration thesis for shared, mobile, and frontline environments.
+- Preserve the product thesis as `docs/PURPOSE.md` §2 states it: SignalGrid connects the systems a building already runs into one grid that decides and acts on the person's behalf across door, device, room and app; no category label is ratified (DR-019/DR-020).
 - Preserve product quality, user experience, and evidence discipline.
 - Keep high-risk actions simulated, constrained, or approval-required unless separately validated under private/sandbox controls.
 - Keep existing enterprise systems as systems of record.

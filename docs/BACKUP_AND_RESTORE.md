@@ -121,7 +121,7 @@ The backup manifest is the other half of the answer: it records the audit head h
 > **DO NOT run `proof:audit-ledger-pg` against a restored database.** An earlier
 > revision of this page told you to, and doing so destroys the ledger you just
 > restored: the proof's first statement is `DROP TABLE IF EXISTS audit_ledger`
-> (`scripts/src/audit-ledger-pg-proof.ts:46`). It is a CI proof that builds and tears
+> (`scripts/src/audit-ledger-pg-proof.ts:51`). It is a CI proof that builds and tears
 > down its own table on a throwaway database. `db:verify-ledger` is the operator tool.
 
 ## Export the chain out of custody

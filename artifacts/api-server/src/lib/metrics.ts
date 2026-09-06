@@ -160,15 +160,31 @@ export const auditEventsTotal = new Counter(
   "signalgrid_audit_events_total",
   "Route-level audit events appended to the durable ledger, by event type.",
 );
-const up = new Gauge("signalgrid_up", "1 if the API process is serving.");
-up.set(1);
-const startedAtMs = { v: 0 }; // set on first render to avoid Date.now at import
+/** 1 once the process is SERVING, which is a different fact from "this module was
+ *  imported" — and the module was where it used to be set, at import, before
+ *  `app.listen`. A gauge whose only reachable value is the healthy one is a green
+ *  light wired to the switch rather than to the circuit, and the HELP text below
+ *  says "serving". `markServing()` is called from the listen callback in index.ts,
+ *  so the 0 is real for as long as the process is not listening. */
+const up = new Gauge("signalgrid_up", "1 if the API process is serving (set when the listener is bound).");
+up.set(0);
+
+/** Called from `app.listen`'s callback once the socket is bound. */
+export function markServing(): void {
+  up.set(1);
+}
+
+/** Uptime comes from `process.uptime()`, which is monotonic, needs no wall clock,
+ *  and is on no decision path. The previous implementation started its clock on the
+ *  FIRST SCRAPE, so the metric reported time-since-a-scraper-arrived: always 0 on
+ *  the first scrape however old the process was, and an alert on
+ *  `signalgrid_process_uptime_seconds < N` (the restart-loop alert this metric
+ *  exists for) fired once per new scraper and never for an actual restart. */
 const processUptime = new Gauge("signalgrid_process_uptime_seconds", "Process uptime in seconds.");
 
 /** Render the full metrics registry in Prometheus text format. */
-export function renderMetrics(nowMs: number): string {
-  if (startedAtMs.v === 0) startedAtMs.v = nowMs;
-  processUptime.set(Math.max(0, (nowMs - startedAtMs.v) / 1000));
+export function renderMetrics(): string {
+  processUptime.set(Math.max(0, process.uptime()));
   return [
     up.render(),
     processUptime.render(),

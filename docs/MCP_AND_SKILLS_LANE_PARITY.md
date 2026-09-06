@@ -15,8 +15,9 @@ either lane.**
 - **Skills** — everything under `.claude/skills/` is tracked, so a pull gives a
   lane every skill. The count is derived, not hardcoded:
   `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`
-  (25 tracked skill directories at time of writing — 14 vendored obra/superpowers
-  skills plus 11 first-party, per `.claude/skills/VENDORED.md`). Nothing needs
+  (26 tracked skill directories as of 2026-09-06 — 14 vendored obra/superpowers
+  skills plus 12 first-party, per `.claude/skills/VENDORED.md`; the command above is
+  the derivation, and this said 25 = 14 + 11 before that date). Nothing needs
   installing; a pull is the whole mechanism.
 - **Agents** — everything under `.claude/agents/` is tracked too. Derived count:
   `ls .claude/agents/*.md | wc -l` (13 dispatchable agents at time of writing),

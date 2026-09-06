@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Signal Source Catalog organizes potential inputs into SignalGrid's Operational Trust Orchestration model. It is a public-safe, documentation-only roadmap for candidate signal sources, ownership layers, normalized SignalGrid fields, decision impact, and future connector priority.
+The Signal Source Catalog organizes potential inputs into SignalGrid's decision model. SignalGrid connects the systems a building already runs — access control, identity, device management, location, applications, ticketing — into one grid that decides and acts on the person's behalf (`docs/PURPOSE.md` §2 owns that sentence; DR-019/DR-020 ratified no category label). It is a public-safe, documentation-only roadmap for candidate signal sources, ownership layers, normalized SignalGrid fields, decision impact, and future connector priority.
 
 This catalog is intended to help reviewers see how useful enterprise signals could be mapped into deterministic trust decisions without adding live integrations, credentials, tenant data, customer data, PHI, PII, or production-specific assumptions.
 

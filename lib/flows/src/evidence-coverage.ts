@@ -52,8 +52,10 @@ export type SourcePlane =
 // power-set sweep, which reported 512 estates where only 128 were distinct.
 //
 // They are gone rather than wired up because the honest reason is a MODEL BOUNDARY:
-// those planes feed `posture-composition` (38 signal kinds), not the 18-axis
-// `DecisionEvidence` struct this report is about. A plane belongs here only when it
+// those planes feed `posture-composition` (38 signal kinds), not the
+// `DecisionEvidence` struct this report is about (the axis count is printed by
+// `proof:evidence-coverage` as `figures=axes=…`; it was 18 when this was written and
+// three axes were missing from it at the time). A plane belongs here only when it
 // answers one of THESE axes. Adding a `dex` axis is a real option later; declaring the
 // plane without one was the unearned affirmative.
 
@@ -209,6 +211,44 @@ export const EVIDENCE_AXES: readonly EvidenceAxis[] = [
     id: "badgeBinding",
     question: "Is the badge that started this session still present?",
     answerableBy: ["badge_custody", "physical_access"],
+    dayOneQuiet: true,
+  },
+  {
+    id: "managementHealthState",
+    question: "Is the management plane that reports on this device itself healthy?",
+    // The MDM/UEM's OWN health — enrollment live, check-ins fresh, policy on baseline.
+    // Only the plane being graded can report it, which is the point: an estate without
+    // an MDM has no answer, and an MDM that has stopped answering looks the same as one
+    // that says "fine" unless somebody asks this question separately.
+    answerableBy: ["device_management"],
+    // MEASURED against the live engine below. The active rule matches only the
+    // AFFIRMATIVE `broken`; `unknown` stays quiet by design (adding the family could not
+    // change an existing decision), which is exactly what makes it a silent hole on an
+    // estate that cannot answer it.
+    dayOneQuiet: true,
+  },
+  {
+    id: "localAuthorityState",
+    question: "May this device act on its own authority right now — and did it ever establish that authority since it last booted?",
+    // The management agent's device state report is the channel that carries it: whether
+    // the protected store is readable, whether a human has authenticated since restart,
+    // and whether the offline grant is still live. Stated precisely, because the
+    // difference matters to a prospect reading this row: `device_management` is the plane
+    // that COULD supply the report, not a claim that a stock MDM emits these fields
+    // today.
+    answerableBy: ["device_management"],
+    // MEASURED. `unverified` — the default until a connector emits it — still grants;
+    // only the affirmative `withheld` restricts. seed.ts pins both.
+    dayOneQuiet: true,
+  },
+  {
+    id: "dockEvidenceFreshness",
+    question: "How old is the dock evidence the custody, charge and tamper answers rest on?",
+    // Derived by the core from the dock-family signals' own freshness rather than
+    // sourced, exactly like `criticalSignalsPresent` below. Listed for the same reason:
+    // it is a field of `DecisionEvidence`, and a coverage report whose denominator omits
+    // a field of the struct it claims to enumerate is a report with a wrong denominator.
+    answerableBy: [],
     dayOneQuiet: true,
   },
   {

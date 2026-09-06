@@ -338,6 +338,27 @@
     "nothing answers[^.\\n]{0,80}change window"
    ],
    "$scope": "docs/**/*.md except this registry and docs/agent/EVIDENCE.md; a sentence in the past tense that names the date it was corrected is not a denial"
+  },
+  {
+   "id": "one-pager-mdm-uem-audience-quote",
+   "claimed": "docs/EXECUTIVE_ONE_PAGER.md names 'MDM/UEM vendors exploring orchestration opportunities' as an audience, and the Smplify founders are that audience",
+   "assertedBy": "docs/research/SMPLIFY_DESIGN_STUDY.md (the 'who they are' paragraph) and docs/INTAKE_LEDGER.md row 92, each quoting the other's phrase as the one-pager's",
+   "assertedOn": "2026-08-24",
+   "whyItHappened": "A quotation attributed to a named file that the file never carried: the phrase was coined in the intake row and the design study cited it back as the one-pager's own words. The one-pager's 'Who it is for' is the DR-012 lean-IT segment (roughly 75-1,000 employees, 1-10 in IT) plus design partners and pre-seed investors; an MDM/UEM vendor is not on it. A multiline-flattened probe of all 108 lines returned false for every fragment of the phrase (twenty-third audit round, 2026-09-06). A quotation is a claim about a file, and nothing anchored it.",
+   "refutation": {
+    "kind": "file_contains",
+    "file": "docs/EXECUTIVE_ONE_PAGER.md",
+    "contains": "limited IT staff or limited resources",
+    "paths": [
+     "docs/EXECUTIVE_ONE_PAGER.md",
+     "docs/research/SMPLIFY_DESIGN_STUDY.md"
+    ]
+   },
+   "denials": [
+    "MDM/UEM vendors exploring orchestration opportunities",
+    "exploring orchestration opportunities[^.\\n]{0,40}one-pager",
+    "one-pager names[^.\\n]{0,60}MDM/UEM vendors"
+   ]
   }
  ]
 }

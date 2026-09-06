@@ -3,9 +3,10 @@
 **Date: 2026-09-01. Method: an independent six-dimension evaluation (build,
 tests, security-adversarial, decision-core, claims, operational readiness), each
 dimension read the real code and cited file:line; the severe findings were then
-adversarially re-verified against the tree. An ECC full-evaluation pass is queued
+adversarially re-verified against the tree. An ECC full-evaluation pass was queued
 to the Mac lane in parallel (`artifacts/sim-requests/2026-09-01-ecc-full-evaluation.json`)
-so two independent verdicts can be compared. This is a snapshot of what the code
+so two independent verdicts could be compared; it landed 2026-09-05 and the
+comparison is `docs/agent/ECC_FULL_EVALUATION_2026-09-01.md` §7. This is a snapshot of what the code
 does today — not a certification.**
 
 ## The one-paragraph verdict
@@ -14,7 +15,10 @@ SignalGrid is an **unusually rigorous, unusually honest engineering demonstrator
 with a real persistence spine and no security bypass found** — and it is **not
 yet a system that decides about a real customer's estate.** Those are both true,
 and the distance between them is well-defined and largely self-declared. The hard
-parts are done: the decision core is deterministic and fail-closed, 139 proofs
+parts are done: the decision core is deterministic and fail-closed, 140 proofs
+(the `proof:*` count on 2026-09-01 — an earlier revision said 139, wrong by one on
+the day; 144 as of 2026-09-06 —
+`node -e "console.log(Object.keys(require('./package.json').scripts).filter(k=>k.startsWith('proof:')).length)"`)
 each assert something that can fail, every surface builds, and an adversarial read
 of the auth and decision paths found no auth bypass, no tenant crossing, and no
 fail-open. What remains is not more of the same — it is the set of things that
@@ -88,9 +92,16 @@ From the operational-readiness read and the launch profile's own declared
 7. **Runtime enforced-vs-observed status.** No route reports, per signal kind,
    what the running server actually enforces. (gap `runtime-launch-status`.)
 
-Items 1–7 are now tracked as backlog rows. Six of the seven are self-declared in
-the launch profile already — the evaluation confirms the repo's own accounting is
-honest, which is itself the strongest maturity signal here.
+Items 1–7 are now tracked as backlog rows. Five of the seven were self-declared in
+the launch profile when this was written (2026-09-01: `non-demo-core-constructor`,
+`step-up-answerability`, `device-management-health`, `assist-wire-unserved`,
+`runtime-launch-status`); four are today (`assist-wire-unserved` retired in item 6;
+as of 2026-09-06 `node -e "import('./scripts/launch-profile.mjs').then(m=>console.log(m.GAPS.map(g=>g.id)))"`
+lists the other four). Items 4 and 5 are declared in DR-003 and
+`docs/SECRET_MODEL.md`, not in the profile. An earlier revision said "six of the
+seven" — more than the profile's whole gap population on the day. With the count
+corrected, the point stands: the repo's own accounting matches the independent
+read, which is itself a strong maturity signal.
 
 ## The sequence you asked for, mapped to reality
 
@@ -98,15 +109,18 @@ Build → test → secure → review → brute-force → test again → validate
 what is actually true today:
 
 - **Build** — done. Every surface compiles; CI mirrors it.
-- **Test** — done for what exists. `preflight` + `verify:breadth` green; 139
-  falsifiable proofs. Coverage is honest about what it does *not* cover.
+- **Test** — done for what exists. `preflight` + `verify:breadth` green; 140
+  falsifiable proofs on 2026-09-01 (144 as of 2026-09-06, same command as above). Coverage is honest about what it does *not* cover.
 - **Secure** — strong on code (no bypass found), with one real gap: secrets
   management (#4). Security is not a one-time pass; the gates keep it standing.
-- **Review** — this evaluation, plus the ECC pass queued to the Mac lane. Compare
-  the two verdicts when ECC's lands; a disagreement is a finding.
+- **Review** — this evaluation, plus the ECC pass queued to the Mac lane. ECC's
+  pass landed 2026-09-05; the comparison is
+  `docs/agent/ECC_FULL_EVALUATION_2026-09-01.md` §7 (a disagreement is a finding —
+  §7 names one: how far the OpenAPI document is the client-facing contract).
 - **Brute-force / adversarial** — the paper attack is done (no live infra exists
   to attack). Real fuzz (Schemathesis against `/v1`, which the evidence-toolchain
-  skill blesses) is part of the queued ECC sequence on the Mac lane.
+  skill blesses) was part of the queued ECC sequence on the Mac lane; it ran
+  2026-09-05 (`docs/agent/ECC_FULL_EVALUATION_2026-09-01.md` §4).
 - **Test again / validate** — `preflight` + `verify:breadth` are green as of this
   commit; re-run after each completion-list item lands.
 

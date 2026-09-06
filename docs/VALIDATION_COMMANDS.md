@@ -7,8 +7,14 @@ Run these commands from the repository root before opening or updating a standar
 ```bash
 node scripts/status-summary.mjs            # fast gates (seconds)
 node scripts/status-summary.mjs --full     # + preflight (typecheck, build, all proofs, browser E2E)
-node scripts/status-summary.mjs --md > STATUS.md
+pnpm run status -- --write                 # writes docs/STATUS.md, the tracked copy pinned to a commit
 ```
+
+(An earlier version of this block said `node scripts/status-summary.mjs --md > STATUS.md`.
+The script reads only `--full` and `--write` — `grep -n argv scripts/status-summary.mjs` —
+so that line produced an untracked repo-root `STATUS.md` holding the plain report: a
+second, unmanaged copy of a file whose whole design is a staleness tell. The same phantom
+flag still sits in the script's own header comment, `scripts/status-summary.mjs:7`.)
 
 Emits one paste-ready report of whether the whole system is consistent and current:
 repo state versus the base branch, every fast gate, the live-sync manifest and

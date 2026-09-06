@@ -525,6 +525,28 @@ jobs:
         run: node scripts/check-index-banner-parity.mjs --self-test
       - name: "Index\u2194banner parity (a bannered doc is not described alive in INDEX.md)"
         run: node scripts/check-index-banner-parity.mjs
+      # One level wider again: the index is not the only page that routes a reader to a
+      # dead document. docs/research/PITCH_EXECUTION_PACK.md listed three "do not send
+      # from this file" documents in the present tense while docs/INDEX.md announced all
+      # three honestly, so the index gate was green over it.
+      - name: "Cross-doc banner parity self-test (the gate must be able to fail)"
+        run: node scripts/check-cross-doc-banner-parity.mjs --self-test
+      - name: "Cross-doc banner parity (no live doc cites a bannered doc as live)"
+        run: node scripts/check-cross-doc-banner-parity.mjs
+      # Two published demo pages and the architecture page carried no deferred/Limited-GA
+      # scope statement while the other five published pages did (twenty-third round).
+      # Scope is derived from the cp lines in pages.yml, so a new published page joins by itself.
+      - name: "Published-page scope banner self-test (the gate must be able to fail)"
+        run: node scripts/check-published-page-scope-banner.mjs --self-test
+      - name: "Published-page scope banner (every page pages.yml publishes states its deferred scope)"
+        run: node scripts/check-published-page-scope-banner.mjs
+      # REPORTED, not gated. Exits 0 on whatever it finds and 1 only when its own
+      # derivation breaks: docs/PURPOSE.md section 2 owns the product sentence (DR-020),
+      # and a fatal version would gate the whole corpus on prose taste.
+      - name: "Product-sentence drift self-test (the detector must find the planted sentences)"
+        run: node scripts/check-product-sentence-drift.mjs --self-test
+      - name: "Product-sentence drift REPORT (never fatal on findings)"
+        run: node scripts/check-product-sentence-drift.mjs
       # The #336 self-check tooling, wired 2026-08-31 after its fail-closed
       # inversions were fixed. Latent standalone scripts are how check:postman
       # rotted out of every lane; these fail the PR now.

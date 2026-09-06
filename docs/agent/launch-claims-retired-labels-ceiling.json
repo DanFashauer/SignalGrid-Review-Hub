@@ -1,16 +1,12 @@
 {
   "note": "DEBT CEILING for retired category labels in docs/**/*.md: the COUNT OF mentions that survive RETIRED_OK, the quote idiom, the avoid-list idiom and a superseded-history page banner. A RISE is fatal; a drop is recorded automatically. Never hand-edit; the gate writes it. docs/**/*.html is NOT here — it is at zero and gated hard.",
-  "retiredLabelMentions": 20,
-  "filesCarryingThem": 14,
+  "retiredLabelMentions": 12,
+  "filesCarryingThem": 7,
   "pagesExemptByBanner": 2,
   "worst": [
     {
       "file": "docs/research/SOCIAL_PLATFORM_MESSAGE_VARIANTS.md",
       "mentions": 5
-    },
-    {
-      "file": "docs/research/APPLE_OPEN_SOURCE_PLATFORM_STRATEGY.md",
-      "mentions": 2
     },
     {
       "file": "docs/research/LINKEDIN_POST_DRAFTS.md",
@@ -29,31 +25,7 @@
       "mentions": 1
     },
     {
-      "file": "docs/REALISTIC_LAUNCH_PLAN.md",
-      "mentions": 1
-    },
-    {
-      "file": "docs/REVIEW_CHECKLIST.md",
-      "mentions": 1
-    },
-    {
-      "file": "docs/SIGNALGRID_OPERATING_METHOD.md",
-      "mentions": 1
-    },
-    {
-      "file": "docs/SIGNALGRID_SECURITY_OPERATIONS_EVIDENCE_MODEL.md",
-      "mentions": 1
-    },
-    {
       "file": "docs/consolidation/HOME_REPO_README.md",
-      "mentions": 1
-    },
-    {
-      "file": "docs/research/FOUNDER_CONTROL_REQUIREMENTS.md",
-      "mentions": 1
-    },
-    {
-      "file": "docs/research/FOUNDER_STRATEGIC_OPTIONS.md",
       "mentions": 1
     },
     {

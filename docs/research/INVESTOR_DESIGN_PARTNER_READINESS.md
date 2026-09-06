@@ -16,4 +16,4 @@ SignalGrid v0.2 readiness is the transition from public-safe proof assets to a f
 
 ## Public-safe narrative
 
-SignalGrid is an operational trust control plane for frontline, shared-device, and mobile workflows. It normalizes signals from systems of record, decides an outcome, routes approved actions, audits evidence, and verifies expected results. It does not replace systems of record and does not claim production readiness, compliance certification, vendor endorsement, or unsupervised production remediation.
+SignalGrid connects the systems a building already runs — access control, identity, device management, location, applications, ticketing — into one grid that decides and acts on the person's behalf across door, device, room and app (`docs/PURPOSE.md` §2; no category label is ratified — DR-019/DR-020). It normalizes signals from systems of record, decides an outcome, routes approved actions, audits evidence, and verifies expected results. It does not replace systems of record and does not claim production readiness, compliance certification, vendor endorsement, or unsupervised production remediation.

@@ -7,7 +7,9 @@ what real APIs actually expose, instead of from an invented shape.
 
 > **Non-claims.** Nothing here is a partnership, endorsement, certification,
 > integration, procurement recommendation, or vendor ranking. No live vendor call is
-> made anywhere in this repository — every connector is fixture-backed and gated.
+> made **by default** anywhere in this repository — every connector is fixture-backed and
+> gated behind tier + `SIGNALGRID_LIVE_INTEGRATIONS=true` + a credential (the `proof:live-*`
+> lanes exist and refuse without all three; `docs/FLEET_LIVE_INTEGRATION.md`).
 > Vendor names appear as *public API surfaces studied*, nothing more. Where an entry
 > says "unverified", it has not been confirmed against primary documentation and must
 > not be treated as fact.

@@ -11,7 +11,7 @@ SignalGrid v0.2 becomes credible when it narrows from broad demo coverage to one
 - one real connector path: Microsoft Entra ID plus Microsoft Intune, starting sandbox/mock and read-only;
 - one secure tenant model: tenant-scoped data, authorization, audit, and public-safe demo mode;
 - one pilot/customer story: a design-partner workflow with explicit success criteria;
-- one investor narrative: an operational trust control plane for frontline, shared-device, and mobile workflows.
+- one investor narrative: SignalGrid connects the systems a building already runs into one grid that decides and acts on the person's behalf across door, device, room and app (`docs/PURPOSE.md` §2; no category label is ratified — DR-019/DR-020).
 
 Core product question: **Should this identity, on this device, in this workflow, in this context, be allowed to continue right now?** Every decision must eventually explain why it happened, which signals were used, which policy version applied, what system supplied evidence, what action was taken, and who or what can review it later.
 

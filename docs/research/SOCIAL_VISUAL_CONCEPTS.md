@@ -1,5 +1,7 @@
 # Social Visual Concepts
 
+> **SUPERSEDED 2026-09-06 — do not post or send from this file.** Pre-DR-011 category-building visual concepts whose captions carried the retired label until 2026-09-06 (see the dated note under Concept 2); the live outbound surface is `docs/outreach/` (claim-scanned on every push). Kept for provenance only; `scripts/check-send-copy-banner.mjs` holds the rule.
+
 These concepts are for static social graphics or simple carousel frames. Keep them minimal, enterprise-grade, and public-safe.
 
 ## Visual style

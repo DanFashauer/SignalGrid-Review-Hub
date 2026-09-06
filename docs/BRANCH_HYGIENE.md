@@ -228,6 +228,8 @@ surface retires its evidence rather than erasing it.
 
 The tiers themselves are unaffected as **deployment environments**:
 `SIGNALGRID_TIER`, `config/tiers/<tier>.env.example` and the fixture-safe rule in
-`docs/BRANCHING_AND_ENVIRONMENTS.md` all still hold. What is gone is the
+`docs/BRANCHING_AND_ENVIRONMENTS.md` all still hold — read that page's branch
+table as historical intent, since its own banner records that the branch half of
+the model no longer exists. What is gone is the
 branch-per-tier promotion flow. Reinstating it means recreating the four branches
 *and* a promotion workflow — an owner decision, not a side effect of this sweep.

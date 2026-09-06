@@ -53,8 +53,34 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               unchanged.
 LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
               M (#466), N (#468), O (#470), P (#471), Q (#473), R (#474) and
-              S (#476), T (#477), U (#480), V (#482) and W (#484) LANDED.
-              Batch X (twenty-second round, on its PR) repaired docs/company's
+              S (#476), T (#477), U (#480), V (#482), W (#484) and X (#485) LANDED.
+              Batch Y (twenty-third round, on its PR) read four of the six
+              partial surfaces WHOLE - docs/research, docs/agent, artifacts/
+              api-server and every loose docs/* file - with six independent
+              fail-closed audits (~90 findings) and fixed them with seven
+              agents: the served /console classified signal values by
+              substring and painted a restrict cause green (now an exact map
+              from the core's unions, driven through all nineteen scenarios
+              by the api suite); stepUpAnswerable was a literal under
+              review-demo (now derived from the mounted router); the load
+              gate passed on zero requests (floored); a blank METRICS_TOKEN
+              served /metrics open (refused at boot); the daily live-sync
+              keeper had fired for forty-one days and delivered nothing
+              (trigger disabled, retired in the registry, duties in the
+              hourly steward, and a never-fired routine with no status is
+              now fatal); the retired-label rule read a possessive as a
+              quote; the room console's sigClass("broken") returned ok and
+              its vector list is now derived from types.ts; the evidence-
+              coverage page lacked the two launch-family axes (21 now, proof
+              asserts both directions); PITCH_EXECUTION_PACK routed readers
+              to do-not-send docs (cross-doc banner parity gate); a
+              fabricated one-pager quotation is a FALSE_CLAIMS entry; three
+              new gates (cross-doc banner parity, published-page scope
+              banner, product-sentence drift REPORT) and four extended
+              (launch-claims roots from every Dockerfile, derived-figure
+              companion rule, scheduled-routines retirement/launchd/
+              tolerance, room-console vectors). api suite 384 → 409.
+              Batch X (twenty-second round, #485) repaired docs/company's
               twelve defects with every figure re-derived first: the investor
               one-pager no longer says the outreach wave is "in flight" or the
               pilot program "live" (an {AT-USE} bracket names the outreach log
@@ -545,10 +571,14 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land Batch X (on its PR), then (1) the six surfaces the
-              ledger still marks partial
-              (docs/*, docs/agent, docs/inspiration, docs/research,
-              artifacts/api-server, scripts) - read them, not their indexes;
+NEXT ACTION: cloud: land Batch Y (on its PR), then (1) the two surfaces the
+              ledger still marks partial - scripts (411 files; read the gates
+              nobody has opened whole, in chunks, the way the loose docs were)
+              and docs/inspiration's vendor-row bodies; owner decisions Batch
+              Y recorded rather than made: the custody backstop blind to five
+              custody axes (disclosed, pinned), NOT_COVERED credential
+              exposure resolving to monitor, a GAPS entry for connector
+              families unwired in the served core;
               (2) the console's remaining open items above (connector status
               rendered, the toaster, CATEGORY_ORDER derived, /sessions/:id
               linked) and Dashboard's chart-style deeper-path pending arms the

@@ -4,7 +4,7 @@
 //
 //   node scripts/status-summary.mjs           # fast gates (seconds)
 //   node scripts/status-summary.mjs --full    # + the heavy preflight (typecheck/build/proofs/E2E)
-//   node scripts/status-summary.mjs --md > STATUS.md
+//   node scripts/status-summary.mjs --write   # rewrites STATUS.md (there is no --md flag; docs/VALIDATION_COMMANDS.md carried one until 2026-09-06)
 //
 // WHY THIS EXISTS. A status report is only worth pasting if it cannot overstate.
 // This script therefore reports EXACTLY what it ran and nothing else: every gate is

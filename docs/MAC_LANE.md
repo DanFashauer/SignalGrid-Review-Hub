@@ -110,9 +110,12 @@ history already dates it.
 gates only. This suite is no longer quite service-free — it now provisions Redis for
 `proof:enrollment-race` — but it still does not run `durable-persistence` (Postgres),
 `deploy-stack` (Docker compose) or `secret-scan` (gitleaks), which remain Linux-CI
-only. Nor does it run `phase-pr-evidence`, a job neither this lane nor `preflight`
-covers; the full CI job set is larger than the six previously enumerated, and deriving
-that list mechanically instead of maintaining it by hand is tracked work.
+only. Nor does it run `phase-pr-evidence`. The full CI job set is larger than the six
+previously enumerated; deriving that list mechanically instead of maintaining it by
+hand was tracked work and is done — `scripts/lib/ci-jobs.mjs` (`enumerateCiJobs`,
+`uncoveredLines`) derives it from `.github/workflows/`, and `scripts/preflight.mjs:627`
+reads it, its comment naming `phase-pr-evidence` among the jobs the derivation
+recovered.
 
 **Neither tier proves on-device enforcement.** An app cannot grant device access,
 restrict other apps, make itself non-removable, or self-kiosk. Those are MDM/OS
@@ -294,7 +297,9 @@ tested host, so nothing local was imposing 1024.
 (`vendor/go.podman.io/buildah/define/types.go`) *does* define
 `RLimitDefaultValue = uint64(1048576)`. So on a recent Podman the web image may build
 with no flag at all — the `--ulimit` below is a compatibility measure, harmless where
-the default is already high. **Not verified on 6.x**, only read in its source.
+the default is already high. The 6.2.0-dev vendored constant is **not verified**, only
+read in its source; the flagless build itself IS verified on 6.0.2 — the 2026-08-08
+`3a3bbbe051d0` build above.
 
 Two changes fix it, and both are now in the repo:
 

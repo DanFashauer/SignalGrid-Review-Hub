@@ -126,17 +126,80 @@ try {
   // 1b — the integration constraint that is easy to get wrong, and that nothing
   // exercised before this file. registerVerifiedPrincipal calls requireTenant:
   // "an OIDC identity cannot conjure one". So OIDC_TENANT_MAP must point at a
-  // tenant that ALREADY EXISTS, and a map naming an absent tenant produces a
-  // 401 that looks exactly like a bad token. That cost a debugging round here;
-  // it should cost an operator a log line instead.
-  const unknownTenant = await get(sign(baseClaims({ tid: "idp-tenant-abc" }), {}));
-  check(
-    "a mapped-but-nonexistent internal tenant is refused, not conjured",
-    // proven by the negative below: the map only carries IDP_TENANT -> INTERNAL_TENANT,
-    // so any other idp tenant is unmapped, and an internal tenant that does not
-    // exist cannot be reached at all through this path.
-    unknownTenant.status === 200 || unknownTenant.status === 401,
-  );
+  // tenant that ALREADY EXISTS.
+  //
+  // WHAT IT ACTUALLY ANSWERS, MEASURED (2026-09-06). This comment used to say the
+  // map naming an absent tenant "produces a 401 that looks exactly like a bad
+  // token". It does not: `requireTenant` (signalgrid-core/engine.ts) throws
+  // CoreError("not_found", 404), so the wire answer is 404 `not_found` with a
+  // message naming the tenant — which is the operator log line the old prose wished
+  // for, and the prose had never been run. Both answers refuse; only one is true, so
+  // the assertion pins the true one. The property that matters is unchanged: an OIDC
+  // identity whose mapped internal tenant does not exist is REFUSED, never conjured.
+  //
+  // THIS PROBE USED TO SEND THE WRONG TOKEN AND ACCEPT BOTH ANSWERS. It signed
+  // `tid: "idp-tenant-abc"` — byte-identical to IDP_TENANT, i.e. the MAPPED,
+  // EXISTING tenant, the same token as the passing positive case above — and then
+  // accepted `200 || 401`, so it never constructed the condition its name describes
+  // and could not have failed either way. The condition needs a SERVER whose map
+  // names an internal tenant the seed does not create, so one is spawned here, and
+  // the only accepted answer is 401.
+  {
+    const ABSENT_PORT = 5397;
+    const ABSENT_BASE = `http://localhost:${ABSENT_PORT}/api`;
+    const ABSENT_TENANT = "tenant_that_the_seed_never_creates";
+    const absentServer = spawn("node", [serverEntry], {
+      env: {
+        ...process.env,
+        PORT: String(ABSENT_PORT),
+        LOG_LEVEL: "silent",
+        OIDC_ISSUER: ISSUER,
+        OIDC_AUDIENCE: AUDIENCE,
+        OIDC_JWKS_URI: `${ISSUER}/jwks`,
+        OIDC_TENANT_MAP: JSON.stringify({ [IDP_TENANT]: ABSENT_TENANT }),
+        OIDC_ROLE_MAP: JSON.stringify({ "sg-operator": "operator" }),
+      },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      let absentReady = false;
+      const absentStart = Date.now();
+      while (Date.now() - absentStart < 20000) {
+        try { if ((await fetch(`${ABSENT_BASE}/healthz`)).ok) { absentReady = true; break; } } catch { /* not up */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      // NON-VACUITY. The assertion below is a refusal, and a server that never
+      // booted refuses everything — including for reasons that have nothing to do
+      // with tenant mapping.
+      check("the absent-tenant server becomes ready (so its 401 is a refusal, not a dead port)", absentReady === true);
+
+      const token = sign(baseClaims());
+      const absent = await fetch(`${ABSENT_BASE}/v1/context`, { headers: { authorization: `Bearer ${token}` } });
+      const absentBody = await absent.json().catch(() => null);
+      check(
+        "a mapped-but-nonexistent internal tenant is REFUSED, not conjured (404 not_found from requireTenant)",
+        absent.status === 404 && absentBody?.error === "not_found",
+        `got ${absent.status} ${JSON.stringify(absentBody?.error ?? null)}`,
+      );
+      check(
+        "...and the refusal names the absent tenant, so an operator reads the misconfiguration instead of debugging a token",
+        typeof absentBody?.message === "string" && absentBody.message.includes(ABSENT_TENANT),
+        `message was ${JSON.stringify(absentBody?.message ?? null)}`,
+      );
+      // POSITIVE CONTROL, and it is the whole reason the two servers share one
+      // issuer, one key and one set of claims: the SAME token authenticates against
+      // the server whose map names a tenant that exists. So the 401 above is the
+      // absent tenant and nothing else about the token.
+      const sameTokenElsewhere = await get(token);
+      check(
+        "...and that identical token is accepted where the map names a REAL tenant (so the 401 is the tenant, not the token)",
+        sameTokenElsewhere.status === 200,
+        `got ${sameTokenElsewhere.status}`,
+      );
+    } finally {
+      absentServer.kill("SIGTERM");
+    }
+  }
 
   // 2 — no fallback to a weaker credential
   const demo = await get("demo-owner-key");

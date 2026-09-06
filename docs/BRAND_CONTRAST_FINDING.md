@@ -14,9 +14,14 @@ the decision-state palette's source of truth is now this repository —
 `native/ios/EnterpriseShell/Services/DesignSystem.swift`, which must never
 diverge.
 
-**Still open under the ratified floor:** `allow` measures 4.32:1 on the dark
-card. The owner ratified values for deny only, so allow needs an owner
-proposal, queued with `brand-design`.
+**`allow` RESOLVED — DR-006, 2026-08-21.** The owner ratified the proposed
+re-tone: light `#3F6B52`, dark `#639779`, AA on both grounds
+(`native/ios/EnterpriseShell/Services/DesignSystem.swift`,
+`artifacts/signalgrid-web/src/index.css`; `pnpm run proof:decision-palette` —
+"AA everywhere. Exceptions: none." on 2026-09-06). Until 2026-09-06 this paragraph
+still read "Still open under the ratified floor: `allow` measures 4.32:1 on the dark
+card"; that measurement was of the pre-DR-006 tone and stays in the historical
+section below.
 
 The original finding follows, kept as the record that motivated the decision.
 

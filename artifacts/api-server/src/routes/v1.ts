@@ -57,10 +57,12 @@ router.use("/v1", v1RateLimiter, requireTenantContext, idempotencyReplay);
 
 // `assurance` is derived on every call rather than cached: a deployment that is
 // promoted, or has live integrations switched on, must not keep reporting the
-// posture it booted with.
+// posture it booted with. `req.app` is handed over because `stepUpAnswerable`
+// derives from the routes THIS process mounted — the live router stack, not a
+// list of paths written down somewhere.
 router.get("/v1/context", (req: Request, res: Response) => {
   const { principal, tenant } = core.context(token(req));
-  res.json(envelope(req, { principal, tenant, assurance: resolveAssurancePosture() }));
+  res.json(envelope(req, { principal, tenant, assurance: resolveAssurancePosture(req.app) }));
 });
 
 // The decision core stays pure/in-memory; when a durable store is configured

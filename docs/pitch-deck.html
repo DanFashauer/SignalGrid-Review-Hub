@@ -131,6 +131,11 @@
     <span class="num">05 / 11</span>
     <div class="kicker">See it — the demos do the talking</div>
     <h2>Live, clickable, public-safe.</h2>
+    <!-- These hrefs are the paths .github/workflows/pages.yml PUBLISHES, not the source filenames in docs/:
+         docs/embedded-host-app-demo.html -> embedded-demo.html, docs/embedded-desktop-demo.html -> desktop-demo.html,
+         docs/room-entry-console.html -> console.html (the workflow renames on copy into _site/). They resolve on
+         signalgrid.app and 404 from a clone or a raw GitHub view. Renaming a source file without updating pages.yml
+         AND this deck breaks them silently; nothing gates that coupling (recorded 2026-09-06). -->
     <div class="demos">
       <a class="demo" href="embedded-demo.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">The invisible flow (mobile clinical app)</span><br><span class="d">Open a chart friction-free; a controlled med order is held for a native gesture.</span></span><span class="go">open →</span></a>
       <a class="demo" href="desktop-demo.html" target="_blank" rel="noopener"><span class="dot"></span><span><span class="t">Cross-platform parity (macOS / Windows)</span><br><span class="d">The same flow in a NOC desktop app — a config push held for step-up, then confirm.</span></span><span class="go">open →</span></a>

@@ -77,9 +77,9 @@ erDiagram
     EvidenceSnapshot ||--o{ AuditEvent : "emits"
 ```
 
-> `PolicyTest` is being added to the core. It is included here as a child of
-> `Policy` / `PolicyVersion` so the model reflects the intended shape; see the
-> table below.
+> `PolicyTest` landed in the core (`lib/signalgrid-core/src/types.ts:607`), and
+> `GET /v1/policies/{id}/tests` is a `launch` route in `scripts/launch-profile.mjs`.
+> It is a child of `Policy` / `PolicyVersion`; see the table below.
 
 ## Entities
 
@@ -203,7 +203,7 @@ real secret is stored.
 | `connectorId` | `string` | Producing connector. |
 | `subjectType` | `SubjectType` | `device` \| `identity`. |
 | `subjectId` | `string` | The `Device` or `Identity` observed. |
-| `category` | `SignalCategory` | `identity_state` \| `device_compliance` \| `device_management` \| `device_encryption` \| `os_support` \| `posture_freshness` \| `custody_state` \| `charge_state` \| `battery_health` \| `tamper_state` \| `dock_state` \| `security_baseline` \| `badge_binding`. |
+| `category` | `SignalCategory` | `identity_state` \| `device_compliance` \| `device_management` \| `device_encryption` \| `os_support` \| `posture_freshness` \| `custody_state` \| `charge_state` \| `battery_health` \| `tamper_state` \| `dock_state` \| `security_baseline` \| `benchmark_selection` \| `shift_context` \| `badge_binding` \| `device_management_health` \| `local_authority`. Copied from `SIGNAL_CATEGORIES` (`lib/signalgrid-core/src/types.ts:329`), 17 values as of 2026-09-06 — `pnpm run proof:signalgrid-core` prints `categories=17`; this cell listed 13 before that date. |
 | `value` | `string \| number \| boolean \| null` | Normalized value. |
 | `observedAt` | `string` | When the source observed it. |
 | `freshness` | `Freshness` | `fresh` \| `stale` \| `expired` \| `missing` \| `unknown`. |
@@ -248,9 +248,9 @@ hold (logical AND); the engine is most-restrictive-wins and fail-closed.
 | `reasonCode` | `string` | Machine-readable reason emitted on match. |
 | `severity` | `Severity` | `low` \| `medium` \| `high` \| `critical`. |
 
-**PolicyTest** *(being added)* — a pinned assertion that a given evidence input
-produces an expected outcome under a specific policy version. Included here as a
-child of `Policy` / `PolicyVersion` so the model reflects its intended shape.
+**PolicyTest** (`lib/signalgrid-core/src/types.ts:607`) — a pinned assertion that a
+given evidence input produces an expected outcome under a specific policy version.
+A child of `Policy` / `PolicyVersion`; served by `GET /v1/policies/{id}/tests`.
 
 | field | type | notes |
 | ----- | ---- | ----- |
@@ -439,13 +439,13 @@ public-safe form. Correspondences:
 | `policies` | `Policy` | Named policy + active version pointer. |
 | `policy_versions` | `PolicyVersion` | Immutable, digested. |
 | `policy_rules` | `PolicyRuleSpec` | Embedded in the version. |
-| `policy_tests` | `PolicyTest` *(being added)* | Pinned assertions per version. |
+| `policy_tests` | `PolicyTest` | Pinned assertions per version (`lib/signalgrid-core/src/types.ts:607`). |
 | `decisions` | `Decision` | Immutable outcome. |
 | `decision_signal_evidence` | `EvidenceSnapshot` | Content-digested capture. |
 | `decision_explanations` | `Decision.explanation` | Denormalized onto the decision. |
 | `audit_events` | `AuditEvent` | Per-tenant digest chain. |
-| `remediation_actions` | *(not in the public core)* | Approval-gated, human-owned; outside this public-safe scope. |
-| `webhook_deliveries` | *(not in the public core)* | Delivery/egress belongs to the private production core. |
+| `remediation_actions` | `RemediationAction` | Approval-required and simulated-only (`approvalRequired: true`, `simulatedOnly: true` in `lib/signalgrid-core/src/remediation.ts`); approving records and simulates, never executes on a source system. Served by `GET /v1/remediation` and `POST /v1/remediation/:id/approve`. |
+| `webhook_deliveries` | `WebhookEndpoint` + `WebhookDelivery` | Simulated delivery with retry/backoff — no real HTTP request is ever made (`lib/signalgrid-core/src/webhooks.ts`). Served by `GET /v1/webhooks` and `GET /v1/webhooks/deliveries`. Real egress belongs to the private production core. |
 
 Consistent with `AGENTS.md`, entities tied to real credentials, live vendor
 calls, durable persistence, egress, and approval-gated remediation are

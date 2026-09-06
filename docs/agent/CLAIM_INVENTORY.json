@@ -2,7 +2,7 @@
  "generated": "2026-08-21",
  "derivation": "README.md + artifacts/signalgrid-web/src (pages + sections) + artifacts/{signalgrid-review,signalgrid-app,signalgrid-desktop,signalgrid-mobile-pwa}/src + docs/{fabric,room-entry}-console.html — the union of docs-sanity's app SCAN_PATHS plus README and the consoles; extraction: 9-agent workflow + completeness critic (web/README/consoles), 4-agent second pass (app trees, after review found the first derivation incomplete); corrections per docs/CLAIM_INVENTORY.md honesty note; README rows re-extracted 2026-09-06 against the 2026-09-01 rebuild (the 58 rows of 2026-08-21 kept and resolved — 57 quoted sentences the rebuild removed, one still present; 58 new rows, every quotation anchored by check-claim-inventory-anchors); five web surfaces (SignalTypes, Verticals, Differentiators, Outcomes sections and docs/fabric-console.html) re-extracted 2026-09-06 — 120 rows, every quotation anchored",
  "groundTruth": "scripts/launch-profile.mjs (DR-005 ratified v4; LAUNCH_PROFILE_VERSION is 5 under DR-023 — rows were classified against v4 on 2026-08-21)",
- "rowCount": 1201,
+ "rowCount": 1202,
  "counts": {
   "unsubstantiated": 263,
   "deferred": 315,
@@ -5402,7 +5402,7 @@
   },
   {
    "file": "docs/room-entry-console.html",
-   "line": "131",
+   "line": "196",
    "claim": "Scenario group headings presented as supported verticals — \"Smart hospital\", \"Warehouse\", \"Global fleet\"",
    "kind": "availability",
    "classification": "demo-only",
@@ -5440,7 +5440,7 @@
   },
   {
    "file": "docs/room-entry-console.html",
-   "line": "167",
+   "line": "232",
    "claim": "Rendered control — \"Complete step-up · badge tap\"",
    "kind": "capability",
    "classification": "deferred",
@@ -5449,7 +5449,7 @@
   },
   {
    "file": "docs/room-entry-console.html",
-   "line": "173",
+   "line": "238",
    "claim": "Panel heading — \"Signals evaluated\", listing per-signal vendor-shaped states (compliant / bound / drifted / stale / tampered) as though read from source systems",
    "kind": "capability",
    "classification": "demo-only",
@@ -5458,7 +5458,7 @@
   },
   {
    "file": "docs/room-entry-console.html",
-   "line": "183",
+   "line": "248",
    "claim": "Panel heading — \"Downstream orchestration\"",
    "kind": "capability",
    "classification": "demo-only",
@@ -10113,7 +10113,7 @@
    "claim": "\"`scripts/check-review-coverage.mjs` prints review\" — \"coverage beside every green preflight\"; \"nothing skips silently.\"",
    "kind": "availability",
    "classification": "launch",
-   "evidence": "Grounded: scripts/check-review-coverage.mjs exists and preflight runs it beside its self-test at scripts/preflight.mjs:418 (\"a green gate suite is not a reviewed codebase\"). \"A proof that refuses … exits 1 by name; nothing skips silently\": scripts/src/lib/db-guard.ts:19-25 (named REFUSING, exit 1); validate-sim-macos.sh:302 prints the skipped count and names the skipped gates above it.",
+   "evidence": "Grounded: scripts/check-review-coverage.mjs exists and preflight runs it beside its self-test at scripts/preflight.mjs:438 (\"a green gate suite is not a reviewed codebase\"). \"A proof that refuses … exits 1 by name; nothing skips silently\": scripts/src/lib/db-guard.ts:19-25 (named REFUSING, exit 1); validate-sim-macos.sh:302 prints the skipped count and names the skipped gates above it.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -11502,6 +11502,15 @@
    "evidence": "Reached only when all nine in-file signals and workflows are toggled on; disclaimed at :185 (\"a demonstration of the rule, not ... a measurement of the product\")",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
+  },
+  {
+   "file": "lib/orchestration/src/index.ts",
+   "line": "503",
+   "claim": "\"Access held in ${room.roomId} pending a step-up (badge tap / biometric).\"",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "Bundled into docs/room-entry-console.html's verdict summary (the generated line moves on every rebuild, so the row anchors at the source). Badge/PACS is a deferred family (scripts/launch-profile.mjs `pacs-access` deferred); the launch step-up path is WebAuthn-shaped, and docs/competitive-battlecard.html lists \"badge tap / tap-and-go\" as a trap phrase to avoid. A second rendering of the same claim the :167 shell row already carries — a shell rewrite alone would leave this sentence rendering (twenty-third round, 2026-09-06).",
+   "action": "rewrite"
   }
  ]
 }

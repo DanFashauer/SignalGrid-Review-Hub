@@ -38,8 +38,8 @@ Emergency actions must remain constrained, logged, and reversible where possible
 | Surface                       | Recommended approach                 | Rationale                                                                                                               |
 | ----------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | Web console                   | Responsive web/PWA first             | Fastest path to shared admin/operator review, public demos, and cross-platform validation.                              |
-| iOS/Android                   | React Native/Expo                    | Suitable once mobile-specific workflows such as push notifications, QR/NFC scanning, and operator queues are validated. |
-| macOS/Windows admin           | PWA, Tauri, or Electron if needed    | Useful only if desktop packaging materially improves admin workflows.                                                   |
+| iOS/Android                   | Native Swift — two Xcode apps under `native/ios/` (`ios:EnterpriseShell` is `launch`); native Android under `native/android/` (`native:android` is `deferred`) | What was built. Until 2026-09-06 this row recommended React Native/Expo; that was superseded in the tree rather than by a decision record (`grep -in 'react native' docs/DECISION_RECORDS.md` returns no match as of 2026-09-06). Classification per `scripts/launch-profile.mjs` app-surfaces. |
+| macOS/Windows admin           | Rust/Tauri desktop under `native/desktop/` (`native:desktop` is `deferred`); the operator console is the web app `signalgrid-app` (`launch`) | What was built; desktop packaging stays deferred until it materially improves admin workflows. (Until 2026-09-06 this row read "PWA, Tauri, or Electron if needed".) |
 | macOS/Windows endpoint agents | Only if deeper telemetry is required | Endpoint agents increase security, support, and deployment burden; prefer existing telemetry sources first.             |
 
 ## Operational Health / DEX mobile workflows

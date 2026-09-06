@@ -211,7 +211,9 @@ Anything a builder discovers outside `FILES` goes into
 
 Applies to every role until there is one paying design partner:
 
-- No new verticals. No new connectors beyond the five in the product design.
+- No new verticals. No new connector families beyond those in
+  `scripts/launch-profile.mjs` (3 launch, 48 deferred as of 2026-09-06) — a new
+  family is a ratified event, per DR-001.
 - No new platforms. Android, desktop, and firmware are **maintained, not
   extended**.
 - No new proofs written for their own sake.
@@ -237,8 +239,11 @@ This model was authored in a separate session and installed by the operating
 lane. Three seams, stated so nobody discovers them by collision:
 
 **Lanes vs domains.** The four roles here are SESSION LANES — what one agent
-session is allowed to touch. The thirteen roles in `docs/agent/org-roster.json`
-are ACCOUNTABILITY DOMAINS — who answers for a surface, and what the lab
+session is allowed to touch. The 42 roles in `docs/agent/org-roster.json`
+(count derived, never remembered:
+`node -e "console.log(require('./docs/agent/org-roster.json').roles.length)"`;
+the earlier text said thirteen, which was never true — the roster held 41 at the
+commit that wrote it) are ACCOUNTABILITY DOMAINS — who answers for a surface, and what the lab
 registry's `ownerRole` means. They compose: a Core-lane session doing connector
 work acts within `endpoint-uem-domain`'s accountability. Neither replaces the
 other.

@@ -100,7 +100,7 @@ already run advisory into blocking.
 
 - On the **Branches** page, delete any leftover `codex/…` branch(es) from the
   earlier closed PRs.
-- The tier branches (`dev/alpha/beta/prod`) and `SignalGrid_Alpha` should stay.
+- `SignalGrid_Alpha` should stay — the working base and the only long-lived ref. (Until 2026-09-06 this line also said the tier branches `dev/alpha/beta/prod` should stay; they were pruned — see item 3 above.)
 
 ---
 
@@ -181,7 +181,8 @@ Four items moved to the team under the delegated authority now recorded in
   also closed a gap it found on the way: cited *paths* were gated but cited
   *commands* were not, so a renamed script could silently falsify the document
   a security assessor reads — `scripts/check-cited-commands.mjs` now gates all
-  130 of them.
+  130 of them (as written; 164 as of 2026-09-06 — `node scripts/check-cited-commands.mjs`
+  prints the current count).
 
 Two of the four standing decisions — the **graph-default flip** and
 **shadow-mode step-up** — are recorded as still open in `DECISION_RECORDS.md`,

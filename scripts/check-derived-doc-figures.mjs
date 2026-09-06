@@ -446,6 +446,13 @@ export const FIGURES = [
   { id: "roster-catalog-b", doc: "docs/company/ROLE_CATALOG.md", re: /enforcement registry of (\d+) agent duties/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
   { id: "roster-catalog-c", doc: "docs/company/ROLE_CATALOG.md", re: /`docs\/LANE_COORDINATION\.md`, the (\d+)-duty registry in/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
   { id: "roster-catalog-d", doc: "docs/company/ROLE_CATALOG.md", re: /the same (\d+)-duty registry in/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
+  // docs/agent/ORG.md said "The thirteen roles in `docs/agent/org-roster.json`" from
+  // the commit that installed the four-lane model until 2026-09-06. It was never true:
+  // the roster held 41 roles at that very commit and 42 today, so a reader sized the
+  // accountability plane at under a third of its width, in the paragraph whose whole
+  // job is telling the next session how lanes and domains compose. Ten rows already
+  // pinned this figure across five docs/company files; ORG.md was in none of them.
+  { id: "roster-org-md", doc: "docs/agent/ORG.md", re: /The (\d+) roles in `docs\/agent\/org-roster\.json`/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
   {
     id: "sim-operations",
     doc: "docs/LIVE_SYNC_LOOP.md",
@@ -584,49 +591,65 @@ export const SWEEP = [
     derive: bruRequestCount,
     // "97 requests", "97 request files", "All 97 are live-verified".
     noun: "request files|requests|live-verified",
+    totalNoun: "request files|requests as plain-text",
   },
   {
     id: "proof-scripts",
     label: "proof:* scripts",
     derive: proofScriptCount,
     noun: "proof scripts|proof gates|proofs|proof:\\*",
+    totalNoun: "deterministic proof scripts|proof gates|falsifiable proofs",
   },
   {
     id: "proof-source-files",
     label: "scripts/src/*-proof.ts files",
     derive: proofSourceFileCount,
     noun: "`scripts/src/\\*-proof\\.ts`|-proof\\.ts files|proof sources",
+    // The only sentence that states this figure writes it as "140 are
+    // `scripts/src/*-proof.ts`" — the noun does not follow the number, so the
+    // adjacency rule below cannot see it and the pinned row is its only guard.
+    // Declared rather than left silent: an omission nobody wrote down is a hole.
+    totalNoun: null,
+    totalNounReason: "the only spelling in the tree puts a verb between the figure and the noun (\"140 are `scripts/src/*-proof.ts`\"), which the adjacency rule deliberately does not match",
   },
   {
     id: "workflow-files",
     label: "workflow files",
     derive: workflowFileCount,
     noun: "workflow files|workflows",
+    totalNoun: "workflow files",
   },
   {
     id: "skill-directories",
     label: "skill directories",
     derive: skillDirectoryCount,
     noun: "tracked skill directories|skill directories",
+    // "skill directories" alone is not a total: docs/agent/EVIDENCE.md:1333 says
+    // "14 vendored skill directories", which is a true statement about a SUBSET.
+    // The derivation's own spelling — tracked — is the one that means all of them.
+    totalNoun: "tracked skill directories",
   },
   {
     id: "roster-roles",
     label: "agent duties (roster size)",
     derive: rosterRoleCount,
     noun: "agent duties|-duty (?:agent )?(?:roster|registry)|-role agent roster|duties\\) records|duties\\) as enforcement",
+    totalNoun: "agent duties|dut(?:y|ies)[ -](?:agent )?(?:roster|registry)|role agent roster|roles in `docs/agent/org-roster\\.json`",
   },
   {
     id: "postman-requests",
     label: "Postman requests",
     derive: postmanRequestCount,
     noun: "requests in [A-Za-z]+ folders|requests",
+    totalNoun: "requests in [A-Za-z0-9]+ folders",
   },
-  { id: "postman-folders", label: "Postman top-level folders", derive: postmanFolderCount, noun: "folders" },
+  { id: "postman-folders", label: "Postman top-level folders", derive: postmanFolderCount, noun: "folders", totalNoun: "folders" },
   {
     id: "route-pairs",
     label: "registered method+path pairs",
     derive: routePairCount,
     noun: "method\\+path pairs|method/path pairs",
+    totalNoun: "distinct method\\+path pairs|distinct method/path pairs",
   },
 ];
 
@@ -656,6 +679,229 @@ export const SWEEP_EXEMPT = [
       "rather than caught by rule. Rewriting it to today's count would falsify the record it is part of.",
   },
 ];
+
+// ── The COMPANION RULE: the sweep's blind direction ──────────────────────────────────
+//
+// THE HOLE THE SWEEP HAD, and it is the sweep's own construction. `sweepAll` searches
+// for the value the tree derives TODAY, so a sentence that states the RIGHT number is
+// found and a sentence that states the WRONG one is invisible. Both directions were
+// measured before this was written, on docs/agent/ORG.md, which said "The thirteen
+// roles in `docs/agent/org-roster.json`" while the roster held 42:
+//
+//   sweepHits(ORG.md, derived=42) = []      <- nothing to find; the figure is wrong
+//   sweepHits(ORG.md, 13)         = []      <- and the sweep is never asked about 13
+//
+// So the gate was green about a figure that had never once been true — the roster held
+// 41 at the very commit that wrote "thirteen". A correct-but-unregistered figure was
+// caught; a wrong one was caught by nothing.
+//
+// THE RULE. For every derived value, find a number standing IMMEDIATELY BEFORE one of
+// that figure's TOTAL-CLAIM spellings, in every document the sweep already reads, and
+// require it to equal the derived value.
+//
+// WHY "IMMEDIATELY BEFORE", AND WHY A SEPARATE `totalNoun`. Both narrowings are the
+// result of running the loose rule on the live tree rather than reasoning about it, and
+// both were forced by false positives on TRUE sentences:
+//
+//   · The loose rule — any number within 30 characters of the sweep's own `noun`, in
+//     either order — produced 315 hits, 269 of them surviving the dated-measurement
+//     exemption. Measured 2026-09-06, before any of this was enabled. Almost every one
+//     was honest English about a SUBSET: "five proofs", "two MCP proofs", "seven pull
+//     requests", "Two of those workflows" — and a long tail of path fragments where the
+//     noun was a directory and the number a line number
+//     (".github/workflows/review-hub-ci.yml:67"). A gate that flags 269 true sentences
+//     is not a strict gate, it is a gate somebody switches off, and this repository has
+//     shipped that gate three times.
+//   · `totalNoun` is the spelling that can only mean the WHOLE population. It is not a
+//     second copy of anything the build knows — the scope of the search stays derived
+//     (every tracked document, every derived value); this is vocabulary, which is the
+//     one thing a parser cannot derive from a tree. Every probe declares either a
+//     `totalNoun` or a `totalNounReason` saying why it has none, and the self-test
+//     refuses a probe that declares neither.
+//   · Adjacency — number, then at most three separator characters, then the noun —
+//     is how a count is written in English ("42 agent duties", "42-duty roster",
+//     "**144** proof gates"). It is what distinguishes "74 requests in four folders"
+//     (a statement about requests) from a statement about folders, and it is what let
+//     "request files are authored by one" stop being a hit.
+//
+// With both narrowings the live tree yields 20 agreeing hits, 1 dated, 3 quoted and 2
+// listed exemptions, and zero unexplained mismatches — so this rule is GATED, not
+// REPORTED. That decision was made from the measurement, not before it.
+//
+// GATED vs REPORTED, explicitly:
+//   · GATED    — a number immediately before a `totalNoun` that does not equal the
+//                derived value, in a tracked document, unexplained. Fatal.
+//   · REPORTED — a hit exempt by the dated-measurement rule, by the QUOTATION rule, or
+//                by a listed exemption. All three are printed on every run.
+//   · NOT COVERED, deliberately — any figure with no registered deriver. Guessing what
+//     a bare number means is how a gate earns a suppression.
+
+/** Number tokens the companion rule reads: digits, grouped digits, or a WORDS spelling. */
+const NUMBER_TOKEN = `(?:\\d{1,3}(?:,\\d{3})+|\\d+|${Object.keys(WORDS)
+  .map((w) => `[${w[0].toUpperCase()}${w[0]}]${w.slice(1)}`)
+  .join("|")})`;
+
+/**
+ * The number, guarded on both sides so the shapes the finding predicted cannot fire:
+ *   · ORDINALS — "the 13th roster" (digit + st/nd/rd/th) and "thirteenth" (the word
+ *     followed by a word character) are both refused.
+ *   · VERSION NUMBERS — "v2" and "Schemathesis 4.4.4" are refused: a digit preceded by
+ *     a word character, or followed by "." or another digit, is not a count.
+ *   · PERCENTAGES — "100% of pull requests" is refused.
+ *   · PATH, LINE AND RANGE FRAGMENTS — "src/2", "ci.yml:67" and "1-4" are refused by the
+ *     same guards; a number after a colon is a line reference, never a count.
+ */
+const COUNTER_NUMBER = `(?<![\\w,.$/:-])(${NUMBER_TOKEN})(?!(?:st|nd|rd|th)\\b)(?![\\w,.%])`;
+
+/** At most three separators — a space, a backtick, bold/italic marks, or a hyphen. */
+const COUNTER_GAP = "[\\s`*_-]{1,3}";
+
+/**
+ * Pure: every place a number stands IMMEDIATELY BEFORE one of `totalNoun`'s spellings.
+ * Returns the raw token so the caller reads it with `readCount` — one definition of
+ * "a stated figure" for both passes.
+ */
+export function counterHits(text, totalNoun) {
+  const rx = new RegExp(`${COUNTER_NUMBER}${COUNTER_GAP}(?:${totalNoun})`, "g");
+  return [...text.matchAll(rx)].map((m) => ({
+    index: m.index,
+    raw: m[1],
+    snippet: m[0].replace(/\s+/g, " "),
+  }));
+}
+
+/**
+ * Pure: does the hit sit inside a double-quoted span on its own line?
+ *
+ * A document REPORTING what another document says is not making the claim. Three live
+ * hits have exactly this shape — docs/agent/EVIDENCE.md and docs/agent/LOOP.md quoting
+ * `"Fifteen workflow files total"` while recording that it was wrong and was fixed —
+ * and gating them would demand falsifying a record of a repair to keep a gate green.
+ * That is the failure this file's header already names three times. REPORTED, never
+ * silent: every quoted hit is printed with its document and line on every run.
+ */
+export function isQuotedFromElsewhere(text, index) {
+  const start = text.lastIndexOf("\n", index) + 1;
+  let end = text.indexOf("\n", index);
+  if (end < 0) end = text.length;
+  const line = text.slice(start, end);
+  const rel = index - start;
+  let open = -1;
+  for (let i = 0; i < line.length; i += 1) {
+    if (line[i] !== '"') continue;
+    if (open < 0) {
+      open = i;
+    } else {
+      if (rel > open && rel < i) return true;
+      open = -1;
+    }
+  }
+  return false;
+}
+
+/**
+ * Mismatches that are real and correctly NOT fatal, each with the reason, each printed.
+ * Same discipline as SWEEP_EXEMPT: short, weighable, and self-tested to still match
+ * something — a stale exemption is a hole.
+ */
+export const COUNTER_EXEMPT = [
+  {
+    doc: "docs/VALIDATION_EVIDENCE.md",
+    near: /28 proof gates/,
+    reason:
+      "\"Each of the 28 proof gates **that existed when the audit ran** was …\" — the sentence this file's " +
+      "header already names as the reason a stricter rule was rejected once before. It is true, it scopes " +
+      "itself in its own words, and a gate that flags it is the gate that punishes honest writing.",
+  },
+  {
+    doc: "docs/MCP_AND_SKILLS_LANE_PARITY.md",
+    near: /25 tracked skill directories/,
+    reason:
+      "\"(25 tracked skill directories at time of writing …)\" — hedged, and printed directly beneath the " +
+      "git command that derives the count, so a reader has the true answer in front of them. It is stale " +
+      "(26 today) and the honest repair is to delete the numeral and keep the command, as docs/INDEX.md did " +
+      "for the lab registry; that is a prose change on a page this gate does not own. Named here rather " +
+      "than made fatal, and it is REPORTED on every run until it is fixed.",
+  },
+];
+
+const QUOTED_RULE = "the figure sits inside a double-quoted span — the document is quoting another document, not claiming";
+
+/**
+ * The companion pass. Returns { fatal, agreeing, exemptDated, exemptQuoted, exemptListed,
+ * probes, scanned }.
+ *
+ * FLOORED like everything else here: a probe whose `totalNoun` finds NOTHING anywhere in
+ * the tree is fatal, because the vocabulary has drifted away from the prose and the
+ * probe is guarding a spelling nobody uses.
+ */
+export function counterSweepAll(root = ROOT, probes = SWEEP) {
+  const docs = sweepDocs(root);
+  const fatal = [];
+  const agreeing = [];
+  const exemptDated = [];
+  const exemptQuoted = [];
+  const exemptListed = [];
+  let active = 0;
+
+  for (const probe of probes) {
+    if (!probe.totalNoun) continue;
+    active += 1;
+    const value = probe.derive(root);
+    if (!Number.isInteger(value) || value < 1) {
+      fatal.push(`counter ${probe.id}: deriver returned ${JSON.stringify(value)} — refusing to judge figures against a broken derivation.`);
+      continue;
+    }
+    let found = 0;
+    for (const doc of docs) {
+      let text;
+      try {
+        text = read(doc, root);
+      } catch {
+        continue;
+      }
+      for (const hit of counterHits(text, probe.totalNoun)) {
+        const stated = readCount(hit.raw);
+        if (!Number.isInteger(stated)) continue;
+        found += 1;
+        const line = text.slice(0, hit.index).split("\n").length;
+        const where = `${doc}:${line}`;
+        if (stated === value) {
+          agreeing.push({ where, id: probe.id, snippet: hit.snippet, value });
+          continue;
+        }
+        if (isDatedMeasurement(text, hit.index)) {
+          exemptDated.push({ where, snippet: hit.snippet, stated, value });
+          continue;
+        }
+        if (isQuotedFromElsewhere(text, hit.index)) {
+          exemptQuoted.push({ where, snippet: hit.snippet, stated, value });
+          continue;
+        }
+        const listed = COUNTER_EXEMPT.find((e) => e.doc === doc && e.near.test(hit.snippet));
+        if (listed) {
+          exemptListed.push({ where, snippet: hit.snippet, stated, value, reason: listed.reason });
+          continue;
+        }
+        fatal.push(
+          `counter ${probe.id}: ${where} states ${stated} beside "${probe.label}" ("${hit.snippet}"), but the tree ` +
+            `derives ${value}. A WRONG figure is invisible to the sweep by construction — the sweep only looks for the ` +
+            `RIGHT one — which is how "The thirteen roles in docs/agent/org-roster.json" survived a roster of 42. ` +
+            `Correct the sentence; or, if it is a dated observation, a quotation, or true-as-scoped, date it, quote it, ` +
+            `or add it to COUNTER_EXEMPT with the reason.`,
+        );
+      }
+    }
+    if (found === 0) {
+      fatal.push(
+        `counter ${probe.id}: the total-claim spelling /${probe.totalNoun}/ matches NOTHING in ${docs.length} documents. ` +
+          `A probe that finds no sentence is green about nothing — the vocabulary drifted away from the prose, or the ` +
+          `sentence was deleted. Fix the spelling, or drop the probe with a totalNounReason.`,
+      );
+    }
+  }
+  return { fatal, agreeing, exemptDated, exemptQuoted, exemptListed, probes: active, scanned: docs.length };
+}
 
 const DATED_RULE =
   "a YYYY-MM-DD within 80 characters of the figure, or a markdown table row whose first cell is a date";
@@ -988,6 +1234,106 @@ function selfTest() {
     ),
   ]);
 
+
+  // ── The companion rule: the WRONG-figure direction ────────────────────────────
+  const counter = counterSweepAll();
+  checks.push(["every sweep probe declares a totalNoun or a stated reason it has none", SWEEP.every((pr) => (typeof pr.totalNoun === "string" && pr.totalNoun.length > 3) || (pr.totalNoun === null && typeof pr.totalNounReason === "string" && pr.totalNounReason.length > 40))]);
+  checks.push(["the companion rule runs over a plausible number of probes and documents, not zero", counter.probes >= 5 && counter.scanned >= 50]);
+  checks.push(["…and it actually FOUND figures rather than matching nothing — a hit-count floor", counter.agreeing.length >= 12]);
+  checks.push(["…and the live tree has no unexplained wrong figure (the positive control)", counter.fatal.length === 0]);
+  checks.push([
+    "A WRONG FIGURE BESIDE A TOTAL NOUN IS FLAGGED — the ORG.md defect, which the sweep above cannot see",
+    (() => {
+      const noun = SWEEP.find((pr) => pr.id === "roster-roles").totalNoun;
+      const derived = rosterRoleCount();
+      const wrong = counterHits("The thirteen roles in `docs/agent/org-roster.json` are ACCOUNTABILITY DOMAINS", noun);
+      const right = counterHits(`The ${derived} roles in \`docs/agent/org-roster.json\` are ACCOUNTABILITY DOMAINS`, noun);
+      return wrong.length === 1 && readCount(wrong[0].raw) === 13 && readCount(wrong[0].raw) !== derived &&
+        right.length === 1 && readCount(right[0].raw) === derived;
+    })(),
+  ]);
+  checks.push([
+    "…and the SWEEP is blind to that same wrong figure in both directions — the hole this rule fills",
+    sweepHits("The thirteen roles in `docs/agent/org-roster.json` are ACCOUNTABILITY DOMAINS", rosterRoleCount(), SWEEP.find((pr) => pr.id === "roster-roles").noun).length === 0 &&
+      sweepHits("The thirteen roles in `docs/agent/org-roster.json` are ACCOUNTABILITY DOMAINS", 13, SWEEP.find((pr) => pr.id === "roster-roles").noun).length === 0,
+  ]);
+  checks.push([
+    "ORDINALS DO NOT FIRE — \"the 13th agent duties\" and \"thirteenth agent duties\" are not counts",
+    counterHits("the 13th agent duties rotation", "agent duties").length === 0 &&
+      counterHits("the thirteenth agent duties rotation", "agent duties").length === 0 &&
+      counterHits("our 1st agent duties review", "agent duties").length === 0,
+  ]);
+  checks.push([
+    "VERSION NUMBERS DO NOT FIRE — \"v2 agent duties\", \"4.4.4 agent duties\", \"LAUNCH_PROFILE_VERSION 5\"-style decimals",
+    counterHits("v2 agent duties", "agent duties").length === 0 &&
+      counterHits("Schemathesis 4.4.4 agent duties", "agent duties").length === 0 &&
+      counterHits("2.1 agent duties", "agent duties").length === 0 &&
+      counterHits("workflows/ci.yml:67 agent duties", "agent duties").length === 0,
+  ]);
+  checks.push([
+    "…nor do percentages, while the plain count still does",
+    counterHits("100% agent duties", "agent duties").length === 0 && counterHits("42 agent duties", "agent duties").length === 1,
+  ]);
+  checks.push([
+    "the number must stand IMMEDIATELY before the noun — a subset sentence with words between is not a total claim",
+    counterHits("request files are authored by one lane", "request files").length === 0 &&
+      // "74 requests in four folders" states BOTH figures; the folder probe must read
+      // "four", never the 74 sitting 15 characters to its left.
+      counterHits("74 requests in four folders", "folders").map((h) => h.raw).join() === "four" &&
+      counterHits("four folders", "folders").length === 1,
+  ]);
+  checks.push([
+    "…and the separators a repository actually writes ARE crossed: `42`, **42**, 42-duty",
+    counterHits("`42` agent duties", "agent duties").length === 1 &&
+      counterHits("**42** agent duties", "agent duties").length === 1 &&
+      counterHits("a 42-duty roster", "dut(?:y|ies)[ -](?:agent )?(?:roster|registry)").length === 1,
+  ]);
+  checks.push([
+    `the quotation rule (${QUOTED_RULE}) exempts a quoted figure and only a quoted one`,
+    isQuotedFromElsewhere('said "Fifteen workflow files total" four days after', 24) &&
+      !isQuotedFromElsewhere("- **Fifteen workflow files total** — the Apple lane", 4) &&
+      !isQuotedFromElsewhere('a "quoted phrase" then Fifteen workflow files', 30),
+  ]);
+  checks.push([
+    "every listed counter-exemption carries a doc, a matcher and a reason a reviewer can weigh",
+    COUNTER_EXEMPT.every((e) => typeof e.doc === "string" && e.near instanceof RegExp && typeof e.reason === "string" && e.reason.length > 60),
+  ]);
+  checks.push([
+    "…and every listed counter-exemption still MATCHES its document — a stale exemption is a hole",
+    COUNTER_EXEMPT.every((e) => {
+      try {
+        return e.near.test(read(e.doc, ROOT));
+      } catch {
+        return false;
+      }
+    }),
+  ]);
+  checks.push([
+    "a companion probe whose deriver returns 0 is FATAL, never a quiet empty pass",
+    counterSweepAll(ROOT, [{ id: "broken", label: "x", derive: () => 0, totalNoun: "agent duties" }]).fatal.some((f) => f.includes("broken derivation")),
+  ]);
+  checks.push([
+    "…and a probe whose totalNoun matches NOTHING in the tree is FATAL — a spelling nobody uses guards nothing",
+    counterSweepAll(ROOT, [{ id: "unspoken", label: "x", derive: () => 42, totalNoun: "quadrupedal agent duties" }]).fatal.some((f) => f.includes("matches NOTHING")),
+  ]);
+  checks.push([
+    "A SYNTHETIC VIOLATION IS FATAL end to end — a probe whose derived value is deliberately wrong turns the live tree red",
+    counterSweepAll(ROOT, [{ id: "planted", label: "agent duties", derive: () => rosterRoleCount() + 1, totalNoun: "agent duties" }]).fatal.some((f) => f.includes("A WRONG figure is invisible to the sweep")),
+  ]);
+  checks.push([
+    "the ORG.md row is pinned, reads one sentence, and its planted 13 IS reported as drift",
+    (() => {
+      const r = FIGURES.find((x) => x.id === "roster-org-md");
+      if (!r) return false;
+      const text = read(r.doc);
+      const live = auditFigure(r, text, rosterRoleCount());
+      const planted = text.replace(r.re, "The 13 roles in `docs/agent/org-roster.json`");
+      const after = auditFigure(r, planted, rosterRoleCount());
+      return live.matches === 1 && live.problems.length === 0 &&
+        after.problems.length === 1 && after.problems[0].includes("states 13, but the tree derives");
+    })(),
+  ]);
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -999,7 +1345,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const results = auditAll();
   const sweep = sweepAll();
-  const problems = [...results.flatMap(({ result }) => result.problems), ...sweep.fatal];
+  const counter = counterSweepAll();
+  const problems = [...results.flatMap(({ result }) => result.problems), ...sweep.fatal, ...counter.fatal];
   if (problems.length > 0) {
     console.error(`Derived-doc-figure check FAILED: ${problems.length} problem(s):`);
     for (const p of problems) console.error(`  ✗ ${p}`);
@@ -1018,6 +1365,17 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   for (const e of sweep.exemptDated) console.log(`    · ${e.where} — "${e.snippet}"`);
   console.log(`  REPORTED, exempt by declaration — ${sweep.exemptListed.length} hit(s):`);
   for (const e of sweep.exemptListed) console.log(`    · ${e.where} — "${e.snippet}"\n      ${e.reason}`);
+  console.log(
+    `\nCOMPANION RULE (GATED) — ${counter.probes} total-claim spelling(s) searched across ${counter.scanned} document(s) ` +
+      "for a figure that does NOT equal the derived value (the direction the sweep above is blind to):",
+  );
+  console.log(`  ${counter.agreeing.length} hit(s) state the derived figure and agree with the tree.`);
+  console.log(`  REPORTED, exempt by rule (${DATED_RULE}) — ${counter.exemptDated.length} hit(s):`);
+  for (const e of counter.exemptDated) console.log(`    · ${e.where} states ${e.stated} (derived ${e.value}) — "${e.snippet}"`);
+  console.log(`  REPORTED, exempt by rule (${QUOTED_RULE}) — ${counter.exemptQuoted.length} hit(s):`);
+  for (const e of counter.exemptQuoted) console.log(`    · ${e.where} states ${e.stated} (derived ${e.value}) — "${e.snippet}"`);
+  console.log(`  REPORTED, exempt by declaration — ${counter.exemptListed.length} hit(s):`);
+  for (const e of counter.exemptListed) console.log(`    · ${e.where} states ${e.stated} (derived ${e.value}) — "${e.snippet}"\n      ${e.reason}`);
   console.log(
     `\nDerived-doc-figure check passed — ${results.length} figure(s) across ` +
       `${new Set(FIGURES.map((r) => r.doc)).size} document(s) match the tree they describe, ` +

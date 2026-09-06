@@ -81,7 +81,7 @@ export const CONSOLE_HTML = /* html */ `<!doctype html>
     <span class="sub">Trusted Room Entry · Simulation</span>
   </header>
   <h1>Context-aware trust &amp; orchestration — Phase 1</h1>
-  <p class="lead">A synthetic nurse with a managed device approaches a room. SignalGrid runs the real decision core over identity, device posture, custody, badge binding, security baseline and workflow risk — then orchestrates the downstream actions. Sensitive steps (a controlled-room door, a PHI display) are never automatic; they wait for a clinician to confirm.</p>
+  <p class="lead">A synthetic nurse with a managed device approaches a room. SignalGrid runs the real decision core over identity, device posture, device-management health and local authority today; custody and badge binding are deferred families, shown here from fixtures — then orchestrates the downstream actions. Sensitive steps (a controlled-room door, a PHI display) are never automatic; they wait for a clinician to confirm.</p>
   <div class="grid">
     <aside class="scn">
       <h2>Scenarios</h2>
@@ -99,14 +99,65 @@ let current=null, confirmed=new Set(), stepUp=false;
 // HTML-entity encode every dynamic value before it reaches innerHTML.
 const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function j(url,opts){const r=await fetch(url,opts);return r.json();}
+/*sigClass:start*/
+// Colour for one signal value. THE LAW: a value this table does not recognise is
+// NEVER rendered green.
+//
+// Until 2026-09-06 the match was a SUBSTRING scan over a positive vocabulary, so
+// 'non_compliant' (which contains "compliant") painted the signal that CAUSED a
+// restrict in the ALLOW colour, and every unknown / missing / unverified /
+// removed value rendered with no class at all — absent evidence shown as
+// unremarkable evidence. tools/room-console/shell.html carried the same defect
+// and was fixed the same way (build-room-console.mjs runs its vectors).
+//
+// So: EXACT values only, keyed by the signal they belong to. The vocabularies are
+// the unions declared in lib/signalgrid-core/src/types.ts — Freshness,
+// BaselineState, BadgeBindingState, CustodyState, ChargeState, TamperState,
+// DockState, BatteryHealthState, ManagementHealthState, LocalAuthorityGrantState,
+// BenchmarkSelectionState, ShiftContextState — read there, not invented here.
+//
+// '' is a DECLARED neutral and is used ONLY for descriptive signals that carry no
+// health polarity at all (who owns the device, how risky the workflow is, a dock
+// that is simply empty). It is never the fallback. Anything unrecognised — an
+// unknown signal key, an unknown value, blank, null — is 'warn': amber, loud, and
+// never green. A new signal therefore renders amber until this table learns it,
+// which is the noisy-and-safe direction.
+//
+// test/api.test.mjs extracts this block from the SERVED page between the markers
+// and runs it against vectors, so the page a reviewer loads is the code tested.
 function sigClass(k,v){
-  const bad=['disabled','noncompliant','absent','withdrawn','forced','tampered','drifted','offline','faulted','stale','false'];
-  const ok=['enabled','compliant','present','bound','aligned','fresh','docked','nominal','true','supported'];
-  const s=String(v).toLowerCase();
-  if(bad.some(b=>s.includes(b)))return'bad';
-  if(ok.some(o=>s.includes(o)))return'ok';
-  return'';
+  const BOOL={'true':'ok','false':'bad',unknown:'warn'};
+  const FRESH={fresh:'ok',stale:'warn',expired:'bad',missing:'warn',unknown:'warn'};
+  const SIG={
+    identityEnabled:BOOL,deviceManaged:BOOL,deviceEncrypted:BOOL,osSupported:BOOL,
+    // false here means a critical input is ABSENT, not that a device failed a
+    // check — amber, the same colour every other missing input gets.
+    criticalSignalsPresent:{'true':'ok','false':'warn',unknown:'warn'},
+    deviceCompliance:{compliant:'ok',non_compliant:'bad',unknown:'warn'},
+    postureFreshness:FRESH,dockEvidenceFreshness:FRESH,
+    baselineCompliance:{aligned:'ok',partial:'warn',drifted:'bad',not_assessed:'warn',unknown:'warn'},
+    benchmarkSelection:{confirmed:'ok',misfit:'bad',unverified:'warn'},
+    shiftContext:{confirmed:'ok',misfit:'bad',unverified:'warn'},
+    // absent = an unbound shared device, which the type's own comment calls "not
+    // itself a fault"; removed/forced are affirmative withdrawals.
+    badgeBinding:{present:'ok',removed:'bad',forced:'bad',absent:'warn',unknown:'warn'},
+    custodyState:{checked_in:'ok',checked_out:'ok',overdue:'bad',exception:'bad',maintenance:'bad',unknown:'warn'},
+    dockChargeState:{charging:'ok',charged:'ok',low:'warn',critical:'bad',not_present:'warn',unknown:'warn'},
+    batteryHealth:{healthy:'ok',degraded:'warn',failing:'bad',unknown:'warn'},
+    tamperState:{none:'ok',suspected:'warn',confirmed:'bad',sensor_unavailable:'warn',unknown:'warn'},
+    dockState:{occupied:'ok',empty:'',reserved:'',faulted:'bad',offline:'bad',unknown:'warn'},
+    managementHealthState:{healthy:'ok',degraded:'warn',broken:'bad',unknown:'warn'},
+    localAuthorityState:{verified:'ok',withheld:'bad',unverified:'warn'},
+    ownerType:{corporate:'',shared:'',personal:'',unknown:'warn'},
+    workflowRiskTier:{low:'',standard:'',elevated:'',critical:''}
+  };
+  const s=String(v).trim().toLowerCase();
+  const has=(o,key)=>Object.prototype.hasOwnProperty.call(o,key);
+  if(!has(SIG,k))return'warn';
+  const per=SIG[k];
+  return has(per,s)?per[s]:'warn';
 }
+/*sigClass:end*/
 async function load(){
   const data=await j('/api/sim/room-entry/scenarios');
   const box=$('#scenarios');box.innerHTML='';
@@ -147,7 +198,7 @@ function render(d){
       '<span style="font-family:var(--mono);font-size:.7rem;color:var(--faint)">'+esc(d.context.roomId)+' · '+esc(d.context.unit)+' · '+esc(d.context.sensitivity)+'</span></div>'+
       '<p class="why">'+esc(d.decision.explanation)+'</p>'+(codes?'<div class="codes">'+codes+'</div>':'')+
       '<p class="sum">'+esc(d.plan.summary)+'</p>'+
-      (mode==='step_up'?'<button class="confirm" id="stepupbtn" style="margin-top:.7rem">Complete step-up &middot; badge tap</button>':'')+'</div>'+
+      (mode==='step_up'?'<button class="confirm" id="stepupbtn" style="margin-top:.7rem">Complete step-up &middot; simulated badge tap (deferred family)</button>':'')+'</div>'+
     '<div class="panel"><h2>Signals evaluated</h2><div class="sig">'+sig+'</div></div>'+
     '<div class="panel"><h2>Downstream orchestration</h2><div class="acts">'+acts+'</div></div>';
   out.querySelectorAll('.confirm[data-act]').forEach(b=>b.onclick=()=>{confirmed.add(b.dataset.act);run();});

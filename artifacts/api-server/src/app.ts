@@ -102,23 +102,51 @@ if (demoSurfacesEnabled()) {
   });
 }
 
+/**
+ * `METRICS_TOKEN` — the bearer a /metrics scraper must present.
+ *
+ * UNSET means the endpoint is open, per Prometheus convention, and that is
+ * unchanged. PRESENT BUT BLANK refuses to boot, which is the whole point of
+ * resolving it here instead of in the handler: `process.env.METRICS_TOKEN?.trim()`
+ * used as a truthiness guard treats `""` and `"   "` exactly like unset, so an
+ * operator who set the variable and got the quoting wrong believed the endpoint
+ * was protected while it was served open — an unusable configuration value
+ * LOOSENING the answer, which golden rule 2 forbids. Mirrors the boot-time refusal
+ * `lib/core.ts` already applies to SIGNALGRID_MAX_DECISIONS_PER_TENANT and
+ * `lib/profile.ts` to an unrecognised profile: a configuration error on a security
+ * knob is answered by not serving, never by serving less safely.
+ */
+function metricsTokenFromEnv(): string | undefined {
+  const raw = process.env["METRICS_TOKEN"];
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    throw new Error(
+      'METRICS_TOKEN is set but blank (""/whitespace) — refusing to start rather than ' +
+        "serving /metrics unauthenticated to an operator who believes it is protected. " +
+        "Unset the variable to serve metrics openly, or give it a value.",
+    );
+  }
+  return trimmed;
+}
+const METRICS_BEARER = metricsTokenFromEnv();
+
 // Prometheus scrape endpoint (operational metrics). Global AGGREGATE only —
 // counters/latencies with no tenant label and no request payloads, so the
 // endpoint can never become a cross-tenant side channel. Open by default per
 // Prometheus convention; setting METRICS_TOKEN requires scrapers to present it
 // as a bearer, without breaking deployments that never set it.
 app.get("/metrics", (req, res) => {
-  const required = process.env.METRICS_TOKEN?.trim();
   // constantTimeEquals, not `!==`: an early-exit string compare on the one
   // static secret an operator actually sets leaks it character by character,
   // and the core already protects even its PUBLIC demo keys this way
   // (store.ts:128). The weaker guard sat on the stronger secret.
   const presented = typeof req.headers.authorization === "string" ? req.headers.authorization : "";
-  if (required && !constantTimeEquals(presented, `Bearer ${required}`)) {
+  if (METRICS_BEARER !== undefined && !constantTimeEquals(presented, `Bearer ${METRICS_BEARER}`)) {
     res.status(401).type("text/plain").send("metrics: bearer token required");
     return;
   }
-  res.type("text/plain; version=0.0.4").send(renderMetrics(Date.now()));
+  res.type("text/plain; version=0.0.4").send(renderMetrics());
 });
 
 app.use("/api", router);

@@ -135,9 +135,9 @@ This determines what may be built, and it corrects v1's freeze.
 | Lane | Status | Why |
 | --- | --- | --- |
 | **Mac / iOS** | **open** | Invisibility cannot be proven in a container. A real enrolled device in a real hand is the only place the embedded UX law is testable. |
-| **API - Bruno - Postman** | **open, gated** | For a product that connects systems, the API surface *is* the product. 57 `/v1` spec paths are the integration contract. `check:postman` verifies that contract is complete - it is a product gate, not doc-sync. |
-| Cloud logic, connectors, proofs | **frozen** | Sufficient. Adding here proves nothing new. |
-| New verticals, platforms, hardware | **frozen** | Until a design partner names one. |
+| **API - Bruno - Postman** | **open, gated** | For a product that connects systems, the API surface *is* the product. 57 `/v1` spec paths (as of 2026-08-27; today 58 — `node scripts/build-postman.mjs --check`) are the integration contract. `check:postman` verifies that contract is complete - it is a product gate, not doc-sync. |
+| Cloud logic, connectors, proofs | **frozen** — as recorded 2026-08-27; lifted by DR-021 (2026-08-31); see `docs/DECISION_RECORDS.md` | Sufficient. Adding here proves nothing new. *Claim discipline (DR-021 §2) did not lift.* |
+| New verticals, platforms, hardware | **frozen** — as recorded 2026-08-27; lifted by DR-021 (2026-08-31), each still needing a decision record first (DR-020 rule); see `docs/DECISION_RECORDS.md` | Until a design partner names one. |
 
 ---
 

@@ -5,7 +5,7 @@ Use this checklist for advisors, design partners, and internal review before mov
 ## Problem and positioning
 
 - Is the problem clear?
-- Is SignalGrid's positioning as a runtime decision layer / Zero Trust orchestration platform clear?
+- Is SignalGrid's positioning clear as `docs/PURPOSE.md` §2 states it — one grid that decides and acts on the person's behalf — with no coined category label (DR-019/DR-020)?
 - Is the shared-device and mobile frontline environment focus specific enough?
 - Does the repo explain what breaks today before SignalGrid intervenes?
 

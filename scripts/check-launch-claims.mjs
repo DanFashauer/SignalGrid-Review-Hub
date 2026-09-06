@@ -39,43 +39,81 @@ import { execFileSync, execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-// The published web surface is not just the marketing site. `Dockerfile.web`
-// builds each app and COPYs its `dist/public` into the served nginx image
-// (signalgrid-web at "/", signalgrid-app at "/app/"), so every app whose built
-// output ships is buyer-reachable and must be scanned. ROOTS is DERIVED from
-// those COPY lines rather than hand-listed, for the same reason the published-
-// pages set is derived from pages.yml below: a hand copy of a deploy manifest is
-// a fossil waiting to happen. Each `artifacts/<pkg>/dist/public/` copy maps to
-// that package's SOURCE root `artifacts/<pkg>/src` — the gate scans source, not
-// built output — and a mapped source that is missing is fatal, never silently
-// dropped (that would scan less without saying so).
-const WEB_DOCKERFILE = "Dockerfile.web";
+// The published surface is not just the marketing site, and it is not just the WEB
+// image. Every `Dockerfile.*` that COPYs a package's BUILT OUTPUT ships that
+// package's strings to a reader: `Dockerfile.web` copies
+// `artifacts/signalgrid-web/dist/public/` and `artifacts/signalgrid-app/dist/public/`
+// into the served nginx image ("/" and "/app/"), and `Dockerfile.api` copies
+// `artifacts/api-server/dist/` into the runtime image — and the api-server SERVES A
+// PAGE: `artifacts/api-server/src/console-html.ts` renders the HTML mounted at `/`
+// and `/console` (`src/app.ts`).
+//
+// This derivation read ONE of the two Dockerfiles until 2026-09-06, so that page sat
+// outside every claims gate while its served lead paragraph asserted "identity,
+// device posture, custody, badge binding, security baseline and workflow risk" —
+// custody and badge are DEFERRED in scripts/launch-profile.mjs. The derivation was
+// not wrong about what it named; it named one image in a repository that ships two.
+// A manifest-derived scope that reads one manifest is a hand list wearing a
+// derivation's clothes.
+//
+// So the Dockerfile SET is derived too (git ls-files, so an untracked scratch
+// Dockerfile cannot widen the scan), each `artifacts/<pkg>/dist…` COPY maps to that
+// package's SOURCE root `artifacts/<pkg>/src` — the gate scans source, not built
+// output — and a mapped source that is missing is fatal, never silently dropped
+// (that would scan less without saying so). A COPY of a package's SOURCE into a
+// builder stage (`COPY artifacts/api-server/ ./artifacts/api-server/`) is not a
+// shipped root: only `dist` is built output.
+
+/**
+ * Pure: the source roots a set of Dockerfiles ships, given `[name, text]` pairs.
+ * Exported shape so the self-test can feed synthetic manifests — the live tree has
+ * exactly two Dockerfiles, which cannot demonstrate "a third image joins the scan"
+ * or "an image that copies nothing contributes nothing".
+ */
+export function rootsFromDockerfiles(entries) {
+  const out = new Set();
+  for (const [, text] of entries) {
+    for (const line of String(text).split("\n")) {
+      if (!/^\s*COPY\b/i.test(line)) continue;
+      for (const m of line.matchAll(/artifacts\/([A-Za-z0-9._-]+)\/dist(?=[/\s"']|$)/g)) {
+        out.add(`artifacts/${m[1]}/src`);
+      }
+    }
+  }
+  return [...out].sort();
+}
+
+let DOCKERFILES = [];
+try {
+  DOCKERFILES = execSync("git ls-files 'Dockerfile*'", { encoding: "utf8" })
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+} catch {
+  console.error("✗ could not list the tracked Dockerfiles — cannot derive the served roots, and guessing them would defeat the gate.");
+  process.exit(1);
+}
+if (DOCKERFILES.length === 0) {
+  console.error("✗ no tracked Dockerfile found — the image set changed shape; fix this derivation, do not silently scan less.");
+  process.exit(1);
+}
 let ROOTS = [];
 try {
-  const df = readFileSync(WEB_DOCKERFILE, "utf8");
-  ROOTS = [
-    ...new Set(
-      [...df.matchAll(/artifacts\/([A-Za-z0-9._-]+)\/dist\/public\//g)].map(
-        (m) => `artifacts/${m[1]}/src`,
-      ),
-    ),
-  ];
+  ROOTS = rootsFromDockerfiles(DOCKERFILES.map((f) => [f, readFileSync(f, "utf8")]));
 } catch {
-  console.error(
-    `✗ ${WEB_DOCKERFILE} unreadable — cannot derive the served web roots, and guessing them would defeat the gate.`,
-  );
+  console.error("✗ a tracked Dockerfile is unreadable — cannot derive the served roots, and guessing them would defeat the gate.");
   process.exit(1);
 }
 if (ROOTS.length === 0) {
   console.error(
-    `✗ no served web roots derived from ${WEB_DOCKERFILE} — the COPY … dist/public lines changed shape; fix this derivation, do not silently scan less.`,
+    `✗ no served roots derived from ${DOCKERFILES.join(", ")} — the COPY … dist lines changed shape; fix this derivation, do not silently scan less.`,
   );
   process.exit(1);
 }
 for (const r of ROOTS) {
   if (!existsSync(r)) {
     console.error(
-      `✗ derived web root ${r} does not exist — the Dockerfile COPYs its dist/public but its source is gone; fix the derivation, do not silently scan less.`,
+      `✗ derived served root ${r} does not exist — a Dockerfile COPYs its dist output but its source is gone; fix the derivation, do not silently scan less.`,
     );
     process.exit(1);
   }
@@ -497,7 +535,32 @@ function blocksOf(name, body) {
   return blocks.map((b) => ({ start: b.start, text: b.lines.join("\n") }));
 }
 
-function violationsIn(name, body) {
+/**
+ * `hedgeBody` is the SAME file with its code comments intact, and the asymmetry is
+ * deliberate (2026-09-06, with the api-server root — see "A CODE COMMENT IS NOT
+ * SERVED COPY" below, and the note there on why only source files get it).
+ *
+ *   · A CLAIM in a comment is not a claim. Nobody reading the page can see it, and
+ *     flagging it teaches the next author to delete an explanation. So the deferred-
+ *     noun scan runs over `body`, which for a source file has comments blanked.
+ *   · A HEDGE in a comment is kept, because removing it changes an EXISTING gate's
+ *     verdict on copy nobody asked this task to rewrite. Measured on 2026-09-06:
+ *     dropping comment hedges too would newly flag four sites whose hedge is a
+ *     comment above a fixture array — artifacts/signalgrid-app/src/pages/Dashboard.tsx:281
+ *     ("Static demo mock for a DEFERRED capability"), .../integrations/IntegrationDetail.tsx:40
+ *     ("on the roadmap / deferred … not a claim that each is evaluated today"),
+ *     .../lib/route-owner.ts:30 and
+ *     artifacts/signalgrid-web/src/components/sections/SignalTypesSection.tsx:59 —
+ *     and the only way to satisfy the gate there is to write the word "deferred"
+ *     into a data literal, which is contorting code to please a regex.
+ *
+ * That asymmetry IS a hole, and it is REPORTED by name on every run (see
+ * `commentOnlyHedges` below) rather than left silent: a rendered page whose only
+ * hedge is a code comment is honest to the next engineer and silent to the buyer.
+ * Closing it is a copy decision for whoever owns those surfaces, not a scope change
+ * this gate may make on their behalf.
+ */
+function violationsIn(name, body, hedgeBody = body, commentOnlyHedges = null) {
   const out = [];
   const scannable = stripNegated(body);
   for (const re of OVERCLAIM_MARKERS) {
@@ -510,9 +573,31 @@ function violationsIn(name, body) {
       out.push(`${name}: "Limited GA" label on non-launch signal id ${idm ? `"${idm[1]}"` : "(unidentifiable)"}`);
     }
   }
-  const pageScoped = PAGE_SCOPE.test(body);
+  // Blanking a comment line turns it into a blank line, which is a block BOUNDARY —
+  // so a stripped block can only ever be a subset of one un-stripped block, never a
+  // span across two. That is what makes this lookup exact rather than approximate.
+  const commented = hedgeBody === body ? null : blocksOf(name, hedgeBody);
+  const contextFor = (block) => {
+    if (!commented) return block;
+    for (const b of commented) {
+      const end = b.start + b.text.split("\n").length;
+      if (block.start >= b.start && block.start < end) return b;
+    }
+    return block;
+  };
+  const pageScoped = PAGE_SCOPE.test(hedgeBody);
   for (const block of pageScoped ? [] : blocksOf(name, body)) {
-    if (!DEFERRED_NOUNS.test(block.text) || HEDGES.test(block.text) || AVOID_LIST.test(block.text)) continue;
+    if (!DEFERRED_NOUNS.test(block.text)) continue;
+    if (HEDGES.test(block.text) || AVOID_LIST.test(block.text)) continue;
+    const ctx = contextFor(block);
+    if (HEDGES.test(ctx.text) || AVOID_LIST.test(ctx.text)) {
+      // Hedged ONLY in a comment: legal here, named on stdout, never silent.
+      if (commentOnlyHedges) {
+        const rel0 = block.text.split("\n").findIndex((l) => DEFERRED_NOUNS.test(l));
+        commentOnlyHedges.push(`${name}:${block.start + rel0}: "${(block.text.match(DEFERRED_NOUNS) || [""])[0]}" — hedged only in a code comment`);
+      }
+      continue;
+    }
     const rel = block.text.split("\n").findIndex((l) => DEFERRED_NOUNS.test(l));
     const noun = (block.text.match(DEFERRED_NOUNS) || [""])[0];
     out.push(
@@ -582,8 +667,22 @@ function retiredLabelViolations(name, body) {
 // fail-open the exact defect this rule exists to catch: the deployed site carried
 // that label in its title and social meta for five days. Prose quoting and attribute
 // quoting look identical to a regex and mean opposite things, so only prose gets it.
+//
+// A POSSESSIVE APOSTROPHE IS NOT AN OPENING QUOTE (2026-09-06, docs-chunk-3 audit F1).
+// The straight `'` sat in this character class, so `SignalGrid's Operational Trust
+// Orchestration model` opened a "quotation" at the possessive, `s ` filled the ≤24-char
+// gap, and an unhedged live sentence asserting a retired label as the product's own
+// model name — docs/SIGNAL_SOURCE_CATALOG.md:5 — was exempted and never reached the
+// ceiling. Measured across all 307 tracked docs/**/*.md at the time: of every line this
+// idiom exempted, exactly ONE was exempted by a possessive rather than a quotation, so
+// the repair costs nothing and the hole was worth exactly one invisible claim.
+//
+// The guard is applied to `'` ONLY. U+2019 is both a curly apostrophe and a real closing
+// quote in this corpus, and a lookbehind there would start dropping genuine quotations;
+// the audit said so explicitly and did not measure it, so it is left alone rather than
+// changed on a guess. The self-test pins both directions.
 const QUOTE_CONTEXT =
-  /["“”‘’'`][^"“”‘’'`]{0,24}(Zero[\s-]Trust orchestration|Operational Trust Orchestration|Shared-Device Trust Gateway)/i;
+  /(?:["“”‘’`]|(?<!\w)')[^"“”‘’'`]{0,24}(Zero[\s-]Trust orchestration|Operational Trust Orchestration|Shared-Device Trust Gateway)/i;
 const AVOID_CONTEXT =
   /trap phrases|phrases to avoid|words to avoid|never say|do not say|don'?t say|avoid leading with|not an established|collision assessment|invented category/i;
 // A typesetting verb BEFORE the opening quote turns a quotation into copy to set.
@@ -632,7 +731,10 @@ function bannerLineIndex(body) {
 function retiredProseScan(name, body) {
   const lines = body.split("\n");
   const bannerIdx = bannerLineIndex(body);
-  const out = { violations: [], byQuote: 0, byAvoid: 0, byBanner: 0, bannerIdx };
+  // The exempted LINES are recorded, not just counted (docs-chunk-3 audit F1): the
+  // possessive hole was invisible for as long as the quote idiom reported only a
+  // number. An idiom that removes a line must be able to say WHICH line.
+  const out = { violations: [], byQuote: 0, byAvoid: 0, byBanner: 0, bannerIdx, quotedLines: [] };
   for (const v of retiredLabelViolations(name, body)) {
     const lineNo = Number(v.slice(name.length + 1).split(":")[0]);
     const line = lines[lineNo - 1] ?? "";
@@ -650,7 +752,11 @@ function retiredProseScan(name, body) {
     // and it sat under the quote exemption in docs/research/SOCIAL_VISUAL_CONCEPTS.md
     // twice (thirteenth audit round, 2026-09-06). Same reasoning the HTML carve-out
     // above uses: in a design brief the label sits inside quotes BY CONSTRUCTION.
-    if (QUOTE_CONTEXT.test(line) && !TYPESET_CONTEXT.test(line)) { out.byQuote += 1; continue; }
+    if (QUOTE_CONTEXT.test(line) && !TYPESET_CONTEXT.test(line)) {
+      out.byQuote += 1;
+      out.quotedLines.push(`${name}:${lineNo}: ${line.trim().slice(0, 110)}`);
+      continue;
+    }
     out.violations.push(v);
   }
   return out;
@@ -706,6 +812,28 @@ const stripCodeComments = (t) =>
     })
     .join("\n");
 
+// ── A CODE COMMENT IS NOT SERVED COPY (2026-09-06, with the api-server root) ──
+//
+// Widening ROOTS to every image brought `artifacts/api-server/src` into the scan,
+// and the first run flagged four lines that no reader can ever see: a paragraph in
+// `middlewares/context.ts` explaining a temporal dead ZONE bug, `routes/sim.ts`'s
+// docblock describing which signals the simulator fuses, and two comments in
+// `routes/control-plane.ts` naming the custody rollup they implement. Every one is
+// accurate engineering prose about the code it sits on. Flagging them would teach
+// the next author to delete an explanation to please a gate — the failure mode this
+// file already warns about three times.
+//
+// So SOURCE files are scanned with their comments blanked, using the same stripper
+// the retired-label code scan has used since 2026-09-02. It preserves line count and
+// line length, so reported line numbers still point at the real file.
+//
+// ONLY SOURCE. `stripCodeComments` blanks any line whose first non-space character
+// is `*` — which in markdown is a BULLET. Running it over docs/**/*.md or the served
+// HTML would silently delete list items from the scan, so the extension test is
+// explicit and narrow: this is a stripper for JavaScript-family syntax only.
+const SOURCE_EXT = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
+const scannableTextOf = (name, body) => (SOURCE_EXT.test(name) ? stripCodeComments(body) : body);
+
 function codeRetiredViolations(name, body) {
   return retiredLabelViolations(name, stripCodeComments(body)).map((v) =>
     v.replace("in buyer-facing copy", "in live CODE (string/template/regex literal)"),
@@ -728,6 +856,10 @@ const CODE_LABEL_EXEMPT = new Map([
   [
     "scripts/loop-state.mjs",
     "reads README's first 40 lines for the retired label in order to REPORT framing drift; it must name what it looks for",
+  ],
+  [
+    "scripts/check-product-sentence-drift.mjs",
+    "the near-miss variant REPORT: its second variant carries two lookbehinds whose whole job is to stay OFF the spellings gated here, and the self-test fixture that proves it must spell 'Operational Trust Orchestration platform' — a variant watch that cannot name the gated label cannot show it is not double-counting it",
   ],
 ]);
 
@@ -889,6 +1021,27 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
     ).length === 1 &&
     // ── F2b: every idiom that removes a line must be countable ──────────────────
     retiredProseScan("stD9.md", '| README.md:3 | "SignalGrid is a Shared-Device Trust Gateway" | rewrite |').byQuote === 1 &&
+    // ── F1 (docs chunk 3, 2026-09-06): a POSSESSIVE is not an opening quote ─────
+    // The live sentence the hole hid, verbatim from docs/SIGNAL_SOURCE_CATALOG.md:5.
+    // It must be COUNTED, and it must not land in the quote bucket.
+    retiredProseScan(
+      "stQ0.md",
+      "The Signal Source Catalog organizes potential inputs into SignalGrid's **Operational Trust Orchestration** model.",
+    ).violations.length === 1 &&
+    retiredProseScan(
+      "stQ0.md",
+      "The Signal Source Catalog organizes potential inputs into SignalGrid's **Operational Trust Orchestration** model.",
+    ).byQuote === 0 &&
+    // A REAL quotation is still a document naming a string, and still exempt …
+    retiredProseScan("stQ1.md", 'The page said "Operational Trust Orchestration" until DR-019 ratified none.').byQuote === 1 &&
+    // … the straight apostrophe still opens a quotation when a word does NOT precede it …
+    retiredProseScan("stQ2.md", "The page said 'Operational Trust Orchestration' until DR-019 ratified none.").byQuote === 1 &&
+    // … and U+2019 is deliberately UNCHANGED (it is a closing quote as often as an
+    // apostrophe here, and the audit did not measure it — see QUOTE_CONTEXT).
+    retiredProseScan("stQ3.md", "SignalGrid\u2019s Operational Trust Orchestration model organizes the inputs.").byQuote === 1 &&
+    // The exempted lines are NAMED, not just counted — the hole above was invisible
+    // for exactly as long as this idiom reported a number and nothing else.
+    retiredProseScan("stQ1.md", 'The page said "Operational Trust Orchestration" until DR-019 ratified none.').quotedLines.length === 1 &&
     retiredProseScan("stD10.md", "Avoid leading with “Shared-Device Trust Gateway” for now.").byAvoid === 1 &&
     retiredProseScan(
       "stD11.md",
@@ -949,6 +1102,43 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
     // the path and the FIRST HEADING declare an audience.
     externalAudienceOf("docs/REASON_CODES.md", "# Reason codes\n\nSome pilot partners asked about custody.\n").length === 0 &&
     firstHeadingOf("intro line\n\n## Executive One-Pager\n# later\n") === "## Executive One-Pager" &&
+    // ── F8: THE SCAN ROOTS COME FROM EVERY IMAGE, NOT FROM Dockerfile.web ──────
+    // The live tree has exactly two Dockerfiles, which cannot demonstrate "a third
+    // image joins" or "an image that copies nothing contributes nothing" — so the
+    // derivation is fed synthetic manifests here, and its LIVE result is floored
+    // below. An api image that ships built output contributes its source root …
+    rootsFromDockerfiles([["Dockerfile.api", "FROM node:22\nCOPY --from=builder /app/artifacts/api-server/dist/ ./artifacts/api-server/dist/\n"]]).join(",") ===
+      "artifacts/api-server/src" &&
+    // … a Dockerfile that copies no package output contributes NONE …
+    rootsFromDockerfiles([["Dockerfile.none", "FROM nginx\nCOPY docker/nginx-web.conf /etc/nginx/conf.d/default.conf\n"]]).length === 0 &&
+    // … a COPY of a package's SOURCE into a builder stage is not shipped output …
+    rootsFromDockerfiles([["Dockerfile.api", "COPY artifacts/api-server/ ./artifacts/api-server/\n"]]).length === 0 &&
+    // … a non-COPY line naming the same path (RUN, a comment) contributes none …
+    rootsFromDockerfiles([["Dockerfile.x", "# artifacts/ghost/dist/public/ used to ship here\nRUN ls artifacts/ghost/dist/public/\n"]]).length === 0 &&
+    // … and two images contribute two roots, deduplicated and sorted.
+    rootsFromDockerfiles([
+      ["Dockerfile.web", "COPY --from=b /app/artifacts/signalgrid-web/dist/public/ /usr/share/nginx/html/\nCOPY --from=b /app/artifacts/signalgrid-web/dist/public/ /x/\n"],
+      ["Dockerfile.api", "COPY --from=b /app/artifacts/api-server/dist/ ./artifacts/api-server/dist/\n"],
+    ]).join(",") === "artifacts/api-server/src,artifacts/signalgrid-web/src" &&
+    // THE LIVE HALF, because a derivation that is right in a fixture and unwired in
+    // the tree is decorative: the api-server root must be derived AND reached.
+    ROOTS.includes("artifacts/api-server/src") &&
+    files.some((f) => f.startsWith("artifacts/api-server/src/")) &&
+    // ── A CODE COMMENT IS NOT SERVED COPY, and a comment hedge is not deleted ───
+    // The claim scan runs over comment-stripped source: an engineering paragraph
+    // explaining a "temporal dead zone" bug is not a zone capability claim …
+    violationsIn("stK0.ts", scannableTextOf("stK0.ts", "// it was still in the temporal dead zone when constructed\nconst x = 1;\n")).length === 0 &&
+    // … while the same words in a served STRING still are …
+    violationsIn("stK1.ts", scannableTextOf("stK1.ts", 'const lead = "SignalGrid decides on identity, device posture and custody today.";\n')).length > 0 &&
+    // … the stripper is NOT applied to markdown, where a leading `*` is a bullet …
+    scannableTextOf("stK2.md", "* custody is a design target\n") === "* custody is a design target\n" &&
+    // … and a hedge that lives only in a comment still exempts, and is REPORTED.
+    (() => {
+      const src = "// Static demo mock for a DEFERRED capability.\nconst rows = [{ zone: \"ICU\" }];\n";
+      const seen = [];
+      const n = violationsIn("stK3.ts", scannableTextOf("stK3.ts", src), src, seen).length;
+      return n === 0 && seen.length === 1 && seen[0].includes("hedged only in a code comment");
+    })() &&
     // LIVE FLOORS. A derivation that matched nothing, or that swallowed the whole
     // docs tree, is green about nothing in opposite directions. This repository
     // carries an investor one-pager, a funding memo, a pilot package and a dozen
@@ -972,9 +1162,12 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
 }
 
 let problems = 0;
+/** REPORTED, never fatal: blocks whose only hedge is a code comment (see violationsIn). */
+const commentOnlyHedges = [];
 for (const f of files) {
   if (f.endsWith("check-launch-claims.mjs")) continue;
-  for (const v of violationsIn(f, readFileSync(f, "utf8"))) {
+  const raw = readFileSync(f, "utf8");
+  for (const v of violationsIn(f, scannableTextOf(f, raw), raw, commentOnlyHedges)) {
     console.error(`  ✗ ${v}`);
     problems += 1;
   }
@@ -1099,12 +1292,14 @@ const RETIRED_CEILING_FILE = "docs/agent/launch-claims-retired-labels-ceiling.js
   let byQuote = 0;
   let byAvoid = 0;
   let byBanner = 0;
+  const quotedLines = [];
   const worst = [];
   for (const f of docMd) {
     let body;
     try { body = readFileSync(f, "utf8"); } catch { continue; }
     if (bannerLineIndex(body) >= 0 && RETIRED_LABELS.test(body)) bannered += 1;
     const r = retiredProseScan(f, body);
+    quotedLines.push(...r.quotedLines);
     byQuote += r.byQuote;
     byAvoid += r.byAvoid;
     byBanner += r.byBanner;
@@ -1128,6 +1323,12 @@ const RETIRED_CEILING_FILE = "docs/agent/launch-claims-retired-labels-ceiling.js
       (typeof ceiling === "number" ? ` (ceiling ${ceiling})` : " (no baseline yet)"),
   );
   for (const [f, n] of worst.slice(0, 5)) console.log(`      ${String(n).padStart(3)}  ${f}`);
+  // NAME THE LINES THE QUOTE IDIOM REMOVED (docs-chunk-3 audit F1). A possessive
+  // apostrophe read as an opening quote hid a live claim for as long as this idiom
+  // reported a count and nothing else; a deduction nobody can read is a deduction
+  // nobody can audit.
+  console.log(`      exempt by quote context (REPORTED, so the idiom can be read rather than trusted): ${quotedLines.length}`);
+  for (const q of quotedLines) console.log(`        · ${q}`);
   if (typeof ceiling === "number" && mentions > ceiling) {
     console.error(
       `\n  ✗ ${mentions - ceiling} MORE retired-label mention(s) than the recorded ceiling of ${ceiling}.\n` +
@@ -1292,6 +1493,13 @@ console.log(
     `${problems} violation(s); self-test green`,
 );
 console.log(
+  `  served roots derived from ${DOCKERFILES.length} tracked Dockerfile(s) (${DOCKERFILES.join(", ")}): ${ROOTS.join(", ")}`,
+);
+console.log(
+  `  hedged ONLY in a code comment (REPORTED, never fatal — a comment is honest to the next engineer and silent to the buyer): ${commentOnlyHedges.length}`,
+);
+for (const h of commentOnlyHedges) console.log(`      ${h}`);
+console.log(
   `  audience rule (${AUDIENCE_TOKENS.join("/")} as whole tokens): ${audienceDocs.length} document(s) declare one ` +
     `(${audienceDocs.length - audienceScanned} already in scope through another rule):`,
 );
@@ -1324,6 +1532,9 @@ console.log(
       (typeof ceiling === "number" ? ` (ceiling ${ceiling})` : " (no baseline yet)"),
   );
   for (const [f, n] of docsWorst.slice(0, 5)) console.log(`      ${String(n).padStart(3)}  ${f}`);
+  // LAUNCH_CLAIMS_DUMP=1 prints EVERY file's count, so a ceiling rise can be bisected
+  // against a worktree at HEAD (the top-5 list cannot tell which file moved).
+  if (process.env.LAUNCH_CLAIMS_DUMP) for (const [f, n] of docsWorst) console.log(`      DUMP ${n} ${f}`);
   if (typeof ceiling === "number" && docsMentions > ceiling) {
     console.error(
       `\n  \u2717 ${docsMentions - ceiling} MORE unhedged mention(s) than the recorded ceiling of ${ceiling}.\n` +

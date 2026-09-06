@@ -271,6 +271,116 @@ async function run() {
   check("controlled med room includes medication-cabinet action",
     (medRoom.json?.plan?.actions ?? []).some((a) => a.kind === "medication.cabinet.unlock"));
 
+  // ── the SERVED console's signal colouring (the page at / and /console) ────────
+  //
+  // WHY THIS IS AN HTTP TEST AND NOT A UNIT TEST. `sigClass` lives inside the inline
+  // <script> of `src/console-html.ts`; nothing imports it and no gate scanned it, so
+  // it painted `deviceCompliance: non_compliant` — the signal that CAUSED a restrict
+  // — in the ALLOW colour. The match was a substring scan over a positive vocabulary
+  // and "non_compliant" contains "compliant". A reviewer read a `restrict` verdict
+  // beside a green signal. The classifier is therefore extracted from the page THIS
+  // SERVER SERVES, between the markers the source carries for exactly this purpose,
+  // and run against the values the sim really emits. Same shape as
+  // `scripts/build-room-console.mjs`, which tests the twin page the same way.
+  {
+    const page = await fetch(`${BASE.replace(/\/api$/, "")}/console`);
+    const html = await page.text();
+    check("the demo console is served at /console (200, html)", page.status === 200 && html.includes("<!doctype html>"));
+    // ── the served COPY, which no claims gate could reach ────────────────────
+    // `check-launch-claims.mjs` derives its scan roots from Dockerfile.web; the
+    // api-server ships from Dockerfile.api, so this page — buyer-reachable at / and
+    // /console — sat outside every claims gate. Two lines named DEFERRED families
+    // (custody, badge binding) with no hedge on the line. THE FIX IS NEVER TO DELETE
+    // THE TRUE SENTENCE, so this asserts both halves: the families are still named,
+    // AND the line naming them carries the hedge the gate's HEDGES pattern reads.
+    const HEDGE = /deferred|fixture|simulated|design target/i;
+    const lead = /<p class="lead">([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
+    check("served copy: the lead paragraph still names the custody and badge families (the fix is a hedge, never a deletion)",
+      /custody/i.test(lead) && /badge/i.test(lead));
+    check("served copy: and hedges them in line — deferred families, shown from fixtures",
+      HEDGE.test(lead) && /deferred/i.test(lead));
+    const stepUpLabel = /Complete step-up[^<]*/.exec(html)?.[0] ?? "";
+    check("served copy: the step-up button label hedges the badge tap it offers",
+      /badge tap/i.test(stepUpLabel) && HEDGE.test(stepUpLabel));
+
+    const sigSrc = /\/\*sigClass:start\*\/([\s\S]*?)\/\*sigClass:end\*\//.exec(html)?.[1] ?? null;
+    // FAIL-CLOSED ON THE PARSE. If the markers move, this block must go red rather
+    // than quietly assert nothing — a classifier test that found no classifier is
+    // green about nothing.
+    check("the served console exposes its signal classifier between the sigClass markers", typeof sigSrc === "string" && sigSrc.length > 200);
+    const sigClass = typeof sigSrc === "string" ? new Function(`${sigSrc}; return sigClass;`)() : () => "ok";
+
+    // Vectors. Every non-`ok` expectation is a value that MUST NOT render green.
+    const vectors = [
+      ["deviceCompliance", "compliant", "ok"],
+      ["deviceCompliance", "non_compliant", "bad"],
+      ["deviceCompliance", "unknown", "warn"],
+      ["badgeBinding", "present", "ok"],
+      ["badgeBinding", "removed", "bad"],
+      ["badgeBinding", "unknown", "warn"],
+      ["baselineCompliance", "drifted", "bad"],
+      ["baselineCompliance", "aligned", "ok"],
+      ["identityEnabled", false, "bad"],
+      ["identityEnabled", true, "ok"],
+      ["tamperState", "suspected", "warn"],
+      ["tamperState", "confirmed", "bad"],
+      ["managementHealthState", "broken", "bad"],
+      ["localAuthorityState", "withheld", "bad"],
+      ["shiftContext", "misfit", "bad"],
+      ["dockEvidenceFreshness", "missing", "warn"],
+      // Unrecognised in every shape: unknown value, unknown signal, blank, null.
+      ["deviceCompliance", "brand_new_value", "warn"],
+      ["aSignalNobodyHasAddedYet", "compliant", "warn"],
+      ["deviceCompliance", "", "warn"],
+      ["deviceCompliance", null, "warn"],
+    ];
+    const wrong = vectors.filter(([k, v, want]) => sigClass(k, v) !== want);
+    check(
+      `served console: every signal vector renders its true colour (${vectors.length} vectors, wrong=${wrong.length})`,
+      wrong.length === 0,
+    );
+    for (const [k, v, want] of wrong) console.error(`  sigClass(${k}, ${JSON.stringify(v)}) = ${sigClass(k, v)} (want ${want})`);
+    check(
+      "served console: NOTHING that is not a known-good value renders in the allow colour",
+      vectors.filter(([, , want]) => want !== "ok").every(([k, v]) => sigClass(k, v) !== "ok"),
+    );
+
+    // THE LIVE HALF: the scenario that caused the original defect, driven through the
+    // real endpoint, so this cannot pass on a vector table that has drifted from what
+    // the server emits. The signal VALUE is asserted first — without that, a scenario
+    // that stopped emitting `non_compliant` would leave the colour assertion vacuous.
+    const nonCompliant = await req("POST", "/sim/room-entry", { body: { scenarioId: "noncompliant-device" } });
+    const dc = nonCompliant.json?.signals?.deviceCompliance;
+    check("room-entry noncompliant-device still returns restrict with deviceCompliance=non_compliant",
+      nonCompliant.json?.decision?.outcome === "restrict" && dc === "non_compliant");
+    check("served console: the signal that CAUSED the restrict renders BAD, not the allow colour",
+      sigClass("deviceCompliance", dc) === "bad");
+
+    // Every distinct (signal, value) pair the whole scenario catalogue emits, classified.
+    // Floored on both the pair count and the scenario count, because every assertion
+    // below is an `.every()` over a derived set and an empty set satisfies all of them.
+    const pairs = new Map();
+    for (const sc of roomScenarios.json?.scenarios ?? []) {
+      const r = await req("POST", "/sim/room-entry", { body: { scenarioId: sc.id } });
+      for (const [k, v] of Object.entries(r.json?.signals ?? {})) pairs.set(`${k}=${JSON.stringify(v)}`, [k, v]);
+    }
+    const scenarioCount = (roomScenarios.json?.scenarios ?? []).length;
+    check(`served console: the classification sweep is not vacuous (${scenarioCount} scenarios, ${pairs.size} distinct signal values)`,
+      scenarioCount >= 15 && pairs.size >= 25);
+    const classes = [...pairs.values()].map(([k, v]) => [k, v, sigClass(k, v)]);
+    // The absent/negative vocabulary the old substring matcher rendered green or blank.
+    const NEVER_GREEN = /^(unknown|unverified|missing|not_assessed|removed|forced|withheld|misfit|drifted|broken|failing|suspected|overdue|exception|maintenance|faulted|offline|expired|non_compliant|false)$/;
+    const greenNegatives = classes.filter(([, v, c]) => c === "ok" && NEVER_GREEN.test(String(v).toLowerCase()));
+    for (const [k, v] of greenNegatives) console.error(`  rendered green: ${k}=${JSON.stringify(v)}`);
+    check("served console: no absent, withdrawn or negative value the sim emits renders in the allow colour",
+      greenNegatives.length === 0);
+    // POSITIVE CONTROL through the same predicate: a classifier that answered a
+    // constant would satisfy every assertion above. All three classes must appear.
+    const produced = new Set(classes.map(([, , c]) => c));
+    check("served console: the classifier is discriminating — the live values produce ok, warn AND bad",
+      produced.has("ok") && produced.has("warn") && produced.has("bad"));
+  }
+
   // ── Signal Radar: new-signal detection ───────────────────────────────────
   const catalog = await req("GET", "/signals/catalog");
   check("signal catalog → 200 with 17 evaluated categories (15 + the two launch families the 2026-08-10 scan found unrepresented)", catalog.status === 200 && catalog.json?.evaluated?.length === 17);
@@ -961,8 +1071,8 @@ async function run() {
   // criticalSignalsPresent) have no source plane at all, so `answerable` can never
   // reach 18 for ANY input; the assertion could not fail even if silentHoles were
   // hardcoded to zero. Pin the real numbers against the engine instead.
-  check("evidence-coverage wedge pins the measured counts (10 answerable, 6 silent holes)", covWedge.json?.report?.answerable === 10 && covWedge.json?.report?.silentHoles === 6);
-  check("evidence-coverage empty estate pins the measured hole count (11)", covEmpty.json?.report?.silentHoles === 11);
+  check("evidence-coverage wedge pins the measured counts (12 answerable, 6 silent holes — 21 axes since the two launch-family axes and dockEvidenceFreshness joined on 2026-09-06)", covWedge.json?.report?.answerable === 12 && covWedge.json?.report?.silentHoles === 6);
+  check("evidence-coverage empty estate pins the measured hole count (13 of 21 axes)", covEmpty.json?.report?.silentHoles === 13);
   // The `note` is prose the CLIENT receives, so a stale number in it is a published
   // contradiction, not an internal comment. It said "18" as a literal beside a
   // `totalAxes` that computes the same thing; a nineteenth axis would have shipped a
@@ -1463,6 +1573,49 @@ async function run() {
       });
       check("gateway: a demo bearer is refused — no fallback to fixture credentials", gwDemoToken.status === 401);
 
+      // ── THE FENCE'S REACH, ASSERTED RATHER THAN ASSUMED ──────────────────────
+      //
+      // The allowlist is registered INSIDE the router (routes/index.ts) and that
+      // router is mounted at /api (app.ts), so its reach ends at /api — anything
+      // registered directly on the app above the mount never meets it. `GET /metrics`
+      // is one of those, is NOT in GA_ALLOWED_ROUTES, and is served under this
+      // profile. That is a decision (an orchestrator that cannot scrape a customer
+      // deployment is one nobody can operate; the endpoint is global-aggregate only,
+      // no tenant label, bearer-gatable via METRICS_TOKEN) and `launch-profile.mjs`
+      // records it as a gap — but nothing asserted it, and profile.ts's own comment
+      // claimed "everything outside it 404s" without qualification. Both halves are
+      // pinned here so neither the carve-out nor the fence can move unnoticed.
+      // THE UPTIME ASSERTION BELOW NEEDS THIS TO BE THE PROCESS'S FIRST SCRAPE, and
+      // it needs the process to be measurably old — so wait out the difference here
+      // rather than scraping twice. Scraping twice is what let the old defect pass:
+      // the second scrape of a lazily-started clock reads the gap between the two
+      // scrapes, which looks exactly like uptime.
+      while (Date.now() - start4 < 900) await new Promise((r) => setTimeout(r, 50));
+      const gwMetrics = await fetch(`http://localhost:${PORT4}/metrics`);
+      const gwMetricsBody = await gwMetrics.text();
+      check("gateway: /metrics is OUTSIDE the fence and is still served (200) — the allowlist governs /api",
+        gwMetrics.status === 200 && gwMetricsBody.includes("signalgrid_http_requests_total"));
+      const gwMetricsUnderApi = await fetch(`${BASE4}/metrics`);
+      check("gateway: /api/metrics — the same name UNDER the mount — is 404, so the fence's reach is exactly /api",
+        gwMetricsUnderApi.status === 404);
+
+      // ── the two metrics whose HELP text used to disagree with what they computed ──
+      // `signalgrid_up` was set at module IMPORT, so its only reachable value was 1:
+      // a green light wired to the switch rather than the circuit. It is now set from
+      // the listen callback, and this is the first scrape of this process.
+      check("metrics: signalgrid_up reads 1 on a process that is genuinely serving",
+        /^signalgrid_up 1$/m.test(gwMetricsBody));
+      // `signalgrid_process_uptime_seconds` started its clock on the FIRST SCRAPE, so
+      // it reported 0 on the first scrape of a process of any age, and measured
+      // time-since-a-scraper-arrived thereafter — an alert on
+      // `signalgrid_process_uptime_seconds < N`, the restart-loop alert this metric
+      // exists for, fired once per new scraper and never for an actual restart. The
+      // scrape read here is this process's FIRST, taken after it has demonstrably been
+      // alive for most of a second, so 0 is not a rounding error: it is the defect.
+      const uptime = Number(/^signalgrid_process_uptime_seconds ([0-9.]+)$/m.exec(gwMetricsBody)?.[1] ?? "-1");
+      check(`metrics: process uptime measures the PROCESS, not the scraper (first scrape of a >0.9s-old server read ${uptime}s)`,
+        uptime >= 0.7);
+
       // NON-VACUITY. Every check above asserts an ABSENCE, and a server that failed to
       // boot, or a wrong base URL, would satisfy all of them. Something must still be
       // served, or these prove nothing.
@@ -1814,7 +1967,13 @@ async function run() {
       return seen;
     };
 
-    const PORT_OPEN = 5314;
+    // DISTINCT PORTS, and that is not tidiness: these two were 5314 and 5315, the
+    // ports server5 and server6 above bind. Neither of those is awaited on
+    // SIGTERM before the spawn below rebinds, so a slow shutdown would have this
+    // probe answering against a still-dying server. A flake, not a fail-open (the
+    // positive controls below would go red, not green) — and cheaper to remove
+    // than to reason about.
+    const PORT_OPEN = 5322;
     const openServer = spawnLimited(PORT_OPEN, {});
     try {
       check("rate-limit probe server (no METRICS_TOKEN) becomes ready", (await waitReady(PORT_OPEN)) === true);
@@ -1834,7 +1993,7 @@ async function run() {
       openServer.kill("SIGTERM");
     }
 
-    const PORT_TOKEN = 5315;
+    const PORT_TOKEN = 5323;
     const tokenServer = spawnLimited(PORT_TOKEN, { METRICS_TOKEN: "row94-probe-token" });
     try {
       check("rate-limit probe server (METRICS_TOKEN set) becomes ready", (await waitReady(PORT_TOKEN)) === true);
@@ -1883,6 +2042,16 @@ async function run() {
     ctx.json?.assurance?.verdictEffect === "advisory");
   check("assurance: step_up IS answerable under review-demo (the step-up routes are mounted)",
     ctx.json?.assurance?.stepUpAnswerable === true);
+  // THE DERIVATION'S POSITIVE CONTROL. The assertion above used to be a decoration:
+  // `stepUpAnswerable` was the literal `true` under this profile, so renaming every
+  // /v1/step-up route (proven by planting exactly that) left the field claiming a
+  // capability the process did not have while the test stayed green. The field now
+  // derives from the routes THIS PROCESS MOUNTED, passed through the fence a request
+  // would meet — so the field and the wire must agree, and this probe is the wire.
+  // A 404 here would mean nothing is mounted to answer a step_up.
+  const stepUpProbe = await req("POST", "/v1/step-up/challenge", { token: KEYS.operator, body: {} });
+  check("assurance: stepUpAnswerable agrees with the WIRE — a step-up route is mounted and answers something other than 404",
+    stepUpProbe.status !== 404 && ctx.json?.assurance?.stepUpAnswerable === true);
   check("context → 200 with the caller's principal and tenant", ctx.status === 200 && typeof ctx.json?.tenant?.id === "string" && typeof ctx.json?.principal !== "undefined");
   const ctxNoAuth = await req("GET", "/v1/context", {});
   check("context without a token → 401", ctxNoAuth.status === 401);
@@ -1984,6 +2153,86 @@ async function run() {
     });
     check("invalid SIGNALGRID_MAX_DECISIONS_PER_TENANT refuses at boot (non-zero exit, never a silent default)",
       exitCode !== "still-running" && exitCode !== 0);
+  }
+
+  // ── Tenth short-lived server: a BLANK-BUT-SET METRICS_TOKEN must refuse to boot ──
+  //
+  // `process.env.METRICS_TOKEN?.trim()` used as a truthiness guard treats "" and "   "
+  // exactly like unset, so an operator who set the variable and got the quoting wrong
+  // believed /metrics was bearer-protected while it was served OPEN — an unusable
+  // configuration value LOOSENING the answer, which golden rule 2 forbids. Asserted by
+  // watching the process die, the same way the cap above is, and paired with a control
+  // that proves it is the BLANKNESS being refused and not the variable's presence.
+  {
+    const PORT10 = 5319;
+    const startBlank = (value) => spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT10), NODE_ENV: "production", LOG_LEVEL: "silent", METRICS_TOKEN: value },
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const exitOf = (child) => new Promise((resolveExit) => {
+      const timer = setTimeout(() => { child.kill("SIGKILL"); resolveExit("still-running"); }, 8000);
+      child.on("exit", (code) => { clearTimeout(timer); resolveExit(code); });
+    });
+    const blankExit = await exitOf(startBlank(""));
+    check("METRICS_TOKEN=\"\" refuses at boot (never a silently unauthenticated /metrics)",
+      blankExit !== "still-running" && blankExit !== 0);
+    const whitespaceExit = await exitOf(startBlank("   "));
+    check("METRICS_TOKEN=\"   \" refuses at boot too — the check is on the TRIMMED value",
+      whitespaceExit !== "still-running" && whitespaceExit !== 0);
+    // POSITIVE CONTROL: a real token boots. Without this, the two refusals above pass
+    // just as well on a server that cannot start for any reason at all.
+    const realToken = startBlank("row-f5-real-token");
+    try {
+      check("...and a NON-blank METRICS_TOKEN boots normally (so the refusals above are about blankness)",
+        await waitReady(PORT10));
+    } finally {
+      realToken.kill("SIGTERM");
+    }
+  }
+
+  // ── Eleventh short-lived server: the boot seeder must SAY what it did ───────────
+  //
+  // The seed loop swallowed every failure in a bare `catch {}` and the module imported
+  // no logger, so all six seeds failing — or the demo operator key being absent
+  // entirely — was indistinguishable at runtime from a healthy boot: the console just
+  // started empty and nothing said why. It now emits one line after the loop, and this
+  // reads that line off the process's own stdout rather than trusting the source.
+  {
+    const PORT11 = 5324;
+    const seedServer = spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT11), NODE_ENV: "production", LOG_LEVEL: "info" },
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    let bootLog = "";
+    seedServer.stdout.on("data", (chunk) => { bootLog += String(chunk); });
+    try {
+      check("boot-seed server came up", await waitReady(PORT11));
+      const seedLine = bootLog.split("\n").find((l) => l.includes("boot seed"));
+      const seedJson = (() => { try { return JSON.parse(seedLine ?? ""); } catch { return null; } })();
+      check("boot seed: the loop REPORTS what it minted instead of failing silently",
+        typeof seedLine === "string" && seedJson !== null);
+      check("boot seed: the report carries real counts and a healthy boot minted every seed",
+        seedJson?.total > 0 && seedJson?.minted === seedJson?.total && seedJson?.failed === 0);
+    } finally {
+      seedServer.kill("SIGTERM");
+    }
+  }
+
+  // ── every spawned server binds its OWN port ──────────────────────────────
+  // 5314 and 5315 were each used by TWO different spawned servers, and neither
+  // predecessor is awaited on SIGTERM before the successor rebinds. That is a flake,
+  // not a fail-open — but a flake in a gate is a gate people learn to re-run. Derived
+  // from this file's own text rather than a list kept beside it, so a port added
+  // tomorrow is covered without anyone remembering to add it here.
+  {
+    const selfSrc = await readFile(new URL("./api.test.mjs", import.meta.url), "utf8");
+    const portLiterals = [...selfSrc.matchAll(/\bPORT[A-Z0-9_]*\s*=\s*(\d{4})\b/g)].map((m) => m[1]);
+    const dupes = portLiterals.filter((p, i) => portLiterals.indexOf(p) !== i);
+    for (const d of new Set(dupes)) console.error(`  port bound by more than one spawned server: ${d}`);
+    // FLOOR FIRST: a regex that matched nothing would report "no duplicates".
+    check(`port hygiene: the port scan found the servers it should (${portLiterals.length} port constants)`,
+      portLiterals.length >= 12);
+    check("port hygiene: no two spawned servers are given the same port", dupes.length === 0);
   }
 
   // ── route coverage: every registered /v1 route must be exercised ─────────

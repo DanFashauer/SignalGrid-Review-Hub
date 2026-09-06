@@ -480,8 +480,12 @@ built:
 4. the decision reaches the host app, which owns the action;
 5. the audit ledger records the decision, its evidence and its policy version.
 
-Layers 2, 3 and 7 stay explicitly out of the first profile. They are the
-expansion path, not the launch claim.
+Layers 2, 3 and 8 stay explicitly out of the first profile. They are the
+expansion path, not the launch claim. (Layer numbers in this document's prose always
+mean the ten-layer table above, never the `## 1`–`## 13` section headings, which run
+on their own offset numbering — section 1 is layer 2. An earlier version of this line
+said layer 7, the decision core, which is item 3 of the profile; the workflow section
+below already said 8.)
 
 ---
 

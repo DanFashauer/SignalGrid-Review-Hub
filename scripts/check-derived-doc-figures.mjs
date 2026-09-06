@@ -79,6 +79,8 @@ const read = (rel, root = ROOT) => readFileSync(join(root, rel), "utf8");
 const WORDS = {
   zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6,
   seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+  thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17,
+  eighteen: 18, nineteen: 19, twenty: 20,
 };
 
 /** Pure: a stated figure as a number, or NaN when it is neither digits nor a known word. */
@@ -147,6 +149,32 @@ export function postmanFolderCount(root = ROOT) {
 export function proofScriptCount(root = ROOT) {
   const scripts = JSON.parse(read("package.json", root)).scripts ?? {};
   return Object.keys(scripts).filter((k) => k.startsWith("proof:")).length;
+}
+
+/** Tracked files under a git pathspec — the shape every "N files" figure here derives from. */
+function trackedCount(pathspec, root = ROOT) {
+  const out = execSync(`git ls-files -- ${pathspec}`, { cwd: root, encoding: "utf8" });
+  return out.split("\n").filter(Boolean).length;
+}
+
+/**
+ * Workflow files under .github/workflows. `docs/CI_AND_VALIDATION.md` said "Fifteen"
+ * from 2026-08-22 until 2026-09-06, eight lines above the paragraph whose whole
+ * subject is that derived numbers must not be copied; `promote.yml` had been retired
+ * on 2026-09-02 and `docs/REPO_LAYOUT.md`, beside it, already said 14. The figure
+ * was a WORD, which is why the sweep below never saw it (see `sweepHits`).
+ */
+export function workflowFileCount(root = ROOT) {
+  return trackedCount("'.github/workflows/*.yml' '.github/workflows/*.yaml'", root);
+}
+
+/**
+ * `scripts/src/*-proof.ts` sources — the decomposition `docs/ZERO_COST_LIVE_TEST_MATRIX.md`
+ * gives beside the gated proof:* count. It read "140 are …" from the day it was written
+ * (2026-09-05, when there were 142) and never added up to its own headline.
+ */
+export function proofSourceFileCount(root = ROOT) {
+  return trackedCount("'scripts/src/*-proof.ts'", root);
 }
 
 /**
@@ -341,6 +369,20 @@ export const FIGURES = [
     from: "proof:* keys in the root package.json",
   },
   {
+    id: "proof-source-files",
+    doc: "docs/ZERO_COST_LIVE_TEST_MATRIX.md",
+    re: /(\d+) are `scripts\/src\/\*-proof\.ts`/,
+    derive: proofSourceFileCount,
+    from: "tracked scripts/src/*-proof.ts files (git ls-files)",
+  },
+  {
+    id: "workflow-files",
+    doc: "docs/CI_AND_VALIDATION.md",
+    re: /\*\*([A-Za-z]+|\d+) workflow files total\*\*/,
+    derive: workflowFileCount,
+    from: "tracked .github/workflows/*.yml files (git ls-files)",
+  },
+  {
     id: "sim-operations",
     doc: "docs/LIVE_SYNC_LOOP.md",
     re: /allowlist — (\d+) operations covering/,
@@ -486,6 +528,18 @@ export const SWEEP = [
     noun: "proof scripts|proof gates|proofs|proof:\\*",
   },
   {
+    id: "proof-source-files",
+    label: "scripts/src/*-proof.ts files",
+    derive: proofSourceFileCount,
+    noun: "`scripts/src/\\*-proof\\.ts`|-proof\\.ts files|proof sources",
+  },
+  {
+    id: "workflow-files",
+    label: "workflow files",
+    derive: workflowFileCount,
+    noun: "workflow files|workflows",
+  },
+  {
     id: "postman-requests",
     label: "Postman requests",
     derive: postmanRequestCount,
@@ -511,6 +565,13 @@ export const SWEEP_EXEMPT = [
       "Two gates on one sentence is two places to fix it; this one defers.",
   },
   {
+    doc: "docs/STATUS.md",
+    near: /workflows: \*\*\d+/,
+    reason:
+      "the same Inventory line: check-status-figures.mjs derives the workflow count from .github/workflows " +
+      "and regenerates the sentence; this gate defers to the owner of the line.",
+  },
+  {
     doc: "docs/BUILD_BACKLOG.md",
     near: /\d+ `proof:\*/,
     reason:
@@ -533,10 +594,23 @@ export function isDatedMeasurement(text, index) {
   return /^\s*\|\s*\d{4}-\d{2}-\d{2}\s*\|/.test(text.slice(lineStart, lineStart + 40));
 }
 
-/** Pure: every place `value` stands within 30 characters of one of `noun`'s spellings. */
+/**
+ * Pure: every place `value` stands within 30 characters of one of `noun`'s spellings —
+ * as DIGITS or, for a value WORDS can spell, as the word ("Fifteen workflow files").
+ *
+ * The word form was missing until 2026-09-06. The pattern interpolated the digits
+ * only, so a figure an author wrote out in English could never be a hit, and
+ * `docs/CI_AND_VALIDATION.md` carried "Fifteen workflow files total" for four days
+ * after the fifteenth workflow was retired while this sweep reported the tree fully
+ * accounted for. The rows above already read either spelling (`readCount`); the sweep
+ * now searches either spelling. Sentence-initial capitals are matched by class rather
+ * than by an `i` flag, so the noun alternatives keep their exact case.
+ */
 export function sweepHits(text, value, noun) {
   const n = `(?:${noun})`;
-  const v = `(?<![\\d,.])${value}(?![\\d,.%])`;
+  const word = NUMERALS[value];
+  const wordAlt = word ? `|\\b[${word[0].toUpperCase()}${word[0]}]${word.slice(1)}\\b` : "";
+  const v = `(?:(?<![\\d,.])${value}(?![\\d,.%])${wordAlt})`;
   const rx = new RegExp(`${v}[\\s\\S]{0,30}?${n}|${n}[\\s\\S]{0,30}?${v}`, "g");
   return [...text.matchAll(rx)].map((m) => ({ index: m.index, end: m.index + m[0].length, snippet: m[0].replace(/\s+/g, " ") }));
 }
@@ -783,6 +857,24 @@ function selfTest() {
   checks.push([
     "…and a longer number CONTAINING the figure is not a hit (1970 is not 97)",
     sweepHits("1970 requests", 97, "requests").length === 0 && sweepHits("in 1997 requests", 97, "requests").length === 0,
+  ]);
+  checks.push([
+    "A FIGURE WRITTEN AS A WORD IS A HIT — \"Fifteen workflow files\" is the sentence that hid for four days",
+    sweepHits("- **Fifteen workflow files total** — the Apple lane", 15, "workflow files|workflows").length === 1 &&
+      sweepHits("fifteen workflows run", 15, "workflow files|workflows").length === 1,
+  ]);
+  checks.push([
+    "…and a DIFFERENT word beside the noun is not a hit, nor is the word inside another word",
+    sweepHits("Fourteen workflow files", 15, "workflow files|workflows").length === 0 &&
+      sweepHits("thirtyfifteen workflows", 15, "workflow files|workflows").length === 0,
+  ]);
+  checks.push([
+    "the live workflow-files row reads a WORD figure and the deriver counts tracked workflow files",
+    (() => {
+      const row = FIGURES.find((r) => r.id === "workflow-files");
+      const m = read(row.doc).match(row.re);
+      return !!m && Number.isInteger(readCount(m[1])) && readCount(m[1]) === workflowFileCount() && workflowFileCount() >= 5;
+    })(),
   ]);
   checks.push([
     `the dated-measurement rule exempts ${DATED_RULE}`,

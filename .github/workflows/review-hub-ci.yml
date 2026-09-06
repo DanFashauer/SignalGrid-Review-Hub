@@ -588,6 +588,13 @@ jobs:
         run: node scripts/check-cited-paths.mjs
       - name: "Cited-path self-test (the gate can actually fail)"
         run: node scripts/check-cited-paths.mjs --self-test
+      # A document that instructs `SIGNALGRID_X=…` names a control; if nothing reads X
+      # the control does not exist. SIGNALGRID_SANITIZE_OUTPUT was "required" in two
+      # documents and read by nothing.
+      - name: "Env-doc readers (an instructed SIGNALGRID_* variable must be read by something)"
+        run: node scripts/check-env-doc-readers.mjs
+      - name: "Env-doc-reader self-test (the gate can actually fail)"
+        run: node scripts/check-env-doc-readers.mjs --self-test
       # The MCP-ecosystem source-independence map: every externally-sourced connector
       # family must carry a row in docs/research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md (an
       # MCP server or an explicit gap marker), and the map may not name a family the

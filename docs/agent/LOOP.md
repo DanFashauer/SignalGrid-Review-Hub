@@ -51,13 +51,28 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batch J LANDED (#456) with the
+LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batch K LANDED (#463). Batch L
+              (tenth round, on its PR) read the docs families: CI_AND_VALIDATION
+              said "Fifteen workflow files" four days after the fifteenth was
+              retired - a WORD numeral the figure sweep could not see (it reads
+              words now, and the count is a row); ZERO_COST's "140 are
+              *-proof.ts" never added up (143, now a row); 3,080 path:line
+              citations were never bounded (ten past EOF; the cited-paths gate
+              bounds them now, historical records declare themselves); the
+              Ponytail audit cited 44 paths through this container's absolute
+              prefix (rejected now); the Graph runbook required an env variable
+              nothing reads (removed; check-env-doc-readers is new); the
+              evidence-log reporter miscounted 19 of 33 records as incomplete
+              (detector widened, count ratcheted at zero). One audit claim was
+              REFUTED by the tree: "no gate reads docs HTML" - check-doc-html-
+              figures has since 2026-09-02. Coverage: 82 read / 7 partial / 11
+              not read of 100. Earlier the same day: Batch J (#456) with the
               Mac-lane second revision; the owner's Fleet Premium key was used
               the same hour in the cloud lab (#461: the adapter's team branch
               dropped every inherited policy - fixed and proven; the transfer
               endpoint answers 200 under Premium and SignalGrid still has no
               path to it - asserted; proof:live-fleet 52/52, workflow 21/21).
-              Batch K (ninth round, on its PR) read the rest of lib/integrations
+              Batch K (ninth round, #463) read the rest of lib/integrations
               and the twelve data directories: the device registry's Redis key
               folded ':' and '_' (two valid ids, one record), its allowlist
               opened on any value but the exact string 'true' AND on absence,
@@ -281,10 +296,12 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land batch K, then keep reading the 15 unread surfaces
-              (the docs families first - docs/* loose files, docs/agent,
-              docs/research, docs/company - then .claude/skills content and
-              signalgrid-app's remainder). OWNER, once, on the Mac, now that
+NEXT ACTION: cloud: land batch L, then keep reading the 11 unread surfaces
+              (docs/research, docs/company, docs/inspiration, docs/connectors,
+              docs/outreach, docs/preview, docs/assets, docs/consolidation,
+              docs/estate, docs/postman - then .claude/skills content) and the
+              three big docs bodies the tenth round only sampled
+              (BUILD_BACKLOG, COMPANY_BUILD_PLAN, CLAIM_INVENTORY). OWNER, once, on the Mac, now that
               the installer is on mainline: `bash scripts/mac/install-launchd.sh`
               then `--status` - the steward escalates once a day while the tick
               stays silent. Mac lane (a person): nothing is owed; seven unread

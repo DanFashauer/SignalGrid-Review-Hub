@@ -6,9 +6,9 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**81 of 100 surfaces have been read. 4 are partially read. 15 have not been read at all.**
+**82 of 100 surfaces have been read. 7 are partially read. 11 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2248 of 2248 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2249 of 2249 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -53,16 +53,16 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/sync` | tree | 5 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `config` | tree | 5 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `docker` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
-| `docs/*` | loose files | 214 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `docs/agent` | docs family | 31 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `docs/*` | loose files | 214 | **partial** | 1 | 2026-09-06 | cloud lane (one independent docs audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 6 | 0 |
+| `docs/agent` | docs family | 31 | **partial** | 1 | 2026-09-06 | cloud lane (one independent docs audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 0 |
 | `docs/assets` | docs family | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/company` | docs family | 9 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/connectors` | docs family | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/consolidation` | docs family | 4 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `docs/env` | docs family | 1 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `docs/env` | docs family | 1 | read | 1 | 2026-09-06 | cloud lane (one independent docs audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/estate` | docs family | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/inspiration` | docs family | 12 | **NOT READ** | 0 | — | — | — | 0 | 0 |
-| `docs/lab` | docs family | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
+| `docs/lab` | docs family | 2 | **partial** | 1 | 2026-09-06 | cloud lane (one independent docs audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 1 |
 | `docs/outreach` | docs family | 3 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/postman` | docs family | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `docs/preview` | docs family | 5 | **NOT READ** | 0 | — | — | — | 0 | 0 |
@@ -114,33 +114,32 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 8 | 1 |
 | `native/shared` | native | 3 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 392 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 4 | 0 |
+| `scripts` | package | 393 | **partial** | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 4 | 0 |
 | `site` | tree | 2 | read | 2 | 2026-09-05 | cloud lane (firsthand read of every edit site; fixes + gates) | docs/agent/EVIDENCE.md | 2 | 3 |
 | `tests` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 1 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |
 
-## Partially read (4)
+## Partially read (7)
 
 A named slice was read. The rest of the surface has not been.
 
 - `.claude/skills` (tree)
 - `artifacts/api-server` (package)
 - `artifacts/signalgrid-app` (package)
-- `scripts` (package)
-
-## Not read (15)
-
-- `artifacts/lane-messages` (tree)
 - `docs/*` (loose files)
 - `docs/agent` (docs family)
+- `docs/lab` (docs family)
+- `scripts` (package)
+
+## Not read (11)
+
+- `artifacts/lane-messages` (tree)
 - `docs/assets` (docs family)
 - `docs/company` (docs family)
 - `docs/connectors` (docs family)
 - `docs/consolidation` (docs family)
-- `docs/env` (docs family)
 - `docs/estate` (docs family)
 - `docs/inspiration` (docs family)
-- `docs/lab` (docs family)
 - `docs/outreach` (docs family)
 - `docs/postman` (docs family)
 - `docs/preview` (docs family)

@@ -132,8 +132,11 @@ if (process.platform !== "darwin") {
 check("--plan writes no result file (a plan is not evidence)", !existsSync(join(RES_DIR, "PLAN.json")));
 
 // ── 3. the audit's laws, each against its own failure ────────────────────────
-type Req = { id: string; __fileId: string; runs: string[]; reason: string };
-const req = (id: string, runs: string[]): Req => ({ id, __fileId: id, runs, reason: "why" });
+type Req = { id: string; __fileId: string; runs: string[]; reason: string; requestedAt?: string };
+// Every request states WHEN it was queued (2026-09-06): without it "PENDING" read
+// the same on day one and day twenty-four. The synthetic requests carry one; the
+// control below is the one that does not.
+const req = (id: string, runs: string[]): Req => ({ id, __fileId: id, runs, reason: "why", requestedAt: "2026-09-01T00:00:00Z" });
 const res = (id: string, runs: unknown[]) => ({ requestId: id, __fileId: id, runs, provenance: { commit: "abc" } });
 
 const clean = auditSimRequests([req("r", ["preflight"])], [res("r", [{ operation: "preflight", status: "passed" }])]);
@@ -176,6 +179,12 @@ check("a result naming no existing request is refused", ghost.problems.some((p: 
 
 const badStatus = auditSimRequests([req("r", ["preflight"])], [res("r", [{ operation: "preflight", status: "mostly-fine" }])]);
 check("a status outside the closed set is refused", badStatus.problems.some((p: string) => p.includes("outside the closed set")));
+
+const noWhen = auditSimRequests([{ id: "r", __fileId: "r", runs: ["preflight"], reason: "why" }], []);
+check(
+  "a request that does not say WHEN it was queued is refused — pending without an age cannot be reported overdue",
+  noWhen.problems.some((x) => x.includes("no parseable requestedAt")),
+);
 
 const noProv = auditSimRequests([req("r", ["preflight"])], [{ requestId: "r", __fileId: "r", runs: [], provenance: {} }]);
 check("a result that cannot name the commit it ran against is refused", noProv.problems.some((p: string) => p.includes("provenance.commit")));

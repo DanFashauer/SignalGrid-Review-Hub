@@ -316,7 +316,14 @@ console.log(`  operations that actually ran clean: ${greenRuns.length}`);
 
 if (reported.length > 0) {
   console.log(`\n  REPORTED — provenance this checkout cannot vouch for (never silent, never green):`);
-  for (const line of reported) console.log(`    · ${line}`);
+  if (shallow && reported.length > 3) {
+    // A depth-1 CI checkout cannot resolve ANY historical commit, so every result
+    // lands here; one line with the ids says the same thing as sixteen.
+    const ids = reported.map((l) => l.match(/^result ([^:]+):/)?.[1] ?? "?");
+    console.log(`    · ${reported.length} result(s) name commits this SHALLOW clone cannot resolve (a full clone would gate them): ${ids.join(", ")}`);
+  } else {
+    for (const line of reported) console.log(`    · ${line}`);
+  }
 }
 
 if (superseded.length > 0) {

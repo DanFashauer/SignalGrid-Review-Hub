@@ -679,6 +679,15 @@
      "scope": "partial: CLAIM_INVENTORY.json by anchors as before; the membership check for launch-profile citations is still specified, not built; EVIDENCE.md, LOOP.md, the registries as before.",
      "open": 2,
      "closed": 1
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Seventeenth round: the 11 evidence fragments the ratchet had carried since the fifteenth round read one by one — 8 claim echoes (the gate quoting the row's own claim back at the cited file; rule fixed, no row edited), 2 stale citations re-cited to the current text (rows 503, 555), 1 superseded sentence de-cited and dated (row 69). Membership measured across the inventory: 246 asserted arms hold, 0 contradict the profile, 213 clauses unasserted and reported. Ratchet: absent 0, remove-actioned still present 0, evidence fragments absent 12 → 0, membership mismatches 0.",
+     "reviewer": "cloud lane (membership rule measured on the live inventory before it became a gate; every false pairing pinned in the self-test)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: CLAIM_INVENTORY.json by anchors, citations and membership; whether a NEW claim on a surface has a row is still nobody's gate; EVIDENCE.md, LOOP.md, the registries as before.",
+     "open": 1,
+     "closed": 1
     }
    ]
   },
@@ -1665,6 +1674,15 @@
      "scope": "partial: the two gates in full; the rest of scripts/ as the fourth, tenth and fourteenth rounds left them.",
      "open": 0,
      "closed": 2
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Seventeenth round: check-claim-inventory-anchors gained the launch-profile membership check — every citation into scripts/launch-profile.mjs that names a profile id and an arm is tested by importing SURFACES (180 ids, four arms, floored) and pairing the id with the status word that governs it through link material only; nearest-word pairing was measured first and produced 33 false mismatches across two attempts, each pinned as a self-test case; bare dictionary-word ids count only when marked. A fragment that is the row's own claim wording is a claim echo, never an absent citation. Ratchet field membershipMismatches starts at 0. Self-test 41/41. gen-claim-inventory-md's preamble names the evidence and membership rules.",
+     "reviewer": "cloud lane (membership rule measured on the live inventory before it became a gate; every false pairing pinned in the self-test)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the anchor gate and the generator in full; the rest of scripts/ as the fourth, tenth, fourteenth and fifteenth rounds left them.",
+     "open": 0,
+     "closed": 1
     }
    ]
   },

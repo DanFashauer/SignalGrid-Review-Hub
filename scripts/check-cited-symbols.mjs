@@ -19,11 +19,16 @@
 // underscore (an env key or constant) or a backticked camelCase / snake_case
 // identifier. It is PAIRED with a code-file citation only when the pairing is
 // unambiguous:
-//   - in prose, the nearest citation BEFORE it within 60 characters, with no
-//     sentence break, semicolon, or other file name between them; or the
-//     citation immediately AFTER it in the "`sym` (path)" / "`sym` in path" form;
-//   - in a table row that cites exactly ONE code file (a registry row), every
-//     symbol in the row.
+//   - in prose, an EXPLICIT attribution after it wins ("`sym` in/at/from/of/
+//     exported by/defined in path", "`sym` is defined in path", or a
+//     parenthetical citation within two words: "before `sym` runs (path:56)");
+//     otherwise the nearest citation BEFORE it within 60 characters, with no
+//     sentence break, semicolon, table-cell bar, other file name, or possessive
+//     of some other noun ("the sibling's `sym`") between them;
+//   - in a table row that cites exactly ONE code file BY URL (a registry row),
+//     every symbol in the row.
+// The first live pass mis-paired three sentences a reader gets right; each is a
+// self-test case written before the rule moved.
 // Anything else is REPORTED as unpaired and never judged. A symbol counts as
 // present when it occurs on a NON-COMMENT line of the cited file — a file that
 // names BACKEND_TIMEOUT in the comment recording its deletion does not contain
@@ -62,7 +67,7 @@ export const DERIVED_OR_RECORD = new Map([
   ["docs/agent/EVIDENCE.md", "a record of commands run and their output on the day; symbols are quoted as they were, not as claims about today's tree"],
 ]);
 
-const CODE_RE = /(?:github\.com\/[\w.-]+\/[\w.-]+\/blob\/[\w./-]+?\/)?((?:lib|scripts|artifacts|native|fixtures|fleet|tests|tools|config|firmware|site)\/[A-Za-z0-9_./-]+\.(?:ts|tsx|mjs|js|swift|kt|py|sh))\b/g;
+const CODE_RE = /(github\.com\/[\w.-]+\/[\w.-]+\/blob\/[\w./-]+?\/)?((?:lib|scripts|artifacts|native|fixtures|fleet|tests|tools|config|firmware|site)\/[A-Za-z0-9_./-]+\.(?:ts|tsx|mjs|js|swift|kt|py|sh))\b/g;
 const ANY_PATH_RE = /[\w.-]+(?:\/[\w.-]+)+/g;
 const BARE_FILE_RE = /\b[\w-]+\.(?:ts|tsx|mjs|js|swift|kt|py|sh|md|json|yml|yaml)\b/;
 const SYM_RE = /\b([A-Z][A-Z0-9]*_[A-Z0-9_]{2,})\b|`([A-Za-z_$][\w$]*(?:[A-Z][a-z0-9]|_[a-z])[\w$]*)`/g;
@@ -79,7 +84,7 @@ export function codeLines(text, file) {
 
 /** Pure: the (symbol, files) pairs one document line asserts, given the doc-name set. */
 export function pairsIn(line, docNames) {
-  const cites = [...line.matchAll(CODE_RE)].map((m) => ({ file: m[1], at: m.index, end: m.index + m[0].length, url: m[0].startsWith("github.com") }));
+  const cites = [...line.matchAll(CODE_RE)].map((m) => ({ file: m[2], at: m.index, end: m.index + m[0].length, url: m[1] !== undefined }));
   if (cites.length === 0) return { pairs: [], unpaired: 0 };
   const pathy = [...line.matchAll(ANY_PATH_RE)].map((m) => m[0].toUpperCase());
   const syms = [...line.matchAll(SYM_RE)]

@@ -1,3 +1,5 @@
+<!-- render-viewport: 1200x630 -->
+<!-- render-output: signalgrid-og.png -->
 <style>
   :root {
     --bg: #080b11; --surface: #111a24; --line: rgba(148,163,184,0.14);
@@ -43,6 +45,7 @@
   .vrow:first-of-type { border-top: none; }
   .vrow .k { color: var(--muted); }
   .vrow .v { color: var(--allow); }
+  .vnote { font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; color: var(--muted); margin-top: 13px; }
   .legend { position: absolute; left: 66px; bottom: 34px; z-index: 2; display: flex; gap: 20px; font-family: var(--mono); font-size: 13px; color: var(--muted); }
   .oc { display: flex; align-items: center; gap: 7px; }
   .oc i { width: 9px; height: 9px; border-radius: 2px; }
@@ -64,6 +67,7 @@
       <div class="vrow"><span class="k">reason</span><span class="v">TRUST_ESTABLISHED</span></div>
       <div class="vrow"><span class="k">policy</span><span class="v" style="color:var(--muted)">v1</span></div>
       <div class="vrow"><span class="k">audit chain</span><span class="v">VERIFIED</span></div>
+      <div class="vnote">· synthetic data</div>
     </div>
   </div>
   <div class="legend">

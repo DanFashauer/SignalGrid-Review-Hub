@@ -1,4 +1,7 @@
 {
+  "env": {
+    "SUPERPOWERS_DISABLE_TELEMETRY": "1"
+  },
   "permissions": {
     "defaultMode": "default",
     "allow": [

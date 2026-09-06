@@ -18,6 +18,9 @@ buy. Do not manufacture work because a capability could exist.
 All paths below are repository-root-relative.
 ## Authority order
 When instructions conflict, follow this order:
+1. The owner's explicit current instruction. (This line was dropped by a renumbering
+   on 2026-09-06 and the list shipped starting at 2 for four hours — an absent head
+   entry read as no entry. CLAUDE.md: "Dan decides; Claude Code executes.")
 2. Ratified records in `docs/DECISION_RECORDS.md`, newest applicable record first.
 3. `docs/PURPOSE.md` for WHAT SignalGrid is (canonical under DR-020; CLAUDE.md
    itself defers to it).

@@ -674,6 +674,24 @@ jobs:
         run: node scripts/check-cited-symbols.mjs
       - name: "Cited symbols self-test (the check can actually fail)"
         run: node scripts/check-cited-symbols.mjs --self-test
+      # Two preview PNGs shipped a retired label for five days after their HTML sources
+      # were corrected (2026-09-06): no gate read image content. The manifest pins each
+      # render to the sha256 of its source; the renderer (Chromium) is NOT run in CI.
+      - name: "Rendered assets (a committed PNG must be a render of the committed HTML; unpinned PNGs reported)"
+        run: node scripts/check-rendered-assets.mjs
+      - name: "Rendered assets self-test (the check can actually fail)"
+        run: node scripts/check-rendered-assets.mjs --self-test
+      # The vendored skills prescribed two commands the repo's own Bash hook denies, and
+      # three of them write paths into the tree that were not gitignored — one untracked
+      # directory stamps every later sim result as minted from a dirty tree (2026-09-06).
+      - name: "Skill instruction conflicts (no skill may prescribe a command the Bash deny-list hook refuses, unless VENDORED.md Overrides names the site)"
+        run: node scripts/check-skill-instruction-conflicts.mjs
+      - name: "Skill instruction conflicts self-test (the check can actually fail)"
+        run: node scripts/check-skill-instruction-conflicts.mjs --self-test
+      - name: "Gitignore producers (every path a vendored skill writes into the tree is ignored by the TRACKED ignore files)"
+        run: node scripts/check-gitignore-producers.mjs
+      - name: "Gitignore producers self-test (the check can actually fail)"
+        run: node scripts/check-gitignore-producers.mjs --self-test
       - name: "Proof — dual control"
         run: pnpm run proof:dual-control
       - name: "Pagination-truncation guard (a capped read must not look complete)"

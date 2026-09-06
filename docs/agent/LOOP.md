@@ -53,8 +53,42 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               unchanged.
 LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
               M (#466), N (#468), O (#470), P (#471), Q (#473), R (#474) and
-              S (#476) and T (#477) LANDED. Batch U (nineteenth round, on its
-              PR) built the gate the catalog auditor specified:
+              S (#476), T (#477) and U (#480) LANDED. Batch V (twentieth round,
+              on its PR) read six partial surfaces WHOLE with four independent
+              fail-closed audits: docs/lab, docs/preview, docs/assets and the
+              vendored .claude/skills content are now READ and fixed; docs/company
+              and artifacts/signalgrid-app are READ with their fixes owed by
+              Batches X and W (findings in the scratchpad, open counts in the
+              ledger). Fixed here: both public preview PNGs still rendered the
+              retired "Operational Trust Orchestration" eyebrow five days after
+              ab72355 struck it from their HTML (no gate read an image) — re-
+              rendered from the committed sources with a synthetic-data
+              disclosure the OG card lacked, and check-rendered-assets pins each
+              PNG to the sha256 of its source; the SVG ladder's one arrow pointed
+              at Restrict off-centre with two amber rungs at ΔE 11 → fan to four,
+              recoloured, the ladder gate holds neighbours at ΔE ≥ 20 and text at
+              AA (a luminance rule was tried first and could not tell green from
+              yellow); the retired-label scan opens docs/**/*.svg; the LAB_001
+              rehearsal called the Python posture server "the same tool" as the
+              TypeScript location tool it drove and said "NOT minted" four days
+              after the Mac ran it → rewritten, and check-sim-requests fails a
+              doc that names a PASSED request in a paragraph still saying not
+              yet / when that lands; two lab services bound to 0.0.0.0 on a LAN
+              lane → loopback; signalgrid-master's authority ladder had lost
+              "1. The owner's explicit current instruction" in a renumbering
+              (f97cebf) → restored; the vendored brainstorm server beaconed a
+              third-party image URL with the version string from every page →
+              SUPERPOWERS_DISABLE_TELEMETRY=1 in settings.json env; VENDORED.md
+              gained an Overrides table (23 rows: hook-denied commands, force-
+              push-on-request, commit-without-asking, a fail-open except-arm
+              taught as the good example, RED-phase outage fixtures, dead
+              nested layouts); check-skill-instruction-conflicts judges every
+              code span under .claude/skills by invoking the hook itself (found a
+              third rm -rf inside a teardown script the hook can never see);
+              check-gitignore-producers proved .superpowers/, .worktrees/ and
+              diagrams/ were unignored (0/31 → 30/30) in a pristine git harness
+              because git check-ignore cannot be told to ignore info/exclude.
+              Batch U (nineteenth round, #480) built the gate the catalog auditor specified:
               scripts/check-cited-symbols.mjs - a symbol named beside a
               code-file citation must be one the file still holds on a
               non-comment line. It reads no English: pairing is positional
@@ -458,14 +492,26 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land Batch U (on its PR - the cited-symbols gate), then
-              close mail PR #479 (it fails the figure guard on the digit Batch
-              U rewrites) and re-deliver the steward heartbeat from the new
-              mainline, then (1) whatever the ledger still marks partial (12
-              on 2026-09-06 - `node scripts/check-surface-review-coverage.mjs`
-              names them) - read them, not their indexes; (2) the 194 symbols
-              the cited-symbols gate leaves unpaired are REPORTED, not owed -
-              a symbol two clauses from its citation is unchecked, not wrong;
+NEXT ACTION: cloud: land Batch V (on its PR), then (1) Batch W - the console's
+              fourteen fail-open shapes (scratchpad batch-w-app-findings.md:
+              eight "Loading…" sites that render a settled error as pending,
+              the Dashboard's three-literal buckets hiding 88 not-configured
+              integrations, Fleet's failed sync read shown as no drift,
+              freshness badges that look fresh when stale, "Policy not found"
+              on a failed list read) with an error-as-pending scan, an enum-
+              coverage check, and a route-reachability + preview() gate; (2)
+              Batch X - docs/company (scratchpad batch-x-company-findings.md:
+              the investor one-pager's "in flight"/"live" over an empty
+              outreach log, three false "no cost figure appears" absolutes the
+              2026-08-21 lens review already named, iam 2/5/15, 47 vs 48
+              families, v4/174 vs v5/180) plus docs/company into the buyer-
+              facing claims scan and a REPORT of unbackticked path:line
+              citations; (3) the six surfaces the ledger still marks partial
+              (docs/*, docs/agent, docs/inspiration, docs/research,
+              artifacts/api-server, scripts) - read them, not their indexes;
+              the 194 symbols the cited-symbols gate leaves unpaired and the
+              14 deny-list MENTIONS the skills gate reports are REPORTED, not
+              owed;
               the 213 unasserted membership clauses are REPORTED, not owed -
               an evidence sentence that names an id without an arm is not
               wrong, only unchecked. OWNER: the ICP

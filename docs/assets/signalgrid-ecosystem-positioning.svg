@@ -72,20 +72,29 @@
     <text x="448" y="486" class="small" style="font-size:18px; fill:#e8fffb;">Evaluates identity + posture + session + operational + physical context</text>
   </g>
 
-  <path d="M640 526 L640 596" class="out-line" fill="none"/>
+  <!-- One decision, four possible outcomes: the line leaves the decision layer once and
+       fans to every rung (the ladder is centred under the card at x=640). Adjacent rungs
+       must be tellable apart — Step-Up and Restrict once sat at ΔE 11 against each other;
+       scripts/check-svg-outcome-ladder.mjs holds neighbours at ΔE >= 20 and chip text at AA. -->
+  <path d="M640 526 L640 560" class="out-line" fill="none" style="marker-end:none"/>
+  <path d="M337 560 L943 560" class="out-line" fill="none" style="marker-end:none"/>
+  <path d="M337 560 L337 596" class="out-line" fill="none"/>
+  <path d="M539 560 L539 596" class="out-line" fill="none"/>
+  <path d="M741 560 L741 596" class="out-line" fill="none"/>
+  <path d="M943 560 L943 596" class="out-line" fill="none"/>
 
   <g filter="url(#shadow)">
-    <rect x="142" y="610" width="170" height="70" rx="20" fill="#72b989"/>
-    <text x="186" y="653" class="outcome">Allow</text>
+    <rect x="252" y="610" width="170" height="70" rx="20" fill="#72b989"/>
+    <text x="296" y="653" class="outcome">Allow</text>
 
-    <rect x="344" y="610" width="170" height="70" rx="20" fill="#d6a85b"/>
-    <text x="391" y="653" class="outcome">Step-Up</text>
+    <rect x="454" y="610" width="170" height="70" rx="20" fill="#e9c65f"/>
+    <text x="501" y="653" class="outcome">Step-Up</text>
 
-    <rect x="546" y="610" width="170" height="70" rx="20" fill="#c98f3e"/>
-    <text x="602" y="653" class="outcome">Restrict</text>
+    <rect x="656" y="610" width="170" height="70" rx="20" fill="#d9843f"/>
+    <text x="712" y="653" class="outcome">Restrict</text>
 
-    <rect x="748" y="610" width="170" height="70" rx="20" fill="#c7645c"/>
-    <text x="788" y="653" class="outcome">Deny</text>
+    <rect x="858" y="610" width="170" height="70" rx="20" fill="#c7645c"/>
+    <text x="898" y="653" class="outcome">Deny</text>
   </g>
 
   <text x="72" y="724" class="note">Connected systems stay systems of record. SignalGrid consumes signals, decides at runtime, and emits decisions, audit context, and action requests.</text>

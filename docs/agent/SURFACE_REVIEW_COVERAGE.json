@@ -133,6 +133,15 @@
      "scope": "partial: all 12 first-party SKILL.md + VENDORED.md + the eight stack-reference files now read in full; vendored content not audited.",
      "open": 0,
      "closed": 2
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twentieth round: the 51 vendored obra/superpowers files, LICENSE, VENDORED.md and signalgrid-master/SKILL.md read in full (the 16 first-party files stand on the twelfth round's read). signalgrid-master's authority ladder began at 2 — commit f97cebf's renumbering dropped '1. The owner's explicit current instruction' and the list shipped headless for four hours → restored. brainstorming/scripts/server.cjs embeds a primeradiant.com image URL with the version string in every served page unless a telemetry kill-switch is set (reproduced) → SUPERPOWERS_DISABLE_TELEMETRY=1 in .claude/settings.json env. Two vendored instructions are commands the repo's own hook DENIES (rm -rf a workspace, git branch -D), one leaves force-push open on request, five say commit without asking, one teaches a fail-open except-arm as the good example, two are RED-phase fixtures asserting a live outage, three producers (.superpowers/, .worktrees/, diagrams/) were not gitignored and would stamp every later sim result dirty → VENDORED.md gained an Overrides table (one row per site, the repo rule that replaces it), .gitignore the producers, and two gates: check-skill-instruction-conflicts (every code span under .claude/skills judged by invoking the hook itself; Overrides rows exempt by site) and check-gitignore-producers. VENDORED.md's inventory re-derived (26/12/14/51, MIT notice, one vendoring commit); upstream byte-identity UNVERIFIED (403 through the proxy).",
+     "reviewer": "cloud lane (one independent fail-closed audit agent + firsthand read of every edit site and of the hook's verdicts)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 8
     }
    ]
   },
@@ -428,6 +437,15 @@
      "scope": "partial: the three query-error states in pages/Intelligence.tsx only.",
      "open": 0,
      "closed": 1
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twentieth round: 41 of 65 files read in full, the 19 vendored ui/* skimmed with a status-word and clock grep (zero hits), 5 not read (use-mobile, utils, vite-env.d.ts, tsconfig, favicon). Reproduced with a controlled useQuery stand-in with positive and negative controls, and live HTTP against a built api-server. Fourteen fail-open shapes across 22 sites, recorded for Batch W: '{!q.data && \"Loading…\"}' renders a settled error as pending at eight sites in six pages (the fix Batch D made in Intelligence.tsx never reached its siblings), and under the shared-device-gateway profile every /api/cp/v1 route is 404 so every Build-the-grid page spins forever; AppResilience's blocked-apps card disappears on an unreachable control plane; the Dashboard buckets 149 integrations by three literals and hides the 88 not-configured; a failed sync read renders as no drift in Fleet; 'signed' asserted from the presence of a signature string; freshness stale/expired/unknown badged like fresh on a live stale decision; PolicyDetail says 'not found' on a failed list read; disconnected labelled Not Configured; unknown session mode falls to amber. Clean: no client-side verdict, fetch targets already gated green (check-console-routes), no clock or random in a decision path. Dead UI: /overview (the only live /v1 trigger) reachable from no nav and rendering no preview banner, /policies/new, a disabled Approve claiming to be wired, a toaster nothing fires.",
+     "reviewer": "cloud lane (one independent fail-closed audit agent, every finding reproduced by running something; firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 14,
+     "closed": 0
     }
    ]
   },
@@ -723,6 +741,15 @@
      "scope": "partial: text nodes and metadata of the one SVG; path geometry not read.",
      "open": 0,
      "closed": 1
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twentieth round: the one SVG read whole including geometry. Ladder order Allow · Step-Up · Restrict · Deny matches lib/signalgrid-core types/policy/continuity (ladder gate passed; its planted-defect control holds). Geometry did not say what the labels say: one arrow at x=640 pointed at the Restrict box while the ladder sat 110px off-centre, and Step-Up/Restrict were two ambers at ΔE 11 — redrawn as a fan to four rungs centred under the card, rungs recoloured. The ladder gate's header delegated <title>/<desc> prose to 'the retired-label scan', whose scope was .html|.md — a handoff to nobody; the retired-label scan now opens docs/**/*.svg with a floor, and the ladder gate holds neighbouring rungs at ΔE ≥ 20 and chip text at WCAG AA (a luminance rule was tried first and could not tell green from yellow).",
+     "reviewer": "cloud lane (one independent fail-closed audit agent, every finding reproduced by running something; firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 3
     }
    ]
   },
@@ -746,6 +773,15 @@
      "scope": "partial: ROLE_CATALOG by structure + ~120 prose lines, ROLE_ACTIVATION_MATRIX in full, HIRING_SEQUENCE by figures; the other company files as the eleventh round left them.",
      "open": 0,
      "closed": 2
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twentieth round: all nine files read in full, every re-derivable figure re-derived (42 duties, 144 proofs, 164 roles, 21 divisions, 17/23 founder-alone, 7 fractional, brief line counts, domain dimensions, every cited pnpm script — all hold). Twelve defects across 24 sites, recorded for Batch X: INVESTOR_ONE_PAGER says the outreach wave is 'in flight' and the pilot program 'live' while artifacts/outreach-log/ holds only its README and the discovery tally is 0 of 15; FUNDING_READINESS says sends began 'Monday' (2026-08-24, none logged); iam verification stated as 2, 5 and 15 of 15 across the folder (roster: ten unverified); 'No cost or billing figure appears in this repository' at three sites while Pricing.tsx, COST_MODEL.md and the one-pager print dollars (the 2026-08-21 lens review already named this line); '47 deferred families' is the gate count (48 families); 'no lint rule yet' for raw fonts while check-ios-dynamic-type runs in preflight; 'live end-to-end against FreeRADIUS' for a one-off sandbox capture; 'no cost model exists yet' twice with COST_MODEL.md in the tree; the lens review's fixed findings unannotated; ROLE_CATALOG says no hiring sequence was published beside a ratified HIRING_SEQUENCE; launch profile 'v4 / 174' vs v5 / 180. Structural: docs/company is outside the buyer-facing claims scan, and ROLE_LENS_REVIEW's 192 unbackticked path:line citations are invisible to check-cited-paths (three dead, three drifted onto other content). No deferred noun presented as current; no fail-open role instruction.",
+     "reviewer": "cloud lane (one independent fail-closed audit agent, every finding reproduced by running something; firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 12,
+     "closed": 0
     }
    ]
   },
@@ -848,6 +884,15 @@
      "scope": "partial: LAB_001.md step 1 only.",
      "open": 1,
      "closed": 0
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twentieth round: both files read in full. LAB_001_CLOUD_REHEARSAL.md said 'the same server, the same tool the Mac run will use' — the rehearsal drove the in-repo TypeScript artifacts/mcp-server (evaluate_location_certainty, a location observation) while the Mac's half runs the separate Python signalgrid-mcp against macOS posture; the two share a name and nothing else, so 'if the Mac's run disagrees with a row above, the disagreement is the finding' compared nothing and would always read as agreement → rewritten as an analogue, not a baseline. Its status line still said 'real-hardware evidence NOT minted' four days after the Mac ran it (result passed, exit 0) → dated completion recorded; mac-run.json named as a single slot the next run overwrote. LAB_001.md sent the reader to ~/signalgrid-mcp, a path verify-all.mjs never searches → sibling clone / SIGNALGRID_MCP_PATH; '99 passed' dated as an external figure; Keycloak (admin/admin) and ntfy published on 0.0.0.0 on a LAN lane → loopback. The five-row unknown-tightens table reproduces verbatim today over stdio. Gate: check-sim-requests now fails a document that names a PASSED request in a paragraph still saying not yet / NOT minted / when that lands, unless the paragraph dates itself.",
+     "reviewer": "cloud lane (one independent fail-closed audit agent, every finding reproduced by running something; firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 5
     }
    ]
   },
@@ -899,6 +944,15 @@
      "scope": "partial: README in full; teaser/OG html by rendered text; PNGs by header only.",
      "open": 0,
      "closed": 1
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twentieth round: every file read — html source in full (no external fetch of any kind; Math.random in the teaser is canvas decoration), README, and both PNGs VIEWED. Both PNGs still rendered the eyebrow 'OPERATIONAL TRUST ORCHESTRATION', a label check-launch-claims retires; commit ab72355 (2026-09-01) struck it from both html sources and touched neither image — the blobs were identical to their 2026-08-03 state and no gate reads image content. The OG card asserted 'LIVE DECISION / ALLOW / audit chain VERIFIED' with no synthetic-data disclosure while its teaser twin got one in Batch N. Fixed: disclosure added, both PNGs re-rendered from the committed html with Playwright, and a new gate (check-rendered-assets) pins each render to the sha256 of its source and reports every docs PNG with no declared source.",
+     "reviewer": "cloud lane (one independent fail-closed audit agent, every finding reproduced by running something; firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 2
     }
    ]
   },

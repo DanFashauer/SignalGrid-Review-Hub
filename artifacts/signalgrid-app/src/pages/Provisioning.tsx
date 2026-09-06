@@ -76,7 +76,7 @@ export function Provisioning() {
                 </span>
               </div>
             ))}
-            {!data && <div className="text-sm text-muted-foreground">Loading…</div>}
+            {!data && <div className="text-sm text-muted-foreground">{q.isError ? "Recording unavailable — the control plane did not answer." : "Loading…"}</div>}
           </div>
 
           {(errors.length > 0 || warnings.length > 0) && (
@@ -145,7 +145,7 @@ export function Provisioning() {
               )}
             </>
           )}
-          {!data && <div className="text-sm text-muted-foreground">Loading…</div>}
+          {!data && <div className="text-sm text-muted-foreground">{q.isError ? "Zero-touch plan unavailable — the control plane did not answer." : "Loading…"}</div>}
 
           <p className="text-[0.68rem] text-muted-foreground font-mono">
             Every step is <span className="text-sky-400">simulated</span> until an owner turns enforcement on. Even then, a <span className="text-amber-400">sensitive</span> step waits for administrator approval — never auto-applied. Read live from <span className="text-muted-foreground">/cp/v1</span>.

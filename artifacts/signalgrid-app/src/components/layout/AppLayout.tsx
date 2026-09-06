@@ -72,8 +72,14 @@ export const LAUNCH_NAV: NavEntry[] = [
 ];
 
 const PREVIEW_NAV: NavEntry[] = [
+  // /overview carries the LiveDecisionPanel — the console's only live /v1 evaluation —
+  // on fixture telemetry, and /policies/new is the preview of an off-launch-fence
+  // capability; both were registered routes nothing linked to until 2026-09-06
+  // (scripts/check-console-routes-reachable.mjs). Fixture previews, not launch screens.
+  { href: "/overview", label: "Overview", icon: LayoutGrid, match: "/overview" },
   { href: "/signals", label: "Signals", icon: Activity, match: "/signals" },
   { href: "/app-workflows", label: "App workflows", icon: AppWindow, match: "/app-workflows" },
+  { href: "/policies/new", label: "New policy", icon: FileCode },
 ];
 
 const GRID_NAV: NavEntry[] = [

@@ -53,8 +53,34 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               unchanged.
 LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
               M (#466), N (#468), O (#470), P (#471), Q (#473), R (#474) and
-              S (#476), T (#477) and U (#480) LANDED. Batch V (twentieth round,
-              on its PR) read six partial surfaces WHOLE with four independent
+              S (#476), T (#477), U (#480) and V (#482) LANDED. Batch W
+              (twenty-first round, on its PR) fixed the console's fourteen
+              fail-open shapes and gated them: every "{!q.data && 'Loading…'}"
+              site (nine — the read named eight, the gate found a ninth in
+              GridConfig) renders a settled control-plane error as "unavailable";
+              AppResilience shows a red "treat every app as blocked" card
+              instead of an empty list; GridOverview's all-clear is unreachable
+              while any read failed; the Dashboard buckets integration health
+              from the IntegrationHealthStatus enum (NOT CONFIGURED tile, alert
+              list = everything not connected, worst first, "+N more" so the
+              slice hides nothing); the chart says "series unavailable" instead
+              of loading forever; Fleet's drift column is three-way ("target
+              unread") and "signed" became "signature present"; freshness
+              badges take their tone from a mirror of the core's severity;
+              PolicyDetail says "policies unreadable" before "not found";
+              disconnected has its own danger label; every wire mode maps
+              explicitly with hold → blocked; Audit's chain banner says
+              "chain unverified" on error; /overview and /policies/new are in
+              PREVIEW_NAV and /overview is preview-wrapped. Four gates, each
+              with a self-test and proven against the committed pre-fix
+              console: error states (nine flagged, zero after), enum coverage
+              (not-configured unnamed → flagged), routes reachable + preview-
+              wrapped (two orphans → zero), launch families (LAUNCH_FAMILIES
+              mirrors the launch arm both ways). Still open on the surface:
+              connector `status` rendered nowhere (every fixture connector is
+              healthy today), the toaster nothing fires, the CATEGORY_ORDER
+              hand list, a `/sessions/:id` canonical path nothing links to.
+              Batch V (twentieth round, #482) read six partial surfaces WHOLE with four independent
               fail-closed audits: docs/lab, docs/preview, docs/assets and the
               vendored .claude/skills content are now READ and fixed; docs/company
               and artifacts/signalgrid-app are READ with their fixes owed by
@@ -492,23 +518,20 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land Batch V (on its PR), then (1) Batch W - the console's
-              fourteen fail-open shapes (scratchpad batch-w-app-findings.md:
-              eight "Loading…" sites that render a settled error as pending,
-              the Dashboard's three-literal buckets hiding 88 not-configured
-              integrations, Fleet's failed sync read shown as no drift,
-              freshness badges that look fresh when stale, "Policy not found"
-              on a failed list read) with an error-as-pending scan, an enum-
-              coverage check, and a route-reachability + preview() gate; (2)
-              Batch X - docs/company (scratchpad batch-x-company-findings.md:
+NEXT ACTION: cloud: land Batch W (on its PR), then (1) Batch X - docs/company
+              (scratchpad batch-x-company-findings.md:
               the investor one-pager's "in flight"/"live" over an empty
               outreach log, three false "no cost figure appears" absolutes the
               2026-08-21 lens review already named, iam 2/5/15, 47 vs 48
               families, v4/174 vs v5/180) plus docs/company into the buyer-
               facing claims scan and a REPORT of unbackticked path:line
-              citations; (3) the six surfaces the ledger still marks partial
+              citations; (2) the six surfaces the ledger still marks partial
               (docs/*, docs/agent, docs/inspiration, docs/research,
               artifacts/api-server, scripts) - read them, not their indexes;
+              (3) the console's remaining open items above (connector status
+              rendered, the toaster, CATEGORY_ORDER derived, /sessions/:id
+              linked) and Dashboard's chart-style deeper-path pending arms the
+              error-state gate deliberately does not judge;
               the 194 symbols the cited-symbols gate leaves unpaired and the
               14 deny-list MENTIONS the skills gate reports are REPORTED, not
               owed;

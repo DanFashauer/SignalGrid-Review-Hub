@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **94 of 100 surfaces have been read. 6 are partially read. 0 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2267 of 2267 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2271 of 2271 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -43,7 +43,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/outreach-log` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/sbom` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/scanner-comparison` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
-| `artifacts/signalgrid-app` | package | 65 | read | 2 | 2026-09-06 | cloud lane (one independent fail-closed audit agent, every finding reproduced by running something; firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 14 |
+| `artifacts/signalgrid-app` | package | 65 | read | 3 | 2026-09-06 | cloud lane (fixes by a general-purpose agent with the findings file, gates by the gate engineer; firsthand spot-read of every edit site and every gate run) | docs/agent/EVIDENCE.md | 15 | 17 |
 | `artifacts/signalgrid-desktop` | package | 22 | read | 2 | 2026-09-06 | cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match) | docs/agent/EVIDENCE.md | 7 | 0 |
 | `artifacts/signalgrid-mobile-pwa` | package | 24 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 1 |
 | `artifacts/signalgrid-review` | package | 45 | read | 3 | 2026-09-06 | cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match) | docs/agent/EVIDENCE.md | 19 | 14 |
@@ -114,7 +114,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 8 | 1 |
 | `native/shared` | native | 3 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 406 | **partial** | 6 | 2026-09-06 | cloud lane; the gate built from the eighteenth round's specification, measured live before and after each rule change, falsified with a planted line | docs/agent/EVIDENCE.md | 17 | 0 |
+| `scripts` | package | 410 | **partial** | 6 | 2026-09-06 | cloud lane; the gate built from the eighteenth round's specification, measured live before and after each rule change, falsified with a planted line | docs/agent/EVIDENCE.md | 17 | 0 |
 | `site` | tree | 2 | read | 2 | 2026-09-05 | cloud lane (firsthand read of every edit site; fixes + gates) | docs/agent/EVIDENCE.md | 2 | 3 |
 | `tests` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 1 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |

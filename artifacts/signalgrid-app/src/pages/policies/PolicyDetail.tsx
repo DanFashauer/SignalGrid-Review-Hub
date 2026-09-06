@@ -30,6 +30,16 @@ export function PolicyDetail() {
     enabled: !!id && !!current,
   });
 
+  // A failed list read is "policies unreadable", not "Policy not found" — the
+  // latter is a statement about the policy, and nothing was read to make it.
+  if (policies.isError) {
+    return (
+      <div className="p-8 text-center text-muted-foreground font-mono text-sm">
+        Policies unreadable — the control plane did not answer.
+        <div className="text-xs mt-1">{String(policies.error instanceof Error ? policies.error.message : policies.error)}</div>
+      </div>
+    );
+  }
   if (!policy && !policies.isLoading) {
     return <div className="p-8 text-center text-muted-foreground font-mono text-sm">Policy not found.</div>;
   }

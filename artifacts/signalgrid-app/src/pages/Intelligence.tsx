@@ -97,7 +97,9 @@ export function Intelligence() {
             loading) the emerald branch is unreachable — a failed flow-health query
             must never read as a healthy grid. */}
         <Metric label="Flows healthy" value={grid ? `${grid.flowsHealthy}/${grid.flowsTotal}` : "-"} sub={!flows.data ? (flows.isError ? "unavailable" : "…") : attention.length ? `${attention.length} need attention` : "all clear"} accent={!flows.data ? undefined : attention.length ? "text-amber-400" : "text-emerald-400"} />
-        <Metric label="Recommendations" value={String(recList.length)} sub="ranked by confidence" />
+        {/* "-" until the read settles with data: `recList` defaults to [] so a failed
+            fetch used to render "Recommendations 0" beside neighbours showing "-". */}
+        <Metric label="Recommendations" value={recs.data ? String(recList.length) : "-"} sub={recs.data ? "ranked by confidence" : recs.isError ? "unavailable" : ""} />
         <Metric label="New signals" value={disc.data ? `${disc.data.summary.autoOnboardable}` : "-"} sub={disc.data ? `auto-onboardable · ${disc.data.summary.needsAdmin} need admin` : ""} />
       </div>
 

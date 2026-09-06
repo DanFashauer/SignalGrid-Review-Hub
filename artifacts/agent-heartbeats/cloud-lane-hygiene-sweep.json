@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-05T09:40:13Z",
-  "result": "freed ~2.47G scratchpad (old clones/worktrees/node_modules + logs >24h) + pnpm store prune (60 files); / now 22G free (44%). Docker skipped (no daemon, 116K)."
+  "firedAt": "2026-09-06T09:53:46.008Z",
+  "result": "freed 27MB of scratchpad (two stale reproduction trees older than 24h) | 19G free of 252G (50% used) | pnpm store prune removed 0 | docker daemon RUNNING so /var/lib/docker (3.4G) left alone per the routine's own condition | quiet, no owner message"
 }

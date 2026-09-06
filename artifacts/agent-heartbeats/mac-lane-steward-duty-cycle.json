@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-06T00:41:15.337Z",
-  "result": "quiet: no Mac activity (no Mac commits on SignalGrid_Alpha; six origin/mac/* branches unmoved since 09-02/03, all on mainline by other PRs, prune list unchanged; no new sim results; 0 messages to cloud; 7 cloud→mac messages unread, oldest 7.2h — the Mac has not opened a session). Tick heartbeat mac-lane-tick: ABSENT — expected: the installer (scripts/mac/install-launchd.sh) is on PR #456, not yet on mainline; owner escalation deferred until it lands, then the 3h clock starts. Owner already holds the one command. Batch J (#456) local preflight green, CI on 26cec08 running; merging when green."
+  "firedAt": "2026-09-06T01:26:49.307Z",
+  "result": "quiet: no Mac activity (no Mac commits on SignalGrid_Alpha; six origin/mac/* branches unmoved since 09-02/03, all on mainline by other PRs, prune list unchanged; no new sim results; 0 messages to cloud; 8 cloud->mac messages unread, oldest 8.2h). Tick heartbeat mac-lane-tick: ABSENT. Installer landed on mainline at 00:40Z (#456); the 3h clock runs from then, so no owner escalation yet (earliest 03:40Z; the owner already holds the one command, told twice today). Cloud: #456 Batch J, #461 Fleet Premium, #460/#462 mail all merged; #463 Batch K on its PR, CI + preflight running."
 }

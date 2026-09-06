@@ -168,7 +168,7 @@ API vocabulary, and a host app must not build against them as if they were.
 They are also not renameable at will: `native/ios/EnterpriseShell/Services/DecisionEngine.swift`
 is a byte-faithful port of the simulator engine (CLAUDE.md golden rule 1), so the
 iOS app's reason codes ARE these spellings. Aligning them with the core's would
-break the parity the port exists to prove. The wrapper's eight codes have the same
+break the parity the port exists to prove. The wrapper's 8 codes have the same
 constraint by a different mechanism: `native/ios/EnterpriseShell/Services/RemediationAllow.swift`
 is held to the wrapper by the shared vector table and `scripts/check-remediation-allow-conformance.mjs`,
 so the spellings are a contract there too.

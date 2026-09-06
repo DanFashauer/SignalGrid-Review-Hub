@@ -43,7 +43,24 @@ function jobsIn(text) {
   }
   return keys.map((k, idx) => {
     const end = idx + 1 < keys.length ? keys[idx + 1].at : lines.length;
-    return { name: k.name, bounded: /^\s+timeout-minutes:/m.test(lines.slice(k.at, end).join("\n")) };
+    // THE JOB'S OWN KEY, at exactly four spaces — not `^\s+`, which was the defect
+    // (found 2026-09-06). The block searched is the whole job INCLUDING its `steps:`,
+    // so `^\s+timeout-minutes:` matched a STEP-level bound at 8 spaces and reported the
+    // JOB as bounded. A step timeout bounds that step; the job's other steps, and the
+    // merge waiting on the job, still ride GitHub's 360-minute default — which is the
+    // only thing this gate is about. Reproduced against a planted workflow:
+    //
+    //     jobs:
+    //       unbounded_job:
+    //         runs-on: ubuntu-latest
+    //         steps:
+    //           - run: echo hi
+    //             timeout-minutes: 10
+    //
+    // scored "0 unbounded" and exited 0. The self-test could not catch it: its `bad`
+    // fixture has a `steps:` block with no nested timeout, so the one shape that
+    // defeats the rule was the one shape untested. It is a fixture now.
+    return { name: k.name, bounded: /^ {4}timeout-minutes:/m.test(lines.slice(k.at, end).join("\n")) };
   });
 }
 
@@ -52,21 +69,39 @@ function jobsIn(text) {
   const bad = "jobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n";
   const good = "jobs:\n  build:\n    timeout-minutes: 10\n    runs-on: ubuntu-latest\n";
   const twoJobs = "jobs:\n  a:\n    timeout-minutes: 5\n  b:\n    runs-on: x\n";
+  // The shape that defeated the rule: a bound on a STEP, none on the job.
+  const stepOnly =
+    "jobs:\n  unbounded_job:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n        timeout-minutes: 10\n";
+  // …and the honest neighbour: a job bounded at the job level that ALSO bounds a step,
+  // which is what review-hub-ci.yml actually does. It must stay bounded, or the fix
+  // above would punish the correct shape.
+  const bothLevels =
+    "jobs:\n  ok_job:\n    timeout-minutes: 30\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n        timeout-minutes: 10\n";
   const catchesUnbounded = jobsIn(bad).some((j) => !j.bounded);
   const acceptsBounded = jobsIn(good).every((j) => j.bounded);
   const separatesJobs = jobsIn(twoJobs).length === 2 && jobsIn(twoJobs)[0].bounded && !jobsIn(twoJobs)[1].bounded;
-  if (!catchesUnbounded || !acceptsBounded || !separatesJobs) {
+  const stepIsNotJob = jobsIn(stepOnly).length === 1 && !jobsIn(stepOnly)[0].bounded;
+  const jobLevelStillCounts = jobsIn(bothLevels).length === 1 && jobsIn(bothLevels)[0].bounded;
+  if (!catchesUnbounded || !acceptsBounded || !separatesJobs || !stepIsNotJob || !jobLevelStillCounts) {
     console.error(
-      `✗ SELF-TEST FAILED — unbounded=${catchesUnbounded}, bounded=${acceptsBounded}, boundaries=${separatesJobs}. ` +
+      `✗ SELF-TEST FAILED — unbounded=${catchesUnbounded}, bounded=${acceptsBounded}, boundaries=${separatesJobs}, ` +
+        `stepTimeoutIsNotAJobTimeout=${stepIsNotJob}, jobLevelStillCounts=${jobLevelStillCounts}. ` +
         "The job parser has drifted from the workflow shape; a gate that resolves nothing is green about nothing.",
     );
     process.exit(1);
   }
 }
 
+// AN ABSENT SUBJECT IS NOT A CLEAN SUBJECT (fixed 2026-09-06). This used to print
+// "nothing to bound" and exit 0 — before JOB_FLOOR was ever consulted, so the one
+// control against a drifted parse was bypassed by the case where the scan finds
+// nothing at all. Reproduced: run the gate from any directory without a
+// `.github/workflows` and it exited 0 having judged nothing. This repository ships
+// workflows; their absence means the gate is looking in the wrong place.
 if (!existsSync(DIR)) {
-  console.log(`CI-job-timeout gate: no ${DIR} — nothing to bound.`);
-  process.exit(0);
+  console.error(`✗ no ${DIR} — this repository has workflows, so this is a wrong cwd or a deletion, not a clean tree.`);
+  console.error(`  Refusing to report green over zero jobs (the floor below is ${JOB_FLOOR}). Run from the repo root.`);
+  process.exit(1);
 }
 
 console.log("CI job timeouts — an unbounded job is an unbounded outage\n");

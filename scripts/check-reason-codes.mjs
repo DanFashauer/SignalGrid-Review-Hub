@@ -12,6 +12,7 @@
 //      genuine fixture contradictions (checked BEFORE any repair);
 //   3. the OpenAPI x-signalgrid-reason-codes list must equal the emit set.
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { buildCatalog, buildMarkdown, CODE_LIT, SIMULATOR_ENGINE, SIMULATOR_WRAPPERS } from "./gen-reason-codes.mjs";
 
 const CATALOG = "docs/REASON_CODES.md";
@@ -201,7 +202,7 @@ function selfTest() {
 
 // Direct invocation only — importing this module must not run the gate
 // (assurance advisory: an import-time run can exit the importing process).
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const catalog = buildCatalog();
   const problems = auditReasonCodes({

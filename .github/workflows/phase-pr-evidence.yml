@@ -37,6 +37,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Phase gate self-test (lane escalation is wired to the exit code, not the printed lane)
+        run: pnpm --filter @workspace/scripts exec tsx ./src/phase-gate.ts --self-test
+      - name: Phase PR report self-test (an empty and a clean docs-only change set do not reach the same lane)
+        run: pnpm --filter @workspace/scripts exec tsx ./src/phase-pr-report.ts --self-test
       - name: Run phase gate
         run: pnpm run phase:gate
 

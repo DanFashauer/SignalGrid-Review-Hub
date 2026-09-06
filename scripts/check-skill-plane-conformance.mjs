@@ -51,7 +51,9 @@ const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SKILLS_DIR = ".claude/skills";
 const AGENTS_DIR = ".claude/agents";
 
-// Floors below today's real counts (24 skills, 13 agents) but far above zero, so a
+// Floors below today's real counts (26 skills, 13 agents on 2026-09-06 — the comment
+// said 24 while the tree held 26, which is why the summary line, not this sentence, is
+// the number to read: every run prints the current pair) but far above zero, so a
 // broken walk fails loudly rather than passing over an empty result. The point of a
 // floor is to catch a walk that reaches nothing, not to pin a total that a routine
 // deletion would trip — a pinned total silently turns a legitimate removal into a

@@ -36,8 +36,9 @@
 // introduced by was/were/from/previously/originally/earlier/before/until/rather than is
 // read as a deliberate comparison to a past state and left alone.
 
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -46,7 +47,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** True only when this file is the entrypoint, so another script can import its
  *  registry without running the gate. */
 const IS_MAIN = process.argv[1] !== undefined && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href;
-const docsDir = join(repoRoot, "docs");
+const DOCS_DIR = join(repoRoot, "docs");
 
 /** Proofs that emit a `figures=` line. A proof that does not is simply not checked here —
  *  this guard never invents a figure it was not given. */
@@ -88,13 +89,33 @@ const HISTORICAL_AFTER = new RegExp(`^[^.\\n]{0,60}\\b(?:${MARKER})\\b`, "i");
  *  far more often years or identifiers than figures. */
 const FIGURE_RE = /\b\d{1,3}(?:,\d{3})+\b/g;
 
-function liveFigures(proof) {
-  const run = spawnSync("pnpm", ["run", proof], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    timeout: 180_000,
-  });
-  const out = `${run.stdout ?? ""}${run.stderr ?? ""}`;
+/**
+ * Did the proof actually RUN? Pure over a spawnSync result so `--self-test` can drive
+ * every branch without spawning anything.
+ *
+ * THE DEFECT THIS CLOSES. `liveFigures` read `run.stdout` and never looked at
+ * `run.status`, `run.signal` or `run.error`. A proof that printed its `figures=` line
+ * and then FAILED — an assertion further down, a throw during teardown — handed this
+ * guard a figure set from a broken run, and every document figure was then validated
+ * against it. So did a proof killed at the 180s timeout, which returns a partial
+ * transcript and `signal: "SIGTERM"`. The one case that did fail closed was a proof
+ * that died before printing anything (no `figures=` line → null), which is exactly the
+ * case that made the hole hard to see: the gate looked like it noticed broken proofs.
+ *
+ * A measurement from a failing measurement process is not a measurement.
+ */
+export function classifyRun(run) {
+  if (run.error) return { ok: false, why: `could not be started (${run.error.message})` };
+  if (run.signal) return { ok: false, why: `was killed by ${run.signal} (the 180s timeout?) — a partial transcript is not a measurement` };
+  if (run.status !== 0) return { ok: false, why: `FAILED (exit ${run.status}) — figures printed by a failing proof are not measurements` };
+  return { ok: true };
+}
+
+/**
+ * Parse a proof transcript's `figures=` line into the value set the comparison uses.
+ * Pure, and separate from the spawn, so the parser has controls of its own.
+ */
+export function parseFigures(out) {
   const line = out.match(/^figures=(.+)$/m);
   if (!line) return null;
   const values = new Set();
@@ -106,11 +127,24 @@ function liveFigures(proof) {
       values.add(n.toLocaleString("en-US"));
     }
   }
-  // Both readers share ONE spawn. An earlier draft called a second function that ran
-  // every proof again, doubling a multi-minute gate — the kind of cost that gets a
+  // Both readers share ONE transcript. An earlier draft called a second function that
+  // ran every proof again, doubling a multi-minute gate — the kind of cost that gets a
   // check moved out of preflight, which is the same outcome as deleting it.
   values.named = namedFiguresFrom(out);
   return values;
+}
+
+function liveFigures(proof) {
+  const run = spawnSync("pnpm", ["run", proof], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 180_000,
+  });
+  const verdict = classifyRun(run);
+  if (!verdict.ok) return { ok: false, why: verdict.why };
+  const figures = parseFigures(`${run.stdout ?? ""}${run.stderr ?? ""}`);
+  if (figures === null) return { ok: false, why: "emitted no `figures=` line. Add one, or remove it from PROOFS" };
+  return { ok: true, figures };
 }
 
 /**
@@ -362,8 +396,21 @@ function scopesMentioning(text, needle) {
   return scopes;
 }
 
-function main() {
-  console.log("Docs↔proof FIGURE guard — a number stated as a measurement must still be one\n");
+/**
+ * @param {object} [opts]
+ * @param {(proof: string) => {ok: boolean, figures?: Set<any>, why?: string}} [opts.figuresFor]
+ *        how to obtain a proof's figures — injected so `--self-test` can drive the
+ *        COMPARISON against a known figure set instead of spawning 44 proofs.
+ * @param {string} [opts.docsDir] the documentation tree to scan.
+ * @param {string[]} [opts.proofs] which proofs to check.
+ * @param {boolean} [opts.returnFailures] return the failure count instead of exiting,
+ *        so the self-test can assert both directions of the comparison.
+ */
+function main(opts = {}) {
+  const figuresFor = opts.figuresFor ?? liveFigures;
+  const docsDir = opts.docsDir ?? DOCS_DIR;
+  const proofList = opts.proofs ?? PROOFS;
+  if (!opts.quiet) console.log("Docs↔proof FIGURE guard — a number stated as a measurement must still be one\n");
 
   let failures = 0;
   let checked = 0;
@@ -384,13 +431,14 @@ function main() {
   // guard scope — a non-recursive scan let a move silently un-check a figure.
   const docFiles = readdirSync(docsDir, { recursive: true }).map(String).filter((f) => f.endsWith(".md"));
 
-  for (const proof of PROOFS) {
-    const figures = liveFigures(proof);
-    if (figures === null) {
-      console.error(`✗ ${proof} — emitted no \`figures=\` line. Add one, or remove it from PROOFS.`);
+  for (const proof of proofList) {
+    const result = figuresFor(proof);
+    if (!result.ok) {
+      console.error(`✗ ${proof} — ${result.why}.`);
       failures += 1;
       continue;
     }
+    const figures = result.figures;
     const live = [...figures].filter((v) => typeof v === "string").sort();
     console.log(`  ${proof} — live figures: ${live.join(", ")}`);
 
@@ -549,6 +597,7 @@ function main() {
   );
 
   if (failures > 0) {
+    if (opts.returnFailures) return failures;
     console.error(
       `\nFigure guard FAILED: ${failures} problem${failures === 1 ? "" : "s"}.\n\n` +
         "A number presented as a measurement has to still be one. Either re-measure and update\n" +
@@ -579,7 +628,7 @@ function main() {
   }
 
   console.log("Figure guard passed — every measured figure in the docs matches a live proof run.");
-
+  return failures;
 }
 
 
@@ -604,7 +653,8 @@ export function baselineAge(text, now) {
 function selfTest() {
   const NOW = new Date("2026-08-24T00:00:00Z");
   const doc = (d) => `The figures were re-measured on **${d}** and all still hold:`;
-  const checks = [
+  const checks = [];
+  checks.push(...[
     ["a same-day baseline reports 0 days", baselineAge(doc("2026-08-24"), NOW)?.days === 0],
     ["a 90-day-old baseline reports 90 — the age is real arithmetic, not a flag",
       baselineAge(doc("2026-05-26"), NOW)?.days === 90],
@@ -615,7 +665,64 @@ function selfTest() {
       baselineAge("re-measured on 2026-05-26 and all still hold:", NOW) === null],
     ["LIVE: the committed RELIABILITY_SLO.md still carries a parseable baseline date",
       baselineAge(readFileSync(resolve(repoRoot, "docs/RELIABILITY_SLO.md"), "utf8"), NOW) !== null],
-  ];
+  ]);
+  // ── the RUN was a real run: figures from a failed proof are not measurements ──
+  checks.push(["a proof exiting 0 is usable", classifyRun({ status: 0 }).ok === true]);
+  checks.push(["a proof exiting NON-ZERO is refused — the planted defect", classifyRun({ status: 1 }).ok === false]);
+  checks.push(["a proof KILLED by a signal is refused (a partial transcript is not a measurement)", classifyRun({ status: null, signal: "SIGTERM" }).ok === false]);
+  checks.push(["a spawn that could not start is refused", classifyRun({ error: new Error("ENOENT") }).ok === false]);
+  checks.push(["the refusal NAMES the exit code, so the reader is not left guessing", /exit 3/.test(classifyRun({ status: 3 }).why)]);
+
+  // ── the PARSER reads what a proof actually prints ─────────────────────────
+  const transcript = "some log\nfigures=pairs=1234,categories=15\ndone\n";
+  const parsed = parseFigures(transcript);
+  checks.push(["a `figures=` line parses to its values, comma-formatted and bare", parsed.has(1234) && parsed.has("1,234") && parsed.has(15)]);
+  checks.push(["…and keeps the KEYS for the named comparison", parsed.named.get("pairs") === 1234 && parsed.named.get("categories") === 15]);
+  checks.push(["a transcript with NO figures line parses to null, never an empty set", parseFigures("no figures here") === null]);
+
+  // ── THE COMPARISON ITSELF, planted in both directions ─────────────────────
+  // Until this existed, nothing in the self-test touched the thing the gate is FOR:
+  // every control was about the baseline-age REPORT, which is not even gated.
+  const tmp = mkdtempSync(join(tmpdir(), "figure-guard-selftest-"));
+  try {
+    // The fixture runs print a full guard report each; silence them so the self-test's
+    // own verdict is readable. Restored in `finally`, always.
+    const realLog = console.log;
+    const realErr = console.error;
+    const hush = () => { console.log = () => {}; console.error = () => {}; };
+    const unhush = () => { console.log = realLog; console.error = realErr; };
+    const injected = (out) => () => ({ ok: true, figures: parseFigures(out) });
+    const doc = (n) => `# Fixture\n\n## About proof:local-authority\n\nThe proof measures **${n} pairs** on this tree.\n`;
+    const run = (n, out) => {
+      writeFileSync(join(tmp, "FIXTURE.md"), doc(n));
+      hush();
+      try {
+        return main({ figuresFor: injected(out), docsDir: tmp, proofs: ["proof:local-authority"], returnFailures: true, quiet: true });
+      } finally {
+        unhush();
+      }
+    };
+    const agreeing = run("1,234", "figures=pairs=1234\n");
+    const drifted = run("9,999", "figures=pairs=1234\n");
+    checks.push(["a document figure that MATCHES the proof passes (the comparison is not always-red)", agreeing === 0]);
+    checks.push(["a document figure that DRIFTED from the proof FAILS — the planted defect", drifted > 0]);
+    // …and a failing proof must not be able to certify a document at all.
+    writeFileSync(join(tmp, "FIXTURE.md"), doc("1,234"));
+    hush();
+    let brokenProof;
+    try {
+      brokenProof = main({
+        figuresFor: () => ({ ok: false, why: "FAILED (exit 1)" }),
+        docsDir: tmp, proofs: ["proof:local-authority"], returnFailures: true, quiet: true,
+      });
+    } finally {
+      unhush();
+    }
+    checks.push(["a FAILING proof cannot certify a document — it is a failure, not a pass", brokenProof > 0]);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [n, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${n}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);

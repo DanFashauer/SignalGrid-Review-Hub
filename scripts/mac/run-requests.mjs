@@ -182,6 +182,9 @@ function main() {
   let ran = 0;
   let considered = 0;
   let anyFailed = false;
+  // The roster --plan prints at the end. See the PENDING block below for why it is
+  // not optional.
+  const pendingRoster = [];
 
   for (const file of requestFiles) {
     const id = file.replace(/\.json$/, "");
@@ -205,6 +208,7 @@ function main() {
       console.log(`\n== request ${id} == supersededBy "${req.supersededBy}" does NOT validate (missing, non-reciprocal, or itself superseded) — running the request; fix the link (check-sim-requests names the problem)`);
     }
     considered += 1;
+    if (plan) pendingRoster.push({ id, runs: req.runs ?? [] });
     console.log(`\n== request ${id} ==`);
     console.log(`   ${req.reason ?? "(no reason recorded)"}`);
     console.log(`   runs: ${req.runs.join(", ")}`);
@@ -247,6 +251,24 @@ function main() {
     writeFileSync(join(RES_DIR, `${id}.json`), `${JSON.stringify(result, null, 2)}\n`, "utf8");
     console.log(`\nwrote artifacts/sim-results/${id}.json`);
     ran += 1;
+  }
+
+  if (plan) {
+    // THE MACHINE-READABLE ROSTER, and the reason it exists (2026-09-06).
+    // scripts/mac/lane-tick.sh — the unattended 30-minute tick — counts pending work
+    // with `run-requests.mjs --plan … | grep -c '^  PENDING'`. Nothing in this file
+    // could ever print that: the only occurrences of the word were in `//` comments.
+    // The count was therefore 0 on every tick, the tick logged "no pending sim
+    // requests" forever, and step (c) — the single thing the unattended tick exists
+    // to do — never fired once. A grep that cannot match is indistinguishable from
+    // an empty queue, which is the fail-open shape this repo keeps finding.
+    //
+    // One line per request, anchored `^  PENDING <id>`, so `grep -c` counts requests
+    // and nothing else. `scripts/check-sim-scripts-selfcheck.mjs` rule (f) now fails
+    // if a scripts/mac/*.sh anchors a grep at a marker its target cannot print.
+    console.log("");
+    for (const p of pendingRoster) console.log(`  PENDING ${p.id} — runs: ${p.runs.join(", ")}`);
+    console.log(`--plan: ${pendingRoster.length} request(s) PENDING of ${requestFiles.length} on disk; no result written.`);
   }
 
   if (considered === 0) {

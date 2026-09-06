@@ -53,30 +53,81 @@ console.log(
 // Schema validation alone does not enforce path-template/parameter agreement,
 // so pin it here directly: every {name} in a path must be declared as an
 // in:path parameter at path or operation level ($refs resolved).
+
+/** Every `{name}` in a path with no matching `in: path` parameter. Pure, so the rule
+ *  can be watched failing — see the arms below. */
+export function undeclaredPathParams(doc) {
+  const comp = doc?.components?.parameters ?? {};
+  const deref = (x) => (x?.$ref ? (comp[x.$ref.split("/").pop()] ?? {}) : x);
+  const problems = [];
+  for (const [path, item] of Object.entries(doc?.paths ?? {})) {
+    const needed = [...path.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
+    if (needed.length === 0) continue;
+    const declared = new Set();
+    for (const [k, v] of Object.entries(item ?? {})) {
+      const params = k === "parameters" ? v : v?.parameters;
+      for (const p of params ?? []) {
+        const r = deref(p);
+        if (r?.in === "path") declared.add(r.name);
+      }
+    }
+    for (const n of needed) if (!declared.has(n)) problems.push({ path, name: n });
+  }
+  return problems;
+}
+
+// THE ARM THE HEADER ALREADY PROMISED. It says the gate first validates "a templated
+// path with an undeclared parameter — the exact defect class that was live" and
+// refuses to continue if that passes. The schema validator does not enforce that rule
+// (`st1` above is printed, never asserted), and the AST check that DOES enforce it had
+// no control of any kind: it could have been deleted, inverted, or silently matched
+// nothing, and this gate would have printed "every templated parameter declared".
+{
+  const op = { responses: { 200: { description: "ok" } } };
+  const arms = [
+    ["a templated {id} with NO parameter is caught — the planted defect",
+      undeclaredPathParams({ paths: { "/things/{id}": { get: op } } }).length === 1],
+    ["…and it names the path and the parameter",
+      undeclaredPathParams({ paths: { "/things/{id}": { get: op } } })[0]?.name === "id"],
+    ["a PATH-level in:path parameter clears it (the rule is not always-red)",
+      undeclaredPathParams({ paths: { "/things/{id}": { parameters: [{ name: "id", in: "path" }], get: op } } }).length === 0],
+    ["an OPERATION-level in:path parameter clears it",
+      undeclaredPathParams({ paths: { "/things/{id}": { get: { ...op, parameters: [{ name: "id", in: "path" }] } } } }).length === 0],
+    ["a $ref to components.parameters is resolved, not counted undeclared",
+      undeclaredPathParams({
+        components: { parameters: { Id: { name: "id", in: "path" } } },
+        paths: { "/things/{id}": { get: { ...op, parameters: [{ $ref: "#/components/parameters/Id" }] } } },
+      }).length === 0],
+    ["a parameter of the same name declared in:QUERY does NOT clear a path template",
+      undeclaredPathParams({ paths: { "/things/{id}": { get: { ...op, parameters: [{ name: "id", in: "query" }] } } } }).length === 1],
+    ["a path with no template is not a finding",
+      undeclaredPathParams({ paths: { "/things": { get: op } } }).length === 0],
+    ["TWO templates, one declared, still reports the other",
+      undeclaredPathParams({ paths: { "/a/{x}/b/{y}": { parameters: [{ name: "x", in: "path" }], get: op } } }).length === 1],
+  ];
+  const bad = arms.filter(([, ok]) => !ok);
+  for (const [n, ok] of arms) console.log(`  ${ok ? "ok  " : "FAIL"} self-test: ${n}`);
+  if (bad.length > 0) {
+    console.error(`\n✗ SELF-TEST FAILED: ${bad.length} of ${arms.length} undeclared-parameter control(s).`);
+    console.error("  The rule this gate exists for cannot be shown to work, so its silence means nothing.");
+    process.exit(1);
+  }
+}
+
 // The validator parses YAML itself; validate the real file FIRST so its
 // parsed form is available for the AST parameter check below.
 const res = await validator.validate(SPEC);
 const doc = validator.specification;
-const comp = doc.components?.parameters ?? {};
-const resolve = (x) => (x?.$ref ? (comp[x.$ref.split("/").pop()] ?? {}) : x);
-let paramProblems = 0;
-for (const [path, item] of Object.entries(doc.paths ?? {})) {
-  const needed = [...path.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
-  if (needed.length === 0) continue;
-  const declared = new Set();
-  for (const [k, v] of Object.entries(item)) {
-    const params = k === "parameters" ? v : v?.parameters;
-    for (const p of params ?? []) {
-      const r = resolve(p);
-      if (r.in === "path") declared.add(r.name);
-    }
-  }
-  for (const n of needed) {
-    if (!declared.has(n)) {
-      console.error(`✗ ${path}: templated {${n}} has no declared in:path parameter`);
-      paramProblems += 1;
-    }
-  }
+const problems = undeclaredPathParams(doc);
+for (const { path, name } of problems) console.error(`✗ ${path}: templated {${name}} has no declared in:path parameter`);
+const paramProblems = problems.length;
+
+// NON-VACUITY: the real spec must actually contain templated paths, or this rule is
+// being run over nothing and its silence is not evidence.
+const templatedPaths = Object.keys(doc?.paths ?? {}).filter((p) => /\{\w+\}/.test(p));
+if (templatedPaths.length === 0) {
+  console.error(`\n✗ ${SPEC} declares no templated path at all — the parameter rule scanned nothing.`);
+  process.exit(1);
 }
 
 // ── the real document's schema verdict ─────────────────────────────────────
@@ -92,4 +143,4 @@ if (!res.valid || paramProblems > 0) {
   process.exit(1);
 }
 console.log(`\nOpenAPI-validity gate passed — ${SPEC} parses as OpenAPI ${doc.openapi}, ` +
-  `${Object.keys(doc.paths).length} paths, every templated parameter declared.`);
+  `${Object.keys(doc.paths).length} paths (${templatedPaths.length} templated), every templated parameter declared.`);

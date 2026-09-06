@@ -28,6 +28,17 @@
 //     approval-gate ratification (DR-008: no mutation without a gated record)
 //   ✗ ownerRanked neither a number nor null-with-a-report-basis (unranked
 //     rows arrived with the report; silence about rank is still forbidden)
+// v3 (2026-09-06) — the record's OWN instant:
+//   · REPORTED for every cited execution record: how old it is. A capture minted
+//     once and never re-run reads identically to one minted this morning; nothing
+//     anywhere read `capturedAt` until this.
+//   ✗ an evidence file dated in the FUTURE (a clock contradiction)
+//   ✗ an evidence file older than the bound THE ENTRY ITSELF DECLARES
+//     (`evidenceMaxAgeDays`) — declared per entry so a lane that legitimately runs
+//     monthly declares a month, and an entry that declares nothing is REPORTED and
+//     never gated. An entry may name a non-standard instant field with
+//     `evidenceInstantField` (glpi.json records provenance.fixtureTimestamp — a
+//     shape-discovery capture, not a wall-clock run).
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import {fileURLToPath, pathToFileURL } from "node:url";
@@ -78,6 +89,32 @@ export function reposInMarkdown(mdText) {
  */
 const PRIORITY_TIERS = new Set(["P0", "P1", "P2"]);
 
+/** Fields an execution record may use to record its own instant. An entry may name a
+ *  different one with `evidenceInstantField` (dotted paths supported). */
+const INSTANT_FIELDS = ["capturedAt", "completedAt", "recordedAt", "ranAt", "startedAt", "generatedAt", "provenance.capturedAt", "provenance.completedAt", "provenance.sampledAt", "provenance.recordedAt", "provenance.ranAt"];
+
+const readPath = (doc, path) => path.split(".").reduce((o, k) => (o && typeof o === "object" ? o[k] : undefined), doc);
+
+/** Milliseconds since epoch of the record's own instant, or null when it records none. */
+export function evidenceInstantMs(doc, declaredField) {
+  const fields = declaredField ? [declaredField] : INSTANT_FIELDS;
+  for (const f of fields) {
+    const v = readPath(doc, f);
+    if (typeof v === "string") {
+      const ms = Date.parse(v);
+      if (Number.isFinite(ms)) return ms;
+    }
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+  }
+  return null;
+}
+
+/** Age in days of the cited record against `nowMs`, or null when it records no instant. */
+export function evidenceAgeDays(doc, declaredField, nowMs) {
+  const ms = evidenceInstantMs(doc, declaredField);
+  return ms === null ? null : (nowMs - ms) / 86400000;
+}
+
 /**
  * Does the cited execution record actually record an execution? `readJson` is
  * injected (null when unreadable) so the self-test can drive every shape.
@@ -102,10 +139,11 @@ export function evidenceRecordsARun(path, doc, marker) {
   return null;
 }
 
-export function auditLabRegistry(registry, mdText, pathExists, rosterRoles, readJson = () => null) {
+export function auditLabRegistry(registry, mdText, pathExists, rosterRoles, readJson = () => null, nowMs = Date.now()) {
   const fatal = [];
+  const reports = [];
   const entries = registry?.entries;
-  if (!Array.isArray(entries)) return { fatal: [`${REGISTRY} carries no entries array`] };
+  if (!Array.isArray(entries)) return { fatal: [`${REGISTRY} carries no entries array`], reports: [] };
   if (!registry.transcribedFrom) {
     fatal.push("the registry does not record when it was transcribed from the owner's research — an undated transcription is a guess");
   }
@@ -168,8 +206,25 @@ export function auditLabRegistry(registry, mdText, pathExists, rosterRoles, read
         // refused_platform, or a capture with `probes: []`, closed a deployedInLab
         // claim — the hole check-sim-requests.mjs documents fixing in ITS domain, and
         // its fix stopped at that gate's edge (ninth audit round, 2026-09-06).
-        const why = evidenceRecordsARun(e.deployedEvidence, readJson(e.deployedEvidence), e.evidenceMarker);
+        const doc = readJson(e.deployedEvidence);
+        const why = evidenceRecordsARun(e.deployedEvidence, doc, e.evidenceMarker);
         if (why) fatal.push(`${name}: deployedEvidence ${e.deployedEvidence} ${why}`);
+        // THE RECORD'S OWN INSTANT, read at last. `capturedAt` was minted by the live
+        // lanes and consulted by nothing, so a capture from two months ago vouched for a
+        // deployment claim exactly as loudly as one minted this morning. REPORTED always;
+        // FATAL only past the bound the entry itself declares, and on a future instant.
+        const ageDays = evidenceAgeDays(doc, e.evidenceInstantField, nowMs);
+        const bound = typeof e.evidenceMaxAgeDays === "number" ? e.evidenceMaxAgeDays : null;
+        if (ageDays === null) {
+          reports.push(`${name}: ${e.deployedEvidence} records no instant of its own (looked for ${e.evidenceInstantField ?? INSTANT_FIELDS.join("/")}) — age UNKNOWN`);
+        } else {
+          reports.push(`${name}: ${e.deployedEvidence} is ${ageDays.toFixed(1)}d old${bound === null ? " (no evidenceMaxAgeDays declared — REPORTED, not gated)" : ` (bound ${bound}d)`}`);
+          if (ageDays < 0) {
+            fatal.push(`${name}: deployedEvidence ${e.deployedEvidence} is dated in the FUTURE (${(-ageDays).toFixed(1)}d ahead) — a clock contradiction, not evidence`);
+          } else if (bound !== null && ageDays > bound) {
+            fatal.push(`${name}: deployedEvidence ${e.deployedEvidence} is ${ageDays.toFixed(1)}d old, past the ${bound}d bound this entry declares — re-run the lane or widen evidenceMaxAgeDays deliberately`);
+          }
+        }
       }
     }
     if (e.licence && CAUTION_FAMILY.test(e.licence) && e.licenceCaution !== true) {
@@ -186,7 +241,7 @@ export function auditLabRegistry(registry, mdText, pathExists, rosterRoles, read
   for (const r of mdRepos) {
     if (!jsonRepos.has(r)) fatal.push(`${r} is in the md table but not in the json — the machine half is missing an entry`);
   }
-  return { fatal };
+  return { fatal, reports };
 }
 
 function selfTest() {
@@ -258,6 +313,26 @@ function selfTest() {
   checks.push(["an md-table repo missing from the json is FATAL", r.fatal.some((x) => x.includes("not in the json"))]);
   r = auditLabRegistry(good, mdFor(["a/one", "b/two"]), () => false, roster);
   checks.push(["deployedEvidence absent from disk is FATAL — the claim cites nothing", r.fatal.some((x) => x.includes("does not exist on disk"))]);
+  // v3: the record's own instant. NOW is fixed so these cannot rot.
+  const NOW = Date.parse("2026-09-06T00:00:00.000Z");
+  const aged = (days) => () => ({ runs: [{ operation: "everything", status: "passed" }], capturedAt: new Date(NOW - days * 86400000).toISOString() });
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], evidenceMaxAgeDays: 30 }, good.entries[1]] }, mdFor(["a/one", "b/two"]), onDisk, roster, aged(200), NOW);
+  checks.push(["evidence older than the bound the ENTRY declares is FATAL", r.fatal.some((x) => x.includes("past the 30d bound"))]);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], evidenceMaxAgeDays: 30 }, good.entries[1]] }, mdFor(["a/one", "b/two"]), onDisk, roster, aged(2), NOW);
+  checks.push(["evidence inside the declared bound is not fatal (positive control)", !r.fatal.some((x) => x.includes("bound"))]);
+  checks.push(["...and its age is REPORTED either way", r.reports.some((x) => x.includes("2.0d old (bound 30d)"))]);
+  r = auditLabRegistry(good, mdFor(["a/one", "b/two"]), onDisk, roster, aged(400), NOW);
+  checks.push(["an entry declaring NO bound is REPORTED, never gated — a monthly lane is not a defect", !r.fatal.some((x) => x.includes("bound")) && r.reports.some((x) => x.includes("REPORTED, not gated"))]);
+  r = auditLabRegistry(good, mdFor(["a/one", "b/two"]), onDisk, roster, aged(-5), NOW);
+  checks.push(["evidence dated in the FUTURE is FATAL — a clock contradiction is not freshness", r.fatal.some((x) => x.includes("dated in the FUTURE"))]);
+  r = auditLabRegistry(good, mdFor(["a/one", "b/two"]), onDisk, roster, readGreen, NOW);
+  checks.push(["a record with no instant at all is REPORTED as unknown, not silently fresh", r.reports.some((x) => x.includes("age UNKNOWN"))]);
+  r = auditLabRegistry(
+    { ...good, entries: [{ ...good.entries[0], evidenceInstantField: "provenance.fixtureTimestamp", evidenceMaxAgeDays: 30 }, good.entries[1]] },
+    mdFor(["a/one", "b/two"]), onDisk, roster,
+    () => ({ runs: [{ operation: "everything", status: "passed" }], provenance: { fixtureTimestamp: new Date(NOW - 400 * 86400000).toISOString() } }), NOW,
+  );
+  checks.push(["an entry may NAME the field that stands in for a wall-clock instant, and it is then read", r.fatal.some((x) => x.includes("past the 30d bound"))]);
   // Parser controls: a backticked file path in a table row, or a repo named
   // only in prose, must not enter the cross-check.
   const mdWithNoise = `${mdFor(["a/one", "b/two"])}\n| gate | \`scripts/check-lab-registry.mjs\` |\n\nSee also \`c/prose-only\` in passing.`;
@@ -291,7 +366,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const readJson = (p) => {
     try { return JSON.parse(readFileSync(join(repoRoot, p), "utf8")); } catch { return null; }
   };
-  const { fatal } = auditLabRegistry(registry, mdText, (p) => existsSync(join(repoRoot, p)), rosterRoles, readJson);
+  const { fatal, reports } = auditLabRegistry(registry, mdText, (p) => existsSync(join(repoRoot, p)), rosterRoles, readJson);
+  for (const line of reports) console.log(`  · evidence age (REPORTED): ${line}`);
   const deployed = registry.entries?.filter((e) => e.deployedInLab === true).length ?? 0;
   console.log(`Open-source lab registry — ${registry.entries?.length ?? 0} entr(ies), ${deployed} deployed-in-lab`);
   if (fatal.length > 0) {

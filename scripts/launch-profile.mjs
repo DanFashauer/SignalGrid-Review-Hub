@@ -664,7 +664,8 @@ export const SURFACES = [
  * "compares a thing to itself" defect this repo keeps finding, wearing a governance
  * hat.
  *
- * It had already gone wrong. TWO of the five gaps below had been closed in code —
+ * It had already gone wrong. TWO of the five gaps THIS LIST THEN HELD had been closed
+ * in code —
  * the runtime allowlist fence and the served-vs-published surface, both with tests
  * asserting a 404 for every deferred path — and this list still declared them
  * missing, as did LAUNCH_PROFILE.md. A third had drifted: the Graph transport it
@@ -674,6 +675,11 @@ export const SURFACES = [
  * direction and is exactly why it can rot for so long unnoticed. It is still a
  * false statement about the repository, and worse, it makes the honest gaps cheaper
  * to ignore: a reader who finds two of five wrong stops trusting the other three.
+ *
+ * "five" is the count that list carried on the day of that correction, and it is
+ * deliberately in the PAST tense: the sentence said "the five gaps below" while the
+ * array below held four, so a paragraph about a stale count had itself gone stale.
+ * The current number is `GAPS.length` and nothing in this comment restates it.
  *
  * So each gap now states, mechanically, what would make it CLOSED, and
  * `check-launch-profile.mjs` evaluates that against source. Every condition met →

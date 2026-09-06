@@ -738,5 +738,5 @@ per-file, so a sincere claim written *inside* `docs/PUBLIC_MESSAGING_GUARDRAILS.
 document whose purpose is to enumerate forbidden wording — is exempt. The `registry:`
 count moves when that happens, but the lane does not. Closing it would require shape
 heuristics about how that one document may be written, and a guard that fails on
-legitimate edits gets switched off. `pnpm run proof:unsafe-claim` (40 checks) pins all of
+legitimate edits gets switched off. `pnpm run proof:unsafe-claim` (50 checks) pins all of
 the above, including that limitation and the adversarial trailing-negation case.

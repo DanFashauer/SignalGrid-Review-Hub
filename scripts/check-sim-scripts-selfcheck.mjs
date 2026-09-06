@@ -34,6 +34,30 @@
 //         "Absolutised" is DERIVED from the script's own assignments — a value
 //         built from `$(cd … && pwd)`, starting with `/`, or taken from $PWD /
 //         $HOME / $TMPDIR — so `$ROOT/$OUT` passes and `$OUT` alone does not.
+//     (f) a LINE-ANCHORED grep against another repo script's stdout must anchor at
+//         text that script can actually print.
+//
+// RULE (f), and the defect it was written for. `scripts/mac/lane-tick.sh` — the
+// unattended 30-minute tick — counted the cloud lane's queued work with
+//
+//     PENDING="$(node scripts/mac/run-requests.mjs --plan | grep -c '^  PENDING')"
+//
+// and `run-requests.mjs` could not print that. The word appeared in that file only
+// inside `//` comments, so the count was 0 on every tick ever run, the log said "no
+// pending sim requests" forever, and step (c) — the one thing the tick exists to do
+// — never fired once. A grep that CANNOT match is indistinguishable from an empty
+// queue, and nothing anywhere went red.
+//
+// GATED vs REPORTED, narrowly, because the opposite mistake is worse. Only
+// `^`-ANCHORED patterns are gated: anchoring is an explicit claim that the target
+// emits a line STARTING with that literal, and it is checkable. An UNANCHORED
+// pattern (`grep -c '→ mac'` against lane-message.mjs, which builds that text by
+// interpolation — `${m.id} → ${m.to}` — and is perfectly correct) is REPORTED as
+// not checked and never failed. A gate that flagged that honest line would be the
+// wrong gate. The search runs over the target's STRING AND TEMPLATE LITERALS only,
+// never its comments, because a comment mentioning the word is exactly what made
+// the original defect invisible; and a pattern carrying regex metacharacters is
+// REPORTED as not checked rather than guessed at.
 //
 //   Over the scripts an operation actually NAMES (derived by importing
 //   SIM_OPERATIONS and reading its argv, never by re-listing them here):
@@ -79,10 +103,17 @@ import { SIM_OPERATIONS } from "./lib/sim-operations.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MAC_DIR = resolve(repo, "scripts/mac");
+// Rule (f)'s REPORTED half, collected by staticChecks and printed with the verdict.
+const GREP_NOT_CHECKED = [];
 
-// TODAY'S COUNT, measured: scripts/mac/run-everything.sh is the only shell script
-// any operation names, and it predates the convention. Lower this when it gains
-// the mode; never raise it.
+// TODAY'S COUNT, measured 2026-09-06 by running this gate: THREE shell scripts are
+// named by an operation — run-everything.sh, ios-shell-repair.sh and
+// desktop-window-smoke.sh — and only run-everything.sh lacks `--self-check`. The
+// sentence here said run-everything.sh "is the only shell script any operation
+// names", which stopped being true when the other two were registered; the CEILING
+// was right and its justification was describing a one-script world. The ceiling is
+// the count WITHOUT the mode, not the count of referenced scripts. Lower it when
+// run-everything.sh gains the mode; never raise it.
 const NOT_SELF_CHECKING_CEILING = 1;
 const OPERATION_FLOOR = 10;
 
@@ -210,6 +241,140 @@ function statusDelta(before, after) {
   return out;
 }
 
+// ── rule (f): an anchored grep must anchor at text the target can print ──────
+
+/**
+ * Every string / template literal in a JS source, with COMMENTS REMOVED FIRST.
+ *
+ * The first version was a bare regex over the whole file, and it failed on this
+ * gate's own first plant: the explanatory comment added to run-requests.mjs quoted
+ * the marker (`grep -c '^  PENDING'`), the regex read that quoted span as a string
+ * literal, and the gate reported the target COULD print a line it could not. A
+ * prose mention satisfying a check about behaviour is the precise defect rule (f)
+ * exists to catch, so the scanner walks the source instead of pattern-matching it.
+ *
+ * Known imprecision, stated rather than hidden: a regex literal containing a quote
+ * can shift the tokenizer. The bias is deliberately toward MERGING code into a
+ * literal (permissive — this gate misses a defect) rather than dropping a real
+ * literal (which would fail honest code, the one outcome that is never acceptable).
+ */
+export function stringLiteralsOf(text) {
+  const out = [];
+  const n = text.length;
+  let i = 0;
+  while (i < n) {
+    const c = text[i];
+    if (c === "/" && text[i + 1] === "/") {
+      while (i < n && text[i] !== "\n") i += 1;
+      continue;
+    }
+    if (c === "/" && text[i + 1] === "*") {
+      i += 2;
+      while (i < n && !(text[i] === "*" && text[i + 1] === "/")) i += 1;
+      i += 2;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      let j = i + 1;
+      let buf = "";
+      while (j < n) {
+        if (text[j] === "\\") { buf += text[j + 1] ?? ""; j += 2; continue; }
+        if (text[j] === c) break;
+        if (c !== "`" && text[j] === "\n") break; // unterminated on one line: not a literal
+        buf += text[j];
+        j += 1;
+      }
+      out.push(buf);
+      i = j + 1;
+      continue;
+    }
+    i += 1;
+  }
+  return out;
+}
+
+/**
+ * `grep` calls in a shell script whose input is a repo script's stdout, in the two
+ * shapes that occur here:
+ *
+ *   ONE LINE   N="$(node scripts/x.mjs --plan | grep -c '^  PENDING')"
+ *   TWO STEPS  OUT="$(node scripts/x.mjs --plan)"
+ *              N="$(printf '%s\n' "$OUT" | grep -c '^  PENDING')"
+ *
+ * The two-step form is not a nicety: capturing first is how a script tells a
+ * FAILED command from an EMPTY result, and the one-line form is what hides that
+ * distinction. A rule that only understood the one-liner would have gone blind the
+ * moment lane-tick.sh was fixed properly — it did, during this change, and that is
+ * why the variable pass exists.
+ */
+export function grepClaims(text) {
+  const lines = text.split("\n").map((l) => l.replace(/#.*$/, ""));
+  const SCRIPT_RE = /\bnode\s+(?:\.\/)?((?:scripts|lib)\/[A-Za-z0-9._/-]+\.(?:mjs|js|cjs))/;
+  // pass 1: shell vars holding a repo script's stdout
+  const varOf = new Map();
+  for (const bare of lines) {
+    const a = /^\s*(?:export\s+)?([A-Za-z_]\w*)="?\$\((.*)$/.exec(bare);
+    if (!a) continue;
+    const m = SCRIPT_RE.exec(a[2]);
+    if (m) varOf.set(a[1], m[1]);
+  }
+  // pass 2: the greps
+  const claims = [];
+  lines.forEach((bare, i) => {
+    if (!/\bgrep\b/.test(bare)) return;
+    let target = SCRIPT_RE.exec(bare)?.[1] ?? null;
+    if (!target) {
+      for (const v of bare.matchAll(/\$\{?([A-Za-z_]\w*)\}?/g)) {
+        if (varOf.has(v[1])) { target = varOf.get(v[1]); break; }
+      }
+    }
+    if (!target) return;
+    for (const g of bare.matchAll(/\bgrep\b(?:\s+-[A-Za-z]+)*\s+(['"])(.*?)\1/g)) {
+      claims.push({ line: i + 1, target, pattern: g[2] });
+    }
+  });
+  return claims;
+}
+
+const REGEX_META = /[\\.*+?()[\]{}$|]/;
+
+/**
+ * Rule (f). `readTarget(relPath)` returns the target's source or null if absent —
+ * injected so the self-test drives this without a repo on disk.
+ * Returns { problems, notChecked }.
+ */
+export function grepMarkerChecks(text, label, readTarget) {
+  const problems = [];
+  const notChecked = [];
+  for (const c of grepClaims(text)) {
+    if (!c.pattern.startsWith("^")) {
+      notChecked.push(`${label}:${c.line} grep '${c.pattern}' against ${c.target} — UNANCHORED, so this gate does not check it`);
+      continue;
+    }
+    const lit = c.pattern.slice(1);
+    if (lit === "" || REGEX_META.test(lit)) {
+      notChecked.push(`${label}:${c.line} grep '${c.pattern}' against ${c.target} — the anchored text is a regex, not a literal; NOT checked`);
+      continue;
+    }
+    const src = readTarget(c.target);
+    if (src === null || src === undefined) {
+      problems.push({ label, rule: "f", detail: `line ${c.line}: greps the output of \`${c.target}\`, which does not exist — the count is silently 0 forever` });
+      continue;
+    }
+    if (stringLiteralsOf(src).some((s) => s.includes(lit))) continue;
+    problems.push({
+      label,
+      rule: "f",
+      detail:
+        `line ${c.line}: anchors on '${c.pattern}' against ${c.target}, but no string or template literal in that ` +
+        `file contains ${JSON.stringify(lit)} — the grep can never match, so the count is 0 on every run and an ` +
+        `empty result is indistinguishable from a broken one. (Comments do not count: a comment mentioning the ` +
+        `word is what hid this defect the first time.)`,
+    });
+  }
+  return { problems, notChecked };
+}
+
 // ── the checks ───────────────────────────────────────────────────────────────
 function staticChecks(absPath, label) {
   const problems = [];
@@ -220,6 +385,11 @@ function staticChecks(absPath, label) {
   for (const h of badSubshellRedirects(text)) {
     problems.push({ label, rule: "d", detail: `line ${h.line}: redirect to \`${h.target}\` inside a ( cd … ) subshell — ${h.why}` });
   }
+  const grepRes = grepMarkerChecks(text, label, (rel) => {
+    try { return readFileSync(resolve(repo, rel), "utf8"); } catch { return null; }
+  });
+  problems.push(...grepRes.problems);
+  GREP_NOT_CHECKED.push(...grepRes.notChecked);
   return problems;
 }
 
@@ -276,6 +446,24 @@ const FIXTURES = {
   "dirty-selfcheck.sh": `#!/usr/bin/env bash\nset -euo pipefail\nif [ "\${1:-}" = "--self-check" ]; then mkdir -p artifacts/selfcheck; : >artifacts/selfcheck/probe.log; exit 0; fi\n`,
   "tmpdir-selfcheck.sh": `#!/usr/bin/env bash\nset -euo pipefail\nif [ "\${1:-}" = "--self-check" ]; then d="$(mktemp -d)"; : >"$d/probe.log"; exit 0; fi\n`,
   "case-selfcheck.sh": `#!/usr/bin/env bash\nset -euo pipefail\ncase "\${1:-}" in\n  --self-check) echo "plumbing ok"; exit 0 ;;\nesac\n`,
+  // rule (f)
+  "grep-unprintable.sh": `#!/usr/bin/env bash\nN="$(node scripts/mac/planner.mjs --plan 2>/dev/null | grep -c '^  PENDING' || true)"\n`,
+  "grep-printable.sh": `#!/usr/bin/env bash\nN="$(node scripts/mac/planner.mjs --plan 2>/dev/null | grep -c '^  READY' || true)"\n`,
+  "grep-unanchored.sh": `#!/usr/bin/env bash\nN="$(node scripts/lane-message.mjs inbox 2>/dev/null | grep -c '\u2192 mac' || true)"\n`,
+  "grep-missing-target.sh": `#!/usr/bin/env bash\nN="$(node scripts/mac/gone.mjs --plan | grep -c '^  READY')"\n`,
+  "grep-two-step.sh": `#!/usr/bin/env bash\nOUT="$(node scripts/mac/planner.mjs --plan 2>/dev/null)"\nN="$(printf '%s' "$OUT" | grep -c '^  PENDING')"\n`,
+};
+
+// The two fake targets rule (f)'s self-test reads. `planner.mjs` MENTIONS PENDING in
+// a comment and PRINTS READY in a template literal — the exact asymmetry that made
+// the real defect invisible for as long as it lasted.
+const GREP_TARGETS = {
+  "scripts/mac/planner.mjs": [
+    "// A request with no result is PENDING; scripts/mac/tick.sh reads `grep -c '^  PENDING'`.",
+    "for (const r of rows) console.log(`  READY ${r.id}`);",
+    "",
+  ].join("\n"),
+  "scripts/lane-message.mjs": "unread.push(`${m.id} \u2192 ${m.to}: ${m.subject}`);\n",
 };
 
 function selfTest() {
@@ -332,6 +520,37 @@ function selfTest() {
     expect("ratchet fails when a new script joins without the mode", notSelfChecking.length > NOT_SELF_CHECKING_CEILING, "the ceiling would not have caught a second legacy script");
     expect("ratchet passes at the ceiling", ["legacy-no-selfcheck.sh"].length <= NOT_SELF_CHECKING_CEILING, "the ceiling is below today's measured count");
 
+    // ── rule (f), both directions, on injected targets ──────────────────────
+    const readFixtureTarget = (rel) => GREP_TARGETS[rel] ?? null;
+    const F = (n) => grepMarkerChecks(readFileSync(join(dir, n), "utf8"), n, readFixtureTarget);
+
+    const unprintable = F("grep-unprintable.sh");
+    expect("SYNTHETIC VIOLATION: an anchored grep the target can never print is caught",
+      unprintable.problems.some((p) => p.rule === "f") && /never match/.test(unprintable.problems[0]?.detail ?? ""),
+      `MISSED the lane-tick defect: ${JSON.stringify(unprintable)}`);
+    expect("a comment QUOTING the marker does NOT satisfy the claim (this broke v1 of the scanner)",
+      !stringLiteralsOf(GREP_TARGETS["scripts/mac/planner.mjs"]).some((l) => l.includes("  PENDING")),
+      "the literal scan reached into a // comment — that is how the defect hid the first time");
+    const printable = F("grep-printable.sh");
+    expect("an anchored grep the target DOES print is clean",
+      printable.problems.length === 0 && printable.notChecked.length === 0,
+      `FALSE POSITIVE on a working grep: ${JSON.stringify(printable)}`);
+    const unanchored = F("grep-unanchored.sh");
+    expect("an UNANCHORED grep is reported, never failed",
+      unanchored.problems.length === 0 && unanchored.notChecked.length === 1,
+      `an honest interpolated marker was punished (the failure mode this gate must not have): ${JSON.stringify(unanchored)}`);
+    expect("a grep against a script that does not exist is caught",
+      F("grep-missing-target.sh").problems.some((p) => p.rule === "f"),
+      "MISSED a grep whose target file is gone — the count would be 0 forever");
+    const twoStep = F("grep-two-step.sh");
+    expect("SYNTHETIC VIOLATION: the CAPTURE-THEN-GREP form is checked too",
+      twoStep.problems.some((p) => p.rule === "f"),
+      `the two-step shape went unseen — this is the shape lane-tick.sh uses, and a line-only ` +
+      `matcher goes blind the moment a script is fixed to tell a failed command from an empty one: ${JSON.stringify(twoStep)}`);
+    expect("grepClaims finds nothing in a script with no node|grep pipeline",
+      grepClaims(readFileSync(join(dir, "case-selfcheck.sh"), "utf8")).length === 0,
+      "grepClaims over-matched");
+
     // The derivation itself, driven on a fixture allowlist.
     const derived = referencedMacScripts({
       a: { argv: ["./scripts/mac/run-everything.sh"] },
@@ -355,7 +574,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 if (process.argv.includes("--self-test")) {
-  console.log(`PASS  self-test — ${Object.keys(FIXTURES).length} planted shell fixtures behave in both directions (syntax, subshell redirect rooted and unrooted, executable bit, a passing and a failing --self-check, a self-check that dirties the tree and one that scratches under mktemp -d, a legacy script, the ratchet, and the argv derivation).`);
+  console.log(`PASS  self-test — ${Object.keys(FIXTURES).length} planted shell fixtures behave in both directions (syntax, subshell redirect rooted and unrooted, executable bit, a passing and a failing --self-check, a self-check that dirties the tree and one that scratches under mktemp -d, a legacy script, the ratchet, the argv derivation, and rule (f) in all four directions — an anchored marker the target cannot print, one it can, an unanchored marker that must NOT be punished, and a missing target).`);
   process.exit(0);
 }
 
@@ -406,6 +625,13 @@ if (notSelfChecking.length > NOT_SELF_CHECKING_CEILING) {
     detail: `${notSelfChecking.length} referenced script(s) lack --self-check, ceiling is ${NOT_SELF_CHECKING_CEILING}. A NEW queueable script must carry the mode; the ceiling is only ever lowered.`,
   });
 }
+
+// Rule (f)'s REPORTED half, stated so nobody reads "0 problems" as "every grep in
+// these scripts was verified". An unanchored pattern is a claim this gate cannot
+// check, and saying so is the whole difference between GATED and REPORTED.
+console.log(`\n  GREP MARKERS NOT CHECKED (${GREP_NOT_CHECKED.length} — REPORTED, never failed):`);
+for (const n of GREP_NOT_CHECKED) console.log(`    \u00b7 ${n}`);
+if (GREP_NOT_CHECKED.length === 0) console.log("    (none)");
 
 console.log(`\nsim-scripts-selfcheck: ${allMac.length} script(s) checked statically, ${referenced.size} referenced, ${problems.length} problem(s); self-test green`);
 if (problems.length > 0) {

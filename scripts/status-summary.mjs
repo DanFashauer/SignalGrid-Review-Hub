@@ -28,6 +28,38 @@ const full = process.argv.includes("--full");
 // sees the same numbers straight from the tooling.
 const write = process.argv.includes("--write");
 
+/** The "Would run here now?" answer for one live-vendor lane.
+ *
+ *  IT MUST ANSWER THE QUESTION IN THE COLUMN HEADER. Until 2026-09-06 the unarmed
+ *  answer was "self-provisions in Docker" — a CAPABILITY, not an answer, in the one
+ *  file whose header (":9-14") promises it "reports EXACTLY what it ran and nothing
+ *  else, and anything not executed is printed as `not run`". Nothing here probes for
+ *  Docker, a running daemon, or the ~2GB Wazuh pull the prose below mentions, so the
+ *  capability was being asserted without evidence in the answer slot. The
+ *  self-provisioning fact is true and is kept — one clause later, after the answer,
+ *  and in the paragraph below where it already lived. */
+function wouldRunHereNow(armed, envVar) {
+  return armed
+    ? `yes — \`${envVar}\` is set (external lab)`
+    : `no — \`${envVar}\` unset; \`verify:live\` can self-provision it in Docker, which is NOT probed here`;
+}
+
+if (process.argv.includes("--self-test")) {
+  const failures = [];
+  const unarmed = wouldRunHereNow(false, "FLEET_URL");
+  const armedAnswer = wouldRunHereNow(true, "FLEET_URL");
+  // The property: the column answers yes/no FIRST. A capability sentence in that slot
+  // is the defect, and it is what re-planting this reintroduces.
+  if (!unarmed.startsWith("no")) failures.push(`an unarmed lane must answer "no" first, got: ${unarmed}`);
+  if (!armedAnswer.startsWith("yes")) failures.push(`an armed lane must answer "yes" first, got: ${armedAnswer}`);
+  if (unarmed === armedAnswer) failures.push("armed and unarmed produce the SAME answer — the column carries no information");
+  // NON-VACUITY: the answer must still carry the reason, or "no" alone is unactionable.
+  if (!unarmed.includes("FLEET_URL")) failures.push("the unarmed answer must name the env var that would arm it");
+  for (const f of failures) console.error(`  ✗ ${f}`);
+  console.log(`status-summary self-test ${failures.length === 0 ? "pass" : "FAIL"} (${4 - failures.length}/4) — no gates were run.`);
+  process.exit(failures.length === 0 ? 0 : 1);
+}
+
 /** Run a gate. Returns {status, detail} — never throws, never guesses. */
 function gate(name, cmd, args, { skip = false, reason = "" } = {}) {
   if (skip) return { name, status: "not run", detail: reason };
@@ -193,7 +225,7 @@ if (liveLanes.length) {
   for (const lane of liveLanes.sort()) {
     const [envVar, doc] = LANE_ENV[lane] ?? ["(see docs)", ""];
     const armed = envVar !== "(see docs)" && !!process.env[envVar];
-    L.push(`| \`${lane}\` | \`${envVar}\`${doc ? ` — ${doc}` : ""} | ${armed ? "yes (external lab)" : "self-provisions in Docker"} |`);
+    L.push(`| \`${lane}\` | \`${envVar}\`${doc ? ` — ${doc}` : ""} | ${wouldRunHereNow(armed, envVar)} |`);
   }
   L.push("");
   L.push(

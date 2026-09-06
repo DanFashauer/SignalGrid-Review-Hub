@@ -42,14 +42,85 @@ const conditions = JSON.parse(readFileSync(REGISTRY, "utf8")).conditions ?? [];
 
 const argv = process.argv.slice(2);
 
+/**
+ * The classification, as a pure function so the self-test can drive it. `exit` is the
+ * contract the header states: 0 = diagnosed and nothing blocks, 1 = undiagnosed OR
+ * something blocks.
+ */
+export function classify(registry, gate) {
+  const hits = registry.filter((c) => c.gate === gate || c.id === gate);
+  const anyBlocks = hits.some((c) => c.blocks_pr === true);
+  return { hits, anyBlocks, diagnosed: hits.length > 0, exit: hits.length === 0 || anyBlocks ? 1 : 0 };
+}
+
+/**
+ * The path-shaped tokens inside an evidence string. Extracted so `--audit`'s parser is
+ * testable: its predecessor split on `[\s\-:]` and truncated
+ * "artifacts/signalgrid-app/…" to "artifacts/signalgrid", reporting four stale entries
+ * in a healthy registry.
+ */
+export function evidencePaths(ev) {
+  const trimmed = String(ev ?? "").trim();
+  if (trimmed === "") return [];
+  return /^[\w./-]+$/.test(trimmed) ? [trimmed] : [...trimmed.matchAll(/(?:[\w-]+\/)+[\w.-]+/g)].map((m) => m[0]);
+}
+
 if (argv.includes("--self-test")) {
-  // A classifier nobody has watched fail is one nobody should trust.
-  const unknown = conditions.find((c) => c.gate === "__no_such_gate__");
-  const ok = unknown === undefined;
-  console.log(ok
-    ? "PASS  self-test - an unrecognised gate is correctly reported as undiagnosed"
-    : "FAIL  self-test - the registry claims to know a gate that does not exist");
-  process.exit(ok ? 0 : 1);
+  // WHAT THIS REPLACED, because it is the failure mode this repository keeps paying for:
+  //   const unknown = conditions.find((c) => c.gate === "__no_such_gate__");
+  //   const ok = unknown === undefined;
+  // That is a tautology. No registry can contain a gate literally named
+  // `__no_such_gate__`, so `ok` was true no matter what the classifier did — it never
+  // called the classifier at all, and would have reported PASS with every diagnosis
+  // deleted, every exit code inverted, or the audit parser back to its truncating
+  // splitter. A gate that cannot fail is green about nothing.
+  const checks = [];
+  const fixture = [
+    { id: "blocking-one", gate: "gate:blocks", blocks_pr: true, status: "open" },
+    { id: "safe-one", gate: "gate:safe", blocks_pr: false, status: "open" },
+  ];
+
+  // 1-3. The exit contract, all three arms. Arm 3 is the regression the header records
+  //      (a blocking condition once printed "BLOCKS THIS PR." and exited 0).
+  checks.push(["an UNRECOGNISED gate is undiagnosed and exits 1", classify(fixture, "gate:unheard-of").exit === 1 && classify(fixture, "gate:unheard-of").diagnosed === false]);
+  checks.push(["a diagnosed NON-blocking condition exits 0", classify(fixture, "gate:safe").exit === 0 && classify(fixture, "gate:safe").diagnosed === true]);
+  checks.push(["a diagnosed BLOCKING condition exits 1 (fail-open inversion cannot return)", classify(fixture, "gate:blocks").exit === 1]);
+  // 4. Lookup works by id as well as by gate, which `--audit`'s messages assume.
+  checks.push(["a condition is findable by its id, not only by its gate", classify(fixture, "safe-one").diagnosed === true]);
+  // 5. `blocks_pr` must be read strictly: a missing or string flag must not be truthy-blocked
+  //    into silence, nor a "true" string silently dropped from blocking.
+  checks.push(["a condition with no blocks_pr does not silently claim to block", classify([{ id: "x", gate: "g", status: "open" }], "g").anyBlocks === false]);
+
+  // 6. The evidence-path extractor, on the shapes the audit meets.
+  checks.push(["a bare path is audited whole (the hyphen-truncating splitter cannot return)", JSON.stringify(evidencePaths("artifacts/signalgrid-app/vite.config.ts")) === JSON.stringify(["artifacts/signalgrid-app/vite.config.ts"])]);
+  checks.push(["a path inside prose is extracted, hyphens intact", JSON.stringify(evidencePaths("the proxy in artifacts/signalgrid-app/vite.config.ts was absent")) === JSON.stringify(["artifacts/signalgrid-app/vite.config.ts"])]);
+  checks.push(["pure prose yields NO path to audit (testimony is not a reference)", evidencePaths("observed by the owner on 2026-08-27").length === 0]);
+
+  // 7. FLOORS on the live registry: a classifier over an empty or reshaped registry is
+  //    green about nothing, and every arm above would still pass on it.
+  const REQUIRED = ["id", "gate", "status", "symptom", "looks_like", "actual_cause", "fix", "fix_owner"];
+  const missingFields = conditions.filter((c) => REQUIRED.some((f) => typeof c[f] !== "string" || c[f].trim() === ""));
+  // The floor is 1, not a bigger round number: the registry holds 2 diagnoses today and
+  // a floor must sit BELOW what is really there or it fossilises into a red gate on the
+  // next honest edit. It is here to catch a registry that parsed to NOTHING — a renamed
+  // `conditions` key, an empty array, a truncated file — because every arm above would
+  // still pass over an empty registry.
+  checks.push([`the live registry parsed to at least one condition (found ${conditions.length})`, conditions.length >= 1]);
+  checks.push([`every live condition carries every field the printer reads (${missingFields.length} incomplete)`, missingFields.length === 0]);
+  checks.push(["every live condition states blocks_pr as a boolean", conditions.every((c) => typeof c.blocks_pr === "boolean")]);
+  checks.push(["a real gate name from the registry classifies as diagnosed", conditions.length > 0 && classify(conditions, conditions[0].gate).diagnosed === true]);
+
+  let bad = 0;
+  for (const [name, ok] of checks) {
+    console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}`);
+    if (!ok) bad += 1;
+  }
+  if (bad) {
+    console.error(`\nclassify-failure self-test FAILED - ${bad} of ${checks.length} check(s).`);
+    process.exit(1);
+  }
+  console.log(`\nclassify-failure self-test passed - ${checks.length} checks over the exit contract, the evidence parser and the live registry.`);
+  process.exit(0);
 }
 
 if (argv.includes("--list")) {
@@ -78,11 +149,7 @@ if (argv.includes("--audit")) {
       // path-shaped tokens instead: the whole string when it IS a bare path,
       // otherwise every slash-containing token. Pure-prose evidence has no
       // auditable path and is testimony, not a reference — skipped.
-      const trimmed = ev.trim();
-      const candidates = /^[\w./-]+$/.test(trimmed)
-        ? [trimmed]
-        : [...trimmed.matchAll(/(?:[\w-]+\/)+[\w.-]+/g)].map((m) => m[0]);
-      for (const path of candidates) {
+      for (const path of evidencePaths(ev)) {
         if (!existsSync(resolve(repo, path))) {
           stale++;
           console.log(`  ${R}x${X} ${c.id} - evidence path gone: ${path}`);
@@ -116,7 +183,7 @@ if (!gate) {
   process.exit(2);
 }
 
-const hits = conditions.filter((c) => c.gate === gate || c.id === gate);
+const { hits, anyBlocks } = classify(conditions, gate);
 
 console.log(`\n${B}${gate}${X}\n`);
 
@@ -133,8 +200,8 @@ if (!hits.length) {
 // and nothing blocks; 1 = undiagnosed OR any diagnosed condition blocks the
 // PR; 2 = usage. The previous version fell off the end of this loop and
 // exited 0 even after printing "BLOCKS THIS PR." — the known-blocking case
-// passed while the safe-unknown case failed. Fail-open, inverted.
-let anyBlocks = false;
+// passed while the safe-unknown case failed. Fail-open, inverted. `anyBlocks` now
+// comes from `classify()` above, which `--self-test` drives in all three arms.
 for (const c of hits) {
   console.log(`  ${B}${c.id}${X}  ${D}diagnosed ${c.diagnosed} - ${c.status}${X}\n`);
   console.log(`  ${D}Symptom${X}        ${c.symptom}`);
@@ -145,7 +212,6 @@ for (const c of hits) {
   for (const e of c.evidence ?? []) console.log(`      ${e}`);
   console.log("");
   if (c.blocks_pr) {
-    anyBlocks = true;
     console.log(`  ${R}${B}BLOCKS THIS PR.${X} Fix before merging.`);
   } else {
     console.log(`  ${G}${B}Does not block a PR${X} - but verify, do not trust:`);

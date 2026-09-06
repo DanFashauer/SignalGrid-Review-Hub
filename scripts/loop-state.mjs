@@ -49,9 +49,11 @@ console.log(`\n${B}Loop check${X} ${D}— reality, not notes${X}\n`);
 // This is the check that would have caught the lost week.
 const localBranches = git("branch", "--format=%(refname:short)").split("\n").filter(Boolean);
 let hubBranches = [];
+let hubListed = false;
 try {
   hubBranches = execFileSync("git", ["ls-remote", "--heads", HUB], { encoding: "utf8", timeout: 60000 })
     .split("\n").filter(Boolean).map((l) => l.split("refs/heads/")[1]).filter(Boolean);
+  hubListed = true;
 } catch {
   // FAIL, not warn. An unreachable Hub means the unpushed-work check below did
   // not run, and "the check that would have caught the lost week did not run"
@@ -60,6 +62,26 @@ try {
   // an empty collection concluding no objection, exactly when the network was
   // the unverifiable input.
   add("fail", "Review Hub reachable", "could not list the Hub's branches — the unpushed-work check did NOT run; unknown is not clean");
+}
+
+// ...and the half of that fix which did NOT land. The comment above says the `if
+// (hubBranches.length)` guard "turned an empty ls-remote into a clean report", and
+// the guard was still here: a command that SUCCEEDS and returns nothing throws no
+// exception, so `hubBranches` was empty, no fail row was added, and the unpushed-work
+// check plus the origin check were both skipped in silence. That is the same empty
+// collection concluding no objection, one layer down — and it is the realistic
+// failure (an HTTP proxy answering 200 with an empty body, a misspelled remote that
+// resolves, a repo genuinely carrying no heads), not the clean throw.
+//
+// Success and emptiness are now different answers. A Hub that lists ZERO branches is
+// a broken read, never a clean one.
+if (hubListed && hubBranches.length === 0) {
+  add(
+    "fail",
+    "Review Hub branch list",
+    "git ls-remote --heads succeeded but returned ZERO branches — the unpushed-work check did NOT run. " +
+      "An empty answer is not a clean answer.",
+  );
 }
 
 if (hubBranches.length) {
@@ -75,7 +97,14 @@ if (hubBranches.length) {
   } else {
     add("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}`);
   }
-  // Is 'origin' even pointed at the Hub? A push can "succeed" into the wrong repo.
+}
+
+// OUTSIDE the branch-list block, deliberately. This is a purely LOCAL check — it
+// reads `git remote get-url` — and it sat inside `if (hubBranches.length)`, so the
+// one condition under which a push is most likely to have gone to the wrong repo
+// (the Hub listing nothing) was the condition under which nobody asked which repo
+// origin points at. A push can "succeed" into the wrong repository.
+{
   const origin = git("remote", "get-url", "origin");
   const pointsAtHub = /DanFashauer\/SignalGrid-Review-Hub/i.test(origin);
   add(pointsAtHub ? "ok" : "fail", "origin points at the Review Hub", origin || "(no origin)");
@@ -118,6 +147,19 @@ if (existsSync(logPath)) {
       // the discovery alarm (NaN >= 7 is false).
       add("fail", "Discovery start date", `unparseable "Experiment started" date in docs/agent/DISCOVERY_LOG.md`);
     }
+  } else {
+    // The line being ABSENT was the one shape with no row at all. An unparseable
+    // date failed; a MISSING date produced silence — no day count, and the
+    // "N days and 0 conversations" alarm structurally unable to fire, because the
+    // alarm lives inside this `if`. That is the loudest row in the script switched
+    // off by deleting one line of markdown, with nothing anywhere saying so. GATED,
+    // like its unparseable sibling: the missing input is a repository defect a
+    // session can fix, not a number a session cannot change.
+    add(
+      "fail",
+      "Discovery start date",
+      'no "Experiment started: YYYY-MM-DD" line in docs/agent/DISCOVERY_LOG.md — the days-since alarm CANNOT fire without it',
+    );
   }
   add(logged >= target ? "ok" : logged > 0 ? "warn" : "fail", "Discovery",
     `${logged}/${target} conversations · ${commits} commitment(s)${daysMsg}`, false);

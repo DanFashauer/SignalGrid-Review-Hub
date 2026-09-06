@@ -556,6 +556,8 @@ jobs:
         run: node scripts/check-gate-census.mjs --self-test
       - name: "Failure-diagnosis registry audit (evidence paths still exist)"
         run: node scripts/classify-failure.mjs --audit
+      - name: "Failure classifier self-test (exit contract + evidence parser)"
+        run: node scripts/classify-failure.mjs --self-test
       - name: "Gap scan (blocking findings fail; a degraded scan is blocking)"
         run: node scripts/scan-gaps.mjs
       - name: "Gap scan self-test (a dying scan command must surface)"
@@ -696,6 +698,14 @@ jobs:
         run: node scripts/check-cited-symbols.mjs
       - name: "Cited symbols self-test (the check can actually fail)"
         run: node scripts/check-cited-symbols.mjs --self-test
+      - name: "Inspiration catalog structure (a stated total, a row-wise URL claim, a constant column and a duplicate product, re-derived from the rows)"
+        run: node scripts/check-inspiration-catalog-structure.mjs
+      - name: "Inspiration catalog structure self-test (the check can actually fail)"
+        run: node scripts/check-inspiration-catalog-structure.mjs --self-test
+      - name: "Entry guards (a module gate body runs only when it IS the entry, never on a filename match)"
+        run: node scripts/check-entry-guards.mjs
+      - name: "Entry-guard self-test (the suffix form is flagged, the exact form is not)"
+        run: node scripts/check-entry-guards.mjs --self-test
       # Two preview PNGs shipped a struck category label for five days after their HTML sources
       # were corrected (2026-09-06): no gate read image content. The manifest pins each
       # render to the sha256 of its source; the renderer (Chromium) is NOT run in CI.
@@ -760,6 +770,8 @@ jobs:
         run: node scripts/check-decision-port-parity.mjs
       - name: "Read-error swallowing (a failed lookup must not report nothing-found)"
         run: node scripts/check-read-error-swallowing.mjs
+      - name: "Read-error swallowing self-test (detector + floors)"
+        run: node scripts/check-read-error-swallowing.mjs --self-test
       # Every other gate here checks what the text MEANS. This one checks the text is
       # what it appears to be — no bidirectional control or invisible character may
       # make a tracked file render differently from how it executes (CVE-2021-42574).
@@ -790,6 +802,8 @@ jobs:
       # hardware can refresh that, so staleness never blocks a commit.
       - name: Live-sync manifest drift (Mac MCP + iOS instructions current)
         run: node scripts/check-live-sync.mjs
+      - name: "Live-sync evidence-kind self-test (unreadable is not hardware)"
+        run: node scripts/check-live-sync.mjs --self-test
       - name: MCP surface self-test (coverage + resource parity can fail)
         run: node scripts/check-mcp-surface.mjs --self-test
       - name: MCP surface drift gate (server = docs = ready message = manifest = resources = exercised)
@@ -1042,6 +1056,8 @@ jobs:
         run: node scripts/check-status-figures.mjs
       - name: STATUS.md figure gate self-test (the gate can actually fail)
         run: node scripts/check-status-figures.mjs --self-test
+      - name: STATUS.md "would run here now" self-test (an unarmed lane answers no first)
+        run: node scripts/status-summary.mjs --self-test
 
       - name: Decision-latency pilot gate
         run: pnpm run bench:decision-latency
@@ -1084,6 +1100,8 @@ jobs:
 
       - name: Breadth lane (47 deferred-family gates + 8 doctrine-doc proofs)
         run: pnpm run verify:breadth
+      - name: Breadth-lane membership self-test (the deferred half can actually fail)
+        run: node scripts/verify-breadth.mjs --self-test
 
   docs-sanity:
     timeout-minutes: 15

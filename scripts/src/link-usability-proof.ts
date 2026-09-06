@@ -376,8 +376,11 @@ check(
   enumRes.mismatches === 0 && enumRes.combos === productOf(domains) && enumRes.combos === 7560,
 );
 check("exhaustive (normalized): some clean states DO grant (the enumeration is not vacuous)", enumRes.noneCount > 0);
-// Six: three roam capabilities × two roam-health shapes (stable, or no roaming domain).
-// Pinning the count is what makes a seventh route into the grant a test failure rather
+// Three: one shape per COHERENT roam pair. (This comment said "Six: three roam
+// capabilities × two roam-health shapes" — the PRE-FIX figure, left behind when the roam
+// contradiction was modelled and the granting set fell to three. The check one line below
+// has been right the whole time; the comment beside it disagreed with it.)
+// Pinning the count is what makes a FOURTH route into the grant a test failure rather
 // than a silent widening.
 check("exhaustive (normalized): exactly THREE shapes grant — one per COHERENT roam pair, down from six once the roam contradiction was modelled", enumRes.noneCount === 3);
 // Grant-ness is not the only thing worth pinning. `linkUsable` is a separate field, and

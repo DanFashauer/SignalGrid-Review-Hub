@@ -340,7 +340,14 @@ console.log(
 );
 
 const content = shell.replace("/*__BUNDLE__*/", () => bundle);
+// EVERY SPLIT POINT IS CHECKED — the guard its twin `build-evidence-coverage.mjs:74-75`
+// carries, and the reason it carries it: `indexOf` returns -1 on a miss and `slice(-1)`
+// happily returns the last character, so an unguarded split produced a bundle stranded in
+// <head> behind an unterminated tag and still printed a cheerful byte count. The
+// `/*__BUNDLE__*/` marker here was already guarded; this one was not. Fixed in one copy
+// of a file family is not fixed.
 const i = content.indexOf('<div class="wrap">');
+if (i === -1) throw new Error('shell has no <div class="wrap"> split marker — refusing to emit a page split at -1');
 const head = content.slice(0, i).trim();
 const body = content.slice(i).trim();
 

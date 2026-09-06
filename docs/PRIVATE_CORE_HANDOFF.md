@@ -23,7 +23,7 @@ and approval-gated, simulated remediation (no autonomous production remediation)
 The controlling principle for the whole handoff: **the observable contract of
 `@workspace/signalgrid-core` stays fixed; only the backing implementations
 change.** The deterministic proof harness that guards that contract
-(`pnpm run proof:signalgrid-core`, 489 invariant assertions) must keep passing
+(`pnpm run proof:signalgrid-core`, 495 invariant assertions) must keep passing
 against the production wiring, extended with the new tests below.
 
 ## 1. Public fixture → private production mapping
@@ -223,7 +223,7 @@ existing public checks (`pnpm run typecheck`, the proof harnesses, and the
 unsafe-claim `git grep` from `AGENTS.md`) plus:
 
 - **Deterministic core proof, unchanged.** `pnpm run proof:signalgrid-core`
-  (489 invariant assertions: correct outcomes, fail-closed, tenant isolation,
+  (495 invariant assertions: correct outcomes, fail-closed, tenant isolation,
   RBAC, auth-fails-closed, tamper-evidence, determinism, the security-baseline
   dimension, the badge-binding dimension, and the dock/SmartDock hardware-state
   dimension) runs against the production wiring too.

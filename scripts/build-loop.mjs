@@ -164,9 +164,23 @@ for (;;) {
 // ── Report ───────────────────────────────────────────────────────────────────
 const last = iterations[iterations.length - 1];
 const green = last.findings.length === 0;
+// A SKIP IS NOT A PASS, AND THE HEADLINE IS WHERE THAT GETS READ (fixed 2026-09-06).
+// Without `--full` the Preflight gate carries `skip: true`, so it never runs, produces no
+// finding, and the headline read a flat "GREEN" over the heaviest gate in the list. This
+// file's own honesty rules say "a gate that was asked to run but couldn't spawn is a
+// FAILURE, not 'skipped'" — honoured for spawn errors and not for declared skips — and
+// CLAUDE.md says the same thing about the macOS harness: "compare M against 0 AND read
+// S — a skip is not a pass". The verdict now carries the number, so the word GREEN can
+// never stand alone over a gate nobody ran.
+const notRun = last.results.filter((r) => r.status === "not run");
+const verdict = green ? (notRun.length === 0 ? "GREEN" : `GREEN over ${last.results.length - notRun.length} of ${last.results.length} gates — ${notRun.length} NOT RUN`) : "RED";
 const L = [];
-L.push(`# Build loop — ${green ? "GREEN" : "RED"} after ${iterations.length} iteration(s)`);
+L.push(`# Build loop — ${verdict} after ${iterations.length} iteration(s)`);
 L.push("");
+if (notRun.length > 0) {
+  L.push(`> ${notRun.length} gate(s) did not run and are not evidence of anything: ${notRun.map((r) => `${r.name} (${r.detail})`).join("; ")}.`);
+  L.push("");
+}
 for (const r of last.results) {
   const icon = r.status === "pass" ? "✅" : r.status === "FAIL" ? "❌" : "⚪";
   L.push(`${icon} ${r.name}${r.status === "not run" ? ` (${r.detail})` : ""}`);

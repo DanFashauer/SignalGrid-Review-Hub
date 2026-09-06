@@ -68,6 +68,20 @@ const cls = (text: string, file = "docs/SOME_DOC.md") => classifyClaim(file, 1, 
     ["avoid, mid-sentence", "Preserve systems of record and avoid claims that SignalGrid replaces IAM."],
     ["guardrail wording", "The denylist checks for `replaces Jamf`, while allowing guardrail wording and disclaimers."],
     ["without", "Delivered without any Imprivata partner relationship."],
+    // POSTPOSED NEGATION — the negator is the direct object of the matched verb, so it
+    // sits AFTER the phrase. Prefix-only scoping filed all four as affirmative until
+    // 2026-09-06, and the first is the repository's own doctrine sentence (quoted in
+    // docs/SECURITY_BASELINE_ALIGNMENT.md:125-126, and again inside
+    // docs/agent/CLAIM_INVENTORY.json where it was the live gate's ONE affirmative hit).
+    ["postposed no", "SignalGrid replaces no system of record."],
+    ["postposed neither/nor", "SignalGrid replaces neither Jamf nor Intune."],
+    ["postposed nothing", "SignalGrid replaces nothing."],
+    ["postposed none", "SignalGrid replaces none of them."],
+    // The live line, verbatim from the claim inventory record that made the gate report
+    // an asserted unsafe claim. Kept as bytes rather than paraphrased, because the
+    // paraphrase is what a reviewer would have checked instead.
+    ["the live CLAIM_INVENTORY.json:4694 sentence",
+     "   \"evidence\": \"CLAUDE.md golden rule 3 (embedded UX law \u2014 domain enforcement belongs to the host/system of record); docs/SECURITY_BASELINE_ALIGNMENT.md:125-126 (SignalGrid replaces no system of record)\","],
   ];
   for (const [why, line] of MUST_CLEAR) {
     check(`disclaimer cleared (${why})`, cls(line) === "disclaimed");
@@ -99,6 +113,17 @@ const cls = (text: string, file = "docs/SOME_DOC.md") => classifyClaim(file, 1, 
   // The self-reference exemption must be narrow: merely mentioning grep earns nothing.
   check("a line that merely mentions grep is NOT self-referential",
     cls("We grep for this: SignalGrid is an Imprivata partner.") === "affirmative");
+  // The postposed window is ONE token wide. These four are the boundary of the
+  // 2026-09-06 widening: each puts a negator after the claim where it does NOT govern
+  // it, and each must stay affirmative or the widening has reopened the central hole.
+  check("postposed window is one token: a negator two words later does not launder",
+    cls("SignalGrid replaces Jamf and no one disputes it.") === "affirmative");
+  check('"no fewer than" asserts rather than denies',
+    cls("SignalGrid replaces no fewer than three systems of record.") === "affirmative");
+  check('a hyphenated "no-" prefix is not the negator "no"',
+    cls("SignalGrid replaces no-code tooling across the estate.") === "affirmative");
+  check("the trailing-negation case still holds after the postposed widening",
+    cls("SignalGrid is production-ready and needs no configuration.") === "affirmative");
 }
 
 // ── 4. THE NAMED EXEMPTIONS ──────────────────────────────────────────────────
@@ -160,6 +185,15 @@ const cls = (text: string, file = "docs/SOME_DOC.md") => classifyClaim(file, 1, 
   // An unparseable line must NOT be silently cleared.
   check("an unparseable scan line is treated as AFFIRMATIVE, never dropped",
     classifyScanOutput("garbage-with-no-colons")[0]?.classification === "affirmative");
+  // A line the pattern never matched is `not_a_hit`, NOT `disclaimed`. It used to be
+  // counted in the disclaimed figure phase-gate prints, which made that number a mix of
+  // "recognised a disclaimer" and "recognised nothing" — unusable for judging reach.
+  check("a line with no claim pattern is not_a_hit, and is NOT counted as disclaimed",
+    cls("SignalGrid does not replace any system of record.") === "not_a_hit" &&
+    tallyClaims(classifyScanOutput("docs/E.md:2:SignalGrid does not replace any system of record."))
+      .notAHit === 1 &&
+    tallyClaims(classifyScanOutput("docs/E.md:2:SignalGrid does not replace any system of record."))
+      .disclaimed === 0);
   check("empty scan output yields an empty tally, not a phantom finding",
     tallyClaims(classifyScanOutput("")).total === 0);
 }

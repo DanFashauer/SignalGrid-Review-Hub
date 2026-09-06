@@ -74,19 +74,75 @@ try {
 // Evidence is classified by KIND, and only HARDWARE evidence answers
 // `liveEvidence=` (review finding on this file's own new sibling lane): this
 // directory used to be globbed indiscriminately, so ANY committed *.json with a
-// current fingerprint flipped the status to `fresh`. The Docker lane
-// (scripts/docker-verify.mjs) emits `kind: "docker-run"`, which proves the
-// DEPLOYED SERVER TOPOLOGY against a real database — it says nothing whatsoever
-// about a supervised iOS device or a real Mac. Letting it answer this line would
-// have made the repo claim hardware validation it does not have, which is the
-// exact "green-ness is not hardware" failure docs/LIVE_SYNC_LOOP.md forbids.
-// Legacy files without a `kind` are treated as hardware (mac-run.json predates
-// the field), so this cannot silently downgrade existing evidence.
-const HARDWARE_KINDS = new Set(["mac-run", undefined, null, ""]);
+// current fingerprint flipped the status to `fresh`. The container lane
+// (scripts/docker-verify.mjs) proves the DEPLOYED SERVER TOPOLOGY against a real
+// database — it says nothing whatsoever about a supervised iOS device or a real
+// Mac. Letting it answer this line would have made the repo claim hardware
+// validation it does not have, which is the exact "green-ness is not hardware"
+// failure docs/LIVE_SYNC_LOOP.md forbids.
+//
+// TWO SPELLINGS OF THE CONTAINER LANE, both of them real: the committed artifact
+// `artifacts/live-evidence/docker-run.json` carries `kind: "docker-run"`, and the
+// emitter now writes `kind: "container-run"` (docker-verify.mjs:206) because the
+// lane runs under podman as readily as docker. This comment named only the first,
+// so it described a value the generator had stopped writing. Neither is hardware,
+// and the classification below never depended on the spelling — it is an
+// EXCLUSION rule — but a comment that names the wrong constant is how the next
+// reader learns something untrue.
+const HARDWARE_KIND = "mac-run";
+// The ONE legacy artifact that predates the `kind` field. Grandfathered BY NAME,
+// not by absence-of-field. It was the latter — `HARDWARE_KINDS` contained
+// `undefined`, `null` and `""` — which means any evidence file that arrived with
+// no kind at all, or that failed to PARSE (an unreadable file yields `ev = null`,
+// and `null?.kind` is `undefined`), was counted as HARDWARE evidence. The one
+// direction this file must never fail in is claiming hardware validation the repo
+// does not have, and an unreadable file was doing exactly that.
+const LEGACY_HARDWARE_FILES = new Set(["mac-run.json"]);
+
+/**
+ * How one evidence file is classified. Pure, so `--self-test` can drive every arm.
+ * @returns {"hardware"|"other"|"unreadable"}
+ */
+export function classifyEvidence(fileName, ev) {
+  if (ev === null || typeof ev !== "object") return "unreadable";
+  if (ev.kind === HARDWARE_KIND) return "hardware";
+  if (ev.kind === undefined || ev.kind === null || ev.kind === "") {
+    return LEGACY_HARDWARE_FILES.has(fileName) ? "hardware" : "unreadable";
+  }
+  return "other";
+}
+
+if (process.argv.includes("--self-test")) {
+  const checks = [
+    ["mac-run kind is HARDWARE", classifyEvidence("mac-run.json", { kind: "mac-run" }) === "hardware"],
+    ["the legacy mac-run.json with NO kind is grandfathered as hardware", classifyEvidence("mac-run.json", { manifestFingerprint: "x" }) === "hardware"],
+    ["a NEW file with no kind is NOT hardware — grandfathering is by name, not by absence", classifyEvidence("new-lane.json", { manifestFingerprint: "x" }) === "unreadable"],
+    ["an UNREADABLE file (parse failed → null) is NOT hardware — the planted defect", classifyEvidence("mac-run.json", null) === "unreadable"],
+    ["the container lane's LEGACY spelling is not hardware", classifyEvidence("docker-run.json", { kind: "docker-run" }) === "other"],
+    ["the container lane's CURRENT spelling is not hardware either", classifyEvidence("docker-run.json", { kind: "container-run" }) === "other"],
+    ["an unknown lane is not hardware", classifyEvidence("whatever.json", { kind: "something-new" }) === "other"],
+    ["an empty-string kind on a new file is not hardware", classifyEvidence("new.json", { kind: "" }) === "unreadable"],
+  ];
+  // LIVE: the emitter's own kind string, read from the generator rather than retyped —
+  // if docker-verify.mjs renames it again, this arm notices instead of a comment rotting.
+  const emitted = readFileSync(join(repoRoot, "scripts/docker-verify.mjs"), "utf8").match(/kind:\s*"([a-z-]+)"/);
+  checks.push([
+    `the container lane's emitted kind (${emitted ? emitted[1] : "NOT FOUND"}) is classified, and is NOT hardware`,
+    emitted !== null && classifyEvidence("docker-run.json", { kind: emitted[1] }) === "other",
+  ]);
+  let bad = 0;
+  for (const [n, ok] of checks) {
+    console.log(`  ${ok ? "ok  " : "FAIL"} — ${n}`);
+    if (!ok) bad += 1;
+  }
+  console.log(`\nself-test ${bad === 0 ? "passed" : "FAILED"} (${checks.length - bad}/${checks.length})`);
+  process.exit(bad === 0 ? 0 : 1);
+}
 
 let anyStale = false;
 let hardwareCount = 0;
 const otherLanes = [];
+const unreadable = [];
 for (const f of evidenceFiles) {
   let ev = null;
   try {
@@ -98,18 +154,31 @@ for (const f of evidenceFiles) {
   const fresh = typeof fp === "string" && fp === currentFingerprint;
   const detail = typeof fp === "string" ? `evidence fingerprint ${fp.slice(0, 16)}…` : "no manifestFingerprint field";
   const summary = ev?.summary ? ` ${JSON.stringify(ev.summary)}` : "";
-  const isHardware = HARDWARE_KINDS.has(ev?.kind);
-  if (isHardware) {
+  const klass = classifyEvidence(f, ev);
+  if (klass === "hardware") {
     hardwareCount += 1;
     if (!fresh) anyStale = true;
-  } else {
+  } else if (klass === "other") {
     otherLanes.push(`${ev.kind}:${fresh ? "fresh" : "stale"}`);
+  } else {
+    unreadable.push(f);
   }
-  const lane = isHardware ? "hardware" : `${ev?.kind} lane — NOT hardware evidence`;
+  const lane =
+    klass === "hardware"
+      ? "hardware"
+      : klass === "other"
+        ? `${ev.kind} lane — NOT hardware evidence`
+        : "UNREADABLE or unclassified — counted as nothing";
   console.log(`  ${fresh ? "FRESH" : "STALE"}  artifacts/live-evidence/${f} [${lane}] (${detail})${summary}`);
 }
 
 const status = hardwareCount === 0 ? "none" : anyStale ? "stale" : "fresh";
+if (unreadable.length > 0) {
+  console.log(
+    `  \u26a0 ${unreadable.length} evidence file(s) unreadable or carrying no recognised kind — counted as ` +
+      `NOTHING, never as hardware: ${unreadable.join(", ")}`,
+  );
+}
 if (otherLanes.length > 0) {
   console.log(`  (other verification lanes present: ${otherLanes.join(", ")} — reported separately, they never answer liveEvidence)`);
 }

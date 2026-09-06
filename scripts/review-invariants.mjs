@@ -460,6 +460,117 @@ if (process.argv.includes("--self-test")) {
   }
 }
 
+// 2c — the same collation rule, over the code lib/ does not contain ───────────
+//
+// 2b covers lib/ only, and the sentence it prints — "codepoint order everywhere" —
+// was true of the population it scanned and false of the repository. Every proof
+// under scripts/src and every shipped service under artifacts/*/src was outside it,
+// and that is where the digests live: `deterministicHash` in
+// scripts/src/connector-emulator-harness.ts sorted with `localeCompare` inside a
+// function whose NAME is the claim, and the SBOM generator orders its component
+// list the same way. Two machines with different ICU data hash the same input to
+// different digests; the drift gate then fails on a tree nobody changed.
+//
+// Scope is DERIVED (`scripts/src/` plus every `artifacts/*/src/` that exists), never
+// typed, so a new artifact package joins the scan by existing.
+//
+// DECLARED EXEMPTIONS, pinned by count and split into two honest classes, because
+// they are not the same thing and printing them as one would be the over-claim:
+//   · "exempt"        — correct as written; the pin stops it from growing.
+//   · "pinned-defect" — a real locale-dependent sort, contained rather than fixed
+//                       here (the file belongs to another change in flight). GATED
+//                       against growth, and REPORTED by name with the verdict so it
+//                       is never mistaken for a clean scan.
+// Both fail in both directions, like DECLARED_CLOCK_READS: an undeclared site, a
+// count that drifted, or an entry whose file no longer has any hit at all.
+const DECLARED_LOCALE_COMPARE = new Map([
+  [
+    "scripts/src/signalgrid-grid-proof.ts",
+    {
+      count: 1,
+      class: "exempt",
+      reason:
+        "The NEGATIVE CONTROL. This line builds the locale order on purpose and asserts the evidence " +
+        "comparator disagrees with it, which is how the proof shows the comparator is codepoint order. " +
+        "Flagging it would be flagging the test for containing the thing it forbids.",
+    },
+  ],
+  [
+    "artifacts/mcp-server/src/index.ts",
+    {
+      count: 1,
+      class: "pinned-defect",
+      reason:
+        "readdirSync(...).sort(a.name.localeCompare(b.name)) orders a directory listing the MCP client " +
+        "reads. Not a digest, so the blast radius is presentation order, but it is still locale-dependent " +
+        "output from a shipped service. Owned by artifacts/mcp-server, outside this change.",
+    },
+  ],
+  [
+    "scripts/src/self-audit-proof.ts",
+    {
+      count: 1,
+      class: "pinned-defect",
+      reason:
+        "`[...checklist].map(i => i.id).sort(localeCompare).join(\"|\")` builds a FINGERPRINT string. " +
+        "Same class as the connector-emulator digest that was fixed: two ICU builds, two fingerprints, " +
+        "one of them wrong. Outside this change's file set.",
+    },
+  ],
+]);
+{
+  const wider = [
+    "scripts/src/",
+    ...readdirSync(resolve(repo, "artifacts"), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => `artifacts/${e.name}/src/`)
+      .filter((d) => existsSync(resolve(repo, d))),
+  ];
+  const files = tracked.filter((f) => isTs(f) && inAny(f, wider));
+  // FLOOR. Scanning nothing is not a clean scan. The scope is derived, so a moved
+  // directory or a changed `isTs` would silently empty it.
+  if (files.length < 50) {
+    bad(
+      `Determinism (wider): the derived scope found only ${files.length} file(s) across ${wider.length} root(s) ` +
+        `— that is a broken derivation, not a small repository. Refusing to report a clean scan.`,
+    );
+  } else {
+    const byFile = new Map();
+    for (const f of files) {
+      const lines = localeCompareViolations(maskLiterals(stripComments(read(f))));
+      if (lines.length) byFile.set(f, lines);
+    }
+    const undeclared = [];
+    const drifted = [];
+    for (const [f, lines] of byFile) {
+      const d = DECLARED_LOCALE_COMPARE.get(f);
+      if (!d) undeclared.push(`${f}:${lines.join(",")}`);
+      else if (d.count !== lines.length) drifted.push(`${f}: declared ${d.count}, found ${lines.length}`);
+    }
+    const stale = [...DECLARED_LOCALE_COMPARE.keys()].filter((f) => !byFile.has(f));
+    if (undeclared.length || drifted.length || stale.length) {
+      const parts = [];
+      if (undeclared.length) {
+        parts.push(
+          `UNDECLARED localeCompare — ${undeclared.join(" | ")} (collation follows the process locale and the ` +
+            `ICU build; compare codepoints: (a < b ? -1 : a > b ? 1 : 0))`,
+        );
+      }
+      if (drifted.length) parts.push(`COUNT DRIFT — ${drifted.join(" | ")} (a pin that stops matching is not a pin)`);
+      if (stale.length) parts.push(`STALE exemption, file no longer uses localeCompare — ${stale.join(", ")}`);
+      bad(`Determinism (wider): ${parts.join("; ")}`);
+    } else {
+      const pinnedDefects = [...DECLARED_LOCALE_COMPARE].filter(([, d]) => d.class === "pinned-defect");
+      ok(
+        `Determinism (wider): ${files.length} file(s) across ${wider.length} derived root(s); ` +
+          `${byFile.size} declared site(s) — ${DECLARED_LOCALE_COMPARE.size - pinnedDefects.length} exempt, ` +
+          `${pinnedDefects.length} PINNED DEFECT (gated against growth, NOT fixed): ` +
+          `${pinnedDefects.map(([f]) => f).join(", ")}`,
+      );
+    }
+  }
+}
+
 // 3 — Assist catalog invariant: critical ⇒ sensitive ───────────────────────────
 // Guard the source so no catalog entry declares a critical action non-sensitive.
 {

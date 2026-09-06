@@ -43,7 +43,15 @@ console.log("Proof: telemetry posture cache — nothing stale is served, nothing
 // and the half that runs whenever REDIS_URL is unset.
 delete process.env.REDIS_URL;
 
-const T0 = 1_000_000_000_000; // a fixed clock; no Date.now() in the assertions
+// A fixed instant for every assertion that supplies its OWN "now" — which is all of
+// them except the ones below that must outlive a write. This comment used to say "no
+// Date.now() in the assertions", ten lines above a `Date.now()` whose value feeds three
+// assertions. The honest statement is narrower and is the one that matters: no
+// assertion here depends on WHEN it runs, because `setPostureForHost` stamps
+// `expiresAt` from the real clock and `FAR_FUTURE` is derived from that same clock plus
+// more than the TTL. The clean fix is to inject a clock into `setPostureForHost`; that
+// is a change to lib/, not to this proof, and is not made here.
+const T0 = 1_000_000_000_000;
 
 // --- EXPIRY IS HONORED ------------------------------------------------------------
 await clearPostureCache();
@@ -53,7 +61,20 @@ const fresh = await getPostureForHost("host-a", T0);
 check("a just-written entry is returned (the cache is not merely always-null)", fresh !== null);
 
 // The write stamps expiresAt from the real clock, so read far past any plausible TTL.
+// This is the one real-clock read in the file, and it is deliberate: it is not a
+// decision path, and the quantity that matters is the OFFSET (TTL + 60s), which is
+// fixed. See the note on T0.
 const FAR_FUTURE = Date.now() + 300 * 1000 + 60_000;
+// PIN THE PROPERTY THE COMMENT ABOVE CLAIMS. What makes the real-clock read harmless is
+// that FAR_FUTURE stays strictly past the TTL of anything written during this run, no
+// matter when the run happens. Shrink the offset below the 300s TTL and the reads below
+// would start returning LIVE entries and the "returns null after its TTL" assertions
+// would fail for a reason that has nothing to do with the cache — so the margin is
+// asserted here, where the failure names itself.
+check(
+  "FAR_FUTURE is at least the full 300s TTL past the instant this run writes entries",
+  FAR_FUTURE - Date.now() >= 300 * 1000,
+);
 check(
   "an entry read AFTER its TTL returns null, not stale posture — this is the defect",
   (await getPostureForHost("host-a", FAR_FUTURE)) === null,

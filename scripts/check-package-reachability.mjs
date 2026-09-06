@@ -51,12 +51,14 @@
 // edge exists, it exists. Trusting manifests alone would let an undeclared import
 // masquerade as an unreachable package.
 
+import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const PIN_PATH = join(repoRoot, "artifacts/sync/package-reachability-pin.json");
+const PIN_REL = "artifacts/sync/package-reachability-pin.json";
+const PIN_PATH = join(repoRoot, PIN_REL);
 
 const SOURCE_EXT = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", ".next", "coverage", ".turbo", ".git"]);
@@ -151,6 +153,87 @@ function importedEdges(dir, known) {
   return out;
 }
 
+/**
+ * Classify the pin, distinguishing GENESIS (no ceiling has ever existed) from
+ * UNREADABLE (one exists, or existed, and cannot be trusted). Pure, so both branches
+ * are exercised by `--self-test` without touching the tracked file.
+ *
+ * WHY THIS IS NOT A BARE CATCH. It was one: `try { pin = JSON.parse(read(...)) }
+ * catch { /* first run *\/ }`, and the very next line wrote the pin whenever `pin`
+ * came back null. Every failure mode — deleted, truncated, mid-merge, unreadable —
+ * therefore folded into "first run", and the ORDINARY gate run (no `--update`,
+ * the one preflight and CI make) responded by minting a fresh ceiling out of
+ * whatever the tree happened to contain at that moment. A ratchet that re-mints
+ * its own ceiling when its ceiling goes missing is not a ratchet; it is a gate
+ * that cannot fail, and it would have reported "passed — no new unshippable
+ * libraries" while accepting an arbitrary number of new ones. Proven on the real
+ * tree before this was written: a truncated pin, a plain run, exit 0, file rewritten.
+ *
+ * A ceiling of a non-numeric shape is UNREADABLE for the same reason: `n > undefined`
+ * and `n < undefined` are both false, so a `{}` pin passes the ratchet in both
+ * directions and prints "At the pinned ceiling (undefined)".
+ */
+export function classifyPin({ errCode, text, hasGitHistory }) {
+  if (errCode === "ENOENT") {
+    if (hasGitHistory) {
+      return {
+        kind: "unreadable",
+        why:
+          `${PIN_REL} is absent from the working tree but PRESENT in git history — refusing to treat a ` +
+          "DELETED ceiling as a first run. That would re-mint the ratchet at today's count and erase every " +
+          `improvement it records. Restore it:  git checkout -- ${PIN_REL}`,
+      };
+    }
+    return { kind: "genesis" };
+  }
+  if (errCode) return { kind: "unreadable", why: `${PIN_REL} exists but could not be read (${errCode}).` };
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    return {
+      kind: "unreadable",
+      why:
+        `${PIN_REL} exists but is not valid JSON (${err instanceof Error ? err.message : "parse failed"}). ` +
+        `Refusing to treat a corrupt ceiling as a first run. Restore it:  git checkout -- ${PIN_REL}`,
+    };
+  }
+  const max = parsed && typeof parsed === "object" ? parsed.maxUnreachable : undefined;
+  if (!Number.isInteger(max) || max < 0) {
+    return {
+      kind: "unreadable",
+      why:
+        `${PIN_REL} carries maxUnreachable=${JSON.stringify(max)}, which is not a non-negative integer. ` +
+        "A ceiling that is not a number compares false in BOTH directions, so the ratchet would pass " +
+        "over any count at all.",
+    };
+  }
+  return { kind: "ok", max };
+}
+
+/** Has the pin ever existed in git history? Fail-closed: if git cannot answer, assume it has. */
+function pinHasGitHistory() {
+  try {
+    return (
+      execFileSync("git", ["log", "--oneline", "-1", "--", PIN_REL], { cwd: repoRoot, encoding: "utf8", maxBuffer: 1 << 20 }).trim().length > 0
+    );
+  } catch {
+    // No git, or a tree it cannot be queried in. "This ceiling is new" is an
+    // affirmative claim and there is no evidence for it here, so it is not made.
+    return true;
+  }
+}
+
+function readPin() {
+  let text;
+  try {
+    text = readFileSync(PIN_PATH, "utf8");
+  } catch (err) {
+    return classifyPin({ errCode: (err && err.code) || "EUNKNOWN", text: null, hasGitHistory: pinHasGitHistory() });
+  }
+  return classifyPin({ errCode: null, text, hasGitHistory: true });
+}
+
 // `--self-test` — the extractor against the shapes that must and must not count.
 // A gate whose only evidence of working is "the count looked right" is the gate
 // that credited a comment for a week.
@@ -178,11 +261,40 @@ if (process.argv.includes("--self-test")) {
     console.log(`  ${ok ? "✓" : "✗"} ${label}${ok ? "" : ` — expected [${expected}] got [${got}]`}`);
     if (!ok) failed += 1;
   }
+  // The PIN CLASSIFIER, both directions. The bare catch this replaced meant the
+  // ordinary gate run re-minted its own ceiling whenever the pin went missing or
+  // corrupt, so these arms are the difference between a ratchet and a decoration.
+  const pinCases = [
+    [{ errCode: "ENOENT", text: null, hasGitHistory: false }, "genesis", "absent AND never in git history is genesis"],
+    [{ errCode: "ENOENT", text: null, hasGitHistory: true }, "unreadable", "absent but PRESENT in git history is a deleted ceiling, never genesis"],
+    [{ errCode: "EACCES", text: null, hasGitHistory: false }, "unreadable", "an unreadable file is never genesis, whatever its history"],
+    [{ errCode: null, text: '{ "maxUnrea', hasGitHistory: true }, "unreadable", "truncated JSON is unreadable, not a first run"],
+    [{ errCode: null, text: "{}", hasGitHistory: true }, "unreadable", "a pin with no maxUnreachable is unreadable (undefined compares false BOTH ways)"],
+    [{ errCode: null, text: '{ "maxUnreachable": "13" }', hasGitHistory: true }, "unreadable", "a string ceiling is unreadable"],
+    [{ errCode: null, text: '{ "maxUnreachable": -1 }', hasGitHistory: true }, "unreadable", "a negative ceiling is unreadable"],
+    [{ errCode: null, text: '{ "maxUnreachable": 13 }', hasGitHistory: true }, "ok", "a well-formed pin reads ok (the classifier is not simply always red)"],
+    [{ errCode: null, text: '{ "maxUnreachable": 0 }', hasGitHistory: true }, "ok", "a ceiling of zero is a real ceiling"],
+  ];
+  for (const [input, expected, label] of pinCases) {
+    const got = classifyPin(input).kind;
+    const ok = got === expected;
+    console.log(`  ${ok ? "✓" : "✗"} ${label}${ok ? "" : ` — expected ${expected} got ${got}`}`);
+    if (!ok) failed += 1;
+  }
+  // …and the well-formed pin must carry the NUMBER through, or the comparison below
+  // would be against undefined no matter how the classifier reported.
+  {
+    const c = classifyPin({ errCode: null, text: '{ "maxUnreachable": 13 }', hasGitHistory: true });
+    const ok = c.kind === "ok" && c.max === 13;
+    console.log(`  ${ok ? "✓" : "✗"} a well-formed pin carries its ceiling through as a number`);
+    if (!ok) failed += 1;
+  }
+
   if (failed > 0) {
-    console.error(`\nPackage-reachability self-test FAILED — ${failed} extractor case(s) wrong.`);
+    console.error(`\nPackage-reachability self-test FAILED — ${failed} case(s) wrong.`);
     process.exit(1);
   }
-  console.log(`\nPackage-reachability self-test passed — ${cases.length} extractor cases.`);
+  console.log(`\nPackage-reachability self-test passed — ${cases.length} extractor cases, ${pinCases.length + 1} pin-classifier cases.`);
   process.exit(0);
 }
 
@@ -299,18 +411,17 @@ if (vacuity > 0) {
   process.exit(1);
 }
 
-let pin = null;
-try {
-  pin = JSON.parse(readFileSync(PIN_PATH, "utf8"));
-} catch {
-  /* first run — established below */
-}
+const pinState = readPin();
 
 const report = (log) => {
   for (const name of unreachable) log(`    · ${name} — ${classifyImporters(name)}`);
 };
 
-if (process.argv.includes("--update") || pin === null) {
+// `--update` is the SOLE WRITER. A gate run does not get to move its own ceiling,
+// however the ceiling looks when it arrives — that is a deliberate, argued act and
+// it belongs in a commit somebody signed for.
+if (process.argv.includes("--update")) {
+  if (pinState.kind === "unreadable") console.log(`\n  (replacing an unusable pin: ${pinState.why})`);
   writeFileSync(PIN_PATH, `${JSON.stringify({ maxUnreachable: unreachable.length }, null, 2)}\n`);
   console.log(`\n  pin set: maxUnreachable=${unreachable.length}`);
   if (unreachable.length > 0) {
@@ -319,6 +430,25 @@ if (process.argv.includes("--update") || pin === null) {
   }
   process.exit(0);
 }
+
+if (pinState.kind === "unreadable") {
+  console.error(`\n✗ ${pinState.why}`);
+  console.error("  Refusing to conclude anything: with no trustworthy ceiling there is nothing to");
+  console.error("  compare today's count against. Current unreachable packages:");
+  report(console.error);
+  process.exit(1);
+}
+
+if (pinState.kind === "genesis") {
+  console.error(`\n✗ No ceiling has ever been recorded (${PIN_REL} has never existed here).`);
+  console.error("  A ratchet with no pin measures nothing. Establish it deliberately:");
+  console.error("    node scripts/check-package-reachability.mjs --update");
+  console.error("  Current unreachable packages:");
+  report(console.error);
+  process.exit(1);
+}
+
+const pin = { maxUnreachable: pinState.max };
 
 if (unreachable.length > pin.maxUnreachable) {
   console.error(`\n✗ Unreachable packages GREW: ${unreachable.length} > pinned ceiling ${pin.maxUnreachable}.`);

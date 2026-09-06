@@ -129,6 +129,30 @@ REDIS_PORT=6381   # not 6379/6380: leaves a local Redis and docker-verify's alon
 SKIPPED=0; skipped_gates=""
 skip() { printf "  \033[33mSKIP\033[0m  %s  (%s)\n" "$1" "$2"; SKIPPED=$((SKIPPED+1)); skipped_gates="$skipped_gates $1"; }
 
+# -- proofs that SKIP THEMSELVES ----------------------------------------------
+# Five proofs open with `const url = process.env.DATABASE_URL; if (!url) { …
+# console.log("… SKIPPED …"); process.exit(0); }`. On a machine with no Postgres
+# they print one line, exit 0, and `gate` above recorded five PASSES for five
+# proofs that executed not one assertion — the harness's own summary line ("a skip
+# is not a pass") contradicted by five silent skips it counted as passes.
+#
+# DERIVED, never typed: the list comes from scripts/src/*.ts via the parity gate,
+# which fails if a sixth self-skipping proof appears unclassified. Same law as
+# WEB_ARTIFACTS above — and the same FLOOR, because an empty derivation would
+# quietly restore the old behaviour for all five.
+#
+# bash 3.2: a space-delimited STRING and `case`, never an array. `"${a[@]}"` on an
+# empty array is UNBOUND under `set -u` here, and this harness runs under -u.
+DB_SELF_SKIP_PROOFS="$(node scripts/check-preflight-ci-parity.mjs --list-self-skipping-proofs 2>/dev/null | awk '{print $1}' | tr '\n' ' ')"
+if [ -z "$(printf '%s' "$DB_SELF_SKIP_PROOFS" | tr -d '[:space:]')" ]; then
+  echo "FATAL: derived 0 self-skipping proofs from scripts/src/*.ts." >&2
+  echo "       node scripts/check-preflight-ci-parity.mjs --list-self-skipping-proofs returned nothing," >&2
+  echo "       so the harness cannot tell a proof that ran from one that skipped itself and exited 0." >&2
+  echo "       Refusing to run: every such proof would be counted PASSED." >&2
+  exit 1
+fi
+echo "-- self-skipping proofs (derived, skipped unless DATABASE_URL is set):$DB_SELF_SKIP_PROOFS"
+
 # TWO BUGS lived in the block below, and both were found by running this harness
 # against PR #152 rather than by reading it. That branch adds proof:config-scope,
 # which asserts REDIS_URL is UNSET so it can prove the in-memory path — the
@@ -260,6 +284,18 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
     if [ "$p" = "proof:live-glpi" ] && [ -z "${GLPI_URL:-}" ]; then
       skip "$p" "needs a live GLPI (GLPI_URL); run ./scripts/run-live-lanes.sh --only glpi"
       continue
+    fi
+    # The self-skipping Postgres proofs (derived into DB_SELF_SKIP_PROOFS above).
+    # Unlike every guard above, these do NOT refuse — they exit 0 — so without this
+    # row the harness ran them and counted five unearned passes. With DATABASE_URL
+    # set they run for real and fall through to `gate` like anything else.
+    if [ -z "${DATABASE_URL:-}" ]; then
+      case " $DB_SELF_SKIP_PROOFS " in
+        *" $p "*)
+          skip "$p" "self-skips without DATABASE_URL (it exits 0 having proven nothing); CI runs it against a real Postgres in the durable-persistence job"
+          continue
+          ;;
+      esac
     fi
     gate "$p" $PNPM run "$p"
   done

@@ -75,11 +75,36 @@ const RETIRED = [
 
 // Permitted as architecture description — NOT as an alternate product name.
 // Listed so the distinction is explicit rather than folklore.
+//
+// WHAT THIS LIST DOES AND DOES NOT DO, said plainly because it used to imply more than
+// it delivered: it is a VOCABULARY NOTE, printed by `--list`, and no scanning rule
+// consults it. It grants no exemption, because nothing here is caught in the first
+// place — a phrase can only need permission if some RETIRED pattern would match it, and
+// none does. Reading it as "the gate allows these" was reading an enforcement path into
+// a comment; the only enforcement it has is the contradiction check below.
 const ARCHITECTURE_LANGUAGE = [
   "decision layer",
   "runtime decision layer",
   "trust orchestration",
 ];
+
+/**
+ * The two lists must not contradict each other. A phrase this file PERMITS while a
+ * RETIRED pattern would flag it is a gate telling a writer to use words it then fails
+ * them for — the "gate punishes honest writing" shape, and unfixable from the writer's
+ * side because both instructions come from here. Whichever list is wrong, the
+ * contradiction must be visible rather than discovered by whoever takes the advice.
+ */
+export function permittedButRetired(permitted = ARCHITECTURE_LANGUAGE, retired = RETIRED) {
+  const clashes = [];
+  for (const phrase of permitted) {
+    for (const { re, why } of retired) {
+      // `re` may carry /g elsewhere; test on a fresh copy so lastIndex cannot leak.
+      if (new RegExp(re.source, re.flags.replace("g", "")).test(phrase)) clashes.push({ phrase, pattern: String(re), why });
+    }
+  }
+  return clashes;
+}
 
 // A surface must anchor to the canonical framing rather than restate it.
 const ANCHOR = /docs\/PURPOSE\.md|PURPOSE\.md/i;
@@ -100,14 +125,37 @@ if (process.argv.includes("--list")) {
 }
 
 if (process.argv.includes("--self-test")) {
-  const sample = "SignalGrid is a trust fabric for frontline devices.";
-  const caught = RETIRED.some((r) => r.re.test(sample));
-  console.log(
-    caught
-      ? "PASS  self-test — a retired framing on a current-truth surface is detected"
-      : "FAIL  self-test — the gate would not catch a retired framing",
-  );
-  process.exit(caught ? 0 : 1);
+  // A single positive probe was the whole self-test, and a positive probe alone cannot
+  // fail in the direction that matters: a pattern matching EVERYTHING would pass it
+  // while flagging every honest sentence on every surface. Both directions now.
+  const checks = [
+    ["a retired framing on a current-truth surface is DETECTED",
+      RETIRED.some((r) => r.re.test("SignalGrid is a trust fabric for frontline devices."))],
+    ["the CANONICAL framing is not flagged — a rule that catches everything is not a rule",
+      !RETIRED.some((r) => r.re.test("SignalGrid connects the systems a building runs into one grid that decides and acts on a person's behalf."))],
+    ["ordinary prose about a door, a device and a room is not flagged",
+      !RETIRED.some((r) => r.re.test("The worker walks through the door, the device unlocks, the room is ready."))],
+    ["every retired pattern has a stated reason", RETIRED.every((r) => typeof r.why === "string" && r.why.trim() !== "")],
+    ["the permitted-vocabulary list does not contradict the retired list", permittedButRetired().length === 0],
+    ["…and that contradiction check can FIRE (it is not vacuously true)",
+      permittedButRetired(["trust fabric"], RETIRED).length === 1],
+  ];
+  const bad = checks.filter(([, ok]) => !ok);
+  for (const [n, ok] of checks) console.log(`  ${ok ? "PASS" : "FAIL"}  self-test — ${n}`);
+  console.log(`\nself-test ${bad.length === 0 ? "passed" : "FAILED"} (${checks.length - bad.length}/${checks.length})`);
+  process.exit(bad.length === 0 ? 0 : 1);
+}
+
+// Consulted on every run, not only in the self-test: the lists cannot silently drift
+// into contradicting each other between self-test invocations.
+{
+  const clashes = permittedButRetired();
+  if (clashes.length > 0) {
+    console.error(`✗ ${clashes.length} phrase(s) are both PERMITTED as architecture language and RETIRED:`);
+    for (const c of clashes) console.error(`    "${c.phrase}" matches ${c.pattern} — ${c.why}`);
+    console.error("  A gate cannot recommend a phrase and fail a writer for using it. Fix one list.");
+    process.exit(1);
+  }
 }
 
 const failures = [];

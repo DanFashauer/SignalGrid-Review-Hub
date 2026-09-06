@@ -151,11 +151,14 @@ export const ITSM_LAYERS = [
 ];
 
 /**
- * The bridge between the two taxonomies — SEVEN rows, declared once, rather than an
- * ITSM layer written onto each of the thirty-one reason codes.
+ * The bridge between the two taxonomies — one row per IT layer, declared once, rather
+ * than an ITSM layer written onto every row of `REASON_CODE_LAYERS` below.
  *
- * Declaring it per code would be thirty-one chances to disagree with the IT layer
- * already recorded above. One bridge cannot disagree with itself.
+ * Declaring it per code would be as many chances to disagree with the IT layer already
+ * recorded above as there are codes. One bridge cannot disagree with itself.
+ *
+ * No count is typed here on purpose: this sentence said "thirty-one reason codes" twice
+ * while `REASON_CODE_LAYERS` held 33. The arrays are the count; prose about them rots.
  */
 export const IT_TO_ITSM_LAYER = [
   { itLayer: "strategic_it_management", itsmLayer: "governance_security" },

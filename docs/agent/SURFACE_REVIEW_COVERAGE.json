@@ -924,6 +924,15 @@
      "scope": "partial: the marker and the gate's view of the eleven catalogs; nothing re-read",
      "open": 0,
      "closed": 0
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twenty-fourth round (Batch Z): every docs/inspiration catalog read WHOLE — vendor-row bodies, not just structure. Six catalogs re-derived by command and de-duplicated with the UNVERIFIED reading winning each merge: OT 151→14x1 rows (10 merges, Purdue 'Covered.'→'Modeled (deferred families, not Limited GA)'), COMM 441→439 rows / mobile 97→86, ASSET 330→320, TECHNOLOGY sheet URL counts re-measured (0/61, 10/79, 6/37), PACS Wiegand shared-standards URL blanked, CONTROLUP link-usability/edr labels marked deferred, MOBILE verbatim import kept with an import-source-notes preamble. Backed by a new structural gate (check-inspiration-catalog-structure): a stated total bound to one table must equal its rows, a row-wise-URL claim must hold, a constant column called per-vendor needs a disclosure, a duplicate whose decisive column disagrees fails — GATED; 1031 findings REPORTED; the four OT section-note counts the merges left stale were corrected. cited-symbols verbatim marker now requires a measured date.",
+     "reviewer": "cloud lane (inspiration prose agent + catalog-gate engineer + coordinator)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 40
     }
    ]
   },
@@ -1866,6 +1875,15 @@
      "scope": "partial: the new gate and its registration only; no other script re-read this round",
      "open": 0,
      "closed": 1
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twenty-fourth round (Batch Z): all of scripts/ read WHOLE across five independent fail-closed chunks (~373 code files). Fixed, each with a plant→red assertion: the breadth lane's deferred half read f.id on id strings so it could not fail (derived membership + a 40-key floor); the mutation guard scored an unrunnable proof as a kill (baseline probe aborts if the unmutated target is not a survivor); five DB proofs self-skipped to exit 0 and were counted as passes (selfSkipsWithout marks them skipped-db in preflight and the Mac harness, with a derived floor); the Mac tick grepped '^  PENDING' against a script that only says it in comments (planner emits the roster; a comment-aware selfcheck rule f); phase-gate moved a string not the exit code; unsafe-claim read a postposed 'no' as an affirmative; zero-trust swept 5 axes of the 7 it claimed (derived from the core's fields, 128 combinations, each axis degraded alone); localeCompare fed three committed digests/fingerprints (codepoint, SBOM regenerated 491 lines); ratchet reads (package-reachability, surface-ownership, sync-manifest) treated corrupt/deleted as genesis (shared scripts/lib/ratchet-read.mjs, refuses unless git proves first run); walker/read-error/status-figures/live-sync/ungated-fetch floors and self-tests. Two NEW gates: check-entry-guards (36 exact guards, 0 suffix after four conversions) and check-inspiration-catalog-structure; both wired preflight+CI. Parity: 233 non-proof of 310, 0 unwired.",
+     "reviewer": "cloud lane (five gate-and-proof engineers + coordinator)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 4,
+     "closed": 76
     }
    ]
   },

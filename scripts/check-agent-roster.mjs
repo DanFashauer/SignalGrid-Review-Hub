@@ -31,11 +31,19 @@
 // overlapping scope must be rejected, and synthetic vendor drift must be
 // detected. A gate that cannot fail proves nothing.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const AGENT_DIR = ".claude/agents";
-const REGISTRY = "docs/agent/agent-tiers.json";
-const VENDOR_AGENTS = "third_party/everything-claude-code/agents";
+// RESOLVED FROM THIS FILE, not from the caller's cwd (fixed 2026-09-06). These three
+// were relative, so the gate's subject depended on where it was invoked: run from
+// anywhere but the repo root and `.claude/agents` did not exist, which used to be an
+// exit-0. Every sibling in this directory resolves from `import.meta.url`.
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const AGENT_DIR_REL = ".claude/agents";
+const REGISTRY_REL = "docs/agent/agent-tiers.json";
+const AGENT_DIR = join(repoRoot, AGENT_DIR_REL);
+const REGISTRY = join(repoRoot, REGISTRY_REL);
+const VENDOR_AGENTS = join(repoRoot, "third_party/everything-claude-code/agents");
 const AGENT_FLOOR = 5;
 const WRITE_TOOLS = /\b(Write|Edit|NotebookEdit|MultiEdit)\b/;
 
@@ -65,9 +73,16 @@ function frontmatter(body) {
 const nests = (a, b) => a !== b && (a.startsWith(b) || b.startsWith(a));
 const overlaps = (a, b) => a === b || nests(a, b);
 
+// AN ABSENT ROSTER IS THE LOOSEST STATE OF THE CONTROL, NOT A CLEAN ONE (fixed
+// 2026-09-06). This printed "nothing dispatchable, nothing to govern" and exited 0 —
+// before AGENT_FLOOR (5) was ever consulted, so the one control against a drifted parse
+// was bypassed by the case that makes the parse find nothing at all. DR-016's argument
+// is that the collision control "has to move somewhere mechanical, or it does not
+// exist"; deleting or renaming the directory must not be the way to satisfy it.
 if (!existsSync(AGENT_DIR)) {
-  console.log("Agent-roster gate: no .claude/agents directory — nothing dispatchable, nothing to govern.");
-  process.exit(0);
+  console.error(`✗ no ${AGENT_DIR_REL} at ${repoRoot} — this repository dispatches agents, so this is a deletion or a rename,`);
+  console.error(`  not an ungoverned-by-design tree. Refusing to report green over zero agents (floor ${AGENT_FLOOR}).`);
+  process.exit(1);
 }
 
 const agents = [];
@@ -88,7 +103,7 @@ let registry;
 try {
   registry = JSON.parse(readFileSync(REGISTRY, "utf8"));
 } catch (err) {
-  console.error(`✗ ${REGISTRY} unreadable or invalid JSON (${err.message}) — every dispatchable agent is ungoverned until it parses.`);
+  console.error(`✗ ${REGISTRY_REL} unreadable or invalid JSON (${err.message}) — every dispatchable agent is ungoverned until it parses.`);
   process.exit(1);
 }
 const declared = new Map((registry.agents ?? []).map((a) => [a.id, a]));
@@ -122,7 +137,7 @@ for (const a of agents.sort((x, y) => x.id.localeCompare(y.id))) {
   }
   if (!d) {
     console.error(
-      `  ✗ ${a.id}: dispatchable but UNREGISTERED in ${REGISTRY}.\n` +
+      `  ✗ ${a.id}: dispatchable but UNREGISTERED in ${REGISTRY_REL}.\n` +
         "      Hiring is autonomous; hiring in silence is not. Add a tier, a charter, and\n" +
         "      a write scope if it can write.",
     );
@@ -203,7 +218,7 @@ for (const a of agents.sort((x, y) => x.id.localeCompare(y.id))) {
 // A registry entry for an agent that no longer exists is a stale grant.
 for (const id of declared.keys()) {
   if (!agents.some((a) => a.id === id)) {
-    console.error(`  ✗ ${id}: registered in ${REGISTRY} but no ${AGENT_DIR}/${id}.md exists — a grant with nobody holding it.`);
+    console.error(`  ✗ ${id}: registered in ${REGISTRY_REL} but no ${AGENT_DIR_REL}/${id}.md exists — a grant with nobody holding it.`);
     problems += 1;
   }
 }

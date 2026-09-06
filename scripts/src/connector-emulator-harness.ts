@@ -59,10 +59,24 @@ export function evaluateScenario(
   };
 }
 
+/**
+ * CODEPOINT order, never `localeCompare` — in a function whose name is the claim.
+ *
+ * `String.prototype.localeCompare` follows the process locale and the ICU build:
+ * sv_SE orders "a" after "z", de_DE before it, and at primary strength ICU can
+ * ignore punctuation entirely, so `a-b` and `ab` compare equal. Two machines with
+ * different ICU data therefore hash the SAME results to DIFFERENT digests, and the
+ * one thing this function exists to provide is that they do not. The current 15
+ * scenario ids happen to order identically both ways (measured 2026-09-06 — the
+ * digest is unchanged by this edit), which is exactly why it survived: the defect
+ * is dormant until an id arrives with a character the two orders disagree on.
+ */
 export function deterministicHash(results: EvaluationResult[]): string {
   return createHash("sha256")
     .update(
-      JSON.stringify([...results].sort((a, b) => a.id.localeCompare(b.id))),
+      JSON.stringify(
+        [...results].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+      ),
     )
     .digest("hex");
 }

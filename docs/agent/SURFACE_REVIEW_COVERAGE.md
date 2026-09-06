@@ -6,9 +6,9 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**98 of 100 surfaces have been read. 2 are partially read. 0 have not been read at all.**
+**100 of 100 surfaces have been read. 0 are partially read. 0 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2275 of 2275 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2278 of 2278 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -61,7 +61,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `docs/consolidation` | docs family | 4 | read | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/env` | docs family | 1 | read | 1 | 2026-09-06 | cloud lane (one independent docs audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/estate` | docs family | 2 | read | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
-| `docs/inspiration` | docs family | 12 | **partial** | 3 | 2026-09-06 | cloud lane; the gate built from the eighteenth round's specification, measured live before and after each rule change, falsified with a planted line | docs/agent/EVIDENCE.md | 10 | 0 |
+| `docs/inspiration` | docs family | 12 | read | 4 | 2026-09-06 | cloud lane (inspiration prose agent + catalog-gate engineer + coordinator) | docs/agent/EVIDENCE.md | 50 | 0 |
 | `docs/lab` | docs family | 2 | read | 2 | 2026-09-06 | cloud lane (one independent fail-closed audit agent, every finding reproduced by running something; firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 1 |
 | `docs/outreach` | docs family | 3 | read | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
 | `docs/postman` | docs family | 2 | read | 2 | 2026-09-06 | cloud lane (two independent fail-closed audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
@@ -114,17 +114,16 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 8 | 1 |
 | `native/shared` | native | 3 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 414 | **partial** | 6 | 2026-09-06 | cloud lane; the gate built from the eighteenth round's specification, measured live before and after each rule change, falsified with a planted line | docs/agent/EVIDENCE.md | 17 | 0 |
+| `scripts` | package | 417 | read | 7 | 2026-09-06 | cloud lane (five gate-and-proof engineers + coordinator) | docs/agent/EVIDENCE.md | 93 | 4 |
 | `site` | tree | 2 | read | 2 | 2026-09-05 | cloud lane (firsthand read of every edit site; fixes + gates) | docs/agent/EVIDENCE.md | 2 | 3 |
 | `tests` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 1 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |
 
-## Partially read (2)
+## Partially read (0)
 
 A named slice was read. The rest of the surface has not been.
 
-- `docs/inspiration` (docs family)
-- `scripts` (package)
+- None.
 
 ## Not read (0)
 

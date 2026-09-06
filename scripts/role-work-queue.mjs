@@ -79,7 +79,13 @@ export function queueFor(role, tracked, readPaths) {
   // "what counts as a file somebody must read" has exactly one definition.
   const owned = tracked.filter((f) => isReviewable(f) && surfaces.some((re) => re.test(f)) && !excl.some((re) => re.test(f)));
   const unread = owned.filter((f) => !readPaths.has(f));
-  unread.sort((a, b) => consequenceRank(a) - consequenceRank(b) || b.length - a.length || a.localeCompare(b));
+  // CODEPOINT final tie-break, never `localeCompare` — this decides which item an
+  // operator is handed FIRST among equals, and it should not depend on the locale
+  // the process happened to start in.
+  unread.sort(
+    (a, b) =>
+      consequenceRank(a) - consequenceRank(b) || b.length - a.length || (a < b ? -1 : a > b ? 1 : 0),
+  );
   return { id: role.id, activated: Boolean(role.activated), owns: owned.length, read: owned.length - unread.length, unread };
 }
 

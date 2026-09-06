@@ -49,7 +49,12 @@ if [ -n "$(git status --porcelain)" ]; then
   warn "uncommitted local changes exist — NOT pulling over them. Commit or stash, then re-run."
   git status --short | head -10
 elif [ "$FETCH_OK" = "1" ]; then
-  if git merge-base --is-ancestor "origin/$BRANCH" HEAD 2>/dev/null; then
+  if ! git rev-parse --verify --quiet "refs/remotes/origin/$BRANCH" >/dev/null 2>&1; then
+    # There is nothing to fast-forward FROM. Saying "local and remote diverged"
+    # here — which is what the old `git pull --ff-only` fallthrough said — sends the
+    # reader to a merge-conflict procedure for a branch that simply was never pushed.
+    ok "branch $BRANCH has no counterpart on origin yet — nothing to fast-forward (see the WARN below)"
+  elif git merge-base --is-ancestor "origin/$BRANCH" HEAD 2>/dev/null; then
     ok "branch $BRANCH already current"
   elif git pull --ff-only origin "$BRANCH"; then
     ok "fast-forwarded $BRANCH to origin"
@@ -58,9 +63,28 @@ elif [ "$FETCH_OK" = "1" ]; then
   fi
 fi
 # Undelivered work is invisible work: the push is the delivery.
-AHEAD="$(git rev-list --count "origin/$BRANCH"..HEAD 2>/dev/null || echo 0)"
-if [ "$AHEAD" != "0" ]; then
-  warn "$AHEAD commit(s) on $BRANCH not pushed — the push is the delivery; run: git push"
+#
+# THE NEVER-PUSHED BRANCH WAS THE ONE CASE THIS MISSED. The old line was
+#
+#     AHEAD="$(git rev-list --count "origin/$BRANCH"..HEAD 2>/dev/null || echo 0)"
+#
+# and with no `origin/$BRANCH` the rev-list FAILS, so `|| echo 0` reported ZERO
+# unpushed commits — total silence for the worst possible state of this check:
+# a branch whose every commit is undelivered, because it has never been pushed at
+# all. A failed measurement was written down as a measurement of nothing owed,
+# which is the fail-open shape golden rule 2 forbids. Three answers now, not two:
+# the remote branch exists and we can count; it does not exist; or the count itself
+# failed and is UNKNOWN.
+if git rev-parse --verify --quiet "refs/remotes/origin/$BRANCH" >/dev/null 2>&1; then
+  AHEAD="$(git rev-list --count "origin/$BRANCH"..HEAD 2>/dev/null || echo "")"
+  if [ -z "$AHEAD" ]; then
+    warn "could not count commits against origin/$BRANCH — unpushed work is UNKNOWN, not zero"
+  elif [ "$AHEAD" != "0" ]; then
+    warn "$AHEAD commit(s) on $BRANCH not pushed — the push is the delivery; run: git push"
+  fi
+else
+  LOCAL_COMMITS="$(git rev-list --count HEAD 2>/dev/null || echo '?')"
+  warn "$BRANCH has NO branch on origin — it has NEVER been pushed, so all $LOCAL_COMMITS commit(s) on it are undelivered. Run: git push -u origin $BRANCH"
 fi
 
 # ── 2. dependencies: only when the lockfile moved ────────────────────────────

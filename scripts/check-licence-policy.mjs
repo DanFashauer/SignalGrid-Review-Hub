@@ -19,6 +19,7 @@
 // dual-licensed package is used under the friendlier grant — the standard
 // reading); AND and WITH take the WORST (every part binds).
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 const SBOM = "artifacts/sbom/cyclonedx.json";
 
@@ -252,7 +253,7 @@ function selfTest() {
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const bom = JSON.parse(readFileSync(SBOM, "utf8"));
   const { fatal, review } = auditLicences(bom, POLICY, REVIEW_COMPONENTS);

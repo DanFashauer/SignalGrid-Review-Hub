@@ -99,10 +99,17 @@ check(`fail-safe holds across ALL scenarios (violations=${failSafeViolations})`,
 check(`worst-concern-wins holds across ALL scenarios (violations=${worstWinsViolations})`, worstWinsViolations === 0);
 
 // A calm scenario (none/monitor only) must NEVER open an incident — no ticket noise.
+// THE GOLDEN SET MUST CONTAIN ONE, and that is now asserted. This block used to be a
+// bare `if (calm) { check(...) }`: edit the committed fixture so every scenario carries an
+// actionable signal and the no-noise rule — one of the two properties this file's header
+// leads with — is asserted by NOTHING, while the suite prints the same pass with one
+// fewer check and says nothing about it.
 const calm = suite.scenarios.find((s) => s.signals.every((x) => ACTION_RANK[x.action] <= MONITOR_RANK));
 if (calm) {
   const inc = mapPostureToIncident(composeDeviceRisk(calm.signals), { impact: suite.impactForIncident, correlationId: "eval-calm" });
-  check("a calm (none/monitor) scenario opens NO incident", inc === null);
+  check(`a calm (none/monitor) scenario opens NO incident (${calm.id})`, inc === null);
+} else {
+  check("the golden set contains a calm (none/monitor) scenario to test the no-noise rule against — without one the rule is asserted by nothing", false);
 }
 
 // Determinism: the whole suite composes identically on a re-run.

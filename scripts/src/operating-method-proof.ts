@@ -63,7 +63,24 @@ check("human review is stated as non-substitutable", src.includes("AI review is 
 check("helper-first positioning is additive, never a replacement claim", src.includes("You already have IAM, UEM, EDR, SIEM, ITSM"));
 
 // ── 3. Every relative markdown link resolves ─────────────────────────────────
-const links = [...src.matchAll(/\]\(([^)#http][^)]*\.md)\)/g)].map((m) => m[1]);
+// NEGATED PREFIX, NOT A NEGATED CHARACTER CLASS. This was
+// `/\]\(([^)#http][^)]*\.md)\)/g` — `[^)#http]` means "one character that is not
+// `)`, `#`, `h`, `t` or `p`", so every relative link whose filename STARTS with h,
+// t or p (handbook.md, protocol.md, team.md) was silently excluded from the
+// resolve check below. The doc happens to carry none today and the non-vacuity
+// floor is `>= 4` against exactly four links, so adding a fifth companion named
+// `handbook.md` would leave the count at 4, the floor passing, and a phantom link
+// shipping green. The lookahead form is what the sibling scanners already use
+// (municipal-resilience-proof.ts, itom-itsm-bridge-proof.ts).
+const LINK_PATTERN = /\]\(((?!https?:)[^)#]+\.md)\)/g;
+const links = [...src.matchAll(LINK_PATTERN)].map((m) => m[1]);
+// SELF-TEST of the scanner, because the floor below cannot see a link the scanner
+// never produced: under the old character class this probe yields NOTHING and the
+// doc-side count is unchanged, which is exactly how the hole stayed invisible.
+const LINK_PROBE = "see [h](handbook.md), [t](team.md), [p](protocol.md), [abs](https://example.com/a.md), [anchor](CI_AND_VALIDATION.md#section)";
+const probeHits = [...LINK_PROBE.matchAll(LINK_PATTERN)].map((m) => m[1]);
+check("SELF-TEST: the link scanner sees companions whose names start with h/t/p, and still skips absolute URLs and anchored links",
+  probeHits.join(",") === "handbook.md,team.md,protocol.md", `probe=[${probeHits.join(",")}]`);
 check("the doc carries relative links to its companions (non-vacuity)", links.length >= 4, `links=${links.length}`);
 for (const l of links) {
   check(`link resolves: ${l}`, existsSync(join(repo, "docs", l)));

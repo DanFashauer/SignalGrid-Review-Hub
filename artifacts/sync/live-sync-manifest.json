@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 63,
-  "fingerprint": "0e762ca784fed97e626878d57fa9d27e95ee947194283c5c404a8bd4180da370",
+  "manifestVersion": 64,
+  "fingerprint": "6f6a47998f01ccb605646b4f83ca6e768ede38144878f979675148ca1a336be1",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -132,7 +132,7 @@
       "mcp-answer-discipline": 55,
       "mcp-server": 11,
       "mobile-app-catalog": 19,
-      "nac": 45,
+      "nac": 46,
       "network-nac": 64,
       "oauth-consent": 74,
       "ot-posture": 46,
@@ -156,7 +156,7 @@
       "task-exception": 204,
       "token-binding": 61,
       "uem": 76,
-      "unsafe-claim": 40,
+      "unsafe-claim": 50,
       "verdict-attestation": 82,
       "webhooks": 206,
       "work-context": 58

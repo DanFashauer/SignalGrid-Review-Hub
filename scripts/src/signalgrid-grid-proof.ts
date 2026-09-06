@@ -147,6 +147,36 @@ assertions.push(
     hashes.join(", "),
   ),
 );
+// SELF-TEST ON THE COMPARATOR THAT MINTS THAT HASH. The check above runs three times
+// in ONE process, so it shares a locale with itself and cannot see a locale-dependent
+// comparator at all. These keys are ordered one way by codepoint ("B" < "a", because
+// uppercase sorts first in ASCII) and the other way by `localeCompare` under every
+// locale this repo has been run in. If `sortValue` ever reverts to `localeCompare`,
+// this assertion fails HERE rather than on someone else's machine.
+{
+  const LOCALE_DIVERGENT_KEYS = ["a", "B"] as const;
+  const codepointOrder = [...LOCALE_DIVERGENT_KEYS].sort(codepointCompare);
+  const localeOrder = [...LOCALE_DIVERGENT_KEYS].sort((l, r) => l.localeCompare(r));
+  const sorted = Object.keys(
+    sortValue({ a: 1, B: 2 }) as Record<string, unknown>,
+  );
+  assertions.push(
+    assertion(
+      "determinism: the evidence comparator is CODEPOINT order, not localeCompare",
+      JSON.stringify(sorted) === JSON.stringify(codepointOrder),
+      `sortValue=[${sorted.join(", ")}] codepoint=[${codepointOrder.join(", ")}] locale=[${localeOrder.join(", ")}]`,
+    ),
+  );
+  // NON-VACUITY: the two comparators must actually disagree on this pair, or the
+  // assertion above passes under both and proves nothing.
+  assertions.push(
+    assertion(
+      "determinism: …and the probe pair is one the two comparators order DIFFERENTLY",
+      JSON.stringify(codepointOrder) !== JSON.stringify(localeOrder),
+      `codepoint=[${codepointOrder.join(", ")}] locale=[${localeOrder.join(", ")}]`,
+    ),
+  );
+}
 
 for (const result of baselineResults) {
   assertBaselineCoverage(result);
@@ -1125,6 +1155,33 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(sortValue(value), null, 2);
 }
 
+/** CODEPOINT order, never `localeCompare`.
+ *
+ *  This function feeds `stableStringify` → `hashForResults` → the printed
+ *  `determinismHash` and the generated evidence file, so its comparator decides a
+ *  digest. `String.prototype.localeCompare` is locale- and ICU-build-dependent: the
+ *  same keys can order differently under `sv_SE` than under `en_US`, which would make
+ *  the digest a fact about the machine rather than about the run. Three sibling proofs
+ *  in this directory forbid it for exactly this reason and say so in their comments
+ *  (`signal-radar-proof.ts:59-64`, `signal-discovery-proof.ts:71-75`,
+ *  `recommendations-proof.ts:92`), and `scripts/review-invariants.mjs` gates it — but
+ *  only over `determinismScope()`, a lib/ derivation, so `scripts/src/*.ts` sat outside
+ *  the gate that exists for it and this call survived until 2026-09-06.
+ *
+ *  Measured before the change: across the C, sv_SE.UTF-8, de_DE.UTF-8 and en_US.UTF-8
+ *  locales the two comparators produced the same digest, because every key in the
+ *  hashed structure is a lowercase ASCII identifier. It was a latent hazard, not a live
+ *  defect — and it goes live the day a signal `attributes` object carries a mixed-case
+ *  or non-ASCII key, which is caller-supplied data. The determinism check at :137-149
+ *  could never have caught it: three runs in ONE process share a locale.
+ *
+ *  `codepointCompare` is asserted below against a key pair the two comparators order
+ *  differently, so a silent revert to `localeCompare` fails rather than passing until
+ *  someone changes locale. */
+function codepointCompare(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function sortValue(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(sortValue);
@@ -1133,7 +1190,7 @@ function sortValue(value: unknown): unknown {
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value)
-        .sort(([left], [right]) => left.localeCompare(right))
+        .sort(([left], [right]) => codepointCompare(left, right))
         .map(([key, item]) => [key, sortValue(item)]),
     );
   }

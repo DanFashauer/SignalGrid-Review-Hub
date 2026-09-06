@@ -256,7 +256,7 @@ test("evidence coverage opens on the Entra + Intune wedge and names its silent h
   );
 });
 
-test("declaring a plane converts its dark axes, and undeclaring every plane exposes eleven holes", async ({
+test("declaring a plane converts its dark axes, and undeclaring every plane exposes the silent holes the assertion pins", async ({
   page,
 }) => {
   const c = coverage(page);
@@ -286,8 +286,9 @@ test("declaring a plane converts its dark axes, and undeclaring every plane expo
   await expect(shift).toHaveAttribute("data-silent-hole", "false");
   expect(await stat(page, "stat-silent-holes")).toBe(5);
 
-  // Now strip the estate to nothing. The honest opening position: eleven axes dark
-  // AND ungraded. The report gets WORSE as the estate thins — it cannot flatter.
+  // Now strip the estate to nothing. The honest opening position: every axis dark
+  // AND ungraded, with the count carried by the assertion below rather than by this
+  // sentence. The report gets WORSE as the estate thins — it cannot flatter.
   for (const plane of ["Workforce Management", "Identity", "Device Management"]) {
     await planeToggle(page, plane).click();
   }

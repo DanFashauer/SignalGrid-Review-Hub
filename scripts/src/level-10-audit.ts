@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 type Score = { area: string; current: number; target: number; riskLane: string };
 
@@ -23,7 +24,15 @@ const expectedAreas = [
   'Next-phase clarity',
 ];
 
-const repoRoot = process.env.INIT_CWD ?? path.resolve(process.cwd(), '..');
+// ANCHORED ON THIS FILE, not on where the process happened to start. This read
+// `process.env.INIT_CWD ?? path.resolve(process.cwd(), '..')` — an npm/pnpm-lifecycle
+// variable with a positional fallback — so run outside a package lifecycle it resolved
+// relative to the caller's cwd, and the run either threw on the matrix read or wrote
+// artifacts/level-10/ into the wrong tree. Two live proofs in this directory carry long
+// comments about exactly this class of assumption (live-headwind-proof.ts,
+// live-glpi-proof.ts): a capture written to scripts/artifacts/ that every consumer then
+// read as ABSENT. Every sibling anchors on import.meta.url; so does this now.
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const matrixPath = path.join(repoRoot, 'docs', 'LEVEL_10_COMPLETION_MATRIX.md');
 const outDir = path.join(repoRoot, 'artifacts', 'level-10');
 
@@ -60,7 +69,7 @@ const currentAverage = Number((scores.reduce((sum, score) => sum + score.current
 const targetAverage = Number((scores.reduce((sum, score) => sum + score.target, 0) / scores.length).toFixed(2));
 const gaps = scores
   .map((score) => ({ ...score, gap: Number((score.target - score.current).toFixed(2)) }))
-  .sort((a, b) => b.gap - a.gap || a.area.localeCompare(b.area));
+  .sort((a, b) => b.gap - a.gap || (a.area < b.area ? -1 : a.area > b.area ? 1 : 0));
 
 const scorecard = {
   generatedAt: 'deterministic-from-source',

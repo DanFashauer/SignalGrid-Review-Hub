@@ -88,6 +88,8 @@ jobs:
 
       - name: Posture-allow proof (an unknown or illegible posture must not buy the allow the engine offers on its presence)
         run: pnpm run proof:posture-allow
+      - name: Proof — device registry (injective keys, fail-closed allowlist, freshness)
+        run: pnpm run proof:device-registry
 
       - name: Posture-allow conformance (shared vectors bound on both sides — TS proof and Swift XCTest)
         run: node scripts/check-posture-allow-conformance.mjs
@@ -259,6 +261,10 @@ jobs:
         run: node scripts/check-demo-flags-documented.mjs
       - name: Lab registry self-test (the gate must be able to fail)
         run: node scripts/check-lab-registry.mjs --self-test
+      - name: Lab source collections (declared, openable, read-only, parseable)
+        run: node scripts/check-lab-collections.mjs
+      - name: Lab source collections self-test (the gate must be able to fail)
+        run: node scripts/check-lab-collections.mjs --self-test
       - name: Lab registry (both halves agree; every deployment claim cites evidence on disk)
         run: node scripts/check-lab-registry.mjs
       - name: Evidence sources self-test (the gate can fail)

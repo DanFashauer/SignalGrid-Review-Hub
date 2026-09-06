@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "2026-08-21-telemetry-lane-first-run",
+  "requestedAt": "2026-08-21T20:49:44Z",
   "requestedBy": "cloud lane",
   "reason": "Backlog row 33 landed the opt-in telemetry lane (OTel Collector 0.116.1 + Prometheus v3.1.0, both sha-pinned by tag in scripts/lib/container-engine.sh) but the cloud session has no runnable container engine today, so the lane has never executed anywhere. deployedInLab for both registry rows stays false until a live run passes - this request is that run. The lane asserts signalgrid_up==1 arriving through the FULL chain (api /metrics -> collector prometheus receiver -> collector exporter -> Prometheus), where Prometheus's target list names only the collector, so a pass cannot be a direct-scrape shortcut. If it passes: flip deployedInLab on open-telemetry/opentelemetry-collector and prometheus/prometheus with deployedEvidence scripts/run-live-lanes.sh, and update the OPEN_SOURCE_LAB_REGISTRY.md table's Deployed column to match (the gate checks both halves).",
   "runs": [

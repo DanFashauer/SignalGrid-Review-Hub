@@ -284,8 +284,11 @@ lone repairs into unreachable code).
       same change; Intune App Protection first, other MAM vendors deferred.
 
 _Derived from repo data, not memory: `check-connector-discipline` reports 36/36
-families with KNOWN_GAPS empty, and `check-live-sync` reports `liveEvidence=fresh`
-(`artifacts/live-evidence/mac-run.json`, minted on a real Mac 2026-08-07).
+families with KNOWN_GAPS empty. The live-evidence status is NOT restated here —
+`node scripts/check-live-sync.mjs` prints it (`liveEvidence=fresh|stale|none`), and
+this paragraph once said "fresh" while the tool printed STALE, seven manifest
+versions behind the artifact it cited (flagged 2026-08-21, corrected 2026-09-06;
+`check-live-sync` now fails any doc that restates a status it does not print).
 What remains is the LIVE-lane column of
 [ZERO_COST_LIVE_TEST_MATRIX.md](ZERO_COST_LIVE_TEST_MATRIX.md) — every dimension
 already has a fixture proof; these add a real vendor behind it._

@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "2026-08-25-ios-dynamic-type-and-nil-expiry",
+  "requestedAt": "2026-08-25T05:58:55Z",
   "requestedBy": "cloud lane",
   "reason": "Two findings that only your box can settle, both filed and both blocked on a Swift toolchain this lane does not have. Sending them as WORK rather than as mail, because the owner correctly pointed out on 2026-08-25 that they should have been queued as work already. Row 78: CLAUDE.md tells a reader to check the raw-font rule by grepping UIFont.systemFont, and that returns ZERO. Swift's implicit-member form, .systemFont(ofSize, returns EIGHTEEN \u2014 sixteen in HostAppViewController and two in ManagedAppViewController, the two view controllers that host the Assist gate, at fixed 9-12pt. The screen that tells a worker why they were blocked does not grow at accessibility text sizes. dd55bca converted eight other view controllers on 2026-08-18 and skipped these two; SG-token adoption and adjustsFontForContentSizeCategory correlate 1:1 across every file that was converted. Row 58: SessionData.isExpired is `guard let expiresAt = expiresAt else { return false }` \u2014 a session that cannot say when it expires reads as NOT expired \u2014 and HostAppViewController:189 stacks a second permissive default on top. `stale` is a live posture input to the Assist gate, and nil is producible by a real auth path. Neither file is a frozen port, so golden rule 1 does not block the fix.",
   "runs": [

@@ -1212,3 +1212,33 @@ proof:live-fleet            summary=pass (37/37) before the section; summary=pas
 proof:live-fleet-workflow   summary=pass (21/21)   (FLEET_HOST_UUID = the live agent, inside the team)
 ```
 Verdict:  **the trial bought exactly what the 2026-08-12 note said it would — evidence, not enforcement — plus one bug the Free server could never have shown.** Under Premium the transfer endpoint SUCCEEDS, so the connector's refusal is now provably the product's choice rather than Fleet's 422; SignalGrid's public packages carry no path to it at all. The team branch of `getPolicies()` worked as far as it went and no further: Fleet reports a team's policies in two lists, and the adapter returned only the first, so a team-scoped catalogue omitted every global policy the team inherits — fewer policies than Fleet applies to the host. Fixed to fold both (more policies known is the strict direction), asserted live in the new Premium section of `proof:live-fleet`, which skips LOUDLY and uncounted on a Free server or without `FLEET_LAB_WRITE_OK=true`. The key never touched the tree, a commit, a log or a result file; the lab could not phone home. Not verified: the Free-tier skip of the new section (this lab is Premium, so only the no-write-flag skip was run for real). One more wire fact the section caught on its first run: a team with no policies of its own answers with `inherited_policies` ONLY — Fleet omits the `policies` key rather than sending `[]` — so the adapter's `?? []` is load-bearing, and the proof now pins that shape too. The trial's clock ends 2026-09-16.
+
+## 2026-09-06 — "Ninth round: the rest of lib/integrations and the twelve data directories — a key that folded two devices into one record, an allowlist a typo could open, gates that could not fail on the thing they guard"
+Command:  two independent fail-closed audits (the 45 unread evaluate.ts families + registry/resolver/graph/store-scope/utils; the twelve artifacts data directories against their producers and consumer gates), then a firsthand read of every edit site; every fix behind a proof or a self-test that fails by mutation:
+```
+pnpm run proof:device-registry                  # new; then mutated: old key transform, "TRUE" opens
+node scripts/check-scheduled-routines.mjs --self-test ; node scripts/check-lab-registry.mjs --self-test
+node scripts/check-sim-requests.mjs --self-test ; node scripts/check-lab-collections.mjs --self-test   # new gate
+node scripts/check-live-sync.mjs               # now refuses a doc that restates a status it does not print
+pnpm run proof:graph-connector ; proof:graph-wire ; proof:launch-seam ; pnpm run typecheck ; pnpm run review:invariants
+```
+Output:
+```
+deviceKey: AA:BB:CC:DD:EE:FF vs AA_BB_CC_DD_EE_FF → different keys; exhaustive 4-letter alphabet 256/256 distinct (old transform: 81/256)
+parseAllowlistMode: "true"→enforced/explicit  "false"→open/explicit  absent→enforced/absent  "TRUE","1","yes",""→enforced/unrecognized
+isAllowedByPolicy: no lastSeenAt → false · unparseable → false · 31 days → false · exactly the bound → true · future beyond skew → false
+proof:device-registry  summary=pass (52/52)
+  mutation (old Redis key transform)   → summary=FAIL (50/52): "the two ids that used to collide…" and "injective over that set (81/256)"
+  mutation ("TRUE" opens the allowlist) → summary=FAIL (51/52): "\"TRUE\" enforces and is reported as unrecognized"
+check-scheduled-routines self-test 25/25 (future firedAt FATAL; active routine without tolerance FATAL; staleness still REPORTED)
+check-lab-registry self-test 22/22 (refusal-only sim-result, empty capture, unparseable file, missing evidenceMarker all FATAL)
+check-sim-requests self-test 19/19; real run: REPORTED — 2026-08-23-headwind-first-capture: provenance.commit da1ee232fc9f does not resolve (shallow clone: reported, not fatal)
+check-lab-collections self-test 10/10; real run: 5 service folder(s), 20 request file(s) — passed
+check-live-sync: liveEvidence=stale; docs/BUILD_BACKLOG.md restated "fresh" → corrected; a quoted citation in the 2026-08-21 review is exempt by rule
+graph: proof:graph-connector 31/31 (absent from riskyUsers → none; 403 → every subject unknown; inventory reads still succeed)
+       proof:graph-wire 12/12 · proof:launch-seam 46/46 (risk mirrored case for case from FIXTURE_GRAPH_RISKY_USERS)
+review:invariants — clock-read pin lib/integrations/src 20 → 22, the two reads named (deviceRegistry.isAllowed on both backends)
+coverage ledger: 81 read, 4 partial, 15 not read, of 100 surfaces (was 68 / 5 / 27)
+```
+Verdict:  **the registry could admit the wrong device, and a typo in one environment variable admitted every device.** `AA:BB:CC:DD:EE:FF` and `AA_BB_CC_DD_EE_FF` are both valid ids and shared one Redis record; `DEVICE_ALLOWLIST_MODE=TRUE` (or unset) opened the allowlist with no log line; the production backend validated nothing the dev backend checked; a freshness stamp was written on every check-in and read by nothing. All four now live behind pure, exported helpers a proof drives with a fixed clock, and the allowlist opens only on the exact string `false`. The Graph connector graded every live user's risk `unknown` because it read a field the live `$select` never requested — fixtures supplied it, so every proof passed; it now reads Identity Protection's risky-user list, and a tenant without the scope grades `unknown`, never `none`. Three gates carried the shape this repository keeps finding in itself: a check that skips on the unknown (no tolerance ⇒ exempt), an age that goes negative (future heartbeat ⇒ fresh forever), and evidence checked for existence rather than content (a refusal-only result closing a deployment claim). One committed result names a commit this repository has never held; the gate now resolves every commit and says, on a shallow clone, what it cannot vouch for. Not verified here: the Redis backend against a live Redis (the shared validator and injective key are proven pure; the Redis wiring compiles and mirrors the in-memory path); the `resolveFromRegistry` collision through `deviceResolver` (its input now cannot collide).
+

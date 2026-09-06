@@ -28,6 +28,9 @@ const REGISTRY = "docs/agent/scheduled-routines.json";
 const HEARTBEATS_DIR = "artifacts/agent-heartbeats";
 const ROSTER = "docs/agent/org-roster.json";
 
+/** A heartbeat may run a few minutes ahead of this clock (two hosts); further is a broken clock. */
+const FUTURE_SKEW_MS = 5 * 60 * 1000;
+
 export function auditScheduledRoutines(registry, heartbeats, rosterText, listHeads = defaultListHeads) {
   const fatal = [];
   const reported = [];
@@ -106,6 +109,12 @@ export function auditScheduledRoutines(registry, heartbeats, rosterText, listHea
           const at = Date.parse(parsed.firedAt ?? "");
           if (Number.isNaN(at)) {
             fatal.push(`${name}: heartbeat carries no parseable firedAt — 'ran at some point' is not evidence`);
+          } else if (at > Date.now() + FUTURE_SKEW_MS) {
+            // A future firedAt yielded a NEGATIVE age below, which is never
+            // "beyond tolerance" — a clock-skewed or hand-edited heartbeat read as
+            // fresh forever (ninth audit round, 2026-09-06). The file already refused a
+            // future retiredAt; the same rule now holds the instant that matters.
+            fatal.push(`${name}: heartbeat firedAt ${parsed.firedAt} is in the FUTURE — a clock that cannot be trusted cannot prove freshness`);
           } else if (retired) {
             // Fail-closed spelling: an unparseable retirement instant does not
             // skip the comparison (that would be the skip-on-unknown shape), it
@@ -113,7 +122,12 @@ export function auditScheduledRoutines(registry, heartbeats, rosterText, listHea
             if (!Number.isFinite(retiredAt) || at > retiredAt) {
               fatal.push(`${name}: declared retired at ${r.retiredAt} but its heartbeat fired at ${parsed.firedAt} — the trigger is still running, or the retirement instant is unreadable; disable it on the account or un-retire the row`);
             }
-          } else if (r.cadenceToleranceHours != null) {
+          } else if (!(Number.isFinite(r.cadenceToleranceHours) && r.cadenceToleranceHours > 0)) {
+            // Skipping the staleness check when the tolerance is absent made a new
+            // active routine permanently exempt from the only clock in this gate.
+            // Staleness itself stays REPORTED; the missing bound is FATAL.
+            fatal.push(`${name}: active routine with a heartbeat but no positive cadenceToleranceHours — without a bound its staleness can never be measured`);
+          } else {
             const ageH = (Date.now() - at) / 3_600_000;
             if (ageH > r.cadenceToleranceHours) {
               reported.push(`${name}: heartbeat is ${ageH.toFixed(1)}h old, beyond its ${r.cadenceToleranceHours}h tolerance — the lane may be asleep (REPORTED, never silent)`);
@@ -173,6 +187,14 @@ function selfTest() {
   checks.push(["a coherent registry with a fresh heartbeat passes clean", r.fatal.length === 0 && r.reported.length === 0]);
   r = auditScheduledRoutines({ ...good, routines: [{ ...good.routines[0], authorizedBy: null }] }, freshHb, "");
   checks.push(["a routine with no authorizer is FATAL — consent is never inferred", r.fatal.some((x) => x.includes("no authorizing human"))]);
+  const futureHb = { "artifacts/agent-heartbeats/a.json": JSON.stringify({ firedAt: new Date(Date.now() + 3_600_000).toISOString(), result: "quiet" }) };
+  r = auditScheduledRoutines(good, futureHb, "");
+  checks.push(["a heartbeat fired in the FUTURE is FATAL — a negative age must not read as fresh", r.fatal.some((x) => x.includes("in the FUTURE"))]);
+  const staleHb400 = { "artifacts/agent-heartbeats/a.json": JSON.stringify({ firedAt: new Date(Date.now() - 400 * 3_600_000).toISOString(), result: "quiet" }) };
+  r = auditScheduledRoutines({ ...good, routines: [{ ...good.routines[0], cadenceToleranceHours: undefined }, good.routines[1]] }, staleHb400, "");
+  checks.push(["an active routine with NO cadence tolerance is FATAL — it was silently exempt from the staleness clock", r.fatal.some((x) => x.includes("no positive cadenceToleranceHours"))]);
+  r = auditScheduledRoutines(good, staleHb400, "");
+  checks.push(["with a tolerance, staleness is REPORTED, not fatal (the control that keeps the gate honest)", r.fatal.length === 0 && r.reported.some((x) => x.includes("beyond its"))]);
   r = auditScheduledRoutines(good, { ...freshHb, "artifacts/agent-heartbeats/ghost.json": JSON.stringify({ firedAt: new Date().toISOString() }) }, "");
   checks.push(["a heartbeat with no registry entry is FATAL — an undeclared lane is running", r.fatal.some((x) => x.includes("ghost"))]);
   r = auditScheduledRoutines(good, freshHb, '{"producedByRoutine": "unknown-routine"}');

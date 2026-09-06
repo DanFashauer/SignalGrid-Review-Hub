@@ -6,6 +6,7 @@ import {
   createMockGraphTransport,
   type GraphManagedDeviceRaw,
   type GraphPostureSignal,
+  type GraphRiskyUserRaw,
   type GraphUserRaw,
 } from "@workspace/integrations/graph";
 
@@ -196,6 +197,7 @@ console.log("shipped-connector checks");
 interface RawGraphFixture {
   accessToken: string;
   users: GraphUserRaw[];
+  riskyUsers: GraphRiskyUserRaw[];
   devices: GraphManagedDeviceRaw[];
   expectedNormalized: Record<string, Partial<GraphPostureSignal>>;
 }
@@ -211,6 +213,9 @@ const shippedConnector = new GraphPostureConnector(
   createMockGraphTransport({
     users: rawFixture.users,
     devices: rawFixture.devices,
+    // User risk lives on /identityProtection/riskyUsers, not on /users (2026-09-06);
+    // a mock without this list answers 403 and every subject would grade unknown.
+    riskyUsers: rawFixture.riskyUsers,
     expectedToken: rawFixture.accessToken,
     pageSize: 2, // small page size forces real pagination through the connector
     baseUrl: SHIPPED_BASE_URL,
@@ -319,6 +324,12 @@ function liftShippedSignal(
   signal: GraphPostureSignal,
   ctx: { permissionHealth: string; graphApiHealth: string; accessReviewState: string },
 ): NormalizedSignalGridInput {
+  // The shipped signal now carries NULL for a device whose owner could not be
+  // resolved (never the literal "unknown"). The oracle input wants a subject, so
+  // an unresolved one is refused here rather than re-rendered as an identity.
+  if (signal.subjectId === null) {
+    throw new Error(`cannot lift ${signal.deviceId}: no resolved subject — an unresolved identity is not a subjectId`);
+  }
   return {
     caseId: signal.deviceId,
     subjectId: signal.subjectId,

@@ -100,9 +100,15 @@ const DECLARED_CLOCK_READS = new Map([
   [
     "lib/integrations/src/",
     {
-      count: 20,
+      count: 22,
       reason:
         "Connector boundary. Fixture/demo enrolment and last-seen timestamps, and freshness computed " +
+        "AT the boundary where wall-clock is the input being read. The 21st and 22nd (2026-09-06) are " +
+        "deviceRegistry.isAllowed on BOTH backends: the allowlist freshness bound reads the clock once " +
+        "at the boundary and hands it to the pure isAllowedByPolicy(now), which proof:device-registry " +
+        "drives with a fixed clock — the answer is 'fresh enrolment or not', never a verdict. Before " +
+        "2026-09-06 lastSeenAt was stamped and never consulted, so this pair is the read that was " +
+        "missing, not one that crept in. Original wording continues: freshness computed " +
         "AT the boundary where wall-clock is the input being read — not a decision path. The decision " +
         "core receives the derived Freshness value and never reads a clock itself. " +
         "The 23rd (2026-08-24) is the default argument of telemetry/store.ts getPostureForHost(), " +

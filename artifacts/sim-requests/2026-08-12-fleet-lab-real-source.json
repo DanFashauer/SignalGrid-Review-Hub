@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "2026-08-12-fleet-lab-real-source",
+  "requestedAt": "2026-08-12T15:29:14Z",
   "requestedBy": "cloud lane",
   "reason": "The owner's redirect made Fleet the low-cost engineering lab and the first real device-management evidence source. The adapter is proven against fixtures and was proven once against a real Fleet 4.89.2 (proof:live-fleet, 30 assertions) — but never since the DeviceManagementEvidence contract and the launch seam landed. This runs the live lane against a real Fleet so the source-agnostic claim is backed by a real source, not only by fixtures that agree with themselves.",
   "runs": [

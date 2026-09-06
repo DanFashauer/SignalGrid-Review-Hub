@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "2026-08-31-lab001-step1-real-posture",
+  "requestedAt": "2026-08-31T17:30:12Z",
   "requestedBy": "cloud lane",
   "reason": "LAB_001 Step 1 — the first true signal the core has ever seen. The cloud rehearsal (docs/lab/LAB_001_CLOUD_REHEARSAL.md, 2026-08-31) proved the verification protocol over the real MCP stdio wire: a healthy baseline evaluates SUFFICIENT_CERTAINTY, and all four forced-unknown probes (health omitted, unavailable, stale, accuracy unknown) tighten to step_up. What only the Mac can add is the real half: signalgrid-mcp reading the MacBook's actual posture, the core deciding on it, evidence minted.",
   "runs": [

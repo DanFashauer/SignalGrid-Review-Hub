@@ -51,7 +51,29 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-05 (cloud lane, latest) - Batch J (eighth round, on its PR)
+LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batch J LANDED (#456) with the
+              Mac-lane second revision; the owner's Fleet Premium key was used
+              the same hour in the cloud lab (#461: the adapter's team branch
+              dropped every inherited policy - fixed and proven; the transfer
+              endpoint answers 200 under Premium and SignalGrid still has no
+              path to it - asserted; proof:live-fleet 52/52, workflow 21/21).
+              Batch K (ninth round, on its PR) read the rest of lib/integrations
+              and the twelve data directories: the device registry's Redis key
+              folded ':' and '_' (two valid ids, one record), its allowlist
+              opened on any value but the exact string 'true' AND on absence,
+              the production enroll validated nothing, lastSeenAt was never
+              consulted - all fixed behind pure helpers + proof:device-registry
+              (52, mutations caught by name); Graph user risk read a field the
+              live $select never asked for (now a real riskyUsers read, 403 ->
+              unknown) and an unresolved owner was the identity 'unknown' (now
+              null); three gates fail-opened (future heartbeat read as fresh,
+              no tolerance = exempt, lab evidence never parsed) and one result
+              named a commit the repo never held - the gate resolves commits
+              now; sim requests carry requestedAt; lab-collections got its
+              first gate; BUILD_BACKLOG restated liveEvidence=fresh while the
+              tool printed STALE for 16 days - check-live-sync refuses restated
+              statuses now. Coverage: 81 read / 4 partial / 15 not read of 100.
+              EARLIER (2026-09-05) - Batch J (eighth round, now on mainline)
               read the partial and unread code: the simulator engine ALLOWS on a
               posture whose compliance is unknown/expired/absent (measured live;
               engine frozen, so a posture-allow wrapper + proof 189 + shared
@@ -259,17 +281,16 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land batch J (PR #456, carries the Mac-lane second revision:
-              PostureAllow.swift + its XCTest written here and proven by ios-ci,
-              the launchd tick, the --sim-only banner fix), then keep reading
-              unread surfaces (the docs families, the data directories,
-              .claude/skills content, the remainder of lib/integrations, scripts
-              and signalgrid-app). OWNER, once, on the Mac:
-              `bash scripts/mac/install-launchd.sh` — after that the Mac runs
-              queued sim requests and heartbeats every 30 min with no session
-              open, and the steward tells you if it stops. Mac lane (a person):
-              only judgment calls and physical actions come by mail now; the
-              six unread messages can be acked with `pnpm run lane:inbox`.
+NEXT ACTION: cloud: land batch K, then keep reading the 15 unread surfaces
+              (the docs families first - docs/* loose files, docs/agent,
+              docs/research, docs/company - then .claude/skills content and
+              signalgrid-app's remainder). OWNER, once, on the Mac, now that
+              the installer is on mainline: `bash scripts/mac/install-launchd.sh`
+              then `--status` - the steward escalates once a day while the tick
+              stays silent. Mac lane (a person): nothing is owed; seven unread
+              messages can be acked with `pnpm run lane:inbox`; a Premium
+              re-run on the Mac is optional (FLEET_LICENSE_KEY in the env,
+              `./scripts/run-live-lanes.sh --only fleet`) before 2026-09-16.
               EARLIER: land batch E, then keep reading unread surfaces (56 left; next
               lib/api-spec, lib/iac, then the docs families) and build the three
               gates batch E specified (NaN gate follows one helper hop;
@@ -316,7 +337,7 @@ NEXT ACTION: cloud: land batch J (PR #456, carries the Mac-lane second revision:
    frozen" until 2026-09-02 — two days after this file's own STATE section
    recorded DR-021 — which is the contradiction a doc can hold against itself
    when no gate reads English.*
-3. **Nobody has used the product.** 143 proof gates and four native surfaces do
+3. **Nobody has used the product.** 144 proof gates and four native surfaces do
    not change that number. Only a conversation does.
 
 ---

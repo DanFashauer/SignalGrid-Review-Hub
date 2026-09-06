@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "2026-08-23-glpi-first-bringup",
+  "requestedAt": "2026-08-23T07:20:51Z",
   "requestedBy": "cloud lane",
   "reason": "DR-013 item 3 \u2014 the ITSM class, proven without any vendor signup. You confirmed GLPI was genuinely absent (zero matches under scripts/); it now has a lane and a proof, and this is its first run on a real engine. Deliberately built as SHAPE DISCOVERY, not a contract proof: the image and its env are verified from primary sources (glpi/glpi is HTTP 200 on Docker Hub with 11.0.8 a real tag; glpiproject/glpi is a 404 and unused; GLPI_DB_* and the MariaDB backend come from the image's own published description), but the REST surface is NOT \u2014 GLPI ships a v1 /apirest.php and a v2 whose shape differs by release, and nothing here has driven either. So the proof probes the candidate roots and RECORDS what the server answers rather than asserting a contract from memory. That ordering is the lesson from the headwind lane, where a credential was asserted instead of observed and turned out never to have authenticated anywhere.",
   "runs": [

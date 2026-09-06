@@ -31,6 +31,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import {fileURLToPath, pathToFileURL } from "node:url";
+import { GREEN_STATUSES } from "./lib/sim-operations.mjs";
 
 const REGISTRY = "docs/agent/open-source-lab-registry.json";
 const HUMAN_HALF = "docs/OPEN_SOURCE_LAB_REGISTRY.md";
@@ -77,7 +78,31 @@ export function reposInMarkdown(mdText) {
  */
 const PRIORITY_TIERS = new Set(["P0", "P1", "P2"]);
 
-export function auditLabRegistry(registry, mdText, pathExists, rosterRoles) {
+/**
+ * Does the cited execution record actually record an execution? `readJson` is
+ * injected (null when unreadable) so the self-test can drive every shape.
+ * A sim-result must carry at least one run row with a GREEN status; a
+ * live-capture must carry a non-empty `probes` or `devices` array. An optional
+ * per-entry `evidenceMarker` must appear in the file's text — a fleet claim
+ * cannot be closed by a result that never mentions fleet.
+ */
+export function evidenceRecordsARun(path, doc, marker) {
+  if (!doc || typeof doc !== "object") return "does not parse as a JSON object";
+  if (/^artifacts\/sim-results\//.test(path)) {
+    const runs = Array.isArray(doc.runs) ? doc.runs : [];
+    if (!runs.some((r) => GREEN_STATUSES.includes(r?.status))) return "has no run row with a green status — a refusal or a skip is an attempt, not a deployment";
+  } else if (/^artifacts\/live-captures\//.test(path)) {
+    const probes = Array.isArray(doc.probes) ? doc.probes : Array.isArray(doc.devices) ? doc.devices : [];
+    if (probes.length === 0) return "has no probes/devices — a capture of nothing is not a deployment";
+  }
+  if (marker) {
+    const text = JSON.stringify(doc);
+    if (!text.includes(marker)) return `never mentions evidenceMarker "${marker}"`;
+  }
+  return null;
+}
+
+export function auditLabRegistry(registry, mdText, pathExists, rosterRoles, readJson = () => null) {
   const fatal = [];
   const entries = registry?.entries;
   if (!Array.isArray(entries)) return { fatal: [`${REGISTRY} carries no entries array`] };
@@ -137,6 +162,14 @@ export function auditLabRegistry(registry, mdText, pathExists, rosterRoles) {
             "a launcher proves the service is DEPLOYABLE, never that it was deployed. " +
             "Cite artifacts/sim-results/… or artifacts/live-captures/… instead.",
         );
+      } else {
+        // Existing on disk with the right prefix says the RIGHT KIND of file exists;
+        // it says nothing about what is in it. A result whose every row is
+        // refused_platform, or a capture with `probes: []`, closed a deployedInLab
+        // claim — the hole check-sim-requests.mjs documents fixing in ITS domain, and
+        // its fix stopped at that gate's edge (ninth audit round, 2026-09-06).
+        const why = evidenceRecordsARun(e.deployedEvidence, readJson(e.deployedEvidence), e.evidenceMarker);
+        if (why) fatal.push(`${name}: deployedEvidence ${e.deployedEvidence} ${why}`);
       }
     }
     if (e.licence && CAUTION_FAMILY.test(e.licence) && e.licenceCaution !== true) {
@@ -169,14 +202,16 @@ function selfTest() {
     ],
   };
   const onDisk = () => true;
+  const greenDoc = { runs: [{ operation: "live-lanes", status: "passed" }], probes: [{ id: 1 }] };
+  const readGreen = () => greenDoc;
   const roster = new Set(["endpoint-uem-domain", "secops-domain"]);
-  let r = auditLabRegistry(good, mdFor(["a/one", "b/two"]), onDisk, roster);
+  let r = auditLabRegistry(good, mdFor(["a/one", "b/two"]), onDisk, roster, readGreen);
   checks.push(["a coherent registry with a matching md table passes clean", r.fatal.length === 0]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], licence: undefined }] }, mdFor(["a/one"]), onDisk, roster);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], licence: undefined }] }, mdFor(["a/one"]), onDisk, roster, readGreen);
   checks.push(["an entry with no licence is FATAL", r.fatal.some((x) => x.includes("no licence"))]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], classification: "COOL_REPO" }] }, mdFor(["a/one"]), onDisk, roster);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], classification: "COOL_REPO" }] }, mdFor(["a/one"]), onDisk, roster, readGreen);
   checks.push(["a classification outside the enum is FATAL", r.fatal.some((x) => x.includes("outside the declared enum"))]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], deployedEvidence: null }] }, mdFor(["a/one"]), onDisk, roster);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], deployedEvidence: null }] }, mdFor(["a/one"]), onDisk, roster, readGreen);
   checks.push(["deployedInLab without evidence is FATAL — 'it runs' needs a citation", r.fatal.some((x) => x.includes("no deployedEvidence"))]);
 
   // Added 2026-08-25 with its own negative control. Four real entries cited
@@ -195,14 +230,29 @@ function selfTest() {
   // a live-capture is an execution record too, not only a sim-result.
   r = auditLabRegistry(
     { ...good, entries: [{ ...good.entries[0], deployedEvidence: "artifacts/live-captures/glpi.json" }] },
-    mdFor(["a/one"]), onDisk, roster,
+    mdFor(["a/one"]), onDisk, roster, readGreen,
   );
   checks.push(["a live-capture IS an execution record — both families accepted", !r.fatal.some((x) => x.includes("not an execution record"))]);
+
+  // Ninth round: the record has to RECORD something.
+  r = auditLabRegistry(good, mdFor(["a/one", "b/two"]), onDisk, roster, () => ({ runs: [{ operation: "everything", status: "refused_platform" }] }));
+  checks.push(["a sim-result whose only row is a refusal does NOT close a deployment claim", r.fatal.some((x) => x.includes("no run row with a green status"))]);
+  r = auditLabRegistry(
+    { ...good, entries: [{ ...good.entries[0], deployedEvidence: "artifacts/live-captures/glpi.json" }] },
+    mdFor(["a/one"]), onDisk, roster, () => ({ probes: [] }),
+  );
+  checks.push(["a live-capture with no probes does NOT close a deployment claim", r.fatal.some((x) => x.includes("no probes/devices"))]);
+  r = auditLabRegistry(good, mdFor(["a/one", "b/two"]), onDisk, roster, () => null);
+  checks.push(["an unreadable evidence file is FATAL, never a skip", r.fatal.some((x) => x.includes("does not parse"))]);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], evidenceMarker: "wazuh" }, good.entries[1]] }, mdFor(["a/one", "b/two"]), onDisk, roster, readGreen);
+  checks.push(["an evidenceMarker the file never mentions is FATAL — a fleet result cannot vouch for wazuh", r.fatal.some((x) => x.includes("never mentions evidenceMarker"))]);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], evidenceMarker: "live-lanes" }, good.entries[1]] }, mdFor(["a/one", "b/two"]), onDisk, roster, readGreen);
+  checks.push(["an evidenceMarker the file does mention passes (positive control)", !r.fatal.some((x) => x.includes("evidenceMarker"))]);
   r = auditLabRegistry({ ...good, entries: [{ ...good.entries[1], licenceCaution: false }] }, mdFor(["b/two"]), onDisk, roster);
   checks.push(["an AGPL licence without licenceCaution is FATAL", r.fatal.some((x) => x.includes("caution family"))]);
   r = auditLabRegistry({ ...good, entries: [{ ...good.entries[1], licence: "Sustainable Use License", licenceCaution: false }] }, mdFor(["b/two"]), onDisk, roster);
   checks.push(["a Sustainable Use licence without caution is FATAL — custom families count", r.fatal.some((x) => x.includes("caution family"))]);
-  r = auditLabRegistry(good, mdFor(["a/one"]), onDisk, roster);
+  r = auditLabRegistry(good, mdFor(["a/one"]), onDisk, roster, readGreen);
   checks.push(["a json repo missing from the md table is FATAL", r.fatal.some((x) => x.includes("not in the md table"))]);
   r = auditLabRegistry(good, mdFor(["a/one", "b/two", "c/three"]), onDisk, roster);
   checks.push(["an md-table repo missing from the json is FATAL", r.fatal.some((x) => x.includes("not in the json"))]);
@@ -211,17 +261,17 @@ function selfTest() {
   // Parser controls: a backticked file path in a table row, or a repo named
   // only in prose, must not enter the cross-check.
   const mdWithNoise = `${mdFor(["a/one", "b/two"])}\n| gate | \`scripts/check-lab-registry.mjs\` |\n\nSee also \`c/prose-only\` in passing.`;
-  r = auditLabRegistry(good, mdWithNoise, onDisk, roster);
+  r = auditLabRegistry(good, mdWithNoise, onDisk, roster, readGreen);
   checks.push(["file paths and prose mentions do not desynchronize the halves", r.fatal.length === 0]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], ownerRole: "made-up-role" }] }, mdFor(["a/one"]), onDisk, roster);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], ownerRole: "made-up-role" }] }, mdFor(["a/one"]), onDisk, roster, readGreen);
   checks.push(["an ownerRole the org roster does not carry is FATAL — phantom ownership", r.fatal.some((x) => x.includes("does not exist in docs/agent/org-roster.json"))]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], priorityTier: "P9" }] }, mdFor(["a/one"]), onDisk, roster);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], priorityTier: "P9" }] }, mdFor(["a/one"]), onDisk, roster, readGreen);
   checks.push(["a priority tier outside P0/P1/P2 is FATAL", r.fatal.some((x) => x.includes("priorityTier"))]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], mutationsAllowed: true }] }, mdFor(["a/one"]), onDisk, roster);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], mutationsAllowed: true }] }, mdFor(["a/one"]), onDisk, roster, readGreen);
   checks.push(["mutationsAllowed true without a decisionRecord is FATAL — DR-008", r.fatal.some((x) => x.includes("DR-008"))]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], ownerRanked: null, basis: "recorded from owner research report 2026-08-21" }] }, mdFor(["a/one"]), onDisk, roster);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], ownerRanked: null, basis: "recorded from owner research report 2026-08-21" }] }, mdFor(["a/one"]), onDisk, roster, readGreen);
   checks.push(["null ownerRanked WITH a report basis is coherent — unranked arrivals are allowed", r.fatal.length === 0]);
-  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], ownerRanked: null, basis: "just because" }] }, mdFor(["a/one"]), onDisk, roster);
+  r = auditLabRegistry({ ...good, entries: [{ ...good.entries[0], ownerRanked: null, basis: "just because" }] }, mdFor(["a/one"]), onDisk, roster, readGreen);
   checks.push(["null ownerRanked WITHOUT a report basis is FATAL", r.fatal.some((x) => x.includes("ownerRanked"))]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
@@ -238,7 +288,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const mdText = readFileSync(join(repoRoot, HUMAN_HALF), "utf8");
   const roster = JSON.parse(readFileSync(join(repoRoot, "docs/agent/org-roster.json"), "utf8"));
   const rosterRoles = new Set((roster.roles ?? roster).map((r) => r.id ?? r.roleId ?? r.name));
-  const { fatal } = auditLabRegistry(registry, mdText, (p) => existsSync(join(repoRoot, p)), rosterRoles);
+  const readJson = (p) => {
+    try { return JSON.parse(readFileSync(join(repoRoot, p), "utf8")); } catch { return null; }
+  };
+  const { fatal } = auditLabRegistry(registry, mdText, (p) => existsSync(join(repoRoot, p)), rosterRoles, readJson);
   const deployed = registry.entries?.filter((e) => e.deployedInLab === true).length ?? 0;
   console.log(`Open-source lab registry — ${registry.entries?.length ?? 0} entr(ies), ${deployed} deployed-in-lab`);
   if (fatal.length > 0) {

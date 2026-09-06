@@ -24,6 +24,7 @@
 // `check-live-sync.mjs` against the evidence artifact; this gate answers
 // "do the request and result files agree", which has no time in it.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SIM_OPERATIONS, OPERATION_KEYS, RUN_STATUSES, GREEN_STATUSES, EXECUTED_STATUSES } from "./lib/sim-operations.mjs";
@@ -37,10 +38,11 @@ const listJson = (dir) =>
 
 /** Pure over the two directories' PARSED contents, so the self-test can drive it
  *  with synthetic input and prove the same code path fails. */
-export function auditSimRequests(requests, results) {
+export function auditSimRequests(requests, results, commitExists = null, shallow = true) {
   const problems = [];
   const pending = [];
   const superseded = [];
+  const reported = [];
   const reqById = new Map(requests.map((r) => [r.id, r]));
 
   // ── Supersession ──────────────────────────────────────────────────────────
@@ -55,6 +57,17 @@ export function auditSimRequests(requests, results) {
   //     every run — retirement is visible forever, never silent;
   //   · its existing results stay bound to its original runs, untouched.
   const supersededIds = new Set();
+  for (const req of requests) {
+    // A request that does not say WHEN it was queued cannot be reported as
+    // overdue: "PENDING" read the same on day one and day twenty-four (ninth
+    // audit round, 2026-09-06). Required, parseable, and not in the future.
+    const asked = Date.parse(req.requestedAt ?? "");
+    if (!req.requestedAt || Number.isNaN(asked)) {
+      problems.push(`request ${req.__fileId}: no parseable requestedAt — a request with no queue instant can never be reported overdue`);
+    } else if (asked > Date.now() + 5 * 60 * 1000) {
+      problems.push(`request ${req.__fileId}: requestedAt ${req.requestedAt} is in the future`);
+    }
+  }
   for (const req of requests) {
     if (!req.supersededBy) continue;
     if (req.supersededBy === req.id) {
@@ -135,6 +148,23 @@ export function auditSimRequests(requests, results) {
     }
     if (!res.provenance || !res.provenance.commit) {
       problems.push(`result ${res.__fileId}: no provenance.commit — a result that cannot name the code it ran against is not evidence`);
+    } else if (commitExists) {
+      // PRESENT is not RESOLVABLE. One committed result named a commit this
+      // repository has never held (2026-08-23-headwind-first-capture: da1ee232…,
+      // found by the ninth audit round) while every sibling resolved — a green
+      // run whose code cannot be identified, which is exactly what the sentence
+      // above forbids. FATAL on a full clone; on a shallow clone a miss cannot be
+      // told from an old commit, so it is REPORTED, never silent, never green.
+      // A commit is NOT required to be an ancestor of HEAD: mac/* branch work is
+      // legitimate; it only has to exist.
+      const sha = String(res.provenance.commit);
+      if (!/^[0-9a-f]{7,40}$/i.test(sha)) {
+        problems.push(`result ${res.__fileId}: provenance.commit "${sha}" is not a commit hash`);
+      } else if (!commitExists(sha)) {
+        const line = `result ${res.__fileId}: provenance.commit ${sha.slice(0, 12)} does not resolve in this repository — the code that produced it cannot be identified`;
+        if (shallow) reported.push(`${line} (shallow clone: a miss cannot be told from an unfetched commit — REPORTED, not fatal)`);
+        else problems.push(line);
+      }
     }
     // An operation is ANSWERED only when it actually executed — `passed` or
     // `failed`. Everything else is still owed.
@@ -162,10 +192,14 @@ export function auditSimRequests(requests, results) {
   }
 
   for (const req of requests) {
-    if (!resById.has(req.id) && !supersededIds.has(req.id)) pending.push(`${req.id} → every run still queued (no result yet)`);
+    if (!resById.has(req.id) && !supersededIds.has(req.id)) {
+      const asked = Date.parse(req.requestedAt ?? "");
+      const age = Number.isNaN(asked) ? "age unknown" : `${Math.max(0, Math.floor((Date.now() - asked) / 86_400_000))} day(s) old`;
+      pending.push(`${req.id} → every run still queued (no result yet; ${age})`);
+    }
   }
 
-  return { problems, pending, superseded };
+  return { problems, pending, superseded, reported };
 }
 
 function loadDir(dir) {
@@ -178,7 +212,7 @@ function loadDir(dir) {
 
 function selfTest() {
   const checks = [];
-  const req = (id, runs, reason = "why") => ({ id, __fileId: id, runs, reason });
+  const req = (id, runs, reason = "why") => ({ id, __fileId: id, runs, reason, requestedAt: "2026-09-01T00:00:00Z" });
   const res = (id, runs) => ({ requestId: id, __fileId: id, runs, provenance: { commit: "abc" } });
 
   // A coherent pair is clean.
@@ -207,6 +241,23 @@ function selfTest() {
   a = auditSimRequests([req("r1", ["preflight"])], []);
   checks.push(["a request with no result at all is pending, not a failure", a.pending.length === 1 && a.problems.length === 0]);
 
+  // Ninth round: every request states when it was queued.
+  a = auditSimRequests([{ id: "r1", __fileId: "r1", runs: ["preflight"], reason: "why" }], []);
+  checks.push(["a request with no requestedAt is a failure — pending without an age is not reportable", a.problems.some((p) => p.includes("no parseable requestedAt"))]);
+  a = auditSimRequests([req("r1", ["preflight"])], []);
+  checks.push(["…and a pending request reports its age", a.pending.some((p) => /\d+ day\(s\) old/.test(p))]);
+
+  // Ninth round: a commit that is PRESENT but does not RESOLVE.
+  const green = [{ ...res("r1", [{ operation: "preflight", status: "passed" }]), provenance: { commit: "abcdef0123456789" } }];
+  a = auditSimRequests([req("r1", ["preflight"])], green, () => false, false);
+  checks.push(["on a FULL clone an unresolvable provenance.commit is a failure", a.problems.some((p) => p.includes("does not resolve"))]);
+  a = auditSimRequests([req("r1", ["preflight"])], green, () => false, true);
+  checks.push(["on a SHALLOW clone it is REPORTED, never fatal and never silent", a.problems.length === 0 && a.reported.some((p) => p.includes("does not resolve"))]);
+  a = auditSimRequests([req("r1", ["preflight"])], green, () => true, false);
+  checks.push(["a commit that resolves is clean (positive control)", a.problems.length === 0 && a.reported.length === 0]);
+  a = auditSimRequests([req("r1", ["preflight"])], [{ ...green[0], provenance: { commit: "not-a-sha" } }], () => true, false);
+  checks.push(["a provenance.commit that is not a hash is a failure even when the resolver would say yes", a.problems.some((p) => p.includes("is not a commit hash"))]);
+
   // The hole this gate shipped with, now a permanent control.
   a = auditSimRequests(
     [req("r1", ["everything"])],
@@ -221,7 +272,7 @@ function selfTest() {
   checks.push(["a result with no provenance commit is caught", a.problems.some((p) => p.includes("provenance.commit"))]);
 
   // Supersession: retirement must be two-sided, visible, and never silent.
-  const sup = (id, runs, extra) => ({ id, __fileId: id, runs, reason: "why", ...extra });
+  const sup = (id, runs, extra) => ({ id, __fileId: id, runs, reason: "why", requestedAt: "2026-09-01T00:00:00Z", ...extra });
   a = auditSimRequests(
     [sup("old", ["everything"], { supersededBy: "new" }), sup("new", ["preflight"], { supersedes: "old" })],
     [res("new", [{ operation: "preflight", status: "passed" }])],
@@ -254,11 +305,26 @@ if (process.argv.includes("--self-test")) process.exit(selfTest());
 
 const requests = loadDir(REQ_DIR);
 const results = loadDir(RES_DIR);
-const { problems, pending, superseded } = auditSimRequests(requests, results);
+const git = (args) => spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+const commitExists = (sha) => git(["cat-file", "-e", `${sha}^{commit}`]).status === 0;
+const shallow = git(["rev-parse", "--is-shallow-repository"]).stdout.trim() === "true";
+const { problems, pending, superseded, reported } = auditSimRequests(requests, results, commitExists, shallow);
 
 console.log(`Simulation request loop — ${requests.length} request(s), ${results.length} result(s)`);
 const greenRuns = results.flatMap((r) => (r.runs ?? []).filter((x) => GREEN_STATUSES.includes(x.status)));
 console.log(`  operations that actually ran clean: ${greenRuns.length}`);
+
+if (reported.length > 0) {
+  console.log(`\n  REPORTED — provenance this checkout cannot vouch for (never silent, never green):`);
+  if (shallow && reported.length > 3) {
+    // A depth-1 CI checkout cannot resolve ANY historical commit, so every result
+    // lands here; one line with the ids says the same thing as sixteen.
+    const ids = reported.map((l) => l.match(/^result ([^:]+):/)?.[1] ?? "?");
+    console.log(`    · ${reported.length} result(s) name commits this SHALLOW clone cannot resolve (a full clone would gate them): ${ids.join(", ")}`);
+  } else {
+    for (const line of reported) console.log(`    · ${line}`);
+  }
+}
 
 if (superseded.length > 0) {
   console.log(`\n  SUPERSEDED — retired by a successor request (reported forever, never silent):`);

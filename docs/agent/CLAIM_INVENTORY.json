@@ -8376,7 +8376,7 @@
    "kind": "status",
    "classification": "demo-only",
    "action": "keep",
-   "evidence": "MITIGATION PRESENT and accurate \u2014 every route this app calls is read-only fixture (artifacts/api-server/src/routes/monitoring.ts:147-186 exposes only GET handlers). This is the second of the two persistent disclaimers; keep both."
+   "evidence": "MITIGATION PRESENT and accurate \u2014 every route this app calls is read-only fixture (artifacts/api-server/src/routes/monitoring.ts:147-184 exposes only GET handlers). This is the second of the two persistent disclaimers; keep both."
   },
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
@@ -9226,7 +9226,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/components/OutcomeBadge.tsx",
-   "line": "7-15, 18-20",
+   "line": "7-13",
    "claim": "Verdict badges rendering ALLOW / STEP UP / RESTRICT / DENY with distinct colors.",
    "kind": "capability",
    "classification": "launch",

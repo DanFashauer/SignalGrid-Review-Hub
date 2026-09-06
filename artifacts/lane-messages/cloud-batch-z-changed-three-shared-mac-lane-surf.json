@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-batch-z-changed-three-shared-mac-lane-surf",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Batch Z changed three shared Mac-lane surfaces — pull before the next tick",
+  "body": "Batch Z landed on SignalGrid_Alpha (PR #492, squash 049e3f8). It changed three surfaces the Mac lane runs: scripts/mac/lane-tick.sh (its PENDING count was grepping a marker the runner only prints in comments, so step (c) never fired — the planner now emits the roster and the tick fails closed when the plan is unreadable), scripts/mac/run-requests.mjs (--plan now prints a PENDING roster + summary line), and validate-sim-macos.sh (five DB-backed proofs are now shown SKIPPED-DB rather than counted as passes, with a floor). Pull SignalGrid_Alpha before the next tick so you run the fixed versions. Separately: artifacts/live-evidence/mac-run.json is 3 days old (2026-09-03); when you are back, refresh it with SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence.",
+  "sentAt": "2026-09-06T16:14:02.100Z"
+}

@@ -30,7 +30,7 @@ Kontakt.io or another RTLS source would continue to own RTLS hardware, tags, bad
 
 ## Operational Health / DEX ecosystem path
 
-The [Operational Health / DEX Layer Strategy](OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md) creates a future ecosystem path for endpoint health, digital employee experience, monitoring, alerting, API/service health, ITSM ownership, and routed remediation. Candidate signal sources include ControlUp, Nexthink, Riverbed Aternity, Lakeside SysTrack, TeamViewer DEX, Tanium, Ivanti Neurons, Microsoft Intune / Endpoint Analytics, Microsoft Defender for Endpoint, CrowdStrike, SentinelOne, Datadog, Splunk, Azure Monitor, ServiceNow, Jira Service Management, PagerDuty, and Opsgenie.
+The [Operational Health / DEX Layer Strategy](../OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md) creates a future ecosystem path for endpoint health, digital employee experience, monitoring, alerting, API/service health, ITSM ownership, and routed remediation. Candidate signal sources include ControlUp, Nexthink, Riverbed Aternity, Lakeside SysTrack, TeamViewer DEX, Tanium, Ivanti Neurons, Microsoft Intune / Endpoint Analytics, Microsoft Defender for Endpoint, CrowdStrike, SentinelOne, Datadog, Splunk, Azure Monitor, ServiceNow, Jira Service Management, PagerDuty, and Opsgenie.
 
 The useful partner framing is narrow: SignalGrid would consume health, experience, alert, ticket, service, severity, ownership, and impacted-service context; correlate it with identity, posture, session, RTLS/DockBridge, and workflow state; then route decisions, tickets, alerts, review requests, remediation requests, and audit evidence to the correct existing system or team. SignalGrid should not claim that it replaces DEX, RMM, EDR, SIEM, monitoring, observability, ITSM, or endpoint platforms.
 
@@ -50,7 +50,7 @@ Agentic operations platforms, MCP-style tool surfaces, and connector marketplace
 
 A future SignalGrid connector ecosystem could include read-only signal connectors, signed action request connectors, simulation before execution, human approval gates, audit records, rollback metadata, and policy-bound permissions. Jamf, Fleet, Workspace ONE, broader UEM, Intune, Imprivata candidate workflows, ServiceNow, Jira Service Management, PagerDuty, Opsgenie, DEX platforms, endpoint platforms, Datadog, Azure Monitor, Sentinel, Splunk, dock vendors, and other systems should remain systems of record for their domains.
 
-Review Hub does not claim current Cisco Cloud Control integration, Jamf integration, DEX integration, monitoring integration, ITSM integration, MCP implementation, connector marketplace listing, partner certification, customer integration, or autonomous production remediation. Public language should keep the safe principle: agents may suggest, SignalGrid evaluates, operators approve, existing systems execute, and SignalGrid records. See [Agentic connector strategy](AGENTIC_CONNECTOR_STRATEGY.md).
+Review Hub does not claim current Cisco Cloud Control integration, Jamf integration, DEX integration, monitoring integration, ITSM integration, MCP implementation, connector marketplace listing, partner certification, customer integration, or autonomous production remediation. Public language should keep the safe principle: agents may suggest, SignalGrid evaluates, operators approve, existing systems execute, and SignalGrid records. See [Agentic connector strategy](../AGENTIC_CONNECTOR_STRATEGY.md).
 
 ## Requirements before applying broadly
 

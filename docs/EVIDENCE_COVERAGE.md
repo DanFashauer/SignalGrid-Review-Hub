@@ -113,7 +113,7 @@ did too.
 This is a *coverage* report, not a *decision* report. It says which questions a
 deployment can answer, and says nothing about what the answers would be — that needs
 real data from a real tenant, which lives behind the publication boundary
-([`IP_AND_LICENSING.md`](IP_AND_LICENSING.md),
+([`IP_AND_LICENSING.md`](research/IP_AND_LICENSING.md),
 [`PILOT_READINESS_CRITERIA.md`](PILOT_READINESS_CRITERIA.md)). It also holds no
 per-axis confidence: the model carries no per-axis collection method, so it reports
 none rather than inventing one a reader would take as measured.

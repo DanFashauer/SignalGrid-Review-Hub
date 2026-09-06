@@ -13,7 +13,7 @@ already exist — it sequences them and states what stops.
 | [LAUNCH_PROFILE.md](LAUNCH_PROFILE.md) | Which surfaces are `launch` / `deferred` / `demo_only` / `internal`, enforced by a bijection gate | **Authoritative on scope.** This plan does not redefine it. |
 | [REALISTIC_LAUNCH_PLAN.md](REALISTIC_LAUNCH_PLAN.md) | The honest sequence to a company and production SaaS | **Authoritative on the arc.** This plan sequences its next six months. |
 | [PILOT_READINESS_CRITERIA.md](PILOT_READINESS_CRITERIA.md) | The gate a paid pilot must pass | **Authoritative on the pilot gate.** Month 5–6 defers to it. |
-| [PRODUCT_REALITY_CHECKLIST.md](PRODUCT_REALITY_CHECKLIST.md) | v0.2 focus, and what NOT to build | **Authoritative on anti-scope.** Extended here (§2). |
+| [PRODUCT_REALITY_CHECKLIST.md](research/PRODUCT_REALITY_CHECKLIST.md) | v0.2 focus, and what NOT to build | **Authoritative on anti-scope.** Extended here (§2). |
 | [OPERATOR_GRID_CONSOLE.md](OPERATOR_GRID_CONSOLE.md) | What the console renders today | Input to the console IA (§4). |
 
 ## 1. The one question

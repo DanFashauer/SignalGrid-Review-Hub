@@ -136,6 +136,20 @@ const STEPS = [
   // and read by nothing, anywhere, for as long as the documents existed.
   { name: "Env-doc readers (an instructed SIGNALGRID_* variable must be read by something)", cmd: ["node", "scripts/check-env-doc-readers.mjs"] },
   { name: "Env-doc-reader self-test (the gate can actually fail)", cmd: ["node", "scripts/check-env-doc-readers.mjs", "--self-test"] },
+  // A browser follows `](FOO.md)` from the document's own directory and nowhere
+  // else. 41 documents moved to docs/research/ on 2026-08-10 and their sibling
+  // links pointed at nothing for four weeks — 35 dead links across the tree.
+  { name: "Markdown links (a relative link resolves from its own document to a tracked file)", cmd: ["node", "scripts/check-markdown-links.mjs"] },
+  { name: "Markdown-link self-test (the gate can actually fail)", cmd: ["node", "scripts/check-markdown-links.mjs", "--self-test"] },
+  // The Graph permission page told an administrator to grant two scopes while the
+  // connector read three (the third landed hours earlier and updated seven records,
+  // not this page). Tables ⇔ connector reads, both directions.
+  { name: "Graph permission boundary (the page names exactly what the connector reads)", cmd: ["node", "scripts/check-graph-permission-boundary.mjs"] },
+  { name: "Graph-permission-boundary self-test (the gate can actually fail)", cmd: ["node", "scripts/check-graph-permission-boundary.mjs", "--self-test"] },
+  // A `Subject:` line is a template; a template is claim-scanned (docs/outreach) or
+  // bannered do-not-send. One pitch pack was neither, with a retired label in its subject.
+  { name: "Send-copy banner (a send template is claim-scanned or bannered do-not-send)", cmd: ["node", "scripts/check-send-copy-banner.mjs"] },
+  { name: "Send-copy-banner self-test (the gate can actually fail)", cmd: ["node", "scripts/check-send-copy-banner.mjs", "--self-test"] },
   // The MCP-ecosystem source-independence map: every externally-sourced connector
   // family must have a row in docs/research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md (an MCP
   // server or an explicit gap marker), and the map may not name a family the tree

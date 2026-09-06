@@ -78,5 +78,5 @@ Hospitals prove it where the stakes are highest. Warehouses and global fleets
 are where the *simplify-the-complexity* value scales.
 
 See also: [`ECOSYSTEM_POSITIONING.md`](./ECOSYSTEM_POSITIONING.md),
-[`IGA_ADJACENCY.md`](./IGA_ADJACENCY.md),
+[`IGA_ADJACENCY.md`](research/IGA_ADJACENCY.md),
 [`DEPLOYMENT_MODELS.md`](./DEPLOYMENT_MODELS.md).

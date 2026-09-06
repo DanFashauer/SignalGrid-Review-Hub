@@ -46,7 +46,7 @@ Use the companion docs as the working packet:
 - [LinkedIn Post Drafts](LINKEDIN_POST_DRAFTS.md).
 - [Social Platform Message Variants](SOCIAL_PLATFORM_MESSAGE_VARIANTS.md).
 - [Social Visual Concepts](SOCIAL_VISUAL_CONCEPTS.md).
-- [Public Messaging Guardrails](PUBLIC_MESSAGING_GUARDRAILS.md).
+- [Public Messaging Guardrails](../PUBLIC_MESSAGING_GUARDRAILS.md).
 
 ## Two-week posting sequence
 

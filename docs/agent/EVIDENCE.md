@@ -1270,3 +1270,34 @@ REFUTED audit claim: "the sweep reads no HTML — 8 buyer-facing files are outsi
 coverage ledger: 82 read, 7 partial, 11 not read, of 100 surfaces (was 81 / 4 / 15)
 ```
 Verdict:  **the figure gates were blind to the two spellings a document actually uses — a number written as a word, and a line range — and a runbook could require a control that did not exist.** `Fifteen` sat in the CI entry document eight lines above the paragraph about not copying derived numbers, and the sweep that guards that paragraph interpolated digits only. Ten line ranges pointed past the end of their files and nothing had ever compared a range to a length. `SIGNALGRID_SANITIZE_OUTPUT` (instructed as true) was "required" and read by nothing — the prose form of a fail-open: a control whose only implementation is the sentence enabling it. Each is now a rule with a self-test: words are hits, ranges are bounded (a dated record declares itself and is reported), an instructed variable needs a reader in a read shape. The audit agent's own absence claim about HTML gating was false, which is the check:absence lesson again from the other side: the tree is the authority, not the report. Not read: the bodies of BUILD_BACKLOG, COMPANY_BUILD_PLAN and CLAIM_INVENTORY (~10k lines), and eleven docs families still marked not read in the ledger.
+
+## 2026-09-06 — "Eleventh round, the research, company, inspiration and connector families: a permission page that under-granted for a few hours, a roster count five files got wrong beside a sixth that had it right, thirty-five dead links no gate could see, and a send-ready pitch outside every claim scan"
+Command:  one independent fail-closed audit agent over 74 files (42 read line by line, 32 grepped; every DR citation, self-repo URL, relative link, tree-describing figure, fail-open phrase and retired label swept mechanically), then firsthand verification of every finding against the tree and a read of every edit site; then:
+```
+grep -n 'baseUrl}/\|Read\.All' lib/integrations/src/integrations/graph/posture-connector.ts   # three reads, three scopes
+node scripts/check-graph-permission-boundary.mjs ; node scripts/check-graph-permission-boundary.mjs --self-test   # new
+node scripts/check-markdown-links.mjs ; node scripts/check-markdown-links.mjs --self-test                         # new
+node scripts/check-send-copy-banner.mjs ; node scripts/check-send-copy-banner.mjs --self-test                     # new
+node scripts/check-derived-doc-figures.mjs ; node scripts/check-derived-doc-figures.mjs --self-test               # +12 rows, +2 probes
+node -e "console.log(require('./docs/agent/org-roster.json').roles.length)" ; git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l
+node scripts/check-index-banner-parity.mjs ; node scripts/check-launch-claims.mjs ; node scripts/check-cited-paths.mjs
+```
+Output:
+```
+posture-connector.ts: /users · /deviceManagement/managedDevices · /identityProtection/riskyUsers ; User.Read.All · DeviceManagementManagedDevices.Read.All · IdentityRiskyUser.Read.All
+docs/connectors/MICROSOFT_GRAPH_PERMISSION_BOUNDARY.md (before): "Two endpoints … These two are what the connector names in code … Grant nothing else" — riskyUsers landed in #463 (e61d4ca), which updated seven records and not this page; its own line 73: "No gate currently reads this document"
+check-graph-permission-boundary: connector reads 3, page tables 3 endpoint(s), 3 scope(s) — passed; self-test 8/8 (the omitted-scope plant fails with "403")
+roster: roles.length = 42; docs/company: 10 sites in 5 files said 41 (HIRING_SEQUENCE, ORG_STRUCTURE, RESPONSIBILITY_AND_DRI_MATRIX, ROLE_ACTIVATION_MATRIX, ROLE_CATALOG); INVESTOR_ONE_PAGER.md:49 said 42 — corrected; 10 rows + probe roster-roles
+skills: 26 tracked directories; MCP_MARKET_LEADERBOARDS.md:14 said 25 five lines above the command that derives it — corrected; row skill-directories
+scan of tracked markdown: 782 relative links, 35 do not resolve document-relative (12 in docs/research from the 2026-08-10 relocation, 7 top-level docs pointing at moved files, 2 in the rendered CLAIM_INVENTORY, 13 in the HOME_REPO_README snapshot, 1 regex inside a code span)
+check-markdown-links: 782 link(s) resolved from their own directory; REPORTED 13 in 1 declared snapshot; passed; self-test 11/11
+check-send-copy-banner: 2 documents hold a Subject: template — 0 inside docs/outreach, 2 bannered (OUTREACH_EMAIL_TEMPLATES since 2026-08-23, STRATEGIC_BUYER_PARTNER_PITCH_PACK since today); passed; self-test 7/7
+check-derived-doc-figures: 33 figure(s) across 18 document(s) match; self-test 62/62
+DRI matrix: 23 classes; approval column opens "Founder alone" on 17, "Mechanical" on 4, "Nobody" on 2 — the doc said 12 (corrected, rule stated)
+FUNDING_READINESS: "Keycloak 15 dimensions" as live proof → ORG_CHART/COMPANY_BUILD_PLAN: 2 of 15 iam dimensions live-verified (restated)
+PRODUCT_REALITY_CHECKLIST.md:23 "Configurable fail-open/fail-closed behavior with conservative defaults for high-risk paths" (since 2026-07-08); git grep failOpen|fail_open lib/ artifacts/*/src → 0 (rewritten fail-closed)
+docs/research/README.md: "no gate, proof, script or workflow references" → grep -rhoE 'docs/research/[A-Z_0-9]+\.md' scripts/ .github/workflows/ | sort -u → 6 files, one a hard gate since 2026-09-02 (reworded, dated)
+index-banner parity passed · launch-claims passed (ceilings unchanged) · cited-paths passed · preflight↔CI parity 325 gates, 0 unwired
+coverage ledger: 83 read / 10 partial / 7 not read of 100 (was 82 / 7 / 11; docs/research moved from read to partial, honestly)
+```
+Verdict:  **the permission page is the sharpest instance yet of a document loosening what the code holds closed.** The connector answers 403 → `unknown` exactly as the doctrine demands; the page told the one person who could grant the scope not to. It had said "no gate reads this" for twelve days and drifted the first morning it could. Three gates hold the shapes this round found: the page's tables ⇔ the connector's reads, a relative link ⇔ its own directory, a send template ⇔ a claim scan or a banner. The roster and skill counts are rows now, and the figure sweep has a roster probe. Left for the owner's judgement, not gated: the ICP segment stated flatly to investors while ICP_EVIDENCE calls it an assumption. Not read: 17 of 49 research files (send-copy, founder-strategy and social drafts), 4 of 9 company files by structure only, 11 inspiration catalogs by derivation only.

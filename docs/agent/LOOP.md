@@ -51,8 +51,21 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batch K LANDED (#463). Batch L
-              (tenth round, on its PR) read the docs families: CI_AND_VALIDATION
+LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463) and L (#465)
+              LANDED. Batch M (eleventh round, on its PR) read docs/research,
+              docs/company, docs/inspiration and docs/connectors: the Graph
+              permission page told an admin to grant two scopes and "nothing
+              else" hours after #463 gave the connector a third read (403 ->
+              unknown without it) - fixed, and check-graph-permission-boundary
+              holds tables <-> reads both ways; five company docs said 41
+              duties beside a sixth saying 42 (ten rows + a probe now); 35
+              relative links dead since the 2026-08-10 relocation, invisible
+              to every gate (check-markdown-links is new); a pitch pack held a
+              ready subject line under a retired label outside every claim
+              scan (bannered; check-send-copy-banner is new); a checklist
+              prescribed configurable fail-open; the battlecard turned "no
+              evidence" into "they don't". Coverage: 83 / 10 / 7 of 100.
+              Batch L (tenth round) read the loose docs: CI_AND_VALIDATION
               said "Fifteen workflow files" four days after the fifteenth was
               retired - a WORD numeral the figure sweep could not see (it reads
               words now, and the count is a row); ZERO_COST's "140 are
@@ -296,12 +309,16 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land batch L, then keep reading the 11 unread surfaces
-              (docs/research, docs/company, docs/inspiration, docs/connectors,
-              docs/outreach, docs/preview, docs/assets, docs/consolidation,
-              docs/estate, docs/postman - then .claude/skills content) and the
-              three big docs bodies the tenth round only sampled
-              (BUILD_BACKLOG, COMPANY_BUILD_PLAN, CLAIM_INVENTORY). OWNER, once, on the Mac, now that
+NEXT ACTION: cloud: land batch M, then keep reading the 8 unread surfaces
+              (docs/outreach, docs/preview, docs/assets, docs/consolidation,
+              docs/estate, docs/postman, .claude/skills content, and the rest)
+              plus the partial remainders (17 research send-copy files,
+              ROLE_CATALOG, the inspiration catalogs' prose) and the three big
+              docs bodies the tenth round only sampled (BUILD_BACKLOG,
+              COMPANY_BUILD_PLAN, CLAIM_INVENTORY JSON). OWNER: the ICP
+              segment ("75-1,000 employees, 1-10 in IT") is stated flatly in
+              INVESTOR_ONE_PAGER while ICP_EVIDENCE calls it an assumption -
+              your call, not a gate's. OWNER, once, on the Mac, now that
               the installer is on mainline: `bash scripts/mac/install-launchd.sh`
               then `--status` - the steward escalates once a day while the tick
               stays silent. Mac lane (a person): nothing is owed; seven unread

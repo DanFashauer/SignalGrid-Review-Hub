@@ -66,6 +66,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { execSync } from "node:child_process";
 import { collectionRequestFiles, registeredRoutePairCount } from "./check-api-collection.mjs";
+import { connectorEndpoints } from "./check-graph-permission-boundary.mjs";
 
 /** The connector tree the redirect census walks. */
 const INTEGRATIONS = "lib/integrations/src/integrations";
@@ -175,6 +176,43 @@ export function workflowFileCount(root = ROOT) {
  */
 export function proofSourceFileCount(root = ROOT) {
   return trackedCount("'scripts/src/*-proof.ts'", root);
+}
+
+/**
+ * Tracked skill directories under .claude/skills — the derivation
+ * `docs/research/MCP_MARKET_LEADERBOARDS.md` names in its own text
+ * (`git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`). It said
+ * 25 from 2026-09-02; `stack-reference` made it 26 and the sentence beside the
+ * command that derives it stayed put (tenth round, 2026-09-06).
+ */
+export function skillDirectoryCount(root = ROOT) {
+  const out = execSync("git ls-files -- .claude/skills", { cwd: root, encoding: "utf8" });
+  const dirs = new Set();
+  for (const f of out.split("\n").filter(Boolean)) {
+    const seg = f.split("/");
+    if (seg.length > 3) dirs.add(seg[2]);
+  }
+  return dirs.size;
+}
+
+/**
+ * Agent duties in the roster — `roles.length` in docs/agent/org-roster.json. Five
+ * docs/company files said 41 after the roster went to 42 on 2026-08-24, while the
+ * investor one-pager in the same directory said 42 (tenth round, 2026-09-06).
+ */
+export function rosterRoleCount(root = ROOT) {
+  const roles = JSON.parse(read("docs/agent/org-roster.json", root)).roles;
+  return Array.isArray(roles) ? roles.length : 0;
+}
+
+/**
+ * Distinct Graph endpoints the posture connector reads — the gate that holds the
+ * permission page's tables owns the parser; this row holds the page's headline
+ * sentence ("Three endpoints, all GET"), which said "Two" for the hours between
+ * the third read landing and the gate existing.
+ */
+export function graphEndpointCount(root = ROOT) {
+  return connectorEndpoints(read("lib/integrations/src/integrations/graph/posture-connector.ts", root)).length;
 }
 
 /**
@@ -383,6 +421,32 @@ export const FIGURES = [
     from: "tracked .github/workflows/*.yml files (git ls-files)",
   },
   {
+    id: "skill-directories",
+    doc: "docs/research/MCP_MARKET_LEADERBOARDS.md",
+    re: /(\d+)\s+tracked skill directories/,
+    derive: skillDirectoryCount,
+    from: "tracked directories under .claude/skills (the sentence's own derivation)",
+  },
+  {
+    id: "graph-endpoints",
+    doc: "docs/connectors/MICROSOFT_GRAPH_PERMISSION_BOUNDARY.md",
+    re: /([A-Za-z]+|\d+) endpoints, all GET, all on/,
+    derive: graphEndpointCount,
+    from: "distinct `${this.baseUrl}/…` literals in graph/posture-connector.ts (check-graph-permission-boundary.mjs's parser)",
+  },
+  // The roster size, stated ten times across five docs/company files. One row per
+  // sentence, because a figure with ten homes and one row is nine places to drift.
+  { id: "roster-hiring", doc: "docs/company/HIRING_SEQUENCE.md", re: /through the (\d+)-duty agent roster/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
+  { id: "roster-org-structure", doc: "docs/company/ORG_STRUCTURE.md", re: /the (\d+) agent duties that execute work today/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
+  { id: "roster-dri", doc: "docs/company/RESPONSIBILITY_AND_DRI_MATRIX.md", re: /org-roster\.json` \((\d+) duties\) records/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
+  { id: "roster-activation-a", doc: "docs/company/ROLE_ACTIVATION_MATRIX.md", re: /via the (\d+)-role agent roster/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
+  { id: "roster-activation-b", doc: "docs/company/ROLE_ACTIVATION_MATRIX.md", re: /org-roster\.json \((\d+) duties\) as enforcement registry/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
+  { id: "roster-activation-c", doc: "docs/company/ROLE_ACTIVATION_MATRIX.md", re: /protocol, the (\d+)-duty roster, and the review-coverage/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
+  { id: "roster-catalog-a", doc: "docs/company/ROLE_CATALOG.md", re: /declares (\d+) engineering, signal-domain/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
+  { id: "roster-catalog-b", doc: "docs/company/ROLE_CATALOG.md", re: /enforcement registry of (\d+) agent duties/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
+  { id: "roster-catalog-c", doc: "docs/company/ROLE_CATALOG.md", re: /`docs\/LANE_COORDINATION\.md`, the (\d+)-duty registry in/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
+  { id: "roster-catalog-d", doc: "docs/company/ROLE_CATALOG.md", re: /the same (\d+)-duty registry in/, derive: rosterRoleCount, from: "roles.length in docs/agent/org-roster.json" },
+  {
     id: "sim-operations",
     doc: "docs/LIVE_SYNC_LOOP.md",
     re: /allowlist — (\d+) operations covering/,
@@ -538,6 +602,18 @@ export const SWEEP = [
     label: "workflow files",
     derive: workflowFileCount,
     noun: "workflow files|workflows",
+  },
+  {
+    id: "skill-directories",
+    label: "skill directories",
+    derive: skillDirectoryCount,
+    noun: "tracked skill directories|skill directories",
+  },
+  {
+    id: "roster-roles",
+    label: "agent duties (roster size)",
+    derive: rosterRoleCount,
+    noun: "agent duties|-duty (?:agent )?(?:roster|registry)|-role agent roster|duties\\) records|duties\\) as enforcement",
   },
   {
     id: "postman-requests",

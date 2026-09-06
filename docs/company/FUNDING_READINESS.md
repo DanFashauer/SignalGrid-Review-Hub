@@ -18,7 +18,7 @@ is a founder decision; nothing here self-executes.**
 - **A ratified, narrow, provable claim** (POSITIONING.md): three signals,
   fail-closed, evidence per verdict — with a gate that fails CI on overclaim.
 - **A live proof stack on open source** (DR-013): Fleet end-to-end, Keycloak
-  15 dimensions, RADIUS/NAC, Traccar, Wazuh — no vendor spend.
+  (2 of the iam domain's 15 dimensions live-verified against 26.4; the other 13 are fixture-proven — `docs/ORG_CHART.md`), RADIUS/NAC, Traccar, Wazuh — no vendor spend.
 - **Cost honesty** (COST_MODEL.md): limiter-bound serving, ≈$0 marginal
   tenant cost, one identified paid dependency, published denominators.
 - **An operating system that runs itself**: the agent org, routines,

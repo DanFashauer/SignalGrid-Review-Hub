@@ -60,7 +60,7 @@ wins where the two are read together.
 product scope, engineering sequencing, security accountability, every outbound
 claim, every financial and legal decision, and the endpoint and device-management
 domain expertise the product is built on. Software execution is AI-covered
-through the 41-duty agent roster, which the founder ratifies rather than writes.
+through the 42-duty agent roster, which the founder ratifies rather than writes.
 
 **What it does not hold:** independence. The founder is the sole approver on most
 decision classes in

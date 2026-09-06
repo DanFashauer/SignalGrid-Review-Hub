@@ -20,7 +20,7 @@ Use this checklist to keep v0.2 focused on product foundation instead of more pi
 - Matched rules captured on decisions.
 - Decision evidence snapshots.
 - Replay/simulate support.
-- Configurable fail-open/fail-closed behavior with conservative defaults for high-risk paths.
+- Fail-closed on every path: an unknown, unreachable or unverified input raises assurance and never lowers it. There is no fail-open mode to configure (CLAUDE.md golden rule 2; this line said "configurable fail-open/fail-closed" from 2026-07-08 to 2026-09-06 and described a switch the code has never had).
 - Approval before risky policy activation.
 
 ## Operator app requirements

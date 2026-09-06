@@ -471,4 +471,4 @@ That proof keeps the public story anchored in a conservative runtime decision fl
 
 ## Visual artifact discipline
 
-Public diagrams and ecosystem visuals should be maintained as source-controlled visual code where practical. See [Visual-code asset strategy](VISUAL_CODE_ASSET_STRATEGY.md) for the repository process for SVG, React/HTML/CSS, Mermaid, Lottie JSON, and other structured visual artifacts.
+Public diagrams and ecosystem visuals should be maintained as source-controlled visual code where practical. See [Visual-code asset strategy](research/VISUAL_CODE_ASSET_STRATEGY.md) for the repository process for SVG, React/HTML/CSS, Mermaid, Lottie JSON, and other structured visual artifacts.

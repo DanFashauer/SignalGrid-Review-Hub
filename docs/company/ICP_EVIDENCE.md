@@ -130,6 +130,8 @@ surface, not the creation of a missing one.
 
 ---
 
+(Findings 5–7 do not appear in this document's history — the numbering was never contiguous; nothing was removed.)
+
 ## Finding 8 — the audience the founder's public writing actually reaches, measured
 
 **Added 2026-08-25.** Source: a LinkedIn creator analytics export for

@@ -4,10 +4,10 @@ This pack converts the merged Strategic Buyer / Partner Pitch Pack into outbound
 
 ## Pack contents
 
-- [Executive One-Pager](EXECUTIVE_ONE_PAGER.md): concise buyer-facing summary.
+- [Executive One-Pager](../EXECUTIVE_ONE_PAGER.md): concise buyer-facing summary.
 - [Outreach Email Templates](OUTREACH_EMAIL_TEMPLATES.md): short editable drafts by audience.
 - [First-Call Talk Track](FIRST_CALL_TALK_TRACK.md): opener, framing, proof flow, partnership path, founder-control preference, and next ask.
-- [Demo Script for Partners](DEMO_SCRIPT_FOR_PARTNERS.md): walkthrough using only current validated Review Hub assets.
+- [Demo Script for Partners](../DEMO_SCRIPT_FOR_PARTNERS.md): walkthrough using only current validated Review Hub assets.
 - [Diligence Checklist](DILIGENCE_CHECKLIST.md): assets, send list, questions, validation next steps, and control terms.
 
 ## Intended use

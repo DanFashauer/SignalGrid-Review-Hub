@@ -28,13 +28,14 @@ import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { vendoredSkillPrefixes } from "./lib/skill-plane.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export const ASSIGNMENT = /\b(SIGNALGRID_[A-Z0-9_]+)=/g;
 export const PROPOSED = /<!--\s*proposed-env:\s*([A-Z0-9_ ]+?)\s*-->/g;
-/** Vendored third-party prose, not this repository's instructions (the cited-paths gate's list). */
-const SKIP_PREFIXES = ["attached_assets/", "vendor/", "third_party/", ".claude/skills/"];
+/** Pasted external material and the VENDORED skill directories — first-party skills are checked (scripts/lib/skill-plane.mjs). */
+const SKIP_PREFIXES = ["attached_assets/", "vendor/", "third_party/", ...vendoredSkillPrefixes(repoRoot)];
 
 function git(args) {
   return execSync(`git ${args}`, { cwd: repoRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });

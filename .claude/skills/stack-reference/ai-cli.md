@@ -25,7 +25,7 @@ hooks, prompts or CLAUDE.md is therefore recommending that the rules be skipped.
    **BREAKS** a gate whose output varies run to run is a flaky gate, and "a flaky gate gets
    switched off" — the preflight↔CI parity checks would also have to list it.
    **DO** never an AI step in `package.json` scripts or any gate. AI review is a report-only
-   pass (the dormant `tools/ecc-review-pass.sh` pattern) whose findings go through
+   pass (the retired ECC review-pass script pattern (its file is gone from the tree)) whose findings go through
    `signalgrid-reviewer` to a human.
 4. **SAYS** `claude --bare -p "query"` — "skips hooks, CLAUDE.md auto-discovery, plugins, MCP
    and auto memory; ideal for scripting".

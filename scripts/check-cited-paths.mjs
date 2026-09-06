@@ -24,6 +24,7 @@ import { existsSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { vendoredSkillPrefixes } from "./lib/skill-plane.mjs";
 
 const SELF_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -173,14 +174,22 @@ export const ALLOW = [
 // tree and are not this repository's claims to keep true. `attached_assets/` is the
 // Replit paste convention and is where the private core keeps scraped vendor pages.
 // This is a skip with a reason, not a silent exclusion: the count is reported.
-// `.claude/skills/` is VENDORED third-party work (obra/superpowers, MIT — see
-// .claude/skills/VENDORED.md). Its documentation cites illustrative example paths
-// — `tests/exact/path/to/test.py`, `scripts/helper.py`, `docs/file1.md` — which are
-// placeholders in somebody else's prose, not claims about this tree. The alternative
-// was editing the vendored files to satisfy our gate, which would have destroyed the
-// one property that makes a vendored copy auditable: that it is byte-identical to
-// upstream and can be diffed against it. Skipping is the cheaper honesty.
-export const INTAKE_PREFIXES = ["attached_assets/", "vendor/", "third_party/", ".claude/skills/"];
+// The 14 VENDORED skill directories under `.claude/skills/` (obra/superpowers, MIT —
+// see .claude/skills/VENDORED.md) cite illustrative example paths —
+// `tests/exact/path/to/test.py`, `scripts/helper.py`, `docs/file1.md` — which are
+// placeholders in somebody else's prose, not claims about this tree. Editing them to
+// satisfy this gate would destroy the one property that makes a vendored copy
+// auditable: byte-identity with upstream. Skipping THOSE is the cheaper honesty.
+//
+// Until 2026-09-06 the exemption was the literal prefix `.claude/skills/` — the whole
+// directory, including the 12 FIRST-PARTY skills VENDORED.md's own first paragraph
+// says are "written in this repository and NOT part of the upstream set". Those
+// twelve carried 96 repository-path citations (the vendored set: 5), and three were
+// dead — `lib/profile.ts` for a file that lives under artifacts/api-server, and a
+// `tools/` script that never existed — for as long as the prefix stood. The set is
+// now DERIVED from VENDORED.md's carve-out table (scripts/lib/skill-plane.mjs):
+// tracked skill directories minus the first-party rows. Authored prose is checked.
+export const INTAKE_PREFIXES = ["attached_assets/", "vendor/", "third_party/", ...vendoredSkillPrefixes(ROOT)];
 
 // Documents whose subject IS another repository, keyed by REPOSITORY IDENTITY —
 // `owner/repo` read out of `git remote get-url origin`, not the checkout's directory

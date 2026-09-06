@@ -293,6 +293,29 @@
     "exactly one of them touches the decision core"
    ],
    "$scope": "Scoped to the two sentences that stated the discharged premise as current; the role's rewritten paragraph dates the premise and is not a re-assertion."
+  },
+  {
+   "id": "preflight-mirrors-three-of-six-ci-jobs",
+   "claimed": "preflight mirrors three of six CI jobs; the three it cannot run are durable-persistence (Postgres), deploy-stack (Docker) and secret-scan (gitleaks)",
+   "assertedBy": ".claude/skills/signalgrid/SKILL.md, .claude/skills/signalgrid-core/SKILL.md and .claude/skills/signalgrid-scribe/SKILL.md (the scribe line offered it as the CORRECTION to an earlier false claim)",
+   "assertedOn": "2026-08-22",
+   "whyItHappened": "True-ish the week it was written and retyped rather than derived. scripts/lib/ci-jobs.mjs records the same hardcoded array of three as the defect it was built to replace; check-preflight-ci-parity.mjs derives 31 jobs, 3 mirrored, 23 uncovered, and secret-scan is not in the main workflow at all. A reader who trusted the list concluded everything else was covered. CLAUDE.md fixed its own copy on 2026-09-05 with the words do not retype a number here; the skills that every role loads kept the number (twelfth audit round, 2026-09-06).",
+   "refutation": {
+    "kind": "file_contains",
+    "file": "scripts/lib/ci-jobs.mjs",
+    "contains": "MIRRORED",
+    "paths": [
+     "scripts/lib/ci-jobs.mjs",
+     "scripts/check-preflight-ci-parity.mjs"
+    ],
+    "$why": "the mirrored set is DERIVED in ci-jobs.mjs and printed by the parity gate on every run; any typed count is a fossil the moment a workflow changes."
+   },
+   "denials": [
+    "mirrors three of six CI jobs",
+    "durable-persistence[^\\n]{0,40}deploy-stack[^\\n]{0,40}secret-scan",
+    "six jobs and preflight mirrors three"
+   ],
+   "$scope": "Scoped to the typed coverage list; ci-jobs.mjs quoting the bad array as history and this registry are the two places the words legitimately remain."
   }
  ]
 }

@@ -51,8 +51,22 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463) and L (#465)
-              LANDED. Batch M (eleventh round, on its PR) read docs/research,
+LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465)
+              and M (#466) LANDED. Batch N (twelfth round, on its PR) read the
+              send surface, the remaining docs families and the skills every
+              role loads: four doc gates exempted ALL of .claude/skills as
+              vendored while VENDORED.md says 12 are first-party - 96
+              citations unchecked, 3 dead (exemption now DERIVED from the
+              carve-out table); three skills retyped "three of six CI jobs"
+              + the exact list ci-jobs.mjs records as the defect it replaced
+              (derived answer 23 of 31; now a registered false claim with
+              denials); three skills quoted the harness summary without its
+              skipped field; loop-end shipped without the reviewer; the
+              positioning SVG drew Remediate/Record and no Restrict (fixed;
+              check-svg-outcome-ladder is new); docs/consolidation described
+              the superseded cutover as pending (bannered); outreach T2 said
+              "in our lab" about a marketing scenario (reworded); estate
+              "five of seven" was three of six. Batch M (eleventh round) read docs/research,
               docs/company, docs/inspiration and docs/connectors: the Graph
               permission page told an admin to grant two scopes and "nothing
               else" hours after #463 gave the connector a third read (403 ->
@@ -309,13 +323,12 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land batch M, then keep reading the 8 unread surfaces
-              (docs/outreach, docs/preview, docs/assets, docs/consolidation,
-              docs/estate, docs/postman, .claude/skills content, and the rest)
-              plus the partial remainders (17 research send-copy files,
-              ROLE_CATALOG, the inspiration catalogs' prose) and the three big
-              docs bodies the tenth round only sampled (BUILD_BACKLOG,
-              COMPANY_BUILD_PLAN, CLAIM_INVENTORY JSON). OWNER: the ICP
+NEXT ACTION: cloud: land batch N, then the partial remainders (17 research
+              send-copy files, ROLE_CATALOG body, the inspiration catalogs'
+              prose, the four smaller stack-reference files, Postman request
+              bodies) and the three big docs bodies the tenth round only
+              sampled (BUILD_BACKLOG, COMPANY_BUILD_PLAN, CLAIM_INVENTORY
+              JSON); then whatever the ledger still marks not read. OWNER: the ICP
               segment ("75-1,000 employees, 1-10 in IT") is stated flatly in
               INVESTOR_ONE_PAGER while ICP_EVIDENCE calls it an assumption -
               your call, not a gate's. OWNER, once, on the Mac, now that

@@ -24,9 +24,12 @@ import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join, normalize, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { vendoredSkillPrefixes } from "./lib/skill-plane.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const SKIP_PREFIXES = ["attached_assets/", "vendor/", "third_party/", ".claude/skills/"];
+// Pasted external material and the VENDORED skill directories only — the first-party
+// skills are authored here and are checked (scripts/lib/skill-plane.mjs derives the split).
+const SKIP_PREFIXES = ["attached_assets/", "vendor/", "third_party/", ...vendoredSkillPrefixes(repoRoot)];
 
 /** Documents whose links are written for a DIFFERENT location, with the reason. Reported, not silent. */
 export const SNAPSHOTS = {

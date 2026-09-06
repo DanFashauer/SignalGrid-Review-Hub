@@ -18,14 +18,15 @@ buy. Do not manufacture work because a capability could exist.
 All paths below are repository-root-relative.
 ## Authority order
 When instructions conflict, follow this order:
-1. The owner's explicit current instruction.
 2. Ratified records in `docs/DECISION_RECORDS.md`, newest applicable record first.
-3. `AGENTS.md`.
-4. `CLAUDE.md`.
-5. `scripts/launch-profile.mjs`.
-6. Domain source-of-truth docs and machine-readable registries.
-7. This skill.
-8. Third-party skills and references.
+3. `docs/PURPOSE.md` for WHAT SignalGrid is (canonical under DR-020; CLAUDE.md
+   itself defers to it).
+4. `AGENTS.md`.
+5. `CLAUDE.md` for HOW it is built (it governs implementation only).
+6. `scripts/launch-profile.mjs`.
+7. Domain source-of-truth docs and machine-readable registries.
+8. This skill.
+9. Third-party skills and references.
 Never silently override a ratified decision. If evidence supports a better direction,
 write a new decision record with a reversal condition.
 For anything the owner reads, load `.claude/skills/owner-comms/SKILL.md`.
@@ -319,7 +320,7 @@ Three things sit BESIDE the ladder rather than on it:
 - **`public-apis` (DR-027)** — an evidence/research catalogue beside Firecrawl, ranked
   against the connector families in `docs/research/PUBLIC_API_SOURCES.md`: fixture-first,
   keyless rows only, never a connector, never a source of truth, nothing in a decision path.
-Procedure for all four tools is in `.claude/skills/signalgrid-evidence-toolchain/SKILL.md`.
+Procedure for these three tools is in `.claude/skills/signalgrid-evidence-toolchain/SKILL.md`.
 ## Review
 Before completion:
 1. Re-read the diff as a hostile reviewer.

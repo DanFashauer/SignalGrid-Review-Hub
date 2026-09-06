@@ -22,12 +22,19 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { BANNER } from "./check-index-banner-parity.mjs";
+import { vendoredSkillPrefixes } from "./lib/skill-plane.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** The set the launch-claims gate scans fatally — send-ready copy belongs there. */
 export const SCANNED_PREFIX = "docs/outreach/";
-const SKIP_PREFIXES = ["attached_assets/", "vendor/", "third_party/", ".claude/skills/"];
-export const SUBJECT_LINE = /^\s*(?:\*\*)?Subject:/;
+const SKIP_PREFIXES = ["attached_assets/", "vendor/", "third_party/", ...vendoredSkillPrefixes(repoRoot)];
+/**
+ * A template line, with any blockquote prefix stripped first. The first version
+ * matched `^\s*Subject:` and could not see `> Subject: …`, which is the form the
+ * live TEMPLATES.md writes both of its templates in — so a copy lifted out of it
+ * into a research doc arrived with the `>` and read as "no send copy here".
+ */
+export const SUBJECT_LINE = /^\s*(?:>\s*)*(?:\*\*)?Subject:/;
 export const BANNER_WINDOW = 30;
 
 /** Pure: does this document hold a send template outside a code fence? */
@@ -99,8 +106,11 @@ function selfTest() {
   checks.push(["prose ABOUT a subject line is not a template", r.templates === 0]);
   r = auditSendCopy({ "docs/research/PACK.md": "# Pack\n" + "filler\n".repeat(31) + "> **SUPERSEDED — do not send.**\n" + tpl });
   checks.push(["a banner below the window does not count — the window is the index-parity gate's", r.fatal.length === 1]);
+  r = auditSendCopy({ "docs/research/PACK.md": "# Pack\n\n> Subject: SignalGrid discussion\n>\n> Hi …\n" });
+  checks.push(["a BLOCKQUOTED template is a template — the form TEMPLATES.md actually uses, invisible to the first version", r.templates === 1 && r.fatal.length === 1]);
   const live = auditSendCopy(loadDocs());
-  checks.push(["LIVE: the tree holds send templates, and every one outside the scanned set is bannered", live.templates >= 2 && live.fatal.length === 0]);
+  checks.push(["LIVE: the outreach surface itself is SEEN (≥1 template inside the scanned set) and every template outside it is bannered",
+    live.scanned >= 1 && live.templates >= 2 && live.fatal.length === 0]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);

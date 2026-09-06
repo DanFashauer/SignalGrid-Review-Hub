@@ -612,6 +612,11 @@ jobs:
         run: node scripts/check-send-copy-banner.mjs
       - name: "Send-copy-banner self-test (the gate can actually fail)"
         run: node scripts/check-send-copy-banner.mjs --self-test
+      # The positioning SVG drew five outcomes with restrict missing; no gate read .svg.
+      - name: "SVG outcome ladder (a rendered decision ladder is allow · step_up · restrict · deny)"
+        run: node scripts/check-svg-outcome-ladder.mjs
+      - name: "SVG-outcome-ladder self-test (the gate can actually fail)"
+        run: node scripts/check-svg-outcome-ladder.mjs --self-test
       # The MCP-ecosystem source-independence map: every externally-sourced connector
       # family must carry a row in docs/research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md (an
       # MCP server or an explicit gap marker), and the map may not name a family the

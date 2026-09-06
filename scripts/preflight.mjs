@@ -150,6 +150,10 @@ const STEPS = [
   // bannered do-not-send. One pitch pack was neither, with a retired label in its subject.
   { name: "Send-copy banner (a send template is claim-scanned or bannered do-not-send)", cmd: ["node", "scripts/check-send-copy-banner.mjs"] },
   { name: "Send-copy-banner self-test (the gate can actually fail)", cmd: ["node", "scripts/check-send-copy-banner.mjs", "--self-test"] },
+  // The positioning SVG drew Allow · Step-Up · Deny · Remediate · Record — restrict
+  // missing, a never-claim drawn in its place — and no gate opened an .svg.
+  { name: "SVG outcome ladder (a rendered decision ladder is allow · step_up · restrict · deny)", cmd: ["node", "scripts/check-svg-outcome-ladder.mjs"] },
+  { name: "SVG-outcome-ladder self-test (the gate can actually fail)", cmd: ["node", "scripts/check-svg-outcome-ladder.mjs", "--self-test"] },
   // The MCP-ecosystem source-independence map: every externally-sourced connector
   // family must have a row in docs/research/MCP_ECOSYSTEM_SIGNAL_SOURCES.md (an MCP
   // server or an explicit gap marker), and the map may not name a family the tree

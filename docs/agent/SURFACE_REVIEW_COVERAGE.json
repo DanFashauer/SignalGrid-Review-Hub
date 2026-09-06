@@ -106,6 +106,15 @@
      "scope": "partial: the first-party/vendored classification of each skill. The skills' content was not read.",
      "open": 0,
      "closed": 3
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Partial: VENDORED.md and all 12 first-party SKILL.md read in full, stack-reference/ai-cli.md in full, shell/git-ci/http-docs partially, four stack-reference domain files grepped only; the 14 vendored directories not audited for truth (byte-identity to upstream cannot be verified in-repo — no checksum). Found: four documentation gates exempted the WHOLE directory as vendored while VENDORED.md's first paragraph says 12 are first-party — 96 first-party citations unchecked, 3 dead (lib/profile.ts for a file under artifacts/api-server; a tools/ script that never existed) — exemption now derived from VENDORED.md's carve-out table (scripts/lib/skill-plane.mjs), citations fixed; three skills hardcoded 'three of six CI jobs' + a list of three (the exact array scripts/lib/ci-jobs.mjs records as the defect it replaced; derived answer 23 of 31 uncovered) — rewritten to the command, registered in FALSE_CLAIMS.json with denials; three skills quoted the harness SUMMARY without its skipped field; loop-end shipped without the reviewer step and named one gate where CLAUDE.md requires both; stack-reference counts 102/28/nine vs 105/29/eight; signalgrid-master ranked CLAUDE.md above the PURPOSE.md it defers to and said 'three things … four tools'; '~131 proofs' vs 144. Clean: every npm script the skills name resolves; all 12 role ids exist; no skill permits --no-verify/--force/stash/reset --hard; no proceed-on-unknown instruction.",
+     "reviewer": "cloud lane (one independent fail-closed audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: all 12 first-party SKILL.md + VENDORED.md + ai-cli.md in full; three stack-reference files partially, four grepped; vendored content not audited.",
+     "open": 1,
+     "closed": 8
     }
    ]
   },
@@ -558,7 +567,17 @@
   },
   "docs/assets": {
    "path": "docs/assets",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Partial: the positioning SVG read for every <text>/<desc> node and grep, not every path element. It drew five outcome chips — Allow · Step-Up · Deny · Remediate · Record — with restrict missing and a never-claim (Remediate) in its place; no gate opened an .svg. Fixed to the four-rung ladder; check-svg-outcome-ladder.mjs (new) holds every rendered ladder to allow · step_up · restrict · deny.",
+     "reviewer": "cloud lane (one independent fail-closed audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: text nodes and metadata of the one SVG; path geometry not read.",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "docs/company": {
    "path": "docs/company",
@@ -590,7 +609,17 @@
   },
   "docs/consolidation": {
    "path": "docs/consolidation",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Read in full (4 of 4). All four describe the Phase 6 cutover as pending — 'copies this to the home repo's README at cutover', 'Re-run … at cutover', 'archived' vs 'home' fates inverted — while PHASE6_CUTOVER_RUNBOOK.md has carried a do-not-execute banner since 2026-08-19; docs/INDEX.md called the cutover upcoming. Bannered SUPERSEDED (dated, snapshot 2026-07-14 kept), index entries repeat the banner. HOME_REPO_README.md still carries the retired label inside the bannered record (counted by the docs ceiling, unchanged).",
+     "reviewer": "cloud lane (one independent fail-closed audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "docs/env": {
    "path": "docs/env",
@@ -608,7 +637,17 @@
   },
   "docs/estate": {
    "path": "docs/estate",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Read in full (2 of 2). REPO_PRESENTATION_PROPOSALS.md said the estate audit found 'five of seven' repositories describing themselves with their own name; ESTATE_SYNC_REPORT.md §4 is a six-row table showing three (four counting a different string that repeats 'SignalGrid'); INDEX.md repeated five. Corrected in both. The seven repositories named match scripts/scan-estate-citations.mjs exactly; the '22 tools' claim verified against the sibling checkout.",
+     "reviewer": "cloud lane (one independent fail-closed audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "docs/inspiration": {
    "path": "docs/inspiration",
@@ -640,15 +679,45 @@
   },
   "docs/outreach": {
    "path": "docs/outreach",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Read in full (3 of 3) — the live send surface. Every product claim traces to POSITIONING.md or PILOT_PACKAGE.md; no deferred family presented as current; no retired label. One tense defect: T2 said 'in our lab, a device … had actually gone unverified for hours' while its own claim trace pointed at the marketing site's illustrative scenario and no lab record exists (check:absence 'medication cart' INCONCLUSIVE, all hits marketing) — rewritten as the scenario it is. Both templates are blockquoted, which the new send-copy gate could not see until today (fixed; the live self-test now requires the outreach surface itself to be seen).",
+     "reviewer": "cloud lane (one independent fail-closed audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 2
+    }
+   ]
   },
   "docs/postman": {
    "path": "docs/postman",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Partial: both JSON files parsed structurally (names, folders, request counts, description); individual request bodies, headers and scripts not read. '74 requests in four folders' derives exactly and is gated by check-derived-doc-figures; build-postman --check passes (58 spec paths); CI regenerates and diffs. Regeneration was not run here (read-only audit; it writes into the tree).",
+     "reviewer": "cloud lane (one independent fail-closed audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: structural parse of both collections; request bodies not read.",
+     "open": 0,
+     "closed": 0
+    }
+   ]
   },
   "docs/preview": {
    "path": "docs/preview",
-   "reads": []
+   "reads": [
+    {
+     "date": "2026-09-06",
+     "read": "Partial: README.md in full; the teaser and OG html read for rendered text and CSS head, not every markup line; PNG dimensions verified from the IHDR chunk (3200x2000, 2400x1260 as the README says). The teaser's 'Live decision' panel showed 'latency 1 ms · 16 events' with the synthetic-data disclosure in a different file — a 'synthetic data' caption now sits in the panel. The preview pages are inside the fatal retired-label scan (clean) and outside the deferred-noun scan (not a published page).",
+     "reviewer": "cloud lane (one independent fail-closed audit agent + firsthand read of every edit site)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: README in full; teaser/OG html by rendered text; PNGs by header only.",
+     "open": 0,
+     "closed": 1
+    }
+   ]
   },
   "docs/research": {
    "path": "docs/research",

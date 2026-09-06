@@ -117,9 +117,12 @@ large document.
 
 ## 9. Launch-scope discipline
 
-The launch wedge is the Shared-Device Trust Gateway
-([LAUNCH_PROFILE.md](LAUNCH_PROFILE.md)): three connector families, one
-console, one host-app reference, thirteen `/v1` routes — proven source-agnostic
+The launch wedge ([LAUNCH_PROFILE.md](LAUNCH_PROFILE.md)) — the surface DR-004 labelled the Shared-Device Trust Gateway, a label DR-019 superseded;
+`docs/PURPOSE.md` §2 owns the product sentence and no replacement label is ratified —
+is three connector families, one console, one host-app reference, and the `/v1`
+routes `scripts/launch-profile.mjs` lists as `launch` under `published-api-paths`
+(fourteen on 2026-09-06: `/v1/authorize` joined under DR-023 after this line said
+thirteen — count the profile, not this sentence) — proven source-agnostic
 first on the open-source lab (Fleet; a Headwind-shaped Android fixture), with
 Microsoft Entra/Intune as the first enterprise production connector (profile
 v3, owner-directed 2026-08-11). The launch profile gate

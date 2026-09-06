@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`lib/pim-activation` is proven offline — 43 checks, three exhaustive enumerations, zero
+`lib/pim-activation` is proven offline — `pnpm run proof:pim-activation` (51 checks), three exhaustive enumerations, zero
 mismatches. None of that proves it works against a real tenant. This runbook is the
 procedure for the first live test, and the honest list of what must be settled *before*
 that test rather than discovered during it.

@@ -8,7 +8,7 @@ This document is strategy only. It does not add implementation code, Apple SDK d
 
 ## 2. Core positioning
 
-SignalGrid remains an Operational Trust Orchestration platform. It normalizes signals from source systems, evaluates operational context, routes approved outcomes, audits events, and verifies expected results.
+SignalGrid connects the systems a building already runs - access control, identity, device management, location, applications, ticketing - into one grid that decides and acts on the person's behalf (`docs/PURPOSE.md` §2; no category label is ratified - DR-019/DR-020). It normalizes signals from source systems, evaluates operational context, routes approved outcomes, audits events, and verifies expected results.
 
 Apple open-source and Apple-participating projects may support future implementation layers, local tooling, review surfaces, or fixture-backed proofs. They do not expand current product scope in this repository, create Apple production capability, imply Apple partnership, or make SignalGrid a replacement for Apple, MDM, IAM, UEM, ITSM, or other systems of record.
 
@@ -54,7 +54,7 @@ The repository's current proof path is the no-license/no-PC/no-external-runtime 
 
 ## 6. Relationship to SignalGrid and EnterpriseShell
 
-SignalGrid is the operational trust orchestration layer. It evaluates normalized context, routes outcomes, audits decisions, and verifies expected results while external systems remain systems of record.
+SignalGrid connects the systems a building already runs - access control, identity, device management, location, applications, ticketing - into one grid that decides and acts on the person's behalf (`docs/PURPOSE.md` §2; no category label is ratified - DR-019/DR-020). It evaluates normalized context, routes outcomes, audits decisions, and verifies expected results while external systems remain systems of record.
 
 EnterpriseShell is a possible future shared-device Apple/session experience. It may use Apple-native patterns in a future private implementation, but it is not implemented by this documentation PR.
 

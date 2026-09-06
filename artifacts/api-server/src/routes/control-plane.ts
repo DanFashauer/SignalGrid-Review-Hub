@@ -153,7 +153,7 @@ const FLOW_SIGNAL_SNAPSHOT: SignalState[] = [
   { id: "device_compliance", status: "healthy" },
   { id: "badge_binding", status: "healthy" },
   { id: "baseline", status: "broken" }, // breaks med-admin (incident) + network-change (self-heal)
-  { id: "custody", status: "healthy" },
+  { id: "custody", status: "healthy" }, // deferred family — fixture catalog data, not Limited GA capability
   { id: "change_window", status: "healthy" },
 ];
 const FLOW_SNAPSHOT_AT = "2026-07-16T14:00:00.000Z";
@@ -357,7 +357,7 @@ router.get("/cp/v1/iac", (_req, res) => {
 const GRID_SIGNAL_SOURCES: SignalSource[] = [
   { id: "identity", name: "Identity / SSO", system: "Entra ID", method: "api" },
   { id: "device_compliance", name: "Device compliance", system: "Intune", method: "api" },
-  { id: "badge_binding", name: "Badge binding", system: "RFID reader", method: "native" },
+  { id: "badge_binding", name: "Badge binding", system: "RFID reader", method: "native" }, // deferred family — fixture catalog data, not Limited GA capability
   { id: "baseline", name: "Security baseline (CIS)", system: "baseline scanner", method: "grid_collected" },
   { id: "change_window", name: "Approved change window", system: "ITSM", method: "native" },
   { id: "custody", name: "Physical custody", system: "RTLS", method: "grid_collected", degraded: true },
@@ -408,12 +408,12 @@ router.get("/cp/v1/grid/evidence-coverage", (req, res) => {
   //
   // Unlike the two arms above, this one is PARAMETERISED by the estate the caller
   // declares, because that is the entire point: "your Intune + Entra can honestly
-  // answer N of the 18 evidence axes; here are the ones they cannot, and what you
+  // answer N of the 21 evidence axes (one per DecisionEvidence field; the proof pins the count); here are the ones they cannot, and what you
   // would have to instrument." It needs no customer data — no export, no CSV, no
   // PII — so it needs no NDA and no security review to produce.
   //
   // It replaces a replay backtest that was designed and then abandoned: the active
-  // rule set is deliberately day-one-quiet on ELEVEN of the eighteen axes — measured
+  // rule set is deliberately day-one-quiet on THIRTEEN of the twenty-one axes — measured
   // by running the engine, not counted by hand; an earlier comment said eight and the
   // axis table said seven — so a CSV
   // replay would have emitted allow at scale from ABSENCE of data, on the one

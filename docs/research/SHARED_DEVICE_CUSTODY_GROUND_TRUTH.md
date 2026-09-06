@@ -22,7 +22,7 @@ imagined.
 Each row is a real-world element (a workflow step, a signal, or a failure mode observed in
 the runbooks) mapped to the SignalGrid surface that represents it, with a status:
 
-- **modeled** — a shipped, fixture-backed surface represents it; the path is cited.
+- **modeled** — a fixture-backed surface implemented in the tree represents it (Limited GA status per `scripts/launch-profile.mjs`: of the families this table names only `device-management-health` and `local-authority` are Limited GA; `pacs-access`, `rtls-custody`, `custody-beacon`, `nac`, `network-nac`, `carrier` and `device-attestation` are deferred families, not Limited GA); the path is cited.
 - **partial** — a surface represents part of it; the gap is named.
 - **gap** — nothing represents it yet; filed as a backlog row, not implied to exist.
 

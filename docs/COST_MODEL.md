@@ -22,13 +22,15 @@ in chat, never by committing it here.
   behind nginx (dev compose only; no gate builds it). **No Redis in the
   product** — Redis appears only inside Fleet's own stack.
 - **Capacity**: limiter-bound, not compute-bound. Default 240 req/min per key
-  (`rateLimit.ts:56`, `SIGNALGRID_V1_RATE_LIMIT`); decision core p95 1.27ms,
-  5,128 decisions/sec on 4 workers (`RELIABILITY_SLO.md`). One small VM
+  (`rateLimit.ts:56`, `SIGNALGRID_V1_RATE_LIMIT`); decision core p95 1.0458 ms,
+  5,370 decisions/sec on 4 workers — the 2026-08-24 column of `RELIABILITY_SLO.md`
+  (this line quoted the 2026-08-19 column, 1.27 ms / 5,128, until 2026-09-06; the two
+  runs were on different hardware and are not a trend). One small VM
   (2 vCPU / 4GB class) over-serves a tenant by orders of magnitude; marginal
   compute per added tenant ≈ $0 until the limiter is deliberately raised.
 - **Line items**: VM hosting — TBD (public price list, agent-computable).
   Backup storage for `sg_pgdata` — TBD. TLS/domain — optional
-  (`OWNER_ACTIONS.md:197`).
+  (`OWNER_ACTIONS.md:210`).
 
 ## 2. MDM / device lines (per deployment)
 

@@ -6,9 +6,9 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**94 of 100 surfaces have been read. 6 are partially read. 0 have not been read at all.**
+**98 of 100 surfaces have been read. 2 are partially read. 0 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2272 of 2272 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2275 of 2275 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -32,7 +32,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `(root)` | loose files | 26 | read | 2 | 2026-09-06 | cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 10 | 2 |
 | `artifacts/agent-heartbeats` | tree | 3 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
 | `artifacts/api-collection` | tree | 111 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
-| `artifacts/api-server` | package | 34 | **partial** | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
+| `artifacts/api-server` | package | 34 | read | 3 | 2026-09-06 | cloud lane (six independent fail-closed-auditor reads in parallel, seven fix agents, every edit site and every gate run read firsthand) | docs/agent/EVIDENCE.md | 16 | 0 |
 | `artifacts/build-loop` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/connector-emulator` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/lab-collections` | tree | 42 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
@@ -53,8 +53,8 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/sync` | tree | 5 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `config` | tree | 5 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `docker` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
-| `docs/*` | loose files | 214 | **partial** | 5 | 2026-09-06 | cloud lane (general-purpose agent working from the launch-claims rule-5 output; every edit site spot-read firsthand) | docs/agent/EVIDENCE.md | 34 | 0 |
-| `docs/agent` | docs family | 34 | **partial** | 6 | 2026-09-06 | cloud lane (membership rule measured on the live inventory before it became a gate; every false pairing pinned in the self-test) | docs/agent/EVIDENCE.md | 15 | 11 |
+| `docs/*` | loose files | 214 | read | 6 | 2026-09-06 | cloud lane (six independent fail-closed-auditor reads in parallel, seven fix agents, every edit site and every gate run read firsthand) | docs/agent/EVIDENCE.md | 105 | 3 |
+| `docs/agent` | docs family | 34 | read | 7 | 2026-09-06 | cloud lane (six independent fail-closed-auditor reads in parallel, seven fix agents, every edit site and every gate run read firsthand) | docs/agent/EVIDENCE.md | 28 | 11 |
 | `docs/assets` | docs family | 1 | read | 2 | 2026-09-06 | cloud lane (one independent fail-closed audit agent, every finding reproduced by running something; firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
 | `docs/company` | docs family | 9 | read | 4 | 2026-09-06 | cloud lane (prose by a general-purpose agent working from the findings file with every figure re-derived by command; gates by the gate engineer; firsthand spot-read of every edit site and every gate run) | docs/agent/EVIDENCE.md | 17 | 14 |
 | `docs/connectors` | docs family | 4 | read | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
@@ -66,7 +66,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `docs/outreach` | docs family | 3 | read | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
 | `docs/postman` | docs family | 2 | read | 2 | 2026-09-06 | cloud lane (two independent fail-closed audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/preview` | docs family | 6 | read | 2 | 2026-09-06 | cloud lane (one independent fail-closed audit agent, every finding reproduced by running something; firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 0 |
-| `docs/research` | docs family | 49 | **partial** | 3 | 2026-09-06 | cloud lane (general-purpose agent working from the launch-claims rule-5 output; every edit site spot-read firsthand) | docs/agent/EVIDENCE.md | 54 | 0 |
+| `docs/research` | docs family | 49 | read | 4 | 2026-09-06 | cloud lane (six independent fail-closed-auditor reads in parallel, seven fix agents, every edit site and every gate run read firsthand) | docs/agent/EVIDENCE.md | 69 | 0 |
 | `firmware` | tree | 8 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `fixtures` | tree | 9 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `fleet` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 1 |
@@ -114,20 +114,16 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 8 | 1 |
 | `native/shared` | native | 3 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 411 | **partial** | 6 | 2026-09-06 | cloud lane; the gate built from the eighteenth round's specification, measured live before and after each rule change, falsified with a planted line | docs/agent/EVIDENCE.md | 17 | 0 |
+| `scripts` | package | 414 | **partial** | 6 | 2026-09-06 | cloud lane; the gate built from the eighteenth round's specification, measured live before and after each rule change, falsified with a planted line | docs/agent/EVIDENCE.md | 17 | 0 |
 | `site` | tree | 2 | read | 2 | 2026-09-05 | cloud lane (firsthand read of every edit site; fixes + gates) | docs/agent/EVIDENCE.md | 2 | 3 |
 | `tests` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 1 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |
 
-## Partially read (6)
+## Partially read (2)
 
 A named slice was read. The rest of the surface has not been.
 
-- `artifacts/api-server` (package)
-- `docs/*` (loose files)
-- `docs/agent` (docs family)
 - `docs/inspiration` (docs family)
-- `docs/research` (docs family)
 - `scripts` (package)
 
 ## Not read (0)

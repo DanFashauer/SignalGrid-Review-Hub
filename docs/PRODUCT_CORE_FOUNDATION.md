@@ -78,7 +78,7 @@ the client, which is what makes cross-tenant access structurally impossible.
 
 | Method & path | Permission | Purpose |
 | ------------- | ---------- | ------- |
-| `GET /api/v1/keys` | none | Discover the public-safe demo keys |
+| `GET /api/v1/keys` | none | Discover the public-safe demo keys — `demo_only` in `scripts/launch-profile.mjs`, not product surface; refused under the `shared-device-gateway` product profile (`docs/PRODUCT_PROFILE.md`) |
 | `GET /api/v1/context` | any | Who am I / which tenant |
 | `POST /api/v1/decisions/evaluate` | `decision:evaluate` | Run the decision loop |
 | `GET /api/v1/decisions` | `decision:read` | List tenant decisions |
@@ -116,7 +116,7 @@ sgk_demo_northwind_auditor    auditor
 sgk_demo_atlas_owner          owner    (Atlas Logistics — warehouse handhelds)
 ```
 
-Two tenants exist so cross-tenant isolation can be exercised directly.
+Seven tenants are seeded — nine `sgk_demo_*` keys in `lib/signalgrid-core/src/seed.ts`: the four above plus one owner key each for Meridian, Vero, Forge, Orion and Civic — so cross-tenant isolation can be exercised directly. (This said "two tenants" until 2026-09-06.)
 
 Example:
 

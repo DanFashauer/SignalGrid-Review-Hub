@@ -1,5 +1,12 @@
 # Autopilot Intake Bot
 
+> **SUPERSEDED 2026-09-06 in its "parked, not implemented" list — do not read it as current.**
+> Last substantively written 2026-08-03; its sibling Autopilot pages carry ⛔ RETIRED
+> 2026-08-15 banners. Three of the themes it parks ship as connector families with
+> registered proofs — `access-governance`, `platform-sso`, `network-nac` under
+> `lib/integrations/src/integrations/` — and the proof sequence it assumes was redirected
+> by DR-012 (Fleet-first). The taxonomy is kept as a dated record.
+
 The Intake Bot converts screenshots, links, notes, PR summaries, and workflow findings into public-safe backlog entries. It does not implement phases by itself.
 
 ## Classification taxonomy
@@ -25,7 +32,7 @@ Each record should include input source, classification, proposed deliverable, r
 
 ## Parked recent themes
 
-These themes are intentionally parked for future scoped phases and are not implemented by the Autopilot Control Plane PR:
+These themes were intentionally parked for future scoped phases and were not implemented by the Autopilot Control Plane PR *(as written 2026-08-03; on 2026-09-06 the Entra governance, Platform SSO and network-segmentation themes SHIP as `access-governance`, `platform-sso` and `network-nac` — see the banner)*:
 
 - IAM market signals / strategic buyer and partner thesis
 - Microsoft Endpoint / Intune Lab Readiness

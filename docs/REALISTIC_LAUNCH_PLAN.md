@@ -46,7 +46,7 @@ The fastest legitimate path is **not** to "finish every possible integration." I
 
 The public Review Hub already has:
 
-- Operational Trust Orchestration positioning
+- positioning documentation (`docs/POSITIONING.md`, per `docs/PURPOSE.md` §2; no category label — DR-019/DR-020)
 - deterministic simulator and connector fixtures
 - Microsoft Graph-shaped posture proofs
 - credential-reader and smart-locker signal models
@@ -93,7 +93,10 @@ securely tenant-scoped.
 are green, but two automated-review P2 findings remain around committed-diff checking and
 unsafe-claim suppression.
 
-The `signalgrid-complete.zip` package is a meaningful next step. It contains:
+The `signalgrid-complete.zip` package was named here as a meaningful next step. As of
+2026-09-06 it is not in this repository — `git ls-files | grep -i signalgrid-complete`
+returns nothing — and the plan steps below that depend on it are marked retired. It was
+said to contain:
 
 - a deterministic in-memory API store
 - Postgres fallback switching
@@ -107,6 +110,17 @@ That package can make the public demo demo-complete, but it is **not** yet the
 production tenant / auth / connector core.
 
 ### Honest readiness assessment
+
+> **Dated record.** The scores below are the assessment as first written and are kept
+> as written. As of 2026-09-06 three rows understate: tenant isolation, RBAC and
+> fail-closed are asserted by `pnpm run proof:signalgrid-core` (it prints `figures=assertions=489`) and listed
+> Implemented (public core) in `docs/SECURITY_CONTROLS_MATRIX.md` §1–§3; the versioned
+> policy engine ships content-digested `PolicyVersion`, an activate route
+> (`artifacts/api-server/src/routes/v1.ts:398`) and pinned `PolicyTest` fixtures; the
+> durable ledger has `proof:audit-ledger-pg` and `proof:backup-restore` in CI and
+> preflight plus `db:verify-ledger`. Re-scoring is an owner call; until then read the
+> rows as history and `node scripts/preflight.mjs` as the current gate. As
+> `docs/LAUNCH_PROFILE.md` puts it, a stale gap understates readiness — it is still false.
 
 | Area                                | Current readiness                    |
 | ----------------------------------- | ------------------------------------ |
@@ -676,9 +690,9 @@ Build this while the pilot is underway.
 ### Phase A — Finish the public demo (2–4 weeks)
 
 1. ~~Fix and merge PR #36.~~ (Closed unmerged 2026-07-15 — see the §5 correction; this step is retired, not pending.)
-2. Integrate `signalgrid-complete.zip`.
+2. ~~Integrate `signalgrid-complete.zip`.~~ (Retired 2026-09-06 — the archive is not in the tree; see "Current active engineering state".)
 3. Add the in-memory store and test suite.
-4. Run the bootstrap script the package ships with, in your local environment.
+4. ~~Run the bootstrap script the package ships with, in your local environment.~~ (Retired 2026-09-06 — same reason; `bootstrap.sh` is not in the tree either.)
 5. Boot API and web.
 6. Verify all listed endpoints.
 7. Deploy a live public-safe demo.
@@ -822,8 +836,8 @@ they are distractions.
 ### Week 1
 
 - ~~clear PR #36~~ (closed unmerged 2026-07-15 — see §5; retired)
-- integrate demo-complete zip
-- run full bootstrap
+- ~~integrate demo-complete zip~~ (retired 2026-09-06 — not in the tree; see "Current active engineering state")
+- ~~run full bootstrap~~ (retired 2026-09-06 — same reason)
 - deploy public alpha
 - confirm business entity decision with counsel
 - begin trademark / name search

@@ -78,12 +78,14 @@ firmware/dock/           SmartDock firmware core
                          (promote was retired 2026-09-02 with the tier branches)
 ```
 
-## The packages — all 43, derived not curated
+## The packages — all 42, derived not curated
 
-Counted from `lib/*/package.json` + `artifacts/*/package.json` on 2026-08-22;
+Counted from `lib/*/package.json` + `artifacts/*/package.json` on 2026-08-22 (the
+heading said 43 then; 42 = 35 + 7 as of 2026-09-06 —
+`ls lib/*/package.json artifacts/*/package.json | wc -l`);
 one-liners come from each package's own source header where one exists. The
 code is the truth — a one-liner that drifts gets fixed by reading the source,
-not by trusting this table. (`scripts/` is a 44th workspace package holding
+not by trusting this table. (`scripts/` is a 43rd workspace package holding
 the proof harnesses and gates.)
 
 ### `lib/` — the decision fabric (35)
@@ -169,8 +171,9 @@ or `prod`.
   resolve to nothing can only fail. There is no automated promotion today.
 
 Reconnecting the pipeline is an owner decision with three defensible answers, set out
-in `docs/BRANCHING_AND_ENVIRONMENTS.md`. Until one is chosen, read the four-tier
-diagram anywhere in these docs as **intent, not current state**.
+in `docs/BRANCHING_AND_ENVIRONMENTS.md`, whose own banner retires the branch half
+of the model. Until one is chosen, read the four-tier diagram anywhere in these
+docs as **historical intent, not current state**.
 
 ## What is intentionally *not* here
 

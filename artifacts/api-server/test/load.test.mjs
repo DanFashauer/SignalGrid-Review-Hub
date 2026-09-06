@@ -72,8 +72,47 @@ function sandboxEnv(extra) {
 }
 
 const STRESS = process.argv.includes("--stress");
-const CONCURRENCY = Number(process.env.LOAD_CONCURRENCY ?? 32);
-const REQUESTS = Number(process.env.LOAD_REQUESTS ?? 600);
+
+/**
+ * THE KNOBS ARE VALIDATED AT START, and a run too small to mean anything is refused.
+ *
+ * `Number("abc")` is NaN; `while (issued < NaN)` is false and `Array.from({length: NaN})`
+ * is empty, so a typo'd LOAD_REQUESTS drove ZERO requests — and every GATED assertion
+ * below is an `.every()` or a `=== 0` over the resulting EMPTY array, so all of them
+ * passed. `LOAD_REQUESTS=abc` and a real 600-request run printed the identical
+ * `summary=pass (15/15)` and the identical exit code; the only tell, `throughput NaN
+ * req/s`, sat in the block this file declares REPORTED and never asserts. A gate that
+ * drove nothing must be red, not green.
+ *
+ * Digits-only, and the reason is `src/lib/core.ts`'s cap parser verbatim: Number("1e4"),
+ * Number(" 3 ") and Number("0x10") all coerce to something plausible. Unset/empty means
+ * "use the default" and is the only value that falls through. Exit 2, not 1: a refusal to
+ * run is not a failed assertion, and the two should not read the same in CI.
+ */
+const MIN_REQUESTS = 24;
+function positiveIntEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const text = raw.trim();
+  if (!/^\d+$/.test(text) || Number(text) < 1) {
+    console.error(
+      `refusing to run: ${name} must be a positive integer, got "${raw}". ` +
+        "A non-numeric knob drives zero requests and every gated check passes vacuously.",
+    );
+    process.exit(2);
+  }
+  return Number(text);
+}
+const CONCURRENCY = positiveIntEnv("LOAD_CONCURRENCY", 32);
+const REQUESTS = positiveIntEnv("LOAD_REQUESTS", 600);
+if (REQUESTS < MIN_REQUESTS) {
+  console.error(
+    `refusing to run: LOAD_REQUESTS=${REQUESTS} is below the non-vacuity floor of ${MIN_REQUESTS}. ` +
+      "A handful of requests cannot exercise concurrency, and a gate that drove almost nothing " +
+      "reports the same green as one that drove everything.",
+  );
+  process.exit(2);
+}
 
 // Two tenants, interleaved on purpose: the cross-tenant assertion below is only
 // meaningful if both are genuinely in flight at once.
@@ -226,6 +265,16 @@ try {
   const load = await drive(REQUESTS, CONCURRENCY);
 
   // ── GATED: correctness under concurrency, machine-independent ─────────────
+  // THE WORK FLOOR COMES FIRST. Every check under this heading is an `.every()` or a
+  // `=== 0` over `load.results`, and all of them are satisfied by an EMPTY array — so
+  // this assertion is what makes the rest of them mean anything. Exact, not `>= 1`:
+  // the count is knowable, and a run that lost 300 of 600 responses is a finding, not
+  // a rounding error. The house standard is api.test.mjs, which floors every derived
+  // set it reasons over; this file did not meet it.
+  check(
+    `NOT VACUOUS: the load drove exactly the ${REQUESTS} requests it claims (recorded=${load.results.length}, concurrency=${CONCURRENCY})`,
+    load.results.length === REQUESTS && load.results.length >= MIN_REQUESTS,
+  );
   check(`no transport errors under load (errors=${load.errors})`, load.errors === 0);
   check(`no 5xx under load (server5xx=${load.server5xx})`, load.server5xx === 0);
   check(`every response is 200 (non200=${load.non200})`, load.non200 === 0);
@@ -339,9 +388,11 @@ try {
       // only at concurrency 64+ left `test:stress` green — the exact regime the
       // stress phase exists to explore was the one regime nothing asserted.
       // Latency and throughput stay unasserted; correctness does not.
+      const want = Math.max(200, c * 6);
       check(
-        `stress c=${c}: correctness holds — no 5xx, no transport errors, every outcome still the known answer`,
-        r.errors === 0 && r.server5xx === 0 && r.non200 === 0 &&
+        `stress c=${c}: correctness holds — no 5xx, no transport errors, every outcome still the known answer (over ${r.results.length}/${want} responses)`,
+        r.results.length === want &&
+          r.errors === 0 && r.server5xx === 0 && r.non200 === 0 &&
           r.results.every((x) => x.enveloped && x.outcome === x.expect),
       );
       console.log(
@@ -368,7 +419,7 @@ try {
 
   const total = passed + failures.length;
   console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);
-  console.log(`figures=cases=${CASES.length},concurrency=${CONCURRENCY}`);
+  console.log(`figures=cases=${CASES.length},concurrency=${CONCURRENCY},requests=${REQUESTS},responses=${load.results.length}`);
   if (failures.length > 0) {
     console.error("Failed checks:");
     for (const f of failures) console.error(`  - ${f}`);

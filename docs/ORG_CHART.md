@@ -163,7 +163,10 @@ buyer.
 
 Two of its six are marked PREMATURE in the roster rather than started.
 `launch-manager` would be writing fiction against a launch profile still moving
-weekly (22 items classified launch against 134 deferred), and
+weekly (23 items classified launch against 134 deferred as of 2026-09-06 — the sum of
+`launch` entries across `SURFACES` in `scripts/launch-profile.mjs`, which
+`docs/LAUNCH_PROFILE.md` states as "23 launch items"; this line said 22 before that
+date), and
 `lifecycle-activation` would be describing a customer journey nobody has taken.
 Naming a gap is not the same as working it, and a role invented to look complete is
 the same unearned affirmative this repository exists to refuse.

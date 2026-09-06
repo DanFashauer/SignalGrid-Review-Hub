@@ -105,7 +105,9 @@ capability rather than one family's local insight.
 ## What the layer walk says about coverage
 
 The diagram's nine layers against the 51 connector families, checked rather than
-recalled:
+recalled. Seven rows, not nine: the table merges system-extension approval with
+kernel-extension approval, and the PPPC payload with the TCC privacy decision, because
+the coverage answer is the same for each pair:
 
 | Layer | Coverage today |
 | --- | --- |
@@ -114,7 +116,7 @@ recalled:
 | Application / service | **Partial**, across `app-update`, `service-lifecycle`, `link-usability`. |
 | APNs delivery | **Thin.** `managementReachable` is the nearest thing. |
 | Config profile installation | **Thin.** `policyDrift` is adjacent; profile-received / payload-conflict / scope-mismatch are not modelled. |
-| **PPPC / TCC privacy decision** | **Structurally unobservable via DDM** — and `check:absence "TCC privacy permission"` returns CORROBORATED across four probes: no file, no directory, no workflow, no source mention. |
+| **PPPC / TCC privacy decision** | **Structurally unobservable via DDM** — and `check:absence "TCC privacy permission"` returns INCONCLUSIVE (exit 2) as of 2026-09-06: no file, no directory, no workflow, and two prose mentions — this row and `docs/COMPANY_BUILD_PLAN.md`, both read and both non-implementing. (It returned CORROBORATED when this was written, before the tool's content probe was widened to `docs/*` on 2026-08-24.) |
 | User experience | The Assist gate itself. |
 
 The bottom row is the interesting one, and not because someone forgot it. **The layer

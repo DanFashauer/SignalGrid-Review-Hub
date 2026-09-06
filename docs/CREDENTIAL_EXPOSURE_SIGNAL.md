@@ -48,7 +48,7 @@ warrants — fail-safe, so the **worst still-exposed** secret drives the verdict
 | `scanner_unenrolled` | no secrets scanner enrolled on the endpoint (a gap) | step_up |
 | `secrets_exposed` | a secret is still exposed, lower value | alert |
 | `active_credential_exposed` | a **live, high-value** credential (cloud key, private key, DB cred, OAuth) or a critical/high-severity secret is still exposed | escalate |
-| `unknown` | no scanner coverage at all — a blind spot | monitor |
+| `unknown` | no scanner coverage at all — a blind spot | monitor — the same unified action as `remediated`; the distinction survives only in the posture label (see below) |
 
 ## Fail-safe rules (non-negotiable)
 
@@ -56,7 +56,14 @@ warrants — fail-safe, so the **worst still-exposed** secret drives the verdict
   is `open`, or whose remediation/validity is unknown/unmapped, is treated as
   **still exposed** — we never assume an unconfirmed finding was cleaned up.
 - **No coverage ≠ clean.** A device with no scanner record is `unknown` (a blind
-  spot), never reported clean.
+  spot), never reported clean — but note what that buys: `unknown` and `remediated`
+  both resolve to `monitor` (`evaluate.ts` `NOT_COVERED` / `SCANNER_ENROLLMENT_UNVERIFIED`
+  vs `FINDINGS_REMEDIATED`), and `fromCredentialExposure` in
+  `lib/posture-composition/src/adapters.ts` fuses on `recommendedAction`, so the fabric
+  sees the two as the same action. The distinction is carried in the posture label only.
+  A confirmed-unenrolled scanner is the stronger `step_up` because it is a reported bad
+  state, not an unreported one; whether the unreported case should also step up is an
+  open owner decision, not a documented behaviour.
 - **The worst exposure wins** (order-proof): a live high-value exposure outranks a
   co-present remediated finding, so a severe secret is never diluted by a calm one.
 - **High-value** = inherently sensitive kind (cloud/private-key/DB/OAuth) OR

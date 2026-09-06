@@ -15,8 +15,10 @@ of the **three** jobs in `review-hub-ci.yml` that need nothing but Node
 docs + unsafe-claim scan), typecheck, build, every proof, the API integration
 test, the safety gate, Postman/spec sync, and the CycloneDX SBOM sync.
 
-The third Node-only job is **`breadth`** — the 47 deferred-family gates and 8
-doctrine-doc proofs — and preflight does not run it. It is its own lane,
+The third Node-only job is **`breadth`** — the deferred-family gates, the doctrine-doc
+proofs and the DR-005 decision-palette gate; count the `STEPS` entries in
+`scripts/verify-breadth.mjs` (56 on 2026-09-06 — its header explains why the "47 + 8"
+this line used to add up undercounts by one) — and preflight does not run it. It is its own lane,
 `pnpm run verify:breadth`, and `CLAUDE.md` says to run it alongside preflight for
 exactly this reason.
 
@@ -89,10 +91,17 @@ over the full product): **oauth-consent** (6,480), **sso-session** (4,608, widen
 **access-governance** (18,000, widened from 4,500 by the lifecycle axis), **ot-posture** (324), **token-binding** (1,296),
 **pacs-access** (97,200, in both the unposed and the posed-floor grading), **agent-identity** (17,280 normalized + 870,912 raw + a parse-fidelity pass over the raw space),
 **device-management-health** (21,600 normalized + 1,354,752 raw + a parse-fidelity pass),
-**link-usability** (6,480 normalized + 217,728 raw + a parse-fidelity pass). These are the enum-field
+**link-usability** (7,560 normalized + 241,920 raw + a parse-fidelity pass; an earlier version of this line pinned the space as it stood before the link-usability axis widened). These are the enum-field
 "trust grant" dimensions where
 the unknown-reaches-grant class is most acute; new connectors adopt the harness
 from the start.
+
+Re-derive that list rather than trust it. Each connector's proof script (its `proof:<family>` entry in
+`package.json`) prints its own `figures=` line — link-usability's printed
+`normalized=7560,raw=241920,grants=3` on 2026-09-06, which is where the 7,560 and
+241,920 above come from. This paragraph sits under a `####` heading, which the figure
+guard does not open as a scope (see the guard-scope section below), so nothing
+mechanical holds these numbers; the command does.
 
 Two of them also pin the NUMBER of granting shapes, not just the absence of
 mismatches: `device-management-health` and `link-usability` at exactly three each,
@@ -252,8 +261,14 @@ drift in the other direction and also fails. Negative-controlled both ways: drop
 connector from the registry fails, and so does adding a brand-new allow-path proof nobody
 registered.
 
-What it reports today is worth stating plainly rather than burying: **20 proofs enumerate
-an allow path, 19 are under the mutation guard, and none are QUEUED.** The one that is not
+What it reports today is worth reading from the gate rather than from this paragraph —
+`pnpm run guard:registries` prints the four counts, and on 2026-09-06 they were **38
+allow-path proofs, 53 mutation-guard targets, 44 proofs publishing figures, and no QUEUED
+list** (the list prints only when it is non-empty). An earlier version of this sentence
+pinned "20 proofs enumerate an allow path, 19 are under the mutation guard" from memory —
+in the document that argues, a few lines up, that a stale coverage list is worse than no
+guard — and `guard:figures` could not see it because the numbers are bare. Run the
+command; do not read this line as the count. The one allow-path proof that is not
 a target is `proof:grant-safety` itself — it IS the harness, with no normalizer or
 evaluator to mutate, and it already ships its own negative controls. The QUEUED list is
 empty for the first time; while it was not, those proofs were named individually in the

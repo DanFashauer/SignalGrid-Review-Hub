@@ -66,14 +66,14 @@ test("the standalone page renders the real model, not an empty shell", async ({ 
 
   // Eighteen axis rows and seven plane toggles prove the bundled model was linked in and
   // iterated. A build that resolved the import to nothing produces a valid, blank page.
-  await expect(page.locator("tbody tr")).toHaveCount(18);
+  await expect(page.locator("tbody tr")).toHaveCount(21);
   await expect(page.locator("button.p")).toHaveCount(7);
 
   // Opens on the wedge, with the figures pinned by equality in proof:evidence-coverage
   // and api.test.mjs. Three surfaces, one set of numbers.
-  expect(await stat(page, "stat-answerable")).toBe(10);
+  expect(await stat(page, "stat-answerable")).toBe(12);
   expect(await stat(page, "stat-dark")).toBe(6);
-  expect(await stat(page, "stat-not-sourced")).toBe(2);
+  expect(await stat(page, "stat-not-sourced")).toBe(3);
   expect(await stat(page, "stat-silent-holes")).toBe(6);
 
   // Each value sits with ITS OWN caption. Swapping two captions leaves every number and
@@ -83,10 +83,10 @@ test("the standalone page renders the real model, not an empty shell", async ({ 
   await expect(statCard(page, "stat-not-sourced")).toContainText("not sourced");
 
   // The denominator is tied to what is actually on screen, not to a literal: a hardcoded
-  // "18" here would print "10 + 7 + 2 = 18" the day a nineteenth axis is added.
+  // "21" here would print "12 + 7 + 3 = 21" the day a twenty-second axis is added.
   const rows = await page.locator("tbody tr").count();
   await expect(page.getByTestId("coverage-denominator")).toContainText(
-    `10 + 6 + 2 = ${rows} evidence axes`,
+    `12 + 6 + 3 = ${rows} evidence axes`,
   );
 
   // The toggles must agree with the report they produced.
@@ -100,7 +100,7 @@ test("the standalone page renders the real model, not an empty shell", async ({ 
 });
 
 test("the visible coverage labels say what the data attributes say", async ({ page }) => {
-  // Inverting COVERAGE_LABEL renders all 18 badges backwards and changes no attribute.
+  // Inverting COVERAGE_LABEL renders all 21 badges backwards and changes no attribute.
   for (const [coverage, label] of [
     ["answerable", "answerable"],
     ["needs_instrumentation", "dark"],
@@ -167,10 +167,10 @@ test("declaring and undeclaring planes moves the report, down to the empty estat
     await planeToggle(page, plane).click();
   }
   expect(await stat(page, "stat-answerable")).toBe(0);
-  expect(await stat(page, "stat-silent-holes")).toBe(11);
-  expect(await stat(page, "stat-dark")).toBe(16);
+  expect(await stat(page, "stat-silent-holes")).toBe(13);
+  expect(await stat(page, "stat-dark")).toBe(18);
   await expect(page.getByTestId("coverage-denominator")).toContainText(
-    "0 + 16 + 2 = 18 evidence axes",
+    "0 + 18 + 3 = 21 evidence axes",
   );
 });
 

@@ -9,7 +9,7 @@ Use this checklist to keep v0.2 focused on product foundation instead of more pi
 - [ ] One Microsoft connector path is designed as read-only, sandbox/mock first, and credential-free in public.
 - [ ] One secure tenant model is defined and tested before customer-like data exists.
 - [ ] One pilot/customer story has success criteria and explicit boundaries.
-- [ ] One investor narrative explains the operational trust control plane without production, compliance, partnership, valuation, or replacement claims.
+- [ ] One investor narrative explains what SignalGrid decides (`docs/PURPOSE.md` §2: one grid across the systems a building already runs that decides and acts on the person's behalf; no category label is ratified — DR-019/DR-020) without production, compliance, partnership, valuation, or replacement claims.
 
 ## Policy and decision requirements
 

@@ -51,7 +51,7 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `OIDC_AUDIENCE` | Expected token audience (the API's app/client id). | unset |
 | `OIDC_JWKS_URI` | IdP JWKS endpoint (discovery `jwks_uri`). | unset |
 | `OIDC_TENANT_CLAIM` / `OIDC_ROLE_CLAIM` | Claims carrying the IdP tenant / role. | `tid` / `roles` |
-| `METRICS_TOKEN` | Set ⇒ `/metrics` requires this bearer. | unset (open on the internal port) |
+| `METRICS_TOKEN` | Set ⇒ `/metrics` requires this bearer. Set but BLANK ⇒ the server refuses to boot (since 2026-09-06; a blank token is an operator who believes the endpoint is protected). `docker-compose.prod.yml` passes it key-only so an unset host variable stays unset in the container. | unset (open on the internal port) |
 | `NODE_ENV` | Standard Node environment switch; the compose file sets `production`. | unset |
 | `SIGNALGRID_DEPRECATED_ROUTES` | Comma-separated route ids to serve with a `Deprecation` header during a migration window. | unset |
 | `SIGNALGRID_V1_RATE_LIMIT` | Requests/min/bearer on `/v1`. Malformed values fall back — never to "unlimited". | `240` |
@@ -94,6 +94,8 @@ part an attacker writes.
 | `PERIPHERAL_ACCESS_TOKEN` | Read-only token for the removable-media/peripheral-control connector. | unset (fixture mode) |
 | `DLP_ACCESS_TOKEN` | Read-only token for the data-protection/DLP posture connector. | unset (fixture mode) |
 
+**The ten `*_ACCESS_TOKEN` rows above describe library surfaces, not the served decision path.** Each connector family lives in `@workspace/integrations` and is exercised by its `proof:*` script; in this build `artifacts/api-server/src` does not import that package and no file under it reads any of the ten variables (measured 2026-09-06: `grep -rn "@workspace/integrations" artifacts/api-server/src --include=*.ts` → no output; `grep -rl <VAR> artifacts/api-server/src | wc -l` → 0 for all ten). Setting one of them alongside `SIGNALGRID_LIVE_INTEGRATIONS=true` therefore changes nothing the `/v1` API decides — neither a live read nor a fixture read runs there. Wiring a family into the served core is tracked as backlog work, not as a configuration step.
+
 ## Enterprise sign-in (OIDC) — gated
 
 With `OIDC_ISSUER`, `OIDC_AUDIENCE`, and `OIDC_JWKS_URI` set, the `/v1` surface also
@@ -107,6 +109,8 @@ real Entra/Okta/Auth0 tenant is a one-time configuration step, no code change.
 
 ## Read-only Microsoft Graph connector — gated
 
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `GRAPH_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
+
 The read-only Graph posture connector reads **users + managed devices** and
 normalizes them to SignalGrid's posture vocabulary. It is **read-only by
 construction** (only GET requests are issued) and **gated exactly like every
@@ -117,6 +121,8 @@ tenant, and its normalization/pagination/error paths are proven offline in CI
 (`pnpm run proof:graph-connector`).
 
 ## Post-exit reachability (carrier connectivity) — gated
+
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `CARRIER_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
 
 Once a shared device leaves managed Wi-Fi, MDM "find/ring/lock" commands become
 opportunistic. The read-only **carrier reachability connector** reads per-SIM
@@ -131,6 +137,8 @@ only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` + `CARRIER_ACCESS_TO
 otherwise fixture mode). Proven offline in CI (`pnpm run proof:carrier-reachability`).
 
 ## EDR/EPP endpoint threat-state — gated
+
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `EDR_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
 
 The vulnerability connector answers "what known CVEs does this device carry?";
 the read-only **EDR/EPP connector** answers the other half — "is this endpoint
@@ -152,6 +160,8 @@ the other dimensions by `@workspace/posture-composition`.
 
 ## Identity / SSO sign-in risk — gated
 
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `IDENTITY_RISK_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
+
 Every other dimension asks about the **device**; this one asks about the
 **person/session**: is the identity signing in actually who they claim, or is it
 compromised? The read-only **identity-risk connector** reads per-principal risk
@@ -172,6 +182,8 @@ integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` +
 `@workspace/posture-composition`.
 
 ## RTLS / badge-dwell physical custody — gated
+
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `RTLS_ACCESS_TOKEN` (RTLS is a deferred family; measured 2026-09-06, see the note under the environment table).
 
 The physical-plane signal that ties the cyber dimensions back to the two-plane
 custody model: **where is the shared device physically, and is its custody
@@ -195,6 +207,8 @@ integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` +
 
 ## Removable-media / peripheral control — gated
 
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `PERIPHERAL_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
+
 The data-exfiltration / malware-ingress surface: is an unauthorized or unencrypted
 removable device attached to the shared device? On a shared frontline (especially
 clinical) workstation, a writable USB drive is a real HIPAA/exfil and ingress
@@ -217,6 +231,8 @@ the other dimensions by `@workspace/posture-composition`.
 
 ## Data-protection / DLP posture — gated
 
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `DLP_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
+
 The peripheral-control dimension covers the hardware exfil surface (attached
 removable media); this one covers the **data exfil surface across every channel** —
 a sensitive file leaving via cloud upload, personal email, web post, print, or
@@ -238,7 +254,10 @@ every other integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATI
 
 **Fixture-safe by default:** even at `SIGNALGRID_TIER=prod`, no live vendor calls
 are made unless `SIGNALGRID_LIVE_INTEGRATIONS=true` is also set — so this stack is
-safe to stand up for evaluation without any external credentials.
+safe to stand up for evaluation without any external credentials. And in this build the
+flag has nothing to enable in the served API: the connector families above are not
+imported by `artifacts/api-server/src` (`artifacts/api-server/src/lib/assurance.ts`
+records the same — "permits live calls; none exist").
 
 ## Schema — migrate first, then boot
 
@@ -310,7 +329,7 @@ itself.
 ## What this deployment decides about
 
 Be precise about the decision core this stack serves: the API boots the
-demo-seeded core (`artifacts/api-server/src/lib/core.ts:10` —
+demo-seeded core (`artifacts/api-server/src/lib/core.ts:32` —
 `SignalGridCore.demo()`), whose only constructor path is the demo factory with
 a fixed clock (`lib/signalgrid-core/src/engine.ts:51,92`). The
 `shared-device-gateway` profile fences off the demo *surfaces* (credential

@@ -94,7 +94,20 @@ export function demoSurfacesEnabled(profile: ProductProfile = resolveProfile()):
 // that is not part of Limited GA, and a surface nobody scoped is a surface nobody
 // reviewed — which is Blocker 8 stated precisely.
 //
-// So the gateway profile carries an ALLOWLIST, and everything outside it 404s.
+// So the gateway profile carries an ALLOWLIST, and everything outside it 404s —
+// UNDER `/api`, which is the exact reach of this fence and is stated that way
+// because the shorter sentence was not true. The fence is registered inside the
+// router (`routes/index.ts`), and that router is mounted at `/api` (`app.ts`), so
+// routes registered directly on the app ABOVE that mount never meet it: `GET
+// /metrics` is served under the gateway profile and is deliberately not in the
+// list below. That carve-out is a decision, not an oversight — an orchestrator
+// that cannot scrape a customer deployment is a customer deployment nobody can
+// operate, and the endpoint is global-aggregate only with no tenant label, bearer-
+// gatable via METRICS_TOKEN. `scripts/launch-profile.mjs` records the same fact
+// ("the server mounts this contract under /api and ALSO registers `/`, `/console`
+// and `/metrics` directly on the app, outside it"), and `test/api.test.mjs`'s
+// gateway block now asserts BOTH halves live: `/metrics` answers 200, `/api/metrics`
+// 404s.
 //
 // WHY AN ALLOWLIST AND NOT A DENYLIST. A denylist has to be updated every time a
 // route is added, and the failure mode of forgetting is that the new route SHIPS.

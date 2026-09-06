@@ -141,8 +141,9 @@ in `native/desktop/core`. Each had its own hand-written tests, which is precisel
 arrangement in which they diverge silently: every suite stays green while one client
 starts treating a malformed response differently from the others.
 
-`native/shared/assist-wire-conformance.json` is **one set of 42 cases every client
-must agree on** — happy paths, transport failures, captive-portal HTML, truncated
+`native/shared/assist-wire-conformance.json` is **one set of cases every client
+must agree on** (the count is the file's own `requires.minCases` — 44 on 2026-09-06, up
+from the 42 this sentence used to state) — happy paths, transport failures, captive-portal HTML, truncated
 bodies, wrong-typed fields, and the near-misses (`allow_all`, `disallow`, `allowed`)
 that a lenient parser could talk itself into accepting. Each client has a test that
 reads the file and asserts its own parser agrees, case by case.
@@ -297,8 +298,10 @@ which three CI jobs it does *not* mirror (Postgres, the Docker-compose smoke, an
 gitleaks), so a green preflight means everything reproducible locally is green, not that
 CI cannot go red.
 
-**The breadth lane is separate since 2026-08-11.** The 47 deferred-family gates and the
-8 doctrine-document proofs run as their own required CI job (`Breadth lane`, in parallel
+**The breadth lane is separate since 2026-08-11.** The deferred-family gates and the
+doctrine-document proofs (47 + 8 when this was written; the lane holds a 56th step,
+`proof:decision-palette`, and the number to trust is the count of `STEPS` entries in
+`scripts/verify-breadth.mjs` — 56 on 2026-09-06) run as their own required CI job (`Breadth lane`, in parallel
 with `validation`) via `pnpm run verify:breadth` — kept, still gating every pull
 request, no longer a serial per-push tax. Touch a deferred connector family or a
 doctrine document? Run the breadth lane locally too:
@@ -347,7 +350,8 @@ builds; preflight sets them for the build step itself.
 ### A name-drift gate is not a behaviour gate
 
 `scripts/check-mcp-surface.mjs` asserts the MCP server, its ready message,
-`docs/RUN_ON_MAC.md` and the live-sync manifest all list the same eight tool names.
+`docs/RUN_ON_MAC.md` and the live-sync manifest all list the same tool names (eight
+when this was written; the gate prints the count — 16 on 2026-09-06).
 That is worth having and it is not coverage: a tool can pass it while returning a
 confidently wrong answer, and one did. `evaluate_location_certainty` defaulted two
 optional inputs — `source_health ?? "healthy"` and `map_version ?? <the graph's own

@@ -5,6 +5,12 @@
 > fixtures only, no employer data, no live systems. SignalGrid **assists and
 > coordinates; it never silently overrides a clinician** or becomes an
 > uncontrolled dependency for life-safety systems.
+>
+> **Framing note (2026-09-06).** "Trust fabric" and "trust & orchestration layer" are
+> this document's original framing and its filename; `docs/PURPOSE.md` §2 owns the
+> product sentence (DR-019 counted `trust fabric` among the drift phrases its census
+> found and ratifies no category label). Read the title as the document's name, not
+> as the product's category.
 
 ## Problem statement
 
@@ -119,7 +125,9 @@ A synthetic nurse with a managed device approaches a room. SignalGrid evaluates
 identity, role, on-shift, device compliance, assignment, location, room
 sensitivity, and workflow, and returns **Allow / Step-up / Restrict / Deny**.
 Run it: [`RUN_ON_MAC.md`](./RUN_ON_MAC.md). Proven by `proof:orchestration`
-(20/20) + API integration coverage.
+(it printed `Orchestration proof: 48/48 assertions passed` on 2026-09-06; this line
+held 20/20, a shape `scripts/check-proof-counts.mjs` cannot read, so run the proof
+rather than trust the cell) + API integration coverage.
 
 ### Phase 2 — Workflow orchestration ✅ (built, runnable)
 Once access is decided, SignalGrid orchestrates simulated downstream actions —

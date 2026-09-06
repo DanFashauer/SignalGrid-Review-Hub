@@ -14,11 +14,11 @@ Use limited capital or design-partner support to validate the sandbox and pilot 
 
 ### OEM / embedded partnership path
 
-Explore embedding SignalGrid trust orchestration into another vendor's workflow or device ecosystem while keeping clear source-system boundaries.
+Explore embedding SignalGrid's grid — the systems a building already runs, deciding and acting on the person's behalf (`docs/PURPOSE.md` §2) — into another vendor's workflow or device ecosystem while keeping clear source-system boundaries.
 
 ### Acquisition with retained product leadership
 
-Consider strategic acquisition only if product leadership, public-safety discipline, and the operational trust orchestration thesis remain protected.
+Consider strategic acquisition only if product leadership, public-safety discipline, and the product thesis (`docs/PURPOSE.md` §2: one grid across the systems a building already runs that decides and acts on the person's behalf; no category label is ratified — DR-019/DR-020) remain protected.
 
 ### Full buyout as last path
 

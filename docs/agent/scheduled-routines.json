@@ -10,10 +10,10 @@
    "authorizedBy": "Dan Fashauer (owner)",
    "authorizedOn": "2026-08-21",
    "authorizationEvidence": "owner message in-session: 'Can you have an employee monitor and administrator for the Mac lane please' — the role was created in direct response, same day. Cadence 4h -> hourly on 2026-09-05, owner message: 'Need you to have a better system with local Mac lane cause this is not working and causing delay'",
-   "writeScope": "artifacts/lane-messages/** and artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json, delivered through scripts/lane-deliver.mjs onto a lane/cloud-mail-* branch that is opened as a PR and auto-merged — NEVER through the code branch (that is what held acks behind open code PRs). Plus: opens a draft PR for every unmerged origin/mac/* branch, subscribes to it, reviews and lands it.",
-   "escalationBoundary": "escalates to the owner ONLY what only the owner can clear (credentials, Mac-side actions); a quiet cycle produces no owner message",
+   "writeScope": "artifacts/lane-messages/** and artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json, delivered through scripts/lane-deliver.mjs onto a lane/cloud-mail-* branch that is opened as a PR and auto-merged — NEVER through the code branch (that is what held acks behind open code PRs). Plus: opens a draft PR for every unmerged origin/mac/* branch, subscribes to it, reviews and lands it. Since 2026-09-06 it also carries the duties absorbed from the retired live-sync-loop-keeper: checks pending sim-requests (scripts/check-sim-requests.mjs), unread lane messages (scripts/check-lane-messages.mjs), and the age of artifacts/live-evidence/mac-run.json — when that file is >3 days stale it mails the Mac lane through lane:deliver.",
+   "escalationBoundary": "escalates to the owner ONLY what only the owner can clear (credentials, Mac-side actions); a quiet cycle produces no owner message. Live-evidence staleness (artifacts/live-evidence/mac-run.json older than 3 days) goes to the Mac lane as lane mail, never to the owner.",
    "heartbeatPath": "artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json",
-   "cadenceToleranceHours": 4
+   "cadenceToleranceHours": 3
   },
   {
    "id": "live-sync-loop-keeper",
@@ -26,7 +26,16 @@
    "writeScope": "artifacts/sync/live-sync-manifest.json, artifacts/sync/last-evidence-notice.json, and artifacts/agent-heartbeats/live-sync-loop-keeper.json only; never touches lib/ or proofs",
    "escalationBoundary": "notifies the owner only when live evidence is stale >3 days and not recently notified; flags rather than fixes anything large",
    "heartbeatPath": "artifacts/agent-heartbeats/live-sync-loop-keeper.json",
-   "cadenceToleranceHours": 50
+   "cadenceToleranceHours": 50,
+   "status": "retired",
+   "retiredAt": "2026-09-06T10:10Z",
+   "retiredBy": "cloud lane (Batch Y)",
+   "retiredReason": "The account trigger fires daily (last run 2026-09-05T13:07Z, status SUCCEEDED, fresh session each fire) and has delivered nothing in 41 days: a fresh session cannot push to SignalGrid_Alpha (direct push is denied), so every fire since 2026-07-27 ended without a heartbeat, a manifest or an evidence notice reaching the tree. Zero deliveries is not a quiet routine; it is a routine that never had a write path. Its duties are absorbed by mac-lane-steward-duty-cycle: pending sim-requests, unread lane messages, and artifacts/live-evidence/mac-run.json staleness (>3 days) -> Mac-lane mail, never an owner message.",
+   "retiredEvidence": {
+    "command": "git log --all --oneline -- artifacts/agent-heartbeats/live-sync-loop-keeper.json | wc -l",
+    "result": "0 on 2026-09-06 — no commit in the repository's whole history has ever touched the declared heartbeat path; git ls-files artifacts/sync/last-evidence-notice.json is likewise empty",
+    "triggerLastRun": "2026-09-05T13:07Z, SUCCEEDED, per the account scheduler (list_triggers), which this tree cannot read"
+   }
   },
   {
    "id": "nightly-build-agent",
@@ -74,7 +83,10 @@
    "writeScope": "artifacts/agent-heartbeats/mac-lane-tick.json (via lane:deliver, straight to SignalGrid_Alpha) and artifacts/sim-results/** + artifacts/live-evidence/** on mac/tick-<stamp> branches only; never the code branches, never lane mail (only a person acks a message)",
    "escalationBoundary": "runs only what a sim request names from scripts/lib/sim-operations.mjs; refuses a dirty or non-Alpha checkout and says so in its heartbeat; the cloud steward escalates to the owner when this heartbeat is older than its tolerance (the tick is not installed, the Mac is asleep, or origin is unreachable)",
    "heartbeatPath": "artifacts/agent-heartbeats/mac-lane-tick.json",
-   "cadenceToleranceHours": 3
+   "cadenceToleranceHours": 3,
+   "status": "awaiting-activation",
+   "awaitingReason": "launchd agent not yet installed on the owner's Mac (bash scripts/mac/install-launchd.sh); owner escalated 2026-09-06T04:26Z",
+   "awaitingSince": "2026-09-05"
   }
  ]
 }

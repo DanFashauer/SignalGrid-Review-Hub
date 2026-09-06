@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { markServing } from "./lib/metrics";
 
 // Re-exported for `test/route-stack-dump.mjs`, which boots this entry and walks
 // the router stack the server actually mounted, to cross-check the source-text
@@ -26,5 +27,8 @@ app.listen(port, (err) => {
     process.exit(1);
   }
 
+  // signalgrid_up flips to 1 HERE, not at module import: the gauge answers
+  // "is this process serving", and until the socket is bound it is not.
+  markServing();
   logger.info({ port }, "Server listening");
 });

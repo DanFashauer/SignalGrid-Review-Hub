@@ -4876,18 +4876,18 @@ Auth chain (bearer token to tenant principal):
 11. lib/enterprise-auth/src/jwt.ts (205) — token verification.
 12. lib/enterprise-auth/src/claims.ts (99) — claims-to-principal mapping; tenant derivation lives here.
 13. lib/enterprise-auth/src/jwks.ts (90) — key fetch/cache; wrong caching means accepting rotated-out keys.
-14. artifacts/api-server/src/lib/profile.ts (181) — the review-demo vs shared-device-gateway fence; a classification bug mounts demo surfaces in production.
-15. artifacts/api-server/src/lib/core.ts (78) — the seam where HTTP hands to the decision core.
+14. artifacts/api-server/src/lib/profile.ts (194) — the review-demo vs shared-device-gateway fence; a classification bug mounts demo surfaces in production.
+15. artifacts/api-server/src/lib/core.ts (105) — the seam where HTTP hands to the decision core.
 16. artifacts/api-server/src/middlewares/idempotency.ts (109) — durable-write dedupe on the decision path.
 
 Served surface and durable path:
-17. artifacts/api-server/src/routes/v1.ts (1026) — every served /v1 route including evaluate and the release-path re-evaluation; the spec was audited, the implementation was not.
+17. artifacts/api-server/src/routes/v1.ts (1028) — every served /v1 route including evaluate and the release-path re-evaluation; the spec was audited, the implementation was not.
 18. lib/audit/src/backend.ts (318) — the Postgres ledger WRITE path; the audited verify path is provably blind to tail truncation, so append guarantees live only here.
 19. lib/persistence/src/decision-store.ts (288) — durable decision writes.
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (648) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (660) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (758) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (188) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

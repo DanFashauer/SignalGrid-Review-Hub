@@ -5,7 +5,7 @@
 > because its entire output is the size of the gap.
 
 Modeled in `@workspace/flows` (`lib/flows/src/evidence-coverage.ts`); proven by
-`pnpm run proof:evidence-coverage` (25 checks). Three surfaces render it, all from the
+`pnpm run proof:evidence-coverage` (30 checks). Three surfaces render it, all from the
 same function — none holds a transcribed copy of another's numbers:
 
 | Surface | Where | For |
@@ -59,6 +59,19 @@ So the honest artifact is not "here is what we would have decided". It is:
   planes that can supply it. An axis with an empty list is answerable by nothing a
   deployment could plausibly have — a legitimate answer, and the reason the row is
   shown rather than quietly omitted.
+  **"One per field" is now GATED, and it was not true when this line was first
+  written.** `proof:evidence-coverage` compares the axis ids against
+  `Object.keys()` of a `DecisionEvidence`-typed record — a list the compiler forces to
+  be exactly the interface's fields — in both directions, and separately resolves every
+  `EVIDENCE_FIELDS` entry onto an axis through the engine's own `matches()` switch. The
+  only completeness assertion before that was "the buckets sum to the axis total",
+  which is true by construction for any list including an empty one; underneath it the
+  table had 18 axes against 21 fields, omitting `managementHealthState` and
+  `localAuthorityState` (two of the three Limited GA launch families) and
+  `dockEvidenceFreshness`. An estate with neither of those planes therefore produced no
+  dark axis and no silent hole for them — absence uncounted, on the page whose whole job
+  is counting absence. Do not restate the axis count here: the proof prints it as
+  `figures=axes=…`.
 - **`dayOneQuiet`** — true when the active rule set still grants on the axis's
   *ignorance* member. Not an opinion: each `true` corresponds to a policy test in
   `seed.ts`, and the proof asserts the flag and the rule set stay in step rather than

@@ -103,27 +103,92 @@
   const byId = (s,el)=> (el||document).querySelector(s);
   let current=null, confirmed=new Set(), stepUp=false;
   /*sigClass:start*/
-  function sigClass(v){
-    // Colour for a signal value. The rule this must never break: a value that is
-    // not a known-good one is NEVER rendered green. `non_compliant` once rendered
-    // green because the match ran on the raw string and "non_compliant" contains
-    // "compliant"; `not_present` the same. Separators are stripped before matching,
-    // exact good values win first, every bad/warn word beats every good word, a
-    // negated word the lists do not know is bad, and an unrecognised value is amber —
-    // never blank and never green. build-room-console.mjs runs these vectors.
+  // Colour for ONE evidence field's value, by EXACT MEMBERSHIP of the core's own state
+  // unions. No substring test, no good-word list, no prefix rule.
+  //
+  // WHY IT TAKES THE FIELD. Two unions disagree about the same word. `confirmed` is the
+  // GOOD benchmark-selection and shift-context state and the WORST tamper state; `low`
+  // is a benign risk tier and a bad charge level. A value-only classifier cannot tell
+  // them apart, so it has to guess, and either guess is wrong for one of the two fields.
+  //
+  // WHAT THIS REPLACED, because the previous comment here claimed the defect was closed.
+  // The old body fell back to `ok.some(o => s.includes(o))` over a list containing the
+  // literal 'ok' — so `"broken"`, the ManagementHealthState FAILURE state and one of the
+  // three Limited GA launch families, rendered in the allow green, because "broken"
+  // contains "ok". A `/^(un|non|not|no)/` rule painted `tamperState: "none"` — no tamper
+  // observed, the healthy state — in the deny red, while `suspected` sat in amber. Same
+  // defect as `non_compliant` containing `compliant`, one word later: a word list IS a
+  // substring test wearing a different hat.
+  //
+  // THE LAW. A value that is not a known-good member of ITS OWN field's union is never
+  // green. A field or a value this table does not know is amber — never blank, never
+  // green, never silently unclassed.
+  //
+  // THE SCOPE IS DERIVED, NOT REMEMBERED. `scripts/build-room-console.mjs` parses the
+  // `DecisionEvidence` interface and every union it names out of
+  // `lib/signalgrid-core/src/types.ts`, and asserts that this table covers every member
+  // of every one of them with the colour the gate's own map expects. A union member
+  // added, removed or renamed in the core fails the BUILD until it is classified here.
+  //
+  // WHAT THE THREE CLASSES MEAN: evidence HEALTH, not the verdict. `ok` is the good or
+  // expected reading, `warn` is degraded / not-yet-answered / no-answer-possible, `bad`
+  // is an affirmative failure. The verdict has its own banner above and is not restated
+  // in the signal grid.
+  const U_BOOL     = {};  // boolean-only field; true/false are classed before the table
+  const U_BOOL3    = {unknown:'warn'};
+  const U_COMPLIANCE = {compliant:'ok', non_compliant:'bad', unknown:'warn'};
+  const U_OWNER    = {corporate:'ok', shared:'ok', personal:'warn', unknown:'warn'};
+  const U_FRESH    = {fresh:'ok', stale:'bad', expired:'bad', missing:'warn', unknown:'warn'};
+  // Risk tier describes the ACTION, not the device: no tier is a device fault, so the
+  // graded tiers raise attention rather than reporting a failure.
+  const U_RISK     = {low:'ok', standard:'ok', elevated:'warn', critical:'warn'};
+  const U_CUSTODY  = {checked_in:'ok', checked_out:'ok', overdue:'bad', exception:'bad', maintenance:'bad', unknown:'warn'};
+  const U_CHARGE   = {charging:'ok', charged:'ok', low:'warn', critical:'bad', not_present:'bad', unknown:'warn'};
+  const U_BATTERY  = {healthy:'ok', degraded:'warn', failing:'bad', unknown:'warn'};
+  const U_TAMPER   = {none:'ok', suspected:'warn', confirmed:'bad', sensor_unavailable:'warn', unknown:'warn'};
+  const U_DOCK     = {occupied:'ok', empty:'ok', reserved:'ok', faulted:'bad', offline:'bad', unknown:'warn'};
+  const U_BASELINE = {aligned:'ok', partial:'warn', drifted:'bad', not_assessed:'warn', unknown:'warn'};
+  const U_BENCH    = {confirmed:'ok', misfit:'bad', unverified:'warn'};
+  const U_SHIFT    = {confirmed:'ok', misfit:'bad', unverified:'warn'};
+  // `absent` is deliberately amber, not red: the core's own type comment calls an unbound
+  // shared device "not itself a fault". `removed` and `forced` are the affirmative ones.
+  const U_BADGE    = {present:'ok', removed:'bad', forced:'bad', absent:'warn', unknown:'warn'};
+  const U_MGMT     = {healthy:'ok', degraded:'warn', broken:'bad', unknown:'warn'};
+  const U_AUTH     = {verified:'ok', withheld:'bad', unverified:'warn'};
+  // Keys are `DecisionEvidence` field names, exactly as `Object.entries(d.signals)` yields
+  // them. The build gate asserts this key set EQUALS the interface's field set.
+  const SIG_FIELDS = {
+    identityEnabled: U_BOOL3,
+    deviceManaged: U_BOOL3,
+    deviceCompliance: U_COMPLIANCE,
+    deviceEncrypted: U_BOOL3,
+    osSupported: U_BOOL3,
+    ownerType: U_OWNER,
+    postureFreshness: U_FRESH,
+    workflowRiskTier: U_RISK,
+    custodyState: U_CUSTODY,
+    dockChargeState: U_CHARGE,
+    batteryHealth: U_BATTERY,
+    tamperState: U_TAMPER,
+    dockEvidenceFreshness: U_FRESH,
+    dockState: U_DOCK,
+    baselineCompliance: U_BASELINE,
+    benchmarkSelection: U_BENCH,
+    shiftContext: U_SHIFT,
+    badgeBinding: U_BADGE,
+    managementHealthState: U_MGMT,
+    localAuthorityState: U_AUTH,
+    criticalSignalsPresent: U_BOOL,
+  };
+  function sigClass(field, v){
     if(v===true) return 'ok';
     if(v===false) return 'bad';
     if(v===null||v===undefined) return 'warn'; // evidence that never arrived: amber, like 'unknown'
-    const s=String(v).toLowerCase().replace(/[^a-z]/g,'');
-    const ok=['enabled','compliant','present','bound','aligned','fresh','docked','nominal','supported','enrolled','healthy','ok'];
-    const bad=['disabled','noncompliant','notpresent','absent','withdrawn','forced','tampered','drifted','offline','faulted','stale','expired','removed','revoked','misfit','unsupported','undocked','unbound','unenrolled','denied','blocked'];
-    const warn=['unknown','missing','suspected','degraded','pending','unverified','partial'];
-    if(ok.includes(s)) return 'ok';
-    if(bad.some(b=>s.includes(b))) return 'bad';
-    if(warn.some(w=>s.includes(w))) return 'warn';
-    if(/^(un|non|not|no)/.test(s)) return 'bad';
-    if(ok.some(o=>s.includes(o))) return 'ok';
-    return 'warn';
+    const has=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
+    const table = has(SIG_FIELDS, field) ? SIG_FIELDS[field] : null;
+    const key = String(v).trim().toLowerCase();
+    if(table && has(table, key)) return table[key];
+    return 'warn'; // unrecognised field or value — amber, never green
   }
   /*sigClass:end*/
   function load(){
@@ -175,7 +240,7 @@
     Object.entries(d.signals).forEach(([k,val])=>{
       const it=el('div','s-item');
       it.appendChild(el('div','k',k.replace(/([A-Z])/g,' $1').trim()));
-      it.appendChild(el('div','v '+sigClass(val),String(val)));
+      it.appendChild(el('div','v '+sigClass(k,val),String(val)));
       sg.appendChild(it);
     });
     sp.appendChild(sg); out.appendChild(sp);

@@ -300,13 +300,17 @@ Everything this loop commits is public-repo safe by construction:
   owner's machines stay outside the repo; only their *verdict* (pass, against
   which fingerprint) is committed.
 
-## Wiring (to be added by the owner — files out of scope for automation here)
+## Wiring
 
-- `package.json` scripts:
-  `"sync:manifest": "node scripts/generate-sync-manifest.mjs"` and
-  `"check:live-sync": "node scripts/check-live-sync.mjs"`.
-- `scripts/preflight.mjs` STEPS (the hard half locally):
-  `{ name: "Live-sync manifest (contracts vs published manifest)", cmd: ["node", "scripts/check-live-sync.mjs"] }`.
-- `.github/workflows/review-hub-ci.yml` (the hard half in CI) and
-  `.github/workflows/scheduled-verification.yml` (drift + staleness watch):
-  a step running `node scripts/check-live-sync.mjs`.
+Landed (as of 2026-09-06): the `package.json` scripts `sync:manifest` and
+`check:live-sync`; `scripts/preflight.mjs:359` runs `node scripts/check-live-sync.mjs`
+(the hard half locally); `.github/workflows/review-hub-ci.yml` runs the same step (the
+hard half in CI). Two of the three bullets that stood here until 2026-09-06 were
+already done.
+
+Still to be added by the owner (`.github/` is out of scope for automation here):
+
+- `.github/workflows/scheduled-verification.yml` (drift + staleness watch): a step
+  running `node scripts/check-live-sync.mjs` — `grep -n live-sync
+  .github/workflows/scheduled-verification.yml` returns nothing as of 2026-09-06;
+  §(ii) above describes what it would do.

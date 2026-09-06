@@ -71,7 +71,8 @@ Keep them — they're the right tool for governance, and SignalGrid is not tryin
 to replace them. What they do *not* do is stand at the shared ward tablet at
 2 a.m. and decide whether *this* medication-administration workflow should
 proceed on *this* device, given that the badge was just withdrawn, the device is
-off its dock, and posture is one hour stale. Entitlement says the nurse *may*
+off its dock (badge and dock are deferred families, not Limited GA), and posture
+is one hour stale. Entitlement says the nurse *may*
 perform med-admin; SignalGrid decides whether *this attempt, right now* is
 trustworthy — and holds the sensitive step for a human. That runtime,
 in-context, per-workflow gap is what SignalGrid fills, on top of the identities
@@ -81,9 +82,10 @@ your IGA already governs.
 
 Conditional Access is identity-and-session centric and excellent at login.
 SignalGrid decides per *workflow* on shared/frontline devices and fuses signals
-an IdP doesn't see — physical custody, dock state, badge binding, tamper, device
-baseline drift — then orchestrates the downstream action with a human-confirmed
-assist on anything sensitive. It complements Conditional Access; it doesn't
+an IdP doesn't see — device posture and device-management health today (Limited
+GA); physical custody, dock state, badge binding and tamper as deferred
+families, not Limited GA — then orchestrates the downstream action with a
+human-confirmed assist on anything sensitive. It complements Conditional Access; it doesn't
 replace it.
 
 ## Claim boundaries
@@ -94,8 +96,13 @@ replace it.
 - No production-ready or compliance-certification claim.
 - Vendor names appear only as the widely-known systems a buyer likely runs, to
   make the adjacency concrete.
+- Custody, dock, badge and tamper signals are deferred families (design
+  targets), not Limited GA; Limited GA today is Microsoft Graph,
+  device-management health and local authority (`scripts/launch-profile.mjs`).
 
-See also: [`ECOSYSTEM_POSITIONING.md`](../ECOSYSTEM_POSITIONING.md) (the full
-category matrix) and
-[`OPERATIONAL_TRUST_ORCHESTRATION.md`](../OPERATIONAL_TRUST_ORCHESTRATION.md)
-(the category definition).
+See also: [`POSITIONING.md`](../POSITIONING.md) (the live positioning page),
+[`PURPOSE.md`](../PURPOSE.md) §2 (the product sentence; no category label is
+ratified — DR-019/DR-020) and [`ECOSYSTEM_POSITIONING.md`](../ECOSYSTEM_POSITIONING.md)
+(the full category matrix). Until 2026-09-06 this line also pointed at a retired
+label exploration as "the category definition"; that page is superseded and is
+kept for provenance only.

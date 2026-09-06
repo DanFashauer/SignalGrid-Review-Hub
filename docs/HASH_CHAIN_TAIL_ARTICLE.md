@@ -41,4 +41,4 @@ Reproducing this takes five minutes — **on a disposable copy, never on retaine
 
 ---
 
-*This came out of hardening the audit ledger behind SignalGrid, a fail-closed assist gate for shared frontline devices; the full lab notes are public in our review repository.*
+*This came out of hardening the audit ledger behind SignalGrid, which connects the systems a building already runs into one grid that decides and acts on a person's behalf — fail-closed, on shared frontline devices; the full lab notes are public in our review repository.*

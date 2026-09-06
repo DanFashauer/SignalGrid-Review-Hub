@@ -272,6 +272,15 @@
      "scope": "partial: middlewares, persistence wiring, health, simulator, control-plane telemetry, connector wiring",
      "open": 0,
      "closed": 4
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twenty-third round: app.ts, index.ts, console-html.ts, lib/{assurance,core,logger,metrics,profile,tier}.ts, test/{api,load,oidc,route-stack-dump}.mjs, build.mjs, requests.http, package.json, tsconfig.json - 12 findings: the served console painting a restrict cause green (substring classifier → exact per-signal map, driven through all nineteen scenarios), stepUpAnswerable a literal under review-demo (derived from the mounted router, plant → red), the load gate passing on zero requests (floored, knobs refused), an oidc probe that sent the mapped tenant and accepted both answers (404 not_found pinned), blank METRICS_TOKEN serving /metrics open (refused at boot), uptime from first scrape, the fence sentence overstating /metrics, a silent boot seeder, duplicate test ports, unhedged served copy. api suite 384 → 409, every fix red under its plant. With the 2026-09-02 and 2026-09-05 reads this surface is now read whole.",
+     "reviewer": "cloud lane (six independent fail-closed-auditor reads in parallel, seven fix agents, every edit site and every gate run read firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 12
     }
    ]
   },
@@ -686,6 +695,15 @@
      "scope": "partial: HARDWARE_PARTNER_MATRIX.md only",
      "open": 0,
      "closed": 12
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twenty-third round: every loose docs/* file not read whole before - 209 files in three chunks (INDEX, DECISION_RECORDS, INTAKE_LEDGER, INTEGRATION_CATALOG in slices; room-entry-console.html through its shell source, its bundle's sources and a run of all nineteen scenarios) - 74 findings: the retired-label rule's apostrophe-as-quote hole (one live sentence invisible to the ceiling), sigClass('broken') → ok in the room console (vectors now derived from the core's unions), the evidence-coverage page missing the two launch-family axes (21 now, proof asserts both directions), PURPOSE.md's lane table still frozen after DR-021, POSITIONING's claim-to-proof trace with eight bare citations on unrelated lines, DEPLOYMENT.md documenting ten credentials the served core never reads, the Codex reviewer listed active after its retirement, four pruned branches described live, two published demos and the architecture page without a scope statement (gate derived from pages.yml), a reset path that constructed an allow, and stale figures in some thirty sentences each re-derived by command. With BUILD_BACKLOG, COMPANY_BUILD_PLAN, CLAIM_INVENTORY (by anchors), fabric-console.html and HARDWARE_PARTNER_MATRIX this surface is now read whole. Open: the custody backstop blind to five custody axes and NOT_COVERED credential exposure resolving to monitor (both disclosed and pinned - owner decisions), and a GAPS entry for connector families unwired in the served core (recorded in DEPLOYMENT.md prose, not yet in launch-profile.mjs).",
+     "reviewer": "cloud lane (six independent fail-closed-auditor reads in parallel, seven fix agents, every edit site and every gate run read firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 3,
+     "closed": 71
     }
    ]
   },
@@ -745,6 +763,15 @@
      "scope": "partial: CLAIM_INVENTORY.json by anchors, citations and membership; whether a NEW claim on a surface has a row is still nobody's gate; EVIDENCE.md, LOOP.md, the registries as before.",
      "open": 1,
      "closed": 1
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twenty-third round: the ten markdown files and four registries no round had opened (CONTINUITY, LOOP_COVERAGE, REVIEW_STRUCTURE_COMPARISON, EVIDENCE_TOOLCHAIN_OWNERSHIP, REVIEW_CYCLE, SOLUTION_READINESS_ASSESSMENT, MANUAL_FULL_PRODUCT_SMOKE_SCREEN_RESULTS, ORG, ECC_FULL_EVALUATION_2026-09-01, RESOURCE_INTAKE; KNOWN_CONDITIONS, evidence-sources, agent-tiers, scheduled-routines) - 13 findings: ORG.md's 'thirteen roles' (42 today, 41 when written; the derived-figure gate could not see a WRONG figure by construction - companion rule added), 'six of the seven self-declared' against five ids, live-sync-loop-keeper firing daily for 41 days with zero deliveries (retired; never-fired-with-no-status now fatal; launchd trigger parity; tolerance bounded by cadence), the steward's 4h tolerance on an hourly cron, stale proof and gate counts in two dated records (annotated), a missing intake cell. With the earlier rounds (EVIDENCE, LOOP, PONYTAIL, DISCOVERY_LOG, CLAIM_INVENTORY by anchors, the JSON registries) this surface is now read whole; the inventory's 149 unquoted rows remain reported, not judged.",
+     "reviewer": "cloud lane (six independent fail-closed-auditor reads in parallel, seven fix agents, every edit site and every gate run read firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 13
     }
    ]
   },
@@ -1012,6 +1039,15 @@
      "scope": "partial: the six documents rule 5 flagged, at the flagged blocks — not the rest of docs/research",
      "open": 0,
      "closed": 43
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Twenty-third round: the 24 files no round had read whole (every research file not among the 32 read in the eleventh round or the 5 read in the thirteenth) - 15 findings: a fabricated one-pager quotation cited back to the file it was never in (now a FALSE_CLAIMS entry), the retired IaC 'apply is refused' sentence re-quoted as doctrine, PITCH_EXECUTION_PACK and DILIGENCE_CHECKLIST routing readers to do-not-send documents (bannered / marked superseded; cross-doc banner parity gate), the custody ground-truth legend saying modeled = shipped, 'current proof is synthetic' in two live files, a see-also calling the superseded category page the category definition, the label and its 'operational trust control plane' variant in five files (product-sentence drift REPORT), mis-attached hedge parentheticals, an unbannered member of the social family, an undated status section, a hand-typed count. With the eleventh and thirteenth rounds this surface is now read whole.",
+     "reviewer": "cloud lane (six independent fail-closed-auditor reads in parallel, seven fix agents, every edit site and every gate run read firsthand)",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "surface",
+     "open": 0,
+     "closed": 15
     }
    ]
   },

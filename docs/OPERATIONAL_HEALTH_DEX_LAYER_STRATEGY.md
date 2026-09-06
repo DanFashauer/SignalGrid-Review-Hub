@@ -6,7 +6,7 @@ SignalGrid's Operational Health / Digital Employee Experience (DEX) layer is a f
 
 The Operational Health / DEX layer consumes endpoint performance, endpoint health, monitoring, alerting, digital employee experience, observability, and ITSM signals, then correlates them with identity, device posture, session context, RTLS/DockBridge context, and workflow state.
 
-SignalGrid is not the system of record for DEX, RMM, EDR, SIEM, monitoring, ITSM, observability, or UEM data. It sits above those systems as a runtime trust orchestration layer that evaluates combined context and decides what should happen next.
+SignalGrid is not the system of record for DEX, RMM, EDR, SIEM, monitoring, ITSM, observability, or UEM data. It sits above those systems as what `docs/PURPOSE.md` §2 states the product is: SignalGrid connects the systems a building already runs into one grid that decides and acts on the person's behalf — here, evaluating the combined operational context and deciding what should happen next. No category label is ratified (DR-019/DR-020); this layer is described by that product sentence, not by a coined name.
 
 ## Why this belongs in SignalGrid
 

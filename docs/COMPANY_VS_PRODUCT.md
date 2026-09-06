@@ -66,12 +66,12 @@ This table is the answer to "are the bots synced and always validating":
 
 | Watcher | Cadence | Scope | Verified green as of 2026-08-18 |
 | --- | --- | --- | --- |
-| Per-push CI (13 checks) | every push/PR | full gate suite, both prod stacks, CodeQL, secret scan, SBOM | ✅ every merged head |
+| Per-push CI (the job count is printed by `node scripts/check-preflight-ci-parity.mjs`, never typed here) | every push/PR | full gate suite, both prod stacks, CodeQL, secret scan, SBOM | ✅ every merged head |
 | Scheduled Verification | daily 07:17 UTC | launch gates + breadth lane on the default branch; opens a tracking issue on regression | ✅ ran this morning |
 | Mac lane (full suite) | weekly Mon 06:00 UTC | the macOS CI mirror of the harness | ✅ ran 2026-08-17 |
 | CodeQL + supply-chain | weekly Mon 07:17 UTC | static analysis + SBOM/secret sweep | ✅ |
 | Dependabot | weekly, grouped | dependency currency (queue cleared 2026-08-18, nine for nine) | ✅ |
-| Codex review bot | every PR ready/push | independent automated review (three real findings on the vite bump alone) | ✅ active |
+| Codex review bot | — (retired) | independent automated review (three real findings on the vite bump alone, Jun–Jul 2026) | ⛔ retired — as of 2026-08-18 this cell read `✅ active`; on 2026-09-06 `git ls-remote --heads origin \| grep -c codex` → 0 and `docs/BRANCH_HYGIENE.md` names `codex/*` as the earlier lane. The review control now is the in-repo reviewer role run before every push (`docs/agent/ORG.md`, `.claude/skills/signalgrid-reviewer/SKILL.md`). |
 | Cloud agent session | hourly self check-in + PR webhooks | drive-to-green on watched PRs, lane inbox, sim-request loop | ✅ this session |
 | Owner's Mac lane | when awake | `sim:run-requests`, live evidence mint, lane mail | last active 2026-08-18 (baseline + bash fix) |
 | `scan:estate` | on demand (cloud lane, needs /workspace clones) | cited paths across all seven repositories | ✅ 7/7 scanned 2026-08-18 |

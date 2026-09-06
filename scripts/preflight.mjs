@@ -85,6 +85,18 @@ const STEPS = [
   { name: "Doc-orphan self-test (a prose mention is not a route)", cmd: ["node", "scripts/check-doc-orphans.mjs", "--self-test"] },
   { name: "Index\u2194banner parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-index-banner-parity.mjs", "--self-test"] },
   { name: "Index\u2194banner parity (a bannered doc is not described alive in INDEX.md)", cmd: ["node", "scripts/check-index-banner-parity.mjs"] },
+  // One level wider than the line above: the index is not the only page that routes a
+  // reader to a dead document. A pitch pack listed three "do not send from this file"
+  // documents in the present tense while the index announced all three honestly.
+  { name: "Cross-doc banner parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-cross-doc-banner-parity.mjs", "--self-test"] },
+  { name: "Cross-doc banner parity (no live doc cites a bannered doc as live)", cmd: ["node", "scripts/check-cross-doc-banner-parity.mjs"] },
+  { name: "Published-page scope banner self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-published-page-scope-banner.mjs", "--self-test"] },
+  { name: "Published-page scope banner (every page pages.yml publishes states its deferred scope)", cmd: ["node", "scripts/check-published-page-scope-banner.mjs"] },
+  // REPORT, not a gate — it prints and exits 0 on what it finds, and exits 1 only when
+  // its own derivation breaks. docs/PURPOSE.md §2 owns the product sentence (DR-020);
+  // this counts how many other sentences in the corpus also define the product.
+  { name: "Product-sentence drift self-test (the detector must find the planted sentences)", cmd: ["node", "scripts/check-product-sentence-drift.mjs", "--self-test"] },
+  { name: "Product-sentence drift REPORT (never fatal on findings; fatal on a broken derivation)", cmd: ["node", "scripts/check-product-sentence-drift.mjs"] },
   // Re-registered 2026-08-31: the gate census found this invoked by NO lane
   // and NO workflow — it had silently drifted out after #213 hardened it.
   { name: "Postman collection tracks the /v1 spec (57 paths at registration)", cmd: ["node", "scripts/build-postman.mjs", "--check"] },

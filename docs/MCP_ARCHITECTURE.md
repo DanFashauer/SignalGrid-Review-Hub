@@ -84,9 +84,12 @@ invoke:
 - **Skills (`.claude/skills/`)** are instruction files a model selects by their metadata.
   They shape the workflow, the output format and the constraints of the work: the role
   executors, the owner-comms rules, the session rituals. A skill can *use* MCP tools; it
-  never exposes a capability of its own. The registry holds 25 tracked directories, 14
-  vendored and 11 first-party, and `.claude/skills/VENDORED.md` is the record of which is
-  which (gated by the publication boundary's vendored-set arithmetic).
+  never exposes a capability of its own. The registry holds 26 tracked directories, 14
+  vendored and 12 first-party (as of 2026-09-06 —
+  `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`; this said
+  25 = 14 + 11 before that date), and `.claude/skills/VENDORED.md` is the record of which
+  is which (its opener states the same arithmetic; the publication boundary gates the
+  vendored set, not this sentence).
 
 So: a new capability that a model should be able to reach lands as an MCP tool behind the
 same read-only, fixture-first rules as the rest of Plane 2; a new rule about *how* the

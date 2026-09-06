@@ -1,4 +1,5 @@
 import { SignalGridCore } from "@workspace/signalgrid-core";
+import { logger } from "./logger";
 
 /**
  * Shared, process-wide product core, preloaded with the deterministic
@@ -54,15 +55,41 @@ const demoOperatorToken = core
   .demoApiKeys()
   .find((k) => k.role === "operator" && k.tenantId === "tenant_northwind")?.token;
 
+// SAY WHAT DID NOT HAPPEN. Not booting would be the wrong answer here — a missing
+// seed subject must not stop the server — but the silent version of this loop made
+// ALL SIX seeds failing, or the operator token being absent entirely, indistinguishable
+// at runtime from a healthy boot. One line, after the loop, so an operator staring at
+// an empty console learns why instead of guessing.
 if (demoOperatorToken) {
+  let failed = 0;
   for (const seed of DEMO_DECISION_SEEDS) {
     try {
       core.evaluate(demoOperatorToken, seed);
     } catch {
       // A missing seed subject must not stop the server from booting — the
       // console simply starts with fewer pre-minted decisions.
+      failed += 1;
     }
   }
+  const total = DEMO_DECISION_SEEDS.length;
+  const minted = total - failed;
+  // The healthy boot logs too, at info. Warning only on failure would leave the
+  // ABSENCE of a line carrying the meaning, and an absence is exactly what the
+  // silent version of this loop already proved nobody notices — it is also what
+  // test/api.test.mjs reads to prove the counting happens at all.
+  if (failed > 0) {
+    logger.warn(
+      { minted, failed, total },
+      "boot seed: some demo decisions could not be minted; the console starts with fewer pre-minted decisions",
+    );
+  } else {
+    logger.info({ minted, failed, total }, "boot seed: demo decisions minted");
+  }
+} else {
+  logger.warn(
+    { minted: 0, failed: 0, total: DEMO_DECISION_SEEDS.length, tenant: "tenant_northwind", role: "operator" },
+    "boot seed: no demo operator key found, so NO decisions were pre-minted; the console starts empty",
+  );
 }
 
 /**

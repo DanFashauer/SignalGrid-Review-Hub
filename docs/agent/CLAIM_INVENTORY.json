@@ -10,9 +10,9 @@
   "demo-only": 259
  },
  "actions": {
-  "rewrite": 572,
+  "rewrite": 578,
   "keep": 481,
-  "remove": 148
+  "remove": 142
  },
  "rows": [
   {
@@ -595,7 +595,8 @@
    "kind": "surface",
    "classification": "demo-only",
    "evidence": "scripts/launch-profile.mjs:507 — signalgrid-mobile-pwa is demo_only, \"A third client surface (fixture-fed)\"; ratified by docs/DECISION_RECORDS.md:243-259",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Pricing.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 58); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -634,7 +635,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "scripts/launch-profile.mjs:294 — shift_context is a deferred signal kind (and :230 shift-context a deferred connector family); docs/DECISION_RECORDS.md:201-202 quotes the owner verbatim: \"Remove present-tense claims for deferred badge, zone, and shift capabilities\"",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Pricing.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 62); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -643,7 +645,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No compliance-report export exists in the product: the only \"compliance reporting\" strings in the codebase are third-party vendor blurbs in artifacts/api-server/src/routes/integrations.ts:151, :187, :447; no such path appears in lib/api-spec/v1-openapi.yaml and no proof:* script covers it (package.json:57-200)",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Pricing.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 63); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -652,7 +655,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "The delivery surface it would require is deferred: lib/api-spec/v1-openapi.yaml:476 /v1/webhooks and :438 /v1/webhooks/deliveries are listed deferred at scripts/launch-profile.mjs:394-395; no routing configuration surface exists in the repo",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Pricing.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 64); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -661,7 +665,8 @@
    "kind": "availability",
    "classification": "unsubstantiated",
    "evidence": "No air-gap or on-premise deployment artifact exists — a repo-wide search of lib/, artifacts/api-server and scripts/ for air-gap/airgap returns one unrelated comment (lib/integrations/src/integrations/sse-egress/types.ts:20); the page's own FAQ at Pricing.tsx:85 concedes the Federal/DoD air-gap deployment \"is a design modeled on public-safe fixtures, not an available offering\"",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06 (Batch R): remove → rewrite — the feature line now reads \"Air-gap / on-premise deploy (roadmap design, not delivered)\" with ok:false in the Starter tier, the hedge in the same line. The row stands as the extraction record."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -725,7 +730,8 @@
    "kind": "surface",
    "classification": "demo-only",
    "evidence": "scripts/launch-profile.mjs:503 — signalgrid-desktop is demo_only, \"A second client surface (fixture-fed). Blocker 8 names exactly this; the console is the one.\"",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Pricing.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 72); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -743,7 +749,8 @@
    "kind": "surface",
    "classification": "demo-only",
    "evidence": "scripts/launch-profile.mjs:490-493 — signalgrid-mobile-pwa demo_only, fixture-fed third client surface",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Pricing.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 74); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -782,7 +789,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "scripts/launch-profile.mjs:294 shift_context deferred, :230 shift-context connector family deferred; docs/DECISION_RECORDS.md:201-202 (DR-005) — \"Remove present-tense claims for deferred badge, zone, and shift capabilities\"",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Pricing.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 78); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -791,7 +799,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No such feature: no path in lib/api-spec/v1-openapi.yaml, no proof:* script in package.json:57-200, and the only \"compliance reporting\" strings are vendor catalogue descriptions (artifacts/api-server/src/routes/integrations.ts:151, :187, :447)",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Pricing.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 79); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -800,7 +809,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "scripts/launch-profile.mjs:394-395 defers /v1/webhooks and /v1/webhooks/deliveries — the only delivery mechanism a routing feature could use; no routing configuration surface exists in lib/ or artifacts/api-server/src",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Pricing.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 80); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
@@ -948,11 +958,12 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "scripts/launch-profile.mjs:275 custody, :276 custody_beacon and :287 pacs_access are deferred signal kinds (families custody-beacon :206, pacs-access :221, rtls-custody :227 deferred); docs/DECISION_RECORDS.md:201-202 (DR-005) — \"Remove present-tense claims for deferred badge, zone, and shift capabilities\"",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Pricing.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 95); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
-   "line": "72-73",
+   "line": "61",
    "claim": "FAQ: \"Any shared device registered to a SignalGrid policy\" is the billable unit",
    "kind": "pricing",
    "classification": "unsubstantiated",
@@ -961,7 +972,7 @@
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
-   "line": "76-77",
+   "line": "65",
    "claim": "FAQ: \"The dock and reader case are a pre-production design concept; no hardware is for sale or lease today.\"",
    "kind": "availability",
    "classification": "deferred",
@@ -970,7 +981,7 @@
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
-   "line": "80-81",
+   "line": "69",
    "claim": "FAQ: \"policies and audit exports are portable by design, so nothing about the model locks you into one deployment\"",
    "kind": "capability",
    "classification": "unsubstantiated",
@@ -979,7 +990,7 @@
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
-   "line": "84-85",
+   "line": "73",
    "claim": "FAQ: \"FedRAMP authorization is a roadmap target… it is not claimed today. The air-gap Federal/DoD deployment is a design modeled on public-safe fixtures, not an available offering.\"",
    "kind": "status",
    "classification": "deferred",
@@ -988,7 +999,7 @@
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
-   "line": "88-89",
+   "line": "77",
    "claim": "FAQ: rugged-Android tools (Zebra StageNow/OEMConfig/DataWedge, SOTI, 42Gears, Honeywell, Datalogic) are \"candidate signal-source categories in the design… not live integrations today\"",
    "kind": "status",
    "classification": "deferred",
@@ -997,7 +1008,7 @@
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
-   "line": "102",
+   "line": "90",
    "claim": "Headline: \"Indicative Pricing. No Per-Workflow Tax.\" — asserts a pricing model that does not charge per decision",
    "kind": "pricing",
    "classification": "unsubstantiated",
@@ -1006,7 +1017,7 @@
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
-   "line": "103",
+   "line": "91",
    "claim": "\"Illustrative per-device pricing that would scale with your fleet — not your decision volume. Pre-announcement: figures are indicative and not a live offer.\"",
    "kind": "status",
    "classification": "deferred",
@@ -1066,7 +1077,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "Dockerfile.api:15 uses docker.io/library/node:22-bookworm-slim and Dockerfile.api:67 uses node:22-alpine. No STIG-oriented Ubuntu/RHEL image exists anywhere in the tree.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Federal.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 108); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1139,7 +1151,8 @@
    "kind": "status",
    "classification": "unsubstantiated",
    "evidence": "No such document exists. A repo-wide search for 800-53 control mapping returns only docs/SECURITY_BASELINE_ALIGNMENT.md:105 (a single table row) plus two docs/inspiration/ research files. A document \"in progress\" that has no file is an effort commitment to a buyer, not a status.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Federal.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 116); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1157,7 +1170,8 @@
    "kind": "count",
    "classification": "unsubstantiated",
    "evidence": "No 110-control mapping exists in any file. The only 800-171 reference in the tree is docs/SECURITY_BASELINE_ALIGNMENT.md:105, which maps configuration-management controls to the baseline dimension and enumerates nothing. The number 110 is unbacked and is the most falsifiable claim on the page.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Federal.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 118); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1166,7 +1180,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No CUI model, marking, or handling rule exists in lib/signalgrid-core or lib/posture-composition. docs/SECURITY_BASELINE_ALIGNMENT.md:105 is the only 800-171 substantiation and says nothing about CUI.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Federal.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 119); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1229,7 +1244,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No licensing subsystem exists anywhere in the repository (zero grep hits for license key/model/validation/bundle across lib/, scripts/, artifacts/api-server/src).",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Federal.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 126); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1238,7 +1254,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "Dockerfile.api:15 (node:22-bookworm-slim) and Dockerfile.api:67 (node:22-alpine); Dockerfile.web:16/54 (bookworm-slim / nginx:alpine). No Ubuntu or RHEL image, STIG-oriented or otherwise, exists.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Federal.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 127); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1256,7 +1273,8 @@
    "kind": "framework",
    "classification": "unsubstantiated",
    "evidence": "docs/WHAT_SIGNALGRID_DOES_TODAY.md:151 lists FIPS among certifications/authorizations NOT held. No cryptographic module, validation boundary, or FIPS-mode configuration exists in the tree. | DEDUP (second extraction): POSSIBLE DUPLICATE (Federal rows not visible in the supplied set). Verified this session: the string \"FIPS\" does not appear anywhere in docs/*.md or lib/ — there is no cryptographic-module design document of any kind. docs/SECURITY_BASELINE_ALIGNMENT.md:98-105, the only substantiation table, has no FIPS row, and :127 forbids claiming unearned regulatory posture.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Federal.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 129); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1365,7 +1383,8 @@
    "kind": "framework",
    "classification": "unsubstantiated",
    "evidence": "docs/WHAT_SIGNALGRID_DOES_TODAY.md:151 lists FIPS among certifications not held; no cryptographic module or FIPS mode exists. Stated here with no \"(design)\" hedge, unlike the neighboring rows.",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06 (Batch R): remove → rewrite — the table cell now reads \"FIPS 140-2-oriented (design target)\"; the noun stays because a design target is what it is, and the hedge sits in the same cell. The row stands as the extraction record."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1374,7 +1393,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "Dockerfile.api:15, 67 — node:22-bookworm-slim / node:22-alpine. No STIG-oriented baseline exists; docs/SECURITY_BASELINE_ALIGNMENT.md:108 forbids asserting STIG-hardened. Stated with no hedge.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Federal.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 142); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1392,7 +1412,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No CAC, PIV, smartcard, or LDAP implementation exists in lib/ or scripts/ (grep hits are all the substring \"cached\"). pacs_access is deferred at scripts/launch-profile.mjs:287. Stated as an unhedged present capability — the most direct false statement in the table.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Federal.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 144); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Federal.tsx",
@@ -1799,7 +1820,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "All three named systems are deferred connector families: `nac` scripts/launch-profile.mjs:216 (also `network-nac`:217), `siem`:231, `itsm`:212. The three launch families are `graph`, `device-management-health`, `local-authority` (scripts/launch-profile.mjs:156-189). Nothing is connected to NAC/SIEM/ITSM at launch.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in About.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 188); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/About.tsx",
@@ -1927,7 +1949,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "scripts/launch-profile.mjs:415 — `/v1/remediation` and `/v1/remediation/{id}/approve` are both in the deferred published-API list.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Downloads.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 202); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Downloads.tsx",
@@ -2008,7 +2031,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "scripts/launch-profile.mjs:415 — `/v1/remediation` and `/v1/remediation/{id}/approve` are deferred.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Downloads.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 211); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Downloads.tsx",
@@ -2026,7 +2050,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "`itsm` is a deferred connector family (scripts/launch-profile.mjs:212) and there is no ITSM code in artifacts/signalgrid-desktop/src at all (grep for \"itsm\" returns nothing); the desktop page is artifacts/signalgrid-desktop/src/pages/Handoff.tsx, a fixture view with no ITSM integration.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Downloads.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 213); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Downloads.tsx",
@@ -2080,7 +2105,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "`shift_context` is a deferred signal kind (scripts/launch-profile.mjs:241) and `shift-context` a deferred connector family (:230); docs/DECISION_RECORDS.md:236 DR-005 ratifies removal of present-tense shift claims. The view itself is fixture-only inside the demo_only desktop surface (artifacts/signalgrid-desktop/src/pages/Handoff.tsx).",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Downloads.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 219); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Downloads.tsx",
@@ -2098,7 +2124,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "artifacts/signalgrid-desktop/src/pages/ contains only Dashboard, Decisions, Handoff, Integrations, Policies, Signals and not-found — there is no audit page and no export path anywhere in artifacts/signalgrid-desktop/src.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Downloads.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 221); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Downloads.tsx",
@@ -2179,7 +2206,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No service worker exists: artifacts/signalgrid-mobile-pwa contains no service-worker/sw file and no `serviceWorker` registration in src/ or index.html. A manifest alone gives installability, never offline capability.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in Downloads.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 230); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Downloads.tsx",
@@ -2563,7 +2591,8 @@
    "kind": "count",
    "classification": "deferred",
    "evidence": "scripts/launch-profile.mjs:156-189 — three launch connector families (`graph`, `device-management-health`, `local-authority`), not seven; the remaining sources in the list are deferred at :192-241",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in ProblemSection.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 271); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/ProblemSection.tsx",
@@ -3287,7 +3316,8 @@
    "kind": "surface",
    "classification": "unsubstantiated",
    "evidence": "An Android tree EXISTS (native/android — the Assist-wire Kotlin core and a demo app; the 2026-08-08 registry entry corrected the earlier absence claim), but the LAUNCH app-surface list names only api-server, signalgrid-app and ios:EnterpriseShell — launch surfaces are api-server, signalgrid-app and ios:EnterpriseShell (scripts/launch-profile.mjs:446-465). Presenting shared Android scanners as supported TODAY is a present-tense claim with no launch backing.",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06 (Batch R): remove → rewrite — the segment describes the buyer's own devices (Android scanners, station PCs) read through the management plane, which the detail line names as the source; it is not a SignalGrid client claim and SignalGrid ships no Android launch surface. The row stands as the extraction record."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/VerticalsSection.tsx",
@@ -4276,7 +4306,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "CLAUDE.md \"Ask before\" — no HIPAA guarantee, human compliance review required; the sibling surface states no PHI is processed (ComplianceSection.tsx:14). No PHI-scoped control exists in lib/ or artifacts/api-server/src.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in DeploymentSection.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 448); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DeploymentSection.tsx",
@@ -4351,7 +4382,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "docs/INTAKE_LEDGER.md:39 (single process; no multi-node or horizontal scaling); docker-compose.prod.yml exposes no scaling or HA configuration; DeploymentSection.tsx:156 admits no failover machinery ships",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in DeploymentSection.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 456); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DeploymentSection.tsx",
@@ -4360,7 +4392,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "docs/DELIVERY_GAP_ANALYSIS.md:95 (no FIPS document exists; it implies FIPS-validated crypto — a compliance programme, not a feature); docs/WHAT_SIGNALGRID_DOES_TODAY.md:151 lists FIPS among certifications/authorizations NOT held",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in DeploymentSection.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 457); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DeploymentSection.tsx",
@@ -4369,7 +4402,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "docs/DEPLOYMENT.md:28-56 environment table has no TLS/certificate/PKI variable, and no PKI or cert-loading code exists in artifacts/api-server/src; docker-compose.prod.yml terminates nothing",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in DeploymentSection.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 458); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DeploymentSection.tsx",
@@ -4397,7 +4431,8 @@
    "kind": "availability",
    "classification": "unsubstantiated",
    "evidence": "docs/DELIVERY_GAP_ANALYSIS.md:95 (federal/government surface ABSENT — no IL-level or air-gap artifact); no licensing code exists anywhere in lib/ or artifacts/api-server/src",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in DeploymentSection.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 461); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DeploymentSection.tsx",
@@ -4415,7 +4450,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No licensing or update-distribution mechanism exists — grep for license validation across lib/ and artifacts/api-server/src returns nothing; docs/DEPLOYMENT.md documents no license variable in its env table (:28-56)",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06 (Batch R): remove → rewrite — the bullet now reads \"Offline license and update model (design intent)\" under a card whose description says it is a deployment DESIGN, not an available offering. The row stands as the extraction record."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DeploymentSection.tsx",
@@ -4424,7 +4460,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "Dockerfile.api:15 and :67 use stock docker.io/library/node:22-bookworm-slim and node:22-alpine — no hardened or STIG-oriented base; docs/SECURITY_BASELINE_ALIGNMENT.md:128, 127-128 bar \"STIG hardened\" framing",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in DeploymentSection.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 464); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DeploymentSection.tsx",
@@ -4442,7 +4479,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "docs/DELIVERY_GAP_ANALYSIS.md:95 — no IL-level document exists; docs/SECURITY_BASELINE_ALIGNMENT.md:127-128 (no authorization claimed)",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06 (Batch R): remove → rewrite — the bullet now reads \"IL4 / IL5-oriented architecture (design target)\" under the same design-only card. The row stands as the extraction record."
   },
   {
    "file": "artifacts/signalgrid-web/src/components/sections/DeploymentSection.tsx",
@@ -5493,7 +5531,7 @@
   },
   {
    "file": "artifacts/signalgrid-web/src/pages/Pricing.tsx",
-   "line": "103",
+   "line": "91",
    "claim": "\"Pre-announcement: figures are indicative and not a live offer.\"",
    "kind": "status",
    "classification": "launch",
@@ -5617,7 +5655,8 @@
    "classification": "unsubstantiated",
    "evidence": "POSSIBLE DUPLICATE — no Federal.tsx rows were visible in the extraction text supplied to me (it truncated inside Pricing.tsx). Flagging because the count is checkable and fails: docs/SECURITY_BASELINE_ALIGNMENT.md:105 is the ONLY 800-171 substantiation and is a single table row (\"Control-family coverage (e.g. CM-6)\") with no per-control mapping and no count; a repo-wide grep for \"800-171\" hits only that file and docs/company/ROLE_LENS_REVIEW_2026-08-21.md. No 110-control artifact exists, and no CUI handling appears in the policy engine.",
    "action": "rewrite",
-   "source": "critic"
+   "source": "critic",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the NIST SP 800-171 detail in Federal.tsx now reads that configuration-management controls are mapped into the baseline dimension and that the full 110-control baseline and CUI handling are design goals, not modeled; the quoted sentence no longer renders. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/index.html",
@@ -6712,7 +6751,8 @@
    "kind": "availability",
    "classification": "unsubstantiated",
    "evidence": "Five named identity sources rendered as sources SignalGrid reads. Only Entra is reachable, via the launch graph family (scripts/launch-profile.mjs:158). There is no okta, adfs, ping or fleet family anywhere in lib/integrations/src/integrations/ — these are not deferred entries, they are absent. No inline qualifier on the chips.",
-   "action": "remove"
+   "action": "rewrite",
+   "resolution": "RECLASSIFIED 2026-09-06 (Batch R): remove → rewrite — the source array is cut to the two reachable sources — Entra ID / Azure AD (the implemented Graph connector, awaiting a tenant) and Fleet's logged_in_users table (proven live); Okta, ADFS and Ping Identity are removed. The row stands as the extraction record."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/architectureData.ts",
@@ -6813,7 +6853,8 @@
    "kind": "capability",
    "classification": "deferred",
    "evidence": "Present tense across six named signal sources; exactly one is launch (Intune compliance via graph, scripts/launch-profile.mjs:158). Entra identity → identity deferred (:279); shift context → :294 / :230 deferred; ITSM operational state → :212 deferred; session anomalies → session_readiness :293 deferred. This is the prepared answer a founder reads aloud on a call, so the present tense is load-bearing.",
-   "action": "rewrite"
+   "action": "rewrite",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the objection response in competitiveData.ts now names only Intune compliance and Entra identity as consumed today and marks shift context, ITSM state and session anomalies as designed and deferred, not Limited GA; the quoted sentence no longer renders. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/competitiveData.ts",
@@ -6822,7 +6863,8 @@
    "kind": "availability",
    "classification": "unsubstantiated",
    "evidence": "Not merely deferred — absent. lib/integrations/src/integrations/ contains no okta family; the nearest deferred relatives are sso-session (scripts/launch-profile.mjs:232) and platform-sso (:224), neither of which is Okta-specific or shipping.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in competitiveData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 715); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/competitiveData.ts",
@@ -6915,7 +6957,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "Asserts an outbound write into a third-party ITSM system. Directly contradicts the doctrine this same surface renders at OperatorConsoleSection.tsx:463 (\"SignalGrid never executes a change\") and at ConnectorEmulatorDashboard.tsx:31 (\"no autonomous production remediation\"). itsm deferred at scripts/launch-profile.mjs:212; webhooks deferred at :240.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in demoData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 725); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -6951,7 +6994,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No workspace-one family exists in lib/integrations/src/integrations/; uem is deferred (scripts/launch-profile.mjs:238). Rendered as a live call the product makes, with no fixture or roadmap qualifier anywhere in this scenario.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in demoData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 729); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -6960,7 +7004,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "Asserts a supervisor push-approval surface. No such app target exists in scripts/launch-profile.mjs:440-520; the launch app surfaces are api-server, signalgrid-app and ios:EnterpriseShell (:451, 461). Push delivery would need the deferred webhooks family (:240).",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in demoData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 730); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -6969,7 +7014,8 @@
    "kind": "status",
    "classification": "unsubstantiated",
    "evidence": "Ranked market claim about another vendor's customer base with no survey, analyst report, or source anywhere in the tree.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in demoData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 731); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -6978,7 +7024,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No hexnode family in lib/integrations/src/integrations/; the nearest deferred relative is uem (scripts/launch-profile.mjs:238). Present-tense live API call with no qualifier.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in demoData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 732); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -6996,7 +7043,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "Asserts an executed remediation loop, labeled \"a real capability\". Contradicts \"SignalGrid never executes a change\" (OperatorConsoleSection.tsx:463) and \"no autonomous production remediation\" (ConnectorEmulatorDashboard.tsx:31), and there is no hexnode connector; remediation routes are deferred (scripts/launch-profile.mjs:396-397).",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in demoData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 734); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -7005,7 +7053,8 @@
    "kind": "count",
    "classification": "unsubstantiated",
    "evidence": "A specific latency figure for a call the product never makes. No benchmark artifact exists for any vendor API; the repo's only latency lanes are bench:decision-latency and test:load (CLAUDE.md), neither of which touches Hexnode.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in demoData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 735); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -7014,7 +7063,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No tanium family in lib/integrations/src/integrations/. The 12-second figure is fabricated — no artifact records a Tanium round trip. Reinforced at :~332 (\"The 12-second Tanium query is within an acceptable real-time evaluation window ... Show the actual API call and response time in the decision trace\"), which instructs the presenter to display a measurement that does not exist.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in demoData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 736); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -7023,7 +7073,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "Outbound webhook into a third-party platform: webhooks is a deferred family (scripts/launch-profile.mjs:240) and no tanium connector exists. Also an executed action, contradicting OperatorConsoleSection.tsx:463.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in demoData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 737); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -7041,7 +7092,8 @@
    "kind": "capability",
    "classification": "unsubstantiated",
    "evidence": "No maas360 family in lib/integrations/src/integrations/; uem (scripts/launch-profile.mjs:238) and edr-threat (:209) are deferred. Present-tense live call with a stated response.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in demoData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 739); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -7050,7 +7102,8 @@
    "kind": "framework",
    "classification": "unsubstantiated",
    "evidence": "Regulatory-expectation claims naming three US agencies, with no control mapping, citation or compliance artifact in the tree. Contradicted by the workspace's own footer at ReviewDashboard.tsx:923 (asserts no compliance with \"any other framework\") and by CLAUDE.md's requirement that regulated-vertical claims get a human compliance review.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in demoData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 740); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -7069,7 +7122,8 @@
    "kind": "count",
    "classification": "unsubstantiated",
    "evidence": "Four fabricated performance figures (200–800ms, 20s, 15-minute cache) for three connectors that do not exist (Workspace ONE, Hexnode, Tanium have no family in lib/integrations/src/integrations/). No load or latency artifact backs any number; the repo's real lanes are bench:decision-latency and test:load (CLAUDE.md), and test:load explicitly REPORTS rather than gates percentiles. Caching device compliance for 15 minutes also cuts against the device_management_health freshness premise at scripts/launch-profile.mjs:252, 254.",
-   "action": "remove"
+   "action": "remove",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in demoData.ts per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 742); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-review/src/data/demoData.ts",
@@ -8746,7 +8800,8 @@
    "kind": "availability",
    "classification": "unsubstantiated",
    "action": "remove",
-   "evidence": "No native desktop build exists on any platform: artifacts/signalgrid-desktop/package.json declares only vite dev/build/serve/typecheck, and no electron or tauri dependency exists in any package.json in the repo (pnpm-lock.yaml's electron-to-chromium is a browserslist transitive, not a runtime). The launch app surfaces are api-server, signalgrid-app and ios:EnterpriseShell only (scripts/launch-profile.mjs:446-470); signalgrid-desktop is demo_only (:487-489). Linux is claimed nowhere else in the estate — docs/APP_SUITE_MATRIX.md:41-42 lists macOS and Windows only and describes the artifact as a \"desktop-chromed operator console\". MITIGATION ABSENT for the platform claim: the adjacent \"Synthetic fixture data\" note at :176 qualifies the DATA, not the platform availability."
+   "evidence": "No native desktop build exists on any platform: artifacts/signalgrid-desktop/package.json declares only vite dev/build/serve/typecheck, and no electron or tauri dependency exists in any package.json in the repo (pnpm-lock.yaml's electron-to-chromium is a browserslist transitive, not a runtime). The launch app surfaces are api-server, signalgrid-app and ios:EnterpriseShell only (scripts/launch-profile.mjs:446-470); signalgrid-desktop is demo_only (:487-489). Linux is claimed nowhere else in the estate — docs/APP_SUITE_MATRIX.md:41-42 lists macOS and Windows only and describes the artifact as a \"desktop-chromed operator console\". MITIGATION ABSENT for the platform claim: the adjacent \"Synthetic fixture data\" note at :176 qualifies the DATA, not the platform availability.",
+   "resolution": "RESOLVED 2026-09-06 (this PR, Batch R): the copy was removed or reworded in DesktopLayout.tsx per docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (row 924); the quotation no longer renders, and the replacement copy is governed by the launch-claims gate. Recorded by check-claim-inventory-anchors."
   },
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",

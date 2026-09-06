@@ -32,7 +32,7 @@ export const signalTypes: SignalType[] = [
       "Who is authenticated to this session right now — not who owns the device. In shared-device environments, identity is ephemeral and session-scoped. The device may have been used by a different worker on the previous shift. SignalGrid evaluates identity at session time, not device enrollment time.",
     sharedDeviceExample:
       "Nurse Maria logs into a shared iOS medication cart at the start of her shift. Her identity token is fresh, her MFA was completed 4 minutes ago, and her role maps to the ward she's currently assigned to. The previous user's session has been cleared.",
-    sourceExamples: ["Entra ID / Azure AD", "Okta", "Fleet logged_in_users table", "ADFS", "Ping Identity"],
+    sourceExamples: ["Entra ID / Azure AD", "Fleet logged_in_users table"],
     evaluationQuestion:
       "Is the current authenticated identity valid, recently verified, and authorized for this context?",
   },

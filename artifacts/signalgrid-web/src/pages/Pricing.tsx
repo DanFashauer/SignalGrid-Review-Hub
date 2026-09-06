@@ -16,12 +16,9 @@ const TIERS = [
       { text: "The three Limited GA signals: device compliance, its freshness, and the device's authority to act now", ok: true },
       { text: "Decision engine + policy editor", ok: true },
       { text: "Operator dashboard", ok: true },
-      { text: "Mobile PWA (operator + access-support triage)", ok: true },
+      { text: "Mobile PWA — demo surface, not in Limited GA", ok: false },
       { text: "Tamper-evident audit ledger — hash-chained and independently verifiable", ok: true },
-      { text: "Shift Handoff Intelligence", ok: false },
-      { text: "Compliance reporting export", ok: false },
-      { text: "Custom alert routing", ok: false },
-      { text: "Air-gap / on-premise deploy", ok: false },
+      { text: "Air-gap / on-premise deploy (roadmap design, not delivered)", ok: false },
     ],
   },
   {
@@ -35,12 +32,9 @@ const TIERS = [
       { text: "Device counts indicative — the measured constraint is the per-key rate limit (240 requests/minute default, operator-tunable)", ok: true },
       { text: "16 candidate source categories", ok: true },
       { text: "Decision engine + policy editor", ok: true },
-      { text: "Operator dashboard + Desktop client", ok: true },
-      { text: "Mobile PWA (operator + access-support triage)", ok: true },
+      { text: "Operator dashboard", ok: true },
+      { text: "Mobile PWA — demo surface, not in Limited GA", ok: false },
       { text: "Tamper-evident audit ledger — hash-chained and independently verifiable", ok: true },
-      { text: "Shift Handoff Intelligence", ok: true },
-      { text: "Compliance reporting export", ok: true },
-      { text: "Ownership-aware alert routing", ok: true },
       { text: "Cloud or self-hosted VPC", ok: true },
     ],
   },
@@ -64,7 +58,7 @@ const TIERS = [
 const FAQ = [
   {
     q: "What counts as a 'managed device'?",
-    a: "Any shared device registered to a SignalGrid policy — typically a tablet, mobile computer, or terminal that is physically custody-bound to a badge case and evaluated at each workflow trigger.",
+    a: "Any shared device registered to a SignalGrid policy — typically a tablet, mobile computer, or terminal evaluated at each workflow trigger. Badge-custody binding is a design target, not a Limited GA capability.",
   },
   {
     q: "Is the badge reader case included in the price?",

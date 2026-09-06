@@ -74,7 +74,7 @@ export const demoScenarios: DemoScenario[] = [
         phaseLabel: "Access Outcome",
         title: "Restricted access — workflow continues with guardrails",
         narrative:
-          "The decision outcome is Restrict, not Deny. Nurse B gets access to read-only patient records but the medication administration write workflow is blocked pending device remediation. A notification is sent to the charge nurse and the device queue. The incident ticket is updated with a note that access was restricted due to open incident state. Nurse B can continue working — just not on medication administration until the device is cleared.",
+          "The decision outcome is Restrict, not Deny. Nurse B gets access to read-only patient records but the medication administration write workflow is blocked pending device remediation. The evidence recommends notifying the charge nurse and annotating the incident ticket; SignalGrid records the recommendation and sends nothing itself. Nurse B can continue working — just not on medication administration until the device is cleared.",
         technicalNote:
           "Emphasize: this is not a hard block. It's a calibrated outcome. Nurse B can still do most of their work. The high-risk workflow is protected. The charge nurse is notified. The incident is now linked to an access event — which creates an audit trail that didn't exist before.",
         duration: "2 min",
@@ -194,9 +194,9 @@ export const demoScenarios: DemoScenario[] = [
         phaseLabel: "Decision Trigger",
         title: "Worker picks up Device B at shift start — workflow access requested",
         narrative:
-          "Worker Jordan checks in at the start of their shift and picks up Device B from the charging rack. Jordan scans their badge — session context signal: Jordan is on the day shift schedule, this is expected access time. Jordan authenticates via the Workspace ONE Hub app — identity signal: valid. Jordan attempts to access the high-value inventory adjustment workflow in SAP WM. SignalGrid receives the request. It queries Workspace ONE: GET /api/v1/mdm/devices?searchby=Serialnumber&id=DEVICE_B_SERIAL.",
+          "Worker Jordan checks in at the start of their shift and picks up Device B from the charging rack. Jordan scans their badge — session context signal: Jordan is on the day shift schedule, this is expected access time. Jordan authenticates via the Workspace ONE Hub app — identity signal: valid. Jordan attempts to access the high-value inventory adjustment workflow in SAP WM. SignalGrid receives the request. In this fixture scenario it reads a Workspace ONE-shaped compliance payload; no Workspace ONE connector exists.",
         technicalNote:
-          "The Workspace ONE API call returns: ComplianceStatus=NonCompliant, reason=OsVersionRequirement, LastSeen=today. SignalGrid has all four signals: identity (valid), device posture (NonCompliant), session context (within shift window, normal location), operational signals (no open incidents).",
+          "The fixture payload carries: ComplianceStatus=NonCompliant, reason=OsVersionRequirement, LastSeen=today. SignalGrid has all four signals: identity (valid), device posture (NonCompliant), session context (within shift window, normal location), operational signals (no open incidents).",
         duration: "2 min",
       },
       {
@@ -216,7 +216,7 @@ export const demoScenarios: DemoScenario[] = [
         phaseLabel: "Access Outcome",
         title: "Step-up required — supervisor confirmation before high-value action",
         narrative:
-          "The decision outcome is Step-Up, not Deny. Jordan can use Device B for standard barcode scanning workflows — pick list scanning, receiving confirmation. But the high-value inventory adjustment workflow (pallet movement > $10,000) requires supervisor confirmation. Jordan's scanner displays a prompt: 'Supervisor approval required for this workflow — device pending OS update.' Jordan's shift supervisor receives a push notification and can approve from their compliant device. The high-value authorization requires two parties, not one, on a non-compliant device.",
+          "The decision outcome is Step-Up, not Deny. Jordan can use Device B for standard barcode scanning workflows — pick list scanning, receiving confirmation. But the high-value inventory adjustment workflow (pallet movement > $10,000) requires supervisor confirmation. Jordan's scanner displays a prompt: 'Supervisor approval required for this workflow — device pending OS update.' The supervisor approves in their own host app — SignalGrid has no notification surface. The high-value authorization requires two parties, not one, on a non-compliant device.",
         technicalNote:
           "The two-party approval requirement is a practical outcome that logistics buyers immediately recognize. It mirrors the separation-of-duties controls they already use for high-value transactions — SignalGrid is extending that control to the device compliance dimension.",
         duration: "2 min",
@@ -229,7 +229,7 @@ export const demoScenarios: DemoScenario[] = [
         narrative:
           "Workspace ONE already knows Device B is non-compliant. It sent an alert to the MDM dashboard. But the warehouse management system that runs on Device B has no channel to receive that signal. Conditional Access doesn't fire on barcode scans — there's no authentication event mid-session. SignalGrid sits at the workflow layer, queries Workspace ONE's compliance API at execution time, and routes the outcome. The MDM platform becomes a signal source for every workflow decision, not just device enrollment.",
         technicalNote:
-          "Workspace ONE's Dedicated Device mode + Android Enterprise is the dominant pattern for warehouse/logistics shared scanners. This demo scenario directly addresses the #1 use case for Workspace ONE customers in logistics.",
+          "Dedicated-device Android scanners are the warehouse pattern this fixture models; no vendor market share or customer ranking is claimed.",
         duration: "1–2 min",
       },
     ],
@@ -265,7 +265,7 @@ export const demoScenarios: DemoScenario[] = [
         phaseLabel: "Decision Trigger",
         title: "Store associate attempts high-value inventory write on Device B",
         narrative:
-          "Store associate Sam picks up Device B from the register. Kiosk mode is off — Sam doesn't notice, the POS app is still the foreground app. Sam authenticates using the store associate credentials. Identity check: valid. Sam attempts to execute a high-value inventory adjustment — a markdown event on 50 units of merchandise worth $4,500. SignalGrid receives the workflow execution request. It queries the Hexnode API: GET /api/v1/device/{device_b_id}/ and reads kiosk_status=kiosk_off.",
+          "Store associate Sam picks up Device B from the register. Kiosk mode is off — Sam doesn't notice, the POS app is still the foreground app. Sam authenticates using the store associate credentials. Identity check: valid. Sam attempts to execute a high-value inventory adjustment — a markdown event on 50 units of merchandise worth $4,500. SignalGrid receives the workflow execution request. In this fixture scenario the kiosk_status field (kiosk_off) is what the decision turns on; no Hexnode connector exists.",
         technicalNote:
           "The Hexnode API call is the key moment. `kiosk_status: 'kiosk_off'` on a device that should be in kiosk lockdown is an operational anomaly — not an MDM compliance failure (the device is still compliant by MDM policy standards), but a control environment anomaly.",
         duration: "2 min",
@@ -287,9 +287,9 @@ export const demoScenarios: DemoScenario[] = [
         phaseLabel: "Access Outcome",
         title: "Inventory write blocked — IT alert raised, manager override required",
         narrative:
-          "The decision outcome is Restrict. Sam can process standard POS transactions — cash, card, returns. The high-value inventory adjustment workflow is blocked. Sam's screen displays: 'Inventory adjustment restricted on this device — contact your store manager.' The store manager receives a push alert: 'POS device kiosk mode violation — Device B, Store 14.' IT receives an automated Hexnode remediation task: re-apply the kiosk profile to Device B. The incident is logged with the device ID, the attempted workflow, Sam's identity, and the kiosk_status signal that triggered the restriction.",
+          "The decision outcome is Restrict. Sam can process standard POS transactions — cash, card, returns. The high-value inventory adjustment workflow is blocked. Sam's screen displays: 'Inventory adjustment restricted on this device — contact your store manager.' The evidence recommends a store-manager alert and a kiosk-profile re-apply; both stay with the source systems — SignalGrid executes nothing. The incident is logged with the device ID, the attempted workflow, Sam's identity, and the kiosk_status signal that triggered the restriction.",
         technicalNote:
-          "The automated Hexnode remediation task is a real capability — Hexnode supports policy enforcement automation that can re-apply kiosk mode profiles remotely. The integration loop: Hexnode detects kiosk exit → SignalGrid restricts high-value workflows → Hexnode re-applies kiosk profile → SignalGrid re-evaluates on next request.",
+          "Re-applying a kiosk profile is Hexnode's capability, not SignalGrid's. The loop this fixture describes: Hexnode detects kiosk exit → SignalGrid restricts high-value workflows → the operator re-applies the profile in Hexnode → SignalGrid re-evaluates on the next request.",
         duration: "2 min",
       },
       {
@@ -298,7 +298,7 @@ export const demoScenarios: DemoScenario[] = [
         phaseLabel: "Closing Frame",
         title: "Hexnode kiosk_status — the invisible control boundary signal",
         narrative:
-          "Every existing access control tool in your retail environment — authentication, MDM compliance, network access — would have allowed this transaction. Sam's identity was valid. The device was enrolled. The compliance policy passed. SignalGrid added one signal: is this device actually operating in the control environment it's supposed to operate in? The kiosk_status field is a 30-millisecond API call. The access decision it enabled prevented a high-value inventory write on a device with a broken control boundary.",
+          "Every existing access control tool in your retail environment — authentication, MDM compliance, network access — would have allowed this transaction. Sam's identity was valid. The device was enrolled. The compliance policy passed. SignalGrid added one signal: is this device actually operating in the control environment it's supposed to operate in? The access decision that field enabled prevented a high-value inventory write on a device with a broken control boundary.",
         technicalNote:
           "Leave the audience with the kiosk_status concept. It's the retail-specific answer to 'what can SignalGrid tell me that my existing tools can't?' — a device that's enrolled and compliant but no longer in the control context it was enrolled for.",
         duration: "1 min",
@@ -336,9 +336,9 @@ export const demoScenarios: DemoScenario[] = [
         phaseLabel: "Decision Trigger",
         title: "Engineer requests access to privileged config management tooling",
         narrative:
-          "Senior Engineer Alex requests access to the Terraform Cloud configuration management tool to push a change to the production load balancer configuration. Alex's identity is valid — MFA completed, Okta session active, role = 'Senior Infrastructure Engineer'. Alex's endpoint: ENDPOINT-B. SignalGrid receives the privilege escalation request. It queries the Tanium API: POST /api/v2/questions with query text 'Get Running Services containing \"CrowdStrike\" from computers where Computer Name contains \"ENDPOINT-B\"'. Tanium responds in 12 seconds.",
+          "Senior Engineer Alex requests access to the Terraform Cloud configuration management tool to push a change to the production load balancer configuration. Alex's identity is valid — MFA completed, Okta session active, role = 'Senior Infrastructure Engineer'. Alex's endpoint: ENDPOINT-B. SignalGrid receives the privilege escalation request. In this fixture scenario the real-time endpoint query (is the CrowdStrike service running on ENDPOINT-B?) is the differentiator; no Tanium connector exists.",
         technicalNote:
-          "The 12-second Tanium query is within an acceptable real-time evaluation window for a privilege escalation decision. Show the actual API call and response time in the decision trace — the latency is a real consideration and being transparent about it is credible.",
+          "A real-time endpoint query takes seconds, not milliseconds; say so rather than showing a response time this fixture cannot measure — the latency is a real consideration and being transparent about it is credible.",
         duration: "2 min",
       },
       {
@@ -358,7 +358,7 @@ export const demoScenarios: DemoScenario[] = [
         phaseLabel: "Access Outcome",
         title: "Privilege escalation denied — Tanium investigation queued",
         narrative:
-          "The decision outcome is Deny. Alex's Terraform Cloud access request is rejected. The decision log shows: 'Privilege escalation denied — required security agent not detected on requesting endpoint (Tanium real-time query, evaluated at 14:23:07 UTC).' Alex's IT security team receives an alert: endpoint ENDPOINT-B — CrowdStrike agent not running, privilege escalation attempted. Tanium receives a webhook: endpoint ENDPOINT-B added to real-time investigation queue. Alex is instructed to use a compliant workstation or contact IT to remediate ENDPOINT-B.",
+          "The decision outcome is Deny. Alex's Terraform Cloud access request is rejected. The decision log shows: 'Privilege escalation denied — required security agent not detected on requesting endpoint (Tanium real-time query, evaluated at 14:23:07 UTC).' The evidence recommends alerting IT security and queuing ENDPOINT-B for investigation; both stay with the source systems. Alex is instructed to use a compliant workstation or contact IT to remediate ENDPOINT-B.",
         technicalNote:
           "The precise timestamp in the denial log ('evaluated at 14:23:07 UTC') is important for enterprise security buyers. It creates an immutable audit record: we knew the agent wasn't running at this exact moment, and access was denied at this exact moment. That's the audit trail that security teams need.",
         duration: "2 min",
@@ -407,7 +407,7 @@ export const demoScenarios: DemoScenario[] = [
         phaseLabel: "Decision Trigger",
         title: "Advisor attempts loan origination after branch close on flagged device",
         narrative:
-          "Banking Advisor Morgan is in Branch 14 finishing up a client meeting. It's 6:22 PM — the branch closed at 6:00 PM. Morgan's client wants to submit a mortgage application tonight. Morgan authenticates on Device B using the bank's Okta SSO. Identity: valid. Morgan navigates to the loan origination workflow and initiates a new application for a $380,000 mortgage. SignalGrid receives the workflow execution request. It queries MaaS360: GET /api/device/1.0/getDeviceCompliance, and reads complianceState=Non-Compliant, threatRisk=Medium.",
+          "Banking Advisor Morgan is in Branch 14 finishing up a client meeting. It's 6:22 PM — the branch closed at 6:00 PM. Morgan's client wants to submit a mortgage application tonight. Morgan authenticates on Device B using the bank's Okta SSO. Identity: valid. Morgan navigates to the loan origination workflow and initiates a new application for a $380,000 mortgage. SignalGrid receives the workflow execution request. In this fixture scenario it reads a MaaS360-shaped compliance payload (complianceState=Non-Compliant, threatRisk=Medium); no MaaS360 connector exists.",
         technicalNote:
           "Two independent signals: a compliance exception that's been active for 4 weeks (device posture) and a Medium threat score from the last 3 hours (operational signal). Either one alone might be acceptable. Together, combined with the after-hours session context, they produce a different picture.",
         duration: "2 min",
@@ -440,9 +440,9 @@ export const demoScenarios: DemoScenario[] = [
         phaseLabel: "Closing Frame",
         title: "MaaS360 threat intelligence + SignalGrid — the regulated industry argument",
         narrative:
-          "MaaS360's threat intelligence flagged Device B's anomalous behavior. Your compliance team documented the encryption exception four weeks ago. The session was initiated after hours. None of these signals individually would have stopped the loan submission. No existing system was combining all three. SignalGrid evaluated them together, at the moment of the workflow request, and produced a calibrated outcome — application saved, submission held, review triggered. That audit trail — the signal values, the policy rule, the decision timestamp — is the compliance record that your regulators want to see.",
+          "MaaS360's threat intelligence flagged Device B's anomalous behavior. Your compliance team documented the encryption exception four weeks ago. The session was initiated after hours. None of these signals individually would have stopped the loan submission. No existing system was combining all three. SignalGrid evaluated them together, at the moment of the workflow request, and produced a calibrated outcome — application saved, submission held, review triggered. That audit trail — the signal values, the policy rule, the decision timestamp — is the record a compliance review would start from.",
         technicalNote:
-          "Financial services regulators (OCC, FDIC, CFPB) are increasingly interested in how banks demonstrate controls over mobile access to core banking systems. The audit trail framing resonates with compliance officers — they need to show that controls exist and were exercised, not just that policies were written.",
+          "The audit-trail framing is the point of this closing: a compliance review needs to show that controls exist and were exercised, not just that policies were written. No claim is made here about what any named regulator is asking for.",
         duration: "1–2 min",
       },
     ],
@@ -472,6 +472,6 @@ export const demoObjectionResponses = [
   {
     objection: "\"How do you handle the latency of querying multiple APIs in real time?\"",
     response:
-      "SignalGrid queries signal sources in parallel with a configurable timeout per signal type. For MDM compliance signals (Intune, Workspace ONE, Hexnode), the API response time is typically 200–800ms. For real-time queries (Tanium), we allow up to 20 seconds for the question to resolve. For latency-sensitive workflows, signals can be pre-fetched and cached with a configurable staleness window — for example, device compliance cached for 15 minutes, identity signals always live.",
+      "SignalGrid evaluates the signals it is handed against a fixture-backed decision core; connector timeouts and latencies are measured per connector in the proof harness, not quoted as typical figures here. Of the vendors this demo names, only Intune has an implemented connector (awaiting a tenant); Workspace ONE, Hexnode, MaaS360 and Tanium are fixture shapes. Pre-fetching and staleness windows are a design direction, not a configurable feature today.",
   },
 ];

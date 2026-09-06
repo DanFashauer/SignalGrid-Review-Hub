@@ -52,8 +52,20 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
 LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
-              M (#466), N (#468), O (#470) and P (#471) LANDED. Batch Q
-              (fifteenth round, on its PR) held the claim inventory to its
+              M (#466), N (#468), O (#470), P (#471) and Q (#473) LANDED. Batch R
+              (sixteenth round, on its PR) applied the 53 dispositions Q left:
+              47 remove-actioned claims no longer render (priced tier features
+              nobody built, vendor API calls no connector makes, notifications
+              SignalGrid has no surface to send, latency figures no harness
+              measured, a Linux desktop, PHI controls, bring-your-own PKI), 6
+              render inside a hedge in their own line and are reclassified
+              rewrite with the reason, 2 older rewrite rows fell with the same
+              edits and are resolved; which was which was decided by the anchor
+              gate's own match, never by eye. Ratchet remove-actioned still
+              present 53 → 0, absent 0, evidence fragments absent 12 → 11;
+              launch-claims 100 files 0 violations, docs ceiling 453 held;
+              typecheck Done.
+              Batch Q (fifteenth round, #473) held the claim inventory to its
               evidence as well as its surfaces: 1,066 citations checked (none
               missing, none past EOF; 53 drifted fragments re-anchored, 12 absent
               ratcheted, the rest of the first 67 were the gate's own heuristics
@@ -386,25 +398,15 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land Batch Q (on its PR), then Batch R = the 54 remove-
-              actioned claims that still render, from
-              docs/agent/CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json (each row
-              carries the current text, a proposed edit and an evidence check):
-              Pricing 11 (tier features priced at $14/device with green
-              checkmarks), Federal 10 (:146 "CAC / PIV + LDAP" unhedged beside
-              "(design)" neighbours), DeploymentSection 8 (:40 the air-gapped
-              card with no hedge, :30 "Bring your own PKI" with no PKI code),
-              Downloads 6, demoData 12 more prepared answers, About/Problem/
-              Verticals/architectureData/competitiveData/DesktopLayout 1 each
-              - the copy is removed or hedged in its own block, or the row's
-              action is revised with the reason; never a resolution while the
-              words render (the gate fails that now). Then (2) the membership
+NEXT ACTION: cloud: land Batch R (on its PR - the 53 remove-actioned claims
+              that still rendered are removed or hedged in their own line,
+              ratchet 53 → 0), then (1) the membership
               check the auditor specified: an evidence citation into
               scripts/launch-profile.mjs that asserts an id's arm must be
               verified by importing SURFACES and testing membership, never by
               line number (28 such citations in the remove rows land on
               unrelated lines while every membership claim still holds; start
-              REPORT-only, ratchet); (3) the 12 evidence fragments still absent
+              REPORT-only, ratchet); (2) the 11 evidence fragments still absent
               in 2026-08-21 rows. Then the inspiration catalogs' prose and
               whatever the ledger still marks not read. OWNER: the ICP
               segment ("75-1,000 employees, 1-10 in IT") is stated flatly in

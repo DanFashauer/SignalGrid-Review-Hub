@@ -22,7 +22,7 @@ const PILLARS = [
 const IS = [
   "A trust-orchestration layer for access decisions on shared and mobile devices.",
   "A session decision platform combining identity, device posture, and operational context (location and custody are roadmap, not Limited GA).",
-  "An evidence and governance layer for connected systems (NAC, SIEM, ITSM) — each remains the system of record.",
+  "An evidence and governance layer designed to sit alongside connected systems (NAC, SIEM, ITSM) — each remains the system of record; none is a Limited GA connector.",
 ];
 const IS_NOT = [
   "A replacement for your identity provider.",

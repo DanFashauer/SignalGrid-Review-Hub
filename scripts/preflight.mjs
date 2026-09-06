@@ -186,6 +186,8 @@ const STEPS = [
   // 58 README rows quoted a README rebuilt five days earlier and none was resolved.
   { name: "Claim-inventory anchors (a quoted claim is still a quotation; absent is ratcheted)", cmd: ["node", "scripts/check-claim-inventory-anchors.mjs"] },
   { name: "Claim-inventory anchors self-test (the check can actually fail)", cmd: ["node", "scripts/check-claim-inventory-anchors.mjs", "--self-test"] },
+  { name: "Cited symbols (a symbol named beside a code citation must still be in that file; missing is ratcheted)", cmd: ["node", "scripts/check-cited-symbols.mjs"] },
+  { name: "Cited symbols self-test (the check can actually fail)", cmd: ["node", "scripts/check-cited-symbols.mjs", "--self-test"] },
   { name: "Guard-registry drift (coverage lists derived, not trusted)", cmd: ["node", "scripts/check-guard-registries.mjs"] },
   { name: "CI\u2194preflight drift (every proof runs in both places)", cmd: ["node", "scripts/check-ci-preflight-sync.mjs"] },
   // Pure static analysis of the Dockerfiles against pnpm-workspace.yaml — no

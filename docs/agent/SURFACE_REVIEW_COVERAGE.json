@@ -641,6 +641,15 @@
      "scope": "partial: fabric-console.html in full by claim; the other loose files as the thirteenth round left them.",
      "open": 0,
      "closed": 1
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Nineteenth round: the 82 symbol↔file pairs the cited-symbols gate judges across all 484 tracked documents — 80 hold; one real defect (MAC_LANE.md:248 named SignalGridMobileCore as if it lived under native/ios/Package.swift — it is its own package; check-cited-paths passed the line) reworded to name both manifests; COMPANY_BUILD_PLAN.md:4890 preflight line count 630 → 632; LOOP.md's NEXT ACTION carried the false 'acked with lane:inbox' instruction the eighteenth round corrected in the mail channel → corrected. 194 symbols near a citation are unpaired and unjudged, reported on every run.",
+     "reviewer": "cloud lane; the gate built from the eighteenth round's specification, measured live before and after each rule change, falsified with a planted line",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: only the lines that pair a symbol with a code citation, mechanically; the prose around them not re-read",
+     "open": 0,
+     "closed": 3
     }
    ]
   },
@@ -816,6 +825,15 @@
      "scope": "partial: the eleven catalogs' prose in full (every non-table line and every SignalGrid-facing row); the vendor-row bodies (~2.4MB of 2.6MB) counted and column-tallied, not read — a false vendor-capability claim buried in one of roughly nineteen hundred rows would not have been caught.",
      "open": 0,
      "closed": 10
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Nineteenth round: MOBILE_APP_CONFIGURATION_CATALOG.md opted out of the cited-symbols gate by a visible first-line marker (verbatim owner workbook; the 19 deleted iOS keys are recorded in its preamble's KEY-REMOVAL DRIFT paragraph) — the gate names the exemption on every run. The other ten catalogs' symbol↔file pairs hold.",
+     "reviewer": "cloud lane; the gate built from the eighteenth round's specification, measured live before and after each rule change, falsified with a planted line",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the marker and the gate's view of the eleven catalogs; nothing re-read",
+     "open": 0,
+     "closed": 0
     }
    ]
   },
@@ -1713,6 +1731,15 @@
      "scope": "partial: the lane channel's five scripts in full; the rest of scripts/ as the earlier rounds left them.",
      "open": 0,
      "closed": 6
+    },
+    {
+     "date": "2026-09-06",
+     "read": "Nineteenth round: check-cited-symbols.mjs built — a symbol named beside a code-file citation must be one the file holds on a non-comment line; pairing is positional (explicit attribution after the symbol wins, else the nearest citation before it, broken by `;`, sentence end, table-cell bar, bare file name, foreign possessive); registry rows pair every symbol; unpaired symbols are counted and printed, never judged; four named exemptions; ratchet at missing 0. The first live pass produced three mis-pairings a reader gets right — each became a self-test case before the rule changed (13/16 → 16/16). Falsified: a planted line fails by name (ratchet ROSE 0 → 1). Registered in preflight and CI (parity 336, 0 unwired).",
+     "reviewer": "cloud lane; the gate built from the eighteenth round's specification, measured live before and after each rule change, falsified with a planted line",
+     "record": "docs/agent/EVIDENCE.md",
+     "scope": "partial: the new gate and its registration only; no other script re-read this round",
+     "open": 0,
+     "closed": 1
     }
    ]
   },

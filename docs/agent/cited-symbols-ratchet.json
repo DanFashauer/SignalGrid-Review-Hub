@@ -1,0 +1,5 @@
+{
+  "note": "Cited-symbol ratchet: symbols named beside a code-file citation that the cited file no longer contains on a non-comment line. DERIVED by scripts/check-cited-symbols.mjs; never hand-edit. The count may not rise; a fall is recorded with `--write` and committed.",
+  "missing": 0,
+  "byDoc": {}
+}

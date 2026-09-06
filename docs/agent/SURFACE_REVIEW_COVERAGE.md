@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **88 of 100 surfaces have been read. 12 are partially read. 0 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2259 of 2259 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
+Coverage of the tree is asserted, not assumed: **2261 of 2261 in-scope tracked files** belong to a surface on this page (52 more are in declared out-of-scope trees). A file belonging to no surface fails the gate.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -53,15 +53,15 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/sync` | tree | 5 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `config` | tree | 5 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `docker` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
-| `docs/*` | loose files | 214 | **partial** | 3 | 2026-09-06 | cloud lane (anchor gate + pickaxe provenance + two read-only agents, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 19 | 0 |
-| `docs/agent` | docs family | 33 | **partial** | 6 | 2026-09-06 | cloud lane (membership rule measured on the live inventory before it became a gate; every false pairing pinned in the self-test) | docs/agent/EVIDENCE.md | 15 | 11 |
+| `docs/*` | loose files | 214 | **partial** | 4 | 2026-09-06 | cloud lane; the gate built from the eighteenth round's specification, measured live before and after each rule change, falsified with a planted line | docs/agent/EVIDENCE.md | 22 | 0 |
+| `docs/agent` | docs family | 34 | **partial** | 6 | 2026-09-06 | cloud lane (membership rule measured on the live inventory before it became a gate; every false pairing pinned in the self-test) | docs/agent/EVIDENCE.md | 15 | 11 |
 | `docs/assets` | docs family | 1 | **partial** | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/company` | docs family | 9 | **partial** | 2 | 2026-09-06 | cloud lane (two independent fail-closed audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 1 |
 | `docs/connectors` | docs family | 4 | read | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/consolidation` | docs family | 4 | read | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/env` | docs family | 1 | read | 1 | 2026-09-06 | cloud lane (one independent docs audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `docs/estate` | docs family | 2 | read | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
-| `docs/inspiration` | docs family | 12 | **partial** | 2 | 2026-09-06 | fail-closed-auditor agent (cloud lane); every figure re-counted and every citation opened, the counts re-measured firsthand before the edits | docs/agent/EVIDENCE.md | 10 | 0 |
+| `docs/inspiration` | docs family | 12 | **partial** | 3 | 2026-09-06 | cloud lane; the gate built from the eighteenth round's specification, measured live before and after each rule change, falsified with a planted line | docs/agent/EVIDENCE.md | 10 | 0 |
 | `docs/lab` | docs family | 2 | **partial** | 1 | 2026-09-06 | cloud lane (one independent docs audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 1 |
 | `docs/outreach` | docs family | 3 | read | 1 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
 | `docs/postman` | docs family | 2 | read | 2 | 2026-09-06 | cloud lane (two independent fail-closed audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
@@ -114,7 +114,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 8 | 1 |
 | `native/shared` | native | 3 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 401 | **partial** | 5 | 2026-09-06 | fail-closed-auditor agent (cloud lane), every finding re-run firsthand; every fixed shape has an assertion that fails against the old code | docs/agent/EVIDENCE.md | 16 | 0 |
+| `scripts` | package | 402 | **partial** | 6 | 2026-09-06 | cloud lane; the gate built from the eighteenth round's specification, measured live before and after each rule change, falsified with a planted line | docs/agent/EVIDENCE.md | 17 | 0 |
 | `site` | tree | 2 | read | 2 | 2026-09-05 | cloud lane (firsthand read of every edit site; fixes + gates) | docs/agent/EVIDENCE.md | 2 | 3 |
 | `tests` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 1 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |

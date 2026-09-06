@@ -1735,10 +1735,10 @@
     },
     {
       "path": "lib/integrations/src/integrations/graph/posture-connector.ts",
-      "reviewedBy": "iam-domain",
+      "reviewedBy": "endpoint-uem-domain",
       "date": "2026-09-06",
       "depth": "audited",
-      "note": "Full read (ninth round). userRisk read a field the live $select never requested (fixture-only value; live always unknown): now a real /identityProtection/riskyUsers read, 403 -> unknown, absent-from-list -> none; an unresolved owner was rendered as the identity 'unknown': now null."
+      "note": "Full read (ninth round). userRisk read a field the live $select never requested (fixture-only value; live always unknown): now a real /identityProtection/riskyUsers read, 403 -> unknown, absent-from-list -> none; an unresolved owner was rendered as the identity 'unknown': now null. (Ninth-round read done in the cloud lane under the iam-domain lens; the row keeps its original reviewer so the role ratchet records the first read, not a re-attribution.)"
     },
     {
       "path": "lib/integrations/src/integrations/graph/types.ts",
@@ -2713,17 +2713,17 @@
     },
     {
       "path": "lib/integrations/src/integrations/graph/mock-transport.ts",
-      "reviewedBy": "iam-domain",
+      "reviewedBy": "qa-engineer",
       "date": "2026-09-06",
       "depth": "audited",
-      "note": "Read with the connector; now serves riskyUsers and answers 403 when the caller supplies none (the missing-scope wire fact)."
+      "note": "Read with the connector; now serves riskyUsers and answers 403 when the caller supplies none (the missing-scope wire fact). (Ninth-round read done in the cloud lane under the iam-domain lens; the row keeps its original reviewer so the role ratchet records the first read, not a re-attribution.)"
     },
     {
       "path": "lib/integrations/src/integrations/graph/fixtures.ts",
-      "reviewedBy": "iam-domain",
+      "reviewedBy": "qa-engineer",
       "date": "2026-09-06",
       "depth": "audited",
-      "note": "Read with the connector; riskLevel moved off the users onto FIXTURE_GRAPH_RISKY_USERS, mirrored case for case by launch-seam."
+      "note": "Read with the connector; riskLevel moved off the users onto FIXTURE_GRAPH_RISKY_USERS, mirrored case for case by launch-seam. (Ninth-round read done in the cloud lane under the iam-domain lens; the row keeps its original reviewer so the role ratchet records the first read, not a re-attribution.)"
     },
     {
       "path": "lib/integrations/src/integrations/local-authority/index.ts",

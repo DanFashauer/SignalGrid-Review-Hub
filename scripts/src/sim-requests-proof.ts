@@ -183,7 +183,7 @@ check("a status outside the closed set is refused", badStatus.problems.some((p: 
 const noWhen = auditSimRequests([{ id: "r", __fileId: "r", runs: ["preflight"], reason: "why" }], []);
 check(
   "a request that does not say WHEN it was queued is refused — pending without an age cannot be reported overdue",
-  noWhen.problems.some((x) => x.includes("no parseable requestedAt")),
+  noWhen.problems.some((x: string) => x.includes("no parseable requestedAt")),
 );
 
 const noProv = auditSimRequests([req("r", ["preflight"])], [{ requestId: "r", __fileId: "r", runs: [], provenance: {} }]);

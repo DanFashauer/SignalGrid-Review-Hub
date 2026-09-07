@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-07T09:27:59.636Z",
-  "result": "quiet: 2026-09-07 09:24Z cycle. fetch/prune pruned origin/lane/cloud-mail-20260907-082856Z (merged as #510). Six origin/mac/* branches unmoved since 2026-09-02/03; none new/moved; all already on SignalGrid_Alpha -> no PR action (prune list already mailed to Mac; deletion theirs). No mail addressed to cloud; nothing to ack. sim 16/16 bound, none owed. sync manifest v64, no drift. tick heartbeat ABSENT (Mac not ticking); owner escalation on 24h cooldown (last 2026-09-07T05:09Z, next allowed 2026-09-08T05:09Z) -> not escalated. live-evidence 2026-09-03 (4d old), covered by the standing 'install-launchd' directive -> no new send. mailbox PR #439 subscribed."
+  "firedAt": "2026-09-07T10:29:40.447Z",
+  "result": "quiet: 2026-09-07 10:24Z cycle. fetch/prune removed the two merged lane branches (#511, #512). Six origin/mac/* branches unmoved since 2026-09-02/03; none new/moved; all already on SignalGrid_Alpha -> no PR action. No mail addressed to cloud; nothing to ack. sim 16/16 bound, none owed. sync manifest v64, no drift. tick heartbeat ABSENT (Mac not ticking); owner escalation on 24h cooldown (last 2026-09-07T05:09Z, next allowed 2026-09-08T05:09Z) -> not escalated. live-evidence 2026-09-03 (4d old), covered by the standing 'install-launchd' directive -> no new send. mailbox PR #439 subscribed."
 }

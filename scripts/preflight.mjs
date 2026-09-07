@@ -207,6 +207,8 @@ const STEPS = [
   { name: "Inspiration catalog structure self-test (the check can actually fail)", cmd: ["node", "scripts/check-inspiration-catalog-structure.mjs", "--self-test"] },
   { name: "Entry guards (a module's gate body runs only when it IS the entry, never on a filename match)", cmd: ["node", "scripts/check-entry-guards.mjs"] },
   { name: "Entry-guard self-test (the suffix form is flagged, the exact form is not)", cmd: ["node", "scripts/check-entry-guards.mjs", "--self-test"] },
+  { name: "Plugin manifest (the signalgrid plugin's agent list equals the tracked agent files; skills and commands present; claude plugin validate passes when the CLI is on PATH)", cmd: ["node", "scripts/check-plugin-manifest.mjs"] },
+  { name: "Plugin-manifest self-test (a manifest missing or inventing an agent is flagged)", cmd: ["node", "scripts/check-plugin-manifest.mjs", "--self-test"] },
   { name: "Rendered assets (a committed PNG must be a render of the committed HTML; unpinned PNGs reported)", cmd: ["node", "scripts/check-rendered-assets.mjs"] },
   { name: "Rendered assets self-test (the check can actually fail)", cmd: ["node", "scripts/check-rendered-assets.mjs", "--self-test"] },
   { name: "Skill instruction conflicts (no skill may prescribe a command the Bash deny-list hook refuses, unless VENDORED.md Overrides names the site)", cmd: ["node", "scripts/check-skill-instruction-conflicts.mjs"] },

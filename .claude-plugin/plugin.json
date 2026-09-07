@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "signalgrid",
+  "displayName": "SignalGrid Operating Plane",
+  "version": "0.1.0",
+  "description": "The SignalGrid engineering operating plane packaged as a Claude Code plugin: the first-party role and ritual skills, the specialist agents, and the slash-command skills that run this repository. Hooks stay in project settings and are deliberately excluded so they do not double-fire.",
+  "author": {
+    "name": "Dan Fashauer",
+    "email": "dan.fashauer@gmail.com"
+  },
+  "repository": "https://github.com/DanFashauer/SignalGrid-Review-Hub",
+  "license": "SEE LICENSE IN LICENSE",
+  "keywords": [
+    "signalgrid",
+    "fail-closed",
+    "deterministic",
+    "review",
+    "skills",
+    "agents"
+  ],
+  "skills": "./.claude/skills/",
+  "agents": [
+    "./.claude/agents/agent-platform-steward.md",
+    "./.claude/agents/architect.md",
+    "./.claude/agents/build-error-resolver.md",
+    "./.claude/agents/code-reviewer.md",
+    "./.claude/agents/doc-updater.md",
+    "./.claude/agents/e2e-runner.md",
+    "./.claude/agents/fail-closed-auditor.md",
+    "./.claude/agents/gate-and-proof-engineer.md",
+    "./.claude/agents/planner.md",
+    "./.claude/agents/refactor-cleaner.md",
+    "./.claude/agents/security-reviewer.md",
+    "./.claude/agents/tdd-guide.md",
+    "./.claude/agents/verdict-core-reader.md"
+  ],
+  "commands": "./.claude/commands/"
+}

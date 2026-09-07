@@ -51,7 +51,18 @@ PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
               (DR-021, owner directive 2026-08-31); absorption mode - owner
               feeds resources, the repo absorbs them. Claim discipline
               unchanged.
-LAST TOUCHED: 2026-09-06 (cloud lane, latest) - Batches K (#463), L (#465),
+LAST TOUCHED: 2026-09-07 (cloud lane, latest) - PACKAGED THE REPO AS A CLAUDE
+              CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json
+              names the `signalgrid` plugin and declares skills/agents/commands
+              by path into the LIVE .claude/ (one source of truth, no drift
+              copy; hooks excluded so they do not double-fire). claude plugin
+              validate . exits 0. New anti-drift gate check-plugin-manifest.mjs
+              (agents list == git ls-files .claude/agents/*.md; validate exit 0
+              when CLI present) - self-tested, mutation-proven, wired preflight+CI,
+              parity green. Records: DR-030, RESOURCE_INTAKE, docs/reference/
+              CLAUDE_CODE_PLUGINS.md, INDEX, coverage 102/102, publication-boundary
+              + surface-ownership areas for .claude-plugin. Preflight PASSED.
+              (Earlier 2026-09-06:) Batches K (#463), L (#465),
               M (#466), N (#468), O (#470), P (#471), Q (#473), R (#474) and
               S (#476), T (#477), U (#480), V (#482), W (#484), X (#485) and
               Y (#489) LANDED. Batch Z (twenty-fourth round, on its PR) read
@@ -586,8 +597,11 @@ BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
               Screen Recording permission for Terminal (System Settings > Privacy &
               Security > Screen Recording, then relaunch Terminal) - closes
               2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land Batch Z (on its PR). Every surface is now READ
-              (100 of 100); the whole-repo review pass is complete. Residual
+NEXT ACTION: cloud: land the plugin-packaging PR (DR-030) to SignalGrid_Alpha,
+              then hold for owner direction. Batch Z landed earlier (049e3f8);
+              the whole-repo review pass is complete and every surface is READ
+              (now 102 of 102 with .claude-plugin and docs/reference added).
+              Residual
               follow-ups, none blocking: (0) STATUS.md's "would run here now"
               column is cosmetically stale vs the F10 generator fix - no gate
               reads it and the generator cannot run to completion off a

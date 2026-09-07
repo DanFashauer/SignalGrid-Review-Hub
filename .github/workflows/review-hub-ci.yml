@@ -706,6 +706,10 @@ jobs:
         run: node scripts/check-entry-guards.mjs
       - name: "Entry-guard self-test (the suffix form is flagged, the exact form is not)"
         run: node scripts/check-entry-guards.mjs --self-test
+      - name: "Plugin manifest (the signalgrid plugin's agent list equals the tracked agent files; skills and commands present)"
+        run: node scripts/check-plugin-manifest.mjs
+      - name: "Plugin-manifest self-test (a manifest missing or inventing an agent is flagged)"
+        run: node scripts/check-plugin-manifest.mjs --self-test
       # Two preview PNGs shipped a struck category label for five days after their HTML sources
       # were corrected (2026-09-06): no gate read image content. The manifest pins each
       # render to the sha256 of its source; the renderer (Chromium) is NOT run in CI.

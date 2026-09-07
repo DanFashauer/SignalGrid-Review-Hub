@@ -663,6 +663,7 @@
       "executor": "agent:agent-platform-steward",
       "surface": [
         ".claude/**",
+        ".claude-plugin/**",
         ".agents/**",
         ".mcp.json",
         "artifacts/mcp-server/**",

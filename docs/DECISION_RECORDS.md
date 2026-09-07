@@ -1671,3 +1671,61 @@ family, no proof, no gate — a build tool adopted by reference changes none of 
 **Reversal.** The owner reverses by saying so: delete `docs/AGENT_GATEWAY.md`, this
 record, the intake row and the index line. Nothing in the product depends on any of it,
 by construction — the boundary above guarantees it.
+
+## DR-030 — The repository's operating plane (its first-party skills, agents and slash-command skills) is packaged as a Claude Code plugin named `signalgrid`, with a single source of truth and no hooks (owner-directed 2026-09-07)
+
+**Context.** The owner shared the Claude Code plugins reference and directed: package
+this repository as a plugin (chosen over "standing operating rule" and "file the
+reference"). The repository already carries its whole operating plane under `.claude/` —
+28 skills, 13 agents, 9 slash-command skills, and three hooks wired inline in
+`.claude/settings.json`. A plugin is the unit Claude Code installs, versions and
+distributes; packaging the plane as one lets it be carried to other checkouts and
+sessions as a single named, versioned artifact.
+
+**Call: a manifest at the repository root, pointing into the existing `.claude/`, is the
+plugin.** `.claude-plugin/plugin.json` names the plugin `signalgrid` and declares its
+components by path: `skills: "./.claude/skills/"`, `agents: [the 13 tracked agent files]`,
+`commands: "./.claude/commands/"`. `claude plugin validate .` passes (exit 0; one benign
+warning that a plugin root's CLAUDE.md is not loaded as plugin context — true and
+intended, our CLAUDE.md is project context).
+
+Why the root, and not a subdirectory: a plugin component path may not escape the plugin
+root (`path escapes plugin directory`), so a plugin living under a subfolder could not
+reference the real `.claude/` above it. The choice was **one source of truth** — the
+plugin points at the live `.claude/` the repo already runs — over a second copy that
+would drift. A bare `.claude-plugin/plugin.json` does not auto-activate: plugins load
+only via a marketplace install, `--plugin-dir`/`--plugin-url`, an `@skills-dir` manifest,
+or claude.ai sync. So adding the manifest changes nothing in this repo's own sessions; it
+makes the repo INSTALLABLE as a plugin without altering current behavior.
+
+**Boundary — the load-bearing halves.**
+
+- **Hooks are excluded, deliberately.** The three hooks (`session-start`,
+  `block-dangerous`, `verify-done`) stay in `.claude/settings.json` (project scope) and
+  are NOT re-declared in the plugin. Declaring them twice would double-fire them in this
+  repo — session-start twice, the Bash deny-list twice, verify-done twice. They are also
+  repo-specific (pnpm, this repo's git discipline and gates), not portable. The plugin
+  packages the reusable plane (skills + agents + commands); the hooks remain project
+  infrastructure.
+- **The agent list is gated against drift, not trusted.** The loader requires `agents` to
+  be a list of file paths, not a directory, so the manifest carries a hand-list beside the
+  directory that is the real source — exactly the "hand-list claimed derived" shape this
+  repo has been bitten by. `scripts/check-plugin-manifest.mjs` (preflight + CI, self-tested
+  both directions, mutation-proven) fails if the manifest's `agents` set is not exactly
+  `git ls-files .claude/agents/*.md`, if any referenced path is missing, if `skills`/
+  `commands` are empty, or — when the `claude` CLI is on PATH — if `claude plugin validate`
+  does not exit 0. An empty derivation fails closed.
+- **No claim moves, no code changes.** Packaging the operating plane asserts nothing about
+  the product: no `lib/*`, `/v1`, connector, proof or decision-path change; no
+  production/certification/partnership claim; no launch-profile change. Golden rule 2 is
+  untouched — the decision core is exactly as deterministic and offline as before.
+
+**Evidence.** The plugins reference read 2026-09-07 (filed at
+`docs/reference/CLAUDE_CODE_PLUGINS.md`); `claude plugin validate .` exit 0 (CLI 2.1.263);
+`.claude-plugin/plugin.json`; `scripts/check-plugin-manifest.mjs` (+ self-test) wired into
+`scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml`, parity green; the intake
+row in `docs/agent/RESOURCE_INTAKE.md`.
+
+**Reversal.** Delete `.claude-plugin/`, `scripts/check-plugin-manifest.mjs`, its two
+preflight and two CI lines, this record, the reference doc, the intake row and the index
+lines. Nothing in the product depends on any of it — the boundary above guarantees it.

@@ -93,6 +93,7 @@ export const AREAS = [
   // says is that the GitHub mobile app cannot open repository settings, which is a
   // fact about GitHub, not about this company.
   { path: ".claude", class: "tooling", reason: "Slash commands for prompt authoring, and the note describing them. Generic authoring aids carrying no product, tenant or customer specifics — see .claude/COMMANDS.md." },
+  { path: ".claude-plugin", class: "tooling", reason: "The Claude Code plugin manifest (DR-030) that packages this repo's operating plane as the `signalgrid` plugin. Names skills/agents/commands by path into the public .claude/; no secrets, endpoints, tenant or customer material." },
   { path: ".mcp.json", class: "tooling", reason: "Project-scope MCP registration pointing at artifacts/mcp-server (already public in this tree). Command and args only — no credentials, no endpoints beyond the local stdio process. Installed under DR-021 (handoff Task 4g, corrected to the real Node server)." },
   // A NESTED, more specific area — the gate resolves longest-prefix-wins, so these
   // files take this class and not the `.claude` one above. Split out because they are

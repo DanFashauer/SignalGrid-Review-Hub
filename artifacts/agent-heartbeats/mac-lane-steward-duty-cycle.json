@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-08T20:26:17.764Z",
-  "result": "quiet: 2026-09-08 20:24Z cycle. Alpha b029e4e (#549 merged). Nothing addressed to cloud; six origin/mac/* branches stale on Alpha (prune list already mailed); sim bound; manifest v64 no drift. tick heartbeat ABSENT; owner escalation on cooldown (next 2026-09-09T05:24Z) plus re-reminded in chat -> NOT escalated. live-evidence 2026-09-03 (5d) subsumed by that same physical action -> no send. PR #531 (green, owner-gated) still unmerged; carries the two scripts/mac container-engine scripts plus the temp-dir cleanup hardening; mail the Mac to pull scripts/mac once it lands."
+  "firedAt": "2026-09-08T21:26:00.756Z",
+  "result": "quiet: 2026-09-08 21:24Z cycle. Alpha cea168f (#550 merged). Nothing addressed to cloud; six origin/mac/* branches stale on Alpha (prune list already mailed); sim bound; manifest v64 no drift. tick heartbeat ABSENT; owner escalation on cooldown (next 2026-09-09T05:24Z) plus re-reminded in chat -> NOT escalated. live-evidence 2026-09-03 (5d) subsumed by that same physical action -> no send. PR #531 (green, owner-gated) still unmerged; carries the two scripts/mac container-engine scripts plus the temp-dir cleanup hardening; mail the Mac to pull scripts/mac once it lands."
 }

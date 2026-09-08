@@ -283,7 +283,7 @@ earlier — that is the loop working, not a reason to soften the record.
     eleven lines below, plus one more in `lib/persistence`, for NINE fail-open
     sites in total (see the widening note below).
     All nine are fixed to treat unparseable as expired/stale.
-    `scripts/check-nan-fail-open.mjs` (preflight + CI, four rules, self-tested)
+    `scripts/check-nan-fail-open.mjs` (preflight + CI, five rules, self-tested)
     holds the line. Two measurements, each attributed to the gate version that
     produced it, because conflating them is how a figure goes stale:
     the FIRST (clock-operand-only) gate, run against the pre-fix sources,

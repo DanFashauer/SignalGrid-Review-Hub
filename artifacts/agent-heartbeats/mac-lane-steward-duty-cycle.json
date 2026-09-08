@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-08T18:37:53.402Z",
-  "result": "quiet: 2026-09-08 18:24Z cycle. Alpha e818b55 (#547 heartbeat merged). Nothing addressed to cloud; six origin/mac/* STALE on Alpha (prune list already mailed); sim bound; manifest v64 no drift. tick ABSENT; owner escalation on cooldown (next allowed 2026-09-09T05:24Z) + re-reminded in chat this session -> NOT escalated. live-evidence 2026-09-03 (5d) subsumed by that same physical action -> no send. Shared-surface note stands: PR #531 (unmerged) adds scripts/mac/ensure-container-engine.sh + install-container-engine-launchd.sh and hardens five gate/delivery rmSync teardowns against an ENOTEMPTY race; mail the Mac to pull scripts/mac/* once #531 lands."
+  "firedAt": "2026-09-08T19:28:07.832Z",
+  "result": "quiet: 2026-09-08 19:24Z cycle. Alpha d82660c (#548 merged). Nothing to cloud; six origin/mac/* STALE on Alpha (prune list mailed); sim bound; manifest v64 no drift. tick ABSENT; owner escalation on cooldown (next 2026-09-09T05:24Z) + re-reminded in chat -> NOT escalated. live-evidence 2026-09-03 (5d) subsumed -> no send. Shared-surface note still pending: PR #531 (green, owner-gated, unmerged) adds scripts/mac container-engine scripts + repo-wide ENOTEMPTY teardown-race fix; mail the Mac to pull scripts/mac/* once it lands."
 }

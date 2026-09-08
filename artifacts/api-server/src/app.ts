@@ -46,7 +46,16 @@ const corsOptions: CorsOptions = {
   // here, a browser console on an allowed cross-origin deployment with
   // SIGNALGRID_ENROLLMENT_SECRET set would have every correctly-authorized enrollment
   // request blocked at CORS preflight, before the server-side check could even run.
-  allowedHeaders: ["authorization", "content-type", "x-request-id", "x-enrollment-authorization"],
+  // idempotency-key: the exactly-once retry token the idempotency middleware reads
+  // (middlewares/idempotency.ts); omitting it here blocks the documented retry-safety
+  // mechanism for a browser client on an allowed origin at preflight, same failure mode.
+  allowedHeaders: [
+    "authorization",
+    "content-type",
+    "x-request-id",
+    "x-enrollment-authorization",
+    "idempotency-key",
+  ],
   maxAge: 600,
 };
 

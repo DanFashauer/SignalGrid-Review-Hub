@@ -171,7 +171,10 @@ export function buildHarness(files) {
   const dir = mkdtempSync(join(tmpdir(), "sg-ignore-harness-"));
   const init = spawnSync("git", ["init", "-q", "."], { cwd: dir, encoding: "utf8" });
   if (init.status !== 0) {
-    rmSync(dir, { recursive: true, force: true });
+    // maxRetries: every harness here is a `git init`ed tree; a recursive rmSync of
+    // `.git` can race a settling git write and throw ENOTEMPTY, which Node's rimraf
+    // retries only when maxRetries > 0 — otherwise a transient crashes the gate.
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     throw new Error(`could not git init the ignore harness: ${init.stderr || init.stdout}`);
   }
   // git's template writes a commented sample into info/exclude; truncate it so the
@@ -358,7 +361,7 @@ function run() {
     );
     for (const n of notes) console.log(`  ${n}`);
   } finally {
-    rmSync(harness, { recursive: true, force: true });
+    rmSync(harness, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 
   if (missing.length > 0) {
@@ -406,7 +409,7 @@ function selfTest() {
     const a = checkIgnored(h, probes);
     check("a fixture .gitignore carrying every producer flags nothing", probes.every((p) => a.get(p) !== null), JSON.stringify([...a]));
   } finally {
-    rmSync(h, { recursive: true, force: true });
+    rmSync(h, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 
   // 2. THE PLANT: the same fixture with ONE producer's rule removed → that one, and
@@ -426,7 +429,7 @@ function selfTest() {
         plantDetail.push(`removing ${rules[i]} flagged ${JSON.stringify(flagged)}, expected [${probes[i]}]`);
       }
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   }
   check(`removing each producer's rule in turn flags exactly that producer (${probes.length} plants)`, plantOk, plantDetail.join("; "));
@@ -460,7 +463,7 @@ function selfTest() {
     );
     check("an unmatched path comes back not-ignored", a.get("plain.txt") === null);
   } finally {
-    rmSync(h, { recursive: true, force: true });
+    rmSync(h, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 
   // 4. A drifted citation is FATAL, not ignorable.

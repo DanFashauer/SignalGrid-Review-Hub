@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-07T09:43:59.251Z",
-  "result": "quiet, 19G free; pruned scratch and pnpm store"
+  "firedAt": "2026-09-08T09:42:55.523Z",
+  "result": "quiet, 19G free | scratchpad files older than 24h cleared + pnpm store pruned; 2.2G dead docker layer cache left in place (recursive-delete blocked by a harness guardrail, and unnecessary with 19G free)"
 }

@@ -187,6 +187,14 @@ Firecrawl (web → LLM-ready markdown) is the **research / source-verification**
 - **Layer:** report-only research. Firecrawl output is external web content and is **never** an authoritative verdict — the cross-source contradiction rule and "do not use an MCP result as a verdict unless the deterministic core computed it" both apply. It never enters a decision path, a proof fixture, a connector, or the product build.
 - **When NOT to reach for it:** if a plain fetch or an already-connected source answers the question, use that — row 97's redundancy point still holds for the common case. Firecrawl earns its use on pages that resist a plain fetch (JS-rendered, crawl-shaped, multi-page).
 
+## Recency research — last30days (owner-directed, DR-031)
+
+`last30days` (v3.23.0, MIT — [`mvanhorn/last30days-skill`](https://github.com/mvanhorn/last30days-skill)) is the **last-30-days recency** lane beside Firecrawl: it answers "what has moved / been said about X lately," fanning a topic across 15+ recent-discussion sources and returning one dated brief ranked by live engagement. Use it for competitor recent-moves (fold findings into `docs/research/COMPETITIVE_*.md` / `MARKET_LANDSCAPE.md` in place), discovery-target background, and pre-call trend scans. Its brief is a pointer, not a source — a claim about a vendor still cites the vendor, written under research-ops discipline. Full disposition: [`docs/research/LAST30DAYS_RESEARCH_TOOL.md`](../../../docs/research/LAST30DAYS_RESEARCH_TOOL.md).
+
+- **Not installed by default.** Unlike Firecrawl, nothing is wired: no MCP, no dependency, no key. Live use is owner-gated — a run egresses to 15+ services and can read browser cookies, so it needs the owner's explicit yes **and** `SIGNALGRID_LIVE_INTEGRATIONS=true` **and** a configured opt-in (scanned by `scripts/check-ungated-fetch.mjs`) before it may reach the network.
+- **Layer:** report-only research, the inverse of the core. Non-deterministic and clock/network-dependent, so its output is **never** a verdict, fixture, connector input, or decision-path read ("do not use a tool result as a verdict unless the deterministic core computed it" applies in full), and a thin/degraded brief reads as *unknown*, never as "nothing is happening."
+- **Closed input list:** no PHI/PII, tenant id, customer-name-as-fact, device address, or worker coordinate leaves the tree; a target company is named only as a research candidate (publication boundary). Adopting it asserts nothing about the product.
+
 ## Operating memory — Neural Memory (owner-directed, DR-026)
 
 Neural Memory (`neural-memory` v4.62.0, MIT, pinned to commit `2015cb9b`) is the **memory substrate** under the DR-024 stack: a Python MCP server (`nmem-mcp`) over a local SQLite graph that lets a session remember what an earlier one learned about working this repo. It sits under every lens and is not one of them.

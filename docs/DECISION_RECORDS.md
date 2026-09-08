@@ -1729,3 +1729,60 @@ row in `docs/agent/RESOURCE_INTAKE.md`.
 **Reversal.** Delete `.claude-plugin/`, `scripts/check-plugin-manifest.mjs`, its two
 preflight and two CI lines, this record, the reference doc, the intake row and the index
 lines. Nothing in the product depends on any of it — the boundary above guarantees it.
+
+## DR-031 — `last30days` is the research-ops lane's last-30-days recency transport: report-only, non-deterministic, never in a decision path, live invocation owner-gated (owner-directed 2026-09-08)
+
+**Context.** The owner shared [`mvanhorn/last30days-skill`](https://github.com/mvanhorn/last30days-skill)
+and directed: *"Need to incorporate this repo into the layers and tech stack for this
+project. This will help a lot I believe based on information I've provided in the past and
+future."* `last30days` (v3.23.0, MIT) is an agent-led research skill: given a topic it
+fans queries across 15+ recent-discussion sources (Reddit, X, YouTube, TikTok, Hacker
+News, Polymarket, GitHub, arXiv, Techmeme, LinkedIn, Bluesky, StockTwits, Perplexity,
+open-web search, …), clusters and ranks by live engagement, and synthesizes one dated
+markdown brief of what has moved in the last ~30 days. It was read via its published repo
+(`SKILL.md`/`CONFIGURATION.md`/`CONCEPTS.md`) on 2026-09-08 and deliberately **not** run:
+a real invocation transmits the query to those third parties and can read local browser
+cookies.
+
+**Call: adopt it as the research/source-discovery lane's recency transport — the DR-022
+(Firecrawl) / DR-027 (public-apis) slot — at the doctrine and routing level only.** It
+answers "what changed about X lately," feeding the competitive briefs
+(`docs/research/COMPETITIVE_*.md`, `MARKET_LANDSCAPE.md`) and discovery-conversation prep,
+findings written under research-ops discipline (cite what resolves, prove absence first,
+narrowest truthful verb). The disposition is recorded in
+`docs/research/LAST30DAYS_RESEARCH_TOOL.md`, routed in the evidence-toolchain skill, and
+logged in `docs/agent/RESOURCE_INTAKE.md`. **No code, no dependency, no MCP install, no new
+skill, no gate** — the same documentation-first shape public-apis (DR-027) took, and unlike
+Firecrawl (DR-022) nothing is even installed key-gated yet.
+
+**Boundary — the load-bearing halves.**
+
+- **It is the inverse of the decision core, and the two never mix.** `last30days` is
+  non-deterministic, clock-dependent (a rolling window) and network-dependent; the core is
+  deterministic, offline, fixture-backed. Golden rule 2 holds in full: nothing in `lib/*`,
+  `/v1`, a connector, or a `proof:*` may call it or read its output, its brief can never
+  become a fixture or evidence-of-record, and "do not use a tool result as a verdict unless
+  the deterministic core computed it" applies. Fail-closed also governs the *reading*: the
+  tool degrades silently when a source is unreachable, so a thin brief is read as *unknown*,
+  never as "nothing is happening."
+- **Live use is owner-gated; nothing identifying leaves the tree.** A run egresses to 15+
+  services and can read browser cookies, so it is deferred behind the owner's explicit yes
+  **and** `SIGNALGRID_LIVE_INTEGRATIONS=true` **and** a configured opt-in scanned by
+  `scripts/check-ungated-fetch.mjs` — "keyless for Reddit/HN" is not "no opt-in needed." No
+  PHI/PII/tenant id/customer-name-as-fact/device address/worker coordinate is ever sent; a
+  target company is named only as a research candidate, never as a customer or partner
+  (publication boundary).
+- **Building is not claiming.** Adopting internal research tooling asserts nothing about the
+  product: never a SignalGrid feature, launch surface, or on-device capability; the
+  launch-claims gate (`scripts/check-launch-claims.mjs`) still governs what may be said to
+  ship.
+
+**Evidence.** The skill read 2026-09-08 (repo above; not cloned or executed);
+`docs/research/LAST30DAYS_RESEARCH_TOOL.md`; the routing subsection in
+`.claude/skills/signalgrid-evidence-toolchain/SKILL.md`; the intake row in
+`docs/agent/RESOURCE_INTAKE.md`; the index link in `docs/INDEX.md`.
+
+**Reversal.** Delete `docs/research/LAST30DAYS_RESEARCH_TOOL.md`, this record, the intake
+row, the evidence-toolchain subsection and the index link. Nothing in the product depends
+on any of it — no code, dependency, gate or install was added, so there is nothing else to
+undo.

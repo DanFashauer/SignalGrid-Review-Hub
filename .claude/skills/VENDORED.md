@@ -60,7 +60,7 @@ Third-party work, copied in unmodified. **Not ours.**
 | Committed upstream | 2026-08-12T09:53:21-07:00 |
 | Vendored | 2026-08-20 |
 | Contents | 14 skills, 51 files, byte-identical to upstream |
-| Byte-identity re-verified | 2026-09-08 — 51 files + LICENSE identical to upstream@pin; HEAD still == pin (`pnpm run scan:superpowers-vendor`) |
+| Byte-identity re-verified | 2026-09-08 — 51 files + LICENSE identical to upstream@pin; HEAD still == pin (re-fetched from the raw CDN and diffed) |
 
 ## Why these and nothing else
 
@@ -129,12 +129,14 @@ product and no new surface to the launch profile.
   commits feed showed upstream HEAD is STILL that pinned commit (Release v6.3.0,
   2026-08-12) — the pin is current, upstream has not moved since we vendored, and there
   is nothing new to vendor or adopt (no re-vendor, no new skill; a new skill would
-  duplicate one already here). This is now a one-command check, `pnpm run
-  scan:superpowers-vendor` (`scripts/scan-superpowers-vendor.mjs`): it re-fetches every
-  vendored file, diffs it against upstream@pin (fail-closed — a file it cannot fetch is
-  NOT-VERIFIED, never a silent pass), and REPORTS if upstream HEAD has advanced past the
-  pin (a human re-vendor DECISION, never an automatic sync). It reaches the network, so
-  it is not a CI gate — the same reason `scan:estate` is not.
+  duplicate one already here). The verification was performed by fetching every vendored
+  file from the raw CDN at the pinned commit and diffing it (fail-closed — a file that
+  will not fetch is NOT-VERIFIED, never a silent pass); to re-check after a re-share,
+  repeat that fetch-and-diff against the `Commit` above. It was deliberately NOT shipped
+  as a committed script: no script in this repository makes an outbound network request,
+  and the one written for this check tripped CodeQL's file-data-in-outbound-request query
+  — introducing the tree's first network-fetching script for a convenience is not worth
+  the surface, so the record is the evidence and the check stays a manual re-run.
 
 ## Overrides
 

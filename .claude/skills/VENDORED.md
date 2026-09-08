@@ -56,10 +56,11 @@ Third-party work, copied in unmodified. **Not ours.**
 | Upstream | https://github.com/obra/superpowers |
 | Author | Jesse Vincent |
 | Licence | MIT (`LICENSE` in this directory, copyright notice intact) |
-| Commit | `b36e0829c6d0140e93cfef2ca599b1b07d4a7797` |
+| Commit | `b36e0829c6d0140e93cfef2ca599b1b07d4a7797` (Release v6.3.0) |
 | Committed upstream | 2026-08-12T09:53:21-07:00 |
 | Vendored | 2026-08-20 |
 | Contents | 14 skills, 51 files, byte-identical to upstream |
+| Byte-identity re-verified | 2026-09-08 — 51 files + LICENSE identical to upstream@pin; HEAD still == pin (`pnpm run scan:superpowers-vendor`) |
 
 ## Why these and nothing else
 
@@ -120,6 +121,20 @@ product and no new surface to the launch profile.
   the override is the record. What the read did NOT do: verify byte-identity
   against upstream (the GitHub API returned 403 through the sandbox proxy), or
   re-read the 16 first-party files the twelfth round had already read in full.
+- **Byte-identity verified 2026-09-08, closing the caveat above.** The GitHub API
+  is still 403 through the proxy, but the raw CDN (`raw.githubusercontent.com`) is
+  reachable, so every vendored file was fetched from upstream at the pinned commit
+  and compared: all 51 skill files plus the `LICENSE` (52 in total) are byte-identical
+  to `obra/superpowers@b36e0829`. The owner re-shared the repository the same day; the
+  commits feed showed upstream HEAD is STILL that pinned commit (Release v6.3.0,
+  2026-08-12) — the pin is current, upstream has not moved since we vendored, and there
+  is nothing new to vendor or adopt (no re-vendor, no new skill; a new skill would
+  duplicate one already here). This is now a one-command check, `pnpm run
+  scan:superpowers-vendor` (`scripts/scan-superpowers-vendor.mjs`): it re-fetches every
+  vendored file, diffs it against upstream@pin (fail-closed — a file it cannot fetch is
+  NOT-VERIFIED, never a silent pass), and REPORTS if upstream HEAD has advanced past the
+  pin (a human re-vendor DECISION, never an automatic sync). It reaches the network, so
+  it is not a CI gate — the same reason `scan:estate` is not.
 
 ## Overrides
 

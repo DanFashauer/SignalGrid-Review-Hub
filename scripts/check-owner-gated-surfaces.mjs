@@ -27,7 +27,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -123,5 +123,9 @@ function validate() {
   console.log("Run with --self-test to exercise classifyDiff (preflight + CI do).");
 }
 
-if (process.argv.includes("--self-test")) selfTest();
-else validate();
+// Guarded so this module can be IMPORTED for classifyDiff (e.g. by the brain cycle)
+// without running its CLI as a side effect. Direct invocation is unchanged.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (process.argv.includes("--self-test")) selfTest();
+  else validate();
+}

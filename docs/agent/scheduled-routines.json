@@ -84,9 +84,7 @@
    "escalationBoundary": "runs only what a sim request names from scripts/lib/sim-operations.mjs; refuses a dirty or non-Alpha checkout and says so in its heartbeat; the cloud steward escalates to the owner when this heartbeat is older than its tolerance (the tick is not installed, the Mac is asleep, or origin is unreachable)",
    "heartbeatPath": "artifacts/agent-heartbeats/mac-lane-tick.json",
    "cadenceToleranceHours": 3,
-   "status": "awaiting-activation",
-   "awaitingReason": "launchd agent not yet installed on the owner's Mac (bash scripts/mac/install-launchd.sh); owner escalated 2026-09-06T04:26Z",
-   "awaitingSince": "2026-09-05"
+   "status": "active"
   }
  ]
 }

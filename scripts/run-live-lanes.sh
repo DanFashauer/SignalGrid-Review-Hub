@@ -48,6 +48,11 @@ ok()   { printf "  \033[32mPASS\033[0m  %s\n" "$1"; pass=$((pass+1)); }
 bad()  { printf "  \033[31mFAIL\033[0m  %s  (log: %s)\n" "$1" "$2"; fail=$((fail+1)); failed_lanes="$failed_lanes $1"; }
 skip() { printf "  \033[33mSKIP\033[0m  %s  (%s)\n" "$1" "$2"; skipped=$((skipped+1)); skipped_lanes="$skipped_lanes $1"; }
 
+# Docker Desktop's credsStore="desktop" hangs a headless image pull; neutralise it
+# before the first docker call (no-op on Linux/CI/podman). See the guard's header.
+# shellcheck source=lib/docker-credhang-guard.sh
+. "$(dirname "$0")/lib/docker-credhang-guard.sh"
+sg_guard_docker_credhang
 # shellcheck source=lib/container-engine.sh
 . "$(dirname "$0")/lib/container-engine.sh"
 # Engine-agnostic: these are OCI images, so podman runs them as well as docker.

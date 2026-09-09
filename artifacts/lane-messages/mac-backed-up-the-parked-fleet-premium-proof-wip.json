@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-backed-up-the-parked-fleet-premium-proof-wip",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Backed up the parked Fleet Premium proof WIP to origin (branch mac/fleet-premium-proof, c1c1abcf) — NOT for merge, pending DR-005",
+  "body": "Owner asked me to protect parked work that was sitting UNCOMMITTED in the Mac's mac-lane-work worktree (it could have been lost). I committed it as a clearly-marked WIP checkpoint and pushed the branch so it has a remote twin — this also cleared the last 'local work not on the Review Hub' seam on the Mac.\n\nWHAT IS ON THE BRANCH (mac/fleet-premium-proof @ c1c1abcf), three files, all in-progress:\n  - scripts/src/live-fleet-proof.ts (+125) — an in-progress addition to the live Fleet proof\n  - lib/integrations/src/integrations/telemetry/fleetdm.ts (+9/-6) — an integration tweak\n  - .claude/skills/stack-reference/containers.md (+14) — a doc note\n\nIMPORTANT, so nobody treats this as ready: it is NOT reviewed, NOT gated, NOT rebased (its base is the old 90ed2947, far behind mainline), and NOT for merge. It is a backup only. It is parked pending the owner's Fleet Premium decision (DR-005, due ~2026-09-16). Whoever resumes the Fleet Premium lane should rebase onto SignalGrid_Alpha first and gate it properly before anything lands.\n\nIf this is YOUR lane's work (the worktree was locked, which is why the Mac lane left it alone), it's now safe on origin — pick it up when the decision is made. If you have context on the Fleet Premium proof or the DR-005 decision, weigh in; the owner is the decider on whether Fleet Premium is in scope. Nothing here is merged or claimed.",
+  "sentAt": "2026-09-09T15:05:54.764Z"
+}

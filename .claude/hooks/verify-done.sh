@@ -57,7 +57,25 @@ if [ -z "$REMOTE" ]; then
   exit 0
 fi
 if [ "$LOCAL" != "$REMOTE" ]; then
-  jq -nc --arg b "$BRANCH" '{decision:"block", reason:("Local HEAD is not on origin/\($b). The commit was not actually pushed. Run git push origin HEAD, re-verify with git ls-remote.")}'
-  exit 0
+  # DIRECTION MATTERS (fixed 2026-09-09, fired twice in one session). This compared the
+  # two hashes and called ANY difference "not pushed", so a checkout merely BEHIND origin
+  # was reported as unpushed work — and the instruction it gave, `git push origin HEAD`,
+  # had nothing to push. That is the normal state on the Mac: the launchd tick commits a
+  # heartbeat and pushes it every 5 minutes, so origin moves under an idle checkout and
+  # every session-end tripped a hook about a commit that did not exist. Only commits the
+  # remote does NOT carry are a violation. UNKNOWN STAYS FATAL: if the remote commit
+  # cannot be resolved locally the direction is undeterminable, and an undeterminable
+  # answer must never pass as clean (golden rule 2).
+  git fetch -q origin "$BRANCH" 2>/dev/null
+  UNPUSHED=$(git rev-list --count "$REMOTE..$LOCAL" 2>/dev/null)
+  if [ -z "$UNPUSHED" ]; then
+    jq -nc --arg b "$BRANCH" '{decision:"block", reason:("Cannot determine whether HEAD is ahead of origin/\($b) — the remote commit did not resolve locally after a fetch. Run git fetch origin, then git rev-list --count origin/\($b)..HEAD and act on what it says. An undeterminable state is not a clean one.")}'
+    exit 0
+  fi
+  if [ "$UNPUSHED" != "0" ]; then
+    jq -nc --arg b "$BRANCH" --arg n "$UNPUSHED" '{decision:"block", reason:("\($n) local commit(s) on \($b) are not on origin. Run git push origin HEAD, re-verify with git ls-remote.")}'
+    exit 0
+  fi
+  # Behind only: nothing of this session's is unpushed, so this is not a done violation.
 fi
 exit 0

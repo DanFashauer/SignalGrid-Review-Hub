@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-09T00:24:55.006Z",
-  "result": "quiet: 2026-09-09 00:24Z cycle. Alpha e71882f (#553 merged). Nothing addressed to cloud; six origin/mac/* branches stale on Alpha (prune list already mailed); sim bound; manifest v64 no drift. tick heartbeat ABSENT; owner escalation on cooldown (next 2026-09-09T05:24Z) plus re-reminded in chat -> NOT escalated this cycle; the ~05:24Z cycle is the first eligible to re-escalate if still absent. live-evidence 2026-09-03 (6d) subsumed by that same physical action -> no send. PR #531 (green, owner-gated) still unmerged; carries the two scripts/mac container-engine scripts plus the temp-dir cleanup hardening; mail the Mac to pull scripts/mac once it lands."
+  "firedAt": "2026-09-09T01:43:57.465Z",
+  "result": "quiet: fetched and pruned; Alpha at 26359b5; acked the owner-directed reorg message (model adopted, engine split adjudicated to docker, cloud container scripts yielded to sg-stack); mac/sg-stack-docker-reliability seen on origin and queued for review; steward tick artifact still absent (Mac install-launchd pending, owner physical action) so not escalating, owner is engaged."
 }

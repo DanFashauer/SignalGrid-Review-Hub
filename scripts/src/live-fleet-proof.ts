@@ -315,6 +315,131 @@ async function main(): Promise<void> {
     `partial=${truncated.partial} responded=${truncated.hostsResponded} results=${truncated.results.length}`);
   delete process.env.SIGNALGRID_ALLOW_LIVE_QUERY;
 
+  // ── 11. Premium: the team-scoped branch of getPolicies() ─────────────────
+  // Teams are a Fleet PREMIUM feature (docs/FLEET_LIVE_INTEGRATION.md). The
+  // adapter's team route existed for a year and was never once exercised against
+  // a server that could answer it, because free Fleet cannot create a team. This
+  // section asks the server what it is licensed for and behaves in three honest
+  // ways: an unlicensed server is REPORTED (stated, never counted as a pass); a
+  // licensed server without write approval is REPORTED (proving the branch needs
+  // a team and a team policy to exist, and this proof writes to no Fleet it was
+  // not told is disposable — FLEET_LAB_WRITE_OK=true, as proof:live-fleet-workflow
+  // demands); a licensed, writable lab gets the branch exercised end to end and
+  // pinned to the wire. DR-005: proven on the owner's trial, or marked
+  // deferred/unverified-premium on 2026-09-16 — this is the proof half of that.
+  // A body that is not JSON (a proxy's HTML error page, an empty 5xx) must become an
+  // attributable check failure, never a SyntaxError that aborts the whole report.
+  const parseJson = (body: string): Record<string, unknown> => {
+    try {
+      const v: unknown = JSON.parse(body);
+      return v !== null && typeof v === "object" ? (v as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  };
+  const cfgRes = await raw("/api/v1/fleet/config");
+  // A broken config read is a FAILURE, never an "unlicensed" skip: a stale token or a
+  // 5xx must not dress itself as free Fleet and let the run report pass with the
+  // whole branch having done nothing (the reviewer's blocker on the first cut).
+  check("premium probe: GET /api/v1/fleet/config answers 200 (a broken read is a failure, not a skip)",
+    cfgRes.status === 200, `status=${cfgRes.status}`);
+  const cfgJson = cfgRes.status === 200
+    ? (parseJson(cfgRes.body) as { license?: { tier?: string; expiration?: string } })
+    : {};
+  const tier = cfgRes.status === 200 ? (cfgJson.license?.tier ?? "unknown") : "unreadable";
+  if (cfgRes.status !== 200) {
+    // Counted above; nothing below can be trusted on a config read that failed.
+  } else if (tier !== "premium") {
+    console.log(`  ~  — premium: server license tier is '${tier}' — the team-scoped getPolicies() branch is UNVERIFIED on this run (reported, not counted)`);
+  } else if (process.env.FLEET_LAB_WRITE_OK !== "true") {
+    console.log("  ~  — premium: server is licensed, but FLEET_LAB_WRITE_OK is not 'true' — a team and a team policy must be CREATED to exercise the branch, so it stays UNVERIFIED on this run (reported, not counted)");
+  } else {
+    check("premium: the server states its license expiration", typeof cfgJson.license?.expiration === "string",
+      `expiration=${String(cfgJson.license?.expiration)}`);
+
+    // A team to scope to — reused when the lab already has it, created otherwise.
+    // Fixed names throughout: nothing here reads a clock (golden rule 2).
+    const TEAM_NAME = "signalgrid-premium-probe";
+    const teamsRes = await raw("/api/v1/fleet/teams");
+    const teamsJson = parseJson(teamsRes.body) as { teams?: Array<{ id: number; name: string }> };
+    let team = teamsRes.status === 200 ? teamsJson.teams?.find((t) => t.name === TEAM_NAME) : undefined;
+    if (!team) {
+      const created = await raw("/api/v1/fleet/teams", { method: "POST", body: JSON.stringify({ name: TEAM_NAME }) });
+      const createdJson = parseJson(created.body) as { team?: { id: number; name: string } };
+      check("premium: a team can be created on this server (free Fleet refuses this call)",
+        created.status === 200 && typeof createdJson.team?.id === "number", `status=${created.status}`);
+      team = created.status === 200 ? createdJson.team : undefined;
+    }
+    if (!team || typeof team.id !== "number") {
+      // The create failure is already counted; a placeholder id would let the checks
+      // below pass or crash for reasons unrelated to the branch under test.
+      console.log("  ~  — premium: no team to scope to after the attempt above (already counted as a failure) — the team-branch assertions are SKIPPED, not passed");
+    } else {
+      const teamId = team.id;
+
+      // A TEAM policy — reused when present, created otherwise.
+      const POLICY_NAME = "signalgrid-premium-probe: osquery answers";
+      const beforeRes = await raw(`/api/v1/fleet/teams/${teamId}/policies`);
+      const beforeJson = parseJson(beforeRes.body) as { policies?: Array<{ id: number; name: string; team_id: number | null }> };
+      if (!(beforeRes.status === 200 && beforeJson.policies?.some((p) => p.name === POLICY_NAME))) {
+        const createdPolicy = await raw(`/api/v1/fleet/teams/${teamId}/policies`, {
+          method: "POST",
+          body: JSON.stringify({
+            name: POLICY_NAME,
+            query: "SELECT 1 FROM osquery_info;",
+            description: "SignalGrid premium probe — exists only to be read back through the team route",
+            resolution: "none",
+            platform: "",
+          }),
+        });
+        const createdPolicyJson = parseJson(createdPolicy.body) as { policy?: { id: number; name: string; team_id: number | null } };
+        check("premium: a TEAM policy can be created, and the server scopes it to that team (team_id === teamId)",
+          createdPolicy.status === 200 && createdPolicyJson.policy?.team_id === teamId,
+          `status=${createdPolicy.status} team_id=${String(createdPolicyJson.policy?.team_id)}`);
+      }
+
+      // THE POINT: the adapter's team branch, against the wire it should be reading.
+      // The adapter throws on a non-2xx; a throw here is a named failure, not a crash.
+      await setFleetDMConfig({ enabled: true, baseUrl: FLEET_BASE, apiToken: TOKEN, syncIntervalMs: 300000, teamId });
+      const teamAdapter = new FleetDMAdapter();
+      await teamAdapter.initialize();
+      let teamPolicies: Awaited<ReturnType<FleetDMAdapter["getPolicies"]>> = [];
+      let teamReadError = "";
+      try {
+        teamPolicies = await teamAdapter.getPolicies();
+      } catch (e) {
+        teamReadError = e instanceof Error ? e.message : String(e);
+      }
+      check("premium: getPolicies() with teamId set reads the TEAM route without throwing", teamReadError === "", teamReadError.slice(0, 100));
+      const wire = await raw(`/api/v1/fleet/teams/${teamId}/policies`);
+      const wireJson = parseJson(wire.body) as { policies?: Array<{ id: number; team_id: number | null }> };
+      const wireIds = (wireJson.policies ?? []).map((p) => p.id);
+      const byId = (a: number, b: number): number => a - b;
+      // Every assertion below is ANDed with a non-empty read: `[].every()` and
+      // `[] === []` are vacuously true, and this file already documents that trap.
+      check("premium: the team route answers with at least one policy",
+        teamPolicies.length > 0, `count=${teamPolicies.length}`);
+      check("premium: every policy it returns is scoped to THAT team (team_id === teamId) — no global policy leaks in",
+        teamPolicies.length > 0 && teamPolicies.every((p) => p.team_id === teamId),
+        `team_ids=${teamPolicies.map((p) => String(p.team_id)).join(",")}`);
+      check("premium: the probe policy is among them", teamPolicies.some((p) => p.name === POLICY_NAME));
+      check("premium: the ids EQUAL the wire's team-policies list (sourcing, not resemblance)",
+        wire.status === 200 && teamPolicies.length > 0 &&
+          JSON.stringify(teamPolicies.map((p) => p.id).sort(byId)) === JSON.stringify(wireIds.sort(byId)),
+        `adapter=${teamPolicies.map((p) => p.id).join(",")} wire=${wireIds.join(",")} status=${wire.status}`);
+      // …and the team's existence does not bleed into the global branch: the adapter
+      // configured WITHOUT a teamId (section 2's `fleet`) still reads only global policies.
+      const globalAgain = await fleet.getPolicies();
+      check("premium: the global branch still answers only global policies (team_id null) beside the team",
+        globalAgain.length > 0 && globalAgain.every((p) => p.team_id === null),
+        `team_ids=${globalAgain.map((p) => String(p.team_id)).join(",")}`);
+      // Leave the shared store WITHOUT a teamId: with REDIS_URL set the config
+      // persists for a day, and section 10 and the next run must start from the
+      // same place this section did.
+      await setFleetDMConfig({ enabled: true, baseUrl: FLEET_BASE, apiToken: TOKEN, syncIntervalMs: 300000 });
+    }
+  }
+
   // ── 10. The operator flag is still a real off switch ──────────────────────
   await setFleetDMConfig({ enabled: false, baseUrl: FLEET_BASE, apiToken: TOKEN, syncIntervalMs: 300000 });
   const offAdapter = new FleetDMAdapter();

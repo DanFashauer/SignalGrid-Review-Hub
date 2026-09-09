@@ -112,7 +112,13 @@ OFFSET ports bound to the loopback and tear them down in an EXIT trap.
 - The host's `openssl version` (Homebrew 3.6.x) says NOTHING about the image. Verify inside
   it: `<engine> run --rm <image> apk info -v libssl3 libcrypto3` — the check that confirmed
   #407 on hardware (3.5.8-r0, both CVEs absent).
-- Mac-lane finding (2026-09-04): `docker build` from a headless shell on this Mac HANGS
-  SILENTLY on `docker-credential-desktop get` (Keychain). Fix: `DOCKER_CONFIG=<dir holding an
-  empty {} config.json>` so no credsStore is invoked — public bases pull anonymously. And a
-  `| tail` on a long build BUFFERS every line until exit; log to a file instead.
+- Mac-lane finding (2026-09-04, confirmed for `pull` 2026-09-05): ANY docker command that
+  may touch the registry — `build`, `pull`, `run` of an image not yet local — HANGS
+  SILENTLY from a headless shell on this Mac, waiting on `docker-credential-desktop get`
+  (the Keychain). It prints nothing at all, not even the "Pulling from" line, so it
+  looks like a slow network; two 10-minute pulls produced no image while
+  `curl https://registry-1.docker.io/v2/` answered 401 in 0.13 s. Fix:
+  `DOCKER_CONFIG=<dir holding an empty {} config.json>` so no credsStore is invoked —
+  public images pull anonymously (both lab images then landed in under a minute). Lab
+  scripts `export DOCKER_CONFIG=…` at the top. And a `| tail` on a long build BUFFERS
+  every line until exit; log to a file instead.

@@ -184,8 +184,13 @@ export class FleetDMAdapter {
       throw new Error(`FleetDM getPolicies failed: ${response.status} ${error}`);
     }
 
-    const data = await response.json() as { policies: FleetDMPolicy[] };
-    return data.policies;
+    const data = await response.json() as { policies?: FleetDMPolicy[] };
+    // A 200 whose body carries no `policies` is a response we do not understand.
+    // Returning `undefined` behind a `FleetDMPolicy[]` type would throw at the first
+    // `.length` in a caller; an empty list is the tightening answer (compliance
+    // requires at least one policy), and it is what `getHost` already does for
+    // an envelope without `host`.
+    return data.policies ?? [];
   }
 
   /**

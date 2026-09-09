@@ -1817,3 +1817,76 @@ Firecrawl (DR-022) nothing is even installed key-gated yet.
 row, the evidence-toolchain subsection and the index link. Nothing in the product depends
 on any of it — no code, dependency, gate or install was added, so there is nothing else to
 undo.
+
+## DR-032 — build-lane model-routing tap: chores may route low-stakes, fully-recheckable work to the DR-029 gateway through a report-only helper, fenced out of the decision path by construction (owner-directed 2026-09-09)
+
+**Context.** The owner asked for a routing "brain": the non-Claude models reached through
+one gateway, the coordinating session deciding per task which model to use — cheap/free/local
+models for bulk low-stakes work (log triage, first-draft prose), Claude for the real
+decisions — and the workflow/"ultracode" discipline applying whatever model runs a task.
+DR-029 already adopted [OmniRoute](https://github.com/diegosouzapw/OmniRoute) as the
+by-reference model-access gateway (env-configured endpoint, ~352 providers + free-tier
+aggregation) and its LM Studio addendum as the fully-local counterpart, but nothing in the
+tree actually *used* it. One hard fact bounds what the repo can build: **it cannot change
+which model a Claude Code session itself runs on** — that is the lane's owner-provisioned
+environment/gateway config — so the in-repo deliverable is a build-lane *tap* for chores, a
+documented *routing policy*, and a *boundary gate*, all report-only and outside the decision
+path. Designed by a judge-panel workflow (three independent designs → synthesis) on 2026-09-09.
+
+**Call: adopt the tap, its single-source policy, and the fence, extending DR-029 BY
+REFERENCE — no install, no npm dependency, endpoint ENV-only.**
+
+- `scripts/lib/model-routing-policy.mjs` is the ONE source of truth: `tierFor(taskClass)`
+  (unknown class → the CLAUDE tier, fail-closed), the tier→env map, and the boundary's
+  forbidden roots/tokens — imported by BOTH the tap and the gate so doctrine and fence cannot
+  drift.
+- `scripts/lib/agent-model-tap.mjs` exposes `draftWithModel({taskClass, system, input})`: for
+  a FREE/LOCAL class it POSTs an OpenAI-compatible request to the ENV endpoint and returns
+  `{text, model, tier, provenance:{drafted:'model', verified:false}}`; for the CLAUDE tier (or
+  any unknown class) it returns `null` without touching the network (the coordinating session
+  does that work inline — the tap is not the path). It **never throws, exits, blocks, writes
+  the tree, gates, or decides**; every miss returns `null` with one honest stderr line, and the
+  caller falls back deterministically or to Claude.
+- `scripts/check-model-tap-boundary.mjs` (preflight + CI, real + `--self-test`) proves no file
+  under the decision-path roots — `lib/**`, the `/v1` server, connectors, proofs, scope
+  DERIVED from the policy and floor-checked — imports the tap/policy, names its env vars, or
+  carries a model-call shape, and that the tap/policy import nothing from the decision path
+  (the reciprocal fence). A permanent planted-red fixture keeps it falsifiable.
+- First consumer: `scripts/brief.mjs --narrate` routes a one-line, explicitly-`unverified`
+  developer summary to the free tier; with no endpoint it is simply omitted. Routing doctrine
+  lives in a "Route by model tier" subsection of `.claude/skills/signalgrid-master/SKILL.md`
+  and a tap section in `docs/AGENT_GATEWAY.md`. Env vars: `SIGNALGRID_AGENT_MODEL_BASE_URL`,
+  `SIGNALGRID_AGENT_MODEL_NAME`, optional `SIGNALGRID_AGENT_MODEL_KEY` — ENV-only, never
+  committed (the DR-029 rule).
+
+**Boundary — the load-bearing halves.**
+
+- **Golden rule 2 holds regardless of tier, now BY CONSTRUCTION.** No model — free, local, or
+  Claude — may enter `lib/*`, the `/v1` decision path, a connector, or a `proof:*`; the
+  boundary gate (filesystem-derived scope + reciprocal fence + floor + permanent planted-red)
+  makes a breach a red build, not a matter of goodwill. A model-drafted output always carries
+  `provenance.verified:false` — it is an INPUT, never a verdict — and nothing model-drafted is
+  auto-written to any registry or owner-facing surface.
+- **"Ultracode regardless of model" is true because the discipline is a property of the LANE,
+  not the model.** The tap only returns text, so every routed draft re-enters the identical
+  preflight / `verify:breadth` / proof / adversarial-review pipeline, which keys off the
+  artifact, not its author; and the policy forbids routing to the free tier any task a gate
+  cannot fully re-check — the cheap tier may DRAFT, never be the final unverified word.
+- **The repo cannot reroute a Claude session's own model, and this record does not claim it
+  can.** The CLAUDE tier means the coordinating session does the work inline; the session's
+  model is owner-provisioned lane/gateway env. Adopted by reference: `pnpm-lock.yaml` is
+  untouched (no dependency). Building is not claiming — the launch-claims gate still governs
+  what may be said to ship.
+
+**Evidence.** `scripts/lib/model-routing-policy.mjs`, `scripts/lib/agent-model-tap.mjs`,
+`scripts/check-model-tap-boundary.mjs` (self-test 20/20 — covering Anthropic/Claude,
+Ollama and Gemini shapes, comment/string-literal hiding, and a deleted root — real
+scan green over 651 decision-path files across 4 roots), `scripts/brief.mjs` (`--narrate`), the registrations in
+`scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml`, the routing sections in
+`.claude/skills/signalgrid-master/SKILL.md` and `docs/AGENT_GATEWAY.md`, and the intake
+lineage in `docs/agent/RESOURCE_INTAKE.md` (2026-09-09). Cites DR-029 and golden rule 2.
+
+**Reversal.** Delete the tap, the policy module, the boundary gate, this record, and the
+doc/skill routing sections, and remove the two gate registrations and the `--narrate` block.
+Nothing in the product depends on any of it — no dependency, no install, no decision-path
+code — so there is nothing else to undo.

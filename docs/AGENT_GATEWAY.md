@@ -82,6 +82,31 @@ Every boundary above transfers, and two are stronger:
   deterministic core with **no model at all**; a zero-egress build lane is coherent with that
   residency posture but is not the same thing and does not put inference into the product.
 
+## How a chore routes through it — the tap (DR-032)
+
+The gateway above is *how* a lane reaches a model; the **tap** is *how a chore in this repo
+actually consumes it**, and the routing policy is *which* chores may. All three are build-lane
+only and fenced out of the product's decision path.
+
+- **The policy — one source of truth.** `scripts/lib/model-routing-policy.mjs` maps each task
+  class to a tier: a FREE/LOCAL tier reached through this gateway for bulk, low-stakes work a
+  gate can fully re-check (log/CI triage, first-draft prose, bulk classification), and a CLAUDE
+  tier — the coordinating session does it inline — for anything that decides, judges, or
+  authors shippable output. An unknown class resolves to CLAUDE (fail-closed: unknown tightens,
+  never loosens).
+- **The tap — report-only.** `scripts/lib/agent-model-tap.mjs`'s `draftWithModel()` sends a
+  FREE/LOCAL chore to the gateway endpoint (`SIGNALGRID_AGENT_MODEL_BASE_URL` /
+  `SIGNALGRID_AGENT_MODEL_NAME`, optional `SIGNALGRID_AGENT_MODEL_KEY` — ENV-only) and returns
+  a draft always labeled `verified:false`, or `null`. It never throws, blocks, writes, gates,
+  or decides; with no endpoint configured it simply returns `null` and the caller proceeds on
+  its deterministic path or hands the task to Claude. First consumer: `scripts/brief.mjs
+  --narrate`.
+- **The fence — by construction.** `scripts/check-model-tap-boundary.mjs` (preflight + CI)
+  proves no file under `lib/**`, the `/v1` server, a connector, or a proof references the tap,
+  its env vars, or a model-call shape, and that the tap imports nothing from the decision path
+  — so a model, free or local, can never reach a verdict (golden rule 2). This is the same
+  boundary the OmniRoute record states, now enforced, not just asserted.
+
 ## What this repo does and does not carry
 
 - **Carries:** this adoption record, DR-029, and the intake row. That is the whole

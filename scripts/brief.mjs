@@ -26,11 +26,13 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { draftWithModel } from "./lib/agent-model-tap.mjs";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
 const JSON_OUT = process.argv.includes("--json");
 const SELF_TEST = process.argv.includes("--self-test");
 const FULL = process.argv.includes("--full"); // include the slow deep sections (status-summary)
+const NARRATE = process.argv.includes("--narrate"); // route a one-line dev summary to the free/local tier (DR-032)
 
 const C = process.stdout.isTTY && !JSON_OUT
   ? { g: "\x1b[32m", r: "\x1b[31m", y: "\x1b[33m", d: "\x1b[2m", b: "\x1b[1m", off: "\x1b[0m" }
@@ -260,6 +262,21 @@ if (SELF_TEST) {
     console.log(JSON.stringify({ at: new Date().toISOString(), sections }, null, 2));
   } else {
     console.log(render(sections));
+    // --narrate routes a one-line developer summary to the FREE/LOCAL tier via
+    // the DR-032 tap. It is an opt-in operability convenience, explicitly labeled
+    // unverified, never auto-sent to the owner; with no endpoint configured the
+    // tap returns null and the line is simply omitted (proving the fail-safe by
+    // use). --json and --self-test never reach the tap — the composer stays
+    // deterministic.
+    if (NARRATE) {
+      const input = sections.map((s) => `${s.label}: ${s.state} — ${s.summary}`).join("\n");
+      const draft = await draftWithModel({
+        taskClass: "dev-summary",
+        system: "You summarize a developer system-health panel in ONE terse sentence. No preamble.",
+        input,
+      });
+      if (draft && draft.text) console.log(`\n  ${C.d}draft (${draft.model}, unverified):${C.off} ${draft.text.trim()}`);
+    }
   }
   process.exit(0); // report-only: never blocks
 }

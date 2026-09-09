@@ -1,0 +1,23 @@
+{
+  "$comment": "Config for the Standing Brain Cycle (DR-032, docs/agent/BRAIN_CYCLE_DESIGN.md). The deterministic decision core (scripts/brain-cycle-decide.mjs) and the orchestrator read this file so the cycle's behaviour is declared, not buried in code. Owner-directed 2026-09-09 (standing recurring cycle, full autonomous tier, daily target, auto-OPEN gated by a security+code validation gauntlet, auto-MERGE off).",
+  "routineId": "brain-cycle",
+  "cadenceTarget": "35 8 * * * (daily) — declared in docs/agent/scheduled-routines.json; the account trigger and activation pend the owner's explicit go (Slice 3)",
+  "scope": "full autonomous tier — any route whose classifyDiff() tier is 'autonomous' is eligible; owner-gated surfaces (SAFETY_MACHINERY / OWNER_RESERVED) ESCALATE and are never auto-opened",
+  "vetoLenses": ["security-reviewer", "fail-closed-auditor"],
+  "minConfidence": 0.7,
+  "maxAgentsPerCycle": 12,
+  "autoOpen": true,
+  "autoOpenAsDraft": true,
+  "autoMergeGreenSwitch": false,
+  "autoMergeNote": "The cycle NEVER auto-merges. Auto-MERGE sits behind this explicit owner GREEN switch (default false) AND classifyDiff==autonomous AND every gauntlet stage green — and even then only once per-PR gate falsification exists. Slice 1 ships auto-OPEN (draft) only.",
+  "gauntlet": {
+    "mechanical": ["node scripts/preflight.mjs (FULL, verdict read separately)", "pnpm run verify:breadth", "node scripts/check-preflight-ci-parity.mjs", "node scripts/check-ci-preflight-sync.mjs"],
+    "adversarial": "the routed touched-surface lens panel, re-run on the winner's diff; pass condition is UNANIMOUS with zero CONFIRMED critical / fail-open findings; security-reviewer and fail-closed-auditor are vetoes",
+    "bugHunt": "/code-review at high/max + gate-and-proof-engineer planted-defect-both-directions on any new/changed gate",
+    "publication": ["node scripts/check-publication-boundary.mjs", "node scripts/check-launch-claims.mjs"],
+    "classify": "classifyDiff(winner.files).tier must be 'autonomous'; anything else escalates",
+    "haltsAutoOpen": "any mechanical gate red or skipped; any CONFIRMED critical / fail-open finding; any veto BLOCK; any expected lens absent / ran:false / UNVERIFIED on a depended surface; a publication-boundary violation"
+  },
+  "boardRoot": "artifacts/brain-cycle",
+  "heartbeatRoutine": "brain-cycle"
+}

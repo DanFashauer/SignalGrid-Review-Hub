@@ -1672,6 +1672,37 @@ family, no proof, no gate — a build tool adopted by reference changes none of 
 record, the intake row and the index line. Nothing in the product depends on any of it,
 by construction — the boundary above guarantees it.
 
+### DR-029 addendum (2026-09-09): the fully-local counterpart — LM Studio
+
+The same model-access decision in local form. [LM Studio](https://github.com/lmstudio-ai)
+was read on 2026-09-09 (the org and its `lms`/`lmstudio-js`/`mlx-engine`/`lmstudio-python`
+repos, the OpenAI-compat and app-terms pages): a desktop app (macOS/Windows/Linux) that runs
+LLMs entirely on-device and serves them over an OpenAI-compatible endpoint
+(`http://localhost:1234/v1`) with an `lms` CLI for headless use. It is the same build/agent
+model-access layer as OmniRoute in the fully-local variant: where OmniRoute fronts ~352
+REMOTE providers, LM Studio runs the model on the machine with **zero cloud egress** — the
+air-gapped end of the "point the lane's base URL at an endpoint" mechanism. A lane points at
+it directly, or OmniRoute treats it as one local upstream. Adopted **by reference** — not
+installed, not vendored, no dependency, no MCP install, exactly the OmniRoute shape;
+`docs/AGENT_GATEWAY.md` carries the detail and the intake row records the read.
+
+**Why an addendum and not a new DR.** It changes nothing about how green is certified — no
+code, dependency, connector, proof or gate, exactly as DR-029 recorded of OmniRoute — and it
+is not a distinct decision but the same model-access call in local form, so it inherits
+DR-029's boundary and reversal rather than restating them. The full four-point boundary above
+governs unchanged; only one point shifts, and in the safe direction — **keys-out-of-the-tree
+becomes keys-don't-exist**, because local inference makes no outbound provider call, so there
+is no provider credential to hold. The load-bearing half is, if anything, firmer: LLM
+inference is nondeterministic and LM Studio offers no determinism guarantee, so it may never
+enter `lib/*`, `artifacts/api-server`'s `/v1` decision path, a connector or a proof — a model
+must never decide a verdict, and running it locally does not change that (golden rule 2).
+License: the SDK/CLI/engine repos are MIT, but the desktop app is proprietary — free for
+personal/internal-business use as of 2025-07-08, yet forbidding resale, redistribution or
+SaaS use — so it is run from upstream, never embedded in or shipped with anything here. No
+claim moves: the product's air-gapped tier runs the deterministic core with no model at all,
+and this build-lane option does not put inference into the product. DR-029's reversal clause
+covers this addendum unchanged.
+
 ## DR-030 — The repository's operating plane (its first-party skills, agents and slash-command skills) is packaged as a Claude Code plugin named `signalgrid`, with a single source of truth and no hooks (owner-directed 2026-09-07)
 
 **Context.** The owner shared the Claude Code plugins reference and directed: package

@@ -1786,3 +1786,68 @@ Firecrawl (DR-022) nothing is even installed key-gated yet.
 row, the evidence-toolchain subsection and the index link. Nothing in the product depends
 on any of it — no code, dependency, gate or install was added, so there is nothing else to
 undo.
+
+## DR-032 — The Standing Brain Cycle: a daily cloud-fired orchestrator-over-blackboard that audits the real tree with the resource/agent lens panel and AUTO-OPENS (never auto-merges) the winner behind a validation gauntlet (owner-directed 2026-09-09)
+
+**Decision.** Adopt a daily, cloud-fired **Standing Brain Cycle** (`brain-cycle`): a
+Centralized-Orchestrator-over-Blackboard hybrid (the owner's "9 Architectures" graphic mapped
+to Blackboard + Collaborative-Swarm fan-out + Centralized Orchestrator + a Pipeline gauntlet,
+with Role-Based routing). It guarantees brain parity as its first fail-closed act
+(`scripts/check-brain-freshness.mjs` — this lane's `.claude/` + `.mcp.json` +
+`.claude-plugin/plugin.json` must match `origin/SignalGrid_Alpha` or it refuses), fans a
+bounded touched-surface lens panel (the 13 agents + executable RESOURCE_INTAKE lenses) over
+the real HEAD diff, lands their verdicts in a committed per-cycle blackboard
+(`artifacts/brain-cycle/<sha>/`), deterministically picks the smallest route that clears its
+panel (`scripts/brain-cycle-decide.mjs` — never a model verdict, golden rule 2), drives the
+winner through the composed mechanical + adversarial gauntlet, and **auto-OPENs (never
+auto-merges)** the winner as a draft PR. Full design: [`docs/agent/BRAIN_CYCLE_DESIGN.md`](agent/BRAIN_CYCLE_DESIGN.md).
+Owner choices (2026-09-09, in-session): standing recurring cycle, **full autonomous tier**,
+**daily** target, "auto but does x amount of security and code check validation for bugs and
+other problems for the winner." It reuses `classifyDiff`, `lane-deliver`,
+`check-scheduled-routines`, the agent panel, `preflight`/`verify:breadth` and mailbox PR #439
+verbatim; the only new code is one freshness gate, one decision core, one orchestrator spine,
+one config and one dormant registry row.
+
+**Alternatives considered.** Pure Collaborative Swarm / Decentralized — rejected as the
+dominant shape: no single fail-closed authority for the owner-gated merge boundary, and a
+robot cannot merge changes to its own safety net (`check-owner-gated-surfaces.mjs`
+SAFETY_MACHINERY). Its one-file-per-lens board + consensus floor are grafted in.
+Orchestrator-first with candidate generation — its provenance-before-run, quoted-evidence
+board, `review-coverage.json` router and the absent=HARD-NO planted-defect self-test are
+grafted; candidate *generation* is deferred (Slice 1 audits HEAD only). A fingerprint-cached
+two-lane cycle — its cost cache and Mac-only-as-draft reconciliation are grafted (Slice 2).
+
+**Consequences.** A standing, evidence-first mechanism that can fix small autonomous-tier
+defects and escalate everything else — without ever merging a change to its own safety net,
+ever assuming the Mac is awake, or ever letting a model decide a verdict. The cycle's own
+machinery is SAFETY_MACHINERY, so it can never self-merge its own improvements; every change
+to it is an owner-reviewed PR, which deliberately paces the effort. Slice 1 ships the
+machinery DORMANT (`status: awaiting-activation`); ACTIVATION (creating the account trigger
+and flipping the row active) needs a further explicit owner go — no consent is inferred from
+the build directive.
+
+**Doctrine guardrails.** Fail-closed (golden rule 2): a stale/unverifiable brain refuses;
+any absent / `ran:false` / UNVERIFIED expected lens is a HARD NO in the orchestrator's own
+logic (there is no gate that asserts a reviewer ran, so a planted-defect self-test proves the
+arm both directions); an unrecognised owner-gated shape escalates; no eligible candidate
+opens nothing. Publication boundary (DR-021): the gauntlet includes
+`check-publication-boundary.mjs` + `check-launch-claims.mjs`; buyer-facing surfaces are
+OWNER_RESERVED. **Dan decides:** auto-OPEN (draft) is the shipped ceiling; auto-MERGE sits
+behind an explicit owner GREEN switch (`docs/agent/brain-cycle-config.json`, default false)
+and is not used in Slice 1. No behaviour edits to `DecisionEngine.swift` / `AppWorkflows.swift`
+(golden rule 1): audited read-only; any finding there routes around them or escalates.
+
+**Evidence.** `scripts/check-brain-freshness.mjs` (+ `--self-test`, 5 cases),
+`scripts/brain-cycle-decide.mjs` (+ `--self-test`, 8 cases), `scripts/brain-cycle.mjs`
+(+ `--self-test`), all wired into `scripts/preflight.mjs` and
+`.github/workflows/review-hub-ci.yml` (parity gates green); the `brain-cycle` row in
+`docs/agent/scheduled-routines.json` (awaiting-activation, `check-scheduled-routines.mjs`
+green); `docs/agent/brain-cycle-config.json`; the design doc above; the intake row in
+`docs/agent/RESOURCE_INTAKE.md`. Design produced by a 13-agent design workflow (4 approaches,
+4 judges, 1 synthesis) on 2026-09-09.
+
+**Reversal.** Delete the five new files (freshness gate, decision core, spine, config, design
+doc), remove the `brain-cycle` registry row, unwire the three self-tests from preflight + CI,
+revert the one-line `check-owner-gated-surfaces.mjs` import guard and this record. No account
+trigger was created and the row is dormant, so nothing runs to stop; nothing in the product
+depends on any of it.

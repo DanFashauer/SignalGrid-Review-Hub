@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-undefined",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "undefined",
+  "body": "undefined",
+  "sentAt": "2026-09-09T06:32:39.364Z"
+}

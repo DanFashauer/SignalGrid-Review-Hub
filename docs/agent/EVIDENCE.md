@@ -1170,7 +1170,7 @@ DONE IN THE CLOUD, PROVEN BY CI: native/ios/EnterpriseShell/Services/PostureAllo
   SWIFT_TWIN_REQUIRED flipped — the conformance gate now FAILS if the twin or its test vanishes. validate-sim-macos.sh:
   --sim-only now prints "MODE: --sim-only — ONLY the four simulator gates above ran", names what did not run, and its
   SUMMARY line says partial; "11 scenarios" derived from scenarios.ts. Both verified by mac-lane.yml / check-shell on CI.
-THE PHYSICAL MAC, UNATTENDED: scripts/mac/lane-tick.sh (bash 3.2) — every 30 min from launchd: fetch --prune; refuse a dirty
+THE PHYSICAL MAC, UNATTENDED: scripts/mac/lane-tick.sh (bash 3.2) — every 5 min from launchd: fetch --prune; refuse a dirty
   or non-Alpha checkout (a person's work is never pulled over) and SAY so; fast-forward Alpha; install only when the lockfile
   moved; run every pending sim request; push results on mac/tick-<stamp> (gh opens the PR when present, else the steward
   does within the hour); print unread cloud→mac mail WITHOUT acking it (a machine is not the addressee); heartbeat on EVERY

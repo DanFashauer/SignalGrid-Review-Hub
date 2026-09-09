@@ -45,7 +45,7 @@ Mac lane is the reviewer of record, not the only author; the cloud announces the
 edit in the commit and the lane message, per protocol rule 2.
 
 **Rule 2 — what genuinely needs the physical Mac runs from a tick, unattended.**
-`scripts/mac/lane-tick.sh` runs every 30 minutes from launchd
+`scripts/mac/lane-tick.sh` runs every 5 minutes from launchd
 (`bash scripts/mac/install-launchd.sh`, once, on the Mac): fetch, refuse a dirty
 or non-Alpha checkout, run every pending sim request, push results on a
 `mac/tick-<stamp>` branch, and HEARTBEAT (the mac-lane-tick file under artifacts/agent-heartbeats,

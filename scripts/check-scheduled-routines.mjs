@@ -66,8 +66,8 @@
 //      THREE MISSED FIRES is the multiple: two is inside the ordinary jitter of
 //      a laptop that closed its lid, four is a working day of silence. The 3h
 //      FLOOR is there because a sub-hourly cadence would otherwise demand a
-//      tolerance no real host can hold — `mac-lane-tick` runs every 30 minutes
-//      on a Mac that sleeps, and a 1.5h bound on it would report a lane that is
+//      tolerance no real host can hold — `mac-lane-tick` runs every 5 minutes
+//      on a Mac that sleeps, and a sub-hour bound on it would report a lane that is
 //      simply lunch-hour asleep. A flaky gate gets switched off, so the floor is
 //      part of the rule rather than an exception to it. Hourly cron: 3h passes,
 //      4h fails. A cron shape this gate cannot parse is FATAL — an unreadable

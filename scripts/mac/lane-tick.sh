@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
 # SignalGrid — the Mac lane's automatic tick. Runs WITHOUT a person and WITHOUT a
-# Claude session, from launchd (scripts/mac/install-launchd.sh), every 30 minutes.
+# Claude session, from launchd (scripts/mac/install-launchd.sh); the interval is the
+# installer's (default 5 min). A short interval picks up queued sim requests fast; to
+# keep that from flooding SignalGrid_Alpha with heartbeat commits, a QUIET tick
+# heartbeats at most once per QUIET_HEARTBEAT_MIN minutes (a tick that ACTED, SKIPPED
+# or FAILED always heartbeats). The steward's 3-hour staleness window stays satisfied.
 #
 #   bash scripts/mac/lane-tick.sh            # one tick, prints what it did
 #   bash scripts/mac/lane-tick.sh --dry-run  # say what would run, run nothing
@@ -60,12 +64,30 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG_PREFIX="lane-tick $STAMP"
 say() { printf '%s  %s\n' "$LOG_PREFIX" "$1"; }
 
+# A QUIET tick heartbeats at most once per this many minutes, so a short launchd
+# interval does not push a heartbeat commit to Alpha every run. Override with
+# SIGNALGRID_QUIET_HEARTBEAT_MIN. The local stamp sits beside the install stamp in
+# node_modules (gitignored, never pushed); its mtime is the last delivered heartbeat.
+QUIET_HEARTBEAT_MIN="${SIGNALGRID_QUIET_HEARTBEAT_MIN:-25}"
+HB_STAMP="node_modules/.sg-last-heartbeat"
+
 # The heartbeat is the tick's ONLY obligation on every path, including failure
 # paths: a tick that died silently is exactly what this script exists to prevent.
 RESULT="quiet"
 heartbeat() {
   if [ "$DRY" = "1" ]; then say "dry-run: would heartbeat: $RESULT"; return 0; fi
+  # Throttle ONLY a purely-quiet result ("quiet", or "quiet; N …unread" appended
+  # below): acted/skipped/failed always deliver. `find -mmin -N` is BSD/bash-3.2 safe.
+  case "$RESULT" in
+    quiet|quiet\;*)
+      if [ -f "$HB_STAMP" ] && [ -n "$(find "$HB_STAMP" -mmin -"$QUIET_HEARTBEAT_MIN" 2>/dev/null)" ]; then
+        say "quiet, last heartbeat <${QUIET_HEARTBEAT_MIN}m ago — tick ran, not re-pushing (avoids flooding Alpha)"
+        return 0
+      fi
+      ;;
+  esac
   if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" >/dev/null 2>&1; then
+    touch "$HB_STAMP" 2>/dev/null || true
     say "heartbeat delivered: $RESULT"
   else
     say "WARN heartbeat delivery FAILED (push refused or offline): $RESULT"

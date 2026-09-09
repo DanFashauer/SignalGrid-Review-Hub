@@ -255,7 +255,7 @@ function main() {
 
   if (plan) {
     // THE MACHINE-READABLE ROSTER, and the reason it exists (2026-09-06).
-    // scripts/mac/lane-tick.sh — the unattended 30-minute tick — counts pending work
+    // scripts/mac/lane-tick.sh — the unattended 5-minute tick — counts pending work
     // with `run-requests.mjs --plan … | grep -c '^  PENDING'`. Nothing in this file
     // could ever print that: the only occurrences of the word were in `//` comments.
     // The count was therefore 0 on every tick, the tick logged "no pending sim

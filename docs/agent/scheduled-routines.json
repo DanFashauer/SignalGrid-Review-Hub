@@ -75,7 +75,7 @@
   {
    "id": "mac-lane-tick",
    "trigger": "launchd:com.signalgrid.lane-tick (installed by scripts/mac/install-launchd.sh on the owner's Mac; not an account trigger)",
-   "cron": "*/30 * * * *",
+   "cron": "*/5 * * * *",
    "binding": "launchd user agent on the Mac lane's machine, running scripts/mac/lane-tick.sh with no Claude session",
    "authorizedBy": "Dan Fashauer (owner)",
    "authorizedOn": "2026-09-05",

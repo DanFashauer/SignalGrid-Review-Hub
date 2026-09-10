@@ -678,6 +678,39 @@ export const SWEEP_EXEMPT = [
       "lines above the figure, out of the 80-character window the dated-measurement rule uses, so it is named here " +
       "rather than caught by rule. Rewriting it to today's count would falsify the record it is part of.",
   },
+  {
+    doc: "docs/COMPANY_BUILD_PLAN.md",
+    near: /fifteen workflows/,
+    reason:
+      "two dated backlog records that happen to state the current count. Line 54 is a 'DONE 2026-08-22' entry " +
+      "recounting what the CI doc's first screen named that day; line ~1596 narrates a past property scan across the " +
+      "then-15 workflows. Both dates sit far outside the 80-character dated-measurement window. Rewriting either to " +
+      "track today's figure would falsify the record it belongs to.",
+  },
+  {
+    doc: "docs/agent/EVIDENCE.md",
+    near: /Fifteen workflow files/,
+    reason:
+      "a captured command-output transcript (the ```Output``` fence for Batch L) recording the PRIOR workflow-figure " +
+      "drift — the day CI_AND_VALIDATION said 'Fifteen' while the tree held 14 after promote.yml retired. It is a " +
+      "quotation of a past run, not a live claim; editing it would falsify the evidence it preserves.",
+  },
+  {
+    doc: "docs/agent/LOOP.md",
+    near: /Fifteen workflow files/,
+    reason:
+      "the Batch L history line quoting that same past defect — CI_AND_VALIDATION 'said \"Fifteen workflow files\" " +
+      "four days after the fifteenth was retired' — to explain why the sweep now reads word numerals. A quotation of " +
+      "the historical wrong figure, not a statement about today's tree.",
+  },
+  {
+    doc: "docs/company/ROLE_LENS_REVIEW_2026-08-21.md",
+    near: /workflows` \(15/,
+    reason:
+      "a dated 2026-08-21 review finding quoting a review-coverage.json ledger entry's file count " +
+      "(`.github/workflows` (15 files)) as it stood that day. It records what the ledger held, not the current " +
+      "workflow total; rewriting it would falsify the finding.",
+  },
 ];
 
 // ── The COMPANION RULE: the sweep's blind direction ──────────────────────────────────

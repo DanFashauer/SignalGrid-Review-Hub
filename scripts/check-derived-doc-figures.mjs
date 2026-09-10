@@ -681,43 +681,6 @@ export const SWEEP_EXEMPT = [
       "lines above the figure, out of the 80-character window the dated-measurement rule uses, so it is named here " +
       "rather than caught by rule. Rewriting it to today's count would falsify the record it is part of.",
   },
-  {
-    doc: "docs/COMPANY_BUILD_PLAN.md",
-    near: /fifteen workflows/,
-    count: 2,
-    reason:
-      "two dated backlog records that happen to state the current count. Line 54 is a 'DONE 2026-08-22' entry " +
-      "recounting what the CI doc's first screen named that day; line ~1596 narrates a past property scan across the " +
-      "then-15 workflows. Both dates sit far outside the 80-character dated-measurement window. Rewriting either to " +
-      "track today's figure would falsify the record it belongs to.",
-  },
-  {
-    doc: "docs/agent/EVIDENCE.md",
-    near: /Fifteen workflow files/,
-    count: 2,
-    reason:
-      "a captured command-output transcript (the ```Output``` fence for Batch L) recording the PRIOR workflow-figure " +
-      "drift — the day CI_AND_VALIDATION said 'Fifteen' while the tree held 14 after promote.yml retired. It is a " +
-      "quotation of a past run, not a live claim; editing it would falsify the evidence it preserves.",
-  },
-  {
-    doc: "docs/agent/LOOP.md",
-    near: /Fifteen workflow files/,
-    count: 1,
-    reason:
-      "the Batch L history line quoting that same past defect — CI_AND_VALIDATION 'said \"Fifteen workflow files\" " +
-      "four days after the fifteenth was retired' — to explain why the sweep now reads word numerals. A quotation of " +
-      "the historical wrong figure, not a statement about today's tree.",
-  },
-  {
-    doc: "docs/company/ROLE_LENS_REVIEW_2026-08-21.md",
-    near: /workflows` \(15/,
-    count: 1,
-    reason:
-      "a dated 2026-08-21 review finding quoting a review-coverage.json ledger entry's file count " +
-      "(`.github/workflows` (15 files)) as it stood that day. It records what the ledger held, not the current " +
-      "workflow total; rewriting it would falsify the finding.",
-  },
 ];
 
 // ── The COMPANION RULE: the sweep's blind direction ──────────────────────────────────
@@ -1072,7 +1035,7 @@ export function sweepAll(root = ROOT, rows = FIGURES, probes = SWEEP, exempts = 
     }
   }
 
-  return { fatal, gated, exemptDated, exemptListed, scanned: docs.length };
+  return { fatal, gated, exemptDated, exemptListed, scanned: docs.length, listedHits };
 }
 
 // ── The audit ───────────────────────────────────────────────────────────────────────
@@ -1276,16 +1239,30 @@ function selfTest() {
   ]);
   checks.push([
     "…and a new second home the exemption would silently absorb is FATAL (the count is enforced, not decorative)",
-    // A near-matcher exempts EVERY occurrence of its spelling. Declaring one COMPANY_BUILD_PLAN
-    // exemption but pointing it at the two live "fifteen workflows" occurrences must fail (2 != 1),
-    // and declaring the true count must pass — so a genuinely new live second home (raising the
-    // real entry's count) is caught the same way.
-    sweepAll(ROOT, FIGURES, SWEEP, [{ doc: "docs/COMPANY_BUILD_PLAN.md", near: /fifteen workflows/, count: 1, reason: "x".repeat(50) }]).fatal.some((f) =>
-      f.includes("declared count 1 but absorbed 2"),
-    ) &&
-      sweepAll(ROOT, FIGURES, SWEEP, [{ doc: "docs/COMPANY_BUILD_PLAN.md", near: /fifteen workflows/, count: 2, reason: "x".repeat(50) }]).fatal.every(
-        (f) => !f.includes("declared count"),
-      ),
+    // A near-matcher exempts EVERY occurrence of its spelling, so `count` must equal the hits
+    // it absorbs on the live tree; declaring fewer must be fatal, declaring the truth must be
+    // quiet. DERIVED AT TEST TIME (fixed 2026-09-10): the first version hard-coded a plant of
+    // /fifteen workflows/ in COMPANY_BUILD_PLAN.md and expected "declared count 1 but absorbed
+    // 2" — true only while the tree held fifteen workflow files. The day the sixteenth landed,
+    // "fifteen" absorbed nothing and this check went red on mainline for hours: the self-test
+    // had pinned itself to a figure that moved, the exact defect the gate exists to catch. Now
+    // it takes the real exemption that absorbs the most current-figure hits, declares one fewer
+    // (fatal), then the truth (quiet). If nothing absorbs anything, the check FAILS rather than
+    // passing vacuously — enforcement that cannot be exercised is not proven.
+    (() => {
+      const live = sweepAll(ROOT, FIGURES, SWEEP, SWEEP_EXEMPT);
+      if (!(live.listedHits instanceof Map)) return false; // the real absorption map, or nothing is proven
+      let target = null, hits = 0;
+      for (const e of SWEEP_EXEMPT) {
+        const n = live.listedHits.get(e) || 0;
+        if (n > hits) { target = e; hits = n; }
+      }
+      if (!target || hits < 1) return false;
+      const under = sweepAll(ROOT, FIGURES, SWEEP, [{ ...target, count: hits - 1 }]).fatal;
+      const exact = sweepAll(ROOT, FIGURES, SWEEP, [{ ...target, count: hits }]).fatal;
+      return under.some((f) => f.includes(`declared count ${hits - 1} but absorbed ${hits}`)) &&
+        exact.every((f) => !f.includes("declared count"));
+    })(),
   ]);
   checks.push([
     "…and every listed exemption still MATCHES something — a stale exemption is a hole",

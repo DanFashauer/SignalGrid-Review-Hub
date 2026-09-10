@@ -17,6 +17,7 @@
 // reports where they disagree. It is deliberately read-only: it changes nothing,
 // so it is safe to run half-awake on a Sunday.
 
+import { spawnSync } from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -166,6 +167,20 @@ if (existsSync(logPath)) {
     `${logged}/${target} conversations · ${commits} commitment(s)${daysMsg} — input, not the gate (DR-033)`, false);
 } else {
   add("warn", "Discovery log", "docs/agent/DISCOVERY_LOG.md not in the repo yet");
+}
+
+// ── 5. READINESS — the number that gates outreach (DR-036), derived, never typed ────────
+// Three dimensions, headline = the lowest; floor 80 / target 92–95 / goal 100. REPORTED,
+// not a seam: a low number closes outreach, it does not block a session from ending.
+{
+  const r = spawnSync(process.execPath, [resolve(repo, "scripts/check-readiness-figure.mjs"), "--json"], { cwd: repo, encoding: "utf8" });
+  if (r.status !== 0) {
+    add("fail", "Readiness figure", "derivation BROKEN — run node scripts/check-readiness-figure.mjs", false);
+  } else {
+    const j = JSON.parse(r.stdout.trim().split("\n").pop());
+    add(j.headline >= j.floor ? "ok" : "warn", "Readiness (gates outreach)",
+      `${j.headline}% = lowest of runbook ${j.a}% · launch-evidence ${j.b}% · end-to-end ${j.c}% — floor ${j.floor}, target ${j.target[0]}–${j.target[1]} (DR-036)`, false);
+  }
 }
 
 // ── 4b. How much of the repo has actually been READ? ────────────────────────

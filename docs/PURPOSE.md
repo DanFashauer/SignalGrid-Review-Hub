@@ -34,7 +34,8 @@ the expected outcome.
 ### The system underneath is replaceable
 
 **Source-agnostic is the point, not a feature.** The building is the first scope; the
-same grid spans every system the company runs that exposes an API or SDK — the devices
+same grid spans every system the company runs — across all of its sites and buildings —
+that exposes an API or SDK — the devices
 staff use, the admins who run those systems, and the workflows between them. Any such
 system is a candidate signal source. None is a dependency. **Vendor lock, in either
 direction, is the condition SignalGrid exists to remove** (DR-035).

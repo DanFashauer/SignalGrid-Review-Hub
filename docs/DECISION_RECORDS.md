@@ -2069,7 +2069,9 @@ authoritative decision; this record cites that rule rather than restating it.
 
 1. **Scope.** The building is the first scope, not the boundary. The same grid spans every
    system the company runs that exposes an API or SDK — for the devices staff use, the
-   admins who run those systems, and the workflows between them.
+   admins who run those systems, and the workflows between them. **[Amended 2026-09-10 by DR-036:
+   a company is many sites and buildings; the grid spans all of them, and a site is
+   configuration, not a separate product.]**
 2. **Source-agnostic is the point.** Any system with an API or SDK is a candidate signal
    source; none is a dependency. Vendor lock — in either direction — is the condition
    SignalGrid exists to remove, and a design that requires one vendor underneath is a
@@ -2097,3 +2099,71 @@ enum, the determinism invariant, and the Decision Envelope are untouched.
 **Reversal / amendment.** The owner reverses by saying so; amend items 1–5 in place and
 keep the record. If the §2 sentence is later widened to "the company," that is a
 follow-up record that names the mirrors it changes.
+
+
+## DR-036 — The agentic operating model, the readiness figure that gates outreach (floor 80 / target 92–95 / goal 100), and multi-site scope (owner-directed 2026-09-10)
+
+**Question.** DR-033 set the object of the phase — a working core product before go-to-market —
+without saying what "working" means or who decides it, and the operating model the owner has
+been building (lanes that research, plan, execute and monitor) was described in chat, never in
+a record. A bar nobody can measure is a feeling; this repository's discipline is that numbers
+come from output.
+
+**The directive.** The owner, 2026-09-10, in his own words, with the "Agentic AI (goal-driven,
+multi-agent system)" picture attached: *"This is the end goal for what I need you to be and
+become successful to build the product from all sides period and everything else we've
+discussed already. Then once everything is completed and confirmed that this solution works
+80% or higher then I'll start the outreach — I don't want to burn contacts or sources when I
+don't have a valid and effective solution that's working. I mean the goal is 100% working but
+stretch is 80 then target is 92–95%."* Asked which definition of "working" should gate
+outreach: *"Why not all?"* And: *"a company can have multiple location/buildings within the
+company itself."*
+
+**Grounding — measured 2026-09-10 by `node scripts/check-readiness-figure.mjs`.**
+(a) runbook ground truth 78% — 11 modeled / 3 partial / 0 gap of 14 real-world
+elements in `docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`; (b) launch surface,
+evidence-bound 100% — green on both halves, 1 day(s) old; launch 23 · deferred 134;
+(c) end-to-end 62% — scenarios 11/11, live operations proven 5/8
+(unproven: live-keycloak, live-location, live-edr). Headline **62%** — OUTREACH CLOSED — readiness 62% is below the 80% floor. Launch items map to proof
+names 3 of 23 (they are routes, packages and families), which is why (b) is evidence-bound
+rather than an invented per-item ratio.
+
+**The call.**
+
+1. **The operating model, named.** The lanes are the orchestrator in the owner's picture, built
+   from parts the repo already has: *research* = the research-ops skill, the owner's Drive
+   corpus (DR-034) and the live lanes; *planning* = the planning skills, the backlog and the
+   brain cycle's candidate selection; *execution* = the two lanes, the self-hosted Mac runner
+   and the sim-request loop; *monitoring* = the gates, `loop:state`, the heartbeats, the
+   nightly runner and this readiness figure; *memory* = neural memory (DR-026) and the file
+   memory; *self-correction* = `FALSE_CLAIMS.json`, decision records and mutation-proven
+   gates; *orchestrator* = the Standing Brain Cycle (DR-032) under the owner's decisions —
+   auto-merge stays behind the owner's GREEN switch. The gap this record closes: the
+   monitoring role had no single number for the goal.
+2. **The readiness figure is derived, never typed.** `scripts/check-readiness-figure.mjs`
+   computes three dimensions — (a) runbook ground truth, (b) launch surface evidence-bound,
+   (c) end-to-end scenarios and live operations — and the headline is the LOWEST of the
+   three, so no single easy dimension can carry the product. `loop:state` prints it every
+   session; preflight and CI run it as a REPORT (a low number is information; only a broken
+   derivation is fatal). Dimension (b) is binary until launch items carry explicit proof
+   bindings — a named follow-up; stale evidence (older than 7 days) reads as 0%, which
+   closes outreach until a real Mac run refreshes it.
+3. **The bar.** Outreach opens at a headline of 80% (floor), the target is 92–95%, the goal
+   100%. Below the floor no contact or source is spent on the product; the second-opinion
+   review's activation recommendations stay retired until the bar is met. Discovery evidence
+   remains an input (DR-033).
+4. **Multi-site scope.** A company is many sites and buildings; the grid spans all of them,
+   and a site is configuration, not a separate product — amends DR-035 item 1 in place and
+   the PURPOSE.md §2 subsection.
+5. **Surfaces reconciled in this change:** `scripts/check-readiness-figure.mjs` (new, with
+   `scripts/src/readiness-scenarios.ts`), `scripts/loop-state.mjs` (the row),
+   `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml` (self-test + REPORT),
+   `docs/PURPOSE.md` §2 (multi-site line), `CLAUDE.md` (scope line), and DR-035 item 1.
+
+**What does not change.** Claim discipline (DR-021 §2, DR-033 item 4) — the figure is an
+internal readiness measure, never a buyer-facing claim. The decision core stays
+deterministic; learning proposes (DR-035 item 5).
+
+**Reversal / amendment.** The owner reverses by saying so; amend the thresholds in
+`scripts/check-readiness-figure.mjs` and this record together. A dimension may be added or
+its derivation tightened by a later record that names what changed and why.

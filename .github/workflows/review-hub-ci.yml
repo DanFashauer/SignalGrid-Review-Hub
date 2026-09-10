@@ -547,6 +547,11 @@ jobs:
         run: node scripts/check-product-sentence-drift.mjs --self-test
       - name: "Product-sentence drift REPORT (never fatal on findings)"
         run: node scripts/check-product-sentence-drift.mjs
+      # Readiness figure (DR-036): the derived number that gates outreach. REPORT only.
+      - name: "Readiness figure self-test (the derivation must be able to fail)"
+        run: node scripts/check-readiness-figure.mjs --self-test
+      - name: "Readiness figure REPORT (never fatal on the number)"
+        run: node scripts/check-readiness-figure.mjs
       # The #336 self-check tooling, wired 2026-08-31 after its fail-closed
       # inversions were fixed. Latent standalone scripts are how check:postman
       # rotted out of every lane; these fail the PR now.

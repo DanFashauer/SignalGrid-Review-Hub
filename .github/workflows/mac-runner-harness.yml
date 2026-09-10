@@ -1,0 +1,68 @@
+# .github/workflows/mac-runner-harness.yml  — DRAFT, lives in the scratchpad until the
+# self-hosted runner is registered and shows "Idle" on the repo's Runners page.
+#
+# WHY. The cloud lane cannot reach the Mac: no route, no tunnel, and a 5-minute git
+# poll is the only channel. A self-hosted runner is OUTBOUND-ONLY (the Mac polls
+# GitHub for jobs; nothing listens on the Mac, no credential leaves it), so the cloud
+# lane can dispatch a job that runs on this hardware in seconds. This first job is
+# deliberately READ-ONLY: it runs the two lanes only a Mac can run and uploads the
+# logs. It commits nothing — minting live evidence from CI is a separate decision.
+#
+# RUNS ONLY ON DEMAND (workflow_dispatch). A job queued against a runner that does
+# not exist would sit forever and read as a silent skip, which is why this file does
+# not land before the runner is online.
+name: Mac harness (self-hosted, on demand)
+
+on:
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: "harness = validate-sim-macos.sh (full, incl. web build); preflight = node scripts/preflight.mjs; both"
+        required: true
+        default: both
+        type: choice
+        options: [harness, preflight, both]
+
+concurrency:
+  group: mac-runner
+  cancel-in-progress: false
+
+jobs:
+  mac-harness:
+    name: Mac harness on the SignalGrid Mac
+    runs-on: [self-hosted, macOS, ARM64, signalgrid-mac]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Toolchain present on this Mac (report, never install here)
+        run: |
+          node -v; pnpm -v; xcodebuild -version | head -1 || true
+          echo "docker: $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo absent)"
+
+      - name: Install (frozen lockfile — what CI installs with)
+        run: pnpm install --frozen-lockfile
+
+      - name: Full harness (proofs + web build; darwin binaries supplied for the run, manifests restored)
+        if: ${{ inputs.lane == 'harness' || inputs.lane == 'both' }}
+        run: |
+          code=0; ./validate-sim-macos.sh > harness.log 2>&1 || code=$?
+          tail -40 harness.log; exit "$code"
+
+      - name: Preflight (every non-proof gate)
+        if: ${{ inputs.lane == 'preflight' || inputs.lane == 'both' }}
+        run: |
+          code=0; node scripts/preflight.mjs > preflight.log 2>&1 || code=$?
+          grep -E "Preflight (PASSED|FAILED)|FAILED at" preflight.log || true; exit "$code"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-runner-logs-${{ github.run_id }}
+          path: |
+            harness.log
+            preflight.log
+          if-no-files-found: ignore

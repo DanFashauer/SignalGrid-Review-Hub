@@ -684,39 +684,43 @@ export const SWEEP_EXEMPT = [
   {
     doc: "docs/COMPANY_BUILD_PLAN.md",
     near: /fifteen workflows/,
-    count: 2,
+    count: 0,
     reason:
-      "two dated backlog records that happen to state the current count. Line 54 is a 'DONE 2026-08-22' entry " +
-      "recounting what the CI doc's first screen named that day; line ~1596 narrates a past property scan across the " +
-      "then-15 workflows. Both dates sit far outside the 80-character dated-measurement window. Rewriting either to " +
-      "track today's figure would falsify the record it belongs to.",
+      "two dated backlog records stating a PAST count of 15 — no longer current since mac-runner-auto.yml became the " +
+      "16th workflow (2026-09-10), so the sweep for today's figure never sees them (count 0). Line 54 is a " +
+      "'DONE 2026-08-22' entry recounting what the CI doc's first screen named that day; line ~1596 narrates a past " +
+      "property scan across the then-15 workflows. Both dates sit far outside the 80-character dated-measurement " +
+      "window. Rewriting either to track today's figure would falsify the record it belongs to.",
   },
   {
     doc: "docs/agent/EVIDENCE.md",
     near: /Fifteen workflow files/,
-    count: 2,
+    count: 0,
     reason:
       "a captured command-output transcript (the ```Output``` fence for Batch L) recording the PRIOR workflow-figure " +
       "drift — the day CI_AND_VALIDATION said 'Fifteen' while the tree held 14 after promote.yml retired. It is a " +
-      "quotation of a past run, not a live claim; editing it would falsify the evidence it preserves.",
+      "quotation of a past run, not a live claim; editing it would falsify the evidence it preserves. Count 0 now " +
+      "that 16 is current (mac-runner-auto.yml, 2026-09-10): the quoted 15 is invisible to the sweep for today's figure.",
   },
   {
     doc: "docs/agent/LOOP.md",
     near: /Fifteen workflow files/,
-    count: 1,
+    count: 0,
     reason:
       "the Batch L history line quoting that same past defect — CI_AND_VALIDATION 'said \"Fifteen workflow files\" " +
       "four days after the fifteenth was retired' — to explain why the sweep now reads word numerals. A quotation of " +
-      "the historical wrong figure, not a statement about today's tree.",
+      "the historical wrong figure, not a statement about today's tree. Count 0 now that 16 is current " +
+      "(mac-runner-auto.yml, 2026-09-10): the quoted 15 is invisible to the sweep for today's figure.",
   },
   {
     doc: "docs/company/ROLE_LENS_REVIEW_2026-08-21.md",
     near: /workflows` \(15/,
-    count: 1,
+    count: 0,
     reason:
       "a dated 2026-08-21 review finding quoting a review-coverage.json ledger entry's file count " +
       "(`.github/workflows` (15 files)) as it stood that day. It records what the ledger held, not the current " +
-      "workflow total; rewriting it would falsify the finding.",
+      "workflow total; rewriting it would falsify the finding. Count 0 now that 16 is current (mac-runner-auto.yml, " +
+      "2026-09-10) — and the figure sits beside `files`, not the workflow noun, so the sweep for today's total never sees it.",
   },
 ];
 
@@ -1276,14 +1280,17 @@ function selfTest() {
   ]);
   checks.push([
     "…and a new second home the exemption would silently absorb is FATAL (the count is enforced, not decorative)",
-    // A near-matcher exempts EVERY occurrence of its spelling. Declaring one COMPANY_BUILD_PLAN
-    // exemption but pointing it at the two live "fifteen workflows" occurrences must fail (2 != 1),
-    // and declaring the true count must pass — so a genuinely new live second home (raising the
-    // real entry's count) is caught the same way.
-    sweepAll(ROOT, FIGURES, SWEEP, [{ doc: "docs/COMPANY_BUILD_PLAN.md", near: /fifteen workflows/, count: 1, reason: "x".repeat(50) }]).fatal.some((f) =>
-      f.includes("declared count 1 but absorbed 2"),
+    // A near-matcher exempts EVERY occurrence of its spelling. STATUS.md's inventory line
+    // states the CURRENT workflow figure ("CI workflows: **16**"), which the sweep for
+    // today's value does find — so an exemption pointed at it that under-declares its count
+    // must fail (declared 0 but absorbed 1), and declaring the true count must pass. A
+    // genuinely new live second home (raising the real entry's count) is caught the same way.
+    // (The old form pinned two live "fifteen workflows" occurrences; those state 15, a PAST
+    // value the sweep for 16 no longer sees, so the control was re-anchored to the live figure.)
+    sweepAll(ROOT, FIGURES, SWEEP, [{ doc: "docs/STATUS.md", near: /workflows: \*\*\d+/, count: 0, reason: "x".repeat(50) }]).fatal.some((f) =>
+      f.includes("declared count 0 but absorbed 1"),
     ) &&
-      sweepAll(ROOT, FIGURES, SWEEP, [{ doc: "docs/COMPANY_BUILD_PLAN.md", near: /fifteen workflows/, count: 2, reason: "x".repeat(50) }]).fatal.every(
+      sweepAll(ROOT, FIGURES, SWEEP, [{ doc: "docs/STATUS.md", near: /workflows: \*\*\d+/, count: 1, reason: "x".repeat(50) }]).fatal.every(
         (f) => !f.includes("declared count"),
       ),
   ]);

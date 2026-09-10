@@ -176,19 +176,19 @@ function overdueToleranceHours(declared) {
 function heartbeatsSection() {
   const dir = join(repo, "artifacts/agent-heartbeats");
   if (!existsSync(dir)) return { key: "heartbeats", label: "Lane heartbeats", state: "ERROR", summary: "no heartbeat directory" };
-  // Map heartbeat file id -> the routine's DECLARED cadenceToleranceHours, so age is
-  // judged against the same number the canonical gate uses. `has` distinguishes "declared
-  // as null" (not overdue-checkable) from "no routine at all" (conservative fallback). A
-  // missing registry just means the 12h fallback for every heartbeat.
-  const tolById = {};
+  // Map heartbeat file id -> the routine's DECLARED cadenceToleranceHours AND status,
+  // so age is judged against the same number the canonical gate uses AND a retired
+  // routine is exempt from cadence aging exactly as check-scheduled-routines exempts it.
+  // The cadence field is kept verbatim: an explicit null means "not overdue-checkable"
+  // (-> Infinity), while an ABSENT field leaves it undefined and the helper's
+  // conservative 12h fallback applies. A missing registry means the 12h fallback and
+  // no known status for every heartbeat.
+  const routineById = {};
   try {
     const reg = JSON.parse(readFileSync(join(repo, "docs/agent/scheduled-routines.json"), "utf8"));
     const list = Array.isArray(reg) ? reg : Array.isArray(reg.routines) ? reg.routines : [];
-    // Keep the field verbatim: an explicit null means "not overdue-checkable" (-> Infinity),
-    // while an ABSENT field leaves the value undefined and the helper's conservative 12h
-    // fallback applies. Collapsing undefined into null would silence a real routine.
-    for (const r of list) if (r && r.id) tolById[r.id] = r.cadenceToleranceHours;
-  } catch { /* no registry -> fallback tolerance */ }
+    for (const r of list) if (r && r.id) routineById[r.id] = { tol: r.cadenceToleranceHours, status: r.status };
+  } catch { /* no registry -> fallback tolerance, unknown status */ }
   try {
     const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
     if (!files.length) return { key: "heartbeats", label: "Lane heartbeats", state: "OK", summary: "(none recorded yet)" };
@@ -201,13 +201,18 @@ function heartbeatsSection() {
         const when = j.firedAt || j.updatedAt || j.at || j.lastRun;
         const ms = when ? Date.parse(when) : NaN;
         const age = when ? ageOf(when) : null;
-        const tol = overdueToleranceHours(tolById[id]);
+        const meta = routineById[id];
+        // A RETIRED routine keeps its last heartbeat on disk but is intentionally exempt
+        // from ongoing cadence checks (matching check-scheduled-routines) — never flag it
+        // OVERDUE, or a valid retirement reads as a permanent failure.
+        const retired = meta?.status === "retired";
+        const tol = overdueToleranceHours(meta?.tol);
         // A not-checkable routine (tol === Infinity) is never overdue, even on a missing
-        // timestamp — the routine has opted out of cadence checking. Every cadence-checked
-        // routine still fails closed on an unparseable/absent timestamp.
-        const isOverdue = Number.isFinite(tol) && (!Number.isFinite(ms) || (Date.now() - ms) > tol * 3600 * 1000);
+        // timestamp — the routine has opted out of cadence checking. Every cadence-checked,
+        // non-retired routine still fails closed on an unparseable/absent timestamp.
+        const isOverdue = !retired && Number.isFinite(tol) && (!Number.isFinite(ms) || (Date.now() - ms) > tol * 3600 * 1000);
         if (isOverdue) overdue.push(id);
-        return `${id}: ${age || "no timestamp"}${isOverdue ? " (OVERDUE)" : ""}`;
+        return `${id}: ${age || "no timestamp"}${retired ? " (retired)" : ""}${isOverdue ? " (OVERDUE)" : ""}`;
       } catch {
         anyUnreadable = true;
         return `${id}: unreadable`;
@@ -222,6 +227,15 @@ function heartbeatsSection() {
   }
 }
 
+// A tick that RAN but SKIPPED its work (dirty checkout, non-Alpha, diverged) is NOT a
+// healthy lane just because its timestamp is fresh: lane-tick.sh keeps publishing a
+// fresh "skipped" heartbeat every interval while draining nothing, which both masks the
+// block AND keeps the staleness escalation from ever firing. So a non-clean result is
+// treated as blocked. Pure so the self-test can prove a fresh-but-skipped tick is FAIL.
+function tickIsBlocked(result) {
+  return /\b(skip|skipped|dirty|diverg|non-?alpha|error|fail|refus|blocked)\b/i.test(String(result ?? ""));
+}
+
 function tickWatch() {
   // The Mac's unattended tick — absent means the Mac lane is not autonomous.
   const p = join(repo, "artifacts/agent-heartbeats/mac-lane-tick.json");
@@ -231,12 +245,17 @@ function tickWatch() {
     const when = j.firedAt || j.updatedAt || j.at;
     const ms = when ? Date.parse(when) : NaN;
     const age = when ? ageOf(when) : null;
+    const blocked = tickIsBlocked(j.result); // FAIL regardless of age (golden rule 2)
     // Staleness is computed from the timestamp, never the formatted age string:
     // once the tick crosses 48h, ageOf() returns "2d ago" with no "Nh", so an
     // hours-only match would read stale as false forever and report a dead lane OK.
     // An unparseable or absent timestamp is stale (fail-closed).
     const stale = !Number.isFinite(ms) || Date.now() - ms >= 3 * 3600 * 1000;
-    return { key: "mac-tick", label: "Mac tick", state: stale ? "FAIL" : "OK", summary: `last ${age || "unknown"}` };
+    const state = blocked || stale ? "FAIL" : "OK";
+    const summary = blocked
+      ? `${String(j.result).slice(0, 90)} (fresh ${age || "?"}, but the tick did no work — needs a person, not the mail channel)`
+      : `last ${age || "unknown"}`;
+    return { key: "mac-tick", label: "Mac tick", state, summary };
   } catch (e) {
     return { key: "mac-tick", label: "Mac tick", state: "ERROR", summary: String(e).slice(0, 120) };
   }
@@ -245,9 +264,17 @@ function tickWatch() {
 async function collect() {
   // Deep sections (status-summary can take >60s here) run only under --full, so the
   // default brief stays a fast single read.
-  const sections = CMD_SECTIONS.filter((s) => FULL || !s.deep);
-  const cmdResults = await Promise.all(sections.map(runCmdSection));
-  return [...cmdResults, discoverySection(), heartbeatsSection(), tickWatch()];
+  const runnable = CMD_SECTIONS.filter((s) => FULL || !s.deep);
+  const cmdResults = await Promise.all(runnable.map(runCmdSection));
+  // A deep section NOT run in the default mode is unread, not clean. Emit an explicit
+  // SKIPPED row for it so the footer cannot certify "all clean" over the repo-wide
+  // status rollup it never ran — silently dropping status-summary would let the brief
+  // read green while the whole gate suite is red.
+  const skipped = FULL ? [] : CMD_SECTIONS.filter((s) => s.deep).map((s) => ({
+    key: s.key, label: s.label, state: "SKIPPED",
+    summary: "deep section not run in the default brief — `pnpm run brief -- --full` to include it",
+  }));
+  return [...cmdResults, ...skipped, discoverySection(), heartbeatsSection(), tickWatch()];
 }
 
 function stateColor(state) {
@@ -267,10 +294,18 @@ function render(sections) {
   // TIMEOUT is unhealthy too: a section whose command did not finish is an
   // INCOMPLETE read, and an incomplete read must never end in "all clean".
   const bad = sections.filter((s) => s.state === "FAIL" || s.state === "ERROR" || s.state === "TIMEOUT");
+  // A SKIPPED section is not a failure but it is ALSO not clean — it was never run, so
+  // the footer must not certify a complete read over it (status-summary is deep and
+  // skipped by default; certifying "all clean" without it hides a red gate suite).
+  const skipped = sections.filter((s) => s.state === "SKIPPED");
   lines.push("");
-  lines.push(bad.length
-    ? `  ${C.y}${bad.length} section(s) want a look: ${bad.map((s) => `${s.label} (${s.state})`).join(", ")}.${C.off} This view reports; it never blocks.`
-    : `  ${C.d}all sections read clean. This view reports; it never blocks.${C.off}`);
+  if (bad.length) {
+    lines.push(`  ${C.y}${bad.length} section(s) want a look: ${bad.map((s) => `${s.label} (${s.state})`).join(", ")}.${C.off} This view reports; it never blocks.`);
+  } else if (skipped.length) {
+    lines.push(`  ${C.y}run sections read clean, but ${skipped.length} deep section(s) were not run: ${skipped.map((s) => s.label).join(", ")} — not a complete read (\`--full\`).${C.off} This view reports; it never blocks.`);
+  } else {
+    lines.push(`  ${C.d}all sections read clean. This view reports; it never blocks.${C.off}`);
+  }
   return lines.join("\n");
 }
 
@@ -304,6 +339,21 @@ async function selfTest() {
   const painted = render([{ label: "X", state: "FAIL", summary: "boom" }, { label: "Y", state: "OK", summary: "fine" }]);
   ok(/want a look/.test(painted) && /X/.test(painted), "render() surfaces failing sections by name");
 
+  // 6b. A SKIPPED section is not clean: the footer must NOT certify "all clean" over a
+  // deep section that was never run (else the default brief reads green without status).
+  const withSkip = render([{ label: "Status", state: "SKIPPED", summary: "deep" }, { label: "Y", state: "OK", summary: "fine" }]);
+  ok(!/all sections read clean/.test(withSkip) && /not a complete read/.test(withSkip),
+    "render() does not certify 'all clean' when a deep section was SKIPPED");
+
+  // 6c. A fresh-but-SKIPPED Mac tick must read blocked, not OK: a dirty/non-Alpha tick
+  // keeps beating every interval, so freshness alone would mask an indefinitely-stuck
+  // lane (the mail channel can't reach it — it needs a person).
+  ok(tickIsBlocked("skipped: checkout dirty (a person's uncommitted work; not touching it)"),
+    "a 'skipped: checkout dirty' tick result is treated as blocked even when fresh");
+  ok(tickIsBlocked("skipped: non-Alpha branch"), "a non-Alpha skip is blocked");
+  ok(!tickIsBlocked("quiet"), "a clean 'quiet' tick is not blocked (judged by staleness)");
+  ok(!tickIsBlocked("ran 3 sim request(s)"), "a clean work result is not blocked");
+
   // 7. discovery + heartbeats sections return a shape with a state drawn from the
   // fail-closed vocabulary. Both now emit FAIL — discovery when the authoritative
   // "Conversations logged" line is gone, heartbeats when a lane is overdue past its
@@ -324,12 +374,13 @@ if (SELF_TEST) {
     console.log(JSON.stringify({ at: new Date().toISOString(), sections }, null, 2));
   } else {
     console.log(render(sections));
-    // --narrate routes a one-line developer summary to the FREE/LOCAL tier via
-    // the DR-035 tap. It is an opt-in operability convenience, explicitly labeled
-    // unverified, never auto-sent to the owner; with no endpoint configured the
-    // tap returns null and the line is simply omitted (proving the fail-safe by
-    // use). --json and --self-test never reach the tap — the composer stays
-    // deterministic.
+    // --narrate would route a one-line developer summary to the FREE/LOCAL tier via
+    // the DR-035 tap. In THIS public repo the tap is fixture-backed (DR-029/DR-035): it
+    // returns a canned draft, not a summary of the panel above, so presenting it as one
+    // would print a generic line beneath real failures as if it described them. So a
+    // fixture-backed draft is NOT shown as a summary — it is named as the placeholder it
+    // is. Only a genuine out-of-tree model (model !== "fixture") produces a real,
+    // explicitly-unverified narration. --json and --self-test never reach the tap.
     if (NARRATE) {
       const input = sections.map((s) => `${s.label}: ${s.state} — ${s.summary}`).join("\n");
       const draft = await draftWithModel({
@@ -337,7 +388,12 @@ if (SELF_TEST) {
         system: "You summarize a developer system-health panel in ONE terse sentence. No preamble.",
         input,
       });
-      if (draft && draft.text) console.log(`\n  ${C.d}draft (${draft.model}, unverified):${C.off} ${draft.text.trim()}`);
+      const isFixture = !draft || draft.model === "fixture" || draft.provenance?.drafted === "fixture";
+      if (isFixture) {
+        console.log(`\n  ${C.d}narration: unavailable — the in-repo tap is fixture-backed (no live free/local model here), so it cannot summarize this panel. Read the rows above.${C.off}`);
+      } else if (draft.text) {
+        console.log(`\n  ${C.d}draft (${draft.model}, unverified):${C.off} ${draft.text.trim()}`);
+      }
     }
   }
   process.exit(0); // report-only: never blocks

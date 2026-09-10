@@ -90,10 +90,32 @@ const LIVE_CALL_NEEDLES = [...FORBIDDEN_TOKENS.filter((t) => t !== "SIGNALGRID_A
 // therefore contains every one of these strings as data.
 const LIVE_CALL_SCAN_MODULE = "scripts/lib/agent-model-tap.mjs";
 
+// A CALL-shaped needle ends in "(" (`fetch(`, `new OpenAI(`). JS lets whitespace —
+// spaces, tabs, a newline — sit before the paren and between `new` and the
+// constructor, so a literal `indexOf("fetch(")` misses `fetch (…)`, `fetch\n(…)`,
+// and `new OpenAI (…)`. Compile those to a whitespace-tolerant regex; the rest
+// (URL paths, module names, the ollama ports) stay literal substrings.
+function callNeedleRegExp(needle) {
+  const esc = needle
+    .slice(0, -1) // drop the trailing "("
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // escape regex specials
+    .replace(/\s+/g, "\\s+"); // any run of space tolerates any whitespace
+  return new RegExp(esc + "\\s*\\(", "gi");
+}
+
 function scanForLiveCall(body) {
   const lower = body.toLowerCase();
   const findings = [];
   for (const needle of LIVE_CALL_NEEDLES) {
+    if (needle.endsWith("(")) {
+      const re = callNeedleRegExp(needle);
+      let m;
+      while ((m = re.exec(body)) !== null) {
+        findings.push({ line: body.slice(0, m.index).split("\n").length, needle });
+        if (m.index === re.lastIndex) re.lastIndex += 1; // never loop on a zero-width match
+      }
+      continue;
+    }
     let idx = lower.indexOf(needle.toLowerCase());
     while (idx !== -1) {
       findings.push({ line: body.slice(0, idx).split("\n").length, needle });
@@ -227,6 +249,16 @@ function selfTest() {
     "a live model fetch in the tap is flagged (no live API in the Review Hub)");
   expect(scanForLiveCall(`import Anthropic from "@anthropic-ai/sdk";`).length > 0,
     "a provider SDK import in the tap is flagged");
+  // Whitespace-tolerant call matching: a space or newline before the paren, and
+  // between `new` and the constructor, must not slip a live call past the fence.
+  expect(scanForLiveCall(`const r = await fetch (base);`).length > 0,
+    "a spaced `fetch (…)` is flagged (whitespace before the paren does not evade the fence)");
+  expect(scanForLiveCall(`const r = await fetch\n  (base);`).length > 0,
+    "a newline before the `fetch` paren is flagged");
+  expect(scanForLiveCall(`const c = new OpenAI ({ baseURL });`).length > 0,
+    "a spaced `new OpenAI (…)` is flagged");
+  expect(scanForLiveCall(`const c = new   OpenAI(key);`).length > 0,
+    "extra spaces between `new` and the constructor are flagged");
   expect(scanForLiveCall(`export function draftWithModel(){ return null; }`).length === 0,
     "a fixture-only tap body makes no live call and is not flagged");
   let liveTapClean = true;

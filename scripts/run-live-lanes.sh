@@ -142,6 +142,18 @@ REQCNF
     chmod 755 "$FLEET_TLS_DIR"
     chmod 644 "$FLEET_TLS_DIR/fleet.key" "$FLEET_TLS_DIR/fleet.crt"
     E="-e FLEET_MYSQL_ADDRESS=sg-fleet-mysql:3306 -e FLEET_MYSQL_DATABASE=fleet -e FLEET_MYSQL_USERNAME=fleet -e FLEET_MYSQL_PASSWORD=fleet -e FLEET_REDIS_ADDRESS=sg-fleet-redis:6379 -e FLEET_SERVER_CERT=/fleet-tls/fleet.crt -e FLEET_SERVER_KEY=/fleet-tls/fleet.key"
+    # POLICY CYCLE. Fleet recomputes a host's POLICY results on its detail/policy
+    # cycle, and both intervals default to ONE HOUR, while the agent's
+    # `--distributed_interval=5` below governs only live/distributed queries. A
+    # disposable lab wants these tight so proof:live-fleet-workflow's flip section is
+    # deterministic rather than a question of which minute the run started on.
+    #
+    # HONESTY ABOUT THIS LINE: it was added while chasing a flip failure whose actual
+    # cause was the host selection below, and it has NOT been isolated — no run has
+    # measured the flip with the correct host and the stock one-hour cycle. It is kept
+    # because an hour-long cycle plainly cannot serve a 120-second assertion, not
+    # because it was shown to be the fix.
+    E="$E -e FLEET_OSQUERY_POLICY_UPDATE_INTERVAL=30s -e FLEET_OSQUERY_DETAIL_UPDATE_INTERVAL=30s -e FLEET_OSQUERY_LABEL_UPDATE_INTERVAL=30s"
     # Fleet Premium (teams, the transfer endpoint) needs a licence key on the SERVER.
     # Read from the caller's environment only — never from a file in this tree — and
     # passed straight through; the proof reads the tier the server actually reports
@@ -241,8 +253,43 @@ REQCNF
   fi
   if [ -n "${FLEET_URL:-}" ] && [ -n "${FLEET_TOKEN:-}" ]; then
     if $PNPM run proof:live-fleet >/tmp/live_fleet.log 2>&1; then ok "proof:live-fleet"; else bad "proof:live-fleet" /tmp/live_fleet.log; fi
+
+    # proof:live-fleet-workflow — the seam between the adapter proof above and the
+    # zero-network launch-seam proof: live wire JSON from the REAL enrolled agent,
+    # carried all the way to an allow/step_up/restrict/deny verdict.
+    #
+    # WIRED 2026-09-09. It needs one thing the lane already has and never handed it:
+    # the UUID of a host that actually enrolled. Nothing drove it, so it was the ONE
+    # gate of the macOS harness's twelve skips with no local path — reported as
+    # "needs a live Fleet" on a box that had just stood one up. It needs no Premium
+    # licence (the cloud's Premium run added a team dimension on top of this base).
+    # FLEET_LAB_WRITE_OK is set because these containers are this script's own
+    # disposable lab, torn down below unless --keep; the proof's write section
+    # creates and deletes one failing global policy.
+    # PICK THE HOST WITH AN AGENT BEHIND IT. This lane enrols TWO hosts: a stub posted
+    # straight to /osquery/enroll above (uuid 1111…5555, no process anywhere) and the
+    # REAL osqueryd container. The stub answers nothing, so handing it to the flip
+    # section produces a policy that is never responded to — which is exactly what the
+    # first cut of this wiring did, and it cost two wrong diagnoses (a proof window
+    # "too short for emulation", then an hour-long policy cycle) before the cause
+    # turned out to be the host itself. `osquery_version` is the discriminator: only a
+    # host running the daemon reports one.
+    FLEET_HOST_UUID=$(sgcurl -H "Authorization: Bearer $FLEET_TOKEN" "$FLEET_URL/api/v1/fleet/hosts" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const hs=(JSON.parse(d).hosts||[]).filter(h=>h&&h.uuid&&h.osquery_version);console.log((hs[0]||{}).uuid||'')}catch(e){console.log('')}})")
+    if [ -n "$FLEET_HOST_UUID" ]; then
+      export FLEET_HOST_UUID FLEET_LAB_WRITE_OK=true
+      if $PNPM run proof:live-fleet-workflow >/tmp/live_fleet_workflow.log 2>&1; then
+        ok "proof:live-fleet-workflow"
+      else
+        bad "proof:live-fleet-workflow" /tmp/live_fleet_workflow.log
+      fi
+    else
+      # No UUID means no host enrolled — the proof would prove nothing. Say which,
+      # and never let the absence read as a pass.
+      skip "proof:live-fleet-workflow" "Fleet is up but no host reported an osquery_version — the real agent never checked in, and the enrol stub cannot answer a policy"
+    fi
   else
     skip "proof:live-fleet" "could not stand up Fleet (see docs/FLEET_LIVE_INTEGRATION.md)"
+    skip "proof:live-fleet-workflow" "could not stand up Fleet (see docs/FLEET_LIVE_INTEGRATION.md)"
   fi
   # Hand the caller's own trust bundle back to every later lane — but ONLY
   # if this script actually replaced it; a failed bring-up never did.

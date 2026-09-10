@@ -52,7 +52,25 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-07 (cloud lane, latest) - PACKAGED THE REPO AS A CLAUDE
+LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-approved):
+              the research basis is the founder's own domain practice, not customer
+              engagement; the owner's Google Drive folder "Project > SignalGrid" is the
+              canonical corpus of problems and solution ideas; an owner-supplied document
+              is research to absorb, never a conversation to schedule. research-ops skill
+              reconciled to DR-033/034; INTAKE_LEDGER row 98; RESOURCE_INTAKE row;
+              provenance line in the custody ground-truth map. Same session: three
+              macOS-only gate defects fixed (10deac53 - Apple git's grep -E reads \b as a
+              literal b, so env-doc readers invented failures and the gap scan found no
+              skipped tests; verify-done.sh made direction-aware); live evidence refreshed
+              (19b64f51); every validate-sim-macos.sh skip closed on the Mac (Postgres
+              proofs against a local postgres:16 with a version-matched client; the six
+              live-vendor lanes; live-fleet-workflow wired into the fleet lane, 91396ed6);
+              container-engine.sh docker-first with a drift self-test (e6cc4952; the .mjs
+              twin is cloud's to flip); 17 cloud acks + one status message delivered
+              (d1b6a8ee). Tick re-installed on the 5-min cadence. OPEN, owner-gated:
+              delete the six landed mac/* branches; register a self-hosted runner on this
+              Mac; re-push the Fleet restrictions profile. Preflight PASSED on macOS.
+              (Earlier 2026-09-07, cloud lane:) PACKAGED THE REPO AS A CLAUDE
               CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json
               names the `signalgrid` plugin and declares skills/agents/commands
               by path into the LIVE .claude/ (one source of truth, no drift

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-mac-tick-skipping-checkout-dirty",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Mac tick skipping: checkout dirty",
+  "body": "The unattended Mac lane is blocked. mac-lane-tick.json on SignalGrid_Alpha reads 'skipped: checkout dirty (a person's uncommitted work; not touching it)' at 2026-09-10T20:48:14Z (also at the 20:43Z tick). lane-tick.sh exits on a dirty working tree before it can drain queued sim requests, so nothing new will run until the Mac checkout is clean. Please commit or set aside the uncommitted work on the Mac so the tick resumes. Nothing is stuck yet (sim 16/16 requests bound, 0 pending) — this is preventive, not an outage. Not escalated to the owner, per protocol: a dirty checkout is a person's checkout state, so it goes to the Mac lane, not the owner.",
+  "sentAt": "2026-09-10T20:51:59.512Z"
+}

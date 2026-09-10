@@ -67,9 +67,12 @@ LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-app
               live-vendor lanes; live-fleet-workflow wired into the fleet lane, 91396ed6);
               container-engine.sh docker-first with a drift self-test (e6cc4952; the .mjs
               twin is cloud's to flip); 17 cloud acks + one status message delivered
-              (d1b6a8ee). Tick re-installed on the 5-min cadence. OPEN, owner-gated:
-              delete the six landed mac/* branches; register a self-hosted runner on this
-              Mac; re-push the Fleet restrictions profile. Preflight PASSED on macOS.
+              (d1b6a8ee). Tick re-installed on the 5-min cadence. mac/* branch cleanup
+              done with evidence (owner-approved): five landed branches deleted, each
+              tied to its landing commit; kept mac/fleet-premium-proof (parked WIP) and
+              mac/native-ledger-2026-09-02 (superseded, unmerged - a human call). OPEN,
+              owner-gated: register a self-hosted runner on this Mac (owner in progress);
+              re-push the Fleet restrictions profile. Preflight PASSED on macOS.
               (Earlier 2026-09-07, cloud lane:) PACKAGED THE REPO AS A CLAUDE
               CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json
               names the `signalgrid` plugin and declares skills/agents/commands

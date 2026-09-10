@@ -70,9 +70,13 @@ LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-app
               (d1b6a8ee). Tick re-installed on the 5-min cadence. mac/* branch cleanup
               done with evidence (owner-approved): five landed branches deleted, each
               tied to its landing commit; kept mac/fleet-premium-proof (parked WIP) and
-              mac/native-ledger-2026-09-02 (superseded, unmerged - a human call). OPEN,
-              owner-gated: register a self-hosted runner on this Mac (owner in progress);
-              re-push the Fleet restrictions profile. Preflight PASSED on macOS.
+              mac/native-ledger-2026-09-02 (superseded, unmerged - a human call). Self-hosted
+              runner signalgrid-mac registered and running as a launchd service; the
+              read-only workflow_dispatch job mac-runner-harness.yml landed (a779f692,
+              owner-approved) - cloud can now run the Mac harness/preflight on this
+              hardware on demand. OPEN: the first dispatched run (owner or cloud clicks
+              Run workflow); re-push the Fleet restrictions profile. Preflight PASSED on
+              macOS.
               (Earlier 2026-09-07, cloud lane:) PACKAGED THE REPO AS A CLAUDE
               CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json
               names the `signalgrid` plugin and declares skills/agents/commands

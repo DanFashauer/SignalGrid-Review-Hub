@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "requestId": "2026-09-10-readiness-live-lanes-unproven",
+  "completedAt": "2026-09-10T23:41:57.765Z",
+  "provenance": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "nodeVersion": "v24.18.0",
+    "macosVersion": "26.6.2",
+    "commit": "fb9b5f4638c381b816b89c4c4b26472dcb8329be",
+    "branch": "SignalGrid_Alpha",
+    "workingTreeClean": true
+  },
+  "runs": [
+    {
+      "operation": "live-keycloak",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 11687,
+      "tail": [
+        "== SignalGrid live-vendor lanes ==",
+        "-- bringing up Keycloak (DPoP feature)",
+        "  \u001b[32mPASS\u001b[0m  proof:live-keycloak",
+        "",
+        "-- removing containers this run started: sg-keycloak",
+        "",
+        "== LIVE LANES: 1 passed, 0 failed, 0 skipped ==",
+        "✅ Every live lane ran and passed."
+      ]
+    },
+    {
+      "operation": "live-location",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 11931,
+      "tail": [
+        "== SignalGrid live-vendor lanes ==",
+        "-- bringing up Traccar",
+        "  \u001b[32mPASS\u001b[0m  proof:live-location",
+        "",
+        "-- removing containers this run started: sg-traccar",
+        "",
+        "== LIVE LANES: 1 passed, 0 failed, 0 skipped ==",
+        "✅ Every live lane ran and passed."
+      ]
+    },
+    {
+      "operation": "live-edr",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 21560,
+      "tail": [
+        "== SignalGrid live-vendor lanes ==",
+        "-- bringing up Wazuh",
+        "   wazuh image: docker.io/wazuh/wazuh-manager:4.14.7",
+        "  \u001b[32mPASS\u001b[0m  proof:live-edr",
+        "",
+        "-- removing containers this run started: sg-wazuh",
+        "",
+        "== LIVE LANES: 1 passed, 0 failed, 0 skipped ==",
+        "✅ Every live lane ran and passed."
+      ]
+    }
+  ]
+}

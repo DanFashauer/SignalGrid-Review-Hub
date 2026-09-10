@@ -14,6 +14,12 @@
 name: Mac harness (self-hosted, on demand)
 
 on:
+  # Reusable: mac-runner-auto.yml calls this nightly with lane=both and lane=mcp.
+  workflow_call:
+    inputs:
+      lane:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       lane:

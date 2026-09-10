@@ -1,0 +1,95 @@
+# .github/workflows/mac-runner-auto.yml — the Mac runner triggers itself.
+#
+# WHY. mac-runner-harness.yml is dispatch-only, and the owner was clicking it by hand.
+# Owner choices (2026-09-10): run on every PR into mainline AND a full run every night;
+# heavy work (full harness, darwin web build, live vendor containers, MCP lane) at
+# night only, so the Mac is not a treadmill while he is using it. Every push was
+# rejected on purpose: the 5-minute tick commits heartbeats all day (103 lane-mail
+# commits vs 56 real ones in the 24h measured), so pushes are not a signal.
+#
+# WHAT EACH JOB UNIQUELY PROVES (things GitHub-hosted CI structurally cannot):
+#   pr-mac-checks  · proof:sim-requests on a FULL clone — a sim result whose provenance
+#                    commit never reached origin is fatal here and TOLERATED on CI's
+#                    depth-1 clone (check-sim-requests.mjs says so); the runner's first
+#                    job caught exactly one (0a40d1b4).
+#                  · preflight on macOS — the gates must behave the same on the platform
+#                    the Mac lane runs; Apple git's grep -E once turned 19 false failures
+#                    (10deac53). Medium weight, a few minutes, acceptable in daytime.
+#   nightly        · lane=both: the full harness incl. the darwin web build, then preflight.
+#                  · lane=mcp:  the signalgrid-mcp sibling on real macOS, both halves
+#                    against the shared posture-report contract. Read-only; no evidence
+#                    is minted (a runner-minted evidence file is its own decision record).
+#
+# SECURITY. Self-hosted runner + pull_request: GitHub runs this automatically only for
+# PRs from branches of THIS repository (both lanes push to origin); a PR from a fork
+# needs a maintainer's approval first (GitHub's default for outside collaborators).
+# Never loosen that setting: an approved fork PR executes on the owner's Mac.
+#
+# NOT an agent lane: it writes nothing and merges nothing, so it is not declared in
+# docs/agent/scheduled-routines.json (that registry is for always-on agent lanes with
+# a write scope), the same way mac-lane.yml's weekly rehearsal is not.
+name: Mac runner (automatic)
+
+on:
+  pull_request:
+    branches: [SignalGrid_Alpha]
+    paths-ignore:
+      - "artifacts/lane-messages/**"
+      - "artifacts/agent-heartbeats/**"
+      - "docs/agent/SURFACE_REVIEW_COVERAGE.md"
+      - "docs/agent/LOOP.md"
+  schedule:
+    # 08:00 UTC = 04:00 America/New_York during daylight time (03:00 in winter).
+    # GitHub cron is UTC only; the hour drifts by one across the DST change, on purpose.
+    - cron: "0 8 * * *"
+
+jobs:
+  pr-mac-checks:
+    if: github.event_name == 'pull_request'
+    name: PR — Mac-only checks (full-clone provenance, preflight on macOS)
+    runs-on: [self-hosted, macOS, ARM64, signalgrid-mac]
+    timeout-minutes: 30
+    concurrency:
+      group: mac-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install (frozen lockfile)
+        id: install
+        run: pnpm install --frozen-lockfile
+
+      - name: Provenance on a FULL clone (a result must name a commit that resolves)
+        run: pnpm run proof:sim-requests
+
+      - name: Preflight on macOS
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          code=0; node scripts/preflight.mjs > preflight.log 2>&1 || code=$?
+          grep -E "Preflight (PASSED|FAILED)|FAILED at" preflight.log || true; exit "$code"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-pr-logs-${{ github.event.pull_request.number }}-${{ github.run_id }}
+          path: preflight.log
+          if-no-files-found: ignore
+
+  nightly-both:
+    if: github.event_name == 'schedule'
+    name: Nightly — full harness + preflight
+    uses: ./.github/workflows/mac-runner-harness.yml
+    with:
+      lane: both
+
+  nightly-mcp:
+    # Independent of nightly-both: a red harness must not hide the MCP verdict.
+    if: github.event_name == 'schedule' && !cancelled()
+    needs: nightly-both
+    name: Nightly — MCP lane
+    uses: ./.github/workflows/mac-runner-harness.yml
+    with:
+      lane: mcp

@@ -74,9 +74,12 @@ LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-app
               runner signalgrid-mac registered and running as a launchd service; the
               read-only workflow_dispatch job mac-runner-harness.yml landed (a779f692,
               owner-approved) - cloud can now run the Mac harness/preflight on this
-              hardware on demand. OPEN: the first dispatched run (owner or cloud clicks
-              Run workflow); re-push the Fleet restrictions profile. Preflight PASSED on
-              macOS.
+              hardware on demand. Its FIRST run caught a real defect no shallow clone can
+              see: sim result 2026-08-23-headwind-first-capture named a pre-rebase
+              provenance commit that never reached origin; re-minted from mainline with
+              run-requests.mjs --id (0a40d1b4), and the workflow now reports preflight
+              independently of the harness (b370417). OPEN: the second dispatched run;
+              re-push the Fleet restrictions profile. Preflight PASSED on macOS.
               (Earlier 2026-09-07, cloud lane:) PACKAGED THE REPO AS A CLAUDE
               CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json
               names the `signalgrid` plugin and declares skills/agents/commands

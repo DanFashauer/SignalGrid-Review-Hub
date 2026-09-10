@@ -43,6 +43,7 @@ function jobsIn(text) {
   }
   return keys.map((k, idx) => {
     const end = idx + 1 < keys.length ? keys[idx + 1].at : lines.length;
+    const block = lines.slice(k.at, end).join("\n");
     // THE JOB'S OWN KEY, at exactly four spaces — not `^\s+`, which was the defect
     // (found 2026-09-06). The block searched is the whole job INCLUDING its `steps:`,
     // so `^\s+timeout-minutes:` matched a STEP-level bound at 8 spaces and reported the
@@ -60,12 +61,60 @@ function jobsIn(text) {
     // scored "0 unbounded" and exited 0. The self-test could not catch it: its `bad`
     // fixture has a `steps:` block with no nested timeout, so the one shape that
     // defeats the rule was the one shape untested. It is a fixture now.
-    return { name: k.name, bounded: /^ {4}timeout-minutes:/m.test(lines.slice(k.at, end).join("\n")) };
+    const hasJobTimeout = /^ {4}timeout-minutes:/m.test(block);
+    // A REUSABLE-WORKFLOW CALLER: `uses:` at the JOB level (exactly four spaces —
+    // a step's `uses:` sits at six under `steps:` and is not matched). GitHub Actions
+    // FORBIDS `timeout-minutes` on a job that calls a reusable workflow, so such a job
+    // can never satisfy the rule above no matter how it is written — and its runtime is
+    // bounded not by a field it may not carry but by the workflow it calls. A LOCAL
+    // callee (`./.github/workflows/x.yml`) we can resolve and verify; a remote one
+    // (`owner/repo/.github/workflows/y.yml@ref`) we cannot, so it stays unbounded.
+    // This blind spot is why mac-runner-auto.yml's `nightly-both`/`nightly-mcp` (callers
+    // of mac-runner-harness.yml, whose `mac-harness` job is bounded at 90m) reddened the
+    // gate on every PR into Alpha though nothing was actually unbounded (2026-09-10).
+    const usesMatch = /^ {4}uses:\s*(\S+)/m.exec(block);
+    const usesTarget = usesMatch ? usesMatch[1] : null;
+    const localCallee = usesTarget && /^\.\/.+\.ya?ml$/.test(usesTarget) ? usesTarget.replace(/^\.\//, "") : null;
+    const remoteUses = Boolean(usesTarget) && !localCallee;
+    return { name: k.name, hasJobTimeout, localCallee, remoteUses };
   });
 }
 
+/**
+ * Is a job bounded? True when it carries its own `timeout-minutes`, OR it is a caller of
+ * a LOCAL reusable workflow whose every job is itself bounded (recurse one level or more,
+ * cycle-guarded). FAIL CLOSED everywhere else: a remote `uses:` we cannot read, a callee
+ * that does not resolve, a callee with no jobs, or a call cycle, all read UNBOUNDED — the
+ * same discipline the rest of this gate keeps, so a delegated bound is verified, never
+ * assumed. `resolve(path)` returns the callee's parsed jobs (or null); it is injected so
+ * the self-test can exercise the recursion without touching the real filesystem.
+ */
+function isBounded(job, resolve, visiting = new Set()) {
+  if (job.hasJobTimeout) return true;
+  if (job.remoteUses) return false; // cannot verify a workflow this checkout does not hold
+  if (!job.localCallee) return false;
+  if (visiting.has(job.localCallee)) return false; // a call cycle bounds nothing
+  const callee = resolve(job.localCallee);
+  if (!callee || callee.length === 0) return false; // unresolved or jobless → unbounded
+  const next = new Set(visiting);
+  next.add(job.localCallee);
+  return callee.every((j) => isBounded(j, resolve, next));
+}
+
+// Resolve a local reusable workflow to its parsed jobs, cached; missing file → null.
+const parsedFileCache = new Map();
+function jobsForFile(relPath) {
+  if (parsedFileCache.has(relPath)) return parsedFileCache.get(relPath);
+  const jobs = existsSync(relPath) ? jobsIn(readFileSync(relPath, "utf8")) : null;
+  parsedFileCache.set(relPath, jobs);
+  return jobs;
+}
+const resolveLocal = (relPath) => jobsForFile(relPath);
+
 // ── self-test ────────────────────────────────────────────────────────────────
 {
+  const NONE = () => null; // a resolver that finds no callees — for the non-caller cases
+  const one = (yaml) => jobsIn(yaml)[0];
   const bad = "jobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n";
   const good = "jobs:\n  build:\n    timeout-minutes: 10\n    runs-on: ubuntu-latest\n";
   const twoJobs = "jobs:\n  a:\n    timeout-minutes: 5\n  b:\n    runs-on: x\n";
@@ -77,15 +126,53 @@ function jobsIn(text) {
   // above would punish the correct shape.
   const bothLevels =
     "jobs:\n  ok_job:\n    timeout-minutes: 30\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n        timeout-minutes: 10\n";
-  const catchesUnbounded = jobsIn(bad).some((j) => !j.bounded);
-  const acceptsBounded = jobsIn(good).every((j) => j.bounded);
-  const separatesJobs = jobsIn(twoJobs).length === 2 && jobsIn(twoJobs)[0].bounded && !jobsIn(twoJobs)[1].bounded;
-  const stepIsNotJob = jobsIn(stepOnly).length === 1 && !jobsIn(stepOnly)[0].bounded;
-  const jobLevelStillCounts = jobsIn(bothLevels).length === 1 && jobsIn(bothLevels)[0].bounded;
-  if (!catchesUnbounded || !acceptsBounded || !separatesJobs || !stepIsNotJob || !jobLevelStillCounts) {
+  const catchesUnbounded = jobsIn(bad).some((j) => !isBounded(j, NONE));
+  const acceptsBounded = jobsIn(good).every((j) => isBounded(j, NONE));
+  const twoParsed = jobsIn(twoJobs);
+  const separatesJobs = twoParsed.length === 2 && isBounded(twoParsed[0], NONE) && !isBounded(twoParsed[1], NONE);
+  const stepIsNotJob = jobsIn(stepOnly).length === 1 && !isBounded(one(stepOnly), NONE);
+  const jobLevelStillCounts = jobsIn(bothLevels).length === 1 && isBounded(one(bothLevels), NONE);
+
+  // Reusable-workflow CALLER recursion — the 2026-09-10 blind spot. A job whose only
+  // marker of duration is `uses: ./…` is bounded IFF the workflow it calls is bounded,
+  // and fail-closed against every way that verification can come up empty.
+  const caller = "jobs:\n  call:\n    uses: ./.github/workflows/harness.yml\n    with:\n      lane: both\n";
+  const boundedCallee = jobsIn("jobs:\n  work:\n    timeout-minutes: 90\n    runs-on: x\n");
+  const unboundedCallee = jobsIn("jobs:\n  work:\n    runs-on: x\n    steps:\n      - run: echo hi\n");
+  const remoteCaller = "jobs:\n  call:\n    uses: owner/repo/.github/workflows/y.yml@main\n";
+  const callerToBounded = isBounded(one(caller), (p) => (p === ".github/workflows/harness.yml" ? boundedCallee : null));
+  const callerToUnbounded = isBounded(one(caller), (p) =>
+    p === ".github/workflows/harness.yml" ? unboundedCallee : null,
+  );
+  const callerToMissing = isBounded(one(caller), () => null); // callee does not resolve
+  const remoteIsUnbounded = isBounded(one(remoteCaller), NONE); // a workflow we cannot read
+  const cycleIsUnbounded = isBounded(one(caller), (p) =>
+    p === ".github/workflows/harness.yml" ? jobsIn(caller) : null,
+  ); // harness.yml calls back into itself → the call cycle bounds nothing
+
+  const callerBoundedPasses = callerToBounded === true;
+  const callerUnboundedFails = callerToUnbounded === false;
+  const callerMissingFails = callerToMissing === false;
+  const remoteFails = remoteIsUnbounded === false;
+  const cycleFails = cycleIsUnbounded === false;
+
+  if (
+    !catchesUnbounded ||
+    !acceptsBounded ||
+    !separatesJobs ||
+    !stepIsNotJob ||
+    !jobLevelStillCounts ||
+    !callerBoundedPasses ||
+    !callerUnboundedFails ||
+    !callerMissingFails ||
+    !remoteFails ||
+    !cycleFails
+  ) {
     console.error(
       `✗ SELF-TEST FAILED — unbounded=${catchesUnbounded}, bounded=${acceptsBounded}, boundaries=${separatesJobs}, ` +
-        `stepTimeoutIsNotAJobTimeout=${stepIsNotJob}, jobLevelStillCounts=${jobLevelStillCounts}. ` +
+        `stepTimeoutIsNotAJobTimeout=${stepIsNotJob}, jobLevelStillCounts=${jobLevelStillCounts}, ` +
+        `callerBoundedPasses=${callerBoundedPasses}, callerUnboundedFails=${callerUnboundedFails}, ` +
+        `callerMissingFails=${callerMissingFails}, remoteUsesFails=${remoteFails}, callCycleFails=${cycleFails}. ` +
         "The job parser has drifted from the workflow shape; a gate that resolves nothing is green about nothing.",
     );
     process.exit(1);
@@ -111,7 +198,7 @@ for (const f of readdirSync(DIR).filter((e) => /\.ya?ml$/.test(e)).sort()) {
   for (const job of jobsIn(readFileSync(join(DIR, f), "utf8"))) {
     total += 1;
     const key = `${f}:${job.name}`;
-    if (job.bounded) {
+    if (isBounded(job, resolveLocal)) {
       if (DECLARED_UNBOUNDED.has(key)) {
         console.error(`  ✗ ${key}: now bounded, but still carries a declared-unbounded entry — remove the exemption`);
         problems += 1;

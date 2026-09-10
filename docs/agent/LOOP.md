@@ -78,8 +78,13 @@ LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-app
               see: sim result 2026-08-23-headwind-first-capture named a pre-rebase
               provenance commit that never reached origin; re-minted from mainline with
               run-requests.mjs --id (0a40d1b4), and the workflow now reports preflight
-              independently of the harness (b370417). OPEN: the second dispatched run;
-              re-push the Fleet restrictions profile. Preflight PASSED on macOS.
+              independently of the harness (b370417). The shared Mac MCP lane the owner
+              asked for: lane=mcp (e7473ba6) clones the public signalgrid-mcp sibling and
+              runs verify.sh + verify:all --require-mcp on real macOS for either lane
+              (no evidence minted); audit of that repo: 11 of 12 PRs merged, PR #9
+              superseded (cloud asked to close), its ubuntu CI smoke-only by design.
+              OPEN: the second lane=both dispatch; the first lane=mcp dispatch; re-push
+              the Fleet restrictions profile. Preflight PASSED on macOS.
               (Earlier 2026-09-07, cloud lane:) PACKAGED THE REPO AS A CLAUDE
               CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json
               names the `signalgrid` plugin and declares skills/agents/commands

@@ -6,7 +6,9 @@ phase or gates the loop. It stays because discovery evidence is still a valuable
 the evidence that can materially change `docs/PURPOSE.md`, the P0 wedge, or the product
 hierarchy still comes from outside the repo. Repository engineering is not stopped (DR-021,
 2026-08-31, lifted the freeze in full). A day without a new conversation is no longer a
-failing state — it is a note. The precise GTM sub-phase is the owner's to name.
+failing state — it is a note. Near-term objective (DR-033): a working core product that
+does what it claims — something real in hand for partners/collaborators before
+GTM/execution.
 
 `PURPOSE.md` closes on this test:
 

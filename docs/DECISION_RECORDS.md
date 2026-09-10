@@ -1803,9 +1803,12 @@ history past DR-021, DECISION_RECORDS through DR-032, `check:absence`, the mailb
 neural memory) and was recorded NOWHERE.
 
 **The directive.** On 2026-09-10 the owner directed that the company is past Customer
-Discovery, relayed through the Mac lane and confirmed in the cloud session. The owner
-did not, in that exchange, fix the precise go-to-market label; what is authoritative
-is the correction itself.
+Discovery — relayed through the Mac lane and then confirmed by the owner directly in the
+cloud session. In that same exchange the owner also named the current sub-phase: build
+an actually-working, solid CORE PRODUCT that does what it claims, and have something
+real in hand to bring to partners/collaborators BEFORE go-to-market/execution. Both the
+correction and this sub-phase are authoritative because the owner confirmed the wording
+directly; a peer relay alone would not have been enough to record it.
 
 **The call.**
 
@@ -1819,11 +1822,13 @@ is the correction itself.
    log stays. But it is no longer THE gating metric, and the loop-state "nothing else
    matters" red alarm is retired to a neutral, non-fatal report. A day with zero
    discovery conversations is no longer a failing loop.
-3. **The precise GTM sub-phase is the owner's to set and is NOT asserted here.**
-   Whether "Build / execution" is further named pilots / design-partners, GTM /
-   revenue, or launch-timing is a one-word refinement the owner supplies; this record
-   deliberately does not invent it. Correct the label and this DR is amended, not
-   reversed.
+3. **The named sub-phase: a real core product first, partners before GTM.** Within
+   Build / execution the owner set the near-term objective (2026-09-10): make the CORE
+   PRODUCT actually work and do what it claims — something solid and real — and take
+   that to partners/collaborators BEFORE go-to-market/execution. Building the working
+   product is the current job; pilots, revenue and launch timing come after there is
+   something real in hand. This states the *object* of the phase; it is not a claim
+   that anything ships (claim discipline in item 4 is unchanged).
 4. **Claim discipline is unchanged** (DR-021 §2): the launch-claims gate, the
    launch-profile classification, the publication boundary, and the no-overclaim rules
    still govern what may be *said* to ship. Building and claiming remain two acts.
@@ -1835,12 +1840,10 @@ is the correction itself.
 **Consequences / surface reconciliation.** The stale assertions in
 `docs/agent/DISCOVERY_LOG.md`, `scripts/loop-state.mjs` (the red discovery alarm →
 neutral report), `docs/agent/LOOP.md` (PHASE), and `CLAUDE.md` (the "only number"
-line) must be brought into line with this record. To avoid a two-lane collision on
-the same files (the reason `docs/LANE_COORDINATION.md` exists), the split is: the
-**cloud lane owns this record** (`docs/DECISION_RECORDS.md`, DR-033) and states the
-phase to the Mac lane over the mail channel; the **Mac lane reconciles the surface
-assertions** it is already auditing. Neither figure below is asserted as GTM truth —
-they are corrections of a stale internal phase label only.
+line) are brought into line with this record **in this same PR** — the cloud lane
+carries the record and its surface reconciliation together, so the Mac lane pulls one
+consistent mainline and aligns to it rather than reconciling a divergent copy. These
+are corrections of a stale internal phase label only, not go-to-market claims.
 
 **Reversal / amendment.** If the owner names a different phase, amend items 1–3 in
 place (keep the record and its history — do not delete it). Nothing in the product

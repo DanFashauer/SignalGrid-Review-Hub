@@ -88,6 +88,13 @@ export const FORBIDDEN_ROOTS = Object.freeze([
   // gate's glob→regex spans `/`), not only the top level — so a proof moved into a
   // subdirectory cannot escape the fence.
   "scripts/src/**-proof.ts",
+  // The NATIVE decision path. DecisionEngine.swift and AppWorkflows.swift are
+  // byte-faithful ports of the TS simulator (golden rule 1) — they ARE a verdict
+  // path, so a provider SDK or model endpoint in them would reach a decision as
+  // surely as one in lib/*. The fence SCANS them (a model-call shape is forbidden);
+  // it never modifies them, so parity is untouched.
+  "native/ios/EnterpriseShell/Services/DecisionEngine.swift",
+  "native/ios/EnterpriseShell/Services/AppWorkflows.swift",
 ]);
 
 // A decision-path file may reference NONE of these. Import specifiers for the tap

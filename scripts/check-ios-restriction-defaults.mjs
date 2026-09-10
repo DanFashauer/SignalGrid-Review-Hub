@@ -44,21 +44,25 @@ const SKIP_DIRS = new Set(["build", ".build", "DerivedData", "Pods", ".git"]);
 const FILE_FLOOR = 40;
 
 // A restriction read that defaults permissive on unknown. `restrictions` may be
-// optional-chained (`restrictions?.field`); whitespace/newlines may sit around `??`.
-const RESTRICTION_READ = /\.restrictions\??\.[A-Za-z_]\w*/;
-const FAIL_OPEN = /\.restrictions\??\.[A-Za-z_]\w*\s*\?\?\s*true\b/;
+// optional-chained (`restrictions?.field`), and Swift may wrap the member chain OR
+// the coalesce across lines — `session?.persona.restrictions` on one line and
+// `.allowCopyPaste ?? true` on the next. `\s` matches newlines, so the whole
+// sanitized source is scanned as ONE string with whitespace tolerated between every
+// part: a split between `.restrictions` and its field, or between the field and
+// `?? true`, is caught the same way. (Anchoring line-by-line on the field missed the
+// first split; scanning the joined source closes it.)
+const FAIL_OPEN = /\.restrictions\s*\??\s*\.\s*[A-Za-z_]\w*\s*\?\?\s*true\b/g;
 
 function findViolations(rawSource) {
-  const lines = sanitize(rawSource).split("\n");
+  const src = sanitize(rawSource);
+  const rows = src.split("\n");
   const hits = [];
-  for (let i = 0; i < lines.length; i += 1) {
-    // Anchor on the line that holds the restriction read (so a two-line window is
-    // counted once), and test that line plus the next for the full `?? true` form —
-    // the coalesce often wraps onto the following line.
-    if (!RESTRICTION_READ.test(lines[i])) continue;
-    if (FAIL_OPEN.test(lines.slice(i, i + 2).join("\n"))) {
-      hits.push({ line: i + 1, text: (lines[i].trim() || lines.slice(i, i + 2).join(" ").trim()) });
-    }
+  const re = new RegExp(FAIL_OPEN.source, "g");
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const line = src.slice(0, m.index).split("\n").length;
+    hits.push({ line, text: (rows[line - 1] || "").trim() || m[0].replace(/\s+/g, " ").trim() });
+    if (m.index === re.lastIndex) re.lastIndex += 1; // never loop on a zero-width match
   }
   return hits;
 }
@@ -80,6 +84,7 @@ const CASES = [
   ["fail-open screen-capture default is caught", `let x = s?.persona.restrictions.allowScreenCapture ?? true`, true],
   ["optional-chained restrictions is caught", `let x = s?.persona.restrictions?.allowCopyPaste ?? true`, true],
   ["multi-line `?? true` is caught", `let x = session?.persona.restrictions.allowCopyPaste\n    ?? true`, true],
+  ["multi-line MEMBER CHAIN (restrictions, then .field ?? true on the next line) is caught", `let x = session?.persona.restrictions\n    .allowCopyPaste ?? true`, true],
   ["fail-CLOSED default is allowed", `let x = session?.persona.restrictions.allowCopyPaste ?? false`, false],
   ["a non-restriction `?? true` is not a restriction default", `let stale = session?.isExpired ?? true`, false],
   ["the same text in a comment is masked", `// restrictions.allowCopyPaste ?? true`, false],

@@ -143,35 +143,70 @@ function discoverySection() {
     // "15 conversations" is a sample-size mention, not the count). This is the
     // number that moves the company; a guessed one is worse than none.
     const m = text.match(/Conversations logged:\s*(\d+)\s*of\s*(\d+)/i);
+    // The file is readable but the ONE authoritative line is gone/malformed: the only
+    // measure the code recognizes is unavailable, so this is not a clean read — FAIL,
+    // never OK (a missing count must not read green).
     const summary = m
       ? `${m[1]} of ${m[2]} conversations logged — the only number that moves the company (docs/agent/DISCOVERY_LOG.md)`
-      : "no 'Conversations logged: N of M' line in docs/agent/DISCOVERY_LOG.md — the only number that moves the company";
-    return { key: "discovery", label: "Discovery", state: "OK", summary };
+      : "no 'Conversations logged: N of M' line in docs/agent/DISCOVERY_LOG.md — the only number that moves the company is missing";
+    return { key: "discovery", label: "Discovery", state: m ? "OK" : "FAIL", summary };
   } catch (e) {
     return { key: "discovery", label: "Discovery", state: "ERROR", summary: String(e).slice(0, 120) };
   }
 }
 
+// Max age (hours) a recurring routine's heartbeat may reach before it is overdue,
+// derived from the routine's cron cadence: hourly ("N * * * *" or "*/k") -> the
+// interval, daily/other -> 24h; tolerance is 3x the interval with a 3h floor, so a
+// missed beat or two is fine but a dead lane is not. A heartbeat with no matching
+// recurring routine falls back to a conservative 12h. Missing/unparseable timestamp
+// is overdue (fail-closed).
+function overdueToleranceHours(cron) {
+  if (typeof cron !== "string") return 12;
+  const [, hour = "*"] = cron.trim().split(/\s+/);
+  let intervalH;
+  if (hour === "*") intervalH = 1;
+  else if (/^\*\/(\d+)$/.test(hour)) intervalH = Number(hour.match(/^\*\/(\d+)$/)[1]) || 1;
+  else intervalH = 24;
+  return Math.max(3, intervalH * 3);
+}
+
 function heartbeatsSection() {
   const dir = join(repo, "artifacts/agent-heartbeats");
   if (!existsSync(dir)) return { key: "heartbeats", label: "Lane heartbeats", state: "ERROR", summary: "no heartbeat directory" };
+  // Map heartbeat file id -> routine cron, so age is judged against the registry
+  // cadence rather than assumed OK. A missing registry just means the 12h fallback.
+  const cronById = {};
+  try {
+    const reg = JSON.parse(readFileSync(join(repo, "docs/agent/scheduled-routines.json"), "utf8"));
+    const list = Array.isArray(reg) ? reg : Array.isArray(reg.routines) ? reg.routines : [];
+    for (const r of list) if (r && r.id) cronById[r.id] = r.cron;
+  } catch { /* no registry -> fallback tolerance */ }
   try {
     const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
     if (!files.length) return { key: "heartbeats", label: "Lane heartbeats", state: "OK", summary: "(none recorded yet)" };
     let anyUnreadable = false;
+    const overdue = [];
     const rows = files.map((f) => {
+      const id = f.replace(/\.json$/, "");
       try {
         const j = JSON.parse(readFileSync(join(dir, f), "utf8"));
         const when = j.firedAt || j.updatedAt || j.at || j.lastRun;
+        const ms = when ? Date.parse(when) : NaN;
         const age = when ? ageOf(when) : null;
-        return `${f.replace(/\.json$/, "")}: ${age || "no timestamp"}`;
+        const tol = overdueToleranceHours(cronById[id]);
+        const isOverdue = !Number.isFinite(ms) || (Date.now() - ms) > tol * 3600 * 1000;
+        if (isOverdue) overdue.push(id);
+        return `${id}: ${age || "no timestamp"}${isOverdue ? " (OVERDUE)" : ""}`;
       } catch {
         anyUnreadable = true;
-        return `${f.replace(/\.json$/, "")}: unreadable`;
+        return `${id}: unreadable`;
       }
     });
-    // A heartbeat we cannot read is missing liveness evidence — never report that OK.
-    return { key: "heartbeats", label: "Lane heartbeats", state: anyUnreadable ? "ERROR" : "OK", summary: rows.join(" · ") };
+    // Unreadable heartbeat = missing liveness evidence -> ERROR. An overdue one means an
+    // always-on lane has gone quiet past its cadence -> FAIL. Neither may read OK.
+    const state = anyUnreadable ? "ERROR" : overdue.length ? "FAIL" : "OK";
+    return { key: "heartbeats", label: "Lane heartbeats", state, summary: rows.join(" · ") };
   } catch (e) {
     return { key: "heartbeats", label: "Lane heartbeats", state: "ERROR", summary: String(e).slice(0, 120) };
   }
@@ -259,9 +294,13 @@ async function selfTest() {
   const painted = render([{ label: "X", state: "FAIL", summary: "boom" }, { label: "Y", state: "OK", summary: "fine" }]);
   ok(/want a look/.test(painted) && /X/.test(painted), "render() surfaces failing sections by name");
 
-  // 7. discovery + heartbeats sections return a shape with a state.
-  ok(["OK", "ERROR"].includes(discoverySection().state), "discovery section returns a state");
-  ok(["OK", "ERROR"].includes(heartbeatsSection().state), "heartbeats section returns a state");
+  // 7. discovery + heartbeats sections return a shape with a state drawn from the
+  // fail-closed vocabulary. Both now emit FAIL — discovery when the authoritative
+  // "Conversations logged" line is gone, heartbeats when a lane is overdue past its
+  // cadence — so the accepted set must include it or a real overdue lane trips the
+  // gate's own self-test instead of the panel.
+  ok(["OK", "FAIL", "ERROR"].includes(discoverySection().state), "discovery section returns a state");
+  ok(["OK", "FAIL", "ERROR"].includes(heartbeatsSection().state), "heartbeats section returns a state");
 
   console.log(failed === 0 ? `\nself-test passed (${checks}/${checks})` : `\nself-test FAILED (${checks - failed}/${checks})`);
   process.exit(failed === 0 ? 0 : 1);

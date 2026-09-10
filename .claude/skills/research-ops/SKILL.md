@@ -5,12 +5,16 @@ description: Evidence-first market, competitive, and customer-discovery research
 
 # SignalGrid — Research Ops
 
-Non-code work moves this company or it does not move. `docs/agent/DISCOVERY_LOG.md`
-states it plainly: no amount of engineering changes the number that matters, and
-the next evidence that can change `docs/PURPOSE.md`, the wedge, or the product
-hierarchy comes from OUTSIDE the repo. This skill is how that outside evidence is
-gathered and written down without inheriting the failure modes the code side
-already paid for. It inherits the base `signalgrid` skill and the truth rules of
+Research is what moves this company's understanding, and most of it comes from the
+founder's own domain practice (DR-034, 2026-09-10): the runbooks, catalogs and
+disclosures produced by running a shared clinical-device program day to day, held in
+the owner's Google Drive folder "Project › SignalGrid" and absorbed by use into
+`docs/research/` and `docs/inspiration/`. An owner-supplied document is research to
+absorb — a ledger or intake row — never a conversation to schedule. Discovery
+conversations are an INPUT to that picture, not the gate (DR-033); the operating
+phase is Build / execution. This skill is how outside evidence — market, competitor,
+buyer — is gathered and written down without inheriting the failure modes the code
+side already paid for. It inherits the base `signalgrid` skill and the truth rules of
 `signalgrid-scribe` — read those first; this does not repeat them.
 
 This is an INSTRUCTION file, not a tool. It installs nothing and sends nothing
@@ -57,14 +61,17 @@ second document making the same claim a third time, which is how a figure drifts
    MDM/DEX/RMM/SIEM/SOAR/ITSM/NAC. Name a target company only as a candidate, not
    a customer or partner. Retired category labels stay retired.
 
-## Discovery is the product's only moving number
+## Discovery is an input, not the gate
 
 Discovery work is governed by `docs/agent/DISCOVERY_LOG.md`, not by this file:
 the pre-registered two-phase protocol, the target roles, and the tally live
-there. Research Ops SUPPORTS it — sharpening the question, mapping who to ask,
-preparing the read-only observe-mode framing — and records every conversation in
-that log the day it happens. A polished pitch pack is not a discovery
-conversation, and code work never substitutes for one.
+there. Since DR-033 (2026-09-10) it no longer sets the phase or gates the loop,
+and since DR-034 the owner's own documents count as research the day they arrive.
+Research Ops SUPPORTS discovery when it happens — sharpening the question, mapping
+who to ask, preparing the read-only observe-mode framing — and records every
+conversation in that log the day it happens. A polished pitch pack is still not a
+discovery conversation. Partner and collaborator conversations follow a working
+core product (DR-033 item 3); they are not how the research is validated.
 
 ## Handing findings back
 

@@ -1951,3 +1951,81 @@ are corrections of a stale internal phase label only, not go-to-market claims.
 place (keep the record and its history — do not delete it). Nothing in the product
 decision core depends on this record; it governs the operating loop and the doctrine
 docs only.
+
+
+## DR-034 — The research basis is the founder's own domain practice, not customer engagement; the owner's Google Drive "Project › SignalGrid" folder is the canonical corpus of the problems dealt with and the ideas for the solution (owner-directed 2026-09-10)
+
+**Question.** DR-033 corrected the operating phase. It did not record *why* the
+"Customer Discovery" framing was wrong to begin with, and nothing in the tree said where
+the founding research lives. The owner's inputs — runbooks, catalogs, a disclosure,
+reviews, infographics — had been read by the lanes as customer-engagement material to be
+validated by external conversations, when they are the research itself: the record of a
+problem the founder operates against every working day.
+
+**The directive.** The owner, 2026-09-10, Mac lane session, in his own words:
+*"maybe you confused with customer engagement and everything else with the info I been
+feeding you is not customer engagement its research information from what I do for my
+everyday job and this is reason why I've decided to build this company and product. I want
+to make sure that the Google Drive is the data source of what i've had to deal with and
+ideas for building this solution."* The same day's directive on the object of the phase —
+a working core product, real in hand for partners before go-to-market — is already
+recorded as DR-033 item 3 and is not repeated here.
+
+**Grounding — what was actually read (measured 2026-09-10).** The Mac lane read the Drive
+folder directly. It holds: the five operational runbooks of a large hospital system's
+shared clinical-device program (L1 and L2 support, iOS device prep, iOS update, macOS
+setup — the owner's own working documents, exported 2026-09-04), which are the runbooks
+[`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`](research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md)
+absorbed on 2026-09-04; the confidential invention disclosure record (2026-07-25),
+already pointed to — content deliberately not reproduced — in
+[`docs/research/IP_AND_LICENSING.md`](research/IP_AND_LICENSING.md); the Technology
+Ecosystem Master Catalog workbook, absorbed as ledger row 28 and
+[`docs/inspiration/TECHNOLOGY_ECOSYSTEM_MASTER_CATALOG.md`](inspiration/TECHNOLOGY_ECOSYSTEM_MASTER_CATALOG.md);
+three API-catalog bundles, absorbed as
+[`docs/inspiration/CONTROLUP_DEX_EUC_API_CATALOG.md`](inspiration/CONTROLUP_DEX_EUC_API_CATALOG.md)
+and its sibling catalogs; a pre-launch second-opinion review (v0.1, cover dated May) whose
+Priority-3 recommendation was to hold five customer-discovery conversations; two Gartner
+Peer Insights review exports (endpoint management; identity governance, 2026); the
+positioning carousel and two product videos; and roughly sixty saved screenshots and
+infographics, of which two were sampled (a third-party software-asset-management process
+diagram; a job-interview tips card) — reference material of mixed relevance, absorbed
+case-by-case as the ledger already does. Measured with `grep` across `docs/`: no document
+named the Drive as the source store, and the second-opinion review, the Gartner exports,
+the carousel and the videos had no ledger row. Everything else was already in the tree.
+
+**The call.**
+
+1. **The research basis of SignalGrid is the founder's own domain practice** — running a
+   shared clinical-device program in enterprise mobility, day to day — and the documents
+   that practice produces. This is founder-domain evidence. It is not customer
+   engagement, and it does not wait on external validation before it counts.
+2. **The owner's Google Drive folder "Project › SignalGrid" is the canonical corpus** of
+   (a) the problems dealt with and (b) the ideas for the solution. The repository
+   absorbs from it by use (DR-021) and points back to it; it does not replace it.
+   Confidential items — the invention disclosure, employer-identifying runbooks — are
+   referenced by name and date only and are never committed. The publication boundary is
+   unchanged; the generalization the ground-truth map already applies (no employer,
+   site, personnel, group or address specifics) is the rule for every Drive-derived line.
+3. **The misclassification, named so it is not repeated.** "Customer Discovery" as a
+   gate treated this research as engagement to be validated by fifteen external
+   conversations. The framing was recommended by the second-opinion review and later
+   institutionalized in DR-021 §6; DR-033 retired the gate. The standing rule from here:
+   **an owner-supplied document is research to absorb — a ledger or intake row — never a
+   conversation to schedule.**
+4. **Partner and collaborator conversations follow a working core product** (DR-033
+   item 3). They are how the product is taken to market, not how the research is
+   validated.
+5. **Surface reconciliation, in this same change:**
+   [`.claude/skills/research-ops/SKILL.md`](../.claude/skills/research-ops/SKILL.md)
+   (its "only moving number" doctrine → the DR-033/034 framing);
+   [`docs/INTAKE_LEDGER.md`](INTAKE_LEDGER.md) row 98 for the corpus items that had no
+   row; [`docs/agent/RESOURCE_INTAKE.md`](agent/RESOURCE_INTAKE.md) row for this intake;
+   and [`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`](research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md)
+   naming the Drive folder as its source store.
+
+**What does not change.** Claim discipline (DR-021 §2, DR-033 item 4). The discovery log
+stays as an input. Nothing in the decision core depends on this record.
+
+**Reversal / amendment.** The owner reverses by saying so; amend items 1–4 in place and
+keep the record and its history. If a Drive item is later shown not to be the owner's own
+material, its ledger row is corrected — not this record.

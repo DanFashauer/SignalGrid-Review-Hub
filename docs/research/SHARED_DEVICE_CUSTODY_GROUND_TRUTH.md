@@ -9,6 +9,8 @@ memory. The source runbooks are confidential customer material and are NOT commi
 map is generalized, with no customer, personnel, purchase-order, site, internal-URL,
 directory-group or network-address specifics.**
 
+**Source store (DR-034, 2026-09-10).** These runbooks come from the owner's Google Drive folder "Project › SignalGrid" — the canonical corpus of the problems dealt with and the ideas for the solution, produced by the founder's own day-to-day operation of this program. This map absorbs from that corpus and points back to it; it never reproduces confidential material, and the generalization above is the rule for every line derived from it.
+
 ## Why this file exists
 
 `docs/PURPOSE.md` states the thesis in the abstract: *you do not need a single monolithic

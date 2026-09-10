@@ -256,4 +256,4 @@ HIPAA/SOC 2 — a human compliance review is required, not optional.
 ## Scope (current phase — DR-021, 2026-08-31)
 - Engineering is UNFROZEN across every lane (DR-021). Build what strengthens the solution; new verticals/platforms/hardware still get a decision record first (DR-020 rule).
 - Claim discipline is unchanged: the launch-claims gate, launch-profile classification, and publication boundary still govern what may be *said* to ship. Building and claiming are different acts.
-- The only number that moves the company is discovery conversations (`docs/agent/DISCOVERY_LOG.md`). Code work never substitutes for it.
+- Current phase is Build / execution (DR-033, 2026-09-10 — past Customer Discovery). Discovery evidence (`docs/agent/DISCOVERY_LOG.md`) is still a valued input, but it is no longer the sole gating metric and does not gate the loop. Near-term objective (DR-033): a working core product that does what it claims — something real in hand for partners/collaborators before GTM/execution (pilots, revenue and launch timing come after).

@@ -1786,3 +1786,63 @@ Firecrawl (DR-022) nothing is even installed key-gated yet.
 row, the evidence-toolchain subsection and the index link. Nothing in the product depends
 on any of it — no code, dependency, gate or install was added, so there is nothing else to
 undo.
+
+## DR-033 — The company is past Customer Discovery; the current phase is Build / execution, and a phase change is a decision record before either lane acts on it (owner-directed 2026-09-10)
+
+**Question.** The operating phase changed but the change was never written down. The
+owner directed that the company is no longer in "Customer Discovery," yet every
+recorded surface still asserted it: `docs/agent/DISCOVERY_LOG.md` ("State: Customer
+Discovery", "Experiment started: 2026-08-27"), `scripts/loop-state.mjs` (a red,
+non-passing row — "N days since the freeze and 0 conversations. Nothing else on this
+list matters."), `docs/agent/LOOP.md` ("PHASE: Build + Customer Discovery in
+parallel"), and `CLAUDE.md` ("The only number that moves the company is discovery
+conversations… Code work never substitutes for it"). Both lanes therefore kept
+running the stale written phase for days, which cost real time and eroded trust in
+what the repo asserts. The change was searched for on every recorded channel (git
+history past DR-021, DECISION_RECORDS through DR-032, `check:absence`, the mailbox,
+neural memory) and was recorded NOWHERE.
+
+**The directive.** On 2026-09-10 the owner directed that the company is past Customer
+Discovery, relayed through the Mac lane and confirmed in the cloud session. The owner
+did not, in that exchange, fix the precise go-to-market label; what is authoritative
+is the correction itself.
+
+**The call.**
+
+1. **Customer Discovery is no longer the operating phase.** The current phase is
+   **Build / execution** — engineering-led, toward launch. This is not a new
+   direction: DR-021 (2026-08-31) already lifted the engineering freeze in full and
+   put the repo in absorption/build mode; the discovery surfaces contradicted the
+   *most recent* recorded decision, and this record resolves that contradiction in
+   favor of DR-021.
+2. **Discovery is an input, not the gate.** Discovery evidence still matters and the
+   log stays. But it is no longer THE gating metric, and the loop-state "nothing else
+   matters" red alarm is retired to a neutral, non-fatal report. A day with zero
+   discovery conversations is no longer a failing loop.
+3. **The precise GTM sub-phase is the owner's to set and is NOT asserted here.**
+   Whether "Build / execution" is further named pilots / design-partners, GTM /
+   revenue, or launch-timing is a one-word refinement the owner supplies; this record
+   deliberately does not invent it. Correct the label and this DR is amended, not
+   reversed.
+4. **Claim discipline is unchanged** (DR-021 §2): the launch-claims gate, the
+   launch-profile classification, the publication boundary, and the no-overclaim rules
+   still govern what may be *said* to ship. Building and claiming remain two acts.
+5. **Process rule (the actual failure this record fixes).** A phase or doctrine change
+   is a decision record on `SignalGrid_Alpha` *before* either lane acts on it. A change
+   said aloud but unrecorded is not a change the repo or the gates can honor — that is
+   how this drift happened, and the fix is not a one-time cleanup but this standing rule.
+
+**Consequences / surface reconciliation.** The stale assertions in
+`docs/agent/DISCOVERY_LOG.md`, `scripts/loop-state.mjs` (the red discovery alarm →
+neutral report), `docs/agent/LOOP.md` (PHASE), and `CLAUDE.md` (the "only number"
+line) must be brought into line with this record. To avoid a two-lane collision on
+the same files (the reason `docs/LANE_COORDINATION.md` exists), the split is: the
+**cloud lane owns this record** (`docs/DECISION_RECORDS.md`, DR-033) and states the
+phase to the Mac lane over the mail channel; the **Mac lane reconciles the surface
+assertions** it is already auditing. Neither figure below is asserted as GTM truth —
+they are corrections of a stale internal phase label only.
+
+**Reversal / amendment.** If the owner names a different phase, amend items 1–3 in
+place (keep the record and its history — do not delete it). Nothing in the product
+decision core depends on this record; it governs the operating loop and the doctrine
+docs only.

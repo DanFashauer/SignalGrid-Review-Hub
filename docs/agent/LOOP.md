@@ -649,7 +649,7 @@ NEXT ACTION: cloud: land the plugin-packaging PR (DR-030) to SignalGrid_Alpha,
               the three stale claude/* branches (ruleset-probe, two
               steward-heartbeat) may be deleted. owner: to wake the cloud lane at
               any moment, comment on PR #439 from the phone. owner:
-              discovery conversations (0 of 15) - nothing substitutes.
+              discovery is a valued input now, not the gate (DR-033, past Customer Discovery).
               owner: publish the MCP marketplace listing
               (docs/SIGNALGRID_MCP_MARKET_LISTING.md) on the creator page - only
               the owner has the login. owner decisions still pending: fork or
@@ -657,8 +657,8 @@ NEXT ACTION: cloud: land the plugin-packaging PR (DR-030) to SignalGrid_Alpha,
               files under attached_assets/.
 ```
 
-**Experiment started: 2026-08-27**
-**Conversations logged: 0 of 15 - Commitments: 0**
+**Customer Discovery experiment (2026-08-27 to 2026-09-10): concluded - DR-033.**
+**Conversations logged: 0 of 15 - now a valued input, no longer the loop's gate.**
 
 ---
 

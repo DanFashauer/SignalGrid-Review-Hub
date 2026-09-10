@@ -31,6 +31,22 @@ A decision is not the output. **A decision is the trigger for a cascade** -
 environment, workflow, verification, and escalation when reality does not match
 the expected outcome.
 
+### The system underneath is replaceable
+
+**Source-agnostic is the point, not a feature.** The building is the first scope; the
+same grid spans every system the company runs that exposes an API or SDK — the devices
+staff use, the admins who run those systems, and the workflows between them. Any such
+system is a candidate signal source. None is a dependency. **Vendor lock, in either
+direction, is the condition SignalGrid exists to remove** (DR-035).
+
+The decision shape is declared, not learned: *if X, this happens; if Y is not present,
+route to X or Y; solve, or deny.* Declared, versioned, deterministic, auditable — that is
+what lets an admin trust it and an auditor prove it.
+
+Replacing a system underneath is contract re-validation, not a rewrite: validate the new
+system's API against the same contract, and the same workflows carry over. The grid
+learns in the build loop and in what it recommends; what it *decides* stays declared.
+
 ## 3. The law that outranks everything else
 
 > **The worker never sees SignalGrid.**
@@ -210,6 +226,8 @@ decision noun may enter the tree.
   recommend or triage; the authoritative decision stays deterministic,
   policy-versioned, testable and auditable.
 - Write access to a source system on first deployment.
+- **Vendor lock, in either direction** — a design that needs one vendor underneath,
+  or that makes leaving SignalGrid cost the customer their workflows (DR-035).
 
 ## The test
 

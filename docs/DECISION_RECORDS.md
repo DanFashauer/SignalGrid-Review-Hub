@@ -2029,3 +2029,71 @@ stays as an input. Nothing in the decision core depends on this record.
 **Reversal / amendment.** The owner reverses by saying so; amend items 1–4 in place and
 keep the record and its history. If a Drive item is later shown not to be the owner's own
 material, its ledger row is corrected — not this record.
+
+
+## DR-035 — Source-agnostic is the point: SignalGrid is the company's orchestration layer over every system it already runs, and vendor lock is the condition it exists to remove (owner-directed 2026-09-10)
+
+**Question.** `docs/PURPOSE.md` §2 is canonical (DR-020) and says the grid "connects the
+systems a building already runs … into one grid that decides and acts." It does not say
+the word *agnostic*, does not name vendor lock, and does not say what happens when a
+customer replaces a system underneath. Two lanes have drifted on exactly those silences —
+toward "a gate," and toward a single-vendor frame — and the owner corrected both in one
+evening. The silence is the defect.
+
+**The directive.** The owner, 2026-09-10, in his own words: *"this product is all about
+source agnostic — that's the beauty of the product and solution. It embodies all these
+complex systems that are already complicated enough to manage … an overall system layer
+that sits on top of everything and makes a decision based on the workflow you told the
+system to do — if you do X this happens, and if Y is not here or there then route to X
+or Y and then solve or deny and pass — very simple, but essentially a smart-home-like
+solution for all layers of the company that can be automated and controlled if it has an
+API or SDK … if they choose to migrate to a different platform the system will allow the
+new system to take over the automations and workflows — just validate the API changes for
+that system and done."* And, later the same night: *"The vendor lock is completely the
+opposite of what this system is made to become — it's the reason I'm building it — as
+master smart automated orchestration system for the entire company."*
+
+**Grounding — measured.** `grep -iE "agnostic|vendor lock|migrat"` over `docs/PURPOSE.md`
+returns nothing. The §2 product sentence is mirrored verbatim in four other documents
+(`docs/POSITIONING.md`, `docs/SIGNAL_SOURCE_CATALOG.md`,
+`docs/OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md`, `docs/HASH_CHAIN_TAIL_ARTICLE.md`), so
+this record ADDS to §2 and to the forbids list rather than rewriting the sentence; widening
+"a building" to "the company" in the sentence itself is a follow-up that touches
+`POSITIONING.md` (owner-reserved) on purpose. The mechanism the owner describes for
+migration already exists: the shared posture-report contract and the `proof:live-*` lanes
+re-validate a source against the same contract, and the connector families are the
+source-agnostic seam. `docs/PURPOSE.md` already forbids probabilistic scoring as the
+authoritative decision; this record cites that rule rather than restating it.
+
+**The call.**
+
+1. **Scope.** The building is the first scope, not the boundary. The same grid spans every
+   system the company runs that exposes an API or SDK — for the devices staff use, the
+   admins who run those systems, and the workflows between them.
+2. **Source-agnostic is the point.** Any system with an API or SDK is a candidate signal
+   source; none is a dependency. Vendor lock — in either direction — is the condition
+   SignalGrid exists to remove, and a design that requires one vendor underneath is a
+   defect against this record.
+3. **Declared workflows decide.** The owner's "if X this happens; if Y is not here, route
+   to X or Y; solve, or deny" is the product's decision shape: declared, versioned,
+   deterministic, auditable. That is why an admin can trust it and an auditor can prove it.
+4. **Migration is contract re-validation.** Replacing a system underneath means validating
+   the new system's API against the same contract and letting it take over the same
+   workflows — the posture contract and the live lanes are that check; extend them, never
+   fork the workflow per vendor.
+5. **Learning proposes; it never decides.** "Learn from itself so it can make these
+   choices easier" lives in the build loop and the recommendation surfaces: propose new
+   routes, connectors and rules from real signals and real failures, for a human to
+   approve. The authoritative decision stays deterministic (PURPOSE.md, "What this doctrine
+   forbids"; DR-029; golden rule 2).
+6. **Surfaces reconciled in this change:** `docs/PURPOSE.md` §2 gains the subsection "The
+   system underneath is replaceable"; "What this doctrine forbids" gains the vendor-lock
+   line. The §2 sentence and its four mirrors are unchanged.
+
+**What does not change.** Claim discipline (DR-021 §2, DR-033 item 4): this is doctrine
+about what the product IS, not a claim about what ships or integrates today. The verdict
+enum, the determinism invariant, and the Decision Envelope are untouched.
+
+**Reversal / amendment.** The owner reverses by saying so; amend items 1–5 in place and
+keep the record. If the §2 sentence is later widened to "the company," that is a
+follow-up record that names the mirrors it changes.

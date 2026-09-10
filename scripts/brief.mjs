@@ -187,13 +187,31 @@ function heartbeatsSection() {
   try {
     const reg = JSON.parse(readFileSync(join(repo, "docs/agent/scheduled-routines.json"), "utf8"));
     const list = Array.isArray(reg) ? reg : Array.isArray(reg.routines) ? reg.routines : [];
-    for (const r of list) if (r && r.id) routineById[r.id] = { tol: r.cadenceToleranceHours, status: r.status };
-  } catch { /* no registry -> fallback tolerance, unknown status */ }
+    for (const r of list) {
+      if (!r || !r.id) continue;
+      routineById[r.id] = { tol: r.cadenceToleranceHours, status: r.status, hb: r.heartbeatPath ? String(r.heartbeatPath).split("/").pop() : null };
+    }
+  } catch { /* no registry -> fallback tolerance, unknown status, no expectation set */ }
   try {
     const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
-    if (!files.length) return { key: "heartbeats", label: "Lane heartbeats", state: "OK", summary: "(none recorded yet)" };
+    const present = new Set(files);
     let anyUnreadable = false;
     const overdue = [];
+    // MISSING: an ACTIVE, cadence-checked routine that declares a heartbeatPath but has
+    // NEVER written the file. check-scheduled-routines only REPORTS this (exits 0) and
+    // the file loop below iterates only files that EXIST, so without this an
+    // never-fired lane is invisible and the section would read OK (the absence-is-not-
+    // clean hole). Retired and awaiting-activation routines are exempt (not yet/again
+    // expected to beat); a null tolerance is not cadence-checked.
+    const missing = [];
+    for (const [id, m] of Object.entries(routineById)) {
+      const expects = m.status !== "retired" && m.status !== "awaiting-activation"
+        && typeof m.tol === "number" && Number.isFinite(m.tol) && m.hb;
+      if (expects && !present.has(m.hb)) missing.push(id);
+    }
+    if (!files.length && !missing.length) {
+      return { key: "heartbeats", label: "Lane heartbeats", state: "OK", summary: "(none recorded yet)" };
+    }
     const rows = files.map((f) => {
       const id = f.replace(/\.json$/, "");
       try {
@@ -218,10 +236,11 @@ function heartbeatsSection() {
         return `${id}: unreadable`;
       }
     });
-    // Unreadable heartbeat = missing liveness evidence -> ERROR. An overdue one means an
-    // always-on lane has gone quiet past its cadence -> FAIL. Neither may read OK.
-    const state = anyUnreadable ? "ERROR" : overdue.length ? "FAIL" : "OK";
-    return { key: "heartbeats", label: "Lane heartbeats", state, summary: rows.join(" · ") };
+    // Unreadable heartbeat = missing liveness evidence -> ERROR. An overdue lane, or an
+    // active routine that has NEVER written its heartbeat -> FAIL. None may read OK.
+    const state = anyUnreadable ? "ERROR" : (overdue.length || missing.length) ? "FAIL" : "OK";
+    const missingNote = missing.length ? ` · MISSING (never fired): ${missing.join(", ")}` : "";
+    return { key: "heartbeats", label: "Lane heartbeats", state, summary: rows.join(" · ") + missingNote };
   } catch (e) {
     return { key: "heartbeats", label: "Lane heartbeats", state: "ERROR", summary: String(e).slice(0, 120) };
   }

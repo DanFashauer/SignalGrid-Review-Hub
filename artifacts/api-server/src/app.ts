@@ -56,6 +56,12 @@ const corsOptions: CorsOptions = {
     "x-enrollment-authorization",
     "idempotency-key",
   ],
+  // Idempotency-Replay: the idempotency middleware sets this on a replayed response
+  // (middlewares/idempotency.ts) so a caller can tell a replay from fresh execution.
+  // Response headers are NOT readable by browser JS across origins unless exposed, so
+  // without this a cross-origin client sends the retry token but cannot see the answer
+  // it exists to convey. x-request-id is exposed for the same reason (request tracing).
+  exposedHeaders: ["Idempotency-Replay", "x-request-id"],
   maxAge: 600,
 };
 

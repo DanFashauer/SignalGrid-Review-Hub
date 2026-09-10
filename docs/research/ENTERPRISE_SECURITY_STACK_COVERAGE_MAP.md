@@ -124,8 +124,15 @@ claim — intake logged in `docs/agent/RESOURCE_INTAKE.md`.
   that SignalGrid does not certify HIPAA/SOC 2 and a human review is required.
 - **OBSERVABILITY & MONITORING** (identity · AI-quality · security monitoring) — the one
   band the five-layer stack above carries no row for, and the genuine addition from this
-  reference: `proof:observability`, `proof:observability-integrity`, `proof:fabric-evals`
-  (AI-quality/eval), `proof:telemetry-up`, `proof:telemetry-posture-cache`.
+  reference. **Identity + security monitoring** are covered: `proof:observability`,
+  `proof:observability-integrity`, `proof:telemetry-up`, `proof:telemetry-posture-cache`.
+  **AI-quality monitoring is a GAP, not a covered control:** `proof:fabric-evals` scores
+  the *deterministic* multi-signal posture composition and incident routing — it never
+  evaluates an LLM, a prompt, a retrieval result, a model response, or the fixture-backed
+  tap, and no other proof measures model quality either. There is no LLM in the decision
+  path to monitor (golden rule 2), so this band is named here as unaddressed rather than
+  claimed; if an out-of-tree model tap is ever exercised for real, its output quality would
+  need its own monitoring.
 - **CONTINUOUS TRUST — "Verify Every Request"** — this closing principle *is* SignalGrid's
   own thesis, not a new requirement: every decision is re-evaluated per request, fail-closed
   and deterministic, and an unknown or stale signal raises assurance rather than lowering it

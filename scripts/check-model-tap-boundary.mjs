@@ -66,35 +66,11 @@ function stripComments(text) {
 // lives inside string literals and erase a real call between them (a false
 // negative). For a security fence over-reporting is the safe default; a
 // decision-path file has no reason to mention a model call even in a comment.
-function scanBody(body) {
-  const lower = body.toLowerCase();
-  const findings = [];
-  for (const needle of NEEDLES) {
-    let idx = lower.indexOf(needle.toLowerCase());
-    while (idx !== -1) {
-      const line = body.slice(0, idx).split("\n").length;
-      findings.push({ line, needle });
-      idx = lower.indexOf(needle.toLowerCase(), idx + needle.length);
-    }
-  }
-  return findings;
-}
-
-// The in-repo tap must make NO live model call (AGENTS.md — no live API calls in
-// the public Review Hub; the free/local client is out-of-tree, DR-029, and the
-// in-repo tap is fixture-backed). These are the network-call and provider-client
-// shapes: every FORBIDDEN_TOKEN except the env PREFIX (which the policy legitimately
-// declares as data), plus a bare `fetch(`.
-const LIVE_CALL_NEEDLES = [...FORBIDDEN_TOKENS.filter((t) => t !== "SIGNALGRID_AGENT_MODEL_"), "fetch("];
-// Scanned on the TAP module ONLY — never the policy, which DEFINES the denylist and
-// therefore contains every one of these strings as data.
-const LIVE_CALL_SCAN_MODULE = "scripts/lib/agent-model-tap.mjs";
-
 // A CALL-shaped needle ends in "(" (`fetch(`, `new OpenAI(`). JS lets whitespace —
-// spaces, tabs, a newline — sit before the paren and between `new` and the
-// constructor, so a literal `indexOf("fetch(")` misses `fetch (…)`, `fetch\n(…)`,
-// and `new OpenAI (…)`. Compile those to a whitespace-tolerant regex; the rest
-// (URL paths, module names, the ollama ports) stay literal substrings.
+// spaces, tabs, a newline — sit before the paren and between `new` and the constructor,
+// so a literal `indexOf("new OpenAI(")` misses `new OpenAI (…)`, `new Anthropic\n(…)`,
+// `new GoogleGenerativeAI (…)`. Compile those to a whitespace-tolerant regex; the rest
+// (URL paths, module names, env prefixes, the ollama ports) stay literal substrings.
 function callNeedleRegExp(needle) {
   const esc = needle
     .slice(0, -1) // drop the trailing "("
@@ -103,10 +79,14 @@ function callNeedleRegExp(needle) {
   return new RegExp(esc + "\\s*\\(", "gi");
 }
 
-function scanForLiveCall(body) {
+// The ONE needle matcher used by BOTH the decision-path scan (scanBody) and the tap's
+// live-call scan (scanForLiveCall), so a whitespace-tolerant call shape can never be
+// caught in one and missed in the other. Call-shaped needles match whitespace-tolerantly;
+// everything else is a literal, case-insensitive substring.
+function findNeedles(body, needles) {
   const lower = body.toLowerCase();
   const findings = [];
-  for (const needle of LIVE_CALL_NEEDLES) {
+  for (const needle of needles) {
     if (needle.endsWith("(")) {
       const re = callNeedleRegExp(needle);
       let m;
@@ -123,6 +103,24 @@ function scanForLiveCall(body) {
     }
   }
   return findings;
+}
+
+function scanBody(body) {
+  return findNeedles(body, NEEDLES);
+}
+
+// The in-repo tap must make NO live model call (AGENTS.md — no live API calls in
+// the public Review Hub; the free/local client is out-of-tree, DR-029, and the
+// in-repo tap is fixture-backed). These are the network-call and provider-client
+// shapes: every FORBIDDEN_TOKEN except the env PREFIX (which the policy legitimately
+// declares as data), plus a bare `fetch(`.
+const LIVE_CALL_NEEDLES = [...FORBIDDEN_TOKENS.filter((t) => t !== "SIGNALGRID_AGENT_MODEL_"), "fetch("];
+// Scanned on the TAP module ONLY — never the policy, which DEFINES the denylist and
+// therefore contains every one of these strings as data.
+const LIVE_CALL_SCAN_MODULE = "scripts/lib/agent-model-tap.mjs";
+
+function scanForLiveCall(body) {
+  return findNeedles(body, LIVE_CALL_NEEDLES);
 }
 
 // Import/require/dynamic-import specifiers in a body.
@@ -217,6 +215,15 @@ function selfTest() {
   // PERMANENT planted-red: keep this one so the gate is provably watched to fail.
   expect(scanBody(`const c = new OpenAI({ baseURL: "http://x:1234/v1" });`).length > 0,
     "PLANTED RED: an OpenAI client + local endpoint is flagged (permanent falsifiability fixture)");
+  // Whitespace-tolerant call matching in the DECISION-PATH scan too (not only the tap
+  // scan): a space or newline before the paren, or extra space after `new`, must not slip
+  // a provider client into a core file past the fence.
+  expect(scanBody(`const c = new OpenAI (opts);`).length > 0,
+    "a spaced `new OpenAI (…)` in a decision-path file is flagged");
+  expect(scanBody(`const c = new Anthropic\n  (opts);`).length > 0,
+    "a newline before the `new Anthropic` paren is flagged in a decision-path file");
+  expect(scanBody(`const c = new GoogleGenerativeAI (key);`).length > 0,
+    "a spaced `new GoogleGenerativeAI (…)` in a decision-path file is flagged");
 
   // The scan is RAW (not comment-stripped), so a token can never be hidden by
   // wrapping it in a comment or by `/*`…`*/` delimiters that live inside string
@@ -279,8 +286,11 @@ function selfTest() {
   expect(rootBlob.includes("artifacts/api-server/src"), "the /v1 api-server root is declared");
   expect(rootBlob.includes("lib/integrations/src"), "the connectors root is declared");
   expect(/-proof\.ts/.test(rootBlob), "the proofs root is declared");
-  expect(rootBlob.includes("DecisionEngine.swift") && rootBlob.includes("AppWorkflows.swift"),
-    "the native decision-path roots (DecisionEngine.swift, AppWorkflows.swift) are declared");
+  expect(
+    ["DecisionEngine.swift", "AppWorkflows.swift", "DecisionService.swift", "PostureAllow.swift", "RemediationAllow.swift"]
+      .every((f) => rootBlob.includes(f)),
+    "all five native verdict sources (DecisionEngine, AppWorkflows, DecisionService, PostureAllow, RemediationAllow) are declared",
+  );
 
   // The live tap/policy actually pass the reciprocal fence today.
   let liveReciprocalClean = true;

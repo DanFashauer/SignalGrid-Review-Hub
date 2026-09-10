@@ -88,13 +88,20 @@ export const FORBIDDEN_ROOTS = Object.freeze([
   // gate's glob→regex spans `/`), not only the top level — so a proof moved into a
   // subdirectory cannot escape the fence.
   "scripts/src/**-proof.ts",
-  // The NATIVE decision path. DecisionEngine.swift and AppWorkflows.swift are
-  // byte-faithful ports of the TS simulator (golden rule 1) — they ARE a verdict
-  // path, so a provider SDK or model endpoint in them would reach a decision as
-  // surely as one in lib/*. The fence SCANS them (a model-call shape is forbidden);
-  // it never modifies them, so parity is untouched.
+  // The NATIVE decision path — every operative verdict source, not just the engine
+  // ports. DecisionEngine.swift and AppWorkflows.swift are byte-faithful ports of the
+  // TS simulator (golden rule 1); DecisionService.swift SELECTS and clamps the effective
+  // outcome (local vs remote); PostureAllow.swift and RemediationAllow.swift are the
+  // guards AROUND the engine that can WITHHOLD an allow. A provider SDK or model endpoint
+  // in ANY of these would reach a decision as surely as one in lib/*, so the fence SCANS
+  // them all (a model-call shape is forbidden). It never modifies them, so parity is
+  // untouched. (Enumerated rather than globbed on Services/*.swift because that directory
+  // also holds non-verdict UI/config services; these five are the verdict sources.)
   "native/ios/EnterpriseShell/Services/DecisionEngine.swift",
   "native/ios/EnterpriseShell/Services/AppWorkflows.swift",
+  "native/ios/EnterpriseShell/Services/DecisionService.swift",
+  "native/ios/EnterpriseShell/Services/PostureAllow.swift",
+  "native/ios/EnterpriseShell/Services/RemediationAllow.swift",
 ]);
 
 // A decision-path file may reference NONE of these. Import specifiers for the tap

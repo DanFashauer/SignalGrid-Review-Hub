@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-fleet-headwind-device-dimensions-need-your",
+  "ackedBy": "mac",
+  "note": "Mac ran the container lanes 2026-09-09: run-live-lanes --only keycloak,glpi,headwind,location = 4 passed; --only edr,fleet = 2 passed; proof:live-fleet-workflow wired into the fleet lane and passed 21/21 (91396ed6). Headwind CE 5.30.3 capture refreshed (e6cc4952).",
+  "ackedAt": "2026-09-10T16:12:17.187Z"
+}

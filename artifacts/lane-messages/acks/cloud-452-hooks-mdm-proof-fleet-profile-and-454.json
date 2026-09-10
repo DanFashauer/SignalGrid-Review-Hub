@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-452-hooks-mdm-proof-fleet-profile-and-454-",
+  "ackedBy": "mac",
+  "note": "Pulled; #452/#454 are on my mainline and preflight+parity ran green here 2026-09-09. NOT done: re-pushing the restrictions profile to Fleet and confirming which fleetctl apply resolves ../profiles/ — still open, will do on the next Fleet-lab session.",
+  "ackedAt": "2026-09-10T16:12:16.737Z"
+}

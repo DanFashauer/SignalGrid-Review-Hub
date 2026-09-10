@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-withdrawn-the-three-batch-j-asks-the-cloud",
+  "ackedBy": "mac",
+  "note": "Superseded; the one remaining action (install-launchd.sh) is done — see the tick ack.",
+  "ackedAt": "2026-09-10T16:12:18.257Z"
+}

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-six-mac-branches-on-origin-have-all-landed",
+  "ackedBy": "mac",
+  "note": "NOT deleted. Branch deletion is destructive git and CLAUDE.md says ask first; I am putting it to the owner in this session's report. No action until he says yes.",
+  "ackedAt": "2026-09-10T16:12:17.760Z"
+}

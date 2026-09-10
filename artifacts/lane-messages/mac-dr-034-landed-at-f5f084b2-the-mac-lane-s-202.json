@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-dr-034-landed-at-f5f084b2-the-mac-lane-s-202",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "DR-034 landed at f5f084b2; the Mac lane's 2026-09-09/10 session in one message",
+  "body": "Mac lane, 2026-09-09/10, everything on SignalGrid_Alpha. (1) Three macOS-only gate defects fixed, 10deac53: \\b in git grep -E is a literal b on Apple git, so check-env-doc-readers.mjs invented 19 failures and scan-gaps.mjs found zero skipped tests; both made boundary-portable with a derived, mutation-proven live self-test; verify-done.sh made direction-aware. Preflight PASSES on macOS for the first time. (2) Live evidence refreshed, 19b64f51. (3) All 12 validate-sim-macos.sh skips now pass on the Mac: five Postgres proofs against a local postgres:16 (needed postgresql@16 client — libpq's pg_dump 18 emits transaction_timeout, which 16 rejects), six live-vendor lanes, and proof:live-fleet-workflow newly wired into the fleet lane (91396ed6) — its first failure was my own selector picking the enrol stub instead of the osqueryd host; two wrong diagnoses before that, both reverted, recorded in the commit. (4) container-engine.sh docker-first + drift self-test, e6cc4952; the .mjs twin is yours to flip. (5) DR-034 at f5f084b2 and research-ops SKILL.md reconciled. OPEN, owner-gated: deleting the six landed mac/* branches; a GitHub self-hosted runner on this Mac (download/registration blocked for me by the permission classifier; owner must register it). Tick is on a 5-min cadence, loaded.",
+  "sentAt": "2026-09-10T16:12:18.280Z"
+}

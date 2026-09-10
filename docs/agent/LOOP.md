@@ -87,8 +87,10 @@ LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-app
               every PR into mainline gets full-clone provenance + macOS preflight; nightly
               08:00 UTC runs lane=both then lane=mcp; manual dispatch optional. OPEN: proof
               of the first automatic run (next real PR / tonight's cron); re-push the Fleet
-              restrictions profile; offered, owner's call: a PURPOSE.md amendment in his
-              words (source-agnostic as the point; migration = re-validate the contract).
+              restrictions profile. DR-035 LANDED (613071e9, owner-approved): PURPOSE.md §2
+              now says source-agnostic is the point in the owner's words and forbids vendor
+              lock; follow-up named there: widen the §2 sentence from "a building" to "the
+              company" together with its four mirrors (POSITIONING.md owner-reserved).
               Preflight PASSED on macOS.
               (Earlier 2026-09-07, cloud lane:) PACKAGED THE REPO AS A CLAUDE
               CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json

@@ -43,6 +43,7 @@ jobs:
           echo "docker: $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo absent)"
 
       - name: Install (frozen lockfile — what CI installs with)
+        id: install
         run: pnpm install --frozen-lockfile
 
       - name: Full harness (proofs + web build; darwin binaries supplied for the run, manifests restored)
@@ -52,7 +53,10 @@ jobs:
           tail -40 harness.log; exit "$code"
 
       - name: Preflight (every non-proof gate)
-        if: ${{ inputs.lane == 'preflight' || inputs.lane == 'both' }}
+        # Independent of the harness: a failing harness must not hide preflight's verdict
+        # (the first dispatched run showed only half an answer). Gated on the install
+        # instead of always(), so a broken checkout cannot produce a misleading failure.
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (inputs.lane == 'preflight' || inputs.lane == 'both') }}
         run: |
           code=0; node scripts/preflight.mjs > preflight.log 2>&1 || code=$?
           grep -E "Preflight (PASSED|FAILED)|FAILED at" preflight.log || true; exit "$code"

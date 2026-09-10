@@ -657,7 +657,7 @@ NEXT ACTION: cloud: land the plugin-packaging PR (DR-030) to SignalGrid_Alpha,
               files under attached_assets/.
 ```
 
-**Customer Discovery experiment (2026-08-27 to 2026-09-10): concluded - DR-033.**
+**Customer Discovery as the operating phase ended 2026-09-10 (DR-033); the log stays open as an input.**
 **Conversations logged: 0 of 15 - now a valued input, no longer the loop's gate.**
 
 ---

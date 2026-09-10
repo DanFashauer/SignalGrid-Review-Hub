@@ -197,7 +197,7 @@ The whole loop with the minimum panel and the terminal push proven, plus the fai
 
 **Deliverable:** `scripts/brain-cycle.mjs` that on the cloud lane runs:
 1. **STEP 0 brain-freshness** via the new `scripts/check-brain-freshness.mjs` (built in this slice — it is a PREREQUISITE, not a follow-on): `git fetch` + assert `.claude/` + `.mcp.json` + `plugin.json` match `origin/SignalGrid_Alpha`; refuse + heartbeat if behind.
-2. **Dispatch three lenses** over the HEAD diff via `dispatching-parallel-agents`: `fail-closed-auditor` (veto) + `code-reviewer` + the independent `signalgrid-reviewer`, each writing one board file + a derived `_manifest.json`.
+2. **Dispatch the panel** over the HEAD diff via `dispatching-parallel-agents`: **both** veto lenses ALWAYS (`fail-closed-auditor` + `security-reviewer`) + `code-reviewer` + the independent `signalgrid-reviewer`, each writing one board file + a derived `_manifest.json` that names them. The manifest MUST include every configured veto lens — `decide()` HARD-NOs a manifest that omits one (`vetoLenses ⊆ expected`), so both vetoes run every cycle regardless of the touched surface.
 3. **Write the board** `artifacts/brain-cycle/<sha>/` (lens files + `decision.json`).
 4. **Decide** deterministically, constrained to one autonomous, mechanically-verifiable class (a fossil-figure / dead-authority-field fix where `classifyDiff==autonomous`). **Churn dedup built in now** (winner vs open PRs + a committed already-proposed ledger) — a daily cycle re-opening the same finding is the predictable failure mode.
 5. **Gauntlet** on the implemented diff: `preflight` FULL + `verify:breadth` + `classifyDiff`. Green → auto-OPEN a **draft** PR via `gh`; never merge.
@@ -205,7 +205,7 @@ The whole loop with the minimum panel and the terminal push proven, plus the fai
 
 **Also in Slice 1:**
 - The `brain-cycle` registry row (`awaiting-activation`, honest `awaitingReason`, **no invented authorization**) landed on `SignalGrid_Alpha` first, `check-scheduled-routines.mjs` shown green with quoted output.
-- **Two self-tests, both planted-defect (gate-and-proof-engineer pattern, both directions):** (a) plant a BLOCK finding → orchestrator refuses, opens nothing; (b) **plant a `ran:false` lens → orchestrator treats it as HARD NO.** Test (b) is non-negotiable — the absent=HARD-NO branch is the loop's one un-gated trust anchor, so it must itself be provably fail-closed. Prove the owner-gated arm too: point it at a `scripts/` change → STOP at `classifyDiff==owner-gated`.
+- **Planted-defect self-tests (gate-and-proof-engineer pattern, both directions):** (a) plant a BLOCK finding → orchestrator refuses, opens nothing; (b) **plant a `ran:false` lens → orchestrator treats it as HARD NO.** Test (b) is non-negotiable — the absent=HARD-NO branch is the loop's one un-gated trust anchor, so it must itself be provably fail-closed. Prove the owner-gated arm too: point it at a `scripts/` change → STOP at `classifyDiff==owner-gated`. **The 2026-09-10 adversarial pass added the arms the anchor actually needs** (see DR-032 Hardening): a missing/unparsable/empty `_manifest.json` → HARD-NO (not a silent `expected=[]`), a manifest omitting a veto lens → HARD-NO, a record missing `ran` → HARD-NO, a duplicate `ran:false` lane not masked by a `ran:true` one, and a fileless route → escalate not auto-pick.
 
 Because `brain-cycle.mjs` and `check-brain-freshness.mjs` are `scripts/**` = SAFETY_MACHINERY, Slice 1 lands by a **normal owner-reviewed PR**, correctly not self-mergeable.
 

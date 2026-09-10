@@ -1838,13 +1838,33 @@ and is not used in Slice 1. No behaviour edits to `DecisionEngine.swift` / `AppW
 (golden rule 1): audited read-only; any finding there routes around them or escalates.
 
 **Evidence.** `scripts/check-brain-freshness.mjs` (+ `--self-test`, 5 cases),
-`scripts/brain-cycle-decide.mjs` (+ `--self-test`, 8 cases), `scripts/brain-cycle.mjs`
-(+ `--self-test`), all wired into `scripts/preflight.mjs` and
+`scripts/brain-cycle-decide.mjs` (+ `--self-test`, 14 scenarios / 16 assertions),
+`scripts/brain-cycle.mjs` (+ `--self-test`, 7 assertions incl. missing/empty/unparsable-manifest
+fail-closed), all wired into `scripts/preflight.mjs` and
 `.github/workflows/review-hub-ci.yml` (parity gates green); the `brain-cycle` row in
 `docs/agent/scheduled-routines.json` (awaiting-activation, `check-scheduled-routines.mjs`
 green); `docs/agent/brain-cycle-config.json`; the design doc above; the intake row in
 `docs/agent/RESOURCE_INTAKE.md`. Design produced by a 13-agent design workflow (4 approaches,
 4 judges, 1 synthesis) on 2026-09-09.
+
+**Hardening (2026-09-10).** Before opening the Slice 1 PR the decision path was run through an
+adversarial review (a `fail-closed-auditor` pass and an independent correctness read). Seven
+real defects were fixed and each got a planted-defect self-test arm: (1, CRITICAL) a
+missing/unparsable/empty `_manifest.json` made `expected` silently `[]`, so the "a reviewer that
+did not run = NO" loop iterated nothing and a winner shipped on a vacuous trust anchor —
+`readBoard` now fails closed (throws) on a bad manifest and `decide()` independently HARD-NOs an
+empty expected set and asserts every veto lens is named in it; (2) a fileless route classified as
+`autonomous` and became auto-pickable — no files ⇒ escalate; (3) a lens record omitting `ran`
+read as run — now requires `ran === true`; (4) `byName` last-write-wins could hide a `ran:false`
+lane behind a `ran:true` one of the same name — every record per name is now checked; (5) the
+`warnings` ranking key was dead (`counts()` admits only CONFIRMED, so a WARNING was never tallied)
+— WARNING findings are counted in a separate pass; (6) a winner and a separate escalation could
+coexist but the exit code dropped the escalation — added exit 40 and made `decision.json`
+authoritative; (7) a swallowed `decision.json` write failure could report exit 0 without persisting
+— now fatal. The two exploit variants (no manifest + no veto lens on the board; valid manifest but
+veto lens absent) were reproduced against the real CLI and both now refuse (exit 1 / HARD NO,
+no winner). Both reviewers independently confirmed `check-brain-freshness.mjs` and the
+`check-owner-gated-surfaces.mjs` import guard SOLID.
 
 **Reversal.** Delete the five new files (freshness gate, decision core, spine, config, design
 doc), remove the `brain-cycle` registry row, unwire the three self-tests from preflight + CI,

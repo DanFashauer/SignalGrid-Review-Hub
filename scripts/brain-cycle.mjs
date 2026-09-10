@@ -16,10 +16,13 @@
 // the fail-closed doctrine (golden rule 2): the brain PICKS with code, it does not judge
 // with a model.
 //
-// EXIT CODES: 0 = a winner was written to decision.json; 10 = quiet (open nothing);
-// 20 = HARD NO (a lens did not run / stale surface); 30 = escalate (owner-gated/tie);
-// 1 = error (stale brain, unreadable board). Non-zero-but-expected (10/20/30) let the
-// caller branch without treating "quiet" as a crash.
+// EXIT CODES: 0 = a winner was written to decision.json and NOTHING else is pending;
+// 10 = quiet (open nothing); 20 = HARD NO (a lens did not run / bad manifest / stale surface);
+// 30 = escalate, no winner (owner-gated/fileless/tie); 40 = a winner was written AND a SEPARATE
+// route needs escalation (read decision.json for both — never infer "clean winner" from the code);
+// 1 = error (stale brain, unreadable board, bad manifest, or decision.json could not be persisted).
+// Non-zero-but-expected (10/20/30/40) let the caller branch without treating "quiet" as a crash.
+// The exit code is a SUMMARY; decision.json is authoritative — a caller that acts must read it.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -40,15 +43,21 @@ function loadConfig() {
 
 // Read a board directory: every <lens>.<lane>.json is a lens record; _manifest.json names
 // the expected lenses. A malformed lens file is treated as ran:false (fail-closed — an
-// unreadable audit is a NO, never a silent pass).
+// unreadable audit is a NO, never a silent pass). A MISSING, unparsable, or empty _manifest.json
+// is a HARD fail (throw): with no trustworthy expected-lens set the whole board is untrustworthy,
+// and defaulting `expected` to [] would silently disarm decide()'s "a reviewer that did not
+// run = NO" anchor (an empty expected set requires no reviewer at all). The throw propagates to
+// run()'s catch and exits 1. decide() ALSO fails closed on an empty expected set — belt and braces.
 export function readBoard(dir) {
   if (!existsSync(dir)) throw new Error(`board directory not found: ${dir}`);
   const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
-  let expected = [];
   const manifestPath = join(dir, "_manifest.json");
-  if (existsSync(manifestPath)) {
-    try { expected = JSON.parse(readFileSync(manifestPath, "utf8")).expected || []; } catch { /* handled below */ }
-  }
+  if (!existsSync(manifestPath)) throw new Error(`board has no _manifest.json (cannot know which lenses were expected): ${dir}`);
+  let manifest;
+  try { manifest = JSON.parse(readFileSync(manifestPath, "utf8")); }
+  catch (e) { throw new Error(`_manifest.json is unparsable (fail-closed): ${e.message}`); }
+  const expected = Array.isArray(manifest.expected) ? manifest.expected : [];
+  if (expected.length === 0) throw new Error("_manifest.json names no expected lenses (a board that requires no reviewer is a NO)");
   const lenses = [];
   for (const f of files) {
     if (f === "_manifest.json" || f === "decision.json") continue;
@@ -74,8 +83,9 @@ function freshnessOk() {
 
 function outcomeExit(decision) {
   if (decision.hardNo) return 20;
-  if (decision.escalate && !decision.winner) return 30;
+  if (decision.winner && decision.escalate) return 40; // winner AND a separate escalation — read decision.json
   if (decision.winner) return 0;
+  if (decision.escalate) return 30;
   return 10; // quiet
 }
 
@@ -107,7 +117,15 @@ function run(argv) {
     reason: decision.reason,
     ranked: decision.ranked.map((r) => ({ key: r.key, files: r.files, lenses: r.byLens })),
   };
-  try { writeFileSync(join(board, "decision.json"), JSON.stringify(decisionOut, null, 2) + "\n"); } catch { /* board may be read-only in a probe */ }
+  // Persist the decision. A write failure is FATAL: exit 0 means "a winner was written to
+  // decision.json", so a decided-but-unpersisted run must not report success (disk full,
+  // read-only mount). Report the failure and exit 1 rather than swallowing it.
+  try {
+    writeFileSync(join(board, "decision.json"), JSON.stringify(decisionOut, null, 2) + "\n");
+  } catch (e) {
+    console.error(`brain-cycle: decided (${decision.reason}) but could NOT persist decision.json: ${e.message}`);
+    process.exit(1);
+  }
   console.log(`brain-cycle decision: ${decision.reason}`);
   process.exit(outcomeExit(decision));
 }
@@ -123,15 +141,17 @@ function selfTest() {
   let fail = 0;
   const check = (n, c) => { if (!c) { console.error("SELF-TEST FAIL:", n); fail = 1; } };
 
-  // Fixture: two lenses confirm an autonomous route; expected set fully present.
-  write("_manifest.json", { expected: ["code-reviewer", "signalgrid-reviewer", "fail-closed-auditor"] });
+  // Fixture: two lenses confirm an autonomous route; expected set names BOTH veto lenses and
+  // all of them ran (the expected set must include security-reviewer + fail-closed-auditor).
+  write("_manifest.json", { expected: ["code-reviewer", "signalgrid-reviewer", "security-reviewer", "fail-closed-auditor"] });
   const conf = (file) => ({ file, category: "correctness", verdict: "CONFIRMED", confidence: 0.9, proposedRoute: "fix-fossil" });
   write("code-reviewer.cloud.json", { lens: "code-reviewer", ran: true, verdict: "WARNING", findings: [conf("docs/GLOSSARY.md")] });
   write("signalgrid-reviewer.cloud.json", { lens: "signalgrid-reviewer", ran: true, verdict: "WARNING", findings: [conf("docs/GLOSSARY.md")] });
+  write("security-reviewer.cloud.json", { lens: "security-reviewer", ran: true, verdict: "APPROVE", findings: [] });
   write("fail-closed-auditor.cloud.json", { lens: "fail-closed-auditor", ran: true, verdict: "APPROVE", findings: [] });
 
   const b1 = readBoard(dir);
-  check("readBoard finds 3 lenses + expected set", b1.lenses.length === 3 && b1.expected.length === 3);
+  check("readBoard finds 4 lenses + expected set", b1.lenses.length === 4 && b1.expected.length === 4);
   const d1 = decide({ lenses: b1.lenses, expected: b1.expected, config: loadConfig() });
   check("fixture board picks the autonomous winner", d1.winner && d1.winner.key === "fix-fossil");
 
@@ -145,9 +165,28 @@ function selfTest() {
   // code-reviewer is now absent from the board → HARD NO. Either way it must not pick a winner.
   check("a board with a broken expected lens opens nothing", d2.winner === null);
 
+  // A MISSING _manifest.json is a fail-closed throw (not a silent expected=[] that disarms the anchor).
+  writeFileSync(join(dir, "code-reviewer.cloud.json"), JSON.stringify({ lens: "code-reviewer", ran: true, verdict: "WARNING", findings: [conf("docs/GLOSSARY.md")] }));
+  rmSync(join(dir, "_manifest.json"), { force: true });
+  let threwMissing = false;
+  try { readBoard(dir); } catch { threwMissing = true; }
+  check("readBoard throws on a missing _manifest.json", threwMissing);
+
+  // An EMPTY expected set (manifest present but names nothing) is also a fail-closed throw.
+  write("_manifest.json", { expected: [] });
+  let threwEmpty = false;
+  try { readBoard(dir); } catch { threwEmpty = true; }
+  check("readBoard throws on an empty expected set", threwEmpty);
+
+  // An UNPARSABLE _manifest.json is a fail-closed throw.
+  writeFileSync(join(dir, "_manifest.json"), "{ not json");
+  let threwBad = false;
+  try { readBoard(dir); } catch { threwBad = true; }
+  check("readBoard throws on an unparsable _manifest.json", threwBad);
+
   try { rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
   if (fail) return 1;
-  console.log("brain-cycle spine self-test: readBoard + decide integrate, malformed=ran:false, broken-expected=no-winner — green");
+  console.log("brain-cycle spine self-test: readBoard + decide integrate, malformed=ran:false, broken-expected=no-winner, missing/empty/unparsable-manifest=throw — green");
   return 0;
 }
 

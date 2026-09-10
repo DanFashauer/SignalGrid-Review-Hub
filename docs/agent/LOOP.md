@@ -87,10 +87,16 @@ LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-app
               every PR into mainline gets full-clone provenance + macOS preflight; nightly
               08:00 UTC runs lane=both then lane=mcp; manual dispatch optional. OPEN: proof
               of the first automatic run (next real PR / tonight's cron); re-push the Fleet
-              restrictions profile. DR-035 LANDED (613071e9, owner-approved): PURPOSE.md §2
-              now says source-agnostic is the point in the owner's words and forbids vendor
-              lock; follow-up named there: widen the §2 sentence from "a building" to "the
-              company" together with its four mirrors (POSITIONING.md owner-reserved).
+              restrictions profile. DR-035 LANDED (613071e9): PURPOSE.md §2 says source-agnostic
+              is the point and forbids vendor lock; follow-up: widen the §2 sentence to "the
+              company" with its four mirrors (POSITIONING.md owner-reserved). DR-036 LANDED
+              (c97138d8, owner-approved): outreach is gated on a DERIVED readiness figure —
+              node scripts/check-readiness-figure.mjs, lowest of three dimensions, floor 80 /
+              target 92-95 / goal 100 — printed by loop:state every session; today it reads
+              under the floor, outreach CLOSED. Cheapest lift: sim requests for live-keycloak,
+              live-location, live-edr (green tonight as lanes, no result on disk); then the
+              three runbook partials. Same commit repaired mainline preflight (workflow count
+              15->16 fallout, a pinned self-test fixture, coverage page, one claim citation).
               Preflight PASSED on macOS.
               (Earlier 2026-09-07, cloud lane:) PACKAGED THE REPO AS A CLAUDE
               CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json

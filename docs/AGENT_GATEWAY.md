@@ -94,17 +94,22 @@ only and fenced out of the product's decision path.
   tier — the coordinating session does it inline — for anything that decides, judges, or
   authors shippable output. An unknown class resolves to CLAUDE (fail-closed: unknown tightens,
   never loosens).
-- **The tap — report-only.** `scripts/lib/agent-model-tap.mjs`'s `draftWithModel()` sends a
-  FREE/LOCAL chore to the gateway endpoint (`SIGNALGRID_AGENT_MODEL_BASE_URL` /
-  `SIGNALGRID_AGENT_MODEL_NAME`, optional `SIGNALGRID_AGENT_MODEL_KEY` — ENV-only) and returns
-  a draft always labeled `verified:false`, or `null`. It never throws, blocks, writes, gates,
-  or decides; with no endpoint configured it simply returns `null` and the caller proceeds on
-  its deterministic path or hands the task to Claude. First consumer: `scripts/brief.mjs
-  --narrate`.
+- **The tap — report-only, and public-safe by construction.** The public Review Hub makes NO
+  live API calls (AGENTS.md), so the in-repo `scripts/lib/agent-model-tap.mjs` makes no network
+  call: `draftWithModel()` returns a committed FIXTURE draft for a routable class (always
+  labeled `verified:false`) or `null`. The real FREE/LOCAL gateway client — which reads
+  `SIGNALGRID_AGENT_MODEL_BASE_URL` / `SIGNALGRID_AGENT_MODEL_NAME`, optional
+  `SIGNALGRID_AGENT_MODEL_KEY` (ENV-only, keys-out-of-tree per DR-029) — lives OUT of this
+  repository and is referenced only; the env names are declared in the routing policy as that
+  out-of-tree contract. The tap never throws, blocks, writes, gates, or decides; with no
+  fixture for a class it returns `null` and the caller proceeds on its deterministic path or
+  hands the task to Claude. First consumer: `scripts/brief.mjs --narrate`.
 - **The fence — by construction.** `scripts/check-model-tap-boundary.mjs` (preflight + CI)
   proves no file under `lib/**`, the `/v1` server, a connector, or a proof references the tap,
-  its env vars, or a model-call shape, and that the tap imports nothing from the decision path
-  — so a model, free or local, can never reach a verdict (golden rule 2). This is the same
+  its env vars, or a model-call shape; that the tap imports nothing from the decision path
+  (the reciprocal fence, including the `@workspace/` alias form); and that the in-repo tap
+  itself contains no live-call shape — so a model, free or local, can never reach a verdict
+  (golden rule 2) and no live API call enters the public surface (AGENTS.md). This is the same
   boundary the OmniRoute record states, now enforced, not just asserted.
 
 ## What this repo does and does not carry

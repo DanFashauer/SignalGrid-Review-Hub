@@ -623,12 +623,12 @@ jobs:
         run: node scripts/check-env-doc-readers.mjs
       - name: "Env-doc-reader self-test (the gate can actually fail)"
         run: node scripts/check-env-doc-readers.mjs --self-test
-      # No model may reach the deterministic /v1 decision path: the DR-032 tap
+      # No model may reach the deterministic /v1 decision path: the DR-035 tap
       # (free/local models for chores) is fenced out of lib/*, the /v1 server,
       # connectors and proofs — golden rule 2, enforced by construction.
       - name: "Model-tap boundary self-test (the fence can actually fail)"
         run: node scripts/check-model-tap-boundary.mjs --self-test
-      - name: "Model-tap boundary (no model reference reaches the /v1 decision path — DR-032)"
+      - name: "Model-tap boundary (no model reference reaches the /v1 decision path — DR-035)"
         run: node scripts/check-model-tap-boundary.mjs
       # A browser follows `](FOO.md)` from the document's own directory and nowhere
       # else; 35 relocation fossils were dead links for four weeks.

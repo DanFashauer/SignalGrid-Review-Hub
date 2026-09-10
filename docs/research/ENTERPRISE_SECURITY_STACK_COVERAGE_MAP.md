@@ -105,18 +105,22 @@ claim — intake logged in `docs/agent/RESOURCE_INTAKE.md`.
   `proof:mcp-answer-discipline`, `proof:mcp-server`): a fail-closed MCP plane where an
   unknown tightens and is never fabricated into a grant.
 - **AI APPLICATION LAYER — RAG** (query authorization → retrieval → Top-K/rerank → LLM →
-  prompt guardrails) — **divergence, not a gap.** SignalGrid is a deterministic fail-closed
-  decision gate, not a RAG/LLM application: there is no LLM in its decision path and no
-  retrieval/rerank stage (golden rule 2 — no model nondeterminism in a decision). Its
+  prompt guardrails) — **divergence, not a gap.** SignalGrid decides deterministically and
+  fail-closed (see `docs/PURPOSE.md` for what it is), not a RAG/LLM application: there is no
+  LLM in its decision path and no retrieval/rerank stage (golden rule 2 — no model
+  nondeterminism in a decision). Its
   nearest analogue is deterministic *evidence* gathering that authorizes and fuses signals,
   not documents (`proof:evidence-coverage`, `proof:grid-coverage`); the LLM/guardrail band
   applies only to the agent-facing MCP plane above, never to the verdict.
 - **SECURITY & GOVERNANCE** (PII · DLP · content safety · policy enforcement · audit ·
-  secrets · compliance) — DLP posture as a signal (Layer 2, `proof:data-protection`); PII
-  and content redaction through the shared sanitizer (`scripts/lib/sanitize.mjs`) and the
-  publication boundary (`scripts/check-publication-boundary.mjs`); policy enforcement
-  through the deterministic core (`proof:policy-binding`, `proof:signalgrid-core`); audit
-  through `proof:audit-ledger`. **Compliance is not a guarantee** — CLAUDE.md is explicit
+  secrets · compliance) — DLP posture as a signal (Layer 2, `proof:data-protection`);
+  policy enforcement through the deterministic core (`proof:policy-binding`,
+  `proof:signalgrid-core`); audit through `proof:audit-ledger`. **PII / content redaction is
+  a gap, not a covered control:** `scripts/lib/sanitize.mjs` masks comment and
+  string-literal content in emitted output and `scripts/check-publication-boundary.mjs` has
+  only narrow rules for scraped pages and credential-bearing URLs — neither detects or
+  redacts PII, so this band is named here as unaddressed rather than claimed. **Compliance
+  is not a guarantee** — CLAUDE.md is explicit
   that SignalGrid does not certify HIPAA/SOC 2 and a human review is required.
 - **OBSERVABILITY & MONITORING** (identity · AI-quality · security monitoring) — the one
   band the five-layer stack above carries no row for, and the genuine addition from this

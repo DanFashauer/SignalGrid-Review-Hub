@@ -17,14 +17,21 @@
 // gate also enforces).
 // =============================================================================
 
-// The tiers. 'free-local' is reachable through the tap (env-configured gateway);
-// 'claude' means the coordinating session does it inline and the tap returns null.
+// The tiers. 'free-local' is routable; in the public Review Hub the tap serves it
+// from committed FIXTURES and makes no network call (AGENTS.md — no live API
+// calls here). The real free/local gateway CLIENT lives out of this repository
+// (DR-029) and reads the env names below; they are declared here as the
+// documented out-of-tree contract — naming them keeps check-env-doc-readers.mjs
+// satisfied for the docs that instruct them, without the in-repo tap ever reading
+// them for a live call. 'claude' means the coordinating session does it inline
+// and the tap returns null.
 export const TIERS = Object.freeze({
   "free-local": Object.freeze({
     routable: true,
-    // ENV-only, never committed (the DR-029 rule). The tap reads these three
-    // names DIRECTLY (see agent-model-tap.mjs) so check-env-doc-readers.mjs sees
-    // a reader for any doc that instructs them.
+    // ENV-only, never committed (the DR-029 rule). Read by the OUT-OF-TREE gateway
+    // client, NOT by the in-repo tap (which is fixture-backed). Named here so a doc
+    // that instructs them has a reader, and so the boundary gate can forbid them in
+    // the decision path.
     baseUrlEnv: "SIGNALGRID_AGENT_MODEL_BASE_URL",
     modelEnv: "SIGNALGRID_AGENT_MODEL_NAME",
     keyEnv: "SIGNALGRID_AGENT_MODEL_KEY",
@@ -130,4 +137,11 @@ export const RECIPROCAL_FORBIDDEN_IMPORT_SUBSTRINGS = Object.freeze([
   "/lib/",
   "artifacts/api-server",
   "integrations",
+  // The workspace-alias form of the same decision-path packages. A relative
+  // "../lib/..." is caught by "/lib/", but "@workspace/signalgrid-core" is not —
+  // and scripts/package.json makes those aliases resolvable, so without this the
+  // tap could import decision-path code through an alias and the reciprocal fence
+  // would stay green. The tap and policy import only each other (a relative path)
+  // and node builtins, so forbidding every "@workspace/" import here is exact.
+  "@workspace/",
 ]);

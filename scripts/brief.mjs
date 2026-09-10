@@ -3,10 +3,12 @@
 // brief — ONE read of the whole system state for the operating brain.
 //
 // The coordinating session (the signalgrid-master orchestrator, per
-// docs/agent/ORG.md) previously had to run six separate read-only commands to
-// see where things stood: loop:state, status, lane:inbox, lane:messages,
-// check-sim-requests, check-scheduled-routines. A single brain needs one read,
-// not six. This composes them into one panel.
+// docs/agent/ORG.md) previously had to run several separate read-only commands to
+// see where things stood: loop:state, status, lane messages, check-sim-requests,
+// check-scheduled-routines. This composes their PASS/FAIL state into one panel.
+// It is a status overview, NOT a replacement for `lane:inbox`: the Lane-mail row
+// shows the consistency summary (sent/acked), so when unread work exists for this
+// lane, run `pnpm run lane:inbox` for the message bodies and their required action.
 //
 // WHAT IT IS AND IS NOT:
 //   · REPORT-ONLY. It SHELLS OUT to the existing read-only commands and never
@@ -156,6 +158,7 @@ function heartbeatsSection() {
   try {
     const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
     if (!files.length) return { key: "heartbeats", label: "Lane heartbeats", state: "OK", summary: "(none recorded yet)" };
+    let anyUnreadable = false;
     const rows = files.map((f) => {
       try {
         const j = JSON.parse(readFileSync(join(dir, f), "utf8"));
@@ -163,10 +166,12 @@ function heartbeatsSection() {
         const age = when ? ageOf(when) : null;
         return `${f.replace(/\.json$/, "")}: ${age || "no timestamp"}`;
       } catch {
+        anyUnreadable = true;
         return `${f.replace(/\.json$/, "")}: unreadable`;
       }
     });
-    return { key: "heartbeats", label: "Lane heartbeats", state: "OK", summary: rows.join(" · ") };
+    // A heartbeat we cannot read is missing liveness evidence — never report that OK.
+    return { key: "heartbeats", label: "Lane heartbeats", state: anyUnreadable ? "ERROR" : "OK", summary: rows.join(" · ") };
   } catch (e) {
     return { key: "heartbeats", label: "Lane heartbeats", state: "ERROR", summary: String(e).slice(0, 120) };
   }
@@ -178,8 +183,14 @@ function tickWatch() {
   if (!existsSync(p)) return { key: "mac-tick", label: "Mac tick", state: "FAIL", summary: "absent — Mac not ticking (run: bash scripts/mac/install-launchd.sh)" };
   try {
     const j = JSON.parse(readFileSync(p, "utf8"));
-    const age = ageOf(j.firedAt || j.updatedAt || j.at);
-    const stale = age && /(\d+)h/.test(age) && Number(age.match(/(\d+)h/)[1]) >= 3;
+    const when = j.firedAt || j.updatedAt || j.at;
+    const ms = when ? Date.parse(when) : NaN;
+    const age = when ? ageOf(when) : null;
+    // Staleness is computed from the timestamp, never the formatted age string:
+    // once the tick crosses 48h, ageOf() returns "2d ago" with no "Nh", so an
+    // hours-only match would read stale as false forever and report a dead lane OK.
+    // An unparseable or absent timestamp is stale (fail-closed).
+    const stale = !Number.isFinite(ms) || Date.now() - ms >= 3 * 3600 * 1000;
     return { key: "mac-tick", label: "Mac tick", state: stale ? "FAIL" : "OK", summary: `last ${age || "unknown"}` };
   } catch (e) {
     return { key: "mac-tick", label: "Mac tick", state: "ERROR", summary: String(e).slice(0, 120) };
@@ -208,10 +219,12 @@ function render(sections) {
     const col = stateColor(s.state);
     lines.push(`  ${s.label.padEnd(w)}  ${col}${s.state.padEnd(7)}${C.off} ${C.d}${s.summary}${C.off}`);
   }
-  const bad = sections.filter((s) => s.state === "FAIL" || s.state === "ERROR");
+  // TIMEOUT is unhealthy too: a section whose command did not finish is an
+  // INCOMPLETE read, and an incomplete read must never end in "all clean".
+  const bad = sections.filter((s) => s.state === "FAIL" || s.state === "ERROR" || s.state === "TIMEOUT");
   lines.push("");
   lines.push(bad.length
-    ? `  ${C.y}${bad.length} section(s) want a look: ${bad.map((s) => s.label).join(", ")}.${C.off} This view reports; it never blocks.`
+    ? `  ${C.y}${bad.length} section(s) want a look: ${bad.map((s) => `${s.label} (${s.state})`).join(", ")}.${C.off} This view reports; it never blocks.`
     : `  ${C.d}all sections read clean. This view reports; it never blocks.${C.off}`);
   return lines.join("\n");
 }

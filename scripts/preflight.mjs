@@ -152,7 +152,7 @@ const STEPS = [
   { name: "Env-doc readers (an instructed SIGNALGRID_* variable must be read by something)", cmd: ["node", "scripts/check-env-doc-readers.mjs"] },
   { name: "Env-doc-reader self-test (the gate can actually fail)", cmd: ["node", "scripts/check-env-doc-readers.mjs", "--self-test"] },
   { name: "Model-tap boundary self-test (the fence can actually fail)", cmd: ["node", "scripts/check-model-tap-boundary.mjs", "--self-test"] },
-  { name: "Model-tap boundary (no model reference reaches the /v1 decision path — DR-032, golden rule 2)", cmd: ["node", "scripts/check-model-tap-boundary.mjs"] },
+  { name: "Model-tap boundary (no model reference reaches the /v1 decision path — DR-035, golden rule 2)", cmd: ["node", "scripts/check-model-tap-boundary.mjs"] },
   // A browser follows `](FOO.md)` from the document's own directory and nowhere
   // else. 41 documents moved to docs/research/ on 2026-08-10 and their sibling
   // links pointed at nothing for four weeks — 35 dead links across the tree.

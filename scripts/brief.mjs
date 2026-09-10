@@ -32,7 +32,7 @@ const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
 const JSON_OUT = process.argv.includes("--json");
 const SELF_TEST = process.argv.includes("--self-test");
 const FULL = process.argv.includes("--full"); // include the slow deep sections (status-summary)
-const NARRATE = process.argv.includes("--narrate"); // route a one-line dev summary to the free/local tier (DR-032)
+const NARRATE = process.argv.includes("--narrate"); // route a one-line dev summary to the free/local tier (DR-035)
 
 const C = process.stdout.isTTY && !JSON_OUT
   ? { g: "\x1b[32m", r: "\x1b[31m", y: "\x1b[33m", d: "\x1b[2m", b: "\x1b[1m", off: "\x1b[0m" }
@@ -263,7 +263,7 @@ if (SELF_TEST) {
   } else {
     console.log(render(sections));
     // --narrate routes a one-line developer summary to the FREE/LOCAL tier via
-    // the DR-032 tap. It is an opt-in operability convenience, explicitly labeled
+    // the DR-035 tap. It is an opt-in operability convenience, explicitly labeled
     // unverified, never auto-sent to the owner; with no endpoint configured the
     // tap returns null and the line is simply omitted (proving the fail-safe by
     // use). --json and --self-test never reach the tap — the composer stays

@@ -188,6 +188,12 @@ const STEPS = [
   { name: "MCP-ecosystem-map self-test (the gate can fail both directions)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs", "--self-test"] },
   { name: "MCP-ecosystem map (every externally-sourced family has an ecosystem row or a stated gap)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs"] },
   { name: "Absence-check self-test (a word in a disclaimer is not the thing existing)", cmd: ["node", "scripts/agent/absence-check.mjs", "--self-test"] },
+  // Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push gate
+  // (a feature branch legitimately differs from origin); preflight runs only the self-tests,
+  // which prove each piece can fail in both directions.
+  { name: "Brain-freshness self-test (empty derivation + drift must fail; identical is clean)", cmd: ["node", "scripts/check-brain-freshness.mjs", "--self-test"] },
+  { name: "Brain-cycle decision self-test (ran:false=HARD NO, veto/owner-gated open nothing, consensus floor)", cmd: ["node", "scripts/brain-cycle-decide.mjs", "--self-test"] },
+  { name: "Brain-cycle spine self-test (readBoard+decide integrate; malformed lens = ran:false)", cmd: ["node", "scripts/brain-cycle.mjs", "--self-test"] },
   { name: "Package reachability self-test (a comment naming a package is not an import)", cmd: ["node", "scripts/check-package-reachability.mjs", "--self-test"] },
   { name: "Package reachability (a library nobody ships is a library nobody runs)", cmd: ["node", "scripts/check-package-reachability.mjs"] },
   { name: "Core normalization-version (the provenance stamp must track the code it names)", cmd: ["node", "scripts/generate-core-normalization-version.mjs", "--check"] },

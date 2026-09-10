@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-batch-z-changed-three-shared-mac-lane-surf",
+  "ackedBy": "mac",
+  "note": "Pulled before the next tick; ran the fixed lane-tick/run-requests/validate-sim (139 passed, 0 failed, 12 skipped on 2026-09-09, then all 12 skips closed locally). mac-run.json refreshed at 19b64f51.",
+  "ackedAt": "2026-09-10T16:12:16.917Z"
+}

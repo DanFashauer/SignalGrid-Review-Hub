@@ -75,7 +75,7 @@
   {
    "id": "mac-lane-tick",
    "trigger": "launchd:com.signalgrid.lane-tick (installed by scripts/mac/install-launchd.sh on the owner's Mac; not an account trigger)",
-   "cron": "*/30 * * * *",
+   "cron": "*/5 * * * *",
    "binding": "launchd user agent on the Mac lane's machine, running scripts/mac/lane-tick.sh with no Claude session",
    "authorizedBy": "Dan Fashauer (owner)",
    "authorizedOn": "2026-09-05",
@@ -84,9 +84,23 @@
    "escalationBoundary": "runs only what a sim request names from scripts/lib/sim-operations.mjs; refuses a dirty or non-Alpha checkout and says so in its heartbeat; the cloud steward escalates to the owner when this heartbeat is older than its tolerance (the tick is not installed, the Mac is asleep, or origin is unreachable)",
    "heartbeatPath": "artifacts/agent-heartbeats/mac-lane-tick.json",
    "cadenceToleranceHours": 3,
+   "status": "active"
+  },
+  {
+   "id": "brain-cycle",
+   "trigger": "awaiting-activation — no account trigger yet; will be a cloud self-session trigger created via create_trigger AFTER the owner's explicit go (DR-032, Slice 3). Not a launchd agent, not yet a trig_*.",
+   "cron": "35 8 * * *",
+   "binding": "self-session (resumes the operating session)",
+   "authorizedBy": "Dan Fashauer (owner)",
+   "authorizedOn": "2026-09-09",
+   "authorizationEvidence": "owner directed the standing Brain Cycle in-session 2026-09-09: shared the '9 Architectures for Multi-Agent Systems' graphic with 'I'm looking for a 🧠 to operate things and each one of these repos I've shared will do the same thing in this graph', then chose 'Standing recurring cycle', 'once a day', and 'auto but does x amount of security and code check validation for bugs and other problems for the winner'. This authorizes BUILDING the machinery (Slice 1, dormant); ACTIVATION (creating the trigger + flipping to active) needs a further explicit owner go per the awaiting-activation contract.",
+   "writeScope": "artifacts/brain-cycle/** (the per-cycle audit blackboard), artifacts/lane-messages/** and artifacts/agent-heartbeats/brain-cycle.json (heartbeat via scripts/lane-deliver.mjs onto a lane/cloud-mail-* branch, never the code branch); opens DRAFT PRs for winning autonomous-tier routes only (classifyDiff==autonomous). Never auto-merges; never opens a PR touching SAFETY_MACHINERY or OWNER_RESERVED surfaces (those escalate).",
+   "escalationBoundary": "escalates to the owner every owner-gated route, every tie, and every unrecognised/ambiguous tier; auto-OPEN (draft) is the ceiling and auto-MERGE is off (owner GREEN switch in docs/agent/brain-cycle-config.json, default false). Fail-closed halts (not ships): a stale brain (check-brain-freshness), an absent or ran:false expected lens, or an unverifiable surface stops the cycle.",
+   "heartbeatPath": "artifacts/agent-heartbeats/brain-cycle.json",
+   "cadenceToleranceHours": 50,
    "status": "awaiting-activation",
-   "awaitingReason": "launchd agent not yet installed on the owner's Mac (bash scripts/mac/install-launchd.sh); owner escalated 2026-09-06T04:26Z",
-   "awaitingSince": "2026-09-05"
+   "awaitingReason": "Slice 1 lands the machinery (freshness gate, decision core, config, this row) DORMANT. The account trigger is deliberately not created and the row is not active until the owner gives an explicit go on the cadence, per DR-032 and the awaiting-activation contract — no consent is inferred from the build directive.",
+   "awaitingSince": "2026-09-09"
   }
  ]
 }

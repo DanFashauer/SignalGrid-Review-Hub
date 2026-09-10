@@ -1,6 +1,6 @@
 // =============================================================================
 // agent-model-tap — the build-lane tap that routes a low-stakes chore's FIRST
-// DRAFT to a free/local model through the DR-029 gateway (DR-032). Report-only:
+// DRAFT to a free/local model through the DR-029 gateway (DR-035). Report-only:
 // it RETURNS text and never writes the tree, gates, decides, throws, exits, or
 // blocks. A miss returns null; the caller then proceeds on its deterministic
 // path, or hands the task to the coordinating Claude session.

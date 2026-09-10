@@ -676,6 +676,15 @@ jobs:
         run: node scripts/check-mcp-ecosystem-map.mjs
       - name: "Absence-check self-test (a word in a disclaimer is not the thing existing)"
         run: node scripts/agent/absence-check.mjs --self-test
+      # Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push
+      # gate (a feature branch legitimately differs from origin); CI runs only the
+      # self-tests, which prove each piece can fail in both directions.
+      - name: "Brain-freshness self-test (empty derivation + drift must fail; identical is clean)"
+        run: node scripts/check-brain-freshness.mjs --self-test
+      - name: "Brain-cycle decision self-test (ran:false=HARD NO, veto/owner-gated open nothing, consensus floor)"
+        run: node scripts/brain-cycle-decide.mjs --self-test
+      - name: "Brain-cycle spine self-test (readBoard+decide integrate; malformed lens = ran:false)"
+        run: node scripts/brain-cycle.mjs --self-test
       # The same shape one level down: doc-orphans asks whether a reader can reach a
       # document, this asks whether a shipped artifact can reach a library. Both catch
       # the failure mode that never announces itself — everything green, nothing

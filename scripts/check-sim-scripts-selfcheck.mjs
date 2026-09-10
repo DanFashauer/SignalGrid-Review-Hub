@@ -38,7 +38,7 @@
 //         text that script can actually print.
 //
 // RULE (f), and the defect it was written for. `scripts/mac/lane-tick.sh` — the
-// unattended 30-minute tick — counted the cloud lane's queued work with
+// unattended 5-minute tick — counted the cloud lane's queued work with
 //
 //     PENDING="$(node scripts/mac/run-requests.mjs --plan | grep -c '^  PENDING')"
 //

@@ -47,11 +47,37 @@ clone `SignalGrid_Alpha`; `git pull` is not available there.
 ## STATE - update these four lines every session
 
 ```
-PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
-              (DR-021, owner directive 2026-08-31); absorption mode - owner
-              feeds resources, the repo absorbs them. Claim discipline
-              unchanged.
-LAST TOUCHED: 2026-09-07 (cloud lane, latest) - PACKAGED THE REPO AS A CLAUDE
+PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
+              Engineering UNFROZEN (DR-021); absorption mode - owner feeds
+              resources, the repo absorbs them. Discovery is an input, not the
+              gate. Claim discipline unchanged. Near-term: a working core product
+              that does what it claims, real in hand for partners before GTM.
+LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-approved):
+              the research basis is the founder's own domain practice, not customer
+              engagement; the owner's Google Drive folder "Project > SignalGrid" is the
+              canonical corpus of problems and solution ideas; an owner-supplied document
+              is research to absorb, never a conversation to schedule. research-ops skill
+              reconciled to DR-033/034; INTAKE_LEDGER row 98; RESOURCE_INTAKE row;
+              provenance line in the custody ground-truth map. Same session: three
+              macOS-only gate defects fixed (10deac53 - Apple git's grep -E reads \b as a
+              literal b, so env-doc readers invented failures and the gap scan found no
+              skipped tests; verify-done.sh made direction-aware); live evidence refreshed
+              (19b64f51); every validate-sim-macos.sh skip closed on the Mac (Postgres
+              proofs against a local postgres:16 with a version-matched client; the six
+              live-vendor lanes; live-fleet-workflow wired into the fleet lane, 91396ed6);
+              container-engine.sh docker-first with a drift self-test (e6cc4952; the .mjs
+              twin is cloud's to flip); 17 cloud acks + one status message delivered
+              (d1b6a8ee). Tick re-installed on the 5-min cadence. mac/* branch cleanup
+              done with evidence (owner-approved): five landed branches deleted, each
+              tied to its landing commit; kept mac/fleet-premium-proof (parked WIP) and
+              mac/native-ledger-2026-09-02 (superseded, unmerged - a human call). Self-hosted
+              runner signalgrid-mac registered and running as a launchd service; the
+              read-only workflow_dispatch job mac-runner-harness.yml landed (a779f692,
+              owner-approved) - cloud can now run the Mac harness/preflight on this
+              hardware on demand. OPEN: the first dispatched run (owner or cloud clicks
+              Run workflow); re-push the Fleet restrictions profile. Preflight PASSED on
+              macOS.
+              (Earlier 2026-09-07, cloud lane:) PACKAGED THE REPO AS A CLAUDE
               CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json
               names the `signalgrid` plugin and declares skills/agents/commands
               by path into the LIVE .claude/ (one source of truth, no drift
@@ -648,7 +674,7 @@ NEXT ACTION: cloud: land the plugin-packaging PR (DR-030) to SignalGrid_Alpha,
               the three stale claude/* branches (ruleset-probe, two
               steward-heartbeat) may be deleted. owner: to wake the cloud lane at
               any moment, comment on PR #439 from the phone. owner:
-              discovery conversations (0 of 15) - nothing substitutes.
+              discovery is a valued input now, not the gate (DR-033, past Customer Discovery).
               owner: publish the MCP marketplace listing
               (docs/SIGNALGRID_MCP_MARKET_LISTING.md) on the creator page - only
               the owner has the login. owner decisions still pending: fork or
@@ -656,8 +682,8 @@ NEXT ACTION: cloud: land the plugin-packaging PR (DR-030) to SignalGrid_Alpha,
               files under attached_assets/.
 ```
 
-**Experiment started: 2026-08-27**
-**Conversations logged: 0 of 15 - Commitments: 0**
+**Customer Discovery as the operating phase ended 2026-09-10 (DR-033); the log stays open as an input.**
+**Conversations logged: 0 of 15 - now a valued input, no longer the loop's gate.**
 
 ---
 

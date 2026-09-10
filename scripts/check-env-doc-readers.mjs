@@ -94,15 +94,50 @@ export function auditEnvDocReaders(docs, readersOf) {
  * preflight registration comment as three "readers" of SIGNALGRID_SANITIZE_OUTPUT,
  * the very variable the gate was written to catch.
  */
+/**
+ * Word boundaries that survive BOTH regex engines this repo runs on.
+ *
+ * `\b` IS NOT PORTABLE (fixed 2026-09-09, reproduced on this Mac). It is a GNU
+ * extension: glibc's grep on the Linux CI box honours it, and Apple git 2.50.1's
+ * `-E` — POSIX ERE, which has no such escape — matches nothing at all. Measured:
+ *   git grep -l -E -e 'process\.env\.SIGNALGRID_MCP_PATH\b'  -> 0 files
+ *   git grep -l -E -e 'process\.env\.SIGNALGRID_MCP_PATH'     -> 1 file
+ * So on macOS every `\b` shape below matched NOTHING, `readersOf` returned 0 for
+ * variables the tree plainly reads, and the gate invented 19 violations — CLAUDE.md
+ * among them — while CI stayed green. A gate that fails on one platform and passes
+ * on the other teaches the operator to disbelieve it, which is worse than no gate.
+ * An explicit character class says the same thing in both dialects.
+ */
+const BOUNDARY_BEFORE = "(^|[^A-Za-z0-9_])";
+const BOUNDARY_AFTER = "([^A-Za-z0-9_]|$)";
+
 export function readShapes(name) {
   return [
-    `process\\.env\\.${name}\\b`,
+    `process\\.env\\.${name}${BOUNDARY_AFTER}`,
     `process\\.env\\[["']${name}["']\\]`,
-    `\\benv\\.${name}\\b`,
-    `\\$\\{?${name}\\b`,
+    `${BOUNDARY_BEFORE}env\\.${name}${BOUNDARY_AFTER}`,
+    `\\$\\{?${name}${BOUNDARY_AFTER}`,
     `getenv\\(["']${name}["']\\)`,
     `environment\\[["']${name}["']\\]`,
   ].join("|");
+}
+
+/**
+ * LIVE probe of the platform's regex engine: every SIGNALGRID_* name the tree reads
+ * in the dotted `process.env.X` form, derived rather than hardcoded. The self-test
+ * asserts `readersOf` finds each one — which is precisely what macOS could not do
+ * while the shapes carried `\b`, and precisely what the old live check missed by
+ * naming a single variable whose reader happened to match a boundary-free shape.
+ */
+export function dottedReaderNames() {
+  try {
+    const out = git(
+      `grep -h -o -E -e ${JSON.stringify("process\\.env\\.SIGNALGRID_[A-Z0-9_]+")} -- ':!*.md' ':!docs/**' ':!scripts/check-env-doc-readers.mjs'`,
+    );
+    return [...new Set(out.split("\n").filter(Boolean).map((m) => m.trim().replace("process.env.", "")))];
+  } catch {
+    return [];
+  }
 }
 
 function readersOf(name) {
@@ -177,6 +212,20 @@ function selfTest() {
   checks.push(["the assignment shape needs the `=` — a bare mention of a name is not an instruction", assignmentsIn("we call it SIGNALGRID_TIER in prose").names.length === 0]);
   checks.push(["LIVE: the real reader lookup finds SIGNALGRID_TIER and finds nothing for a name that does not exist",
     readersOf("SIGNALGRID_TIER") > 0 && readersOf("SIGNALGRID_NO_SUCH_VARIABLE_ZZ") === 0]);
+  // LIVE, AND PLATFORM-SPECIFIC (added 2026-09-09 with the `\b` fix). The check above
+  // passed on macOS while the gate was broken there: SIGNALGRID_TIER's reader matches a
+  // boundary-free shape, so one green variable hid a lookup that found nothing for every
+  // dotted read in the tree. Derive the dotted names and require ALL of them — on Apple
+  // git with `\b` in the shapes this fails with the real count, which is the mutation
+  // proof; a tree with no dotted read at all is itself a broken derivation, not a pass.
+  const dotted = dottedReaderNames();
+  const dottedMissed = dotted.filter((n) => readersOf(n) === 0);
+  checks.push([
+    `LIVE: this platform's regex engine resolves the dotted \`process.env.X\` shape — ${dotted.length} name(s) derived, ${dottedMissed.length} unresolved${dottedMissed.length ? ` (${dottedMissed.join(", ")})` : ""}`,
+    dotted.length > 0 && dottedMissed.length === 0,
+  ]);
+  checks.push(["…and no shape hands `\\b` to git grep -E, which Apple git's POSIX ERE does not implement",
+    !readShapes("SIGNALGRID_X").includes("\\b")]);
   // AN UNREADABLE TRACKED DOCUMENT IS FATAL (F7). The pure audit cannot see it — an
   // unreadable file reaches it as `""` — so the rule lives beside it and is asserted
   // here, including the wiring, which is the half that was missing.

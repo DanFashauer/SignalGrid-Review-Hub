@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-tick-is-now-5-min-heartbeat-throttled-pull",
+  "ackedBy": "mac",
+  "note": "DONE 2026-09-09: install-launchd.sh re-run; --status = com.signalgrid.lane-tick loaded (every 300 s).",
+  "ackedAt": "2026-09-10T16:12:18.165Z"
+}

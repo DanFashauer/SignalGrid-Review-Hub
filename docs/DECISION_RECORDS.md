@@ -1672,37 +1672,6 @@ family, no proof, no gate — a build tool adopted by reference changes none of 
 record, the intake row and the index line. Nothing in the product depends on any of it,
 by construction — the boundary above guarantees it.
 
-### DR-029 addendum (2026-09-09): the fully-local counterpart — LM Studio
-
-The same model-access decision in local form. [LM Studio](https://github.com/lmstudio-ai)
-was read on 2026-09-09 (the org and its `lms`/`lmstudio-js`/`mlx-engine`/`lmstudio-python`
-repos, the OpenAI-compat and app-terms pages): a desktop app (macOS/Windows/Linux) that runs
-LLMs entirely on-device and serves them over an OpenAI-compatible endpoint
-(`http://localhost:1234/v1`) with an `lms` CLI for headless use. It is the same build/agent
-model-access layer as OmniRoute in the fully-local variant: where OmniRoute fronts ~352
-REMOTE providers, LM Studio runs the model on the machine with **zero cloud egress** — the
-air-gapped end of the "point the lane's base URL at an endpoint" mechanism. A lane points at
-it directly, or OmniRoute treats it as one local upstream. Adopted **by reference** — not
-installed, not vendored, no dependency, no MCP install, exactly the OmniRoute shape;
-`docs/AGENT_GATEWAY.md` carries the detail and the intake row records the read.
-
-**Why an addendum and not a new DR.** It changes nothing about how green is certified — no
-code, dependency, connector, proof or gate, exactly as DR-029 recorded of OmniRoute — and it
-is not a distinct decision but the same model-access call in local form, so it inherits
-DR-029's boundary and reversal rather than restating them. The full four-point boundary above
-governs unchanged; only one point shifts, and in the safe direction — **keys-out-of-the-tree
-becomes keys-don't-exist**, because local inference makes no outbound provider call, so there
-is no provider credential to hold. The load-bearing half is, if anything, firmer: LLM
-inference is nondeterministic and LM Studio offers no determinism guarantee, so it may never
-enter `lib/*`, `artifacts/api-server`'s `/v1` decision path, a connector or a proof — a model
-must never decide a verdict, and running it locally does not change that (golden rule 2).
-License: the SDK/CLI/engine repos are MIT, but the desktop app is proprietary — free for
-personal/internal-business use as of 2025-07-08, yet forbidding resale, redistribution or
-SaaS use — so it is run from upstream, never embedded in or shipped with anything here. No
-claim moves: the product's air-gapped tier runs the deterministic core with no model at all,
-and this build-lane option does not put inference into the product. DR-029's reversal clause
-covers this addendum unchanged.
-
 ## DR-030 — The repository's operating plane (its first-party skills, agents and slash-command skills) is packaged as a Claude Code plugin named `signalgrid`, with a single source of truth and no hooks (owner-directed 2026-09-07)
 
 **Context.** The owner shared the Claude Code plugins reference and directed: package
@@ -1818,7 +1787,250 @@ row, the evidence-toolchain subsection and the index link. Nothing in the produc
 on any of it — no code, dependency, gate or install was added, so there is nothing else to
 undo.
 
-## DR-032 — build-lane model-routing tap: chores may route low-stakes, fully-recheckable work to the DR-029 gateway through a report-only helper, fenced out of the decision path by construction (owner-directed 2026-09-09)
+## DR-032 — The Standing Brain Cycle: a daily cloud-fired orchestrator-over-blackboard that audits the real tree with the resource/agent lens panel and AUTO-OPENS (never auto-merges) the winner behind a validation gauntlet (owner-directed 2026-09-09)
+
+**Decision.** Adopt a daily, cloud-fired **Standing Brain Cycle** (`brain-cycle`): a
+Centralized-Orchestrator-over-Blackboard hybrid (the owner's "9 Architectures" graphic mapped
+to Blackboard + Collaborative-Swarm fan-out + Centralized Orchestrator + a Pipeline gauntlet,
+with Role-Based routing). It guarantees brain parity as its first fail-closed act
+(`scripts/check-brain-freshness.mjs` — this lane's `.claude/` + `.mcp.json` +
+`.claude-plugin/plugin.json` must match `origin/SignalGrid_Alpha` or it refuses), fans a
+bounded touched-surface lens panel (the 13 agents + executable RESOURCE_INTAKE lenses) over
+the real HEAD diff, lands their verdicts in a committed per-cycle blackboard
+(`artifacts/brain-cycle/<sha>/`), deterministically picks the smallest route that clears its
+panel (`scripts/brain-cycle-decide.mjs` — never a model verdict, golden rule 2), drives the
+winner through the composed mechanical + adversarial gauntlet, and **auto-OPENs (never
+auto-merges)** the winner as a draft PR. Full design: [`docs/agent/BRAIN_CYCLE_DESIGN.md`](agent/BRAIN_CYCLE_DESIGN.md).
+Owner choices (2026-09-09, in-session): standing recurring cycle, **full autonomous tier**,
+**daily** target, "auto but does x amount of security and code check validation for bugs and
+other problems for the winner." It reuses `classifyDiff`, `lane-deliver`,
+`check-scheduled-routines`, the agent panel, `preflight`/`verify:breadth` and mailbox PR #439
+verbatim; the only new code is one freshness gate, one decision core, one orchestrator spine,
+one config and one dormant registry row.
+
+**Alternatives considered.** Pure Collaborative Swarm / Decentralized — rejected as the
+dominant shape: no single fail-closed authority for the owner-gated merge boundary, and a
+robot cannot merge changes to its own safety net (`check-owner-gated-surfaces.mjs`
+SAFETY_MACHINERY). Its one-file-per-lens board + consensus floor are grafted in.
+Orchestrator-first with candidate generation — its provenance-before-run, quoted-evidence
+board, `review-coverage.json` router and the absent=HARD-NO planted-defect self-test are
+grafted; candidate *generation* is deferred (Slice 1 audits HEAD only). A fingerprint-cached
+two-lane cycle — its cost cache and Mac-only-as-draft reconciliation are grafted (Slice 2).
+
+**Consequences.** A standing, evidence-first mechanism that can fix small autonomous-tier
+defects and escalate everything else — without ever merging a change to its own safety net,
+ever assuming the Mac is awake, or ever letting a model decide a verdict. The cycle's own
+machinery is SAFETY_MACHINERY, so it can never self-merge its own improvements; every change
+to it is an owner-reviewed PR, which deliberately paces the effort. Slice 1 ships the
+machinery DORMANT (`status: awaiting-activation`); ACTIVATION (creating the account trigger
+and flipping the row active) needs a further explicit owner go — no consent is inferred from
+the build directive.
+
+**Doctrine guardrails.** Fail-closed (golden rule 2): a stale/unverifiable brain refuses;
+any absent / `ran:false` / UNVERIFIED expected lens is a HARD NO in the orchestrator's own
+logic (there is no gate that asserts a reviewer ran, so a planted-defect self-test proves the
+arm both directions); an unrecognised owner-gated shape escalates; no eligible candidate
+opens nothing. Publication boundary (DR-021): the gauntlet includes
+`check-publication-boundary.mjs` + `check-launch-claims.mjs`; buyer-facing surfaces are
+OWNER_RESERVED. **Dan decides:** auto-OPEN (draft) is the shipped ceiling; auto-MERGE sits
+behind an explicit owner GREEN switch (`docs/agent/brain-cycle-config.json`, default false)
+and is not used in Slice 1. No behaviour edits to `DecisionEngine.swift` / `AppWorkflows.swift`
+(golden rule 1): audited read-only; any finding there routes around them or escalates.
+
+**Evidence.** `scripts/check-brain-freshness.mjs` (+ `--self-test`, 5 cases),
+`scripts/brain-cycle-decide.mjs` (+ `--self-test`, 17 scenarios / 19 assertions),
+`scripts/brain-cycle.mjs` (+ `--self-test`, 7 assertions incl. missing/empty/unparsable-manifest
+fail-closed), all wired into `scripts/preflight.mjs` and
+`.github/workflows/review-hub-ci.yml` (parity gates green); the `brain-cycle` row in
+`docs/agent/scheduled-routines.json` (awaiting-activation, `check-scheduled-routines.mjs`
+green); `docs/agent/brain-cycle-config.json`; the design doc above; the intake row in
+`docs/agent/RESOURCE_INTAKE.md`. Design produced by a 13-agent design workflow (4 approaches,
+4 judges, 1 synthesis) on 2026-09-09.
+
+**Hardening (2026-09-10).** Before opening the Slice 1 PR the decision path was run through an
+adversarial review (a `fail-closed-auditor` pass and an independent correctness read). Seven
+real defects were fixed and each got a planted-defect self-test arm: (1, CRITICAL) a
+missing/unparsable/empty `_manifest.json` made `expected` silently `[]`, so the "a reviewer that
+did not run = NO" loop iterated nothing and a winner shipped on a vacuous trust anchor —
+`readBoard` now fails closed (throws) on a bad manifest and `decide()` independently HARD-NOs an
+empty expected set and asserts every veto lens is named in it; (2) a fileless route classified as
+`autonomous` and became auto-pickable — no files ⇒ escalate; (3) a lens record omitting `ran`
+read as run — now requires `ran === true`; (4) `byName` last-write-wins could hide a `ran:false`
+lane behind a `ran:true` one of the same name — every record per name is now checked; (5) the
+`warnings` ranking key was dead (`counts()` admits only CONFIRMED, so a WARNING was never tallied)
+— WARNING findings are counted in a separate pass; (6) a winner and a separate escalation could
+coexist but the exit code dropped the escalation — added exit 40 and made `decision.json`
+authoritative; (7) a swallowed `decision.json` write failure could report exit 0 without persisting
+— now fatal. The two exploit variants (no manifest + no veto lens on the board; valid manifest but
+veto lens absent) were reproduced against the real CLI and both now refuse (exit 1 / HARD NO,
+no winner). Both reviewers independently confirmed `check-brain-freshness.mjs` and the
+`check-owner-gated-surfaces.mjs` import guard SOLID.
+
+A SECOND adversarial pass (2026-09-10, three lenses — fail-closed, correctness, security — on the
+HARDENED code before the PR opened) found one more real fail-open the first pass missed, and all
+three lenses reproduced it independently: the veto set was read from `config.vetoLenses` but never
+anchored to the real safety lenses, so a config of `{vetoLenses:[]}` or `{vetoLenses:["code-reviewer"]}`
+silently disabled `vetoedRoute()` and let a route win past a live security/fail-closed BLOCK, while
+`{vetoLenses:undefined}` (a config that omits the key) crashed instead of failing closed — and
+`docs/agent/brain-cycle-config.json` classified as `autonomous`, so the cycle could edit its own veto
+net with no owner gate. Fixed three ways: (a) `MANDATORY_VETO_LENSES` (security-reviewer,
+fail-closed-auditor) is now a frozen floor — `decide()` unions it over any config, so config may only
+WIDEN the veto set, never shrink/blank/retarget it, and a non-finite `minConfidence` falls back to the
+default; (b) `brain-cycle.mjs` `loadConfig()` passes through only validly-typed keys so a partial config
+cannot override the defaults with `undefined`; (c) `docs/agent/brain-cycle-config.json` is added to
+SAFETY_MACHINERY in `check-owner-gated-surfaces.mjs` (a robot cannot merge its own safety net). Three
+new self-test arms (config `{vetoLenses:[]}` + a security BLOCK → no winner; config
+`{vetoLenses:["code-reviewer"]}` + a fail-closed BLOCK → no winner; partial/undefined config → floor
+applied, no crash) plus a new owner-gated self-test arm; all three exploit shapes reproduced against the
+real `decide()` and confirmed closed. The freshness gate and the import guard were re-confirmed SOLID.
+
+**Reversal.** Delete the five new files (freshness gate, decision core, spine, config, design
+doc), remove the `brain-cycle` registry row, unwire the three self-tests from preflight + CI,
+revert the one-line `check-owner-gated-surfaces.mjs` import guard and this record. No account
+trigger was created and the row is dormant, so nothing runs to stop; nothing in the product
+depends on any of it.
+## DR-033 — The company is past Customer Discovery; the current phase is Build / execution, and a phase change is a decision record before either lane acts on it (owner-directed 2026-09-10)
+
+**Question.** The operating phase changed but the change was never written down. The
+owner directed that the company is no longer in "Customer Discovery," yet every
+recorded surface still asserted it: `docs/agent/DISCOVERY_LOG.md` ("State: Customer
+Discovery", "Experiment started: 2026-08-27"), `scripts/loop-state.mjs` (a red,
+non-passing row — "N days since the freeze and 0 conversations. Nothing else on this
+list matters."), `docs/agent/LOOP.md` ("PHASE: Build + Customer Discovery in
+parallel"), and `CLAUDE.md` ("The only number that moves the company is discovery
+conversations… Code work never substitutes for it"). Both lanes therefore kept
+running the stale written phase for days, which cost real time and eroded trust in
+what the repo asserts. The change was searched for on every recorded channel (git
+history past DR-021, DECISION_RECORDS through DR-032, `check:absence`, the mailbox,
+neural memory) and was recorded NOWHERE.
+
+**The directive.** On 2026-09-10 the owner directed that the company is past Customer
+Discovery — relayed through the Mac lane and then confirmed by the owner directly in the
+cloud session. In that same exchange the owner also named the current sub-phase: build
+an actually-working, solid CORE PRODUCT that does what it claims, and have something
+real in hand to bring to partners/collaborators BEFORE go-to-market/execution. Both the
+correction and this sub-phase are authoritative because the owner confirmed the wording
+directly; a peer relay alone would not have been enough to record it.
+
+**The call.**
+
+1. **Customer Discovery is no longer the operating phase.** The current phase is
+   **Build / execution** — engineering-led, toward launch. This is not a new
+   direction: DR-021 (2026-08-31) already lifted the engineering freeze in full and
+   put the repo in absorption/build mode; the discovery surfaces contradicted the
+   *most recent* recorded decision, and this record resolves that contradiction in
+   favor of DR-021.
+2. **Discovery is an input, not the gate.** Discovery evidence still matters and the
+   log stays. But it is no longer THE gating metric, and the loop-state "nothing else
+   matters" red alarm is retired to a neutral, non-fatal report. A day with zero
+   discovery conversations is no longer a failing loop.
+3. **The named sub-phase: a real core product first, partners before GTM.** Within
+   Build / execution the owner set the near-term objective (2026-09-10): make the CORE
+   PRODUCT actually work and do what it claims — something solid and real — and take
+   that to partners/collaborators BEFORE go-to-market/execution. Building the working
+   product is the current job; pilots, revenue and launch timing come after there is
+   something real in hand. This states the *object* of the phase; it is not a claim
+   that anything ships (claim discipline in item 4 is unchanged).
+4. **Claim discipline is unchanged** (DR-021 §2): the launch-claims gate, the
+   launch-profile classification, the publication boundary, and the no-overclaim rules
+   still govern what may be *said* to ship. Building and claiming remain two acts.
+5. **Process rule (the actual failure this record fixes).** A phase or doctrine change
+   is a decision record on `SignalGrid_Alpha` *before* either lane acts on it. A change
+   said aloud but unrecorded is not a change the repo or the gates can honor — that is
+   how this drift happened, and the fix is not a one-time cleanup but this standing rule.
+
+**Consequences / surface reconciliation.** The stale assertions in
+`docs/agent/DISCOVERY_LOG.md`, `scripts/loop-state.mjs` (the red discovery alarm →
+neutral report), `docs/agent/LOOP.md` (PHASE), and `CLAUDE.md` (the "only number"
+line) are brought into line with this record **in this same PR** — the cloud lane
+carries the record and its surface reconciliation together, so the Mac lane pulls one
+consistent mainline and aligns to it rather than reconciling a divergent copy. These
+are corrections of a stale internal phase label only, not go-to-market claims.
+
+**Reversal / amendment.** If the owner names a different phase, amend items 1–3 in
+place (keep the record and its history — do not delete it). Nothing in the product
+decision core depends on this record; it governs the operating loop and the doctrine
+docs only.
+
+
+## DR-034 — The research basis is the founder's own domain practice, not customer engagement; the owner's Google Drive "Project › SignalGrid" folder is the canonical corpus of the problems dealt with and the ideas for the solution (owner-directed 2026-09-10)
+
+**Question.** DR-033 corrected the operating phase. It did not record *why* the
+"Customer Discovery" framing was wrong to begin with, and nothing in the tree said where
+the founding research lives. The owner's inputs — runbooks, catalogs, a disclosure,
+reviews, infographics — had been read by the lanes as customer-engagement material to be
+validated by external conversations, when they are the research itself: the record of a
+problem the founder operates against every working day.
+
+**The directive.** The owner, 2026-09-10, Mac lane session, in his own words:
+*"maybe you confused with customer engagement and everything else with the info I been
+feeding you is not customer engagement its research information from what I do for my
+everyday job and this is reason why I've decided to build this company and product. I want
+to make sure that the Google Drive is the data source of what i've had to deal with and
+ideas for building this solution."* The same day's directive on the object of the phase —
+a working core product, real in hand for partners before go-to-market — is already
+recorded as DR-033 item 3 and is not repeated here.
+
+**Grounding — what was actually read (measured 2026-09-10).** The Mac lane read the Drive
+folder directly. It holds: the five operational runbooks of a large hospital system's
+shared clinical-device program (L1 and L2 support, iOS device prep, iOS update, macOS
+setup — the owner's own working documents, exported 2026-09-04), which are the runbooks
+[`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`](research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md)
+absorbed on 2026-09-04; the confidential invention disclosure record (2026-07-25),
+already pointed to — content deliberately not reproduced — in
+[`docs/research/IP_AND_LICENSING.md`](research/IP_AND_LICENSING.md); the Technology
+Ecosystem Master Catalog workbook, absorbed as ledger row 28 and
+[`docs/inspiration/TECHNOLOGY_ECOSYSTEM_MASTER_CATALOG.md`](inspiration/TECHNOLOGY_ECOSYSTEM_MASTER_CATALOG.md);
+three API-catalog bundles, absorbed as
+[`docs/inspiration/CONTROLUP_DEX_EUC_API_CATALOG.md`](inspiration/CONTROLUP_DEX_EUC_API_CATALOG.md)
+and its sibling catalogs; a pre-launch second-opinion review (v0.1, cover dated May) whose
+Priority-3 recommendation was to hold five customer-discovery conversations; two Gartner
+Peer Insights review exports (endpoint management; identity governance, 2026); the
+positioning carousel and two product videos; and roughly sixty saved screenshots and
+infographics, of which two were sampled (a third-party software-asset-management process
+diagram; a job-interview tips card) — reference material of mixed relevance, absorbed
+case-by-case as the ledger already does. Measured with `grep` across `docs/`: no document
+named the Drive as the source store, and the second-opinion review, the Gartner exports,
+the carousel and the videos had no ledger row. Everything else was already in the tree.
+
+**The call.**
+
+1. **The research basis of SignalGrid is the founder's own domain practice** — running a
+   shared clinical-device program in enterprise mobility, day to day — and the documents
+   that practice produces. This is founder-domain evidence. It is not customer
+   engagement, and it does not wait on external validation before it counts.
+2. **The owner's Google Drive folder "Project › SignalGrid" is the canonical corpus** of
+   (a) the problems dealt with and (b) the ideas for the solution. The repository
+   absorbs from it by use (DR-021) and points back to it; it does not replace it.
+   Confidential items — the invention disclosure, employer-identifying runbooks — are
+   referenced by name and date only and are never committed. The publication boundary is
+   unchanged; the generalization the ground-truth map already applies (no employer,
+   site, personnel, group or address specifics) is the rule for every Drive-derived line.
+3. **The misclassification, named so it is not repeated.** "Customer Discovery" as a
+   gate treated this research as engagement to be validated by fifteen external
+   conversations. The framing was recommended by the second-opinion review and later
+   institutionalized in DR-021 §6; DR-033 retired the gate. The standing rule from here:
+   **an owner-supplied document is research to absorb — a ledger or intake row — never a
+   conversation to schedule.**
+4. **Partner and collaborator conversations follow a working core product** (DR-033
+   item 3). They are how the product is taken to market, not how the research is
+   validated.
+5. **Surface reconciliation, in this same change:**
+   [`.claude/skills/research-ops/SKILL.md`](../.claude/skills/research-ops/SKILL.md)
+   (its "only moving number" doctrine → the DR-033/034 framing);
+   [`docs/INTAKE_LEDGER.md`](INTAKE_LEDGER.md) row 98 for the corpus items that had no
+   row; [`docs/agent/RESOURCE_INTAKE.md`](agent/RESOURCE_INTAKE.md) row for this intake;
+   and [`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`](research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md)
+   naming the Drive folder as its source store.
+
+**What does not change.** Claim discipline (DR-021 §2, DR-033 item 4). The discovery log
+stays as an input. Nothing in the decision core depends on this record.
+
+**Reversal / amendment.** The owner reverses by saying so; amend items 1–4 in place and
+keep the record and its history. If a Drive item is later shown not to be the owner's own
+material, its ledger row is corrected — not this record.
+
+## DR-035 — build-lane model-routing tap: chores may route low-stakes, fully-recheckable work to the DR-029 gateway through a report-only helper, fenced out of the decision path by construction (owner-directed 2026-09-09)
 
 **Context.** The owner asked for a routing "brain": the non-Claude models reached through
 one gateway, the coordinating session deciding per task which model to use — cheap/free/local

@@ -133,7 +133,7 @@ agents, code review, verification-before-completion, branch finishing, and
 worktrees.
 SignalGrid-specific truth and decision records always outrank a vendored workflow.
 ## Route by model tier
-You are the brain that decides which model does a task (DR-032). Hand a bulk,
+You are the brain that decides which model does a task (DR-035). Hand a bulk,
 low-stakes, fully-recheckable chore — log/CI triage, first-draft prose, bulk
 classification, changelog/commit-message drafts — to the free/local tier via
 `scripts/lib/agent-model-tap.mjs` (`draftWithModel`), reached through the DR-029

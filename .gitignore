@@ -123,3 +123,7 @@ artifacts/bruno/
 # only by .git/info/exclude, which lives inside .git/, is never committed, and so
 # does not exist in a fresh clone or on a CI runner: ignored on exactly one machine.
 **/.claude/worktrees/
+
+# Local knowledge corpus symlinked from iCloud by scripts/mac/sg-brain-link.sh.
+# NEVER committed: some of it is confidential and the Review Hub is public-safe.
+reference/

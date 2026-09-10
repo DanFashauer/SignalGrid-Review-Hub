@@ -131,8 +131,13 @@ export function readShapes(name) {
  */
 export function dottedReaderNames() {
   try {
+    // `-a` forces git to treat every tracked file as text for this search. Without it, a
+    // file git's own heuristic calls binary (scripts/check-model-tap-boundary.mjs holds a
+    // deliberate NUL sentinel byte in a glob-to-regex helper) reports as a bare "Binary
+    // file <path> matches" line instead of the matched text — and that whole notice then
+    // got treated as a derived "name", turning up as a permanent phantom unresolved entry.
     const out = git(
-      `grep -h -o -E -e ${JSON.stringify("process\\.env\\.SIGNALGRID_[A-Z0-9_]+")} -- ':!*.md' ':!docs/**' ':!scripts/check-env-doc-readers.mjs'`,
+      `grep -a -h -o -E -e ${JSON.stringify("process\\.env\\.SIGNALGRID_[A-Z0-9_]+")} -- ':!*.md' ':!docs/**' ':!scripts/check-env-doc-readers.mjs'`,
     );
     return [...new Set(out.split("\n").filter(Boolean).map((m) => m.trim().replace("process.env.", "")))];
   } catch {
@@ -141,9 +146,11 @@ export function dottedReaderNames() {
 }
 
 function readersOf(name) {
-  // Tracked files outside the documentation (and outside this gate) that READ the variable.
+  // Tracked files outside the documentation (and outside this gate) that READ the
+  // variable. `-a`: see dottedReaderNames — a binary-flagged file must not silently
+  // drop out of the search.
   try {
-    const out = git(`grep -l -E -e ${JSON.stringify(readShapes(name))} -- ':!*.md' ':!docs/**' ':!scripts/check-env-doc-readers.mjs'`);
+    const out = git(`grep -a -l -E -e ${JSON.stringify(readShapes(name))} -- ':!*.md' ':!docs/**' ':!scripts/check-env-doc-readers.mjs'`);
     return out.split("\n").filter(Boolean).length;
   } catch {
     return 0; // git grep exits 1 on no match

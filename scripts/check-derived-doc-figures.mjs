@@ -659,6 +659,7 @@ export const SWEEP_EXEMPT = [
   {
     doc: "docs/STATUS.md",
     near: /proof gates: \*\*\d+/,
+    count: 1,
     reason:
       "gated by check-status-figures.mjs, which owns the Inventory line and derives the same proof:* count. " +
       "Two gates on one sentence is two places to fix it; this one defers.",
@@ -666,6 +667,7 @@ export const SWEEP_EXEMPT = [
   {
     doc: "docs/STATUS.md",
     near: /workflows: \*\*\d+/,
+    count: 1,
     reason:
       "the same Inventory line: check-status-figures.mjs derives the workflow count from .github/workflows " +
       "and regenerates the sentence; this gate defers to the owner of the line.",
@@ -673,10 +675,48 @@ export const SWEEP_EXEMPT = [
   {
     doc: "docs/BUILD_BACKLOG.md",
     near: /\d+ `proof:\*/,
+    count: 0,
     reason:
       "a quotation inside the 2026-09-01 backlog entry recording what a scan found that day. The date sits four " +
       "lines above the figure, out of the 80-character window the dated-measurement rule uses, so it is named here " +
       "rather than caught by rule. Rewriting it to today's count would falsify the record it is part of.",
+  },
+  {
+    doc: "docs/COMPANY_BUILD_PLAN.md",
+    near: /fifteen workflows/,
+    count: 2,
+    reason:
+      "two dated backlog records that happen to state the current count. Line 54 is a 'DONE 2026-08-22' entry " +
+      "recounting what the CI doc's first screen named that day; line ~1596 narrates a past property scan across the " +
+      "then-15 workflows. Both dates sit far outside the 80-character dated-measurement window. Rewriting either to " +
+      "track today's figure would falsify the record it belongs to.",
+  },
+  {
+    doc: "docs/agent/EVIDENCE.md",
+    near: /Fifteen workflow files/,
+    count: 2,
+    reason:
+      "a captured command-output transcript (the ```Output``` fence for Batch L) recording the PRIOR workflow-figure " +
+      "drift — the day CI_AND_VALIDATION said 'Fifteen' while the tree held 14 after promote.yml retired. It is a " +
+      "quotation of a past run, not a live claim; editing it would falsify the evidence it preserves.",
+  },
+  {
+    doc: "docs/agent/LOOP.md",
+    near: /Fifteen workflow files/,
+    count: 1,
+    reason:
+      "the Batch L history line quoting that same past defect — CI_AND_VALIDATION 'said \"Fifteen workflow files\" " +
+      "four days after the fifteenth was retired' — to explain why the sweep now reads word numerals. A quotation of " +
+      "the historical wrong figure, not a statement about today's tree.",
+  },
+  {
+    doc: "docs/company/ROLE_LENS_REVIEW_2026-08-21.md",
+    near: /workflows` \(15/,
+    count: 1,
+    reason:
+      "a dated 2026-08-21 review finding quoting a review-coverage.json ledger entry's file count " +
+      "(`.github/workflows` (15 files)) as it stood that day. It records what the ledger held, not the current " +
+      "workflow total; rewriting it would falsify the finding.",
   },
 ];
 
@@ -945,12 +985,18 @@ export function sweepDocs(root = ROOT) {
  * The second pass. Returns { fatal, gated, exemptDated, exemptListed, scanned } —
  * `fatal` are the hits nothing accounts for.
  */
-export function sweepAll(root = ROOT, rows = FIGURES, probes = SWEEP) {
+export function sweepAll(root = ROOT, rows = FIGURES, probes = SWEEP, exempts = SWEEP_EXEMPT) {
   const docs = sweepDocs(root);
   const fatal = [];
   const gated = [];
   const exemptDated = [];
   const exemptListed = [];
+  // How many hits each listed exemption actually absorbed. A `near` that matches the
+  // 30-char snippet is document-wide by construction — it exempts EVERY occurrence of
+  // that spelling, not the ones its reason names — so a future live second home would
+  // ride the same exemption unseen. Each entry therefore declares `count`, the exact
+  // number of CURRENT-derived-figure hits it is allowed to absorb; a divergence is fatal.
+  const listedHits = new Map();
 
   // Where each row's sentence actually sits, so "covered by a row" is a SPAN overlap
   // rather than a document-name match. A row for INDEX.md must not silently account for
@@ -994,8 +1040,9 @@ export function sweepAll(root = ROOT, rows = FIGURES, probes = SWEEP) {
           exemptDated.push({ where, snippet: hit.snippet });
           continue;
         }
-        const listed = SWEEP_EXEMPT.find((e) => e.doc === doc && e.near.test(hit.snippet));
+        const listed = exempts.find((e) => e.doc === doc && e.near.test(hit.snippet));
         if (listed) {
+          listedHits.set(listed, (listedHits.get(listed) || 0) + 1);
           exemptListed.push({ where, snippet: hit.snippet, reason: listed.reason });
           continue;
         }
@@ -1008,6 +1055,23 @@ export function sweepAll(root = ROOT, rows = FIGURES, probes = SWEEP) {
       }
     }
   }
+  // Reconcile each listed exemption against the occurrences it declared. `count` is the
+  // exact number of current-derived-figure hits the entry may absorb (0 for a quotation of
+  // a PAST value, invisible to the sweep). More than declared means a new second home rode
+  // the exemption unseen; fewer means the sentence it named has moved or gone — either way
+  // the exemption no longer describes the tree, and a reviewer must look.
+  for (const e of exempts) {
+    if (typeof e.count !== "number") continue;
+    const actual = listedHits.get(e) || 0;
+    if (actual !== e.count) {
+      fatal.push(
+        `sweep exemption ${e.doc} (${e.near}) declared count ${e.count} but absorbed ${actual} current-figure hit(s). ` +
+          `A near-matcher exempts EVERY occurrence of its spelling, not the ones its reason names — so a new live ` +
+          `second home would ride it unseen. Bind the matcher tighter, or update count with the reason for the change.`,
+      );
+    }
+  }
+
   return { fatal, gated, exemptDated, exemptListed, scanned: docs.length };
 }
 
@@ -1199,8 +1263,29 @@ function selfTest() {
       !isDatedMeasurement("140 proof scripts run on every push", 0),
   ]);
   checks.push([
-    "every listed sweep exemption carries a doc, a matcher and a reason a reviewer can weigh",
-    SWEEP_EXEMPT.every((e) => typeof e.doc === "string" && e.near instanceof RegExp && typeof e.reason === "string" && e.reason.length > 40),
+    "every listed sweep exemption carries a doc, a matcher, a reason and an exact count a reviewer can weigh",
+    SWEEP_EXEMPT.every(
+      (e) =>
+        typeof e.doc === "string" &&
+        e.near instanceof RegExp &&
+        typeof e.reason === "string" &&
+        e.reason.length > 40 &&
+        Number.isInteger(e.count) &&
+        e.count >= 0,
+    ),
+  ]);
+  checks.push([
+    "…and a new second home the exemption would silently absorb is FATAL (the count is enforced, not decorative)",
+    // A near-matcher exempts EVERY occurrence of its spelling. Declaring one COMPANY_BUILD_PLAN
+    // exemption but pointing it at the two live "fifteen workflows" occurrences must fail (2 != 1),
+    // and declaring the true count must pass — so a genuinely new live second home (raising the
+    // real entry's count) is caught the same way.
+    sweepAll(ROOT, FIGURES, SWEEP, [{ doc: "docs/COMPANY_BUILD_PLAN.md", near: /fifteen workflows/, count: 1, reason: "x".repeat(50) }]).fatal.some((f) =>
+      f.includes("declared count 1 but absorbed 2"),
+    ) &&
+      sweepAll(ROOT, FIGURES, SWEEP, [{ doc: "docs/COMPANY_BUILD_PLAN.md", near: /fifteen workflows/, count: 2, reason: "x".repeat(50) }]).fatal.every(
+        (f) => !f.includes("declared count"),
+      ),
   ]);
   checks.push([
     "…and every listed exemption still MATCHES something — a stale exemption is a hole",

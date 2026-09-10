@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
   "requestId": "2026-08-23-headwind-first-capture",
-  "completedAt": "2026-08-23T15:35:15.810Z",
+  "completedAt": "2026-09-10T17:24:10.807Z",
   "provenance": {
     "platform": "darwin",
     "arch": "arm64",
     "nodeVersion": "v24.18.0",
     "macosVersion": "26.6.2",
-    "commit": "da1ee232fc9f5cbfbf248f9816c7d119d3ee4914",
+    "commit": "0c23e7ca5a4300cae339b7ba20a68bb543c6ce33",
     "branch": "SignalGrid_Alpha",
-    "workingTreeClean": false
+    "workingTreeClean": true
   },
   "runs": [
     {
       "operation": "live-headwind",
       "status": "passed",
       "exitCode": 0,
-      "durationMs": 70833,
+      "durationMs": 28200,
       "tail": [
         "== SignalGrid live-vendor lanes ==",
         "-- bringing up Headwind CE (postgres + hmdm 0.1.5 / 5.30.3-os)",
@@ -32,13 +32,10 @@
       "operation": "proofs-sim-only",
       "status": "passed",
       "exitCode": 0,
-      "durationMs": 5019,
+      "durationMs": 5255,
       "tail": [
-        "-- install deps",
-        "-- add platform binaries for this run: @esbuild/darwin-arm64@0.27.3 @rolldown/binding-darwin-arm64@1.2.4 lightningcss-darwin-arm64@1.32.0 @tailwindcss/oxide-darwin-arm64@4.3.3",
-        "   (manifests restored; binaries kept in node_modules)",
-        "-- build api-server (esbuild; needed for observability + api integration test)",
         "   dist built",
+        "-- self-skipping proofs (derived, skipped unless DATABASE_URL is set):proof:audit-ledger-pg proof:backup-restore proof:db-role-split proof:decision-store-pg proof:session-store-pg ",
         "-- started sgval-redis on 6381 for proof:enrollment-race",
         "",
         "== real-life simulator scenarios ==",
@@ -51,14 +48,17 @@
         "Lane inbox — this machine is the MAC lane (override with SIGNALGRID_LANE)",
         "",
         "  nothing unread. (--all to include acknowledged.)",
+        "  Your branches on origin that mainline does not carry as ancestors (as of the last fetch): 1",
+        "    · origin/mac/fleet-premium-proof",
+        "  A NEW or MOVED one is picked up by the cloud lane's hourly cycle (draft PR opened at once; comment on the mailbox PR to wake it sooner).",
+        "  One whose work already landed through another PR is STALE — delete it (git push origin --delete <name>) so this list stays honest.",
         "",
-        "== NOTE: the web build now RUNS here (it used to be skipped) ==",
-        "   — the vite/rollup/lightningcss/tailwind darwin binaries this repo strips are",
-        "     added to node_modules for the run, exactly as tsx's esbuild binary always",
-        "     was. Nothing about the sources is linux-only; all 6 artifacts build on arm64.",
+        "== MODE: --sim-only — ONLY the four simulator gates above ran ==",
+        "   NOT run by this mode: the full proof:* suite, typecheck, the web build, test:api,",
+        "   safety:check, docs:sanity, review:invariants, lane:messages. Nothing about them is verified here.",
         "",
-        "== SUMMARY: 4 passed, 0 failed, 0 skipped ==",
-        "✅ Simulation validation GREEN."
+        "== SUMMARY (--sim-only, partial): 4 passed, 0 failed, 0 skipped ==",
+        "✅ Simulator scenarios GREEN (--sim-only: the rest of the suite did NOT run)."
       ]
     }
   ]

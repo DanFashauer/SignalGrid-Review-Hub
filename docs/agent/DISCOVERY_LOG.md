@@ -1,11 +1,12 @@
 # Customer discovery — the log
 
-**State: Customer Discovery.** Repository engineering is **not** stopped — DR-021
-(2026-08-31) lifted the engineering freeze in full, and this line said "stopped"
-until 2026-09-02. What the line was reaching for is still true and is the point of
-this log: **no amount of engineering moves the number below.** The next evidence
-that can materially change `docs/PURPOSE.md`, the P0 wedge, or the product
-hierarchy must come from outside the repo.
+**State: Build / execution (past Customer Discovery — DR-033, 2026-09-10).** The company
+is no longer in the Customer Discovery phase, and this log no longer sets the operating
+phase or gates the loop. It stays because discovery evidence is still a valuable **input**:
+the evidence that can materially change `docs/PURPOSE.md`, the P0 wedge, or the product
+hierarchy still comes from outside the repo. Repository engineering is not stopped (DR-021,
+2026-08-31, lifted the freeze in full). A day without a new conversation is no longer a
+failing state — it is a note. The precise GTM sub-phase is the owner's to name.
 
 `PURPOSE.md` closes on this test:
 

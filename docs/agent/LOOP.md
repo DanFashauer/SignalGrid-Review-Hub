@@ -47,10 +47,10 @@ clone `SignalGrid_Alpha`; `git pull` is not available there.
 ## STATE - update these four lines every session
 
 ```
-PHASE:        Build + Customer Discovery in parallel. Engineering UNFROZEN
-              (DR-021, owner directive 2026-08-31); absorption mode - owner
-              feeds resources, the repo absorbs them. Claim discipline
-              unchanged.
+PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
+              Engineering UNFROZEN (DR-021); absorption mode - owner feeds
+              resources, the repo absorbs them. Discovery is an input, not the
+              gate. Claim discipline unchanged. GTM sub-phase owner's to name.
 LAST TOUCHED: 2026-09-07 (cloud lane, latest) - PACKAGED THE REPO AS A CLAUDE
               CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json
               names the `signalgrid` plugin and declares skills/agents/commands

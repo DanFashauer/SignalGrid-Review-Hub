@@ -28,9 +28,10 @@ const HUB = "https://github.com/DanFashauer/SignalGrid-Review-Hub.git";
 const G = "\x1b[32m", R = "\x1b[31m", Y = "\x1b[33m", B = "\x1b[1m", D = "\x1b[2m", X = "\x1b[0m";
 const rows = [];
 // `gated` is whether a `fail` in this row moves the EXIT CODE. Every seam row
-// is gated. The discovery rows are reported — loudly, in red — but do not set
-// the exit code, because the Stop hook (.claude/hooks/verify-done.sh) runs
-// this script as its gate and a hook that blocks every session over a number
+// is gated. The discovery rows are reported — as a warning, never red/fatal
+// since DR-033 (past Customer Discovery: discovery is an input, not the gate) —
+// but do not set the exit code, because the Stop hook (.claude/hooks/verify-done.sh)
+// runs this script as its gate and a hook that blocks every session over a number
 // no session can change teaches bypass. Until 2026-09-05 the script exited 0
 // on EVERY outcome, so the hook's gate arm could never fire at all.
 const add = (state, what, detail, gated = true) => rows.push({ state, what, detail, gated });
@@ -140,7 +141,7 @@ if (existsSync(logPath)) {
       const days = Math.floor((Date.now() - startMs) / 86400000);
       daysMsg = ` · day ${days}`;
       if (days >= 7 && logged === 0) {
-        add("fail", "DISCOVERY", `${days} days since the freeze and 0 conversations. Nothing else on this list matters.`, false);
+        add("warn", "Discovery", `day ${days}, still 0 conversations logged — an input now, not the gate (DR-033, past Customer Discovery).`, false);
       }
     } else {
       // Fail closed: an unparseable start date must surface, never silently skip
@@ -161,8 +162,8 @@ if (existsSync(logPath)) {
       'no "Experiment started: YYYY-MM-DD" line in docs/agent/DISCOVERY_LOG.md — the days-since alarm CANNOT fire without it',
     );
   }
-  add(logged >= target ? "ok" : logged > 0 ? "warn" : "fail", "Discovery",
-    `${logged}/${target} conversations · ${commits} commitment(s)${daysMsg}`, false);
+  add(logged >= target ? "ok" : "warn", "Discovery",
+    `${logged}/${target} conversations · ${commits} commitment(s)${daysMsg} — input, not the gate (DR-033)`, false);
 } else {
   add("warn", "Discovery log", "docs/agent/DISCOVERY_LOG.md not in the repo yet");
 }

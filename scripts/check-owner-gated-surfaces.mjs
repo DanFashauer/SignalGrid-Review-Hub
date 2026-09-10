@@ -27,7 +27,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -40,6 +40,7 @@ export const SAFETY_MACHINERY = [
   { rule: "the gate/guard registries", re: /^scripts\/(mutation-guard|check-guard-registries|check-mutation-sharding)\.mjs$/ },
   { rule: "workspace/lockfile", re: /^(pnpm-workspace\.yaml|pnpm-lock\.yaml)$/ },
   { rule: "the decision records", re: /^docs\/DECISION_RECORDS\.md$/ },
+  { rule: "the brain-cycle veto config (its own safety net)", re: /^docs\/agent\/brain-cycle-config\.json$/ },
 ];
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
@@ -79,6 +80,7 @@ function selfTest() {
   t("a fixtures dir is SAFETY_MACHINERY", cls(["lib/foo/fixtures/case.json"]).tier === "owner-gated");
   t("the lockfile is SAFETY_MACHINERY", cls(["pnpm-lock.yaml"]).tier === "owner-gated");
   t("the decision records are owner-gated", cls(["docs/DECISION_RECORDS.md"]).tier === "owner-gated");
+  t("the brain-cycle veto config is SAFETY_MACHINERY", cls(["docs/agent/brain-cycle-config.json"]).tier === "owner-gated");
   t("LICENSE is OWNER_RESERVED", cls(["LICENSE"]).tier === "owner-gated");
   t("NOTICE is OWNER_RESERVED", cls(["NOTICE"]).tier === "owner-gated");
   t("the launch profile is OWNER_RESERVED", cls(["docs/LAUNCH_PROFILE.md"]).tier === "owner-gated");
@@ -123,5 +125,9 @@ function validate() {
   console.log("Run with --self-test to exercise classifyDiff (preflight + CI do).");
 }
 
-if (process.argv.includes("--self-test")) selfTest();
-else validate();
+// Guarded so this module can be IMPORTED for classifyDiff (e.g. by the brain cycle)
+// without running its CLI as a side effect. Direct invocation is unchanged.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (process.argv.includes("--self-test")) selfTest();
+  else validate();
+}

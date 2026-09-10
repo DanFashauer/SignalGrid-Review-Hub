@@ -83,8 +83,13 @@ LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-app
               runs verify.sh + verify:all --require-mcp on real macOS for either lane
               (no evidence minted); audit of that repo: 11 of 12 PRs merged, PR #9
               superseded (cloud asked to close), its ubuntu CI smoke-only by design.
-              OPEN: the second lane=both dispatch; the first lane=mcp dispatch; re-push
-              the Fleet restrictions profile. Preflight PASSED on macOS.
+              The runner now triggers itself (mac-runner-auto.yml, b08374a3, owner-approved):
+              every PR into mainline gets full-clone provenance + macOS preflight; nightly
+              08:00 UTC runs lane=both then lane=mcp; manual dispatch optional. OPEN: proof
+              of the first automatic run (next real PR / tonight's cron); re-push the Fleet
+              restrictions profile; offered, owner's call: a PURPOSE.md amendment in his
+              words (source-agnostic as the point; migration = re-validate the contract).
+              Preflight PASSED on macOS.
               (Earlier 2026-09-07, cloud lane:) PACKAGED THE REPO AS A CLAUDE
               CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json
               names the `signalgrid` plugin and declares skills/agents/commands

@@ -34,8 +34,15 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { classifyDiff } from "./check-owner-gated-surfaces.mjs";
 
+// The two STRUCTURAL veto lenses. This set is a non-negotiable floor: the config file
+// (docs/agent/brain-cycle-config.json — itself owner-gated in check-owner-gated-surfaces.mjs)
+// may ADD veto lenses but can NEVER remove, empty, or retarget these two. Without this anchor a
+// config of {vetoLenses:[]} or {vetoLenses:["code-reviewer"]} would silently disable vetoedRoute()
+// and the consensus veto-shortcut, letting a route win past a real security/fail-closed BLOCK.
+export const MANDATORY_VETO_LENSES = Object.freeze(["security-reviewer", "fail-closed-auditor"]);
+
 const DEFAULT_CONFIG = {
-  vetoLenses: ["security-reviewer", "fail-closed-auditor"],
+  vetoLenses: [...MANDATORY_VETO_LENSES],
   minConfidence: 0.7,
 };
 
@@ -94,6 +101,14 @@ function vetoedRoute(route, lenses, cfg) {
 // - alreadyProposed: Set of route keys already open / previously proposed (churn dedup).
 export function decide({ lenses = [], expected = [], config = {}, alreadyProposed = new Set() } = {}) {
   const cfg = { ...DEFAULT_CONFIG, ...config };
+  // Anchor the veto set to the mandatory floor: config may WIDEN it, never shrink/blank/retarget
+  // it. An empty, undefined, or bogus config.vetoLenses can therefore never disable the real
+  // security-reviewer / fail-closed-auditor vetoes. (belt to the config file being owner-gated.)
+  const providedVeto = Array.isArray(cfg.vetoLenses) ? cfg.vetoLenses : [];
+  cfg.vetoLenses = [...new Set([...MANDATORY_VETO_LENSES, ...providedVeto])];
+  // A non-finite minConfidence (e.g. a config that omitted the key → undefined) would make
+  // counts() reject every finding and the cycle go silently "quiet". Fall back to the safe default.
+  if (!Number.isFinite(cfg.minConfidence)) cfg.minConfidence = DEFAULT_CONFIG.minConfidence;
 
   // HARD NO arm 0: an empty expected set means the manifest was absent, unparsable, or named
   // nothing — the board declares no reviewer required, so nothing on it can be trusted. And
@@ -306,8 +321,33 @@ function selfTest() {
   check("the warnings tie-break ranks the clean route first",
     warnTie.winner && warnTie.winner.key === "clean-route" && warnTie.ranked[0].warnings === 0 && warnedRoute && warnedRoute.warnings === 1);
 
+  // 15. Config CANNOT DISABLE the veto floor: config {vetoLenses:[]} with a real security-reviewer
+  //     BLOCK on the route → the BLOCK is still honored, opens nothing. [verification pass, critical]
+  const emptyVetoCfg = decide({ lenses: [
+    lens("code-reviewer", [finding(okFile, { proposedRoute: "fix-fossil" })]),
+    lens("signalgrid-reviewer", [finding(okFile, { proposedRoute: "fix-fossil" })]),
+    lens("security-reviewer", [{ file: okFile, category: "authz", verdict: "BLOCK", confidence: 0.95 }], { verdict: "BLOCK" }),
+    lens("fail-closed-auditor", []),
+  ], expected, config: { vetoLenses: [], minConfidence: 0.7 } });
+  check("config vetoLenses:[] cannot disable the security-reviewer veto", emptyVetoCfg.winner === null);
+
+  // 16. Config CANNOT RETARGET the veto floor: config {vetoLenses:['code-reviewer']} with a real
+  //     fail-closed-auditor BLOCK → still honored (the two structural vetoes are non-negotiable). [critical]
+  const retargetVetoCfg = decide({ lenses: [
+    lens("code-reviewer", [finding(okFile, { proposedRoute: "fix-fossil" })]),
+    lens("signalgrid-reviewer", [finding(okFile, { proposedRoute: "fix-fossil" })]),
+    sec(),
+    lens("fail-closed-auditor", [{ file: okFile, category: "fail-open", verdict: "BLOCK", confidence: 0.95 }], { verdict: "BLOCK" }),
+  ], expected, config: { vetoLenses: ["code-reviewer"], minConfidence: 0.7 } });
+  check("config vetoLenses:['code-reviewer'] cannot disable the fail-closed-auditor veto", retargetVetoCfg.winner === null);
+
+  // 17. A partial config (undefined vetoLenses/minConfidence — what a config file omitting the keys
+  //     yields) must NOT crash: the veto floor + default confidence apply, a clean board wins. [medium]
+  const partialCfg = decide({ lenses: fullBoard(okFile), expected, config: { vetoLenses: undefined, minConfidence: undefined } });
+  check("a partial config (undefined keys) applies the floor+default, no crash", partialCfg.winner && partialCfg.winner.key === "fix-fossil");
+
   if (fail) return 1;
-  console.log("brain-cycle-decide self-test: happy/veto/hardNo(+live)/owner-gated/floor(+veto)/dedup/low-conf/empty-manifest/no-veto/missing-ran/dual-lane/fileless/winner+escalate/warnings-tiebreak — all green");
+  console.log("brain-cycle-decide self-test: happy/veto/hardNo(+live)/owner-gated/floor(+veto)/dedup/low-conf/empty-manifest/no-veto/missing-ran/dual-lane/fileless/winner+escalate/warnings-tiebreak/config-empty-veto/config-retarget-veto/config-partial — all green");
   return 0;
 }
 

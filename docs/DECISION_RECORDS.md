@@ -1838,7 +1838,7 @@ and is not used in Slice 1. No behaviour edits to `DecisionEngine.swift` / `AppW
 (golden rule 1): audited read-only; any finding there routes around them or escalates.
 
 **Evidence.** `scripts/check-brain-freshness.mjs` (+ `--self-test`, 5 cases),
-`scripts/brain-cycle-decide.mjs` (+ `--self-test`, 14 scenarios / 16 assertions),
+`scripts/brain-cycle-decide.mjs` (+ `--self-test`, 17 scenarios / 19 assertions),
 `scripts/brain-cycle.mjs` (+ `--self-test`, 7 assertions incl. missing/empty/unparsable-manifest
 fail-closed), all wired into `scripts/preflight.mjs` and
 `.github/workflows/review-hub-ci.yml` (parity gates green); the `brain-cycle` row in
@@ -1865,6 +1865,24 @@ authoritative; (7) a swallowed `decision.json` write failure could report exit 0
 veto lens absent) were reproduced against the real CLI and both now refuse (exit 1 / HARD NO,
 no winner). Both reviewers independently confirmed `check-brain-freshness.mjs` and the
 `check-owner-gated-surfaces.mjs` import guard SOLID.
+
+A SECOND adversarial pass (2026-09-10, three lenses — fail-closed, correctness, security — on the
+HARDENED code before the PR opened) found one more real fail-open the first pass missed, and all
+three lenses reproduced it independently: the veto set was read from `config.vetoLenses` but never
+anchored to the real safety lenses, so a config of `{vetoLenses:[]}` or `{vetoLenses:["code-reviewer"]}`
+silently disabled `vetoedRoute()` and let a route win past a live security/fail-closed BLOCK, while
+`{vetoLenses:undefined}` (a config that omits the key) crashed instead of failing closed — and
+`docs/agent/brain-cycle-config.json` classified as `autonomous`, so the cycle could edit its own veto
+net with no owner gate. Fixed three ways: (a) `MANDATORY_VETO_LENSES` (security-reviewer,
+fail-closed-auditor) is now a frozen floor — `decide()` unions it over any config, so config may only
+WIDEN the veto set, never shrink/blank/retarget it, and a non-finite `minConfidence` falls back to the
+default; (b) `brain-cycle.mjs` `loadConfig()` passes through only validly-typed keys so a partial config
+cannot override the defaults with `undefined`; (c) `docs/agent/brain-cycle-config.json` is added to
+SAFETY_MACHINERY in `check-owner-gated-surfaces.mjs` (a robot cannot merge its own safety net). Three
+new self-test arms (config `{vetoLenses:[]}` + a security BLOCK → no winner; config
+`{vetoLenses:["code-reviewer"]}` + a fail-closed BLOCK → no winner; partial/undefined config → floor
+applied, no crash) plus a new owner-gated self-test arm; all three exploit shapes reproduced against the
+real `decide()` and confirmed closed. The freshness gate and the import guard were re-confirmed SOLID.
 
 **Reversal.** Delete the five new files (freshness gate, decision core, spine, config, design
 doc), remove the `brain-cycle` registry row, unwire the three self-tests from preflight + CI,

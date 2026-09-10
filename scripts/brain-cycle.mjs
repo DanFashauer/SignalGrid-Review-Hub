@@ -35,7 +35,13 @@ const CONFIG_PATH = join(repoRoot, "docs", "agent", "brain-cycle-config.json");
 function loadConfig() {
   try {
     const c = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
-    return { vetoLenses: c.vetoLenses, minConfidence: c.minConfidence };
+    // Pass through ONLY validly-typed keys. An absent/ill-typed key must fall back to decide()'s
+    // DEFAULT_CONFIG per-field — never override it with `undefined`, which the object spread would
+    // otherwise do (making a config that merely OMITS a field more dangerous than an unparsable one).
+    const out = {};
+    if (Array.isArray(c.vetoLenses)) out.vetoLenses = c.vetoLenses;
+    if (Number.isFinite(c.minConfidence)) out.minConfidence = c.minConfidence;
+    return out;
   } catch {
     return {}; // decide() falls back to its own DEFAULT_CONFIG (fail-closed defaults)
   }

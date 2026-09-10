@@ -40,6 +40,7 @@ export const SAFETY_MACHINERY = [
   { rule: "the gate/guard registries", re: /^scripts\/(mutation-guard|check-guard-registries|check-mutation-sharding)\.mjs$/ },
   { rule: "workspace/lockfile", re: /^(pnpm-workspace\.yaml|pnpm-lock\.yaml)$/ },
   { rule: "the decision records", re: /^docs\/DECISION_RECORDS\.md$/ },
+  { rule: "the brain-cycle veto config (its own safety net)", re: /^docs\/agent\/brain-cycle-config\.json$/ },
 ];
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
@@ -79,6 +80,7 @@ function selfTest() {
   t("a fixtures dir is SAFETY_MACHINERY", cls(["lib/foo/fixtures/case.json"]).tier === "owner-gated");
   t("the lockfile is SAFETY_MACHINERY", cls(["pnpm-lock.yaml"]).tier === "owner-gated");
   t("the decision records are owner-gated", cls(["docs/DECISION_RECORDS.md"]).tier === "owner-gated");
+  t("the brain-cycle veto config is SAFETY_MACHINERY", cls(["docs/agent/brain-cycle-config.json"]).tier === "owner-gated");
   t("LICENSE is OWNER_RESERVED", cls(["LICENSE"]).tier === "owner-gated");
   t("NOTICE is OWNER_RESERVED", cls(["NOTICE"]).tier === "owner-gated");
   t("the launch profile is OWNER_RESERVED", cls(["docs/LAUNCH_PROFILE.md"]).tier === "owner-gated");

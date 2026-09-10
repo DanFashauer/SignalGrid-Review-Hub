@@ -131,9 +131,9 @@ claim — intake logged in `docs/agent/RESOURCE_INTAKE.md`.
   and deterministic, and an unknown or stale signal raises assurance rather than lowering it
   (DR-020; `proof:signalgrid-core`, `proof:decision-continuity`, the freshness/skew gate).
 
-The verdict is unchanged from the five-layer map: **SignalGrid is the decision layer** of
-this reference too — it does not become a RAG app, a WAF, a DLP product, or an APM by
-appearing as a band in someone's diagram.
+The verdict is unchanged from the five-layer map: SignalGrid's role in this reference is
+the one `docs/PURPOSE.md` defines (DR-020, the canonical description) — it does not become a
+RAG app, a WAF, a DLP product, or an APM by appearing as a band in someone's diagram.
 
 ## What this map is careful not to say
 

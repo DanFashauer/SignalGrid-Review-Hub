@@ -140,47 +140,54 @@ function discoverySection() {
     const text = readFileSync(p, "utf8").replace(/\x1b\[[0-9;]*m/g, "");
     // Mirror the ONE authoritative source loop-state.mjs parses — the
     // "Conversations logged: N of M" line — never a prose number (line 112's
-    // "15 conversations" is a sample-size mention, not the count). This is the
-    // number that moves the company; a guessed one is worse than none.
+    // "15 conversations" is a sample-size mention, not the count). Discovery is a
+    // NON-GATING input since DR-033 (it no longer sets the phase or gates the loop);
+    // the brief only reports it, and a guessed number is worse than none.
     const m = text.match(/Conversations logged:\s*(\d+)\s*of\s*(\d+)/i);
     // The file is readable but the ONE authoritative line is gone/malformed: the only
     // measure the code recognizes is unavailable, so this is not a clean read — FAIL,
-    // never OK (a missing count must not read green).
+    // never OK (an unreadable input must not read green — this is a data-quality FAIL,
+    // not a re-instated discovery gate).
     const summary = m
-      ? `${m[1]} of ${m[2]} conversations logged — the only number that moves the company (docs/agent/DISCOVERY_LOG.md)`
-      : "no 'Conversations logged: N of M' line in docs/agent/DISCOVERY_LOG.md — the only number that moves the company is missing";
+      ? `${m[1]} of ${m[2]} conversations logged — a non-gating input (DR-033), from docs/agent/DISCOVERY_LOG.md`
+      : "no 'Conversations logged: N of M' line in docs/agent/DISCOVERY_LOG.md — the discovery input (non-gating, DR-033) is unreadable";
     return { key: "discovery", label: "Discovery", state: m ? "OK" : "FAIL", summary };
   } catch (e) {
     return { key: "discovery", label: "Discovery", state: "ERROR", summary: String(e).slice(0, 120) };
   }
 }
 
-// Max age (hours) a recurring routine's heartbeat may reach before it is overdue,
-// derived from the routine's cron cadence: hourly ("N * * * *" or "*/k") -> the
-// interval, daily/other -> 24h; tolerance is 3x the interval with a 3h floor, so a
-// missed beat or two is fine but a dead lane is not. A heartbeat with no matching
-// recurring routine falls back to a conservative 12h. Missing/unparseable timestamp
-// is overdue (fail-closed).
-function overdueToleranceHours(cron) {
-  if (typeof cron !== "string") return 12;
-  const [, hour = "*"] = cron.trim().split(/\s+/);
-  let intervalH;
-  if (hour === "*") intervalH = 1;
-  else if (/^\*\/(\d+)$/.test(hour)) intervalH = Number(hour.match(/^\*\/(\d+)$/)[1]) || 1;
-  else intervalH = 24;
-  return Math.max(3, intervalH * 3);
+// Max age (hours) a routine's heartbeat may reach before it is overdue, taken from the
+// routine's DECLARED cadenceToleranceHours in scheduled-routines.json — the SAME value the
+// canonical check-scheduled-routines gate uses, so the brief and the gate can never
+// diverge. `null` means the routine declares no cadence tolerance (not overdue-checkable)
+// -> never flagged. A heartbeat with no matching routine, or a routine that declares no
+// numeric tolerance, falls back to a conservative 12h. Synthesizing a second threshold from
+// the cron drifted from the declared number (a daily cron became 72h while the routine
+// declared 50h — overdue by the gate at hour 50, still OK here through 72), so the declared
+// value is the only source. `null` -> Infinity (age never triggers); missing/unparseable
+// timestamp is still overdue for a cadence-checked routine (fail-closed).
+function overdueToleranceHours(declared) {
+  if (declared === null) return Infinity; // routine declares no cadence tolerance
+  if (typeof declared === "number" && Number.isFinite(declared) && declared > 0) return declared;
+  return 12; // no declared routine, or tolerance field absent/malformed -> conservative
 }
 
 function heartbeatsSection() {
   const dir = join(repo, "artifacts/agent-heartbeats");
   if (!existsSync(dir)) return { key: "heartbeats", label: "Lane heartbeats", state: "ERROR", summary: "no heartbeat directory" };
-  // Map heartbeat file id -> routine cron, so age is judged against the registry
-  // cadence rather than assumed OK. A missing registry just means the 12h fallback.
-  const cronById = {};
+  // Map heartbeat file id -> the routine's DECLARED cadenceToleranceHours, so age is
+  // judged against the same number the canonical gate uses. `has` distinguishes "declared
+  // as null" (not overdue-checkable) from "no routine at all" (conservative fallback). A
+  // missing registry just means the 12h fallback for every heartbeat.
+  const tolById = {};
   try {
     const reg = JSON.parse(readFileSync(join(repo, "docs/agent/scheduled-routines.json"), "utf8"));
     const list = Array.isArray(reg) ? reg : Array.isArray(reg.routines) ? reg.routines : [];
-    for (const r of list) if (r && r.id) cronById[r.id] = r.cron;
+    // Keep the field verbatim: an explicit null means "not overdue-checkable" (-> Infinity),
+    // while an ABSENT field leaves the value undefined and the helper's conservative 12h
+    // fallback applies. Collapsing undefined into null would silence a real routine.
+    for (const r of list) if (r && r.id) tolById[r.id] = r.cadenceToleranceHours;
   } catch { /* no registry -> fallback tolerance */ }
   try {
     const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
@@ -194,8 +201,11 @@ function heartbeatsSection() {
         const when = j.firedAt || j.updatedAt || j.at || j.lastRun;
         const ms = when ? Date.parse(when) : NaN;
         const age = when ? ageOf(when) : null;
-        const tol = overdueToleranceHours(cronById[id]);
-        const isOverdue = !Number.isFinite(ms) || (Date.now() - ms) > tol * 3600 * 1000;
+        const tol = overdueToleranceHours(tolById[id]);
+        // A not-checkable routine (tol === Infinity) is never overdue, even on a missing
+        // timestamp — the routine has opted out of cadence checking. Every cadence-checked
+        // routine still fails closed on an unparseable/absent timestamp.
+        const isOverdue = Number.isFinite(tol) && (!Number.isFinite(ms) || (Date.now() - ms) > tol * 3600 * 1000);
         if (isOverdue) overdue.push(id);
         return `${id}: ${age || "no timestamp"}${isOverdue ? " (OVERDUE)" : ""}`;
       } catch {

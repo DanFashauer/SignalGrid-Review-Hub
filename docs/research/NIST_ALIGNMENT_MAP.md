@@ -23,14 +23,18 @@ shipped, it is labelled a **design target**.
 
 The NIST corpus gives SignalGrid an external, authoritative frame for four
 capabilities at different maturities: **per-call, least-privilege decisioning**
-(SP 800-207 Zero Trust) — this is the **launch** decision loop, *point-in-time*
-evaluation; **grading identity/authenticator assurance** (SP 800-63) — launch
-step-up plus deferred rungs; **reading Apple device posture against a recognized
-baseline** (macOS Security Compliance Project) — **deferred**, fixture-backed; and
-**enriching vulnerability signal from the national feed** (NVD/SCAP) — a
-**deferred** design direction. Each row below carries its status; the map reads
-these as *evidence and vocabulary* and claims none of their authority. Only the
-per-call decision loop is a shipped capability today; **continuous
+(SP 800-207 Zero Trust) — the *point-in-time* decision loop is in the **Limited GA
+(launch)** surface; **grading identity/authenticator assurance** (SP 800-63) — the
+`step_up` *verdict* is launch, but the authenticator-assurance machinery
+(passkey/WebAuthn, token-binding, the `/v1/step-up/*` routes) is **deferred**;
+**reading Apple device posture against a recognized baseline** (macOS Security
+Compliance Project) — **deferred**, fixture-backed; and **enriching vulnerability
+signal from the national feed** (NVD/SCAP) — a **deferred** design direction. Each
+row below carries its status; the map reads these as *evidence and vocabulary* and
+claims none of their authority. **Nothing here is shipped** — this repository is a
+pre-announcement, fixture-backed review artifact
+(`docs/WHAT_SIGNALGRID_DOES_TODAY.md`); "launch" means *implemented, fixture-backed,
+and selected for the Limited GA surface*, not generally available. **Continuous
 reevaluation over elapsed time is not established** (`docs/SIGNALGRID_ZERO_TRUST_DECISION_PRINCIPLES.md`;
 `proof:zero-trust-principles` prints the same limitation) and stays deferred.
 
@@ -74,17 +78,25 @@ rule set so posture citations resolve to a named baseline, not a hand-listed set
 
 NIST SP 800-207 defines Zero Trust as per-request, continuously-evaluated,
 least-privilege access decisions made by a Policy Decision Point from multiple
-signal sources. That is SignalGrid's core thesis (DR-020), and its own
+signal sources. This is a *subordinate architectural mapping* of SignalGrid's
+decision-fabric role, not a restatement of the company thesis — the canonical
+thesis is [`docs/PURPOSE.md`](../PURPOSE.md) (DR-020): orchestration that acts on
+a person's behalf while staying invisible to the worker. Its own
 [`ENTERPRISE_SECURITY_STACK_COVERAGE_MAP.md`](ENTERPRISE_SECURITY_STACK_COVERAGE_MAP.md)
-already places its weight in the Zero Trust Identity Mesh layer.
+places its weight in the Zero Trust Identity Mesh layer.
 
-| SP 800-207 tenet | SignalGrid surface (real) | Relationship |
-| --- | --- | --- |
-| Policy Decision Point / Policy Engine | the deterministic decision core; `proof:zero-trust-principles` and `proof:signalgrid-core` exercise `evaluatePolicy` directly (`proof:orchestration` tests the downstream cascade, not the PDP itself) | aligned with — the launch decision loop *is* a PDP for the shared-device workflow |
-| Per-request evaluation (point-in-time) | the launch decision loop evaluates each request | **launch** — aligned with |
-| *Continuous* reevaluation over elapsed time | `proof:caep-events`, `proof:sso-session`, `proof:session-readiness` (families all **deferred**, `scripts/launch-profile.mjs`) | **deferred** — not established (`proof:zero-trust-principles` prints this limitation); a design direction, not shipped |
-| Decision from many signal sources | the read-only, fail-closed connector families (identity, EDR, NAC, posture, plus the RTLS/custody families that are **deferred**, DR-001) | aligned with |
-| Least privilege / dynamic policy | `allow / step_up / restrict / deny`; `proof:entitlement-binding`, `proof:break-glass` | aligned with |
+Note the SP 800-207 split: a Policy Decision Point = a **Policy Engine (PE)** that
+decides + a **Policy Administrator (PA)** that executes the decision. SignalGrid's
+deterministic core is the **PE**; the remediation/action cascade is the **PA**.
+
+| SP 800-207 tenet | SignalGrid surface (real) | Status | Relationship |
+| --- | --- | --- | --- |
+| Policy **Engine** (the decide step) | the deterministic decision core; `proof:zero-trust-principles` and `proof:signalgrid-core` exercise `evaluatePolicy` directly | **launch** | aligned with — the core is the PE for the shared-device workflow |
+| Policy **Administrator** (execute the decision) | the remediation/action cascade; `proof:orchestration` tests the downstream disposition (not `evaluatePolicy`) | mixed (cascade launch; write-actuation deferred) | aligned with — the PA half of the PDP, distinct from the PE |
+| Per-request evaluation (point-in-time) | the decision loop evaluates each request | **launch** | aligned with |
+| *Continuous* reevaluation over elapsed time | `proof:caep-events`, `proof:sso-session`, `proof:session-readiness` (families all deferred) | **deferred** | not established (`proof:zero-trust-principles` prints this limitation); a design direction |
+| Decision from many signal sources | the read-only, fail-closed connector families (identity, EDR, NAC, posture; RTLS/custody deferred, DR-001) | mixed | aligned with |
+| Least privilege / dynamic policy | the core PE emits `allow / step_up / restrict / deny` | **launch** (the verdicts) | aligned with — `proof:entitlement-binding` and `proof:break-glass` are **deferred** connector-evaluator *inputs*, not PE evidence (break-glass grades an override after the fact; it is not a policy type) |
 
 ## 3 — SP 800-63 Digital Identity → the assurance ladder
 
@@ -93,13 +105,17 @@ NIST SP 800-63 **Revision 4** — the current, finalized suite as of 2025
 for authenticators; Rev 3 is superseded) — grades identity/authenticator/
 federation assurance (IAL/AAL/FAL). SignalGrid's step-up path is an assurance
 ladder in the same spirit — a weak or replayable authenticator raises assurance
-requirements rather than passing silently.
+requirements rather than passing silently. **Status:** the `step_up` *verdict* is
+a launch decision output, but the WebAuthn/passkey assurance machinery that would
+satisfy a step-up — the `passkey-assurance` and `token-binding` families and the
+`/v1/step-up/*` routes — is **deferred** (`scripts/launch-profile.mjs`).
 
-| SP 800-63 concept | SignalGrid surface (real) | Relationship |
-| --- | --- | --- |
-| Authenticator assurance (AAL) / phishing-resistant | `proof:passkey-assurance`, `proof:webauthn-verify` | informed by |
-| Proof-of-possession vs replayable bearer | `proof:token-binding` (DPoP / mTLS) | aligned with |
-| Step-up when assurance is insufficient | `step_up` verdict + the `/v1/step-up/challenge` route | aligned with |
+| SP 800-63 concept | SignalGrid surface (real) | Status | Relationship |
+| --- | --- | --- | --- |
+| The decision can *require* step-up | the `step_up` verdict from the core | **launch** | aligned with — the core can raise assurance |
+| Authenticator assurance (AAL) / phishing-resistant | `proof:passkey-assurance`, `proof:webauthn-verify` | **deferred** | informed by |
+| Proof-of-possession vs replayable bearer | `proof:token-binding` (DPoP / mTLS) | **deferred** | informed by |
+| The step-up enrollment/challenge flow | the `/v1/step-up/*` routes | **deferred** (`scripts/launch-profile.mjs`) | informed by — the machinery that would satisfy a `step_up`, not yet in the launch surface |
 
 ## 4 — OSCAL → control-evidence format (design target)
 

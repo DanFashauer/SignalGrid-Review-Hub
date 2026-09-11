@@ -548,6 +548,53 @@ check("device-prep: a Proxy whose key enumeration throws is malformed, never an 
   normalizeDevicePrep("w-13", prepThrowing).reportIntegrity === "malformed");
 check("device-prep: a plain own-property report still reaches the grant after the own-read change (the fix did not foreclose the honest path)",
   evaluateDevicePrep(normalizeDevicePrep("w-14", { ...prepGrantRaw })).readyForCheckout === true);
+// A recognized OWN key whose read throws — an accessor, or a Proxy `get` trap — passes the
+// key scan; the read itself must be caught and the report marked malformed (review finding).
+const prepGetter = Object.defineProperty({ profiles: "applied", required_apps: "installed", os_update: "current", prep_stage: "complete" },
+  "enrollment", { get() { throw new Error("hostile getter"); }, enumerable: true });
+const prepGetterOut = normalizeDevicePrep("w-15", prepGetter as DevicePrepReportRaw);
+check("device-prep: an own accessor whose getter throws is malformed and all-unknown, never an exception out of the normalizer",
+  prepGetterOut.reportIntegrity === "malformed" && prepGetterOut.enrollment === "unknown" && prepGetterOut.prepStage === "unknown");
+const prepGetTrap = new Proxy(prepGrantRaw, { get: () => { throw new Error("hostile get"); } }) as DevicePrepReportRaw;
+check("device-prep: a Proxy whose `get` trap throws is malformed, never an exception (the key scan alone does not see it)",
+  normalizeDevicePrep("w-16", prepGetTrap).reportIntegrity === "malformed");
+// The grant is a POSITIVE predicate: a NORMALIZED value outside the declared union — a
+// JavaScript caller, a cast — matches no branch and must be HELD, not ready (review
+// finding: the exhaustive sweep walks only union members, so it could not see this).
+// (report integrity is the one stage an existing branch already catches — anything not
+// "clean" is malformed — so its expected reason is that branch's, not the predicate's.)
+const prepOodAxes: Array<[string, Partial<NormalizedDevicePrep>, DevicePrepVerdict["reasonCode"], string]> = [
+  ["prep stage", { prepStage: "garbage" as PrepStage }, "DEVICE_PREP_STATE_UNKNOWN", "state_out_of_domain"],
+  ["enrollment", { enrollment: "garbage" as PrepEnrollment }, "DEVICE_PREP_STATE_UNKNOWN", "state_out_of_domain"],
+  ["profiles", { profiles: "garbage" as PrepProfiles }, "DEVICE_PREP_STATE_UNKNOWN", "state_out_of_domain"],
+  ["required apps", { requiredApps: "garbage" as PrepRequiredApps }, "DEVICE_PREP_STATE_UNKNOWN", "state_out_of_domain"],
+  ["OS update", { osUpdate: "garbage" as OsUpdateState }, "DEVICE_PREP_STATE_UNKNOWN", "state_out_of_domain"],
+  ["report integrity", { reportIntegrity: "garbage" as PrepReportIntegrity }, "DEVICE_PREP_REPORT_MALFORMED", "report_integrity"],
+];
+for (const [label, patch, reason, signal] of prepOodAxes) {
+  const v = evaluateDevicePrep({ ...prepBase, ...patch });
+  check(`device-prep: an out-of-domain runtime value on ${label} is held (step_up / ${reason}), never ready`,
+    v.recommendedAction === "step_up" && v.reasonCode === reason && v.readyForCheckout === false &&
+    v.unknownSignals.includes(signal));
+}
+check("device-prep: the positive predicate does not disturb a real concern's reason (prep in progress keeps its own reason)",
+  evaluateDevicePrep({ ...prepBase, prepStage: "in_progress" }).reasonCode === "DEVICE_PREP_IN_PROGRESS");
+// The per-stage `unknown` branches must stay LIVE now that the positive predicate also
+// holds those states under the same reason: each names ITS stage in unknownSignals, and
+// the backstop's "state_out_of_domain" must not appear — otherwise a deleted branch is
+// invisible to the proof (the os_update mutant survived the sweep before this check).
+const prepUnknownStageSignals: Array<[string, string]> = [
+  ["prep-stage-unknown", "prep_stage"],
+  ["enrollment-unknown", "enrollment"],
+  ["profiles-unknown", "profiles"],
+  ["apps-unknown", "required_apps"],
+  ["os-update-unknown", "os_update"],
+];
+for (const [fixture, signal] of prepUnknownStageSignals) {
+  const v = P(fixture);
+  check(`device-prep: the '${fixture}' hold names its own stage ('${signal}') and is NOT the out-of-domain backstop`,
+    v.unknownSignals.includes(signal) && !v.unknownSignals.includes("state_out_of_domain"));
+}
 check("device-prep evaluator is deterministic",
   JSON.stringify(evaluateDevicePrep(prepBase)) === JSON.stringify(evaluateDevicePrep(prepBase)));
 

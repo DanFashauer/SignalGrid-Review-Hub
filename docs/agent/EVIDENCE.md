@@ -1734,3 +1734,20 @@ Codex P2 on the lane-mail PR (#642, merged d11279ca) — "queue the re-mint in t
 Process defect recorded: the previous entry's paragraph was appended AFTER preflight ran, so no local gate saw it; CI's figure guard and the sim-requests "pending" rule caught two sentences. This entry is written BEFORE the gates in this chain run on it.
 ```
 Verdict:  **Three real findings from an outside reviewer, each reproduced, fixed at the root, and pinned by a check that fails without the fix.** No verdict outside the two new modules changed; both families stay deferred; no claim moves.
+
+## 2026-09-11 — "Codex round three on #641: the grant becomes a positive predicate, and a throwing read is malformed"
+Command:  four findings on e2881cba, each verified real against source before any edit, fixed at the root and pinned.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (140/140) (was 128) — +8: throwing own getter, throwing Proxy get, one out-of-domain value per axis (5), a real concern keeps its own reason
+pnpm run proof:app-update                                 # summary=pass (153/153) (was 139) — +9: the same two throwing shapes, six out-of-domain axes, a real concern keeps its own reason
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=51 killed=51 hung=0 known-inert=0 survivors=0 (was 46/46)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=73 killed=69 hung=0 known-inert=4 survivors=0 (was 63 killed + 4 documented-inert of 67)
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 72, fingerprint 1532efcae09e
+```
+Output:
+```
+P1 (both evaluators) — the branches cover every declared union member and the exhaustive sweep pins the grant over those, but a NORMALIZED value outside the union (a JavaScript caller, a cast, a deserialized object — e.g. enrollment: "garbage") matched no branch, so the grant seed survived and readyForCheckout / trustPreconditionMet came back true. The sweep could not see it because it enumerates union members. Now the grant is a POSITIVE predicate: if no branch fired AND any axis is not exactly its confirmed value, a step_up hold (STATE_UNKNOWN, unknownSignals "state_out_of_domain") is pushed before the reduce — pushed as a candidate, not swapped into the seed, because a seed swap would win ties against a real concern's reason and break the named outcomes (pinned: an unresponsive channel / an in-progress prep keeps its own reason). Both mutators on the guard die: cond-false by the out-of-domain checks, the dropped trailing conjunct by the grant fixture.
+P2 (both normalizers) — a recognized OWN key whose read throws (an accessor property, a Proxy get trap) passed the key scan and the exception escaped. Reads now sit in one try/catch: on a throw the report is malformed and every axis unknown. Pinned with a throwing own getter and a throwing get-trap Proxy on each normalizer.
+```
+Verdict:  **Two more real findings per module, each reproduced by a check that fails without the fix.** The evaluators' comment that said "deliberately no backstop predicate" was wrong for a runtime boundary and is replaced. No verdict outside the two new modules changed; both families stay deferred.

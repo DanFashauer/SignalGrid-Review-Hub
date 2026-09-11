@@ -200,11 +200,25 @@ export function evaluateSupervisionIdentity(s: NormalizedSupervisionIdentity): S
     candidates.push({ posture: "identity_unverified", action: "step_up", reason: "SUPERVISION_STATE_UNKNOWN" });
   }
 
+  // The grant is a POSITIVE predicate, not the absence of a fired branch. The branches
+  // above cover every declared union member, and the proof's exhaustive sweep pins the
+  // grant set by equality over those — but a value OUTSIDE the union (a JavaScript
+  // caller, a cast, a deserialized object) matches no branch, and without this guard the
+  // seed below would grant on it (review finding). So: if nothing fired AND any axis is
+  // not exactly its confirmed value, the state is unreadable and held.
+  const positivelyConfirmed =
+    s.supervision === "supervised" &&
+    s.identityBinding === "bound_to_org" &&
+    s.enrollment === "enrolled" &&
+    s.commandChannel === "responsive" &&
+    s.reportIntegrity === "clean";
+  if (candidates.length === 0 && !positivelyConfirmed) {
+    unknownSignals.push("state_out_of_domain");
+    candidates.push({ posture: "identity_unverified", action: "step_up", reason: "SUPERVISION_STATE_UNKNOWN" });
+  }
+
   // Worst-concern-wins. The grant survives only when nothing fired: supervised, bound
-  // to THIS org, enrolled, answering commands, clean parse. There is deliberately no
-  // "backstop" predicate here — every non-confirmed state above pushes a raising
-  // candidate, and the proof's exhaustive sweep pins the grant set by equality, which
-  // is the backstop that can actually be seen to fail.
+  // to THIS org, enrolled, answering commands, clean parse.
   const seed: Candidate = { posture: "supervised_trusted", action: "none", reason: "SUPERVISION_IDENTITY_PRESENT" };
   const winner = candidates.reduce<Candidate>(
     (max, c) => (ACTION_SEVERITY[c.action] > ACTION_SEVERITY[max.action] ? c : max),
@@ -320,19 +334,34 @@ export function normalizeSupervisionIdentity(
       r = raw as Record<string, unknown>;
     }
   }
-  const supervision = readSupervision(ownValue(r, "supervised"), integrity);
+  // A recognized OWN key whose read throws (an accessor property, a Proxy `get` trap) is
+  // an assertion we could not read: malformed and every axis unknown — never an
+  // exception out of the normalizer (review finding: it passed the key scan and crashed).
+  let fields: Record<string, unknown> = {};
+  try {
+    fields = {
+      supervised: ownValue(r, "supervised"),
+      identity_binding: ownValue(r, "identity_binding"),
+      enrollment: ownValue(r, "enrollment"),
+      command_channel: ownValue(r, "command_channel"),
+    };
+  } catch {
+    integrity.malformed = true;
+    fields = {};
+  }
+  const supervision = readSupervision(fields.supervised, integrity);
   const identityBinding = readEnum<SupervisionIdentityBinding>(
-    ownValue(r, "identity_binding"),
+    fields.identity_binding,
     ["bound_to_org", "bound_to_other_org", "unbound"],
     integrity,
   );
   const enrollment = readEnum<SupervisionEnrollment>(
-    ownValue(r, "enrollment"),
+    fields.enrollment,
     ["enrolled", "enrollment_lost", "never_enrolled"],
     integrity,
   );
   const commandChannel = readEnum<ManagementChannel>(
-    ownValue(r, "command_channel"),
+    fields.command_channel,
     ["responsive", "unresponsive"],
     integrity,
   );

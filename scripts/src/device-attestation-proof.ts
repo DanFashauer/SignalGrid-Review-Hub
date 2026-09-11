@@ -469,6 +469,51 @@ console.log("\n  ── the supervision-identity lifecycle ──\n");
     normalizeSupervisionIdentity("w-14", siThrowing).reportIntegrity === "malformed");
   check("a plain own-property report still reaches the grant after the own-read change (the fix did not foreclose the honest path)",
     evaluateSupervisionIdentity(normalizeSupervisionIdentity("w-15", { ...grantRaw })).trustPreconditionMet === true);
+  // A recognized OWN key whose read throws — an accessor, or a Proxy `get` trap — passes the
+  // key scan; the read itself must be caught and the report marked malformed (review finding).
+  const siGetter = Object.defineProperty({ identity_binding: "bound_to_org", enrollment: "enrolled", command_channel: "responsive" },
+    "supervised", { get() { throw new Error("hostile getter"); }, enumerable: true });
+  const siGetterOut = normalizeSupervisionIdentity("w-16", siGetter as SupervisionIdentityReportRaw);
+  check("an own accessor whose getter throws is malformed and all-unknown, never an exception out of the normalizer",
+    siGetterOut.reportIntegrity === "malformed" && siGetterOut.supervision === "unknown" && siGetterOut.identityBinding === "unknown");
+  const siGetTrap = new Proxy(grantRaw, { get: () => { throw new Error("hostile get"); } }) as SupervisionIdentityReportRaw;
+  check("a Proxy whose `get` trap throws is malformed, never an exception (the key scan alone does not see it)",
+    normalizeSupervisionIdentity("w-17", siGetTrap).reportIntegrity === "malformed");
+  // The grant is a POSITIVE predicate: a NORMALIZED value outside the declared union — a
+  // JavaScript caller, a cast — matches no branch and must be HELD, not granted (review
+  // finding: the exhaustive sweep walks only union members, so it could not see this).
+  // (report integrity is the one axis an existing branch already catches — anything not
+  // "clean" is malformed — so its expected reason is that branch's, not the predicate's.)
+  const oodAxes: Array<[string, Partial<NormalizedSupervisionIdentity>, SupervisionIdentityVerdict["reasonCode"], string]> = [
+    ["supervision", { supervision: "garbage" as SupervisionState }, "SUPERVISION_STATE_UNKNOWN", "state_out_of_domain"],
+    ["identity binding", { identityBinding: "garbage" as SupervisionIdentityBinding }, "SUPERVISION_STATE_UNKNOWN", "state_out_of_domain"],
+    ["enrollment", { enrollment: "garbage" as SupervisionEnrollment }, "SUPERVISION_STATE_UNKNOWN", "state_out_of_domain"],
+    ["command channel", { commandChannel: "garbage" as ManagementChannel }, "SUPERVISION_STATE_UNKNOWN", "state_out_of_domain"],
+    ["report integrity", { reportIntegrity: "garbage" as SupervisionReportIntegrity }, "SUPERVISION_REPORT_MALFORMED", "report_integrity"],
+  ];
+  for (const [label, patch, reason, signal] of oodAxes) {
+    const v = evaluateSupervisionIdentity({ ...base, ...patch });
+    check(`an out-of-domain runtime value on ${label} is held (step_up / ${reason}), never the grant`,
+      v.recommendedAction === "step_up" && v.reasonCode === reason && v.trustPreconditionMet === false &&
+      v.unknownSignals.includes(signal));
+  }
+  check("the positive predicate does not disturb a real concern's reason (unresponsive channel keeps its own reason, not the out-of-domain one)",
+    evaluateSupervisionIdentity({ ...base, commandChannel: "unresponsive" }).reasonCode === "SUPERVISION_CHANNEL_UNRESPONSIVE");
+  // The per-axis `unknown` branches must stay LIVE now that the positive predicate also
+  // holds those states under the same reason: each names ITS axis in unknownSignals, and
+  // the backstop's "state_out_of_domain" must not appear — otherwise a deleted branch is
+  // invisible to the proof (four such mutants survived the sweep before this check).
+  const unknownAxisSignals: Array<[string, string]> = [
+    ["identity-binding-unknown", "identity_binding"],
+    ["enrollment-unknown", "enrollment"],
+    ["supervision-unknown", "supervision"],
+    ["channel-unknown", "command_channel"],
+  ];
+  for (const [fixture, signal] of unknownAxisSignals) {
+    const v = F(fixture);
+    check(`the '${fixture}' hold names its own axis ('${signal}') and is NOT the out-of-domain backstop`,
+      v.unknownSignals.includes(signal) && !v.unknownSignals.includes("state_out_of_domain"));
+  }
   check("supervision-identity evaluator is deterministic",
     JSON.stringify(evaluateSupervisionIdentity(base)) === JSON.stringify(evaluateSupervisionIdentity(base)));
 }

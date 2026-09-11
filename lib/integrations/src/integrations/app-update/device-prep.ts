@@ -210,10 +210,27 @@ export function evaluateDevicePrep(s: NormalizedDevicePrep): DevicePrepVerdict {
     candidates.push({ posture: "prep_unverified", action: "step_up", reason: "DEVICE_PREP_STATE_UNKNOWN" });
   }
 
+  // The grant is a POSITIVE predicate, not the absence of a fired branch. The branches
+  // above cover every declared union member and the proof's exhaustive sweep pins the
+  // grant by equality over those — but a value OUTSIDE the union (a JavaScript caller, a
+  // cast, a deserialized object) matches no branch, and without this guard the seed
+  // below would grant on it (review finding). If nothing fired AND any stage is not
+  // exactly its confirmed value, the state is unreadable and held. (`update_available`
+  // fires the monitor branch above, so it never reaches this guard.)
+  const positivelyReady =
+    s.prepStage === "complete" &&
+    s.enrollment === "enrolled" &&
+    s.profiles === "applied" &&
+    s.requiredApps === "installed" &&
+    s.osUpdate === "current" &&
+    s.reportIntegrity === "clean";
+  if (candidates.length === 0 && !positivelyReady) {
+    unknownSignals.push("state_out_of_domain");
+    candidates.push({ posture: "prep_unverified", action: "step_up", reason: "DEVICE_PREP_STATE_UNKNOWN" });
+  }
+
   // Worst-concern-wins. The grant survives only when nothing fired: complete, enrolled,
-  // profiles applied, apps installed, OS current, clean parse. Deliberately no backstop
-  // predicate — every non-confirmed state above pushes a raising candidate, and the
-  // proof's exhaustive sweep pins the single grant by equality.
+  // profiles applied, apps installed, OS current, clean parse.
   const seed: Candidate = { posture: "prep_complete", action: "none", reason: "DEVICE_PREP_READY" };
   const winner = candidates.reduce<Candidate>(
     (max, c) => (ACTION_SEVERITY[c.action] > ACTION_SEVERITY[max.action] ? c : max),
@@ -317,18 +334,34 @@ export function normalizeDevicePrep(deviceRef: string, raw: DevicePrepReportRaw 
       r = raw as Record<string, unknown>;
     }
   }
+  // A recognized OWN key whose read throws (an accessor property, a Proxy `get` trap) is
+  // an assertion we could not read: malformed and every stage unknown — never an
+  // exception out of the normalizer (review finding: it passed the key scan and crashed).
+  let fields: Record<string, unknown> = {};
+  try {
+    fields = {
+      enrollment: ownValue(r, "enrollment"),
+      profiles: ownValue(r, "profiles"),
+      required_apps: ownValue(r, "required_apps"),
+      os_update: ownValue(r, "os_update"),
+      prep_stage: ownValue(r, "prep_stage"),
+    };
+  } catch {
+    integrity.malformed = true;
+    fields = {};
+  }
   return {
     sourceSystem: "app-update",
     deviceRef,
-    enrollment: readEnum<PrepEnrollment>(ownValue(r, "enrollment"), ["enrolled", "pending", "not_enrolled"], integrity),
-    profiles: readEnum<PrepProfiles>(ownValue(r, "profiles"), ["applied", "partial", "missing"], integrity),
-    requiredApps: readEnum<PrepRequiredApps>(ownValue(r, "required_apps"), ["installed", "partial", "missing"], integrity),
+    enrollment: readEnum<PrepEnrollment>(fields.enrollment, ["enrolled", "pending", "not_enrolled"], integrity),
+    profiles: readEnum<PrepProfiles>(fields.profiles, ["applied", "partial", "missing"], integrity),
+    requiredApps: readEnum<PrepRequiredApps>(fields.required_apps, ["installed", "partial", "missing"], integrity),
     osUpdate: readEnum<OsUpdateState>(
-      ownValue(r, "os_update"),
+      fields.os_update,
       ["current", "update_available", "update_required", "update_in_progress", "update_failed"],
       integrity,
     ),
-    prepStage: readEnum<PrepStage>(ownValue(r, "prep_stage"), ["complete", "in_progress", "failed"], integrity),
+    prepStage: readEnum<PrepStage>(fields.prep_stage, ["complete", "in_progress", "failed"], integrity),
     reportIntegrity: integrity.malformed ? "malformed" : "clean",
   };
 }

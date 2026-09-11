@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 68,
-  "fingerprint": "ce58f6f231042bfb7665e842e385e502e173e44e9821377abf44838733f920a9",
+  "manifestVersion": 69,
+  "fingerprint": "d46363a33320afd60a37fbab107b019d09026b35fded6a4bc72f215f0e00c539",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -105,7 +105,7 @@
       "adaptive-proposals": 48,
       "agent-behavior": 54,
       "agent-identity": 152,
-      "app-update": 71,
+      "app-update": 74,
       "benchmark-selection": 95,
       "bootstrap-credential": 48,
       "break-glass": 101,
@@ -157,7 +157,7 @@
       "token-binding": 61,
       "uem": 76,
       "unsafe-claim": 50,
-      "verdict-attestation": 82,
+      "verdict-attestation": 98,
       "webhooks": 206,
       "work-context": 58
     },

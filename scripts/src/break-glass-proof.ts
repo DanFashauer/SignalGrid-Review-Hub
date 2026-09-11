@@ -39,7 +39,7 @@ import type {
   NormalizedManualFallback,
   ReviewState,
 } from "@workspace/integrations/break-glass";
-import { EVENT_TYPES } from "@workspace/event-contract";
+import { EVENT_TYPES, validateEvent } from "@workspace/event-contract";
 
 let passed = 0;
 const failures: string[] = [];
@@ -524,7 +524,7 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   const ACCOUNTABLE_RAW = { invocationRef: "bg-live", justification: "recorded", scope: "single_encounter", expiry: "bounded", review: "reviewed", assignmentAtInvocation: "not_assigned" };
   const realFallback = normalizeManualFallbackSequence(
     [
-      { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "failure" }, // badge auth FAILED
+      { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "failure" }, // badge auth FAILED
       { eventType: "checkout_denied", correlationId: CID, tenantId: T }, // badge check-out denied
       { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" }, // manual fallback
       { eventType: "checkout_granted", correlationId: CID, tenantId: T }, // credential verified
@@ -541,7 +541,7 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   );
   const badgeOkStream = normalizeManualFallbackSequence(
     [
-      { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "success" }, // badge worked
+      { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "success" }, // badge worked
       { eventType: "checkout_granted", correlationId: CID, tenantId: T },
       { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
       { eventType: "checkout_granted", correlationId: CID, tenantId: T },
@@ -554,7 +554,7 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   );
   const noManualResolution = normalizeManualFallbackSequence(
     [
-      { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "failure" },
+      { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "failure" },
       { eventType: "checkout_denied", correlationId: CID, tenantId: T },
       { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
     ],
@@ -603,7 +603,7 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   // and stayed intact → an accountable override yielded allow. Ambiguity must tighten.
   const conflictingManual = normalizeManualFallbackSequence(
     [
-      { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "failure" },
+      { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "failure" },
       { eventType: "checkout_denied", correlationId: CID, tenantId: T },
       { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
       { eventType: "checkout_granted", correlationId: CID, tenantId: T }, // grant …
@@ -620,7 +620,7 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   // one intact sequence (badge-deny from A + manual-grant from B → allow before the fix).
   const crossTenant = normalizeManualFallbackSequence(
     [
-      { eventType: "badge_access", correlationId: CID, tenantId: "tenant-a", outcome: "failure" },
+      { eventType: "badge_access", correlationId: CID, tenantId: "tenant-a", badgeAuthOutcome: "failure" },
       { eventType: "checkout_denied", correlationId: CID, tenantId: "tenant-a" },
       { eventType: "checkout_requested", correlationId: CID, tenantId: "tenant-b", mobileCredentialId: "mc-1" }, // DIFFERENT tenant
       { eventType: "checkout_granted", correlationId: CID, tenantId: "tenant-b" },
@@ -635,7 +635,7 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
     "#2 a MISSING tenantId is also malformed — correlation alone cannot fuse a sequence",
     normalizeManualFallbackSequence(
       [
-        { eventType: "badge_access", correlationId: CID, outcome: "failure" },
+        { eventType: "badge_access", correlationId: CID, badgeAuthOutcome: "failure" },
         { eventType: "checkout_denied", correlationId: CID },
         { eventType: "checkout_requested", correlationId: CID, mobileCredentialId: "mc-1" },
         { eventType: "checkout_granted", correlationId: CID },
@@ -669,7 +669,7 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
     (() => {
       const withEvidence = normalizeManualFallbackSequence(
         [
-          { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "failure" }, // the only change
+          { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "failure" }, // the only change
           { eventType: "checkout_denied", correlationId: CID, tenantId: T },
           { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
           { eventType: "checkout_granted", correlationId: CID, tenantId: T },
@@ -685,7 +685,7 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   // credential=unknown and denied before ever considering the successful badge.
   const normalCheckout = normalizeManualFallbackSequence(
     [
-      { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "success" },
+      { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "success" },
       { eventType: "checkout_granted", correlationId: CID, tenantId: T },
     ],
     ACCOUNTABLE_RAW,
@@ -703,7 +703,7 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
     (() => {
       const attemptedUnknown = normalizeManualFallbackSequence(
         [
-          { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "success" },
+          { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "success" },
           { eventType: "checkout_granted", correlationId: CID, tenantId: T },
           { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" }, // attempted…
           // …but never resolved → unknown
@@ -712,6 +712,128 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
       );
       return attemptedUnknown.manualCredential === "unknown" && evaluateManualFallback(attemptedUnknown).decision === "deny";
     })(),
+  );
+
+  // 6g. ROUND-2 REGRESSION CONTROLS — one per Codex re-review finding.
+  //
+  // #1 THE CANONICAL PATH. The badge-causation fix reads `badgeAuthOutcome`; if that field
+  // does not survive validateEvent's allowlist the whole feature is dead through the real
+  // contract. Build the stream as RAW events, run each through validateEvent, and feed the
+  // VALIDATED events (rebuilt from allowlisted fields only) to the normalizer.
+  const iso = "2026-01-01T00:00:00.000Z";
+  const asCanonical = (raw: Record<string, unknown>[]) =>
+    raw.map((r) => {
+      const v = validateEvent(r);
+      if (!v.ok) throw new Error(`fixture event failed canonical validation: ${v.errors.join("; ")}`);
+      return v.event;
+    });
+  const canonicalFail = asCanonical([
+    { eventType: "badge_access", eventId: "e1", occurredAt: iso, correlationId: CID, tenantId: T, badgeAuthOutcome: "failure" },
+    { eventType: "checkout_denied", eventId: "e2", occurredAt: iso, correlationId: CID, tenantId: T },
+    { eventType: "checkout_requested", eventId: "e3", occurredAt: iso, correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
+    { eventType: "checkout_granted", eventId: "e4", occurredAt: iso, correlationId: CID, tenantId: T },
+  ]);
+  check(
+    "#1 the canonical contract PRESERVES badgeAuthOutcome through validateEvent (not stripped by the allowlist)",
+    canonicalFail[0].badgeAuthOutcome === "failure",
+  );
+  const canonSeq = normalizeManualFallbackSequence(canonicalFail, ACCOUNTABLE_RAW);
+  check(
+    `#1 a CANONICAL failed-badge→manual-grant stream reaches the accountable allow (${canonSeq.badgeAttempt} / ${evaluateManualFallback(canonSeq).decision})`,
+    canonSeq.badgeAttempt === "failed" &&
+      evaluateManualFallback(canonSeq).decision === "allow" &&
+      evaluateManualFallback(canonSeq).reasonCode === "FALLBACK_GRANTED_ACCOUNTABLE",
+  );
+  const canonNoOutcome = asCanonical([
+    { eventType: "badge_access", eventId: "e1", occurredAt: iso, correlationId: CID, tenantId: T }, // no outcome
+    { eventType: "checkout_denied", eventId: "e2", occurredAt: iso, correlationId: CID, tenantId: T },
+    { eventType: "checkout_requested", eventId: "e3", occurredAt: iso, correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
+    { eventType: "checkout_granted", eventId: "e4", occurredAt: iso, correlationId: CID, tenantId: T },
+  ]);
+  const canonNoOutcomeSeq = normalizeManualFallbackSequence(canonNoOutcome, ACCOUNTABLE_RAW);
+  check(
+    `#1 …and the SAME canonical stream WITHOUT the outcome stays step_up — the validated field is the gate (${evaluateManualFallback(canonNoOutcomeSeq).decision})`,
+    canonNoOutcomeSeq.badgeAttempt === "unknown" && evaluateManualFallback(canonNoOutcomeSeq).decision === "step_up",
+  );
+
+  // #2 MANUAL REQUEST BEFORE BADGE. A credential-bearing request + grant BEFORE any
+  // resolved badge attempt must not verify a fallback the badge never justified.
+  const manualFirst = normalizeManualFallbackSequence(
+    [
+      { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" }, // before any badge
+      { eventType: "checkout_granted", correlationId: CID, tenantId: T },
+      { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "failure" }, // badge fails only later
+    ],
+    ACCOUNTABLE_RAW,
+  );
+  check(
+    `#2 a manual request BEFORE any resolved badge attempt → malformed, never allow (${manualFirst.sequenceIntegrity} / ${evaluateManualFallback(manualFirst).decision})`,
+    manualFirst.sequenceIntegrity === "malformed" && evaluateManualFallback(manualFirst).decision === "deny",
+  );
+
+  // #3 MULTIPLE MANUAL REQUESTS. Two credential-bearing requests, then one grant: which
+  // credential did the grant resolve? Unknowable — so it is ambiguous and fails closed.
+  const twoCreds = normalizeManualFallbackSequence(
+    [
+      { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "failure" },
+      { eventType: "checkout_denied", correlationId: CID, tenantId: T },
+      { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
+      { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-2" }, // different credential
+      { eventType: "checkout_granted", correlationId: CID, tenantId: T },
+    ],
+    ACCOUNTABLE_RAW,
+  );
+  check(
+    `#3 two manual requests (different credentials) → malformed, never allow (${twoCreds.sequenceIntegrity} / ${evaluateManualFallback(twoCreds).decision})`,
+    twoCreds.sequenceIntegrity === "malformed" && evaluateManualFallback(twoCreds).decision === "deny",
+  );
+
+  // #4 BADGE SUCCESS ≠ CHECKOUT GRANTED. A success outcome with no completed check-out is
+  // not `succeeded`, and a success followed by a denial is contradictory.
+  const successNoGrant = normalizeManualFallbackSequence(
+    [{ eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "success" }], // no checkout_granted
+    ACCOUNTABLE_RAW,
+  );
+  check(
+    `#4 a badge success with NO checkout_granted is not succeeded and does NOT allow (${successNoGrant.badgeAttempt} / ${evaluateManualFallback(successNoGrant).decision})`,
+    successNoGrant.badgeAttempt !== "succeeded" && evaluateManualFallback(successNoGrant).decision !== "allow",
+  );
+  check(
+    "#4 a badge success FOLLOWED BY a checkout_denial is contradictory → malformed",
+    normalizeManualFallbackSequence(
+      [
+        { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "success" },
+        { eventType: "checkout_denied", correlationId: CID, tenantId: T },
+      ],
+      ACCOUNTABLE_RAW,
+    ).sequenceIntegrity === "malformed",
+  );
+  check(
+    "#4 NON-VACUITY: a badge success WITH an actual checkout_granted IS succeeded and allows — the gate is the grant, not the outcome word",
+    (() => {
+      const ok = normalizeManualFallbackSequence(
+        [
+          { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "success" },
+          { eventType: "checkout_granted", correlationId: CID, tenantId: T },
+        ],
+        ACCOUNTABLE_RAW,
+      );
+      return ok.badgeAttempt === "succeeded" && evaluateManualFallback(ok).decision === "allow";
+    })(),
+  );
+
+  // #5 AUDIT INTEGRITY ORDERING. Credential verified, badge unknown, override malformed:
+  // the unauditable check-out must DENY, not step_up on the badge-unknown branch first.
+  const auditVsBadgeUnknown = evaluateManualFallback({
+    correlationId: "c",
+    badgeAttempt: "unknown",
+    manualCredential: "verified",
+    override: normalizeBreakGlassRecord({}), // malformed audit record
+    sequenceIntegrity: "intact",
+  });
+  check(
+    `#5 malformed audit + badge unknown → deny/FALLBACK_AUDIT_MALFORMED, not step_up (${auditVsBadgeUnknown.decision} / ${auditVsBadgeUnknown.reasonCode})`,
+    auditVsBadgeUnknown.decision === "deny" && auditVsBadgeUnknown.reasonCode === "FALLBACK_AUDIT_MALFORMED",
   );
 }
 

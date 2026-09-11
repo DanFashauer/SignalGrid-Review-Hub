@@ -117,12 +117,14 @@ export interface FallbackEventLike {
   /** Present on a manual `checkout_requested` — the credential offered in lieu of a badge. */
   readonly mobileCredentialId?: string;
   /**
-   * For a `badge_access` event: whether the badge auth SUCCEEDED or FAILED at the reader.
-   * This is the POSITIVE evidence the normalizer needs to attribute a failed check-out to
-   * the badge control. A bare `checkout_denied` may be posture/policy-caused, so without
-   * a failed `badge_access` the badge state stays `unknown` and no fallback is enabled.
+   * For a `badge_access` event: the canonical `badgeAuthOutcome` (`success`/`failure`/
+   * `unknown`) from @workspace/event-contract. This is the POSITIVE evidence the
+   * normalizer needs to attribute a failed check-out to the badge control. It is a
+   * VALIDATED contract field that survives `validateEvent`'s allowlist — a bare
+   * `checkout_denied` may be posture/policy-caused, so without a `failure` outcome the
+   * badge state stays `unknown` and no fallback is enabled.
    */
-  readonly outcome?: string;
+  readonly badgeAuthOutcome?: string;
 }
 
 const trimmed = (v: string | undefined): string => (typeof v === "string" ? v.trim() : "");
@@ -161,22 +163,24 @@ export function evaluateManualFallback(state: NormalizedManualFallback): Fallbac
   if (state.manualCredential === "unknown") return at("deny", "FALLBACK_CREDENTIAL_UNVERIFIED");
   if (state.manualCredential === "rejected") return at("deny", "FALLBACK_CREDENTIAL_REJECTED");
 
-  // credential verified from here.
+  // credential verified from here — a manual credential WAS presented and accepted.
 
-  // 4. Anomalous: the badge worked, yet a manual fallback was also used. Surface it.
+  // 4. A verified check-out that cannot be audited is not granted, WHATEVER the badge
+  //    state. This is checked BEFORE any badge-related step-up: an unauditable manual
+  //    override is a deny, and letting a badge-unknown step-up fire first would downgrade
+  //    that deny to a step-up. An unauditable override is the exact hole this closes.
+  if (state.override.reportIntegrity === "malformed") return at("deny", "FALLBACK_AUDIT_MALFORMED");
+
+  // 5. Anomalous: the badge worked, yet a manual fallback was also used. Surface it.
   if (state.badgeAttempt === "succeeded") return at("step_up", "FALLBACK_NOT_NEEDED_BADGE_OK");
 
-  // 5. Fail-closed: we lack POSITIVE evidence the badge was the failed control (a bare
+  // 6. Fail-closed: we lack POSITIVE evidence the badge was the failed control (a bare
   //    denial may be posture/policy-caused). We know WHO but not that the fallback was
   //    warranted, so we step up rather than grant silently — never allow.
   if (state.badgeAttempt === "unknown") return at("step_up", "FALLBACK_BADGE_STATE_UNKNOWN");
 
-  // From here: the badge FAILED (positive evidence) and the credential verified.
-
-  // 6. A verified check-out that cannot be audited is not granted. An unauditable
-  //    manual override is the exact hole the break-glass family exists to close, so it
-  //    denies rather than merely adding friction.
-  if (state.override.reportIntegrity === "malformed") return at("deny", "FALLBACK_AUDIT_MALFORMED");
+  // From here: the badge FAILED (positive evidence), the credential verified, and the
+  // override record is intact.
 
   // 7. Grant. Outright when the manual check-out is fully accountable; with friction
   //    (step_up) when it is not, so the device reaches the clinician but the missing
@@ -184,11 +188,6 @@ export function evaluateManualFallback(state: NormalizedManualFallback): Fallbac
   if (posture === "accountable") return at("allow", "FALLBACK_GRANTED_ACCOUNTABLE");
   return at("step_up", "FALLBACK_GRANTED_NEEDS_AUDIT");
 }
-
-/** Outcome tokens on a `badge_access` event that count as the badge auth having failed. */
-const BADGE_FAILURE_OUTCOMES = new Set(["failure", "failed", "fail", "denied", "denial", "reject", "rejected"]);
-/** …and the ones that count as the badge auth having succeeded. */
-const BADGE_SUCCESS_OUTCOMES = new Set(["success", "succeeded", "succeed", "granted", "grant", "ok", "pass", "passed"]);
 
 /**
  * Read a badge→manual fallback sequence out of an ordered event stream.
@@ -200,15 +199,21 @@ const BADGE_SUCCESS_OUTCOMES = new Set(["success", "succeeded", "succeed", "gran
  *   - a missing or mixed `correlationId`, OR a missing or mixed `tenantId` (correlation
  *     alone cannot fuse a sequence — two tenants can share a correlationId);
  *   - an orphan resolution (a grant/deny with no badge tap or manual request before it);
- *   - a manual request that arrives before the badge attempt has resolved;
+ *   - a manual request that arrives before ANY badge attempt has resolved (a fallback is
+ *     by definition a response to a badge failure, so it cannot come first);
+ *   - a SECOND manual request (duplicate or credential-changing) — ambiguous which
+ *     credential a later grant resolved;
  *   - a SECOND or contradictory resolution for either phase (ambiguity tightens);
- *   - contradictory badge evidence (a failed AND a succeeded badge in one stream).
+ *   - contradictory badge evidence (auth-failure with a grant, auth-success with a
+ *     denial, or a failed AND a succeeded badge in one stream).
  *
  * BADGE CAUSATION IS POSITIVE-EVIDENCE ONLY. A bare `checkout_denied` may be caused by
- * device posture, policy, or any non-badge control, and the canonical event carries no
- * denial-cause field. So the badge is treated as `failed` ONLY when a `badge_access`
- * event explicitly reports a failure outcome; absent that, the badge state is `unknown`
- * and the manual fallback is NOT enabled to allow.
+ * device posture, policy, or any non-badge control. So the badge is treated as `failed`
+ * ONLY when a `badge_access` event carries the canonical `badgeAuthOutcome: "failure"`
+ * (a VALIDATED field that survives `validateEvent`); absent that, the badge state is
+ * `unknown` and the manual fallback is NOT enabled to allow. Badge SUCCESS likewise
+ * requires an actual `checkout_granted` — a success outcome with no grant (or with a
+ * later denial) is not a completed check-out and does not open the no-fallback path.
  *
  * The `override` accountability record is supplied separately (it lives on the EHR-audit
  * plane, not in the dock event stream) and normalized through the same asymmetric
@@ -250,17 +255,22 @@ export function normalizeManualFallbackSequence(
     switch (e.eventType) {
       case FALLBACK_EVENT_TYPES.badgeAccess: {
         sawBadge = true;
-        const o = trimmed(e.outcome).toLowerCase();
-        if (BADGE_FAILURE_OUTCOMES.has(o)) badgeAuthFailed = true;
-        else if (BADGE_SUCCESS_OUTCOMES.has(o)) badgeAuthSucceeded = true;
-        // No/unrecognised outcome: no positive evidence either way — stays unknown.
+        const o = trimmed(e.badgeAuthOutcome).toLowerCase();
+        if (o === "failure") badgeAuthFailed = true;
+        else if (o === "success") badgeAuthSucceeded = true;
+        // "unknown"/absent/unrecognised: no positive evidence either way — stays unknown.
         break;
       }
       case FALLBACK_EVENT_TYPES.checkoutRequested:
         // A manual fallback request is the one that carries a credential in lieu of a badge.
         if (trimmed(e.mobileCredentialId) !== "") {
-          // Out of order: the manual fallback cannot precede the badge attempt resolving.
-          if (sawBadge && !badgeResolvedSoFar()) structureBroken = true;
+          // A fallback is a RESPONSE to a resolved badge attempt; one that arrives before
+          // any badge attempt has resolved is out of order. (sawBadge is not enough — a
+          // credential-first stream would skip this guard.)
+          if (!badgeResolvedSoFar()) structureBroken = true;
+          // A SECOND manual request is ambiguous: a later grant cannot be attributed to a
+          // single credential, and a changed credential id is a different person entirely.
+          if (manualRequested) structureBroken = true;
           manualRequested = true;
         }
         break;
@@ -289,17 +299,25 @@ export function normalizeManualFallbackSequence(
     }
   }
 
-  // Positive evidence in BOTH directions is a contradiction — fail closed.
+  // BADGE FAILURE needs the positive `badgeAuthOutcome: "failure"` evidence; a bare
+  // denial is not enough (it may be posture/policy-caused). BADGE SUCCESS needs an actual
+  // `checkout_granted` — a success outcome alone is a reader event, not a completed
+  // check-out. Any of these combinations is contradictory and fails closed:
+  //   - auth-failure together with a badge grant;
+  //   - auth-success together with a badge denial (claimed success, then refused);
+  //   - both a failed and a succeeded badge_access in one stream.
   const badgeFailed = badgeAuthFailed;
-  const badgeSucceeded = badgeAuthSucceeded || badgeCheckoutGranted;
-  if (badgeFailed && badgeSucceeded) structureBroken = true;
+  const badgeSucceeded = badgeCheckoutGranted;
+  if (badgeAuthFailed && badgeCheckoutGranted) structureBroken = true;
+  if (badgeAuthSucceeded && badgeCheckoutDenied) structureBroken = true;
+  if (badgeAuthFailed && badgeAuthSucceeded) structureBroken = true;
 
   if (correlationBroken || tenantBroken || structureBroken) {
     return { correlationId: corr, badgeAttempt: "unknown", manualCredential: "not_attempted", override, sequenceIntegrity: "malformed" };
   }
 
-  // Badge is `failed` ONLY on positive badge-auth-failure evidence; a bare denial is not
-  // enough (it may be posture/policy-caused). Otherwise succeeded, else unknown.
+  // `failed` on positive failure evidence; `succeeded` only on an actual completed
+  // badge check-out (grant); otherwise `unknown` — fail-closed.
   const badgeAttempt: BadgeAttempt = badgeFailed ? "failed" : badgeSucceeded ? "succeeded" : "unknown";
 
   // `not_attempted` and `unknown` are distinct: no manual request at all is not_attempted;

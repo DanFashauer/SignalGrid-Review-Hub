@@ -84,21 +84,28 @@ const MUTATOR_FIXTURES = [
   { line: `    return false;`, expect: ["return-flip"] },
   { line: `    return true;`, expect: ["return-flip"] },
   { line: `  const remaining = budget - spent;`, expect: [] },
+  // The brace-less mutator is OPT-IN per target (`oneLine: true`), so the same
+  // guard line is asserted twice: it fires when the target opted in, and it
+  // stays silent when it did not — a target that never opted in is never swept
+  // by it, and the census line reports that rather than the sweep pretending.
+  { line: `  if (typeof raw !== "string") return null;`, opts: { oneLine: true }, expect: ["oneline-cond-false"] },
+  { line: `  if (!isPlainReport(report)) return UNKNOWN; // hostile shape`, opts: { oneLine: true }, expect: ["oneline-cond-false"] },
+  { line: `  if (typeof raw !== "string") return null;`, expect: [] },
 ];
 // Non-vacuity: the case set is itself pinned. Deleting fixtures to weaken this
 // self-test is the same class of attack it defends against, so a shrunk fixture
 // list fails the gate. Also assert every mutator id is exercised by at least one
 // fixture, so adding a mutator without a fixture cannot leave it untested.
-const FIXTURE_FLOOR = 10;
+const FIXTURE_FLOOR = 13;
 check(`mutator self-test is non-vacuous (${MUTATOR_FIXTURES.length} fixtures, floor ${FIXTURE_FLOOR})`,
   MUTATOR_FIXTURES.length >= FIXTURE_FLOOR);
 const exercised = new Set(MUTATOR_FIXTURES.flatMap((f) => f.expect));
 check(`every mutator id is exercised by a fixture (${exercised.size}/${MUTATORS.length})`,
   MUTATORS.every((m) => exercised.has(m.id)));
 for (const f of MUTATOR_FIXTURES) {
-  const got = lineMutations(f.line).map((x) => x.mutator).sort();
+  const got = lineMutations(f.line, f.opts ?? {}).map((x) => x.mutator).sort();
   const want = [...f.expect].sort();
-  check(`mutators fire on \`${f.line.trim()}\` → [${want.join(", ") || "none"}]`,
+  check(`mutators fire on \`${f.line.trim()}\`${f.opts?.oneLine ? " (oneLine opt-in)" : ""} → [${want.join(", ") || "none"}]`,
     got.length === want.length && got.every((id, i) => id === want[i]));
 }
 

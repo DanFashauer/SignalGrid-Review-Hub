@@ -620,6 +620,10 @@ export const TARGETS = [
       "lib/integrations/src/integrations/rtls-custody/evaluate.ts",
       "lib/integrations/src/integrations/rtls-custody/index.ts",
       "lib/integrations/src/integrations/rtls-custody/rtls-connector.ts",
+      // The custody-ledger reconciliation emits the ready / hold / contain / escalate
+      // verdict and normalizes a reconciliation report (the cap axis is computed from
+      // counts), so its guards are mutable decision logic that must be swept.
+      "lib/integrations/src/integrations/rtls-custody/custody-ledger.ts",
     ],
   },
   {

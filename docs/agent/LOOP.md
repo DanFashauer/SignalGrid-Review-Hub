@@ -52,7 +52,25 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-11 (cloud lane, latest) - READINESS-FIGURE HONESTY LANDED
+LAST TOUCHED: 2026-09-11 (cloud lane, latest) - TWO OF THE THREE RUNBOOK GAPS MODELED
+              (branch lane/cloud-custody-ledger-20260911-203200Z; product PR, owner merges):
+              the custody-ledger RECONCILIATION in rtls-custody/custody-ledger.ts - what
+              the checkout ledger says vs what the dock bay sees, plus the requester's cap.
+              A seated device the ledger still assigns to a prior holder is a hold with the
+              contradiction named (the runbooks' phantom); an unpaired device in a bay is
+              contained; a clear ledger over an empty bay escalates; a cap hit only by
+              returns that never cleared is a hold (CUSTODY_CAP_BLOCKED_BY_STALE_RETURN), a
+              cap genuinely reached a containment - the cap axis is computed from three
+              counts, never asserted. 19 fixtures, an 864-state sweep pinning the single
+              grant, every hostile-report shape from the sibling surfaces' six review
+              rounds pinned on day one; proof:rtls-custody 63 -> 171; mutation-swept
+              62/62, 0 survivors (48 new guards). Ground-truth rows "custody integrity" and
+              "per-user checkout cap" now read modeled: readiness (a) 16 modeled / 1 gap of
+              17 once #641 lands (this base still carries #641's two rows as partial). The
+              third gap (the smart-charging simulator scenario) and the detect.ts timeline
+              detection are decision-core / simulator work (DR-020) and stay on the backlog
+              for a decision record. Headline readiness still 0% on (b) until the Mac
+              re-mint. (Earlier 2026-09-11, cloud lane:) READINESS-FIGURE HONESTY LANDED
               (#620, 52b395d). The DR-036 readiness gate was OVER-reporting - it
               fail-OPENED on two dimensions. Fixed at root, each with a control that
               fails pre-fix: (a) parseGroundTruth dropped markdown-bold **gap** rows

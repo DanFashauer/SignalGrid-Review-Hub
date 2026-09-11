@@ -60,6 +60,54 @@ This document defines a vendor-neutral, public-safe schema for future Physical C
 | Failing battery | `batteryHealth` is `failing`, at any charge level. | Distinct from low charge: charging cannot clear it, so the device is routed for battery replacement rather than back to a bay. |
 | Unknown dock state + high-risk workflow | `dockState` is `unknown`, `faulted`, or `offline` during a sensitive workflow. | Degraded confidence; require step-up, alternate evidence, or owner review. |
 
+## The ledger-versus-bay reconciliation (built)
+
+The schema above is a design surface. One piece of it is now **built and proven**: the
+reconciliation of what the checkout **ledger** says against what the dock **bay** sees,
+plus the requester's per-user cap — the two runbook rows in
+[`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`](research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md)
+("custody integrity" and "per-user checkout cap") that no surface modeled. It lives in
+[`lib/integrations/src/integrations/rtls-custody/custody-ledger.ts`](../lib/integrations/src/integrations/rtls-custody/custody-ledger.ts)
+beside the physical-custody evaluator, and is a different question from it: not *where is
+the device*, but *does the ledger agree with the bay, and may this requester take it*.
+Read-only and fixture-gated like the rest of the family; nothing here clears a record,
+releases a bay, or changes a cap — the fabric surfaces the contradiction with a legible
+reason, a person reconciles it. The `rtls-custody` family stays **deferred** in the launch
+profile (DR-001): this is built and proven, not claimed to ship.
+
+| Ledger vs bay vs cap (a deferred family: built, not claimed) | Verdict | Why |
+| --- | --- | --- |
+| ledger clear, no holder, seated, paired, requester under cap, clean parse | `none` — ready for check-out | the one grant; every axis positively confirmed |
+| ledger still assigns the device to a **prior holder** while it sits in a bay | `step_up` (`CUSTODY_STALE_RETURN_OTHER`) | the runbooks' phantom: a return that never cleared, named as a contradiction |
+| ledger still assigns it to the **requester** while it sits in a bay | `step_up` (`CUSTODY_STALE_RETURN_OWN`) | the requester's own stale return |
+| **unpaired** device in a bay; unpaired device out | `restrict` | not a device to hand out — "unpaired but occupying a slot" is named separately |
+| out with **another** holder (bay empty, ledger consistent) | `restrict` (`CUSTODY_HELD_BY_OTHER`) | not this device; no contradiction |
+| out with the **requester** (bay empty, ledger consistent) | `monitor` — **not** ready | the one advisory: already in their custody, nothing in the bay to hand out |
+| ledger **clear** and the bay **empty** | `escalate` (`CUSTODY_DEVICE_UNACCOUNTED`) | nobody has it and it is not in its bay — a custody breach, the same rung the physical evaluator uses for a device that left the area |
+| cap hit **only** because prior returns never cleared | `step_up` (`CUSTODY_CAP_BLOCKED_BY_STALE_RETURN`) | the mystery beep, named — a person clears the stale records |
+| cap genuinely reached | `restrict` (`CUSTODY_CAP_REACHED`) | a hard limit, legibly stated |
+| ledger contradicts itself (clear yet a holder named; checked out to nobody) | `step_up` (`CUSTODY_LEDGER_INCONSISTENT`) | a self-contradicting record grades nothing |
+| any axis unknown | `step_up` | unknown raises, never grants |
+| malformed report | `step_up` | an assertion we could not read is never a grant |
+
+The **cap axis is computed, never asserted**: the normalizer derives under-cap /
+stale-blocked / reached from the requester's open-checkout count, the tenant cap and the
+count of those checkouts physically docked (non-negative safe integers, strict parse — a
+string, a float, a negative, a zero cap, or more stale returns than open checkouts is a
+malformed report; a missing count is unknown and raises). `returned` and `no record` both
+normalize to a *clear* ledger. Unlike the device-prep surface, the one advisory here does
+not mean ready: `readyForCheckout` is true for the grant alone.
+
+Proven by `proof:rtls-custody` (171 checks): named outcomes, single-axis flips of the one
+grant, an 864-state grant-safety sweep over the module's exported domains that pins that
+grant by equality (exactly one state grants; `monitor` reachable only as "already held and
+not in the bay"; `escalate` only as "clear and the bay empty"; `alert` unreachable), every
+count shape on the computed cap axis, and the hostile-report shapes the sibling surfaces
+learned from review (inherited fields, a polluted `Object.prototype`, throwing accessors
+and Proxy traps, unrecognized and symbol keys, a bounded prototype walk); deterministic,
+offline. Registered with the mutation guard. Building is not claiming: the family is
+deferred in the launch profile.
+
 ## Public-safety boundaries
 
 - Keep all examples deterministic and fixture-backed.

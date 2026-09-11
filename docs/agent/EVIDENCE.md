@@ -1683,3 +1683,32 @@ coordinator: docs figures nac 45->46, unsafe-claim 40->50, signalgrid-core 489->
 gates after: typecheck (all packages Done); review-invariants (determinism wider now names two remaining pinned defects — artifacts/mcp-server/src/index.ts and scripts/src/self-audit-proof.ts — and passes); known false claims, cited paths, markdown links, derived figures, docs sanity, cost figures, cross-doc banner parity, published-page scope banner, scheduled routines, launch-claims (0 violations, docs ceiling 416, retired 12 — no rise), proof figures (495 matches), proof counts (59), cited commands, cited symbols (92), doc line counts, lab-registry (48 entries, evidence age REPORTED), entry-guards self-test 12/12, catalog-structure self-test 45/45, parity self-test 18/18, gate census 189, surface coverage 100/100 — all passed
 ```
 Verdict:  **scripts/ was the surface where the guards live, and reading it whole found the guards themselves failing the way everything they watch fails — a self-test that could not go red, a kill rate over zero runs, a skip counted as a pass, a grep against text that is never printed, a ceiling that read corruption as a fresh start.** The pattern is the same one every prior round named, one level up: a check that cannot see the thing it guards. Every fix derives its scope from the thing that defines it — the core's fields, package.json, the installer's constants, git history for genesis — so the next member joins the check by itself, and two new gates now hold the two shapes reading found repeatedly (a module that runs its body on a filename match, a catalog total that no longer counts its rows). With this the ledger reads 100 of 100 surfaces READ; the six that were partial when Batch Y opened are closed. Left as owner decisions, not defects: the two remaining localeCompare pinned defects (artifacts/mcp-server directory listing, self-audit fingerprint), the k6 load drivers no runner invokes (tests surface, COMPANY_BUILD_PLAN row 43), and STATUS.md's "would run here now" column, whose generator cannot run to completion off a live-lane host and whose regeneration no gate enforces.
+
+## 2026-09-11 — "Two of the three runbook gaps modeled: the custody-ledger reconciliation (ledger vs bay vs cap) as a fixture corpus + fail-closed evaluator in the rtls-custody family, 48 new guards all falsifiable"
+Command:  the two gap rows in docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md that no surface modeled — "custody integrity" (a returned device still checked out to a prior holder / unpaired but occupying a slot) and the "per-user checkout cap" contradiction — built on the device-prep / supervision-identity pattern: lib/integrations/src/integrations/rtls-custody/custody-ledger.ts (6 normalized axes; the cap axis COMPUTED from three counts, never asserted; own-property reads, bounded chain scan, frozen domains and allowlist), a 19-fixture corpus, and a proof section in scripts/src/rtls-custody-proof.ts; registered with the mutation guard and the figure guard. Not a detect.ts detection and not a simulator change (both DR-020 territory — split to the backlog).
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:rtls-custody                               # 171 checks (was 63 on this base)
+node scripts/mutation-guard.mjs --proof=proof:rtls-custody
+node scripts/check-readiness-figure.mjs
+node scripts/generate-sync-manifest.mjs                   # regenerated, never hand-edited
+node scripts/check-proof-counts.mjs ; check-proof-figures ; check-cited-paths ; check-launch-claims ; check-known-false-claims ; docs:sanity ; review:invariants ; check-connector-discipline ; check-surface-review-coverage --write
+```
+Output:
+```
+figures=custodyLedgerCombos=864,custodyLedgerGrants=1
+summary=pass (171/171)
+mutations=62 killed=62 hung=0 known-inert=0 survivors=0     # 48 of the 62 are the new module's
+  (a) runbook ground truth       82%   14 modeled / 2 partial / 1 gap of 17 real-world elements   # on this base: the two partial rows are #641's, unmerged
+Proof-count check passed — all 60 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Cited-path check passed — 2241 citation(s) across 487 docs ...: all
+docs/**/*.md (REPORTED, not gated): 416 unhedged deferred-capability mention(s) ... (ceiling 416)   # four new blocks hedged where they sit
+Launch-claims gate passed — nothing deferred is presented as current.
+Known-false-claim check passed — every refutation holds, and no document re-states one.
+Docs sanity passed — required docs present, no unsafe claims.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Connector-discipline gate passed.
+wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces
+```
+Verdict:  **the runbooks' most-cited pain — a custody contradiction met as a mystery beep — is now a graded decision with a legible reason, and the two ground-truth rows read `modeled`.** The grant is a positive predicate over six axes (ledger clear with no holder, seated, paired, requester under cap, clean parse); the 864-state sweep pins it by equality (exactly one grant; `monitor` reachable only as "already held and not in the bay" and NOT ready; `escalate` only as "clear and the bay empty"; `alert` unreachable). The cap axis is derived from the requester's open count, the tenant cap and the docked-stale count with a strict integer parse, so "at cap only because a return never cleared" is a hold named `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN` and a cap genuinely reached is `CUSTODY_CAP_REACHED`. Every hostile-report shape the sibling surfaces learned from six review rounds is pinned on day one (inherited fields, polluted `Object.prototype`, throwing accessors and Proxy traps, unrecognized and symbol keys, the bounded walk, the frozen namespace). The one fixture that failed on the first run (`unpaired-absent`) was the proof's expectation, not the evaluator: a clear ledger over an empty bay is unaccounted (escalate) and outranks unpaired (restrict), so the fixture now isolates the unpaired branch with the device out with the requester, and the precedence is pinned as its own check. Readiness (a) moves to 16 modeled / 1 gap of 17 once #641 lands; the headline stays 0% on (b) until the Mac re-mint. The third gap — the end-to-end smart-charging simulator scenario — is simulator behavior (DR-020) and stays filed.

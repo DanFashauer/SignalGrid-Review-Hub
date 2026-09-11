@@ -76,16 +76,21 @@ premises:
 | Cross-domain detection: dock tamper + connectivity loss | `DOCK_TAMPER_WITH_NETWORK_LOSS` (same file) | modeled |
 | Cross-domain detection: dark in MDM yet alive on cellular/badge | `INACTIVE_MDM_BUT_ACTIVE_ELSEWHERE` (same file) | modeled |
 | Deterministic remediation cascade (what the L1/L2 ladder does by hand) | [`lib/signalgrid-simulator/src/remediation-allow.ts`](../../lib/signalgrid-simulator/src/remediation-allow.ts), proven by [`scripts/src/remediation-allow-proof.ts`](../../scripts/src/remediation-allow-proof.ts) | modeled |
-| **Custody integrity: a returned device still checked out to a prior holder / "unpaired" but occupying a slot** | — | **gap** |
-| **Per-user checkout cap (a hard limit silently blocking a clinician when a prior return did not clear)** | — | **gap** |
+| Custody integrity: a returned device still checked out to a prior holder / "unpaired" but occupying a slot | [`rtls-custody`](../../lib/integrations/src/integrations/rtls-custody) family — the custody-ledger RECONCILIATION as a distinct fixture corpus + evaluator in [`custody-ledger.ts`](../../lib/integrations/src/integrations/rtls-custody/custody-ledger.ts) (what the ledger says vs what the bay sees: a seated device the ledger still assigns to a prior holder is a hold with the contradiction named; an unpaired device in a bay is contained; a clear ledger over an empty bay escalates; any unknown axis holds; fail-closed), proven by [`scripts/src/rtls-custody-proof.ts`](../../scripts/src/rtls-custody-proof.ts) | modeled |
+| Per-user checkout cap (a hard limit silently blocking a clinician when a prior return did not clear) | the same surface — the cap axis is COMPUTED from the requester's open-checkout count, the tenant cap, and how many of those checkouts are physically docked (never asserted by the wire): a cap hit only by returns that never cleared is a hold with the reason `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN`; a cap genuinely reached is contained with `CUSTODY_CAP_REACHED`; a missing count is unknown and raises; contradictory counts are a malformed report | modeled |
 | **A faithful end-to-end "smart-charging" simulator scenario (badge → dock → provision → in-use → check-in, with the real failure branches)** | — | **gap** |
 
 ## The three gaps, and why they are worth filing
 
 The mapping is dense with **modeled** rows — the domain fits the existing surfaces almost
 one-to-one, which is the strongest evidence yet that the event-contract-first design was
-the right bet. Three fidelity gaps are genuine and filed as backlog rows rather than
-implied:
+the right bet. Three fidelity gaps were genuine and filed as backlog rows rather than
+implied. **Two of the three were modeled on 2026-09-11** as a read-only, fixture-backed
+evaluator in the `rtls-custody` family (`custody-ledger.ts`, proven by `proof:rtls-custody`)
+— the same pattern the two partial rows took, touching neither the decision core nor the
+simulator: the contradiction is graded as a checkout decision with a legible reason, and a
+person reconciles it. The timeline-level detection in `detect.ts` that item 1 proposed is
+still a design target (decision core), recorded on the backlog. The third remains a gap.
 
 1. **The "phantom custody" detection.** The single most-cited operational pain is a device
    that reads as checked-out to someone who already walked away, or occupies a dock slot
@@ -100,9 +105,12 @@ implied:
    the real workflow and its failure branches (unpaired / network-down / cap-hit /
    dock-fault), so proofs exercise the real thing.
 
-Because all three touch the decision core / simulator (behavior, DR-020 territory), they
-are proposed here and filed to [`docs/BUILD_BACKLOG.md`](../BUILD_BACKLOG.md) for a decision
-record, not changed unilaterally.
+The detection form of item 1 and all of item 3 touch the decision core / simulator
+(behavior, DR-020 territory); they are proposed here and filed to
+[`docs/BUILD_BACKLOG.md`](../BUILD_BACKLOG.md) for a decision record, not changed
+unilaterally. Items 1 and 2 as *decisions* — the ledger-versus-bay and ledger-versus-cap
+contradictions graded with a named reason — live in `custody-ledger.ts` (see the table),
+read-only and fixture-backed, in a family the launch profile keeps deferred.
 
 ## What this sharpens beyond code
 

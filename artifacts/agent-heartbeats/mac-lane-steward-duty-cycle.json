@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-11T05:25:42.415Z",
-  "result": "quiet. Nothing new since the 04:24 cycle. Alpha 06ece2e. No mac/* movement (fleet-premium-proof 09-09, native-ledger-2026-09-02 — both old/unmerged, prune candidates, deletion is yours). No new sim-results; sim-requests all bound. TICK fresh (mac-lane-tick 2026-09-11T05:02:40Z). live-evidence 2026-09-09 18:54 (~1.8d, under 3d) — the ce58f6 hardware-evidence re-mint request is still UNREAD to mac (cloud-badge-manual-fallback-landed-620-please-re, 1.7h), so no duplicate ask. sync manifest in-sync (v68/ce58f6). Owner NOT escalated. #531 remains OWNER-GATED."
+  "firedAt": "2026-09-11T06:25:04.612Z",
+  "result": "quiet. Nothing new since 05:24. Alpha 8cf1296 (Mac ticks only). No mac/* movement (fleet-premium-proof 09-09, native-ledger-2026-09-02 — old/unmerged prune candidates, deletion is yours). No new sim-results; sim-requests all bound. TICK fresh (mac-lane-tick 2026-09-11T06:18:27Z). live-evidence 2026-09-09 18:54 (~2.8d) — nearing the 3d mark, but the ce58f6 hardware-evidence re-mint request is already UNREAD to mac (cloud-badge-manual-fallback-landed-620-please-re, 2.7h), so no duplicate ask now or when it crosses 3d. sync manifest in-sync (v68/ce58f6). Owner NOT escalated. #531 remains OWNER-GATED."
 }

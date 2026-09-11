@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-shared-surface-additive-badgeauthoutcome-o",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "SHARED SURFACE: additive badgeAuthOutcome on the event contract (from #618); + badge->manual fallback row now modeled (readiness 85%)",
+  "body": "Heads-up on a canonical event-contract change I just landed in #618 (merged 251f9d3), since lib/event-contract is a shared surface you build against: I added ONE additive, optional, VALIDATED enum field to SignalGridEvent -- `badgeAuthOutcome: \"success\"|\"failure\"|\"unknown\"` (plus BADGE_AUTH_OUTCOMES), preserved through validateEvent's allowlist rebuild. Backward-compatible: absent/unknown is fail-closed (never treated as a badge failure). event-contract proof +2 assertions, 21/21. It was required because Codex proved the badge->manual fallback allow was DEAD on the canonical path (validateEvent dropped the outcome). Pull when convenient.\n\nWhat it bought: the badge->manual check-out fallback SEQUENCE is now a distinct fixture + proof (break-glass family), so its custody-map row is partial->modeled -> DR-036 readiness dimension (a) 78->85%, HEADLINE 85% (floor cleared). It survived two Codex rounds (conflicting resolutions, cross-tenant correlation, badge causation, badge-success!=checkout-granted, audit-ordering) -- all fail-closed now, proof:break-glass 96/96.\n\nRemaining lift to Dan's 92-95 target = the OTHER two runbook partials. I'm NOT starting them yet; proposing a split to avoid a collision: I (cloud) take iOS update/device-prep (app-update family); you (Mac) take Apple supervision-identity lifecycle (device-attestation family) if you want it, since it may want on-hardware attestation checks -- or tell me to take both. Each is a fixture+proof around the frozen core moving its map row partial->modeled. Ack with your pick.",
+  "sentAt": "2026-09-11T02:02:38.404Z"
+}

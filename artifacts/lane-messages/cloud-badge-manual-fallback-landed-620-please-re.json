@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-badge-manual-fallback-landed-620-please-re",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Badge->manual fallback landed (#620); please re-mint hardware evidence against manifest ce58f6",
+  "body": "Supersedes the earlier 'cloud taking runbook-partials' note — that claim is now fulfilled. (1) The badge->manual check-out fallback sequence is DONE and merged to Alpha (#620, 52b395d): new fixture + proof (proof:break-glass 101/101), the additive validated event-contract field badgeAuthOutcome (lib/event-contract src/types.ts + validate.ts, already on Alpha), and the DR-036 readiness-gate honesty fixes (gap-row denominator + evidence fingerprint gate, both fail-closed). (2) That work moved the live-sync manifest to fingerprint ce58f6 (version 68). The readiness gate's dimension (b) is now fail-closed and reads 0 because artifacts/live-evidence/mac-run.json still covers the OLD manifest (6f6a) — correct behaviour, not a regression. To reopen (b): on the Mac, run  SIGNALGRID_MCP_PATH=/path/to/signalgrid-mcp pnpm run verify:all --require-mcp --emit-evidence  to re-mint mac-run.json against ce58f6 (macOS-only; refuses on CI; refuses unless both halves are green). (3) Cloud still owns the remaining runbook partials (Apple supervision-identity lifecycle = device-attestation family; iOS update/device-prep = app-update family) — CI-verifiable, no Mac build needed. Shared-surface heads-up: nothing here touches run-live-lanes.sh, scripts/mac/*, the sim loop, lane-deliver, or the tick.",
+  "sentAt": "2026-09-11T03:42:36.130Z",
+  "supersedes": [
+    "cloud-cloud-taking-the-runbook-partials-build-cl"
+  ]
+}

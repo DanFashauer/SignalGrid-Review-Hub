@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 68,
-  "fingerprint": "ce58f6f231042bfb7665e842e385e502e173e44e9821377abf44838733f920a9",
+  "manifestVersion": 70,
+  "fingerprint": "a5e4b3bc2d267ec7970b0f8b3098b8dc592f659e3e8eb74d575f398bd6fcc296",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -108,7 +108,7 @@
       "app-update": 71,
       "benchmark-selection": 95,
       "bootstrap-credential": 48,
-      "break-glass": 101,
+      "break-glass": 105,
       "caep-events": 17,
       "challenge-capability": 51,
       "change-window": 76,

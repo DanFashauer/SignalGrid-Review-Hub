@@ -49,6 +49,19 @@ check(
 );
 check("prototype is not polluted", ({} as Record<string, unknown>).polluted === undefined);
 
+// Additive optional field: a valid badgeAuthOutcome is PRESERVED through the allowlist
+// (a downstream consumer — the break-glass badge→manual fallback — depends on this), and
+// an out-of-domain value is rejected fail-closed.
+{
+  const withOutcome = validateEvent({ ...good, eventType: "badge_access", badgeAuthOutcome: "failure" });
+  check(
+    "badgeAuthOutcome is validated and preserved through the allowlist",
+    withOutcome.ok === true && withOutcome.event.badgeAuthOutcome === "failure",
+  );
+  const badOutcome = validateEvent({ ...good, eventType: "badge_access", badgeAuthOutcome: "maybe" });
+  check("rejects: out-of-domain badgeAuthOutcome", badOutcome.ok === false);
+}
+
 // ── validator: reject the malformed ───────────────────────────────────────────
 const rejects: Array<[string, unknown]> = [
   ["missing required anchors", { eventType: "badge_access" }],

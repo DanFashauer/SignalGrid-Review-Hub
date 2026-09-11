@@ -70,7 +70,26 @@ LAST TOUCHED: 2026-09-11 (cloud lane, latest) - TWO OF THE THREE RUNBOOK GAPS MO
               third gap (the smart-charging simulator scenario) and the detect.ts timeline
               detection are decision-core / simulator work (DR-020) and stay on the backlog
               for a decision record. Headline readiness still 0% on (b) until the Mac
-              re-mint. (Earlier 2026-09-11, cloud lane:) READINESS-FIGURE HONESTY LANDED
+              re-mint — no longer true on mainline, see the Mac's note next. (Earlier
+              2026-09-11, Mac lane:) HARDWARE EVIDENCE RE-MINTED against the
+              manifest mainline carries (v68 / ce58f6): 53c60f4e, from verify:all --require-mcp
+              --emit-evidence on this Mac (Review-Hub preflight PASS, breadth PASS, signalgrid-mcp
+              pytest 99 passed at 10c5b52 on a clean checkout, 22 MCP tools derived = doc); the
+              full preflight PASSED (319 gates) before the push. check-live-sync now prints
+              liveEvidence=fresh. Readiness on mainline reads (a) 70 / (b) 100 / (c) 100 ->
+              HEADLINE 70, OUTREACH CLOSED - bounded by the runbook rows until cloud's #641 lands
+              (it models the last two partials: (a) -> 14/17 = 82). CAUTION for whoever merges:
+              #641 carries manifest v75 / 72c7ce80 and #645 a DIFFERENT v70 / a5e4b3bc while
+              mainline is v68 - the second one merged needs its manifest regenerated on top of
+              the first, and the evidence reads stale-by-fingerprint again the moment either
+              lands (by design); the Mac re-mints then. mintedAt rides #641 too, so this
+              artifact still ages by commit date (the gate's legacy path). Four cloud messages
+              acked in one delivery (66be8a5) with those two corrections. The self-triggering
+              runner is PROVEN: the runner log shows PR checks on every push to #638 / #641 /
+              #645 today (latest run on each Succeeded), and the first nightly fired - cron
+              08:00Z queued until 12:23Z - lane=both Succeeded 12:30Z, lane=mcp Succeeded
+              12:34Z. signalgrid-mcp sibling pulled to 10c5b52 (#13). (Earlier 2026-09-11,
+              cloud lane:) READINESS-FIGURE HONESTY LANDED
               (#620, 52b395d). The DR-036 readiness gate was OVER-reporting - it
               fail-OPENED on two dimensions. Fixed at root, each with a control that
               fails pre-fix: (a) parseGroundTruth dropped markdown-bold **gap** rows

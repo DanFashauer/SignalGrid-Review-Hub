@@ -64,7 +64,7 @@ LAST TOUCHED: 2026-09-11 (cloud lane, latest) - BRACE-LESS GUARDS JOIN THE MUTAT
               guards DELETED, app-update 54 with 0 survivors after two shadowed guards
               deleted and six parseVersion pins). Docs proof counts 82->98 and 71->74.
               The guard now REPORTS "N of M targets opted in; K pending" every run and
-              never fails on it; the BUILD_BACKLOG campaign row lists the pending families
+              never fails on it; as of 2026-09-11 the BUILD_BACKLOG campaign row lists the pending families
               by survivor count. Still awaiting owner merge: #638, #641, #645, #649 (all
               green; Mac re-mints evidence ONCE after they land). (Earlier 2026-09-11, Mac
               lane:) HARDWARE EVIDENCE RE-MINTED against the

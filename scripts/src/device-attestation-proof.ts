@@ -32,6 +32,7 @@ import {
   SUPERVISION_ENROLLMENT_DOMAIN,
   MANAGEMENT_CHANNEL_DOMAIN,
   SUPERVISION_INTEGRITY_DOMAIN,
+  SUPERVISION_IDENTITY_REPORT_KEYS,
   type AttestationReportRaw,
   type ManagementChannel,
   type NormalizedSupervisionIdentity,
@@ -42,6 +43,7 @@ import {
   type SupervisionReportIntegrity,
   type SupervisionState,
 } from "@workspace/integrations/device-attestation";
+import * as deviceAttestationModule from "@workspace/integrations/device-attestation";
 import { composeDeviceRisk, fromAttestation } from "@workspace/posture-composition";
 import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
@@ -361,12 +363,16 @@ console.log("\n  ── the supervision-identity lifecycle ──\n");
 
   // 7c. THE GRANT SET, PINNED BY EQUALITY over the whole lifecycle state space. Only an
   // equality pin excludes the states nobody named; the sweep is the backstop.
+  // The sweep walks the MODULE's exported domains, not a hand-typed copy (in-house review
+  // finding: a member added to a domain with no evaluator branch would be in-domain, fire
+  // nothing, and grant — and a retyped list here could not see it). The 288 below is the
+  // documented figure and stays literal on purpose.
   const domains = {
-    supervision: ["supervised", "unsupervised", "unknown"],
-    identityBinding: ["bound_to_org", "bound_to_other_org", "unbound", "unknown"],
-    enrollment: ["enrolled", "enrollment_lost", "never_enrolled", "unknown"],
-    commandChannel: ["responsive", "unresponsive", "unknown"],
-    reportIntegrity: ["clean", "malformed"],
+    supervision: SUPERVISION_DOMAIN,
+    identityBinding: IDENTITY_BINDING_DOMAIN,
+    enrollment: SUPERVISION_ENROLLMENT_DOMAIN,
+    commandChannel: MANAGEMENT_CHANNEL_DOMAIN,
+    reportIntegrity: SUPERVISION_INTEGRITY_DOMAIN,
   } as const;
   const build = (c: Record<string, unknown>): NormalizedSupervisionIdentity => ({
     sourceSystem: "device-attestation",
@@ -541,6 +547,36 @@ console.log("\n  ── the supervision-identity lifecycle ──\n");
   check("pushing onto a domain list throws (strict mode) and does not widen it — the out-of-domain hold survives the attempt",
     siPushThrew && SUPERVISION_ENROLLMENT_DOMAIN.length === 4 &&
     evaluateSupervisionIdentity({ ...base, enrollment: "garbage" as SupervisionEnrollment }).trustPreconditionMet === false);
+  // Every exported array in the module namespace is frozen — not a hand-enumerated list
+  // (in-house review finding: round five froze the five domain lists and left
+  // SUPERVISION_IDENTITY_REPORT_KEYS, the unrecognized-key allowlist, open).
+  const siUnfrozenExports = Object.entries(deviceAttestationModule).filter(([, v]) => Array.isArray(v) && !Object.isFrozen(v)).map(([k]) => k);
+  check(`every exported array in the device-attestation namespace is frozen (unfrozen: ${siUnfrozenExports.join(", ") || "none"})`,
+    siUnfrozenExports.length === 0);
+  let siKeysPushThrew = false;
+  try { (SUPERVISION_IDENTITY_REPORT_KEYS as unknown as string[]).push("vendor_note"); } catch { siKeysPushThrew = true; }
+  const siExtraAfter = normalizeSupervisionIdentity("w-18", { ...grantRaw, vendor_note: "anything" } as SupervisionIdentityReportRaw);
+  check("pushing onto the REPORT_KEYS allowlist throws and an unrecognized key still reads malformed",
+    siKeysPushThrew && SUPERVISION_IDENTITY_REPORT_KEYS.length === 4 && siExtraAfter.reportIntegrity === "malformed");
+  // The own-property read is the ONLY thing between a polluted Object.prototype and the
+  // trust precondition: the chain scan stops at Object.prototype by design. Pollute,
+  // normalize {} and undefined, assert all-unknown and not trusted, restore in finally.
+  {
+    const planted = { supervised: true, identity_binding: "bound_to_org", enrollment: "enrolled", command_channel: "responsive" };
+    const proto = Object.prototype as unknown as Record<string, unknown>;
+    try {
+      for (const [k, v] of Object.entries(planted)) Object.defineProperty(proto, k, { value: v, configurable: true, enumerable: false, writable: true });
+      const pollutedEmpty = normalizeSupervisionIdentity("w-19", {} as SupervisionIdentityReportRaw);
+      const pollutedAbsent = normalizeSupervisionIdentity("w-20", undefined);
+      check("with Object.prototype polluted with every recognized key, an EMPTY report is all-unknown and never trusted (own-property read is load-bearing)",
+        pollutedEmpty.supervision === "unknown" && pollutedEmpty.identityBinding === "unknown" && pollutedEmpty.enrollment === "unknown" &&
+        evaluateSupervisionIdentity(pollutedEmpty).trustPreconditionMet === false);
+      check("with Object.prototype polluted, an ABSENT report is all-unknown and never trusted",
+        pollutedAbsent.supervision === "unknown" && pollutedAbsent.identityBinding === "unknown" && evaluateSupervisionIdentity(pollutedAbsent).trustPreconditionMet === false);
+    } finally {
+      for (const k of Object.keys(planted)) delete proto[k];
+    }
+  }
   check("supervision-identity evaluator is deterministic",
     JSON.stringify(evaluateSupervisionIdentity(base)) === JSON.stringify(evaluateSupervisionIdentity(base)));
 }

@@ -31,6 +31,7 @@ import {
   OS_UPDATE_DOMAIN,
   PREP_STAGE_DOMAIN,
   PREP_INTEGRITY_DOMAIN,
+  DEVICE_PREP_REPORT_KEYS,
   type DevicePrepReportRaw,
   type AppUpdateReportRaw,
   type DevicePrepVerdict,
@@ -43,6 +44,7 @@ import {
   type PrepRequiredApps,
   type PrepStage,
 } from "@workspace/integrations/app-update";
+import * as appUpdateModule from "@workspace/integrations/app-update";
 import { SIGNAL_KINDS, composeDeviceRisk, fromAppUpdate } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
@@ -430,13 +432,18 @@ for (const [label, patch, action, reason] of prepFlips) {
 }
 
 // the grant set, pinned by equality over the whole workflow state space
+// The sweep walks the MODULE's exported domains, not a hand-typed copy (in-house review
+// finding: a member added to a domain with no evaluator branch would be in-domain, fire
+// nothing, and grant — and a retyped list here could not see it). The 3,072 below is the
+// documented figure and stays literal on purpose: if a domain grows, this line and the
+// figures= line move together and the docs↔proof figure guard catches the stale 3,072.
 const prepDomains = {
-  enrollment: ["enrolled", "pending", "not_enrolled", "unknown"],
-  profiles: ["applied", "partial", "missing", "unknown"],
-  requiredApps: ["installed", "partial", "missing", "unknown"],
-  osUpdate: ["current", "update_available", "update_required", "update_in_progress", "update_failed", "unknown"],
-  prepStage: ["complete", "in_progress", "failed", "unknown"],
-  reportIntegrity: ["clean", "malformed"],
+  enrollment: PREP_ENROLLMENT_DOMAIN,
+  profiles: PREP_PROFILES_DOMAIN,
+  requiredApps: PREP_REQUIRED_APPS_DOMAIN,
+  osUpdate: OS_UPDATE_DOMAIN,
+  prepStage: PREP_STAGE_DOMAIN,
+  reportIntegrity: PREP_INTEGRITY_DOMAIN,
 } as const;
 const buildPrep = (c: Record<string, unknown>): NormalizedDevicePrep => ({
   sourceSystem: "app-update",
@@ -624,6 +631,40 @@ try { (PREP_ENROLLMENT_DOMAIN as unknown as string[]).push("garbage"); } catch {
 check("device-prep: pushing onto a domain list throws (strict mode) and does not widen it — the out-of-domain hold survives the attempt",
   prepPushThrew && PREP_ENROLLMENT_DOMAIN.length === 4 &&
   evaluateDevicePrep({ ...prepBase, enrollment: "garbage" as PrepEnrollment }).readyForCheckout === false);
+// Every exported array in the module namespace is frozen — not a hand-enumerated list of
+// them (in-house review finding: round five froze the six domain lists by hand and left
+// DEVICE_PREP_REPORT_KEYS, the unrecognized-key allowlist, open; one push made an extra key
+// read clean). A future exported array that is genuinely mutable would need a named exemption.
+const prepUnfrozenExports = Object.entries(appUpdateModule).filter(([, v]) => Array.isArray(v) && !Object.isFrozen(v)).map(([k]) => k);
+check(`device-prep: every exported array in the app-update namespace is frozen (unfrozen: ${prepUnfrozenExports.join(", ") || "none"})`,
+  prepUnfrozenExports.length === 0);
+let prepKeysPushThrew = false;
+try { (DEVICE_PREP_REPORT_KEYS as unknown as string[]).push("vendor_note"); } catch { prepKeysPushThrew = true; }
+const prepExtraAfter = normalizeDevicePrep("w-17", { ...prepGrantRaw, vendor_note: "anything" } as DevicePrepReportRaw);
+check("device-prep: pushing onto the REPORT_KEYS allowlist throws and an unrecognized key still reads malformed",
+  prepKeysPushThrew && DEVICE_PREP_REPORT_KEYS.length === 5 && prepExtraAfter.reportIntegrity === "malformed");
+// The own-property read is the ONLY thing between a polluted Object.prototype and a full
+// grant: the chain scan stops at Object.prototype by design, so a recognized key planted
+// there is invisible to it, and an EMPTY or ABSENT report would read as fully confirmed.
+// (In-house review finding: every earlier hostile case used Object.create, which the scan
+// catches first, so deleting hasOwnProperty left 157/157 green.) Pollute, normalize {}
+// and undefined, assert all-unknown and not ready, restore in finally.
+{
+  const planted = { enrollment: "enrolled", profiles: "applied", required_apps: "installed", os_update: "current", prep_stage: "complete" };
+  const proto = Object.prototype as unknown as Record<string, unknown>;
+  try {
+    for (const [k, v] of Object.entries(planted)) Object.defineProperty(proto, k, { value: v, configurable: true, enumerable: false, writable: true });
+    const pollutedEmpty = normalizeDevicePrep("w-18", {} as DevicePrepReportRaw);
+    const pollutedAbsent = normalizeDevicePrep("w-19", undefined);
+    check("device-prep: with Object.prototype polluted with every recognized key, an EMPTY report is all-unknown and never ready (own-property read is load-bearing)",
+      pollutedEmpty.enrollment === "unknown" && pollutedEmpty.prepStage === "unknown" && pollutedEmpty.osUpdate === "unknown" &&
+      evaluateDevicePrep(pollutedEmpty).readyForCheckout === false);
+    check("device-prep: with Object.prototype polluted, an ABSENT report is all-unknown and never ready",
+      pollutedAbsent.enrollment === "unknown" && pollutedAbsent.prepStage === "unknown" && evaluateDevicePrep(pollutedAbsent).readyForCheckout === false);
+  } finally {
+    for (const k of Object.keys(planted)) delete proto[k];
+  }
+}
 check("device-prep evaluator is deterministic",
   JSON.stringify(evaluateDevicePrep(prepBase)) === JSON.stringify(evaluateDevicePrep(prepBase)));
 

@@ -88,7 +88,10 @@ LAST TOUCHED: 2026-09-11 (cloud lane, latest) - THE LAST TWO RUNBOOK PARTIALS MO
               granted) and a throwing field read malformed; round four caught that cut
               (it skipped when an advisory had fired) - now an in-domain check on every
               axis, run whatever else fired; round five froze the domain lists at runtime
-              (readonly is compile-time only). (Earlier 2026-09-11, cloud
+              (readonly is compile-time only); round six (Codex out of quota, so the
+              in-house fail-closed-auditor) froze the REPORT_KEYS allowlists too and pinned
+              the own-property read against a polluted Object.prototype - two P1s the
+              external rounds had just walked past. (Earlier 2026-09-11, cloud
               lane:) READINESS-FIGURE HONESTY LANDED
               (#620, 52b395d). The DR-036 readiness gate was OVER-reporting - it
               fail-OPENED on two dimensions. Fixed at root, each with a control that

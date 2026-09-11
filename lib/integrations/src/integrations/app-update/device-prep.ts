@@ -53,7 +53,10 @@ export interface DevicePrepReportRaw {
   [k: string]: unknown;
 }
 
-export const DEVICE_PREP_REPORT_KEYS = ["enrollment", "profiles", "required_apps", "os_update", "prep_stage"] as const;
+/** FROZEN like the domain lists: this is the allowlist `hasUnrecognizedKey` reads, and a
+ *  JavaScript caller that pushed a key onto it would turn an unrecognized assertion into a
+ *  clean one (in-house review finding, the round-five hole one list over). */
+export const DEVICE_PREP_REPORT_KEYS = Object.freeze(["enrollment", "profiles", "required_apps", "os_update", "prep_stage"] as const);
 
 /** The NORMALIZED domain of each stage — every declared member, `unknown` included. The
  *  evaluator holds any value outside these (a JavaScript caller, a cast, a deserialized
@@ -328,11 +331,20 @@ function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
   try {
     let o: object | null = report;
     for (let depth = 0; o !== null && o !== Object.prototype; depth += 1) {
-      if (depth >= MAX_PROTOTYPE_DEPTH) return true;
+      // Braced so the mutation guard can reach each guard (its mutators match `) {`;
+      // a one-line `if (...) return true;` was invisible to the sweep — review finding).
+      // A symbol key needs no separate test: `known` holds strings, so `includes` is
+      // false for any symbol and the last guard catches it.
+      if (depth >= MAX_PROTOTYPE_DEPTH) {
+        return true;
+      }
       for (const k of Reflect.ownKeys(o)) {
-        if (depth > 0) return true;
-        if (typeof k === "symbol") return true;
-        if (!known.includes(k)) return true;
+        if (depth > 0) {
+          return true;
+        }
+        if (!(known as readonly (string | symbol)[]).includes(k)) {
+          return true;
+        }
       }
       o = Object.getPrototypeOf(o) as object | null;
     }

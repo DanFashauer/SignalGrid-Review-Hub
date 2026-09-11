@@ -21,12 +21,16 @@ shipped, it is labelled a **design target**.
 
 ## The one-sentence position
 
-The NIST corpus gives SignalGrid an external, authoritative frame for four things
-it already does: **decide continuously and least-privilege** (SP 800-207 Zero
-Trust), **grade identity/authenticator assurance** (SP 800-63), **read Apple
-device posture against a recognized baseline** (macOS Security Compliance
-Project), and **enrich vulnerability signal from the national feed** (NVD/SCAP).
-It reads these as *evidence and vocabulary*; it claims none of their authority.
+The NIST corpus gives SignalGrid an external, authoritative frame for four
+capabilities at different maturities: **deciding continuously and
+least-privilege** (SP 800-207 Zero Trust) — this is the **launch** decision loop;
+**grading identity/authenticator assurance** (SP 800-63) — launch step-up plus
+deferred rungs; **reading Apple device posture against a recognized baseline**
+(macOS Security Compliance Project) — **deferred**, fixture-backed; and
+**enriching vulnerability signal from the national feed** (NVD/SCAP) — a
+**deferred** design direction. Each row below carries its status; the map reads
+these as *evidence and vocabulary* and claims none of their authority. Only the
+Zero Trust decision loop is a shipped capability today.
 
 ## 1 — macOS Security Compliance Project (mSCP) → Mac-lane posture
 
@@ -35,15 +39,26 @@ open mSCP: it generates macOS/iOS/visionOS security configuration and *complianc
 verification* artifacts from a rule library that maps to NIST SP 800-53r5, SP
 800-171, CIS Benchmarks/Controls, CNSSI 1253, and DISA STIG (it implements NIST
 SP 800-219 for automated macOS secure configuration). This is the strongest,
-most concrete fit — it names, in a recognized baseline, exactly the posture
-SignalGrid's Mac lane reads.
+most concrete fit — it names, in a recognized baseline, the posture the
+`macos-posture` family models. **Status:** every SignalGrid surface in this
+section is **deferred** (`scripts/launch-profile.mjs`), fixture-backed, and not
+part of the launch wedge; the mapping is a positioning aid, not a claim that this
+posture path ships today.
 
-| mSCP element | SignalGrid surface (real) | Relationship |
-| --- | --- | --- |
-| macOS security rules / baseline compliance | `proof:macos-posture`, `proof:macos-apple-schema`, `macos-posture` family | **informed by** — mSCP names which posture facts matter; SignalGrid consumes them fail-closed as evidence |
-| Declarative Device Management (DDM) assets | `proof:ddm-connector`, `ddm-connector` family | aligned with — same DDM surface SignalGrid models as a posture source |
-| Compliance verification scripts (report posture) | `mcp__signalgrid-mcp` posture tools; `proof:posture-composition`, `proof:posture-allow` | aligned with — mSCP *reports* a device's state; SignalGrid *decides* on it (golden rule 2: unknown posture raises assurance, never lowers it) |
-| Device management health | `proof:device-management-health`, `uem` family | aligned with |
+| mSCP element | SignalGrid surface (real) | Status | Relationship |
+| --- | --- | --- | --- |
+| macOS security rules / baseline compliance | `proof:macos-posture`, `proof:macos-apple-schema`, `macos-posture` family | **deferred**, fixture-backed proof | **informed by** — mSCP names which posture facts matter; the family models them fail-closed |
+| Declarative Device Management (DDM) assets | `proof:ddm-connector`, `ddm-connector` family | **deferred**, fixture-backed proof | informed by — same DDM surface modeled as a posture source |
+| Compliance verification scripts (report posture) | `proof:posture-composition`, `proof:posture-allow` (in-repo, fixture-backed); the **live** read is the separate **`DanFashauer/signalgrid-mcp`** Python server | **deferred**; live posture read is the sibling server, verification per `docs/LIVE_SYNC_LOOP.md` | informed by — mSCP *reports* a device's state; SignalGrid *would decide* on it (golden rule 2: unknown posture raises assurance) |
+| Device management health | `proof:device-management-health`, `uem` family | **deferred**, fixture-backed proof | informed by |
+
+**Two MCP servers, kept distinct** (`docs/MCP_ARCHITECTURE.md`): the *in-repo*
+`mcp__signalgrid-mcp` (`artifacts/mcp-server/`) exposes the **decision fabric** as
+tools — it does not collect macOS posture. The **macOS device-posture** reads
+come from the *separate* [`DanFashauer/signalgrid-mcp`](https://github.com/DanFashauer/signalgrid-mcp)
+Python server (a read-only signal source; its tool count is derived from a real
+checkout by `pnpm run verify:all`, printed UNVERIFIED when absent). This row is
+about that sibling, not the in-repo namespace.
 
 **Boundary:** SignalGrid is not an MDM and cannot enforce a baseline on a device
 (CLAUDE.md golden rule 4 — enforcement is a supervised-device/OS capability).
@@ -61,18 +76,19 @@ already places its weight in the Zero Trust Identity Mesh layer.
 
 | SP 800-207 tenet | SignalGrid surface (real) | Relationship |
 | --- | --- | --- |
-| Policy Decision Point / Policy Engine | the deterministic decision core; `proof:orchestration`, `proof:policy-binding` | aligned with — SignalGrid *is* a PDP for shared-device custody |
+| Policy Decision Point / Policy Engine | the deterministic decision core; `proof:zero-trust-principles` and `proof:signalgrid-core` exercise `evaluatePolicy` directly (`proof:orchestration` tests the downstream cascade, not the PDP itself) | aligned with — the launch decision loop *is* a PDP for the shared-device workflow |
 | Per-request, continuous evaluation | `proof:caep-events`, `proof:sso-session`, `proof:session-readiness` | aligned with |
 | Decision from many signal sources | the read-only, fail-closed connector families (identity, EDR, NAC, posture, plus the RTLS/custody families that are **deferred**, DR-001) | aligned with |
 | Least privilege / dynamic policy | `allow / step_up / restrict / deny`; `proof:entitlement-binding`, `proof:break-glass` | aligned with |
 
 ## 3 — SP 800-63 Digital Identity → the assurance ladder
 
-NIST SP 800-63 ([`usnistgov/800-63-3`](https://github.com/usnistgov/800-63-3),
-and 800-63B for authenticators) grades identity/authenticator/federation
-assurance (IAL/AAL/FAL). SignalGrid's step-up path is an assurance ladder in the
-same spirit — a weak or replayable authenticator raises assurance requirements
-rather than passing silently.
+NIST SP 800-63 **Revision 4** — the current, finalized suite as of 2025
+([`usnistgov/800-63-4`](https://github.com/usnistgov/800-63-4), with SP 800-63B-4
+for authenticators; Rev 3 is superseded) — grades identity/authenticator/
+federation assurance (IAL/AAL/FAL). SignalGrid's step-up path is an assurance
+ladder in the same spirit — a weak or replayable authenticator raises assurance
+requirements rather than passing silently.
 
 | SP 800-63 concept | SignalGrid surface (real) | Relationship |
 | --- | --- | --- |
@@ -96,11 +112,15 @@ the audit ledger). OSCAL is the recognized shape that evidence could speak.
 
 ## 5 — NVD / SCAP → the vulnerability lane
 
-The National Vulnerability Database and SCAP tooling are the national feed
-SignalGrid's `vuln-scan` family already targets (precedent: intake ledger row 30,
-NVD → `vuln-scan`; NVD CVE 2.0 answered keyless in that probe). `proof:vuln-scan`
-consumes CVE evidence fixture-first (a public feed enters the tree only as a
-committed, dated fixture; live only behind tier + opt-in — DR-027).
+The National Vulnerability Database and SCAP tooling are the national feed the
+**deferred** `vuln-scan` family is designed to consume (`scripts/launch-profile.mjs`;
+precedent: intake ledger row 30, NVD → `vuln-scan`). **Status, stated plainly:**
+`proof:vuln-scan` runs against a **synthetic fixture** (`scripts/fixtures/vuln-scan/findings.json`),
+NVD data has **not** entered any decision path (`docs/research/PUBLIC_API_SOURCES.md`),
+and the family is not part of the launch wedge. The alignment is prospective:
+fixture-first by rule (a public feed enters the tree only as a committed, dated
+fixture; live only behind tier + opt-in — DR-027), so NVD → `vuln-scan` is a
+**design direction**, not a shipped enrichment.
 
 ## 6 — Mobile Threat Catalogue → the shared-device threat model
 

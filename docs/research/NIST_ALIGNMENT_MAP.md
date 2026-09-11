@@ -22,15 +22,17 @@ shipped, it is labelled a **design target**.
 ## The one-sentence position
 
 The NIST corpus gives SignalGrid an external, authoritative frame for four
-capabilities at different maturities: **deciding continuously and
-least-privilege** (SP 800-207 Zero Trust) — this is the **launch** decision loop;
-**grading identity/authenticator assurance** (SP 800-63) — launch step-up plus
-deferred rungs; **reading Apple device posture against a recognized baseline**
-(macOS Security Compliance Project) — **deferred**, fixture-backed; and
+capabilities at different maturities: **per-call, least-privilege decisioning**
+(SP 800-207 Zero Trust) — this is the **launch** decision loop, *point-in-time*
+evaluation; **grading identity/authenticator assurance** (SP 800-63) — launch
+step-up plus deferred rungs; **reading Apple device posture against a recognized
+baseline** (macOS Security Compliance Project) — **deferred**, fixture-backed; and
 **enriching vulnerability signal from the national feed** (NVD/SCAP) — a
 **deferred** design direction. Each row below carries its status; the map reads
 these as *evidence and vocabulary* and claims none of their authority. Only the
-Zero Trust decision loop is a shipped capability today.
+per-call decision loop is a shipped capability today; **continuous
+reevaluation over elapsed time is not established** (`docs/SIGNALGRID_ZERO_TRUST_DECISION_PRINCIPLES.md`;
+`proof:zero-trust-principles` prints the same limitation) and stays deferred.
 
 ## 1 — macOS Security Compliance Project (mSCP) → Mac-lane posture
 
@@ -40,17 +42,19 @@ verification* artifacts from a rule library that maps to NIST SP 800-53r5, SP
 800-171, CIS Benchmarks/Controls, CNSSI 1253, and DISA STIG (it implements NIST
 SP 800-219 for automated macOS secure configuration). This is the strongest,
 most concrete fit — it names, in a recognized baseline, the posture the
-`macos-posture` family models. **Status:** every SignalGrid surface in this
-section is **deferred** (`scripts/launch-profile.mjs`), fixture-backed, and not
-part of the launch wedge; the mapping is a positioning aid, not a claim that this
-posture path ships today.
+`macos-posture` family models. **Status:** the mSCP-facing posture surfaces
+(`macos-posture`, `ddm-connector`, `uem`) are **deferred** and fixture-backed
+(`scripts/launch-profile.mjs`); the one **launch** family here is
+`device-management-health`. The mapping is a positioning aid, not a claim that a
+live mSCP-driven posture path ships today. Each row carries its own status.
 
 | mSCP element | SignalGrid surface (real) | Status | Relationship |
 | --- | --- | --- | --- |
 | macOS security rules / baseline compliance | `proof:macos-posture`, `proof:macos-apple-schema`, `macos-posture` family | **deferred**, fixture-backed proof | **informed by** — mSCP names which posture facts matter; the family models them fail-closed |
 | Declarative Device Management (DDM) assets | `proof:ddm-connector`, `ddm-connector` family | **deferred**, fixture-backed proof | informed by — same DDM surface modeled as a posture source |
 | Compliance verification scripts (report posture) | `proof:posture-composition`, `proof:posture-allow` (in-repo, fixture-backed); the **live** read is the separate **`DanFashauer/signalgrid-mcp`** Python server | **deferred**; live posture read is the sibling server, verification per `docs/LIVE_SYNC_LOOP.md` | informed by — mSCP *reports* a device's state; SignalGrid *would decide* on it (golden rule 2: unknown posture raises assurance) |
-| Device management health | `proof:device-management-health`, `uem` family | **deferred**, fixture-backed proof | informed by |
+| Device management health (is the UEM/MDM reporting) | `proof:device-management-health`, `device-management-health` family | **launch** | aligned with — the launch signal that a device's management channel is healthy |
+| Broader UEM posture | `proof:uem`, `uem` family | **deferred** | informed by — the wider UEM surface beyond the launch health check |
 
 **Two MCP servers, kept distinct** (`docs/MCP_ARCHITECTURE.md`): the *in-repo*
 `mcp__signalgrid-mcp` (`artifacts/mcp-server/`) exposes the **decision fabric** as
@@ -77,7 +81,8 @@ already places its weight in the Zero Trust Identity Mesh layer.
 | SP 800-207 tenet | SignalGrid surface (real) | Relationship |
 | --- | --- | --- |
 | Policy Decision Point / Policy Engine | the deterministic decision core; `proof:zero-trust-principles` and `proof:signalgrid-core` exercise `evaluatePolicy` directly (`proof:orchestration` tests the downstream cascade, not the PDP itself) | aligned with — the launch decision loop *is* a PDP for the shared-device workflow |
-| Per-request, continuous evaluation | `proof:caep-events`, `proof:sso-session`, `proof:session-readiness` | aligned with |
+| Per-request evaluation (point-in-time) | the launch decision loop evaluates each request | **launch** — aligned with |
+| *Continuous* reevaluation over elapsed time | `proof:caep-events`, `proof:sso-session`, `proof:session-readiness` (families all **deferred**, `scripts/launch-profile.mjs`) | **deferred** — not established (`proof:zero-trust-principles` prints this limitation); a design direction, not shipped |
 | Decision from many signal sources | the read-only, fail-closed connector families (identity, EDR, NAC, posture, plus the RTLS/custody families that are **deferred**, DR-001) | aligned with |
 | Least privilege / dynamic policy | `allow / step_up / restrict / deny`; `proof:entitlement-binding`, `proof:break-glass` | aligned with |
 

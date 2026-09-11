@@ -143,6 +143,42 @@ interface Candidate {
   reason: SupervisionIdentityReasonCode;
 }
 
+/** Every axis read ONCE, up front (review finding): a direct caller's accessor or Proxy
+ *  could otherwise answer the branch reads with one value and the domain guard with
+ *  another, and the grant would survive on the second answer. A read that throws leaves
+ *  every axis unknown and the report unreadable — held, never thrown out of the evaluator. */
+interface AxisSnapshot {
+  readonly deviceId: unknown;
+  readonly supervision: NormalizedSupervisionIdentity["supervision"];
+  readonly identityBinding: NormalizedSupervisionIdentity["identityBinding"];
+  readonly enrollment: NormalizedSupervisionIdentity["enrollment"];
+  readonly commandChannel: NormalizedSupervisionIdentity["commandChannel"];
+  readonly reportIntegrity: NormalizedSupervisionIdentity["reportIntegrity"];
+}
+const UNREADABLE_SNAPSHOT: AxisSnapshot = Object.freeze({
+  deviceId: undefined,
+  supervision: "unknown",
+  identityBinding: "unknown",
+  enrollment: "unknown",
+  commandChannel: "unknown",
+  reportIntegrity: "malformed",
+});
+function snapshotAxes(s: NormalizedSupervisionIdentity): { snap: AxisSnapshot; unreadable: boolean } {
+  try {
+    const snap: AxisSnapshot = {
+      deviceId: s.deviceId,
+      supervision: s.supervision,
+      identityBinding: s.identityBinding,
+      enrollment: s.enrollment,
+      commandChannel: s.commandChannel,
+      reportIntegrity: s.reportIntegrity,
+    };
+    return { snap, unreadable: false };
+  } catch {
+    return { snap: UNREADABLE_SNAPSHOT, unreadable: true };
+  }
+}
+
 /**
  * Grade the supervision-identity precondition for one device. Pure and deterministic.
  *
@@ -167,50 +203,55 @@ export function evaluateSupervisionIdentity(s: NormalizedSupervisionIdentity): S
   const criticalFindings: string[] = [];
   const unknownSignals: string[] = [];
   const candidates: Candidate[] = [];
+  const { snap, unreadable } = snapshotAxes(s);
+  if (unreadable) {
+    unknownSignals.push("state_unreadable");
+    candidates.push({ posture: "identity_unverified", action: "step_up", reason: "SUPERVISION_STATE_UNKNOWN" });
+  }
 
   // Defence in depth: a report we could not fully parse is never a grant.
-  if (s.reportIntegrity !== "clean") {
+  if (snap.reportIntegrity !== "clean") {
     unknownSignals.push("report_integrity");
     candidates.push({ posture: "unverified", action: "step_up", reason: "SUPERVISION_REPORT_MALFORMED" });
   }
 
   // ── identity binding: whose device is this? ─────────────────────────────────────
-  if (s.identityBinding === "bound_to_other_org") {
+  if (snap.identityBinding === "bound_to_other_org") {
     criticalFindings.push("foreign_supervision_identity");
     candidates.push({ posture: "foreign_identity", action: "restrict", reason: "SUPERVISION_FOREIGN_IDENTITY" });
-  } else if (s.identityBinding === "unbound") {
+  } else if (snap.identityBinding === "unbound") {
     criticalFindings.push("supervision_identity_lost");
     candidates.push({ posture: "supervision_lost", action: "restrict", reason: "SUPERVISION_IDENTITY_LOST" });
-  } else if (s.identityBinding === "unknown") {
+  } else if (snap.identityBinding === "unknown") {
     unknownSignals.push("identity_binding");
     candidates.push({ posture: "identity_unverified", action: "step_up", reason: "SUPERVISION_STATE_UNKNOWN" });
   }
 
   // ── enrollment ──────────────────────────────────────────────────────────────────
-  if (s.enrollment === "enrollment_lost") {
+  if (snap.enrollment === "enrollment_lost") {
     criticalFindings.push("enrollment_lost");
     candidates.push({ posture: "supervision_lost", action: "restrict", reason: "SUPERVISION_ENROLLMENT_LOST" });
-  } else if (s.enrollment === "never_enrolled") {
+  } else if (snap.enrollment === "never_enrolled") {
     criticalFindings.push("never_enrolled");
     candidates.push({ posture: "unsupervised", action: "restrict", reason: "SUPERVISION_NEVER_ENROLLED" });
-  } else if (s.enrollment === "unknown") {
+  } else if (snap.enrollment === "unknown") {
     unknownSignals.push("enrollment");
     candidates.push({ posture: "identity_unverified", action: "step_up", reason: "SUPERVISION_STATE_UNKNOWN" });
   }
 
   // ── supervision ─────────────────────────────────────────────────────────────────
-  if (s.supervision === "unsupervised") {
+  if (snap.supervision === "unsupervised") {
     criticalFindings.push("unsupervised");
     candidates.push({ posture: "unsupervised", action: "restrict", reason: "SUPERVISION_UNSUPERVISED" });
-  } else if (s.supervision === "unknown") {
+  } else if (snap.supervision === "unknown") {
     unknownSignals.push("supervision");
     candidates.push({ posture: "identity_unverified", action: "step_up", reason: "SUPERVISION_STATE_UNKNOWN" });
   }
 
   // ── command channel: the operational test of trust ──────────────────────────────
-  if (s.commandChannel === "unresponsive") {
+  if (snap.commandChannel === "unresponsive") {
     candidates.push({ posture: "channel_unresponsive", action: "step_up", reason: "SUPERVISION_CHANNEL_UNRESPONSIVE" });
-  } else if (s.commandChannel === "unknown") {
+  } else if (snap.commandChannel === "unknown") {
     unknownSignals.push("command_channel");
     candidates.push({ posture: "identity_unverified", action: "step_up", reason: "SUPERVISION_STATE_UNKNOWN" });
   }
@@ -224,11 +265,11 @@ export function evaluateSupervisionIdentity(s: NormalizedSupervisionIdentity): S
   // its guard was gated on an empty candidate list): any axis outside its domain is
   // held, whatever else fired — an earlier hold or containment keeps its own reason.
   const inDomain =
-    (SUPERVISION_DOMAIN as readonly string[]).includes(s.supervision) &&
-    (IDENTITY_BINDING_DOMAIN as readonly string[]).includes(s.identityBinding) &&
-    (SUPERVISION_ENROLLMENT_DOMAIN as readonly string[]).includes(s.enrollment) &&
-    (MANAGEMENT_CHANNEL_DOMAIN as readonly string[]).includes(s.commandChannel) &&
-    (SUPERVISION_INTEGRITY_DOMAIN as readonly string[]).includes(s.reportIntegrity);
+    (SUPERVISION_DOMAIN as readonly string[]).includes(snap.supervision) &&
+    (IDENTITY_BINDING_DOMAIN as readonly string[]).includes(snap.identityBinding) &&
+    (SUPERVISION_ENROLLMENT_DOMAIN as readonly string[]).includes(snap.enrollment) &&
+    (MANAGEMENT_CHANNEL_DOMAIN as readonly string[]).includes(snap.commandChannel) &&
+    (SUPERVISION_INTEGRITY_DOMAIN as readonly string[]).includes(snap.reportIntegrity);
   if (!inDomain) {
     unknownSignals.push("state_out_of_domain");
     candidates.push({ posture: "identity_unverified", action: "step_up", reason: "SUPERVISION_STATE_UNKNOWN" });
@@ -243,7 +284,7 @@ export function evaluateSupervisionIdentity(s: NormalizedSupervisionIdentity): S
   );
 
   return {
-    deviceId: s.deviceId,
+    deviceId: typeof snap.deviceId === "string" ? snap.deviceId : "",
     posture: winner.posture,
     reasonCode: winner.reason,
     recommendedAction: winner.action,
@@ -354,7 +395,16 @@ export function normalizeSupervisionIdentity(
   const integrity = { malformed: false };
   let r: Record<string, unknown> = {};
   if (raw !== undefined && raw !== null) {
-    if (!isPlainReport(raw) || hasUnrecognizedKey(raw, SUPERVISION_IDENTITY_REPORT_KEYS)) {
+    // The shape check itself can throw — Array.isArray on a REVOKED Proxy does — and a
+    // throw here would break the normalizer's no-throw promise before the field-read
+    // catch below could keep it (review finding). Any failure is malformed.
+    let shapeOk = false;
+    try {
+      shapeOk = isPlainReport(raw) && !hasUnrecognizedKey(raw, SUPERVISION_IDENTITY_REPORT_KEYS);
+    } catch {
+      shapeOk = false;
+    }
+    if (!shapeOk) {
       integrity.malformed = true;
     } else {
       r = raw as Record<string, unknown>;
@@ -419,7 +469,10 @@ const CLEAN: NormalizedSupervisionIdentity = {
   reportIntegrity: "clean",
 };
 
-export const SUPERVISION_IDENTITY_FIXTURES: Readonly<Record<string, NormalizedSupervisionIdentity>> = {
+/** FROZEN, and looked up by OWN name only (review finding: an inherited name such as
+ *  "constructor", or a grant-shaped object planted on Object.prototype, evaluated to a
+ *  verdict instead of the documented `undefined`). */
+export const SUPERVISION_IDENTITY_FIXTURES: Readonly<Record<string, NormalizedSupervisionIdentity>> = Object.freeze({
   /** The one grant: supervised, this org's identity, enrolled, answering commands. */
   "supervised-trusted": CLEAN,
   /** Another org's device on this dock — this org can run nothing on it. */
@@ -445,13 +498,14 @@ export const SUPERVISION_IDENTITY_FIXTURES: Readonly<Record<string, NormalizedSu
     enrollment: "enrollment_lost",
     supervision: "unsupervised",
   },
-};
+});
 
-/** Evaluate a named fixture; `undefined` for an unknown name (never a fabricated verdict). */
+/** Evaluate a named fixture; `undefined` for an unknown name (never a fabricated verdict).
+ *  OWN names only: an inherited name is not a fixture. */
 export function evaluateSupervisionIdentityFixture(name: string): SupervisionIdentityVerdict | undefined {
-  const fixture = SUPERVISION_IDENTITY_FIXTURES[name];
-  if (fixture === undefined) {
+  if (!Object.prototype.hasOwnProperty.call(SUPERVISION_IDENTITY_FIXTURES, name)) {
     return undefined;
   }
-  return evaluateSupervisionIdentity(fixture);
+  // The own-name guard above is the whole test: a name it admits is a fixture.
+  return evaluateSupervisionIdentity(SUPERVISION_IDENTITY_FIXTURES[name]);
 }

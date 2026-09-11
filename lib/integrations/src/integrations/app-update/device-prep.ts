@@ -153,6 +153,45 @@ interface Candidate {
   reason: DevicePrepReasonCode;
 }
 
+/** Every axis read ONCE, up front (review finding): a direct caller's accessor or Proxy
+ *  could otherwise answer the branch reads with one value and the domain guard with
+ *  another, and the grant would survive on the second answer. A read that throws leaves
+ *  every axis unknown and the report unreadable — held, never thrown out of the evaluator. */
+interface AxisSnapshot {
+  readonly deviceRef: unknown;
+  readonly enrollment: NormalizedDevicePrep["enrollment"];
+  readonly profiles: NormalizedDevicePrep["profiles"];
+  readonly requiredApps: NormalizedDevicePrep["requiredApps"];
+  readonly osUpdate: NormalizedDevicePrep["osUpdate"];
+  readonly prepStage: NormalizedDevicePrep["prepStage"];
+  readonly reportIntegrity: NormalizedDevicePrep["reportIntegrity"];
+}
+const UNREADABLE_SNAPSHOT: AxisSnapshot = Object.freeze({
+  deviceRef: undefined,
+  enrollment: "unknown",
+  profiles: "unknown",
+  requiredApps: "unknown",
+  osUpdate: "unknown",
+  prepStage: "unknown",
+  reportIntegrity: "malformed",
+});
+function snapshotAxes(s: NormalizedDevicePrep): { snap: AxisSnapshot; unreadable: boolean } {
+  try {
+    const snap: AxisSnapshot = {
+      deviceRef: s.deviceRef,
+      enrollment: s.enrollment,
+      profiles: s.profiles,
+      requiredApps: s.requiredApps,
+      osUpdate: s.osUpdate,
+      prepStage: s.prepStage,
+      reportIntegrity: s.reportIntegrity,
+    };
+    return { snap, unreadable: false };
+  } catch {
+    return { snap: UNREADABLE_SNAPSHOT, unreadable: true };
+  }
+}
+
 /**
  * Grade the prep/update readiness of one device. Pure and deterministic.
  *
@@ -165,70 +204,75 @@ export function evaluateDevicePrep(s: NormalizedDevicePrep): DevicePrepVerdict {
   const criticalFindings: string[] = [];
   const unknownSignals: string[] = [];
   const candidates: Candidate[] = [];
+  const { snap, unreadable } = snapshotAxes(s);
+  if (unreadable) {
+    unknownSignals.push("state_unreadable");
+    candidates.push({ posture: "prep_unverified", action: "step_up", reason: "DEVICE_PREP_STATE_UNKNOWN" });
+  }
 
   // Defence in depth: a report we could not fully parse is never a grant.
-  if (s.reportIntegrity !== "clean") {
+  if (snap.reportIntegrity !== "clean") {
     unknownSignals.push("report_integrity");
     candidates.push({ posture: "unverified", action: "step_up", reason: "DEVICE_PREP_REPORT_MALFORMED" });
   }
 
   // ── the prep workflow's own outcome ──────────────────────────────────────────────
-  if (s.prepStage === "failed") {
+  if (snap.prepStage === "failed") {
     criticalFindings.push("prep_failed");
     candidates.push({ posture: "prep_failed", action: "restrict", reason: "DEVICE_PREP_FAILED" });
-  } else if (s.prepStage === "in_progress") {
+  } else if (snap.prepStage === "in_progress") {
     candidates.push({ posture: "prep_in_progress", action: "step_up", reason: "DEVICE_PREP_IN_PROGRESS" });
-  } else if (s.prepStage === "unknown") {
+  } else if (snap.prepStage === "unknown") {
     unknownSignals.push("prep_stage");
     candidates.push({ posture: "prep_unverified", action: "step_up", reason: "DEVICE_PREP_STATE_UNKNOWN" });
   }
 
   // ── enrollment ──────────────────────────────────────────────────────────────────
-  if (s.enrollment === "not_enrolled") {
+  if (snap.enrollment === "not_enrolled") {
     criticalFindings.push("not_enrolled");
     candidates.push({ posture: "not_provisioned", action: "restrict", reason: "DEVICE_NOT_ENROLLED" });
-  } else if (s.enrollment === "pending") {
+  } else if (snap.enrollment === "pending") {
     candidates.push({ posture: "prep_in_progress", action: "step_up", reason: "DEVICE_ENROLLMENT_PENDING" });
-  } else if (s.enrollment === "unknown") {
+  } else if (snap.enrollment === "unknown") {
     unknownSignals.push("enrollment");
     candidates.push({ posture: "prep_unverified", action: "step_up", reason: "DEVICE_PREP_STATE_UNKNOWN" });
   }
 
   // ── configuration profiles ──────────────────────────────────────────────────────
-  if (s.profiles === "missing") {
+  if (snap.profiles === "missing") {
     criticalFindings.push("profiles_missing");
     candidates.push({ posture: "not_provisioned", action: "restrict", reason: "DEVICE_PROFILES_MISSING" });
-  } else if (s.profiles === "partial") {
+  } else if (snap.profiles === "partial") {
     candidates.push({ posture: "prep_in_progress", action: "step_up", reason: "DEVICE_PROFILES_PARTIAL" });
-  } else if (s.profiles === "unknown") {
+  } else if (snap.profiles === "unknown") {
     unknownSignals.push("profiles");
     candidates.push({ posture: "prep_unverified", action: "step_up", reason: "DEVICE_PREP_STATE_UNKNOWN" });
   }
 
   // ── required apps ───────────────────────────────────────────────────────────────
-  if (s.requiredApps === "missing") {
+  if (snap.requiredApps === "missing") {
     criticalFindings.push("required_apps_missing");
     candidates.push({ posture: "not_provisioned", action: "restrict", reason: "DEVICE_REQUIRED_APPS_MISSING" });
-  } else if (s.requiredApps === "partial") {
+  } else if (snap.requiredApps === "partial") {
     candidates.push({ posture: "prep_in_progress", action: "step_up", reason: "DEVICE_REQUIRED_APPS_PARTIAL" });
-  } else if (s.requiredApps === "unknown") {
+  } else if (snap.requiredApps === "unknown") {
     unknownSignals.push("required_apps");
     candidates.push({ posture: "prep_unverified", action: "step_up", reason: "DEVICE_PREP_STATE_UNKNOWN" });
   }
 
   // ── the OS update workflow ──────────────────────────────────────────────────────
-  if (s.osUpdate === "update_failed") {
+  if (snap.osUpdate === "update_failed") {
     criticalFindings.push("os_update_failed");
     candidates.push({ posture: "update_failed", action: "restrict", reason: "OS_UPDATE_FAILED" });
-  } else if (s.osUpdate === "update_required") {
+  } else if (snap.osUpdate === "update_required") {
     criticalFindings.push("os_update_required");
     candidates.push({ posture: "update_required", action: "restrict", reason: "OS_UPDATE_REQUIRED" });
-  } else if (s.osUpdate === "update_in_progress") {
+  } else if (snap.osUpdate === "update_in_progress") {
     candidates.push({ posture: "update_in_progress", action: "step_up", reason: "OS_UPDATE_IN_PROGRESS" });
-  } else if (s.osUpdate === "update_available") {
+  } else if (snap.osUpdate === "update_available") {
     // Optional and offered, not required: an advisory nudge, never a block.
     candidates.push({ posture: "update_available", action: "monitor", reason: "OS_UPDATE_AVAILABLE" });
-  } else if (s.osUpdate === "unknown") {
+  } else if (snap.osUpdate === "unknown") {
     unknownSignals.push("os_update");
     candidates.push({ posture: "prep_unverified", action: "step_up", reason: "DEVICE_PREP_STATE_UNKNOWN" });
   }
@@ -243,12 +287,12 @@ export function evaluateDevicePrep(s: NormalizedDevicePrep): DevicePrepVerdict {
   // its domain is held, whatever else fired — after a monitor the hold outranks it; after
   // another hold or containment the earlier concern keeps its own reason on the tie.
   const inDomain =
-    (PREP_STAGE_DOMAIN as readonly string[]).includes(s.prepStage) &&
-    (PREP_ENROLLMENT_DOMAIN as readonly string[]).includes(s.enrollment) &&
-    (PREP_PROFILES_DOMAIN as readonly string[]).includes(s.profiles) &&
-    (PREP_REQUIRED_APPS_DOMAIN as readonly string[]).includes(s.requiredApps) &&
-    (OS_UPDATE_DOMAIN as readonly string[]).includes(s.osUpdate) &&
-    (PREP_INTEGRITY_DOMAIN as readonly string[]).includes(s.reportIntegrity);
+    (PREP_STAGE_DOMAIN as readonly string[]).includes(snap.prepStage) &&
+    (PREP_ENROLLMENT_DOMAIN as readonly string[]).includes(snap.enrollment) &&
+    (PREP_PROFILES_DOMAIN as readonly string[]).includes(snap.profiles) &&
+    (PREP_REQUIRED_APPS_DOMAIN as readonly string[]).includes(snap.requiredApps) &&
+    (OS_UPDATE_DOMAIN as readonly string[]).includes(snap.osUpdate) &&
+    (PREP_INTEGRITY_DOMAIN as readonly string[]).includes(snap.reportIntegrity);
   if (!inDomain) {
     unknownSignals.push("state_out_of_domain");
     candidates.push({ posture: "prep_unverified", action: "step_up", reason: "DEVICE_PREP_STATE_UNKNOWN" });
@@ -263,7 +307,7 @@ export function evaluateDevicePrep(s: NormalizedDevicePrep): DevicePrepVerdict {
   );
 
   return {
-    deviceRef: s.deviceRef,
+    deviceRef: typeof snap.deviceRef === "string" ? snap.deviceRef : "",
     posture: winner.posture,
     reasonCode: winner.reason,
     recommendedAction: winner.action,
@@ -362,7 +406,16 @@ export function normalizeDevicePrep(deviceRef: string, raw: DevicePrepReportRaw 
   const integrity = { malformed: false };
   let r: Record<string, unknown> = {};
   if (raw !== undefined && raw !== null) {
-    if (!isPlainReport(raw) || hasUnrecognizedKey(raw, DEVICE_PREP_REPORT_KEYS)) {
+    // The shape check itself can throw — Array.isArray on a REVOKED Proxy does — and a
+    // throw here would break the normalizer's no-throw promise before the field-read
+    // catch below could keep it (review finding). Any failure is malformed.
+    let shapeOk = false;
+    try {
+      shapeOk = isPlainReport(raw) && !hasUnrecognizedKey(raw, DEVICE_PREP_REPORT_KEYS);
+    } catch {
+      shapeOk = false;
+    }
+    if (!shapeOk) {
       integrity.malformed = true;
     } else {
       r = raw as Record<string, unknown>;
@@ -418,7 +471,10 @@ const READY: NormalizedDevicePrep = {
   reportIntegrity: "clean",
 };
 
-export const DEVICE_PREP_FIXTURES: Readonly<Record<string, NormalizedDevicePrep>> = {
+/** FROZEN, and looked up by OWN name only (review finding: an inherited name such as
+ *  "constructor", or a grant-shaped object planted on Object.prototype, evaluated to a
+ *  verdict instead of the documented `undefined`). */
+export const DEVICE_PREP_FIXTURES: Readonly<Record<string, NormalizedDevicePrep>> = Object.freeze({
   /** The one grant: prep complete, enrolled, profiles applied, apps installed, OS current. */
   "ready": READY,
   /** The runbooks' "phantom device": seated and lit, provisioning failed. */
@@ -451,13 +507,14 @@ export const DEVICE_PREP_FIXTURES: Readonly<Record<string, NormalizedDevicePrep>
     requiredApps: "missing",
     osUpdate: "update_required",
   },
-};
+});
 
-/** Evaluate a named fixture; `undefined` for an unknown name (never a fabricated verdict). */
+/** Evaluate a named fixture; `undefined` for an unknown name (never a fabricated verdict).
+ *  OWN names only: an inherited name is not a fixture. */
 export function evaluateDevicePrepFixture(name: string): DevicePrepVerdict | undefined {
-  const fixture = DEVICE_PREP_FIXTURES[name];
-  if (fixture === undefined) {
+  if (!Object.prototype.hasOwnProperty.call(DEVICE_PREP_FIXTURES, name)) {
     return undefined;
   }
-  return evaluateDevicePrep(fixture);
+  // The own-name guard above is the whole test: a name it admits is a fixture.
+  return evaluateDevicePrep(DEVICE_PREP_FIXTURES[name]);
 }

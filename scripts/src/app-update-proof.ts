@@ -668,6 +668,43 @@ check("device-prep: pushing onto the REPORT_KEYS allowlist throws and an unrecog
 check("device-prep evaluator is deterministic",
   JSON.stringify(evaluateDevicePrep(prepBase)) === JSON.stringify(evaluateDevicePrep(prepBase)));
 
+// ── Codex round seven on #641: fixture names, one-time axis reads, revoked proxies —
+// each verified by execution before the fix ─────────────────────────────────────────
+check("device-prep: 'toString' / '__proto__' / 'constructor' are not fixture names — undefined, never a fabricated verdict",
+  evaluateDevicePrepFixture("toString") === undefined && evaluateDevicePrepFixture("__proto__") === undefined &&
+  evaluateDevicePrepFixture("constructor") === undefined);
+{
+  const proto = Object.prototype as unknown as Record<string, unknown>;
+  try {
+    Object.defineProperty(proto, "planted-fixture", { value: { ...prepBase }, configurable: true, enumerable: false, writable: true });
+    check("device-prep: a grant-shaped fixture planted on Object.prototype under a new name is NOT a fixture (undefined, never ready)",
+      evaluateDevicePrepFixture("planted-fixture") === undefined);
+  } finally {
+    delete proto["planted-fixture"];
+  }
+}
+check("device-prep: the fixture corpus is frozen", Object.isFrozen(DEVICE_PREP_FIXTURES) && Object.keys(DEVICE_PREP_FIXTURES).length === 20);
+{
+  let reads = 0;
+  const flapping = Object.defineProperty({ ...prepBase }, "prepStage", { get() { reads += 1; return reads === 1 ? "garbage" : "complete"; }, enumerable: true });
+  const v = evaluateDevicePrep(flapping as NormalizedDevicePrep);
+  check("device-prep: an axis whose first read is out-of-domain and later reads valid is HELD (one snapshot, not one read per branch)",
+    v.readyForCheckout === false && v.unknownSignals.includes("state_out_of_domain"));
+  const throwing = Object.defineProperty({ ...prepBase }, "enrollment", { get() { throw new Error("hostile axis"); }, enumerable: true });
+  const t = evaluateDevicePrep(throwing as NormalizedDevicePrep);
+  check("device-prep: an axis whose read THROWS is held as unreadable (step_up), never an exception out of the evaluator",
+    t.recommendedAction === "step_up" && t.readyForCheckout === false && t.unknownSignals.includes("state_unreadable"));
+}
+{
+  const { proxy, revoke } = Proxy.revocable({ ...prepGrantRaw }, {});
+  revoke();
+  let threw = false;
+  let out: NormalizedDevicePrep | undefined;
+  try { out = normalizeDevicePrep("w-revoked", proxy as DevicePrepReportRaw); } catch { threw = true; }
+  check("device-prep: a REVOKED Proxy as the report is malformed and never ready — no exception out of the normalizer",
+    !threw && out !== undefined && out.reportIntegrity === "malformed" && evaluateDevicePrep(out).readyForCheckout === false);
+}
+
 
 // ── The live-call gate and the default transport, each condition ISOLATED ────
 //

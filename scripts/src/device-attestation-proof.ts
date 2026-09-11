@@ -579,6 +579,43 @@ console.log("\n  ── the supervision-identity lifecycle ──\n");
   }
   check("supervision-identity evaluator is deterministic",
     JSON.stringify(evaluateSupervisionIdentity(base)) === JSON.stringify(evaluateSupervisionIdentity(base)));
+
+  // ── Codex round seven on #641: fixture names, one-time axis reads, revoked proxies —
+  // each verified by execution before the fix ───────────────────────────────────────
+  check("supervision-identity: 'toString' / '__proto__' / 'constructor' are not fixture names — undefined, never a fabricated verdict",
+    evaluateSupervisionIdentityFixture("toString") === undefined && evaluateSupervisionIdentityFixture("__proto__") === undefined &&
+    evaluateSupervisionIdentityFixture("constructor") === undefined);
+  {
+    const proto = Object.prototype as unknown as Record<string, unknown>;
+    try {
+      Object.defineProperty(proto, "planted-fixture", { value: { ...base }, configurable: true, enumerable: false, writable: true });
+      check("supervision-identity: a grant-shaped fixture planted on Object.prototype under a new name is NOT a fixture (undefined, never trusted)",
+        evaluateSupervisionIdentityFixture("planted-fixture") === undefined);
+    } finally {
+      delete proto["planted-fixture"];
+    }
+  }
+  check("supervision-identity: the fixture corpus is frozen", Object.isFrozen(SUPERVISION_IDENTITY_FIXTURES) && Object.keys(SUPERVISION_IDENTITY_FIXTURES).length === 13);
+  {
+    let reads = 0;
+    const flapping = Object.defineProperty({ ...base }, "supervision", { get() { reads += 1; return reads === 1 ? "garbage" : "supervised"; }, enumerable: true });
+    const v = evaluateSupervisionIdentity(flapping as NormalizedSupervisionIdentity);
+    check("supervision-identity: an axis whose first read is out-of-domain and later reads valid is HELD (one snapshot, not one read per branch)",
+      v.trustPreconditionMet === false && v.unknownSignals.includes("state_out_of_domain"));
+    const throwing = Object.defineProperty({ ...base }, "identityBinding", { get() { throw new Error("hostile axis"); }, enumerable: true });
+    const t = evaluateSupervisionIdentity(throwing as NormalizedSupervisionIdentity);
+    check("supervision-identity: an axis whose read THROWS is held as unreadable (step_up), never an exception out of the evaluator",
+      t.recommendedAction === "step_up" && t.trustPreconditionMet === false && t.unknownSignals.includes("state_unreadable"));
+  }
+  {
+    const { proxy, revoke } = Proxy.revocable({ ...grantRaw }, {});
+    revoke();
+    let threw = false;
+    let out: NormalizedSupervisionIdentity | undefined;
+    try { out = normalizeSupervisionIdentity("w-revoked", proxy as SupervisionIdentityReportRaw); } catch { threw = true; }
+    check("supervision-identity: a REVOKED Proxy as the report is malformed and never trusted — no exception out of the normalizer",
+      !threw && out !== undefined && out.reportIntegrity === "malformed" && evaluateSupervisionIdentity(out).trustPreconditionMet === false);
+  }
 }
 
 // ── The live-call gate, each condition ISOLATED ──────────────────────────────

@@ -91,7 +91,11 @@ LAST TOUCHED: 2026-09-11 (cloud lane, latest) - THE LAST TWO RUNBOOK PARTIALS MO
               (readonly is compile-time only); round six (Codex out of quota, so the
               in-house fail-closed-auditor) froze the REPORT_KEYS allowlists too and pinned
               the own-property read against a polluted Object.prototype - two P1s the
-              external rounds had just walked past. (Earlier 2026-09-11, cloud
+              external rounds had just walked past. Round seven (Codex, back on quota)
+              closed the three holes the custody-ledger review had found the same hour -
+              own-name fixture lookup, one-time axis snapshot, a revoked-Proxy catch - in
+              both modules (proofs 148 -> 154 and 161 -> 167; sweeps 58/58 and 76 + 4 inert
+              of 80, 0 survivors). (Earlier 2026-09-11, cloud
               lane:) READINESS-FIGURE HONESTY LANDED
               (#620, 52b395d). The DR-036 readiness gate was OVER-reporting - it
               fail-OPENED on two dimensions. Fixed at root, each with a control that

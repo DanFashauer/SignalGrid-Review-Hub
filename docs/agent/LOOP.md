@@ -52,7 +52,22 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-11 (Mac lane, latest) - HARDWARE EVIDENCE RE-MINTED against the
+LAST TOUCHED: 2026-09-11 (cloud lane, latest) - BRACE-LESS GUARDS JOIN THE MUTATION SWEEP
+              (branch lane/cloud-guard-braceless-20260911-220800Z; product PR, owner merges): the
+              mutation guard only ever mutated braced `if` blocks, so every one-line
+              `if (cond) return x;` guard - the dominant shape in the newer fail-closed
+              normalizers - was never swept. New mutator oneline-cond-false, opt-in per
+              target (`oneLine: true`), measured across the whole registry first: 1732
+              mutations, 121 survivors (117 one-line across 41 files). Four families opted
+              in and are clean under it (rtls-custody 14/14, device-attestation 25/25,
+              verdict-attestation 42 with 0 survivors after one new pin and two shadowed
+              guards DELETED, app-update 54 with 0 survivors after two shadowed guards
+              deleted and six parseVersion pins). Docs proof counts 82->98 and 71->74.
+              The guard now REPORTS "N of M targets opted in; K pending" every run and
+              never fails on it; the BUILD_BACKLOG campaign row lists the pending families
+              by survivor count. Still awaiting owner merge: #638, #641, #645, #649 (all
+              green; Mac re-mints evidence ONCE after they land). (Earlier 2026-09-11, Mac
+              lane:) HARDWARE EVIDENCE RE-MINTED against the
               manifest mainline carries (v68 / ce58f6): 53c60f4e, from verify:all --require-mcp
               --emit-evidence on this Mac (Review-Hub preflight PASS, breadth PASS, signalgrid-mcp
               pytest 99 passed at 10c5b52 on a clean checkout, 22 MCP tools derived = doc); the

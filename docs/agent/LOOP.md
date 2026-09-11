@@ -72,8 +72,8 @@ LAST TOUCHED: 2026-09-11 (cloud lane, latest) - THE LAST TWO RUNBOOK PARTIALS MO
               mintedAt into mac-run.json and check-readiness-figure prefers it over the
               git date (a shallow clone mis-aged the file twice; fail-closed on a garbage
               or future stamp, 6 new self-test cases). Also this session: the NIST org
-              absorbed as docs/research/NIST_ALIGNMENT_MAP.md (PR #638, owner merge
-              pending) through six review rounds - Codex to its budget, then the in-house
+              absorbed as docs/research/NIST_ALIGNMENT_MAP.md (PR #638, awaits the
+              owner's merge) through six review rounds - Codex to its budget, then the in-house
               fail-closed-auditor, which also showed the launch-claims vocabulary cannot
               see any capability that map names (follow-up: a profile-id <-> doc-status
               gate). The owner delegated routine merge calls this session (do what you

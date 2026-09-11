@@ -1723,7 +1723,7 @@ pnpm run proof:app-update                                 # summary=pass (139/13
 node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=46 killed=46 hung=0 known-inert=0 survivors=0 (was 42/42)
 node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=67 killed=63 hung=0 known-inert=4 survivors=0 (was 59 killed + 4 documented-inert of 63)
 node scripts/check-readiness-figure.mjs --self-test       # self-test passed (20/20) — 20 cases: an unparseable, FUTURE, or non-string mintedAt is now Infinity (invalid-mintedAt), never the git date
-node scripts/generate-sync-manifest.mjs                   # vundefined 2daf941b6ed6
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 71, fingerprint 2daf941b6ed6 (proofCounts device-attestation 128, app-update 139)
 ```
 Output:
 ```

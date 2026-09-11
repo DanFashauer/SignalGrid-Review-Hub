@@ -473,9 +473,10 @@ in one place.
   the ledger still assigns to a prior holder is a hold with the contradiction named; an
   unpaired device in a bay is contained; a clear ledger over an empty bay escalates; a cap
   hit only by returns that never cleared is a hold, a cap genuinely reached a containment
-  (the cap axis is computed from counts, never asserted). Fail-closed; the 864-state sweep
-  pins the single grant; the family stays deferred in the launch profile — built, not
-  claimed. `proof:rtls-custody` (171 checks).
+  (the cap axis is computed from counts, never asserted). Fail-closed; the sweep of all 864
+  combos pins the single grant and 57,600 raw wire reports grant exactly twice (the two
+  spellings of a clear ledger); the family stays deferred in the launch profile — built,
+  not claimed. `proof:rtls-custody` (189 checks).
 
 - **Platform SSO** ([PLATFORM_SSO.md](PLATFORM_SSO.md)) — "passwordless" and "satisfies MFA"
   are not automatic; the **method** decides the credential's worth. Only a user-registered

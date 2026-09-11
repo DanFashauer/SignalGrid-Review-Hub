@@ -80,7 +80,7 @@ profile (DR-001): this is built and proven, not claimed to ship.
 | ledger clear, no holder, seated, paired, requester under cap, clean parse | `none` — ready for check-out | the one grant; every axis positively confirmed |
 | ledger still assigns the device to a **prior holder** while it sits in a bay | `step_up` (`CUSTODY_STALE_RETURN_OTHER`) | the runbooks' phantom: a return that never cleared, named as a contradiction |
 | ledger still assigns it to the **requester** while it sits in a bay | `step_up` (`CUSTODY_STALE_RETURN_OWN`) | the requester's own stale return |
-| **unpaired** device in a bay; unpaired device out | `restrict` | not a device to hand out — "unpaired but occupying a slot" is named separately |
+| **unpaired** device in a bay; unpaired and out with its holder | `restrict` | not a device to hand out — "unpaired but occupying a slot" is named separately; an unpaired device that is also unaccounted (clear ledger, empty bay) takes the higher rung below |
 | out with **another** holder (bay empty, ledger consistent) | `restrict` (`CUSTODY_HELD_BY_OTHER`) | not this device; no contradiction |
 | out with the **requester** (bay empty, ledger consistent) | `monitor` — **not** ready | the one advisory: already in their custody, nothing in the bay to hand out |
 | ledger **clear** and the bay **empty** | `escalate` (`CUSTODY_DEVICE_UNACCOUNTED`) | nobody has it and it is not in its bay — a custody breach, the same rung the physical evaluator uses for a device that left the area |
@@ -98,11 +98,13 @@ malformed report; a missing count is unknown and raises). `returned` and `no rec
 normalize to a *clear* ledger. Unlike the device-prep surface, the one advisory here does
 not mean ready: `readyForCheckout` is true for the grant alone.
 
-Proven by `proof:rtls-custody` (171 checks): named outcomes, single-axis flips of the one
-grant, an 864-state grant-safety sweep over the module's exported domains that pins that
-grant by equality (exactly one state grants; `monitor` reachable only as "already held and
-not in the bay"; `escalate` only as "clear and the bay empty"; `alert` unreachable), every
-count shape on the computed cap axis, and the hostile-report shapes the sibling surfaces
+Proven by `proof:rtls-custody` (189 checks): named outcomes, single-axis flips of the one
+grant, a grant-safety sweep over all 864 combos of the module's exported domains that pins
+that grant by equality (exactly one state grants; `monitor` reachable only as "already held
+and not in the bay"; `escalate` only as "clear and the bay empty"; `alert` unreachable), a
+raw-space sweep of 57,600 hostile wire reports through the real normalizer (exactly two
+grant — the two spellings of a clear ledger), every count shape on the computed cap axis,
+the exact prototype-walk bound, and the hostile-report shapes the sibling surfaces
 learned from review (inherited fields, a polluted `Object.prototype`, throwing accessors
 and Proxy traps, unrecognized and symbol keys, a bounded prototype walk); deterministic,
 offline. Registered with the mutation guard. Building is not claiming: the family is

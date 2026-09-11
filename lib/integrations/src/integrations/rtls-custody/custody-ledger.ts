@@ -402,7 +402,16 @@ const MAX_PROTOTYPE_DEPTH = 64;
 /** Does the report carry any key this normalizer does not understand? Walks the
  *  PROTOTYPE CHAIN even though value reads are own-only: an inherited assertion, in any
  *  spelling, is still an assertion this report did not make, and this scan is the only
- *  thing that notices it. A symbol key counts; a class instance fails closed. */
+ *  thing that notices it. A symbol key counts; a class instance fails closed.
+ *
+ *  RECORDED DECISION, not closed (in-house review, the same call the sibling surfaces
+ *  made): a Proxy whose `ownKeys` trap UNDER-reports — hides an own key from this scan
+ *  while `hasOwnProperty` still sees the recognized ones — reads clean. Nothing reachable
+ *  from a JSON wire report is a Proxy; detecting one needs node:util, which lib code the
+ *  console bundles cannot import; and every enumeration primitive (Object.keys, JSON,
+ *  for-in) goes through the same trap, so there is no second opinion to compare against.
+ *  The proof pins the trap that THROWS; the lying trap is named here so the gap is a
+ *  decision a reader can see, not a hole nobody wrote down. */
 function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
   try {
     let o: object | null = report;
@@ -471,8 +480,11 @@ export function normalizeCustodyLedger(
     sourceSystem: "rtls-custody",
     deviceRef,
     requesterRef,
-    // `returned` and `none` both mean the ledger assigns this device to nobody.
-    ledgerState: ledgerWire === "checked_out" ? "checked_out" : ledgerWire === "unknown" ? "unknown" : "clear",
+    // `returned` and `none` both mean the ledger assigns this device to nobody. The
+    // mapping names the CLEAR members explicitly and defaults to unknown: a wire vocabulary
+    // member added later without a mapping (lost, in_repair, missing) raises, never reads
+    // clear (in-house review finding: the first cut's default arm was the permissive one).
+    ledgerState: ledgerWire === "checked_out" ? "checked_out" : ledgerWire === "returned" || ledgerWire === "none" ? "clear" : "unknown",
     ledgerHolder: readEnum<LedgerHolder>(fields.ledger_holder, ["requester", "other", "none"], integrity),
     slotState: readEnum<SlotState>(fields.slot_state, ["seated", "absent"], integrity),
     pairing: readEnum<PairingState>(fields.pairing, ["paired", "unpaired"], integrity),

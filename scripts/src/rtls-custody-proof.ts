@@ -386,8 +386,12 @@ for (const [label, patch, action, reason] of ledgerFlips) {
 
 // the grant set, pinned by equality over the whole state space
 // The sweep walks the MODULE's exported domains, not a hand-typed copy. The 864 below is
-// the documented figure and stays literal on purpose: if a domain grows, this line and
-// the figures= line move together and the docs↔proof figure guard catches the stale 864.
+// the documented figure and stays literal on purpose: if a domain grows, this line fails
+// first. The docs↔proof figure guard binds a documented figure only when it can SEE it —
+// a comma-formatted number of 1,000 or more, or "N … combos" / "N … grants" with
+// whitespace after the digits — so the docs write "864 combos" (never "864-state", which
+// the guard's noun pass cannot read: in-house review finding) and the raw-space sweep
+// below adds a comma-formatted figure the guard reads on its own.
 const ledgerDomains = {
   ledgerState: LEDGER_STATE_DOMAIN,
   ledgerHolder: LEDGER_HOLDER_DOMAIN,
@@ -623,6 +627,81 @@ check("custody-ledger: pushing onto the REPORT_KEYS allowlist throws and an unre
 check("custody-ledger evaluator is deterministic",
   JSON.stringify(evaluateCustodyLedger(ledgerBase)) === JSON.stringify(evaluateCustodyLedger(ledgerBase)));
 
+// ── in-house audit follow-ups: the threads the mutators cannot see ─────────────────
+// Every readEnum call site that passes `integrity` needs a present-but-non-string value on
+// ITS slot asserting malformed — with only slot_state exercised, the integrity argument
+// could be dropped from three call sites and the proof stayed green.
+for (const slot of ["ledger_state", "ledger_holder", "pairing", "slot_state"] as const) {
+  const n = normalizeCustodyLedger("w-int", "r", { ...ledgerGrantRaw, [slot]: 42 } as CustodyLedgerReportRaw);
+  check(`custody-ledger: a non-string ${slot} marks the report MALFORMED and the reason is CUSTODY_REPORT_MALFORMED (the integrity thread is live on this slot)`,
+    n.reportIntegrity === "malformed" && evaluateCustodyLedger(n).reasonCode === "CUSTODY_REPORT_MALFORMED");
+  const v = normalizeCustodyLedger("w-vocab", "r", { ...ledgerGrantRaw, [slot]: "zzz" } as CustodyLedgerReportRaw);
+  check(`custody-ledger: an out-of-vocabulary ${slot} stays CLEAN (silence, not an unreadable assertion) and the hold names the state, not the report`,
+    v.reportIntegrity === "clean" && evaluateCustodyLedger(v).reasonCode === "CUSTODY_STATE_UNKNOWN");
+}
+// The prototype-walk bound is exact: 63 empty prototypes are within it, 64 are not.
+// chainOf(n): the report at depth 0, then exactly n empty prototypes (the first is the
+// base object literal), then Object.prototype — so the walk reaches depth n.
+const chainOf = (n: number): object => { let o: object = {}; for (let i = 1; i < n; i += 1) o = Object.create(o); return Object.assign(Object.create(o), ledgerGrantRaw); };
+check("custody-ledger: a report behind 63 empty prototypes is within the bound (clean, and still the grant)",
+  evaluateCustodyLedger(normalizeCustodyLedger("w-63", "r", chainOf(63) as CustodyLedgerReportRaw)).readyForCheckout === true);
+check("custody-ledger: a report behind 64 empty prototypes hits the bound (malformed) — the `>=` is load-bearing",
+  normalizeCustodyLedger("w-64", "r", chainOf(64) as CustodyLedgerReportRaw).reportIntegrity === "malformed");
+// Cap boundaries in the fail-closed direction: a cap of exactly 1 is a valid cap, and
+// stale === open is a valid (fully stale) count — neither may read malformed.
+check("custody-ledger cap: a cap of exactly 1 is valid (0 of 1 → under_cap, clean)", capOf(0, 1, 0)[0] === "under_cap" && capOf(0, 1, 0)[1] === "clean");
+check("custody-ledger cap: stale returns equal to the open count is valid (1 of 1, all stale → cap_stale, clean)", capOf(1, 1, 1)[0] === "cap_stale" && capOf(1, 1, 1)[1] === "clean");
+// Keys are matched exactly against the frozen allowlist; VALUES are trimmed and lowercased.
+check("custody-ledger: a key in another spelling (Slot_State) is unrecognized → malformed; the same value in another case (' SEATED ') confirms",
+  normalizeCustodyLedger("w-key", "r", { ...ledgerGrantRaw, slot_state: undefined, Slot_State: "seated" } as CustodyLedgerReportRaw).reportIntegrity === "malformed" &&
+  normalizeCustodyLedger("w-val", "r", { ...ledgerGrantRaw, slot_state: " SEATED " }).slotState === "seated");
+// The ledger-state mapping names its clear members and defaults to UNKNOWN: only
+// "returned" and "none" read clear.
+check("custody-ledger: exactly 'returned' and 'none' read clear; 'checked_out' does not; anything else is unknown",
+  normalizeCustodyLedger("w-ls", "r", { ...ledgerGrantRaw, ledger_state: "returned" }).ledgerState === "clear" &&
+  normalizeCustodyLedger("w-ls", "r", { ...ledgerGrantRaw, ledger_state: "none" }).ledgerState === "clear" &&
+  normalizeCustodyLedger("w-ls", "r", { ...ledgerGrantRaw, ledger_state: "checked_out" }).ledgerState === "checked_out" &&
+  normalizeCustodyLedger("w-ls", "r", { ...ledgerGrantRaw, ledger_state: "lost" }).ledgerState === "unknown");
+
+// ── the RAW space: every adversarial value on every wire slot, through the real
+// normalizer AND evaluator — the class the mutators cannot reach (ternaries, comparison
+// flips, vocabulary edits). Every grant must normalize to the ONE confirmed tuple.
+const ledgerRawDomains = {
+  ledger_state: ["none", "returned", "checked_out", "zzz", 7, undefined],
+  ledger_holder: ["none", "other", "requester", "zzz", 7, undefined],
+  slot_state: ["seated", "absent", "zzz", 7, undefined],
+  pairing: ["paired", "unpaired", "zzz", 7, undefined],
+  open_checkouts: [1, "1", -1, undefined],
+  checkout_cap: [3, 0, "3", undefined],
+  stale_returns: [0, 2, "0", undefined],
+} as const;
+const ledgerRawRes = enumerateGrantSafety<CustodyLedgerReportRaw, CustodyLedgerVerdict>({
+  domains: ledgerRawDomains,
+  build: (c) => ({ ...c }) as CustodyLedgerReportRaw,
+  evaluate: (raw) => evaluateCustodyLedger(normalizeCustodyLedger("raw", "r", raw)),
+  actionOf: (v) => v.recommendedAction,
+  // The honest wire shapes: a clear ledger in either spelling, no holder, seated, paired,
+  // a valid count triple under the cap (1 of 3, none stale), every slot a real string/number.
+  positivelyClean: (c) =>
+    (c.ledger_state === "none" || c.ledger_state === "returned") && c.ledger_holder === "none" &&
+    c.slot_state === "seated" && c.pairing === "paired" &&
+    c.open_checkouts === 1 && c.checkout_cap === 3 && c.stale_returns === 0,
+  confirmedWhenNone: (v) => v.readyForCheckout === true && v.reasonCode === "CUSTODY_CLEAR",
+});
+check(`custody-ledger RAW ENUMERATION: all ${ledgerRawRes.combos} raw reports swept (= product of the adversarial slot values)`,
+  ledgerRawRes.combos === productOf(ledgerRawDomains) && ledgerRawRes.combos === 6 * 6 * 5 * 5 * 4 * 4 * 4);
+check("custody-ledger RAW ENUMERATION: a grant is reachable ONLY by the honest wire shapes — zero mismatches", ledgerRawRes.mismatches === 0);
+check("custody-ledger RAW ENUMERATION: exactly two raw reports grant — the two spellings of a clear ledger (non-vacuous)", ledgerRawRes.noneCount === 2);
+const ledgerRawWrong = enumerateGrantSafety<CustodyLedgerReportRaw, CustodyLedgerVerdict>({
+  domains: ledgerRawDomains,
+  build: (c) => ({ ...c }) as CustodyLedgerReportRaw,
+  evaluate: (raw) => evaluateCustodyLedger(normalizeCustodyLedger("raw", "r", raw)),
+  actionOf: (v) => v.recommendedAction,
+  positivelyClean: (c) => c.ledger_state === "none" && c.ledger_holder === "none" && c.slot_state === "seated" && c.pairing === "paired",
+});
+check("custody-ledger RAW NEGATIVE CONTROL: declaring the counts irrelevant is CAUGHT (mismatches > 0)",
+  ledgerRawWrong.mismatches > 0 && typeof ledgerRawWrong.firstMismatch === "string");
+
 // ── connector guarantees ──────────────────────────────────────────────────────
 
 // read-only enforcement
@@ -775,6 +854,6 @@ await checkCollectionRefusals({
 
 
 const total = passed + failures.length;
-console.log(`figures=custodyLedgerCombos=${ledgerRes.combos},custodyLedgerGrants=${ledgerRes.noneCount}`);
+console.log(`figures=custodyLedgerCombos=${ledgerRes.combos},custodyLedgerGrants=${ledgerRes.noneCount},custodyLedgerRawCombos=${ledgerRawRes.combos},custodyLedgerRawGrants=${ledgerRawRes.noneCount}`);
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

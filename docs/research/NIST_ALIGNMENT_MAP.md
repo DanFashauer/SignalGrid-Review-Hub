@@ -12,11 +12,15 @@ family, or a document that exists today.
 
 SignalGrid is **not** NIST-certified, NIST-endorsed, or a compliance
 attestation, and nothing here changes that. NIST publishes no product
-endorsements. This document uses only *"aligned with"* and *"informed by"* — a
-design and positioning aid, never a certification, compliance, or partnership
-claim (`docs/PUBLIC_MESSAGING_GUARDRAILS.md`). The NIST works cited are public,
-U.S.-government, and mostly public-domain; SignalGrid consumes their **structure
-and guidance**, not any seal of approval. Where a fit is a direction rather than
+endorsements. This document uses only *"aligned with"* and *"informed by"* — or
+something tighter still (*"analogue"*, *"not established"*) — a design and
+positioning aid, never a certification, compliance, or partnership claim
+(`docs/PUBLIC_MESSAGING_GUARDRAILS.md`). The NIST works cited are public
+U.S.-government publications, each under its own license: the macOS Security
+Compliance Project is **CC BY 4.0** (attribution required, and the
+Apple-contributed vendor descriptions in it are explicitly *not* licensed
+material); the SP 800 series is public-domain U.S. government work. SignalGrid
+consumes their **structure and guidance**, not any seal of approval. Where a fit is a direction rather than
 shipped, it is labelled a **design target**.
 
 ## The one-sentence position
@@ -48,18 +52,23 @@ verification* artifacts from a rule library that maps to NIST SP 800-53r5, SP
 800-171, CIS Benchmarks/Controls, CNSSI 1253, and DISA STIG (it implements NIST
 SP 800-219 for automated macOS secure configuration). This is the strongest,
 most concrete fit — it names, in a recognized baseline, the posture the
-`macos-posture` family models. **Status:** the mSCP-facing posture surfaces
-(`macos-posture`, `ddm-connector`, `uem`) are **deferred** and fixture-backed
-(`scripts/launch-profile.mjs`); the one **launch** family here is
-`device-management-health`. The mapping is a positioning aid, not a claim that a
-live mSCP-driven posture path ships today. Each row carries its own status.
+`macos-posture` family models. **Status:** the mSCP-facing posture *families*
+`macos-posture` and `uem` are **deferred** and fixture-backed
+(`scripts/launch-profile.mjs`); `lib/ddm-connector` is a workspace *library*, which
+the profile does not classify at all. Two families named here are **launch**:
+`device-management-health` — which the profile records with an open shipping
+gap (its live transport is a generic bridge, not Microsoft Graph; the owner's
+Blocker 5) — and `local-authority`. The mapping is a positioning aid, not a
+claim that a live mSCP-driven posture path ships today. Each row carries its own
+status.
 
 | mSCP element | SignalGrid surface (real) | Status | Relationship |
 | --- | --- | --- | --- |
 | macOS security rules / baseline compliance | `proof:macos-posture`, `proof:macos-apple-schema`, `macos-posture` family | **deferred**, fixture-backed proof | **informed by** — mSCP names which posture facts matter; the family models them fail-closed |
-| Declarative Device Management (DDM) assets | `proof:ddm-connector`, `ddm-connector` family | **deferred**, fixture-backed proof | informed by — same DDM surface modeled as a posture source |
+| Declarative Device Management (DDM) assets | `proof:ddm-connector`, the `lib/ddm-connector` workspace library (not a connector family) | fixture-backed; **unclassified** by the launch profile, which classifies families and routes, not libraries — not launch | informed by — same DDM surface modeled as a posture source |
 | Compliance verification scripts (report posture) | `proof:posture-composition`, `proof:posture-allow` (in-repo, fixture-backed); the **live** read is the separate **`DanFashauer/signalgrid-mcp`** Python server | **deferred**; live posture read is the sibling server, verification per `docs/LIVE_SYNC_LOOP.md` | informed by — mSCP *reports* a device's state; SignalGrid *would decide* on it (golden rule 2: unknown posture raises assurance) |
-| Device management health (is the UEM/MDM reporting) | `proof:device-management-health`, `device-management-health` family | **launch** | aligned with — the launch signal that a device's management channel is healthy |
+| Device management health (is the UEM/MDM reporting) | `proof:device-management-health`, `device-management-health` family | **launch**, with an open gap the profile records against it: its live transport is a generic bridge, not Microsoft Graph, and a Graph-backed transport does not exist yet (the owner's Blocker 5) | aligned with — the launch signal that a device's management channel is healthy |
+| FileVault / first-unlock (bootstrap-token) state | `proof:local-authority`, `local-authority` family | **launch** | aligned with — the offline/degraded grant that waits for first unlock after a restart; a posture fact mSCP carries rules for |
 | Broader UEM posture | `proof:uem`, `uem` family | **deferred** | informed by — the wider UEM surface beyond the launch health check |
 
 **Two MCP servers, kept distinct** (`docs/MCP_ARCHITECTURE.md`): the *in-repo*
@@ -75,6 +84,9 @@ about that sibling, not the in-repo namespace.
 mSCP is the *baseline*; SignalGrid is the *runtime decision* that reads whether a
 device meets it. Design target: a committed, dated fixture derived from an mSCP
 rule set so posture citations resolve to a named baseline, not a hand-listed set.
+Such a fixture is a derivative of a **CC BY 4.0** corpus: it must carry mSCP's
+attribution, and must not reproduce the Apple-contributed vendor descriptions,
+which mSCP's license excludes.
 
 ## 2 — SP 800-207 Zero Trust Architecture → the decision fabric
 
@@ -97,7 +109,7 @@ deterministic core is the **PE**; the remediation/action cascade is the **PA**.
 | Policy **Administrator** (execute the decision) | the remediation/action cascade; `proof:orchestration` tests `planOrchestration` against **simulated** dispositions (its only non-proof consumer is `lib/room-sim`) | **deferred/demo** — both `/v1/remediation*` routes are deferred (`scripts/launch-profile.mjs`); no launch surface serves the PA | an orchestration *analogue* / design target — NIST's PA commands a PEP to establish or terminate the access path; `planOrchestration` actuates nothing (it emits simulated action descriptions), so this is not a demonstrated PA, only the PE's downstream side |
 | Per-request evaluation (point-in-time) | the decision loop evaluates each request | **launch** | aligned with |
 | *Continuous* reevaluation over elapsed time | `proof:caep-events`, `proof:sso-session`, `proof:session-readiness` (families all deferred) | **deferred** | not established (`proof:zero-trust-principles` prints this limitation); a design direction |
-| Decision from many signal sources | the read-only, fail-closed connector families (identity, EDR, NAC, posture; RTLS/custody deferred, DR-001) | mixed | aligned with |
+| Decision from many signal sources | the read-only, fail-closed connector families, by real id and status: identity — `graph` **launch**, `identity-risk` deferred; EDR — `edr-threat` deferred; NAC — `nac`, `network-nac` deferred; posture — `macos-posture` deferred; RTLS/custody — `rtls-custody`, `custody-beacon` deferred (DR-001) | mostly **deferred** — of these only `graph` is launch | aligned with |
 | Least privilege / dynamic policy | the core PE emits `allow / step_up / restrict / deny` | **launch** (the verdicts) | aligned with — `proof:entitlement-binding` and `proof:break-glass` are **deferred** connector-evaluator *inputs*, not PE evidence (break-glass grades an override after the fact; it is not a policy type) |
 
 ## 3 — SP 800-63 Digital Identity → the assurance ladder

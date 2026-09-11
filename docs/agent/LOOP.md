@@ -61,12 +61,16 @@ LAST TOUCHED: 2026-09-11 (cloud lane, latest) - TWO OF THE THREE RUNBOOK GAPS MO
               contained; a clear ledger over an empty bay escalates; a cap hit only by
               returns that never cleared is a hold (CUSTODY_CAP_BLOCKED_BY_STALE_RETURN), a
               cap genuinely reached a containment - the cap axis is computed from three
-              counts, never asserted. 19 fixtures, a sweep of all 864 combos pinning the
-              single grant plus a raw-space sweep (57,600 wire reports, two grant), every
-              hostile-report shape from the sibling surfaces' six review rounds pinned on
-              day one, then an in-house fail-closed audit (no P1; three P2s and five P3s,
-              each verified and fixed or recorded); proof:rtls-custody 63 -> 189;
-              mutation-swept, 0 survivors. Ground-truth rows "custody integrity" and
+              counts, never asserted; the observation's age is graded against a bound the
+              caller poses, so a replayed snapshot never grants. 21 fixtures, a sweep of
+              all 4,320 combos pinning the single grant plus a raw-space sweep (230,400
+              wire reports, two grant), every hostile-report shape from the sibling
+              surfaces' six review rounds pinned on day one, then an in-house fail-closed
+              audit (no P1; three P2s and five P3s, each verified and fixed or recorded)
+              and a Codex round (own-name fixture lookup, one-time axis snapshot, revoked
+              Proxy, identity binding, freshness - each executed before the fix);
+              proof:rtls-custody 63 -> 214; mutation-swept, 0 survivors. The family stays
+              deferred in the launch profile - built, not claimed. Ground-truth rows "custody integrity" and
               "per-user checkout cap" now read modeled: readiness (a) 16 modeled / 1 gap of
               17 once #641 lands (this base still carries #641's two rows as partial). The
               third gap (the smart-charging simulator scenario) and the detect.ts timeline

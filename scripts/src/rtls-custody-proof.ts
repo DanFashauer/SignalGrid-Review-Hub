@@ -310,6 +310,8 @@ const ledgerExpected: Array<[string, CustodyLedgerVerdict["posture"], CustodyLed
   ["pairing-unknown", "custody_unverified", "step_up", "CUSTODY_STATE_UNKNOWN"],
   ["cap-unknown", "custody_unverified", "step_up", "CUSTODY_STATE_UNKNOWN"],
   ["report-malformed", "unverified", "step_up", "CUSTODY_REPORT_MALFORMED"],
+  ["evidence-stale", "evidence_stale", "step_up", "CUSTODY_EVIDENCE_STALE"],
+  ["evidence-age-unknown", "custody_unverified", "step_up", "CUSTODY_STATE_UNKNOWN"],
   ["worst-of-several", "unpaired", "restrict", "CUSTODY_UNPAIRED_IN_SLOT"],
 ];
 for (const [name, posture, action, reason] of ledgerExpected) {
@@ -376,6 +378,8 @@ const ledgerFlips: Array<[string, Partial<NormalizedCustodyLedger>, CustodyLedge
   ["cap blocked by stale returns", { capState: "cap_stale" }, "step_up", "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"],
   ["cap unknown", { capState: "unknown" }, "step_up", "CUSTODY_STATE_UNKNOWN"],
   ["report malformed", { reportIntegrity: "malformed" }, "step_up", "CUSTODY_REPORT_MALFORMED"],
+  ["observation older than the bound", { observationAgeSeconds: 301 }, "step_up", "CUSTODY_EVIDENCE_STALE"],
+  ["observation age unknown", { observationAgeSeconds: null }, "step_up", "CUSTODY_STATE_UNKNOWN"],
 ];
 check("custody-ledger FAIL-CLOSED: the base state is the grant", evaluateCustodyLedger(ledgerBase).readyForCheckout === true);
 for (const [label, patch, action, reason] of ledgerFlips) {
@@ -398,6 +402,9 @@ const ledgerDomains = {
   slotState: SLOT_STATE_DOMAIN,
   pairing: PAIRING_DOMAIN,
   capState: CAP_STATE_DOMAIN,
+  // The one numeric axis: fresh, stale, and the shapes a direct caller could hand the
+  // evaluator that the normalizer would never produce (negative, NaN) plus unreported.
+  observationAgeSeconds: [5, 301, -5, Number.NaN, null],
   reportIntegrity: CUSTODY_LEDGER_INTEGRITY_DOMAIN,
 } as const;
 const buildLedger = (c: Record<string, unknown>): NormalizedCustodyLedger => ({
@@ -409,6 +416,7 @@ const buildLedger = (c: Record<string, unknown>): NormalizedCustodyLedger => ({
   slotState: c.slotState as SlotState,
   pairing: c.pairing as PairingState,
   capState: c.capState as CapState,
+  observationAgeSeconds: c.observationAgeSeconds as number | null,
   reportIntegrity: c.reportIntegrity as CustodyLedgerReportIntegrity,
 });
 const isLedgerClear = (c: Record<string, unknown>): boolean =>
@@ -417,6 +425,7 @@ const isLedgerClear = (c: Record<string, unknown>): boolean =>
   c.slotState === "seated" &&
   c.pairing === "paired" &&
   c.capState === "under_cap" &&
+  c.observationAgeSeconds === 5 &&
   c.reportIntegrity === "clean";
 const ledgerRes = enumerateGrantSafety<NormalizedCustodyLedger, CustodyLedgerVerdict>({
   domains: ledgerDomains,
@@ -429,7 +438,7 @@ const ledgerRes = enumerateGrantSafety<NormalizedCustodyLedger, CustodyLedgerVer
     v.criticalFindings.length === 0 && v.contradictions.length === 0 && v.unknownSignals.length === 0,
 });
 check(`custody-ledger ENUMERATION: all ${ledgerRes.combos} reconciliation states swept (= product of domains)`,
-  ledgerRes.combos === productOf(ledgerDomains) && ledgerRes.combos === 3 * 4 * 3 * 3 * 4 * 2);
+  ledgerRes.combos === productOf(ledgerDomains) && ledgerRes.combos === 3 * 4 * 3 * 3 * 4 * 5 * 2);
 check("custody-ledger ENUMERATION: ready is EXACTLY the one positively-confirmed state — zero mismatches", ledgerRes.mismatches === 0);
 check("custody-ledger ENUMERATION: exactly one state grants (non-vacuous)", ledgerRes.noneCount === 1);
 // NEGATIVE CONTROL — declare every clear-ledger state clean (ignoring the bay and the cap)
@@ -455,8 +464,9 @@ for (const ledgerState of ledgerDomains.ledgerState)
     for (const slotState of ledgerDomains.slotState)
       for (const pairing of ledgerDomains.pairing)
         for (const capState of ledgerDomains.capState)
+         for (const observationAgeSeconds of ledgerDomains.observationAgeSeconds)
           for (const reportIntegrity of ledgerDomains.reportIntegrity) {
-            const v = evaluateCustodyLedger(buildLedger({ ledgerState, ledgerHolder, slotState, pairing, capState, reportIntegrity }));
+            const v = evaluateCustodyLedger(buildLedger({ ledgerState, ledgerHolder, slotState, pairing, capState, observationAgeSeconds, reportIntegrity }));
             const a = v.recommendedAction;
             if (a === "monitor" && !(ledgerState === "checked_out" && ledgerHolder === "requester" && slotState === "absent")) ledgerMonitorOffAxis += 1;
             if (a === "escalate" && !(ledgerState === "clear" && slotState === "absent")) ledgerEscalateOffAxis += 1;
@@ -471,7 +481,7 @@ check("custody-ledger: over all states readyForCheckout ⇔ none, with no state 
 check(`custody-ledger: exactly ONE state is ready for check-out — the advisory is not (${ledgerReadyCount})`, ledgerReadyCount === 1);
 
 // the normalizer on hostile wire input — the asymmetry that makes it safe
-const ledgerGrantRaw = { ledger_state: "none", ledger_holder: "none", slot_state: "seated", pairing: "paired", open_checkouts: 1, checkout_cap: 3, stale_returns: 0 };
+const ledgerGrantRaw = { ledger_state: "none", ledger_holder: "none", slot_state: "seated", pairing: "paired", open_checkouts: 1, checkout_cap: 3, stale_returns: 0, observation_age_seconds: 5 };
 const ledgerWireOk = normalizeCustodyLedger("w-1", "rn-1", ledgerGrantRaw);
 check("custody-ledger: a fully-confirmed wire report normalizes clean and evaluates to the grant",
   ledgerWireOk.reportIntegrity === "clean" && ledgerWireOk.capState === "under_cap" && evaluateCustodyLedger(ledgerWireOk).readyForCheckout === true);
@@ -480,7 +490,7 @@ check("custody-ledger: 'returned' and 'none' both normalize to a CLEAR ledger; '
   normalizeCustodyLedger("w-2", "r", { ...ledgerGrantRaw, ledger_state: "none" }).ledgerState === "clear" &&
   normalizeCustodyLedger("w-2", "r", { ...ledgerGrantRaw, ledger_state: "checked_out" }).ledgerState === "checked_out" &&
   normalizeCustodyLedger("w-2", "r", { ...ledgerGrantRaw, ledger_state: undefined }).ledgerState === "unknown");
-const ledgerWireVocab = normalizeCustodyLedger("w-3", "r", { ledger_state: "sorta", ledger_holder: "someone", slot_state: "half", pairing: "kinda", open_checkouts: 1, checkout_cap: 3, stale_returns: 0 });
+const ledgerWireVocab = normalizeCustodyLedger("w-3", "r", { ledger_state: "sorta", ledger_holder: "someone", slot_state: "half", pairing: "kinda", open_checkouts: 1, checkout_cap: 3, stale_returns: 0, observation_age_seconds: 5 });
 check("custody-ledger: out-of-vocabulary strings normalize to unknown on every enum axis (never a fabricated state), report clean",
   ledgerWireVocab.ledgerState === "unknown" && ledgerWireVocab.ledgerHolder === "unknown" && ledgerWireVocab.slotState === "unknown" &&
   ledgerWireVocab.pairing === "unknown" && ledgerWireVocab.reportIntegrity === "clean" && evaluateCustodyLedger(ledgerWireVocab).readyForCheckout === false);
@@ -543,7 +553,7 @@ check("custody-ledger: a Proxy whose key enumeration throws is malformed, never 
   normalizeCustodyLedger("w-14", "r", ledgerThrowing).reportIntegrity === "malformed");
 check("custody-ledger: a plain own-property report still reaches the grant (the hostile-shape guards do not foreclose the honest path)",
   evaluateCustodyLedger(normalizeCustodyLedger("w-15", "r", { ...ledgerGrantRaw })).readyForCheckout === true);
-const ledgerGetter = Object.defineProperty({ ledger_holder: "none", slot_state: "seated", pairing: "paired", open_checkouts: 1, checkout_cap: 3, stale_returns: 0 },
+const ledgerGetter = Object.defineProperty({ ledger_holder: "none", slot_state: "seated", pairing: "paired", open_checkouts: 1, checkout_cap: 3, stale_returns: 0, observation_age_seconds: 5 },
   "ledger_state", { get() { throw new Error("hostile getter"); }, enumerable: true });
 const ledgerGetterOut = normalizeCustodyLedger("w-16", "r", ledgerGetter as CustodyLedgerReportRaw);
 check("custody-ledger: an own accessor whose getter throws is malformed and all-unknown, never an exception out of the normalizer",
@@ -584,6 +594,7 @@ const ledgerUnknownAxisSignals: Array<[string, string]> = [
   ["slot-unknown", "slot_state"],
   ["pairing-unknown", "pairing"],
   ["cap-unknown", "cap_state"],
+  ["evidence-age-unknown", "observation_age"],
 ];
 for (const [fixture, signal] of ledgerUnknownAxisSignals) {
   const v = L(fixture);
@@ -604,7 +615,7 @@ check(`custody-ledger: every exported array in the rtls-custody namespace is fro
 let ledgerKeysPushThrew = false;
 try { (CUSTODY_LEDGER_REPORT_KEYS as unknown as string[]).push("vendor_note"); } catch { ledgerKeysPushThrew = true; }
 check("custody-ledger: pushing onto the REPORT_KEYS allowlist throws and an unrecognized key still reads malformed",
-  ledgerKeysPushThrew && CUSTODY_LEDGER_REPORT_KEYS.length === 7 &&
+  ledgerKeysPushThrew && CUSTODY_LEDGER_REPORT_KEYS.length === 8 &&
   normalizeCustodyLedger("w-18", "r", { ...ledgerGrantRaw, vendor_note: "anything" } as CustodyLedgerReportRaw).reportIntegrity === "malformed");
 // The own-property read is the ONLY thing between a polluted Object.prototype and a full
 // grant. Pollute, normalize {} and undefined, assert all-unknown and not ready, restore.
@@ -663,6 +674,82 @@ check("custody-ledger: exactly 'returned' and 'none' read clear; 'checked_out' d
   normalizeCustodyLedger("w-ls", "r", { ...ledgerGrantRaw, ledger_state: "checked_out" }).ledgerState === "checked_out" &&
   normalizeCustodyLedger("w-ls", "r", { ...ledgerGrantRaw, ledger_state: "lost" }).ledgerState === "unknown");
 
+// ── Codex round one on #649: fixture names, one-time axis reads, identity, freshness,
+// revoked proxies — each verified by execution before the fix ─────────────────────
+// Fixture lookup is OWN-name only: an inherited name is not a fixture.
+check("custody-ledger: 'toString' / '__proto__' / 'constructor' are not fixture names — undefined, never a fabricated verdict",
+  evaluateCustodyLedgerFixture("toString") === undefined && evaluateCustodyLedgerFixture("__proto__") === undefined &&
+  evaluateCustodyLedgerFixture("constructor") === undefined);
+{
+  const proto = Object.prototype as unknown as Record<string, unknown>;
+  try {
+    Object.defineProperty(proto, "planted-fixture", { value: { ...ledgerBase }, configurable: true, enumerable: false, writable: true });
+    check("custody-ledger: a grant-shaped fixture planted on Object.prototype under a new name is NOT a fixture (undefined, never ready)",
+      evaluateCustodyLedgerFixture("planted-fixture") === undefined);
+  } finally {
+    delete proto["planted-fixture"];
+  }
+}
+check("custody-ledger: the fixture corpus is frozen", Object.isFrozen(CUSTODY_LEDGER_FIXTURES) && Object.keys(CUSTODY_LEDGER_FIXTURES).length === 21);
+// Every axis is read ONCE: an accessor that answers the branch reads with garbage and the
+// domain guard with a valid value must not reach the grant on the second answer.
+{
+  let reads = 0;
+  const flapping = Object.defineProperty({ ...ledgerBase }, "pairing", { get() { reads += 1; return reads === 1 ? "garbage" : "paired"; }, enumerable: true });
+  const v = evaluateCustodyLedger(flapping as NormalizedCustodyLedger);
+  check("custody-ledger: an axis whose first read is out-of-domain and later reads valid is HELD (one snapshot, not one read per branch)",
+    v.readyForCheckout === false && v.unknownSignals.includes("state_out_of_domain"));
+  const throwing = Object.defineProperty({ ...ledgerBase }, "slotState", { get() { throw new Error("hostile axis"); }, enumerable: true });
+  const t = evaluateCustodyLedger(throwing as NormalizedCustodyLedger);
+  check("custody-ledger: an axis whose read THROWS is held as unreadable (step_up), never an exception out of the evaluator",
+    t.recommendedAction === "step_up" && t.readyForCheckout === false && t.unknownSignals.includes("state_unreadable"));
+}
+// The verdict binds a device and a requester, or it is not a grant.
+check("custody-ledger: an EMPTY deviceRef never grants (CUSTODY_IDENTITY_UNBOUND)",
+  evaluateCustodyLedger({ ...ledgerBase, deviceRef: "" }).reasonCode === "CUSTODY_IDENTITY_UNBOUND" && evaluateCustodyLedger({ ...ledgerBase, deviceRef: "" }).readyForCheckout === false);
+check("custody-ledger: a whitespace requesterRef never grants (the disjunct is live)",
+  evaluateCustodyLedger({ ...ledgerBase, requesterRef: "   " }).reasonCode === "CUSTODY_IDENTITY_UNBOUND");
+check("custody-ledger: a non-string ref never grants; an unbound identity is named in unknownSignals",
+  evaluateCustodyLedger({ ...ledgerBase, deviceRef: undefined as unknown as string }).readyForCheckout === false &&
+  evaluateCustodyLedger({ ...ledgerBase, requesterRef: 7 as unknown as string }).unknownSignals.includes("identity_refs"));
+check("custody-ledger: an empty ref beside a containment keeps the containment's reason (the hold never weakens a restrict)",
+  evaluateCustodyLedger({ ...ledgerBase, deviceRef: "", capState: "cap_reached" }).reasonCode === "CUSTODY_CAP_REACHED");
+check("custody-ledger: the verdict echoes the refs it bound; an unreadable ref echoes as empty, never as garbage",
+  evaluateCustodyLedger(ledgerBase).deviceRef === "iphone-shared-01" && evaluateCustodyLedger({ ...ledgerBase, deviceRef: 7 as unknown as string }).deviceRef === "");
+// Freshness: the observation's age against the CALLER's bound (default 300 s).
+const withAge = (age: number | null, opts?: Parameters<typeof evaluateCustodyLedger>[1]): CustodyLedgerVerdict =>
+  evaluateCustodyLedger({ ...ledgerBase, observationAgeSeconds: age }, opts);
+check("custody-ledger freshness: 5 s and exactly 300 s (the bound) grant; 301 s is stale (step_up / CUSTODY_EVIDENCE_STALE)",
+  withAge(5).readyForCheckout === true && withAge(300).readyForCheckout === true &&
+  withAge(301).recommendedAction === "step_up" && withAge(301).reasonCode === "CUSTODY_EVIDENCE_STALE" && withAge(301).unknownSignals.includes("evidence_stale"));
+check("custody-ledger freshness: an unreported age (null) is unknown — held, named 'observation_age'",
+  withAge(null).reasonCode === "CUSTODY_STATE_UNKNOWN" && withAge(null).unknownSignals.includes("observation_age"));
+check("custody-ledger freshness: a NEGATIVE or NaN age handed straight to the evaluator is unknown, never fresh",
+  withAge(-5).readyForCheckout === false && withAge(-5).unknownSignals.includes("observation_age") &&
+  withAge(Number.NaN).readyForCheckout === false && withAge(Number.NaN).unknownSignals.includes("observation_age"));
+check("custody-ledger freshness: on the wire a string or negative age is a MALFORMED report; an absent age is silence (clean) and still holds",
+  normalizeCustodyLedger("w-age", "r", { ...ledgerGrantRaw, observation_age_seconds: "5" }).reportIntegrity === "malformed" &&
+  normalizeCustodyLedger("w-age", "r", { ...ledgerGrantRaw, observation_age_seconds: -1 }).reportIntegrity === "malformed" &&
+  normalizeCustodyLedger("w-age", "r", { ...ledgerGrantRaw, observation_age_seconds: undefined }).reportIntegrity === "clean" &&
+  evaluateCustodyLedger(normalizeCustodyLedger("w-age", "r", { ...ledgerGrantRaw, observation_age_seconds: undefined })).readyForCheckout === false);
+check("custody-ledger freshness: a POSED bound is honoured — 11 s against a 10 s bound is stale, 301 s against a 600 s bound grants",
+  withAge(11, { maxObservationAgeSeconds: 10 }).reasonCode === "CUSTODY_EVIDENCE_STALE" && withAge(301, { maxObservationAgeSeconds: 600 }).readyForCheckout === true);
+for (const [label, bound] of [["NaN", Number.NaN], ["Infinity", Number.POSITIVE_INFINITY], ["zero", 0], ["negative", -1]] as ReadonlyArray<readonly [string, number]>) {
+  const v = withAge(5, { maxObservationAgeSeconds: bound });
+  check(`custody-ledger freshness: a ${label} bound does NOT silence the check — the axis is unknown (held, named 'observation_bound')`,
+    v.readyForCheckout === false && v.unknownSignals.includes("observation_bound"));
+}
+// A REVOKED Proxy throws inside Array.isArray, before any catch the first cut had.
+{
+  const { proxy, revoke } = Proxy.revocable({ ...ledgerGrantRaw }, {});
+  revoke();
+  let threw = false;
+  let out: NormalizedCustodyLedger | undefined;
+  try { out = normalizeCustodyLedger("w-revoked", "r", proxy as CustodyLedgerReportRaw); } catch { threw = true; }
+  check("custody-ledger: a REVOKED Proxy as the report is malformed and never ready — no exception out of the normalizer",
+    !threw && out !== undefined && out.reportIntegrity === "malformed" && evaluateCustodyLedger(out).readyForCheckout === false);
+}
+
 // ── the RAW space: every adversarial value on every wire slot, through the real
 // normalizer AND evaluator — the class the mutators cannot reach (ternaries, comparison
 // flips, vocabulary edits). Every grant must normalize to the ONE confirmed tuple.
@@ -674,6 +761,7 @@ const ledgerRawDomains = {
   open_checkouts: [1, "1", -1, undefined],
   checkout_cap: [3, 0, "3", undefined],
   stale_returns: [0, 2, "0", undefined],
+  observation_age_seconds: [5, "5", 301, undefined],
 } as const;
 const ledgerRawRes = enumerateGrantSafety<CustodyLedgerReportRaw, CustodyLedgerVerdict>({
   domains: ledgerRawDomains,
@@ -685,11 +773,11 @@ const ledgerRawRes = enumerateGrantSafety<CustodyLedgerReportRaw, CustodyLedgerV
   positivelyClean: (c) =>
     (c.ledger_state === "none" || c.ledger_state === "returned") && c.ledger_holder === "none" &&
     c.slot_state === "seated" && c.pairing === "paired" &&
-    c.open_checkouts === 1 && c.checkout_cap === 3 && c.stale_returns === 0,
+    c.open_checkouts === 1 && c.checkout_cap === 3 && c.stale_returns === 0 && c.observation_age_seconds === 5,
   confirmedWhenNone: (v) => v.readyForCheckout === true && v.reasonCode === "CUSTODY_CLEAR",
 });
 check(`custody-ledger RAW ENUMERATION: all ${ledgerRawRes.combos} raw reports swept (= product of the adversarial slot values)`,
-  ledgerRawRes.combos === productOf(ledgerRawDomains) && ledgerRawRes.combos === 6 * 6 * 5 * 5 * 4 * 4 * 4);
+  ledgerRawRes.combos === productOf(ledgerRawDomains) && ledgerRawRes.combos === 6 * 6 * 5 * 5 * 4 * 4 * 4 * 4);
 check("custody-ledger RAW ENUMERATION: a grant is reachable ONLY by the honest wire shapes — zero mismatches", ledgerRawRes.mismatches === 0);
 check("custody-ledger RAW ENUMERATION: exactly two raw reports grant — the two spellings of a clear ledger (non-vacuous)", ledgerRawRes.noneCount === 2);
 const ledgerRawWrong = enumerateGrantSafety<CustodyLedgerReportRaw, CustodyLedgerVerdict>({

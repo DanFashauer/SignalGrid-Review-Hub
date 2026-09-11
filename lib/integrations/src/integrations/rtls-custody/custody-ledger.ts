@@ -29,7 +29,12 @@
 // the same rung the physical-custody evaluator uses for a device that left the area.
 // The one advisory (`monitor`): the requester already holds this device and it is not in
 // the bay — nothing to hand out, nothing wrong. ANY unknown axis holds. No clock, no
-// randomness: a pure function of the supplied state.
+// randomness: a pure function of the supplied state — except that the observation's AGE
+// is graded against a bound the CALLER poses (default 300 s), because a reconciliation
+// snapshot replayed later would otherwise grant forever (review finding): the bay's
+// "seated" is a live observation or it is nothing.
+
+import { posedBound } from "../../utils/posed-bound";
 
 /** What the checkout ledger says about this device. `returned` and `no record` both
  *  normalize to `clear`: neither assigns the device to anyone. */
@@ -56,6 +61,7 @@ export interface CustodyLedgerReportRaw {
   open_checkouts?: unknown; // the requester's open checkout count (integer >= 0)
   checkout_cap?: unknown; // the tenant's per-user cap (integer >= 1)
   stale_returns?: unknown; // of those open checkouts, how many are physically docked (integer <= open)
+  observation_age_seconds?: unknown; // how old the bay/ledger observation is (integer >= 0)
   [k: string]: unknown;
 }
 
@@ -70,6 +76,7 @@ export const CUSTODY_LEDGER_REPORT_KEYS = Object.freeze([
   "open_checkouts",
   "checkout_cap",
   "stale_returns",
+  "observation_age_seconds",
 ] as const);
 
 /** The NORMALIZED domain of each axis — every declared member, `unknown` included. The
@@ -93,6 +100,10 @@ export interface NormalizedCustodyLedger {
   readonly slotState: SlotState;
   readonly pairing: PairingState;
   readonly capState: CapState;
+  /** Age of the observation in seconds; `null` when unreported or unreadable. Graded
+   *  against the caller's posed bound at evaluation time — never a freshness the wire
+   *  asserts about itself. */
+  readonly observationAgeSeconds: number | null;
   readonly reportIntegrity: CustodyLedgerReportIntegrity;
 }
 
@@ -106,6 +117,8 @@ export type CustodyLedgerPosture =
   | "cap_reached" // the requester's cap is genuinely reached
   | "cap_blocked_stale" // the cap is hit only by returns that never cleared
   | "ledger_inconsistent" // the ledger contradicts itself
+  | "evidence_stale" // the observation is older than the posed bound
+  | "identity_unbound" // no device or requester to bind the verdict to
   | "custody_unverified" // some axis could not be read
   | "unverified"; // malformed report
 
@@ -124,6 +137,8 @@ export type CustodyLedgerReasonCode =
   | "CUSTODY_CAP_REACHED"
   | "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"
   | "CUSTODY_LEDGER_INCONSISTENT"
+  | "CUSTODY_EVIDENCE_STALE"
+  | "CUSTODY_IDENTITY_UNBOUND"
   | "CUSTODY_STATE_UNKNOWN"
   | "CUSTODY_REPORT_MALFORMED";
 
@@ -162,6 +177,60 @@ interface Candidate {
   reason: CustodyLedgerReasonCode;
 }
 
+/** The bound the CALLER poses on the observation's age. Default: five minutes — a
+ *  checkout decision at the dock reads a bay observation seconds old. Read through
+ *  `posedBound`, so a garbled bound (NaN, Infinity, zero, negative) never switches the
+ *  freshness check off: it resolves the axis to unknown, which raises. */
+export interface EvaluateCustodyLedgerOptions {
+  maxObservationAgeSeconds?: number;
+}
+const OBSERVATION_AGE_SECONDS_DEFAULT = 300;
+
+/** Every axis read ONCE, up front (review finding): a direct caller's accessor or Proxy
+ *  could otherwise answer the branch reads with one value and the domain guard with
+ *  another, and the grant would survive on the second answer. A read that throws leaves
+ *  every axis unknown and the report unreadable — held, never thrown out of the evaluator. */
+interface AxisSnapshot {
+  readonly deviceRef: unknown;
+  readonly requesterRef: unknown;
+  readonly ledgerState: LedgerState;
+  readonly ledgerHolder: LedgerHolder;
+  readonly slotState: SlotState;
+  readonly pairing: PairingState;
+  readonly capState: CapState;
+  readonly observationAgeSeconds: unknown;
+  readonly reportIntegrity: CustodyLedgerReportIntegrity;
+}
+const UNREADABLE_SNAPSHOT: AxisSnapshot = Object.freeze({
+  deviceRef: undefined,
+  requesterRef: undefined,
+  ledgerState: "unknown",
+  ledgerHolder: "unknown",
+  slotState: "unknown",
+  pairing: "unknown",
+  capState: "unknown",
+  observationAgeSeconds: null,
+  reportIntegrity: "malformed",
+});
+function snapshotAxes(s: NormalizedCustodyLedger): { snap: AxisSnapshot; unreadable: boolean } {
+  try {
+    const snap: AxisSnapshot = {
+      deviceRef: s.deviceRef,
+      requesterRef: s.requesterRef,
+      ledgerState: s.ledgerState,
+      ledgerHolder: s.ledgerHolder,
+      slotState: s.slotState,
+      pairing: s.pairing,
+      capState: s.capState,
+      observationAgeSeconds: s.observationAgeSeconds,
+      reportIntegrity: s.reportIntegrity,
+    };
+    return { snap, unreadable: false };
+  } catch {
+    return { snap: UNREADABLE_SNAPSHOT, unreadable: true };
+  }
+}
+
 /**
  * Grade one device against one requester. Pure and deterministic.
  *
@@ -170,14 +239,32 @@ interface Candidate {
  * against the bay, then the requester's cap. Each branch carries its own reason so a
  * fixture can falsify it on its own.
  */
-export function evaluateCustodyLedger(s: NormalizedCustodyLedger): CustodyLedgerVerdict {
+export function evaluateCustodyLedger(
+  s: NormalizedCustodyLedger,
+  options: EvaluateCustodyLedgerOptions = {},
+): CustodyLedgerVerdict {
   const criticalFindings: string[] = [];
   const contradictions: string[] = [];
   const unknownSignals: string[] = [];
   const candidates: Candidate[] = [];
+  const { snap, unreadable } = snapshotAxes(s);
+  if (unreadable) {
+    unknownSignals.push("state_unreadable");
+    candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
+  }
+
+  // ── the identities the verdict binds to ────────────────────────────────────────
+  // A checkout grant is a per-device, per-requester authorization; one that names nobody
+  // is not a grant anyone can act on (review finding: an empty ref reached the grant).
+  const deviceBound = typeof snap.deviceRef === "string" && snap.deviceRef.trim() !== "";
+  const requesterBound = typeof snap.requesterRef === "string" && snap.requesterRef.trim() !== "";
+  if (!deviceBound || !requesterBound) {
+    unknownSignals.push("identity_refs");
+    candidates.push({ posture: "identity_unbound", action: "step_up", reason: "CUSTODY_IDENTITY_UNBOUND" });
+  }
 
   // Defence in depth: a report we could not fully parse is never a grant.
-  if (s.reportIntegrity !== "clean") {
+  if (snap.reportIntegrity !== "clean") {
     unknownSignals.push("report_integrity");
     candidates.push({ posture: "unverified", action: "step_up", reason: "CUSTODY_REPORT_MALFORMED" });
   }
@@ -185,44 +272,44 @@ export function evaluateCustodyLedger(s: NormalizedCustodyLedger): CustodyLedger
   // ── pairing ─────────────────────────────────────────────────────────────────────
   // An unpaired device is not a device to hand out, wherever it is. In a bay it is the
   // runbooks' "unpaired but occupying a slot" — named separately so the console can say so.
-  if (s.pairing === "unpaired") {
-    if (s.slotState === "seated") {
+  if (snap.pairing === "unpaired") {
+    if (snap.slotState === "seated") {
       criticalFindings.push("unpaired_in_slot");
       candidates.push({ posture: "unpaired", action: "restrict", reason: "CUSTODY_UNPAIRED_IN_SLOT" });
     } else {
       criticalFindings.push("unpaired");
       candidates.push({ posture: "unpaired", action: "restrict", reason: "CUSTODY_UNPAIRED_DEVICE" });
     }
-  } else if (s.pairing === "unknown") {
+  } else if (snap.pairing === "unknown") {
     unknownSignals.push("pairing");
     candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
   }
 
   // ── the ledger against the bay ──────────────────────────────────────────────────
-  if (s.ledgerState === "checked_out") {
-    if (s.slotState === "seated") {
+  if (snap.ledgerState === "checked_out") {
+    if (snap.slotState === "seated") {
       // The device is physically back and the ledger never cleared — the phantom.
-      if (s.ledgerHolder === "other") {
+      if (snap.ledgerHolder === "other") {
         contradictions.push("stale_return_other");
         candidates.push({ posture: "stale_return", action: "step_up", reason: "CUSTODY_STALE_RETURN_OTHER" });
-      } else if (s.ledgerHolder === "requester") {
+      } else if (snap.ledgerHolder === "requester") {
         contradictions.push("stale_return_own");
         candidates.push({ posture: "stale_return", action: "step_up", reason: "CUSTODY_STALE_RETURN_OWN" });
-      } else if (s.ledgerHolder === "none") {
+      } else if (snap.ledgerHolder === "none") {
         contradictions.push("checked_out_without_holder");
         candidates.push({ posture: "ledger_inconsistent", action: "step_up", reason: "CUSTODY_LEDGER_INCONSISTENT" });
       } else {
         unknownSignals.push("ledger_holder");
         candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
       }
-    } else if (s.slotState === "absent") {
-      if (s.ledgerHolder === "other") {
+    } else if (snap.slotState === "absent") {
+      if (snap.ledgerHolder === "other") {
         criticalFindings.push("held_by_other");
         candidates.push({ posture: "held_elsewhere", action: "restrict", reason: "CUSTODY_HELD_BY_OTHER" });
-      } else if (s.ledgerHolder === "requester") {
+      } else if (snap.ledgerHolder === "requester") {
         // Consistent and benign: already in the requester's custody, nothing in the bay.
         candidates.push({ posture: "already_held", action: "monitor", reason: "CUSTODY_ALREADY_HELD" });
-      } else if (s.ledgerHolder === "none") {
+      } else if (snap.ledgerHolder === "none") {
         contradictions.push("checked_out_without_holder");
         candidates.push({ posture: "ledger_inconsistent", action: "step_up", reason: "CUSTODY_LEDGER_INCONSISTENT" });
       } else {
@@ -233,42 +320,61 @@ export function evaluateCustodyLedger(s: NormalizedCustodyLedger): CustodyLedger
       unknownSignals.push("slot_state");
       candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
     }
-  } else if (s.ledgerState === "clear") {
+  } else if (snap.ledgerState === "clear") {
     // A clear ledger that still names a holder contradicts itself.
-    if (s.ledgerHolder === "other" || s.ledgerHolder === "requester") {
+    if (snap.ledgerHolder === "other" || snap.ledgerHolder === "requester") {
       contradictions.push("clear_with_holder");
       candidates.push({ posture: "ledger_inconsistent", action: "step_up", reason: "CUSTODY_LEDGER_INCONSISTENT" });
-    } else if (s.ledgerHolder === "unknown") {
+    } else if (snap.ledgerHolder === "unknown") {
       unknownSignals.push("ledger_holder");
       candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
     }
-    if (s.slotState === "absent") {
+    if (snap.slotState === "absent") {
       // Nobody has it and it is not in its bay: a custody breach, not a checkout question.
       criticalFindings.push("unaccounted");
       candidates.push({ posture: "unaccounted", action: "escalate", reason: "CUSTODY_DEVICE_UNACCOUNTED" });
-    } else if (s.slotState === "unknown") {
+    } else if (snap.slotState === "unknown") {
       unknownSignals.push("slot_state");
       candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
     }
   } else {
     unknownSignals.push("ledger_state");
     candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
-    if (s.slotState === "unknown") {
+    if (snap.slotState === "unknown") {
       unknownSignals.push("slot_state");
     }
   }
 
   // ── the requester's cap ─────────────────────────────────────────────────────────
-  if (s.capState === "cap_reached") {
+  if (snap.capState === "cap_reached") {
     criticalFindings.push("cap_reached");
     candidates.push({ posture: "cap_reached", action: "restrict", reason: "CUSTODY_CAP_REACHED" });
-  } else if (s.capState === "cap_stale") {
+  } else if (snap.capState === "cap_stale") {
     // The cap is hit ONLY because prior returns never cleared: the mystery beep, named.
     contradictions.push("cap_blocked_by_stale_return");
     candidates.push({ posture: "cap_blocked_stale", action: "step_up", reason: "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN" });
-  } else if (s.capState === "unknown") {
+  } else if (snap.capState === "unknown") {
     unknownSignals.push("cap_state");
     candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
+  }
+
+  // ── the observation's age against the CALLER's bound ───────────────────────────
+  // A snapshot replayed later must not grant forever: the bay's "seated" and the ledger's
+  // "clear" are current or they are nothing. The bound is posed by the caller and read
+  // through posedBound — a garbled pose (NaN, Infinity, zero, negative) cannot answer the
+  // question, so the axis is unknown and raises rather than the check switching off.
+  const bound = posedBound(options.maxObservationAgeSeconds, OBSERVATION_AGE_SECONDS_DEFAULT);
+  const age = snap.observationAgeSeconds;
+  if (bound === null) {
+    unknownSignals.push("observation_bound");
+    candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
+  }
+  if (typeof age !== "number" || !Number.isFinite(age) || age < 0) {
+    unknownSignals.push("observation_age");
+    candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
+  } else if (bound !== null && age > bound) {
+    unknownSignals.push("evidence_stale");
+    candidates.push({ posture: "evidence_stale", action: "step_up", reason: "CUSTODY_EVIDENCE_STALE" });
   }
 
   // Every axis must be a value this evaluator KNOWS. The branches above cover every
@@ -279,12 +385,12 @@ export function evaluateCustodyLedger(s: NormalizedCustodyLedger): CustodyLedger
   // outside its domain is held, whatever else fired — after an advisory the hold outranks
   // it; after another hold or a containment the earlier concern keeps its own reason.
   const inDomain =
-    (LEDGER_STATE_DOMAIN as readonly string[]).includes(s.ledgerState) &&
-    (LEDGER_HOLDER_DOMAIN as readonly string[]).includes(s.ledgerHolder) &&
-    (SLOT_STATE_DOMAIN as readonly string[]).includes(s.slotState) &&
-    (PAIRING_DOMAIN as readonly string[]).includes(s.pairing) &&
-    (CAP_STATE_DOMAIN as readonly string[]).includes(s.capState) &&
-    (CUSTODY_LEDGER_INTEGRITY_DOMAIN as readonly string[]).includes(s.reportIntegrity);
+    (LEDGER_STATE_DOMAIN as readonly string[]).includes(snap.ledgerState) &&
+    (LEDGER_HOLDER_DOMAIN as readonly string[]).includes(snap.ledgerHolder) &&
+    (SLOT_STATE_DOMAIN as readonly string[]).includes(snap.slotState) &&
+    (PAIRING_DOMAIN as readonly string[]).includes(snap.pairing) &&
+    (CAP_STATE_DOMAIN as readonly string[]).includes(snap.capState) &&
+    (CUSTODY_LEDGER_INTEGRITY_DOMAIN as readonly string[]).includes(snap.reportIntegrity);
   if (!inDomain) {
     unknownSignals.push("state_out_of_domain");
     candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
@@ -299,8 +405,8 @@ export function evaluateCustodyLedger(s: NormalizedCustodyLedger): CustodyLedger
   );
 
   return {
-    deviceRef: s.deviceRef,
-    requesterRef: s.requesterRef,
+    deviceRef: typeof snap.deviceRef === "string" ? snap.deviceRef : "",
+    requesterRef: typeof snap.requesterRef === "string" ? snap.requesterRef : "",
     posture: winner.posture,
     reasonCode: winner.reason,
     recommendedAction: winner.action,
@@ -448,7 +554,16 @@ export function normalizeCustodyLedger(
   const integrity = { malformed: false };
   let r: Record<string, unknown> = {};
   if (raw !== undefined && raw !== null) {
-    if (!isPlainReport(raw) || hasUnrecognizedKey(raw, CUSTODY_LEDGER_REPORT_KEYS)) {
+    // The shape check itself can throw — Array.isArray on a REVOKED Proxy does — and a
+    // throw here would leave the normalizer's no-throw promise broken before the
+    // field-read catch below could keep it (review finding). Any failure is malformed.
+    let shapeOk = false;
+    try {
+      shapeOk = isPlainReport(raw) && !hasUnrecognizedKey(raw, CUSTODY_LEDGER_REPORT_KEYS);
+    } catch {
+      shapeOk = false;
+    }
+    if (!shapeOk) {
       integrity.malformed = true;
     } else {
       r = raw as Record<string, unknown>;
@@ -467,6 +582,7 @@ export function normalizeCustodyLedger(
       open_checkouts: ownValue(r, "open_checkouts"),
       checkout_cap: ownValue(r, "checkout_cap"),
       stale_returns: ownValue(r, "stale_returns"),
+      observation_age_seconds: ownValue(r, "observation_age_seconds"),
     };
   } catch {
     integrity.malformed = true;
@@ -489,6 +605,7 @@ export function normalizeCustodyLedger(
     slotState: readEnum<SlotState>(fields.slot_state, ["seated", "absent"], integrity),
     pairing: readEnum<PairingState>(fields.pairing, ["paired", "unpaired"], integrity),
     capState: deriveCapState(open, cap, stale, integrity),
+    observationAgeSeconds: readCount(fields.observation_age_seconds, integrity),
     reportIntegrity: integrity.malformed ? "malformed" : "clean",
   };
 }
@@ -509,10 +626,14 @@ const CLEAR: NormalizedCustodyLedger = {
   slotState: "seated",
   pairing: "paired",
   capState: "under_cap",
+  observationAgeSeconds: 5,
   reportIntegrity: "clean",
 };
 
-export const CUSTODY_LEDGER_FIXTURES: Readonly<Record<string, NormalizedCustodyLedger>> = {
+/** FROZEN, and looked up by OWN name only (review finding: an inherited name such as
+ *  "constructor", or a fixture-shaped object planted on Object.prototype, evaluated to a
+ *  verdict instead of the documented `undefined`). */
+export const CUSTODY_LEDGER_FIXTURES: Readonly<Record<string, NormalizedCustodyLedger>> = Object.freeze({
   /** The one grant: ledger clear, no holder, seated, paired, requester under cap. */
   "clear": CLEAR,
   /** THE PHANTOM: back in its bay, still assigned to the person who walked away. */
@@ -541,6 +662,9 @@ export const CUSTODY_LEDGER_FIXTURES: Readonly<Record<string, NormalizedCustodyL
   "slot-unknown": { ...CLEAR, deviceRef: "iphone-shared-15", slotState: "unknown" },
   "pairing-unknown": { ...CLEAR, deviceRef: "iphone-shared-16", pairing: "unknown" },
   "cap-unknown": { ...CLEAR, deviceRef: "iphone-shared-17", capState: "unknown" },
+  /** The observation is older than the posed bound: a replayed snapshot confirms nothing current. */
+  "evidence-stale": { ...CLEAR, deviceRef: "iphone-shared-20", observationAgeSeconds: 301 },
+  "evidence-age-unknown": { ...CLEAR, deviceRef: "iphone-shared-21", observationAgeSeconds: null },
   /** Every value reads clear, but the report carried an assertion we could not parse. */
   "report-malformed": { ...CLEAR, deviceRef: "iphone-shared-18", reportIntegrity: "malformed" },
   /** Several concerns at once: the unpaired bay is named first, all three are recorded. */
@@ -552,13 +676,14 @@ export const CUSTODY_LEDGER_FIXTURES: Readonly<Record<string, NormalizedCustodyL
     ledgerHolder: "other",
     capState: "cap_reached",
   },
-};
+});
 
-/** Evaluate a named fixture; `undefined` for an unknown name (never a fabricated verdict). */
+/** Evaluate a named fixture; `undefined` for an unknown name (never a fabricated verdict).
+ *  OWN names only: an inherited name is not a fixture. */
 export function evaluateCustodyLedgerFixture(name: string): CustodyLedgerVerdict | undefined {
-  const fixture = CUSTODY_LEDGER_FIXTURES[name];
-  if (fixture === undefined) {
+  if (!Object.prototype.hasOwnProperty.call(CUSTODY_LEDGER_FIXTURES, name)) {
     return undefined;
   }
-  return evaluateCustodyLedger(fixture);
+  // The own-name guard above is the whole test: a name it admits is a fixture.
+  return evaluateCustodyLedger(CUSTODY_LEDGER_FIXTURES[name]);
 }

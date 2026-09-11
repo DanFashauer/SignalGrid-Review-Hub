@@ -87,7 +87,9 @@ profile (DR-001): this is built and proven, not claimed to ship.
 | cap hit **only** because prior returns never cleared | `step_up` (`CUSTODY_CAP_BLOCKED_BY_STALE_RETURN`) | the mystery beep, named — a person clears the stale records |
 | cap genuinely reached | `restrict` (`CUSTODY_CAP_REACHED`) | a hard limit, legibly stated |
 | ledger contradicts itself (clear yet a holder named; checked out to nobody) | `step_up` (`CUSTODY_LEDGER_INCONSISTENT`) | a self-contradicting record grades nothing |
-| any axis unknown | `step_up` | unknown raises, never grants |
+| the observation is older than the bound the caller posed (default 300 s) | `step_up` (`CUSTODY_EVIDENCE_STALE`) | a replayed snapshot confirms nothing current — the bay's "seated" is a live observation or it is nothing; a garbled bound (NaN, zero, negative) makes the axis unknown rather than switching the check off |
+| no device or requester reference to bind the verdict to | `step_up` (`CUSTODY_IDENTITY_UNBOUND`) | a checkout grant is per device and per requester; one that names nobody is not a grant anyone can act on |
+| any axis unknown (including an unreported observation age) | `step_up` | unknown raises, never grants |
 | malformed report | `step_up` | an assertion we could not read is never a grant |
 
 The **cap axis is computed, never asserted**: the normalizer derives under-cap /
@@ -95,16 +97,21 @@ stale-blocked / reached from the requester's open-checkout count, the tenant cap
 count of those checkouts physically docked (non-negative safe integers, strict parse — a
 string, a float, a negative, a zero cap, or more stale returns than open checkouts is a
 malformed report; a missing count is unknown and raises). `returned` and `no record` both
-normalize to a *clear* ledger. Unlike the device-prep surface, the one advisory here does
-not mean ready: `readyForCheckout` is true for the grant alone.
+normalize to a *clear* ledger; any other wire value defaults to unknown. Every axis is read
+once, up front — an accessor that answers the branches with one value and the domain
+guard with another cannot reach the grant on the second answer — and a read that throws
+holds. Unlike the device-prep surface, the one advisory here does not mean ready:
+`readyForCheckout` is true for the grant alone.
 
-Proven by `proof:rtls-custody` (189 checks): named outcomes, single-axis flips of the one
-grant, a grant-safety sweep over all 864 combos of the module's exported domains that pins
-that grant by equality (exactly one state grants; `monitor` reachable only as "already held
-and not in the bay"; `escalate` only as "clear and the bay empty"; `alert` unreachable), a
-raw-space sweep of 57,600 hostile wire reports through the real normalizer (exactly two
-grant — the two spellings of a clear ledger), every count shape on the computed cap axis,
-the exact prototype-walk bound, and the hostile-report shapes the sibling surfaces
+Proven by `proof:rtls-custody` (214 checks): named outcomes, single-axis flips of the one
+grant, a grant-safety sweep over all 4,320 combos of the module's exported domains plus the
+observation-age axis that pins that grant by equality (exactly one state grants; `monitor`
+reachable only as "already held and not in the bay"; `escalate` only as "clear and the bay
+empty"; `alert` unreachable), a raw-space sweep of 230,400 hostile wire reports through the
+real normalizer (exactly two grant — the two spellings of a clear ledger), every count shape
+on the computed cap axis, the posed freshness bound on every garbled shape, the exact
+prototype-walk bound, own-name-only fixture lookup, the one-time axis snapshot, a revoked
+Proxy, and the hostile-report shapes the sibling surfaces
 learned from review (inherited fields, a polluted `Object.prototype`, throwing accessors
 and Proxy traps, unrecognized and symbol keys, a bounded prototype walk); deterministic,
 offline. Registered with the mutation guard. Building is not claiming: the family is

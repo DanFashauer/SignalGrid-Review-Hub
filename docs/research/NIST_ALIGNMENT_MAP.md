@@ -29,7 +29,9 @@ capabilities at different maturities: **per-call, least-privilege decisioning**
 (passkey/WebAuthn, token-binding, the `/v1/step-up/*` routes) is **deferred**;
 **reading Apple device posture against a recognized baseline** (macOS Security
 Compliance Project) — **deferred**, fixture-backed; and **enriching vulnerability
-signal from the national feed** (NVD/SCAP) — a **deferred** design direction. Each
+signal from the national feeds** — NVD (CVEs) → the `vuln-scan` lane and SCAP
+checklists → the `security_baseline`/`benchmark-selection` lane, two distinct
+lanes, both **deferred** design directions. Each
 row below carries its status; the map reads these as *evidence and vocabulary* and
 claims none of their authority. **Nothing here is shipped** — this repository is a
 pre-announcement, fixture-backed review artifact
@@ -92,7 +94,7 @@ deterministic core is the **PE**; the remediation/action cascade is the **PA**.
 | SP 800-207 tenet | SignalGrid surface (real) | Status | Relationship |
 | --- | --- | --- | --- |
 | Policy **Engine** (the decide step) | the deterministic decision core; `proof:zero-trust-principles` and `proof:signalgrid-core` exercise `evaluatePolicy` directly | **launch** | aligned with — the core is the PE for the shared-device workflow |
-| Policy **Administrator** (execute the decision) | the remediation/action cascade; `proof:orchestration` tests `planOrchestration` against **simulated** dispositions (its only non-proof consumer is `lib/room-sim`) | **deferred/demo** — both `/v1/remediation*` routes are deferred (`scripts/launch-profile.mjs`); no launch surface serves the PA | aligned with — the PA half of the PDP, distinct from the PE, and fixture-backed |
+| Policy **Administrator** (execute the decision) | the remediation/action cascade; `proof:orchestration` tests `planOrchestration` against **simulated** dispositions (its only non-proof consumer is `lib/room-sim`) | **deferred/demo** — both `/v1/remediation*` routes are deferred (`scripts/launch-profile.mjs`); no launch surface serves the PA | an orchestration *analogue* / design target — NIST's PA commands a PEP to establish or terminate the access path; `planOrchestration` actuates nothing (it emits simulated action descriptions), so this is not a demonstrated PA, only the PE's downstream side |
 | Per-request evaluation (point-in-time) | the decision loop evaluates each request | **launch** | aligned with |
 | *Continuous* reevaluation over elapsed time | `proof:caep-events`, `proof:sso-session`, `proof:session-readiness` (families all deferred) | **deferred** | not established (`proof:zero-trust-principles` prints this limitation); a design direction |
 | Decision from many signal sources | the read-only, fail-closed connector families (identity, EDR, NAC, posture; RTLS/custody deferred, DR-001) | mixed | aligned with |

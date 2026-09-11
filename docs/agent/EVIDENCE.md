@@ -1701,7 +1701,7 @@ node scripts/check-proof-counts.mjs                       # all 59 documented co
 node scripts/check-proof-figures.mjs                      # exit 0 (the 3,072 in APP_UPDATE_CURRENCY is a live figure of proof:app-update)
 node scripts/check-surface-review-coverage.mjs --write    # 102 read, 0 partial, 0 not read, of 102 surfaces
 node scripts/check-preflight-ci-parity.mjs                # preflight gates: 240 non-proof of 317; 373 wired, 0 unwired
-node scripts/preflight.mjs                                #   nothing above does. (317 gates ok; shellcheck installed in this container first — the run without it stopped at Shell lint)
+node scripts/preflight.mjs                                # Preflight PASSED — everything it runs is green. (317 gates ok; shellcheck installed in this container first — the run without it stopped at Shell lint)
 pnpm run verify:breadth                                   # Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
 ```
 Output:

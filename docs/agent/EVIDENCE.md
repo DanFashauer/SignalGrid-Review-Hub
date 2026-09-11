@@ -1804,3 +1804,13 @@ F5 (P3, DECISION: not closed) — a Proxy whose ownKeys trap hides a key can swi
 Also verified clean by the auditor, running not reasoning: every code point U+0080–U+2FFFF against readEnum's trim().toLowerCase() (no homoglyph or case-fold reaches a vocabulary word); boxed Strings, arrays, toString objects, numbers on the wire and on the normalized struct; the worst-concern reduce over all 3,072 states (2 ready, 0 with findings); ESM namespace redefinition of a domain list; every 2026-09-11 doc figure against live runs.
 ```
 Verdict:  **Codex running out of quota is an absent signal, not a clean round — the in-house reviewer found two P1s where the last two rounds had just worked.** Both are the same species as round five (an allowlist a caller could edit; a guard no check could tell from deleted), fixed the same way: at the root, with a check that fails without the fix. No verdict outside the two new modules changed; both families stay deferred.
+
+## 2026-09-11 — "The queued re-mint request is WITHDRAWN from this branch (Codex P2 on the merged lane-mail PR #648)"
+Command:  git rm artifacts/sim-requests/2026-09-11-re-mint-evidence-manifest-v70.json ; node scripts/check-sim-requests.mjs ; node scripts/check-cited-paths.mjs ; pnpm run docs:sanity
+Output:
+```
+Simulation request loop passed — every result binds to a request it was asked for.
+Cited-path check passed — 2240 citation(s) across 487 docs plus 26 gate-script reference(s) in lib/ source comments
+Docs sanity passed — required docs present, no unsafe claims.
+```
+Verdict:  **the request that rode this branch would have made the unattended tick mint against an intermediate manifest.** The Mac lane re-minted against mainline's v68 on its own (53c60f4e) and three product PRs (#638, #641, #645, plus the custody-ledger PR) each move the manifest; the plan mailed to the Mac is ONE re-mint after all of them land. Codex read the tick correctly (scripts/mac/lane-tick.sh runs every PENDING request the moment the checkout is back on SignalGrid_Alpha): had #641 landed first, its request would have run at once against v75, and a successor written later cannot supersede a request that has already run. So the request is withdrawn here, not superseded — nothing had run against it (no result binds to it, the gate above says so) — and a fresh request against the FINAL fingerprint is queued after the last of the three lands. The earlier entry that says "the sim request riding this branch" described the branch at that time; this entry records the withdrawal rather than rewriting it.

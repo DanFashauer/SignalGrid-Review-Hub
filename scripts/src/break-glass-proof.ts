@@ -17,19 +17,29 @@
 import {
   BREAK_GLASS_CONTRACT,
   BREAK_GLASS_FIXTURES,
+  FALLBACK_EVENT_TYPES,
+  MANUAL_FALLBACK_FIXTURES,
   evaluateBreakGlass,
   evaluateBreakGlassFixture,
+  evaluateManualFallback,
+  evaluateManualFallbackFixture,
   normalizeBreakGlassRecord,
+  normalizeManualFallbackSequence,
   resolveBreakGlassConnector,
 } from "@workspace/integrations/break-glass";
 import type {
   AssignmentAtInvocation,
+  BadgeAttempt,
   ExpiryState,
+  FallbackSequenceIntegrity,
   InvocationScope,
   JustificationState,
+  ManualCredentialCheck,
   NormalizedBreakGlass,
+  NormalizedManualFallback,
   ReviewState,
 } from "@workspace/integrations/break-glass";
+import { EVENT_TYPES } from "@workspace/event-contract";
 
 let passed = 0;
 const failures: string[] = [];
@@ -354,6 +364,208 @@ check(
   check(
     "no programme evidence reads `unassessed`, never `accountable` — silence about governance is not governance",
     dark.posture === "unassessed" && dark.recommendedAction !== "none",
+  );
+}
+
+// ── 6. THE BADGE→MANUAL FALLBACK SEQUENCE ────────────────────────────────────
+//
+// A DISTINCT surface from everything above. The accountability grader tops out at
+// `alert` because it stands on the EHR plane where care must never be impeded. THIS
+// grades a device check-out at a charging dock — badge tap fails, the clinician falls
+// back to an audited manual credential — and denying a shared device is not a clinical
+// harm, so it CAN deny and step up. Fail-closed is the whole game: ignorance tightens.
+console.log("\n  ── the badge→manual fallback sequence ──\n");
+{
+  // 6a. VOCABULARY IS BOUND TO THE REAL EVENT CONTRACT. The normalizer keys on event
+  // type strings; if any drifts from @workspace/event-contract this fails, so the
+  // sequence is expressed in the contract's terms, not a private copy of them.
+  check(
+    "every fallback event type is a real member of the canonical event contract",
+    Object.values(FALLBACK_EVENT_TYPES).every((t) => (EVENT_TYPES as readonly string[]).includes(t)),
+  );
+  check(
+    "NON-VACUITY: the contract does NOT contain a made-up type, so the binding above can fail",
+    !(EVENT_TYPES as readonly string[]).includes("checkout_teleported"),
+  );
+
+  // 6b. THE NAMED OUTCOMES — allow, deny and step_up all reachable, each by name.
+  const F = (n: string) => evaluateManualFallbackFixture(n)!;
+  const cases: Array<[string, string, string]> = [
+    ["badge-failed-manual-verified-accountable", "allow", "FALLBACK_GRANTED_ACCOUNTABLE"],
+    ["badge-failed-manual-verified-underdocumented", "step_up", "FALLBACK_GRANTED_NEEDS_AUDIT"],
+    ["badge-failed-credential-rejected", "deny", "FALLBACK_CREDENTIAL_REJECTED"],
+    ["badge-failed-credential-unknown", "deny", "FALLBACK_CREDENTIAL_UNVERIFIED"],
+    ["badge-state-unknown", "step_up", "FALLBACK_BADGE_STATE_UNKNOWN"],
+    ["badge-succeeded-manual-used", "step_up", "FALLBACK_NOT_NEEDED_BADGE_OK"],
+    ["sequence-malformed", "deny", "FALLBACK_SEQUENCE_MALFORMED"],
+    ["audit-malformed", "deny", "FALLBACK_AUDIT_MALFORMED"],
+  ];
+  for (const [name, decision, reason] of cases) {
+    const v = F(name);
+    check(
+      `fixture \`${name}\` → ${decision} / ${reason} (${v.decision} / ${v.reasonCode})`,
+      v.decision === decision && v.reasonCode === reason,
+    );
+  }
+  const decisions = new Set(cases.map(([n]) => F(n).decision));
+  check(
+    `NON-VACUITY: all three decisions are reachable across the fixtures (${[...decisions].sort().join(", ")})`,
+    decisions.has("allow") && decisions.has("deny") && decisions.has("step_up"),
+  );
+
+  // 6c. FAIL-CLOSED CONTROLS — a mutated input that MUST flip the verdict. Each takes
+  // the sole allow state and corrupts ONE signal; every one must fall away from allow.
+  const base = MANUAL_FALLBACK_FIXTURES["badge-failed-manual-verified-accountable"];
+  check(
+    "CONTROL baseline: the untouched allow state does allow — so the mutations below fail for their own reason",
+    evaluateManualFallback(base).decision === "allow",
+  );
+  const flipCredUnknown = evaluateManualFallback({ ...base, manualCredential: "unknown" });
+  check(
+    `FAIL-CLOSED: credential verified→unknown flips allow→deny (${flipCredUnknown.decision}) — an unverifiable person gets no device`,
+    flipCredUnknown.decision === "deny" && flipCredUnknown.reasonCode === "FALLBACK_CREDENTIAL_UNVERIFIED",
+  );
+  const flipBadgeUnknown = evaluateManualFallback({ ...base, badgeAttempt: "unknown" });
+  check(
+    `FAIL-CLOSED: badge failed→unknown flips allow→step_up (${flipBadgeUnknown.decision}) — an unconfirmed precondition is not granted silently`,
+    flipBadgeUnknown.decision === "step_up" && flipBadgeUnknown.reasonCode === "FALLBACK_BADGE_STATE_UNKNOWN",
+  );
+  const flipAudit = evaluateManualFallback({ ...base, override: normalizeBreakGlassRecord({}) });
+  check(
+    `FAIL-CLOSED: an unauditable manual check-out flips allow→deny (${flipAudit.decision}) — not even friction, a refusal`,
+    flipAudit.decision === "deny" && flipAudit.reasonCode === "FALLBACK_AUDIT_MALFORMED",
+  );
+  const flipMalformed = evaluateManualFallback({ ...base, sequenceIntegrity: "malformed" });
+  check(
+    `FAIL-CLOSED: a malformed event stream flips allow→deny (${flipMalformed.decision})`,
+    flipMalformed.decision === "deny" && flipMalformed.reasonCode === "FALLBACK_SEQUENCE_MALFORMED",
+  );
+
+  // 6d. THE ALLOW SET, PINNED BY EQUALITY over the whole sequence state space. The
+  // negatives-only lesson from section 3: only an equality pin excludes the states
+  // nobody named. Sweep every combination and assert allow is EXACTLY one shape.
+  const RECORDS: Record<string, Record<string, unknown>> = {
+    accountable: { invocationRef: "r", justification: "recorded", scope: "single_encounter", expiry: "bounded", review: "reviewed", assignmentAtInvocation: "not_assigned" },
+    under_documented: { invocationRef: "r", justification: "recorded", scope: "single_encounter", expiry: "bounded", review: "pending", assignmentAtInvocation: "not_assigned" },
+    malformed: {},
+  };
+  const BADGE: BadgeAttempt[] = ["failed", "succeeded", "unknown"];
+  const CRED: ManualCredentialCheck[] = ["verified", "rejected", "unknown"];
+  const INTEG: FallbackSequenceIntegrity[] = ["intact", "malformed"];
+  const seqSpace: NormalizedManualFallback[] = [];
+  for (const badgeAttempt of BADGE)
+    for (const manualCredential of CRED)
+      for (const rec of Object.keys(RECORDS))
+        for (const sequenceIntegrity of INTEG)
+          seqSpace.push({ correlationId: "c", badgeAttempt, manualCredential, override: normalizeBreakGlassRecord(RECORDS[rec]), sequenceIntegrity });
+  check(
+    `the sequence state space is the full cross-product (${seqSpace.length})`,
+    seqSpace.length === BADGE.length * CRED.length * Object.keys(RECORDS).length * INTEG.length,
+  );
+  const seqVerdicts = seqSpace.map((s) => ({ state: s, verdict: evaluateManualFallback(s) }));
+  const allowStates = seqVerdicts.filter(({ verdict }) => verdict.decision === "allow");
+  const allowShapes = new Set(
+    allowStates.map(({ state }) => `${state.badgeAttempt}|${state.manualCredential}|${state.override.reportIntegrity}|${state.sequenceIntegrity}|${evaluateBreakGlass(state.override).posture}`),
+  );
+  check(
+    `allow is EXACTLY one shape, pinned by equality (${allowShapes.size} distinct)`,
+    allowShapes.size === 1 && allowShapes.has("failed|verified|intact|intact|accountable"),
+  );
+  check(
+    "no allow state has an unknown/rejected credential, an unconfirmed badge, or a malformed stream/record — ignorance never reaches allow",
+    allowStates.every(({ state }) =>
+      state.manualCredential === "verified" &&
+      state.badgeAttempt === "failed" &&
+      state.sequenceIntegrity === "intact" &&
+      state.override.reportIntegrity === "intact"),
+  );
+  check(
+    `NON-VACUITY: allow IS reachable (${allowStates.length} state(s)), so the pin is not describing nothing`,
+    allowStates.length > 0,
+  );
+  // Every unknown-bearing state tightens away from allow — the golden-rule-2 sweep.
+  const withUnknown = seqVerdicts.filter(({ state }) =>
+    state.badgeAttempt === "unknown" || state.manualCredential === "unknown");
+  check(
+    `every state with ANY unknown signal is tightened, never allowed (${withUnknown.length} states)`,
+    withUnknown.length > 0 && withUnknown.every(({ verdict }) => verdict.decision !== "allow"),
+  );
+
+  // 6e. THE NORMALIZER READS THE SEQUENCE OUT OF REAL EVENTS, and fails closed on
+  // structure. Deterministic over array order; no timestamp is read.
+  const CID = "cust-live";
+  const realFallback = normalizeManualFallbackSequence(
+    [
+      { eventType: "badge_access", correlationId: CID },
+      { eventType: "checkout_requested", correlationId: CID },
+      { eventType: "checkout_denied", correlationId: CID }, // badge check-out failed
+      { eventType: "checkout_requested", correlationId: CID, mobileCredentialId: "mc-1" }, // manual fallback
+      { eventType: "checkout_granted", correlationId: CID }, // credential verified
+    ],
+    { invocationRef: "bg-live", justification: "recorded", scope: "single_encounter", expiry: "bounded", review: "reviewed", assignmentAtInvocation: "not_assigned" },
+  );
+  check(
+    `a real badge-fail→manual-verify event stream normalizes to failed/verified/intact (${realFallback.badgeAttempt}/${realFallback.manualCredential}/${realFallback.sequenceIntegrity})`,
+    realFallback.badgeAttempt === "failed" && realFallback.manualCredential === "verified" && realFallback.sequenceIntegrity === "intact",
+  );
+  check(
+    "…and that normalized stream then ALLOWS end to end — the sequence is exercised, not just asserted",
+    evaluateManualFallback(realFallback).decision === "allow",
+  );
+  const badgeOkStream = normalizeManualFallbackSequence(
+    [
+      { eventType: "badge_access", correlationId: CID },
+      { eventType: "checkout_granted", correlationId: CID }, // badge worked
+      { eventType: "checkout_requested", correlationId: CID, mobileCredentialId: "mc-1" },
+      { eventType: "checkout_granted", correlationId: CID },
+    ],
+    {},
+  );
+  check(
+    `a stream where the badge SUCCEEDED reads badgeAttempt=succeeded (${badgeOkStream.badgeAttempt})`,
+    badgeOkStream.badgeAttempt === "succeeded",
+  );
+  const noManualResolution = normalizeManualFallbackSequence(
+    [
+      { eventType: "badge_access", correlationId: CID },
+      { eventType: "checkout_denied", correlationId: CID },
+      { eventType: "checkout_requested", correlationId: CID, mobileCredentialId: "mc-1" },
+    ],
+    {},
+  );
+  check(
+    `FAIL-CLOSED: a manual request that never resolves reads credential=unknown, not verified (${noManualResolution.manualCredential})`,
+    noManualResolution.manualCredential === "unknown",
+  );
+  check("FAIL-CLOSED: an EMPTY event stream is malformed", normalizeManualFallbackSequence([], {}).sequenceIntegrity === "malformed");
+  check(
+    "FAIL-CLOSED: a MIXED-correlation stream is malformed",
+    normalizeManualFallbackSequence(
+      [
+        { eventType: "badge_access", correlationId: "a" },
+        { eventType: "checkout_denied", correlationId: "b" },
+      ],
+      {},
+    ).sequenceIntegrity === "malformed",
+  );
+  check(
+    "FAIL-CLOSED: a manual request BEFORE the badge attempt resolves is out of order → malformed",
+    normalizeManualFallbackSequence(
+      [
+        { eventType: "badge_access", correlationId: CID },
+        { eventType: "checkout_requested", correlationId: CID, mobileCredentialId: "mc-1" }, // manual before badge resolved
+        { eventType: "checkout_denied", correlationId: CID },
+      ],
+      {},
+    ).sequenceIntegrity === "malformed",
+  );
+  check(
+    "FAIL-CLOSED: an orphan resolution (grant/deny with nothing before it) → malformed",
+    normalizeManualFallbackSequence([{ eventType: "checkout_granted", correlationId: CID }], {}).sequenceIntegrity === "malformed",
+  );
+  check(
+    "NON-VACUITY: the well-formed live stream above is `intact`, so the malformed checks fail for their own reason",
+    realFallback.sequenceIntegrity === "intact",
   );
 }
 

@@ -618,7 +618,7 @@ recently. Their documented counts are enforced by `pnpm run check:proof-counts`,
 which runs each proof and fails the build when a number here disagrees with what the
 proof reports — the numbers below are therefore evidence, not claims.
 
-- **`proof:break-glass` (46 checks)** — emergency-override accountability, the one genuine
+- **`proof:break-glass` (76 checks)** — emergency-override accountability, the one genuine
   gap the Healthcare 360 audit returned (intake ledger row 59). A **648-state exhaustive
   sweep**. This is the sharpest row-45 candidate in the fabric, because break-glass is BY
   DESIGN a grant that bypasses the checks — that is its correct function — so an
@@ -640,7 +640,17 @@ proof reports — the numbers below are therefore evidence, not claims.
   reading as health, inside the dimension written to catch it. A second survivor indicted the
   proof rather than the source: the clean set was pinned by negative conditions
   (`scope !== "broad"`), which `unknown` satisfies, and is now pinned by EQUALITY to one
-  enumerated shape.
+  enumerated shape. The proof now also covers the **badge→manual fallback SEQUENCE**
+  (`lib/integrations/src/integrations/break-glass/fallback-sequence.ts`): a badge tap that
+  fails at a charging dock, falling back to an audited manual credential check-out,
+  expressed in the canonical event contract's `badge_access`/`checkout_*` types. That is a
+  DISTINCT surface from the accountability grader above — it decides a DEVICE check-out, not
+  an EHR-record read — so unlike the `alert` ceiling it CAN deny and step up, because
+  denying a shared device is not a clinical-safety harm (the clinician takes another device
+  or calls support). Fail-closed throughout: an unknown credential denies exactly as a
+  rejected one, an unconfirmed badge precondition steps up, and a malformed event stream or
+  an unauditable check-out denies — ignorance never reaches `allow`, and the allow set is
+  pinned by equality over the whole sequence state space.
 - **`proof:session-readiness` (63 checks)** — the DEX/EUC readiness dimension, from the
   IGEL + ControlUp tap-to-app work (intake ledger row 57). A **1,728-state exhaustive
   sweep** whose clean set is pinned to exact SHAPES rather than a count. The headline law

@@ -623,7 +623,7 @@ recently. Their documented counts are enforced by `pnpm run check:proof-counts`,
 which runs each proof and fails the build when a number here disagrees with what the
 proof reports — the numbers below are therefore evidence, not claims.
 
-- **`proof:break-glass` (101 checks)** — emergency-override accountability, the one genuine
+- **`proof:break-glass` (105 checks)** — emergency-override accountability, the one genuine
   gap the Healthcare 360 audit returned (intake ledger row 59). A **648-state exhaustive
   sweep**. This is the sharpest row-45 candidate in the fabric, because break-glass is BY
   DESIGN a grant that bypasses the checks — that is its correct function — so an

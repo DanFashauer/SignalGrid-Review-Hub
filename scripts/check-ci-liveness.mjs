@@ -315,18 +315,61 @@ async function api(path) {
   }
 }
 
+// The sweep is a MATRIX of shards, so one run carries several jobs with the
+// prefix. Liveness asks "did the harness run", not "was every shard green": a
+// run where three shards succeeded and one found a survivor proves the harness
+// is alive (the survivor is the sweep doing its job). So the run counts as a
+// success if ANY shard job succeeded, and the timestamp is the latest such
+// completion — independent of the order the API happens to list the jobs in.
+// (Before this, `.find()` took the FIRST listed shard: on 2026-09-11 one shard
+// of four was red, the API's job order varied between calls, and the gate
+// flipped red/green on identical repo state — the flaky gate this file warns
+// about, in this file.)
+export function latestSweepSuccessInRun(jobs, prefix = SWEEP_JOB_PREFIX) {
+  const shards = (jobs ?? []).filter((j) => String(j?.name ?? "").startsWith(prefix));
+  if (shards.length === 0) return { present: false, iso: null, succeeded: 0, total: 0 };
+  const ok = shards.filter((j) => j.conclusion === "success" && typeof j.completed_at === "string");
+  const iso = ok.map((j) => j.completed_at).sort().at(-1) ?? null;
+  return { present: true, iso, succeeded: ok.length, total: shards.length };
+}
+
+// Self-test for the shard rule — a pure function, no network.
+{
+  const shard = (n, conclusion, at) => ({ name: `${SWEEP_JOB_PREFIX} (every guard must be falsifiable) (${n})`, conclusion, completed_at: at });
+  const other = { name: "Daily verification", conclusion: "success", completed_at: "2026-09-11T12:16:52Z" };
+  const mixed = [other, shard(2, "success", "2026-09-11T12:21:53Z"), shard(1, "failure", "2026-09-11T12:18:52Z"), shard(0, "success", "2026-09-11T12:19:40Z"), shard(3, "success", "2026-09-11T12:25:44Z")];
+  const cases = [
+    ["one red shard among three green → alive, latest green completion", latestSweepSuccessInRun(mixed), { present: true, iso: "2026-09-11T12:25:44Z", succeeded: 3, total: 4 }],
+    ["job order does not change the answer", latestSweepSuccessInRun([...mixed].reverse()), { present: true, iso: "2026-09-11T12:25:44Z", succeeded: 3, total: 4 }],
+    ["every shard red → present but no success", latestSweepSuccessInRun([other, shard(0, "failure", "x"), shard(1, "failure", "y")]), { present: true, iso: null, succeeded: 0, total: 2 }],
+    ["no sweep job at all → not present (silence is not evidence)", latestSweepSuccessInRun([other]), { present: false, iso: null, succeeded: 0, total: 0 }],
+    ["a success with no timestamp does not count", latestSweepSuccessInRun([shard(0, "success", undefined)]), { present: true, iso: null, succeeded: 0, total: 1 }],
+    ["empty / missing jobs → not present", latestSweepSuccessInRun(undefined), { present: false, iso: null, succeeded: 0, total: 0 }],
+  ];
+  const bad = cases.filter(([, got, want]) => JSON.stringify(got) !== JSON.stringify(want));
+  if (bad.length > 0) {
+    console.error(
+      "✗ SELF-TEST FAILED — the shard rule no longer behaves as required:\n" +
+        bad.map(([name, got]) => `    · ${name}: got ${JSON.stringify(got)}`).join("\n"),
+    );
+    process.exit(1);
+  }
+}
+
 async function lastSweepSuccess() {
   const runs = await api(
     `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=${RUNS_TO_INSPECT}&status=completed`,
   );
   for (const run of runs.workflow_runs ?? []) {
     const jobs = await api(`/repos/${REPO}/actions/runs/${run.id}/jobs?per_page=30`);
-    const sweep = (jobs.jobs ?? []).find((j) => String(j.name ?? "").startsWith(SWEEP_JOB_PREFIX));
+    const sweep = latestSweepSuccessInRun(jobs.jobs);
     // A run with no such job is not evidence either way — the job may have been
     // added later, or renamed. Keep looking rather than concluding from silence.
-    if (!sweep) continue;
-    if (sweep.conclusion === "success") {
-      return { iso: sweep.completed_at, runUrl: run.html_url, runConclusion: run.conclusion };
+    if (!sweep.present) continue;
+    // One line per inspected run so a red verdict can be read back later.
+    console.log(`  · run ${run.id} (${String(run.created_at ?? "").slice(0, 16)}Z): ${sweep.succeeded}/${sweep.total} sweep shard(s) succeeded`);
+    if (sweep.iso) {
+      return { iso: sweep.iso, runUrl: run.html_url, runConclusion: run.conclusion };
     }
   }
   return null;

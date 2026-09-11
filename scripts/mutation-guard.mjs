@@ -111,6 +111,18 @@ export const MUTATORS = [
     describe: (m) => `${truncate(m[2])} && → true &&`,
   },
   {
+    id: "oneline-cond-false",
+    // `if (<anything>) return <x>;` on ONE line → `if (false) return <x>;` — the brace-less
+    // guard shape three reviews found invisible to this sweep (in-house audit on the
+    // custody-ledger surface, Codex rounds on #641): a normalizer's early return, a
+    // parser's fail-closed bail-out, a bound check. Each is a guard exactly like the
+    // braced ones above; only its spelling kept it out of the sweep, and a guard the
+    // sweep cannot reach is a guard nobody has ever seen fail.
+    match: /^(\s*)if \((.+)\) return (.+);( \/\/.*)?$/,
+    apply: (m) => `${m[1]}if (false) return ${m[3]};${m[4] ?? ""}`,
+    describe: (m) => `if (${truncate(m[2])}) return ${truncate(m[3])} → if (false) return ...`,
+  },
+  {
     id: "return-flip",
     // `return true;` / `return false;` inside a predicate — flips a fail-closed default.
     match: /^(\s*)return (true|false);( \/\/.*)?$/,

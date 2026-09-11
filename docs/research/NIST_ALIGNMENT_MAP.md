@@ -63,7 +63,7 @@ already places its weight in the Zero Trust Identity Mesh layer.
 | --- | --- | --- |
 | Policy Decision Point / Policy Engine | the deterministic decision core; `proof:orchestration`, `proof:policy-binding` | aligned with — SignalGrid *is* a PDP for shared-device custody |
 | Per-request, continuous evaluation | `proof:caep-events`, `proof:sso-session`, `proof:session-readiness` | aligned with |
-| Decision from many signal sources | the read-only, fail-closed connector families (identity, EDR, NAC, posture, RTLS, custody) | aligned with |
+| Decision from many signal sources | the read-only, fail-closed connector families (identity, EDR, NAC, posture, plus the RTLS/custody families that are **deferred**, DR-001) | aligned with |
 | Least privilege / dynamic policy | `allow / step_up / restrict / deny`; `proof:entitlement-binding`, `proof:break-glass` | aligned with |
 
 ## 3 — SP 800-63 Digital Identity → the assurance ladder
@@ -102,14 +102,15 @@ NVD → `vuln-scan`; NVD CVE 2.0 answered keyless in that probe). `proof:vuln-sc
 consumes CVE evidence fixture-first (a public feed enters the tree only as a
 committed, dated fixture; live only behind tier + opt-in — DR-027).
 
-## 6 — Mobile Threat Catalogue → shared-device custody threat model
+## 6 — Mobile Threat Catalogue → the shared-device threat model
 
 [`usnistgov/mobile-threat-catalogue`](https://github.com/usnistgov/mobile-threat-catalogue)
 (NIST/NCCoE) is a structured taxonomy of mobile threats. It is an external
-cross-check for the custody threat model in
+cross-check for the threat model in
 [`SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`](SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md)
 — informed by, for review of the `custody-beacon` / `rtls-custody` / `carrier` /
-`device-attestation` detections. No code change; a review lens.
+`device-attestation` detections (**deferred** families, DR-001). No code change;
+a review lens.
 
 ## 7 — Adjacent, noted not wired
 

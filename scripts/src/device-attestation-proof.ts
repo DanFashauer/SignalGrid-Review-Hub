@@ -27,6 +27,11 @@ import {
   evaluateSupervisionIdentity,
   evaluateSupervisionIdentityFixture,
   normalizeSupervisionIdentity,
+  SUPERVISION_DOMAIN,
+  IDENTITY_BINDING_DOMAIN,
+  SUPERVISION_ENROLLMENT_DOMAIN,
+  MANAGEMENT_CHANNEL_DOMAIN,
+  SUPERVISION_INTEGRITY_DOMAIN,
   type AttestationReportRaw,
   type ManagementChannel,
   type NormalizedSupervisionIdentity,
@@ -525,6 +530,17 @@ console.log("\n  ── the supervision-identity lifecycle ──\n");
     check(`the '${fixture}' hold names its own axis ('${signal}') and is NOT the out-of-domain backstop`,
       v.unknownSignals.includes(signal) && !v.unknownSignals.includes("state_out_of_domain"));
   }
+  // The domain lists are the guard's allowlist. `readonly` is compile-time only: a JavaScript
+  // caller that pushed "garbage" onto an exported list would make it in-domain and reopen
+  // the grant (review finding). They are frozen at runtime, and a mutation attempt must
+  // leave the hold in place.
+  const siDomains = [SUPERVISION_DOMAIN, IDENTITY_BINDING_DOMAIN, SUPERVISION_ENROLLMENT_DOMAIN, MANAGEMENT_CHANNEL_DOMAIN, SUPERVISION_INTEGRITY_DOMAIN];
+  check("every exported supervision domain list is frozen at runtime", siDomains.every((d) => Object.isFrozen(d)));
+  let siPushThrew = false;
+  try { (SUPERVISION_ENROLLMENT_DOMAIN as unknown as string[]).push("garbage"); } catch { siPushThrew = true; }
+  check("pushing onto a domain list throws (strict mode) and does not widen it — the out-of-domain hold survives the attempt",
+    siPushThrew && SUPERVISION_ENROLLMENT_DOMAIN.length === 4 &&
+    evaluateSupervisionIdentity({ ...base, enrollment: "garbage" as SupervisionEnrollment }).trustPreconditionMet === false);
   check("supervision-identity evaluator is deterministic",
     JSON.stringify(evaluateSupervisionIdentity(base)) === JSON.stringify(evaluateSupervisionIdentity(base)));
 }

@@ -25,6 +25,12 @@ import {
   evaluateDevicePrep,
   evaluateDevicePrepFixture,
   normalizeDevicePrep,
+  PREP_ENROLLMENT_DOMAIN,
+  PREP_PROFILES_DOMAIN,
+  PREP_REQUIRED_APPS_DOMAIN,
+  OS_UPDATE_DOMAIN,
+  PREP_STAGE_DOMAIN,
+  PREP_INTEGRITY_DOMAIN,
   type DevicePrepReportRaw,
   type AppUpdateReportRaw,
   type DevicePrepVerdict,
@@ -607,6 +613,17 @@ for (const [fixture, signal] of prepUnknownStageSignals) {
   check(`device-prep: the '${fixture}' hold names its own stage ('${signal}') and is NOT the out-of-domain backstop`,
     v.unknownSignals.includes(signal) && !v.unknownSignals.includes("state_out_of_domain"));
 }
+// The domain lists are the guard's allowlist. `readonly` is compile-time only: a JavaScript
+// caller that pushed "garbage" onto an exported list would make it in-domain and reopen the
+// grant (review finding). They are frozen at runtime, and a mutation attempt must leave the
+// hold in place.
+const prepDomainLists = [PREP_ENROLLMENT_DOMAIN, PREP_PROFILES_DOMAIN, PREP_REQUIRED_APPS_DOMAIN, OS_UPDATE_DOMAIN, PREP_STAGE_DOMAIN, PREP_INTEGRITY_DOMAIN];
+check("device-prep: every exported domain list is frozen at runtime", prepDomainLists.every((d) => Object.isFrozen(d)));
+let prepPushThrew = false;
+try { (PREP_ENROLLMENT_DOMAIN as unknown as string[]).push("garbage"); } catch { prepPushThrew = true; }
+check("device-prep: pushing onto a domain list throws (strict mode) and does not widen it — the out-of-domain hold survives the attempt",
+  prepPushThrew && PREP_ENROLLMENT_DOMAIN.length === 4 &&
+  evaluateDevicePrep({ ...prepBase, enrollment: "garbage" as PrepEnrollment }).readyForCheckout === false);
 check("device-prep evaluator is deterministic",
   JSON.stringify(evaluateDevicePrep(prepBase)) === JSON.stringify(evaluateDevicePrep(prepBase)));
 

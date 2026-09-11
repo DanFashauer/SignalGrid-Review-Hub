@@ -87,7 +87,8 @@ LAST TOUCHED: 2026-09-11 (cloud lane, latest) - THE LAST TWO RUNBOOK PARTIALS MO
               grant a POSITIVE predicate (an out-of-union runtime value is held, not
               granted) and a throwing field read malformed; round four caught that cut
               (it skipped when an advisory had fired) - now an in-domain check on every
-              axis, run whatever else fired. (Earlier 2026-09-11, cloud
+              axis, run whatever else fired; round five froze the domain lists at runtime
+              (readonly is compile-time only). (Earlier 2026-09-11, cloud
               lane:) READINESS-FIGURE HONESTY LANDED
               (#620, 52b395d). The DR-036 readiness gate was OVER-reporting - it
               fail-OPENED on two dimensions. Fixed at root, each with a control that

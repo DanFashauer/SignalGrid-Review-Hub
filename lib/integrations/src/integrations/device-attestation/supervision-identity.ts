@@ -70,12 +70,14 @@ export const SUPERVISION_IDENTITY_REPORT_KEYS = [
 /** The NORMALIZED domain of each axis — every declared member, `unknown` included. The
  *  evaluator holds any value outside these (a JavaScript caller, a cast, a deserialized
  *  object), whatever else fired: the exhaustive sweep walks these members, so a value
- *  they do not contain is one no proof has ever graded. */
-export const SUPERVISION_DOMAIN: readonly SupervisionState[] = ["supervised", "unsupervised", "unknown"];
-export const IDENTITY_BINDING_DOMAIN: readonly SupervisionIdentityBinding[] = ["bound_to_org", "bound_to_other_org", "unbound", "unknown"];
-export const SUPERVISION_ENROLLMENT_DOMAIN: readonly SupervisionEnrollment[] = ["enrolled", "enrollment_lost", "never_enrolled", "unknown"];
-export const MANAGEMENT_CHANNEL_DOMAIN: readonly ManagementChannel[] = ["responsive", "unresponsive", "unknown"];
-export const SUPERVISION_INTEGRITY_DOMAIN: readonly SupervisionReportIntegrity[] = ["clean", "malformed"];
+ *  they do not contain is one no proof has ever graded. FROZEN at runtime: `readonly` is
+ *  a compile-time promise only, and a JavaScript caller could otherwise push "garbage"
+ *  onto an exported list and reopen the grant (review finding). */
+export const SUPERVISION_DOMAIN: readonly SupervisionState[] = Object.freeze(["supervised", "unsupervised", "unknown"]);
+export const IDENTITY_BINDING_DOMAIN: readonly SupervisionIdentityBinding[] = Object.freeze(["bound_to_org", "bound_to_other_org", "unbound", "unknown"]);
+export const SUPERVISION_ENROLLMENT_DOMAIN: readonly SupervisionEnrollment[] = Object.freeze(["enrolled", "enrollment_lost", "never_enrolled", "unknown"]);
+export const MANAGEMENT_CHANNEL_DOMAIN: readonly ManagementChannel[] = Object.freeze(["responsive", "unresponsive", "unknown"]);
+export const SUPERVISION_INTEGRITY_DOMAIN: readonly SupervisionReportIntegrity[] = Object.freeze(["clean", "malformed"]);
 
 export interface NormalizedSupervisionIdentity {
   readonly sourceSystem: "device-attestation";

@@ -118,7 +118,7 @@ enrolls anything.
   inventory. An app reporting its own version can support UX ("update
   available" messaging in the host app), but a *grant* never rests on it.
 
-Proven by `proof:app-update` (155 checks; targeted checks, hostile report shapes, the
+Proven by `proof:app-update` (157 checks; targeted checks, hostile report shapes, the
 grant-safety enumerations above, and — for the iOS update / device-prep workflow in
 `device-prep.ts` — named outcomes, single-stage flips of the one grant, and a
 3,072-state grant-safety sweep that pins that grant by equality; deterministic,

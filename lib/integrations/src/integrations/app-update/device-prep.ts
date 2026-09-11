@@ -58,20 +58,22 @@ export const DEVICE_PREP_REPORT_KEYS = ["enrollment", "profiles", "required_apps
 /** The NORMALIZED domain of each stage — every declared member, `unknown` included. The
  *  evaluator holds any value outside these (a JavaScript caller, a cast, a deserialized
  *  object), whatever else fired: the exhaustive sweep walks these members, so a value
- *  they do not contain is one no proof has ever graded. */
-export const PREP_ENROLLMENT_DOMAIN: readonly PrepEnrollment[] = ["enrolled", "pending", "not_enrolled", "unknown"];
-export const PREP_PROFILES_DOMAIN: readonly PrepProfiles[] = ["applied", "partial", "missing", "unknown"];
-export const PREP_REQUIRED_APPS_DOMAIN: readonly PrepRequiredApps[] = ["installed", "partial", "missing", "unknown"];
-export const OS_UPDATE_DOMAIN: readonly OsUpdateState[] = [
+ *  they do not contain is one no proof has ever graded. FROZEN at runtime: `readonly` is
+ *  a compile-time promise only, and a JavaScript caller could otherwise push "garbage"
+ *  onto an exported list and reopen the grant (review finding). */
+export const PREP_ENROLLMENT_DOMAIN: readonly PrepEnrollment[] = Object.freeze(["enrolled", "pending", "not_enrolled", "unknown"]);
+export const PREP_PROFILES_DOMAIN: readonly PrepProfiles[] = Object.freeze(["applied", "partial", "missing", "unknown"]);
+export const PREP_REQUIRED_APPS_DOMAIN: readonly PrepRequiredApps[] = Object.freeze(["installed", "partial", "missing", "unknown"]);
+export const OS_UPDATE_DOMAIN: readonly OsUpdateState[] = Object.freeze([
   "current",
   "update_available",
   "update_required",
   "update_in_progress",
   "update_failed",
   "unknown",
-];
-export const PREP_STAGE_DOMAIN: readonly PrepStage[] = ["complete", "in_progress", "failed", "unknown"];
-export const PREP_INTEGRITY_DOMAIN: readonly PrepReportIntegrity[] = ["clean", "malformed"];
+]);
+export const PREP_STAGE_DOMAIN: readonly PrepStage[] = Object.freeze(["complete", "in_progress", "failed", "unknown"]);
+export const PREP_INTEGRITY_DOMAIN: readonly PrepReportIntegrity[] = Object.freeze(["clean", "malformed"]);
 
 export interface NormalizedDevicePrep {
   readonly sourceSystem: "app-update";

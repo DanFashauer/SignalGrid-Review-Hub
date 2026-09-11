@@ -1767,3 +1767,19 @@ Output:
 The guard is now an IN-DOMAIN check per axis — exported *_DOMAIN lists carrying every declared member, unknown included — evaluated independently of the candidate list. Any axis outside its domain pushes a step_up hold (STATE_UNKNOWN, unknownSignals "state_out_of_domain") whatever else fired: after a monitor the hold outranks the advisory (advisory + garbage stage → step_up, readyForCheckout false); after another hold or a containment the earlier concern keeps its own reason on the tie (unresponsive channel + garbage → CHANNEL_UNRESPONSIVE; foreign identity + garbage → restrict; prep failed + garbage → restrict / DEVICE_PREP_FAILED). The round-three per-axis unknown-signal pins stay, and are no longer load-bearing for the sweep: "unknown" is in-domain, so the unknown branches are no longer shadowed and a deleted one fails its fixture outright.
 ```
 Verdict:  **The round-three fix was itself wrong in a way the next review round caught: a guard that only runs when nothing else fired is not a guard on the axis.** The in-domain check runs every time. No verdict outside the two new modules changed; both families stay deferred.
+
+## 2026-09-11 — "Codex round five on #641: the domain lists are frozen at runtime"
+Command:  two P1s on 3ef4e567, verified real: `readonly` is a compile-time promise only, so a JavaScript caller could push "garbage" onto an exported *_DOMAIN list, make it in-domain, and reopen the grant.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (144/144) (was 142) — +2: every domain list frozen; a push throws, does not widen, and the hold survives
+pnpm run proof:app-update                                 # summary=pass (157/157) (was 155) — +2: the same two on the device-prep lists
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=51 killed=51 hung=0 known-inert=0 survivors=0 (was 51/51)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=73 killed=69 hung=0 known-inert=4 survivors=0 (was 69 killed + 4 documented-inert of 73)
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 74, fingerprint b47aedd37229
+```
+Output:
+```
+Every exported *_DOMAIN list is now Object.freeze()d at construction; the type stays readonly T[]. In strict-mode ESM a push onto a frozen array throws a TypeError, the length is unchanged, and the in-domain guard still holds the out-of-domain value — pinned on one list per module, with Object.isFrozen asserted over all of them.
+```
+Verdict:  **A guard whose allowlist a caller can edit is not a guard; the lists are now immutable at runtime and the proof would notice if one were not.** No verdict outside the two new modules changed; both families stay deferred.

@@ -52,51 +52,25 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-11 (cloud lane, latest) - THE LAST TWO RUNBOOK PARTIALS MODELED
-              (branch lane/cloud-runbook-partials-20260911-154128Z; product PR, owner
-              merges - the harness structurally blocks agent self-merge of product PRs):
-              the supervision-identity lifecycle (device-attestation/supervision-identity.ts:
-              supervised / this org vs another / identity lost / enrollment lost / never
-              enrolled / commands unresponsive / unknown -> grant, hold or contain; a
-              288-state sweep pins the single grant) and the iOS update / device-prep
-              workflow (app-update/device-prep.ts: enrolled / profiles / required apps /
-              prep stage / OS update -> ready, hold, contain, or advise; a 3072-state
-              sweep pins the single grant). Each is a distinct fixture corpus + fail-closed
-              evaluator + proof section on the break-glass fallback-sequence pattern;
-              mutation-swept 42/42 and 59 killed + 4 documented-inert of 63, 0 survivors.
-              READINESS (a) 70 -> 82% (14 modeled / 0 partial / 3 gap of 17) - the runbook
-              dimension is OVER THE FLOOR. HEADLINE still 0% ONLY on (b): mac-run.json
-              covers manifest 6f6a, the tree is now 6989 (manifest v70 after proofCounts
-              moved device-attestation 77->119 and app-update 71->127). The Mac re-mint
-              is the single remaining lever, and it got easier: verify-all.mjs now stamps
-              mintedAt into mac-run.json and check-readiness-figure prefers it over the
-              git date (a shallow clone mis-aged the file twice; fail-closed on a garbage
-              or future stamp, 6 new self-test cases). Also this session: the NIST org
-              absorbed as docs/research/NIST_ALIGNMENT_MAP.md (PR #638, awaits the
-              owner's merge) through six review rounds - Codex to its budget, then the in-house
-              fail-closed-auditor, which also showed the launch-claims vocabulary cannot
-              see any capability that map names (follow-up: a profile-id <-> doc-status
-              gate). The owner delegated routine merge calls this session (do what you
-              need to do unless blocked); lane-mail auto-merges, product PRs await the
-              owner because the harness refuses agent self-merge, self-approval, and
-              self-authorizing edits to AGENTS.md or a DR - so that rule text stands as
-              written. PR #641 then took three Codex findings, each real and each fixed
-              at the root: own-property reads in both new normalizers (an inherited field
-              could reach the grant), an invalid mintedAt is Infinity not the git date, and
-              an optional-update advisory stays checkout-ready; round three made the
-              grant a POSITIVE predicate (an out-of-union runtime value is held, not
-              granted) and a throwing field read malformed; round four caught that cut
-              (it skipped when an advisory had fired) - now an in-domain check on every
-              axis, run whatever else fired; round five froze the domain lists at runtime
-              (readonly is compile-time only); round six (Codex out of quota, so the
-              in-house fail-closed-auditor) froze the REPORT_KEYS allowlists too and pinned
-              the own-property read against a polluted Object.prototype - two P1s the
-              external rounds had just walked past. Round seven (Codex, back on quota)
-              closed the three holes the custody-ledger review had found the same hour -
-              own-name fixture lookup, one-time axis snapshot, a revoked-Proxy catch - in
-              both modules (proofs 148 -> 154 and 161 -> 167; sweeps 58/58 and 76 + 4 inert
-              of 80, 0 survivors). (Earlier 2026-09-11, cloud
-              lane:) READINESS-FIGURE HONESTY LANDED
+LAST TOUCHED: 2026-09-11 (Mac lane, latest) - HARDWARE EVIDENCE RE-MINTED against the
+              manifest mainline carries (v68 / ce58f6): 53c60f4e, from verify:all --require-mcp
+              --emit-evidence on this Mac (Review-Hub preflight PASS, breadth PASS, signalgrid-mcp
+              pytest 99 passed at 10c5b52 on a clean checkout, 22 MCP tools derived = doc); the
+              full preflight PASSED (319 gates) before the push. check-live-sync now prints
+              liveEvidence=fresh. Readiness on mainline reads (a) 70 / (b) 100 / (c) 100 ->
+              HEADLINE 70, OUTREACH CLOSED - bounded by the runbook rows until cloud's #641 lands
+              (it models the last two partials: (a) -> 14/17 = 82). CAUTION for whoever merges:
+              #641 carries manifest v75 / 72c7ce80 and #645 a DIFFERENT v70 / a5e4b3bc while
+              mainline is v68 - the second one merged needs its manifest regenerated on top of
+              the first, and the evidence reads stale-by-fingerprint again the moment either
+              lands (by design); the Mac re-mints then. mintedAt rides #641 too, so this
+              artifact still ages by commit date (the gate's legacy path). Four cloud messages
+              acked in one delivery (66be8a5) with those two corrections. The self-triggering
+              runner is PROVEN: the runner log shows PR checks on every push to #638 / #641 /
+              #645 today (latest run on each Succeeded), and the first nightly fired - cron
+              08:00Z queued until 12:23Z - lane=both Succeeded 12:30Z, lane=mcp Succeeded
+              12:34Z. signalgrid-mcp sibling pulled to 10c5b52 (#13). (Earlier 2026-09-11,
+              cloud lane:) READINESS-FIGURE HONESTY LANDED
               (#620, 52b395d). The DR-036 readiness gate was OVER-reporting - it
               fail-OPENED on two dimensions. Fixed at root, each with a control that
               fails pre-fix: (a) parseGroundTruth dropped markdown-bold **gap** rows

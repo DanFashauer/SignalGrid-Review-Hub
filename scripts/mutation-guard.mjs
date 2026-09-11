@@ -433,6 +433,10 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/break-glass/evaluate.ts",
       "lib/integrations/src/integrations/break-glass/index.ts",
+      // The badge→manual fallback sequence emits grant/step-up/deny verdicts and
+      // normalizes a device-checkout event stream, so its guards are mutable decision
+      // logic that must be swept — registered after review found it uncovered.
+      "lib/integrations/src/integrations/break-glass/fallback-sequence.ts",
     ],
   },
   {

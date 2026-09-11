@@ -391,6 +391,7 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   // 6b. THE NAMED OUTCOMES — allow, deny and step_up all reachable, each by name.
   const F = (n: string) => evaluateManualFallbackFixture(n)!;
   const cases: Array<[string, string, string]> = [
+    ["badge-succeeded-no-fallback", "allow", "FALLBACK_BADGE_CHECKOUT_OK"],
     ["badge-failed-manual-verified-accountable", "allow", "FALLBACK_GRANTED_ACCOUNTABLE"],
     ["badge-failed-manual-verified-underdocumented", "step_up", "FALLBACK_GRANTED_NEEDS_AUDIT"],
     ["badge-failed-credential-rejected", "deny", "FALLBACK_CREDENTIAL_REJECTED"],
@@ -443,14 +444,23 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
 
   // 6d. THE ALLOW SET, PINNED BY EQUALITY over the whole sequence state space. The
   // negatives-only lesson from section 3: only an equality pin excludes the states
-  // nobody named. Sweep every combination and assert allow is EXACTLY one shape.
+  // nobody named. Sweep every combination and assert allow is EXACTLY the enumerated set.
+  //
+  // THE ALLOW SET GREW FROM ONE SHAPE TO TWO REASONS, and the pin is updated to match:
+  //   - FALLBACK_BADGE_CHECKOUT_OK — a NORMAL successful badge check-out where no manual
+  //     fallback was attempted. The override record is irrelevant (the manual path was
+  //     never used), so this reason allows across all three override shapes.
+  //   - FALLBACK_GRANTED_ACCOUNTABLE — the genuine fallback grant: badge FAILED, credential
+  //     verified, stream and record intact, override accountable.
+  // Both require an intact stream; neither is reachable on any unknown/rejected credential
+  // or an unconfirmed badge. Four signatures total, enumerated below.
   const RECORDS: Record<string, Record<string, unknown>> = {
     accountable: { invocationRef: "r", justification: "recorded", scope: "single_encounter", expiry: "bounded", review: "reviewed", assignmentAtInvocation: "not_assigned" },
     under_documented: { invocationRef: "r", justification: "recorded", scope: "single_encounter", expiry: "bounded", review: "pending", assignmentAtInvocation: "not_assigned" },
     malformed: {},
   };
   const BADGE: BadgeAttempt[] = ["failed", "succeeded", "unknown"];
-  const CRED: ManualCredentialCheck[] = ["verified", "rejected", "unknown"];
+  const CRED: ManualCredentialCheck[] = ["verified", "rejected", "unknown", "not_attempted"];
   const INTEG: FallbackSequenceIntegrity[] = ["intact", "malformed"];
   const seqSpace: NormalizedManualFallback[] = [];
   for (const badgeAttempt of BADGE)
@@ -467,21 +477,36 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   const allowShapes = new Set(
     allowStates.map(({ state }) => `${state.badgeAttempt}|${state.manualCredential}|${state.override.reportIntegrity}|${state.sequenceIntegrity}|${evaluateBreakGlass(state.override).posture}`),
   );
+  const EXPECTED_ALLOW = new Set([
+    // FALLBACK_BADGE_CHECKOUT_OK — normal badge success, no fallback, override irrelevant.
+    "succeeded|not_attempted|intact|intact|accountable",
+    "succeeded|not_attempted|intact|intact|under_documented",
+    "succeeded|not_attempted|malformed|intact|unassessed",
+    // FALLBACK_GRANTED_ACCOUNTABLE — the genuine fallback grant.
+    "failed|verified|intact|intact|accountable",
+  ]);
   check(
-    `allow is EXACTLY one shape, pinned by equality (${allowShapes.size} distinct)`,
-    allowShapes.size === 1 && allowShapes.has("failed|verified|intact|intact|accountable"),
+    `allow is EXACTLY the enumerated set, pinned by equality (${allowShapes.size} distinct)`,
+    allowShapes.size === EXPECTED_ALLOW.size && [...allowShapes].every((s) => EXPECTED_ALLOW.has(s)),
   );
   check(
-    "no allow state has an unknown/rejected credential, an unconfirmed badge, or a malformed stream/record — ignorance never reaches allow",
+    "no allow state has an unknown/rejected credential, an unconfirmed badge, or a malformed stream — ignorance never reaches allow",
     allowStates.every(({ state }) =>
-      state.manualCredential === "verified" &&
-      state.badgeAttempt === "failed" &&
-      state.sequenceIntegrity === "intact" &&
-      state.override.reportIntegrity === "intact"),
+      (state.manualCredential === "verified" || state.manualCredential === "not_attempted") &&
+      state.badgeAttempt !== "unknown" &&
+      state.sequenceIntegrity === "intact"),
   );
   check(
-    `NON-VACUITY: allow IS reachable (${allowStates.length} state(s)), so the pin is not describing nothing`,
-    allowStates.length > 0,
+    "…and the genuine FALLBACK grant (a manual credential was used) still requires an INTACT accountable record",
+    allowStates.every(({ state, verdict }) =>
+      verdict.reasonCode !== "FALLBACK_GRANTED_ACCOUNTABLE" ||
+      (state.badgeAttempt === "failed" && state.manualCredential === "verified" &&
+        state.override.reportIntegrity === "intact" && evaluateBreakGlass(state.override).posture === "accountable")),
+  );
+  check(
+    `NON-VACUITY: BOTH allow reasons are reachable, so neither pin describes nothing`,
+    allowStates.some(({ verdict }) => verdict.reasonCode === "FALLBACK_BADGE_CHECKOUT_OK") &&
+      allowStates.some(({ verdict }) => verdict.reasonCode === "FALLBACK_GRANTED_ACCOUNTABLE"),
   );
   // Every unknown-bearing state tightens away from allow — the golden-rule-2 sweep.
   const withUnknown = seqVerdicts.filter(({ state }) =>
@@ -492,17 +517,19 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   );
 
   // 6e. THE NORMALIZER READS THE SEQUENCE OUT OF REAL EVENTS, and fails closed on
-  // structure. Deterministic over array order; no timestamp is read.
+  // structure. Deterministic over array order; no timestamp is read. Every well-formed
+  // stream carries the two required contract anchors — correlationId AND tenantId.
   const CID = "cust-live";
+  const T = "tenant-a";
+  const ACCOUNTABLE_RAW = { invocationRef: "bg-live", justification: "recorded", scope: "single_encounter", expiry: "bounded", review: "reviewed", assignmentAtInvocation: "not_assigned" };
   const realFallback = normalizeManualFallbackSequence(
     [
-      { eventType: "badge_access", correlationId: CID },
-      { eventType: "checkout_requested", correlationId: CID },
-      { eventType: "checkout_denied", correlationId: CID }, // badge check-out failed
-      { eventType: "checkout_requested", correlationId: CID, mobileCredentialId: "mc-1" }, // manual fallback
-      { eventType: "checkout_granted", correlationId: CID }, // credential verified
+      { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "failure" }, // badge auth FAILED
+      { eventType: "checkout_denied", correlationId: CID, tenantId: T }, // badge check-out denied
+      { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" }, // manual fallback
+      { eventType: "checkout_granted", correlationId: CID, tenantId: T }, // credential verified
     ],
-    { invocationRef: "bg-live", justification: "recorded", scope: "single_encounter", expiry: "bounded", review: "reviewed", assignmentAtInvocation: "not_assigned" },
+    ACCOUNTABLE_RAW,
   );
   check(
     `a real badge-fail→manual-verify event stream normalizes to failed/verified/intact (${realFallback.badgeAttempt}/${realFallback.manualCredential}/${realFallback.sequenceIntegrity})`,
@@ -514,10 +541,10 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   );
   const badgeOkStream = normalizeManualFallbackSequence(
     [
-      { eventType: "badge_access", correlationId: CID },
-      { eventType: "checkout_granted", correlationId: CID }, // badge worked
-      { eventType: "checkout_requested", correlationId: CID, mobileCredentialId: "mc-1" },
-      { eventType: "checkout_granted", correlationId: CID },
+      { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "success" }, // badge worked
+      { eventType: "checkout_granted", correlationId: CID, tenantId: T },
+      { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
+      { eventType: "checkout_granted", correlationId: CID, tenantId: T },
     ],
     {},
   );
@@ -527,9 +554,9 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   );
   const noManualResolution = normalizeManualFallbackSequence(
     [
-      { eventType: "badge_access", correlationId: CID },
-      { eventType: "checkout_denied", correlationId: CID },
-      { eventType: "checkout_requested", correlationId: CID, mobileCredentialId: "mc-1" },
+      { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "failure" },
+      { eventType: "checkout_denied", correlationId: CID, tenantId: T },
+      { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
     ],
     {},
   );
@@ -542,8 +569,8 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
     "FAIL-CLOSED: a MIXED-correlation stream is malformed",
     normalizeManualFallbackSequence(
       [
-        { eventType: "badge_access", correlationId: "a" },
-        { eventType: "checkout_denied", correlationId: "b" },
+        { eventType: "badge_access", correlationId: "a", tenantId: T },
+        { eventType: "checkout_denied", correlationId: "b", tenantId: T },
       ],
       {},
     ).sequenceIntegrity === "malformed",
@@ -552,20 +579,139 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
     "FAIL-CLOSED: a manual request BEFORE the badge attempt resolves is out of order → malformed",
     normalizeManualFallbackSequence(
       [
-        { eventType: "badge_access", correlationId: CID },
-        { eventType: "checkout_requested", correlationId: CID, mobileCredentialId: "mc-1" }, // manual before badge resolved
-        { eventType: "checkout_denied", correlationId: CID },
+        { eventType: "badge_access", correlationId: CID, tenantId: T },
+        { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" }, // manual before badge resolved
+        { eventType: "checkout_denied", correlationId: CID, tenantId: T },
       ],
       {},
     ).sequenceIntegrity === "malformed",
   );
   check(
     "FAIL-CLOSED: an orphan resolution (grant/deny with nothing before it) → malformed",
-    normalizeManualFallbackSequence([{ eventType: "checkout_granted", correlationId: CID }], {}).sequenceIntegrity === "malformed",
+    normalizeManualFallbackSequence([{ eventType: "checkout_granted", correlationId: CID, tenantId: T }], {}).sequenceIntegrity === "malformed",
   );
   check(
     "NON-VACUITY: the well-formed live stream above is `intact`, so the malformed checks fail for their own reason",
     realFallback.sequenceIntegrity === "intact",
+  );
+
+  // 6f. REGRESSION CONTROLS — one per Codex finding. Each reproduces an input that
+  // reached (or falsely blocked) `allow` before the root-cause fix and must not now.
+  //
+  // #1 CONFLICTING MANUAL RESOLUTIONS: one manual fallback emitting both a grant and a
+  // deny is ambiguous high-risk evidence. Before the fix the normalizer kept the first
+  // and stayed intact → an accountable override yielded allow. Ambiguity must tighten.
+  const conflictingManual = normalizeManualFallbackSequence(
+    [
+      { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "failure" },
+      { eventType: "checkout_denied", correlationId: CID, tenantId: T },
+      { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
+      { eventType: "checkout_granted", correlationId: CID, tenantId: T }, // grant …
+      { eventType: "checkout_denied", correlationId: CID, tenantId: T }, // … then deny — contradiction
+    ],
+    ACCOUNTABLE_RAW,
+  );
+  check(
+    `#1 CONFLICTING MANUAL RESOLUTIONS → malformed, never allow (${conflictingManual.sequenceIntegrity} / ${evaluateManualFallback(conflictingManual).decision})`,
+    conflictingManual.sequenceIntegrity === "malformed" && evaluateManualFallback(conflictingManual).decision === "deny",
+  );
+
+  // #2 CROSS-TENANT CORRELATION: two tenants sharing a correlationId must not fuse into
+  // one intact sequence (badge-deny from A + manual-grant from B → allow before the fix).
+  const crossTenant = normalizeManualFallbackSequence(
+    [
+      { eventType: "badge_access", correlationId: CID, tenantId: "tenant-a", outcome: "failure" },
+      { eventType: "checkout_denied", correlationId: CID, tenantId: "tenant-a" },
+      { eventType: "checkout_requested", correlationId: CID, tenantId: "tenant-b", mobileCredentialId: "mc-1" }, // DIFFERENT tenant
+      { eventType: "checkout_granted", correlationId: CID, tenantId: "tenant-b" },
+    ],
+    ACCOUNTABLE_RAW,
+  );
+  check(
+    `#2 CROSS-TENANT under one correlationId → malformed, never allow (${crossTenant.sequenceIntegrity} / ${evaluateManualFallback(crossTenant).decision})`,
+    crossTenant.sequenceIntegrity === "malformed" && evaluateManualFallback(crossTenant).decision === "deny",
+  );
+  check(
+    "#2 a MISSING tenantId is also malformed — correlation alone cannot fuse a sequence",
+    normalizeManualFallbackSequence(
+      [
+        { eventType: "badge_access", correlationId: CID, outcome: "failure" },
+        { eventType: "checkout_denied", correlationId: CID },
+        { eventType: "checkout_requested", correlationId: CID, mobileCredentialId: "mc-1" },
+        { eventType: "checkout_granted", correlationId: CID },
+      ],
+      ACCOUNTABLE_RAW,
+    ).sequenceIntegrity === "malformed",
+  );
+
+  // #3 BADGE-CAUSATION: a checkout_denied caused by posture/policy (NO failed badge_access)
+  // must not read as badge `failed`. Before the fix a later manual grant produced allow,
+  // bypassing the original denial. Now it needs positive badge-auth-failure evidence.
+  const postureDenied = normalizeManualFallbackSequence(
+    [
+      { eventType: "badge_access", correlationId: CID, tenantId: T }, // NO failure outcome
+      { eventType: "checkout_denied", correlationId: CID, tenantId: T }, // denied for posture/policy, not the badge
+      { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
+      { eventType: "checkout_granted", correlationId: CID, tenantId: T },
+    ],
+    ACCOUNTABLE_RAW,
+  );
+  check(
+    `#3 a non-badge-caused denial reads badge=unknown, not failed (${postureDenied.badgeAttempt})`,
+    postureDenied.badgeAttempt === "unknown",
+  );
+  check(
+    `#3 …so a manual grant on top of it does NOT allow (${evaluateManualFallback(postureDenied).decision}) — it tightens to step_up`,
+    evaluateManualFallback(postureDenied).decision !== "allow",
+  );
+  check(
+    "#3 NON-VACUITY: add positive badge-auth-failure evidence and the SAME stream becomes allow — the gate is the evidence, not the shape",
+    (() => {
+      const withEvidence = normalizeManualFallbackSequence(
+        [
+          { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "failure" }, // the only change
+          { eventType: "checkout_denied", correlationId: CID, tenantId: T },
+          { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
+          { eventType: "checkout_granted", correlationId: CID, tenantId: T },
+        ],
+        ACCOUNTABLE_RAW,
+      );
+      return withEvidence.badgeAttempt === "failed" && evaluateManualFallback(withEvidence).decision === "allow";
+    })(),
+  );
+
+  // #4 NOT_ATTEMPTED vs UNKNOWN: a normal successful badge checkout with no manual fallback
+  // must NOT be falsely denied by the PUBLIC normalizer+evaluator. Before the fix it read
+  // credential=unknown and denied before ever considering the successful badge.
+  const normalCheckout = normalizeManualFallbackSequence(
+    [
+      { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "success" },
+      { eventType: "checkout_granted", correlationId: CID, tenantId: T },
+    ],
+    ACCOUNTABLE_RAW,
+  );
+  check(
+    `#4 a normal successful badge checkout reads credential=not_attempted, not unknown (${normalCheckout.manualCredential})`,
+    normalCheckout.manualCredential === "not_attempted",
+  );
+  check(
+    `#4 …and is NOT falsely denied — it allows as FALLBACK_BADGE_CHECKOUT_OK (${evaluateManualFallback(normalCheckout).decision} / ${evaluateManualFallback(normalCheckout).reasonCode})`,
+    evaluateManualFallback(normalCheckout).decision === "allow" && evaluateManualFallback(normalCheckout).reasonCode === "FALLBACK_BADGE_CHECKOUT_OK",
+  );
+  check(
+    "#4 NO LOOSENING: an ATTEMPTED-but-unknown credential still denies, even when the badge succeeded",
+    (() => {
+      const attemptedUnknown = normalizeManualFallbackSequence(
+        [
+          { eventType: "badge_access", correlationId: CID, tenantId: T, outcome: "success" },
+          { eventType: "checkout_granted", correlationId: CID, tenantId: T },
+          { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" }, // attempted…
+          // …but never resolved → unknown
+        ],
+        ACCOUNTABLE_RAW,
+      );
+      return attemptedUnknown.manualCredential === "unknown" && evaluateManualFallback(attemptedUnknown).decision === "deny";
+    })(),
   );
 }
 

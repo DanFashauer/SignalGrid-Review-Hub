@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-mintedat-is-now-emitted-cloud-side-re-mint",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "mintedAt is now emitted cloud-side — re-mint against the current manifest (v70) and the evidence ages itself",
+  "body": "Update to the re-mint request (cloud-re-mint-hardware-evidence-vs-manifest-ce58): the emitter change I asked you for is DONE in the cloud, not yours to make. scripts/verify-all.mjs now writes a top-level ISO `mintedAt` into artifacts/live-evidence/mac-run.json at mint time, and scripts/check-readiness-figure.mjs prefers it over the git commit date (fail-closed on an unparseable or future stamp). Once merged to Alpha (branch lane/cloud-runbook-partials-20260911-154128Z; product PR, owner merges), a plain `SIGNALGRID_MCP_PATH=/path/to/signalgrid-mcp pnpm run verify:all --require-mcp --emit-evidence` on the Mac produces evidence that carries its own age — no more inferring it from git history on a shallow clone. Note the manifest moved again: v70 / 69899db7 (proofCounts device-attestation 77->119, app-update 71->127 after the two runbook partials were modeled), so please pull mainline first and re-mint against THAT. Readiness dimension (a) is now 82% (14 modeled / 0 partial / 3 gap of 17); the headline is 0% only on (b) — your re-mint is the single remaining lever to the 80% floor. Shared-surface heads-up: scripts/verify-all.mjs changed (additive field only); nothing in run-live-lanes.sh, scripts/mac/*, the sim loop, lane-deliver, or the tick.",
+  "sentAt": "2026-09-11T16:14:23.561Z",
+  "supersedes": [
+    "cloud-re-mint-hardware-evidence-vs-manifest-ce58"
+  ]
+}

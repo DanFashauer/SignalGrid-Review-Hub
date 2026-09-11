@@ -92,7 +92,7 @@ deterministic core is the **PE**; the remediation/action cascade is the **PA**.
 | SP 800-207 tenet | SignalGrid surface (real) | Status | Relationship |
 | --- | --- | --- | --- |
 | Policy **Engine** (the decide step) | the deterministic decision core; `proof:zero-trust-principles` and `proof:signalgrid-core` exercise `evaluatePolicy` directly | **launch** | aligned with — the core is the PE for the shared-device workflow |
-| Policy **Administrator** (execute the decision) | the remediation/action cascade; `proof:orchestration` tests the downstream disposition (not `evaluatePolicy`) | mixed (cascade launch; write-actuation deferred) | aligned with — the PA half of the PDP, distinct from the PE |
+| Policy **Administrator** (execute the decision) | the remediation/action cascade; `proof:orchestration` tests `planOrchestration` against **simulated** dispositions (its only non-proof consumer is `lib/room-sim`) | **deferred/demo** — both `/v1/remediation*` routes are deferred (`scripts/launch-profile.mjs`); no launch surface serves the PA | aligned with — the PA half of the PDP, distinct from the PE, and fixture-backed |
 | Per-request evaluation (point-in-time) | the decision loop evaluates each request | **launch** | aligned with |
 | *Continuous* reevaluation over elapsed time | `proof:caep-events`, `proof:sso-session`, `proof:session-readiness` (families all deferred) | **deferred** | not established (`proof:zero-trust-principles` prints this limitation); a design direction |
 | Decision from many signal sources | the read-only, fail-closed connector families (identity, EDR, NAC, posture; RTLS/custody deferred, DR-001) | mixed | aligned with |
@@ -122,26 +122,33 @@ satisfy a step-up — the `passkey-assurance` and `token-binding` families and t
 [`usnistgov/OSCAL`](https://github.com/usnistgov/OSCAL) and
 [`usnistgov/oscal-content`](https://github.com/usnistgov/oscal-content) define
 machine-readable formats (XML/JSON/YAML) for control catalogs, implementations,
-and **assessment results**. SignalGrid already emits structured, tamper-evident
-decision evidence (`proof:verdict-attestation`, `proof:response-accountability`,
-the audit ledger). OSCAL is the recognized shape that evidence could speak.
+and **assessment results**. SignalGrid's **audit ledger** emits structured decision
+evidence today (`proof:audit-ledger`); `proof:verdict-attestation` and
+`proof:response-accountability` are **modeled/deferred** primitives
+(`response-accountability` is deferred in `scripts/launch-profile.mjs`), not wired
+to a launch surface. OSCAL is the recognized shape that the ledger's evidence
+could speak.
 
 - **Design target, not shipped:** an OSCAL *assessment-results* export of
   SignalGrid's decision/evidence records, so a security team can ingest them in a
   format they already use. Filed as a direction; no exporter exists today and no
   claim is made that one does.
 
-## 5 — NVD / SCAP → the vulnerability lane
+## 5 — NVD and SCAP → two different lanes
 
-The National Vulnerability Database and SCAP tooling are the national feed the
-**deferred** `vuln-scan` family is designed to consume (`scripts/launch-profile.mjs`;
-precedent: intake ledger row 30, NVD → `vuln-scan`). **Status, stated plainly:**
-`proof:vuln-scan` runs against a **synthetic fixture** (`scripts/fixtures/vuln-scan/findings.json`),
-NVD data has **not** entered any decision path (`docs/research/PUBLIC_API_SOURCES.md`),
-and the family is not part of the launch wedge. The alignment is prospective:
-fixture-first by rule (a public feed enters the tree only as a committed, dated
-fixture; live only behind tier + opt-in — DR-027), so NVD → `vuln-scan` is a
-**design direction**, not a shipped enrichment.
+These are **two distinct feeds mapping to two distinct signals**, not one:
+
+- **NVD (CVEs / CVSS) → the deferred `vuln-scan` family.** `proof:vuln-scan` runs
+  against a **synthetic fixture** (`scripts/fixtures/vuln-scan/findings.json`); NVD
+  data has **not** entered any decision path (`docs/research/PUBLIC_API_SOURCES.md`).
+- **SCAP / XCCDF / OVAL (checklist compliance) → the `security_baseline` signal via
+  the deferred `benchmark-selection` family**, not `vuln-scan`
+  (`docs/SECURITY_BASELINE_ALIGNMENT.md`). SignalGrid does **not** run a
+  CIS/STIG/SCAP scan; it would *consume* a checklist result as a baseline signal.
+
+Both are **deferred** (`scripts/launch-profile.mjs`) and fixture-first by rule (a
+public feed enters the tree only as a committed, dated fixture; live only behind
+tier + opt-in — DR-027). Both are **design directions**, not shipped enrichment.
 
 ## 6 — Mobile Threat Catalogue → the shared-device threat model
 

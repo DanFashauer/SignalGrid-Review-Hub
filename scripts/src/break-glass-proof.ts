@@ -521,7 +521,12 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   // stream carries the two required contract anchors — correlationId AND tenantId.
   const CID = "cust-live";
   const T = "tenant-a";
-  const ACCOUNTABLE_RAW = { invocationRef: "bg-live", justification: "recorded", scope: "single_encounter", expiry: "bounded", review: "reviewed", assignmentAtInvocation: "not_assigned" };
+  const MC = "mc-1";
+  // The accountability record must be BOUND to the sequence it accounts for (round-3 fix):
+  // it carries the sequence's tenant, correlationId and presented credential. An unbound or
+  // cross-bound record is malformed and denies, so every manual-fallback stream below feeds
+  // a correctly-bound record — the binding is exercised, then falsified by the controls in 6h.
+  const ACCOUNTABLE_RAW = { invocationRef: "bg-live", justification: "recorded", scope: "single_encounter", expiry: "bounded", review: "reviewed", assignmentAtInvocation: "not_assigned", tenantId: T, correlationId: CID, mobileCredentialId: MC };
   const realFallback = normalizeManualFallbackSequence(
     [
       { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "failure" }, // badge auth FAILED
@@ -546,7 +551,7 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
       { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
       { eventType: "checkout_granted", correlationId: CID, tenantId: T },
     ],
-    {},
+    ACCOUNTABLE_RAW, // manual path used → the record must be bound to the sequence
   );
   check(
     `a stream where the badge SUCCEEDED reads badgeAttempt=succeeded (${badgeOkStream.badgeAttempt})`,
@@ -558,7 +563,7 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
       { eventType: "checkout_denied", correlationId: CID, tenantId: T },
       { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: "mc-1" },
     ],
-    {},
+    ACCOUNTABLE_RAW, // manual path used → the record must be bound to the sequence
   );
   check(
     `FAIL-CLOSED: a manual request that never resolves reads credential=unknown, not verified (${noManualResolution.manualCredential})`,
@@ -834,6 +839,50 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
   check(
     `#5 malformed audit + badge unknown → deny/FALLBACK_AUDIT_MALFORMED, not step_up (${auditVsBadgeUnknown.decision} / ${auditVsBadgeUnknown.reasonCode})`,
     auditVsBadgeUnknown.decision === "deny" && auditVsBadgeUnknown.reasonCode === "FALLBACK_AUDIT_MALFORMED",
+  );
+
+  // 6h. ROUND-3 REGRESSION CONTROL — AUDIT EVIDENCE MUST BE BOUND TO THE SEQUENCE.
+  //
+  // The accountability record is supplied out-of-band. Before the fix it was normalized
+  // in isolation and never compared to the sequence, so an accountable record from ANOTHER
+  // tenant/session/credential carried a valid badge-fail→manual-verify stream straight to
+  // FALLBACK_GRANTED_ACCOUNTABLE — an audit trail accounting for a different event. The fix
+  // requires the record to carry tenantId/correlationId/mobileCredentialId that MATCH the
+  // sequence; any mismatch or missing binding is malformed and denies.
+  const boundStream = [
+    { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "failure" },
+    { eventType: "checkout_denied", correlationId: CID, tenantId: T },
+    { eventType: "checkout_requested", correlationId: CID, tenantId: T, mobileCredentialId: MC },
+    { eventType: "checkout_granted", correlationId: CID, tenantId: T },
+  ] as const;
+  const wrongTenantAudit = normalizeManualFallbackSequence(boundStream, { ...ACCOUNTABLE_RAW, tenantId: "tenant-OTHER" });
+  check(
+    `#6 an accountable record BOUND TO ANOTHER TENANT → malformed, never allow (${wrongTenantAudit.sequenceIntegrity} / ${evaluateManualFallback(wrongTenantAudit).decision})`,
+    wrongTenantAudit.sequenceIntegrity === "malformed" && evaluateManualFallback(wrongTenantAudit).decision === "deny",
+  );
+  const wrongCredAudit = normalizeManualFallbackSequence(boundStream, { ...ACCOUNTABLE_RAW, mobileCredentialId: "mc-OTHER" });
+  check(
+    `#6 an accountable record bound to ANOTHER CREDENTIAL → malformed, never allow (${wrongCredAudit.sequenceIntegrity} / ${evaluateManualFallback(wrongCredAudit).decision})`,
+    wrongCredAudit.sequenceIntegrity === "malformed" && evaluateManualFallback(wrongCredAudit).decision === "deny",
+  );
+  const wrongCorrAudit = normalizeManualFallbackSequence(boundStream, { ...ACCOUNTABLE_RAW, correlationId: "cust-OTHER" });
+  check(
+    `#6 an accountable record bound to ANOTHER SESSION (correlationId) → malformed, never allow (${wrongCorrAudit.sequenceIntegrity} / ${evaluateManualFallback(wrongCorrAudit).decision})`,
+    wrongCorrAudit.sequenceIntegrity === "malformed" && evaluateManualFallback(wrongCorrAudit).decision === "deny",
+  );
+  const unboundAudit = normalizeManualFallbackSequence(boundStream, { invocationRef: "bg-live", justification: "recorded", scope: "single_encounter", expiry: "bounded", review: "reviewed", assignmentAtInvocation: "not_assigned" });
+  check(
+    `#6 an accountable record with NO binding ids at all → malformed, never allow (${unboundAudit.sequenceIntegrity} / ${evaluateManualFallback(unboundAudit).decision})`,
+    unboundAudit.sequenceIntegrity === "malformed" && evaluateManualFallback(unboundAudit).decision === "deny",
+  );
+  check(
+    "#6 NON-VACUITY: the SAME stream with a CORRECTLY-bound accountable record allows — the gate is the binding, not the shape",
+    (() => {
+      const bound = normalizeManualFallbackSequence(boundStream, ACCOUNTABLE_RAW);
+      return bound.sequenceIntegrity === "intact" &&
+        evaluateManualFallback(bound).decision === "allow" &&
+        evaluateManualFallback(bound).reasonCode === "FALLBACK_GRANTED_ACCOUNTABLE";
+    })(),
   );
 }
 

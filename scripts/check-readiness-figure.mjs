@@ -33,6 +33,9 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+// The CURRENT live-sync manifest fingerprint, computed the SAME WAY check-live-sync.mjs
+// does (one source of truth) — dimension (b) only counts evidence that covers it.
+import { computeBody, fingerprintOf } from "./generate-sync-manifest.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const FLOOR = 80, TARGET_LOW = 92, TARGET_HIGH = 95, GOAL = 100, FRESH_DAYS = 7;
@@ -50,7 +53,11 @@ export function parseGroundTruth(text) {
     if (!line.startsWith("| ")) continue;
     const cells = line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((s) => s.trim());
     if (cells.length < 3 || cells[0].startsWith("---") || cells[0] === "Real-world element") continue;
-    const st = cells.filter(Boolean).pop().toLowerCase();
+    // Strip markdown emphasis (`**gap**`, `_gap_`) and surrounding whitespace BEFORE
+    // classifying. Without this a bold `**gap**` status matched none of the keywords and
+    // fell out of the denominator entirely — three real gap rows were invisible, inflating
+    // dimension (a). Emphasis is presentation, not status.
+    const st = cells.filter(Boolean).pop().toLowerCase().replace(/^[\s*_]+/, "").replace(/[\s*_]+$/, "");
     for (const k of ["modeled", "partial", "gap"]) if (st.startsWith(k)) { c[k] += 1; break; }
   }
   const total = c.modeled + c.partial + c.gap;
@@ -58,13 +65,33 @@ export function parseGroundTruth(text) {
   return { ...c, total, pct: pct(c.modeled, total) };
 }
 
-/** Pure: evidence dimension — green AND fresh → 100, else 0, with the reason. */
-export function evidenceDimension(evidence, ageDays) {
+const shortFp = (fp) => (typeof fp === "string" && fp.length > 0 ? fp.slice(0, 12) : "(none)");
+
+/**
+ * Pure: evidence dimension — 100 ONLY when the last Mac run is green, fresh, AND covers
+ * the CURRENT contract; else 0, with the reason.
+ *
+ * The fingerprint clause is the fail-closed point of the whole gate. Green-and-fresh is
+ * not enough: evidence bound to an OLD manifest fingerprint proves behaviour against a
+ * contract the tree no longer ships (check-live-sync reports it STALE). Counting it 100
+ * fail-OPENS outreach on stale hardware evidence. So (b) is 100 only when the evidence's
+ * `manifestFingerprint` equals `currentFingerprint` (the live-sync manifest fingerprint,
+ * computed the same way check-live-sync.mjs does). A missing or mismatched fingerprint,
+ * or an uncomputable current fingerprint, → 0. Only a fresh Mac run reopens it.
+ */
+export function evidenceDimension(evidence, ageDays, currentFingerprint) {
   if (!evidence) return { pct: 0, reason: `${EVIDENCE} absent` };
   const green = evidence.reviewHubPass === true && evidence.mcpPass === true;
   if (!green) return { pct: 0, reason: "last Mac evidence run was not green on both halves" };
   if (!(ageDays <= FRESH_DAYS)) return { pct: 0, reason: `evidence is ${ageDays} day(s) old (> ${FRESH_DAYS})` };
-  return { pct: 100, reason: `green on both halves, ${ageDays} day(s) old` };
+  if (typeof currentFingerprint !== "string" || currentFingerprint.length === 0) {
+    return { pct: 0, reason: "current live-sync manifest fingerprint could not be computed — fail-closed" };
+  }
+  const evFp = evidence.manifestFingerprint;
+  if (typeof evFp !== "string" || evFp !== currentFingerprint) {
+    return { pct: 0, reason: `evidence covers manifest ${shortFp(evFp)}, tree is ${shortFp(currentFingerprint)} — refresh on the Mac` };
+  }
+  return { pct: 100, reason: `green on both halves, ${ageDays} day(s) old, manifest ${shortFp(evFp)}` };
 }
 
 /** Pure: live operations declared vs those with a PASSED result somewhere on disk. */
@@ -98,7 +125,11 @@ async function derive() {
   const lp = await import(pathToFileURL(join(repo, "scripts/launch-profile.mjs")).href);
   const counts = { launch: 0, deferred: 0, demo_only: 0, internal: 0 };
   for (const s of lp.SURFACES) for (const k of Object.keys(counts)) counts[k] += (s[k] || []).length;
-  const b = { ...evidenceDimension(evidence, ageDays), surfaces: counts };
+  // The current contract fingerprint, from the SAME source of truth as check-live-sync.mjs.
+  // Fail-closed: if it cannot be computed, currentFingerprint stays "" and (b) resolves to 0.
+  let currentFingerprint = "";
+  try { currentFingerprint = fingerprintOf(computeBody()); } catch { currentFingerprint = ""; }
+  const b = { ...evidenceDimension(evidence, ageDays, currentFingerprint), surfaces: counts };
   // (c) scenarios — run the engine's own list through the engine (seconds)
   // Spawned from scripts/: tsx and @workspace/signalgrid-simulator resolve in that package, not at the root.
   const sc = spawnSync("pnpm", ["exec", "tsx", "src/readiness-scenarios.ts"], { cwd: join(repo, "scripts"), encoding: "utf8" });
@@ -125,12 +156,21 @@ function selfTest() {
   const table = "| Real-world element | Surface | Status |\n| --- | --- | --- |\n| a | x | modeled |\n| b | x | modeled |\n| c | x | partial (half) |\n| d | x | gap |\n";
   const gt = parseGroundTruth(table);
   checks.push(["ground truth: 2 modeled of 4 rows → 50%, partial and gap count against", gt.modeled === 2 && gt.partial === 1 && gt.gap === 1 && gt.pct === 50]);
+  // A markdown-BOLD `**gap**` status must still count as a gap and stay in the denominator —
+  // it fell out entirely before emphasis was stripped, inflating the modeled ratio.
+  const boldGap = parseGroundTruth("| Real-world element | Surface | Status |\n| --- | --- | --- |\n| a | x | modeled |\n| b | x | **gap** |\n| c | x | modeled |\n");
+  checks.push(["ground truth: a **gap** (markdown-bold) status counts as gap and stays in the denominator", boldGap.modeled === 2 && boldGap.gap === 1 && boldGap.total === 3 && boldGap.pct === 66]);
   let threw = false; try { parseGroundTruth("# nothing\n"); } catch (e) { threw = e instanceof Broken; }
   checks.push(["ground truth: an empty table is BROKEN, never 0% and never 100%", threw]);
-  checks.push(["evidence: green + fresh → 100", evidenceDimension({ reviewHubPass: true, mcpPass: true }, 3).pct === 100]);
-  checks.push(["evidence: green but stale → 0 (stale evidence closes outreach)", evidenceDimension({ reviewHubPass: true, mcpPass: true }, FRESH_DAYS + 1).pct === 0]);
-  checks.push(["evidence: one half red → 0", evidenceDimension({ reviewHubPass: true, mcpPass: false }, 1).pct === 0]);
-  checks.push(["evidence: absent → 0", evidenceDimension(null, 0).pct === 0]);
+  const FP = "6f6a47998f01ccb605646b4f83ca6e768ede38144878f979675148ca1a336be1";
+  const OTHER = "00f6aa9cf3d1a9510238984266d09eeb24b65793f2e89c5304afa5b074dacf3e";
+  checks.push(["evidence: green + fresh + fingerprint MATCHES current → 100", evidenceDimension({ reviewHubPass: true, mcpPass: true, manifestFingerprint: FP }, 3, FP).pct === 100]);
+  checks.push(["evidence: green + fresh but fingerprint MISMATCH → 0 (stale-contract evidence must not open outreach)", evidenceDimension({ reviewHubPass: true, mcpPass: true, manifestFingerprint: FP }, 3, OTHER).pct === 0]);
+  checks.push(["evidence: green + fresh but NO manifestFingerprint field → 0", evidenceDimension({ reviewHubPass: true, mcpPass: true }, 3, FP).pct === 0]);
+  checks.push(["evidence: green + fresh + match but current fingerprint uncomputable → 0 (fail-closed)", evidenceDimension({ reviewHubPass: true, mcpPass: true, manifestFingerprint: FP }, 3, "").pct === 0]);
+  checks.push(["evidence: green but stale → 0 (stale evidence closes outreach)", evidenceDimension({ reviewHubPass: true, mcpPass: true, manifestFingerprint: FP }, FRESH_DAYS + 1, FP).pct === 0]);
+  checks.push(["evidence: one half red → 0", evidenceDimension({ reviewHubPass: true, mcpPass: false, manifestFingerprint: FP }, 1, FP).pct === 0]);
+  checks.push(["evidence: absent → 0", evidenceDimension(null, 0, FP).pct === 0]);
   const lv = liveDimension(["live-a", "live-b", "live-c"], [{ runs: [{ operation: "live-a", status: "passed" }, { operation: "live-b", status: "refused" }] }], ["passed"]);
   checks.push(["live: only PASSED counts — 1 of 3 proven, refused is not proven", lv.proven === 1 && lv.pct === 33 && lv.missing.join() === "live-b,live-c"]);
   checks.push(["headline is the LOWEST dimension, never an average", headline([100, 79, 100]) === 79]);

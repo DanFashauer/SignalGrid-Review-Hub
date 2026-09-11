@@ -129,6 +129,12 @@ export interface FallbackEventLike {
 
 const trimmed = (v: string | undefined): string => (typeof v === "string" ? v.trim() : "");
 
+/** Read a trimmed string field off the raw override record; anything non-string → "". */
+const rawField = (r: Record<string, unknown>, key: string): string => {
+  const v = r[key];
+  return typeof v === "string" ? v.trim() : "";
+};
+
 /**
  * Grade one device-checkout fallback decision.
  *
@@ -217,7 +223,12 @@ export function evaluateManualFallback(state: NormalizedManualFallback): Fallbac
  *
  * The `override` accountability record is supplied separately (it lives on the EHR-audit
  * plane, not in the dock event stream) and normalized through the same asymmetric
- * normalizer the rest of the family uses.
+ * normalizer the rest of the family uses. Because it is out-of-band, it must ALSO be BOUND
+ * to this sequence: when a manual fallback was requested, `overrideRaw` must carry
+ * `tenantId`, `correlationId` and `mobileCredentialId` matching the sequence's tenant,
+ * correlationId and presented credential. A record for another tenant/session/credential —
+ * or one missing those binding ids — reads as `malformed` and denies (fail-closed), so an
+ * accountable record from elsewhere can never carry this sequence to a grant.
  */
 export function normalizeManualFallbackSequence(
   events: readonly FallbackEventLike[],
@@ -245,6 +256,7 @@ export function normalizeManualFallbackSequence(
   let badgeCheckoutGranted = false;
   let badgeCheckoutDenied = false;
   let manualRequested = false;
+  let manualCredentialId = "";
   let manualResolved: "granted" | "denied" | null = null;
   let structureBroken = false;
 
@@ -271,6 +283,9 @@ export function normalizeManualFallbackSequence(
           // A SECOND manual request is ambiguous: a later grant cannot be attributed to a
           // single credential, and a changed credential id is a different person entirely.
           if (manualRequested) structureBroken = true;
+          // The credential PRESENTED to the manual check-out — captured from the FIRST
+          // request so the accountability record can be bound to it (see below).
+          if (!manualRequested) manualCredentialId = trimmed(e.mobileCredentialId);
           manualRequested = true;
         }
         break;
@@ -312,7 +327,27 @@ export function normalizeManualFallbackSequence(
   if (badgeAuthSucceeded && badgeCheckoutDenied) structureBroken = true;
   if (badgeAuthFailed && badgeAuthSucceeded) structureBroken = true;
 
-  if (correlationBroken || tenantBroken || structureBroken) {
+  // AUDIT BINDING — the accountability record is supplied OUT OF BAND (it lives on the
+  // EHR-audit plane, not in the dock stream), so it must prove it belongs to THIS sequence.
+  // Without this, an accountable record from ANOTHER tenant, session or credential could
+  // carry the sequence to FALLBACK_GRANTED_ACCOUNTABLE — an audit trail that accounts for a
+  // different event. When (and only when) a manual fallback was actually requested, the
+  // override MUST carry `tenantId`, `correlationId` and `mobileCredentialId` that MATCH the
+  // sequence's tenant, correlationId and presented credential. Any missing or mismatched
+  // binding is malformed and denies — fail-closed. (When no manual path was used the record
+  // is irrelevant, so binding is not required there.)
+  let auditBindingBroken = false;
+  if (manualRequested) {
+    const boundTenant = rawField(overrideRaw, "tenantId");
+    const boundCorr = rawField(overrideRaw, "correlationId");
+    const boundCred = rawField(overrideRaw, "mobileCredentialId");
+    auditBindingBroken =
+      boundTenant === "" || boundTenant !== tenant ||
+      boundCorr === "" || boundCorr !== corr ||
+      boundCred === "" || boundCred !== manualCredentialId;
+  }
+
+  if (correlationBroken || tenantBroken || structureBroken || auditBindingBroken) {
     return { correlationId: corr, badgeAttempt: "unknown", manualCredential: "not_attempted", override, sequenceIntegrity: "malformed" };
   }
 

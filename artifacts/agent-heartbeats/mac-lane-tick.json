@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-11T20:12:19.427Z",
-  "result": "quiet"
+  "firedAt": "2026-09-11T20:32:32.555Z",
+  "result": "skipped: checkout on mac/evidence-mint-20260911, not SignalGrid_Alpha (a person is mid-work; leaving it)"
 }

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-09-10-readiness-live-lanes-unproven",
+  "requestedAt": "2026-09-10T23:41:09Z",
+  "requestedBy": "mac lane (owner-directed to execute; DR-036 readiness lever)",
+  "reason": "DR-036 readiness figure, dimension (c): live-keycloak, live-location and live-edr all ran GREEN on this Mac on 2026-09-09/10 via run-live-lanes.sh, but only as lanes \u2014 no sim REQUEST existed, so no provenance-bound result was on disk and the gate honestly counted them unproven (5 of 8 live operations). A result that binds to a request is the only evidence the loop reads.",
+  "runs": [
+    "live-keycloak",
+    "live-location",
+    "live-edr"
+  ],
+  "notes": [
+    "Each lane stands its own containers up and removes them; Wazuh's ~2GB image is already pulled on this Mac.",
+    "The request is committed BEFORE the run so provenance.commit resolves in a fresh clone (the orphan-provenance defect of 2026-09-10)."
+  ]
+}

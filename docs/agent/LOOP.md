@@ -93,10 +93,14 @@ LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-app
               (c97138d8, owner-approved): outreach is gated on a DERIVED readiness figure —
               node scripts/check-readiness-figure.mjs, lowest of three dimensions, floor 80 /
               target 92-95 / goal 100 — printed by loop:state every session; today it reads
-              under the floor, outreach CLOSED. Cheapest lift: sim requests for live-keycloak,
-              live-location, live-edr (green tonight as lanes, no result on disk); then the
-              three runbook partials. Same commit repaired mainline preflight (workflow count
-              15->16 fallout, a pinned self-test fixture, coverage page, one claim citation).
+              under the floor, outreach CLOSED. The live-operations lever is DONE (request
+              fb9b5f46, result 59d00041: keycloak, location, edr all PASS on real software;
+              end-to-end now fully proven). THE ONLY GAP TO THE FLOOR is the three runbook
+              partials in SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md: supervision-identity
+              lifecycle, badge->manual fallback sequence, iOS update/device-prep - each a
+              fixture-backed surface + proof around the frozen engine; one row clears the
+              floor. Same session repaired mainline preflight (workflow count 15->16
+              fallout, a pinned self-test fixture, coverage page, one claim citation).
               Preflight PASSED on macOS.
               (Earlier 2026-09-07, cloud lane:) PACKAGED THE REPO AS A CLAUDE
               CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json

@@ -1751,3 +1751,19 @@ P1 (both evaluators) — the branches cover every declared union member and the 
 P2 (both normalizers) — a recognized OWN key whose read throws (an accessor property, a Proxy get trap) passed the key scan and the exception escaped. Reads now sit in one try/catch: on a throw the report is malformed and every axis unknown. Pinned with a throwing own getter and a throwing get-trap Proxy on each normalizer.
 ```
 Verdict:  **Two more real findings per module, each reproduced by a check that fails without the fix.** The evaluators' comment that said "deliberately no backstop predicate" was wrong for a runtime boundary and is replaced. No verdict outside the two new modules changed; both families stay deferred.
+
+## 2026-09-11 — "Codex round four on #641: the guard fires whatever else fired — an in-domain check on every axis"
+Command:  one P1 on 0785cbaf, verified real against source before any edit: the round-three guard was gated on an empty candidate list, so an optional-update advisory (monitor, still ready) beside an out-of-domain stage skipped it and the device read as ready.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (142/142) (was 140) — +2: a hold and a containment beside an out-of-domain axis
+pnpm run proof:app-update                                 # summary=pass (155/155) (was 153) — +2: the advisory-plus-garbage two-axis case, and a containment-plus-garbage control
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=51 killed=51 hung=0 known-inert=0 survivors=0 (was 51/51)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=73 killed=69 hung=0 known-inert=4 survivors=0 (was 69 killed + 4 documented-inert of 73)
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 73, fingerprint ee0ed845694f
+```
+Output:
+```
+The guard is now an IN-DOMAIN check per axis — exported *_DOMAIN lists carrying every declared member, unknown included — evaluated independently of the candidate list. Any axis outside its domain pushes a step_up hold (STATE_UNKNOWN, unknownSignals "state_out_of_domain") whatever else fired: after a monitor the hold outranks the advisory (advisory + garbage stage → step_up, readyForCheckout false); after another hold or a containment the earlier concern keeps its own reason on the tie (unresponsive channel + garbage → CHANNEL_UNRESPONSIVE; foreign identity + garbage → restrict; prep failed + garbage → restrict / DEVICE_PREP_FAILED). The round-three per-axis unknown-signal pins stay, and are no longer load-bearing for the sweep: "unknown" is in-domain, so the unknown branches are no longer shadowed and a deleted one fails its fixture outright.
+```
+Verdict:  **The round-three fix was itself wrong in a way the next review round caught: a guard that only runs when nothing else fired is not a guard on the axis.** The in-domain check runs every time. No verdict outside the two new modules changed; both families stay deferred.

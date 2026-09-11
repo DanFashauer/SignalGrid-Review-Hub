@@ -499,6 +499,17 @@ console.log("\n  ── the supervision-identity lifecycle ──\n");
   }
   check("the positive predicate does not disturb a real concern's reason (unresponsive channel keeps its own reason, not the out-of-domain one)",
     evaluateSupervisionIdentity({ ...base, commandChannel: "unresponsive" }).reasonCode === "SUPERVISION_CHANNEL_UNRESPONSIVE");
+  // Two axes (review finding on the first cut of the sibling guard): a fired concern beside
+  // an out-of-domain axis. The hold must fire whatever else fired; an earlier hold keeps its
+  // reason on the tie, a containment stays a containment, and the grant is never reachable.
+  const heldPlusGarbage = evaluateSupervisionIdentity({ ...base, commandChannel: "unresponsive", enrollment: "garbage" as SupervisionEnrollment });
+  check("an unresponsive channel beside an out-of-domain axis is held under the channel's own reason, and the out-of-domain signal is still recorded",
+    heldPlusGarbage.recommendedAction === "step_up" && heldPlusGarbage.reasonCode === "SUPERVISION_CHANNEL_UNRESPONSIVE" &&
+    heldPlusGarbage.trustPreconditionMet === false && heldPlusGarbage.unknownSignals.includes("state_out_of_domain"));
+  const containedPlusGarbage = evaluateSupervisionIdentity({ ...base, identityBinding: "bound_to_other_org", supervision: "garbage" as SupervisionState });
+  check("a foreign identity beside an out-of-domain axis stays a containment with its own reason (the hold never weakens a restrict)",
+    containedPlusGarbage.recommendedAction === "restrict" && containedPlusGarbage.reasonCode === "SUPERVISION_FOREIGN_IDENTITY" &&
+    containedPlusGarbage.trustPreconditionMet === false && containedPlusGarbage.unknownSignals.includes("state_out_of_domain"));
   // The per-axis `unknown` branches must stay LIVE now that the positive predicate also
   // holds those states under the same reason: each names ITS axis in unknownSignals, and
   // the backstop's "state_out_of_domain" must not appear — otherwise a deleted branch is

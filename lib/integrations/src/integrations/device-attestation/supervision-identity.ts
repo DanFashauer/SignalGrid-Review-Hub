@@ -67,6 +67,16 @@ export const SUPERVISION_IDENTITY_REPORT_KEYS = [
   "command_channel",
 ] as const;
 
+/** The NORMALIZED domain of each axis — every declared member, `unknown` included. The
+ *  evaluator holds any value outside these (a JavaScript caller, a cast, a deserialized
+ *  object), whatever else fired: the exhaustive sweep walks these members, so a value
+ *  they do not contain is one no proof has ever graded. */
+export const SUPERVISION_DOMAIN: readonly SupervisionState[] = ["supervised", "unsupervised", "unknown"];
+export const IDENTITY_BINDING_DOMAIN: readonly SupervisionIdentityBinding[] = ["bound_to_org", "bound_to_other_org", "unbound", "unknown"];
+export const SUPERVISION_ENROLLMENT_DOMAIN: readonly SupervisionEnrollment[] = ["enrolled", "enrollment_lost", "never_enrolled", "unknown"];
+export const MANAGEMENT_CHANNEL_DOMAIN: readonly ManagementChannel[] = ["responsive", "unresponsive", "unknown"];
+export const SUPERVISION_INTEGRITY_DOMAIN: readonly SupervisionReportIntegrity[] = ["clean", "malformed"];
+
 export interface NormalizedSupervisionIdentity {
   readonly sourceSystem: "device-attestation";
   readonly deviceId: string;
@@ -200,19 +210,21 @@ export function evaluateSupervisionIdentity(s: NormalizedSupervisionIdentity): S
     candidates.push({ posture: "identity_unverified", action: "step_up", reason: "SUPERVISION_STATE_UNKNOWN" });
   }
 
-  // The grant is a POSITIVE predicate, not the absence of a fired branch. The branches
-  // above cover every declared union member, and the proof's exhaustive sweep pins the
-  // grant set by equality over those — but a value OUTSIDE the union (a JavaScript
-  // caller, a cast, a deserialized object) matches no branch, and without this guard the
-  // seed below would grant on it (review finding). So: if nothing fired AND any axis is
-  // not exactly its confirmed value, the state is unreadable and held.
-  const positivelyConfirmed =
-    s.supervision === "supervised" &&
-    s.identityBinding === "bound_to_org" &&
-    s.enrollment === "enrolled" &&
-    s.commandChannel === "responsive" &&
-    s.reportIntegrity === "clean";
-  if (candidates.length === 0 && !positivelyConfirmed) {
+  // Every axis must be a value this evaluator KNOWS. The branches above cover every
+  // declared union member, and the proof's exhaustive sweep pins the grant set by
+  // equality over those — but a value OUTSIDE the union (a JavaScript caller, a cast, a
+  // deserialized object) matches no branch, and the seed below would grant on it (review
+  // finding). The check must not depend on whether another candidate fired (the sibling
+  // evaluator's optional-update advisory beside an out-of-domain axis read as ready when
+  // its guard was gated on an empty candidate list): any axis outside its domain is
+  // held, whatever else fired — an earlier hold or containment keeps its own reason.
+  const inDomain =
+    (SUPERVISION_DOMAIN as readonly string[]).includes(s.supervision) &&
+    (IDENTITY_BINDING_DOMAIN as readonly string[]).includes(s.identityBinding) &&
+    (SUPERVISION_ENROLLMENT_DOMAIN as readonly string[]).includes(s.enrollment) &&
+    (MANAGEMENT_CHANNEL_DOMAIN as readonly string[]).includes(s.commandChannel) &&
+    (SUPERVISION_INTEGRITY_DOMAIN as readonly string[]).includes(s.reportIntegrity);
+  if (!inDomain) {
     unknownSignals.push("state_out_of_domain");
     candidates.push({ posture: "identity_unverified", action: "step_up", reason: "SUPERVISION_STATE_UNKNOWN" });
   }

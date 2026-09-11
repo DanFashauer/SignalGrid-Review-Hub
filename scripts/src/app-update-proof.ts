@@ -579,6 +579,18 @@ for (const [label, patch, reason, signal] of prepOodAxes) {
 }
 check("device-prep: the positive predicate does not disturb a real concern's reason (prep in progress keeps its own reason)",
   evaluateDevicePrep({ ...prepBase, prepStage: "in_progress" }).reasonCode === "DEVICE_PREP_IN_PROGRESS");
+// Two axes (review finding on the first cut of the guard): an optional-update advisory —
+// monitor, and still ready — beside an out-of-domain stage. A guard gated on an empty
+// candidate list skipped this and the device read as ready. The hold must fire whatever
+// else fired, and outrank the advisory.
+const prepAdvisoryPlusGarbage = evaluateDevicePrep({ ...prepBase, osUpdate: "update_available", enrollment: "garbage" as PrepEnrollment });
+check("device-prep: an optional-update advisory beside an out-of-domain stage is HELD (step_up, not ready), never the advisory's ready verdict",
+  prepAdvisoryPlusGarbage.recommendedAction === "step_up" && prepAdvisoryPlusGarbage.readyForCheckout === false &&
+  prepAdvisoryPlusGarbage.reasonCode === "DEVICE_PREP_STATE_UNKNOWN" && prepAdvisoryPlusGarbage.unknownSignals.includes("state_out_of_domain"));
+const prepContainedPlusGarbage = evaluateDevicePrep({ ...prepBase, prepStage: "failed", enrollment: "garbage" as PrepEnrollment });
+check("device-prep: a containment beside an out-of-domain stage stays a containment with its own reason (the hold never weakens a restrict)",
+  prepContainedPlusGarbage.recommendedAction === "restrict" && prepContainedPlusGarbage.reasonCode === "DEVICE_PREP_FAILED" &&
+  prepContainedPlusGarbage.readyForCheckout === false && prepContainedPlusGarbage.unknownSignals.includes("state_out_of_domain"));
 // The per-stage `unknown` branches must stay LIVE now that the positive predicate also
 // holds those states under the same reason: each names ITS stage in unknownSignals, and
 // the backstop's "state_out_of_domain" must not appear — otherwise a deleted branch is

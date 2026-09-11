@@ -55,6 +55,24 @@ export interface DevicePrepReportRaw {
 
 export const DEVICE_PREP_REPORT_KEYS = ["enrollment", "profiles", "required_apps", "os_update", "prep_stage"] as const;
 
+/** The NORMALIZED domain of each stage — every declared member, `unknown` included. The
+ *  evaluator holds any value outside these (a JavaScript caller, a cast, a deserialized
+ *  object), whatever else fired: the exhaustive sweep walks these members, so a value
+ *  they do not contain is one no proof has ever graded. */
+export const PREP_ENROLLMENT_DOMAIN: readonly PrepEnrollment[] = ["enrolled", "pending", "not_enrolled", "unknown"];
+export const PREP_PROFILES_DOMAIN: readonly PrepProfiles[] = ["applied", "partial", "missing", "unknown"];
+export const PREP_REQUIRED_APPS_DOMAIN: readonly PrepRequiredApps[] = ["installed", "partial", "missing", "unknown"];
+export const OS_UPDATE_DOMAIN: readonly OsUpdateState[] = [
+  "current",
+  "update_available",
+  "update_required",
+  "update_in_progress",
+  "update_failed",
+  "unknown",
+];
+export const PREP_STAGE_DOMAIN: readonly PrepStage[] = ["complete", "in_progress", "failed", "unknown"];
+export const PREP_INTEGRITY_DOMAIN: readonly PrepReportIntegrity[] = ["clean", "malformed"];
+
 export interface NormalizedDevicePrep {
   readonly sourceSystem: "app-update";
   readonly deviceRef: string;
@@ -210,21 +228,23 @@ export function evaluateDevicePrep(s: NormalizedDevicePrep): DevicePrepVerdict {
     candidates.push({ posture: "prep_unverified", action: "step_up", reason: "DEVICE_PREP_STATE_UNKNOWN" });
   }
 
-  // The grant is a POSITIVE predicate, not the absence of a fired branch. The branches
-  // above cover every declared union member and the proof's exhaustive sweep pins the
-  // grant by equality over those — but a value OUTSIDE the union (a JavaScript caller, a
-  // cast, a deserialized object) matches no branch, and without this guard the seed
-  // below would grant on it (review finding). If nothing fired AND any stage is not
-  // exactly its confirmed value, the state is unreadable and held. (`update_available`
-  // fires the monitor branch above, so it never reaches this guard.)
-  const positivelyReady =
-    s.prepStage === "complete" &&
-    s.enrollment === "enrolled" &&
-    s.profiles === "applied" &&
-    s.requiredApps === "installed" &&
-    s.osUpdate === "current" &&
-    s.reportIntegrity === "clean";
-  if (candidates.length === 0 && !positivelyReady) {
+  // Every stage must be a value this evaluator KNOWS. The branches above cover every
+  // declared union member and the proof's exhaustive sweep pins the grant over those —
+  // but a value OUTSIDE the union (a JavaScript caller, a cast, a deserialized object)
+  // matches no branch, and the seed below would grant on it (review finding). The check
+  // must not depend on whether another candidate fired: an optional-update advisory
+  // (`monitor`, still ready) beside an out-of-domain stage read as ready when the guard
+  // was gated on an empty candidate list (second review finding). So: any stage outside
+  // its domain is held, whatever else fired — after a monitor the hold outranks it; after
+  // another hold or containment the earlier concern keeps its own reason on the tie.
+  const inDomain =
+    (PREP_STAGE_DOMAIN as readonly string[]).includes(s.prepStage) &&
+    (PREP_ENROLLMENT_DOMAIN as readonly string[]).includes(s.enrollment) &&
+    (PREP_PROFILES_DOMAIN as readonly string[]).includes(s.profiles) &&
+    (PREP_REQUIRED_APPS_DOMAIN as readonly string[]).includes(s.requiredApps) &&
+    (OS_UPDATE_DOMAIN as readonly string[]).includes(s.osUpdate) &&
+    (PREP_INTEGRITY_DOMAIN as readonly string[]).includes(s.reportIntegrity);
+  if (!inDomain) {
     unknownSignals.push("state_out_of_domain");
     candidates.push({ posture: "prep_unverified", action: "step_up", reason: "DEVICE_PREP_STATE_UNKNOWN" });
   }

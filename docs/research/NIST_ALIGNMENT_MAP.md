@@ -55,12 +55,21 @@ most concrete fit — it names, in a recognized baseline, the posture the
 `macos-posture` family models. **Status:** the mSCP-facing posture *families*
 `macos-posture` and `uem` are **deferred** and fixture-backed
 (`scripts/launch-profile.mjs`); `lib/ddm-connector` is a workspace *library*, which
-the profile does not classify at all. Two families named here are **launch**:
-`device-management-health` — which the profile records with an open shipping
-gap (its live transport is a generic bridge, not Microsoft Graph; the owner's
-Blocker 5) — and `local-authority`. The mapping is a positioning aid, not a
-claim that a live mSCP-driven posture path ships today. Each row carries its own
-status.
+the profile does not classify at all. One family named in the table is
+**launch**: `device-management-health` — which the profile records with an open
+shipping gap (its live transport is a generic bridge, not Microsoft Graph; the
+owner's Blocker 5). The launch `local-authority` family is deliberately NOT in
+the table: it grades iOS/iPadOS protected-data availability after a restart
+(`awaiting_first_unlock`), local authentication since boot, and offline-grant
+standing (`lib/integrations/src/integrations/local-authority/types.ts`) — a
+runtime state, not a configuration rule; mSCP baselines *configure* a device
+and verify the configuration, they do not report whether anyone has unlocked it
+since boot. An earlier revision of this map put
+FileVault on that row; FileVault is a macOS control modeled by the deferred
+`macos-posture` family (`apple-schema.ts` → `FDE_Enabled` /
+`diskmanagement.filevault.enabled`), and the row now says so. The mapping is a
+positioning aid, not a claim that a live mSCP-driven posture path ships today.
+Each row carries its own status.
 
 | mSCP element | SignalGrid surface (real) | Status | Relationship |
 | --- | --- | --- | --- |
@@ -68,7 +77,7 @@ status.
 | Declarative Device Management (DDM) assets | `proof:ddm-connector`, the `lib/ddm-connector` workspace library (not a connector family) | fixture-backed; **unclassified** by the launch profile, which classifies families and routes, not libraries — not launch | informed by — same DDM surface modeled as a posture source |
 | Compliance verification scripts (report posture) | `proof:posture-composition`, `proof:posture-allow` (in-repo, fixture-backed); the **live** read is the separate **`DanFashauer/signalgrid-mcp`** Python server | **deferred**; live posture read is the sibling server, verification per `docs/LIVE_SYNC_LOOP.md` | informed by — mSCP *reports* a device's state; SignalGrid *would decide* on it (golden rule 2: unknown posture raises assurance) |
 | Device management health (is the UEM/MDM reporting) | `proof:device-management-health`, `device-management-health` family | **launch**, with an open gap the profile records against it: its live transport is a generic bridge, not Microsoft Graph, and a Graph-backed transport does not exist yet (the owner's Blocker 5) | aligned with — the launch signal that a device's management channel is healthy |
-| FileVault / first-unlock (bootstrap-token) state | `proof:local-authority`, `local-authority` family | **launch** | aligned with — the offline/degraded grant that waits for first unlock after a restart; a posture fact mSCP carries rules for |
+| FileVault (full-disk encryption) state | `proof:macos-posture`, `macos-posture` family — `apple-schema.ts` reads it as `FDE_Enabled` (SecurityInfo) / `diskmanagement.filevault.enabled` (DDM status) | **deferred**, fixture-backed proof | informed by — mSCP carries the FileVault rule; the family grades a disabled FileVault as the strongest data-at-rest concern. Not `local-authority`: that launch family is the iOS first-unlock / offline-grant surface, outside mSCP's scope (see the status note above) |
 | Broader UEM posture | `proof:uem`, `uem` family | **deferred** | informed by — the wider UEM surface beyond the launch health check |
 
 **Two MCP servers, kept distinct** (`docs/MCP_ARCHITECTURE.md`): the *in-repo*

@@ -21,8 +21,20 @@ import {
   normalizeReport,
   parseVersion,
   compareVersions,
+  DEVICE_PREP_FIXTURES,
+  evaluateDevicePrep,
+  evaluateDevicePrepFixture,
+  normalizeDevicePrep,
   type AppUpdateReportRaw,
+  type DevicePrepVerdict,
   type NormalizedAppUpdate,
+  type NormalizedDevicePrep,
+  type OsUpdateState,
+  type PrepEnrollment,
+  type PrepProfiles,
+  type PrepReportIntegrity,
+  type PrepRequiredApps,
+  type PrepStage,
 } from "@workspace/integrations/app-update";
 import { SIGNAL_KINDS, composeDeviceRisk, fromAppUpdate } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
@@ -317,6 +329,184 @@ const d1 = normalizeReport("det", "a", { installed_version: "2.1.0", latest_vers
 check("evaluator is deterministic", JSON.stringify(evaluateAppUpdate(d1)) === JSON.stringify(evaluateAppUpdate(d1)));
 
 
+// ── the iOS update / device-prep WORKFLOW (device-prep.ts) ───────────────────────
+//
+// A DISTINCT surface from host-app currency above: not which VERSION of the app is
+// installed, but whether the device finished being PROVISIONED (enrolled, profiles,
+// required apps, prep declared complete) and where its OS UPDATE stands (required,
+// in progress, failed). It is the runbooks' "iOS update / device-prep workflows" row
+// this family had only partially modeled — the seated, lit, never-provisioned
+// "phantom device". Fail-closed: every unknown tightens; the one grant is pinned by
+// equality over the whole workflow state space.
+
+// named outcomes — every workflow state reaches its verdict, each by name
+const P = (n: string): DevicePrepVerdict => evaluateDevicePrepFixture(n)!;
+const prepCases: Array<[string, string, string]> = [
+  ["ready", "none", "DEVICE_PREP_READY"],
+  ["prep-failed", "restrict", "DEVICE_PREP_FAILED"],
+  ["prep-in-progress", "step_up", "DEVICE_PREP_IN_PROGRESS"],
+  ["prep-stage-unknown", "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["not-enrolled", "restrict", "DEVICE_NOT_ENROLLED"],
+  ["enrollment-pending", "step_up", "DEVICE_ENROLLMENT_PENDING"],
+  ["enrollment-unknown", "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["profiles-missing", "restrict", "DEVICE_PROFILES_MISSING"],
+  ["profiles-partial", "step_up", "DEVICE_PROFILES_PARTIAL"],
+  ["profiles-unknown", "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["apps-missing", "restrict", "DEVICE_REQUIRED_APPS_MISSING"],
+  ["apps-partial", "step_up", "DEVICE_REQUIRED_APPS_PARTIAL"],
+  ["apps-unknown", "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["update-required", "restrict", "OS_UPDATE_REQUIRED"],
+  ["update-failed", "restrict", "OS_UPDATE_FAILED"],
+  ["update-in-progress", "step_up", "OS_UPDATE_IN_PROGRESS"],
+  ["update-available", "monitor", "OS_UPDATE_AVAILABLE"],
+  ["os-update-unknown", "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["report-malformed", "step_up", "DEVICE_PREP_REPORT_MALFORMED"],
+  ["worst-of-several", "restrict", "DEVICE_PREP_FAILED"],
+];
+for (const [name, action, reason] of prepCases) {
+  const v = P(name);
+  check(
+    `device-prep fixture \`${name}\` → ${action} / ${reason} (${v.recommendedAction} / ${v.reasonCode})`,
+    v.recommendedAction === action && v.reasonCode === reason,
+  );
+}
+check("device-prep: every fixture is asserted above (fixture count = cases named)",
+  Object.keys(DEVICE_PREP_FIXTURES).length === prepCases.length);
+const prepReached = new Set(prepCases.map(([n]) => P(n).recommendedAction));
+check(`device-prep NON-VACUITY: none, monitor, step_up and restrict are all reachable (${[...prepReached].sort().join(", ")})`,
+  prepReached.has("none") && prepReached.has("monitor") && prepReached.has("step_up") && prepReached.has("restrict"));
+check("device-prep: an unknown fixture name yields undefined — never a fabricated verdict",
+  evaluateDevicePrepFixture("no-such-fixture") === undefined);
+const prepWorst = P("worst-of-several");
+check("device-prep worst-of-several records all three critical findings and names the failed prep first (precedence)",
+  prepWorst.criticalFindings.length === 3 && prepWorst.reasonCode === "DEVICE_PREP_FAILED");
+check("device-prep: only the grant is readyForCheckout; every other fixture is not",
+  prepCases.every(([n, action]) => P(n).readyForCheckout === (action === "none")));
+check("device-prep: the one advisory state (an optional update offered) is monitor, not a hold — and still not ready",
+  P("update-available").recommendedAction === "monitor" && P("update-available").readyForCheckout === false);
+
+// fail-closed controls — corrupt the sole grant ONE stage at a time
+const prepBase = DEVICE_PREP_FIXTURES["ready"];
+const prepBaseline = evaluateDevicePrep(prepBase);
+check("device-prep CONTROL baseline: the untouched grant does grant, ready, with no findings",
+  prepBaseline.recommendedAction === "none" && prepBaseline.readyForCheckout === true &&
+  prepBaseline.criticalFindings.length === 0 && prepBaseline.unknownSignals.length === 0);
+const prepFlips: Array<[string, Partial<NormalizedDevicePrep>, string, string]> = [
+  ["prep stage → failed", { prepStage: "failed" }, "restrict", "DEVICE_PREP_FAILED"],
+  ["prep stage → in progress", { prepStage: "in_progress" }, "step_up", "DEVICE_PREP_IN_PROGRESS"],
+  ["prep stage → unknown", { prepStage: "unknown" }, "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["enrollment → not enrolled", { enrollment: "not_enrolled" }, "restrict", "DEVICE_NOT_ENROLLED"],
+  ["enrollment → pending", { enrollment: "pending" }, "step_up", "DEVICE_ENROLLMENT_PENDING"],
+  ["enrollment → unknown", { enrollment: "unknown" }, "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["profiles → missing", { profiles: "missing" }, "restrict", "DEVICE_PROFILES_MISSING"],
+  ["profiles → partial", { profiles: "partial" }, "step_up", "DEVICE_PROFILES_PARTIAL"],
+  ["profiles → unknown", { profiles: "unknown" }, "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["required apps → missing", { requiredApps: "missing" }, "restrict", "DEVICE_REQUIRED_APPS_MISSING"],
+  ["required apps → partial", { requiredApps: "partial" }, "step_up", "DEVICE_REQUIRED_APPS_PARTIAL"],
+  ["required apps → unknown", { requiredApps: "unknown" }, "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["OS update → required", { osUpdate: "update_required" }, "restrict", "OS_UPDATE_REQUIRED"],
+  ["OS update → failed", { osUpdate: "update_failed" }, "restrict", "OS_UPDATE_FAILED"],
+  ["OS update → in progress", { osUpdate: "update_in_progress" }, "step_up", "OS_UPDATE_IN_PROGRESS"],
+  ["OS update → available (optional)", { osUpdate: "update_available" }, "monitor", "OS_UPDATE_AVAILABLE"],
+  ["OS update → unknown", { osUpdate: "unknown" }, "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["report → malformed", { reportIntegrity: "malformed" }, "step_up", "DEVICE_PREP_REPORT_MALFORMED"],
+];
+for (const [label, patch, action, reason] of prepFlips) {
+  const v = evaluateDevicePrep({ ...prepBase, ...patch });
+  check(
+    `device-prep FAIL-CLOSED: ${label} flips the grant to ${action} / ${reason} (${v.recommendedAction} / ${v.reasonCode})`,
+    v.recommendedAction === action && v.reasonCode === reason && v.readyForCheckout === false,
+  );
+}
+
+// the grant set, pinned by equality over the whole workflow state space
+const prepDomains = {
+  enrollment: ["enrolled", "pending", "not_enrolled", "unknown"],
+  profiles: ["applied", "partial", "missing", "unknown"],
+  requiredApps: ["installed", "partial", "missing", "unknown"],
+  osUpdate: ["current", "update_available", "update_required", "update_in_progress", "update_failed", "unknown"],
+  prepStage: ["complete", "in_progress", "failed", "unknown"],
+  reportIntegrity: ["clean", "malformed"],
+} as const;
+const buildPrep = (c: Record<string, unknown>): NormalizedDevicePrep => ({
+  sourceSystem: "app-update",
+  deviceRef: "enum",
+  enrollment: c.enrollment as PrepEnrollment,
+  profiles: c.profiles as PrepProfiles,
+  requiredApps: c.requiredApps as PrepRequiredApps,
+  osUpdate: c.osUpdate as OsUpdateState,
+  prepStage: c.prepStage as PrepStage,
+  reportIntegrity: c.reportIntegrity as PrepReportIntegrity,
+});
+const isPrepReady = (c: Record<string, unknown>): boolean =>
+  c.enrollment === "enrolled" &&
+  c.profiles === "applied" &&
+  c.requiredApps === "installed" &&
+  c.osUpdate === "current" &&
+  c.prepStage === "complete" &&
+  c.reportIntegrity === "clean";
+const prepRes = enumerateGrantSafety<NormalizedDevicePrep, DevicePrepVerdict>({
+  domains: prepDomains,
+  build: buildPrep,
+  evaluate: evaluateDevicePrep,
+  actionOf: (v) => v.recommendedAction,
+  positivelyClean: isPrepReady,
+  confirmedWhenNone: (v) =>
+    v.readyForCheckout === true && v.reasonCode === "DEVICE_PREP_READY" &&
+    v.criticalFindings.length === 0 && v.unknownSignals.length === 0,
+});
+check(`device-prep ENUMERATION: all ${prepRes.combos} workflow states swept (= product of domains)`,
+  prepRes.combos === productOf(prepDomains) && prepRes.combos === 4 * 4 * 4 * 6 * 4 * 2);
+check("device-prep ENUMERATION: ready is EXACTLY the one positively-confirmed state — zero mismatches",
+  prepRes.mismatches === 0);
+check("device-prep ENUMERATION: exactly one state grants (non-vacuous)", prepRes.noneCount === 1);
+// NEGATIVE CONTROL — declare every prep-complete state clean (ignoring the other stages)
+// and the harness must object.
+const prepWrong = enumerateGrantSafety<NormalizedDevicePrep, DevicePrepVerdict>({
+  domains: prepDomains,
+  build: buildPrep,
+  evaluate: evaluateDevicePrep,
+  actionOf: (v) => v.recommendedAction,
+  positivelyClean: (c) => c.prepStage === "complete",
+});
+check("device-prep NEGATIVE CONTROL: declaring every prep-complete state clean is CAUGHT (mismatches > 0)",
+  prepWrong.mismatches > 0 && typeof prepWrong.firstMismatch === "string");
+// monitor is reserved for the one advisory fact: an OPTIONAL update offered on an
+// otherwise-ready device. Every other non-grant is a hold (step_up) or a containment.
+let prepMonitorOffAxis = 0;
+let prepOffLadder = 0;
+for (const enrollment of prepDomains.enrollment)
+  for (const profiles of prepDomains.profiles)
+    for (const requiredApps of prepDomains.requiredApps)
+      for (const osUpdate of prepDomains.osUpdate)
+        for (const prepStage of prepDomains.prepStage)
+          for (const reportIntegrity of prepDomains.reportIntegrity) {
+            const a = evaluateDevicePrep(buildPrep({ enrollment, profiles, requiredApps, osUpdate, prepStage, reportIntegrity })).recommendedAction;
+            if (a === "monitor" && osUpdate !== "update_available") prepMonitorOffAxis += 1;
+            if (a !== "none" && a !== "monitor" && a !== "step_up" && a !== "restrict") prepOffLadder += 1;
+          }
+check("device-prep: monitor is reachable ONLY through an optional update offered — never for a prep or enrollment state", prepMonitorOffAxis === 0);
+check("device-prep: no workflow state resolves to alert/escalate — the surface holds, contains, or advises", prepOffLadder === 0);
+
+// the normalizer on hostile wire input — the asymmetry that makes it safe
+const prepWireOk = normalizeDevicePrep("w-1", { enrollment: "enrolled", profiles: "applied", required_apps: "installed", os_update: "current", prep_stage: "complete" });
+check("device-prep: a fully-confirmed wire report normalizes clean and evaluates to the grant",
+  prepWireOk.reportIntegrity === "clean" && evaluateDevicePrep(prepWireOk).readyForCheckout === true);
+const prepWireVocab = normalizeDevicePrep("w-2", { enrollment: "sorta", profiles: "mostly", required_apps: "some", os_update: "soon", prep_stage: "done-ish" });
+check("device-prep: out-of-vocabulary strings normalize to unknown on every stage (never a fabricated confirmed state), report clean",
+  prepWireVocab.enrollment === "unknown" && prepWireVocab.profiles === "unknown" && prepWireVocab.requiredApps === "unknown" &&
+  prepWireVocab.osUpdate === "unknown" && prepWireVocab.prepStage === "unknown" && prepWireVocab.reportIntegrity === "clean");
+const prepWireMalformed = normalizeDevicePrep("w-3", { enrollment: 1, profiles: ["applied"], required_apps: "installed", os_update: "current", prep_stage: "complete" });
+check("device-prep: a present-but-non-string slot marks the report MALFORMED — step_up for that reason",
+  prepWireMalformed.reportIntegrity === "malformed" && evaluateDevicePrep(prepWireMalformed).reasonCode === "DEVICE_PREP_REPORT_MALFORMED");
+const prepWireSilent = normalizeDevicePrep("w-4", null);
+check("device-prep: an absent report (silence) is all-unknown and CLEAN — silence is not malformed — and still steps up",
+  prepWireSilent.enrollment === "unknown" && prepWireSilent.prepStage === "unknown" && prepWireSilent.reportIntegrity === "clean" &&
+  evaluateDevicePrep(prepWireSilent).recommendedAction === "step_up");
+check("device-prep evaluator is deterministic",
+  JSON.stringify(evaluateDevicePrep(prepBase)) === JSON.stringify(evaluateDevicePrep(prepBase)));
+
+
 // ── The live-call gate and the default transport, each condition ISOLATED ────
 //
 // See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
@@ -344,6 +534,6 @@ await checkDefaultTransport({
 });
 
 const total = passed + failures.length;
-console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},ladderRungs=6`);
+console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},ladderRungs=6,devicePrepCombos=${prepRes.combos},devicePrepGrants=${prepRes.noneCount}`);
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

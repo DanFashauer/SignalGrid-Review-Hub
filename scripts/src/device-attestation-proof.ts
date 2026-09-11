@@ -23,7 +23,18 @@ import {
   guardReadOnly,
   normalizeReport,
   resolveAttestationConnector,
+  SUPERVISION_IDENTITY_FIXTURES,
+  evaluateSupervisionIdentity,
+  evaluateSupervisionIdentityFixture,
+  normalizeSupervisionIdentity,
   type AttestationReportRaw,
+  type ManagementChannel,
+  type NormalizedSupervisionIdentity,
+  type SupervisionEnrollment,
+  type SupervisionIdentityBinding,
+  type SupervisionIdentityVerdict,
+  type SupervisionReportIntegrity,
+  type SupervisionState,
 } from "@workspace/integrations/device-attestation";
 import { composeDeviceRisk, fromAttestation } from "@workspace/posture-composition";
 import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
@@ -265,6 +276,168 @@ check("prod + live + token resolves live", resolveAttestationConnector({ SIGNALG
   });
   check("NEGATIVE CONTROL: declaring every incapability claim clean is CAUGHT (mismatches > 0)",
     wrongPredicate.mismatches > 0 && typeof wrongPredicate.firstMismatch === "string");
+}
+
+// ── 7. THE APPLE SUPERVISION-IDENTITY LIFECYCLE ("device trust" as a precondition) ──
+//
+// A DISTINCT surface from the hardware attestation above (supervision-identity.ts):
+// not what the Secure Enclave proves about the device, but whether the ORGANIZATION
+// still holds the device's supervision identity — the runbooks' "device trust",
+// without which no management command runs. It is the row this family had only
+// partially modeled. Fail-closed is the whole game: every unknown tightens, and the
+// one grant is pinned by equality over the whole lifecycle state space.
+console.log("\n  ── the supervision-identity lifecycle ──\n");
+{
+  // 7a. NAMED OUTCOMES — every lifecycle state reaches its verdict, each by name.
+  const F = (n: string): SupervisionIdentityVerdict => evaluateSupervisionIdentityFixture(n)!;
+  const cases: Array<[string, string, string]> = [
+    ["supervised-trusted", "none", "SUPERVISION_IDENTITY_PRESENT"],
+    ["foreign-identity", "restrict", "SUPERVISION_FOREIGN_IDENTITY"],
+    ["identity-lost", "restrict", "SUPERVISION_IDENTITY_LOST"],
+    ["identity-binding-unknown", "step_up", "SUPERVISION_STATE_UNKNOWN"],
+    ["enrollment-lost", "restrict", "SUPERVISION_ENROLLMENT_LOST"],
+    ["never-enrolled", "restrict", "SUPERVISION_NEVER_ENROLLED"],
+    ["enrollment-unknown", "step_up", "SUPERVISION_STATE_UNKNOWN"],
+    ["unsupervised", "restrict", "SUPERVISION_UNSUPERVISED"],
+    ["supervision-unknown", "step_up", "SUPERVISION_STATE_UNKNOWN"],
+    ["channel-unresponsive", "step_up", "SUPERVISION_CHANNEL_UNRESPONSIVE"],
+    ["channel-unknown", "step_up", "SUPERVISION_STATE_UNKNOWN"],
+    ["report-malformed", "step_up", "SUPERVISION_REPORT_MALFORMED"],
+    ["worst-of-several", "restrict", "SUPERVISION_FOREIGN_IDENTITY"],
+  ];
+  for (const [name, action, reason] of cases) {
+    const v = F(name);
+    check(
+      `fixture \`${name}\` → ${action} / ${reason} (${v.recommendedAction} / ${v.reasonCode})`,
+      v.recommendedAction === action && v.reasonCode === reason,
+    );
+  }
+  check("every fixture's fixture-name count matches the cases named above (no fixture left un-asserted)",
+    Object.keys(SUPERVISION_IDENTITY_FIXTURES).length === cases.length);
+  const reached = new Set(cases.map(([n]) => F(n).recommendedAction));
+  check(`NON-VACUITY: none, step_up and restrict are all reachable (${[...reached].sort().join(", ")})`,
+    reached.has("none") && reached.has("step_up") && reached.has("restrict"));
+  check("an unknown fixture name yields undefined — never a fabricated verdict",
+    evaluateSupervisionIdentityFixture("no-such-fixture") === undefined);
+  const worst = F("worst-of-several");
+  check("worst-of-several records all three critical findings and names the foreign identity first (precedence)",
+    worst.criticalFindings.length === 3 && worst.reasonCode === "SUPERVISION_FOREIGN_IDENTITY");
+  check("only the grant is trustPreconditionMet; every other fixture is not",
+    cases.every(([n, action]) => F(n).trustPreconditionMet === (action === "none")));
+
+  // 7b. FAIL-CLOSED CONTROLS — corrupt the sole grant ONE axis at a time; every one
+  // must fall away from the grant, for its own named reason.
+  const base = SUPERVISION_IDENTITY_FIXTURES["supervised-trusted"];
+  const baseline = evaluateSupervisionIdentity(base);
+  check("CONTROL baseline: the untouched grant does grant, with the precondition met and no findings",
+    baseline.recommendedAction === "none" && baseline.trustPreconditionMet === true &&
+    baseline.criticalFindings.length === 0 && baseline.unknownSignals.length === 0);
+  const flips: Array<[string, Partial<NormalizedSupervisionIdentity>, string, string]> = [
+    ["identity binding → unknown", { identityBinding: "unknown" }, "step_up", "SUPERVISION_STATE_UNKNOWN"],
+    ["identity binding → unbound (lost)", { identityBinding: "unbound" }, "restrict", "SUPERVISION_IDENTITY_LOST"],
+    ["identity binding → another org", { identityBinding: "bound_to_other_org" }, "restrict", "SUPERVISION_FOREIGN_IDENTITY"],
+    ["enrollment → lost", { enrollment: "enrollment_lost" }, "restrict", "SUPERVISION_ENROLLMENT_LOST"],
+    ["enrollment → never enrolled", { enrollment: "never_enrolled" }, "restrict", "SUPERVISION_NEVER_ENROLLED"],
+    ["enrollment → unknown", { enrollment: "unknown" }, "step_up", "SUPERVISION_STATE_UNKNOWN"],
+    ["supervision → unsupervised", { supervision: "unsupervised" }, "restrict", "SUPERVISION_UNSUPERVISED"],
+    ["supervision → unknown", { supervision: "unknown" }, "step_up", "SUPERVISION_STATE_UNKNOWN"],
+    ["command channel → unresponsive", { commandChannel: "unresponsive" }, "step_up", "SUPERVISION_CHANNEL_UNRESPONSIVE"],
+    ["command channel → unknown", { commandChannel: "unknown" }, "step_up", "SUPERVISION_STATE_UNKNOWN"],
+    ["report → malformed", { reportIntegrity: "malformed" }, "step_up", "SUPERVISION_REPORT_MALFORMED"],
+  ];
+  for (const [label, patch, action, reason] of flips) {
+    const v = evaluateSupervisionIdentity({ ...base, ...patch });
+    check(
+      `FAIL-CLOSED: ${label} flips the grant to ${action} / ${reason} (${v.recommendedAction} / ${v.reasonCode})`,
+      v.recommendedAction === action && v.reasonCode === reason && v.trustPreconditionMet === false,
+    );
+  }
+
+  // 7c. THE GRANT SET, PINNED BY EQUALITY over the whole lifecycle state space. Only an
+  // equality pin excludes the states nobody named; the sweep is the backstop.
+  const domains = {
+    supervision: ["supervised", "unsupervised", "unknown"],
+    identityBinding: ["bound_to_org", "bound_to_other_org", "unbound", "unknown"],
+    enrollment: ["enrolled", "enrollment_lost", "never_enrolled", "unknown"],
+    commandChannel: ["responsive", "unresponsive", "unknown"],
+    reportIntegrity: ["clean", "malformed"],
+  } as const;
+  const build = (c: Record<string, unknown>): NormalizedSupervisionIdentity => ({
+    sourceSystem: "device-attestation",
+    deviceId: "enum",
+    supervision: c.supervision as SupervisionState,
+    identityBinding: c.identityBinding as SupervisionIdentityBinding,
+    enrollment: c.enrollment as SupervisionEnrollment,
+    commandChannel: c.commandChannel as ManagementChannel,
+    reportIntegrity: c.reportIntegrity as SupervisionReportIntegrity,
+  });
+  const isTheGrant = (c: Record<string, unknown>): boolean =>
+    c.supervision === "supervised" &&
+    c.identityBinding === "bound_to_org" &&
+    c.enrollment === "enrolled" &&
+    c.commandChannel === "responsive" &&
+    c.reportIntegrity === "clean";
+  const swept = enumerateGrantSafety<NormalizedSupervisionIdentity, SupervisionIdentityVerdict>({
+    domains,
+    build,
+    evaluate: evaluateSupervisionIdentity,
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: isTheGrant,
+    confirmedWhenNone: (v) =>
+      v.trustPreconditionMet === true && v.reasonCode === "SUPERVISION_IDENTITY_PRESENT" &&
+      v.criticalFindings.length === 0 && v.unknownSignals.length === 0,
+  });
+  check(`ENUMERATION: all ${swept.combos} lifecycle states swept (= product of domains)`,
+    swept.combos === productOf(domains) && swept.combos === 3 * 4 * 4 * 3 * 2);
+  check("ENUMERATION: the trust precondition is met by EXACTLY the one positively-confirmed state — zero mismatches",
+    swept.mismatches === 0);
+  check("ENUMERATION: exactly one state grants (non-vacuous)", swept.noneCount === 1);
+  // NEGATIVE CONTROL — the enumeration can fail: declare every bound-to-org state clean
+  // (ignoring enrollment, supervision, the channel and the parse) and it must object.
+  const wrong = enumerateGrantSafety<NormalizedSupervisionIdentity, SupervisionIdentityVerdict>({
+    domains,
+    build,
+    evaluate: evaluateSupervisionIdentity,
+    actionOf: (v) => v.recommendedAction,
+    positivelyClean: (c) => c.identityBinding === "bound_to_org",
+  });
+  check("NEGATIVE CONTROL: declaring every bound-to-org state clean is CAUGHT (mismatches > 0)",
+    wrong.mismatches > 0 && typeof wrong.firstMismatch === "string");
+  // The surface only ever HOLDS (step_up) or CONTAINS (restrict) — it never merely
+  // monitors, alerts or escalates: a device this org cannot command is not a nuance.
+  let offLadder = 0;
+  for (const supervision of domains.supervision)
+    for (const identityBinding of domains.identityBinding)
+      for (const enrollment of domains.enrollment)
+        for (const commandChannel of domains.commandChannel)
+          for (const reportIntegrity of domains.reportIntegrity) {
+            const a = evaluateSupervisionIdentity(build({ supervision, identityBinding, enrollment, commandChannel, reportIntegrity })).recommendedAction;
+            if (a !== "none" && a !== "step_up" && a !== "restrict") offLadder += 1;
+          }
+  check("no lifecycle state resolves to monitor/alert/escalate — every non-grant is a hold or a containment", offLadder === 0);
+
+  // 7d. THE NORMALIZER on hostile wire input — the asymmetry that makes it safe.
+  const wireOk = normalizeSupervisionIdentity("w-1", { supervised: true, identity_binding: "bound_to_org", enrollment: "enrolled", command_channel: "responsive" });
+  check("a boolean `supervised: true` normalizes to supervised, and the report is clean",
+    wireOk.supervision === "supervised" && wireOk.reportIntegrity === "clean");
+  check("a fully-confirmed wire report evaluates to the grant (the normalizer can reach it)",
+    evaluateSupervisionIdentity(wireOk).trustPreconditionMet === true);
+  const wireUnsup = normalizeSupervisionIdentity("w-2", { supervised: false, identity_binding: "bound_to_org", enrollment: "enrolled", command_channel: "responsive" });
+  check("`supervised: false` is an AFFIRMATIVE fact — unsupervised → restrict",
+    wireUnsup.supervision === "unsupervised" && evaluateSupervisionIdentity(wireUnsup).recommendedAction === "restrict");
+  const wireVocab = normalizeSupervisionIdentity("w-3", { supervised: "totally", identity_binding: "org-ish", enrollment: "yes", command_channel: "fine" });
+  check("out-of-vocabulary strings normalize to unknown on every axis (never a fabricated confirmed state) and the report stays clean",
+    wireVocab.supervision === "unknown" && wireVocab.identityBinding === "unknown" && wireVocab.enrollment === "unknown" &&
+    wireVocab.commandChannel === "unknown" && wireVocab.reportIntegrity === "clean");
+  const wireMalformed = normalizeSupervisionIdentity("w-4", { supervised: 1, identity_binding: { bound: true }, enrollment: "enrolled", command_channel: "responsive" });
+  check("a present-but-non-string slot marks the report MALFORMED (an assertion we could not read) — step_up for that reason",
+    wireMalformed.reportIntegrity === "malformed" && evaluateSupervisionIdentity(wireMalformed).reasonCode === "SUPERVISION_REPORT_MALFORMED");
+  const wireSilent = normalizeSupervisionIdentity("w-5", undefined);
+  check("an absent report (silence) is all-unknown and CLEAN — silence is not malformed — and still steps up",
+    wireSilent.supervision === "unknown" && wireSilent.identityBinding === "unknown" && wireSilent.reportIntegrity === "clean" &&
+    evaluateSupervisionIdentity(wireSilent).recommendedAction === "step_up");
+  check("supervision-identity evaluator is deterministic",
+    JSON.stringify(evaluateSupervisionIdentity(base)) === JSON.stringify(evaluateSupervisionIdentity(base)));
 }
 
 // ── The live-call gate, each condition ISOLATED ──────────────────────────────

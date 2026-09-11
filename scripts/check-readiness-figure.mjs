@@ -94,6 +94,23 @@ export function evidenceDimension(evidence, ageDays, currentFingerprint) {
   return { pct: 100, reason: `green on both halves, ${ageDays} day(s) old, manifest ${shortFp(evFp)}` };
 }
 
+/**
+ * Pure: how old the evidence is, in whole days, and WHICH clock said so.
+ *
+ * Prefers the artifact's own `mintedAt` (written by the emitter at mint time) over the
+ * file's git commit date. The git date is unreliable on a shallow clone — it reports the
+ * clone boundary, not the mint — which is how this file was mis-aged twice. Fail-closed on
+ * a bad stamp: a `mintedAt` that is unparseable, or in the FUTURE relative to `nowSec`
+ * (a wrong clock must never read as "fresh"), is ignored and git is used; with neither
+ * usable the age is Infinity, which `evidenceDimension` scores 0.
+ */
+export function evidenceAgeDays(evidence, gitCommitSec, nowSec) {
+  const minted = typeof evidence?.mintedAt === "string" ? Date.parse(evidence.mintedAt) / 1000 : NaN;
+  if (Number.isFinite(minted) && minted <= nowSec) return { ageDays: Math.floor((nowSec - minted) / 86400), source: "mintedAt" };
+  if (Number.isFinite(gitCommitSec) && gitCommitSec > 0) return { ageDays: Math.floor((nowSec - gitCommitSec) / 86400), source: "git" };
+  return { ageDays: Infinity, source: "none" };
+}
+
 /** Pure: live operations declared vs those with a PASSED result somewhere on disk. */
 export function liveDimension(declaredLiveIds, results, greenStatuses) {
   const proven = new Set();
@@ -116,11 +133,11 @@ async function derive() {
   if (!existsSync(join(repo, GT))) throw new Broken(`${GT} missing`);
   const a = parseGroundTruth(readFileSync(join(repo, GT), "utf8"));
   // (b)
-  let evidence = null, ageDays = Infinity;
+  let evidence = null, ageDays = Infinity, ageSource = "none";
   if (existsSync(join(repo, EVIDENCE))) {
     evidence = JSON.parse(readFileSync(join(repo, EVIDENCE), "utf8"));
     const ct = Number(git(["log", "-1", "--format=%ct", "--", EVIDENCE]));
-    if (Number.isFinite(ct) && ct > 0) ageDays = Math.floor((Date.now() / 1000 - ct) / 86400);
+    ({ ageDays, source: ageSource } = evidenceAgeDays(evidence, ct, Date.now() / 1000));
   }
   const lp = await import(pathToFileURL(join(repo, "scripts/launch-profile.mjs")).href);
   const counts = { launch: 0, deferred: 0, demo_only: 0, internal: 0 };
@@ -129,7 +146,7 @@ async function derive() {
   // Fail-closed: if it cannot be computed, currentFingerprint stays "" and (b) resolves to 0.
   let currentFingerprint = "";
   try { currentFingerprint = fingerprintOf(computeBody()); } catch { currentFingerprint = ""; }
-  const b = { ...evidenceDimension(evidence, ageDays, currentFingerprint), surfaces: counts };
+  const b = { ...evidenceDimension(evidence, ageDays, currentFingerprint), ageSource, surfaces: counts };
   // (c) scenarios — run the engine's own list through the engine (seconds)
   // Spawned from scripts/: tsx and @workspace/signalgrid-simulator resolve in that package, not at the root.
   const sc = spawnSync("pnpm", ["exec", "tsx", "src/readiness-scenarios.ts"], { cwd: join(repo, "scripts"), encoding: "utf8" });
@@ -170,6 +187,20 @@ function selfTest() {
   checks.push(["evidence: green + fresh + match but current fingerprint uncomputable → 0 (fail-closed)", evidenceDimension({ reviewHubPass: true, mcpPass: true, manifestFingerprint: FP }, 3, "").pct === 0]);
   checks.push(["evidence: green but stale → 0 (stale evidence closes outreach)", evidenceDimension({ reviewHubPass: true, mcpPass: true, manifestFingerprint: FP }, FRESH_DAYS + 1, FP).pct === 0]);
   checks.push(["evidence: one half red → 0", evidenceDimension({ reviewHubPass: true, mcpPass: false, manifestFingerprint: FP }, 1, FP).pct === 0]);
+  // Evidence AGE prefers the artifact's own mintedAt and falls back to git, fail-closed.
+  const NOW = 1_800_000_000; // a fixed "now" so the cases are deterministic
+  const DAY = 86400;
+  const aged = evidenceAgeDays({ mintedAt: new Date((NOW - 2 * DAY) * 1000).toISOString() }, NOW - 10 * DAY, NOW);
+  checks.push(["age: a valid mintedAt is preferred over the git date (2 days, source mintedAt)", aged.ageDays === 2 && aged.source === "mintedAt"]);
+  const noStamp = evidenceAgeDays({}, NOW - 3 * DAY, NOW);
+  checks.push(["age: no mintedAt → the git commit date (3 days, source git)", noStamp.ageDays === 3 && noStamp.source === "git"]);
+  const garbage = evidenceAgeDays({ mintedAt: "not-a-date" }, NOW - 4 * DAY, NOW);
+  checks.push(["age: an unparseable mintedAt is ignored → git (4 days), never NaN", garbage.ageDays === 4 && garbage.source === "git"]);
+  const future = evidenceAgeDays({ mintedAt: new Date((NOW + 5 * DAY) * 1000).toISOString() }, NOW - 6 * DAY, NOW);
+  checks.push(["age: a FUTURE mintedAt (wrong clock) is ignored → git (6 days), never a negative 'fresh' age", future.ageDays === 6 && future.source === "git"]);
+  const nothing = evidenceAgeDays({}, 0, NOW);
+  checks.push(["age: no mintedAt and no git date → Infinity (fail-closed; scores 0)", nothing.ageDays === Infinity && nothing.source === "none"]);
+  checks.push(["age: Infinity scores the evidence dimension 0", evidenceDimension({ reviewHubPass: true, mcpPass: true, manifestFingerprint: FP }, Infinity, FP).pct === 0]);
   checks.push(["evidence: absent → 0", evidenceDimension(null, 0, FP).pct === 0]);
   const lv = liveDimension(["live-a", "live-b", "live-c"], [{ runs: [{ operation: "live-a", status: "passed" }, { operation: "live-b", status: "refused" }] }], ["passed"]);
   checks.push(["live: only PASSED counts — 1 of 3 proven, refused is not proven", lv.proven === 1 && lv.pct === 33 && lv.missing.join() === "live-b,live-c"]);
@@ -188,7 +219,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const d = r.details;
     console.log(`Readiness figure — DR-036: derived, never typed; headline = the lowest dimension\n`);
     console.log(`  (a) runbook ground truth      ${String(r.a).padStart(3)}%   ${d.groundTruth.modeled} modeled / ${d.groundTruth.partial} partial / ${d.groundTruth.gap} gap of ${d.groundTruth.total} real-world elements (${GT})`);
-    console.log(`  (b) launch surface, evidence  ${String(r.b).padStart(3)}%   ${d.evidence.reason}; launch ${d.evidence.surfaces.launch} · deferred ${d.evidence.surfaces.deferred} (deferred is the freeze, not a defect)`);
+    console.log(`  (b) launch surface, evidence  ${String(r.b).padStart(3)}%   ${d.evidence.reason} (age via ${d.evidence.ageSource}); launch ${d.evidence.surfaces.launch} · deferred ${d.evidence.surfaces.deferred} (deferred is the freeze, not a defect)`);
     console.log(`  (c) end-to-end                ${String(r.c).padStart(3)}%   scenarios ${d.endToEnd.scenarios.ran}/${d.endToEnd.scenarios.declared} · live operations proven ${d.endToEnd.live.proven}/${d.endToEnd.live.declared}${d.endToEnd.live.missing.length ? ` (unproven: ${d.endToEnd.live.missing.join(", ")})` : ""}`);
     console.log(`\n  HEADLINE ${r.headline}%  → ${r.verdict}`);
     console.log(`  floor ${FLOOR} · target ${TARGET_LOW}–${TARGET_HIGH} · goal ${GOAL}. A broken derivation exits 1; a low number exits 0 (REPORT).`);

@@ -8,6 +8,9 @@ import { AttestationConnectorError, type AttestationReportRaw } from "./types";
 export * from "./types";
 export * from "./evaluate";
 export * from "./device-attestation-connector";
+// The supervision-identity LIFECYCLE — "device trust" as a precondition — a distinct
+// surface from hardware attestation (docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md).
+export * from "./supervision-identity";
 export { createMockAttestationTransport, type MockAttestationOptions } from "./mock-transport";
 
 /**

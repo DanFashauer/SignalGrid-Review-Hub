@@ -52,7 +52,35 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-11 (cloud lane, latest) - READINESS-FIGURE HONESTY LANDED
+LAST TOUCHED: 2026-09-11 (cloud lane, latest) - THE LAST TWO RUNBOOK PARTIALS MODELED
+              (branch lane/cloud-runbook-partials-20260911-154128Z; product PR, owner
+              merges - the harness structurally blocks agent self-merge of product PRs):
+              the supervision-identity lifecycle (device-attestation/supervision-identity.ts:
+              supervised / this org vs another / identity lost / enrollment lost / never
+              enrolled / commands unresponsive / unknown -> grant, hold or contain; a
+              288-state sweep pins the single grant) and the iOS update / device-prep
+              workflow (app-update/device-prep.ts: enrolled / profiles / required apps /
+              prep stage / OS update -> ready, hold, contain, or advise; a 3072-state
+              sweep pins the single grant). Each is a distinct fixture corpus + fail-closed
+              evaluator + proof section on the break-glass fallback-sequence pattern;
+              mutation-swept 42/42 and 59 killed + 4 documented-inert of 63, 0 survivors.
+              READINESS (a) 70 -> 82% (14 modeled / 0 partial / 3 gap of 17) - the runbook
+              dimension is OVER THE FLOOR. HEADLINE still 0% ONLY on (b): mac-run.json
+              covers manifest 6f6a, the tree is now 6989 (manifest v70 after proofCounts
+              moved device-attestation 77->119 and app-update 71->127). The Mac re-mint
+              is the single remaining lever, and it got easier: verify-all.mjs now stamps
+              mintedAt into mac-run.json and check-readiness-figure prefers it over the
+              git date (a shallow clone mis-aged the file twice; fail-closed on a garbage
+              or future stamp, 6 new self-test cases). Also this session: the NIST org
+              absorbed as docs/research/NIST_ALIGNMENT_MAP.md (PR #638, owner merge
+              pending) through six review rounds - Codex to its budget, then the in-house
+              fail-closed-auditor, which also showed the launch-claims vocabulary cannot
+              see any capability that map names (follow-up: a profile-id <-> doc-status
+              gate). The owner delegated routine merge calls this session (do what you
+              need to do unless blocked); lane-mail auto-merges, product PRs await the
+              owner because the harness refuses agent self-merge, self-approval, and
+              self-authorizing edits to AGENTS.md or a DR - so that rule text stands as
+              written. (Earlier 2026-09-11, cloud lane:) READINESS-FIGURE HONESTY LANDED
               (#620, 52b395d). The DR-036 readiness gate was OVER-reporting - it
               fail-OPENED on two dimensions. Fixed at root, each with a control that
               fails pre-fix: (a) parseGroundTruth dropped markdown-bold **gap** rows

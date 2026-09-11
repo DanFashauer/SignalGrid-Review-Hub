@@ -107,7 +107,11 @@ export interface DevicePrepVerdict {
   readonly criticalFindings: string[];
   /** Stages whose state could not be determined. Any of these forecloses the grant. */
   readonly unknownSignals: string[];
-  /** True ONLY when every stage is positively confirmed — the device may be handed out. */
+  /** True when the device may be handed out: nothing holds or contains it. That is the
+   *  grant (`none`) and ALSO the one advisory (`monitor` — an OPTIONAL update offered on
+   *  an otherwise fully-confirmed device). An advisory is not a hold (review finding: the
+   *  first cut set this false on `monitor`, so a checkout consumer reading the boolean
+   *  would have withheld a ready device over an update nobody requires). */
   readonly readyForCheckout: boolean;
 }
 
@@ -223,7 +227,9 @@ export function evaluateDevicePrep(s: NormalizedDevicePrep): DevicePrepVerdict {
     recommendedAction: winner.action,
     criticalFindings,
     unknownSignals,
-    readyForCheckout: winner.action === "none",
+    // Ready = not held and not contained. `monitor` is the ladder's advisory tier (still
+    // the ok risk band in posture-composition); every step_up/restrict above it forecloses.
+    readyForCheckout: winner.action === "none" || winner.action === "monitor",
   };
 }
 
@@ -253,22 +259,76 @@ function readEnum<T extends string>(value: unknown, vocab: readonly T[], integri
   return hit;
 }
 
-/** Normalize a raw prep/update report into the one shape the fabric reads. */
+/** Read a field ONLY if the report asserts it as an OWN property. An inherited value is
+ *  the prototype's claim, not this report's, and must not read as a confirmation
+ *  (review finding: a report built with `Object.create({...})` or a polluted prototype
+ *  otherwise normalized an EMPTY report to the one grant, `readyForCheckout: true`). */
+function ownValue(report: object, key: string): unknown {
+  return Object.prototype.hasOwnProperty.call(report, key)
+    ? (report as Record<string, unknown>)[key]
+    : undefined;
+}
+
+/** Is this a plain JSON-shaped object at all? An injected transport returning a string
+ *  or an array must fail closed, not throw an untyped TypeError out of the normalizer.
+ *  The Object.prototype exclusion is load-bearing: passing Object.prototype itself as
+ *  the report would let POLLUTED prototype fields read as own assertions. */
+function isPlainReport(report: unknown): report is object {
+  return typeof report === "object" && report !== null && !Array.isArray(report) && report !== Object.prototype;
+}
+
+/** Depth bound for the prototype scan — a Proxy may return a fresh object from
+ *  getPrototypeOf on every call, so the walk must be bounded rather than trusted. */
+const MAX_PROTOTYPE_DEPTH = 64;
+
+/** Does the report carry any key this normalizer does not understand? Walks the
+ *  PROTOTYPE CHAIN even though value reads are own-only: an inherited assertion, in any
+ *  spelling, is still an assertion this report did not make, and this scan is the only
+ *  thing that notices it. A symbol key counts; a class instance fails closed. */
+function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
+  try {
+    let o: object | null = report;
+    for (let depth = 0; o !== null && o !== Object.prototype; depth += 1) {
+      if (depth >= MAX_PROTOTYPE_DEPTH) return true;
+      for (const k of Reflect.ownKeys(o)) {
+        if (depth > 0) return true;
+        if (typeof k === "symbol") return true;
+        if (!known.includes(k)) return true;
+      }
+      o = Object.getPrototypeOf(o) as object | null;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/** Normalize a raw prep/update report into the one shape the fabric reads.
+ *  An ABSENT report is silence (every stage unknown, integrity clean); a report that is
+ *  not a plain object, or that carries any key beyond the recognized five — own or
+ *  inherited — is an assertion we could not read: every stage unknown AND malformed. */
 export function normalizeDevicePrep(deviceRef: string, raw: DevicePrepReportRaw | null | undefined): NormalizedDevicePrep {
   const integrity = { malformed: false };
-  const r: DevicePrepReportRaw = raw ?? {};
+  let r: Record<string, unknown> = {};
+  if (raw !== undefined && raw !== null) {
+    if (!isPlainReport(raw) || hasUnrecognizedKey(raw, DEVICE_PREP_REPORT_KEYS)) {
+      integrity.malformed = true;
+    } else {
+      r = raw as Record<string, unknown>;
+    }
+  }
   return {
     sourceSystem: "app-update",
     deviceRef,
-    enrollment: readEnum<PrepEnrollment>(r.enrollment, ["enrolled", "pending", "not_enrolled"], integrity),
-    profiles: readEnum<PrepProfiles>(r.profiles, ["applied", "partial", "missing"], integrity),
-    requiredApps: readEnum<PrepRequiredApps>(r.required_apps, ["installed", "partial", "missing"], integrity),
+    enrollment: readEnum<PrepEnrollment>(ownValue(r, "enrollment"), ["enrolled", "pending", "not_enrolled"], integrity),
+    profiles: readEnum<PrepProfiles>(ownValue(r, "profiles"), ["applied", "partial", "missing"], integrity),
+    requiredApps: readEnum<PrepRequiredApps>(ownValue(r, "required_apps"), ["installed", "partial", "missing"], integrity),
     osUpdate: readEnum<OsUpdateState>(
-      r.os_update,
+      ownValue(r, "os_update"),
       ["current", "update_available", "update_required", "update_in_progress", "update_failed"],
       integrity,
     ),
-    prepStage: readEnum<PrepStage>(r.prep_stage, ["complete", "in_progress", "failed"], integrity),
+    prepStage: readEnum<PrepStage>(ownValue(r, "prep_stage"), ["complete", "in_progress", "failed"], integrity),
     reportIntegrity: integrity.malformed ? "malformed" : "clean",
   };
 }

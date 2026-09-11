@@ -80,7 +80,11 @@ LAST TOUCHED: 2026-09-11 (cloud lane, latest) - THE LAST TWO RUNBOOK PARTIALS MO
               need to do unless blocked); lane-mail auto-merges, product PRs await the
               owner because the harness refuses agent self-merge, self-approval, and
               self-authorizing edits to AGENTS.md or a DR - so that rule text stands as
-              written. (Earlier 2026-09-11, cloud lane:) READINESS-FIGURE HONESTY LANDED
+              written. PR #641 then took three Codex findings, each real and each fixed
+              at the root: own-property reads in both new normalizers (an inherited field
+              could reach the grant), an invalid mintedAt is Infinity not the git date, and
+              an optional-update advisory stays checkout-ready. (Earlier 2026-09-11, cloud
+              lane:) READINESS-FIGURE HONESTY LANDED
               (#620, 52b395d). The DR-036 readiness gate was OVER-reporting - it
               fail-OPENED on two dimensions. Fixed at root, each with a control that
               fails pre-fix: (a) parseGroundTruth dropped markdown-bold **gap** rows

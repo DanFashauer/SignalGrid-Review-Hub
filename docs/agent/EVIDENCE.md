@@ -1713,3 +1713,24 @@ mintedAt — verify-all.mjs stamps the mint time into mac-run.json (provenance, 
 The first preflight run stopped at Shell lint: shellcheck was not installed in this container. Installed (uid 0, plain apt-get) and re-run; the gate is a CI job either way.
 ```
 Verdict:  **Dimension (a) of the readiness figure crossed the 80% floor — 14 of 17 runbook elements modeled, 0 partial — and did so by building the two missing surfaces as falsifiable, mutation-swept fixture corpora, not by relabeling rows.** The headline stays 0% on one Mac-side lever alone: re-mint mac-run.json against the current manifest; when it is minted it will carry its own age.
+
+## 2026-09-11 — "Three Codex findings on the runbook-partials PR (#641), each fixed at the root and pinned"
+Command:  the P1/P1/P2 findings on #641 verified against source before any edit (each was real), fixed, and gated; the earlier evidence line "unparseable/future stamp -> git" is superseded below.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (128/128) (was 119) — +9: inherited fields, Object.prototype, array/string, unrecognized own key, symbol key, 100-deep chain, throwing Proxy, honest path still grants
+pnpm run proof:app-update                                 # summary=pass (139/139) (was 127) — +9 of the same shapes for device-prep, +3 for readiness: readyForCheckout <=> (none | monitor), exactly 2 of 3,072 states ready
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=46 killed=46 hung=0 known-inert=0 survivors=0 (was 42/42)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=67 killed=63 hung=0 known-inert=4 survivors=0 (was 59 killed + 4 documented-inert of 63)
+node scripts/check-readiness-figure.mjs --self-test       # self-test passed (20/20) — 20 cases: an unparseable, FUTURE, or non-string mintedAt is now Infinity (invalid-mintedAt), never the git date
+node scripts/generate-sync-manifest.mjs                   # vundefined 2daf941b6ed6
+```
+Output:
+```
+P1 (both new normalizers) — the reads went through the prototype chain, so a report built with Object.create({...confirmed fields}) or a polluted prototype asserted nothing itself yet reached the one grant (trustPreconditionMet / readyForCheckout true). Reproduced in the proof before the fix. Fixed on the family's existing pattern (app-update-connector.ts): isPlainReport (rejects non-objects, arrays and Object.prototype itself), ownValue (own-property reads only), and a BOUNDED prototype-chain scan that marks any inherited or unrecognized key malformed. Every hostile shape is malformed + all-unknown + no grant; the honest own-property report still grants (the fix did not foreclose the path).
+P1 (check-readiness-figure.evidenceAgeDays) — a PRESENT-but-invalid mintedAt fell back to the git commit date, so re-committing an old artifact with a garbage or future stamp would have minted a fresh age and scored dimension (b) 100. Now: git is the LEGACY fallback only when no stamp exists at all; a present stamp that is not a string, unparseable, or in the future is Infinity (source invalid-mintedAt) and scores 0. Two self-test cases flipped, one added.
+P2 (device-prep readyForCheckout) — the boolean was false on the advisory (an OPTIONAL update offered on an otherwise fully-confirmed device), contradicting APP_UPDATE_CURRENCY's "not a hold" and the ladder's ok tier: a checkout consumer would have withheld a ready device over an update nobody requires. readyForCheckout is now "not held, not contained" = none | monitor; the sweep pins it by equality (exactly two of 3,072 states ready: the grant and the advisory; every step_up/restrict false), and the trailing-|| is a mutant the proof kills.
+Codex P2 on the lane-mail PR (#642, merged d11279ca) — "queue the re-mint in the unattended loop, not prose" — was already met by the sim request riding this branch; replied and resolved.
+Process defect recorded: the previous entry's paragraph was appended AFTER preflight ran, so no local gate saw it; CI's figure guard and the sim-requests "pending" rule caught two sentences. This entry is written BEFORE the gates in this chain run on it.
+```
+Verdict:  **Three real findings from an outside reviewer, each reproduced, fixed at the root, and pinned by a check that fails without the fix.** No verdict outside the two new modules changed; both families stay deferred; no claim moves.

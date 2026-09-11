@@ -32,6 +32,7 @@ import {
   type NormalizedSupervisionIdentity,
   type SupervisionEnrollment,
   type SupervisionIdentityBinding,
+  type SupervisionIdentityReportRaw,
   type SupervisionIdentityVerdict,
   type SupervisionReportIntegrity,
   type SupervisionState,
@@ -436,6 +437,38 @@ console.log("\n  ── the supervision-identity lifecycle ──\n");
   check("an absent report (silence) is all-unknown and CLEAN — silence is not malformed — and still steps up",
     wireSilent.supervision === "unknown" && wireSilent.identityBinding === "unknown" && wireSilent.reportIntegrity === "clean" &&
     evaluateSupervisionIdentity(wireSilent).recommendedAction === "step_up");
+  // Own-property reads (review finding): a report that INHERITS the recognized fields —
+  // Object.create({...}), or a polluted prototype — asserted nothing itself, yet the first
+  // cut read the inherited values as evidence and reached the grant. Every shape below must
+  // be malformed, all-unknown, and never satisfy the trust precondition.
+  const grantRaw = { supervised: true, identity_binding: "bound_to_org", enrollment: "enrolled", command_channel: "responsive" };
+  const wireInherited = normalizeSupervisionIdentity("w-6", Object.create(grantRaw) as SupervisionIdentityReportRaw);
+  check("a report that only INHERITS the confirmed fields is malformed, all-unknown, and never grants (the prototype's claim is not this report's)",
+    wireInherited.reportIntegrity === "malformed" && wireInherited.supervision === "unknown" && wireInherited.identityBinding === "unknown" &&
+    wireInherited.enrollment === "unknown" && wireInherited.commandChannel === "unknown" &&
+    evaluateSupervisionIdentity(wireInherited).trustPreconditionMet === false);
+  const wireAlias = normalizeSupervisionIdentity("w-7", Object.assign(Object.create({ identity_binding: "bound_to_other_org" }), grantRaw) as SupervisionIdentityReportRaw);
+  check("a recognized key inherited BEHIND a clean own set still marks the report malformed (the chain scan, not the own read, notices it)",
+    wireAlias.reportIntegrity === "malformed" && evaluateSupervisionIdentity(wireAlias).trustPreconditionMet === false);
+  check("Object.prototype itself as the report is malformed (polluted-prototype fields must never read as own assertions)",
+    normalizeSupervisionIdentity("w-8", Object.prototype as SupervisionIdentityReportRaw).reportIntegrity === "malformed");
+  check("an array or a string where the report should be is malformed, never a thrown TypeError",
+    normalizeSupervisionIdentity("w-9", [] as unknown as SupervisionIdentityReportRaw).reportIntegrity === "malformed" &&
+    normalizeSupervisionIdentity("w-10", "supervised" as unknown as SupervisionIdentityReportRaw).reportIntegrity === "malformed");
+  const wireExtra = normalizeSupervisionIdentity("w-11", { ...grantRaw, supervised_state: "yes" } as SupervisionIdentityReportRaw);
+  check("an unrecognized OWN key is an assertion in a spelling we ignore — malformed, and the clean-looking rest does not grant",
+    wireExtra.reportIntegrity === "malformed" && evaluateSupervisionIdentity(wireExtra).trustPreconditionMet === false);
+  check("a symbol-keyed report is malformed",
+    normalizeSupervisionIdentity("w-12", { ...grantRaw, [Symbol("x")]: 1 } as SupervisionIdentityReportRaw).reportIntegrity === "malformed");
+  let siDeepProto: object = {};
+  for (let i = 0; i < 100; i += 1) siDeepProto = Object.create(siDeepProto);
+  check("a report behind a 100-deep prototype chain is malformed (the walk is bounded, not trusted)",
+    normalizeSupervisionIdentity("w-13", Object.assign(Object.create(siDeepProto), grantRaw) as SupervisionIdentityReportRaw).reportIntegrity === "malformed");
+  const siThrowing = new Proxy(grantRaw, { ownKeys: () => { throw new Error("hostile"); } }) as SupervisionIdentityReportRaw;
+  check("a Proxy whose key enumeration throws is malformed, never an exception out of the normalizer",
+    normalizeSupervisionIdentity("w-14", siThrowing).reportIntegrity === "malformed");
+  check("a plain own-property report still reaches the grant after the own-read change (the fix did not foreclose the honest path)",
+    evaluateSupervisionIdentity(normalizeSupervisionIdentity("w-15", { ...grantRaw })).trustPreconditionMet === true);
   check("supervision-identity evaluator is deterministic",
     JSON.stringify(evaluateSupervisionIdentity(base)) === JSON.stringify(evaluateSupervisionIdentity(base)));
 }

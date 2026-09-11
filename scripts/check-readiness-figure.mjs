@@ -97,16 +97,23 @@ export function evidenceDimension(evidence, ageDays, currentFingerprint) {
 /**
  * Pure: how old the evidence is, in whole days, and WHICH clock said so.
  *
- * Prefers the artifact's own `mintedAt` (written by the emitter at mint time) over the
- * file's git commit date. The git date is unreliable on a shallow clone — it reports the
- * clone boundary, not the mint — which is how this file was mis-aged twice. Fail-closed on
- * a bad stamp: a `mintedAt` that is unparseable, or in the FUTURE relative to `nowSec`
- * (a wrong clock must never read as "fresh"), is ignored and git is used; with neither
- * usable the age is Infinity, which `evidenceDimension` scores 0.
+ * Uses the artifact's own `mintedAt` (written by the emitter at mint time). The git commit
+ * date is the LEGACY fallback, for an artifact minted before the emitter wrote a stamp —
+ * and only then: it is unreliable on a shallow clone (it reports the clone boundary, not
+ * the mint — how this file was mis-aged twice) and it is re-writable by anyone who
+ * re-commits the file. Fail-closed on a bad stamp: a `mintedAt` that is PRESENT but not a
+ * string, unparseable, or in the FUTURE relative to `nowSec` (a wrong clock must never
+ * read as "fresh") is an assertion we could not read, and the age is Infinity — never the
+ * git date (review finding: falling back to git let a re-commit of an old artifact with an
+ * invalid stamp mint a fresh age and score the evidence dimension 100). With no stamp and
+ * no usable git date the age is also Infinity; `evidenceDimension` scores Infinity 0.
  */
 export function evidenceAgeDays(evidence, gitCommitSec, nowSec) {
-  const minted = typeof evidence?.mintedAt === "string" ? Date.parse(evidence.mintedAt) / 1000 : NaN;
-  if (Number.isFinite(minted) && minted <= nowSec) return { ageDays: Math.floor((nowSec - minted) / 86400), source: "mintedAt" };
+  if (evidence !== null && typeof evidence === "object" && "mintedAt" in evidence) {
+    const minted = typeof evidence.mintedAt === "string" ? Date.parse(evidence.mintedAt) / 1000 : NaN;
+    if (Number.isFinite(minted) && minted <= nowSec) return { ageDays: Math.floor((nowSec - minted) / 86400), source: "mintedAt" };
+    return { ageDays: Infinity, source: "invalid-mintedAt" };
+  }
   if (Number.isFinite(gitCommitSec) && gitCommitSec > 0) return { ageDays: Math.floor((nowSec - gitCommitSec) / 86400), source: "git" };
   return { ageDays: Infinity, source: "none" };
 }
@@ -187,17 +194,20 @@ function selfTest() {
   checks.push(["evidence: green + fresh + match but current fingerprint uncomputable → 0 (fail-closed)", evidenceDimension({ reviewHubPass: true, mcpPass: true, manifestFingerprint: FP }, 3, "").pct === 0]);
   checks.push(["evidence: green but stale → 0 (stale evidence closes outreach)", evidenceDimension({ reviewHubPass: true, mcpPass: true, manifestFingerprint: FP }, FRESH_DAYS + 1, FP).pct === 0]);
   checks.push(["evidence: one half red → 0", evidenceDimension({ reviewHubPass: true, mcpPass: false, manifestFingerprint: FP }, 1, FP).pct === 0]);
-  // Evidence AGE prefers the artifact's own mintedAt and falls back to git, fail-closed.
+  // Evidence AGE reads the artifact's own mintedAt; git is the LEGACY fallback for an
+  // artifact with no stamp at all; a present-but-invalid stamp is Infinity, never git.
   const NOW = 1_800_000_000; // a fixed "now" so the cases are deterministic
   const DAY = 86400;
   const aged = evidenceAgeDays({ mintedAt: new Date((NOW - 2 * DAY) * 1000).toISOString() }, NOW - 10 * DAY, NOW);
   checks.push(["age: a valid mintedAt is preferred over the git date (2 days, source mintedAt)", aged.ageDays === 2 && aged.source === "mintedAt"]);
   const noStamp = evidenceAgeDays({}, NOW - 3 * DAY, NOW);
-  checks.push(["age: no mintedAt → the git commit date (3 days, source git)", noStamp.ageDays === 3 && noStamp.source === "git"]);
+  checks.push(["age: no mintedAt at all (legacy artifact) → the git commit date (3 days, source git)", noStamp.ageDays === 3 && noStamp.source === "git"]);
   const garbage = evidenceAgeDays({ mintedAt: "not-a-date" }, NOW - 4 * DAY, NOW);
-  checks.push(["age: an unparseable mintedAt is ignored → git (4 days), never NaN", garbage.ageDays === 4 && garbage.source === "git"]);
+  checks.push(["age: an unparseable mintedAt → Infinity (invalid-mintedAt), NOT the 4-day git date and never NaN", garbage.ageDays === Infinity && garbage.source === "invalid-mintedAt"]);
   const future = evidenceAgeDays({ mintedAt: new Date((NOW + 5 * DAY) * 1000).toISOString() }, NOW - 6 * DAY, NOW);
-  checks.push(["age: a FUTURE mintedAt (wrong clock) is ignored → git (6 days), never a negative 'fresh' age", future.ageDays === 6 && future.source === "git"]);
+  checks.push(["age: a FUTURE mintedAt (wrong clock) → Infinity, NOT the 6-day git date and never a negative 'fresh' age", future.ageDays === Infinity && future.source === "invalid-mintedAt"]);
+  const nonString = evidenceAgeDays({ mintedAt: NOW - 1 * DAY }, NOW - 7 * DAY, NOW);
+  checks.push(["age: a present-but-non-string mintedAt (a number, null) → Infinity, not git", nonString.ageDays === Infinity && evidenceAgeDays({ mintedAt: null }, NOW - 7 * DAY, NOW).ageDays === Infinity]);
   const nothing = evidenceAgeDays({}, 0, NOW);
   checks.push(["age: no mintedAt and no git date → Infinity (fail-closed; scores 0)", nothing.ageDays === Infinity && nothing.source === "none"]);
   checks.push(["age: Infinity scores the evidence dimension 0", evidenceDimension({ reviewHubPass: true, mcpPass: true, manifestFingerprint: FP }, Infinity, FP).pct === 0]);

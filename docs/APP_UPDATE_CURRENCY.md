@@ -96,7 +96,7 @@ version *floor* is graded elsewhere (the UEM/telemetry posture); this grades the
 | not enrolled; profiles or required apps missing | `restrict` | not provisioned |
 | OS update **required** by the UEM | `restrict` | required before use is a block, not a nudge |
 | prep or enrollment in progress; profiles or apps partial; OS update in progress | `step_up` | not ready; nobody may assume it is |
-| an **optional** OS update offered | `monitor` | advisory only — the one non-grant that is not a hold |
+| an **optional** OS update offered | `monitor` — still ready for check-out | advisory only — the one non-grant that is not a hold; `readyForCheckout` stays true, because an update nobody requires must not withhold a ready device |
 | any stage unknown | `step_up` | unknown raises, never grants |
 | malformed report | `step_up` | an assertion we could not read is never a grant |
 
@@ -118,7 +118,7 @@ enrolls anything.
   inventory. An app reporting its own version can support UX ("update
   available" messaging in the host app), but a *grant* never rests on it.
 
-Proven by `proof:app-update` (127 checks; targeted checks, hostile report shapes, the
+Proven by `proof:app-update` (139 checks; targeted checks, hostile report shapes, the
 grant-safety enumerations above, and — for the iOS update / device-prep workflow in
 `device-prep.ts` — named outcomes, single-stage flips of the one grant, and a
 3,072-state grant-safety sweep that pins that grant by equality; deterministic,

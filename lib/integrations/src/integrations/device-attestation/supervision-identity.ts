@@ -259,25 +259,83 @@ function readSupervision(value: unknown, integrity: { malformed: boolean }): Sup
   return readEnum<SupervisionState>(value, ["supervised", "unsupervised"], integrity);
 }
 
-/** Normalize a raw UEM supervision-identity report into the one shape the fabric reads. */
+/** Read a field ONLY if the report asserts it as an OWN property. An inherited value is
+ *  the prototype's claim, not this report's, and must not read as a confirmation
+ *  (review finding: a report built with `Object.create({...})` or a polluted prototype
+ *  otherwise satisfied the trust precondition while asserting nothing itself). */
+function ownValue(report: object, key: string): unknown {
+  return Object.prototype.hasOwnProperty.call(report, key)
+    ? (report as Record<string, unknown>)[key]
+    : undefined;
+}
+
+/** Is this a plain JSON-shaped object at all? An injected transport returning a string
+ *  or an array must fail closed, not throw an untyped TypeError out of the normalizer.
+ *  The Object.prototype exclusion is load-bearing: passing Object.prototype itself as
+ *  the report would let POLLUTED prototype fields read as own assertions. */
+function isPlainReport(report: unknown): report is object {
+  return typeof report === "object" && report !== null && !Array.isArray(report) && report !== Object.prototype;
+}
+
+/** Depth bound for the prototype scan — a Proxy may return a fresh object from
+ *  getPrototypeOf on every call, so the walk must be bounded rather than trusted. */
+const MAX_PROTOTYPE_DEPTH = 64;
+
+/** Does the report carry any key this normalizer does not understand? Walks the
+ *  PROTOTYPE CHAIN even though value reads are own-only: an inherited assertion, in any
+ *  spelling, is still an assertion this report did not make, and this scan is the only
+ *  thing that notices it. A symbol key counts; a class instance fails closed. */
+function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
+  try {
+    let o: object | null = report;
+    for (let depth = 0; o !== null && o !== Object.prototype; depth += 1) {
+      if (depth >= MAX_PROTOTYPE_DEPTH) return true;
+      for (const k of Reflect.ownKeys(o)) {
+        if (depth > 0) return true;
+        if (typeof k === "symbol") return true;
+        if (!known.includes(k)) return true;
+      }
+      o = Object.getPrototypeOf(o) as object | null;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/** Normalize a raw UEM supervision-identity report into the one shape the fabric reads.
+ *  An ABSENT report is silence (every axis unknown, integrity clean); a report that is
+ *  not a plain object, or that carries any key beyond the recognized five — own or
+ *  inherited — is an assertion we could not read: every axis unknown AND malformed. */
 export function normalizeSupervisionIdentity(
   deviceId: string,
   raw: SupervisionIdentityReportRaw | null | undefined,
 ): NormalizedSupervisionIdentity {
   const integrity = { malformed: false };
-  const r: SupervisionIdentityReportRaw = raw ?? {};
-  const supervision = readSupervision(r.supervised, integrity);
+  let r: Record<string, unknown> = {};
+  if (raw !== undefined && raw !== null) {
+    if (!isPlainReport(raw) || hasUnrecognizedKey(raw, SUPERVISION_IDENTITY_REPORT_KEYS)) {
+      integrity.malformed = true;
+    } else {
+      r = raw as Record<string, unknown>;
+    }
+  }
+  const supervision = readSupervision(ownValue(r, "supervised"), integrity);
   const identityBinding = readEnum<SupervisionIdentityBinding>(
-    r.identity_binding,
+    ownValue(r, "identity_binding"),
     ["bound_to_org", "bound_to_other_org", "unbound"],
     integrity,
   );
   const enrollment = readEnum<SupervisionEnrollment>(
-    r.enrollment,
+    ownValue(r, "enrollment"),
     ["enrolled", "enrollment_lost", "never_enrolled"],
     integrity,
   );
-  const commandChannel = readEnum<ManagementChannel>(r.command_channel, ["responsive", "unresponsive"], integrity);
+  const commandChannel = readEnum<ManagementChannel>(
+    ownValue(r, "command_channel"),
+    ["responsive", "unresponsive"],
+    integrity,
+  );
   return {
     sourceSystem: "device-attestation",
     deviceId,

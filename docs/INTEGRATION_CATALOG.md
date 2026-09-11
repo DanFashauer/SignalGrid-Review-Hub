@@ -197,7 +197,9 @@ The assurance model is the whole point — a cryptographic proof outranks any se
 - hardware **provably not attestation-capable** (Intel Macs, no Secure Enclave) → `not_attestable`/`none` — it **abstains**: attestation is an assurance *upgrade*, not a universal requirement, and the baseline posture is gated by the other dimensions. The abstain is granted **only** to a *self-consistent* report (declares incapable **and** carries no chain or attested facts); a report that claims `attestable:false` yet still presents a verified chain is malformed/tampered — it never abstains, it fails closed (a conflicting chain proving SIP off still `escalate`s; a conflicting "clean" chain is floored at `step_up`, never the top tier);
 - an unrecognized value normalizes to the safe `unknown`, a non-boolean flag becomes `null` (never a fabricated `true`), and a device no attestation source covers is a blind spot (`unknown`/`step_up`), never attested-secure.
 
-Proven fully offline by `pnpm run proof:device-attestation` (77 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. The trust boundary is deliberate: an upstream read-only bridge performs the X.509 chain verification to Apple's Enterprise Attestation Root and decodes the leaf OIDs; **SignalGrid consumes that already-verified record** — it normalizes and decides on it, and does not itself perform the crypto, issue certificates, or mint attestations. Every signal is read-only, and this is not an Apple partnership or certification claim.
+**The supervision-identity lifecycle — "device trust" as a precondition** (`supervision-identity.ts`, same family, a distinct surface). Hardware attestation says what the Secure Enclave *proves* about the device; it says nothing about whether the **organization still holds the device's supervision identity** — the runbooks' "device trust", without which no management command runs, and whose loss is a named root cause of shared-device failures (`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`). This surface grades that lifecycle as read from the UEM, fail-closed: another org's identity, a lost identity, a lost enrollment, never enrolled, or affirmatively unsupervised → `restrict` (this org can run nothing on it); supervised-and-bound but answering no command → `step_up`; any axis unknown or a malformed report → `step_up`. The one grant — supervised, bound to *this* org, enrolled, answering commands, clean parse — is pinned by equality over all 288 lifecycle states, every non-grant is a hold or a containment (never merely `monitor`/`alert`/`escalate`), and a 13-fixture corpus falsifies each branch on its own.
+
+Proven fully offline by `pnpm run proof:device-attestation` (154 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. The trust boundary is deliberate: an upstream read-only bridge performs the X.509 chain verification to Apple's Enterprise Attestation Root and decodes the leaf OIDs; **SignalGrid consumes that already-verified record** — it normalizes and decides on it, and does not itself perform the crypto, issue certificates, or mint attestations. Every signal is read-only, and this is not an Apple partnership or certification claim.
 
 ## SSO session-binding — the shared-device identity dimension (built, fixture-backed)
 
@@ -465,7 +467,10 @@ in one place.
 - **App-update currency** ([APP_UPDATE_CURRENCY.md](APP_UPDATE_CURRENCY.md)) — the honest
   half of "custom OTA updates". An iOS app cannot install or replace itself; distribution
   stays with itms-services / MDM InstallApplication / ABM. What *is* posture: `min_version`
-  floors, `force_update`, and install-channel provenance. `proof:app-update` (71 checks).
+  floors, `force_update`, and install-channel provenance — and, as a distinct surface in
+  the same family, the iOS update / device-prep **workflow** (enrolled, profiles, required
+  apps, prep complete, OS update current / required / failed: ready, hold, or contain,
+  fail-closed; the 3,072-state sweep pins the single grant). `proof:app-update` (167 checks).
 
 - **Platform SSO** ([PLATFORM_SSO.md](PLATFORM_SSO.md)) — "passwordless" and "satisfies MFA"
   are not automatic; the **method** decides the credential's worth. Only a user-registered

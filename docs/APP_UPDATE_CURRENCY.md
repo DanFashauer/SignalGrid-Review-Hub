@@ -77,6 +77,36 @@ pass and never a foreclosed grant; a POSED bound the figures cannot answer
 is a malformed report. No threshold is tuned here: the source counted, the
 operator bounded, the fabric graded.
 
+## The iOS update / device-prep workflow (`device-prep.ts`)
+
+A distinct surface in the same family, added for the runbooks' "iOS update /
+device-prep workflows" row (`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`):
+not which *version* of the host app is installed, but whether the device finished
+being **provisioned** and where its **OS update** stands — the states a support
+tech reads off the console before handing a device out. A device returned to a
+dock "checks itself back in, re-provisions, and recharges"; a seated, lit device
+that never finished provisioning is the runbooks' "phantom device". The OS
+version *floor* is graded elsewhere (the UEM/telemetry posture); this grades the
+**workflow**.
+
+| Stage state | Verdict | Why |
+| --- | --- | --- |
+| enrolled + profiles applied + required apps installed + OS current + prep complete + clean parse | `none` — ready for check-out | the one grant; every stage positively confirmed |
+| prep failed; OS update failed | `restrict` | the "phantom device" — not a working clinical device |
+| not enrolled; profiles or required apps missing | `restrict` | not provisioned |
+| OS update **required** by the UEM | `restrict` | required before use is a block, not a nudge |
+| prep or enrollment in progress; profiles or apps partial; OS update in progress | `step_up` | not ready; nobody may assume it is |
+| an **optional** OS update offered | `monitor` — still ready for check-out | advisory only — the one non-grant that is not a hold; `readyForCheckout` stays true, because an update nobody requires must not withhold a ready device |
+| any stage unknown | `step_up` | unknown raises, never grants |
+| malformed report | `step_up` | an assertion we could not read is never a grant |
+
+Fail-closed by construction and pinned by `proof:app-update`: over all 3,072
+workflow states exactly one grants, `monitor` is reachable only through an optional
+update offered on an otherwise-ready device, and nothing resolves to `alert` or
+`escalate` — the surface holds, contains, or advises. Read-only and
+fixture-gated like the rest of the family; nothing here installs, updates or
+enrolls anything.
+
 ## Boundaries
 
 - **Read-only.** The connector fetches and normalizes; there is no write path.
@@ -88,5 +118,8 @@ operator bounded, the fabric graded.
   inventory. An app reporting its own version can support UX ("update
   available" messaging in the host app), but a *grant* never rests on it.
 
-Proven by `proof:app-update` (71 checks; targeted checks, hostile report shapes, and the
-grant-safety enumerations above; deterministic, offline).
+Proven by `proof:app-update` (167 checks; targeted checks, hostile report shapes, the
+grant-safety enumerations above, and — for the iOS update / device-prep workflow in
+`device-prep.ts` — named outcomes, single-stage flips of the one grant, and a
+3,072-state grant-safety sweep that pins that grant by equality; deterministic,
+offline).

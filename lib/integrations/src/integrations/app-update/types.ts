@@ -71,7 +71,11 @@ export interface AppUpdateReportRaw {
   [k: string]: unknown;
 }
 
-export const APP_UPDATE_REPORT_KEYS = [
+/** FROZEN: this is the allowlist `hasUnrecognizedKey` reads. `readonly` is compile-time only,
+ *  and a JavaScript caller that pushed a key onto it would turn an unrecognized assertion
+ *  into a clean one (found by the namespace-wide freeze check in proof:app-update on
+ *  2026-09-11, the same hole the two new modules had just closed). */
+export const APP_UPDATE_REPORT_KEYS = Object.freeze([
   "installed_version",
   "latest_version",
   "min_version",
@@ -79,7 +83,7 @@ export const APP_UPDATE_REPORT_KEYS = [
   "channel",
   "crash_count",
   "stability_window_hours",
-] as const;
+] as const);
 
 export interface NormalizedAppUpdate {
   sourceSystem: "app-update";

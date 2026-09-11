@@ -52,7 +52,31 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-approved):
+LAST TOUCHED: 2026-09-11 (cloud lane, latest) - READINESS-FIGURE HONESTY LANDED
+              (#620, 52b395d). The DR-036 readiness gate was OVER-reporting - it
+              fail-OPENED on two dimensions. Fixed at root, each with a control that
+              fails pre-fix: (a) parseGroundTruth dropped markdown-bold **gap** rows
+              from the denominator (runbook is 12 modeled/2 partial/3 gap = 70%, not
+              the reported 85%); (b) evidenceDimension is now fail-closed - dimension
+              (b) scores 100 only when mac-run.json's manifestFingerprint matches the
+              live-sync manifest (missing/mismatch/uncomputable -> 0). Plus #6
+              audit-evidence binding in the break-glass fallback (the out-of-band
+              accountability record must match the sequence tenant/correlation/
+              credential). HONEST readiness now 0% = lowest of (a) 70 / (b) 0
+              fail-closed on stale-contract evidence / (c) 100 - OUTREACH CLOSED, and
+              this is the gate telling the truth, not a regression. Recovery path:
+              finish the two remaining runbook partials (moves a past 80) AND the Mac
+              re-mints mac-run.json against manifest ce58f6 (requested via lane mail
+              #622). Corrected the earlier "85% floor cleared" over-declaration to the
+              owner. Verified: proof:break-glass 101/101, proof:event-contract 21/21,
+              preflight PASS; sync manifest regenerated v68/ce58f6; INTEGRATION_CATALOG
+              break-glass count 96->101. Steward heartbeat #621 + Mac evidence request
+              #622 delivered and merged. badgeAuthOutcome documented in EVENT_CONTRACT.md.
+              NOTE: this round's builder subagent HUNG (auto-mode classifier blocked it
+              mid pre-fix sabotage-check); recovered by TaskStop + manual revert + verify.
+              FILED (not done): the mutation-guard brace-less-clause mutator remains its
+              own triage cycle, as documented in scripts/mutation-guard.mjs. (Earlier
+              2026-09-10, Mac lane:) DR-034 LANDED (f5f084b2, owner-approved):
               the research basis is the founder's own domain practice, not customer
               engagement; the owner's Google Drive folder "Project > SignalGrid" is the
               canonical corpus of problems and solution ideas; an owner-supplied document

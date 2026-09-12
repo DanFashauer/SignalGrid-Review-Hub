@@ -79,7 +79,10 @@ function jobsIn(text) {
     // of mac-runner-harness.yml, whose `mac-harness` job is bounded at 90m) reddened the
     // gate on every PR into Alpha though nothing was actually unbounded (2026-09-10).
     const usesMatch = /^ {4}uses:\s*(\S+)/m.exec(block);
-    const usesTarget = usesMatch ? usesMatch[1] : null;
+    // A YAML scalar may be quoted (`uses: "./.github/workflows/x.yml"`); the quotes are not
+    // part of the path. Strip one matching pair so a formatting-only change cannot turn a
+    // verified local callee into an unreadable "remote" one (Codex P2 on #683, 2026-09-12).
+    const usesTarget = usesMatch ? usesMatch[1].replace(/^(["'])(.*)\1$/, "$2") : null;
     const localCallee = usesTarget && /^\.\/.+\.ya?ml$/.test(usesTarget) ? usesTarget.replace(/^\.\//, "") : null;
     const remoteUses = Boolean(usesTarget) && !localCallee;
     return { name: k.name, hasJobTimeout, localCallee, remoteUses };
@@ -146,6 +149,8 @@ const resolveLocal = (relPath) => jobsForFile(relPath);
   const boundedCallee = jobsIn("jobs:\n  work:\n    timeout-minutes: 90\n    runs-on: x\n");
   const unboundedCallee = jobsIn("jobs:\n  work:\n    runs-on: x\n    steps:\n      - run: echo hi\n");
   const remoteCaller = "jobs:\n  call:\n    uses: owner/repo/.github/workflows/y.yml@main\n";
+  const quotedCaller = 'jobs:\n  call:\n    uses: "./.github/workflows/harness.yml"\n';
+  const singleQuotedCaller = "jobs:\n  call:\n    uses: './.github/workflows/harness.yml'\n";
   const callerToBounded = isBounded(one(caller), (p) => (p === ".github/workflows/harness.yml" ? boundedCallee : null));
   const callerToUnbounded = isBounded(one(caller), (p) =>
     p === ".github/workflows/harness.yml" ? unboundedCallee : null,
@@ -157,6 +162,9 @@ const resolveLocal = (relPath) => jobsForFile(relPath);
   ); // harness.yml calls back into itself → the call cycle bounds nothing
 
   const callerBoundedPasses = callerToBounded === true;
+  const boundedResolver = (p) => (p === ".github/workflows/harness.yml" ? boundedCallee : null);
+  const quotedCallerPasses = isBounded(one(quotedCaller), boundedResolver) === true;
+  const singleQuotedCallerPasses = isBounded(one(singleQuotedCaller), boundedResolver) === true;
   const callerUnboundedFails = callerToUnbounded === false;
   const callerMissingFails = callerToMissing === false;
   const remoteFails = remoteIsUnbounded === false;
@@ -169,6 +177,8 @@ const resolveLocal = (relPath) => jobsForFile(relPath);
     !stepIsNotJob ||
     !jobLevelStillCounts ||
     !callerBoundedPasses ||
+    !quotedCallerPasses ||
+    !singleQuotedCallerPasses ||
     !callerUnboundedFails ||
     !callerMissingFails ||
     !remoteFails ||
@@ -177,7 +187,7 @@ const resolveLocal = (relPath) => jobsForFile(relPath);
     console.error(
       `✗ SELF-TEST FAILED — unbounded=${catchesUnbounded}, bounded=${acceptsBounded}, boundaries=${separatesJobs}, ` +
         `stepTimeoutIsNotAJobTimeout=${stepIsNotJob}, jobLevelStillCounts=${jobLevelStillCounts}, ` +
-        `callerBoundedPasses=${callerBoundedPasses}, callerUnboundedFails=${callerUnboundedFails}, ` +
+        `callerBoundedPasses=${callerBoundedPasses}, quotedCallerPasses=${quotedCallerPasses}, singleQuotedCallerPasses=${singleQuotedCallerPasses}, callerUnboundedFails=${callerUnboundedFails}, ` +
         `callerMissingFails=${callerMissingFails}, remoteUsesFails=${remoteFails}, callCycleFails=${cycleFails}. ` +
         "The job parser has drifted from the workflow shape; a gate that resolves nothing is green about nothing.",
     );

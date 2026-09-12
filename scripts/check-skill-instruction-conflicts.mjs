@@ -301,6 +301,11 @@ function askHook(hookPath, command) {
     child.stdout.on("data", (d) => { stdout += d; });
     child.stderr.on("data", (d) => { stderr += d; });
     child.on("error", (e) => reject(new HookFatal(`could not execute ${hookPath}: ${e.message}`)));
+    // The write below can fail (EPIPE) when the child is gone before the payload lands —
+    // seen 2026-09-12 under three parallel preflights, where it surfaced as an UNHANDLED
+    // 'error' event that crashed the self-test instead of a gate verdict. An unasked hook
+    // is a hook that could not be executed: FATAL, fail-closed, never an allow.
+    child.stdin.on("error", (e) => reject(new HookFatal(`could not deliver the call to ${hookPath}: ${e.code ?? e.message}`)));
     child.on("close", (code) => {
       if (code !== 0) {
         reject(new HookFatal(`${hookPath} exited ${code} judging ${JSON.stringify(command)} — stderr: ${stderr.trim()}`));
@@ -327,6 +332,18 @@ function askHook(hookPath, command) {
   });
 }
 
+/** One retry for the transient delivery failures a loaded box produces (EPIPE, EAGAIN);
+ *  a second failure, or any other HookFatal, stays fatal. */
+async function askHookRetrying(hookPath, command) {
+  try {
+    return await askHook(hookPath, command);
+  } catch (e) {
+    if (!(e instanceof HookFatal) || !/EPIPE|EAGAIN/.test(e.message)) throw e;
+    await new Promise((r) => setTimeout(r, 250));
+    return askHook(hookPath, command);
+  }
+}
+
 /** Judge many commands, deduplicated, with a small pool. Map<command, boolean>. */
 export async function judgeAll(hookPath, commands) {
   const unique = [...new Set(commands)];
@@ -337,7 +354,7 @@ export async function judgeAll(hookPath, commands) {
       const i = next;
       next += 1;
       if (i >= unique.length) return;
-      verdict.set(unique[i], await askHook(hookPath, unique[i]));
+      verdict.set(unique[i], await askHookRetrying(hookPath, unique[i]));
     }
   };
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, unique.length || 1) }, worker));

@@ -44,7 +44,7 @@ On a quiet day it opens nothing and heartbeats "quiet." That is a success, not a
 
 Parity is already **enforced on pull** for the git-half; the cycle's job is to refuse to run on a stale one.
 
-**What git carries byte-identically on pull** (`docs/MCP_AND_SKILLS_LANE_PARITY.md`, canonical): `.claude/skills/` (26 tracked dirs), `.claude/agents/` (13), `.claude/commands/`, `.claude/settings.json`, `.claude/hooks/*.sh`, `.mcp.json` (`signalgrid-mcp` only, no creds), `.claude-plugin/plugin.json` (DR-030), and `docs/*`.
+**What git carries byte-identically on pull** (`docs/MCP_AND_SKILLS_LANE_PARITY.md`, canonical): `.claude/skills/` (32 tracked dirs), `.claude/agents/` (13), `.claude/commands/`, `.claude/settings.json`, `.claude/hooks/*.sh`, `.mcp.json` (`signalgrid-mcp` only, no creds), `.claude-plugin/plugin.json` (DR-030), and `docs/*`.
 
 **What already holds that half internally consistent** (both `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml`, self-tested both directions):
 - `scripts/check-plugin-manifest.mjs` — the manifest `agents[]` must **equal** `git ls-files .claude/agents/*.md`. Scope derived from git, fail-closed on empty derivation. This is the pattern every new parity gate copies.

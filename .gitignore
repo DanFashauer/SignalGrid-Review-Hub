@@ -127,3 +127,24 @@ artifacts/bruno/
 # Local knowledge corpus symlinked from iCloud by scripts/mac/sg-brain-link.sh.
 # NEVER committed: some of it is confidential and the Review Hub is public-safe.
 reference/
+
+# Graphify (owner-directed 2026-09-12): the knowledge-graph build output lives in the tree but is
+# never committed — untracked output would flip provenance.workingTreeClean on every sim result.
+graphify-out/
+
+# CLI-Anything (owner-directed 2026-09-12): generation writes an agent-harness/ tree, a skills/cli-anything-<x>/
+# skill and runtime state files into whatever tree it targets — never this one on purpose, and never committed.
+agent-harness/
+skills/cli-anything-*/
+session.json
+trajectory.json
+.blend-cli.json
+
+# Crucible (owner-directed 2026-09-12): its compass/adr/build/checkpoint skills write these into docs/ and the
+# root; the adversarial lenses are report-only here and none of this is ever committed.
+docs/compass.md
+docs/decisions/
+docs/handoffs/
+docs/plans/
+build-gate-ledger.md
+.lock-compass/

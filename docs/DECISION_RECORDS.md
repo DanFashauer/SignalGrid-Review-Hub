@@ -2167,3 +2167,163 @@ deterministic; learning proposes (DR-035 item 5).
 **Reversal / amendment.** The owner reverses by saying so; amend the thresholds in
 `scripts/check-readiness-figure.mjs` and this record together. A dimension may be added or
 its derivation tightened by a later record that names what changed and why.
+
+## DR-037 — The cloud lane merges its own green product PRs; the owner is no longer the merge button (owner-directed 2026-09-12)
+
+**Decision.** From 2026-09-12 the cloud lane **merges product pull requests itself** once
+they are green, instead of parking them for the owner. The owner set this in chat on
+2026-09-12, after six green PRs had queued on him overnight and the lane explained that
+DR-032's "lanes open, owner merges" rule was the only thing holding them: asked whether
+the lane should merge them itself, he answered *"Yes I didn't want that and that was my
+mistake I didn't want that on me."* This record carries that answer; the lane wrote it,
+the owner decided it.
+
+**What "green" means here — every condition, none inferred.** A product PR is
+mergeable by the lane only when all of the following hold on its CURRENT head:
+
+1. The gating check "Typecheck, build, and proof scaffold" has **passed** on that head
+   (a `check_suite.completed` event alone is not it; the lane reads the check run).
+2. `node scripts/preflight.mjs` and `pnpm run verify:breadth` passed **locally on the
+   branch** before the push that produced the head, with output quoted in the PR body
+   or `docs/agent/EVIDENCE.md` — CI green is necessary, not sufficient (CLAUDE.md,
+   "Before you push").
+3. Every review thread is resolved and every bot finding was verified against the
+   source and either fixed or answered with the reason; the lane never resolves a
+   human reviewer's thread it did not address.
+4. The PR is not conflicted with `SignalGrid_Alpha`; a conflict is merged in and
+   regenerated files are regenerated with the repo's tooling, never by hand.
+5. The lane **never approves** a PR (approval is a human act and the harness keeps
+   refusing self-approval), and it never merges a PR it did not open or was not asked to
+   drive for its author, except the Mac lane's landing PRs when the Mac has asked for
+   that in mail (as #653 did).
+
+**What stays owner-gated.** `check-owner-gated-surfaces.mjs` still classifies
+`scripts/**`, `.github/workflows/**`, `lib/**/fixtures/**`, the brain-cycle veto config
+and the owner-reserved rules as SAFETY_MACHINERY / OWNER_RESERVED. This record changes
+who presses merge, not what the classifier says: the lane may merge a SAFETY_MACHINERY
+PR only when the five conditions above hold, and it must say so in the PR body under
+"Owner decision needed" as *"merged under DR-037"* with the check-run id. It still does
+not: edit `AGENTS.md` or a decision record on its own authority (a DR records an owner
+decision, as this one does); activate the Standing Brain Cycle (DR-032's activation clause
+is untouched — the cycle still auto-OPENS and never auto-merges); merge anything that
+changes the launch profile, the launch-claims gate or the publication boundary (DR-021 §2
+— those remain the owner's); or delete branches.
+
+**Consequences.** The owner's queue becomes review-when-he-wants, not merge-or-nothing:
+six green PRs (#656, #657, #653, #649, #654 and the lane-mail #655) sat for hours on
+2026-09-11/12 while the lane could only re-sync them each time a delivery moved the
+coverage page. The lane now lands them in order, regenerating the sync manifest on top of
+the previous landing (DR-036's readiness figure reads (b)=0 until the Mac re-mints against
+the final manifest — by design, unchanged). Every merge is still recorded: the PR body,
+the EVIDENCE entry, the LOOP STATE line and the steward heartbeat name the merged sha.
+
+**Alternatives considered.** Keep DR-032's rule and ask the owner to merge in batches —
+rejected by the owner ("I didn't want that on me"). Auto-merge on green via
+`enable_pr_auto_merge` — unavailable on this repository (the API refuses it), and it
+would merge on CI alone without condition 2. A per-PR allowlist the owner ticks —
+another button on the owner.
+
+**Reversal / amendment.** The owner reverses by saying so; the lane then reverts to
+opening-only for product PRs from the next cycle, and this record stays with the
+reversal date added. Narrowing (for example, "not `.github/workflows/**`") is an
+amendment to the "What stays owner-gated" list, in place.
+
+## DR-038 — Five owner-shared agent tools installed on the Mac lane and absorbed by use, each inside its boundary (owner-directed 2026-09-12)
+
+**Decision.** The owner shared a five-item list — last30days, CLI-Anything, Claude-video,
+Crucible, LightRAG — and said *"Please install all of these and add them where needed and
+start using them now."* The Mac lane installs all five (plus Graphify, from the same night's
+listicle, DR-038 covers it too) at **user scope on the Mac**, pinned where a pin exists,
+hooks OFF, nothing written into this repository's `.claude/` or `CLAUDE.md`, every output
+directory they can produce gitignored before first use, and no data leaving the machine
+unless a later record says so. Each tool is used once on a real SignalGrid question the same
+night and the measured result is the intake row (`docs/agent/RESOURCE_INTAKE.md`, rows dated
+2026-09-12). The lane wrote this record; the owner decided it.
+
+**Per tool — what was decided, from the five independent reads and the first uses.**
+
+| Tool | Disposition | Boundary |
+| --- | --- | --- |
+| `last30days` 3.24.0 | Installed and run (was doctrine-only since DR-031). Keyless coverage today is Hacker News + GitHub; the first brief was thin and off-topic for a niche hospital query. | DR-031 stands: live runs owner-gated, cookies off, never `--publish-html`, never a save dir inside the tree. Source keys are the owner's to add. |
+| CLI-Anything | Installed, no target: it wraps open-source GUI apps whose source it can read; SignalGrid's targets are closed and its own surfaces already have agent handles (`/v1`, MCP, Bruno). | Generation output gitignored (`agent-harness/`, `skills/cli-anything-*/`, state files). Never pointed at this tree. |
+| Claude-video (`/watch`) | ffmpeg 9.0.1 + yt-dlp installed, marketplace added; the plugin install line is the owner's (classifier refused it for the agent). Fit: the missing video modality of the research transports. | Working dir is the system temp dir; audio transcribed locally unless a key is set; never `--out-dir` inside the tree. |
+| Crucible (raddue) | Selective: only the adversarial half (quality-gate, red-team, inquisitor, adversarial-tester, temper, audit, shared/, four agents), via the pinned `pnpm run crucible:install` the owner runs. Its lifecycle half duplicates the vendored obra/superpowers set (two name collisions); excluded. | Hooks off (one is a blocking PreToolUse guard), consensus MCP excluded (third-party egress), build/checkpoint/compass/adr excluded (untracked writes into `docs/`, gitignored regardless). Lenses run report-only in a git worktree; a lens joins `brain-cycle-config.json` only after a measured run. |
+| LightRAG 1.5.6 | Installed; runnable only once the owner installs Ollama (classifier refused). Shape: local chat + embedding models, store under `~/signalgrid-lightrag/`, bound to 127.0.0.1 with an API key. | DR-026: the store is a cache of the committed docs, never their source, never inside the tree. Golden rule 2 / DR-029: never a product component. Answers cite; grep confirms. |
+| Graphify 0.9.58 | Installed and measured: structural graph of this tree (16,229 nodes / 29,512 edges / 677 communities, 3 s), skill at user scope only. Strong for symbol-level "who calls X"; blind to string-literal paths and cross-language twins. | `graphify-out/` gitignored; never `graphify install --project` (it would write into the repo's `.claude/` and `CLAUDE.md`). Optional local index, not a gate; semantic docs pass deferred. |
+
+**Why this way.** The repository absorbs owner-shared material by use, never with a memo
+(handoff rule; DR-021). Pins, user scope and hooks-off are the house pattern every prior
+tool followed (DR-024 Ponytail, DR-026 neural-memory, DR-029 OmniRoute, DR-030). Output
+directories are gitignored first because `provenance.workingTreeClean` on every sim result
+reads untracked files as dirt (CLAUDE.md, "Simulation results — provenance is the product").
+
+**What stays owner-run.** The Mac's auto-mode permission classifier refuses, for an agent,
+plugin installs that write hooks or third-party binaries and any clone into the home
+directory; three commands are therefore the owner's, listed in the intake rows and in
+`package.json` (`claude-video:install`, `crucible:install`) plus `brew install ollama`. The
+lane does not retry a refused install; it hands the line over.
+
+**Consequences.** Six more tools on the Mac lane, each with an installer row in
+`package.json` so a new machine reproduces the set; the readiness figure (DR-036) is
+untouched by any of them — none enters `lib/*`, `/v1`, connectors or proofs.
+
+**Reversal / amendment.** The owner reverses by saying so; `claude plugin uninstall`,
+`uv tool uninstall`, and removing the symlinks undo each install without touching the
+tree. Adding a tool's hook, giving it a key, or letting any of them into the decision path
+is an amendment here, not a quiet change.
+
+## DR-039 — The absorption bar is the founder's: anything with a part that can aid building the company is taken; only licence, auto-execution, egress without consent and directory collision exclude (owner-directed 2026-09-12)
+
+**Context.** Seven evaluations of owner-shared skills collections (Matt Pocock's,
+Addy Osmani's, Google's, NVIDIA's, K-Dense's, the VoltAgent index, a GitHub Trending
+page) came back on 2026-09-12 with most candidates marked "evaluated, not adopted" on
+grounds of overlap with an existing skill, thinness, or no current activity that would
+use them — after the owner had already overruled two such verdicts the same hour
+(DR-038). He then shared his résumé and corrected the posture directly:
+
+> *"You need to probably stop and think of something real quick you need to understand
+> I'm not asking you to check if they really worth anything if it has any part of the
+> main core of this in any fashion that can aid in building all aspects of this
+> company: brand: solution: apps: websites all of it and I mean everything. Please
+> check yourself and readjust what you're looking at should be my assistant that thinks
+> like me and should know my responses and knowledge."*
+
+**Call.**
+
+1. **The bar.** A resource the owner shares is ADOPTED if any part of it can aid
+   building any aspect of the company — product, apps, websites, brand, docs,
+   operations, the skills plane itself. The evaluator's question is no longer "is it
+   worth it" but "which part, and in what form".
+2. **The only exclusions**, each an existing hard line: (a) a licence that cannot be
+   republished from this public MIT tree — none, NonCommercial, ShareAlike, proprietary
+   — excludes the FILES, and the ideas still land in our own words with the source
+   named; (b) auto-execution — hooks, run-time code fetches, HEAD-tracking installs —
+   excludes the MECHANISM, and the skill is taken without it (DR-026, DR-030);
+   (c) egress of owner data or repository source without the owner's own key decision —
+   taken, with the egress stated in the wrapper and keys out of the tree (DR-029);
+   (d) a directory collision under `.claude/skills/`.
+3. **Overlap is recorded, never refused.** "Restates CLAUDE.md", "duplicates a vendored
+   skill", "nothing uses it yet" and "thin" go in the intake row as facts.
+4. **Contradictions get override rows.** An instruction that contradicts CLAUDE.md is
+   recorded in `.claude/skills/VENDORED.md` `## Overrides`, not edited and not a ground
+   for exclusion.
+5. **Domain-irrelevant collections still yield their transferable part** — an authoring
+   standard, a doctrine, a pattern — as a first-party document naming the source.
+6. **"Thinks like me" is standing context, not a mood.** `docs/company/FOUNDER_PROFILE.md`
+   records who the founder is and how he works; the owner-comms skill no longer calls
+   him non-technical; the base `signalgrid` skill points every role at the profile
+   before it touches anything.
+
+**Boundary.** The hard lines do not move: hooks off, pins only, keys out of the tree,
+the publication boundary, the launch-claims gate and the launch profile untouched;
+nothing vendored enters `lib/*`, `/v1`, a connector, a proof or the decision path, and
+nothing vendored is executed by a gate. What moves is the default answer to a shared
+resource: from "evaluated, not adopted" to "adopted, in this form".
+
+**Evidence.** The seven evaluation reports (measurements preserved in their intake
+rows); the two overruled verdicts of DR-038; the owner's message quoted above; the
+founder's résumé (owner-held).
+
+**Reversal.** Delete this record, rule 5 of `docs/agent/RESOURCE_INTAKE.md`,
+`docs/company/FOUNDER_PROFILE.md`, ICP Finding 9, the pointer in the base skill and the
+three owner-comms edits; the exclusion list reverts to the evaluators' judgement.

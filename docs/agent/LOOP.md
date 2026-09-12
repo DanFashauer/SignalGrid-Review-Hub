@@ -52,7 +52,66 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-11 (cloud lane, latest) - TWO OF THE THREE RUNBOOK GAPS MODELED
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE MAC TICK NO LONGER FLOODS MAINLINE
+              (branch lane/cloud-tick-heartbeat-throttle-20260912-005000Z; owner merges): a
+              SKIPPED tick result was exempt from the quiet throttle, so a checkout parked on
+              mac/land-641-645-638 pushed a heartbeat to Alpha every 5 minutes, each push
+              starting four workflows, cancelling the mainline CI run of the merge before it,
+              and exhausting the GITHUB_TOKEN budget until check-ci-liveness failed #654 on a
+              403. The throttle now keys on an UNCHANGED result (a changed one still delivers
+              at once), and the four push-triggered workflows ignore heartbeat-only pushes.
+              The owner said YES (2026-09-12) to the cloud lane merging green product PRs
+              itself - recorded as DR-037 - so the cloud now lands #656 (merged aa5c8151),
+              this one, #653 (Mac landing of #641+#645+#638), #649 and #654 in that order. (Earlier 2026-09-12, cloud lane:) THE COVERAGE PAGE NO LONGER MOVES ON LANE MAIL
+              (#656, merged aa5c8151): the mailbox trees
+              (artifacts/lane-messages, artifacts/agent-heartbeats) stay claimed surfaces but
+              their record counts are withheld from the render, so a send/ack/batch delivery
+              leaves docs/agent/SURFACE_REVIEW_COVERAGE.md byte-identical (self-test proves
+              it, 54/54) and open product PRs stop going unmergeable on it every cycle. Open
+              for the owner: #653 (Mac's combined landing of #641+#645+#638), #649, #654
+              (brace-less guards join the mutation sweep). (Earlier 2026-09-11, cloud lane:) THE LAST TWO RUNBOOK PARTIALS MODELED
+              (PR #641, landed inside the Mac's combined #653 with #645 and #638):
+              the supervision-identity lifecycle (device-attestation/supervision-identity.ts:
+              supervised / this org vs another / identity lost / enrollment lost / never
+              enrolled / commands unresponsive / unknown -> grant, hold or contain; a
+              288-state sweep pins the single grant) and the iOS update / device-prep
+              workflow (app-update/device-prep.ts: enrolled / profiles / required apps /
+              prep stage / OS update -> ready, hold, contain, or advise; a 3072-state
+              sweep pins the single grant). Each is a distinct fixture corpus + fail-closed
+              evaluator + proof section on the break-glass fallback-sequence pattern;
+              mutation-swept 42/42 and 59 killed + 4 documented-inert of 63, 0 survivors.
+              READINESS (a) 70 -> 82% (14 modeled / 0 partial / 3 gap of 17) - the runbook
+              dimension is OVER THE FLOOR. HEADLINE still 0% ONLY on (b): mac-run.json
+              covers manifest 6f6a, the tree is now 6989 (manifest v70 after proofCounts
+              moved device-attestation 77->119 and app-update 71->127). The Mac re-mint
+              is the single remaining lever, and it got easier: verify-all.mjs now stamps
+              mintedAt into mac-run.json and check-readiness-figure prefers it over the
+              git date (a shallow clone mis-aged the file twice; fail-closed on a garbage
+              or future stamp, 6 new self-test cases). Also this session: the NIST org
+              absorbed as docs/research/NIST_ALIGNMENT_MAP.md (PR #638, awaits the
+              owner's merge) through six review rounds - Codex to its budget, then the in-house
+              fail-closed-auditor, which also showed the launch-claims vocabulary cannot
+              see any capability that map names (follow-up: a profile-id <-> doc-status
+              gate). The owner delegated routine merge calls this session (do what you
+              need to do unless blocked); lane-mail auto-merges, product PRs await the
+              owner because the harness refuses agent self-merge, self-approval, and
+              self-authorizing edits to AGENTS.md or a DR - so that rule text stands as
+              written. PR #641 then took three Codex findings, each real and each fixed
+              at the root: own-property reads in both new normalizers (an inherited field
+              could reach the grant), an invalid mintedAt is Infinity not the git date, and
+              an optional-update advisory stays checkout-ready; round three made the
+              grant a POSITIVE predicate (an out-of-union runtime value is held, not
+              granted) and a throwing field read malformed; round four caught that cut
+              (it skipped when an advisory had fired) - now an in-domain check on every
+              axis, run whatever else fired; round five froze the domain lists at runtime
+              (readonly is compile-time only); round six (Codex out of quota, so the
+              in-house fail-closed-auditor) froze the REPORT_KEYS allowlists too and pinned
+              the own-property read against a polluted Object.prototype - two P1s the
+              external rounds had just walked past. Round seven (Codex, back on quota)
+              closed the three holes the custody-ledger review had found the same hour -
+              own-name fixture lookup, one-time axis snapshot, a revoked-Proxy catch - in
+              both modules (proofs 148 -> 154 and 161 -> 167; sweeps 58/58 and 76 + 4 inert
+              of 80, 0 survivors). (Earlier 2026-09-11, cloud lane:) TWO OF THE THREE RUNBOOK GAPS MODELED
               (branch lane/cloud-custody-ledger-20260911-203200Z; product PR, owner merges):
               the custody-ledger RECONCILIATION in rtls-custody/custody-ledger.ts - what
               the checkout ledger says vs what the dock bay sees, plus the requester's cap.
@@ -76,8 +135,9 @@ LAST TOUCHED: 2026-09-11 (cloud lane, latest) - TWO OF THE THREE RUNBOOK GAPS MO
               third gap (the smart-charging simulator scenario) and the detect.ts timeline
               detection are decision-core / simulator work (DR-020) and stay on the backlog
               for a decision record. Headline readiness still 0% on (b) until the Mac
-              re-mint — no longer true on mainline, see the Mac's note next. (Earlier
-              2026-09-11, Mac lane:) HARDWARE EVIDENCE RE-MINTED against the
+              re-mint — no longer true on mainline, see the Mac's note next. (#649 landed after #653 under DR-037; manifest regenerated on top of v71.)
+              (Earlier 2026-09-11, Mac lane:)
+              HARDWARE EVIDENCE RE-MINTED against the
               manifest mainline carries (v68 / ce58f6): 53c60f4e, from verify:all --require-mcp
               --emit-evidence on this Mac (Review-Hub preflight PASS, breadth PASS, signalgrid-mcp
               pytest 99 passed at 10c5b52 on a clean checkout, 22 MCP tools derived = doc); the

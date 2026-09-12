@@ -348,6 +348,13 @@ if (emitEvidence) {
         manifestFingerprint: manifest.fingerprint,
         manifestVersion: manifest.manifestVersion,
         platform: process.platform,
+        // WHEN this evidence was minted, from the wall clock at mint time. Provenance,
+        // not a decision path. Until this field existed the artifact carried no time at
+        // all (ROLE_LENS_REVIEW 2026-08-21: "13 keys, none temporal"), so its only age
+        // was its git commit date — which a SHALLOW clone reports as the clone boundary,
+        // not the mint. The cloud lane mis-aged this file twice that way. The readiness
+        // figure now prefers this field and falls back to git only when it is absent.
+        mintedAt: new Date().toISOString(),
         // WHAT THE PREFLIGHT ACTUALLY RAN. On macOS the workspace strips the native
         // binaries the web build needs, so `Build (all packages)` and the browser
         // E2E do not run — they are absent, not passed. Recording it here is the

@@ -1971,8 +1971,8 @@ Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated tota
 Command:  the `oneline-cond-false` mutator rewrites a brace-less `if (cond) return x;` to `if (false) return x;`. Opting the target in exposed six guards in `bootstrap-credential-connector.ts` that the 48-check proof could not falsify — the non-string enum refusal, the prototype-walk depth bound, the inherited-own-key refusal, the symbol refusal, the strict ISO-8601 Zulu instant regex, and the expires-before-issued derivation. Five are real behaviour and now have checks; the symbol refusal is shadowed by the unrecognized-key check on the next line (`known` holds only strings, so `includes` of a symbol is always false) and was deleted with a comment naming its cover.
 ```
 node scripts/mutation-guard.mjs --proof=proof:bootstrap-credential   # before the checks, and after
-pnpm run -s proof:bootstrap-credential ; node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs
-pnpm run -s review:invariants ; node scripts/check-connector-discipline.mjs ; pnpm run -s typecheck
+pnpm run proof:bootstrap-credential ; node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs
+pnpm run review:invariants ; node scripts/check-connector-discipline.mjs ; pnpm run typecheck
 ```
 Output:
 ```

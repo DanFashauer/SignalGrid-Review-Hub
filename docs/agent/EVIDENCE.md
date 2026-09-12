@@ -1692,8 +1692,8 @@ node scripts/mutation-guard.mjs --proof=proof:rtls-custody       # opt-in sweep 
 node scripts/mutation-guard.mjs --proof=proof:device-attestation
 node scripts/mutation-guard.mjs --proof=proof:verdict-attestation
 node scripts/mutation-guard.mjs --proof=proof:app-update
-pnpm run -s proof:verdict-attestation ; pnpm run -s proof:app-update
-pnpm run -s typecheck ; node scripts/check-proof-counts.mjs
+pnpm run proof:verdict-attestation ; pnpm run proof:app-update
+pnpm run typecheck ; node scripts/check-proof-counts.mjs
 ```
 Output:
 ```

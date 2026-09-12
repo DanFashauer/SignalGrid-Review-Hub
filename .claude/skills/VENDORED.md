@@ -2,17 +2,18 @@
 
 Third-party work, copied in unmodified. **Not ours.**
 
-> **TWELVE exceptions in this directory — read this before any re-vendor.** These are
+> **SIXTEEN exceptions in this directory — read this before any re-vendor.** These are
 > FIRST-PARTY, written in this repository and NOT part of the upstream set. They live
 > here because the harness loads skills from this directory. Everything else below
 > describes the other 14. Counted, not remembered: `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`
-> lists 26 tracked directories = 14 upstream + the 12 in the table (tracked, because only
+> lists 30 tracked directories = 14 upstream + the 16 in the table (tracked, because only
 > tracked paths publish; section E of `scripts/check-publication-boundary.mjs` holds this
 > table, this count and the carve-outs to one another since 2026-09-02). This line said SEVEN until 2026-09-02,
 > then TEN, then ELEVEN on 2026-09-03 when `research-ops/` was authored, then TWELVE on
 > 2026-09-04 when `stack-reference/` was authored — the same drift
 > that took it from "one exception" to seven, recorded below and now caught by section E
-> the moment the count and the carve-outs disagree.
+> the moment the count and the carve-outs disagree. SIXTEEN on 2026-09-12, when the cloud
+> lane wrote down four workflows it had run by hand that day.
 >
 > **The seventh, `signalgrid-master/`, arrived 2026-08-25 under DR-018 and is a
 > MIRROR, not an original.** The owner's synced copy at
@@ -44,6 +45,10 @@ Third-party work, copied in unmodified. **Not ours.**
 > | `loop-end/` | 2026-08-31 | the session-end ritual — handoff enforcement pack, DR-021 |
 > | `research-ops/` | 2026-09-03 | evidence-first market/competitive/discovery research discipline (MCP Market leaderboards intake) |
 > | `stack-reference/` | 2026-09-04 | the corrected quick reference for every tool in the stack — 102 verified places generic cheatsheet advice breaks a rule here, and the form to use instead (Fechin/reference intake) |
+> | `tool-evaluation-by-use/` | 2026-09-12 | how an owner-shared tool is evaluated BY USE and written into the intake log (Graphify intake) |
+> | `media-intake/` | 2026-09-12 | how owner-shared video/audio is transcribed locally, logged, and placed — media and transcript never committed |
+> | `landing-under-dr-037/` | 2026-09-12 | DR-037's five merge conditions, the merge-then-regenerate order, and the single evidence re-mint that follows |
+> | `orchestrator-over-workers/` | 2026-09-12 | the spec-write / fan-out / review / land-one-at-a-time build pattern (docs/LANE_COORDINATION.md, 2026-09-12) |
 >
 > **This note said "one exception" until 2026-08-24, and it was true when written on
 > 08-20.** The five `signalgrid-*` skills landed on 08-22, after it, and nothing

@@ -242,7 +242,7 @@ else console.log(`  ✓ content rules: ${CONTENT_RULES.length} rules over ${scan
     // DOC HALF. The table rows are `> | \`name/\` | date | what |`; the count word is
     // the bold opener "**<WORD> exceptions in this directory". A reformatted table
     // or a rewritten opener fails loudly here rather than matching zero.
-    const WORDS = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5, SIX: 6, SEVEN: 7, EIGHT: 8, NINE: 9, TEN: 10, ELEVEN: 11, TWELVE: 12, THIRTEEN: 13, FOURTEEN: 14, FIFTEEN: 15 };
+    const WORDS = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5, SIX: 6, SEVEN: 7, EIGHT: 8, NINE: 9, TEN: 10, ELEVEN: 11, TWELVE: 12, THIRTEEN: 13, FOURTEEN: 14, FIFTEEN: 15, SIXTEEN: 16, SEVENTEEN: 17, EIGHTEEN: 18, NINETEEN: 19, TWENTY: 20 };
     let vendoredDoc = "";
     try {
       vendoredDoc = readFileSync(resolve(repoRoot, ".claude/skills/VENDORED.md"), "utf8");

@@ -1967,3 +1967,36 @@ wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read,
 Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
 ```
 Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated total to the files a person can actually read again; the two mailbox rows print `mailbox` in the Files column. `lane-deliver.mjs` keeps regenerating the page on every delivery — idempotent now, and still the catch for a page stale for any other reason. What this does NOT fix: a PR that itself changes the tracked-file set still moves the page, and two such PRs still conflict on it; that is the page doing its job.
+## 2026-09-12 — "Four workflows the cloud lane ran by hand are now skills both lanes load from the tree — and the four additions move three registries that hold the skill plane's own count honest"
+Command:  four first-party skills authored from the day's records (the Graphify and video rows in RESOURCE_INTAKE, DR-037, the LANE_COORDINATION build-work section), then every gate that reads `.claude/skills/` plus the full per-push lane.
+```
+node scripts/check-skill-instruction-conflicts.mjs
+node scripts/check-plugin-manifest.mjs
+node scripts/check-publication-boundary.mjs
+node scripts/check-cited-paths.mjs
+node scripts/check-cited-commands.mjs
+node scripts/check-doc-orphans.mjs
+node scripts/check-launch-claims.mjs
+node scripts/check-skill-plane-conformance.mjs
+node scripts/check-surface-review-coverage.mjs --write
+node scripts/preflight.mjs
+```
+Output:
+```
+✓ no tracked skill instructs a command the deny list refuses.
+Plugin-manifest gate passed — signalgrid plugin: 13 agents (derived), skills + commands present; claude plugin validate exit 0.
+  ✓ vendored-set arithmetic: 14 skill director(y/ies) under the vendored claim, 16 first-party carve-out(s) matching 16 table rows and the stated word, code figure 14
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+Cited-path check passed — 2297 citation(s) across 492 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Cited-command check passed — every command a document promises is a command that exists.
+Doc-orphan check passed — no new unreachable documents.
+Launch-claims gate passed — nothing deferred is presented as current.
+Skill-plane conformance — 30 skill(s), 13 agent(s) walked
+Skill-plane conformance passed — every skill and agent carries a name that matches its home and a non-empty description.
+wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces
+Preflight PASSED — everything it runs is green.
+  2 proof(s) SELF-SKIPPED — they exited 0 without running:
+    · Proof: backup-restore (the restore path, exercised not assumed) (DATABASE_URL unset)
+    · Proof: db-role-split (the ledger append-only by privilege) (DATABASE_URL unset)
+```
+Verdict:  **holds, and the cited-commands gate caught the very pitfall one of the skills was being written to record.** `orchestrator-over-workers` quoted a silencing flag between `run` and the script name as its own worked example; the gate read the flag as the script name and failed the file — so the bullet now names the shape without printing it, and says that it tripped while being written. The four skills are `tool-evaluation-by-use`, `media-intake`, `landing-under-dr-037` and `orchestrator-over-workers`, each derived from a record in the tree (the Graphify and two-video rows of `docs/agent/RESOURCE_INTAKE.md` 2026-09-12, DR-037, and the "How the cloud lane runs build work" section of `docs/LANE_COORDINATION.md`). Registry arithmetic moved with them and is gated on both halves: four `tooling` carve-outs in `scripts/publication-boundary.mjs`, four table rows plus TWELVE→SIXTEEN and 26 = 14 + 12 → 30 = 14 + 16 in `.claude/skills/VENDORED.md`, and the number-word map in `scripts/check-publication-boundary.mjs`, which stopped at FIFTEEN and could not have read the new word at all. The same 26/12 pair is restated in four documents and one gate-lib comment, all moved. `.claude-plugin/plugin.json` needed nothing (`skills` is a directory; only `agents` is a hand-list) and `docs/agent/org-roster.json` needed nothing (its pointers resolve roster → disk, never the reverse). What this does NOT establish: no skill here was pressure-tested against a subagent the way `writing-skills` prescribes — they are records of procedures already executed, not procedures proven to survive an agent looking for a loophole.

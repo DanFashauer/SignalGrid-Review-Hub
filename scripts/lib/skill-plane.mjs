@@ -1,6 +1,6 @@
 // The skill plane's two halves, DERIVED from the one document a re-vendor operator
 // reads. `.claude/skills/` holds 14 upstream directories copied byte-for-byte from
-// obra/superpowers and 12 first-party skills authored in this repository;
+// obra/superpowers and 16 first-party skills authored in this repository;
 // `.claude/skills/VENDORED.md` carries the first-party table and
 // `check-publication-boundary.mjs` section E holds the arithmetic.
 //

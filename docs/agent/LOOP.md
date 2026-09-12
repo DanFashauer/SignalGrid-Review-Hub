@@ -85,6 +85,35 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SESSION PUCK IS ON THE RECOR
               lib/webauthn/src/webauthn/verify.ts, PROOF_COVERAGE_AUDIT.md:21 and the :56
               step-up row); and the cross-reference sentence attributed badge_binding to a
               schema that does not own it. All corrected, gates re-run green.
+              (Earlier 2026-09-12, cloud lane:) LIGHTRAG'S KEY-FREE HALF IS RUNNING AND IN
+              THE TREE (DR-041, branch lane/cloud-lightrag-retrieval-20260912-0520Z). The Mac
+              is running LightRAG in its GRAPH shape on Ollama and is still fighting it - five
+              docs at the defaults timed out 4/5, retuned and re-queued, first query pending
+              (entry below). The KEY-FREE half needs no LLM and no embedding endpoint at all:
+              naive mode with only_need_context makes 0 LLM calls and fastembed embeds
+              locally, so it answers today. There is now a pinned
+              installer (scripts/install-lightrag.mjs, lightrag-hku 1.5.8 @ the full sha, a
+              venv under ~/signalgrid-lightrag/key-free - the store convention DR-038 set -
+              NOT the [api] extra whose server binds 0.0.0.0 with a guest token, refuses on
+              CI) and pnpm run docs:retrieve over the TRACKED docs set, which writes nothing
+              inside the repository. Measured here: 73 packages in 34.6s; all 311 tracked docs
+              indexed in 1636.2s into a 34 MB store, then a 24.9s refresh of the seven docs the
+              rebase moved; a query answers in 1.7s with 0 LLM calls. The GRAPH half is
+              quantified and left out - two LLM calls per chunk, and the call and token totals
+              for one index of this corpus are in DR-041 and the EVIDENCE entry rather than
+              retyped here; that is the cost the Mac's Ollama plan is buying.
+              TWO DEFECTS FOUND BY BUILDING IT, both fixed before the push: ainsert always
+              runs entity extraction, so with no model every document ended FAILED after its
+              chunks were embedded - 311 of 311 failed with every chunk already in the vector
+              store and queries answering normally, an index green over its own failure -
+              fixed with LightRAG's own
+              PROCESS_OPTION_SKIP_KG plus a hard failure on any non-processed status; and
+              LightRAG canonicalizes file_path to its BASENAME and rejects duplicates, which
+              would have silently dropped all but the first README.md. Its answer is a POINTER
+              to a tracked file, never a fact, and it never replaces pnpm run check:absence.
+              Also landed: the GitHub Trending screening intake row and the three backlog
+              items it produced (maplibre console view, vendor-doc drift watch, rclone runbook
+              sentence).
               (Earlier 2026-09-12, cloud lane:) THE SKILL COLLECTIONS ARE IN THE TREE,
               UNDER THE OWNER'S BAR (DR-039): 85 skill directories from eleven upstreams
               vendored byte-identical at their pins (mattpocock 25, addyosmani 24,
@@ -310,7 +339,7 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SESSION PUCK IS ON THE RECOR
               returns that never cleared is a hold (CUSTODY_CAP_BLOCKED_BY_STALE_RETURN), a
               cap genuinely reached a containment - the cap axis is computed from three
               counts, never asserted; the observation's age is graded against a bound the
-              caller poses, so a replayed snapshot never grants. 21 fixtures, a sweep of
+              caller poses, so a replayed snapshot never grants when the caller stamps the age at evaluation time. 21 fixtures, a sweep of
               all 4,320 combos pinning the single grant plus a raw-space sweep (230,400
               wire reports, two grant), every hostile-report shape from the sibling
               surfaces' six review rounds pinned on day one, then an in-house fail-closed

@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 76,
-  "fingerprint": "52e0de9a7026baa3eb7477f5bb4c7bc3c3fb33a57b590d5c32be00ce7eb73ca9",
+  "manifestVersion": 77,
+  "fingerprint": "ee348c4a0afd2fb9225a37350e941c97786be77a19cddf0884aea83e7032fa63",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -147,7 +147,7 @@
       "reliability": 30,
       "remediation-allow": 115,
       "response-accountability": 82,
-      "rtls-custody": 214,
+      "rtls-custody": 223,
       "self-audit": 61,
       "service-lifecycle": 82,
       "session-readiness": 63,

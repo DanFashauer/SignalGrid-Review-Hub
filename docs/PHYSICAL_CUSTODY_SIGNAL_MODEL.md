@@ -98,14 +98,14 @@ The **cap axis is computed, never asserted**: the normalizer derives under-cap /
 stale-blocked / reached from the requester's open-checkout count, the tenant cap and the
 count of those checkouts physically docked (non-negative safe integers, strict parse — a
 string, a float, a negative, a zero cap, or more stale returns than open checkouts is a
-malformed report; a missing count is unknown and raises). `returned` and `no record` both
-normalize to a *clear* ledger; any other wire value defaults to unknown. Every axis is read
+malformed report; a missing count is unknown and raises). `returned` and `none` (no open checkout record) both
+normalize to a *clear* ledger; a device the ledger does not track leaves `ledger_state` absent (unknown, never clear); any other wire value defaults to unknown. Every axis is read
 once, up front — an accessor that answers the branches with one value and the domain
 guard with another cannot reach the grant on the second answer — and a read that throws
 holds. Unlike the device-prep surface, the one advisory here does not mean ready:
 `readyForCheckout` is true for the grant alone.
 
-Proven by `proof:rtls-custody` (214 checks): named outcomes, single-axis flips of the one
+Proven by `proof:rtls-custody` (223 checks): named outcomes, single-axis flips of the one
 grant, a grant-safety sweep over all 4,320 combos of the module's exported domains plus the
 observation-age axis that pins that grant by equality (exactly one state grants; `monitor`
 reachable only as "already held and not in the bay"; `escalate` only as "clear and the bay

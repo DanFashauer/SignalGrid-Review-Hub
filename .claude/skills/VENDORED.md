@@ -2,19 +2,21 @@
 
 Third-party work, copied in unmodified. **Not ours.**
 
-> **FOURTEEN exceptions in this directory — read this before any re-vendor.** These are
+> **SEVENTEEN exceptions in this directory — read this before any re-vendor.** These are
 > FIRST-PARTY, written in this repository and NOT part of the upstream set. They live
 > here because the harness loads skills from this directory. Everything else below
 > describes the other 15 — 14 from obra/superpowers and, since 2026-09-12, `watch/` from
 > bradautomates/claude-video (its own section at the end of this file, DR-040). Counted, not remembered: `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`
-> lists 29 tracked directories = 15 upstream + the 14 in the table (tracked, because only
+> lists 32 tracked directories = 15 upstream + the 17 in the table (tracked, because only
 > tracked paths publish; section E of `scripts/check-publication-boundary.mjs` holds this
 > table, this count and the carve-outs to one another since 2026-09-02). This line said SEVEN until 2026-09-02,
 > then TEN, then ELEVEN on 2026-09-03 when `research-ops/` was authored, then TWELVE on
 > 2026-09-04 when `stack-reference/` was authored, then FOURTEEN on 2026-09-12 when
 > `cli-anything/` and `video-intake/` were authored (DR-040) — the same drift
 > that took it from "one exception" to seven, recorded below and now caught by section E
-> the moment the count and the carve-outs disagree.
+> the moment the count and the carve-outs disagree. SEVENTEEN on 2026-09-12, when the cloud
+> lane wrote down three workflows it had run by hand that day (a fourth, `media-intake/`,
+> was folded into `video-intake/` before landing — one skill per resource kind).
 >
 > **The seventh, `signalgrid-master/`, arrived 2026-08-25 under DR-018 and is a
 > MIRROR, not an original.** The owner's synced copy at
@@ -48,6 +50,9 @@ Third-party work, copied in unmodified. **Not ours.**
 > | `stack-reference/` | 2026-09-04 | the corrected quick reference for every tool in the stack — 102 verified places generic cheatsheet advice breaks a rule here, and the form to use instead (Fechin/reference intake) |
 > | `cli-anything/` | 2026-09-12 | the first-party adapter for the CLI-Anything method, vendored unmodified under `third_party/cli-anything/` — how the seven phases map onto the `signalgrid` CLI over `/v1` and the MCP server (DR-040) |
 > | `video-intake/` | 2026-09-12 | owner-shared video → frames through the vendored `watch/` skill, a transcript produced locally with faster-whisper (no key, no upload), an intake row (DR-040) |
+> | `tool-evaluation-by-use/` | 2026-09-12 | how an owner-shared tool is evaluated BY USE and written into the intake log (Graphify intake) |
+> | `landing-under-dr-037/` | 2026-09-12 | DR-037's five merge conditions, the merge-then-regenerate order, and the single evidence re-mint that follows |
+> | `orchestrator-over-workers/` | 2026-09-12 | the spec-write / fan-out / review / land-one-at-a-time build pattern (docs/LANE_COORDINATION.md, 2026-09-12) |
 >
 > **This note said "one exception" until 2026-08-24, and it was true when written on
 > 08-20.** The five `signalgrid-*` skills landed on 08-22, after it, and nothing
@@ -124,7 +129,7 @@ product and no new surface to the launch profile.
   repo rule that replaces it. The files themselves stay unmodified (first caveat);
   the override is the record. What the read did NOT do: verify byte-identity
   against upstream (the GitHub API returned 403 through the sandbox proxy), or
-  re-read the 16 first-party files the twelfth round had already read in full.
+  re-read the first-party files the twelfth round had already read in full.
 - **Byte-identity verified 2026-09-08, closing the caveat above.** The GitHub API
   is still 403 through the proxy, but the raw CDN (`raw.githubusercontent.com`) is
   reachable, so every vendored file was fetched from upstream at the pinned commit

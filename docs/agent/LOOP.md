@@ -60,9 +60,17 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE MAC TICK NO LONGER FLOODS MA
               and exhausting the GITHUB_TOKEN budget until check-ci-liveness failed #654 on a
               403. The throttle now keys on an UNCHANGED result (a changed one still delivers
               at once), and the four push-triggered workflows ignore heartbeat-only pushes.
-              Also open for the owner: #656 (coverage page no longer moves on mail - merge
-              first), #653 (Mac landing of #641+#645+#638), #649, #654. (Earlier 2026-09-11,
-              Mac lane:) HARDWARE EVIDENCE RE-MINTED against the
+              The owner said YES (2026-09-12) to the cloud lane merging green product PRs
+              itself - recorded as DR-037 - so the cloud now lands #656 (merged aa5c8151),
+              this one, #653 (Mac landing of #641+#645+#638), #649 and #654 in that order. (Earlier 2026-09-12, cloud lane:) THE COVERAGE PAGE NO LONGER MOVES ON LANE MAIL
+              (#656, merged aa5c8151): the mailbox trees
+              (artifacts/lane-messages, artifacts/agent-heartbeats) stay claimed surfaces but
+              their record counts are withheld from the render, so a send/ack/batch delivery
+              leaves docs/agent/SURFACE_REVIEW_COVERAGE.md byte-identical (self-test proves
+              it, 54/54) and open product PRs stop going unmergeable on it every cycle. Open
+              for the owner: #653 (Mac's combined landing of #641+#645+#638), #649, #654
+              (brace-less guards join the mutation sweep). (Earlier 2026-09-11, Mac lane:)
+              HARDWARE EVIDENCE RE-MINTED against the
               manifest mainline carries (v68 / ce58f6): 53c60f4e, from verify:all --require-mcp
               --emit-evidence on this Mac (Review-Hub preflight PASS, breadth PASS, signalgrid-mcp
               pytest 99 passed at 10c5b52 on a clean checkout, 22 MCP tools derived = doc); the

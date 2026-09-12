@@ -1701,3 +1701,21 @@ lane-tick.sh: "Throttle ONLY a purely-quiet result … acted/skipped/failed alwa
 after the change: bash syntax ok; sim-scripts-selfcheck 9 script(s) checked statically, 0 problem(s); Drift check passed — every proof runs in both places; preflight↔CI parity passed — every preflight gate is wired into a workflow, 0 unwired
 ```
 Verdict:  **refuted — the tick's own comment said the throttle "keeps that from flooding SignalGrid_Alpha with heartbeat commits", and it did not: the exemption for skipped/failed results is the flood.** The throttle now compares the result to the one last delivered (kept beside the stamp in node_modules) and re-pushes an identical result at most once per window; a changed result — the first skip, the first failure, any acted tick — still delivers at once, so the steward's 3-hour staleness window and the "a tick that died silently" guarantee both hold. Separately, the four workflows that trigger on push to `SignalGrid_Alpha` now ignore a push that touches only `artifacts/agent-heartbeats/**`: lane-deliver already gates that file, it changes no code, and a heartbeat push must not cancel the mainline run of a real merge. What this does NOT fix: the Mac's checkout has been parked on `mac/land-641-645-638` since 23:44Z, so every tick still skips; returning it to Alpha is a person's action (mailed).
+## 2026-09-12 — "The surface-coverage page no longer moves on lane mail: the mailbox trees stay claimed surfaces, their record counts are withheld from the render, and the self-test proves the page is byte-identical before and after one more record lands"
+Command:  the page printed files-per-surface for `artifacts/lane-messages` and `artifacts/agent-heartbeats`, so every delivery (a send, an ack, a batch) regenerated it and every open product PR — the Mac's combined landing #653, the cloud's #649 and #654 — went unmergeable on that one generated file within the hour, each cycle, until somebody merged mainline in and regenerated. The generator now declares `MAILBOX_TREES`; a mailbox file is still claimed by exactly one surface (completeness untouched), only the NUMBER is withheld and left out of the header figures, and a per-key check fails a mailbox key that names no surface or holds no record.
+```
+node scripts/check-surface-review-coverage.mjs --self-test
+node scripts/check-surface-review-coverage.mjs --write ; node scripts/check-surface-review-coverage.mjs
+```
+Output:
+```
+  ok   — every declared mailbox tree is a derived surface and holds records (baseCover proves it)
+  ok   — a MAILBOX_TREES key that is not a surface is FATAL, naming the key
+  ok   — a MAILBOX_TREES key whose tree holds no record is FATAL, naming the key
+  ok   — one more record under a mailbox tree leaves the rendered page BYTE-IDENTICAL (the reason the trees are declared)
+  ok   — …and one more file under a NON-mailbox surface DOES change the page (the identity test is not vacuous)
+self-test: 54/54 controls passed
+wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces
+Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
+```
+Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated total to the files a person can actually read again; the two mailbox rows print `mailbox` in the Files column. `lane-deliver.mjs` keeps regenerating the page on every delivery — idempotent now, and still the catch for a page stale for any other reason. What this does NOT fix: a PR that itself changes the tracked-file set still moves the page, and two such PRs still conflict on it; that is the page doing its job.

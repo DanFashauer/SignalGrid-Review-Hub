@@ -2384,3 +2384,143 @@ outputs in `docs/agent/EVIDENCE.md` (2026-09-12).
 section, the two table rows and the two override rows from `VENDORED.md`; remove the
 two carve-outs and the area from `scripts/publication-boundary.mjs` and return its
 figure to 14 and the exception word to TWELVE; drop this record and the backlog item.
+---
+
+## DR-042 — The founder's thesis in his words: the system of systems above the individually owned platforms (owner-directed 2026-09-12)
+
+**Question.** The owner sent a third-party infographic — *"10 cloud architecture
+concepts"* by **Rajender Ponnala** — and, alongside it, the first complete
+statement of his own thesis he has ever put into words for this repository. Does
+the canonical purpose doc already say what he said; where it does not, what is the
+smallest truthful addition; and how much of what he describes does the tree
+actually model?
+
+The reader this record assumes is the one `docs/company/FOUNDER_PROFILE.md` describes
+(DR-039): a senior platform engineer across UEM, identity and ITSM, so the statement is
+read as an architect's design brief, not as a layperson's wish list.
+
+**The statement, verbatim.** Dictated, and reproduced without correction —
+punctuation, spelling and grammar as he said them. Tidying it is how a founder's
+thesis quietly becomes somebody else's paraphrase.
+
+> "This is also another great example of all of this stuff is individual
+> controlled by people and sometimes teams and they all have to decide how to do
+> what and config this to make whatever communicate with it for end users and
+> customers or whoever the person in other end needs X on the device no matter the
+> platform will need to go through all this process and chain of commands and
+> whatever else is going on but my point is with SignalGrid my solution sits on top
+> of all of this that ingest to crest super simple automated workflows to simply
+> allow or deny based on how you want auth to be handled which in this case using
+> some sort of RFID and or security token that allows access and usage of any
+> device within there department or assigned area or equipment then if X process
+> breaks then the solution can self resolve and notify the proper protocol and
+> teams that are assign to that resource and monitor the fix or jump in and resolve
+> problem and it will kick off tickets and change management while notification for
+> users affected and all that it's the smart system of systems that orchestras
+> every to ask it to do for you for the entire company no matter the product or
+> solution you use we will ingest in the signal and power the grid plan and
+> simple."
+
+**Call: the statement is recorded as product doctrine, tested clause by clause
+against `docs/PURPOSE.md`, and the three clauses PURPOSE did not carry are added to
+PURPOSE under this record's authority (DR-020's rule that a PURPOSE change rides a
+decision record). The quote itself lands in `docs/WHY_THIS_EXISTS.md`, in the
+section that has been deliberately blank since that page was written.**
+
+**Why `WHY_THIS_EXISTS.md` and not PURPOSE.** That page carries a section headed
+*"What only the founder can write"* whose entire body was: *"This section is
+deliberately blank, and should stay blank until he fills it."* The page's own
+argument was that everything else on it had been inferred from his artifacts by
+someone else, and that the part which cannot be inferred is his to write. He wrote
+it. It goes where the page reserved for it, and the page's opening sentence — which
+said the clearest statement of the thesis was *not* in this repository — is
+corrected in the same change, because it is no longer true.
+
+### What the statement asserts, and where the tree already said it
+
+| # | Assertion | Status | Where it is stated |
+| --- | --- | --- | --- |
+| **a** | SignalGrid sits ABOVE individually owned platforms and ingests their signals. | **partial → now stated in full** | The SYSTEM half was canonical: `docs/PURPOSE.md:20` (*"connects the systems a building already runs … into one grid"*), `CLAUDE.md:10`, `docs/ECOSYSTEM_POSITIONING.md:15`. The OWNERSHIP half — that each system has a different owner who has already decided how it behaves, and that this is *why* nothing joins them — was implied only: `docs/WHY_THIS_EXISTS.md:37` (*"Nothing joins the layers up"*) and `:133` (*"no layer is accountable for the join"*). **Added: `docs/PURPOSE.md:30`.** |
+| **b** | The output is simple automated allow/deny workflows. | **stated** | The verdict enum at `docs/PURPOSE.md:163`–`170` (`allow` / `step-up` / `restrict` / `deny`); the cascade sentence at `:49`; the app-workflow surface (`lib/app-workflows`, `docs/APP_WORKFLOW_TEMPLATES.md`). His *"allow or deny"* is the two ends of a four-rung ladder, not a different model — `step_up` and `restrict` are the rungs that let the answer be *"yes, with one more thing"* instead of a refusal. |
+| **c** | The auth factor is the customer's choice; the grid is factor-agnostic. | **partial → now stated** | `docs/PURPOSE.md:24` already listed *"badge, phone, token, biometric"*, and `docs/CREDENTIAL_READER_SIGNAL_MODEL.md:66` already models prox, RFID, NFC, smart card, BLE/mobile credential, barcode and passkey as one `credentialTechnology` axis. What no page said is that the CHOICE is the customer's and the grid is agnostic to it — which is the same argument as DR-035's vendor-lock line, applied to the reader. **Added: `docs/PURPOSE.md:38`.** |
+| **d** | A grant is scoped to a department, an assigned area, or a piece of equipment. | **not stated → now stated** | The vocabulary existed in pieces — rooms, zones, units and bays in `lib/orchestration` and `lib/facility-trust-graph`, entitlement scope in the `entitlement-binding` and `access-governance` dimensions — but no page said a grant is bounded by the organization's own assignment. `pnpm run check:absence "assigned area"` and `"assigned equipment"` were both run on 2026-09-12 BEFORE this record was written and returned four empty probes each; re-run now they are INCONCLUSIVE and the only matches are this record and the intake row, which is the tool's documented behaviour when a document records an absence. The absence was of the SENTENCE, not of the machinery — rooms, units, bays and entitlement scope were all modelled. **Added: `docs/PURPOSE.md:45`.** |
+| **e** | When a process breaks the system self-resolves where it can, notifies the assigned team by the assigned protocol, monitors the fix or steps in. | **partial** | The doctrine sentence was there — `docs/PURPOSE.md:49`, *"A decision is the trigger for a cascade — environment, workflow, verification, and escalation"* — and `CLAUDE.md` says the same. What was never written down is the cascade's STAGES, which is what makes the sentence checkable. `docs/OPERATIONAL_TRUST_ORCHESTRATION.md:71`–`72` and `:122`–`124` reach the same list (*"Who owns it?"*, *"How do we verify completion?"*, *"routes approved actions"*, *"verifies expected outcomes"*) but that page is **retired history** and is bannered as such, so it cannot be cited as current doctrine. **Added as a named, per-stage status table: `docs/PURPOSE.md:53`.** |
+| **f** | It opens tickets and change-management records and notifies affected users. | **partial, and one clause needed a doctrinal ruling** | Tickets: the priority/SLA/assignment-group model is built and deterministic (`lib/incident-playbook`), and eight gated vendor emitters exist (`lib/integrations/src/integrations/itsm`) — but nothing joins them, so no ticket opens. Change records: the fabric READS an approved change record (`change-window`) and never opens one. Affected users: `pnpm run check:absence "affected user notification"` returned CORROBORATED across all four probes on 2026-09-12. **The ruling:** notifying affected people is doctrine, but it may never become a SignalGrid surface the worker has to go and read — `docs/PURPOSE.md:98`, *"The worker never sees SignalGrid"*, outranks it. The notification goes through the channel the person already uses, or it does not go. **Added with that constraint attached: `docs/PURPOSE.md:53` (stage table).** |
+| **g** | It is product-agnostic — *"no matter the product or solution you use we will ingest in the signal and power the grid"*. | **stated** | `docs/PURPOSE.md:81` (*"Source-agnostic is the point, not a feature"*), ratified as DR-035, with the vendor-lock prohibition in the forbidden list. This is the one clause where the canonical page was already ahead of the statement rather than behind it. |
+
+### What this record does NOT license
+
+Every addition above is **doctrine about what the product is and does by design**.
+None of it is a claim that a capability ships today. The cascade table added to
+PURPOSE marks each stage BUILT, PARTIAL or DESIGN INTENT and points every unbuilt
+stage at a `docs/BUILD_BACKLOG.md` item rather than at a promise. The
+launch-claims gate, the launch-profile classification and the publication boundary
+are unchanged by this record and still govern what may be SAID to ship. Building
+and claiming remain different acts (DR-021 §2).
+
+Two of his clauses carry a specific hazard and are constrained rather than adopted
+whole:
+
+- ***"the solution can self resolve"*** — the resolution planner is real
+  (`lib/signalgrid-core/src/resolution.ts`), and everything it produces is
+  approval-gated and simulated. PURPOSE's forbidden list already bans claiming
+  *autonomous remediation* (`docs/PURPOSE.md:265`) and the read-before-write
+  prerequisite (`:186`) is unchanged. Self-resolve means *the system knows the fix
+  and prepares it*; a human still approves the write.
+- ***"notification for users affected"*** — see (f). Adopted with the embedded UX
+  law attached, because a notification SignalGrid invents is a step added to the
+  worker's day, which §3 forbids outright.
+
+### The cascade audit, and what it produced
+
+The measurement behind (e) and (f) is recorded with its commands and output in
+`docs/agent/EVIDENCE.md` (2026-09-12). The short form: **both ends of the cascade
+are built and the joins between them are not.** Modelled and fixture-backed —
+remediation proposal, resolution planning and simulation, the incident playbook,
+orchestration planning, deterministic webhook delivery with dead-lettering.
+Connector stubs behind a live-call gate — eight ITSM vendors, the generic webhook
+emitter, the change-window reader. Prose only — the cascade as a sequence. Absent —
+any path from an incident to a ticket, any change-record draft, any notification of
+an affected person, and any observation that a requested fix landed. Six
+`docs/BUILD_BACKLOG.md` items were opened for exactly those joins, each fail-closed
+and deterministic by construction, each naming the clause of his sentence it serves.
+
+### The infographic
+
+Mapped rather than filed, in
+`docs/SIGNALGRID_CLOUD_PLATFORM_AND_CYBER_RESILIENCE_ARCHITECTURE.md` — one row per
+concept: what it means for a deterministic, fixture-backed decision fabric, what
+the tree has, what it deliberately does NOT do, and what is backlog. Several of the
+answers are refusals, and that is the value of the exercise: a generic cloud
+pattern applied to a fail-closed decision path can invert it. No cache in the
+decision path, because a stale `allow` is the failure the five-minute idempotency
+window was cut from twenty-four hours to prevent. No retry inside a decision,
+because an honest `unknown` beats a slow answer while someone waits at a door. No
+queue on ingestion, because a queued verdict arrives after the person has left.
+The image is third-party and is not committed; it is described, and its author is
+named. **No deployment-target claim is added in either direction** — the tree
+speaks Microsoft Graph, Intune, Entra and ServiceNow because that is the estate it
+reads, which says nothing about where it runs.
+
+**Evidence.** The founder's statement as dictated (quoted above in full);
+`docs/PURPOSE.md` read in full before editing; `CLAUDE.md` *"What this is"*;
+`docs/WHY_THIS_EXISTS.md`; `docs/OPERATIONAL_TRUST_ORCHESTRATION.md` (retired, and
+treated as retired); `docs/ECOSYSTEM_POSITIONING.md`; the grep audit and
+`check:absence` runs recorded in `docs/agent/EVIDENCE.md`; DR-020 (PURPOSE
+canonical), DR-034 (his inputs ARE the research), DR-035 (source-agnostic), DR-033
+(Build / execution phase).
+
+**Reversal.** The owner reverses any line of this by saying so — it is his
+statement and his doctrine. Mechanically: if a cascade stage is built and shipped,
+its row in `docs/PURPOSE.md`'s stage table moves from DESIGN INTENT to BUILT and
+the matching backlog item closes; if a stage is refused on evidence, the row says
+refused and names the reason, as backlog row 27b already does for a refusal. The
+one line that does not move on appetite is (f)'s constraint: a worker-facing
+SignalGrid notification surface reopens only if the embedded UX law itself is
+reopened, which takes its own decision record.
+
+**Confidence: high** on the record and the assertion table — every status is
+anchored to a path and a line that was read, and the absences were probed rather
+than assumed. **Medium** on the backlog shaping: six joins is the right count for
+what the audit found, but the ORDER between them is a sequencing call nobody has
+made yet, and the first one built should be the one a design partner asks for.

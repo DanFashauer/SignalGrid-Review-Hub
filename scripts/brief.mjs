@@ -278,8 +278,16 @@ function heartbeatsSection() {
 // fresh "skipped" heartbeat every interval while draining nothing, which both masks the
 // block AND keeps the staleness escalation from ever firing. So a non-clean result is
 // treated as blocked. Pure so the self-test can prove a fresh-but-skipped tick is FAIL.
+// Word-bounded at the START only. A trailing \b on the whole group missed real
+// inflections: `\bfail\b` does not match `failed:` (the "e" after "fail" is still a
+// word char, so there is no boundary to close on) — a real `failed:` push/heartbeat
+// result from lane-tick.sh read as OK. Same bug silently broke "diverg" and "refus"
+// too (neither is a real word on its own, so those stems could never match anything
+// in practice). Fixed by spelling out the real inflections per stem instead of
+// dropping the trailing boundary outright — dropping it entirely would let "blocked"
+// match unrelated words like "blockchain" (Codex finding, 2026-09-12).
 function tickIsBlocked(result) {
-  return /\b(skip|skipped|dirty|diverg|non-?alpha|error|fail|refus|blocked)\b/i.test(String(result ?? ""));
+  return /\b(skip|skipped|dirty|diverg(e|ed|ing|ent)?|non-?alpha|error|fail(ed|ure|ing)?|refus(ed|al|ing)?|blocked)\b/i.test(String(result ?? ""));
 }
 
 function tickWatch() {
@@ -399,6 +407,12 @@ async function selfTest() {
   ok(tickIsBlocked("skipped: non-Alpha branch"), "a non-Alpha skip is blocked");
   ok(!tickIsBlocked("quiet"), "a clean 'quiet' tick is not blocked (judged by staleness)");
   ok(!tickIsBlocked("ran 3 sim request(s)"), "a clean work result is not blocked");
+  // 6d. Codex finding, 2026-09-12: `\bfail\b` never matched `failed:` (the trailing
+  // boundary can't close inside a word), so a real failed push/heartbeat read as OK.
+  ok(tickIsBlocked("failed: push to origin"), "a 'failed:' tick result is blocked, not OK (was previously missed by \\bfail\\b)");
+  ok(tickIsBlocked("push refused: non-fast-forward"), "a 'refused:' tick result is blocked");
+  ok(tickIsBlocked("diverged: local and remote have split"), "a 'diverged:' tick result is blocked");
+  ok(!tickIsBlocked("blockchain confirmation pending"), "an unrelated word sharing a prefix with 'blocked' is not blocked (exact stems, not bare substrings)");
 
   // 7. discovery + heartbeats sections return a shape with a state drawn from the
   // fail-closed vocabulary. Both now emit FAIL — discovery when the authoritative

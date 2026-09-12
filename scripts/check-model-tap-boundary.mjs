@@ -136,6 +136,36 @@ function importSpecifiers(body) {
   return specs;
 }
 
+// A dynamic import() whose argument is not a directly-quoted string literal (a
+// variable, a template literal, a concatenation) names no specifier this scan can
+// read — `const p = "@workspace/signalgrid-core"; await import(p);` slips the
+// reciprocal fence with zero specifiers extracted. Fail closed: any import( call
+// that is not exactly `import("...")` / `import('...')` is itself a violation —
+// the target is unprovable, and an unprovable tap target cannot be certified out
+// of the decision path (Codex finding, 2026-09-12).
+const DYNAMIC_IMPORT_CALL_RE = /\bimport\s*\(/g;
+const DYNAMIC_IMPORT_LITERAL_RE = /\bimport\s*\(\s*["'][^"']+["']\s*\)/g;
+function hasNonLiteralDynamicImport(body) {
+  const stripped = stripComments(body);
+  const total = (stripped.match(DYNAMIC_IMPORT_CALL_RE) || []).length;
+  const literal = (stripped.match(DYNAMIC_IMPORT_LITERAL_RE) || []).length;
+  return total > literal;
+}
+
+// Scan one decision-path file: return its findings, or a single synthetic
+// "unreadable" finding if the file cannot be read. An unreadable scoped file must
+// never be silently skipped — a broken tracked symlink or a permission error is
+// exactly the condition where a forbidden reference could be hiding, and a gate
+// that `continue`s past it without recording anything reports green over a file
+// it never actually scanned (Codex finding, 2026-09-12: fail-closed, not skip-and-
+// count-green).
+function scanFile(f) {
+  let body;
+  try { body = readFileSync(join(repo, f), "utf8"); }
+  catch (e) { return [{ line: 0, needle: `(UNREADABLE: ${e.code || e.message} — scoped file could not be scanned)` }]; }
+  return scanBody(body);
+}
+
 function deriveScope(all) {
   const regexes = FORBIDDEN_ROOTS.map(globToRegExp);
   const perRoot = FORBIDDEN_ROOTS.map(() => 0);
@@ -163,9 +193,7 @@ function runReal() {
 
   const violations = [];
   for (const f of files) {
-    let body;
-    try { body = readFileSync(join(repo, f), "utf8"); } catch { continue; }
-    for (const v of scanBody(body)) violations.push({ file: f, ...v });
+    for (const v of scanFile(f)) violations.push({ file: f, ...v });
   }
 
   // Reciprocal fence: the tap and the policy import nothing from the decision path.
@@ -175,6 +203,9 @@ function runReal() {
     try { body = readFileSync(join(repo, m), "utf8"); } catch { reciprocal.push({ file: m, spec: "(module missing)" }); continue; }
     for (const spec of importSpecifiers(body)) {
       if (RECIPROCAL_FORBIDDEN_IMPORT_SUBSTRINGS.some((s) => spec.includes(s))) reciprocal.push({ file: m, spec });
+    }
+    if (hasNonLiteralDynamicImport(body)) {
+      reciprocal.push({ file: m, spec: "(dynamic import() with a non-literal argument — target unprovable, fail-closed)" });
     }
   }
 
@@ -294,6 +325,13 @@ function selfTest() {
     "all seven native verdict sources (DecisionEngine, AppWorkflows, DecisionService, PostureAllow, " +
       "RemediationAllow, SignalContext, HostAppViewController) are declared",
   );
+  // Codex finding, 2026-09-12: iOS was not the only native decision client — Android
+  // and desktop parse the same /v1 vocabulary and decide whether the host may
+  // proceed. Pin all four so a future edit cannot shrink the fence back to iOS-only.
+  expect(
+    ["AssistWire.kt", "AssistOutcome.kt", "wire.rs", "assist.rs"].every((f) => rootBlob.includes(f)),
+    "both other native decision clients (android AssistWire.kt/AssistOutcome.kt, desktop wire.rs/assist.rs) are declared",
+  );
 
   // PLANTED RED (Codex finding, 2026-09-12): SignalContext.swift (`AccessDecision.evaluate`,
   // which RETURNS the effective verdict) and HostAppViewController.swift (which CHOOSES the
@@ -313,15 +351,61 @@ function selfTest() {
     expect(planted, `a model call planted in the real content of ${f} is flagged by the fence`);
   }
 
+  // PLANTED RED (Codex finding, 2026-09-12): the two other native decision clients
+  // (android + desktop) newly added to FORBIDDEN_ROOTS above. Same proof as the iOS
+  // pair — plant a real call shape in each file's ACTUAL content (not a synthetic
+  // string) and assert the fence reddens; `scanBody` is a raw text scan so a `//`
+  // line comment reddens it in Kotlin and Rust exactly as it does in Swift/TS.
+  for (const f of [
+    "native/android/core/src/main/kotlin/com/signalgrid/assist/core/AssistWire.kt",
+    "native/android/core/src/main/kotlin/com/signalgrid/assist/core/AssistOutcome.kt",
+    "native/desktop/core/src/wire.rs",
+    "native/desktop/core/src/assist.rs",
+  ]) {
+    let planted = false;
+    try {
+      const real = readFileSync(join(repo, f), "utf8");
+      const injected = real + `\n// planted self-test call: await fetch(base + "/chat/completions", {});\n`;
+      planted = scanBody(injected).length > 0;
+    } catch { /* leave planted false — reported as a failure below */ }
+    expect(planted, `a model call planted in the real content of ${f} is flagged by the fence`);
+  }
+
   // The live tap/policy actually pass the reciprocal fence today.
   let liveReciprocalClean = true;
   for (const m of TAP_MODULES) {
     try {
       const body = readFileSync(join(repo, m), "utf8");
       if (importSpecifiers(body).some((s) => RECIPROCAL_FORBIDDEN_IMPORT_SUBSTRINGS.some((sub) => s.includes(sub)))) liveReciprocalClean = false;
+      if (hasNonLiteralDynamicImport(body)) liveReciprocalClean = false;
     } catch { liveReciprocalClean = false; }
   }
   expect(liveReciprocalClean, "the live tap and policy import nothing from the decision path");
+
+  // PLANTED RED (Codex finding, 2026-09-12): a dynamic import() whose argument is a
+  // variable, not a quoted literal, extracts zero specifiers from importSpecifiers()
+  // yet still pulls in whatever `p` resolves to at runtime — an unprovable target
+  // must flag, not pass silently because no literal specifier was found.
+  expect(
+    hasNonLiteralDynamicImport(`const p = "@workspace/signalgrid-core"; await import(p);`),
+    "a tap module with `import(variable)` (non-literal dynamic import argument) is flagged",
+  );
+  expect(
+    !hasNonLiteralDynamicImport(`await import("./util.mjs");`),
+    "a tap module with a plain literal `import(\"...\")` is not flagged",
+  );
+  expect(
+    !hasNonLiteralDynamicImport(`// import(someVar) mentioned only in a comment`),
+    "a dynamic import() mentioned only inside a comment is not flagged (comments are stripped first)",
+  );
+
+  // PLANTED RED (Codex finding, 2026-09-12): a scoped decision-path file that cannot
+  // be read (permission error, broken tracked symlink) must be recorded as a
+  // violation, never silently `continue`d past — a directory path always throws
+  // EISDIR regardless of user/permissions, so this is deterministic proof independent
+  // of how this process happens to be run.
+  expect(scanFile("scripts").length > 0, "an unreadable scoped path (here: a directory) is recorded as a violation, not silently skipped");
+  expect(/UNREADABLE/.test(scanFile("scripts")[0].needle), "the unreadable-file violation names itself as unreadable, not a normal token match");
 
   console.log(failed === 0 ? `\nself-test passed (${checks}/${checks})` : `\nself-test FAILED (${checks - failed}/${checks})`);
   process.exit(failed === 0 ? 0 : 1);

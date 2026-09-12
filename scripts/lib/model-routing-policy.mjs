@@ -119,6 +119,21 @@ export const FORBIDDEN_ROOTS = Object.freeze([
   "native/ios/EnterpriseShell/Services/RemediationAllow.swift",
   "native/ios/EnterpriseShell/Services/SignalContext.swift",
   "native/ios/EnterpriseShell/Views/HostAppViewController.swift",
+  // The other two native decision CLIENTS (iOS is not the only one): Android and
+  // desktop are both thin clients of `/v1` — they carry no engine port, but
+  // AssistWire.kt/wire.rs PARSE the `/v1` response into the four-outcome vocabulary
+  // and AssistOutcome.kt/assist.rs define what the host may conclude from it
+  // (`proceedsWithoutFurtherAction`, `requiresChallenge`). A provider endpoint or
+  // model reference reaching either pair would let a model influence whether the
+  // host proceeds, exactly as surely as one in the iOS verdict sources above, while
+  // the fence's own claim ("no model can reach a verdict") stayed uncontradicted
+  // only because these two clients were never in scope (Codex review, 2026-09-12).
+  // GateEndpoint.kt/endpoint.rs are deliberately NOT included: they gate TLS/loopback
+  // on the URL, they never see or shape the verdict itself.
+  "native/android/core/src/main/kotlin/com/signalgrid/assist/core/AssistWire.kt",
+  "native/android/core/src/main/kotlin/com/signalgrid/assist/core/AssistOutcome.kt",
+  "native/desktop/core/src/wire.rs",
+  "native/desktop/core/src/assist.rs",
 ]);
 
 // A decision-path file may reference NONE of these. Import specifiers for the tap

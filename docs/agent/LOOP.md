@@ -52,7 +52,17 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-11 (Mac lane, latest) - HARDWARE EVIDENCE RE-MINTED against the
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE MAC TICK NO LONGER FLOODS MAINLINE
+              (branch lane/cloud-tick-heartbeat-throttle-20260912-005000Z; owner merges): a
+              SKIPPED tick result was exempt from the quiet throttle, so a checkout parked on
+              mac/land-641-645-638 pushed a heartbeat to Alpha every 5 minutes, each push
+              starting four workflows, cancelling the mainline CI run of the merge before it,
+              and exhausting the GITHUB_TOKEN budget until check-ci-liveness failed #654 on a
+              403. The throttle now keys on an UNCHANGED result (a changed one still delivers
+              at once), and the four push-triggered workflows ignore heartbeat-only pushes.
+              Also open for the owner: #656 (coverage page no longer moves on mail - merge
+              first), #653 (Mac landing of #641+#645+#638), #649, #654. (Earlier 2026-09-11,
+              Mac lane:) HARDWARE EVIDENCE RE-MINTED against the
               manifest mainline carries (v68 / ce58f6): 53c60f4e, from verify:all --require-mcp
               --emit-evidence on this Mac (Review-Hub preflight PASS, breadth PASS, signalgrid-mcp
               pytest 99 passed at 10c5b52 on a clean checkout, 22 MCP tools derived = doc); the

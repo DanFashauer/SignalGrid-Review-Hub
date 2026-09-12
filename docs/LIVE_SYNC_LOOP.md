@@ -155,7 +155,9 @@ SIGNALGRID_MCP_PATH=/path/to/signalgrid-mcp node scripts/verify-all.mjs --requir
 After a fully-green run of **both** halves (Review-Hub preflight passed, and the
 signalgrid-mcp checkout was found, ran, and passed against this repo's contract
 file), this writes `artifacts/live-evidence/mac-run.json` recording the
-committed manifest's fingerprint plus pass booleans and public-safe summary
+committed manifest's fingerprint, the mint time (`mintedAt`, so the artifact
+ages itself without relying on git history — a shallow clone's commit date is
+the clone boundary, not the mint), plus pass booleans and public-safe summary
 counts. The owner then commits `artifacts/live-evidence/` — that commit *is* the
 evidence that real hardware validated the current contracts. Emission is refused
 when any half is not green or when the MCP side merely skipped, so a sandbox
@@ -293,9 +295,11 @@ Everything this loop commits is public-repo safe by construction:
 
 - the manifest body contains only contract hashes, enum/tool **names**, and
   documented counts — no credentials, tenants, or environment details;
-- `artifacts/live-evidence/mac-run.json` contains fingerprints, booleans, and
-  counts only — **no hostnames, usernames, serial numbers, local paths, or
-  timestamps** (git history already dates the commit);
+- `artifacts/live-evidence/mac-run.json` contains fingerprints, booleans,
+  counts, and one timestamp — **no hostnames, usernames, serial numbers, or
+  local paths**. The one timestamp is `mintedAt`, the mint time, which
+  identifies nothing and exists so the artifact can age itself (git history
+  dates the commit, but a shallow clone reports the clone boundary instead);
 - nothing here weakens the public/private split: the private core and the
   owner's machines stay outside the repo; only their *verdict* (pass, against
   which fingerprint) is committed.

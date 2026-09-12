@@ -875,6 +875,52 @@ console.log("\n  ── the badge→manual fallback sequence ──\n");
     `#6 an accountable record with NO binding ids at all → malformed, never allow (${unboundAudit.sequenceIntegrity} / ${evaluateManualFallback(unboundAudit).decision})`,
     unboundAudit.sequenceIntegrity === "malformed" && evaluateManualFallback(unboundAudit).decision === "deny",
   );
+  // The fusion guards themselves (daily sweep 2026-09-11: `corr === ""` and `tenant === ""`
+  // survived mutation — real behaviour with no test). The case has to be one where fusion is
+  // the ONLY thing that can fail: a BADGE-SUCCESS stream (no manual fallback, so no
+  // accountable record and no audit binding in play) whose events carry NO correlation id,
+  // or NO tenant id. With the guard, the stream is malformed and denies; with the guard
+  // deleted it is intact and decides on the badge success — which is exactly the mutant.
+  // (A first cut used the manual-fallback stream: there the accountable record's binding
+  // failed first and masked the guard, and the two mutants survived that sweep too.)
+  const badgeOkNoCorr = normalizeManualFallbackSequence(
+    [
+      { eventType: "badge_access", tenantId: T, badgeAuthOutcome: "success" },
+      { eventType: "checkout_granted", tenantId: T },
+    ],
+    {},
+  );
+  check(
+    `a badge-success stream whose events carry NO correlation id → malformed, never allow — correlation fusion is the only guard in play (${badgeOkNoCorr.sequenceIntegrity} / ${evaluateManualFallback(badgeOkNoCorr).decision})`,
+    badgeOkNoCorr.sequenceIntegrity === "malformed" && evaluateManualFallback(badgeOkNoCorr).decision === "deny",
+  );
+  const badgeOkNoTenant = normalizeManualFallbackSequence(
+    [
+      { eventType: "badge_access", correlationId: CID, badgeAuthOutcome: "success" },
+      { eventType: "checkout_granted", correlationId: CID },
+    ],
+    {},
+  );
+  check(
+    `a badge-success stream whose events carry NO tenant id → malformed, never allow — tenant fusion is the only guard in play (${badgeOkNoTenant.sequenceIntegrity} / ${evaluateManualFallback(badgeOkNoTenant).decision})`,
+    badgeOkNoTenant.sequenceIntegrity === "malformed" && evaluateManualFallback(badgeOkNoTenant).decision === "deny",
+  );
+  const badgeOkBound = normalizeManualFallbackSequence(
+    [
+      { eventType: "badge_access", correlationId: CID, tenantId: T, badgeAuthOutcome: "success" },
+      { eventType: "checkout_granted", correlationId: CID, tenantId: T },
+    ],
+    {},
+  );
+  check(
+    `NON-VACUITY for the two above: the same badge-success stream WITH its ids is intact and allows (${badgeOkBound.sequenceIntegrity} / ${evaluateManualFallback(badgeOkBound).decision})`,
+    badgeOkBound.sequenceIntegrity === "intact" && evaluateManualFallback(badgeOkBound).decision === "allow",
+  );
+  const emptySeq = normalizeManualFallbackSequence([], {});
+  check(
+    `an EMPTY stream → malformed, never allow (${emptySeq.sequenceIntegrity} / ${evaluateManualFallback(emptySeq).decision})`,
+    emptySeq.sequenceIntegrity === "malformed" && evaluateManualFallback(emptySeq).decision === "deny",
+  );
   check(
     "#6 NON-VACUITY: the SAME stream with a CORRECTLY-bound accountable record allows — the gate is the binding, not the shape",
     (() => {

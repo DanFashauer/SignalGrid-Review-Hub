@@ -52,10 +52,41 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (cloud lane, latest) - DR-037 RECORDED: the owner ended
+LAST TOUCHED: 2026-09-12 (Mac lane, latest) - READINESS CLEARED THE FLOOR: 82%, OUTREACH OPEN
+              (134c25fd). Right after #653 landed, the Mac re-minted
+              artifacts/live-evidence/mac-run.json against manifest v71 / 71042575 with
+              verify:all --require-mcp --emit-evidence (Review-Hub preflight PASS, breadth
+              PASS, signalgrid-mcp pytest 99 passed at 10c5b52, 22 MCP tools = doc) - the
+              first artifact carrying its own mintedAt (2026-09-12T01:49:03Z). Full
+              preflight PASSED on macOS before the push. The gate, quoted: (a) runbook
+              82% (14 modeled / 0 partial / 3 gap of 17) - (b) launch surface 100% (green
+              on both halves, 0 days old, manifest 71042575, age via mintedAt) - (c)
+              end-to-end 100% (scenarios 11/11, live operations 8/8) -> HEADLINE 82%,
+              OUTREACH OPEN at the floor (target 92-95, goal 100). The number is derived,
+              never typed: node scripts/check-readiness-figure.mjs. What moved it, all by
+              proof: 62 -> 78 (three live ops proven on real software, 2026-09-10) -> 70
+              (cloud's #620 made the gate honest: gap rows count, evidence must match the
+              contract fingerprint) -> 82 (cloud modeled the last two runbook partials in
+              #641; Mac re-minted twice, v68 then v71). How #641/#645/#638 landed: the
+              owner said not to wait; the Mac's auto-mode classifier refuses gh pr merge, so
+              the Mac rehearsed the combined landing locally (manifest and coverage page
+              regenerated on the combined tree, preflight + breadth PASSED), opened #653
+              through REST (GraphQL quota exhausted by the shared token), and the cloud
+              merged it under DR-037 (owner: the cloud merges green product PRs). OWNED
+              DEFECT: the Mac checkout sat on mac/land-641-645-638 from 23:44Z to 01:45Z and
+              the pre-#657 tick pushed a 'skipped' heartbeat every 5 minutes - 23 pushes in
+              2h, each starting four workflows, cancelling the mainline CI run before it,
+              and exhausting GITHUB_TOKEN until check-ci-liveness failed on #654. Cloud fixed
+              the throttle in #657 (an UNCHANGED result re-pushes once per 25 min); the Mac
+              rule now: never leave the shared checkout parked past the run that needed it.
+              NEXT LEVERS to 92-95: dimension (a) is the only one under 100 - three GAP rows
+              in SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md; each modeled row is +6 points (15/17
+              = 88, 16/17 = 94, 17/17 = 100). Keep mac-run.json within 7 days and re-mint
+              after every manifest move or (b) reads 0 by design. (Earlier 2026-09-12, cloud lane:) DR-037 RECORDED: the owner ended
               'lanes open, owner merges' ('I didn't want that on me'); the cloud lane now
               merges its own green product PRs under five stated conditions, and landed
-              #656, #657, #653 (the Mac's combined #641+#645+#638), #649 and #654 that way.
+              #656, #657, #653 (the Mac's combined #641+#645+#638) and #649 that way; #654 is
+              next, and the manifest moves again with it (v73), so ONE more re-mint follows.
               Two owner videos absorbed (RESOURCE_INTAKE 2026-09-12): 'paved paths' as
               the vocabulary of ICP Finding 2, and orchestrator-over-Opus-workers as the
               cloud lane's build pattern (first fan-out: the pending brace-less guard
@@ -118,7 +149,32 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - DR-037 RECORDED: the owner ended
               closed the three holes the custody-ledger review had found the same hour -
               own-name fixture lookup, one-time axis snapshot, a revoked-Proxy catch - in
               both modules (proofs 148 -> 154 and 161 -> 167; sweeps 58/58 and 76 + 4 inert
-              of 80, 0 survivors). (Earlier 2026-09-11, Mac lane:)
+              of 80, 0 survivors). (Earlier 2026-09-11, cloud lane:) TWO OF THE THREE RUNBOOK GAPS MODELED
+              (branch lane/cloud-custody-ledger-20260911-203200Z; product PR, owner merges):
+              the custody-ledger RECONCILIATION in rtls-custody/custody-ledger.ts - what
+              the checkout ledger says vs what the dock bay sees, plus the requester's cap.
+              A seated device the ledger still assigns to a prior holder is a hold with the
+              contradiction named (the runbooks' phantom); an unpaired device in a bay is
+              contained; a clear ledger over an empty bay escalates; a cap hit only by
+              returns that never cleared is a hold (CUSTODY_CAP_BLOCKED_BY_STALE_RETURN), a
+              cap genuinely reached a containment - the cap axis is computed from three
+              counts, never asserted; the observation's age is graded against a bound the
+              caller poses, so a replayed snapshot never grants. 21 fixtures, a sweep of
+              all 4,320 combos pinning the single grant plus a raw-space sweep (230,400
+              wire reports, two grant), every hostile-report shape from the sibling
+              surfaces' six review rounds pinned on day one, then an in-house fail-closed
+              audit (no P1; three P2s and five P3s, each verified and fixed or recorded)
+              and a Codex round (own-name fixture lookup, one-time axis snapshot, revoked
+              Proxy, identity binding, freshness - each executed before the fix);
+              proof:rtls-custody 63 -> 214; mutation-swept, 0 survivors. The family stays
+              deferred in the launch profile - built, not claimed. Ground-truth rows "custody integrity" and
+              "per-user checkout cap" now read modeled: readiness (a) 16 modeled / 1 gap of
+              17 once #641 lands (this base still carries #641's two rows as partial). The
+              third gap (the smart-charging simulator scenario) and the detect.ts timeline
+              detection are decision-core / simulator work (DR-020) and stay on the backlog
+              for a decision record. Headline readiness still 0% on (b) until the Mac
+              re-mint — no longer true on mainline, see the Mac's note next. (#649 landed after #653 under DR-037; manifest regenerated on top of v71.)
+              (Earlier 2026-09-11, Mac lane:)
               HARDWARE EVIDENCE RE-MINTED against the
               manifest mainline carries (v68 / ce58f6): 53c60f4e, from verify:all --require-mcp
               --emit-evidence on this Mac (Review-Hub preflight PASS, breadth PASS, signalgrid-mcp

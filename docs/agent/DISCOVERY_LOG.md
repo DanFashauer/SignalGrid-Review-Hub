@@ -153,7 +153,7 @@ profile, their answer counts.
 | 1 | | | | | | | | | | | |
 
 *S ubstitute · I ndifference · P roblem · R equirement · R(ou)t(ing) ·
-**C ommitment*** · **Rh** hardware REQUIREMENT · **Ch** hardware COMMITMENT · **Ph** hardware PROBLEM — each requires the base column (R / C / P) marked too, and never the reverse (DR-043).
+**C ommitment*** · **Rh** hardware REQUIREMENT · **Ch** hardware COMMITMENT · **Ph** hardware PROBLEM — each requires the base column (R / C / P) marked too, and never the reverse (DR-043). Mark a hardware cell with `X` only; any other nonempty value (a `?`, "pending", "no") FAILS the gate rather than being silently counted or silently ignored (`scripts/check-discovery-log.mjs`).
 
 **Experiment started: 2026-08-27**
 **Conversations logged: 0 of 15 · Commitments: 0**

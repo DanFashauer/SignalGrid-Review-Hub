@@ -599,7 +599,8 @@ item below is a design target until its proof is green and named.
       proof drifts. Design target; deferred family. Cloud lane for the TS half, Mac lane
       for the Swift twin.
 
-- [ ] **Puck 5 — the hardware gate itself: a tally column in `docs/agent/DISCOVERY_LOG.md` that the go/no-go table reads from.**
+- [x] **Puck 5 — the hardware gate itself: a tally column in `docs/agent/DISCOVERY_LOG.md` that the go/no-go table reads from.**
+      LANDED — `scripts/check-discovery-log.mjs` derives Rh/Ch/Ph from the Running tally's marks (canonical `X` only; any other nonempty value fails), enforces the base-mark invariant, and cross-checks `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`'s go/no-go table by name; 26/26 self-test, wired into preflight and CI (today's honest tally: 0 of 15 on Rh/Ch/Ph, per `docs/agent/EVIDENCE.md`).
       The change: the *Running tally* table gains a column **Rh** — a REQUIREMENT that
       maps specifically to faster or stronger physical session authentication or
       custody binding — beside R, so the hardware rows of the go/no-go table in

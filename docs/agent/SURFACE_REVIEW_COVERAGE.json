@@ -1921,6 +1921,15 @@
           "scope": "surface",
           "open": 4,
           "closed": 76
+        },
+        {
+          "date": "2026-09-12",
+          "read": "scripts/check-discovery-log.mjs (new, added after the twenty-fourth round's whole-surface read and not covered by it): the Rh/Ch/Ph hardware-tally derivation, the base-mark invariant, the canonical-marker validation (a non-`X` nonempty cell such as `?` fails rather than counting), the running-tally table-boundary parser (stops at the first non-`|` line so a later table is never absorbed), the separator-row shape check (a malformed `|---|` row fails instead of silently dropping the first data row), and the cross-check against SESSION_PUCK_HARDWARE_HYPOTHESIS.md's go/no-go table (the authorization table must name the Rh/Ch/Ph tally cells and carry the registered thresholds) — read firsthand by its author across two commits, each rule added in response to Codex's PR #690 review and self-tested with a planted-violation case.",
+          "reviewer": "cloud lane (Puck 5 worker, firsthand author; PR #690 review by Codex)",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "partial: scripts/check-discovery-log.mjs only, one file added to the surface after the twenty-fourth round's 2026-09-06 whole-surface read.",
+          "open": 0,
+          "closed": 6
         }
       ]
     },

@@ -126,6 +126,31 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE MAC TICK NO LONGER FLOODS MA
               never fails on it; as of 2026-09-11 the BUILD_BACKLOG campaign row lists the pending families
               by survivor count. Still awaiting owner merge: #638, #641, #645, #649 (all
               green; Mac re-mints evidence ONCE after they land). (#654 landed after #653 and #649 under DR-037; manifest regenerated on top.)
+              (Earlier 2026-09-11, cloud lane:) TWO OF THE THREE RUNBOOK GAPS MODELED
+              (branch lane/cloud-custody-ledger-20260911-203200Z; product PR, owner merges):
+              the custody-ledger RECONCILIATION in rtls-custody/custody-ledger.ts - what
+              the checkout ledger says vs what the dock bay sees, plus the requester's cap.
+              A seated device the ledger still assigns to a prior holder is a hold with the
+              contradiction named (the runbooks' phantom); an unpaired device in a bay is
+              contained; a clear ledger over an empty bay escalates; a cap hit only by
+              returns that never cleared is a hold (CUSTODY_CAP_BLOCKED_BY_STALE_RETURN), a
+              cap genuinely reached a containment - the cap axis is computed from three
+              counts, never asserted; the observation's age is graded against a bound the
+              caller poses, so a replayed snapshot never grants. 21 fixtures, a sweep of
+              all 4,320 combos pinning the single grant plus a raw-space sweep (230,400
+              wire reports, two grant), every hostile-report shape from the sibling
+              surfaces' six review rounds pinned on day one, then an in-house fail-closed
+              audit (no P1; three P2s and five P3s, each verified and fixed or recorded)
+              and a Codex round (own-name fixture lookup, one-time axis snapshot, revoked
+              Proxy, identity binding, freshness - each executed before the fix);
+              proof:rtls-custody 63 -> 214; mutation-swept, 0 survivors. The family stays
+              deferred in the launch profile - built, not claimed. Ground-truth rows "custody integrity" and
+              "per-user checkout cap" now read modeled: readiness (a) 16 modeled / 1 gap of
+              17 once #641 lands (this base still carries #641's two rows as partial). The
+              third gap (the smart-charging simulator scenario) and the detect.ts timeline
+              detection are decision-core / simulator work (DR-020) and stay on the backlog
+              for a decision record. Headline readiness still 0% on (b) until the Mac
+              re-mint — no longer true on mainline, see the Mac's note next. (#649 landed after #653 under DR-037; manifest regenerated on top of v71.)
               (Earlier 2026-09-11, Mac lane:)
               HARDWARE EVIDENCE RE-MINTED against the
               manifest mainline carries (v68 / ce58f6): 53c60f4e, from verify:all --require-mcp

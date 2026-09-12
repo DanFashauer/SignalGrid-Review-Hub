@@ -472,6 +472,18 @@ in one place.
   apps, prep complete, OS update current / required / failed: ready, hold, or contain,
   fail-closed; the 3,072-state sweep pins the single grant). `proof:app-update` (170 checks).
 
+- **Custody-ledger reconciliation** ([PHYSICAL_CUSTODY_SIGNAL_MODEL.md](PHYSICAL_CUSTODY_SIGNAL_MODEL.md),
+  in the `rtls-custody` family) — the runbooks' phantom, graded: what the checkout ledger
+  *says* against what the dock bay *sees*, plus the requester's per-user cap. A seated device
+  the ledger still assigns to a prior holder is a hold with the contradiction named; an
+  unpaired device in a bay is contained; a clear ledger over an empty bay escalates; a cap
+  hit only by returns that never cleared is a hold, a cap genuinely reached a containment
+  (the cap axis is computed from counts, never asserted), and the observation's age is
+  graded against a bound the caller poses — a replayed snapshot never grants. Fail-closed;
+  the sweep of all 4,320 combos pins the single grant and 230,400 raw wire reports grant
+  exactly twice (the two spellings of a clear ledger); the family stays deferred in the
+  launch profile — built, not claimed. `proof:rtls-custody` (214 checks).
+
 - **Platform SSO** ([PLATFORM_SSO.md](PLATFORM_SSO.md)) — "passwordless" and "satisfies MFA"
   are not automatic; the **method** decides the credential's worth. Only a user-registered
   Secure Enclave key or smart card is phishing-resistant. A login policy claimed on a method

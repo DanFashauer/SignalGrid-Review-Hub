@@ -2584,7 +2584,12 @@ profile, a design target and not a shipped surface.
    `docs/BUILD_BACKLOG.md` (*The session puck's software half*), each fail-closed
    and deterministic by construction: (a) a fixture-backed dock/attach signal domain
    — `attached` / `removed` / `unknown` — as a connector-style input with its own
-   proof, where `unknown` is at least `step_up` and never a grant; (b) a
+   proof, where `unknown` is at least `step_up` and never a grant — a stricter bar
+   than the sibling dimensions, which pin `badgeBinding: "unknown"` and
+   `dockState: "unknown"` to `allow` under the day-one-quiet pattern
+   (`lib/signalgrid-core/src/seed.ts:480`, `:484`); the divergence is deliberate and
+   stated on the hypothesis page, because for a puck-gated session the attach event
+   is the custody-intent evidence itself; (b) a
    removal-to-suspend rule in the post-decision cascade, joining the six cascade
    items DR-042 opened rather than duplicating them; (c) the puck lifecycle's audit
    event names in the Decision Envelope's ledger vocabulary; (d) a simulator scenario

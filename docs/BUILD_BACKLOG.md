@@ -530,7 +530,11 @@ item below is a design target until its proof is green and named.
       credential physically seated*. Any wire value outside the two positive states, an
       unparseable record, a missing receiver identity or an observation older than the
       caller's bound is `unknown`. **Fail-closed:** `unknown` is at least `step_up` and
-      is never a grant; `attached` alone grants nothing — it is one axis, and identity
+      is never a grant — deliberately stricter than the sibling `badgeBinding` and
+      `dockState` fixtures, which pin `unknown` to `allow` under the day-one-quiet
+      pattern ([`lib/signalgrid-core/src/seed.ts`](../lib/signalgrid-core/src/seed.ts)
+      lines 480 and 484); the proof must pin the divergence, not inherit the sibling
+      rule; `attached` alone grants nothing — it is one axis, and identity
       and posture must each positively confirm. **Deterministic:** the freshness bound
       and the reference instant are arguments. If this adds a signal kind, a connector
       directory or an API path, the same PR classifies it **deferred** in

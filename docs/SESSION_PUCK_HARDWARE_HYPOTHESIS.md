@@ -190,7 +190,7 @@ behaviour.
 | A radio channel says the worker left but the puck is physically attached | **do not assume the worker left** — physical state and policy outrank a noisy RSSI | A radio "gone" never by itself lowers the answer while custody evidence says seated |
 | UWB (a later rung, if ever) proves the credential is outside the defined distance | suspend or re-authenticate, per policy | Distance evidence, when it exists, is an input to policy, not a verdict |
 | Lost or revoked puck presented | `deny`, plus the recovery path | Cryptographic registration fails; no fallback to a weaker read |
-| Attach state **unknown** (receiver offline, faulted, unreadable) | `step_up` at minimum — **never a grant** | Golden rule 2: unknown raises assurance, never lowers it; the same rule the custody schema applies to `dockState = unknown` |
+| Attach state **unknown** (receiver offline, faulted, unreadable) | `step_up` at minimum — **never a grant** | Golden rule 2: unknown raises assurance, never lowers it. This is a **new, stricter bar than the sibling dimensions**: the decision core pins `badgeBinding: "unknown"` and `dockState: "unknown"` to `allow` under its day-one-quiet pattern (only the affirmative bad state fires; `lib/signalgrid-core/src/seed.ts:480` and `:484`). The divergence is deliberate: for a puck-gated session the attach event *is* the custody-intent evidence, so its absence is the absence of the thing being gated, not a missing side signal |
 
 The document adds one rule for walk-up: BLE may pre-wake the experience, but
 **presence must never by itself open a clinical session** — NFC or docking provides

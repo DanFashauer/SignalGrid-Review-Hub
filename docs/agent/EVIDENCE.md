@@ -2535,3 +2535,110 @@ Text-safety gate passed.
 (all thirteen: exit=0)
 ```
 Verdict:  **holds.** The cited-path count rose 2307 → 2433 (the new page and DR-043 cite the tree at path:line and every one resolves); the docs deferred-noun ceiling stayed at 416 with the page bannered as *nothing on this page is a claim of current capability* and every other touched block hedged in its own paragraph; the ceiling file was not rewritten (no drop, no rise); DR-043 is the 42nd record and carries a reversal clause. What this does NOT prove: that any of the five backlog items is buildable as specified — each is a design target until its proof is green and named — and nothing here measures the hardware, which is the point of DR-043 item 4. **Re-run after the same-day verification fixes** (four stale citations corrected, none of them affecting the gate outcome above): `node scripts/check-cited-paths.mjs` → `Cited-path check passed — 2435 citation(s) across 511 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).` — the count rose by two because the ES256 claim now cites the verifier and its proof row instead of an unrelated line, and `check-cited-commands` went red on this entry's own spelling of the absence command with the silent flag between `run` and the script name (the gate reads the flag as a script name) and is green again with the flag noted in a comment.
+
+## 2026-09-12 — "Row 101 is a judgment call, not a mechanical re-port: the Swift is untouched, and check-decision-port-parity now sees the AppWorkflows field drift it was green over"
+Command:  both ported files and both TS originals read in full; the drift located at `lib/app-workflows/src/index.ts:85-90,144-158` vs `native/ios/EnterpriseShell/Services/AppWorkflows.swift:85-95,122`; section 3b added to the gate (five record shapes compared field for field, `DECLARED_WORKFLOW_DRIFT` checked both ways, nine self-tests); then a live plant — a copy of the gate with the declaration emptied — run against the same tree.
+```
+node scripts/check-decision-port-parity.mjs
+node scripts/check-decision-port-parity.mjs --self-test
+sed 's/^const DECLARED_WORKFLOW_DRIFT = \[/const DECLARED_WORKFLOW_DRIFT = [];\nconst _UNUSED = [/' scripts/check-decision-port-parity.mjs > scripts/.plant-parity.mjs && node scripts/.plant-parity.mjs; echo "exit=$?"
+```
+Output:
+```
+app-workflows parity: 3 enums + 4 operations compared
+app-workflows shapes: 5 record type(s) compared field-for-field, 1 declared drift(s) pinned both ways (AppPlanInput.stepUpSatisfiedActionKeys — TS only)
+Port parity passed — DecisionEngine emits the same verdicts wired the same way, and
+AppWorkflows offers the same vocabulary and the same gating operations.
+  ✓ shape: an undeclared TS-only field is flagged — 1 finding(s)
+  ✓ shape: an undeclared Swift-only field is flagged — 1 finding(s)
+  ✓ shape: a declared TS-only drift is accepted while it holds — 0 finding(s)
+  ✓ shape: a declared drift whose port has LANDED is flagged (remove the declaration) — 1 finding(s)
+  ✓ shape: a declared drift whose TS field is GONE is flagged (stale declaration) — 1 finding(s)
+  ✓ shape: a declaration for shape X does not excuse the same field on shape Y — 1 finding(s)
+  ✓ shape: the Swift parser reads stored properties only (init params and nested lets excluded) — {key, confirmer}
+  ✓ shape: the TS parser reads depth-0 members only (a nested object type's members excluded) — {key, confirmer, nested}
+  ✓ shape: the real AppPlanInput parses on both sides above the floor — ts=7 swift=6
+self-test: 16 passed, 0 failed
+  ✗ AppPlanInput.stepUpSatisfiedActionKeys: present in the TS reference, ABSENT from the Swift port and not declared — the device cannot express it
+Decision-port parity FAILED.
+exit=1
+```
+Verdict:  **holds — as a finding, not a repair.** No generator exists from the TS to the Swift (the port was hand-written in #107, the same commit that added the scoped release to the TS), and the gate proves vocabulary and shape, not bodies, so there is no regeneration it could then prove byte-faithful; this lane cannot compile Swift. The Swift files are byte-identical to `origin/SignalGrid_Alpha`. What the gate now does: read `AppPlanInput` on both sides (7 TS fields, 6 Swift), pin the one missing field, and fail the day the declaration goes stale or the port lands unrecorded. What it still cannot see: the confirmer-fallback string divergence (`"an authorized confirmer"` vs `"supervisor"`), recorded in the backlog row instead. The re-port is `mobile-native-engineer`'s, in Xcode.
+
+## 2026-09-12 — "The three decided deletions now have a row a Mac session can execute, and every claim in it was re-derived on this tree"
+Command:
+```
+git ls-files tests/load .agents site
+for f in tests/load .agents/agent_assets_metadata.toml site/index.html; do git log -1 --format='%h %ad %s' --date=short -- "$f"; done
+git grep -l -F "site/index.html" -- '*.mjs' '*.yml' '*.json' '*.ts'
+git grep -l agent_assets_metadata -- '*.mjs' '*.yml' '*.ts'; echo "exit=$?"
+node scripts/check-backlog-ownership.mjs; node scripts/check-cited-paths.mjs
+```
+Output:
+```
+.agents/agent_assets_metadata.toml
+site/CNAME
+site/index.html
+tests/load/location-report.js
+tests/load/session-start.js
+tests/load/webhooks.js
+4b50c4d9 2026-09-05 tests/load: the k6 drivers could not fail — 404, 401 and 400 counted as success, and webhooks.js posted to a third-party host by default
+c95b97ac 2026-07-17 ci: bump the github-actions group across 1 directory with 10 updates (#63)
+29e29f73 2026-09-05 Seventh round, the shipping site: thirteen evidence links to a branch that does not exist, a landing page outside the scan, a figure with a false provenance badge — fixed, gated, mutation-proven
+.github/workflows/pages.yml
+docs/agent/SURFACE_REVIEW_COVERAGE.json
+scripts/check-launch-claims.mjs
+scripts/check-product-framing.mjs
+exit=1
+Backlog ownership check passed — every row with work left in it names a role from the registry.
+Cited-path check passed — 2565 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+```
+Verdict:  **holds.** Nothing was deleted (the six paths are still tracked). The row names `mac-lane-steward`, lists per path what references it, its last commit and which gate reads it — `check-product-framing.mjs:59` names `site/index.html` and skips it if absent, `check-launch-claims.mjs:166` derives `site/*.html`, nothing reads the toml, `check-test-execution.mjs:46` says the k6 drivers are invoked by nothing — and which fixtures move (the `tests` and `.agents` coverage rows, three `.agents/**` surface lines, one `tests/load/**` glob, `README.md:60` on an owner-reserved surface, and every backticked citation the cited-path gate holds). What is NOT proven: that the deleting commit will be green — that is the Mac session's quote to make.
+
+## 2026-09-12 — "DR-045 proposes the fail-closed value of the three 2026-09-06 'recorded rather than made' safety defaults at their exact code sites, and changes none of them"
+Command:  the 2026-09-06 wording recovered (`git show 5f0017c6 -- docs/agent/LOOP.md` → "the custody backstop blind to five custody axes (disclosed, pinned), NOT_COVERED credential exposure resolving to monitor, a GAPS entry for connector families unwired in the served core"); each site read; the record appended; the gates that read it run.
+```
+grep -rn 'reasonCode: "NOT_COVERED", recommendedAction: "monitor"' lib/integrations/src/integrations/*/evaluate.ts | wc -l
+grep -rln "@workspace/integrations" artifacts/api-server/src; echo "exit=$?"
+git diff --stat -- lib/signalgrid-core lib/integrations scripts/launch-profile.mjs
+node scripts/check-decision-record-format.mjs; node scripts/check-launch-claims.mjs; node scripts/check-cited-paths.mjs
+```
+Output:
+```
+4
+exit=1
+(no output — nothing under those paths changed)
+  ✓ DR-045
+decision-record-format: 44 records, 0 without a reversal clause (GATED), 16 with prose-shaped sections (REPORTED); self-test green
+  docs/**/*.md (REPORTED, not gated): 416 unhedged deferred-capability mention(s) across 110 file(s) (53 more mention(s) in 6 engineering-doc(s) carved out per task #67, each verified) (ceiling 416)
+Launch-claims gate passed — nothing deferred is presented as current.
+Cited-path check passed — 2565 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+```
+Verdict:  **holds.** DR-045 carries a question, a proposal, evidence and a reversal (the owner vetoes by saying so, before or after each item's PR). The first draft pushed the deferred-noun ceiling 416 → 418 by naming custody unhedged in two blocks; hedged where the claim is, back to 416. Four sibling `NOT_COVERED → monitor` lines exist beside the one the note named (the grep above counts the `{ ...base, … }` form; `challenge-capability` uses `verdict(…)` and is the fifth); all five are proposed together. Not decided here: any of the three — the code at every site is byte-identical to the branch point.
+
+## 2026-09-12 — "removeCredential now runs under the same per-user lock as addCredential, and the revocation race it lost is measured on both stores: 9/11 unfixed, 11/11 fixed; hasValidStepUpSession's `return false` is fail-closed, only its docstring lied"
+Command:  `lib/webauthn/src/webauthn/store.ts` and `lib/webauthn/src/stepUpStore.ts` read in full; `proof:enrollment-race` extended first (a 516-interleaving in-memory sweep of a revocation racing an enrolment, and a Redis race of one revocation against twelve enrolments) and run against the UNFIXED store; then the lock factored into `withUserLock` and applied to both writers, the in-memory branch made await-free between read and write, the swallowed `DEL` failure made to propagate; run again.
+```
+redis-server --port 6390 --daemonize yes --save "" --appendonly no; redis-cli -p 6390 ping
+cd scripts && REDIS_URL=redis://127.0.0.1:6390 node --import tsx src/webauthn-enrollment-race-proof.ts   # unfixed store
+cd scripts && REDIS_URL=redis://127.0.0.1:6390 node --import tsx src/webauthn-enrollment-race-proof.ts   # fixed store
+pnpm run typecheck; pnpm run review:invariants; node scripts/check-proof-counts.mjs
+git grep -n hasValidStepUpSession -- '*.ts' | grep -v "stepUpStore.ts" ; echo "exit=$?"
+```
+Output:
+```
+PONG
+  FAIL — in-memory: a revocation of the last credential never deletes an enrolment that lands mid-flight (516 interleavings swept): microtask×27 → revoked=true enrolled=true after=[]; microtask×35 → revoked=true enrolled=true after=[]; microtask×47 → revoked=true enrolled=true after=[]; microtask×57 → revoked=true enrolled=true after=[]; … 43 lost
+  FAIL — all 12 enrolments that raced the revocation survived it (the revocation's snapshot did not erase them): missing: cred-100
+9/11 assertions passed
+  ok   — in-memory: a revocation of the last credential never deletes an enrolment that lands mid-flight (516 interleavings swept)
+  ok   — the revoked credential is GONE after the race (a stale write did not restore it)
+  ok   — all 12 enrolments that raced the revocation survived it (the revocation's snapshot did not erase them)
+concurrency=12 survived=12
+11/11 assertions passed
+scripts typecheck: Done
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Proof-count check passed — all 60 documented counts match their proofs.
+exit=1
+```
+Verdict:  **holds.** Both races were real before the change: in memory, 43 of 516 interleavings deleted the user together with the credential enrolled mid-flight (the old code awaited the Redis client factory between the splice and `inMemoryUsers.delete`); under Redis, the unlocked revocation's stale snapshot erased `cred-100`. Neither is reachable after it. `hasValidStepUpSession` is NOT a fail-open — an unconditional `false` can never grant, so a caller must require a fresh step-up; what was wrong was a docstring describing a check never performed, now replaced by NOT IMPLEMENTED plus `@deprecated`, and nothing calls it (the grep above finds only the definition, exit 1). What is NOT done: the revoke route (the lock is latent until one exists) and the attestation-`'none'` comment at `lib/webauthn/src/webauthn/verify.ts:398` — both left on the row for `security-engineer`. The Redis half of the proof runs where CI provides a store (`scripts/docker-verify.mjs`); preflight does not run it.

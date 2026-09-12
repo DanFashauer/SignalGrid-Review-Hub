@@ -165,64 +165,92 @@ const LOCK_RETRY_MS = 25;
 const RELEASE_LOCK_LUA =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
+type RedisClient = NonNullable<Awaited<ReturnType<typeof getRedisClient>>>;
+
+/**
+ * Run `body` while holding the per-user credential lock in Redis.
+ *
+ * ONE lock for EVERY writer of the record (security roster row 82, 2026-09-12). The
+ * lock was written for `addCredential` and lived inside it, so `removeCredential` — the
+ * other read-modify-write on the same key — ran unlocked: getUser → splice → saveUser.
+ * A revocation racing an enrolment could then write its stale snapshot last, erasing
+ * the credential that had just been enrolled, or being overwritten by the enrolment's
+ * write and RESTORING the credential that had just been revoked — precisely the outcome
+ * the comment above says the lock exists to make impossible. Measured, not reasoned:
+ * `proof:enrollment-race` raced one revocation against twelve enrolments on the
+ * unlocked store and lost `cred-100`. Latent today (no route calls removeCredential),
+ * live the day a revoke endpoint is wired.
+ *
+ * Failing to acquire THROWS. A writer that could not take the lock has not written, and
+ * neither an enrolment nor a revocation may be reported over a record it never held.
+ */
+async function withUserLock<T>(
+  userId: string,
+  refusal: string,
+  body: (redis: RedisClient, key: string) => Promise<T>,
+): Promise<T> {
+  const key = `${USER_PREFIX}${userId}`;
+  const redis = (await getRedisClient()) as RedisClient;
+  const lockKey = `${key}:lock`;
+  // Crypto randomness, not Math.random(). The SET NX PX acquisition is what
+  // actually serialises writers, so this token is not the only guard — but it
+  // is compared on RELEASE, and a predictable token on a security surface is
+  // the wrong primitive whether or not today's code path makes it exploitable.
+  const lockToken = `${Date.now()}-${randomUUID()}`;
+  let held = false;
+  try {
+    await redis.connect();
+
+    for (let attempt = 0; attempt < LOCK_ATTEMPTS && !held; attempt += 1) {
+      const acquired = await redis.set(lockKey, lockToken, "PX", LOCK_TTL_MS, "NX");
+      if (acquired === "OK") {
+        held = true;
+        break;
+      }
+      // Jitter so contending writers do not retry in lockstep.
+      await new Promise((r) => setTimeout(r, LOCK_RETRY_MS + Math.floor(Math.random() * LOCK_RETRY_MS)));
+    }
+    if (!held) throw new Error(refusal);
+
+    // ── critical section ────────────────────────────────────────────────────
+    return await body(redis, key);
+  } finally {
+    if (held) {
+      await redis.eval(RELEASE_LOCK_LUA, 1, lockKey, lockToken).catch(() => undefined);
+    }
+    await redis.quit().catch(() => undefined);
+  }
+}
+
 /** Returns `stored: false` when a credential with this id was already enrolled and
  *  the existing record was kept unchanged — the caller must not report a store. */
 export async function addCredential(userId: string, credential: WebAuthnCredential): Promise<{ stored: boolean }> {
-  const key = `${USER_PREFIX}${userId}`;
-
   if (redisConfigured()) {
-    const redis = await getRedisClient();
-    const lockKey = `${key}:lock`;
-    // Crypto randomness, not Math.random(). The SET NX PX acquisition is what
-    // actually serialises writers, so this token is not the only guard — but it
-    // is compared on RELEASE, and a predictable token on a security surface is
-    // the wrong primitive whether or not today's code path makes it exploitable.
-    const lockToken = `${Date.now()}-${randomUUID()}`;
-    let held = false;
-    try {
-      await redis!.connect();
-
-      for (let attempt = 0; attempt < LOCK_ATTEMPTS && !held; attempt += 1) {
-        const acquired = await redis!.set(lockKey, lockToken, "PX", LOCK_TTL_MS, "NX");
-        if (acquired === "OK") {
-          held = true;
-          break;
+    return withUserLock(
+      userId,
+      "WebAuthn credential enrollment could not acquire the per-user lock; not reporting an enrollment that was not persisted",
+      async (redis, key) => {
+        const data = await redis.get(key);
+        const user: WebAuthnUser = data
+          ? (JSON.parse(data) as WebAuthnUser)
+          : { userId, credentials: [], createdAt: new Date().toISOString() };
+        // Re-entrant safety: a retried request or a duplicate delivery must not append
+        // the same credential twice.
+        let stored = false;
+        if (!user.credentials.some((c) => c.id === credential.id)) {
+          user.credentials.push(credential);
+          // Durable, no TTL — matching saveUser. A credential is an enrollment record,
+          // not a session.
+          const setRes = await redis.set(key, JSON.stringify(user));
+          if (setRes !== "OK") {
+            throw new Error("WebAuthn credential persistence failed");
+          }
+          stored = true;
         }
-        // Jitter so contending writers do not retry in lockstep.
-        await new Promise((r) => setTimeout(r, LOCK_RETRY_MS + Math.floor(Math.random() * LOCK_RETRY_MS)));
-      }
-      if (!held) {
-        throw new Error(
-          "WebAuthn credential enrollment could not acquire the per-user lock; not reporting an enrollment that was not persisted",
-        );
-      }
-
-      // ── critical section ────────────────────────────────────────────────────
-      const data = await redis!.get(key);
-      const user: WebAuthnUser = data
-        ? (JSON.parse(data) as WebAuthnUser)
-        : { userId, credentials: [], createdAt: new Date().toISOString() };
-      // Re-entrant safety: a retried request or a duplicate delivery must not append
-      // the same credential twice.
-      let stored = false;
-      if (!user.credentials.some((c) => c.id === credential.id)) {
-        user.credentials.push(credential);
-        // Durable, no TTL — matching saveUser. A credential is an enrollment record,
-        // not a session.
-        const setRes = await redis!.set(key, JSON.stringify(user));
-        if (setRes !== "OK") {
-          throw new Error("WebAuthn credential persistence failed");
-        }
-        stored = true;
-      }
-      inMemoryUsers.set(userId, user); // keep the mirror consistent, as saveUser does
-      return { stored };
-    } finally {
-      if (held) {
-        await redis!.eval(RELEASE_LOCK_LUA, 1, lockKey, lockToken).catch(() => undefined);
-      }
-      await redis!.quit().catch(() => undefined);
-    }
+        inMemoryUsers.set(userId, user); // keep the mirror consistent, as saveUser does
+        return { stored };
+      },
+    );
   }
 
   // No Redis configured: single-process in-memory mode. Read-check-write with NO await
@@ -244,41 +272,69 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
   return { stored: true };
 }
 
+/**
+ * Remove one credential from a user's enrollment record ATOMICALLY; the record itself
+ * is deleted when its last credential goes.
+ *
+ * Returns `false` when there was nothing to remove — no such user, or no such
+ * credential on that user. That is the fail-closed answer for a revoke caller: it never
+ * reports a removal that did not happen, and a caller that needs "revoked" must treat
+ * `false` as NOT revoked, never as "already gone" (a revoke that finds nothing may be
+ * looking at the wrong store, the wrong id, or a record another writer is mid-way
+ * through changing).
+ *
+ * Same lock as `addCredential` in Redis mode (see `withUserLock`), and the same
+ * no-await-between-read-and-write discipline in memory mode: the previous version
+ * awaited the Redis client factory BETWEEN the splice and `inMemoryUsers.delete`, so an
+ * enrolment landing in that window was deleted together with the user (measured: 43 of
+ * 516 swept interleavings on Node 22). It also swallowed a failed Redis DEL and returned
+ * `true` — a revocation reported over a credential the authoritative store still held.
+ * A failed write now propagates, as in saveUser.
+ */
 export async function removeCredential(userId: string, credentialId: string): Promise<boolean> {
-  const user = await getUser(userId);
-  
-  if (!user) {
-    return false;
+  if (redisConfigured()) {
+    return withUserLock(
+      userId,
+      "WebAuthn credential revocation could not acquire the per-user lock; not reporting a revocation that was not persisted",
+      async (redis, key) => {
+        const data = await redis.get(key);
+        if (!data) {
+          inMemoryUsers.delete(userId); // Redis is authoritative: a miss is a miss (see getUser)
+          return false;
+        }
+        const user = JSON.parse(data) as WebAuthnUser;
+        const index = user.credentials.findIndex((c) => c.id === credentialId);
+        if (index === -1) {
+          inMemoryUsers.set(userId, user);
+          return false;
+        }
+        user.credentials.splice(index, 1);
+        if (user.credentials.length === 0) {
+          await redis.del(key); // a failure propagates — never `true` over a key still held
+          inMemoryUsers.delete(userId);
+          return true;
+        }
+        const setRes = await redis.set(key, JSON.stringify(user));
+        if (setRes !== "OK") {
+          throw new Error("WebAuthn credential revocation persistence failed");
+        }
+        inMemoryUsers.set(userId, user);
+        return true;
+      },
+    );
   }
 
-  const index = user.credentials.findIndex(c => c.id === credentialId);
-  if (index === -1) {
-    return false;
-  }
-
+  // No Redis configured: single-process in-memory mode, NO await from read to write.
+  const user = inMemoryUsers.get(userId);
+  if (!user) return false;
+  const index = user.credentials.findIndex((c) => c.id === credentialId);
+  if (index === -1) return false;
   user.credentials.splice(index, 1);
-  
   if (user.credentials.length === 0) {
-    // Remove user entirely
-    const redis = await getRedisClient();
-    const key = `${USER_PREFIX}${userId}`;
-    
-    if (redis) {
-      try {
-        await redis.connect();
-        await redis.del(key);
-      } catch {
-        // Fall through
-      } finally {
-        await redis.quit();
-      }
-    }
-    
     inMemoryUsers.delete(userId);
   } else {
-    await saveUser(user);
+    inMemoryUsers.set(userId, user);
   }
-
   return true;
 }
 

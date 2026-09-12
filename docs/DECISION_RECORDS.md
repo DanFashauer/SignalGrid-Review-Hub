@@ -2857,3 +2857,137 @@ hardware step, not only once); a prototype started on appetite rather than on a 
 gate is a violation of this record, not a reversal of it. The do-not-claim list in
 item 5 does not move on appetite either: a line leaves it only when the test or
 review that would make the claim true is recorded in `docs/agent/EVIDENCE.md`.
+
+## DR-045 — Three safety defaults recorded on 2026-09-06 rather than made: the fail-closed value of each is proposed here with its code site, nothing is changed in this branch, and the owner vetoes by saying so (cloud lane, 2026-09-12)
+
+**Question.** Batch Y (2026-09-06, commit `5f0017c6`) closed its audit of the loose
+docs with three calls it recorded as the owner's rather than making: "the custody
+backstop blind to five custody axes (disclosed, pinned), NOT_COVERED credential
+exposure resolving to monitor, a GAPS entry for connector families unwired in the
+served core." The org self-evaluation of 2026-09-12 (`docs/agent/ORG_SELF_EVALUATION_2026-09-12.md:84`)
+found them still waiting, and read `docs/OWNER_ACTIONS.md:145-152` the way the owner
+wrote it on 2026-08-19: a reversible technical default is the team's to propose, and
+what is asked of him is a veto, not a design. So: for each of the three, what is the
+site, what is the value today, what is the fail-closed value under CLAUDE.md golden
+rule 2 (an unknown or unreachable signal raises assurance, never lowers it), and what
+does the owner have to say to stop it? (Custody is a deferred family here — not
+shipping; nothing in this record changes what is claimed.)
+
+**Proposal — three defaults, each fail-closed, none made here.** This record proposes;
+the code at every site below is untouched in the branch that carries it. Each item is
+made in its own PR, opened after this record is on the owner board, and only if the
+owner has not said otherwise; a veto before the PR stops it, a veto after the PR
+reverts it. Silence during the branch that wrote this is not consent — the PRs are
+opened by the next session that reads the board, not by this one.
+
+**1. The core backstop and the custody axes (a deferred family — not shipping).**
+*Site.* `lib/signalgrid-core/src/evidence.ts:104-156`, `deriveCriticalSignalsPresent`
+— the layer that holds when a custom rule set does not. Pinned at
+`scripts/src/signalgrid-core-proof.ts:3116` (`BACKSTOP_FIELDS`, seven fields) and
+`scripts/src/zero-trust-principles-proof.ts:476` (`DECLARED_AXES`, the same seven);
+the boundary itself is asserted in the affirmative at `scripts/src/zero-trust-principles-proof.ts:245-259`.
+*Current value.* The ladder disqualifies on `identityEnabled`, `deviceCompliance`,
+`deviceManaged`, `deviceEncrypted`, `osSupported`, `postureFreshness` and
+`dockEvidenceFreshness`. The custody fields of the same evidence record —
+`custodyState`, `dockChargeState`, `batteryHealth`, `tamperState`, `dockState`,
+`badgeBinding` (`lib/signalgrid-core/src/types.ts:486-532`; the 2026-09-06 note said
+five, the record has six outside the ladder, `dockEvidenceFreshness` being the one
+inside it) — are not in it, so with every custody field `unknown` a compliant device on
+a critical workflow ALLOWS. The zero-trust proof records why that is deliberate
+(`:207-218`): `unknown` is what every tenant without custody hardware reports, and a
+blanket rule would step up every dockless fleet forever; a channel that EXISTS and
+cannot vouch (`offline`, `faulted`, `sensor_unavailable`, `removed`) already removes
+allow (`:221-238`). The gap is the quiet middle: a tenant that HAS a custody channel
+whose feed stops arriving as `unknown` rather than as `offline` — for that tenant the
+unknown lowers nothing, which golden rule 2 forbids. (Custody is a deferred family in
+the launch profile: not shipping, built behind proofs. This item changes what the
+proofs assert, not a customer's verdict today.)
+*Proposed value.* The backstop gains the six custody fields CONDITIONALLY: a tenant
+declares its custody channel once (`Tenant` in `lib/signalgrid-core/src/types.ts:41`
+gains `custodyChannel: "none" | "dock" | "rtls"`, no default), and for a tenant that
+declared a channel, `unknown` on any of the six disqualifies `criticalSignalsPresent`
+exactly as an unknown compliance answer does today. A tenant that declares `none`
+keeps the boundary the proof pins. An UNDECLARED tenant is treated as declared — the
+raising answer — so the seeded demo tenants declare `none` in the fixture and nothing
+else moves. Custody stays a deferred family throughout: this moves what the proofs
+assert, not a claim. Fail-closed because the one unknown that existed here (does this fleet have
+a channel?) stops being resolved in the loosening direction. Moves in the same commit:
+`BACKSTOP_FIELDS`, `DECLARED_AXES`, and the BOUNDARY assertion (split into "declared
+none → allow" and "declared dock, all unknown → step_up").
+*Veto.* The owner says so; the boundary stays as pinned today and this item is marked
+VETOED here with the date.
+
+**2. `NOT_COVERED` resolving to `monitor`.**
+*Site.* `lib/integrations/src/integrations/credential-exposure/evaluate.ts:81` — the
+one the 2026-09-06 note named — and the identical line in four siblings:
+`lib/integrations/src/integrations/identity-risk/evaluate.ts:77`,
+`lib/integrations/src/integrations/data-protection/evaluate.ts:80`,
+`lib/integrations/src/integrations/peripheral-control/evaluate.ts:82`,
+`lib/integrations/src/integrations/challenge-capability/evaluate.ts:74`.
+*Current value.* `posture: "unknown", reasonCode: "NOT_COVERED", recommendedAction: "monitor"`
+— a device (or principal) no scanner, IdP risk feed, DLP feed or peripheral-control
+policy covers is graded a blind spot to investigate. `monitor` sits one rung above
+`none` on the family's own ladder (`lib/integrations/src/integrations/credential-exposure/evaluate.ts:23-28`:
+none < monitor < step_up < alert < restrict < escalate) and changes nothing the
+holder meets. Pinned at `scripts/src/credential-exposure-proof.ts:91` (posture and
+reason only) and `scripts/src/challenge-capability-proof.ts:162` (which pins `monitor`).
+*Proposed value.* `step_up` — the answer the rest of the catalogue already gives the
+same condition: `lib/integrations/src/integrations/sse-egress/evaluate.ts:76`,
+`lib/integrations/src/integrations/macos-posture/evaluate.ts:90`,
+`lib/integrations/src/integrations/pacs-access/evaluate.ts:137`, and custody-beacon
+(itself a deferred family, not shipping; `scripts/src/custody-beacon-proof.ts:91`: "covered=false → step_up, never a
+confirmation"). Fail-closed because "we have no coverage of this device" is exactly the
+unknown golden rule 2 says must raise, and `monitor` does not raise. Two pins and one
+doc move with it (`challenge-capability-proof.ts:162`, `docs/CREDENTIAL_EXPOSURE_SIGNAL.md:60`;
+`credential-exposure-proof.ts:91` needs an action assertion added, since today it has
+none). Scope, stated plainly: these five are library surfaces the served `/v1` core does
+not import (`docs/DEPLOYMENT.md:97`, measured 2026-09-06), so the change alters what
+the proofs and any future wiring assert, not a verdict a customer meets today. The
+compounding row — an UNREPORTED collection grading `trusted` / `clean` (the
+"unreported collection → verdict" table in `docs/BUILD_BACKLOG.md`, owner-gated on an
+"observed" distinction) — is a different defect and stays where it is.
+*Veto.* The owner says so; `monitor` stays and this item is marked VETOED with the date.
+
+**3. A `GAPS` entry for the connector families the served core does not consume.**
+*Site.* `scripts/launch-profile.mjs:692`, the `GAPS` array — four entries today, and the
+only one on `surface: "connector-families"` (`:695`) is the Graph transport default.
+An owner-merged file (worker rule; `scripts/check-owner-gated-surfaces.mjs` classifies
+it SAFETY_MACHINERY), so the entry is written out here and not applied.
+*Current value.* No declared gap says what `docs/DEPLOYMENT.md:97` measures: every
+connector family under `lib/integrations` is exercised by its proof and imported by
+nothing under `artifacts/api-server/src` (`grep -rn "@workspace/integrations" artifacts/api-server/src --include=*.ts`
+→ no output), so a family "built" is not a family the `/v1` verdict reads. The launch
+profile is what `scripts/check-launch-claims.mjs` and the readiness figure read; a gap
+that is true in a deployment doc and absent from the profile is a claim by omission.
+*Proposed value.* Add to `GAPS`:
+`id: "connector-families-unwired-in-served-core"`, `surface: "connector-families"`,
+`whatIsMissing: "The served /v1 decision path reads no connector family: artifacts/api-server/src imports nothing from @workspace/integrations, so every family's evidence reaches a verdict only through its proof and the simulator. A family's proof being green is not that family deciding for a customer."`,
+`closedWhen: [{ dir: "artifacts/api-server/src", anyFileContainsAll: ['"@workspace/integrations"'] }]`
+— the same self-closing shape the four existing entries use, so the entry deletes
+itself (the build fails until it is removed) the day the served core imports the
+package. Fail-closed because until then the profile, and everything that reads it,
+counts the wired surface as the shipped one instead of letting the library surface
+stand in for it.
+*Veto.* The owner says so, or merges a different wording; the profile is his file.
+
+**Already closed, so not proposed twice.** Two neighbours the 2026-09-12 evaluation
+listed beside these are done in the tree: the `vuln-scan` empty-set default is now
+derived (`options.scanned ?? findings.length > 0`; the BUILD_BACKLOG entry is ticked)
+and the eleven paginating connectors throw `incomplete_read` at the page cap
+(`KNOWN_SILENT` empty). Both are cited here so nobody re-opens them as owner calls.
+
+**Evidence.** Each site above read in full on this branch before citation; the
+2026-09-06 wording recovered from `git show 5f0017c6 -- docs/agent/LOOP.md`; the
+proof pins located by running `grep -rn "NOT_COVERED" scripts/src/*.ts` and
+`grep -n BACKSTOP_FIELDS scripts/src/signalgrid-core-proof.ts`; the served-core
+measurement re-run 2026-09-12 (`grep -rln "@workspace/integrations" artifacts/api-server/src`
+→ nothing). Golden rule 2 as written in `CLAUDE.md`; the delegation rule as written in
+`docs/OWNER_ACTIONS.md:145-152` and this file's preamble.
+
+**Reversal.** The owner vetoes any item by saying so — one line, in chat or on the
+board — before or after its PR; before, the PR is not opened; after, the PR is
+reverted and the pins go back to what they assert today. The item is then marked
+VETOED here with the date and the reason he gave, and stays on the record so the
+next audit does not re-propose it. Nothing in this record changes what may be
+CLAIMED (DR-021 §2): each of the three is a library or governance surface, and the
+launch-claims gate governs the prose either way.

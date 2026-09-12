@@ -41,6 +41,14 @@
 // vectors would, and that needs a Mac. It catches the failure that actually
 // happens: a rule added, removed, or rewired on one side alone.
 //
+// SECTION 3b (2026-09-12) compares the AppWorkflows RECORD SHAPES field by field —
+// the five interfaces/structs the planner reads and writes. Section 3 compares only
+// the enums and the operation names, and BUILD_BACKLOG row 101 is the drift it could
+// not see: TS `AppPlanInput` gained `stepUpSatisfiedActionKeys` (scoped step-up
+// release) and the Swift struct did not, while the gate stayed green. A known drift
+// left for the Mac lane is DECLARED (`DECLARED_WORKFLOW_DRIFT`) and checked both
+// ways, the CORE_ONLY_CATEGORIES pattern; an undeclared field difference fails.
+//
 // SCOPE OF THE "DECLARED" SET (section 4). The core's reason codes are read from
 // the SHARED_DEVICE_RULES_V1 array only — the ACTIVE shared-device policy. Draft
 // rule sets in the same file (SHARED_DEVICE_RULES_V2 and any successor) are OUT
@@ -244,6 +252,44 @@ function checkEnginesAndWorkflows() {
 
   say(`app-workflows parity: 3 enums + 4 operations compared`);
 
+  // ── 3b. AppWorkflows SHAPES: the records, field for field ─────────────────
+  // The enums say what words the two planners share; the record shapes say what
+  // INPUTS they accept and what PLANS they return. A field present on one side only
+  // is a capability the other side cannot express — the device cannot be handed a
+  // scoped release it has no field for — and nothing above could see it.
+  let shapesCompared = 0;
+  for (const shape of WF_SHAPES) {
+    const a = tsInterfaceFields(wfTsSrc, shape);
+    const b = swiftStructFields(wfSwiftSrc, shape);
+    if (!a || !b) {
+      console.error(`  ✗ ${shape}: could not be read from ${!a ? WF_TS : WF_SWIFT} — the declaration shape changed, so this section stopped guarding it`);
+      problems += 1;
+      continue;
+    }
+    if (a.size < MIN_SHAPE_FIELDS || b.size < MIN_SHAPE_FIELDS) {
+      console.error(`  ✗ ${shape}: parsed only ${a.size} TS / ${b.size} Swift field(s), floor is ${MIN_SHAPE_FIELDS} — the parse has drifted, not the code`);
+      problems += 1;
+      continue;
+    }
+    shapesCompared += 1;
+    for (const line of compareShapes({ shape, tsFields: a, swiftFields: b, declared: DECLARED_WORKFLOW_DRIFT })) {
+      console.error(line);
+      problems += 1;
+    }
+  }
+  // A declaration must name a shape this section reads, or it declares nothing.
+  for (const d of DECLARED_WORKFLOW_DRIFT) {
+    if (!WF_SHAPES.includes(d.shape)) {
+      console.error(`  ✗ DECLARED_WORKFLOW_DRIFT names \`${d.shape}\`, which is not one of the shapes compared (${WF_SHAPES.join(", ")}) — the declaration guards nothing`);
+      problems += 1;
+    }
+  }
+  say(
+    `app-workflows shapes: ${shapesCompared} record type(s) compared field-for-field, ` +
+      `${DECLARED_WORKFLOW_DRIFT.length} declared drift(s) pinned both ways ` +
+      `(${DECLARED_WORKFLOW_DRIFT.map((d) => `${d.shape}.${d.field} — ${d.side === "ts" ? "TS only" : "Swift only"}`).join("; ") || "none"})`,
+  );
+
   // ── Declared core-only categories: the divergence must be LOUD, both ways ───
   //
   // The 2026-08-10 second scan found the gap this section pins: the product core
@@ -308,6 +354,101 @@ function swiftEnum(src, name) {
 }
 
 const CORE_ONLY_CATEGORIES = ["device_management_health", "local_authority"];
+
+// ── 3b support: record shapes ────────────────────────────────────────────────
+/** The record types both planners declare. TS `export interface X`, Swift `struct X`. */
+const WF_SHAPES = ["AppAction", "AppIntegration", "AppActionPlan", "AppSessionPlan", "AppPlanInput"];
+// Every shape above carries at least this many fields today (the smallest, AppAction,
+// has five). A parse that returns fewer has stopped reading the declaration.
+const MIN_SHAPE_FIELDS = 5;
+/**
+ * Field-level drift that is KNOWN, RECORDED and deliberately not repaired here.
+ *
+ * `side: "ts"` means the field exists in the TS reference and is absent from the Swift
+ * port. Each entry is checked in BOTH directions on every run: the field must still be
+ * present on its side (else the entry is stale — delete it) and still absent on the
+ * other (else the port landed and the entry is hiding finished work — delete it and
+ * let the plain comparison govern). Repairing the port is the Mac lane's, with Xcode
+ * (CLAUDE.md golden rule 1: the Swift is never edited for behaviour from here).
+ */
+const DECLARED_WORKFLOW_DRIFT = [
+  {
+    shape: "AppPlanInput",
+    field: "stepUpSatisfiedActionKeys",
+    side: "ts",
+    why:
+      "scoped step-up release: TS releases only the actions a verified gesture was bound to " +
+      "(lib/app-workflows/src/index.ts, #107); the Swift port has only the global " +
+      "`stepUpSatisfied` boolean, so the device can release every held action or none " +
+      "(BUILD_BACKLOG row 101). /v1 already speaks the scoped form.",
+  },
+];
+
+/** The text between the brace at `open` and its matching close, with every NESTED
+ *  brace block reduced to `{}` — so only depth-0 members remain. Null if unbalanced. */
+function depthZeroBody(src, open) {
+  if (src[open] !== "{") return null;
+  let depth = 0;
+  let out = "";
+  for (let i = open; i < src.length; i += 1) {
+    const ch = src[i];
+    if (ch === "{") {
+      depth += 1;
+      if (depth === 2) out += "{";
+      continue;
+    }
+    if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return out;
+      if (depth === 1) out += "}";
+      continue;
+    }
+    if (depth === 1) out += ch;
+  }
+  return null;
+}
+/** `export interface X { a: T; b?: U; }` -> Set{a,b}. Comments are stripped by `code()`. */
+function tsInterfaceFields(src, name) {
+  const m = new RegExp(`export interface ${name}\\s*\\{`).exec(src);
+  if (!m) return null;
+  const body = depthZeroBody(src, m.index + m[0].length - 1);
+  if (body === null) return null;
+  return new Set([...body.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\??\s*:/gm)].map((x) => x[1]));
+}
+/** `struct X { let a: T; var b: U = … ; init(…) {…} }` -> Set{a,b}. Only stored
+ *  properties at depth 0 count — an `init` parameter list is not a field. */
+function swiftStructFields(src, name) {
+  const m = new RegExp(`struct ${name}\\s*\\{`).exec(src);
+  if (!m) return null;
+  const body = depthZeroBody(src, m.index + m[0].length - 1);
+  if (body === null) return null;
+  return new Set([...body.matchAll(/^\s*(?:let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/gm)].map((x) => x[1]));
+}
+/** The one comparison, pure so the self-test can run it on synthetic shapes. */
+function compareShapes({ shape, tsFields, swiftFields, declared }) {
+  const found = [];
+  const declaredHere = declared.filter((d) => d.shape === shape);
+  const isDeclared = (field, side) => declaredHere.some((d) => d.field === field && d.side === side);
+  for (const f of [...tsFields].filter((x) => !swiftFields.has(x)).sort()) {
+    if (isDeclared(f, "ts")) continue;
+    found.push(`  ✗ ${shape}.${f}: present in the TS reference, ABSENT from the Swift port and not declared — the device cannot express it`);
+  }
+  for (const f of [...swiftFields].filter((x) => !tsFields.has(x)).sort()) {
+    if (isDeclared(f, "swift")) continue;
+    found.push(`  ✗ ${shape}.${f}: present in the Swift port, ABSENT from the TS reference and not declared — the port invented a field`);
+  }
+  for (const d of declaredHere) {
+    const [home, other, homeName, otherName] =
+      d.side === "ts" ? [tsFields, swiftFields, "TS", "Swift"] : [swiftFields, tsFields, "Swift", "TS"];
+    if (!home.has(d.field)) {
+      found.push(`  ✗ ${shape}.${d.field}: declared ${homeName}-only but ABSENT from the ${homeName} side — stale declaration, delete it`);
+    }
+    if (other.has(d.field)) {
+      found.push(`  ✗ ${shape}.${d.field}: declared ${homeName}-only but the ${otherName} side now has it — the port landed; remove the declaration so the plain comparison governs`);
+    }
+  }
+  return found;
+}
 
 // ── 4. The THIRD engine: SignalGridMobile's mock ─────────────────────────────
 //
@@ -586,6 +727,51 @@ function runSelfTests() {
     "the scoped slice excludes the draft array",
     Boolean(coreRulesSlice) && !coreRulesSlice.includes("SHARED_DEVICE_RULES_V2"),
     coreRulesSlice ? `${coreRulesSlice.split("\n").length} line(s) scoped` : "no slice",
+  );
+
+  // ── 3b: the shape comparison must be able to fail, in every direction ──────
+  const S = (...xs) => new Set(xs);
+  const undeclaredTs = compareShapes({ shape: "X", tsFields: S("a", "b", "extra"), swiftFields: S("a", "b"), declared: [] });
+  t("shape: an undeclared TS-only field is flagged", undeclaredTs.length === 1 && undeclaredTs[0].includes("X.extra"), `${undeclaredTs.length} finding(s)`);
+  const undeclaredSwift = compareShapes({ shape: "X", tsFields: S("a", "b"), swiftFields: S("a", "b", "invented"), declared: [] });
+  t("shape: an undeclared Swift-only field is flagged", undeclaredSwift.length === 1 && undeclaredSwift[0].includes("X.invented"), `${undeclaredSwift.length} finding(s)`);
+  const decl = [{ shape: "X", field: "extra", side: "ts", why: "planted" }];
+  const honoured = compareShapes({ shape: "X", tsFields: S("a", "extra"), swiftFields: S("a"), declared: decl });
+  t("shape: a declared TS-only drift is accepted while it holds", honoured.length === 0, `${honoured.length} finding(s)`);
+  const landed = compareShapes({ shape: "X", tsFields: S("a", "extra"), swiftFields: S("a", "extra"), declared: decl });
+  t("shape: a declared drift whose port has LANDED is flagged (remove the declaration)", landed.length === 1 && landed[0].includes("port landed"), `${landed.length} finding(s)`);
+  const stale = compareShapes({ shape: "X", tsFields: S("a"), swiftFields: S("a"), declared: decl });
+  t("shape: a declared drift whose TS field is GONE is flagged (stale declaration)", stale.length === 1 && stale[0].includes("stale declaration"), `${stale.length} finding(s)`);
+  const otherShape = compareShapes({ shape: "Y", tsFields: S("a", "extra"), swiftFields: S("a"), declared: decl });
+  t("shape: a declaration for shape X does not excuse the same field on shape Y", otherShape.length === 1, `${otherShape.length} finding(s)`);
+  // The Swift parser must read stored properties only: an init parameter that shares a
+  // name with nothing, and a nested block, must not become fields.
+  const swiftFixture = code(
+    [
+      "struct Fx {",
+      "    let key: String",
+      "    /// doc",
+      "    var confirmer: String? = nil",
+      "    init(_ key: String, sensitive: Bool? = nil, gated: Bool? = nil) {",
+      "        self.key = key",
+      "        let local: Int = 1",
+      "    }",
+      "}",
+      "struct Other { let unrelated: Int }",
+    ].join("\n"),
+  );
+  const fx = swiftStructFields(swiftFixture, "Fx");
+  t("shape: the Swift parser reads stored properties only (init params and nested lets excluded)", fx !== null && fx.size === 2 && fx.has("key") && fx.has("confirmer"), fx ? `{${[...fx].join(", ")}}` : "null");
+  const tsFixture = code("export interface Fx {\n  key: string;\n  /** c */\n  confirmer?: string;\n  nested: { inner: number };\n}\nexport interface Other { unrelated: number }");
+  const tx = tsInterfaceFields(tsFixture, "Fx");
+  t("shape: the TS parser reads depth-0 members only (a nested object type's members excluded)", tx !== null && tx.size === 3 && tx.has("nested") && !tx.has("inner"), tx ? `{${[...tx].join(", ")}}` : "null");
+  // Floors on the REAL files: the declared drift must be a real drift today.
+  const realTs = tsInterfaceFields(code(readFileSync(resolve(repo, WF_TS), "utf8")), "AppPlanInput");
+  const realSwift = swiftStructFields(code(readFileSync(resolve(repo, WF_SWIFT), "utf8")), "AppPlanInput");
+  t(
+    "shape: the real AppPlanInput parses on both sides above the floor",
+    Boolean(realTs && realSwift) && realTs.size >= MIN_SHAPE_FIELDS && realSwift.size >= MIN_SHAPE_FIELDS && realTs.has("integration") && realSwift.has("integration"),
+    `ts=${realTs?.size ?? "null"} swift=${realSwift?.size ?? "null"}`,
   );
 
   return results;

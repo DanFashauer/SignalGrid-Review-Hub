@@ -247,8 +247,16 @@ export async function consumeStepUpSession(stepUpSessionId: string): Promise<boo
 }
 
 /**
- * Check if a step-up session exists and is valid (without consuming it)
- * Useful for checking if user has recently completed step-up
+ * NOT IMPLEMENTED — always `false`, and `false` is the fail-closed answer here: it means
+ * "no valid step-up session is known for this user", so a caller must require a fresh
+ * step-up. It can never say `true` about a session that does not exist. What was wrong
+ * was the docstring, which described a check this function has never performed ("Check
+ * if a step-up session exists and is valid"); a reader trusting it would take a `false`
+ * as "verified absent" when it means "never looked". Kept under this name because
+ * `lib/webauthn/src/index.ts` re-exports the module; no route or proof calls it.
+ * Deleting or deprecating this parallel store is an open owner cut (DR-024; security
+ * roster row 82, item 3).
+ * @deprecated Verify a NAMED session with `getStepUpSession` / `consumeStepUpSession`.
  */
 export async function hasValidStepUpSession(
   userId: string,

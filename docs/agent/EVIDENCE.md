@@ -1684,6 +1684,31 @@ gates after: typecheck (all packages Done); review-invariants (determinism wider
 ```
 Verdict:  **scripts/ was the surface where the guards live, and reading it whole found the guards themselves failing the way everything they watch fails — a self-test that could not go red, a kill rate over zero runs, a skip counted as a pass, a grep against text that is never printed, a ceiling that read corruption as a fresh start.** The pattern is the same one every prior round named, one level up: a check that cannot see the thing it guards. Every fix derives its scope from the thing that defines it — the core's fields, package.json, the installer's constants, git history for genesis — so the next member joins the check by itself, and two new gates now hold the two shapes reading found repeatedly (a module that runs its body on a filename match, a catalog total that no longer counts its rows). With this the ledger reads 100 of 100 surfaces READ; the six that were partial when Batch Y opened are closed. Left as owner decisions, not defects: the two remaining localeCompare pinned defects (artifacts/mcp-server directory listing, self-audit fingerprint), the k6 load drivers no runner invokes (tests surface, COMPANY_BUILD_PLAN row 43), and STATUS.md's "would run here now" column, whose generator cannot run to completion off a live-lane host and whose regeneration no gate enforces.
 
+## 2026-09-11 — "Brace-less `if (...) return x;` guards now enter the mutation sweep, opt-in per target, and the first four families are clean under it"
+Command:  the mutation guard's sweep only ever mutated braced `if` blocks; every one-line `if (cond) return x;` guard — the dominant shape in the newer fail-closed normalizers — sat outside it. A sixth mutator (oneline-cond-false: `if (cond) return x;` -> `if (false) return x;`) was added, gated behind `oneLine: true` on a TARGETS entry so an un-pinned family cannot turn the sweep red the day it lands, and measured across the whole registry before any target opted in. The custody family named below is a deferred family, not launch scope.
+```
+node scripts/mutation-guard.mjs                                  # full measurement, every target, mutator forced on
+node scripts/mutation-guard.mjs --proof=proof:rtls-custody       # opt-in sweep (deferred family)
+node scripts/mutation-guard.mjs --proof=proof:device-attestation
+node scripts/mutation-guard.mjs --proof=proof:verdict-attestation
+node scripts/mutation-guard.mjs --proof=proof:app-update
+pnpm run proof:verdict-attestation ; pnpm run proof:app-update
+pnpm run typecheck ; node scripts/check-proof-counts.mjs
+```
+Output:
+```
+full measurement (before any opt-in): mutations=1732 killed=1521 hung=4 known-inert=86 survivors=121 — 117 one-line survivors across 41 files, plus 4 braced break-glass disjuncts that were pinned separately on #645
+proof:rtls-custody (deferred family): mutations=14 killed=14 hung=0 known-inert=0 survivors=0
+proof:device-attestation:  mutations=25 killed=25 hung=0 known-inert=0 survivors=0
+proof:verdict-attestation: mutations=44 killed=37 hung=0 known-inert=4 survivors=3   (attest.ts:99 symbol-key guard, attest.ts:106 symbol-key guard, canonical.ts:45 early return)
+  -> after this round:     mutations=42 killed=38 hung=0 known-inert=4 survivors=0
+proof:app-update:          mutations=54 killed=50 hung=0 known-inert=4 survivors=0
+summary=pass (98/98)   proof:verdict-attestation (was 82)
+summary=pass (74/74)   proof:app-update (was 71)
+typecheck: all packages Done; proof counts: docs updated 82->98 (PRODUCT_CORE_THREAT_MODEL) and 71->74 (APP_UPDATE_CURRENCY, INTEGRATION_CATALOG)
+brace-less sweep (oneline-cond-false): 4 of 41 targets opted in; 37 pending (REPORTED, never fatal)
+```
+Verdict:  **holds — with three of the survivors turning out to be guards that could never fire.** attest.ts:99 was only reachable when Object.prototype carries the attestation's field names; it is now pinned by a check that plants those fields on Object.prototype, presents `Object.prototype` itself as the attestation, and expects `envelope_malformed` (restored in `finally`). attest.ts:106 and canonical.ts:45 were shadowed outright — a symbol key was already rejected by the `includes` membership check one line down, and the canonical early return fell through to the same `UNCANONICAL` the final line returns — so both were DELETED with a comment rather than allowlisted, and the membership check's cast now says why it accepts symbols. app-update's two shadowed guards (a symbol-key check under an `includes`, an empty-string check under a digits-only regex) went the same way, and `parseVersion` gained pins for `1e2.0`, `+1.0`, `1.0x`, empty, `v`, and whitespace. The other 37 families still carry their one-line survivors un-swept; the BUILD_BACKLOG campaign row lists them by survivor count, and each joins by adding `oneLine: true` once its survivors are pinned by a check that fails without them or documented inert with a reason. The guard REPORTS the pending count on every run and never fails on it — a family cannot be quietly counted as swept.
 ## 2026-09-11 — "Two of the three runbook gaps modeled: the custody-ledger reconciliation (ledger vs bay vs cap) as a fixture corpus + fail-closed evaluator in the rtls-custody family, 48 new guards all falsifiable"
 Command:  the two gap rows in docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md that no surface modeled — "custody integrity" (a returned device still checked out to a prior holder / unpaired but occupying a slot) and the "per-user checkout cap" contradiction — built on the device-prep / supervision-identity pattern: lib/integrations/src/integrations/rtls-custody/custody-ledger.ts (6 normalized axes; the cap axis COMPUTED from three counts, never asserted; own-property reads, bounded chain scan, frozen domains and allowlist), a 19-fixture corpus, and a proof section in scripts/src/rtls-custody-proof.ts; registered with the mutation guard and the figure guard. Not a detect.ts detection and not a simulator change (both DR-020 territory — split to the backlog).
 ```

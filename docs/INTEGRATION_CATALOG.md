@@ -470,7 +470,7 @@ in one place.
   floors, `force_update`, and install-channel provenance — and, as a distinct surface in
   the same family, the iOS update / device-prep **workflow** (enrolled, profiles, required
   apps, prep complete, OS update current / required / failed: ready, hold, or contain,
-  fail-closed; the 3,072-state sweep pins the single grant). `proof:app-update` (167 checks).
+  fail-closed; the 3,072-state sweep pins the single grant). `proof:app-update` (170 checks).
 
 - **Custody-ledger reconciliation** ([PHYSICAL_CUSTODY_SIGNAL_MODEL.md](PHYSICAL_CUSTODY_SIGNAL_MODEL.md),
   in the `rtls-custody` family) — the runbooks' phantom, graded: what the checkout ledger

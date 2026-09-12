@@ -73,6 +73,12 @@ const hugeSegment = ev({ installed_version: "2.9007199254740992", latest_version
 check("unsafely-huge version segments → malformed, never a grant from a comparison that lost information",
   hugeSegment.recommendedAction !== "none" && normalizeReport("h", "a", { installed_version: "2.9007199254740992", latest_version: "2.9007199254740993", channel: "managed" }).reportIntegrity === "malformed");
 check("a non-string does not parse", parseVersion(7) === null && parseVersion(null) === null);
+// The brace-less sweep (2026-09-11): guards it reached that no input had ever exercised.
+check("a segment Number() would accept but the digit test refuses (1e2, +1) does not parse — the regex is the guard, not the safe-integer check",
+  parseVersion("1e2.0") === null && parseVersion("+1.0") === null && parseVersion("1.0x") === null);
+check("an empty version and a bare v do not parse", parseVersion("") === null && parseVersion("v") === null && parseVersion("  ") === null);
+check("a non-string enum slot (channel: 7) is a MALFORMED report, not an unknown channel",
+  normalizeReport("j5", "a", { installed_version: "2.4.0", latest_version: "2.4.0", channel: 7 as unknown as string }).reportIntegrity === "malformed");
 
 // ── the grant, and its one reasoned exception ───────────────────────────────────
 const current = ev({ installed_version: "2.4.0", latest_version: "2.4.0", min_version: "2.0.0", force_update: false, channel: "managed" });

@@ -144,7 +144,22 @@ LAST TOUCHED: 2026-09-12 (Mac lane, latest) - READINESS 94%, OUTREACH OPEN INSID
               closed the three holes the custody-ledger review had found the same hour -
               own-name fixture lookup, one-time axis snapshot, a revoked-Proxy catch - in
               both modules (proofs 148 -> 154 and 161 -> 167; sweeps 58/58 and 76 + 4 inert
-              of 80, 0 survivors). (Earlier 2026-09-11, cloud lane:) TWO OF THE THREE RUNBOOK GAPS MODELED
+              of 80, 0 survivors). (Earlier 2026-09-11, cloud lane:) BRACE-LESS GUARDS JOIN THE MUTATION SWEEP
+              (branch lane/cloud-guard-braceless-20260911-220800Z; product PR, owner merges): the
+              mutation guard only ever mutated braced `if` blocks, so every one-line
+              `if (cond) return x;` guard - the dominant shape in the newer fail-closed
+              normalizers - was never swept. New mutator oneline-cond-false, opt-in per
+              target (`oneLine: true`), measured across the whole registry first: 1732
+              mutations, 121 survivors (117 one-line across 41 files). Four families opted
+              in and are clean under it (rtls-custody 14/14, device-attestation 25/25,
+              verdict-attestation 42 with 0 survivors after one new pin and two shadowed
+              guards DELETED, app-update 54 with 0 survivors after two shadowed guards
+              deleted and six parseVersion pins). Docs proof counts 82->98 and 71->74.
+              The guard now REPORTS "N of M targets opted in; K pending" every run and
+              never fails on it; as of 2026-09-11 the BUILD_BACKLOG campaign row lists the pending families
+              by survivor count. Still awaiting owner merge: #638, #641, #645, #649 (all
+              green; Mac re-mints evidence ONCE after they land). (#654 landed after #653 and #649 under DR-037; manifest regenerated on top.)
+              (Earlier 2026-09-11, cloud lane:) TWO OF THE THREE RUNBOOK GAPS MODELED
               (branch lane/cloud-custody-ledger-20260911-203200Z; product PR, owner merges):
               the custody-ledger RECONCILIATION in rtls-custody/custody-ledger.ts - what
               the checkout ledger says vs what the dock bay sees, plus the requester's cap.

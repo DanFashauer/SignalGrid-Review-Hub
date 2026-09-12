@@ -111,6 +111,18 @@ export const MUTATORS = [
     describe: (m) => `${truncate(m[2])} && → true &&`,
   },
   {
+    id: "oneline-cond-false",
+    // `if (<anything>) return <x>;` on ONE line → `if (false) return <x>;` — the brace-less
+    // guard shape three reviews found invisible to this sweep (in-house audit on the
+    // custody-ledger surface, Codex rounds on #641): a normalizer's early return, a
+    // parser's fail-closed bail-out, a bound check. Each is a guard exactly like the
+    // braced ones above; only its spelling kept it out of the sweep, and a guard the
+    // sweep cannot reach is a guard nobody has ever seen fail.
+    match: /^(\s*)if \((.+)\) return (.+);( \/\/.*)?$/,
+    apply: (m) => `${m[1]}if (false) return ${m[3]};${m[4] ?? ""}`,
+    describe: (m) => `if (${truncate(m[2])}) return ${truncate(m[3])} → if (false) return ...`,
+  },
+  {
     id: "return-flip",
     // `return true;` / `return false;` inside a predicate — flips a fail-closed default.
     match: /^(\s*)return (true|false);( \/\/.*)?$/,
@@ -155,11 +167,13 @@ const truncate = (s) => (s.length > 58 ? `${s.slice(0, 55)}...` : s);
 //   touched.
 //
 // MEASURED, not estimated: 417 brace-less guard clauses sit in registered files
-// across 49 of the 53 targets — a whole class this harness cannot currently
-// falsify, and a ~31% increase in mutations (1,367 -> ~1,784) once a mutator for
-// that shape exists. That is its own piece of work with its own triage cycle, and
-// it is filed rather than smuggled into this change. Re-register these two the
-// moment the mutator lands.
+// across 49 of the 53 targets — a whole class this harness could not falsify until
+// the `oneline-cond-false` mutator landed (2026-09-11). It landed as a RATCHET:
+// the full-suite measurement produced 1,732 mutations and 117 new survivors across
+// 41 files, so the mutator applies only to targets that opt in (`oneLine: true`)
+// after their one-line guards are pinned or documented inert, and every run prints
+// which targets have not joined. Re-register nac/cisco-ise.ts and
+// nac/aruba-clearpass.ts (below) when `nac` joins.
 export const TARGETS = [
   // `posture-composition` was registered here and REMOVED in the same session. The sweep
   // returned `mutations=0`: `compose.ts` is a sort plus a table lookup and `adapters.ts`
@@ -202,6 +216,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:verdict-attestation",
+    oneLine: true,
     files: ["lib/verdict-attestation/src/attest.ts", "lib/verdict-attestation/src/canonical.ts"],
   },
   {
@@ -232,6 +247,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:app-update",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/app-update/evaluate.ts",
       "lib/integrations/src/integrations/app-update/app-update-connector.ts",
@@ -537,6 +553,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:device-attestation",
+    oneLine: true,
     files: [
       // `evaluate.ts` grants the TOP assurance tier for this family and was not
       // mutated at all: the registration named `index.ts`, which re-exports it.
@@ -624,6 +641,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:rtls-custody",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/rtls-custody/evaluate.ts",
       "lib/integrations/src/integrations/rtls-custody/index.ts",
@@ -1300,9 +1318,19 @@ export function baselineProbe(proof, run) {
  * post-merge, so nothing per-PR would notice; `check-mutation-sharding.mjs`
  * asserts each mutator still fires on its representative shape by calling this.
  */
-export function lineMutations(line) {
+/** Mutators that apply only when the target OPTS IN (`oneLine: true` on its TARGETS entry).
+ *  The brace-less mutator lands as a ratchet: measured 2026-09-11 over every registered
+ *  file it produced 117 new survivors across 41 files (plus 4 break-glass disjuncts a
+ *  separate PR fixes), and a gate that turns red over 117 guards nobody has pinned yet is
+ *  a gate that gets switched off. So a family joins the brace-less sweep when its one-line
+ *  guards are pinned by checks that fail without them (or documented inert with a reason),
+ *  and the census printed with every run says how many targets have not joined. */
+const OPT_IN_MUTATORS = new Set(["oneline-cond-false"]);
+
+export function lineMutations(line, opts = {}) {
   const out = [];
   for (const mutator of MUTATORS) {
+    if (OPT_IN_MUTATORS.has(mutator.id) && opts.oneLine !== true) continue;
     const m = line.match(mutator.match);
     if (!m) continue;
     const replaced = mutator.apply(m);
@@ -1312,13 +1340,13 @@ export function lineMutations(line) {
   return out;
 }
 
-export function mutationsFor(file) {
+export function mutationsFor(file, opts = {}) {
   const abs = join(repoRoot, file);
   const original = readFileSync(abs, "utf8");
   const lines = original.split("\n");
   const out = [];
   for (let i = 0; i < lines.length; i += 1) {
-    for (const lm of lineMutations(lines[i])) {
+    for (const lm of lineMutations(lines[i], opts)) {
       const mutated = [...lines];
       mutated[i] = lm.replaced;
       out.push({
@@ -1357,7 +1385,7 @@ export function shardTargets(all, index, count) {
   }
   const weighted = all.map((t) => ({
     target: t,
-    weight: t.files.reduce((n, f) => n + mutationsFor(f).length, 0),
+    weight: t.files.reduce((n, f) => n + mutationsFor(f, { oneLine: t.oneLine === true }).length, 0),
   }));
   // Longest-processing-time first: heaviest target into the currently lightest bin.
   // CODEPOINT tie-break, never `localeCompare`. This sort decides WHICH SHARD each
@@ -1469,7 +1497,7 @@ function main() {
     }
     console.log(`   baseline: ${target.proof} passes unmutated — a kill below is a real kill`);
     for (const file of target.files) {
-      const mutations = mutationsFor(file);
+      const mutations = mutationsFor(file, { oneLine: target.oneLine === true });
       console.log(`   ${file} — ${mutations.length} mutations`);
       // A registered file the mutators cannot touch is a FALSE COVERAGE CLAIM, and a
       // quiet one: the run says "every registered guard is falsifiable", which is
@@ -1523,6 +1551,16 @@ function main() {
   // the guard's historical markers already recognise).
   console.log(
     `figures=mutations=${total},killed=${killed},inert=${allowed},survivors=${survivors.length}`,
+  );
+  // The brace-less ratchet, REPORTED on every run and never fatal: which targets have
+  // joined the one-line sweep and which have not. A target that has not joined has
+  // guards this run never reached — say so, so the gap shrinks in the open.
+  const joined = targets.filter((t) => t.oneLine === true);
+  const pending = targets.filter((t) => t.oneLine !== true);
+  console.log(
+    `brace-less sweep (oneline-cond-false): ${joined.length} of ${targets.length} targets opted in; ${pending.length} pending` +
+      (pending.length ? ` — ${pending.map((t) => t.proof.replace(/^proof:/, "")).join(", ")}` : "") +
+      " (REPORTED, never fatal — a target joins when its one-line guards are pinned or documented inert)",
   );
 
   // BEFORE the survivor report: a target with no baseline was never swept, and a

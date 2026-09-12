@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-12T20:29:30.111Z",
-  "result": "quiet: 20:24Z cycle (scanned against origin/SignalGrid_Alpha, not a local checkout). Mac tick fresh — firedAt 2026-09-12T20:17Z. Live-evidence minted 2026-09-12T08:42Z (under 3d). No message addressed to cloud is unread. No new or moved origin/mac branches (fleet-premium-proof, native-ledger: stale prune candidates, deletion theirs). #696 runner-harness port-5310 orphan-kill in flight, self-merges on green. Owner NOT escalated."
+  "firedAt": "2026-09-12T21:29:40.350Z",
+  "result": "21:24Z cycle. ACTED earlier this hour: merged #696 (runner orphan-kill; all Codex threads resolved, gating check green) and #697 (steward heartbeat) under DR-037; loop:state exit 0. Mac tick fresh (firedAt 21:08Z). live-evidence under 3d. Sim requests fully bound. Sync manifest no drift. mac/fleet-premium-proof is a mac-announced parked WIP (not for merge); mac/native-ledger-2026-09-02 landed via merged PR #385 (stale branch, mac's to prune). One unread lane message is cloud->mac (CodeQL alerts #67/#75), awaiting the mac's read. Owner NOT escalated."
 }

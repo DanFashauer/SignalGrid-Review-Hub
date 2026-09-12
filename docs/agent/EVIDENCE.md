@@ -2610,3 +2610,169 @@ Verdict: **holds, after a fix to this same change made from review.** Before sta
 3. **This entry's quoted cited-path count (2533) was stale** — measured before the widening fix and this entry's own rewrite added citations of its own. Re-run on the final tree above: **2536**.
 
 `check-backlog-ownership.mjs` was extended with `parseBacklogRows`/`auditBacklogFileOwnership`, scanning BUILD_BACKLOG's checkbox rows under the same `{problems, open, closed}` output shape as the existing COMPANY_BUILD_PLAN scan, with the checkbox itself as status (no free-prose vocabulary in this file — `- [x]` is skipped outright, every open `- [ ]` row must name a role, bold or not). `check-gate-census.mjs`, `check-cited-paths.mjs`, `check-markdown-links.mjs`, `check-launch-claims.mjs`, `check-doc-line-counts.mjs` and `check-derived-doc-figures.mjs` (plus its own `--self-test`) all pass on the tree that includes this fix; `check-backlog-ownership.mjs` was already registered in both `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml` before this change (confirmed by grep, not re-registered). `node scripts/preflight.mjs` → `Preflight PASSED — everything it runs is green.`; `pnpm run verify:breadth` → `Breadth lane PASSED — 56 breadth proofs green.` — both re-run after every edit in this entry, on the exact tree pushed.
+
+## 2026-09-12 — "The org roster has no clock, so a role's nextAction can sit done or stale for weeks unnoticed" (org self-evaluation, item 4)
+Command:
+```
+node scripts/check-org-roster.mjs
+node scripts/check-org-roster.mjs --self-test
+node scripts/check-plugin-manifest.mjs
+node scripts/check-cited-paths.mjs
+node scripts/check-doc-line-counts.mjs
+node scripts/check-derived-doc-figures.mjs
+node scripts/preflight.mjs
+pnpm run verify:breadth
+```
+Output (CORRECTED 2026-09-12, see the round-2 entry below: the block originally quoted here was captured BEFORE commit dd027dd3 landed, so it showed the pre-commit "as of 2026-09-07" reading a stale commit-date source that has since been replaced — this is the same output re-run on the committed tree, post the round-2 fixes, with the new `--as-of`/env/process-clock source):
+```
+Org roster — 42 role(s): 21 activated, 21 never yet run
+  NEXT-ACTION CLOCK (as of 2026-09-12, source: today (process clock, UTC calendar date)) — 34 role(s) with nextAction older than 7d:
+    · competitive-analyst — nextAction older than 7d (set 2026-08-19, 24d ago)
+    · docs-writer — nextAction older than 7d (set 2026-08-19, 24d ago)
+    ... (32 more)
+Org roster check passed — registry and chart agree, and every activation names what it produced.
+
+self-test passed (36/36) — CORRECTED count 2026-09-12: 26/26 at the time this entry was first written; round 2 (isRealCalendarDate + resolveAsOfDate) brought it to 34/34; round 3 (the future/invalid-date bucket) brought it to 36/36, current as of this tree.
+
+Plugin-manifest gate passed — signalgrid plugin: 13 agents (derived), skills + commands present; claude plugin validate exit 0.
+Cited-path check passed — 2533 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+
+Preflight: every step green except Browser E2E, which failed once on a genuine cross-lane port collision (`Error: Port 4614 is already in use` / `Port 4615 is already in use` — another worktree's playwright run was live on the fixed E2E ports at the same moment). Re-run standalone once those ports freed: `pnpm --filter @workspace/scripts run test:e2e` → `53 passed (1.4m)`.
+
+Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Verdict:  **holds.** Every role that carries a `nextAction` (42 of 42) now also carries `nextActionDate` (ISO date, the day that action was SET — for the 34 untouched roles, recovered from `git log -S'<nextAction fragment>' --format=%cs -- docs/agent/org-roster.json | tail -1`, i.e. the commit that first introduced that exact text; never guessed). `scripts/check-org-roster.mjs` gained a pure, testable staleness audit (`auditNextActionClock`/`daysStale`) reported under a new "NEXT-ACTION CLOCK" section, the gate's existing FATAL checks untouched. **SUPERSEDED 2026-09-12 (Codex round 2 on #685): the design described in this sentence at the time it was written — "as of" sourced from the roster file's own latest commit date via `git log -1 --format=%cs`, three buckets, 26/26 self-test — is NOT what shipped.** It was replaced the same day, before this branch was ever pushed for review, by the design the round-2 and round-3 entries below describe: `resolveAsOfDate()` (flag → env → process clock, four buckets including the round-2 future/invalid-date fix, 36/36 self-test). Read this paragraph as history of an intermediate design, not as a description of the code in this tree; the entries below are accurate. Seven nextActions the org self-evaluation found already executed were marked DONE in place with the commit/PR that did the work (verified by `git log`/`git show` before marking, not assumed): devex-tooling-engineer row 73 (f97cebf6, e94b2829/#399, 049e3f8e/#492), mobile-native-engineer dynamic-type + row 58 (5e3b5c32), data-persistence-engineer SHIFT 2 (b7219453/#222), positioning-messaging retired labels (26fc83f1/#322), brand-design DR-006 allow re-tone (d7beda62/#224 — landed 2026-08-21, three days BEFORE the nextAction asking for it was even written, so that nextAction was stale from the moment it was set), desktop-engineer CI (the `app` job with WebKitGTK has built and tested the Tauri shell since 079cfd25/#199, 2026-08-08; main.rs finalized 92df48f2, 2026-09-02), finance-fundraising COST_MODEL.md (4f656d59/#251). `activated`+`produced` were filled for the three roles whose nextAction literally says "FIRST EXECUTION DONE" while `activated` sat `null`: mobile-native-engineer (2026-08-24), accessibility-specialist (2026-08-24), desktop-engineer (2026-08-25) — each verified against a real execution record before being set, not merely against the role's own prose. Additionally, on the coordinator's instruction: design-partner-outreach's BLOCKED nextAction was checked against the two roles its trigger names — positioning-messaging (label reconciliation landed 26fc83f1/#322; docs/POSITIONING.md exists, created f4bb9ec 2026-08-22, refreshed 5f0017c6 2026-09-06, though the role's own `activated`/`produced` fields are still null — a bookkeeping gap, not a missing deliverable) and icp-customer-research (roster-activated 2026-08-24, `produced` names docs/company/ICP_EVIDENCE.md, which exists) — both show real, verifiable output, and `node scripts/check-readiness-figure.mjs` independently reads `HEADLINE ... -> OUTREACH OPEN` on this checkout, so the role was rewritten UNBLOCKED (prepares addressed drafts only against docs/outreach/TARGETS_CRITERIA.md's criteria — the account list itself lives in the owner's private Drive — and never sends; DR-036's rule against typing the derived figure was kept). What this does NOT prove: that any of the 34 REPORTED-stale roles' underlying work is actually abandoned rather than legitimately quiet — the report only says the clock has not moved, exactly as designed; and the Browser E2E failure, while diagnosed here as a port collision (confirmed by `lsof -i :4614 -i :4615` showing another lane's live chrome/vite processes at the moment of failure, and a clean 53/53 once those ports freed), was not re-run inside a single unbroken `preflight.mjs` invocation — the two data points (full preflight run minus E2E, and standalone E2E) were taken separately.
+
+## 2026-09-12 (round 2) — "Seven Codex findings on dd027dd3 (PR #685): the clock never advances, no calendar-date check, three docs still stale, two roles' inputs mis-scoped"
+Command:
+```
+node scripts/check-org-roster.mjs
+node scripts/check-org-roster.mjs --self-test
+node scripts/check-role-coverage.mjs
+node scripts/check-derived-doc-figures.mjs
+node scripts/check-derived-doc-figures.mjs --self-test
+node scripts/check-role-heading-status.mjs
+node scripts/check-cited-paths.mjs
+node scripts/check-doc-line-counts.mjs
+node scripts/check-markdown-links.mjs
+node scripts/check-launch-claims.mjs
+node scripts/check-plugin-manifest.mjs
+node scripts/preflight.mjs
+pnpm run verify:breadth
+```
+Output:
+```
+NEXT-ACTION CLOCK (as of 2026-09-12, source: today (process clock, UTC calendar date)) — 34 role(s) with nextAction older than 7d: ...
+Org roster — 42 role(s): 21 activated, 21 never yet run
+Org roster check passed — registry and chart agree, and every activation names what it produced.
+
+self-test passed (34/34) — CORRECTED count 2026-09-12: round 3 (the future/invalid-date bucket, below) brought it to 36/36; see that entry for the live number.
+
+  283 of 4147 owned file(s) read across 35 roles with a surface (6.8%).
+Role-coverage check passed — the committed ratchet equals the recompute from the ledger.
+
+self-test passed (82/82)
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Role-heading-status check passed — no role title asserts a status its table would have to defend.
+Cited-path check passed — 2534 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+Launch-claims gate passed — nothing deferred is presented as current.
+Plugin-manifest gate passed — signalgrid plugin: 13 agents (derived), skills + commands present; claude plugin validate exit 0.
+
+Preflight PASSED — everything it runs is green.  (includes: ▶ Browser E2E (review console, website, admin) … ok — a clean, unbroken run this time; ports were free)
+
+Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Verdict:  **holds, all seven.** (1) The "as of" date no longer needs the roster file to be edited to advance: `resolveAsOfDate` (scripts/check-org-roster.mjs) resolves `--as-of YYYY-MM-DD` / `--as-of=VALUE`, then `SIGNALGRID_AS_OF`, then today's UTC calendar date from the process clock, and the CLI prints which source won on every run — verified live: default run reads `source: today (process clock, UTC calendar date)` at `2026-09-12`; `SIGNALGRID_AS_OF=2026-10-01` reads `source: SIGNALGRID_AS_OF env` and reports 42 (not 34) roles stale; `--as-of=2026-09-19` reads `source: --as-of flag`. This IS a `Date.now()`-shaped read and is documented as such in the file's header comment: it does not need golden-rule-2 discipline because (a) `scripts/review-invariants.mjs`'s determinism scan derives its scope from `lib/*/src/` only (`determinismScope()`), so `scripts/` was never in scope, and (b) this section is REPORTED, never FATAL. The self-test never touches the clock — every fixture passes a literal ISO string for `asOfIso`. (2) `nextActionDate` is now validated as exactly `/^\d{4}-\d{2}-\d{2}$/` AND a real calendar date, via a new `isRealCalendarDate` that round-trips through `Date.UTC` and compares the reconstructed year/month/day against the input — `2026-09-31` (a real trap: `new Date("2026-09-31")` silently becomes October 1st) and `2026-2-3` (fails the shape check before it ever reaches `Date.parse`) both land in the unparseable bucket, proven by two new self-test cases plus a third that drives the full `auditOrgRoster` path with a planted `2026-09-31` and confirms it reports unparseable, not stale-or-fresh. (3) docs/company/ROLE_ACTIVATION_MATRIX.md rows for Accessibility Specialist (:56) and Client Engineer (:65) rewritten to match the roster's own activated dates and produced summaries for mobile-native-engineer (2026-08-24), desktop-engineer (2026-08-25), and accessibility-specialist (2026-08-24) — `check-derived-doc-figures` (+self-test) and `check-role-heading-status` re-run clean, confirming the edit did not touch any gated figure or role-heading status word. (4) docs/COMPANY_BUILD_PLAN.md row 7 (:41) rewritten from an open blocking item to DONE, citing docs/POSITIONING.md (f4bb9ec, 2026-08-22, #252) and the label reconciliation (26fc83f1, 2026-08-26, #322), and states design-partner-outreach is no longer blocked on it — `check-doc-line-counts` re-run clean (same-line edit, file line count unchanged at 4915, so no `path (N)` citation elsewhere could have drifted). (5) The stale EVIDENCE.md quote from the first entry (captured before dd027dd3 landed, showing the now-retired commit-date source reading "2026-09-07") is corrected in place with a note explaining why it was stale and the re-run output on the committed tree. (6) finance-fundraising's nextAction rewritten: verified against docs/COST_MODEL.md that Claude and domain are supplied via the owner-private channel (:9-15), GitHub CI is owner-confirmed at $0 (:51-52), and the Apple Developer fee is CLOSED at $0 while unenrolled (:82) — none of these were actually open, contrary to the prior entry's "four owner billing numbers" framing. What remains open is the three agent-computable lines in the "What closes each TBD" table (:80-81): VM hosting, backup storage, and Fleet Premium's per-device price, each explicitly marked "any lane" in that table — the nextAction now says the lane computes these, not the owner. (7) positioning-messaging's `activated`/`produced` were `null` despite design-partner-outreach's UNBLOCKED rewrite depending on it having run — set `activated: "2026-08-22"` (verified via `git log --diff-filter=A -- docs/POSITIONING.md` → `f4bb9ec4 2026-08-22`) and `produced` naming docs/POSITIONING.md plus the label reconciliation (26fc83f1, #322); confirmed by re-running `node scripts/check-org-roster.mjs`: positioning-messaging no longer appears under "CALL THESE NEXT" (the priority-1 unactivated list dropped from 2 to 1 entries, leaving only endpoint-uem-domain), and the activated count rose from 20 to 21. What this does NOT re-verify: the 34-role stale count and the specific fragments/dates recovered in round 1 for the untouched roles — those were not touched this round and are taken as still correct.
+
+## 2026-09-12 (round 3) — "Three more Codex findings on e4c13df3: a dead label in the DONE row, a silent-fresh negative-age bug, a stale round-1 verdict"
+Command:
+```
+node scripts/check-org-roster.mjs
+node scripts/check-org-roster.mjs --self-test
+node scripts/check-derived-doc-figures.mjs
+node scripts/check-derived-doc-figures.mjs --self-test
+node scripts/check-cited-paths.mjs
+node scripts/check-doc-line-counts.mjs
+node scripts/check-markdown-links.mjs
+node scripts/check-launch-claims.mjs
+node scripts/preflight.mjs
+pnpm run verify:breadth
+```
+Output:
+```
+self-test passed (36/36)
+NEXT-ACTION CLOCK (as of 2026-09-12, source: today (process clock, UTC calendar date)) — 34 role(s) with nextAction older than 7d: ...
+Org roster check passed — registry and chart agree, and every activation names what it produced.
+
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+self-test passed (82/82)
+Cited-path check passed — 2535 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+Launch-claims gate passed — nothing deferred is presented as current.
+
+Preflight PASSED — everything it runs is green.  (▶ Browser E2E (review console, website, admin) … ok — clean, unbroken run, ports free)
+
+Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Verdict:  **holds, all three.** (1) docs/COMPANY_BUILD_PLAN.md row 7 (:41) still said "reconciled to the ratified DR-004 label" after being marked DONE last round — read DR-019 (docs/DECISION_RECORDS.md:1022-1042): it explicitly **SUPERSEDES** DR-004's ratification of "Shared-Device Trust Gateway" and **ratifies NO replacement**, deferring the category question to customer discovery. Read docs/POSITIONING.md:10-34 ("The label question — superseded, and deliberately left open... So there is no ratified product-category name to put here") and docs/ECOSYSTEM_POSITIONING.md:3-13 ("There is no ratified category label (DR-019 ratified none...)") — both already carry the DR-019/DR-020 outcome, reconciled in ab723558/#372 (2026-09-01) and cecf6652 (2026-09-01) respectively. docs/EXECUTIVE_ONE_PAGER.md (c64c3fdd, 2026-08-23) never carried a category label to begin with — confirmed by grep, zero hits for any retired label spelling. Row 7 rewritten to record the DR-019 outcome (label retired, no replacement ratified, reconciliation already landed everywhere) instead of pointing docs-writer at the dead DR-004 label; the prior "REMAINING: docs-writer reconciliation" clause is removed since both named docs are already correct. check-doc-line-counts re-run clean (same-line edit, 4915 lines unchanged). (2) scripts/check-org-roster.mjs:168's `auditNextActionClock` had a real gap: `age < 0` (a `nextActionDate` LATER than `asOfIso` — e.g. a `2027` typo) satisfied neither `age === null` nor `age > STALE_AFTER_DAYS`, so it landed in no bucket and `clock.stale.length === 0` read exactly like a genuinely fresh role. Added a fourth bucket, `future`, checked before the `stale` branch; the CLI now prints `nextActionDate \`X\` is AFTER the as-of date (Nd in the future) — invalid, not fresh`. Two new self-test cases (a planted `2027-01-01` role landing in `future` and nowhere else, plus a `daysStale` sign check) bring the suite to 36/36; verified live that the real roster has zero future-dated entries today (`34 role(s) with nextAction older than 7d`, unchanged — the fix adds a bucket, it does not move any existing role). (3) The round-1 EVIDENCE.md verdict paragraph (originally at :2571) still described the git-commit-date "as of" source, three buckets and 26/26 self-test as current, two rounds after that design was replaced — corrected in place with an explicit SUPERSEDED note pointing at the round-2/round-3 entries as the accurate description, and the two stale self-test-count quotes in the round-1 and round-2 Output blocks (26/26, 34/34) each got a one-line correction naming the current 36/36. What this does NOT re-verify: the 34-role stale list and the round-1/round-2 fragment-recovered dates for untouched roles, unaffected by any of these three fixes.
+
+## 2026-09-12 (round 4) — "One more Codex P1 on #685 head c0390273: the same dead-DR-004-label theme, now in the roster record itself"
+Command:
+```
+node scripts/check-org-roster.mjs --self-test
+node scripts/check-launch-claims.mjs
+node scripts/check-cited-paths.mjs
+node scripts/check-derived-doc-figures.mjs --self-test
+node scripts/check-doc-line-counts.mjs
+```
+Output:
+```
+self-test passed (36/36)
+Launch-claims gate passed — nothing deferred is presented as current.
+Cited-path check passed — 2535 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+self-test passed (82/82)
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+```
+Verdict:  **holds.** docs/agent/org-roster.json's positioning-messaging role carried the identical defect just fixed in docs/COMPANY_BUILD_PLAN.md row 7 (round 3, this file), in its own `produced` and `nextAction` fields: both said the four retired-label instances (README.md, ReviewDashboard.tsx, About.tsx) were reconciled "to the ratified DR-004 label." Traced the actual history: 26fc83f1 (#322, 2026-08-26) DID reconcile them to DR-004's "Shared-Device Trust Gateway" — accurate for a few hours, since DR-019 (docs/DECISION_RECORDS.md:1022-1042) superseded that ratification the same day and ratified no replacement (DR-020 reinforced it). The label's actual removal from those three surfaces landed later — `git log -S"Shared-Device Trust Gateway"` shows e1274c57 (2026-08-31, ReviewDashboard.tsx + About.tsx) and aec28c86 (2026-09-01, README.md rebuilt) — so the roster's claim was stale even by the time it described a settled state. Both fields rewritten to record the DR-019/DR-020 outcome (label retired, no replacement ratified, reconciliation actually landed in e1274c57/aec28c86, current state re-verified as zero retired-label instances across all three files) rather than asserting DR-004's label as current or ratified; docs/POSITIONING.md:10-34 and docs/ECOSYSTEM_POSITIONING.md:3-13 are cited as where this outcome now lives in prose, matching the round-3 fix to COMPANY_BUILD_PLAN.md. `check-launch-claims.mjs` re-run clean (the RETIRED_LABELS denylist at :625/:688, correctly cited, was never the defect — the roster's PROSE was). Preflight and breadth were not run this round per the coordinator's instruction (Codex has hit its review usage limit; CI runs the full suite before the 15:11Z merge sweep).
+
+## 2026-09-12 — "cloud/fix-ci-timeout-reusable-callers merged and finished: the gate resolves reusable-workflow callers, 0 unbounded; and no push-triggered workflow needs a heartbeat paths-ignore it lacks"
+Command:
+```
+node scripts/check-ci-job-timeouts.mjs        # after merging origin/SignalGrid_Alpha in
+node scripts/check-derived-doc-figures.mjs
+node scripts/check-preflight-ci-parity.mjs
+node scripts/preflight.mjs
+pnpm run verify:breadth
+node scripts/check-action-pinning.mjs
+node scripts/check-ci-preflight-sync.mjs
+```
+Output:
+```
+  ✗ mac-runner-auto.yml:nightly-both: now bounded, but still carries a declared-unbounded entry — remove the exemption
+  ✗ mac-runner-auto.yml:nightly-mcp: now bounded, but still carries a declared-unbounded entry — remove the exemption
+ci-job-timeouts: 35 jobs, 2 unbounded; self-test green
+CI-job-timeout gate FAILED — bound the job, or declare it with a reason.
+
+[after deleting the two now-stale DECLARED_UNBOUNDED entries]
+ci-job-timeouts: 35 jobs, 0 unbounded; self-test green
+CI-job-timeout gate passed — every job declares how long it may run.
+
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Preflight↔CI parity passed — every preflight gate is wired into a workflow.
+Preflight PASSED — everything it runs is green.
+Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+Action pinning check passed — every third-party action is pinned to an immutable commit.
+Drift check passed — every proof runs in both places, or is exempt by name with a reason.
+```
+Verdict: **branch dcd9cff8 was NOT superseded** — mainline still carried two hand-written `DECLARED_UNBOUNDED` string exemptions for `mac-runner-auto.yml`'s `nightly-both`/`nightly-mcp` jobs, each ending in the same sentence: "Follow-up: resolve a local `uses:` and inherit the callee's bound, then delete this entry." Merging `origin/SignalGrid_Alpha` (344 commits) into the branch turned that prophecy into a gate failure — the new `isBounded()` now resolves the local callee and verifies both jobs bounded on their own, so the two exemptions became stale and the gate caught it the OTHER direction ("now bounded, but still carries a declared-unbounded entry"). Deleted both; the gate is now empty (`DECLARED_UNBOUNDED` has zero entries), which is the file's own stated goal state. Five merge conflicts resolved toward mainline (`docs/CLAIM_INVENTORY.md`, `docs/agent/CLAIM_INVENTORY.json` — PURPOSE.md line numbers moved; `docs/STATUS.md` — mainline's last generated run was green; `docs/agent/SURFACE_REVIEW_COVERAGE.md` — mainline's tree grew past this branch's counts; `scripts/check-derived-doc-figures.mjs` — mainline evolved its fifteen/sixteen-workflow self-test independently); `scripts/check-ci-job-timeouts.mjs` itself auto-merged with no conflict.
+
+Separately, audited whether the six-workflow "carries paths-ignore today" premise in the assignment held: **it did not, on two counts.** Only 5 files match `paths-ignore` in `.github/workflows/` (`codeql.yml`, `connector-emulator-smoke.yml`, `mac-runner-auto.yml`, `review-hub-ci.yml`, `supply-chain.yml`) — `pr-triage.yml` carries none, and it isn't push-triggered at all (`pull_request_target` only). `mac-runner-auto.yml`'s `paths-ignore` guards a `pull_request` trigger, not `push`, so it doesn't bear on a direct push to `SignalGrid_Alpha` either. Of the 16 workflows (counted 2026-09-12), exactly 8 trigger on `push`: `android`, `codeql`, `connector-emulator-smoke`, `desktop`, `firmware`, `ios-ci`, `review-hub-ci`, `supply-chain`. Four already carry `paths-ignore: ["artifacts/agent-heartbeats/**"]` (`codeql`, `connector-emulator-smoke`, `review-hub-ci`, `supply-chain` — landed in 6c5c2dc7, itself dated before the three named heartbeat commits). The other four (`android`, `desktop`, `firmware`, `ios-ci`) use a `paths:` ALLOWLIST scoped to their own native tree (e.g. `native/android/**`, `native/shared/**`, their own workflow file) that never includes `artifacts/agent-heartbeats/**` — a heartbeat-only push cannot match any entry in an allowlist, so GitHub never starts these workflows for one; they were never exposed to the defect and adding `paths-ignore` to an allowlisted trigger would be redundant. **Conclusion: no workflow needs an edit — every push-triggered workflow is already immune, either explicitly or structurally.** No `.github/workflows/*.yml` file was changed for this half of the task.
+
+For the three named commits (`af80bf16`, `689389df`, `30e35ef0`), each touching only `artifacts/agent-heartbeats/mac-lane-tick.json` (`git show --stat`), every statement below is CONFIGURATION-DERIVED: it says what the workflow files and git history make possible, never what any run did. At each of the three commits the four now-guarded workflows carried NO heartbeat path filter — `git show <sha>:.github/workflows/<w>.yml | grep -c agent-heartbeats` → `0` for `review-hub-ci`, `codeql`, `supply-chain` and `connector-emulator-smoke` — so each push was ELIGIBLE to start all four (a trigger proves eligibility, not a start). Ancestry, re-run in the correct direction on 2026-09-12 (`git merge-base --is-ancestor <sha> 6c5c2dc7`): `689389df` and `30e35ef0` ARE ancestors of the fix; `af80bf16` (2026-09-11 21:22 -0400) is the mainline commit immediately before `b39f1cc5` merged the fix from its PR branch (#657), so the ancestor test is false in both directions for it and the tree grep above is the decisive fact. The next first-parent commit on `SignalGrid_Alpha` after each (`git log --first-parent --reverse <sha>..origin/SignalGrid_Alpha | head -1`): `af80bf16` → `b39f1cc5` 3 minutes later, `689389df` → `df9b1553` 25 minutes later, `30e35ef0` → `98759c2c` 4 minutes later (an earlier revision of this entry named parents as successors; corrected). `review-hub-ci.yml`, `codeql.yml` and `supply-chain.yml` share `concurrency: group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true`, which cancels an earlier run of the same workflow on the same ref ONLY IF that run is still active when the next push arrives; `connector-emulator-smoke.yml` carries no `concurrency` block at any of the three commits, so a later push could not cancel it automatically. Whether any of those runs started, how long it ran, whether it was still active at the next push, and whether it passed, failed, timed out or was cancelled by hand is NOT derivable from configuration and is not claimed here. **No Actions run history was consulted — this session has no `gh` — so nothing above is a statement about a run; the runs themselves are for a session with `gh run list --commit <sha>` to read.**
+
+Gates ran sequentially, each quoted above with its real last line. `check-ci-job-timeouts.mjs` ran TWICE: once after the mainline merge (red — the two stale `DECLARED_UNBOUNDED` entries) and once after the entries were deleted (green); every other gate ran once, on the final tree.

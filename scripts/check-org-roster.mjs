@@ -23,7 +23,34 @@
 //               legitimately wait for its trigger. It is printed, never
 //               silent, so "we have a compliance analyst" can never be said
 //               without "who has never run" being visible beside it.
-
+//
+// THE CLOCK, added 2026-09-12 (org self-evaluation: "the roster has no clock,
+// so a role's nextAction can sit done or stale for weeks unnoticed"). Every
+// role now carries `nextActionDate` (ISO date, the day that nextAction was
+// SET — not today's date, unless it really was set today). REPORTED, never
+// fatal, same split as activation: a nextAction can legitimately be a few
+// days old, so this names which are old rather than failing the build over
+// an age nobody has decided is too much.
+//
+// DATE SOURCE, REVISED 2026-09-12 (Codex finding on dd027dd3): the first cut
+// used the roster file's own latest commit date as "as of", reasoning that a
+// wall-clock read would make two runs against the IDENTICAL commit disagree.
+// That reasoning solved the wrong problem — it also meant a nextAction never
+// ages at all while nobody happens to edit the roster, which is exactly the
+// silent-staleness failure this clock exists to catch. The live REPORT now
+// defaults to TODAY (`resolveAsOfDate` below: `--as-of YYYY-MM-DD`, then
+// `SIGNALGRID_AS_OF`, then the process clock's UTC calendar date), and prints
+// which of the three it used. This is a `Date.now()`-shaped read, so it is
+// worth being explicit about why it does not need the discipline golden rule
+// 2 puts on decision paths: (a) `scripts/review-invariants.mjs`'s determinism
+// scan derives its scope from `lib/*/src/` (`determinismScope()`) — this file
+// lives under `scripts/`, outside that scope, so review:invariants does not
+// bind it and never has; (b) this section is REPORTED, never FATAL — a wrong
+// "today" cannot fail a build, only mis-date one line of a report, so it is
+// not a decision path in the sense golden rule 2 means. The SELF-TEST never
+// touches the process clock: every fixture below passes a literal ISO string
+// for asOfIso straight to `auditOrgRoster`, so the suite stays deterministic
+// regardless of when or where it runs.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -64,25 +91,121 @@ const EXECUTOR_FORM = /^(?:lane|agent:[a-z0-9][a-z0-9-]*|skill:[a-z0-9][a-z0-9-]
 // proving it can fail. Named `go-to-market` for exactly that reason.
 const DIVISIONS = new Set(["engineering", "signal-domain", "company", "go-to-market"]);
 
+const STALE_AFTER_DAYS = 7;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Exactly four digits, a literal hyphen, two digits, a literal hyphen, two
+// digits — `2026-9-3` or `2026-09-3` must not pass the SHAPE check, let alone
+// the calendar-date check below.
+const ISO_DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * True iff `iso` is both shaped like `YYYY-MM-DD` AND a real calendar date.
+ * `Date.parse`/`new Date(string)` alone is not enough — both silently roll
+ * an out-of-range date forward (`2026-09-31` becomes October 1st), which
+ * would let a typo'd date pass as a VALID, merely-different one instead of
+ * landing in the unparseable bucket. Caught here by round-tripping through
+ * `Date.UTC` and checking the constructed date's own components still say
+ * what the string said — the same "does the round trip agree" shape the
+ * freshness gate's NaN check already uses elsewhere in this repo, extended
+ * to the case Date.parse accepts but silently reinterprets.
+ */
+export function isRealCalendarDate(iso) {
+  if (typeof iso !== "string" || !ISO_DATE_SHAPE.test(iso)) return false;
+  const [y, m, d] = iso.split("-").map(Number);
+  const ms = Date.UTC(y, m - 1, d);
+  if (Number.isNaN(ms)) return false;
+  const rt = new Date(ms);
+  return rt.getUTCFullYear() === y && rt.getUTCMonth() === m - 1 && rt.getUTCDate() === d;
+}
+
+/**
+ * Pure day-count between two ISO date strings (asOf - dated). Returns null
+ * when either side is not a real calendar date, rather than NaN, so a
+ * malformed OR out-of-range `nextActionDate` (`2026-09-31`, `2026-2-3`) is
+ * REPORTED as unparseable instead of silently sorting as "not stale" (NaN
+ * comparisons are always false), "infinitely stale", or — the sharper trap —
+ * a VALID but WRONG date (`2026-09-31` rolling forward into October) reading
+ * as merely a few days off. The freshness gate's NaN-date silent pass is
+ * exactly the defect class this repo already found once (qa-engineer's
+ * produced note, 2026-08-19); this gate does not repeat it, and does not
+ * repeat its softer cousin either.
+ */
+export function daysStale(datedIso, asOfIso) {
+  if (!isRealCalendarDate(datedIso) || !isRealCalendarDate(asOfIso)) return null;
+  const dated = Date.parse(datedIso);
+  const asOf = Date.parse(asOfIso);
+  return Math.round((asOf - dated) / MS_PER_DAY);
+}
+
+/**
+ * Which roles' nextActionDate is more than STALE_AFTER_DAYS before asOfIso.
+ * Pure and testable: asOfIso is passed in, never read from the clock here.
+ * Four buckets, all REPORTED and none fatal:
+ *   stale     — has a nextActionDate, and it is more than 7 days old.
+ *   unparseable — has a nextActionDate that does not parse as a date; an
+ *               unreadable clock is not the same claim as a fresh one.
+ *   noClock   — has a nextAction but no nextActionDate at all yet.
+ *   future    — has a nextActionDate LATER than asOfIso (a negative age — a
+ *               typo like a 2027 year, or a plain mistake). Added 2026-09-12
+ *               (Codex round 2 on #685): a negative age fell through BOTH the
+ *               `=== null` check and the `> STALE_AFTER_DAYS` check above —
+ *               neither null nor stale, so it printed as fresh. A date after
+ *               "today" is not a earlier-set action aging normally; it is
+ *               invalid on its face (nothing can be SET in the future), so it
+ *               gets its own bucket rather than silently passing as healthy.
+ */
+export function auditNextActionClock(roles, asOfIso) {
+  const stale = [];
+  const unparseable = [];
+  const noClock = [];
+  const future = [];
+  if (typeof asOfIso !== "string" || asOfIso.trim() === "") {
+    return { stale, unparseable, noClock, future };
+  }
+  for (const role of roles) {
+    const id = typeof role?.id === "string" ? role.id : "(no id)";
+    if (typeof role?.nextAction !== "string" || role.nextAction.trim() === "") continue;
+    if (typeof role?.nextActionDate !== "string" || role.nextActionDate.trim() === "") {
+      noClock.push({ id });
+      continue;
+    }
+    const age = daysStale(role.nextActionDate, asOfIso);
+    if (age === null) {
+      unparseable.push({ id, nextActionDate: role.nextActionDate });
+    } else if (age < 0) {
+      future.push({ id, nextActionDate: role.nextActionDate, days: age });
+    } else if (age > STALE_AFTER_DAYS) {
+      stale.push({ id, nextActionDate: role.nextActionDate, days: age });
+    }
+  }
+  return { stale, unparseable, noClock, future };
+}
+
 /**
  * Pure audit so the verdict is testable without a filesystem.
  * roster: the parsed JSON; chartText: the markdown, or null if absent.
+ * asOfIso: optional — the date nextActionDate staleness is measured against
+ * (see THE CLOCK above). Omitted entirely, the staleness report is empty
+ * rather than guessed; the CLI always supplies it.
  */
-export function auditOrgRoster(roster, chartText, known = null) {
+export function auditOrgRoster(roster, chartText, known = null, asOfIso = null) {
   const problems = [];
   const byExecutor = new Map();
   const unactivated = [];
   const activated = [];
 
+  const emptyClock = { stale: [], unparseable: [], noClock: [], future: [] };
   const roles = Array.isArray(roster?.roles) ? roster.roles : null;
   if (roles === null) {
     problems.push(`${ROSTER}: no \`roles\` array — the registry is unreadable`);
-    return { problems, unactivated, activated, byExecutor };
+    return { problems, unactivated, activated, byExecutor, clock: emptyClock };
   }
   if (roles.length === 0) {
     problems.push(`${ROSTER}: the roster is empty — an org chart with no roles is not a chart`);
-    return { problems, unactivated, activated, byExecutor };
+    return { problems, unactivated, activated, byExecutor, clock: emptyClock };
   }
+  const clock = auditNextActionClock(roles, asOfIso);
 
   const seen = new Set();
   for (const role of roles) {
@@ -130,14 +253,14 @@ export function auditOrgRoster(roster, chartText, known = null) {
 
   if (chartText === null) {
     problems.push(`${CHART} does not exist — the registry has no human half to disagree with`);
-    return { problems, unactivated, activated, byExecutor };
+    return { problems, unactivated, activated, byExecutor, clock };
   }
   for (const role of roles) {
     if (typeof role?.id === "string" && !chartText.includes(role.id)) {
       problems.push(`${CHART} never names \`${role.id}\` — registry and chart have drifted`);
     }
   }
-  return { problems, unactivated, activated, byExecutor };
+  return { problems, unactivated, activated, byExecutor, clock };
 }
 
 /**
@@ -160,6 +283,36 @@ export function discoverExecutors(root) {
     }
   }
   return found;
+}
+
+/**
+ * "As of" for the live NEXT-ACTION CLOCK report — see the revised DATE SOURCE
+ * comment at the top of this file. Priority order, first match wins:
+ *   1. `--as-of YYYY-MM-DD` (or `--as-of=YYYY-MM-DD`) on the command line.
+ *   2. `SIGNALGRID_AS_OF` in the environment.
+ *   3. Today's UTC calendar date, from the process clock.
+ * Returns `{ value, source }` — the CLI always prints `source`, so a run's
+ * staleness report can be re-derived from what "today" meant at the time.
+ * `value` is NOT validated as a real calendar date here; `auditNextActionClock`
+ * already treats an unparseable/out-of-range asOfIso as "no report" via
+ * `daysStale`'s guard, which is the correct fail-closed shape for a bad
+ * override without duplicating the calendar check in two places.
+ */
+export function resolveAsOfDate({ argv = [], env = {} } = {}) {
+  const eqFlag = argv.find((a) => typeof a === "string" && a.startsWith("--as-of="));
+  if (eqFlag) return { value: eqFlag.slice("--as-of=".length), source: "--as-of flag" };
+  const flagIndex = argv.indexOf("--as-of");
+  if (flagIndex !== -1 && typeof argv[flagIndex + 1] === "string") {
+    return { value: argv[flagIndex + 1], source: "--as-of flag" };
+  }
+  if (typeof env.SIGNALGRID_AS_OF === "string" && env.SIGNALGRID_AS_OF.trim() !== "") {
+    return { value: env.SIGNALGRID_AS_OF.trim(), source: "SIGNALGRID_AS_OF env" };
+  }
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(now.getUTCDate()).padStart(2, "0");
+  return { value: `${y}-${m}-${d}`, source: "today (process clock, UTC calendar date)" };
 }
 
 function selfTest() {
@@ -234,6 +387,68 @@ function selfTest() {
   const live = discoverExecutors(repo);
   checks.push(["executors are DISCOVERED from disk, not listed in this file", live.size > 0 && live.has("skill:signalgrid")]);
 
+  // ── THE CLOCK: plant an old date and see the report line ──────────────────
+  // This is the self-test the task exists to prove: a nextActionDate set more
+  // than 7 days before "today" must be REPORTED as stale, and REPORTED only —
+  // never added to `problems`, since a role may legitimately go quiet for a
+  // week. Every fixture below reuses `ok`, so the negative controls stay in
+  // sync with the schema the same way the rest of this file already does.
+  {
+    const asOf = "2026-09-12";
+    const freshRole = { ...ok, id: "fresh", nextActionDate: "2026-09-10" }; // 2 days old
+    const staleRole = { ...ok, id: "stale", nextActionDate: "2026-09-01" }; // 11 days old
+    const edgeRole = { ...ok, id: "edge", nextActionDate: "2026-09-05" }; // exactly 7 days old
+    const noClockRole = { ...ok, id: "noclock" }; // no nextActionDate at all
+    const badDateRole = { ...ok, id: "baddate", nextActionDate: "not-a-date" };
+    const futureRole = { ...ok, id: "future", nextActionDate: "2027-01-01" }; // a typo'd year, AFTER asOf
+
+    a = auditOrgRoster({ roles: [freshRole] }, chart("fresh"), KNOWN, asOf);
+    checks.push(["a nextActionDate inside 7 days is not reported stale, and never fatal", a.problems.length === 0 && a.clock.stale.length === 0]);
+
+    a = auditOrgRoster({ roles: [staleRole] }, chart("stale"), KNOWN, asOf);
+    checks.push(["a nextActionDate more than 7 days old is REPORTED stale — the planted case this self-test exists to prove", a.problems.length === 0 && a.clock.stale.length === 1 && a.clock.stale[0].id === "stale" && a.clock.stale[0].days === 11]);
+
+    a = auditOrgRoster({ roles: [edgeRole] }, chart("edge"), KNOWN, asOf);
+    checks.push(["exactly 7 days old is NOT yet stale — the bar is MORE than 7", a.clock.stale.length === 0]);
+
+    a = auditOrgRoster({ roles: [noClockRole] }, chart("noclock"), KNOWN, asOf);
+    checks.push(["a role with a nextAction but no nextActionDate is REPORTED as having no clock, and never fatal", a.problems.length === 0 && a.clock.noClock.length === 1 && a.clock.stale.length === 0]);
+
+    a = auditOrgRoster({ roles: [badDateRole] }, chart("baddate"), KNOWN, asOf);
+    checks.push(["an unparseable nextActionDate is REPORTED as unparseable, not silently treated as fresh or as maximally stale — the freshness gate's NaN-date silent pass, not repeated here", a.problems.length === 0 && a.clock.unparseable.length === 1 && a.clock.stale.length === 0]);
+
+    // ── Codex finding, round 2 on e4c13df3: a nextActionDate LATER than asOf
+    // (age < 0) fell through both the `=== null` branch and the `> 7` branch —
+    // landing in NEITHER bucket, so `clock.stale.length === 0` read exactly
+    // like a genuinely fresh role. A typo'd year (2027 for 2026) must be
+    // REPORTED as invalid, never silently pass as healthy.
+    a = auditOrgRoster({ roles: [futureRole] }, chart("future"), KNOWN, asOf);
+    checks.push(["a nextActionDate AFTER the as-of date is REPORTED in the future/invalid bucket, not in fresh (stale empty) or in unparseable", a.problems.length === 0 && a.clock.future.length === 1 && a.clock.future[0].id === "future" && a.clock.stale.length === 0 && a.clock.unparseable.length === 0]);
+    checks.push(["daysStale on a future date is negative, which is how the future bucket recognises it", daysStale("2027-01-01", asOf) < 0]);
+
+    a = auditOrgRoster({ roles: [staleRole] }, chart("stale"), KNOWN, null);
+    checks.push(["with no asOf date supplied, the clock report is empty rather than guessed — the CLI always supplies one", a.clock.stale.length === 0 && a.clock.unparseable.length === 0 && a.clock.noClock.length === 0 && a.clock.future.length === 0]);
+
+    checks.push(["daysStale is a plain day count, positive when the date is in the past", daysStale("2026-09-01", "2026-09-12") === 11]);
+    checks.push(["daysStale returns null on a bad date rather than NaN, so callers cannot accidentally compare NaN > 7 and get false", daysStale("nonsense", "2026-09-12") === null]);
+
+    // ── Codex finding on dd027dd3: a Date.parse-only check silently ROLLS an
+    // out-of-range date forward instead of rejecting it — new Date("2026-09-31")
+    // becomes October 1st, so a typo'd date would read as "merely a few days
+    // off" instead of landing in the unparseable bucket. Both cases below MUST
+    // resolve to null, and the second is the one Date.parse alone accepts.
+    checks.push(["2026-09-31 is not a real calendar date (September has 30 days) — it must NOT silently become October 1st", isRealCalendarDate("2026-09-31") === false && daysStale("2026-09-31", "2026-10-05") === null]);
+    checks.push(["2026-2-3 fails the SHAPE check (single-digit month) even though Date.parse would accept it", isRealCalendarDate("2026-2-3") === false && daysStale("2026-2-3", "2026-09-12") === null]);
+    checks.push(["a role whose nextActionDate is 2026-09-31 is REPORTED unparseable by the audit, not silently stale-or-fresh", auditOrgRoster({ roles: [{ ...ok, id: "badcal", nextActionDate: "2026-09-31" }] }, chart("badcal"), KNOWN, "2026-10-05").clock.unparseable.length === 1]);
+    checks.push(["a real calendar date round-trips clean", isRealCalendarDate("2026-09-12") === true]);
+
+    // ── resolveAsOfDate: the CLI's three-tier source, and which it printed.
+    checks.push(["--as-of flag (space form) wins over everything", resolveAsOfDate({ argv: ["--as-of", "2026-01-05"], env: { SIGNALGRID_AS_OF: "2026-02-02" } }).value === "2026-01-05" && resolveAsOfDate({ argv: ["--as-of", "2026-01-05"], env: {} }).source === "--as-of flag"]);
+    checks.push(["--as-of=VALUE flag (equals form) also wins", resolveAsOfDate({ argv: ["--as-of=2026-03-04"], env: {} }).value === "2026-03-04"]);
+    checks.push(["with no flag, SIGNALGRID_AS_OF env wins over the process clock", resolveAsOfDate({ argv: [], env: { SIGNALGRID_AS_OF: "2026-04-05" } }).value === "2026-04-05" && resolveAsOfDate({ argv: [], env: { SIGNALGRID_AS_OF: "2026-04-05" } }).source === "SIGNALGRID_AS_OF env"]);
+    checks.push(["with neither flag nor env, the default is today's UTC calendar date and says so", (() => { const r = resolveAsOfDate({ argv: [], env: {} }); return r.source === "today (process clock, UTC calendar date)" && isRealCalendarDate(r.value); })()]);
+  }
+
   const failed = checks.filter(([, k]) => !k);
   for (const [name, k] of checks) console.log(`  ${k ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -266,7 +481,8 @@ function runGate() {
     console.error("Org roster check FAILED: discovered no agents or skills under .claude/ — refusing to check pointers against an empty set.");
     process.exit(1);
   }
-  const { problems, unactivated, activated, byExecutor } = auditOrgRoster(roster, chartText, known);
+  const { value: asOfIso, source: asOfSource } = resolveAsOfDate({ argv: process.argv.slice(2), env: process.env });
+  const { problems, unactivated, activated, byExecutor, clock } = auditOrgRoster(roster, chartText, known, asOfIso);
 
   const total = activated.length + unactivated.length;
   console.log(`Org roster — ${total} role(s): ${activated.length} activated, ${unactivated.length} never yet run`);
@@ -293,6 +509,31 @@ function runGate() {
   console.log(`\n  EXECUTORS — ${total - laneCount} role(s) have a dedicated agent or skill, ${laneCount} are the main lane as a lens:`);
   for (const [e, n] of dedicated) console.log(`    · ${e} — ${n} role(s)`);
   if (laneCount > 0) console.log(`    · lane — ${laneCount} role(s), no dedicated executor`);
+
+  // THE CLOCK — reported, never fatal (see the header comment). asOfIso always
+  // has a value now (resolveAsOfDate's third tier is the process clock, which
+  // cannot fail), but a bad override (--as-of nonsense, or SIGNALGRID_AS_OF set
+  // to garbage) must be SAID rather than silently reported as "nothing stale".
+  if (!isRealCalendarDate(asOfIso)) {
+    console.log(`\n  NEXT-ACTION CLOCK — unavailable: the as-of date \`${asOfIso}\` (source: ${asOfSource}) is not a real calendar date, so staleness cannot be reported this run.`);
+  } else {
+    const staleSorted = [...clock.stale].sort((a, b) => b.days - a.days || a.id.localeCompare(b.id));
+    console.log(`\n  NEXT-ACTION CLOCK (as of ${asOfIso}, source: ${asOfSource}) — ${staleSorted.length} role(s) with nextAction older than 7d:`);
+    for (const s of staleSorted) console.log(`    · ${s.id} — nextAction older than 7d (set ${s.nextActionDate}, ${s.days}d ago)`);
+    if (clock.noClock.length > 0) {
+      console.log(`    · NO CLOCK (nextAction has no nextActionDate): ${clock.noClock.map((n) => n.id).join(", ")}`);
+    }
+    if (clock.unparseable.length > 0) {
+      for (const u of clock.unparseable) console.log(`    · ${u.id} — nextActionDate \`${u.nextActionDate}\` is not a valid calendar date`);
+    }
+    if (clock.future.length > 0) {
+      for (const f of clock.future) console.log(`    · ${f.id} — nextActionDate \`${f.nextActionDate}\` is AFTER the as-of date (${-f.days}d in the future) — invalid, not fresh`);
+    }
+    if (staleSorted.length === 0 && clock.noClock.length === 0 && clock.unparseable.length === 0 && clock.future.length === 0) {
+      console.log("    · none — every nextAction was set within the last 7 days.");
+    }
+  }
+
   if (problems.length > 0) {
     console.error(`\nOrg roster check FAILED: ${problems.length} problem(s).`);
     for (const p of problems) console.error(`  ✗ ${p}`);

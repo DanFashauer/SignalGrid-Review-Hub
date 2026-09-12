@@ -2857,3 +2857,124 @@ hardware step, not only once); a prototype started on appetite rather than on a 
 gate is a violation of this record, not a reversal of it. The do-not-claim list in
 item 5 does not move on appetite either: a line leaves it only when the test or
 review that would make the claim true is recorded in `docs/agent/EVIDENCE.md`.
+
+## DR-044 — cactus-compute/needle is a NARROW, base-weights-only, offline extraction helper kept on the shelf, never on the decision path: its confidence is a learned score with the wrong failure polarity for golden rule 2, and no needle output may seed a fixture, rank evidence, feed a figure, or serve as an oracle (owner-directed 2026-09-12)
+
+**Question.** The owner shared [cactus-compute/needle](https://github.com/cactus-compute/needle)
+with *"Do everything please and also this will be really helpful so ingest this please."*
+Needle is an on-device tool-calling + structured-extraction model with a learned
+confidence head that escalates below a threshold — a shape that visibly resembles
+SignalGrid's own allow/step_up/escalate ladder, and the low-memory on-device tool
+that RUNS on this Mac where LightRAG (DR-041) did not. DR-039 sets the absorption
+bar (a resource is taken if any part can aid building the company; the only
+exclusions are licence, auto-execution, egress without consent, directory
+collision), the tool-evaluation-by-use skill requires a measurement not a memo,
+and golden rule 2 / DR-029 forbid ANY model on the decision path. What does the
+tree adopt, in what form, and what is the boundary?
+
+**Measured by use (isolated venv, python 3.12, `NEEDLE_TELEMETRY=0 DO_NOT_TRACK=1`,
+installed from the LOCAL CLONE at `53df049c4a1a82fca1027b81f9ff21336dfb0861`, base
+weights).** The engine is a single 14.2 MB native `libneedle.dylib` (the model is
+compiled in; no separate weights file) fetched once from HuggingFace
+`Cactus-Compute/needle2` and loaded in-process via ctypes. Warm inference footprint
+is ~48 MB process RSS / 46-56 MB engine self-report (the README's "~28 MB constant"
+understates it; the one-time cold download run measured ~129 MB and is not the
+steady state). Output is deterministic PER FIXED SESSION STATE — identical across
+separate processes and across `extract()` calls, which open and close a fresh engine
+each call — but NOT a pure function of input: a reused `Needle` gives path-dependent
+confidence unless `reset()` is called, so `extract()` is the safe entrypoint and
+reusing one instance across documents is a footgun. Offline: warm-cache inference
+makes ZERO HuggingFace calls (`_register_download` fires only when the dylib is
+absent, not on every init) and runs under `HF_HUB_OFFLINE=1`; only the first-ever run
+needs network. On extraction quality the confidence head is honest in the ONE
+direction that matters and unreliable in the other: no high-confidence-wrong output
+was produced (garbage → 0.0, wrong-domain → ~0.24), but a CORRECT SignalGrid
+extraction landed at 0.38, so a threshold does NOT cleanly separate correct from
+incorrect — the score gates "a call was produced", not "the call is right". Per
+needle's own `doc/apis.md` the score is `min(calibrated head, decode likelihood)` — a
+fail-closed gate, calibrated for the base model only — and `extract()` DISCARDS the
+field entirely (returns `None` on refusal), so the gate is reachable only through
+`complete()`/`run()`; finetuning DISABLES the head (forced to `None`), so the
+"calibrated confidence" strength and the "finetune it for our tools" remedy are
+mutually exclusive. The base model extracts terse/structured input correctly
+un-finetuned (`Decision: ALLOW. Subject: worker-7. …` → correct) and fails only on
+narrative prose (a 6-field access-decision narrative → empty, confidence 0.004).
+The default `strict=True` raises `ExtractionValidationError` on a legitimately
+grounded numeric (the README's own invoice `total=1200.0`): the native engine flags
+it ungrounded and the Python wrapper promotes any non-date ungrounded field to a hard
+raise, so `strict=False` is required for numeric fields.
+
+**Surfaces found (paths in `docs/agent/RESOURCE_INTAKE.md`).** Egress: (1) anonymous
+telemetry to a Supabase endpoint — DISABLED and verified in code, `track()` returns
+before spawning its thread when `NEEDLE_TELEMETRY=0`/`DO_NOT_TRACK`/`CI` is set, and
+plain `import needle` triggers none of it; (2) the one-time HF engine pull; (3) an
+OpenRouter (deepseek) call in the `[train]`/`--generate` data-synthesis path; (4) a
+HuggingFace UPLOAD in `build --upload` — (3) and (4) are consent-gated behind flags
+and keys but are real and were not in the first pass. No `hf_hub_download` passes
+`revision=`, and fetched artifacts are `pickle.load`ed, so "pinned 2.0.4" is a
+FILENAME convention, not an integrity pin. The inference engine binary's LICENCE is
+unverified — the repo's Apache-2.0 covers only the Python wrapper; the dylib is a
+separate HF-hosted artifact. `.github/workflows/` carries a daily-cron PyPI publish
+and a `v*`-tag GHCR publish that would auto-execute and collide with our tags if the
+repo were ever vendored. There are NO Claude Code hooks.
+
+**Call.**
+
+1. **Adopted-by-reference as a NARROW offline extraction helper, base weights only,
+   kept on the shelf — not a standing pipeline component.** If used at all: the
+   installed pip package (never the repo vendored), telemetry disabled, engine cached,
+   run by hand on TERSE/STRUCTURED text, and a human RE-KEYS the fields into the tree
+   after checking them against the source. Never the `[train]`/`--generate`/`--upload`
+   paths without explicit owner consent (external egress, CLAUDE.md "Ask before").
+
+2. **THE BOUNDARY (golden rule 2, DR-029).** *needle's confidence is a
+   45M-parameter neural net's learned probability about its own output; its
+   determinism is incidental to the computation and never a license to admit it, and
+   SignalGrid verdicts derive ONLY from fixture-backed, human-auditable signals — so
+   no needle score, extraction, or synthetic sample may be cited by, seed a fixture
+   for, rank evidence within, or serve as a test oracle to any gate, proof,
+   doc-figure, /v1 decision, or lib/\* path.* The allow/step_up/escalate resemblance
+   is architectural coincidence: SignalGrid gates on known signal STATE, needle on
+   model self-doubt, and needle's score moves the WRONG way for golden rule 2 — it
+   LOWERS on uncertainty, where the rule requires uncertainty to RAISE assurance. The
+   four one-hop laundering paths are barred explicitly: (a) using `needle
+   generate-data` to mint fixtures that back the core; (b) using its confidence to
+   rank/prioritize evidence or as a proof assertion; (c) feeding any needle-derived
+   number into a doc figure or `check-readiness-figure.mjs`, or pasting its JSON into
+   the tree; (d) finetuning on SignalGrid tool schemas — the result is still a model
+   and still barred.
+
+3. **Nothing of needle is in the tree.** The clone and venv live in the session
+   scratchpad only; this record and the `RESOURCE_INTAKE.md` row are the whole
+   footprint. It is the low-memory on-device option LightRAG (DR-041) is not, but the
+   two solve different problems (retrieval over a corpus vs. single-document
+   extraction) and neither is on the decision path.
+
+**Reversal.** The owner reverses by saying so; the reversal is two deletions — this record and the `RESOURCE_INTAKE.md` needle row — because nothing of needle is vendored, installed into a session, or referenced by any gate, proof, doc-figure or code path, by construction. Adopting it into any pipeline, or crossing the boundary in item 2 (needle output on the decision path, seeding a fixture, ranking evidence, feeding a figure, or a finetuned model), is a violation of this record, not a reversal of it, and needs its own decision record first.
+
+## DR-047 — Usage-limit fallback and token-smart model routing for the coordinating lane and its subagents (owner-directed 2026-09-12)
+
+**Context.** On 2026-09-12 a cloud-lane session ran on Fable 5.1 — the creative-writing tier (`.claude/commands/fable.md`), already a mismatch for engineering orchestration. Background subagents were spawned without an explicit `model:`, so each inherited the coordinator's model. When the coordinator hit "You've reached your Fable limit," the same quota that stopped it started returning 429 on every inherited subagent call — including work with no creative content and no reason to be blocked. Nothing detected the usage-limit signal and re-issued the turn on a capable model; a human switched the session to Opus after roughly an hour, during which the cloud lane went dark. (The exact timestamps and the identities of the killed subagents are not in the tree; whoever amends this record should attach the transcript evidence the way every other DR cites concrete output.) The repo already proves the safe pattern is normal: all 13 `.claude/agents/*.md` roles pin an explicit tier (`architect`/`planner`/`fail-closed-auditor`/`gate-and-proof-engineer`/`verdict-core-reader`/`agent-platform-steward` on opus; `code-reviewer`/`security-reviewer`/`e2e-runner`/`refactor-cleaner`/`tdd-guide`/`build-error-resolver` on sonnet; `doc-updater` on haiku), `docs/agent/BRAIN_CYCLE_DESIGN.md` assigns opus/sonnet lenses per review subagent, and `docs/agent/agent-tiers.json` derives tier from that frontmatter rather than trusting prose. The hole is the ad-hoc / background spawn path, which has no frontmatter to declare a tier against and no gate to catch its absence — so inheritance of a possibly-limited model stays possible exactly there.
+
+**The question this settles.** Given what the coordinating agent can and cannot control, what routing and fallback doctrine keeps a model usage-limit from ever again stalling the lane, and routes subagents token-smart?
+
+**The directive (owner, in his own words, 2026-09-12).** "no matter the model I'm currently running the fallback is ultracode and use Opus or whichever other model makes most sense for smarter token usage." ("Ultracode" is the owner's term for running at maximum capability; the model-family reference carries no id by that name, so the concrete model that satisfies it here is Opus.)
+
+**What the coordinating agent controls, and what it does not — stated first, because a rule aimed at the wrong actor is a fait accompli, the failure the DR format exists to prevent.**
+- The AGENT controls: the model tier of every subagent it spawns; never letting a spawn inherit the coordinator's model; never over-spawning onto the model that is already limited; and treating a usage-limit / 429 as a fallback-and-continue-and-log event rather than a silent death.
+- The OWNER / CLI controls: whether the *coordinating* session auto-switches its own primary model when that model hits its usage limit. A running session cannot re-point its own brain mid-turn — only the client-side primary-model auto-fallback setting can. This record cannot gate that behavior; it names the one owner action instead (rule 6).
+
+**Decision.**
+1. **Explicit tier per spawn; never inherit.** Every subagent or background dispatch sets its model on the spawn's own `model:` field (the tool argument beside the prompt), never only in the brief prose — a tier named in the brief does NOT select the runtime model, so a brief-only spawn still inherits the coordinator's. A spawn that omits the `model:` field is under-specified and must not run — the same bar the orchestrator applies to a worker with no falsifying check. Registered `.claude/agents/*.md` roles set it by frontmatter; ad-hoc and background spawns set the `model:` argument directly.
+2. **Token-smart tiering, concrete (cheapest tier that can do the stage).** Bulk, high-volume, fully-recheckable mechanical work — log/output scanning, reads for mapping, doc and codemap regeneration, simple reformatting — runs on **Haiku 4.5**. Reading/mapping that feeds a decision, mechanical edits, implementation, test-writing, refactors, and adversarial verification run on **Sonnet 5** (three cheap verifiers with distinct lenses beat one expensive one). Authorship and judgment where a wrong call is expensive to unwind — decision records, doctrine, design/architecture, gate-and-proof design, fail-closed auditing, decision-core reading, reconciling two lanes' edits — run on **Opus** (5 / 4.8). **Fable / Mythos** are the creative tier and are never assigned to an engineering or review spawn.
+3. **Fail-closed on an unavailable tier.** If an assigned tier is unavailable or unknown, the work resolves UP to Opus, never down to the model that is already limited. This mirrors golden rule 2 and DR-044's own words: unknown tightens, never loosens.
+4. **Contain a tier's exhaustion; be honest where it cannot be contained.** No spawn inherits the coordinator's model. Routing the bulk of work to Haiku/Sonnet keeps those workers off the coordinator's Opus quota, so exhausting one tier does not cascade into the others — the mechanism that turned one Fable limit into a lane-wide 429 storm. The exception, stated plainly: an Opus judgment worker shares an Opus coordinator's quota (naming the tier does not create a separate bucket), so Opus-worker spawns are kept few, and when the Opus tier itself is exhausted, judgment work WAITS for the reset (fail-closed, rule 3) rather than downgrading to a weaker model.
+5. **A usage limit is an event, not an ending.** A subagent killed by a 429 is recorded as a still-open, pending unit of work and continued on the fallback tier — never silently absorbed. This extends the existing "pending is reported on every run and never counts green" discipline (`check-sim-requests.mjs`) from cross-machine sim requests to an in-session spawn that died mid-task.
+6. **The one owner action (rule 3 for the coordinator's own model).** The owner sets the CLI's primary-model auto-fallback to Opus, so that when the current coordinating model hits its usage limit the session continues on Opus at full agentic capability instead of going dark. The agent cannot perform this switch on itself; naming it here is the record's honest boundary.
+7. **The decision-path boundary is untouched.** This record governs which *Claude* model powers a coordinating session and its subagents — a different axis from DR-029's gateway boundary and the model-tap boundary, which keep every model, Claude or otherwise, out of the deterministic decision path. Neither is relaxed. DR-029's boundary is a RUNTIME one — product code must not call, import, or depend on the AI gateway — and it does NOT bar an engineering or review agent from READING `lib/*` or a proof; rule 2 deliberately assigns an Opus agent to read the decision core (`.claude/agents/verdict-core-reader.md`). No model is added to the runtime decision path.
+
+**Consequences.** Routing becomes cheaper and a single tier's exhaustion is contained to that tier. The lane no longer depends on a human noticing silence: the coordinator falls back (owner setting, rule 6) and stalled spawns survive as pending (rule 5). A follow-up may add a gate over the ad-hoc spawn path, owned by `gate-and-proof-engineer`, in the shape of `check-agent-roster.mjs` — deriving-and-gating the declared tier rather than trusting convention; until it exists, rules 1–5 are operating doctrine backed by review, not yet by a script, and this record says so honestly. Numbering note: DR-044 and DR-045 currently live only on open branches and DR-046 is unclaimed; this record takes DR-047 to avoid a collision as those land, and must be renumbered if they merge in a different order.
+
+**What does not change.** Claim discipline (DR-021 §2, DR-033 item 4): this is internal build-lane doctrine, never a buyer-facing claim. The verdict enum, the determinism invariant, and the Decision Envelope are untouched. DR-029 and the (unmerged) DR-044 boundary gate stand as written.
+
+**Reversal / amendment.** The owner reverses by saying so; amend the numbered rules and the SKILL section ("Which model runs a stage") together and keep the record and its history. A tier assignment may be re-mapped, or the ad-hoc-spawn gate added, by a later record that names what changed and why.

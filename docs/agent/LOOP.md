@@ -81,6 +81,26 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - LIGHTRAG'S KEY-FREE HALF IS RUNN
               Also landed: the GitHub Trending screening intake row and the three backlog
               items it produced (maplibre console view, vendor-doc drift watch, rclone runbook
               sentence).
+              (Earlier 2026-09-12, cloud lane:) THE FOUNDER'S THESIS IS ON THE RECORD
+              IN HIS OWN WORDS (DR-042): dictated, quoted verbatim in WHY_THIS_EXISTS.md
+              under 'What only the founder can write' - the section that had been
+              deliberately blank since that page was written - and tested clause by clause
+              against PURPOSE.md with a path:line each. Three clauses PURPOSE did not carry
+              were added under DR-042's authority (DR-020's rule): the systems' OWNERS are
+              separate, not just the systems; the auth factor is the customer's choice and
+              the grid is agnostic to it; a grant is scoped to the department, area or
+              equipment the person was assigned. Plus 'The cascade, named' - a per-stage
+              status table, every unbuilt stage marked design intent and pointed at a
+              backlog item, no shipped-capability claim moved. CASCADE AUDIT: both ends
+              built, the joins missing - @workspace/incident-playbook is imported by four
+              PROOFS and by nothing in lib/ or artifacts/, so no ticket can open; nothing
+              opens a change record (the fabric only reads one); check:absence 'affected
+              user notification' CORROBORATED across four probes. Six fail-closed backlog
+              items opened for exactly those joins. The owner's infographic ('10 cloud
+              architecture concepts', Rajender Ponnala - not committed) mapped concept by
+              concept in the cloud-platform architecture page; several answers are
+              deliberate refusals (no cache in the decision path, no retry inside a
+              decision, no queue on ingestion) and no deployment-target claim was added.
               (Earlier 2026-09-12, Mac lane:) THE SIX TOOLS ARE INSTALLED AND EACH USED ONCE
               (owner ran the three refused installs himself). Crucible /temper on #649's custody-ledger
               landing: three finder angles -> 11 candidates, 10 deduped, one drafted Important; the two

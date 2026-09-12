@@ -396,6 +396,116 @@ only), and the DDM rig is gated on an APNs push certificate.
 
 ## Next
 
+### The post-decision cascade — the six stages DR-042 measured against the tree
+
+Added 2026-09-12 from the founder's thesis statement (DR-042; quoted in full in
+`docs/WHY_THIS_EXISTS.md`). His sentence describes what happens AFTER a verdict:
+*"then if X process breaks then the solution can self resolve and notify the proper
+protocol and teams that are assign to that resource and monitor the fix or jump in
+and resolve problem and it will kick off tickets and change management while
+notification for users affected."* The audit behind DR-042 found the two ends
+built — the resolution planner and the incident playbook on one side, the gated
+vendor emitters on the other — and **the joins between them missing**. These six
+items are those joins, and nothing else. Each is fail-closed by construction (an
+unknown or unreachable downstream REFUSES and says so; it never pretends), each is
+deterministic (no wall clock in a decision path; every reference instant is
+caller-supplied), and each names the clause of his sentence it serves.
+
+- [ ] **Cascade join 1 — the ticket actually opens: a fail-closed ITSM dispatch seam.**
+      Serves *"it will kick off tickets"*. Both halves exist and nothing joins them:
+      `lib/incident-playbook` turns a composed posture or a detection into a properly
+      prioritized `Incident` (priority = impact × urgency on the ServiceNow matrix, an
+      SLA per priority, an assignment group, an escalation flag, a correlation id,
+      ranked drivers) and is pure; `lib/integrations/src/integrations/itsm` holds eight
+      vendor adapters behind a live-call gate. There is no code path from one to the
+      other, and no `/v1` route asks for a ticket. Build a pure mapper from `Incident`
+      to the adapters' ticket-request shape, plus a dispatch seam that goes through the
+      existing emission gate — so in this tree the resolved mode is always fixture and
+      the result says so. **Fail-closed:** an unknown vendor, an absent credential or an
+      unreachable backend REFUSES with a named reason and leaves the incident open; a
+      fabricated ticket id and a 2xx-shaped non-answer are both failures (the family
+      already exports its 2xx-shape refusal reasons for exactly this). **Deterministic:**
+      no wall clock — the correlation id derives from the decision id, as the playbook's
+      already does. Proof: the mapper's full priority × category matrix, and one refusal
+      per refusal reason.
+
+- [ ] **Cascade join 2 — a change record is OPENED, not only read.**
+      Serves *"and change management"*. The fabric today reads the change plane and
+      never writes to it: `lib/integrations/src/integrations/change-window` grades
+      whether a change-class operation is happening inside a window the organization
+      approved, by the implementer the record names. Nothing anywhere drafts a change
+      record. Build a change-request DRAFT derived from the resolution plan — what would
+      change, on which target, why, and which reason codes it would clear — emitted
+      through the same gate as the ticket seam. **Fail-closed:** the draft is
+      `requires_approval` and simulated, exactly as `proposeRemediation` already is; an
+      absent or unreachable change plane means *no change record exists*, which can
+      never itself authorize the change. **The trap this must not walk into** is already
+      written down in that family's own header: a change window may never RELAX a
+      control, and `change_class` (standard / normal / emergency) is carried as evidence
+      and never graded — a draft that inherits those rules keeps them, and one that
+      quietly loosens them is the defect.
+
+- [ ] **Cascade join 3 — the people affected are told through a channel they already use.**
+      Serves *"while notification for users affected"*. `pnpm run check:absence "affected
+      user notification"` returned CORROBORATED across all four probes on 2026-09-12:
+      nothing in the tree notifies an affected person. The constraint that shapes the
+      build is `docs/PURPOSE.md` §3 and golden rule 3 — **SignalGrid may not add a
+      surface the worker has to go and read**, so a SignalGrid notification app or a
+      SignalGrid inbox is not the answer and never will be. Build an audience derivation
+      (who else holds a device, a session or an assignment inside the affected scope —
+      the department, area, room or equipment the grant was scoped to) plus a routing
+      decision over the `ResolutionChannel` values that already exist in
+      `lib/signalgrid-core/src/types.ts`, with delivery delegated to the host app or the
+      organization's own communications system. **Fail-closed:** an audience that cannot
+      be resolved routes to the named OWNER rather than to nobody, and a delivery that
+      cannot be made is recorded as undelivered — silence is never reported as told.
+      **Deterministic:** the audience is derived from evidence the decision already
+      carries, never from a live directory query inside the decision path.
+
+- [ ] **Cascade join 4 — monitor the fix: a post-execution verifier for the resolution path.**
+      Serves *"and monitor the fix or jump in and resolve problem"*. What exists is
+      narrower than the sentence: `simulateResolution` PREVIEWS the outcome after the
+      resolvable fixes are applied, exception release lifts a restriction when the
+      condition is observed to clear rather than on a timer, and decision continuity
+      settles which verdict wins after a partition. Nothing observes whether a requested
+      remediation actually landed —
+      `docs/SIGNALGRID_CLOUD_PLATFORM_AND_CYBER_RESILIENCE_ARCHITECTURE.md` §9 says so in
+      its own words. Build a record that pairs a requested remediation with the next real
+      evidence read for the same subject and derives `cleared` / `not_cleared` /
+      `unobserved` against a caller-supplied reference instant. **Fail-closed:**
+      `unobserved` is not `cleared` — an unobserved fix keeps the restriction in place
+      and escalates on the second miss, which is the *"or jump in"* half of his sentence.
+      **Deterministic:** no clock; the reference instant is an argument, as it is on every
+      recency axis in `lib/integrations`.
+
+- [ ] **Cascade join 5 — a durable outbound queue for the cascade emitters.**
+      Serves *"notify the proper protocol and teams that are assign to that resource"*.
+      The retry, backoff-with-jitter and dead-letter shapes exist
+      (`lib/integrations/src/integrations/webhooks/retry.ts`, `dispatch.ts`, `store.ts`,
+      and the deterministic model in `lib/signalgrid-core/src/webhooks.ts` whose backoff
+      schedule is recorded and never awaited), but they are per-emitter and the store is
+      Redis-or-memory. A cascade that spans a ticket, a change draft and an audience
+      notification needs one queue with one dead-letter view, so a failure to notify is
+      visible in the same place as a failure to ticket. **Fail-closed:** an unreachable
+      backend leaves the item QUEUED and reports it; a dead-letter entry is a visible
+      failure and never a silent drop, and a pending item never counts as delivered.
+      **Deterministic:** the backoff schedule is computed and recorded; any path a proof
+      drives never awaits it. No broker dependency — the point is one durable view, not
+      Kafka.
+
+- [ ] **Cascade join 6 — `proof:decision-cascade`: the whole chain, and every refusal in it.**
+      Serves the sentence end to end. Each stage above will land with its own proof; what
+      none of them covers is the chain, and the chain is the product claim — CLAUDE.md's
+      *"a decision is the trigger for a cascade, not the end of it."* Build one proof that
+      walks a fixture from a non-allow decision through plan → resolution path → incident
+      → (gated) ticket request → change draft → audience routing → verification, and
+      asserts at every hop that the fail-closed arm is reachable: an unreachable ITSM
+      leaves the incident open, an unresolvable audience reaches the owner, an unobserved
+      fix keeps the restriction. **It must fail without the fix** — a cascade proof that
+      passes on a tree with the joins removed is a restatement, not a proof — and it
+      registers in `package.json` as a `proof:*` script so the Mac harness enumerates it
+      automatically.
+
 - [x] **Both findings from the "status reported rather than measured" sweep — FIXED.**
       The sweep that produced the `itsm` tri-state health fix turned up two more instances of the
       same class. Both are now closed and both are pinned.

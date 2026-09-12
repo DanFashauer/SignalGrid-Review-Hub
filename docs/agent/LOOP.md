@@ -52,7 +52,15 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (Mac lane, latest) - READINESS 94%, OUTREACH OPEN INSIDE THE TARGET
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - OWNER-DIRECTED VENDORING (DR-038): the
+              /watch skill from bradautomates/claude-video (pinned, hook NOT taken, two
+              instructions overridden not edited) and the CLI-Anything method (the plugin
+              directory under third_party/, the telemetry-bearing hub NOT taken) are in the
+              tree, with two first-party skills around them: video-intake (frames via
+              /watch, transcript locally with faster-whisper, no key, nothing uploaded)
+              and cli-anything (the seven phases mapped onto a signalgrid CLI over /v1 and
+              the MCP server, a backlog item). Vendored figure 14 -> 15, first-party
+              exceptions TWELVE -> FOURTEEN, section E holds them. (Earlier 2026-09-12, Mac lane:) READINESS 94%, OUTREACH OPEN INSIDE THE TARGET
               (minted 2026-09-12T02:05Z, manifest v72). Two Mac re-mints tonight, each right after a landing moved the
               contract: v71 after #653 (134c25fd: headline 82%, the floor cleared for the
               first time), then v72 after the cloud landed #649 (minted 2026-09-12T02:05Z, manifest v72). Each with

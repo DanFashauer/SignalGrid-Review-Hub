@@ -16,7 +16,7 @@
 // `.obsidian/`, ignored ahead of the first vault rather than after the first bad
 // stamp.
 //
-// `.claude/skills/` holds 14 vendored third-party skills. Several of them WRITE
+// `.claude/skills/` holds 15 vendored third-party skills. Several of them WRITE
 // INTO THE REPOSITORY ROOT as a documented step, and none of those paths was in
 // the tracked `.gitignore` when this gate was written. One of them,
 // `.claude/worktrees/`, was ignored only through `.git/info/exclude` — a file that

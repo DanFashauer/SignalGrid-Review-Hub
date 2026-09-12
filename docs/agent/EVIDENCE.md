@@ -2535,3 +2535,40 @@ Text-safety gate passed.
 (all thirteen: exit=0)
 ```
 Verdict:  **holds.** The cited-path count rose 2307 → 2433 (the new page and DR-043 cite the tree at path:line and every one resolves); the docs deferred-noun ceiling stayed at 416 with the page bannered as *nothing on this page is a claim of current capability* and every other touched block hedged in its own paragraph; the ceiling file was not rewritten (no drop, no rise); DR-043 is the 42nd record and carries a reversal clause. What this does NOT prove: that any of the five backlog items is buildable as specified — each is a design target until its proof is green and named — and nothing here measures the hardware, which is the point of DR-043 item 4. **Re-run after the same-day verification fixes** (four stale citations corrected, none of them affecting the gate outcome above): `node scripts/check-cited-paths.mjs` → `Cited-path check passed — 2435 citation(s) across 511 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).` — the count rose by two because the ES256 claim now cites the verifier and its proof row instead of an unrelated line, and `check-cited-commands` went red on this entry's own spelling of the absence command with the silent flag between `run` and the script name (the gate reads the flag as a script name) and is green again with the flag noted in a comment.
+
+## 2026-09-12 — "cloud/fix-ci-timeout-reusable-callers merged and finished: the gate resolves reusable-workflow callers, 0 unbounded; and no push-triggered workflow needs a heartbeat paths-ignore it lacks"
+Command:
+```
+node scripts/check-ci-job-timeouts.mjs        # after merging origin/SignalGrid_Alpha in
+node scripts/check-derived-doc-figures.mjs
+node scripts/check-preflight-ci-parity.mjs
+node scripts/preflight.mjs
+pnpm run verify:breadth
+node scripts/check-action-pinning.mjs
+node scripts/check-ci-preflight-sync.mjs
+```
+Output:
+```
+  ✗ mac-runner-auto.yml:nightly-both: now bounded, but still carries a declared-unbounded entry — remove the exemption
+  ✗ mac-runner-auto.yml:nightly-mcp: now bounded, but still carries a declared-unbounded entry — remove the exemption
+ci-job-timeouts: 35 jobs, 2 unbounded; self-test green
+CI-job-timeout gate FAILED — bound the job, or declare it with a reason.
+
+[after deleting the two now-stale DECLARED_UNBOUNDED entries]
+ci-job-timeouts: 35 jobs, 0 unbounded; self-test green
+CI-job-timeout gate passed — every job declares how long it may run.
+
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Preflight↔CI parity passed — every preflight gate is wired into a workflow.
+Preflight PASSED — everything it runs is green.
+Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+Action pinning check passed — every third-party action is pinned to an immutable commit.
+Drift check passed — every proof runs in both places, or is exempt by name with a reason.
+```
+Verdict: **branch dcd9cff8 was NOT superseded** — mainline still carried two hand-written `DECLARED_UNBOUNDED` string exemptions for `mac-runner-auto.yml`'s `nightly-both`/`nightly-mcp` jobs, each ending in the same sentence: "Follow-up: resolve a local `uses:` and inherit the callee's bound, then delete this entry." Merging `origin/SignalGrid_Alpha` (344 commits) into the branch turned that prophecy into a gate failure — the new `isBounded()` now resolves the local callee and verifies both jobs bounded on their own, so the two exemptions became stale and the gate caught it the OTHER direction ("now bounded, but still carries a declared-unbounded entry"). Deleted both; the gate is now empty (`DECLARED_UNBOUNDED` has zero entries), which is the file's own stated goal state. Five merge conflicts resolved toward mainline (`docs/CLAIM_INVENTORY.md`, `docs/agent/CLAIM_INVENTORY.json` — PURPOSE.md line numbers moved; `docs/STATUS.md` — mainline's last generated run was green; `docs/agent/SURFACE_REVIEW_COVERAGE.md` — mainline's tree grew past this branch's counts; `scripts/check-derived-doc-figures.mjs` — mainline evolved its fifteen/sixteen-workflow self-test independently); `scripts/check-ci-job-timeouts.mjs` itself auto-merged with no conflict.
+
+Separately, audited whether the six-workflow "carries paths-ignore today" premise in the assignment held: **it did not, on two counts.** Only 5 files match `paths-ignore` in `.github/workflows/` (`codeql.yml`, `connector-emulator-smoke.yml`, `mac-runner-auto.yml`, `review-hub-ci.yml`, `supply-chain.yml`) — `pr-triage.yml` carries none, and it isn't push-triggered at all (`pull_request_target` only). `mac-runner-auto.yml`'s `paths-ignore` guards a `pull_request` trigger, not `push`, so it doesn't bear on a direct push to `SignalGrid_Alpha` either. Of the 16 workflows, exactly 8 trigger on `push`: `android`, `codeql`, `connector-emulator-smoke`, `desktop`, `firmware`, `ios-ci`, `review-hub-ci`, `supply-chain`. Four already carry `paths-ignore: ["artifacts/agent-heartbeats/**"]` (`codeql`, `connector-emulator-smoke`, `review-hub-ci`, `supply-chain` — landed in 6c5c2dc7, itself dated before the three named heartbeat commits). The other four (`android`, `desktop`, `firmware`, `ios-ci`) use a `paths:` ALLOWLIST scoped to their own native tree (e.g. `native/android/**`, `native/shared/**`, their own workflow file) that never includes `artifacts/agent-heartbeats/**` — a heartbeat-only push cannot match any entry in an allowlist, so GitHub never starts these workflows for one; they were never exposed to the defect and adding `paths-ignore` to an allowlisted trigger would be redundant. **Conclusion: no workflow needs an edit — every push-triggered workflow is already immune, either explicitly or structurally.** No `.github/workflows/*.yml` file was changed for this half of the task.
+
+For the three named commits (`af80bf16`, `689389df`, `30e35ef0`) — confirmed via `git show --stat` each touches only `artifacts/agent-heartbeats/mac-lane-tick.json` — and via `git merge-base --is-ancestor 6c5c2dc7 <sha>`, all three predate the 6c5c2dc7 fix. At that point in history all 4 now-guarded workflows had a bare `push: branches: [SignalGrid_Alpha]` with no path filter, so each commit started all 4. Of those, `review-hub-ci.yml`, `codeql.yml` and `supply-chain.yml` share `concurrency: group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true`; `git log --first-parent` shows each of the three commits was followed within minutes by another push to the same ref (`af80bf16`→`be70ebba`, `689389df`→`df9b1553`/`c12261f5`, `30e35ef0`→`7a1c5664`), so each commit's own run of those three workflows was almost certainly CANCELLED by the very next push — exactly the mechanism 6c5c2dc7's own commit message describes ("the next push cancelled the mainline CI run of the merge before it"). `connector-emulator-smoke.yml` carries no concurrency block at all, so its run for each commit ran to completion rather than being cancelled; whether it individually passed cannot be determined from triggers and diffs alone — **this repo has no `gh` access in this session, so no Actions-API run history was consulted; this is inference from trigger/concurrency semantics only, not a fetched run log.**
+
+Gates run once each, sequentially, all quoted above with their real last lines.

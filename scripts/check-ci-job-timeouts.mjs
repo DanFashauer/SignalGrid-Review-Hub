@@ -30,10 +30,12 @@ const JOB_FLOOR = 20;
 
 /** A job may be unbounded ONLY with a reason. Empty is the goal state. */
 const DECLARED_UNBOUNDED = new Map();
-// Reusable-workflow callers cannot carry timeout-minutes (GitHub rejects it on a `uses:` job); the
-// bound lives in the callee. Declared with the reason so the parser's blind spot is named, not hidden.
-DECLARED_UNBOUNDED.set("mac-runner-auto.yml:nightly-both", "BOUNDED, not unbounded — a reusable-workflow CALLER (uses: ./.github/workflows/mac-runner-harness.yml). GitHub rejects timeout-minutes on a `uses:` job; the bound is the callee's, mac-runner-harness.yml job mac-harness timeout-minutes: 90, and the callee's concurrency group serialises the two nightly calls. Declared here only because this parser does not follow `uses:`. Follow-up: resolve a local `uses:` and inherit the callee's bound, then delete this entry (added 2026-09-10 with the nightly flow, DR-036).");
-DECLARED_UNBOUNDED.set("mac-runner-auto.yml:nightly-mcp", "BOUNDED, not unbounded — a reusable-workflow CALLER (uses: ./.github/workflows/mac-runner-harness.yml). GitHub rejects timeout-minutes on a `uses:` job; the bound is the callee's, mac-runner-harness.yml job mac-harness timeout-minutes: 90, and the callee's concurrency group serialises the two nightly calls. Declared here only because this parser does not follow `uses:`. Follow-up: resolve a local `uses:` and inherit the callee's bound, then delete this entry (added 2026-09-10 with the nightly flow, DR-036).");
+// mac-runner-auto.yml's nightly-both/nightly-mcp (reusable-workflow callers of
+// mac-runner-harness.yml, whose mac-harness job is bounded at 90m) used to need a
+// DECLARED_UNBOUNDED entry each because this parser did not follow `uses:`. Now that
+// isBounded() resolves a local callee and inherits its bound, both jobs verify as
+// bounded directly and the entries are gone — the follow-up their own reason text
+// promised (added 2026-09-10 with the nightly flow, DR-036; resolved 2026-09-12).
 
 function jobsIn(text) {
   const lines = text.split("\n");

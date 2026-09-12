@@ -1897,8 +1897,8 @@ Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated tota
 ## 2026-09-12 — "dual-control joins the brace-less mutation sweep with zero survivors: seven one-line guards in the request normalizer, six now pinned by checks that fail without them and one deleted as shadowed"
 Command:  the `oneline-cond-false` mutator was opt-in and dual-control had not joined; opting it in surfaced 7 survivors, all in `lib/dual-control/src/normalize.ts` — the three `v === undefined || v === null → false` arms (absence read as malformed was never asserted to be WRONG), the `typeof v !== "string"` arm of `enumMalformed` (every junk-enum vector was a string, so nothing reached it), the prototype walk's depth bound, the `depth > 0` clause (the inherited-key vectors were all MISSPELLED keys, caught by the spelling check too), and the `typeof k === "symbol"` clause.
 ```
-node scripts/mutation-guard.mjs --proof=proof:dual-control ; pnpm run -s proof:dual-control | tail -1
-node scripts/check-proof-counts.mjs | tail -1 ; pnpm run -s review:invariants | tail -1
+node scripts/mutation-guard.mjs --proof=proof:dual-control ; pnpm run proof:dual-control | tail -1
+node scripts/check-proof-counts.mjs | tail -1 ; pnpm run review:invariants | tail -1
 ```
 Output:
 ```

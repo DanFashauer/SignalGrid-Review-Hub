@@ -306,6 +306,7 @@ export const TARGETS = [
 
   {
     proof: "proof:facility-trust-graph",
+    oneLine: true,
     files: [
       "lib/facility-trust-graph/src/evaluate.ts",
       "lib/facility-trust-graph/src/graph.ts",
@@ -1080,6 +1081,54 @@ export const ALLOWED = [
     line: 'if (!positivelyCertain && candidates.length === 0) {',
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; it exists to catch a FUTURE weakening. Same shape and justification as the sibling backstops.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/evaluate.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "SHADOWED BY THE NEXT LINE, and structurally undeletable — the one guard in this family that " +
+      "neither (a) a check nor (b) deletion could resolve. `known` is a readonly string[], so " +
+      "`known.includes(k)` is false for EVERY symbol and the very next line returns true for the " +
+      "same input: no observation, record or request can be built that this guard answers " +
+      "differently from the line below it, so no proof check can fail when it is disabled. " +
+      "Deletion does not compile: Reflect.ownKeys yields `string | symbol`, and this typeof test " +
+      "is the narrowing that lets `known.includes(k)` take `k` at all — removing it fails " +
+      "`pnpm run typecheck`, and the only way to keep it compiling is a `k as string` cast that " +
+      "moves the symbol case from stated to assumed. Kept, labelled inert in the source, and " +
+      "load-bearing the moment `known` stops being a string array. Same shape and reasoning in " +
+      "evaluate.ts, clinical.ts and gateway.ts — three copies of one prototype walk.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/clinical.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "SHADOWED BY THE NEXT LINE, and structurally undeletable — the one guard in this family that " +
+      "neither (a) a check nor (b) deletion could resolve. `known` is a readonly string[], so " +
+      "`known.includes(k)` is false for EVERY symbol and the very next line returns true for the " +
+      "same input: no observation, record or request can be built that this guard answers " +
+      "differently from the line below it, so no proof check can fail when it is disabled. " +
+      "Deletion does not compile: Reflect.ownKeys yields `string | symbol`, and this typeof test " +
+      "is the narrowing that lets `known.includes(k)` take `k` at all — removing it fails " +
+      "`pnpm run typecheck`, and the only way to keep it compiling is a `k as string` cast that " +
+      "moves the symbol case from stated to assumed. Kept, labelled inert in the source, and " +
+      "load-bearing the moment `known` stops being a string array. Same shape and reasoning in " +
+      "evaluate.ts, clinical.ts and gateway.ts — three copies of one prototype walk.",
+  },
+  {
+    file: "lib/facility-trust-graph/src/gateway.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "SHADOWED BY THE NEXT LINE, and structurally undeletable — the one guard in this family that " +
+      "neither (a) a check nor (b) deletion could resolve. `known` is a readonly string[], so " +
+      "`known.includes(k)` is false for EVERY symbol and the very next line returns true for the " +
+      "same input: no observation, record or request can be built that this guard answers " +
+      "differently from the line below it, so no proof check can fail when it is disabled. " +
+      "Deletion does not compile: Reflect.ownKeys yields `string | symbol`, and this typeof test " +
+      "is the narrowing that lets `known.includes(k)` take `k` at all — removing it fails " +
+      "`pnpm run typecheck`, and the only way to keep it compiling is a `k as string` cast that " +
+      "moves the symbol case from stated to assumed. Kept, labelled inert in the source, and " +
+      "load-bearing the moment `known` stops being a string array. Same shape and reasoning in " +
+      "evaluate.ts, clinical.ts and gateway.ts — three copies of one prototype walk.",
   },
   {
     file: "lib/facility-trust-graph/src/clinical.ts",

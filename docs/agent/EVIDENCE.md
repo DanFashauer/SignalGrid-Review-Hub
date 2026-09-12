@@ -1894,3 +1894,26 @@ wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read,
 Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
 ```
 Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated total to the files a person can actually read again; the two mailbox rows print `mailbox` in the Files column. `lane-deliver.mjs` keeps regenerating the page on every delivery — idempotent now, and still the catch for a page stale for any other reason. What this does NOT fix: a PR that itself changes the tracked-file set still moves the page, and two such PRs still conflict on it; that is the page doing its job.
+## 2026-09-12 — "proof:facility-trust-graph opts in to the brace-less mutator and the sweep has ZERO survivors: 22 one-line guards, 18 pinned by new checks, 1 deleted as shadowed, 3 documented inert"
+Command:  the `oneline-cond-false` mutator (landed 2026-09-11 as a ratchet) reaches the guard shape three reviews found invisible — `if (cond) return x;` with no braces. This family carried 22 of them unfalsified: four copies of `instantOf`'s ISO shape gate (Date.parse accepts "2026-07-31", so without the regex a date-only string becomes midnight UTC and an illegible instant grades as a legible one), three copies of the bounded prototype walk, the recency and confidence bound readers (JS computes `"120" * 1000` and `0.93 >= "0.6"` happily), and the zone-presence grader's input gates. 15 new checks drive the real malformed/hostile/boundary input through the public surface; `transition.ts`'s `graph.get(exitBoundaryId) === null` guard was DELETED as shadowed (every zonePath entry is a graph node, so an absent id can never appear in it and the containment check below already refuses it); the three `if (typeof k === "symbol") return true;` lines are ALLOWED-documented inert — a readonly string[] never contains a symbol, so the key-name test one line down returns true for the same input, and deleting the line removes the narrowing that lets `known.includes(k)` compile at all.
+```
+node scripts/mutation-guard.mjs --proof=proof:facility-trust-graph
+pnpm run -s proof:facility-trust-graph ; pnpm run -s typecheck ; pnpm run -s review:invariants
+node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs ; node scripts/check-connector-discipline.mjs
+node scripts/check-guard-registries.mjs ; node scripts/check-mutation-sharding.mjs
+```
+Output:
+```
+mutations=139 killed=125 hung=0 known-inert=14 survivors=0
+figures=mutations=139,killed=125,inert=14,survivors=0
+brace-less sweep (oneline-cond-false): 1 of 1 targets opted in; 0 pending (REPORTED, never fatal — a target joins when its one-line guards are pinned or documented inert)
+Mutation guard passed — every registered guard is falsifiable, or documented as inert.
+summary=pass (139/139)
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Proof-count check passed — all 59 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Connector-discipline gate passed.
+Registry drift check passed — every allow-path proof and every published figure is accounted for.
+summary=pass (32/32)
+```
+Verdict:  holds. Before: `mutations=140 killed=107 known-inert=11 survivors=22`. The proof went 124 → 139 checks (measured: `summary=pass (124/124)` on HEAD's copy of the proof, `summary=pass (139/139)` on this one), and every new one was confirmed to fail with its guard disabled by re-running the sweep, not by inspection. No documented check count names this proof, so no doc figure moved. What this does NOT fix: the other targets that have not joined the brace-less sweep — the census line prints the pending count on every run, and 417 brace-less guards were measured across 49 of the 53 targets on 2026-09-11.

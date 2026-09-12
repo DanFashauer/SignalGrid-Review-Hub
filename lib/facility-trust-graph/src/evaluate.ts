@@ -171,7 +171,7 @@ function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
       if (depth >= MAX_PROTOTYPE_DEPTH) return true;
       for (const k of Reflect.ownKeys(o)) {
         if (depth > 0) return true;
-        if (typeof k === "symbol") return true;
+        if (typeof k === "symbol") return true; // inert: the key-name test below already returns true for any symbol (a readonly string[] never contains one); kept as the narrowing that lets known.includes(k) typecheck
         if (!known.includes(k)) return true;
       }
       o = Object.getPrototypeOf(o) as object | null;

@@ -2091,3 +2091,20 @@ v4.9.0 ancestor of 2ed6c52: yes ; commits v4.9.0..2ed6c52: 3
 (skills dir diff: empty)            "version": "4.9.0",
 ```
 Verdict:  **refuted as "unreproducible", confirmed as a real installer defect.** The object exists and is 3 commits after tag v4.9.0 (tests plus a Grok Build adapter; the skills tree the vetting read is byte-identical to the tag, and the plugin manifest at that commit says 4.9.0, which is what "= v4.9.0" meant). `git fetch origin <id>` fetches an object only by its FULL id; a 7-character id is looked up as a ref name and there is no ref by that name, so the installer could never have worked on a fresh clone — it worked on 2026-09-01 only because the object was already local. Fixed by pinning the full id; the DR-024 vetting stands unchanged.
+
+## 2026-09-12 — "The four-skills branch reconciled with DR-040 (#666) before landing: media-intake folded into video-intake, and the vendored-set arithmetic holds at 32 = 15 + 17"
+Command:  after merging origin/SignalGrid_Alpha at fcea6f4d (which carries `cli-anything/`, `video-intake/` and the vendored `watch/`), `.claude/skills/media-intake/` was removed — its whole procedure (local faster-whisper transcript, footage never committed) was already `video-intake/`'s — and its one distinct section (where a clip's substance lands, plus three never-rules) moved into `video-intake/SKILL.md`. Every restatement of the pair was then recounted and the gates that read the registry re-run on the merged tree.
+```
+node scripts/check-publication-boundary.mjs ; node scripts/check-skill-plane-conformance.mjs
+node scripts/check-skill-instruction-conflicts.mjs ; node scripts/check-derived-doc-figures.mjs ; node scripts/check-markdown-links.mjs
+```
+Output:
+```
+  ✓ vendored-set arithmetic: 15 skill director(y/ies) under the vendored claim, 17 first-party carve-out(s) matching 17 table rows and the stated word, code figure 15
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+Skill-plane conformance passed — every skill and agent carries a name that matches its home and a non-empty description.
+✓ no tracked skill instructs a command the deny list refuses.   (3 overridden sites, all in watch/)
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+```
+Verdict:  holds. The entry above this one (30 = 14 + 16) was true on the tree it measured and stays as the record; this is the reconciled figure. The four docs that restate the pair (`docs/MCP_AND_SKILLS_LANE_PARITY.md`, `docs/MCP_ARCHITECTURE.md`, `docs/agent/BRAIN_CYCLE_DESIGN.md`, the `scripts/check-skill-instruction-conflicts.mjs` header) and the derived figure in `docs/research/MCP_MARKET_LEADERBOARDS.md` now read 32 / 15 / 17, and section E of the boundary gate is what fails the moment they drift again.

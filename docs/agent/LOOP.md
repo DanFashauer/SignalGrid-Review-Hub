@@ -52,7 +52,17 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (Mac lane, latest) - SIX AGENT TOOLS ABSORBED BY USE (DR-038,
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THREE HAND-RUN WORKFLOWS ARE NOW SKILLS BOTH LANES
+              LOAD FROM THE TREE (branch lane/cloud-four-skills-20260912-024500Z): tool-evaluation-by-use
+              (how an owner-shared tool is evaluated BY USE and written into the intake log),
+              landing-under-dr-037 (the five merge conditions, merge-then-regenerate order, one
+              evidence re-mint after the last family) and orchestrator-over-workers (spec-write /
+              fan-out / review / land one at a time). A fourth, media-intake, was written and then
+              folded into DR-040's video-intake before landing - same procedure, one skill per
+              resource kind; video-intake gained the placement rules (where a clip's substance
+              lands) and audio-only material. VENDORED.md now SEVENTEEN: 32 tracked = 15 upstream
+              + 17 first-party, section E holds it. Readiness untouched.
+              (Earlier 2026-09-12, Mac lane:) SIX AGENT TOOLS ABSORBED BY USE (DR-038,
               owner: 'install all of these and add them where needed and start using them now').
               Installed at user scope, hooks off, nothing in the repo's .claude/: last30days 3.24.0
               (first brief run - keyless coverage is HN-only and thin for niche topics), Ponytail

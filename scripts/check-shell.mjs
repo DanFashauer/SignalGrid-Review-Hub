@@ -44,6 +44,23 @@ const DEFERRED = new Map([
       reason: "Mac lane owns this file (LANE_COORDINATION.md); coordinate before editing",
     },
   ],
+  // A VENDORED SKILL script, which is the one case the third_party/ exclusion above
+  // does NOT cover: it lives under .claude/skills/ because that is where the harness
+  // loads skills from, and it is held byte-identical to mattpocock/skills@3cca18b3
+  // (.claude/skills/VENDORED.md). So it can carry neither an edit nor an inline
+  // disable, and DEFERRED is the mechanism that fits: the code is recorded, not
+  // waved through, and if a re-vendor makes the finding disappear the stale-deferral
+  // check above FAILS and someone re-reads the file. RED is assigned in both arms of
+  // the colour probe at :17 and :19 and then never used by the library half of the
+  // template — the author is expected to use it in the stages half they write below
+  // the marker, which is exactly why upstream leaves it there.
+  [
+    ".claude/skills/wizard/template.sh",
+    {
+      codes: ["SC2034"],
+      reason: "vendored byte-identical (mattpocock/skills@3cca18b3); no edit and no inline disable is permitted in .claude/skills/",
+    },
+  ],
 ]);
 
 const listed = spawnSync("git", ["ls-files", "*.sh"], { encoding: "utf8" });

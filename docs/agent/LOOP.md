@@ -52,7 +52,26 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (Mac lane, latest) - SIX AGENT TOOLS ABSORBED BY USE (DR-038,
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SKILL COLLECTIONS ARE IN THE TREE,
+              UNDER THE OWNER'S BAR (DR-039): 85 skill directories from eleven upstreams
+              vendored byte-identical at their pins (mattpocock 25, addyosmani 24,
+              K-Dense 13, google 5, NVIDIA 4, mcollina 4, hig-doctor 3, finding-unknowns 3,
+              poka-yoke 2, keep-the-why 1, ios-simulator 1). The bar was
+              the owner's: adopted if any part of it can aid building any aspect of the
+              company; overlap is a ROW, never a refusal. The only exclusions are the four
+              hard lines - licence (trailofbits CC BY-SA, ramzesenok no LICENSE, and the
+              NC/proprietary/GPL/unlicensed K-Dense skills), auto-execution (every hook,
+              installer and marketplace manifest), egress (stated and overridden, never
+              silently accepted), directory collision (addyosmani's
+              test-driven-development loses to the incumbent). 37 override rows, not one
+              vendored file edited. One first-party addition:
+              docs/agent/SKILL_AUTHORING_STANDARD.md (the NVIDIA authoring bar in our own
+              words, plus the Trail of Bits doctrine written up rather than copied).
+              Bambushu/crucible NOT taken - the owner's list named one Crucible and the
+              Mac lane's DR-038 adopted a different project of that name; its measurements
+              are appended to that intake row. Vendored figure 15 -> 100, 114 tracked
+              directories under .claude/skills, section E holds all of it.
+              (Earlier 2026-09-12, Mac lane:) SIX AGENT TOOLS ABSORBED BY USE (DR-038,
               owner: 'install all of these and add them where needed and start using them now').
               Installed at user scope, hooks off, nothing in the repo's .claude/: last30days 3.24.0
               (first brief run - keyless coverage is HN-only and thin for niche topics), Ponytail

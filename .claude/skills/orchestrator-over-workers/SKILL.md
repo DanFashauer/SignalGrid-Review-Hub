@@ -88,3 +88,20 @@ gates, then land the next. The landing conditions are DR-037's
 - Never run two worktrees' gates against the same install.
 - Never let the orchestrator also be the author of the code it reviews; the fixer
   is never the reviewer.
+
+## Which model runs a stage (owner directive, 2026-09-12)
+
+The owner's words: "You need to be passing off tasks to other models and or use best
+ultracode model that uses the least amount but best results." So a stage runs on the
+cheapest model that can do it, and the choice is stated in the brief:
+
+- **Reading, mapping, checking, mechanical edits, adversarial verification** run on the
+  smaller tier (Sonnet). These stages are bounded by what is in the tree, not by
+  judgment, and three cheap verifiers with distinct lenses beat one expensive one.
+- **Authorship and judgment** (a decision record, a doctrine paragraph, a design
+  choice, the reconciliation of two lanes' edits) run on the main model.
+- **The orchestrator never does a worker's reading itself.** It writes the brief,
+  names the model, reads the report, and keeps the conclusion.
+
+The first run in this shape was the session-puck absorption on 2026-09-12: three
+Sonnet readers, one main-model author, three Sonnet verifiers, one fix round.

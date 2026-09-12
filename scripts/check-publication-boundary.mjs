@@ -242,7 +242,17 @@ else console.log(`  ✓ content rules: ${CONTENT_RULES.length} rules over ${scan
     // DOC HALF. The table rows are `> | \`name/\` | date | what |`; the count word is
     // the bold opener "**<WORD> exceptions in this directory". A reformatted table
     // or a rewritten opener fails loudly here rather than matching zero.
-    const WORDS = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5, SIX: 6, SEVEN: 7, EIGHT: 8, NINE: 9, TEN: 10, ELEVEN: 11, TWELVE: 12, THIRTEEN: 13, FOURTEEN: 14, FIFTEEN: 15, SIXTEEN: 16, SEVENTEEN: 17, EIGHTEEN: 18, NINETEEN: 19, TWENTY: 20 };
+    // Extended to THIRTY on 2026-09-12 with the twelve-collection vendoring, which took
+    // the opener to FIFTEEN. The map is headroom, not a prediction: a word past its end
+    // reads as NaN and fails the section loudly, which is correct, but a first-party
+    // skill should not have to edit a gate to be counted. Extend it, never trim it.
+    const WORDS = {
+      ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5, SIX: 6, SEVEN: 7, EIGHT: 8, NINE: 9, TEN: 10,
+      ELEVEN: 11, TWELVE: 12, THIRTEEN: 13, FOURTEEN: 14, FIFTEEN: 15, SIXTEEN: 16, SEVENTEEN: 17,
+      EIGHTEEN: 18, NINETEEN: 19, TWENTY: 20, "TWENTY-ONE": 21, "TWENTY-TWO": 22, "TWENTY-THREE": 23,
+      "TWENTY-FOUR": 24, "TWENTY-FIVE": 25, "TWENTY-SIX": 26, "TWENTY-SEVEN": 27, "TWENTY-EIGHT": 28,
+      "TWENTY-NINE": 29, THIRTY: 30,
+    };
     let vendoredDoc = "";
     try {
       vendoredDoc = readFileSync(resolve(repoRoot, ".claude/skills/VENDORED.md"), "utf8");
@@ -251,7 +261,7 @@ else console.log(`  ✓ content rules: ${CONTENT_RULES.length} rules over ${scan
       sectionFailed = true;
     }
     if (vendoredDoc) {
-      const opener = /\*\*([A-Z]+|\d+) exceptions? in this directory/.exec(vendoredDoc);
+      const opener = /\*\*([A-Z]+(?:-[A-Z]+)?|\d+) exceptions? in this directory/.exec(vendoredDoc);
       const docStated = opener ? (WORDS[opener[1]] ?? Number(opener[1])) : NaN;
       const rows = [...vendoredDoc.matchAll(/^> \| `([^`/]+)\/` \| \d{4}-\d{2}-\d{2} \| /gm)].map((m) => m[1]);
       if (!opener || !Number.isFinite(docStated)) {

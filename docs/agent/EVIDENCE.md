@@ -15,6 +15,139 @@ Verdict:  holds | refuted (→ FALSE_CLAIMS.json) | not verifiable here (why)
 
 ---
 
+## 2026-09-12 — "86 skill directories from eleven collections were vendored BYTE-IDENTICAL at their pins; 85 stayed"
+Command:
+```
+# every pin re-verified in its own clone before a single file was copied
+for p in mattpocock/repo addyosmani/target google/google-skills nvidia/nvidia-skills \
+         kdense/sas awesome/cand/*; do git -C $p rev-parse HEAD; done
+# copy: git archive HEAD <path> | tar -x   (tracked files only), then diff back
+python3 verify-identity.py
+```
+Output:
+```
+diff -r over 86 vendored directories (excluding the added LICENSE|LICENSE-APACHE|LICENSE.md): 0 non-empty
+```
+Verdict:  **holds.** Every clone's `git rev-parse HEAD` matched the pin named in the
+brief before anything was copied (`mattpocock/skills` 3cca18b3, `addyosmani/agent-skills`
+6ca0cd7d, `google/skills` 150f8525, `NVIDIA/skills` 9ca28078,
+`K-Dense-AI/scientific-agent-skills` c1ed16d9, `rainmanjam/poka-yoke` 726a575e,
+`mcollina/skills` 856efd26, `Neeeophytee/finding-unknowns-skills` 6d7dda2a,
+`oliver-zehentleitner/keep-the-why` 9cf4ca65, `raintree-technology/hig-doctor` 3ec08f5a,
+`conorluddy/ios-simulator-skill` 4207f82f). The copy is
+`git archive` at the pin, so untracked working-tree files could not travel; the only
+addition to any vendored directory is its upstream LICENSE. ONE of the 86 was then
+removed again: `markdown-mermaid-writing` carries two U+200E LEFT-TO-RIGHT MARKs in
+`references/markdown_style_guide.md`, which `scripts/check-text-safety.mjs` refuses as
+hidden bidirectional text. A vendored file is not edited and a security gate is not
+given an exemption to admit one, so 85 stayed.
+
+## 2026-09-12 — "Every frontmatter `name:` in the new skill directories equals its directory"
+Command:
+```
+node scripts/check-skill-plane-conformance.mjs
+```
+Output:
+```
+Skill-plane conformance — 114 skill(s), 13 agent(s) walked
+
+Skill-plane conformance passed — every skill and agent carries a name that matches its home and a non-empty description.
+```
+Verdict:  **holds** — and one skill was refused BECAUSE of it rather than edited to pass.
+`NVIDIA/skills`' `skill-card-generator` writes its `name:` in quotes, which this gate
+reads as a name that does not equal its directory. A vendored file is not edited to make
+a gate green, so it is recorded in `.claude/skills/VENDORED.md` as not taken.
+
+## 2026-09-12 — "The vendored-set arithmetic moved with the tree, on both halves"
+Command:
+```
+node scripts/check-publication-boundary.mjs
+```
+Output:
+```
+  tracked paths: 3211
+  ✓ vendored-set arithmetic: 100 skill director(y/ies) under the vendored claim, 14 first-party carve-out(s) matching 14 table rows and the stated word, code figure 100
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+```
+Verdict:  **holds.** The arithmetic in the line above is the whole claim: tracked
+directories under `.claude/skills` now number 114, of which 14 are first-party and the
+rest upstream. The
+opener word in `.claude/skills/VENDORED.md` is unchanged at FOURTEEN; section E's number-word map was extended past FIFTEEN to THIRTY (and
+its opener regex taught to read a hyphenated word) so a future first-party skill does not
+have to edit a gate to be counted.
+
+## 2026-09-12 — "Bambushu/crucible is NOT in this tree, and what was measured of it before that call"
+Command:
+```
+git -C <pinned clone> rev-parse HEAD
+grep -n "OPENROUTER_API_KEY" scripts/discover-premium.sh
+sed -n '277p' skill.md
+node scripts/check-plugin-manifest.mjs      # with a copy staged at .claude/skills/crucible/
+```
+Output:
+```
+6d49aef4f71e984e40401e726a66fa456c035fed
+46:  mike_key=$(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}MIKE_OPENROUTER_API_KEY=…' "$HOME/.zshrc" | tail -1)
+53:  for f in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.zprofile" "$HOME/.profile" "$HOME/.env"; do
+**Safety note:** this stage executes MODEL-WRITTEN code against the target. The sandbox bounds
+network/CPU/file-size/wall-clock and runs against a copy, but filesystem reads are NOT isolated
+and the network block is in-process only …
+Plugin-manifest gate FAILED:
+  - skill crucible has no SKILL.md
+```
+Verdict:  **not taken, and the reason is not the gate.** Three things were measured at
+the pin and all three hold: its panel POSTs whole source files to four third-party models
+through OpenRouter under a key it will scrape out of a shell rc file; its `--verify`
+sandbox is porous by upstream's own note; and its entry point is `skill.md` in LOWER
+CASE, which `check-plugin-manifest.mjs` refuses for any directory under `.claude/skills/`
+and which a byte-identical copy may not be renamed to satisfy. The DISPOSITION, however,
+is the owner's list: it named one Crucible, and the Mac lane's DR-038 adopted a different
+project of that name (`raddue/crucible`, 52 skills, selective install through
+`scripts/install-crucible.mjs`, hooks off). Nothing of Bambushu/crucible is in this tree;
+the measurements above are appended to that intake row so the namesake is not re-evaluated
+from scratch by the next reader.
+
+## 2026-09-12 — "Two vendored instructions in the new set are commands the Bash deny list refuses, and both now carry an Overrides row"
+Command:
+```
+node scripts/check-skill-instruction-conflicts.mjs
+```
+Output (before the rows, with the new skills staged):
+```
+✗ 2 skill instruction(s) the Bash deny list refuses:
+  .claude/skills/constraint-driven-development/SKILL.md:287  [inline]  --no-verify
+  .claude/skills/crucible/docs/superpowers/plans/2026-06-01-dynamic-verification.md:1263  [inline]  rm -rf ~/soufflai/.crucible-cache/accept-*
+```
+Output (after):
+```
+skill↔deny-list: 840 files, 12692 candidates judged, 7 denied, 7 overridden (4475 inline spans read as mentions, not invocations; Overrides section present, 59 parsed row(s))
+  overridden: .claude/skills/constraint-driven-development/SKILL.md:287  --no-verify
+  … 6 more overridden, 29 spans REPORTED as mentions in warning prose
+✓ no tracked skill instructs a command the deny list refuses.
+```
+Verdict:  **holds.** The second site left the tree entirely when Bambushu/crucible was
+dropped (entry above), so only the first needed a row. `constraint-driven-development`
+lists `--no-verify` as the symptom of a slow edit-loop check; the gate judges the span as
+written, and the row is how a judgement is released here.
+
+## 2026-09-12 — "The one new skill that writes into a repository root is ignored by the TRACKED ignore files"
+Command:
+```
+node scripts/check-gitignore-producers.mjs
+```
+Output:
+```
+gitignore↔skill producers: 6 listed producers + 115 derived diagrams/ probes checked against 105 patterns from 7 tracked ignore file(s) in a pristine harness; 120/120 ignored
+✓ every listed and derived skill-produced path is ignored by the tracked ignore files alone.
+```
+Verdict:  **holds.** `nemo-rl-session-memory/SKILL.md:27` says
+`mkdir -p session/<session_date_time>` in the repository it is run from. It is now a
+producer entry with a tracked ignore rule, so it cannot flip
+`provenance.workingTreeClean` on a later sim result — belt and braces beside the override
+row that routes checkpoints to the session scratchpad. The same pass found the SELF-TEST
+carrying its own copy of the ignore rules, twice, positionally paired with PRODUCERS: one
+`FIXTURE_RULES` list now, plus an assertion that it has one rule per producer.
+
 ## 2026-08-24 — "The ungated-fetch gate covers every outbound path in the connector tree"
 Command:
 ```

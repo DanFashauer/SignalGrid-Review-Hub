@@ -84,7 +84,7 @@ invoke:
 - **Skills (`.claude/skills/`)** are instruction files a model selects by their metadata.
   They shape the workflow, the output format and the constraints of the work: the role
   executors, the owner-comms rules, the session rituals. A skill can *use* MCP tools; it
-  never exposes a capability of its own. The registry holds 32 tracked directories, 15
+  never exposes a capability of its own. The registry holds 117 tracked directories, 100
   vendored and 17 first-party (as of 2026-09-12 —
   `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`; this said
   26 = 14 + 12 before that date), and `.claude/skills/VENDORED.md` is the record of which

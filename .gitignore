@@ -124,6 +124,13 @@ artifacts/bruno/
 # does not exist in a fresh clone or on a CI runner: ignored on exactly one machine.
 **/.claude/worktrees/
 
+# The NeMo-RL session-memory checkpoint directory (nemo-rl-session-memory/SKILL.md:27
+# says `mkdir -p session/<session_date_time>` in the repo it is run from). Checkpoints
+# belong under the session scratchpad; this is the second line of defence, because one
+# untracked directory stamps every LATER sim result as minted from a dirty tree.
+# Project root only, hence the leading slash.
+/session/
+
 # Local knowledge corpus symlinked from iCloud by scripts/mac/sg-brain-link.sh.
 # NEVER committed: some of it is confidential and the Review Hub is public-safe.
 reference/

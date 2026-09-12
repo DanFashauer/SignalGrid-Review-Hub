@@ -36,7 +36,17 @@
 //     contractSha          — sha256 of the shared posture-report contract file,
 //                            cross-checked against the manifest before emitting;
 //     summary              — public-safe counts only (signal kinds, categories, MCP
-//                            tools, documented proofs), copied from the manifest body.
+//                            tools, documented proofs), copied from the manifest body;
+//     proofs               — PER-PROOF RESULTS (added 2026-09-12, DR-036 follow-up):
+//                            `passed` maps every `proof:*` the green preflight AND
+//                            breadth lanes registered at mint time to "passed" — the
+//                            run was green, so each registered proof passed — and
+//                            `notRecorded` names the proofs that self-skip without an
+//                            env var (a green run cannot say whether they ran, so they
+//                            are never recorded as passed). The readiness figure's
+//                            dimension (b) is the share of the launch profile's bound
+//                            proofs that appear in `passed` against the current
+//                            manifest; a file without this field scores 0 (fail-closed).
 //   Deliberately ABSENT: hostnames, usernames, serials, local paths, timestamps —
 //   the file is committed to a public repo, and git history already dates it.
 //   Emission is refused (with a message) when any half is not green, when the MCP
@@ -49,6 +59,10 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
+// The proof roster a green run COVERS, read from the SAME extractor the binding gate
+// uses on scripts/preflight.mjs — one reading, so the roster the evidence records and
+// the roster the readiness figure divides by cannot drift apart.
+import { liveSelfSkipping, registeredProofs } from "./check-launch-proof-bindings.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const contractPath = resolve(
@@ -390,6 +404,25 @@ if (emitEvidence) {
           mcpTools: manifest.body.mcpTools?.length ?? 0,
           proofsDocumented: Object.keys(manifest.body.proofCounts ?? {}).length,
         },
+        // Which proofs this green run COVERED, by name, from the lane files as they
+        // stood when the run happened (comment-stripped, run position only). Both lanes
+        // are required green above (`fullyGreen`), so every registered proof passed —
+        // EXCEPT the ones that skip themselves when an env var is unset, which a green
+        // run cannot distinguish from a pass; those are listed, never counted.
+        proofs: (() => {
+          const selfSkipping = liveSelfSkipping(repoRoot);
+          const registered = new Set([
+            ...registeredProofs(readFileSync(resolve(repoRoot, "scripts/preflight.mjs"), "utf8")),
+            ...registeredProofs(readFileSync(resolve(repoRoot, "scripts/verify-breadth.mjs"), "utf8")),
+          ]);
+          const passed = {};
+          for (const name of [...registered].sort()) if (!selfSkipping.has(name)) passed[name] = "passed";
+          return {
+            recordedFrom: "scripts/preflight.mjs + scripts/verify-breadth.mjs STEPS at mint time; both lanes green",
+            passed,
+            notRecorded: [...registered].filter((n) => selfSkipping.has(n)).sort(),
+          };
+        })(),
       };
       // Refuse to emit evidence the reader cannot verify. If EITHER git query failed —
       // e.g. SIGNALGRID_MCP_PATH points at a source export (pyproject.toml but no .git),

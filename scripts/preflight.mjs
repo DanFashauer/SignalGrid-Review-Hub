@@ -341,6 +341,11 @@ const STEPS = [
   { name: "CI job timeouts (an unbounded job is an unbounded outage; self-tested)", cmd: ["node", "scripts/check-ci-job-timeouts.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },
+  // DR-036's named follow-up (2026-09-12): every launch item binds the proof:* scripts that
+  // certify it, and readiness dimension (b) divides by that set. A binding that names no
+  // proof, a phantom, an unregistered or a self-skipping proof is a hollow claim — fatal.
+  { name: "Launch-proof bindings self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-launch-proof-bindings.mjs", "--self-test"] },
+  { name: "Launch-proof bindings (every launch item names real, per-push proofs)", cmd: ["node", "scripts/check-launch-proof-bindings.mjs"] },
   { name: "Ungated-fetch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ungated-fetch.mjs", "--self-test"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },
   // Sibling of the two assertions inside that gate. Ungated-fetch asks whether the call was

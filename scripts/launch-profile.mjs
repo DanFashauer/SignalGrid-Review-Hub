@@ -157,6 +157,21 @@ export const DEFERRED_RATIONALE =
 /**
  * SURFACES. Each carries how its real membership is DERIVED — the gate re-derives
  * from that source every run and refuses to trust this file's own arithmetic.
+ *
+ * PROOF BINDINGS (DR-036's named follow-up, executed 2026-09-12). Every `launch`
+ * entry carries `proofs: ["proof:<name>", …]` — the package.json proof scripts that
+ * certify it. Until then the readiness figure's dimension (b) was BINARY: 100 while
+ * the last Mac evidence run was green, fresh and covered the current manifest, else 0,
+ * because only 3 of the 23 launch ids happened to match a proof name and a per-item
+ * ratio would have been invented. Now `scripts/check-readiness-figure.mjs` computes
+ * (b) as a RATIO: of the distinct proofs these entries bind, the share the Mac's
+ * evidence (`artifacts/live-evidence/mac-run.json`, `proofs.passed`) records as
+ * passed against the manifest the tree carries. A binding is a claim, and
+ * `scripts/check-launch-proof-bindings.mjs` (preflight + CI, self-tested) fails when
+ * a launch entry binds nothing, binds a name that is not a proof script, binds one
+ * not registered in `scripts/preflight.mjs` (launch coverage is per push), or binds
+ * one that self-skips without an env var. Non-launch entries may not carry `proofs`.
+ * A binding is NOT a status and does not move LAUNCH_PROFILE_VERSION.
  */
 export const SURFACES = [
   {
@@ -167,6 +182,7 @@ export const SURFACES = [
     launch: [
   {
     id: "graph",
+    proofs: ["proof:graph-connector", "proof:graph-wire", "proof:microsoft-graph-sandbox", "proof:launch-seam", "proof:evidence-adapter"],
     reason:
       "The one read-only Entra/Intune connector — since v3, the first ENTERPRISE " +
       "production connector rather than the prerequisite: the open-source lab (Fleet, via " +
@@ -178,6 +194,7 @@ export const SURFACES = [
   },
   {
     id: "device-management-health",
+    proofs: ["proof:device-management-health", "proof:launch-seam"],
     reason:
       "Grades whether an Intune compliance answer is CURRENT. A device reported " +
       "compliant that has not checked in for weeks is the unearned affirmative in its " +
@@ -191,6 +208,7 @@ export const SURFACES = [
   },
   {
     id: "local-authority",
+    proofs: ["proof:local-authority", "proof:launch-seam"],
     reason:
       "Answers whether a shared device may act on its OWN authority right now — awaiting " +
       "first unlock after a restart, or past the interval its offline grant declares. " +
@@ -257,14 +275,17 @@ export const SURFACES = [
     launch: [
       {
         id: "device_posture",
+        proofs: ["proof:graph-connector", "proof:posture-composition", "proof:posture-allow", "proof:launch-seam"],
         reason: "What the one Graph connector produces.",
       },
       {
         id: "device_management_health",
+        proofs: ["proof:device-management-health", "proof:launch-seam"],
         reason: "Whether that posture answer is current rather than merely present.",
       },
       {
         id: "local_authority",
+        proofs: ["proof:local-authority", "proof:launch-seam"],
         reason: "Whether the shared device may act on its own authority right now.",
       },
     ],
@@ -324,10 +345,12 @@ export const SURFACES = [
     launch: [
   {
     id: "/v1/decisions/evaluate",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:observability", "proof:launch-seam"],
     reason: "The Assist gate itself. If only one route shipped, it would be this one.",
   },
   {
     id: "/v1/authorize",
+    proofs: ["proof:api-contract", "proof:signalgrid-core"],
     reason:
       "The same gate, in the shape a host app obeys: {assist, reasons, decisionId}. " +
       "The wire the Kotlin and Rust SDKs bind and the shared conformance vectors under " +
@@ -336,18 +359,29 @@ export const SURFACES = [
   },
   {
     id: "/v1/decisions",
+    proofs: ["proof:api-contract", "proof:signalgrid-core"],
     reason: "The console's list view; without it an operator cannot see what the gate did.",
   },
-  { id: "/v1/decisions/{id}", reason: "One decision in full." },
+  {
+    id: "/v1/decisions/{id}",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:observability"],
+    reason: "One decision in full.",
+  },
   {
     id: "/v1/decisions/{id}/evidence",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:launch-seam"],
     reason:
       "WHY the gate answered as it did. The product's entire claim is that its answers are " +
       "explainable and reproducible, so this route is not optional garnish — it is the claim.",
   },
-  { id: "/v1/context", reason: "Tenant context. \"Tenant-aware\" is in the criterion." },
+  {
+    id: "/v1/context",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:isolation-scope"],
+    reason: "Tenant context. \"Tenant-aware\" is in the criterion.",
+  },
   {
     id: "/v1/audit",
+    proofs: ["proof:api-contract", "proof:signalgrid-core"],
     reason:
       "The per-tenant audit chain a reviewer reads. Honestly: this route serves the core's " +
       "in-process digest chain, which does not survive a restart; the DURABLE hash-chain " +
@@ -355,37 +389,47 @@ export const SURFACES = [
       "surface — docs/BACKUP_AND_RESTORE.md names both. Calling this one 'durable' was a " +
       "false claim and is the kind this file exists to prevent.",
   },
-  { id: "/v1/metrics", reason: "Operability. A service nobody can watch cannot be run." },
+  {
+    id: "/v1/metrics",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:observability"],
+    reason: "Operability. A service nobody can watch cannot be run.",
+  },
   {
     id: "/v1/connectors",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:launch-seam"],
     reason:
       "Read-only connector inventory: the setup/health screen (launch wireframe 2) renders " +
       "the MODE the gate actually resolved — 'bring your tenant' is not concrete without it.",
   },
   {
     id: "/v1/connectors/{id}/sync-runs",
+    proofs: ["proof:api-contract", "proof:signalgrid-core"],
     reason: "Read-only sync history: last sync, records processed, signals normalized.",
   },
   {
     id: "/v1/policies",
+    proofs: ["proof:api-contract", "proof:signalgrid-core"],
     reason:
       "Read-only policy inventory: the 'what decided this' page (launch wireframe 5). An " +
       "operator who cannot read the active policy cannot trust the verdicts it mints.",
   },
   {
     id: "/v1/policies/{id}/versions",
+    proofs: ["proof:api-contract", "proof:signalgrid-core"],
     reason:
       "Read-only versioned rule sets with content digests — the versioned half of every " +
       "decision's provenance (decisions carry policyVersionId).",
   },
   {
     id: "/v1/policies/{id}/tests",
+    proofs: ["proof:api-contract", "proof:signalgrid-core"],
     reason:
       "Runs the pinned policy tests against a version and reports pass/fail — evidence the " +
       "active rule set still behaves, on demand, read-only.",
   },
   {
     id: "/v1/connectors/{id}/sync",
+    proofs: ["proof:api-contract", "proof:signalgrid-core", "proof:launch-seam"],
     reason:
       "Trigger a FIXTURE sync (the core refuses non-fixture connectors by construction) — " +
       "how the setup screen demonstrates the pipeline without a tenant. No write to any " +
@@ -464,10 +508,12 @@ export const SURFACES = [
     launch: [
   {
     id: "api-server",
+    proofs: ["proof:api-contract", "proof:observability", "proof:signalgrid-core", "proof:isolation-scope", "proof:launch-seam"],
     reason: "The product: one tenant-aware decision service. The whole of \"one product\".",
   },
   {
     id: "signalgrid-app",
+    proofs: ["proof:api-client-react"],
     reason:
       "The one operator console, bound to the served /v1 surface: decisions list, decision " +
       "detail (reason codes, matched rules, digest-verified evidence, per-signal freshness), " +
@@ -477,6 +523,7 @@ export const SURFACES = [
   },
   {
     id: "ios:EnterpriseShell",
+    proofs: ["proof:posture-allow", "proof:remediation-allow", "proof:signalgrid-simulator", "proof:mdm-profile"],
     reason:
       "The one host app — the reference shell a design partner integrates against. Under " +
       "the embedded-UX law the worker uses their OWN app, so this ships as the integration " +

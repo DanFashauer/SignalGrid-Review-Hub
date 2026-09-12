@@ -43,8 +43,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Free the api-server test port 5310 (runner-owned orphan from a prior killed job)
-        run: bash scripts/mac/free-test-port.sh 5310
+      - name: Free the api-server test ports (runner-owned orphans from a prior killed job)
+        run: bash scripts/mac/free-test-port.sh
 
       - name: Toolchain present on this Mac (report, never install here)
         run: |
@@ -92,9 +92,9 @@ jobs:
           grep -E "mcp tool count|Review-Hub preflight|Review-Hub breadth|signalgrid-mcp:|shared contract" verify-all.log || true
           exit "$code"
 
-      - name: Free the api-server test port 5310 (teardown — do not orphan it for the next job)
+      - name: Free the api-server test ports (teardown — do not orphan one for the next job)
         if: always()
-        run: bash scripts/mac/free-test-port.sh 5310
+        run: bash scripts/mac/free-test-port.sh
 
       - name: Upload logs
         if: always()

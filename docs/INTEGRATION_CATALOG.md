@@ -530,7 +530,7 @@ in one place.
   merely labels its checks "CIS" establishes nothing, and a run older than the operator's stated
   age bound cannot confirm anything today (all three temporal inputs supplied, never sampled).
   Titles and versions only — CIS rule content is licensed and is not reproduced.
-  `proof:benchmark-selection` (95 checks).
+  `proof:benchmark-selection` (104 checks).
 
 - **Shift context** ([SHIFT_CONTEXT.md](SHIFT_CONTEXT.md)) — right person, wrong time is still the
   wrong decision context. The labor plane (UKG, Dayforce, ADP and peers) already records whether a
@@ -570,7 +570,7 @@ in one place.
   a STANDING strong credential and only that; a perfectly-used bootstrap pass still reads
   monitor, because a temporary credential is an elevated state, not a clean one. Reading a
   credential record is not managing one: no pass is issued, revoked, or extended.
-  `proof:bootstrap-credential` (48 checks).
+  `proof:bootstrap-credential` (52 checks).
 
 - **Challenge capability** — the answerable step-up (intake ledger row 23; HID DigitalPersona's
   AD/LDS + Web Client inventory and Entra's authentication-methods registry are the reference

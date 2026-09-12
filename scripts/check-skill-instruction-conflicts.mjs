@@ -8,7 +8,7 @@
 // ---------------
 // `.claude/hooks/block-dangerous.sh` is a PreToolUse hook: it reads the Bash tool
 // call Claude Code is about to make and answers `permissionDecision:"deny"` for a
-// forbidden pattern. `.claude/skills/` holds 14 vendored upstream skills plus 12
+// forbidden pattern. `.claude/skills/` holds 15 vendored upstream skills plus 17
 // first-party ones (`.claude/skills/VENDORED.md` counts them), and a skill is a
 // procedure Claude is told to FOLLOW. When a skill's numbered step is a command
 // the hook denies, the two halves of the agent plane contradict each other: the

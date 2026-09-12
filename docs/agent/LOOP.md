@@ -52,7 +52,42 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (Mac lane, latest) - READINESS 94%, OUTREACH OPEN INSIDE THE TARGET
+LAST TOUCHED: 2026-09-12 (Mac lane, latest) - SIX AGENT TOOLS ABSORBED BY USE (DR-038,
+              owner: 'install all of these and add them where needed and start using them now').
+              Installed at user scope, hooks off, nothing in the repo's .claude/: last30days 3.24.0
+              (first brief run - keyless coverage is HN-only and thin for niche topics), Ponytail
+              4.9.0 (the cloud fixed the pin's spelling the same day: a full 40-char id fetches, an
+              abbreviated one is read as a ref name), Graphify 0.9.58 (structural graph of this tree:
+              about sixteen thousand nodes and thirty thousand edges in 677 communities, built in 3 s;
+              strong on 'who calls X', blind to string-literal paths; semantic docs pass deferred),
+              CLI-Anything (no target here), lightrag-hku 1.5.6 (waits on Ollama), ffmpeg 9.0.1 +
+              yt-dlp. Owner-run because the auto-mode classifier refuses them for an agent: the
+              /watch plugin install, `pnpm run crucible:install` (selective, adversarial skills only,
+              pinned), `brew install ollama`. Repo side: five intake rows, DR-038, installer scripts +
+              package.json rows for all six, .gitignore rows for every output dir they can write.
+              Readiness untouched (94%). (Earlier 2026-09-12, cloud lane:) THE BAR IS THE FOUNDER'S (DR-039): a resource
+              with any part that can aid building the company is adopted; only licence,
+              auto-execution, egress without consent and directory collision exclude;
+              overlap is recorded, contradictions get override rows. The founder's resume
+              absorbed as standing context (docs/company/FOUNDER_PROFILE.md): a senior
+              platform engineer, not a non-technical founder - owner-comms corrected, the
+              base skill points every role at it, ICP Finding 9. (Earlier 2026-09-12, cloud lane:) THE MAC'S THREE ASKS ANSWERED IN ONE
+(Earlier 2026-09-12, cloud lane:) OWNER-DIRECTED VENDORING (DR-040): the
+              /watch skill from bradautomates/claude-video (pinned, hook NOT taken, two
+              instructions overridden not edited) and the CLI-Anything method (the plugin
+              directory under third_party/, the telemetry-bearing hub NOT taken) are in the
+              tree, with two first-party skills around them: video-intake (frames via
+              /watch, transcript locally with faster-whisper, no key, nothing uploaded)
+              and cli-anything (the seven phases mapped onto a signalgrid CLI over /v1 and
+              the MCP server, a backlog item). Vendored figure 14 -> 15, first-party
+              exceptions TWELVE -> FOURTEEN, section E holds them. (Earlier 2026-09-12, cloud lane:) THE MAC'S THREE ASKS ANSWERED IN ONE
+              PR: the ponytail pin is real (3 commits after tag v4.9.0, skills identical to
+              the tag) and the installer now fetches it by its FULL id (an abbreviated id is a
+              ref name to git - that was the whole failure); the LM Studio section of
+              AGENT_GATEWAY.md that #531 carried but never landed is ported verbatim;
+              Graphify measured in a sandbox and NOT adopted (hook-based integration,
+              tree-dirtying rebuilds, oscillating output, a benchmark denominator of nodes
+              x 50 words) - the intake row carries the numbers. (Earlier 2026-09-12, Mac lane:) READINESS 94%, OUTREACH OPEN INSIDE THE TARGET
               (minted 2026-09-12T02:05Z, manifest v72). Two Mac re-mints tonight, each right after a landing moved the
               contract: v71 after #653 (134c25fd: headline 82%, the floor cleared for the
               first time), then v72 after the cloud landed #649 (minted 2026-09-12T02:05Z, manifest v72). Each with

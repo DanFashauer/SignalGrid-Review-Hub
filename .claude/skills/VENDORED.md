@@ -2,18 +2,21 @@
 
 Third-party work, copied in unmodified. **Not ours.**
 
-> **SIXTEEN exceptions in this directory — read this before any re-vendor.** These are
+> **SEVENTEEN exceptions in this directory — read this before any re-vendor.** These are
 > FIRST-PARTY, written in this repository and NOT part of the upstream set. They live
 > here because the harness loads skills from this directory. Everything else below
-> describes the other 14. Counted, not remembered: `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`
-> lists 30 tracked directories = 14 upstream + the 16 in the table (tracked, because only
+> describes the other 15 — 14 from obra/superpowers and, since 2026-09-12, `watch/` from
+> bradautomates/claude-video (its own section at the end of this file, DR-040). Counted, not remembered: `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`
+> lists 32 tracked directories = 15 upstream + the 17 in the table (tracked, because only
 > tracked paths publish; section E of `scripts/check-publication-boundary.mjs` holds this
 > table, this count and the carve-outs to one another since 2026-09-02). This line said SEVEN until 2026-09-02,
 > then TEN, then ELEVEN on 2026-09-03 when `research-ops/` was authored, then TWELVE on
-> 2026-09-04 when `stack-reference/` was authored — the same drift
+> 2026-09-04 when `stack-reference/` was authored, then FOURTEEN on 2026-09-12 when
+> `cli-anything/` and `video-intake/` were authored (DR-040) — the same drift
 > that took it from "one exception" to seven, recorded below and now caught by section E
-> the moment the count and the carve-outs disagree. SIXTEEN on 2026-09-12, when the cloud
-> lane wrote down four workflows it had run by hand that day.
+> the moment the count and the carve-outs disagree. SEVENTEEN on 2026-09-12, when the cloud
+> lane wrote down three workflows it had run by hand that day (a fourth, `media-intake/`,
+> was folded into `video-intake/` before landing — one skill per resource kind).
 >
 > **The seventh, `signalgrid-master/`, arrived 2026-08-25 under DR-018 and is a
 > MIRROR, not an original.** The owner's synced copy at
@@ -45,8 +48,9 @@ Third-party work, copied in unmodified. **Not ours.**
 > | `loop-end/` | 2026-08-31 | the session-end ritual — handoff enforcement pack, DR-021 |
 > | `research-ops/` | 2026-09-03 | evidence-first market/competitive/discovery research discipline (MCP Market leaderboards intake) |
 > | `stack-reference/` | 2026-09-04 | the corrected quick reference for every tool in the stack — 102 verified places generic cheatsheet advice breaks a rule here, and the form to use instead (Fechin/reference intake) |
+> | `cli-anything/` | 2026-09-12 | the first-party adapter for the CLI-Anything method, vendored unmodified under `third_party/cli-anything/` — how the seven phases map onto the `signalgrid` CLI over `/v1` and the MCP server (DR-040) |
+> | `video-intake/` | 2026-09-12 | owner-shared video → frames through the vendored `watch/` skill, a transcript produced locally with faster-whisper (no key, no upload), an intake row (DR-040) |
 > | `tool-evaluation-by-use/` | 2026-09-12 | how an owner-shared tool is evaluated BY USE and written into the intake log (Graphify intake) |
-> | `media-intake/` | 2026-09-12 | how owner-shared video/audio is transcribed locally, logged, and placed — media and transcript never committed |
 > | `landing-under-dr-037/` | 2026-09-12 | DR-037's five merge conditions, the merge-then-regenerate order, and the single evidence re-mint that follows |
 > | `orchestrator-over-workers/` | 2026-09-12 | the spec-write / fan-out / review / land-one-at-a-time build pattern (docs/LANE_COORDINATION.md, 2026-09-12) |
 >
@@ -125,7 +129,7 @@ product and no new surface to the launch profile.
   repo rule that replaces it. The files themselves stay unmodified (first caveat);
   the override is the record. What the read did NOT do: verify byte-identity
   against upstream (the GitHub API returned 403 through the sandbox proxy), or
-  re-read the 16 first-party files the twelfth round had already read in full.
+  re-read the first-party files the twelfth round had already read in full.
 - **Byte-identity verified 2026-09-08, closing the caveat above.** The GitHub API
   is still 403 through the proxy, but the raw CDN (`raw.githubusercontent.com`) is
   reachable, so every vendored file was fetched from upstream at the pinned commit
@@ -171,6 +175,8 @@ recorded here for the reader; no regex reads intent.
 | `brainstorming/scripts/server.cjs:106-112, :247-249` | Embeds `https://primeradiant.com/brand/…logo.png?v=<version>` in every served page unless a telemetry kill-switch is set | Outbound traffic to a third party without asking (CLAUDE.md "Ask before: anything that sends data to an external service"). `.claude/settings.json` now sets `SUPERPOWERS_DISABLE_TELEMETRY=1` in the session environment, which the server's own code honours. |
 | `brainstorming/visual-companion.md:95-102` | `--host 0.0.0.0` "if the URL is unreachable" | Loopback only. Mockups here carry unreleased copy, a claim surface. |
 | `brainstorming/visual-companion.md:278` | "use actual images (Unsplash)" | No third-party fetch into a mockup; the fixture assets under `docs/preview/` and `docs/assets/`. |
+| `watch/SKILL.md:193` | "delete it with `rm -rf <dir>`" (Step 5, clean up) | DENIED by the hook. The working directory lives under the system temp dir or the session scratchpad and is left for the harness to reclaim (`video-intake/SKILL.md`, step 4). |
+| `watch/scripts/setup.py:201` | a printed install hint for Linux: `sudo apt install ffmpeg` / `sudo dnf install ffmpeg` | A string the installer PRINTS, never a command it runs — and `sudo` is denied here regardless. The cloud lane puts a pinned static ffmpeg build on PATH under the scratchpad; the Mac uses Homebrew (`video-intake/SKILL.md`, step 1). |
 | `requesting-code-review/code-reviewer.md:116, :178` | Reviewer answers "Ready to merge? Yes / No / With fixes" | The reviewer vocabulary is `blocked \| approved-with-notes \| approved` and a reviewer never merges (`signalgrid-reviewer/SKILL.md:136-145`). |
 | `dispatching-parallel-agents/SKILL.md:71-73, :95-112` | Dispatch "Fix <file> failures" agents; "Adjusting test expectations if testing changed behavior" | A proof may never be weakened to make something pass; the fixer is never the reviewer (`signalgrid-reviewer/SKILL.md:47, :110`; CLAUDE.md "Never bypass a check"). |
 | `receiving-code-review/SKILL.md:205` | Reply via `gh api …/replies` unconditionally | The cloud lane has no `gh`; GitHub writes go through the MCP tools and are frugal (one reply when it resolves the task or raises a question). |
@@ -183,3 +189,23 @@ recorded here for the reader; no regex reads intent.
 Strength worth naming so a re-vendor cannot drop it: `verification-before-completion/SKILL.md:17-36`
 ("NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE") is the workflow form of
 CLAUDE.md's "Truth and completion" block.
+
+# Vendored: bradautomates/claude-video — `watch/`
+
+Third-party work, copied in unmodified. **Not ours.** The second upstream in this
+directory (DR-040, owner-directed 2026-09-12); its licence file travels with it as
+`watch/LICENSE` because the directory-level `LICENSE` above is Jesse Vincent's.
+
+| | |
+|---|---|
+| Upstream | https://github.com/bradautomates/claude-video |
+| Author | Bradley Bonanno (bradautomates) |
+| Licence | MIT © 2026 Bradley Bonanno (`watch/LICENSE`, copyright notice intact) |
+| Commit | `83da59fa78c3eee9e20f515fe75c438bb5166efd` (`main`; manifest version 0.2.0, tag v0.2.0) |
+| Committed upstream | 2026-06-30T17:20:07+10:00 |
+| Vendored | 2026-09-12 |
+| Contents | 1 skill, 12 files (`SKILL.md`, `.skillignore`, 8 Python scripts, 1 shell script) + LICENSE, byte-identical to `skills/watch/` at the pin (`diff -r` empty, excluding `__pycache__` and the added LICENSE) |
+| NOT taken | `hooks/` — a `SessionStart` hook that runs `hooks/scripts/check-setup.sh` on every session start (the hooks-off rule of DR-026); `tests/`; the Claude, Codex and agents marketplace manifests; `dev-sync.sh`. The skill runs from this directory exactly as it would from a plugin cache — its `SKILL_DIR` convention is the directory containing the SKILL.md you read. |
+| What it does here | Frames only, by default. Its transcript path POSTs the audio to Groq or OpenAI under a key; this repository's transcript comes from `video-intake/scripts/transcribe-local.py` instead, locally. A key in `~/.config/watch/.env` is the owner's per-machine decision (DR-029: never in the tree). |
+| Measured before adoption | Sandbox at the pin, no key, one of the owner's 70.61 s clips: `--detail balanced` exit 0 in 4.53 s, 58 frames, `Transcript: none available`; its suite `5 failed, 66 passed` (all five: `yt-dlp` absent). Intake row 2026-09-12. |
+| Overrides | Two rows in the table above: `watch/SKILL.md:193` and `watch/scripts/setup.py:201`. |

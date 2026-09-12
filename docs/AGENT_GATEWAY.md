@@ -50,6 +50,38 @@ repository.
    (see [`MCP_AND_SKILLS_LANE_PARITY.md`](MCP_AND_SKILLS_LANE_PARITY.md) and
    `pnpm run mcp:setup`). It is optional and separate from the gateway role above.
 
+## The fully-local counterpart — LM Studio
+
+[LM Studio](https://github.com/lmstudio-ai) is the same model-access layer in fully-local
+form. It runs LLMs entirely on the machine and serves them over an OpenAI-compatible
+endpoint (`http://localhost:1234/v1`, with `/models`, `/chat/completions`, `/completions`,
+`/embeddings` and `/responses`), plus an `lms` CLI (`lms server start`, `lms status`,
+`--json`) for headless use. Where OmniRoute fronts ~352 REMOTE providers, LM Studio runs the
+model on-device with **zero cloud egress** — the air-gapped end of the same "point the lane's
+OpenAI-compatible base URL at an endpoint" mechanism above (step 3). A lane can point at it
+directly; OmniRoute can also treat it as one local upstream. Adopted **by reference** — not
+installed, not vendored, not a dependency here.
+
+Every boundary above transfers, and two are stronger:
+
+- **Never in the decision path.** Same rule, same reason, more so: LLM inference is
+  nondeterministic by design and LM Studio offers no determinism guarantee, so nothing under
+  `lib/*`, `artifacts/api-server`'s `/v1` decision path, a connector, or a proof may call,
+  import, or depend on it. A model must never decide a verdict — running that model locally
+  does not change that (golden rule 2).
+- **Keys don't exist.** The remote-provider keys OmniRoute needs are absent entirely: local
+  inference makes no outbound provider call, so there is no provider credential to keep out
+  of the tree. (Downloading a model, or connecting LM Studio to a *remote* MCP server, does
+  touch the network; the inference itself does not.)
+- **By reference, not vendored.** The SDK, CLI and engine repos are MIT; the desktop app
+  itself is proprietary — free for personal and internal-business use as of 2025-07-08, but
+  its terms forbid sublicensing, reselling, redistributing or offering it as a service, so it
+  is run from upstream by whoever wants it, never embedded in or shipped with anything here.
+- **No claim moves.** A local build tool asserts nothing about the product. The product's
+  air-gapped deployment tier ([`DEPLOYMENT_MODELS.md`](DEPLOYMENT_MODELS.md)) runs the
+  deterministic core with **no model at all**; a zero-egress build lane is coherent with that
+  residency posture but is not the same thing and does not put inference into the product.
+
 ## What this repo does and does not carry
 
 - **Carries:** this adoption record, DR-029, and the intake row. That is the whole

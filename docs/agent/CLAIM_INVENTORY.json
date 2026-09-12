@@ -576,7 +576,7 @@
    "claim": "\"policy editor\" is included in the Starter tier",
    "kind": "capability",
    "classification": "unsubstantiated",
-   "evidence": "No policy editor exists anywhere in the repo — a repo-wide search for \"policy editor\"/policyEditor hits only Pricing.tsx:17 and :37; the published policy surface is read-only: lib/api-spec/v1-openapi.yaml:334 /v1/policies and :309 /v1/policies/{id}/versions, described at scripts/launch-profile.mjs:372 as \"Read-only policy inventory\" / \"Read-only versioned rule sets\", and the activate route /v1/policies/{id}/versions/{versionId}/activate is deferred at scripts/launch-profile.mjs:391",
+   "evidence": "No policy editor exists anywhere in the repo — a repo-wide search for \"policy editor\"/policyEditor hits only Pricing.tsx:17 and :37; the published policy surface is read-only: lib/api-spec/v1-openapi.yaml:334 /v1/policies and :309 /v1/policies/{id}/versions, described at scripts/launch-profile.mjs:413 as \"Read-only policy inventory\" / \"Read-only versioned rule sets\", and the activate route /v1/policies/{id}/versions/{versionId}/activate is deferred at scripts/launch-profile.mjs:391",
    "action": "rewrite"
   },
   {
@@ -585,7 +585,7 @@
    "claim": "\"Operator dashboard\" included in Starter",
    "kind": "surface",
    "classification": "launch",
-   "evidence": "scripts/launch-profile.mjs:472 — signalgrid-app, \"The one operator console, bound to the served /v1 surface\"; ratified by docs/DECISION_RECORDS.md:243-259 (DR-005)",
+   "evidence": "scripts/launch-profile.mjs:518 — signalgrid-app, \"The one operator console, bound to the served /v1 surface\"; ratified by docs/DECISION_RECORDS.md:243-259 (DR-005)",
    "action": "keep"
   },
   {
@@ -1225,7 +1225,7 @@
    "claim": "CTA: \"Start with the fixture demo — zero install, zero accounts\"",
    "kind": "availability",
    "classification": "demo-only",
-   "evidence": "The zero-network browser demo is signalgrid-review, classified demo_only at scripts/launch-profile.mjs:496 (\"runs the decision core IN THE BROWSER (zero network)\"). Linked doc docs/PARTNER_ONBOARDING.md exists. Honestly labeled a fixture demo.",
+   "evidence": "The zero-network browser demo is signalgrid-review, classified demo_only at scripts/launch-profile.mjs:543 (\"runs the decision core IN THE BROWSER (zero network)\"). Linked doc docs/PARTNER_ONBOARDING.md exists. Honestly labeled a fixture demo.",
    "action": "keep"
   },
   {
@@ -4841,7 +4841,7 @@
    "claim": "After-state: \"One decision layer\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "scripts/launch-profile.mjs:466-467 — api-server (app-surfaces, launch) is \"The product: one tenant-aware decision service\" (re-cited 2026-09-06: the 2026-08-21 lines now hold the published-api-paths list); `POST /v1/decisions/evaluate` (lib/api-spec/v1-openapi.yaml:110)",
+   "evidence": "scripts/launch-profile.mjs:512 — api-server (app-surfaces, launch) is \"The product: one tenant-aware decision service\" (re-cited 2026-09-06: the 2026-08-21 lines now hold the published-api-paths list); `POST /v1/decisions/evaluate` (lib/api-spec/v1-openapi.yaml:110)",
    "action": "keep"
   },
   {
@@ -5858,7 +5858,7 @@
    "claim": "\"Named integration targets with editable status tracking. Microsoft Intune / Entra posture is the first concrete proof\"",
    "kind": "status",
    "classification": "launch",
-   "evidence": "Grounded: graph is a ratified launch connector family (scripts/launch-profile.mjs:175-176, 160-168 — \"the only family in the repository whose live transport actually addresses graph.microsoft.com\"), and .github/workflows/review-hub-ci.yml:67 runs proof:intune-entra-posture. Contradicted internally, however, by src/data/integrationData.ts:38 (status \"in-progress\") and src/data/reviewData.ts:44 (\"No working integration ... has been validated\").",
+   "evidence": "Grounded: graph is a ratified launch connector family (scripts/launch-profile.mjs:191-192, 160-168 — \"the only family in the repository whose live transport actually addresses graph.microsoft.com\"), and .github/workflows/review-hub-ci.yml:67 runs proof:intune-entra-posture. Contradicted internally, however, by src/data/integrationData.ts:38 (status \"in-progress\") and src/data/reviewData.ts:44 (\"No working integration ... has been validated\").",
    "action": "keep"
   },
   {
@@ -7178,7 +7178,7 @@
    "claim": "Product Readiness 5/10: \"the system has not yet been exercised outside a controlled build environment\" / Integration Surface Coverage 3/10: \"No working integration with a production-adjacent identity provider (Entra ID, Okta), MDM platform (Intune, Jamf, Fleet), or workflow system (ServiceNow, Jira) has been validated.\"",
    "kind": "status",
    "classification": "unsubstantiated",
-   "evidence": "Stale in the conservative direction, which is the safer error but still false: graph is now a ratified LAUNCH connector family, described at scripts/launch-profile.mjs:160-168 as \"the first ENTERPRISE production connector\", and .github/workflows/review-hub-ci.yml:67, 80, 83 runs proof:intune-entra-posture, proof:microsoft-graph-sandbox and proof:graph-connector on every push. Record as a mitigation-by-understatement that has become inaccurate.",
+   "evidence": "Stale in the conservative direction, which is the safer error but still false: graph is now a ratified LAUNCH connector family, described at scripts/launch-profile.mjs:187-188 as \"the first ENTERPRISE production connector\", and .github/workflows/review-hub-ci.yml:67, 80, 83 runs proof:intune-entra-posture, proof:microsoft-graph-sandbox and proof:graph-connector on every push. Record as a mitigation-by-understatement that has become inaccurate.",
    "action": "rewrite"
   },
   {
@@ -7187,7 +7187,7 @@
    "claim": "\"Landing page is live with a defined visual identity\" / \"A live landing page with defined visual identity at this stage signals seriousness\" / \"Landing page is live with defined visual identity and wordmark\"",
    "kind": "availability",
    "classification": "unsubstantiated",
-   "evidence": "\"Live\" asserts a deployment. artifacts/signalgrid-web exists in the tree but scripts/launch-profile.mjs:526, 499-501 classifies it demo_only — \"The public explanation surface. It markets the product; it is not part of it\" — and nothing in the repo records a deployed URL or a successful publish for it. Three separate rendered assertions.",
+   "evidence": "\"Live\" asserts a deployment. artifacts/signalgrid-web exists in the tree but scripts/launch-profile.mjs:573, 499-501 classifies it demo_only — \"The public explanation surface. It markets the product; it is not part of it\" — and nothing in the repo records a deployed URL or a successful publish for it. Three separate rendered assertions.",
    "action": "rewrite"
   },
   {
@@ -9320,7 +9320,7 @@
    "claim": "Persistent tab bar asserts five operator capabilities: \"Support\", \"Overview\", \"Decisions\", \"Signals\", \"Integrations\".",
    "kind": "surface",
    "classification": "demo-only",
-   "evidence": "scripts/launch-profile.mjs:507, 492 — demo_only, \"A third client surface (fixture-fed)\". Mitigation is PARTIAL and per-tab: only Signals (src/pages/Signals.tsx:22, 23) and Support (src/pages/AccessSupport.tsx:167-170) carry rendered fixture/demo labels; Overview, Decisions and Integrations carry none.",
+   "evidence": "scripts/launch-profile.mjs:554, 492 — demo_only, \"A third client surface (fixture-fed)\". Mitigation is PARTIAL and per-tab: only Signals (src/pages/Signals.tsx:22, 23) and Support (src/pages/AccessSupport.tsx:167-170) carry rendered fixture/demo labels; Overview, Decisions and Integrations carry none.",
    "action": "rewrite"
   },
   {
@@ -9366,7 +9366,7 @@
    "claim": "\"This device's compliance check is stale, so the host app asks for extra verification first.\" — asserts stale-compliance detection driving a step-up.",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Matches the `device_management_health` launch signal kind (scripts/launch-profile.mjs:252-254: \"Whether that posture answer is current rather than merely present\") and the launch connector family device-management-health (:168-180). Recorded gap at :175-179: its live transport defaults to a generic bridge, not graph.microsoft.com. Mitigation PRESENT at :167-170.",
+   "evidence": "Matches the `device_management_health` launch signal kind (scripts/launch-profile.mjs:284: \"Whether that posture answer is current rather than merely present\") and the launch connector family device-management-health (:168-180). Recorded gap at :175-179: its live transport defaults to a generic bridge, not graph.microsoft.com. Mitigation PRESENT at :167-170.",
    "action": "rewrite"
   },
   {
@@ -9729,7 +9729,7 @@
    "claim": "\"the host asks whether a workflow may proceed and receives one of four verdicts,\" — the Assist gate mechanism (line 13) with `allow` / `step_up` / `restrict` / `deny` (line 15)",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Grounded: lib/signalgrid-core/src/policy.ts:55-58 (the const array \"allow\",\"step_up\",\"restrict\",\"deny\" — the wire vocabulary the sentence cites by path) and lib/signalgrid-core/src/types.ts:384 (DecisionOutcome union); scripts/launch-profile.mjs:325-328 (/v1/decisions/evaluate — \"The Assist gate itself\") and :329-335 (/v1/authorize, \"the shape a host app obeys\", served under DR-023); `pnpm run proof:signalgrid-core` exists in package.json.",
+   "evidence": "Grounded: lib/signalgrid-core/src/policy.ts:55-58 (the const array \"allow\",\"step_up\",\"restrict\",\"deny\" — the wire vocabulary the sentence cites by path) and lib/signalgrid-core/src/types.ts:384 (DecisionOutcome union); scripts/launch-profile.mjs:349 (/v1/decisions/evaluate — \"The Assist gate itself\") and :329-335 (/v1/authorize, \"the shape a host app obeys\", served under DR-023); `pnpm run proof:signalgrid-core` exists in package.json.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9759,7 +9759,7 @@
    "claim": "\"End users never see SignalGrid; they use their own host app.\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:477-483 (ios:EnterpriseShell — \"Under the embedded-UX law the worker uses their OWN app, so this ships as the integration reference\"); CLAUDE.md golden rule 3 (\"SignalGrid is invisible to end users; the worker uses their own host app\").",
+   "evidence": "Grounded: scripts/launch-profile.mjs:528-530 (ios:EnterpriseShell — \"Under the embedded-UX law the worker uses their OWN app, so this ships as the integration reference\"); CLAUDE.md golden rule 3 (\"SignalGrid is invisible to end users; the worker uses their own host app\").",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9799,7 +9799,7 @@
    "claim": "\"SignalGrid reads before it writes and delegates action.\" — \"**Not a system of record.** IAM, UEM, MDM, ITSM, SIEM and NAC stay authoritative\"",
    "kind": "framework",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:386-392 (/v1/connectors/{id}/sync — \"No write to any source system exists on this route\"); every other launch path at :324-385 is read-side or the gate itself; docs/WHAT_SIGNALGRID_DOES_TODAY.md:142 (high-risk actions \"approval-gated and simulated — recorded, never executed on a source system\"); docs/PILOT_PACKAGE.md:1,8-11 (pilot is \"shadow mode, read-only\" and \"blocks nothing\").",
+   "evidence": "Grounded: scripts/launch-profile.mjs:435-436 (/v1/connectors/{id}/sync — \"No write to any source system exists on this route\"); every other launch path at :324-385 is read-side or the gate itself; docs/WHAT_SIGNALGRID_DOES_TODAY.md:142 (high-risk actions \"approval-gated and simulated — recorded, never executed on a source system\"); docs/PILOT_PACKAGE.md:1,8-11 (pilot is \"shadow mode, read-only\" and \"blocks nothing\").",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9819,7 +9819,7 @@
    "claim": "\"The Node control plane and `/v1` decision API; the product surface.\"",
    "kind": "surface",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:464-467 (api-server — \"The product: one tenant-aware decision service\"). Note for the reader, not a defect in the row: the \"control plane\" half (/cp/v1/*) is deferred and runtime-fenced to review-demo (scripts/launch-profile.mjs:323 RUNTIME FENCE; :422-445 every /cp/v1 path deferred); the launch product surface is the /v1 API.",
+   "evidence": "Grounded: scripts/launch-profile.mjs:512 (api-server — \"The product: one tenant-aware decision service\"). Note for the reader, not a defect in the row: the \"control plane\" half (/cp/v1/*) is deferred and runtime-fenced to review-demo (scripts/launch-profile.mjs:323 RUNTIME FENCE; :422-445 every /cp/v1 path deferred); the launch product surface is the /v1 API.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9829,7 +9829,7 @@
    "claim": "\"The operator console, bound to the served `/v1` API.\"",
    "kind": "surface",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:468-476 (signalgrid-app — \"The one operator console, bound to the served /v1 surface\", ratified by the 2026-08-10 product-design review).",
+   "evidence": "Grounded: scripts/launch-profile.mjs:518 (signalgrid-app — \"The one operator console, bound to the served /v1 surface\", ratified by the 2026-08-10 product-design review).",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9839,7 +9839,7 @@
    "claim": "\"The zero-network review deck (demo-only per the launch profile).\"",
    "kind": "surface",
    "classification": "demo-only",
-   "evidence": "Honest and matches the profile: scripts/launch-profile.mjs:492-499 (signalgrid-review demo_only — \"runs the decision core IN THE BROWSER (zero network) … cannot be THE console\").",
+   "evidence": "Honest and matches the profile: scripts/launch-profile.mjs:543 (signalgrid-review demo_only — \"runs the decision core IN THE BROWSER (zero network) … cannot be THE console\").",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9860,7 +9860,7 @@
    "claim": "\"The mobile PWA surface.\" — with line 47 \"`artifacts/signalgrid-web` | The public website source.\"",
    "kind": "surface",
    "classification": "demo-only",
-   "evidence": "Both demo_only in the profile: scripts/launch-profile.mjs:504-507 (signalgrid-mobile-pwa — \"A third client surface (fixture-fed)\") and :522-527 (signalgrid-web — \"The public explanation surface. It markets the product; it is not part of it\"). Neither row asserts shipping status.",
+   "evidence": "Both demo_only in the profile: scripts/launch-profile.mjs:554 (signalgrid-mobile-pwa — \"A third client surface (fixture-fed)\") and :522-527 (signalgrid-web — \"The public explanation surface. It markets the product; it is not part of it\"). Neither row asserts shipping status.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9900,7 +9900,7 @@
    "claim": "\"Two apps: `EnterpriseShell` (the host-app reference with the gate inside) and `SignalGridMobile` (`SignalGridOperator` + `WardlinkDemo`).\"",
    "kind": "surface",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:477-483 (ios:EnterpriseShell launch — \"The one host app\"), :635 (ios:SignalGridOperator deferred), :516-521 (ios:WardlinkDemo demo_only). Measured: `grep -n \"type: application\"` → native/ios/project.yml:33 (EnterpriseShell), native/ios/SignalGridMobile/project.yml:15 (SignalGridOperator) and :40 (WardlinkDemo) — three application targets in two Xcode projects; \"Two apps\" counts projects, and the sentence names all three targets.",
+   "evidence": "Grounded: scripts/launch-profile.mjs:528 (ios:EnterpriseShell launch — \"The one host app\"), :635 (ios:SignalGridOperator deferred), :516-521 (ios:WardlinkDemo demo_only). Measured: `grep -n \"type: application\"` → native/ios/project.yml:33 (EnterpriseShell), native/ios/SignalGridMobile/project.yml:15 (SignalGridOperator) and :40 (WardlinkDemo) — three application targets in two Xcode projects; \"Two apps\" counts projects, and the sentence names all three targets.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9920,7 +9920,7 @@
    "claim": "\"The one wire-conformance case set every client must agree on.\"",
    "kind": "count",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:616-621 (native:shared internal — \"the assist-wire conformance fixture every native port … must parse identically\"). Measured: native/shared holds THREE json files — assist-wire-conformance.json (cases: 44), posture-allow-vectors.json (cases: 52), remediation-allow-vectors.json (cases: 40). README's \"one … case set\" matches the single assist-wire file; the drift is in the ground truth's own prose — scripts/launch-profile.mjs:619 now says \"Three JSON files (it said one until 2026-09-06)\" and :333-335 says the count lives in the fixture (it read 42 while the file carried 44) — both corrected in Batch P.",
+   "evidence": "Grounded: scripts/launch-profile.mjs:666-667 (native:shared internal — \"the assist-wire conformance fixture every native port … must parse identically\"). Measured: native/shared holds THREE json files — assist-wire-conformance.json (cases: 44), posture-allow-vectors.json (cases: 52), remediation-allow-vectors.json (cases: 40). README's \"one … case set\" matches the single assist-wire file; the drift is in the ground truth's own prose — scripts/launch-profile.mjs:666 now says \"Three JSON files (it said one until 2026-09-06)\" and :333-335 says the count lives in the fixture (it read 42 while the file carried 44) — both corrected in Batch P.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9930,7 +9930,7 @@
    "claim": "\"SmartDock firmware core (Rust, `no_std`): sensor readings to a custody event. A deferred surface.\"",
    "kind": "surface",
    "classification": "deferred",
-   "evidence": "Honest deferred framing: scripts/launch-profile.mjs:643 (firmware:dock deferred) and :636-640 (\"no real dock has run it\"); firmware/dock/core/src/lib.rs:17 `#![cfg_attr(not(test), no_std)]`; .github/workflows/firmware.yml exists. custody / custody_beacon are deferred signal kinds (:286-287).",
+   "evidence": "Honest deferred framing: scripts/launch-profile.mjs:690 (firmware:dock deferred) and :636-640 (\"no real dock has run it\"); firmware/dock/core/src/lib.rs:17 `#![cfg_attr(not(test), no_std)]`; .github/workflows/firmware.yml exists. custody / custody_beacon are deferred signal kinds (:286-287).",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -10002,7 +10002,7 @@
    "claim": "\"The api-server runs without a database; fixtures back every decision.\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Grounded: artifacts/api-server/src/routes/health.ts:34 (\"With no DATABASE_URL there is no durable store BY DESIGN (the fixture-safe\") and routes/v1.ts:67 (with DATABASE_URL set each decision is ALSO persisted); artifacts/api-server/src/lib/core.ts:31 (`SignalGridCore.demo(` — the seeded fixture core the served API constructs); scripts/launch-profile.mjs:736-751 (GAP non-demo-core-constructor: \"does not yet decide about the customer's own estate\") — the fixture backing is a declared gap as well as a property.",
+   "evidence": "Grounded: artifacts/api-server/src/routes/health.ts:34 (\"With no DATABASE_URL there is no durable store BY DESIGN (the fixture-safe\") and routes/v1.ts:67 (with DATABASE_URL set each decision is ALSO persisted); artifacts/api-server/src/lib/core.ts:31 (`SignalGridCore.demo(` — the seeded fixture core the served API constructs); scripts/launch-profile.mjs:800-801 (GAP non-demo-core-constructor: \"does not yet decide about the customer's own estate\") — the fixture backing is a declared gap as well as a property.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -10012,7 +10012,7 @@
    "claim": "\"and are demo surfaces, not shipping product.\" — the in-browser consoles \"need no install at all\"",
    "kind": "capability",
    "classification": "demo-only",
-   "evidence": "Honest demo framing: docs/room-entry-console.html and docs/fabric-console.html exist; the surface class is scripts/launch-profile.mjs:508-515 (tools:room-console demo_only — \"how the product is SHOWN, never how it is sold\").",
+   "evidence": "Honest demo framing: docs/room-entry-console.html and docs/fabric-console.html exist; the surface class is scripts/launch-profile.mjs:560-561 (tools:room-console demo_only — \"how the product is SHOWN, never how it is sold\").",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -10133,7 +10133,7 @@
    "claim": "\"`workingTreeClean` (untracked files included) sampled *before* the run by\" — provenance of sim-results; live evidence refreshable only by the Mac lane, \"never from CI\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Grounded: scripts/mac/run-requests.mjs:79 (`workingTreeClean: git([\"status\", \"--porcelain\"]) === \"\"` — porcelain lists untracked files) and :216 (comment on sampling before the loop); scripts/verify-all.mjs:271 (flags), :71 (IN_CI detection), :271 (\"--emit-evidence: REFUSED — running on a CI runner (macOS or not)\"), :283 (refused off darwin), :294 (not emitted unless both halves green); `artifacts/live-evidence` tracked (2 files); artifacts/sim-results tracked (47 files). package.json verify:all → scripts/verify-all.mjs.",
+   "evidence": "Grounded: scripts/mac/run-requests.mjs:79 (`workingTreeClean: git([\"status\", \"--porcelain\"]) === \"\"` — porcelain lists untracked files) and :216 (comment on sampling before the loop); scripts/verify-all.mjs:285 (flags), :71 (IN_CI detection), :271 (\"--emit-evidence: REFUSED — running on a CI runner (macOS or not)\"), :283 (refused off darwin), :294 (not emitted unless both halves green); `artifacts/live-evidence` tracked (2 files); artifacts/sim-results tracked (47 files). package.json verify:all → scripts/verify-all.mjs.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -10356,7 +10356,7 @@
    "claim": "\"A stale “compliant” is the unearned yes in its purest form\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Near-verbatim from scripts/launch-profile.mjs:182-184 (\"A device reported compliant that has not checked in for weeks is the unearned affirmative in its purest form\"); lib/api-spec/v1-openapi.yaml:1273-1275 SignalUsed.freshness enum [fresh, stale, expired, missing, unknown]",
+   "evidence": "Near-verbatim from scripts/launch-profile.mjs:199-201 (\"A device reported compliant that has not checked in for weeks is the unearned affirmative in its purest form\"); lib/api-spec/v1-openapi.yaml:1273-1275 SignalUsed.freshness enum [fresh, stale, expired, missing, unknown]",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },
@@ -10416,7 +10416,7 @@
    "claim": "\"Reproducible evidence attached to every verdict\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "scripts/launch-profile.mjs:343-346 /v1/decisions/{id}/evidence (\"explainable and reproducible ... this route is not optional garnish — it is the claim\"); lib/api-spec/v1-openapi.yaml:1284-1290 snapshot digest recomputed per request",
+   "evidence": "scripts/launch-profile.mjs:375 /v1/decisions/{id}/evidence (\"explainable and reproducible ... this route is not optional garnish — it is the claim\"); lib/api-spec/v1-openapi.yaml:1284-1290 snapshot digest recomputed per request",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },
@@ -10517,7 +10517,7 @@
    "claim": "\"Shared Android scanners and station PCs, small IT team, many sites\" — a target environment SignalGrid is presented as serving",
    "kind": "surface",
    "classification": "launch",
-   "evidence": "The decision API is host-agnostic: /v1/authorize is the launch wire a host app obeys (scripts/launch-profile.mjs:330-336; scripts/launch-profile.mjs:333 \"The wire the Kotlin and Rust SDKs bind\"; lib/api-spec/v1-openapi.yaml:137-149). SignalGrid's Android client (native/android, CI-built by .github/workflows/android.yml) is a deferred surface, not a launch host app — native:android is deferred (scripts/launch-profile.mjs:639-644) and the one launch host app is ios:EnterpriseShell (:479-483) — but the sentence describes the buyer's devices, not a SignalGrid surface",
+   "evidence": "The decision API is host-agnostic: /v1/authorize is the launch wire a host app obeys (scripts/launch-profile.mjs:330-336; scripts/launch-profile.mjs:356 \"The wire the Kotlin and Rust SDKs bind\"; lib/api-spec/v1-openapi.yaml:137-149). SignalGrid's Android client (native/android, CI-built by .github/workflows/android.yml) is a deferred surface, not a launch host app — native:android is deferred (scripts/launch-profile.mjs:639-644) and the one launch host app is ios:EnterpriseShell (:479-483) — but the sentence describes the buyer's devices, not a SignalGrid surface",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },
@@ -10547,7 +10547,7 @@
    "claim": "\"Sensitive workflows check the device before proceeding — read-only, shadow-mode first, no clinical data touched.\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "scripts/launch-profile.mjs:707-713 GAP step-up-answerability \"Limited GA ships in SHADOW mode\"; docs/POSITIONING.md:87; lib/api-spec/v1-openapi.yaml:1082-1090 EvaluateRequest carries identityRef/deviceRef/workflowKey only — no clinical field; CLAUDE.md golden rule 3",
+   "evidence": "scripts/launch-profile.mjs:763 GAP step-up-answerability \"Limited GA ships in SHADOW mode\"; docs/POSITIONING.md:87; lib/api-spec/v1-openapi.yaml:1082-1090 EvaluateRequest carries identityRef/deviceRef/workflowKey only — no clinical field; CLAUDE.md golden rule 3",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },
@@ -10890,7 +10890,7 @@
    "claim": "\"One decision layer on your stack\" (after-state)",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "scripts/launch-profile.mjs:466-467 api-server \"one tenant-aware decision service\"; /v1/decisions/evaluate :326-327",
+   "evidence": "scripts/launch-profile.mjs:512 api-server \"one tenant-aware decision service\"; /v1/decisions/evaluate :326-327",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },
@@ -11219,7 +11219,7 @@
    "claim": "\"Nothing here is a claim of current capability.\"",
    "kind": "status",
    "classification": "launch",
-   "evidence": "Page-level hedge; scripts/launch-profile.mjs:524-527 (signalgrid-web is the demo_only \"public explanation surface\") and the page's own footer :185 (\"illustrative catalogue ... not the catalogue the proofs check\")",
+   "evidence": "Page-level hedge; scripts/launch-profile.mjs:573 (signalgrid-web is the demo_only \"public explanation surface\") and the page's own footer :185 (\"illustrative catalogue ... not the catalogue the proofs check\")",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },

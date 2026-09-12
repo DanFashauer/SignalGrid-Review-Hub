@@ -236,9 +236,11 @@ export function normalizeManualFallbackSequence(
 ): NormalizedManualFallback {
   const override = normalizeBreakGlassRecord(overrideRaw);
 
+  // An EMPTY stream has no correlation id, so `corr === ""` already covers it — a
+  // separate `events.length === 0` disjunct was dead code (the daily mutation sweep of
+  // 2026-09-11 showed it could be deleted with no proof noticing, which is the definition).
   const corr = trimmed(events.find((e) => trimmed(e.correlationId) !== "")?.correlationId);
   const correlationBroken =
-    events.length === 0 ||
     corr === "" ||
     events.some((e) => trimmed(e.correlationId) !== corr);
 
@@ -246,7 +248,6 @@ export function normalizeManualFallbackSequence(
   // mixed tenant cannot be trusted to be one sequence, so it fails closed.
   const tenant = trimmed(events.find((e) => trimmed(e.tenantId) !== "")?.tenantId);
   const tenantBroken =
-    events.length === 0 ||
     tenant === "" ||
     events.some((e) => trimmed(e.tenantId) !== tenant);
 

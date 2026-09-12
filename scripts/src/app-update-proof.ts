@@ -21,9 +21,30 @@ import {
   normalizeReport,
   parseVersion,
   compareVersions,
+  DEVICE_PREP_FIXTURES,
+  evaluateDevicePrep,
+  evaluateDevicePrepFixture,
+  normalizeDevicePrep,
+  PREP_ENROLLMENT_DOMAIN,
+  PREP_PROFILES_DOMAIN,
+  PREP_REQUIRED_APPS_DOMAIN,
+  OS_UPDATE_DOMAIN,
+  PREP_STAGE_DOMAIN,
+  PREP_INTEGRITY_DOMAIN,
+  DEVICE_PREP_REPORT_KEYS,
+  type DevicePrepReportRaw,
   type AppUpdateReportRaw,
+  type DevicePrepVerdict,
   type NormalizedAppUpdate,
+  type NormalizedDevicePrep,
+  type OsUpdateState,
+  type PrepEnrollment,
+  type PrepProfiles,
+  type PrepReportIntegrity,
+  type PrepRequiredApps,
+  type PrepStage,
 } from "@workspace/integrations/app-update";
+import * as appUpdateModule from "@workspace/integrations/app-update";
 import { SIGNAL_KINDS, composeDeviceRisk, fromAppUpdate } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
 import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
@@ -323,6 +344,374 @@ const d1 = normalizeReport("det", "a", { installed_version: "2.1.0", latest_vers
 check("evaluator is deterministic", JSON.stringify(evaluateAppUpdate(d1)) === JSON.stringify(evaluateAppUpdate(d1)));
 
 
+// ── the iOS update / device-prep WORKFLOW (device-prep.ts) ───────────────────────
+//
+// A DISTINCT surface from host-app currency above: not which VERSION of the app is
+// installed, but whether the device finished being PROVISIONED (enrolled, profiles,
+// required apps, prep declared complete) and where its OS UPDATE stands (required,
+// in progress, failed). It is the runbooks' "iOS update / device-prep workflows" row
+// this family had only partially modeled — the seated, lit, never-provisioned
+// "phantom device". Fail-closed: every unknown tightens; the one grant is pinned by
+// equality over the whole workflow state space.
+
+// named outcomes — every workflow state reaches its verdict, each by name
+const P = (n: string): DevicePrepVerdict => evaluateDevicePrepFixture(n)!;
+const prepCases: Array<[string, string, string]> = [
+  ["ready", "none", "DEVICE_PREP_READY"],
+  ["prep-failed", "restrict", "DEVICE_PREP_FAILED"],
+  ["prep-in-progress", "step_up", "DEVICE_PREP_IN_PROGRESS"],
+  ["prep-stage-unknown", "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["not-enrolled", "restrict", "DEVICE_NOT_ENROLLED"],
+  ["enrollment-pending", "step_up", "DEVICE_ENROLLMENT_PENDING"],
+  ["enrollment-unknown", "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["profiles-missing", "restrict", "DEVICE_PROFILES_MISSING"],
+  ["profiles-partial", "step_up", "DEVICE_PROFILES_PARTIAL"],
+  ["profiles-unknown", "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["apps-missing", "restrict", "DEVICE_REQUIRED_APPS_MISSING"],
+  ["apps-partial", "step_up", "DEVICE_REQUIRED_APPS_PARTIAL"],
+  ["apps-unknown", "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["update-required", "restrict", "OS_UPDATE_REQUIRED"],
+  ["update-failed", "restrict", "OS_UPDATE_FAILED"],
+  ["update-in-progress", "step_up", "OS_UPDATE_IN_PROGRESS"],
+  ["update-available", "monitor", "OS_UPDATE_AVAILABLE"],
+  ["os-update-unknown", "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["report-malformed", "step_up", "DEVICE_PREP_REPORT_MALFORMED"],
+  ["worst-of-several", "restrict", "DEVICE_PREP_FAILED"],
+];
+for (const [name, action, reason] of prepCases) {
+  const v = P(name);
+  check(
+    `device-prep fixture \`${name}\` → ${action} / ${reason} (${v.recommendedAction} / ${v.reasonCode})`,
+    v.recommendedAction === action && v.reasonCode === reason,
+  );
+}
+check("device-prep: every fixture is asserted above (fixture count = cases named)",
+  Object.keys(DEVICE_PREP_FIXTURES).length === prepCases.length);
+const prepReached = new Set(prepCases.map(([n]) => P(n).recommendedAction));
+check(`device-prep NON-VACUITY: none, monitor, step_up and restrict are all reachable (${[...prepReached].sort().join(", ")})`,
+  prepReached.has("none") && prepReached.has("monitor") && prepReached.has("step_up") && prepReached.has("restrict"));
+check("device-prep: an unknown fixture name yields undefined — never a fabricated verdict",
+  evaluateDevicePrepFixture("no-such-fixture") === undefined);
+const prepWorst = P("worst-of-several");
+check("device-prep worst-of-several records all three critical findings and names the failed prep first (precedence)",
+  prepWorst.criticalFindings.length === 3 && prepWorst.reasonCode === "DEVICE_PREP_FAILED");
+check("device-prep: readyForCheckout is exactly 'not held, not contained' — true for the grant and the one advisory, false for every step_up/restrict fixture",
+  prepCases.every(([n, action]) => P(n).readyForCheckout === (action === "none" || action === "monitor")));
+check("device-prep: the one advisory state (an optional update offered) is monitor, not a hold — and the device IS ready for check-out (an advisory never withholds a ready device)",
+  P("update-available").recommendedAction === "monitor" && P("update-available").readyForCheckout === true);
+check("device-prep: a step_up is NOT ready (the advisory-ready rule does not leak upward — prep in progress stays held)",
+  P("prep-in-progress").recommendedAction === "step_up" && P("prep-in-progress").readyForCheckout === false);
+
+// fail-closed controls — corrupt the sole grant ONE stage at a time
+const prepBase = DEVICE_PREP_FIXTURES["ready"];
+const prepBaseline = evaluateDevicePrep(prepBase);
+check("device-prep CONTROL baseline: the untouched grant does grant, ready, with no findings",
+  prepBaseline.recommendedAction === "none" && prepBaseline.readyForCheckout === true &&
+  prepBaseline.criticalFindings.length === 0 && prepBaseline.unknownSignals.length === 0);
+const prepFlips: Array<[string, Partial<NormalizedDevicePrep>, string, string]> = [
+  ["prep stage → failed", { prepStage: "failed" }, "restrict", "DEVICE_PREP_FAILED"],
+  ["prep stage → in progress", { prepStage: "in_progress" }, "step_up", "DEVICE_PREP_IN_PROGRESS"],
+  ["prep stage → unknown", { prepStage: "unknown" }, "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["enrollment → not enrolled", { enrollment: "not_enrolled" }, "restrict", "DEVICE_NOT_ENROLLED"],
+  ["enrollment → pending", { enrollment: "pending" }, "step_up", "DEVICE_ENROLLMENT_PENDING"],
+  ["enrollment → unknown", { enrollment: "unknown" }, "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["profiles → missing", { profiles: "missing" }, "restrict", "DEVICE_PROFILES_MISSING"],
+  ["profiles → partial", { profiles: "partial" }, "step_up", "DEVICE_PROFILES_PARTIAL"],
+  ["profiles → unknown", { profiles: "unknown" }, "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["required apps → missing", { requiredApps: "missing" }, "restrict", "DEVICE_REQUIRED_APPS_MISSING"],
+  ["required apps → partial", { requiredApps: "partial" }, "step_up", "DEVICE_REQUIRED_APPS_PARTIAL"],
+  ["required apps → unknown", { requiredApps: "unknown" }, "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["OS update → required", { osUpdate: "update_required" }, "restrict", "OS_UPDATE_REQUIRED"],
+  ["OS update → failed", { osUpdate: "update_failed" }, "restrict", "OS_UPDATE_FAILED"],
+  ["OS update → in progress", { osUpdate: "update_in_progress" }, "step_up", "OS_UPDATE_IN_PROGRESS"],
+  ["OS update → available (optional)", { osUpdate: "update_available" }, "monitor", "OS_UPDATE_AVAILABLE"],
+  ["OS update → unknown", { osUpdate: "unknown" }, "step_up", "DEVICE_PREP_STATE_UNKNOWN"],
+  ["report → malformed", { reportIntegrity: "malformed" }, "step_up", "DEVICE_PREP_REPORT_MALFORMED"],
+];
+for (const [label, patch, action, reason] of prepFlips) {
+  const v = evaluateDevicePrep({ ...prepBase, ...patch });
+  check(
+    `device-prep FAIL-CLOSED: ${label} flips the grant to ${action} / ${reason} (${v.recommendedAction} / ${v.reasonCode})`,
+    // Every flip leaves the grant; only the one advisory flip (an optional update) stays ready.
+    v.recommendedAction === action && v.reasonCode === reason && v.readyForCheckout === (action === "monitor"),
+  );
+}
+
+// the grant set, pinned by equality over the whole workflow state space
+// The sweep walks the MODULE's exported domains, not a hand-typed copy (in-house review
+// finding: a member added to a domain with no evaluator branch would be in-domain, fire
+// nothing, and grant — and a retyped list here could not see it). The 3,072 below is the
+// documented figure and stays literal on purpose: if a domain grows, this line and the
+// figures= line move together and the docs↔proof figure guard catches the stale 3,072.
+const prepDomains = {
+  enrollment: PREP_ENROLLMENT_DOMAIN,
+  profiles: PREP_PROFILES_DOMAIN,
+  requiredApps: PREP_REQUIRED_APPS_DOMAIN,
+  osUpdate: OS_UPDATE_DOMAIN,
+  prepStage: PREP_STAGE_DOMAIN,
+  reportIntegrity: PREP_INTEGRITY_DOMAIN,
+} as const;
+const buildPrep = (c: Record<string, unknown>): NormalizedDevicePrep => ({
+  sourceSystem: "app-update",
+  deviceRef: "enum",
+  enrollment: c.enrollment as PrepEnrollment,
+  profiles: c.profiles as PrepProfiles,
+  requiredApps: c.requiredApps as PrepRequiredApps,
+  osUpdate: c.osUpdate as OsUpdateState,
+  prepStage: c.prepStage as PrepStage,
+  reportIntegrity: c.reportIntegrity as PrepReportIntegrity,
+});
+const isPrepReady = (c: Record<string, unknown>): boolean =>
+  c.enrollment === "enrolled" &&
+  c.profiles === "applied" &&
+  c.requiredApps === "installed" &&
+  c.osUpdate === "current" &&
+  c.prepStage === "complete" &&
+  c.reportIntegrity === "clean";
+const prepRes = enumerateGrantSafety<NormalizedDevicePrep, DevicePrepVerdict>({
+  domains: prepDomains,
+  build: buildPrep,
+  evaluate: evaluateDevicePrep,
+  actionOf: (v) => v.recommendedAction,
+  positivelyClean: isPrepReady,
+  confirmedWhenNone: (v) =>
+    v.readyForCheckout === true && v.reasonCode === "DEVICE_PREP_READY" &&
+    v.criticalFindings.length === 0 && v.unknownSignals.length === 0,
+});
+check(`device-prep ENUMERATION: all ${prepRes.combos} workflow states swept (= product of domains)`,
+  prepRes.combos === productOf(prepDomains) && prepRes.combos === 4 * 4 * 4 * 6 * 4 * 2);
+check("device-prep ENUMERATION: ready is EXACTLY the one positively-confirmed state — zero mismatches",
+  prepRes.mismatches === 0);
+check("device-prep ENUMERATION: exactly one state grants (non-vacuous)", prepRes.noneCount === 1);
+// NEGATIVE CONTROL — declare every prep-complete state clean (ignoring the other stages)
+// and the harness must object.
+const prepWrong = enumerateGrantSafety<NormalizedDevicePrep, DevicePrepVerdict>({
+  domains: prepDomains,
+  build: buildPrep,
+  evaluate: evaluateDevicePrep,
+  actionOf: (v) => v.recommendedAction,
+  positivelyClean: (c) => c.prepStage === "complete",
+});
+check("device-prep NEGATIVE CONTROL: declaring every prep-complete state clean is CAUGHT (mismatches > 0)",
+  prepWrong.mismatches > 0 && typeof prepWrong.firstMismatch === "string");
+// monitor is reserved for the one advisory fact: an OPTIONAL update offered on an
+// otherwise-ready device. Every other non-grant is a hold (step_up) or a containment.
+let prepMonitorOffAxis = 0;
+let prepOffLadder = 0;
+let prepReadyCount = 0;
+let prepReadyMismatch = 0;
+for (const enrollment of prepDomains.enrollment)
+  for (const profiles of prepDomains.profiles)
+    for (const requiredApps of prepDomains.requiredApps)
+      for (const osUpdate of prepDomains.osUpdate)
+        for (const prepStage of prepDomains.prepStage)
+          for (const reportIntegrity of prepDomains.reportIntegrity) {
+            const v = evaluateDevicePrep(buildPrep({ enrollment, profiles, requiredApps, osUpdate, prepStage, reportIntegrity }));
+            const a = v.recommendedAction;
+            if (a === "monitor" && osUpdate !== "update_available") prepMonitorOffAxis += 1;
+            if (a !== "none" && a !== "monitor" && a !== "step_up" && a !== "restrict") prepOffLadder += 1;
+            // readyForCheckout is exactly "not held, not contained": the grant and the advisory.
+            if (v.readyForCheckout) prepReadyCount += 1;
+            if (v.readyForCheckout !== (a === "none" || a === "monitor")) prepReadyMismatch += 1;
+          }
+check("device-prep: monitor is reachable ONLY through an optional update offered — never for a prep or enrollment state", prepMonitorOffAxis === 0);
+check("device-prep: over all workflow states readyForCheckout ⇔ (none | monitor), with no state disagreeing", prepReadyMismatch === 0);
+check(`device-prep: exactly TWO states are ready for check-out — the grant and the one optional-update advisory (${prepReadyCount})`,
+  prepReadyCount === prepRes.noneCount + 1 && prepReadyCount === 2);
+check("device-prep: no workflow state resolves to alert/escalate — the surface holds, contains, or advises", prepOffLadder === 0);
+
+// the normalizer on hostile wire input — the asymmetry that makes it safe
+const prepWireOk = normalizeDevicePrep("w-1", { enrollment: "enrolled", profiles: "applied", required_apps: "installed", os_update: "current", prep_stage: "complete" });
+check("device-prep: a fully-confirmed wire report normalizes clean and evaluates to the grant",
+  prepWireOk.reportIntegrity === "clean" && evaluateDevicePrep(prepWireOk).readyForCheckout === true);
+const prepWireVocab = normalizeDevicePrep("w-2", { enrollment: "sorta", profiles: "mostly", required_apps: "some", os_update: "soon", prep_stage: "done-ish" });
+check("device-prep: out-of-vocabulary strings normalize to unknown on every stage (never a fabricated confirmed state), report clean",
+  prepWireVocab.enrollment === "unknown" && prepWireVocab.profiles === "unknown" && prepWireVocab.requiredApps === "unknown" &&
+  prepWireVocab.osUpdate === "unknown" && prepWireVocab.prepStage === "unknown" && prepWireVocab.reportIntegrity === "clean");
+const prepWireMalformed = normalizeDevicePrep("w-3", { enrollment: 1, profiles: ["applied"], required_apps: "installed", os_update: "current", prep_stage: "complete" });
+check("device-prep: a present-but-non-string slot marks the report MALFORMED — step_up for that reason",
+  prepWireMalformed.reportIntegrity === "malformed" && evaluateDevicePrep(prepWireMalformed).reasonCode === "DEVICE_PREP_REPORT_MALFORMED");
+const prepWireSilent = normalizeDevicePrep("w-4", null);
+check("device-prep: an absent report (silence) is all-unknown and CLEAN — silence is not malformed — and still steps up",
+  prepWireSilent.enrollment === "unknown" && prepWireSilent.prepStage === "unknown" && prepWireSilent.reportIntegrity === "clean" &&
+  evaluateDevicePrep(prepWireSilent).recommendedAction === "step_up");
+// Own-property reads (review finding): a report that INHERITS the recognized fields —
+// Object.create({...}), or a polluted prototype — asserted nothing itself, yet the first
+// cut read the inherited values as evidence and normalized an EMPTY report to the grant.
+// Every shape below must be malformed, all-unknown, and never ready for check-out.
+const prepGrantRaw = { enrollment: "enrolled", profiles: "applied", required_apps: "installed", os_update: "current", prep_stage: "complete" };
+const prepInherited = normalizeDevicePrep("w-5", Object.create(prepGrantRaw) as DevicePrepReportRaw);
+check("device-prep: a report that only INHERITS the confirmed stages is malformed, all-unknown, and never ready (the prototype's claim is not this report's)",
+  prepInherited.reportIntegrity === "malformed" && prepInherited.enrollment === "unknown" && prepInherited.profiles === "unknown" &&
+  prepInherited.requiredApps === "unknown" && prepInherited.osUpdate === "unknown" && prepInherited.prepStage === "unknown" &&
+  evaluateDevicePrep(prepInherited).readyForCheckout === false);
+const prepAlias = normalizeDevicePrep("w-6", Object.assign(Object.create({ os_update: "update_failed" }), prepGrantRaw) as DevicePrepReportRaw);
+check("device-prep: a recognized key inherited BEHIND a clean own set still marks the report malformed (the chain scan notices it)",
+  prepAlias.reportIntegrity === "malformed" && evaluateDevicePrep(prepAlias).readyForCheckout === false);
+check("device-prep: Object.prototype itself as the report is malformed (polluted-prototype fields must never read as own assertions)",
+  normalizeDevicePrep("w-7", Object.prototype as DevicePrepReportRaw).reportIntegrity === "malformed");
+check("device-prep: an array or a string where the report should be is malformed, never a thrown TypeError",
+  normalizeDevicePrep("w-8", [] as unknown as DevicePrepReportRaw).reportIntegrity === "malformed" &&
+  normalizeDevicePrep("w-9", "complete" as unknown as DevicePrepReportRaw).reportIntegrity === "malformed");
+const prepExtra = normalizeDevicePrep("w-10", { ...prepGrantRaw, prep_status: "complete" } as DevicePrepReportRaw);
+check("device-prep: an unrecognized OWN key is an assertion in a spelling we ignore — malformed, and the clean-looking rest is not ready",
+  prepExtra.reportIntegrity === "malformed" && evaluateDevicePrep(prepExtra).readyForCheckout === false);
+check("device-prep: a symbol-keyed report is malformed",
+  normalizeDevicePrep("w-11", { ...prepGrantRaw, [Symbol("x")]: 1 } as DevicePrepReportRaw).reportIntegrity === "malformed");
+let prepDeepProto: object = {};
+for (let i = 0; i < 100; i += 1) prepDeepProto = Object.create(prepDeepProto);
+check("device-prep: a report behind a 100-deep prototype chain is malformed (the walk is bounded, not trusted)",
+  normalizeDevicePrep("w-12", Object.assign(Object.create(prepDeepProto), prepGrantRaw) as DevicePrepReportRaw).reportIntegrity === "malformed");
+const prepThrowing = new Proxy(prepGrantRaw, { ownKeys: () => { throw new Error("hostile"); } }) as DevicePrepReportRaw;
+check("device-prep: a Proxy whose key enumeration throws is malformed, never an exception out of the normalizer",
+  normalizeDevicePrep("w-13", prepThrowing).reportIntegrity === "malformed");
+check("device-prep: a plain own-property report still reaches the grant after the own-read change (the fix did not foreclose the honest path)",
+  evaluateDevicePrep(normalizeDevicePrep("w-14", { ...prepGrantRaw })).readyForCheckout === true);
+// A recognized OWN key whose read throws — an accessor, or a Proxy `get` trap — passes the
+// key scan; the read itself must be caught and the report marked malformed (review finding).
+const prepGetter = Object.defineProperty({ profiles: "applied", required_apps: "installed", os_update: "current", prep_stage: "complete" },
+  "enrollment", { get() { throw new Error("hostile getter"); }, enumerable: true });
+const prepGetterOut = normalizeDevicePrep("w-15", prepGetter as DevicePrepReportRaw);
+check("device-prep: an own accessor whose getter throws is malformed and all-unknown, never an exception out of the normalizer",
+  prepGetterOut.reportIntegrity === "malformed" && prepGetterOut.enrollment === "unknown" && prepGetterOut.prepStage === "unknown");
+const prepGetTrap = new Proxy(prepGrantRaw, { get: () => { throw new Error("hostile get"); } }) as DevicePrepReportRaw;
+check("device-prep: a Proxy whose `get` trap throws is malformed, never an exception (the key scan alone does not see it)",
+  normalizeDevicePrep("w-16", prepGetTrap).reportIntegrity === "malformed");
+// The grant is a POSITIVE predicate: a NORMALIZED value outside the declared union — a
+// JavaScript caller, a cast — matches no branch and must be HELD, not ready (review
+// finding: the exhaustive sweep walks only union members, so it could not see this).
+// (report integrity is the one stage an existing branch already catches — anything not
+// "clean" is malformed — so its expected reason is that branch's, not the predicate's.)
+const prepOodAxes: Array<[string, Partial<NormalizedDevicePrep>, DevicePrepVerdict["reasonCode"], string]> = [
+  ["prep stage", { prepStage: "garbage" as PrepStage }, "DEVICE_PREP_STATE_UNKNOWN", "state_out_of_domain"],
+  ["enrollment", { enrollment: "garbage" as PrepEnrollment }, "DEVICE_PREP_STATE_UNKNOWN", "state_out_of_domain"],
+  ["profiles", { profiles: "garbage" as PrepProfiles }, "DEVICE_PREP_STATE_UNKNOWN", "state_out_of_domain"],
+  ["required apps", { requiredApps: "garbage" as PrepRequiredApps }, "DEVICE_PREP_STATE_UNKNOWN", "state_out_of_domain"],
+  ["OS update", { osUpdate: "garbage" as OsUpdateState }, "DEVICE_PREP_STATE_UNKNOWN", "state_out_of_domain"],
+  ["report integrity", { reportIntegrity: "garbage" as PrepReportIntegrity }, "DEVICE_PREP_REPORT_MALFORMED", "report_integrity"],
+];
+for (const [label, patch, reason, signal] of prepOodAxes) {
+  const v = evaluateDevicePrep({ ...prepBase, ...patch });
+  check(`device-prep: an out-of-domain runtime value on ${label} is held (step_up / ${reason}), never ready`,
+    v.recommendedAction === "step_up" && v.reasonCode === reason && v.readyForCheckout === false &&
+    v.unknownSignals.includes(signal));
+}
+check("device-prep: the positive predicate does not disturb a real concern's reason (prep in progress keeps its own reason)",
+  evaluateDevicePrep({ ...prepBase, prepStage: "in_progress" }).reasonCode === "DEVICE_PREP_IN_PROGRESS");
+// Two axes (review finding on the first cut of the guard): an optional-update advisory —
+// monitor, and still ready — beside an out-of-domain stage. A guard gated on an empty
+// candidate list skipped this and the device read as ready. The hold must fire whatever
+// else fired, and outrank the advisory.
+const prepAdvisoryPlusGarbage = evaluateDevicePrep({ ...prepBase, osUpdate: "update_available", enrollment: "garbage" as PrepEnrollment });
+check("device-prep: an optional-update advisory beside an out-of-domain stage is HELD (step_up, not ready), never the advisory's ready verdict",
+  prepAdvisoryPlusGarbage.recommendedAction === "step_up" && prepAdvisoryPlusGarbage.readyForCheckout === false &&
+  prepAdvisoryPlusGarbage.reasonCode === "DEVICE_PREP_STATE_UNKNOWN" && prepAdvisoryPlusGarbage.unknownSignals.includes("state_out_of_domain"));
+const prepContainedPlusGarbage = evaluateDevicePrep({ ...prepBase, prepStage: "failed", enrollment: "garbage" as PrepEnrollment });
+check("device-prep: a containment beside an out-of-domain stage stays a containment with its own reason (the hold never weakens a restrict)",
+  prepContainedPlusGarbage.recommendedAction === "restrict" && prepContainedPlusGarbage.reasonCode === "DEVICE_PREP_FAILED" &&
+  prepContainedPlusGarbage.readyForCheckout === false && prepContainedPlusGarbage.unknownSignals.includes("state_out_of_domain"));
+// The per-stage `unknown` branches must stay LIVE now that the positive predicate also
+// holds those states under the same reason: each names ITS stage in unknownSignals, and
+// the backstop's "state_out_of_domain" must not appear — otherwise a deleted branch is
+// invisible to the proof (the os_update mutant survived the sweep before this check).
+const prepUnknownStageSignals: Array<[string, string]> = [
+  ["prep-stage-unknown", "prep_stage"],
+  ["enrollment-unknown", "enrollment"],
+  ["profiles-unknown", "profiles"],
+  ["apps-unknown", "required_apps"],
+  ["os-update-unknown", "os_update"],
+];
+for (const [fixture, signal] of prepUnknownStageSignals) {
+  const v = P(fixture);
+  check(`device-prep: the '${fixture}' hold names its own stage ('${signal}') and is NOT the out-of-domain backstop`,
+    v.unknownSignals.includes(signal) && !v.unknownSignals.includes("state_out_of_domain"));
+}
+// The domain lists are the guard's allowlist. `readonly` is compile-time only: a JavaScript
+// caller that pushed "garbage" onto an exported list would make it in-domain and reopen the
+// grant (review finding). They are frozen at runtime, and a mutation attempt must leave the
+// hold in place.
+const prepDomainLists = [PREP_ENROLLMENT_DOMAIN, PREP_PROFILES_DOMAIN, PREP_REQUIRED_APPS_DOMAIN, OS_UPDATE_DOMAIN, PREP_STAGE_DOMAIN, PREP_INTEGRITY_DOMAIN];
+check("device-prep: every exported domain list is frozen at runtime", prepDomainLists.every((d) => Object.isFrozen(d)));
+let prepPushThrew = false;
+try { (PREP_ENROLLMENT_DOMAIN as unknown as string[]).push("garbage"); } catch { prepPushThrew = true; }
+check("device-prep: pushing onto a domain list throws (strict mode) and does not widen it — the out-of-domain hold survives the attempt",
+  prepPushThrew && PREP_ENROLLMENT_DOMAIN.length === 4 &&
+  evaluateDevicePrep({ ...prepBase, enrollment: "garbage" as PrepEnrollment }).readyForCheckout === false);
+// Every exported array in the module namespace is frozen — not a hand-enumerated list of
+// them (in-house review finding: round five froze the six domain lists by hand and left
+// DEVICE_PREP_REPORT_KEYS, the unrecognized-key allowlist, open; one push made an extra key
+// read clean). A future exported array that is genuinely mutable would need a named exemption.
+const prepUnfrozenExports = Object.entries(appUpdateModule).filter(([, v]) => Array.isArray(v) && !Object.isFrozen(v)).map(([k]) => k);
+check(`device-prep: every exported array in the app-update namespace is frozen (unfrozen: ${prepUnfrozenExports.join(", ") || "none"})`,
+  prepUnfrozenExports.length === 0);
+let prepKeysPushThrew = false;
+try { (DEVICE_PREP_REPORT_KEYS as unknown as string[]).push("vendor_note"); } catch { prepKeysPushThrew = true; }
+const prepExtraAfter = normalizeDevicePrep("w-17", { ...prepGrantRaw, vendor_note: "anything" } as DevicePrepReportRaw);
+check("device-prep: pushing onto the REPORT_KEYS allowlist throws and an unrecognized key still reads malformed",
+  prepKeysPushThrew && DEVICE_PREP_REPORT_KEYS.length === 5 && prepExtraAfter.reportIntegrity === "malformed");
+// The own-property read is the ONLY thing between a polluted Object.prototype and a full
+// grant: the chain scan stops at Object.prototype by design, so a recognized key planted
+// there is invisible to it, and an EMPTY or ABSENT report would read as fully confirmed.
+// (In-house review finding: every earlier hostile case used Object.create, which the scan
+// catches first, so deleting hasOwnProperty left 157/157 green.) Pollute, normalize {}
+// and undefined, assert all-unknown and not ready, restore in finally.
+{
+  const planted = { enrollment: "enrolled", profiles: "applied", required_apps: "installed", os_update: "current", prep_stage: "complete" };
+  const proto = Object.prototype as unknown as Record<string, unknown>;
+  try {
+    for (const [k, v] of Object.entries(planted)) Object.defineProperty(proto, k, { value: v, configurable: true, enumerable: false, writable: true });
+    const pollutedEmpty = normalizeDevicePrep("w-18", {} as DevicePrepReportRaw);
+    const pollutedAbsent = normalizeDevicePrep("w-19", undefined);
+    check("device-prep: with Object.prototype polluted with every recognized key, an EMPTY report is all-unknown and never ready (own-property read is load-bearing)",
+      pollutedEmpty.enrollment === "unknown" && pollutedEmpty.prepStage === "unknown" && pollutedEmpty.osUpdate === "unknown" &&
+      evaluateDevicePrep(pollutedEmpty).readyForCheckout === false);
+    check("device-prep: with Object.prototype polluted, an ABSENT report is all-unknown and never ready",
+      pollutedAbsent.enrollment === "unknown" && pollutedAbsent.prepStage === "unknown" && evaluateDevicePrep(pollutedAbsent).readyForCheckout === false);
+  } finally {
+    for (const k of Object.keys(planted)) delete proto[k];
+  }
+}
+check("device-prep evaluator is deterministic",
+  JSON.stringify(evaluateDevicePrep(prepBase)) === JSON.stringify(evaluateDevicePrep(prepBase)));
+
+// ── Codex round seven on #641: fixture names, one-time axis reads, revoked proxies —
+// each verified by execution before the fix ─────────────────────────────────────────
+check("device-prep: 'toString' / '__proto__' / 'constructor' are not fixture names — undefined, never a fabricated verdict",
+  evaluateDevicePrepFixture("toString") === undefined && evaluateDevicePrepFixture("__proto__") === undefined &&
+  evaluateDevicePrepFixture("constructor") === undefined);
+{
+  const proto = Object.prototype as unknown as Record<string, unknown>;
+  try {
+    Object.defineProperty(proto, "planted-fixture", { value: { ...prepBase }, configurable: true, enumerable: false, writable: true });
+    check("device-prep: a grant-shaped fixture planted on Object.prototype under a new name is NOT a fixture (undefined, never ready)",
+      evaluateDevicePrepFixture("planted-fixture") === undefined);
+  } finally {
+    delete proto["planted-fixture"];
+  }
+}
+check("device-prep: the fixture corpus is frozen", Object.isFrozen(DEVICE_PREP_FIXTURES) && Object.keys(DEVICE_PREP_FIXTURES).length === 20);
+{
+  let reads = 0;
+  const flapping = Object.defineProperty({ ...prepBase }, "prepStage", { get() { reads += 1; return reads === 1 ? "garbage" : "complete"; }, enumerable: true });
+  const v = evaluateDevicePrep(flapping as NormalizedDevicePrep);
+  check("device-prep: an axis whose first read is out-of-domain and later reads valid is HELD (one snapshot, not one read per branch)",
+    v.readyForCheckout === false && v.unknownSignals.includes("state_out_of_domain"));
+  const throwing = Object.defineProperty({ ...prepBase }, "enrollment", { get() { throw new Error("hostile axis"); }, enumerable: true });
+  const t = evaluateDevicePrep(throwing as NormalizedDevicePrep);
+  check("device-prep: an axis whose read THROWS is held as unreadable (step_up), never an exception out of the evaluator",
+    t.recommendedAction === "step_up" && t.readyForCheckout === false && t.unknownSignals.includes("state_unreadable"));
+}
+{
+  const { proxy, revoke } = Proxy.revocable({ ...prepGrantRaw }, {});
+  revoke();
+  let threw = false;
+  let out: NormalizedDevicePrep | undefined;
+  try { out = normalizeDevicePrep("w-revoked", proxy as DevicePrepReportRaw); } catch { threw = true; }
+  check("device-prep: a REVOKED Proxy as the report is malformed and never ready — no exception out of the normalizer",
+    !threw && out !== undefined && out.reportIntegrity === "malformed" && evaluateDevicePrep(out).readyForCheckout === false);
+}
+
+
 // ── The live-call gate and the default transport, each condition ISOLATED ────
 //
 // See `lib/live-gate.ts` for why this replaced what was here (or filled the hole where
@@ -350,6 +739,6 @@ await checkDefaultTransport({
 });
 
 const total = passed + failures.length;
-console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},ladderRungs=6`);
+console.log(`figures=normalizedCombos=${normRes.combos},rawCombos=${rawRes.combos},grantingCombos=${normRes.noneCount},rawGrantingCombos=${rawRes.noneCount},ladderRungs=6,devicePrepCombos=${prepRes.combos},devicePrepGrants=${prepRes.noneCount}`);
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

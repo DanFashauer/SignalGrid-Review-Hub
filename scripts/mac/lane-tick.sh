@@ -64,30 +64,42 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG_PREFIX="lane-tick $STAMP"
 say() { printf '%s  %s\n' "$LOG_PREFIX" "$1"; }
 
-# A QUIET tick heartbeats at most once per this many minutes, so a short launchd
+# An UNCHANGED tick heartbeats at most once per this many minutes, so a short launchd
 # interval does not push a heartbeat commit to Alpha every run. Override with
 # SIGNALGRID_QUIET_HEARTBEAT_MIN. The local stamp sits beside the install stamp in
-# node_modules (gitignored, never pushed); its mtime is the last delivered heartbeat.
+# node_modules (gitignored, never pushed); its mtime is the last delivered heartbeat
+# and the sibling file holds the RESULT that heartbeat carried.
+#
+# "Unchanged", not "quiet" (2026-09-12): the throttle used to exempt every skipped
+# and failed result, so a checkout parked on a landing branch for an hour pushed
+# "skipped: checkout on mac/land-…" to Alpha every 5 minutes — twelve pushes an hour,
+# each starting four workflows, each cancelling the mainline CI run before it, and
+# between them exhausting the repository's GITHUB_TOKEN budget until the CI liveness
+# gate failed a product PR on a 403. A repeated result is not news; a CHANGED result
+# is, and still delivers at once — including the first skip and the first failure.
 QUIET_HEARTBEAT_MIN="${SIGNALGRID_QUIET_HEARTBEAT_MIN:-25}"
 HB_STAMP="node_modules/.sg-last-heartbeat"
+HB_LAST_RESULT="node_modules/.sg-last-heartbeat-result"
 
 # The heartbeat is the tick's ONLY obligation on every path, including failure
 # paths: a tick that died silently is exactly what this script exists to prevent.
 RESULT="quiet"
 heartbeat() {
   if [ "$DRY" = "1" ]; then say "dry-run: would heartbeat: $RESULT"; return 0; fi
-  # Throttle ONLY a purely-quiet result ("quiet", or "quiet; N …unread" appended
-  # below): acted/skipped/failed always deliver. `find -mmin -N` is BSD/bash-3.2 safe.
-  case "$RESULT" in
-    quiet|quiet\;*)
-      if [ -f "$HB_STAMP" ] && [ -n "$(find "$HB_STAMP" -mmin -"$QUIET_HEARTBEAT_MIN" 2>/dev/null)" ]; then
-        say "quiet, last heartbeat <${QUIET_HEARTBEAT_MIN}m ago — tick ran, not re-pushing (avoids flooding Alpha)"
-        return 0
-      fi
-      ;;
-  esac
+  # Throttle a result IDENTICAL to the last delivered one ("quiet" again, the same
+  # "skipped: …" again, the same failure again) inside the window; anything that
+  # differs from what Alpha already carries delivers now. A tick that ACTED names
+  # what it did, so its result differs and always delivers. `find -mmin -N` and the
+  # `cat` comparison are BSD/bash-3.2 safe; a missing result file compares unequal.
+  LAST_RESULT=""
+  [ -f "$HB_LAST_RESULT" ] && LAST_RESULT="$(cat "$HB_LAST_RESULT" 2>/dev/null)"
+  if [ "$RESULT" = "$LAST_RESULT" ] && [ -f "$HB_STAMP" ] && [ -n "$(find "$HB_STAMP" -mmin -"$QUIET_HEARTBEAT_MIN" 2>/dev/null)" ]; then
+    say "unchanged ($RESULT), last heartbeat <${QUIET_HEARTBEAT_MIN}m ago — tick ran, not re-pushing (avoids flooding Alpha)"
+    return 0
+  fi
   if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" >/dev/null 2>&1; then
     touch "$HB_STAMP" 2>/dev/null || true
+    printf '%s' "$RESULT" > "$HB_LAST_RESULT" 2>/dev/null || true
     say "heartbeat delivered: $RESULT"
   else
     say "WARN heartbeat delivery FAILED (push refused or offline): $RESULT"

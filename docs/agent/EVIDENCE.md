@@ -1709,3 +1709,188 @@ typecheck: all packages Done; proof counts: docs updated 82->98 (PRODUCT_CORE_TH
 brace-less sweep (oneline-cond-false): 4 of 41 targets opted in; 37 pending (REPORTED, never fatal)
 ```
 Verdict:  **holds — with three of the survivors turning out to be guards that could never fire.** attest.ts:99 was only reachable when Object.prototype carries the attestation's field names; it is now pinned by a check that plants those fields on Object.prototype, presents `Object.prototype` itself as the attestation, and expects `envelope_malformed` (restored in `finally`). attest.ts:106 and canonical.ts:45 were shadowed outright — a symbol key was already rejected by the `includes` membership check one line down, and the canonical early return fell through to the same `UNCANONICAL` the final line returns — so both were DELETED with a comment rather than allowlisted, and the membership check's cast now says why it accepts symbols. app-update's two shadowed guards (a symbol-key check under an `includes`, an empty-string check under a digits-only regex) went the same way, and `parseVersion` gained pins for `1e2.0`, `+1.0`, `1.0x`, empty, `v`, and whitespace. The other 37 families still carry their one-line survivors un-swept; the BUILD_BACKLOG campaign row lists them by survivor count, and each joins by adding `oneLine: true` once its survivors are pinned by a check that fails without them or documented inert with a reason. The guard REPORTS the pending count on every run and never fails on it — a family cannot be quietly counted as swept.
+## 2026-09-11 — "The last two runbook partials modeled — the supervision-identity lifecycle and the iOS update / device-prep workflow — and the evidence artifact learns to age itself"
+Command:  the two rows SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md still marked `partial` were built as distinct fixture corpora + fail-closed evaluators + proof sections on the break-glass fallback-sequence pattern, each registered with the mutation guard; `mintedAt` added to the mac-run.json emitter and preferred by the readiness age.
+```
+pnpm run typecheck                                        # exit 0 (all packages Done)
+pnpm run proof:device-attestation                         # summary=pass (119/119), was 77 — section 7 adds 42: 13 fixtures, 11 single-axis flips, a 288-state sweep pinning the one grant, a negative control, the normalizer on hostile wire
+pnpm run proof:app-update                                 # summary=pass (127/127), was 71 — device-prep adds 56: 20 fixtures, 18 flips, a 3,072-state sweep pinning the one grant; figures=…devicePrepCombos=3072,devicePrepGrants=1
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=42 killed=42 hung=0 known-inert=0 survivors=0
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=63 killed=59 hung=0 known-inert=4 survivors=0
+pnpm run review:invariants                                # Invariant review passed — fail-closed, deterministic, Assist-safe, truthful
+node scripts/check-connector-discipline.mjs               # Connector-discipline gate passed
+node scripts/check-readiness-figure.mjs --self-test       # self-test passed (19/19) — 6 new age cases: mintedAt preferred; unparseable/future stamp -> git; neither -> Infinity -> 0
+node scripts/check-readiness-figure.mjs                   # (a) 82% = 14 modeled / 0 partial / 3 gap of 17 (was 70%); (b) 0% — evidence covers 6f6a, tree 6989, age via git; (c) 100%; HEADLINE 0%
+node scripts/generate-sync-manifest.mjs                   # UPDATED version 70 (proofCounts device-attestation 77->119, app-update 71->127)
+node scripts/check-proof-counts.mjs                       # all 59 documented counts match their proofs
+node scripts/check-proof-figures.mjs                      # exit 0 (the 3,072 in APP_UPDATE_CURRENCY is a live figure of proof:app-update)
+node scripts/check-surface-review-coverage.mjs --write    # 102 read, 0 partial, 0 not read, of 102 surfaces
+node scripts/check-preflight-ci-parity.mjs                # preflight gates: 240 non-proof of 317; 373 wired, 0 unwired
+node scripts/preflight.mjs                                # Preflight PASSED — everything it runs is green. (317 gates ok; shellcheck installed in this container first — the run without it stopped at Shell lint)
+pnpm run verify:breadth                                   # Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Output:
+```
+supervision-identity.ts (device-attestation family) — the row's gap was that attestation was modeled but the supervision-identity LIFECYCLE was not a distinct fixture. It now is: supervision (supervised / unsupervised / unknown), identity binding (this org / another org / unbound = lost / unknown), enrollment (enrolled / lost / never / unknown), command channel (responsive / unresponsive / unknown), report integrity. A foreign identity, a lost identity or enrollment, never enrolled, or affirmatively unsupervised -> restrict (no management command can run); supervised-and-bound but answering nothing -> step_up; any unknown or a malformed report -> step_up. proof:device-attestation sweeps all 288 states and exactly one grants; no state resolves to monitor/alert/escalate. Normalizer: absent -> unknown and clean; out-of-vocabulary string -> unknown; present-but-non-string -> malformed; a boolean `supervised` accepted.
+device-prep.ts (app-update family) — the row's gap was that host-app VERSION currency was modeled but the prep / OS-update WORKFLOW was not. It now is: enrollment, profiles, required apps, OS update state (current / available / required / in progress / failed / unknown), prep stage, integrity. Failed prep or update, not provisioned, or update REQUIRED -> restrict; in progress / partial / pending / unknown -> step_up; an OPTIONAL update offered -> monitor (the one advisory); exactly one of 3,072 states grants; monitor reachable only through the optional update.
+Both evaluators use braced if/else-if chains so every guard is reachable by the mutators and carry no backstop predicate (the exhaustive sweep is the backstop that can be seen to fail): 0 survivors on both sweeps. Barrel exports, mutation-guard file lists, INTEGRATION_CATALOG and APP_UPDATE_CURRENCY prose, and the two ground-truth rows updated; the documented counts moved 77->119 and 71->127 (two claim sites each — one wrote "(N checks;" with a semicolon and a tight grep missed it twice), which regenerated the sync manifest to v70. Hardware evidence was already stale at 6f6a and stays stale until the Mac re-mints.
+mintedAt — verify-all.mjs stamps the mint time into mac-run.json (provenance, not a decision path; the artifact had 13 keys and none temporal, ROLE_LENS_REVIEW 2026-08-21). check-readiness-figure.evidenceAgeDays prefers it, falls back to the git commit date, and ignores an unparseable or FUTURE stamp (a wrong clock must never read fresh). LIVE_SYNC_LOOP.md corrected — it promised "no timestamps". The steward stops inferring age from GitHub commit history on a shallow clone once the Mac re-mints.
+The first preflight run stopped at Shell lint: shellcheck was not installed in this container. Installed (uid 0, plain apt-get) and re-run; the gate is a CI job either way.
+```
+Verdict:  **Dimension (a) of the readiness figure crossed the 80% floor — 14 of 17 runbook elements modeled, 0 partial — and did so by building the two missing surfaces as falsifiable, mutation-swept fixture corpora, not by relabeling rows.** The headline stays 0% on one Mac-side lever alone: re-mint mac-run.json against the current manifest; when it is minted it will carry its own age.
+
+## 2026-09-11 — "Three Codex findings on the runbook-partials PR (#641), each fixed at the root and pinned"
+Command:  the P1/P1/P2 findings on #641 verified against source before any edit (each was real), fixed, and gated; the earlier evidence line "unparseable/future stamp -> git" is superseded below.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (128/128) (was 119) — +9: inherited fields, Object.prototype, array/string, unrecognized own key, symbol key, 100-deep chain, throwing Proxy, honest path still grants
+pnpm run proof:app-update                                 # summary=pass (139/139) (was 127) — +9 of the same shapes for device-prep, +3 for readiness: readyForCheckout <=> (none | monitor), exactly 2 of 3,072 states ready
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=46 killed=46 hung=0 known-inert=0 survivors=0 (was 42/42)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=67 killed=63 hung=0 known-inert=4 survivors=0 (was 59 killed + 4 documented-inert of 63)
+node scripts/check-readiness-figure.mjs --self-test       # self-test passed (20/20) — 20 cases: an unparseable, FUTURE, or non-string mintedAt is now Infinity (invalid-mintedAt), never the git date
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 71, fingerprint 2daf941b6ed6 (proofCounts device-attestation 128, app-update 139)
+```
+Output:
+```
+P1 (both new normalizers) — the reads went through the prototype chain, so a report built with Object.create({...confirmed fields}) or a polluted prototype asserted nothing itself yet reached the one grant (trustPreconditionMet / readyForCheckout true). Reproduced in the proof before the fix. Fixed on the family's existing pattern (app-update-connector.ts): isPlainReport (rejects non-objects, arrays and Object.prototype itself), ownValue (own-property reads only), and a BOUNDED prototype-chain scan that marks any inherited or unrecognized key malformed. Every hostile shape is malformed + all-unknown + no grant; the honest own-property report still grants (the fix did not foreclose the path).
+P1 (check-readiness-figure.evidenceAgeDays) — a PRESENT-but-invalid mintedAt fell back to the git commit date, so re-committing an old artifact with a garbage or future stamp would have minted a fresh age and scored dimension (b) 100. Now: git is the LEGACY fallback only when no stamp exists at all; a present stamp that is not a string, unparseable, or in the future is Infinity (source invalid-mintedAt) and scores 0. Two self-test cases flipped, one added.
+P2 (device-prep readyForCheckout) — the boolean was false on the advisory (an OPTIONAL update offered on an otherwise fully-confirmed device), contradicting APP_UPDATE_CURRENCY's "not a hold" and the ladder's ok tier: a checkout consumer would have withheld a ready device over an update nobody requires. readyForCheckout is now "not held, not contained" = none | monitor; the sweep pins it by equality (exactly two of 3,072 states ready: the grant and the advisory; every step_up/restrict false), and the trailing-|| is a mutant the proof kills.
+Codex P2 on the lane-mail PR (#642, merged d11279ca) — "queue the re-mint in the unattended loop, not prose" — was already met by the sim request riding this branch; replied and resolved.
+Process defect recorded: the previous entry's paragraph was appended AFTER preflight ran, so no local gate saw it; CI's figure guard and the sim-requests "pending" rule caught two sentences. This entry is written BEFORE the gates in this chain run on it.
+```
+Verdict:  **Three real findings from an outside reviewer, each reproduced, fixed at the root, and pinned by a check that fails without the fix.** No verdict outside the two new modules changed; both families stay deferred; no claim moves.
+
+## 2026-09-11 — "Codex round three on #641: the grant becomes a positive predicate, and a throwing read is malformed"
+Command:  four findings on e2881cba, each verified real against source before any edit, fixed at the root and pinned.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (140/140) (was 128) — +8: throwing own getter, throwing Proxy get, one out-of-domain value per axis (5), a real concern keeps its own reason
+pnpm run proof:app-update                                 # summary=pass (153/153) (was 139) — +9: the same two throwing shapes, six out-of-domain axes, a real concern keeps its own reason
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=51 killed=51 hung=0 known-inert=0 survivors=0 (was 46/46)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=73 killed=69 hung=0 known-inert=4 survivors=0 (was 63 killed + 4 documented-inert of 67)
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 72, fingerprint 1532efcae09e
+```
+Output:
+```
+P1 (both evaluators) — the branches cover every declared union member and the exhaustive sweep pins the grant over those, but a NORMALIZED value outside the union (a JavaScript caller, a cast, a deserialized object — e.g. enrollment: "garbage") matched no branch, so the grant seed survived and readyForCheckout / trustPreconditionMet came back true. The sweep could not see it because it enumerates union members. Now the grant is a POSITIVE predicate: if no branch fired AND any axis is not exactly its confirmed value, a step_up hold (STATE_UNKNOWN, unknownSignals "state_out_of_domain") is pushed before the reduce — pushed as a candidate, not swapped into the seed, because a seed swap would win ties against a real concern's reason and break the named outcomes (pinned: an unresponsive channel / an in-progress prep keeps its own reason). Both mutators on the guard die: cond-false by the out-of-domain checks, the dropped trailing conjunct by the grant fixture.
+P2 (both normalizers) — a recognized OWN key whose read throws (an accessor property, a Proxy get trap) passed the key scan and the exception escaped. Reads now sit in one try/catch: on a throw the report is malformed and every axis unknown. Pinned with a throwing own getter and a throwing get-trap Proxy on each normalizer.
+```
+Verdict:  **Two more real findings per module, each reproduced by a check that fails without the fix.** The evaluators' comment that said "deliberately no backstop predicate" was wrong for a runtime boundary and is replaced. No verdict outside the two new modules changed; both families stay deferred.
+
+## 2026-09-11 — "Codex round four on #641: the guard fires whatever else fired — an in-domain check on every axis"
+Command:  one P1 on 0785cbaf, verified real against source before any edit: the round-three guard was gated on an empty candidate list, so an optional-update advisory (monitor, still ready) beside an out-of-domain stage skipped it and the device read as ready.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (142/142) (was 140) — +2: a hold and a containment beside an out-of-domain axis
+pnpm run proof:app-update                                 # summary=pass (155/155) (was 153) — +2: the advisory-plus-garbage two-axis case, and a containment-plus-garbage control
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=51 killed=51 hung=0 known-inert=0 survivors=0 (was 51/51)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=73 killed=69 hung=0 known-inert=4 survivors=0 (was 69 killed + 4 documented-inert of 73)
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 73, fingerprint ee0ed845694f
+```
+Output:
+```
+The guard is now an IN-DOMAIN check per axis — exported *_DOMAIN lists carrying every declared member, unknown included — evaluated independently of the candidate list. Any axis outside its domain pushes a step_up hold (STATE_UNKNOWN, unknownSignals "state_out_of_domain") whatever else fired: after a monitor the hold outranks the advisory (advisory + garbage stage → step_up, readyForCheckout false); after another hold or a containment the earlier concern keeps its own reason on the tie (unresponsive channel + garbage → CHANNEL_UNRESPONSIVE; foreign identity + garbage → restrict; prep failed + garbage → restrict / DEVICE_PREP_FAILED). The round-three per-axis unknown-signal pins stay, and are no longer load-bearing for the sweep: "unknown" is in-domain, so the unknown branches are no longer shadowed and a deleted one fails its fixture outright.
+```
+Verdict:  **The round-three fix was itself wrong in a way the next review round caught: a guard that only runs when nothing else fired is not a guard on the axis.** The in-domain check runs every time. No verdict outside the two new modules changed; both families stay deferred.
+
+## 2026-09-11 — "Codex round five on #641: the domain lists are frozen at runtime"
+Command:  two P1s on 3ef4e567, verified real: `readonly` is a compile-time promise only, so a JavaScript caller could push "garbage" onto an exported *_DOMAIN list, make it in-domain, and reopen the grant.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (144/144) (was 142) — +2: every domain list frozen; a push throws, does not widen, and the hold survives
+pnpm run proof:app-update                                 # summary=pass (157/157) (was 155) — +2: the same two on the device-prep lists
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=51 killed=51 hung=0 known-inert=0 survivors=0 (was 51/51)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=73 killed=69 hung=0 known-inert=4 survivors=0 (was 69 killed + 4 documented-inert of 73)
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 74, fingerprint b47aedd37229
+```
+Output:
+```
+Every exported *_DOMAIN list is now Object.freeze()d at construction; the type stays readonly T[]. In strict-mode ESM a push onto a frozen array throws a TypeError, the length is unchanged, and the in-domain guard still holds the out-of-domain value — pinned on one list per module, with Object.isFrozen asserted over all of them.
+```
+Verdict:  **A guard whose allowlist a caller can edit is not a guard; the lists are now immutable at runtime and the proof would notice if one were not.** No verdict outside the two new modules changed; both families stay deferred.
+
+## 2026-09-11 — "Round six on #641 was the in-house reviewer (Codex out of quota): two P1s in the code the last two rounds touched, and the sweep's blind spots"
+Command:  the fail-closed-auditor subagent, told what five Codex rounds had found, was asked to reach the grant any way it could and to plant each fix back and watch for an assertion that does not fail. It found five things; four are fixed here, one is a recorded decision.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (148/148) (was 144) — +4: namespace-wide "every exported array is frozen", an allowlist push, Object.prototype polluted + EMPTY report, + ABSENT report
+pnpm run proof:app-update                                 # summary=pass (161/161) (was 157) — +4: the same four on the device-prep side
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=57 killed=57 hung=0 known-inert=0 survivors=0 (was 51/51 — three chain-scan guards braced into the sweep's reach)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=79 killed=75 hung=0 known-inert=4 survivors=0 (was 69 killed + 4 documented-inert of 73)
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 75, fingerprint 72c7ce8069a6
+```
+Output:
+```
+F1 (P1, fixed) — round five froze the eleven *_DOMAIN lists by hand and left the OTHER allowlist in the same files open: *_REPORT_KEYS, which hasUnrecognizedKey reads. One push("vendor_note") turned an unrecognized assertion from malformed into clean and readyForCheckout / trustPreconditionMet true (reproduced by the auditor). Both are now Object.freeze()d — and the proof no longer enumerates lists by hand: it walks the module namespace and asserts every exported array is frozen. That check earned its keep on its first run: it failed on a THIRD unfrozen list, APP_UPDATE_REPORT_KEYS in the pre-existing app-update connector (types.ts), which the same barrel exports — frozen too. A hand-enumerated pin would have missed it exactly as round five did.
+F2 (P1, fixed) — ownValue's hasOwnProperty guard, the round-two fix, was pinned by nothing: every hostile case used Object.create, which the chain scan catches at depth 1 first; with the guard deleted both proofs stayed green (auditor: 157/157, 144/144). The vector the code comment names — a polluted Object.prototype — was never exercised, and with the guard gone an EMPTY and even an ABSENT report normalized to fully confirmed. Pinned: pollute Object.prototype with every recognized key, normalize {} and undefined, assert all-unknown and not ready / not trusted, restore in finally.
+F3 (P2, fixed in part) — the mutation guard's mutators match ") {", trailing && / ||, and bare return true/false; the normalizers' one-line "if (...) return true;" guards and multi-conjunct return expressions matched nothing, so "survivors=0" ran over a population that excluded them. The three reachable chain-scan guards (depth bound, inherited key, unrecognized key) are now braced and in the sweep; the redundant symbol-key guard is deleted (known holds strings, so includes() is false for any symbol and the last guard catches it). isPlainReport's return expression and ownValue stay outside the mutators — F2's pin is the falsifier for ownValue. The brace-less-clause mutator itself remains the filed follow-up (LOOP.md).
+F4 (P2, fixed) — both exhaustive sweeps enumerated HAND-TYPED domain lists; the exported *_DOMAIN lists were imported only for the freeze check. A member added to a domain with no evaluator branch would have been in-domain, fired nothing, and granted — invisible to the sweep, the combos assertion, and (because the doc figure is fed from the hand-typed product) the figure guard. The sweeps now walk the exported domains; the 3,072 / 288 literals stay as the documented figure pins so a grown domain moves the figures= line and trips the figure guard. (288 in INTEGRATION_CATALOG remains outside check-proof-figures' comma-formatted vocabulary — a known gap of that tool, now noted in the proof comment.)
+F5 (P3, DECISION: not closed) — a Proxy whose ownKeys trap hides a key can switch the unrecognized-key defence off for an in-process caller. A JSON.parse'd wire report cannot be a Proxy; rejecting Proxies would need node:util in lib code that the console also bundles. Recorded here as an accepted risk with the reasoning, not silently.
+Also verified clean by the auditor, running not reasoning: every code point U+0080–U+2FFFF against readEnum's trim().toLowerCase() (no homoglyph or case-fold reaches a vocabulary word); boxed Strings, arrays, toString objects, numbers on the wire and on the normalized struct; the worst-concern reduce over all 3,072 states (2 ready, 0 with findings); ESM namespace redefinition of a domain list; every 2026-09-11 doc figure against live runs.
+```
+Verdict:  **Codex running out of quota is an absent signal, not a clean round — the in-house reviewer found two P1s where the last two rounds had just worked.** Both are the same species as round five (an allowlist a caller could edit; a guard no check could tell from deleted), fixed the same way: at the root, with a check that fails without the fix. No verdict outside the two new modules changed; both families stay deferred.
+
+## 2026-09-11 — "The queued re-mint request is WITHDRAWN from this branch (Codex P2 on the merged lane-mail PR #648)"
+Command:  git rm artifacts/sim-requests/2026-09-11-re-mint-evidence-manifest-v70.json ; node scripts/check-sim-requests.mjs ; node scripts/check-cited-paths.mjs ; pnpm run docs:sanity
+Output:
+```
+Simulation request loop passed — every result binds to a request it was asked for.
+Cited-path check passed — 2240 citation(s) across 487 docs plus 26 gate-script reference(s) in lib/ source comments
+Docs sanity passed — required docs present, no unsafe claims.
+```
+Verdict:  **the request that rode this branch would have made the unattended tick mint against an intermediate manifest.** The Mac lane re-minted against mainline's v68 on its own (53c60f4e) and three product PRs (#638, #641, #645, plus the custody-ledger PR — a family the launch profile keeps deferred) each move the manifest; the plan mailed to the Mac is ONE re-mint after all of them land. Codex read the tick correctly (scripts/mac/lane-tick.sh runs every PENDING request the moment the checkout is back on SignalGrid_Alpha): had #641 landed first, its request would have run at once against v75, and a successor written later cannot supersede a request that has already run. So the request is withdrawn here, not superseded — nothing had run against it (no result binds to it, the gate above says so) — and a fresh request against the FINAL fingerprint is queued after the last of the three lands. The earlier entry that says "the sim request riding this branch" described the branch at that time; this entry records the withdrawal rather than rewriting it.
+
+## 2026-09-11 — "Codex round seven on #641: own-name fixture lookup, one-time axis snapshot, revoked-Proxy catch — the same three holes the custody-ledger review found, closed in both modules"
+Command:  three Codex findings on device-prep.ts and supervision-identity.ts (two P1, one P2), each reproduced with a real call before a line changed; the fix pattern is the one #649 took the same hour, applied to both modules and pinned in both proofs.
+```
+pnpm run typecheck ; pnpm run proof:device-attestation ; pnpm run proof:app-update
+node scripts/mutation-guard.mjs --proof=proof:device-attestation ; node scripts/mutation-guard.mjs --proof=proof:app-update
+node scripts/generate-sync-manifest.mjs ; check-proof-counts ; check-proof-figures ; check-readiness-figure ; review:invariants ; check-connector-discipline ; check-surface-review-coverage --write ; check-cited-paths ; check-launch-claims ; check-known-false-claims ; check-sim-requests ; docs:sanity
+```
+Output:
+```
+summary=pass (154/154)      # device-attestation, was 148
+summary=pass (167/167)      # app-update, was 161
+mutations=58 killed=58 hung=0 known-inert=0 survivors=0     # device-attestation
+mutations=80 killed=76 hung=0 known-inert=4 survivors=0     # app-update (the four inert are the documented ones)
+live-sync manifest UPDATED — version 76
+Proof-count check passed — all 59 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Surface-read-coverage gate passed ...   Invariant review passed ...   Connector-discipline gate passed.
+```
+Verdict:  **the reviewer read #649's round and asked whether the two sibling modules had the same three holes; they did, and each is pinned by a check that fails without the fix.** (1) `evaluateDevicePrepFixture("toString")` and `evaluateSupervisionIdentityFixture("toString")` returned a verdict built from a function, and a grant-shaped object planted on Object.prototype under a name that does not exist returned READY / trusted — both lookups are own-name only and both corpora frozen; the `fixture === undefined` check behind the guard was dead and is gone (the custody-ledger sweep had already shown that shape survives). (2) Both evaluators read each axis once per branch, so an accessor that answers the branches with an out-of-domain value and the domain guard with a valid one reached the grant on the second answer — every axis is snapshotted once, and a throwing read holds as `state_unreadable`. (3) `Array.isArray` on a REVOKED Proxy threw out of both normalizers before any catch could keep the no-throw promise — the shape check runs inside one. Nothing in the two grant predicates moved; the 288 / 3,072-state sweeps still pin one grant each. The device-attestation and app-update families stay deferred in the launch profile: built, not claimed.
+## 2026-09-12 — "The Mac tick pushed a heartbeat to mainline every 5 minutes because a SKIPPED result was exempt from the quiet throttle, and each push started four workflows; the throttle now keys on an UNCHANGED result, and a heartbeat-only push starts no workflow"
+Command:  read from the Actions run list for `SignalGrid_Alpha` (event push) and the failed job log on #654, then the tick script:
+```
+mcp github actions_list list_workflow_runs branch=SignalGrid_Alpha event=push     # what a heartbeat push starts
+mcp github get_job_logs 103467034731                                              # #654's failing step
+sed -n '60,100p' scripts/mac/lane-tick.sh                                         # the throttle
+bash -n scripts/mac/lane-tick.sh ; node scripts/check-sim-scripts-selfcheck.mjs ; pnpm run guard:ci-sync ; node scripts/check-preflight-ci-parity.mjs
+```
+Output:
+```
+push 60364d5b "Lane mail (mac): heartbeat mac-lane-tick" -> Supply Chain, SignalGrid CI, CodeQL, Connector Emulator Smoke (4 runs); the same at 00:36, 00:30, 00:25, 00:20, 00:15, 00:10 … — one push every 5 minutes
+SignalGrid CI on SignalGrid_Alpha: run 2537 (the #655 merge) conclusion=cancelled; 2536 cancelled; 2535 cancelled; 2533 cancelled; 2532 cancelled; 2530 cancelled — the next heartbeat cancels the mainline run of the merge before it
+#654 job 103467034731: ✗ could not reach the GitHub Actions API: GET …/actions/workflows/scheduled-verification.yml/runs?per_page=10&status=completed -> 403 rate limit exceeded (rate limited) (unchanged after 4 attempts) — every gate before check-ci-liveness passed
+lane-tick.sh: "Throttle ONLY a purely-quiet result … acted/skipped/failed always deliver" — and the tick has read "skipped: checkout on mac/land-641-645-638, not SignalGrid_Alpha" since 23:44Z, so it delivered every run
+after the change: bash syntax ok; sim-scripts-selfcheck 9 script(s) checked statically, 0 problem(s); Drift check passed — every proof runs in both places; preflight↔CI parity passed — every preflight gate is wired into a workflow, 0 unwired
+```
+Verdict:  **refuted — the tick's own comment said the throttle "keeps that from flooding SignalGrid_Alpha with heartbeat commits", and it did not: the exemption for skipped/failed results is the flood.** The throttle now compares the result to the one last delivered (kept beside the stamp in node_modules) and re-pushes an identical result at most once per window; a changed result — the first skip, the first failure, any acted tick — still delivers at once, so the steward's 3-hour staleness window and the "a tick that died silently" guarantee both hold. Separately, the four workflows that trigger on push to `SignalGrid_Alpha` now ignore a push that touches only `artifacts/agent-heartbeats/**`: lane-deliver already gates that file, it changes no code, and a heartbeat push must not cancel the mainline run of a real merge. What this does NOT fix: the Mac's checkout has been parked on `mac/land-641-645-638` since 23:44Z, so every tick still skips; returning it to Alpha is a person's action (mailed).
+## 2026-09-12 — "The surface-coverage page no longer moves on lane mail: the mailbox trees stay claimed surfaces, their record counts are withheld from the render, and the self-test proves the page is byte-identical before and after one more record lands"
+Command:  the page printed files-per-surface for `artifacts/lane-messages` and `artifacts/agent-heartbeats`, so every delivery (a send, an ack, a batch) regenerated it and every open product PR — the Mac's combined landing #653, the cloud's #649 and #654 — went unmergeable on that one generated file within the hour, each cycle, until somebody merged mainline in and regenerated. The generator now declares `MAILBOX_TREES`; a mailbox file is still claimed by exactly one surface (completeness untouched), only the NUMBER is withheld and left out of the header figures, and a per-key check fails a mailbox key that names no surface or holds no record.
+```
+node scripts/check-surface-review-coverage.mjs --self-test
+node scripts/check-surface-review-coverage.mjs --write ; node scripts/check-surface-review-coverage.mjs
+```
+Output:
+```
+  ok   — every declared mailbox tree is a derived surface and holds records (baseCover proves it)
+  ok   — a MAILBOX_TREES key that is not a surface is FATAL, naming the key
+  ok   — a MAILBOX_TREES key whose tree holds no record is FATAL, naming the key
+  ok   — one more record under a mailbox tree leaves the rendered page BYTE-IDENTICAL (the reason the trees are declared)
+  ok   — …and one more file under a NON-mailbox surface DOES change the page (the identity test is not vacuous)
+self-test: 54/54 controls passed
+wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces
+Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
+```
+Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated total to the files a person can actually read again; the two mailbox rows print `mailbox` in the Files column. `lane-deliver.mjs` keeps regenerating the page on every delivery — idempotent now, and still the catch for a page stale for any other reason. What this does NOT fix: a PR that itself changes the tracked-file set still moves the page, and two such PRs still conflict on it; that is the page doing its job.

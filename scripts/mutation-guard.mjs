@@ -252,6 +252,10 @@ export const TARGETS = [
       "lib/integrations/src/integrations/app-update/evaluate.ts",
       "lib/integrations/src/integrations/app-update/app-update-connector.ts",
       "lib/integrations/src/integrations/app-update/index.ts",
+      // The device-prep workflow emits the ready / hold / contain verdict and
+      // normalizes a prep report, so its guards are mutable decision logic that must
+      // be swept — registered with the module.
+      "lib/integrations/src/integrations/app-update/device-prep.ts",
     ],
   },
   {
@@ -559,6 +563,10 @@ export const TARGETS = [
       // parsing the mutators do not express, 0 mutations. evaluate.ts carries the
       // mutable guards.
       "lib/integrations/src/integrations/device-attestation/index.ts",
+      // The supervision-identity lifecycle emits the trust-precondition verdict
+      // (grant / step-up / restrict) and normalizes a UEM report, so its guards are
+      // mutable decision logic that must be swept — registered with the module.
+      "lib/integrations/src/integrations/device-attestation/supervision-identity.ts",
     ],
   },
   {

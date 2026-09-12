@@ -1709,6 +1709,79 @@ typecheck: all packages Done; proof counts: docs updated 82->98 (PRODUCT_CORE_TH
 brace-less sweep (oneline-cond-false): 4 of 41 targets opted in; 37 pending (REPORTED, never fatal)
 ```
 Verdict:  **holds — with three of the survivors turning out to be guards that could never fire.** attest.ts:99 was only reachable when Object.prototype carries the attestation's field names; it is now pinned by a check that plants those fields on Object.prototype, presents `Object.prototype` itself as the attestation, and expects `envelope_malformed` (restored in `finally`). attest.ts:106 and canonical.ts:45 were shadowed outright — a symbol key was already rejected by the `includes` membership check one line down, and the canonical early return fell through to the same `UNCANONICAL` the final line returns — so both were DELETED with a comment rather than allowlisted, and the membership check's cast now says why it accepts symbols. app-update's two shadowed guards (a symbol-key check under an `includes`, an empty-string check under a digits-only regex) went the same way, and `parseVersion` gained pins for `1e2.0`, `+1.0`, `1.0x`, empty, `v`, and whitespace. The other 37 families still carry their one-line survivors un-swept; the BUILD_BACKLOG campaign row lists them by survivor count, and each joins by adding `oneLine: true` once its survivors are pinned by a check that fails without them or documented inert with a reason. The guard REPORTS the pending count on every run and never fails on it — a family cannot be quietly counted as swept.
+## 2026-09-11 — "Two of the three runbook gaps modeled: the custody-ledger reconciliation (ledger vs bay vs cap) as a fixture corpus + fail-closed evaluator in the rtls-custody family, 48 new guards all falsifiable"
+Command:  the two gap rows in docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md that no surface modeled — "custody integrity" (a returned device still checked out to a prior holder / unpaired but occupying a slot) and the "per-user checkout cap" contradiction — built on the device-prep / supervision-identity pattern: lib/integrations/src/integrations/rtls-custody/custody-ledger.ts (6 normalized axes; the cap axis COMPUTED from three counts, never asserted; own-property reads, bounded chain scan, frozen domains and allowlist), a 19-fixture corpus, and a proof section in scripts/src/rtls-custody-proof.ts; registered with the mutation guard and the figure guard. Not a detect.ts detection and not a simulator change (both DR-020 territory — split to the backlog).
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:rtls-custody                               # 171 checks (was 63 on this base)
+node scripts/mutation-guard.mjs --proof=proof:rtls-custody
+node scripts/check-readiness-figure.mjs
+node scripts/generate-sync-manifest.mjs                   # regenerated, never hand-edited
+node scripts/check-proof-counts.mjs ; check-proof-figures ; check-cited-paths ; check-launch-claims ; check-known-false-claims ; docs:sanity ; review:invariants ; check-connector-discipline ; check-surface-review-coverage --write
+```
+Output:
+```
+figures=custodyLedgerCombos=864,custodyLedgerGrants=1
+summary=pass (171/171)
+mutations=62 killed=62 hung=0 known-inert=0 survivors=0     # 48 of the 62 are the new module's
+  (a) runbook ground truth       82%   14 modeled / 2 partial / 1 gap of 17 real-world elements   # on this base: the two partial rows are #641's, unmerged
+Proof-count check passed — all 60 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Cited-path check passed — 2241 citation(s) across 487 docs ...: all
+docs/**/*.md (REPORTED, not gated): 416 unhedged deferred-capability mention(s) ... (ceiling 416)   # four new blocks hedged where they sit
+Launch-claims gate passed — nothing deferred is presented as current.
+Known-false-claim check passed — every refutation holds, and no document re-states one.
+Docs sanity passed — required docs present, no unsafe claims.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Connector-discipline gate passed.
+wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces
+```
+Verdict:  **the runbooks' most-cited pain — a custody contradiction met as a mystery beep — is now a graded decision with a legible reason, and the two ground-truth rows read `modeled`.** The grant is a positive predicate over six axes (ledger clear with no holder, seated, paired, requester under cap, clean parse); the 864-state sweep pins it by equality (exactly one grant; `monitor` reachable only as "already held and not in the bay" and NOT ready; `escalate` only as "clear and the bay empty"; `alert` unreachable). The cap axis is derived from the requester's open count, the tenant cap and the docked-stale count with a strict integer parse, so "at cap only because a return never cleared" is a hold named `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN` and a cap genuinely reached is `CUSTODY_CAP_REACHED`. Every hostile-report shape the sibling surfaces learned from six review rounds is pinned on day one (inherited fields, polluted `Object.prototype`, throwing accessors and Proxy traps, unrecognized and symbol keys, the bounded walk, the frozen namespace). The one fixture that failed on the first run (`unpaired-absent`) was the proof's expectation, not the evaluator: a clear ledger over an empty bay is unaccounted (escalate) and outranks unpaired (restrict), so the fixture now isolates the unpaired branch with the device out with the requester, and the precedence is pinned as its own check. Readiness (a) moves to 16 modeled / 1 gap of 17 once #641 lands; the headline stays 0% on (b) until the Mac re-mint. The third gap — the end-to-end smart-charging simulator scenario — is simulator behavior (DR-020) and stays filed.
+
+## 2026-09-11 — "In-house fail-closed audit of custody-ledger.ts: no P1; three P2s and five P3s, each verified by running and fixed at the root or recorded — plus the coverage page the merge left stale"
+Command:  the fail-closed-auditor (read-only, no guard runs) over lib/integrations/src/integrations/rtls-custody/custody-ledger.ts and its proof section; every finding re-executed here before a line changed. Then: the CI red on #649 (25efe93c) — "Surface read coverage" — reproduced locally and root-caused.
+```
+pnpm run proof:rtls-custody                               # 171 -> 189 checks
+node scripts/mutation-guard.mjs --proof=proof:rtls-custody
+node scripts/check-proof-figures.mjs                      # three runs: a stale value was planted twice (865 in place of the 864 combos the docs previously carried; 57,601 in place of the 57,600 previously documented) — both must fail — then the real run must pass
+node scripts/check-surface-review-coverage.mjs            # check mode, before and after --write on a CLEAN index
+node scripts/generate-sync-manifest.mjs ; check-proof-counts ; check-readiness-figure ; review:invariants ; check-connector-discipline ; check-cited-paths ; check-launch-claims ; docs:sanity ; typecheck
+```
+Output:
+```
+figures=custodyLedgerCombos=864,custodyLedgerGrants=1,custodyLedgerRawCombos=57600,custodyLedgerRawGrants=2
+summary=pass (189/189)
+mutations=62 killed=62 hung=0 known-inert=0 survivors=0
+PLANT (the combos figure, previously 864, planted one higher)  → ✗ docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md — the planted value "in a section about proof:rtls-custody, ..." Figure guard FAILED: 1 problem.
+PLANT (the raw figure, previously 57,600, planted one higher)  → ✗ docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md — the planted value "is stated in a section about proof:rtls-custody, ..." Figure guard FAILED: 1 problem.
+REAL              → Figure guard passed — every measured figure in the docs matches a live proof run.
+coverage (check, before)  ✗ docs/agent/SURFACE_REVIEW_COVERAGE.md is STALE versus docs/agent/SURFACE_REVIEW_COVERAGE.json and the tree.
+coverage (check, after)   Surface-read-coverage gate passed — every tracked file belongs to a surface ...   # page 2340 -> 2338 in-scope files
+live-sync manifest UPDATED — version 70, fingerprint 82c47dbb598a…
+Proof-count check passed — all 60 documented counts match their proofs.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.   Connector-discipline gate passed.   Launch-claims gate passed (416 = ceiling).
+```
+Verdict:  **the audit found no grant reachable by an unconfirmed input (its own 2,097,152-report raw sweep agreed with the proof), and the three P2s were all about what the PROOF could not see.** P2-1: the proof's comment claimed the figure guard would catch a stale 864 — it could not, because the guard's noun pass needs whitespace after the digits and every doc wrote "864-state"; the docs were rewritten to say "864 combos" (the figure was 864 before the freshness axis; it is re-derived by the guard on every run), the proof adds a raw-space sweep whose comma-formatted figure (previously 57,600) the guard reads on its own, and both are proven visible by planting a stale value and watching the guard fail (above), not by asserting it. P2-2: a Proxy whose ownKeys trap UNDER-reports hides an unrecognized key from the chain scan and reads clean — the same accepted decision the sibling surfaces recorded (a JSON wire report is never a Proxy; detecting one needs node:util, which console-bundled lib code cannot import; every enumeration primitive goes through the same trap), now written in the module beside the guard it names. P2-3: only one of the four readEnum integrity threads was pinned — dropping the integrity argument from three call sites left 171/171 green; each slot now has a present-but-non-string check asserting malformed and the reason, and an out-of-vocabulary check asserting clean. P3s: the prototype-walk bound is pinned exactly (63 clean, 64 malformed — the first cut of that pin counted the base object twice and failed, which is what a pin is for); cap 1 and stale === open are pinned valid; the ledger_state mapping names its clear members and defaults to unknown (the first cut's default arm was the permissive one — a future wire member would have read clear); key-exact / value-case-insensitive is pinned in both directions; the docs' unpaired row now says an unaccounted device takes the higher rung. Identity refs stay unvalidated (family convention, recorded — and overturned by Codex in the next round). The rtls-custody family stays deferred in the launch profile: built, not claimed. The separate CI red was the coverage page: regenerated while the merge index still carried the conflicted file's three stages, it counted two files that do not exist — the rule from #641 stands: resolve first, regenerate second, then run the CHECK, not only the write.
+
+## 2026-09-11 — "Codex round one on #649: own-name fixture lookup, one-time axis snapshot, revoked Proxy, identity binding, a posed freshness bound — each executed before the fix; the sweep's one survivor was the dead check the own-name guard made redundant"
+Command:  five Codex findings on custody-ledger.ts (two P1, two P1-rated by the reviewer that the in-house audit had rated P3/none, one P2), each reproduced with a real call before a line changed; the module, the proof and the docs moved together; the launch-claims red on 696ffe47 (one unhedged block: the audit entry itself) hedged where it sits.
+```
+pnpm run typecheck ; pnpm run proof:rtls-custody
+node scripts/mutation-guard.mjs --proof=proof:rtls-custody     # twice: the first pass had one survivor
+node scripts/check-proof-figures.mjs ; check-proof-counts ; generate-sync-manifest ; check-readiness-figure ; review:invariants ; check-connector-discipline ; check-surface-review-coverage ; check-cited-paths ; check-launch-claims ; check-known-false-claims ; check-sim-requests ; check-lane-messages ; docs:sanity
+```
+Output:
+```
+figures=custodyLedgerCombos=4320,custodyLedgerGrants=1,custodyLedgerRawCombos=230400,custodyLedgerRawGrants=2
+summary=pass (214/214)                                                        # was 189
+sweep, first pass:  ✗ SURVIVED custody-ledger.ts:688  if (fixture === undefined) → if (false)   (dead after the own-name guard; removed)
+sweep, second pass: mutations=67 killed=67 hung=0 known-inert=0 survivors=0
+Figure guard passed — every measured figure in the docs matches a live proof run.     # 4,320 and 230,400 are comma-formatted: the guard reads them unaided
+Proof-count check passed — all 60 documented counts match their proofs.
+live-sync manifest UPDATED — version 71
+Surface-read-coverage gate passed ...   Invariant review passed ...   Connector-discipline gate passed.   Launch-claims gate passed (416 = ceiling).
+```
+Verdict:  **all five were real, and two of them overturned calls the in-house audit had made the other way — which is why both reviewers run.** (1) The fixture lookup was an inherited-property read: `evaluate…Fixture("toString")` returned a verdict built from a function, and with a grant-shaped object planted on Object.prototype a name that does not exist returned READY. Own-name only now, corpus frozen; and the sweep then showed the old `fixture === undefined` check dead behind the guard — removed rather than left as an unfalsifiable line. (2) The evaluator read each axis once per branch, so an accessor answering the branches with garbage and the domain guard with a valid value reached the grant on the second answer; every axis is now snapshotted once, a throwing read holds (`state_unreadable`). (3) `Array.isArray` on a REVOKED Proxy threw before any catch could keep the normalizer's no-throw promise; the shape check is now inside one. (4) Empty and whitespace refs granted — the audit called that a family convention; Codex was right that a per-device, per-requester authorization naming nobody is not a grant: `CUSTODY_IDENTITY_UNBOUND`, both refs checked, both branches pinned. (5) No freshness: a snapshot replayed later granted forever; the observation's age is now graded against a bound the caller poses through `posedBound` (default 300 s; NaN/Infinity/zero/negative never switch the check off — the axis goes unknown and raises; at exactly the bound the grant holds, one second past it is `CUSTODY_EVIDENCE_STALE`, an unreported age is unknown). The state space is 4,320 combos with the age axis and 230,400 raw wire reports (exactly two grant: the two spellings of a clear ledger). The rtls-custody family stays deferred in the launch profile: built, not claimed.
 ## 2026-09-11 — "The last two runbook partials modeled — the supervision-identity lifecycle and the iOS update / device-prep workflow — and the evidence artifact learns to age itself"
 Command:  the two rows SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md still marked `partial` were built as distinct fixture corpora + fail-closed evaluators + proof sections on the break-glass fallback-sequence pattern, each registered with the mutation guard; `mintedAt` added to the mac-run.json emitter and preferred by the readiness age.
 ```
@@ -1913,3 +1986,50 @@ Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
 Connector-discipline gate passed.
 ```
 Verdict:  holds. The family's one-line guards are now falsifiable by their own proof: the check count rose 95 → 104 (`docs/BENCHMARK_SELECTION.md`, `docs/INTEGRATION_CATALOG.md` updated from output, not memory). Nothing was loosened — every new check asserts the fail-closed outcome (`malformed`, `unknown`, never the grant), and each deleted guard was proven shadowed by a check that produces the identical answer for every input that reaches it. What this does NOT fix: the other pending families in the brace-less census (facility-trust-graph 22, dual-control 7, bootstrap-credential 6, …) are untouched; this target is one of the 41.
+
+## 2026-09-12 — "The bootstrap-credential family joins the brace-less mutation sweep with ZERO survivors: six one-line guards that no check could falsify are now pinned by four new proof checks, and one symbol guard proved shadowed and was deleted"
+Command:  the `oneline-cond-false` mutator rewrites a brace-less `if (cond) return x;` to `if (false) return x;`. Opting the target in exposed six guards in `bootstrap-credential-connector.ts` that the 48-check proof could not falsify — the non-string enum refusal, the prototype-walk depth bound, the inherited-own-key refusal, the symbol refusal, the strict ISO-8601 Zulu instant regex, and the expires-before-issued derivation. Five are real behaviour and now have checks; the symbol refusal is shadowed by the unrecognized-key check on the next line (`known` holds only strings, so `includes` of a symbol is always false) and was deleted with a comment naming its cover.
+```
+node scripts/mutation-guard.mjs --proof=proof:bootstrap-credential   # before the checks, and after
+pnpm run proof:bootstrap-credential ; node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs
+pnpm run review:invariants ; node scripts/check-connector-discipline.mjs ; pnpm run typecheck
+```
+Output:
+```
+before: mutations=53 killed=41 hung=0 known-inert=6 survivors=6
+        bootstrap-credential-connector.ts:51  if (typeof v !== "string") return true
+        bootstrap-credential-connector.ts:73  if (depth >= MAX_PROTOTYPE_DEPTH) return true
+        bootstrap-credential-connector.ts:75  if (depth > 0) return true
+        bootstrap-credential-connector.ts:76  if (typeof k === "symbol") return true
+        bootstrap-credential-connector.ts:98  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(s)) return null
+        bootstrap-credential-connector.ts:126 if (issuedMs !== null && issuedMs > expiresMs) return "unknown"
+after:  mutations=52 killed=46 hung=0 known-inert=6 survivors=0
+        brace-less sweep (oneline-cond-false): 1 of 1 targets opted in; 0 pending
+        Mutation guard passed — every registered guard is falsifiable, or documented as inert.
+summary=pass (52/52)
+Proof-count check passed — all 59 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Connector-discipline gate passed.
+typecheck exit=0
+```
+Verdict:  holds. The four new checks exercise the real hostile input that reaches each guard and assert the fail-closed outcome: a number/boolean/object in an enum slot is a malformed ASSERTION rather than a quiet fall to the unknown rung; a report buried under an 80-deep all-empty prototype chain is malformed because the walk's bound refuses rather than giving up and calling it clean; an inherited own key spelling a KNOWN field is still the prototype's claim; an offset-bearing or zone-less timestamp is unreadable rather than silently re-based onto a wall clock (expiry → `unbounded`, unreadable reference → lifetime `unknown`); and a window that expires before it was issued derives `unknown`, so the malformed rung is no longer the only thing holding that line. The containment window keeps its no-skew-allowance shape — nothing here widens it. `docs/INTEGRATION_CATALOG.md` moves 48 → 52 checks. What this does NOT fix: the six `known-inert` entries for this family are unchanged, and the other targets that have not joined the brace-less sweep still have guards this run never reached.
+
+## 2026-09-12 — "The ponytail pin 2ed6c52 is reproducible from upstream — the installer failed because it fetched an abbreviated id, which git treats as a ref name"
+Command:  the Mac lane reported `pnpm run ponytail:install` dying at `git fetch --depth=1 origin 2ed6c52` with "couldn't find remote ref 2ed6c52" and asked whether the vetted object exists. Probed upstream from the cloud, in a scratch clone:
+```
+git ls-remote --tags https://github.com/DietrichGebert/ponytail | grep v4.9.0
+git clone -q --depth 300 https://github.com/DietrichGebert/ponytail ponytail-probe
+git -C ponytail-probe cat-file -e 2ed6c52 ; git -C ponytail-probe log -1 --format='%H %ci %s' 2ed6c52
+git -C ponytail-probe merge-base --is-ancestor v4.9.0 2ed6c52 ; git -C ponytail-probe rev-list --count v4.9.0..2ed6c52
+git -C ponytail-probe diff --stat v4.9.0 2ed6c52 -- skills ; git -C ponytail-probe show 2ed6c52:.claude-plugin/plugin.json | grep version
+```
+Output:
+```
+0a4dd63ad4541f4f655c4108a295916f3c1d8fda	refs/tags/v4.9.0
+2ed6c52 present: yes
+2ed6c52c9d7e5e56942508591085fd45dea277d3 2026-08-08 00:44:01 +0300 feat: add Grok Build native skills adapter (revive #561) (#661)
+v4.9.0 ancestor of 2ed6c52: yes ; commits v4.9.0..2ed6c52: 3
+(skills dir diff: empty)            "version": "4.9.0",
+```
+Verdict:  **refuted as "unreproducible", confirmed as a real installer defect.** The object exists and is 3 commits after tag v4.9.0 (tests plus a Grok Build adapter; the skills tree the vetting read is byte-identical to the tag, and the plugin manifest at that commit says 4.9.0, which is what "= v4.9.0" meant). `git fetch origin <id>` fetches an object only by its FULL id; a 7-character id is looked up as a ref name and there is no ref by that name, so the installer could never have worked on a fresh clone — it worked on 2026-09-01 only because the object was already local. Fixed by pinning the full id; the DR-024 vetting stands unchanged.

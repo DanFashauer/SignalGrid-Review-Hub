@@ -2284,3 +2284,58 @@ outputs in `docs/agent/EVIDENCE.md` (2026-09-12).
 section, the two table rows and the two override rows from `VENDORED.md`; remove the
 two carve-outs and the area from `scripts/publication-boundary.mjs` and return its
 figure to 14 and the exception word to TWELVE; drop this record and the backlog item.
+## DR-039 — The absorption bar is the founder's: anything with a part that can aid building the company is taken; only licence, auto-execution, egress without consent and directory collision exclude (owner-directed 2026-09-12)
+
+**Context.** Seven evaluations of owner-shared skills collections (Matt Pocock's,
+Addy Osmani's, Google's, NVIDIA's, K-Dense's, the VoltAgent index, a GitHub Trending
+page) came back on 2026-09-12 with most candidates marked "evaluated, not adopted" on
+grounds of overlap with an existing skill, thinness, or no current activity that would
+use them — after the owner had already overruled two such verdicts the same hour
+(DR-038). He then shared his résumé and corrected the posture directly:
+
+> *"You need to probably stop and think of something real quick you need to understand
+> I'm not asking you to check if they really worth anything if it has any part of the
+> main core of this in any fashion that can aid in building all aspects of this
+> company: brand: solution: apps: websites all of it and I mean everything. Please
+> check yourself and readjust what you're looking at should be my assistant that thinks
+> like me and should know my responses and knowledge."*
+
+**Call.**
+
+1. **The bar.** A resource the owner shares is ADOPTED if any part of it can aid
+   building any aspect of the company — product, apps, websites, brand, docs,
+   operations, the skills plane itself. The evaluator's question is no longer "is it
+   worth it" but "which part, and in what form".
+2. **The only exclusions**, each an existing hard line: (a) a licence that cannot be
+   republished from this public MIT tree — none, NonCommercial, ShareAlike, proprietary
+   — excludes the FILES, and the ideas still land in our own words with the source
+   named; (b) auto-execution — hooks, run-time code fetches, HEAD-tracking installs —
+   excludes the MECHANISM, and the skill is taken without it (DR-026, DR-030);
+   (c) egress of owner data or repository source without the owner's own key decision —
+   taken, with the egress stated in the wrapper and keys out of the tree (DR-029);
+   (d) a directory collision under `.claude/skills/`.
+3. **Overlap is recorded, never refused.** "Restates CLAUDE.md", "duplicates a vendored
+   skill", "nothing uses it yet" and "thin" go in the intake row as facts.
+4. **Contradictions get override rows.** An instruction that contradicts CLAUDE.md is
+   recorded in `.claude/skills/VENDORED.md` `## Overrides`, not edited and not a ground
+   for exclusion.
+5. **Domain-irrelevant collections still yield their transferable part** — an authoring
+   standard, a doctrine, a pattern — as a first-party document naming the source.
+6. **"Thinks like me" is standing context, not a mood.** `docs/company/FOUNDER_PROFILE.md`
+   records who the founder is and how he works; the owner-comms skill no longer calls
+   him non-technical; the base `signalgrid` skill points every role at the profile
+   before it touches anything.
+
+**Boundary.** The hard lines do not move: hooks off, pins only, keys out of the tree,
+the publication boundary, the launch-claims gate and the launch profile untouched;
+nothing vendored enters `lib/*`, `/v1`, a connector, a proof or the decision path, and
+nothing vendored is executed by a gate. What moves is the default answer to a shared
+resource: from "evaluated, not adopted" to "adopted, in this form".
+
+**Evidence.** The seven evaluation reports (measurements preserved in their intake
+rows); the two overruled verdicts of DR-038; the owner's message quoted above; the
+founder's résumé (owner-held).
+
+**Reversal.** Delete this record, rule 5 of `docs/agent/RESOURCE_INTAKE.md`,
+`docs/company/FOUNDER_PROFILE.md`, ICP Finding 9, the pointer in the base skill and the
+three owner-comms edits; the exclusion list reverts to the evaluators' judgement.

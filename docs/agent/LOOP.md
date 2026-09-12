@@ -52,7 +52,40 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (cloud lane, latest) - LIGHTRAG'S KEY-FREE HALF IS RUNNING AND IN
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SESSION PUCK IS ON THE RECORD AS A
+              HARDWARE HYPOTHESIS, NOT A PRODUCT (DR-043). The owner shared his own 25-page
+              research document ('Shared-Device Authentication Puck: Hardware and Form-Factor
+              Concept' - 'I'm going to blow your mind with this'). Read in full, held against
+              the tree with three read-only maps, every path:line re-read before citation.
+              Adopted under DR-039's bar: the three-function split (identity / custody binding
+              / ongoing presence) is doctrine for every session-gating surface; the puck or any
+              dock is a SOURCE OF EVIDENCE, never the policy engine (IdP owns identity, UEM
+              owns posture, PACS owns the physical credential, SignalGrid correlates); the
+              software half is five fail-closed backlog items built without hardware (attach
+              signal domain with unknown -> step_up never a grant; removal -> suspend joined to
+              DR-042's cascade items, no seventh; eight audit event names; a dock/undock/
+              re-dock simulator scenario carrying the policy matrix; a hardware tally column in
+              DISCOVERY_LOG); NO bench prototype, purchase or custom hardware until the
+              pre-registered gates are met (4 of 15 REQUIREMENT -> bench; 3 COMMITMENT ->
+              design-partner MVP; 5 PROBLEM with 0 COMMITMENT -> no-go; tally today 0/15, 0).
+              Substance in docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md with every vendor fact
+              attributed to the document; overlap recorded (badge_binding, dock/custody schema,
+              SmartDock, case-bay token, division of authority all pre-existed as deferred
+              design targets); new: worker-carried token across receivers, the prototype
+              ladder, the lost-credential sequence, the legacy-downgrade rule, the privacy
+              constraint. NOT claimed: HIPAA, disinfectant compatibility, relay-proof,
+              on-device enforcement, any hardware built. Disclosure noted - the tree is public
+              and the owner-gated IP-posture backlog row is still open. Nothing shipped moved;
+              custody/dock families stay deferred. Verification pass
+              (same day) found four stale citations this work had itself introduced: the
+              2-line insertion at the top of PHYSICAL_CUSTODY_SIGNAL_MODEL.md shifted the
+              dockState/custodyState rows to :20-22 while the page and DR-043 still said :18;
+              AUTHENTICATION_AND_CREDENTIAL_ARCHITECTURE.md:73 was offered for ES256
+              verification it does not describe (the real evidence is
+              lib/webauthn/src/webauthn/verify.ts, PROOF_COVERAGE_AUDIT.md:21 and the :56
+              step-up row); and the cross-reference sentence attributed badge_binding to a
+              schema that does not own it. All corrected, gates re-run green.
+              (Earlier 2026-09-12, cloud lane:) LIGHTRAG'S KEY-FREE HALF IS RUNNING AND IN
               THE TREE (DR-041, branch lane/cloud-lightrag-retrieval-20260912-0520Z). The Mac
               is running LightRAG in its GRAPH shape on Ollama and is still fighting it - five
               docs at the defaults timed out 4/5, retuned and re-queued, first query pending

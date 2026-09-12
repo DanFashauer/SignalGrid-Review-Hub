@@ -4,6 +4,8 @@ This matrix is a public-safe planning artifact for SignalGrid's Physical Custody
 
 Partnership, endorsement, procurement recommendation, certification, and integration are not claimed by any entry in this document. SignalGrid's design target is the vendor-neutral layer that normalizes custody signals (a deferred family), evaluates trust decisions, routes approved actions, audits events, and verifies expected results while existing enterprise and hardware systems remain systems of record.
 
+A worker-carried session puck (a FIDO2 token docked into a shared-device receiver) is not a category in this matrix; it is recorded separately as a deferred, customer-testable hardware hypothesis in [Session puck hardware hypothesis](SESSION_PUCK_HARDWARE_HYPOTHESIS.md) (DR-043), and inherits every division-of-authority and non-goal line on this page.
+
 ## Candidate matrix
 
 | Category | Candidate vendors or ecosystems | Candidate SignalGrid signal surface | Public-safe discovery posture |

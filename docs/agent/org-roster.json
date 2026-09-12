@@ -16,7 +16,8 @@
       ],
       "activated": "2026-08-19",
       "produced": "docs/DECISION_RECORDS.md DR-001..DR-003",
-      "nextAction": "Row 81 (NEW, and the higher-value item): decide the disposition of declared-versus-observed divergence as a first-class signal. The gap is measured — decisionEngine.ts:120 reads declaredState and fails closed on stale, but observedState matches ZERO files in the core, so the engine cannot express that a declaration and an observation DISAGREE. device-attestation/evaluate.ts already does exactly this in one dimension and calls the contradiction malformed-or-tampered. Question to settle: is divergence a general signal shape, or does it stay per-family? Doctrine hint: a contradiction should tighten at least as hard as an absence. THEN row 73: qa-engineer's surface is 570 files its executor is forbidden to write."
+      "nextAction": "Row 81 (NEW, and the higher-value item): decide the disposition of declared-versus-observed divergence as a first-class signal. The gap is measured — decisionEngine.ts:120 reads declaredState and fails closed on stale, but observedState matches ZERO files in the core, so the engine cannot express that a declaration and an observation DISAGREE. device-attestation/evaluate.ts already does exactly this in one dimension and calls the contradiction malformed-or-tampered. Question to settle: is divergence a general signal shape, or does it stay per-family? Doctrine hint: a contradiction should tighten at least as hard as an absence. THEN row 73: qa-engineer's surface is 570 files its executor is forbidden to write.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "qa-engineer",
@@ -32,7 +33,8 @@
       ],
       "activated": "2026-08-19",
       "produced": "5 confirmed defects incl. the freshness gate's NaN-date silent pass",
-      "nextAction": "ANSWERED 2026-08-24, and it produced a finding — see backlog row 58. The question was whether the ten TypeScript NaN-expiry sites crossed the port boundary. Strictly they cannot: Swift's Date is strongly typed, so there is no unparseable-date-compares-false path. The SEMANTICS crossed anyway through the optional — SessionData.isExpired returns false when expiresAt is nil, two SessionStateManager guards no-op on nil, and HostAppViewController stacks two permissive defaults into the Assist gate's own staleness input. Reachable from the MDM auth path, which returns a real token with expiresAt: nil. REPORTED not fixed: the cloud lane has no Swift toolchain. Queued to the Mac lane. This role's NEXT question, in the same shape: the ten sites and these four were all found by asking what an UNKNOWN resolves to. Take that question to the other direction of the port — what an unknown resolves to in the Kotlin and Rust Assist clients, which no pass has read at all."
+      "nextAction": "ANSWERED 2026-08-24, and it produced a finding — see backlog row 58. The question was whether the ten TypeScript NaN-expiry sites crossed the port boundary. Strictly they cannot: Swift's Date is strongly typed, so there is no unparseable-date-compares-false path. The SEMANTICS crossed anyway through the optional — SessionData.isExpired returns false when expiresAt is nil, two SessionStateManager guards no-op on nil, and HostAppViewController stacks two permissive defaults into the Assist gate's own staleness input. Reachable from the MDM auth path, which returns a real token with expiresAt: nil. REPORTED not fixed: the cloud lane has no Swift toolchain. Queued to the Mac lane. This role's NEXT question, in the same shape: the ten sites and these four were all found by asking what an UNKNOWN resolves to. Take that question to the other direction of the port — what an unknown resolves to in the Kotlin and Rust Assist clients, which no pass has read at all.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "security-engineer",
@@ -52,7 +54,8 @@
       ],
       "activated": "2026-08-19",
       "produced": "SBOM token split; third-party actions pinned + check-action-pinning.mjs",
-      "nextAction": "Row 82, in order: (1) removeCredential in lib/webauthn/src/webauthn/store.ts:241-277 has no lock while addCredential has SET NX PX and advanceCredentialCounter has WATCH/MULTI — a revocation racing an enrolment can write a stale snapshot last and RESTORE the revoked credential, which is exactly what addCredential's own comment says its lock prevents. Latent only because no live route calls it. Give it the same lock and add an add/remove concurrency proof. (2) Comment the attestation:'none' assumption at verify.ts:348 so tightening to direct/indirect cannot silently inherit unchained leaf-cert trust. (3) Delete or deprecate stepUpStore.ts — a parallel step-up implementation whose hasValidStepUpSession is a hardcoded return false under a docstring claiming otherwise. The lib/api-auth dead glob is already fixed."
+      "nextAction": "Row 82, in order: (1) removeCredential in lib/webauthn/src/webauthn/store.ts:241-277 has no lock while addCredential has SET NX PX and advanceCredentialCounter has WATCH/MULTI — a revocation racing an enrolment can write a stale snapshot last and RESTORE the revoked credential, which is exactly what addCredential's own comment says its lock prevents. Latent only because no live route calls it. Give it the same lock and add an add/remove concurrency proof. (2) Comment the attestation:'none' assumption at verify.ts:348 so tightening to direct/indirect cannot silently inherit unchained leaf-cert trust. (3) Delete or deprecate stepUpStore.ts — a parallel step-up implementation whose hasValidStepUpSession is a hardcoded return false under a docstring claiming otherwise. The lib/api-auth dead glob is already fixed.",
+      "nextActionDate": "2026-08-25"
     },
     {
       "id": "product-manager",
@@ -68,7 +71,8 @@
       ],
       "activated": "2026-08-19",
       "produced": "backlog re-file; three owner-board contradictions corrected",
-      "nextAction": "Two things, the first checkable and the second not. CHECKABLE: docs/COMPANY_BUILD_PLAN.md now has an ownership gate but no staleness one — re-rank the rows still carrying work and name any whose premise has been overtaken, as row 54's diagnosis was overtaken once already. NOT CHECKABLE FROM THIS TREE, and recorded as an open question rather than a fact: an external review raised roughly a dozen findings this lane believes are mostly unfixed and filed in no row. Nothing in the repository records them, so the first task is to write them down; until then their count and status are hearsay."
+      "nextAction": "Two things, the first checkable and the second not. CHECKABLE: docs/COMPANY_BUILD_PLAN.md now has an ownership gate but no staleness one — re-rank the rows still carrying work and name any whose premise has been overtaken, as row 54's diagnosis was overtaken once already. NOT CHECKABLE FROM THIS TREE, and recorded as an open question rather than a fact: an external review raised roughly a dozen findings this lane believes are mostly unfixed and filed in no row. Nothing in the repository records them, so the first task is to write them down; until then their count and status are hearsay.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "web-engineer",
@@ -86,7 +90,8 @@
       ],
       "activated": "2026-08-19",
       "produced": "14 findings; 8 applied incl. router-base 404s and invisible signal dots",
-      "nextAction": "PAGES, and this is now THIS ROLE'S item rather than the owner's — it had been raised to him repeatedly, which was wrong. Established 2026-08-25: it is not a link and not content. .github/workflows/pages.yml already uses actions/upload-pages-artifact and actions/deploy-pages@v5, which ONLY run when the repository's Pages source is set to 'GitHub Actions'. The site is serving README instead, so the source is set to 'Deploy from a branch'. The workflow is correct; the setting points elsewhere. Neither an agent nor a workflow can change it — the Pages REST path is blocked at this environment's proxy (verified: HTTP 403, 'Access to this GitHub API path is not permitted through this proxy'), and it is a repository-settings toggle in any case. ACTION: whoever holds repo admin sets Settings -> Pages -> Source to 'GitHub Actions', once. Then this role verifies the deploy ran and the served page is the built site rather than README. Until that toggle happens, do not re-raise it as a finding — it is a known, single, admin-gated step with a named owner. THEN: Row 70: four demo-only web trees still load remote fonts and are REPORTED by review-invariants on every run (signalgrid-review, signalgrid-mobile-pwa, signalgrid-desktop, mockup-sandbox). Same @fontsource fix already proven twice, on signalgrid-web and signalgrid-app. Then row 70's siblings from the same read: the PWA's <link rel=manifest> resolves to a 404 at every mount point, its Decision Volume chart renders restrict and deny in the identical colour (--chart-4 and --destructive are the same triple), and its decision detail drops the assurance label, reason codes, matched rules, evidence digest and freshness that make signalgrid-app the console."
+      "nextAction": "PAGES, and this is now THIS ROLE'S item rather than the owner's — it had been raised to him repeatedly, which was wrong. Established 2026-08-25: it is not a link and not content. .github/workflows/pages.yml already uses actions/upload-pages-artifact and actions/deploy-pages@v5, which ONLY run when the repository's Pages source is set to 'GitHub Actions'. The site is serving README instead, so the source is set to 'Deploy from a branch'. The workflow is correct; the setting points elsewhere. Neither an agent nor a workflow can change it — the Pages REST path is blocked at this environment's proxy (verified: HTTP 403, 'Access to this GitHub API path is not permitted through this proxy'), and it is a repository-settings toggle in any case. ACTION: whoever holds repo admin sets Settings -> Pages -> Source to 'GitHub Actions', once. Then this role verifies the deploy ran and the served page is the built site rather than README. Until that toggle happens, do not re-raise it as a finding — it is a known, single, admin-gated step with a named owner. THEN: Row 70: four demo-only web trees still load remote fonts and are REPORTED by review-invariants on every run (signalgrid-review, signalgrid-mobile-pwa, signalgrid-desktop, mockup-sandbox). Same @fontsource fix already proven twice, on signalgrid-web and signalgrid-app. Then row 70's siblings from the same read: the PWA's <link rel=manifest> resolves to a 404 at every mount point, its Decision Volume chart renders restrict and deny in the identical colour (--chart-4 and --destructive are the same triple), and its decision detail drops the assurance label, reason codes, matched rules, evidence digest and freshness that make signalgrid-app the console.",
+      "nextActionDate": "2026-08-25"
     },
     {
       "id": "sre",
@@ -104,7 +109,8 @@
       ],
       "activated": "2026-08-19",
       "produced": "timeouts on unbounded jobs; concurrency groups on three workflows",
-      "nextAction": "check-ci-liveness.mjs now gates one sweep job's last success. The estate runs more scheduled workflows than that one, and a schedule that silently stops is the same outage in every one of them. Extend liveness to each scheduled workflow, or record which are exempt and why."
+      "nextAction": "check-ci-liveness.mjs now gates one sweep job's last success. The estate runs more scheduled workflows than that one, and a schedule that silently stops is the same outage in every one of them. Extend liveness to each scheduled workflow, or record which are exempt and why.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "mobile-native-engineer",
@@ -117,10 +123,11 @@
         "native/ios/**",
         "native/android/**"
       ],
-      "activated": null,
-      "produced": null,
+      "activated": "2026-08-24",
+      "produced": "Row 78: found that CLAUDE.md's own grep for the raw-font rule returned a false clean (the literal spelling given matches zero, while Swift's implicit-member form matches 18, all in the two Assist-gate view controllers). DONE 2026-08-31 (5e3b5c32): converted all 18 sites to SG.sans/SG.mono with Dynamic Type, added scripts/check-ios-dynamic-type.mjs to preflight + CI, fixed CLAUDE.md's grep spelling, and closed row 58's nil-expiry fail-open via an ExpiryPolicy enum that makes an unknown expiry unrepresentable.",
       "priority": 2,
-      "nextAction": "FIRST EXECUTION DONE 2026-08-24 (row 78). Highest value first: CLAUDE.md's OWN grep for the raw-font rule returns a false clean — the literal spelling it gives matches zero, while Swift's implicit-member form matches 18, all in the two view controllers that host the Assist gate. Fix the doc's spelling, convert the 18 sites to SG tokens with Dynamic Type, and add the ~20-line gate; the conversion has already been done once and regressed, so the gate matters more than the conversion. Then row 58's nil-expiry fail-open (confirmed still live, two stacked permissive defaults on a live Assist input), the missing scoped step-up release the TS side already fixed, and the three string-vs-boolean attribute predicates. All need a lane that can compile Swift; this lane cannot."
+      "nextAction": "FIRST EXECUTION DONE 2026-08-24 (row 78). DONE 2026-08-31 (5e3b5c32, \"iOS: gate + convert 18 raw fonts to Dynamic Type; ExpiryPolicy removes the nil-expiry fail-open\"): scripts/check-ios-dynamic-type.mjs now gates preflight + CI on any raw `.systemFont(ofSize:`/`.monospacedSystemFont(ofSize:` outside DesignSystem.swift, the 18 sites in HostAppViewController and ManagedAppViewController were converted to SG.sans/SG.mono with `adjustsFontForContentSizeCategory`, and CLAUDE.md's own grep spelling was fixed to match what Swift actually uses. Row 58's nil-expiry fail-open is DONE in the same commit: an `ExpiryPolicy` enum (`.expiresAt` / `.nonExpiring(justification:)`) replaces `expiresAt: Date?` so an unknown expiry is unrepresentable, and HostApp's missing-session default flipped from `?? false` to `?? true`. STILL OPEN, unchanged: the missing scoped step-up release the TS side already fixed, and the three string-vs-boolean attribute predicates — both still need a lane that can compile Swift; this lane cannot.",
+      "nextActionDate": "2026-09-12"
     },
     {
       "id": "compliance-analyst",
@@ -136,7 +143,8 @@
       ],
       "activated": "2026-08-19",
       "produced": "Verified SECURITY_QUESTIONNAIRE_PACK.md end to end — all 12 cited files and 3 cited commands resolve, and both load-bearing claims hold in the code (docs-sanity really does denylist certification claims; the API really asserts 401-before-404 from both sides). Verdict: accurate, ready for a human reviewer; sign-off remains the owner's. Structural gap found and closed — nothing kept command citations resolving, so scripts/check-cited-commands.mjs now gates all 130 across 272 docs",
-      "nextAction": "SECURITY_QUESTIONNAIRE_PACK.md was verified end to end, which establishes that its claims resolve — not that the controls behind them are proven. Produce the inverse list: every control the pack asserts that no proof in this tree holds. The gap list, not the pass list."
+      "nextAction": "SECURITY_QUESTIONNAIRE_PACK.md was verified end to end, which establishes that its claims resolve — not that the controls behind them are proven. Produce the inverse list: every control the pack asserts that no proof in this tree holds. The gap list, not the pass list.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "performance-engineer",
@@ -153,7 +161,8 @@
       ],
       "activated": "2026-08-19",
       "produced": "Re-measured every quoted performance figure and recorded the dated baseline in docs/RELIABILITY_SLO.md. p95 1.2671 ms against the quoted 1.3 ms; 5,128 decisions/sec aggregate at 3.38x scaling (85% of linear) with identical verdicts on every worker; the 240 req/min default confirmed in rateLimit.ts. Recorded the judgement NOT to gate absolute values — a latency threshold on a shared runner is a flaky gate — and named the consequence: check-proof-figures.mjs does not cover these, so keeping them true is this role's standing duty",
-      "nextAction": "Baseline re-measured and re-dated 2026-08-24, and the in-process-versus-over-HTTP gap is now quantified once in docs/RELIABILITY_SLO.md (5,370/sec in-process vs 585 req/sec over HTTP on one box; p95 1.38 ms vs 92.1 ms). Its age is now REPORTED by check-proof-figures on every run, so the standing duty has a reminder instead of relying on memory. Next: re-measure when the decision path changes, not on a calendar."
+      "nextAction": "Baseline re-measured and re-dated 2026-08-24, and the in-process-versus-over-HTTP gap is now quantified once in docs/RELIABILITY_SLO.md (5,370/sec in-process vs 585 req/sec over HTTP on one box; p95 1.38 ms vs 92.1 ms). Its age is now REPORTED by check-proof-figures on every run, so the standing duty has a reminder instead of relying on memory. Next: re-measure when the decision path changes, not on a calendar.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "release-engineer",
@@ -170,7 +179,8 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "v4 IS ratified — DR-005, in full, with \"do not widen the product again now\" as a standing constraint. This role's job inverts: instead of preparing v5, hold the ratified edge — any status change now requires a decision record first, and a v5 conversation starts only when the owner opens one."
+      "nextAction": "v4 IS ratified — DR-005, in full, with \"do not widen the product again now\" as a standing constraint. This role's job inverts: instead of preparing v5, hold the ratified edge — any status change now requires a decision record first, and a v5 conversation starts only when the owner opens one.",
+      "nextActionDate": "2026-08-20"
     },
     {
       "id": "data-persistence-engineer",
@@ -185,7 +195,8 @@
       ],
       "activated": "2026-08-20",
       "produced": "docs/LEDGER_TRUNCATION_FINDING.md. This role was queued on a claim that turned out to be FALSE — \"the RESTORE path is only described\" — when proof:backup-restore has been exercising it on real Postgres in CI all along (16/16 live, including a flipped byte, a truncated archive and a missing manifest all REFUSED). The real gap was next to it: a hash chain detects EDITS, not deletions of its own tail. 40 records seeded on a live Postgres, the last 10 deleted with a plain DELETE, and db:verify-ledger printed \"Chain intact\" and exited 0. Pinned as an explicit assertion in proof:audit-ledger-pg (14/14), named in the threat model as its own Tampering row, documented in BACKUP_AND_RESTORE.md, and answered operationally with db:verify-ledger --min-records N — because the command already REFUSED a missing DATABASE_URL on the grounds that a verifier which green-lights the void is worse than none, and then exited 0 on an empty table.",
-      "nextAction": "SHIFT 2 (owner-sequenced, spec in the owner's words): build the database role split — the runtime role non-owner and minimally privileged (ledger: SELECT+INSERT only), schema/admin operations separate, and BOTH directions proven: legitimate ledger writes still work while destructive operations fail. The backup/restore proof must recreate the same privilege posture rather than accidentally restoring ownership (pg_restore --clean drops table-level grants with the objects). Does NOT reopen launch scope."
+      "nextAction": "SHIFT 2 DONE (b7219453, 2026-08-20, #222, \"Shift 2: the database role split\"): a restricted runtime role holds only SELECT+INSERT on the ledger (no UPDATE, no DELETE, no ownership); schema/admin operations run under a separate owner role; both directions are proven — legitimate ledger writes still succeed while destructive statements are denied (scripts/src/db-role-split-proof.ts); and the restore path re-applies the runtime role's grants after `pg_restore --clean` drops them with the objects, so a restore cannot silently undo the hardening. Documented in docs/BACKUP_AND_RESTORE.md and docs/HASH_CHAIN_TAIL_ARTICLE.md. Did not reopen launch scope. Next: nothing queued on this surface right now — watch for the next ledger, migration or export change.",
+      "nextActionDate": "2026-09-12"
     },
     {
       "id": "api-contract-architect",
@@ -203,7 +214,8 @@
       ],
       "activated": "2026-08-20",
       "produced": "docs/API_CONTRACT_AUDIT.md — the published contract asserted \"every route is tenant-scoped: the tenant is derived from the authenticated bearer token\", which is the inverse of what 21 of its own 55 operations do (/cp/v1/* carries no principal and is scoped only by a client-supplied ?tenant=); nothing said the whole /cp/v1 surface and GET /v1/keys are registered only under the review-demo profile and 404 elsewhere; three served routes (self-audit, reliability, iac) had drifted out of the spec, the Postman collection and the launch profile at once. The cause was that proof:api-contract read one route file and compared only /v1 while printing \"Contract holds\" — widened to the whole served surface, plus a zero-routes-parsed guard, self-test 7/7. Also fixed scripts/safety-check.mjs reporting Postman drift with an EMPTY reason.",
-      "nextAction": "Row 80: native/shared/assist-wire-conformance.json is 100% ASCII across all 42 cases, while the two clients case-fold with DIFFERENT functions — Rust to_ascii_lowercase(), Kotlin full-Unicode lowercase(). Nothing pins the difference. The direction is favourable (Kotlin can only be equal or more permissive), so this is a hole in the shared vectors rather than a client defect. Add NBSP-, U+3000- and ZWSP-padded 'allow' plus a Cyrillic homoglyph, and both clients are obliged at once. By the file's own doctrine, a shared expectation nobody is forced to satisfy is a document, not a gate."
+      "nextAction": "Row 80: native/shared/assist-wire-conformance.json is 100% ASCII across all 42 cases, while the two clients case-fold with DIFFERENT functions — Rust to_ascii_lowercase(), Kotlin full-Unicode lowercase(). Nothing pins the difference. The direction is favourable (Kotlin can only be equal or more permissive), so this is a hole in the shared vectors rather than a client defect. Add NBSP-, U+3000- and ZWSP-padded 'allow' plus a Cyrillic homoglyph, and both clients are obliged at once. By the file's own doctrine, a shared expectation nobody is forced to satisfy is a document, not a gate.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "devex-tooling-engineer",
@@ -227,7 +239,8 @@
       ],
       "activated": "2026-08-19",
       "produced": "Audited whether any preflight gate is referenced only by a workflow that does not gate every PR — the weakness check-preflight-ci-parity.mjs admits in its own header. Found and fixed one real hole: check-assist-conformance.mjs discovers TWO Assist clients (native/android/core Kotlin, native/desktop/core Rust) but ran only in desktop.yml, filtered to native/desktop/** and native/shared/**, so a change to the KOTLIN client never triggered the gate that binds it — the exact failure it exists to catch, in the client where it had already caught two real defects. Now runs in review-hub-ci.yml on every PR. Two other candidates were the false positive the parity gate already documents (npm alias vs script path), and check-ios-port-sources is correctly scoped since its subject lives entirely inside its filter",
-      "nextAction": "Row 73, three items: CLAUDE.md:54,63 understates the preflight-vs-harness gap by ~3x (says ~35 non-proof gates outside the harness; parsed from preflight.mjs it is ~79 distinct against seven in the harness); check-cited-paths.mjs skips all of .claude/skills/ as vendored, which has been false for six first-party directories since 2026-08-22, leaving every path they cite ungated; and check-role-coverage.mjs writes its ratchet on every run, so a read-only review dirties the tree that sim-results provenance reads."
+      "nextAction": "Row 73, three items, ALL DONE: (1) CLAUDE.md's own figure corrected in 049e3f8e (2026-09-06, #492) — now reads 233 of 310, sourced to the parity gate's own extractor rather than retyped from memory. (2) check-cited-paths.mjs's blanket `.claude/skills/` vendored exemption narrowed in f97cebf6 (2026-09-06) — the six first-party skill directories it wrongly shielded are no longer exempt. (3) check-role-coverage.mjs stopped writing its ratchet on every run in e94b2829 (2026-09-02, #399) — `--write` is now the sole writer; check mode never mutates the tree. Next: this role's standing question stands regardless — is any OTHER gate path-filtered away from part of its own subject? Sweep for the next instance rather than re-verify this one.",
+      "nextActionDate": "2026-09-12"
     },
     {
       "id": "docs-writer",
@@ -244,7 +257,8 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "272 markdown files, 618 cited paths, 130 cited commands — all gated. Nothing gates whether a document is still ABOUT something current. Sweep for documents describing surfaces that have since changed shape."
+      "nextAction": "272 markdown files, 618 cited paths, 130 cited commands — all gated. Nothing gates whether a document is still ABOUT something current. Sweep for documents describing surfaces that have since changed shape.",
+      "nextActionDate": "2026-08-19"
     },
     {
       "id": "accessibility-specialist",
@@ -258,10 +272,11 @@
         "artifacts/signalgrid-review/**",
         "native/ios/**"
       ],
-      "activated": null,
-      "produced": null,
+      "activated": "2026-08-24",
+      "produced": "Rows 75-77: fixed the pre-DR-005 deny at 3.14:1 in three trees and the pinch-zoom lock in four; found that no web accessibility standard exists in this repo (the material sits vendored and unopened in third_party/everything-claude-code/skills/frontend-patterns), that the mobile-PWA chart renders restrict and deny as the identical pixel with no legend/tooltip/axis, and that two dashboards paint verdicts from raw Tailwind hex invisible to the palette gate.",
       "priority": 3,
-      "nextAction": "FIRST EXECUTION DONE 2026-08-24 (rows 75-77). Fixed: the pre-DR-005 deny at 3.14:1 in three trees, and the pinch-zoom lock in four. STILL OPEN, in order: (1) write docs/WEB_ACCESSIBILITY_STANDARD.md — row 77 proves eight ways that no web a11y bar exists here, which makes every other finding advisory; the material is in third_party/everything-claude-code/skills/frontend-patterns, vendored and never opened. (2) restrict and deny render as the identical pixel in the mobile-PWA chart, which has no legend, tooltip or axis, so colour is the sole channel (row 76). (3) two dashboards paint verdicts from raw Tailwind hex, one at 4.26:1 on deny, invisible to the palette gate because the verdict arrives as a JSX attribute. Then the live-region, ARIA, form-label and reduced-motion items."
+      "nextAction": "FIRST EXECUTION DONE 2026-08-24 (rows 75-77). Fixed: the pre-DR-005 deny at 3.14:1 in three trees, and the pinch-zoom lock in four. STILL OPEN, in order: (1) write docs/WEB_ACCESSIBILITY_STANDARD.md — row 77 proves eight ways that no web a11y bar exists here, which makes every other finding advisory; the material is in third_party/everything-claude-code/skills/frontend-patterns, vendored and never opened. (2) restrict and deny render as the identical pixel in the mobile-PWA chart, which has no legend, tooltip or axis, so colour is the sole channel (row 76). (3) two dashboards paint verdicts from raw Tailwind hex, one at 4.26:1 on deny, invisible to the palette gate because the verdict arrives as a JSX attribute. Then the live-region, ARIA, form-label and reduced-motion items.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "desktop-engineer",
@@ -274,10 +289,11 @@
         "native/desktop/**",
         "artifacts/signalgrid-desktop/**"
       ],
-      "activated": null,
-      "produced": null,
+      "activated": "2026-08-25",
+      "produced": "Rows 79-80: verified the Rust Assist client CLEAN by execution (cargo test, not reading) — the strongest of the three vocabulary implementations; fixed the web half's raw-hex dashboard; confirmed .github/workflows/desktop.yml's `app` job (added 079cfd25, #199) already builds and tests the Tauri shell end to end with WebKitGTK on Linux and the native WebView2 runtime on Windows.",
       "priority": 3,
-      "nextAction": "FIRST EXECUTION DONE 2026-08-25 (rows 79-80). The Rust Assist client came back CLEAN and is the strongest of the three implementations of this vocabulary — verified by execution, not reading, since cargo IS available in the cloud lane. The web half's raw-hex dashboard is fixed. STILL OPEN: the Tauri app itself was never built (needs WebKitGTK), so main.rs's three tests are read and not executed — that needs a lane that can install system deps or a CI job that already does."
+      "nextAction": "FIRST EXECUTION DONE 2026-08-25 (rows 79-80). The Rust Assist client came back CLEAN and is the strongest of the three implementations of this vocabulary — verified by execution, not reading, since cargo IS available in the cloud lane. The web half's raw-hex dashboard is fixed. CI DONE, and the 'never built' finding is now stale: .github/workflows/desktop.yml's `app` job (added 079cfd25, 2026-08-08, #199) installs libwebkit2gtk-4.1-dev on ubuntu-latest and runs `cargo test` (main.rs's own test module, five #[test] functions since 92df48f2 finalized the shell on 2026-09-02) plus `cargo build --release` on both ubuntu-latest and windows-latest, gated on every PR/push touching native/desktop/**. Next: nothing queued here — watch for the next desktop code or CI lane change.",
+      "nextActionDate": "2026-09-12"
     },
     {
       "id": "firmware-hardware-engineer",
@@ -292,7 +308,8 @@
       "activated": null,
       "produced": null,
       "priority": 3,
-      "nextAction": "Waits for a firmware or dock claim to change. The hardware is a pre-production concept and platform honesty already bounds what may be said about it."
+      "nextAction": "Waits for a firmware or dock claim to change. The hardware is a pre-production concept and platform honesty already bounds what may be said about it.",
+      "nextActionDate": "2026-08-19"
     },
     {
       "id": "iam-domain",
@@ -308,7 +325,8 @@
       ],
       "activated": "2026-08-20",
       "produced": "docs/IDENTITY_LIVE_SHAPE_CHECK.md — driven against a live Keycloak 26.4. Three fields sso-session names are NOT wire facts: amr is absent from the access token, the ID token, /userinfo and RFC 7662 introspection alike, leaving only an opaque deployment-configured acr, so single_factor/mfa/phishing_resistant is not derivable from a default IdP; auth_time is absent everywhere, so iat (token issuance) is not when the human authenticated — the same defect class as the RADIUS lastAuthAt finding; and the access token exp is 60s against a 36000s session max, demonstrated live at 75s with the token dead and four SSO sessions still alive. The session record carries no device field at all (id, username, userId, ipAddress, start, lastAccess, rememberMe, clients, transientUser), and two logins by the same user from the same host produced two indistinguishable sessions — precisely the leftover-session case the dimension exists for, so the device-session join must come from the device side. The code is already right (the connector normalizes a bridge-supplied value through oneOf with an unknown fallback and evaluate.ts raises the bar on every unknown); what was missing was the wire-truth record. proof:live-keycloak 14/14.",
-      "nextAction": "Ten of fifteen dimensions remain unverified against any live IdP, and only Keycloak was driven — Entra DOES emit amr and Okta exposes richer session APIs, so the wire-truth table is one IdP wide. Next: script the Keycloak client setup (KEYCLOAK_LIVE_INTEGRATION.md describes it in prose only, and following that prose cost this shift a 13/14 on a misread mapper value), then take passkey-assurance and token-binding against the same lab."
+      "nextAction": "Ten of fifteen dimensions remain unverified against any live IdP, and only Keycloak was driven — Entra DOES emit amr and Okta exposes richer session APIs, so the wire-truth table is one IdP wide. Next: script the Keycloak client setup (KEYCLOAK_LIVE_INTEGRATION.md describes it in prose only, and following that prose cost this shift a 13/14 on a misread mapper value), then take passkey-assurance and token-binding against the same lab.",
+      "nextActionDate": "2026-08-19"
     },
     {
       "id": "endpoint-uem-domain",
@@ -325,7 +343,8 @@
       "activated": null,
       "produced": null,
       "priority": 1,
-      "nextAction": "Fleet and Headwind are stood up and verified; the remaining 7 device dimensions still need checking against what those servers actually emit. Added by DR-005: prove the Premium-only team-scoped getPolicies() branch on the remaining trial ONLY if it costs no launch focus; on September 16, 2026 mark it deferred/unverified-premium if unproven — do not renew the trial to preserve a test."
+      "nextAction": "Fleet and Headwind are stood up and verified; the remaining 7 device dimensions still need checking against what those servers actually emit. Added by DR-005: prove the Premium-only team-scoped getPolicies() branch on the remaining trial ONLY if it costs no launch focus; on September 16, 2026 mark it deferred/unverified-premium if unproven — do not renew the trial to preserve a test.",
+      "nextActionDate": "2026-08-20"
     },
     {
       "id": "secops-domain",
@@ -341,7 +360,8 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "Wazuh is stood up (proof:live-edr). Check the remaining 9 SecOps dimensions against what a real SIEM/EDR exports rather than what a console displays — especially the threat-vs-vulnerability boundary vuln-scan already reasons about."
+      "nextAction": "Wazuh is stood up (proof:live-edr). Check the remaining 9 SecOps dimensions against what a real SIEM/EDR exports rather than what a console displays — especially the threat-vs-vulnerability boundary vuln-scan already reasons about.",
+      "nextActionDate": "2026-08-19"
     },
     {
       "id": "network-domain",
@@ -356,7 +376,8 @@
       ],
       "activated": "2026-08-19",
       "produced": "docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md (quarantine is an Access-ACCEPT; rejections carry no reason; SSID glued to the AP MAC; nacCompliant/lastAuthAt are not auth facts) and docs/NETWORK_EGRESS_LIVE_SHAPE_CHECK.md (an egress proxy collapses the dns_failing rung; TLS interception is independently observable via the certificate ISSUER, so service_observing_traffic need not stay a self-report); plus a documentation-verified addendum showing Cisco ISE and Aruba ClearPass both split identity from session, confirming the cisco-ise.ts refusal to infer auth state",
-      "nextAction": "This role's own trigger still names its gap: carrier is entirely unverified for want of a free API, and both NAC console adapters are documentation-verified only. Get one NAC instance and drive it, or record carrier as permanently deferred with the reason in the dimension table."
+      "nextAction": "This role's own trigger still names its gap: carrier is entirely unverified for want of a free API, and both NAC console adapters are documentation-verified only. Get one NAC instance and drive it, or record carrier as permanently deferred with the reason in the dimension table.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "physical-ot-domain",
@@ -372,7 +393,8 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "Traccar is verified. The other 4 dimensions (rtls-custody, custody-beacon, pacs-access, ot-posture) have no live source; say which of them a free/open instance could ever verify and which are structurally documentation-only."
+      "nextAction": "Traccar is verified. The other 4 dimensions (rtls-custody, custody-beacon, pacs-access, ot-posture) have no live source; say which of them a free/open instance could ever verify and which are structurally documentation-only.",
+      "nextActionDate": "2026-08-19"
     },
     {
       "id": "itsm-ops-domain",
@@ -387,7 +409,8 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "osquery is verified via the Fleet lab. Check change-window, shift-context and task-exception against what a real ITSM (a self-hosted GLPI or Zammad) actually exports for approval windows and assignment state."
+      "nextAction": "osquery is verified via the Fleet lab. Check change-window, shift-context and task-exception against what a real ITSM (a self-hosted GLPI or Zammad) actually exports for approval windows and assignment state.",
+      "nextActionDate": "2026-08-19"
     },
     {
       "id": "solutions-architect",
@@ -405,7 +428,8 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "NEWLY OWNED 2026-08-24: attached_assets/ (4 files, 976 lines) was EXCLUDED as 'a source, not a maintained surface', which meant nobody was accountable for MINING it. It is the owner's own research — the enterprise ITSM/ticketing stack with APIs, the MDM/UEM/endpoint and networking repo-and-SDK list, the shared-device custody architecture, and the PACS/IAM/mobile-credential/FIDO2 convergence thesis. That is the raw material for this role's existing next action: turn PILOT_SCOPE_SKELETON.md into a concrete first-pilot reference architecture. Read it, extract what is decision-relevant, and say plainly which parts the product does NOT do. Cross-check the repo list against docs/agent/open-source-lab-registry.json before adding anything."
+      "nextAction": "NEWLY OWNED 2026-08-24: attached_assets/ (4 files, 976 lines) was EXCLUDED as 'a source, not a maintained surface', which meant nobody was accountable for MINING it. It is the owner's own research — the enterprise ITSM/ticketing stack with APIs, the MDM/UEM/endpoint and networking repo-and-SDK list, the shared-device custody architecture, and the PACS/IAM/mobile-credential/FIDO2 convergence thesis. That is the raw material for this role's existing next action: turn PILOT_SCOPE_SKELETON.md into a concrete first-pilot reference architecture. Read it, extract what is decision-relevant, and say plainly which parts the product does NOT do. Cross-check the repo list against docs/agent/open-source-lab-registry.json before adding anything.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "threat-modeler",
@@ -421,7 +445,8 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "Re-read threat_model.md against the trust boundaries that moved on 2026-08-19: delegated agent authority, a write-scoped CI job that commits to branches, and two agent lanes exchanging work through committed artifacts. None of those existed when it was written."
+      "nextAction": "Re-read threat_model.md against the trust boundaries that moved on 2026-08-19: delegated agent authority, a write-scoped CI job that commits to branches, and two agent lanes exchanging work through committed artifacts. None of those existed when it was written.",
+      "nextActionDate": "2026-08-19"
     },
     {
       "id": "competitive-analyst",
@@ -437,7 +462,8 @@
       "activated": null,
       "produced": null,
       "priority": 3,
-      "nextAction": "Waits for a competitor or category to need assessing. The Smplify study is the current reference; re-open when a new actuator or decision-layer product surfaces."
+      "nextAction": "Waits for a competitor or category to need assessing. The Smplify study is the current reference; re-open when a new actuator or decision-layer product surfaces.",
+      "nextActionDate": "2026-08-19"
     },
     {
       "id": "partner-alliances-analyst",
@@ -450,7 +476,8 @@
       "activated": null,
       "produced": null,
       "priority": 3,
-      "nextAction": "Waits for a partnership candidate. Drafting is in scope; sending is the owner's, always."
+      "nextAction": "Waits for a partnership candidate. Drafting is in scope; sending is the owner's, always.",
+      "nextActionDate": "2026-08-19"
     },
     {
       "id": "pricing-packaging-analyst",
@@ -463,7 +490,8 @@
       "activated": null,
       "produced": null,
       "priority": 3,
-      "nextAction": "Waits for a pricing claim to change. The retention default was set by DR-003 and is now customer-visible; the next trigger is a tier or figure moving."
+      "nextAction": "Waits for a pricing claim to change. The retention default was set by DR-003 and is now customer-visible; the next trigger is a tier or figure moving.",
+      "nextActionDate": "2026-08-19"
     },
     {
       "id": "brand-design",
@@ -479,7 +507,8 @@
       "activated": "2026-08-20",
       "produced": "The deny re-tone, applied under DR-005: dark #C67070 / light #8A3F3F across web index.css and iOS DesignSystem.swift in one commit (a fork between them was why the first attempt was reverted), re-measured before applying — 5.05:1/4.55:1 dark, 6.50:1/7.33:1 light, against the old 3.18:1 on card. BRAND_CONTRAST_FINDING.md resolved for deny; canonical decision-state palette now lives in this repository.",
       "priority": 3,
-      "nextAction": "STAYS ON `lane` BY DECISION — row 56, 2026-08-24, same reasoning as accessibility-specialist. The palette work this role already did is mechanical (check-decision-palette gates contrast and parity across web and iOS), but nothing states the brand rules in prose, so no skill can claim them without inventing them. Prior next action still stands: the allow re-tone proposal under DR-005's evaluation rule — canonical token first, all rendered surfaces together, text/icon redundancy preserved, contrast proved against every background the state appears on. allow is 4.32:1 on the dark card today."
+      "nextAction": "STAYS ON `lane` BY DECISION — row 56, 2026-08-24, same reasoning as accessibility-specialist; unchanged. The allow re-tone item is DONE: DR-006 (docs/DECISION_RECORDS.md, ratified 2026-08-21, landed in d7beda62 / #224, with a same-day addendum for the on-tint variant) sets the canonical allow token and the onAllow pair, applied across the rendered surfaces with contrast proved against every background the state appears on. Next: nothing queued here — the prose brand-rules gap (row 56) still stands until this role is activated with a dedicated skill.",
+      "nextActionDate": "2026-09-12"
     },
     {
       "id": "program-manager",
@@ -495,7 +524,8 @@
       ],
       "activated": "2026-08-19",
       "produced": "Converted the cold roster from a census into a QUEUE: every one of the 21 cold roles now carries a priority and a concrete nextAction, and check-org-roster.mjs was upgraded to REFUSE a cold role that cannot say what would activate it (self-test 10/10) and to print the priority-1 set with its actions, so the top of the list is the next thing to do rather than a number to feel bad about. Also queued the Mac lane's post-merge verification as sim-request 2026-08-19-post-merge-verification and sent the lane message that carries its context. Then, 2026-08-24: closed the reverse gap — every role now names the agent or skill that RUNS it (executor, gated: a pointer at a file not on disk fails the build), nextAction is required of activated roles and not only cold ones, and check-backlog-ownership.mjs refuses a backlog row with work left in it that names no role from the registry",
-      "nextAction": "Roles now name an executor and every role carries a forward action. The remaining shape is the reverse fossil: nothing reports a nextAction that has gone stale, and an action written weeks ago and never taken reads exactly like a title nobody runs. Decide whether to date nextAction and report staleness, or accept it in writing."
+      "nextAction": "Roles now name an executor and every role carries a forward action. The remaining shape is the reverse fossil: nothing reports a nextAction that has gone stale, and an action written weeks ago and never taken reads exactly like a title nobody runs. Decide whether to date nextAction and report staleness, or accept it in writing.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "records-archivist",
@@ -510,7 +540,8 @@
       "activated": null,
       "produced": null,
       "priority": 3,
-      "nextAction": "Effectively continuous and performed by the coordinating session — every owner input has a ledger row and every delegated call a decision record. Activate as a distinct role only if intake volume outgrows one session."
+      "nextAction": "Effectively continuous and performed by the coordinating session — every owner input has a ledger row and every delegated call a decision record. Activate as a distinct role only if intake volume outgrows one session.",
+      "nextActionDate": "2026-08-19"
     },
     {
       "id": "positioning-messaging",
@@ -527,7 +558,8 @@
       "activated": null,
       "produced": null,
       "priority": 1,
-      "nextAction": "RE-CORRECTED 2026-08-24, and the previous correction was WORSE than what it replaced. It claimed the four retired labels are \"named NOWHERE in this repository\", citing `check:absence \"retired label\"` returning CORROBORATED. That verdict was manufactured by a tool blind spot — absence-check.mjs excluded `docs/*` from its content probe, so a topic living only in prose returned the strongest safe-to-claim verdict instead of the INCONCLUSIVE its own design intends. Fixed in the same commit; the same query now returns INCONCLUSIVE. THE LABELS ARE LIVE, and this is buyer-facing: README.md:3 and :136 say \"Operational Trust Orchestration platform\"; artifacts/signalgrid-review/src/pages/ReviewDashboard.tsx:350 and artifacts/signalgrid-web/src/pages/About.tsx:50 both say \"Zero Trust orchestration platform\". DR-004 ratified \"Shared-Device Trust Gateway\" as the category label. So the ORIGINAL entry was right about the drift and only stale in one clause: docs/POSITIONING.md already exists, created by f4bb9ec on 2026-08-22 (5c8c61b a day later fixed its citations, it did not create it). THE WORK: reconcile those four instances and any others to the ratified label — repo-wide search, the four named here are known instances and not the boundary — then decide whether check-launch-claims.mjs needs a fourth rule denylisting the retired labels, now that they can actually be named. Naming the set was the work; it is named above."
+      "nextAction": "DONE 2026-08-26 (26fc83f1, #322, \"Retire the dead category labels and reconcile the README launch boundary\"): all four cited instances (README.md, ReviewDashboard.tsx, About.tsx) reconciled to the ratified DR-004 label, and scripts/check-launch-claims.mjs gained the RETIRED_LABELS denylist (:625) plus the quoted-fragment near-miss variant (:688) so a future regression is gated, not merely found — reconfirmed this session: a repo-wide search for the three retired strings across README.md and the two dashboards returns nothing. docs/POSITIONING.md (created f4bb9ec 2026-08-22, refreshed 5f0017c6 2026-09-06) is the settled positioning surface design-partner-outreach's trigger names. Next: re-check on any future rebrand or new customer-facing surface; nothing queued today.",
+      "nextActionDate": "2026-09-12"
     },
     {
       "id": "icp-customer-research",
@@ -539,7 +571,8 @@
       "surface": null,
       "activated": "2026-08-24",
       "produced": "docs/company/ICP_EVIDENCE.md — the first buyer evidence in this repository that is sourced rather than inferred, every finding carrying a SOURCE TIER because most of what a search returns on this topic is written by someone selling the fix. TIER 1: three granted US patents (11329990, 11838295, 12425415) disclose shared-device audit misattribution as prior art — the strongest evidence available and a warning that the space is claimed. TIER 2: one healthcare posting spanning Intune, M365 and Imprivata and asking for baselines standardised ACROSS Intune and Jamf Pro, which establishes the SHAPE and explicitly not the frequency. TIER 3: industry writing placing the failure at the shift boundary. It also names what it does NOT establish — the 75-1,000 employee segment in EXECUTIVE_ONE_PAGER.md is corroborated by nothing gathered, and every source is healthcare, so the claim that the pattern generalises to retail and field service is unevidenced. One claim in it was FALSE and is corrected inline rather than edited away: it said no competitive surface named OLOID or Imprivata, while four anchored briefs and a battlecard had sat in docs/research/ since 2026-07-14. See backlog row 57.",
-      "nextAction": "Two things, in order. FIRST, turn Finding 2 from a shape into a frequency: sample 15-20 job postings rather than one, and record the count that name two MDMs, the count that name an identity product beside them, and the count that name neither — a proportion, not an anecdote. SECOND, find a published case study or conference talk where an estate describes the handoff failing in their own words; Finding 3 currently rests on tier 3 and that is the weakest tier in the file. NOT part of this role: the competitive refresh, which belongs to competitive-analyst and is scoped in row 57."
+      "nextAction": "Two things, in order. FIRST, turn Finding 2 from a shape into a frequency: sample 15-20 job postings rather than one, and record the count that name two MDMs, the count that name an identity product beside them, and the count that name neither — a proportion, not an anecdote. SECOND, find a published case study or conference talk where an estate describes the handoff failing in their own words; Finding 3 currently rests on tier 3 and that is the weakest tier in the file. NOT part of this role: the competitive refresh, which belongs to competitive-analyst and is scoped in row 57.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "proof-led-content",
@@ -554,7 +587,8 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "The article is APPROVED (DR-005) and the corrected canonical is staged at docs/HASH_CHAIN_TAIL_ARTICLE.md — the role-split correction applied, CI recheck standing. Next: build the signalgrid.app technical blog surface (venue the owner chose), then draft the shorter founder version for LinkedIn linking back. PUBLISHING IS THE OWNER'S SEND — this role stages, never posts."
+      "nextAction": "The article is APPROVED (DR-005) and the corrected canonical is staged at docs/HASH_CHAIN_TAIL_ARTICLE.md — the role-split correction applied, CI recheck standing. Next: build the signalgrid.app technical blog surface (venue the owner chose), then draft the shorter founder version for LinkedIn linking back. PUBLISHING IS THE OWNER'S SEND — this role stages, never posts.",
+      "nextActionDate": "2026-08-20"
     },
     {
       "id": "design-partner-outreach",
@@ -569,7 +603,8 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "BLOCKED, and honestly so: outreach before positioning-messaging and icp-customer-research have run would be guessing at both the words and the audience. Do those first. When unblocked, note that this role can never send anything itself — contacting a person outside the company is one of the owner's five reserved actions."
+      "nextAction": "UNBLOCKED. Both roles this trigger names have run, checked against the roster's own record and their output: positioning-messaging's label reconciliation landed 2026-08-26 (26fc83f1, #322) and docs/POSITIONING.md is the settled positioning surface (created 2026-08-22, refreshed 2026-09-06); icp-customer-research is activated (2026-08-24) with docs/company/ICP_EVIDENCE.md as its produced buyer evidence. The readiness gate is also open on this checkout: `node scripts/check-readiness-figure.mjs` prints HEADLINE ... -> OUTREACH OPEN, meeting the 92-95% target (DR-036 — the figure is derived by that script and never typed in this record; re-run it for the current number). PREPARES ONLY, still and always: draft addressed outreach material for named targets — the account list itself lives in the owner's private Google Drive per docs/outreach/TARGETS_CRITERIA.md, so this role researches and drafts against criteria, not a committed list. Contacting anyone outside the company remains one of the owner's five reserved actions, without exception (docs/ORG_CHART.md:175) — this role never sends. Worth flagging: docs/agent/DISCOVERY_LOG.md still logs 0 of 15 conversations, so the demand evidence behind the ICP profile stays thin even though the product/readiness gate is open.",
+      "nextActionDate": "2026-09-12"
     },
     {
       "id": "launch-manager",
@@ -582,7 +617,8 @@
       "activated": null,
       "produced": null,
       "priority": 3,
-      "nextAction": "PREMATURE and recorded as such rather than started. The launch profile currently classifies 22 items launch against 134 deferred; a launch plan written against a surface still moving weekly would be fiction. Revisit when that ratio settles."
+      "nextAction": "PREMATURE and recorded as such rather than started. The launch profile currently classifies 22 items launch against 134 deferred; a launch plan written against a surface still moving weekly would be fiction. Revisit when that ratio settles.",
+      "nextActionDate": "2026-08-20"
     },
     {
       "id": "lifecycle-activation",
@@ -595,7 +631,8 @@
       "activated": null,
       "produced": null,
       "priority": 3,
-      "nextAction": "PREMATURE. There are no customers, so every retention artifact would describe an imagined journey. Named here so the gap is visible rather than forgotten, not so it gets worked."
+      "nextAction": "PREMATURE. There are no customers, so every retention artifact would describe an imagined journey. Named here so the gap is visible rather than forgotten, not so it gets worked.",
+      "nextActionDate": "2026-08-20"
     },
     {
       "id": "finance-fundraising",
@@ -608,7 +645,8 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "Fleet Premium is OUT of baseline COGS (DR-005): baseline is Fleet Community $0 license plus actual hosting; a Premium capability prices as a customer-specific dependency if ever required. Land docs/COST_MODEL.md from the sweep skeleton with that baseline. The only open inputs are the four owner billing numbers (Claude, Apple Developer, GitHub, domains) — never estimated, TBD until sent."
+      "nextAction": "docs/COST_MODEL.md landed DONE (4f656d59, 2026-08-22, #251, \"Row 22: the cost model lands\"): Fleet Premium is out of baseline COGS per DR-005 (baseline is Fleet Community $0 license plus actual hosting; Premium prices as a customer-specific dependency if ever required), and every figure in the doc is repo-verified or marked TBD/ASSUMED. STILL OPEN, unchanged: the four owner billing numbers (Claude, Apple Developer, GitHub, domains) are the only remaining inputs — never estimated, TBD until the owner sends them in chat.",
+      "nextActionDate": "2026-09-12"
     },
     {
       "id": "commercial-counsel",
@@ -624,7 +662,8 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "NEWLY OWNED 2026-08-24: LICENSE and NOTICE were EXCLUDED as 'legal text, not a maintained surface' while this role held zero surfaces — an exclusion standing in for an absent owner. First pass, and it is not cosmetic: on 2026-08-24 four first-party agent definitions were found published under another author's MIT grant (COMPANY_BUILD_PLAN row 72). Verify NOTICE actually reflects what this public repository vendors and from whom, now that third_party/ has an owner and the .claude/ carve-outs are recorded."
+      "nextAction": "NEWLY OWNED 2026-08-24: LICENSE and NOTICE were EXCLUDED as 'legal text, not a maintained surface' while this role held zero surfaces — an exclusion standing in for an absent owner. First pass, and it is not cosmetic: on 2026-08-24 four first-party agent definitions were found published under another author's MIT grant (COMPANY_BUILD_PLAN row 72). Verify NOTICE actually reflects what this public repository vendors and from whom, now that third_party/ has an owner and the .claude/ carve-outs are recorded.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "agent-ops-economics",
@@ -637,7 +676,8 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "The metric is DEFINED in the sweep: cost-per-shift = monthly agent spend / ledger rows closed, with denominators computable today from committed artifacts (377 Claude-authored commits since 2026-07-20, sim-results durations). Next: publish the denominators now so one owner billing number later yields the ratio instantly. Never publish an invented dollar."
+      "nextAction": "The metric is DEFINED in the sweep: cost-per-shift = monthly agent spend / ledger rows closed, with denominators computable today from committed artifacts (377 Claude-authored commits since 2026-07-20, sim-results durations). Next: publish the denominators now so one owner billing number later yields the ratio instantly. Never publish an invented dollar.",
+      "nextActionDate": "2026-08-20"
     },
     {
       "id": "mac-lane-steward",
@@ -654,7 +694,8 @@
       ],
       "activated": "2026-08-21",
       "produced": "PR #223 aftercare: lane mail with re-run instructions, ack of the Mac's harness message, standing 4-hour monitor routine",
-      "nextAction": "The Fleet trial expires September 16, 2026 and the Mac lane holds the only enrollable device, so the seven unverified endpoint dimensions have a deadline this lane cannot move. Confirm the queued sim-requests are drained and report the remaining debt to the owner while the trial is still live."
+      "nextAction": "The Fleet trial expires September 16, 2026 and the Mac lane holds the only enrollable device, so the seven unverified endpoint dimensions have a deadline this lane cannot move. Confirm the queued sim-requests are drained and report the remaining debt to the owner while the trial is still live.",
+      "nextActionDate": "2026-08-24"
     },
     {
       "id": "agent-platform-engineer",
@@ -675,7 +716,8 @@
       "nextAction": "NEWLY OWNED 2026-08-24: third_party/everything-claude-code (48 files) was EXCLUDED from ownership as 'upstream owns it' — true about authorship, false about accountability, because this org executes it and VENDORED.md admits it was 'surveyed, not audited'. First pass: audit what we actually run, and triage the 13 vendored skills, 10 commands, 10 rules and 3 contexts that have NEVER been activated against the org's measured gaps. frontend-patterns carries an Accessibility Patterns section, which directly refutes the reason recorded in COMPANY_BUILD_PLAN row 56 for NOT creating a web skill ('no web a11y/brand doctrine exists to put in it'). Read before activating: a vendored skill is a standing instruction to every future session. THEN row 73's four items on the .claude/ surface. Write only inside .claude/; report the rest.",
       "division": "engineering",
       "charter": "The org's own executable definition: skills, agents, commands, and the MCP agent plane. Instructions audited against the code they govern.",
-      "trigger": "A skill or agent is written or changed; a skill contradicts the tree or another skill; a roster executor resolves but cannot do the work."
+      "trigger": "A skill or agent is written or changed; a skill contradicts the tree or another skill; a roster executor resolves but cannot do the work.",
+      "nextActionDate": "2026-08-24"
     }
   ]
 }

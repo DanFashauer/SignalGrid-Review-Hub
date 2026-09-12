@@ -1225,7 +1225,7 @@
    "claim": "CTA: \"Start with the fixture demo — zero install, zero accounts\"",
    "kind": "availability",
    "classification": "demo-only",
-   "evidence": "The zero-network browser demo is signalgrid-review, classified demo_only at scripts/launch-profile.mjs:543 (\"runs the decision core IN THE BROWSER (zero network)\"). Linked doc docs/PARTNER_ONBOARDING.md exists. Honestly labeled a fixture demo.",
+   "evidence": "The zero-network browser demo is signalgrid-review, classified demo_only at scripts/launch-profile.mjs:559 (\"runs the decision core IN THE BROWSER (zero network)\"). Linked doc docs/PARTNER_ONBOARDING.md exists. Honestly labeled a fixture demo.",
    "action": "keep"
   },
   {
@@ -7187,7 +7187,7 @@
    "claim": "\"Landing page is live with a defined visual identity\" / \"A live landing page with defined visual identity at this stage signals seriousness\" / \"Landing page is live with defined visual identity and wordmark\"",
    "kind": "availability",
    "classification": "unsubstantiated",
-   "evidence": "\"Live\" asserts a deployment. artifacts/signalgrid-web exists in the tree but scripts/launch-profile.mjs:573, 499-501 classifies it demo_only — \"The public explanation surface. It markets the product; it is not part of it\" — and nothing in the repo records a deployed URL or a successful publish for it. Three separate rendered assertions.",
+   "evidence": "\"Live\" asserts a deployment. artifacts/signalgrid-web exists in the tree but scripts/launch-profile.mjs:589, 499-501 classifies it demo_only — \"The public explanation surface. It markets the product; it is not part of it\" — and nothing in the repo records a deployed URL or a successful publish for it. Three separate rendered assertions.",
    "action": "rewrite"
   },
   {
@@ -9320,7 +9320,7 @@
    "claim": "Persistent tab bar asserts five operator capabilities: \"Support\", \"Overview\", \"Decisions\", \"Signals\", \"Integrations\".",
    "kind": "surface",
    "classification": "demo-only",
-   "evidence": "scripts/launch-profile.mjs:554, 492 — demo_only, \"A third client surface (fixture-fed)\". Mitigation is PARTIAL and per-tab: only Signals (src/pages/Signals.tsx:22, 23) and Support (src/pages/AccessSupport.tsx:167-170) carry rendered fixture/demo labels; Overview, Decisions and Integrations carry none.",
+   "evidence": "scripts/launch-profile.mjs:570, 492 — demo_only, \"A third client surface (fixture-fed)\". Mitigation is PARTIAL and per-tab: only Signals (src/pages/Signals.tsx:22, 23) and Support (src/pages/AccessSupport.tsx:167-170) carry rendered fixture/demo labels; Overview, Decisions and Integrations carry none.",
    "action": "rewrite"
   },
   {
@@ -9759,7 +9759,7 @@
    "claim": "\"End users never see SignalGrid; they use their own host app.\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:528-530 (ios:EnterpriseShell — \"Under the embedded-UX law the worker uses their OWN app, so this ships as the integration reference\"); CLAUDE.md golden rule 3 (\"SignalGrid is invisible to end users; the worker uses their own host app\").",
+   "evidence": "Grounded: scripts/launch-profile.mjs:544-546 (ios:EnterpriseShell — \"Under the embedded-UX law the worker uses their OWN app, so this ships as the integration reference\"); CLAUDE.md golden rule 3 (\"SignalGrid is invisible to end users; the worker uses their own host app\").",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9839,7 +9839,7 @@
    "claim": "\"The zero-network review deck (demo-only per the launch profile).\"",
    "kind": "surface",
    "classification": "demo-only",
-   "evidence": "Honest and matches the profile: scripts/launch-profile.mjs:543 (signalgrid-review demo_only — \"runs the decision core IN THE BROWSER (zero network) … cannot be THE console\").",
+   "evidence": "Honest and matches the profile: scripts/launch-profile.mjs:559 (signalgrid-review demo_only — \"runs the decision core IN THE BROWSER (zero network) … cannot be THE console\").",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9860,7 +9860,7 @@
    "claim": "\"The mobile PWA surface.\" — with line 47 \"`artifacts/signalgrid-web` | The public website source.\"",
    "kind": "surface",
    "classification": "demo-only",
-   "evidence": "Both demo_only in the profile: scripts/launch-profile.mjs:554 (signalgrid-mobile-pwa — \"A third client surface (fixture-fed)\") and :522-527 (signalgrid-web — \"The public explanation surface. It markets the product; it is not part of it\"). Neither row asserts shipping status.",
+   "evidence": "Both demo_only in the profile: scripts/launch-profile.mjs:570 (signalgrid-mobile-pwa — \"A third client surface (fixture-fed)\") and scripts/launch-profile.mjs:589 (signalgrid-web — \"The public explanation surface. It markets the product; it is not part of it\"). Neither row asserts shipping status.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9900,7 +9900,7 @@
    "claim": "\"Two apps: `EnterpriseShell` (the host-app reference with the gate inside) and `SignalGridMobile` (`SignalGridOperator` + `WardlinkDemo`).\"",
    "kind": "surface",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:528 (ios:EnterpriseShell launch — \"The one host app\"), :635 (ios:SignalGridOperator deferred), :516-521 (ios:WardlinkDemo demo_only). Measured: `grep -n \"type: application\"` → native/ios/project.yml:33 (EnterpriseShell), native/ios/SignalGridMobile/project.yml:15 (SignalGridOperator) and :40 (WardlinkDemo) — three application targets in two Xcode projects; \"Two apps\" counts projects, and the sentence names all three targets.",
+   "evidence": "Grounded: scripts/launch-profile.mjs:544 (ios:EnterpriseShell launch — \"The one host app\"), :635 (ios:SignalGridOperator deferred), :516-521 (ios:WardlinkDemo demo_only). Measured: `grep -n \"type: application\"` → native/ios/project.yml:33 (EnterpriseShell), native/ios/SignalGridMobile/project.yml:15 (SignalGridOperator) and :40 (WardlinkDemo) — three application targets in two Xcode projects; \"Two apps\" counts projects, and the sentence names all three targets.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9920,7 +9920,7 @@
    "claim": "\"The one wire-conformance case set every client must agree on.\"",
    "kind": "count",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:666-667 (native:shared internal — \"the assist-wire conformance fixture every native port … must parse identically\"). Measured: native/shared holds THREE json files — assist-wire-conformance.json (cases: 44), posture-allow-vectors.json (cases: 52), remediation-allow-vectors.json (cases: 40). README's \"one … case set\" matches the single assist-wire file; the drift is in the ground truth's own prose — scripts/launch-profile.mjs:666 now says \"Three JSON files (it said one until 2026-09-06)\" and :333-335 says the count lives in the fixture (it read 42 while the file carried 44) — both corrected in Batch P.",
+   "evidence": "Grounded: scripts/launch-profile.mjs:682-683 (native:shared internal — \"the assist-wire conformance fixture every native port … must parse identically\"). Measured: native/shared holds THREE json files — assist-wire-conformance.json (cases: 44), posture-allow-vectors.json (cases: 52), remediation-allow-vectors.json (cases: 40). README's \"one … case set\" matches the single assist-wire file; the drift is in the ground truth's own prose — scripts/launch-profile.mjs:682 now says \"Three JSON files (it said one until 2026-09-06)\" and :333-335 says the count lives in the fixture (it read 42 while the file carried 44) — both corrected in Batch P.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9930,7 +9930,7 @@
    "claim": "\"SmartDock firmware core (Rust, `no_std`): sensor readings to a custody event. A deferred surface.\"",
    "kind": "surface",
    "classification": "deferred",
-   "evidence": "Honest deferred framing: scripts/launch-profile.mjs:690 (firmware:dock deferred) and :636-640 (\"no real dock has run it\"); firmware/dock/core/src/lib.rs:17 `#![cfg_attr(not(test), no_std)]`; .github/workflows/firmware.yml exists. custody / custody_beacon are deferred signal kinds (:286-287).",
+   "evidence": "Honest deferred framing: scripts/launch-profile.mjs:706 (firmware:dock deferred) and :636-640 (\"no real dock has run it\"); firmware/dock/core/src/lib.rs:17 `#![cfg_attr(not(test), no_std)]`; .github/workflows/firmware.yml exists. custody / custody_beacon are deferred signal kinds (:286-287).",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -10002,7 +10002,7 @@
    "claim": "\"The api-server runs without a database; fixtures back every decision.\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Grounded: artifacts/api-server/src/routes/health.ts:34 (\"With no DATABASE_URL there is no durable store BY DESIGN (the fixture-safe\") and routes/v1.ts:67 (with DATABASE_URL set each decision is ALSO persisted); artifacts/api-server/src/lib/core.ts:31 (`SignalGridCore.demo(` — the seeded fixture core the served API constructs); scripts/launch-profile.mjs:800-801 (GAP non-demo-core-constructor: \"does not yet decide about the customer's own estate\") — the fixture backing is a declared gap as well as a property.",
+   "evidence": "Grounded: artifacts/api-server/src/routes/health.ts:34 (\"With no DATABASE_URL there is no durable store BY DESIGN (the fixture-safe\") and routes/v1.ts:67 (with DATABASE_URL set each decision is ALSO persisted); artifacts/api-server/src/lib/core.ts:31 (`SignalGridCore.demo(` — the seeded fixture core the served API constructs); scripts/launch-profile.mjs:816-817 (GAP non-demo-core-constructor: \"does not yet decide about the customer's own estate\") — the fixture backing is a declared gap as well as a property.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -10012,7 +10012,7 @@
    "claim": "\"and are demo surfaces, not shipping product.\" — the in-browser consoles \"need no install at all\"",
    "kind": "capability",
    "classification": "demo-only",
-   "evidence": "Honest demo framing: docs/room-entry-console.html and docs/fabric-console.html exist; the surface class is scripts/launch-profile.mjs:560-561 (tools:room-console demo_only — \"how the product is SHOWN, never how it is sold\").",
+   "evidence": "Honest demo framing: docs/room-entry-console.html and docs/fabric-console.html exist; the surface class is scripts/launch-profile.mjs:576-577 (tools:room-console demo_only — \"how the product is SHOWN, never how it is sold\").",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -10547,7 +10547,7 @@
    "claim": "\"Sensitive workflows check the device before proceeding — read-only, shadow-mode first, no clinical data touched.\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "scripts/launch-profile.mjs:763 GAP step-up-answerability \"Limited GA ships in SHADOW mode\"; docs/POSITIONING.md:87; lib/api-spec/v1-openapi.yaml:1082-1090 EvaluateRequest carries identityRef/deviceRef/workflowKey only — no clinical field; CLAUDE.md golden rule 3",
+   "evidence": "scripts/launch-profile.mjs:779 GAP step-up-answerability \"Limited GA ships in SHADOW mode\"; docs/POSITIONING.md:87; lib/api-spec/v1-openapi.yaml:1082-1090 EvaluateRequest carries identityRef/deviceRef/workflowKey only — no clinical field; CLAUDE.md golden rule 3",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },
@@ -11219,7 +11219,7 @@
    "claim": "\"Nothing here is a claim of current capability.\"",
    "kind": "status",
    "classification": "launch",
-   "evidence": "Page-level hedge; scripts/launch-profile.mjs:573 (signalgrid-web is the demo_only \"public explanation surface\") and the page's own footer :185 (\"illustrative catalogue ... not the catalogue the proofs check\")",
+   "evidence": "Page-level hedge; scripts/launch-profile.mjs:589 (signalgrid-web is the demo_only \"public explanation surface\") and the page's own footer :185 (\"illustrative catalogue ... not the catalogue the proofs check\")",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },

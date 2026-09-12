@@ -37,16 +37,53 @@
 //                            cross-checked against the manifest before emitting;
 //     summary              — public-safe counts only (signal kinds, categories, MCP
 //                            tools, documented proofs), copied from the manifest body;
-//     proofs               — PER-PROOF RESULTS (added 2026-09-12, DR-036 follow-up):
-//                            `passed` maps every `proof:*` the green preflight AND
-//                            breadth lanes registered at mint time to "passed" — the
-//                            run was green, so each registered proof passed — and
-//                            `notRecorded` names the proofs that self-skip without an
-//                            env var (a green run cannot say whether they ran, so they
-//                            are never recorded as passed). The readiness figure's
-//                            dimension (b) is the share of the launch profile's bound
-//                            proofs that appear in `passed` against the current
-//                            manifest; a file without this field scores 0 (fail-closed).
+//     proofs               — PER-PROOF/STEP RESULTS (2026-09-12, DR-036 follow-up;
+//                            RESHAPED 2026-09-12, review finding): `passed` maps
+//                            every `proof:*` the green preflight AND breadth lanes
+//                            registered at mint time to an OBJECT —
+//                            `{ status, manifestFingerprint, reviewHubCommit,
+//                            sourceDigest }` — not the bare string "passed" the
+//                            first version wrote. `sourceDigest` is a sha256 over
+//                            the proof script's own git blob id plus the recursive
+//                            blob listing of every `lib/*`/`artifacts/*` package it
+//                            imports via `@workspace/*` (proofSourceDigest, derived
+//                            in check-launch-proof-bindings.mjs and shared with the
+//                            readiness figure so the two readings cannot drift).
+//                            WHY: `manifestFingerprint` is a CONTRACT hash — it
+//                            moves only when a cross-surface contract changes — so
+//                            a proof or product-code change that leaves the
+//                            manifest untouched kept an old string-form "passed"
+//                            record reading "current" for up to FRESH_DAYS
+//                            regardless of what the code actually did in the
+//                            meantime. `sourceDigest` closes that: the readiness
+//                            figure recomputes it against the CURRENT tree and
+//                            only counts a record current when BOTH match.
+//                            `reviewHubCommit` (this repo's HEAD at mint time) is
+//                            recorded for AUDIT ONLY — never compared, so a
+//                            docs-only commit after a mint cannot zero the ratio.
+//                            `notRecorded` names the proofs that self-skip without
+//                            an env var (a green run cannot say whether they ran).
+//                            `steps` is the non-proof twin: every preflight STEP
+//                            that actually ran (excluding one flagged
+//                            `needsNativeBuild` when this machine's build was
+//                            structurally excluded — see nativeBuildExclusion
+//                            below) mapped to `{ status, manifestFingerprint }`,
+//                            keyed by the STEP'S OWN NAME (no `step:` prefix —
+//                            that prefix lives only in the launch-profile binding
+//                            string). `stepsExcluded` names the ones this run could
+//                            not attest to. A launch item may bind `step:<name>`
+//                            when no `proof:*` exercises its surface (the Browser
+//                            E2E lane drives a BUILT bundle a tsx-run proof
+//                            cannot); the readiness figure counts a recorded step
+//                            "like a proof" (status passed + current fingerprint,
+//                            no sourceDigest — a preflight step is not one file
+//                            with an import list, so this fix does not attempt to
+//                            define what a step's "source" would mean).
+//                            The readiness figure's dimension (b) is the share of
+//                            the launch profile's bound proofs/steps that read
+//                            current in `passed`/`steps` against the current
+//                            manifest and current source; a file without a
+//                            `proofs` block at all scores 0 (fail-closed).
 //   Deliberately ABSENT: hostnames, usernames, serials, local paths, timestamps —
 //   the file is committed to a public repo, and git history already dates it.
 //   Emission is refused (with a message) when any half is not green, when the MCP
@@ -59,10 +96,18 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
-// The proof roster a green run COVERS, read from the SAME extractor the binding gate
-// uses on scripts/preflight.mjs — one reading, so the roster the evidence records and
-// the roster the readiness figure divides by cannot drift apart.
-import { liveSelfSkipping, registeredProofs } from "./check-launch-proof-bindings.mjs";
+// The proof/step roster a green run COVERS, and the per-proof source-fingerprint
+// derivation, read through the SAME functions the binding gate and the readiness
+// figure use — one reading, so the roster and digests the evidence records cannot
+// drift apart from what those two gates require and recompute.
+import {
+  liveSelfSkipping,
+  registeredProofs,
+  registeredSteps,
+  proofScriptFiles,
+  workspacePackageDirs,
+  proofSourceDigest,
+} from "./check-launch-proof-bindings.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const contractPath = resolve(
@@ -344,6 +389,17 @@ if (emitEvidence) {
       };
       const mcpCommit = mcpGit(["rev-parse", "HEAD"]);
       const mcpStatus = mcpGit(["status", "--porcelain"]);
+      // THIS repo's own HEAD at mint time — recorded on every `proofs.passed` entry
+      // for AUDIT ONLY (finding, 2026-09-12): never compared when the readiness
+      // figure decides whether a record is current, because a docs-only commit
+      // after a mint (which moves reviewHubCommit but touches neither the
+      // manifest fingerprint nor any proof's sourceDigest) must not zero the
+      // ratio. `sourceDigest` is the field that actually gates currency.
+      const reviewHubGit = (args) => {
+        const r = spawnSync("git", args, { cwd: repoRoot, encoding: "utf8" });
+        return r.status === 0 ? r.stdout.trim() : null;
+      };
+      const reviewHubCommit = reviewHubGit(["rev-parse", "HEAD"]);
       // Split the checkout's dirtiness HONESTLY. The earlier form dropped every
       // untracked (`??`) entry, so an untracked test or module — which pytest can
       // still collect and run — left mcpDirty:false, attributing the pass to a
@@ -404,39 +460,68 @@ if (emitEvidence) {
           mcpTools: manifest.body.mcpTools?.length ?? 0,
           proofsDocumented: Object.keys(manifest.body.proofCounts ?? {}).length,
         },
-        // Which proofs this green run COVERED, by name, from the lane files as they
-        // stood when the run happened (comment-stripped, run position only). Both lanes
-        // are required green above (`fullyGreen`), so every registered proof passed —
-        // EXCEPT the ones that skip themselves when an env var is unset, which a green
-        // run cannot distinguish from a pass; those are listed, never counted.
+        // Which proofs and non-proof preflight STEPS this green run COVERED, from
+        // the lane files as they stood when the run happened (comment-stripped,
+        // run position only). Both lanes are required green above (`fullyGreen`),
+        // so every registered proof/step passed — EXCEPT a proof that skips
+        // itself when an env var is unset (a green run cannot distinguish that
+        // from a pass; listed, never counted) or a step this machine's toolchain
+        // structurally excludes (see nativeBuildExclusion at the top of this
+        // file; listed in `stepsExcluded`, never counted either).
         proofs: (() => {
           const selfSkipping = liveSelfSkipping(repoRoot);
           const registered = new Set([
             ...registeredProofs(readFileSync(resolve(repoRoot, "scripts/preflight.mjs"), "utf8")),
             ...registeredProofs(readFileSync(resolve(repoRoot, "scripts/verify-breadth.mjs"), "utf8")),
           ]);
+          const rootScripts = JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf8")).scripts ?? {};
+          const subScripts = JSON.parse(readFileSync(resolve(repoRoot, "scripts/package.json"), "utf8")).scripts ?? {};
+          const files = proofScriptFiles(repoRoot, rootScripts, subScripts);
+          const pkgDirs = workspacePackageDirs(repoRoot);
           const passed = {};
-          for (const name of [...registered].sort()) if (!selfSkipping.has(name)) passed[name] = "passed";
+          for (const name of [...registered].sort()) {
+            if (selfSkipping.has(name)) continue;
+            const relPath = files.get(name);
+            // A proof this cannot resolve to a file still passed (the run was
+            // green), but its currency can never be VERIFIED against source —
+            // sourceDigest null, so the readiness figure's stricter match (which
+            // requires a string equal to what it recomputes) reads it as not
+            // current rather than inventing a digest.
+            const sourceDigest = relPath ? proofSourceDigest(repoRoot, relPath, pkgDirs) : null;
+            passed[name] = { status: "passed", manifestFingerprint: manifest.fingerprint, reviewHubCommit, sourceDigest };
+          }
+          const preflightStepsReg = registeredSteps(readFileSync(resolve(repoRoot, "scripts/preflight.mjs"), "utf8"));
+          const steps = {};
+          const stepsExcluded = [];
+          for (const [name, info] of preflightStepsReg) {
+            if (info.needsNativeBuild && preflightNative.excluded) { stepsExcluded.push(name); continue; }
+            steps[name] = { status: "passed", manifestFingerprint: manifest.fingerprint };
+          }
           return {
             recordedFrom: "scripts/preflight.mjs + scripts/verify-breadth.mjs STEPS at mint time; both lanes green",
             passed,
             notRecorded: [...registered].filter((n) => selfSkipping.has(n)).sort(),
+            steps,
+            stepsExcluded: stepsExcluded.sort(),
           };
         })(),
       };
-      // Refuse to emit evidence the reader cannot verify. If EITHER git query failed —
-      // e.g. SIGNALGRID_MCP_PATH points at a source export (pyproject.toml but no .git),
-      // which pytest can still pass — then mcpCommit is null and the evidence cannot
-      // identify OR reproduce the MCP code that passed, defeating the attribution the
-      // rest of this block exists to provide. "Recorded, not enforced" covers a branch
-      // mint (commit known, tree dirty); it does NOT cover a checkout with no commit at
-      // all. Fail closed rather than publish unverifiable evidence. (Review finding.)
-      if (mcpCommit === null || mcpStatus === null) {
+      // Refuse to emit evidence the reader cannot verify. If EITHER MCP git query
+      // failed — e.g. SIGNALGRID_MCP_PATH points at a source export (pyproject.toml
+      // but no .git), which pytest can still pass — then mcpCommit is null and the
+      // evidence cannot identify OR reproduce the MCP code that passed, defeating
+      // the attribution the rest of this block exists to provide. Same logic for
+      // reviewHubCommit: a null value means THIS repo's own git query failed, which
+      // should not happen in a real checkout but must never mint an audit trail
+      // that silently reads null as if it were a value. "Recorded, not enforced"
+      // covers a branch mint (commit known, tree dirty); it does NOT cover a
+      // checkout with no commit at all. Fail closed rather than publish
+      // unverifiable evidence. (Review finding.)
+      if (mcpCommit === null || mcpStatus === null || reviewHubCommit === null) {
         console.error(
-          `\n--emit-evidence: the signalgrid-mcp checkout at ${mcpPath} is not a git repository ` +
-            `(git rev-parse/status failed), so the evidence cannot identify or reproduce the MCP ` +
-            `code that passed. Refusing to emit unverifiable evidence — point SIGNALGRID_MCP_PATH ` +
-            `at a real git checkout.`,
+          `\n--emit-evidence: ${reviewHubCommit === null ? "this Review-Hub checkout" : `the signalgrid-mcp checkout at ${mcpPath}`} ` +
+            `is not a git repository (git rev-parse/status failed), so the evidence cannot identify or ` +
+            `reproduce the code that passed. Refusing to emit unverifiable evidence.`,
         );
         process.exitCode = 1;
       } else {

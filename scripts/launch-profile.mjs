@@ -513,13 +513,29 @@ export const SURFACES = [
   },
   {
     id: "signalgrid-app",
-    proofs: ["proof:api-client-react"],
+    proofs: ["proof:api-client-react", "step:Browser E2E (review console, website, admin)"],
     reason:
       "The one operator console, bound to the served /v1 surface: decisions list, decision " +
       "detail (reason codes, matched rules, digest-verified evidence, per-signal freshness), " +
       "the tamper-evident audit ledger, and an assurance label on every verdict. Ratified by " +
       "the 2026-08-10 product-design review (PRODUCT_COMPLETION_PLAN §10/§11): the console " +
-      "must read the same API a customer would, not an in-browser copy of the core.",
+      "must read the same API a customer would, not an in-browser copy of the core. " +
+      "proof:api-client-react ALONE is not enough (2026-09-12 review finding): it exercises " +
+      "customFetch against canned Response objects and never builds or launches the console " +
+      "at all, so a Mac evidence mint could certify signalgrid-app without the console ever " +
+      "running. The one thing that DOES run it — a live browser against a live api-server, " +
+      "scripts/src/e2e/admin-console.spec.ts — is a preflight STEP, not a `proof:*` (a proof " +
+      "runs under tsx and cannot drive a built bundle), so it is bound as a step: entry. NOTE " +
+      "for whoever reads (b) and finds this half unrecorded: that step carries " +
+      "`needsNativeBuild: true` and is structurally excluded on every machine but linux-x64 " +
+      "(pnpm-workspace.yaml strips the darwin build binaries on purpose; see " +
+      "scripts/lib/platform-native-build.mjs) — including every Mac, the ONLY platform " +
+      "verify:all --emit-evidence is allowed to mint from. So this binding will read as " +
+      "genuinely unrecorded (0), not passed, on every real evidence file until that toolchain " +
+      "gap closes or evidence-minting is extended past macOS. That is dimension (b) telling " +
+      "the truth about a real gap in the console's evidence, not a defect in the binding — " +
+      "the alternative (leaving it bound only to proof:api-client-react) is the false-positive " +
+      "this finding exists to close.",
   },
   {
     id: "ios:EnterpriseShell",

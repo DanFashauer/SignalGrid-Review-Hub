@@ -1994,3 +1994,22 @@ Connector-discipline gate passed.
 typecheck exit=0
 ```
 Verdict:  holds. The four new checks exercise the real hostile input that reaches each guard and assert the fail-closed outcome: a number/boolean/object in an enum slot is a malformed ASSERTION rather than a quiet fall to the unknown rung; a report buried under an 80-deep all-empty prototype chain is malformed because the walk's bound refuses rather than giving up and calling it clean; an inherited own key spelling a KNOWN field is still the prototype's claim; an offset-bearing or zone-less timestamp is unreadable rather than silently re-based onto a wall clock (expiry → `unbounded`, unreadable reference → lifetime `unknown`); and a window that expires before it was issued derives `unknown`, so the malformed rung is no longer the only thing holding that line. The containment window keeps its no-skew-allowance shape — nothing here widens it. `docs/INTEGRATION_CATALOG.md` moves 48 → 52 checks. What this does NOT fix: the six `known-inert` entries for this family are unchanged, and the other targets that have not joined the brace-less sweep still have guards this run never reached.
+
+## 2026-09-12 — "The ponytail pin 2ed6c52 is reproducible from upstream — the installer failed because it fetched an abbreviated id, which git treats as a ref name"
+Command:  the Mac lane reported `pnpm run ponytail:install` dying at `git fetch --depth=1 origin 2ed6c52` with "couldn't find remote ref 2ed6c52" and asked whether the vetted object exists. Probed upstream from the cloud, in a scratch clone:
+```
+git ls-remote --tags https://github.com/DietrichGebert/ponytail | grep v4.9.0
+git clone -q --depth 300 https://github.com/DietrichGebert/ponytail ponytail-probe
+git -C ponytail-probe cat-file -e 2ed6c52 ; git -C ponytail-probe log -1 --format='%H %ci %s' 2ed6c52
+git -C ponytail-probe merge-base --is-ancestor v4.9.0 2ed6c52 ; git -C ponytail-probe rev-list --count v4.9.0..2ed6c52
+git -C ponytail-probe diff --stat v4.9.0 2ed6c52 -- skills ; git -C ponytail-probe show 2ed6c52:.claude-plugin/plugin.json | grep version
+```
+Output:
+```
+0a4dd63ad4541f4f655c4108a295916f3c1d8fda	refs/tags/v4.9.0
+2ed6c52 present: yes
+2ed6c52c9d7e5e56942508591085fd45dea277d3 2026-08-08 00:44:01 +0300 feat: add Grok Build native skills adapter (revive #561) (#661)
+v4.9.0 ancestor of 2ed6c52: yes ; commits v4.9.0..2ed6c52: 3
+(skills dir diff: empty)            "version": "4.9.0",
+```
+Verdict:  **refuted as "unreproducible", confirmed as a real installer defect.** The object exists and is 3 commits after tag v4.9.0 (tests plus a Grok Build adapter; the skills tree the vetting read is byte-identical to the tag, and the plugin manifest at that commit says 4.9.0, which is what "= v4.9.0" meant). `git fetch origin <id>` fetches an object only by its FULL id; a 7-character id is looked up as a ref name and there is no ref by that name, so the installer could never have worked on a fresh clone — it worked on 2026-09-01 only because the object was already local. Fixed by pinning the full id; the DR-024 vetting stands unchanged.

@@ -52,7 +52,29 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SESSION PUCK IS ON THE RECORD AS A
+LAST TOUCHED: 2026-09-12 (mac lane, latest) - NEEDLE INGESTED (DR-044): cactus-compute/needle
+              evaluated by use (isolated venv, base weights, telemetry off) then hardened by a 4-agent workflow;
+              adopted-by-reference as a NARROW base-weights-only OFFLINE extraction helper, NEVER on the decision
+              path. It runs where LightRAG did not (~48MB warm, offline from cache, deterministic per fixed session
+              state), but the workflow corrected first-pass claims and found real surfaces: confidence is a
+              fail-closed GATE not a calibrated probability (a correct extraction landed at 0.38; polarity is
+              BACKWARDS for golden rule 2; extract() discards the score; finetuning disables the head); the
+              inference-engine binary's LICENCE is unverified; no revision= pin + pickle.load on fetched artifacts;
+              .github has auto-publish workflows so NEVER vendor it; two more consent-gated egress paths. Boundary +
+              reversal in DR-044; nothing of needle is in the tree. SAME COMMIT closed two self-eval Mac items:
+              Graphify semantic-docs pass DROPPED (LightRAG key-free naive mode already covers doc retrieval,
+              DR-041); Crucible /temper NOT joining brain-cycle-config.json (redundant with the gauntlet's
+              /code-review bugHunt stage) - that shared file UNCHANGED. Both decision benches re-run GREEN +
+              deterministic on the Mac (latency p95 0.19ms; throughput 29,535/sec agg on 10 workers, 3.86x).
+              RELIABILITY_SLO.md NOT partial-re-dated: its 08-24 table is a coordinated single-machine measurement
+              and this Mac is a faster class; routed the coordinated re-date (benches + test:load, one machine) to
+              the cloud. Killed an orphaned self-hosted-runner api-server squatting port 5310 for 4h+ that made the
+              local api:test crash (fresh server couldn't bind; hit the stale old-build server); test:api then
+              409/409 - the mac-runner-harness should SIGKILL leftover dist/index.mjs on 5310 at job teardown.
+              Owner directive recorded (memory + [[ultracode-opus-fallback-default]]): default to ultracode
+              workflows + Opus/smartest model, per-stage model choice, use the installed tools. Full preflight
+              green; cloud mailed.
+              2026-09-12 (cloud lane) - THE SESSION PUCK IS ON THE RECORD AS A
               HARDWARE HYPOTHESIS, NOT A PRODUCT (DR-043). The owner shared his own 25-page
               research document ('Shared-Device Authentication Puck: Hardware and Form-Factor
               Concept' - 'I'm going to blow your mind with this'). Read in full, held against
@@ -995,10 +1017,13 @@ NEXT ACTION: cloud: (1) stamp a lane on every lane-less BUILD_BACKLOG row and ex
               (5) the mis-filed owner items that are engineering (AppWorkflows parity re-port, the
               three decided deletions, the three safety defaults - propose, owner vetoes); (6) PR #531
               merge-or-close; (7) then build: Puck 5, Puck 1, the smart-charging scenario behind a DR.
-              Mac: Fleet Premium on the owner's word; Ponytail native cuts part 2 + row 103 in an Xcode
-              session; re-run the two benches and re-date RELIABILITY_SLO.md; delete tests/load,
-              .agents metadata and site/index.html once the cloud opens the row; read the inbox BEFORE
-              any long measurement (a manifest move outranks a measurement). Owner: the BLOCKED ON list.
+              Mac: DONE 2026-09-12 - needle DR-044 + the two self-eval closures (Graphify drop, Crucible
+              lens) + both benches re-run; the RELIABILITY_SLO re-date is ROUTED TO THE CLOUD as a coordinated
+              single-machine job (benches + test:load together, one machine, one commit) rather than a partial
+              cross-machine overwrite. REMAINING Mac: Fleet Premium on the owner's word; Ponytail native cuts
+              part 2 + row 103 in an Xcode session; delete tests/load, .agents metadata and site/index.html once
+              the cloud opens the row; read the inbox BEFORE any long measurement (a manifest move outranks a
+              measurement). Owner: the BLOCKED ON list.
 ## The three things that are true right now
 
 1. **The doctrine is `docs/PURPOSE.md` v2 (DR-020).** SignalGrid is an

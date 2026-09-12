@@ -2627,11 +2627,13 @@ profile, a design target and not a shipped surface.
    fact (the document's bands are estimates and are not reproduced).
 
 **What already existed, recorded rather than refused (DR-039 rule 3).** The FIDO2
-identity root, graded and verified (`docs/AUTHENTICATION_AND_CREDENTIAL_ARCHITECTURE.md:73`);
+identity root, graded (`docs/PASSKEY_ASSURANCE.md:184`) and verified server-side
+(`lib/webauthn/src/webauthn/verify.ts`, proof row `docs/PROOF_COVERAGE_AUDIT.md:21`, step-up row
+`docs/AUTHENTICATION_AND_CREDENTIAL_ARCHITECTURE.md:56`);
 a case-mounted FIDO2 token concept scoped to dual-control step-up
 (`docs/HARDWARE_ELEVATED_ACCESS_TOKEN.md:13`); attach = session / removal = restrict /
 forced removal = deny, built as `badge_binding`; the dock, custody and tamper fixture
-schema (`docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md:18`) and the SmartDock's continuous
+schema (`docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md:20-22`) and the SmartDock's continuous
 `present` / `removed` / `forced` read (`docs/SIGNALGRID_SMARTDOCK.md:44`); the
 division of authority; the discovery thresholds. All deferred design targets, none
 claimed as shipping. **Genuinely new:** the worker-carried token that moves between

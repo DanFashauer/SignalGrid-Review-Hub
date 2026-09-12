@@ -76,7 +76,15 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SESSION PUCK IS ON THE RECOR
               constraint. NOT claimed: HIPAA, disinfectant compatibility, relay-proof,
               on-device enforcement, any hardware built. Disclosure noted - the tree is public
               and the owner-gated IP-posture backlog row is still open. Nothing shipped moved;
-              custody/dock families stay deferred.
+              custody/dock families stay deferred. Verification pass
+              (same day) found four stale citations this work had itself introduced: the
+              2-line insertion at the top of PHYSICAL_CUSTODY_SIGNAL_MODEL.md shifted the
+              dockState/custodyState rows to :20-22 while the page and DR-043 still said :18;
+              AUTHENTICATION_AND_CREDENTIAL_ARCHITECTURE.md:73 was offered for ES256
+              verification it does not describe (the real evidence is
+              lib/webauthn/src/webauthn/verify.ts, PROOF_COVERAGE_AUDIT.md:21 and the :56
+              step-up row); and the cross-reference sentence attributed badge_binding to a
+              schema that does not own it. All corrected, gates re-run green.
               (Earlier 2026-09-12, cloud lane:) THE FOUNDER'S THESIS IS ON THE RECORD
               IN HIS OWN WORDS (DR-042): dictated, quoted verbatim in WHY_THIS_EXISTS.md
               under 'What only the founder can write' - the section that had been

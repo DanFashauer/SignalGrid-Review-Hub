@@ -2139,7 +2139,7 @@ Verdict:  **refuted as stated; the correct claim is narrower and is what DR-042 
 ## 2026-09-12 — "The session-puck concept lands as DR-043 plus a hypothesis page plus five backlog items without adding one unhedged deferred-capability mention, one orphan, one dangling citation or one unreversible record"
 Command:
 ```
-pnpm run -s check:absence "session puck"            # before the page existed
+pnpm run check:absence "session puck"               # run with pnpm's -s (silent) flag, before the page existed
 git add docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md
 for g in check-cited-paths check-cited-commands check-markdown-links check-doc-orphans \
          check-launch-claims check-known-false-claims check-decision-record-format \
@@ -2168,4 +2168,4 @@ Backlog ownership check passed — every row with work left in it names a role f
 Text-safety gate passed.
 (all thirteen: exit=0)
 ```
-Verdict:  **holds.** The cited-path count rose 2307 → 2433 (the new page and DR-043 cite the tree at path:line and every one resolves); the docs deferred-noun ceiling stayed at 416 with the page bannered as *nothing on this page is a claim of current capability* and every other touched block hedged in its own paragraph; the ceiling file was not rewritten (no drop, no rise); DR-043 is the 42nd record and carries a reversal clause. What this does NOT prove: that any of the five backlog items is buildable as specified — each is a design target until its proof is green and named — and nothing here measures the hardware, which is the point of DR-043 item 4.
+Verdict:  **holds.** The cited-path count rose 2307 → 2433 (the new page and DR-043 cite the tree at path:line and every one resolves); the docs deferred-noun ceiling stayed at 416 with the page bannered as *nothing on this page is a claim of current capability* and every other touched block hedged in its own paragraph; the ceiling file was not rewritten (no drop, no rise); DR-043 is the 42nd record and carries a reversal clause. What this does NOT prove: that any of the five backlog items is buildable as specified — each is a design target until its proof is green and named — and nothing here measures the hardware, which is the point of DR-043 item 4. **Re-run after the same-day verification fixes** (four stale citations corrected, none of them affecting the gate outcome above): `node scripts/check-cited-paths.mjs` → `Cited-path check passed — 2435 citation(s) across 511 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).` — the count rose by two because the ES256 claim now cites the verifier and its proof row instead of an unrelated line, and `check-cited-commands` went red on this entry's own spelling of the absence command with the silent flag between `run` and the script name (the gate reads the flag as a script name) and is green again with the flag noted in a comment.

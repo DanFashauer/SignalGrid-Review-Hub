@@ -2,7 +2,7 @@
 
 This document defines a vendor-neutral, public-safe schema for future Physical Custody and DockBridge review scenarios. It is intended for deterministic fixtures, documentation, and design-partner discovery only. It does not implement hardware logic, vendor integrations, live API calls, or production workflows.
 
-The owner's session-puck concept — a worker-carried token whose attach and removal events would land in this schema's `dockState` and the `badge_binding` dimension — is recorded as a deferred hardware hypothesis, not a product, in [Session puck hardware hypothesis](SESSION_PUCK_HARDWARE_HYPOTHESIS.md) (DR-043).
+The owner's session-puck concept — a worker-carried token whose attach and removal events would land in this schema's `dockState` and, via the separate reader-case schema in [Credential reader signal model](CREDENTIAL_READER_SIGNAL_MODEL.md), the `badge_binding` dimension — is recorded as a deferred hardware hypothesis, not a product, in [Session puck hardware hypothesis](SESSION_PUCK_HARDWARE_HYPOTHESIS.md) (DR-043).
 
 ## Vendor-neutral custody event schema
 

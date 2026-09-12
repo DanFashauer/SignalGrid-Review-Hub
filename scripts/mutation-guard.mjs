@@ -360,6 +360,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:bootstrap-credential",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/bootstrap-credential/evaluate.ts",
       "lib/integrations/src/integrations/bootstrap-credential/bootstrap-credential-connector.ts",
@@ -387,6 +388,7 @@ export const TARGETS = [
 
   {
     proof: "proof:benchmark-selection",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
       "lib/integrations/src/integrations/benchmark-selection/benchmark-selection-connector.ts",
@@ -513,6 +515,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:dual-control",
+    oneLine: true,
     files: [
       "lib/dual-control/src/evaluate.ts",
       "lib/dual-control/src/normalize.ts",
@@ -647,6 +650,10 @@ export const TARGETS = [
       "lib/integrations/src/integrations/rtls-custody/evaluate.ts",
       "lib/integrations/src/integrations/rtls-custody/index.ts",
       "lib/integrations/src/integrations/rtls-custody/rtls-connector.ts",
+      // The custody-ledger reconciliation emits the ready / hold / contain / escalate
+      // verdict and normalizes a reconciliation report (the cap axis is computed from
+      // counts), so its guards are mutable decision logic that must be swept.
+      "lib/integrations/src/integrations/rtls-custody/custody-ledger.ts",
     ],
   },
   {

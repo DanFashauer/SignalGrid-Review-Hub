@@ -51,7 +51,18 @@ if (listed.status !== 0) {
   console.error("✗ could not list shell files");
   process.exit(1);
 }
-const files = listed.stdout.split("\n").filter(Boolean);
+// VENDORED TREES ARE NOT LINTED. `third_party/**` is copied in byte-identical under
+// someone else's licence (`scripts/publication-boundary.mjs`, class third_party_intake)
+// and the rule there is "do not edit files here" — so a finding in one of those scripts
+// could only ever be answered by editing the vendored file or by a suppression, and
+// neither is allowed. Nothing under third_party/ is executed by any gate, hook or
+// script (each directory's VENDORED.md says so). Added 2026-09-12 when the first
+// vendored shell script arrived (third_party/cli-anything/, DR-040) and SC2034 fired on
+// an unused variable this repository must not touch. First-party shell — including
+// every script a vendored SKILL under .claude/skills/ tells Claude to run — is still
+// linted; only the third_party/ prefix is excluded, and the non-vacuity floor below
+// still applies to what remains.
+const files = listed.stdout.split("\n").filter(Boolean).filter((f) => !f.startsWith("third_party/"));
 
 // NON-VACUITY. A glob that matched nothing would make this gate pass forever while
 // checking not one line — the shape of "green because nothing ran" this repo treats

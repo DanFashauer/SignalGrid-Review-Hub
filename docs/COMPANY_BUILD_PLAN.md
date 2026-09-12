@@ -4303,7 +4303,8 @@ earlier — that is the loop working, not a reason to soften the record.
     the DR-018 vendoring, and both survived a green build.
     `scripts/publication-boundary.mjs` classifies `.claude/skills` as
     `third_party_intake` — "obra/superpowers, 14 skills vendored unmodified under
-    MIT © 2025 Jesse Vincent". Six first-party skills carry carve-outs;
+    MIT © 2025 Jesse Vincent" (as it read then; since 2026-09-12 the same reason
+    counts 15, DR-040). Six first-party skills carry carve-outs;
     `signalgrid-master`, added hours earlier, did not. So this repository published
     its own orchestration skill under Jesse Vincent's grant. The gate stayed green
     because it proves every path is CLASSIFIED, never that a path is classified

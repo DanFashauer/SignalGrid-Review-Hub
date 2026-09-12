@@ -472,6 +472,18 @@ in one place.
   apps, prep complete, OS update current / required / failed: ready, hold, or contain,
   fail-closed; the 3,072-state sweep pins the single grant). `proof:app-update` (170 checks).
 
+- **Custody-ledger reconciliation** ([PHYSICAL_CUSTODY_SIGNAL_MODEL.md](PHYSICAL_CUSTODY_SIGNAL_MODEL.md),
+  in the `rtls-custody` family) — the runbooks' phantom, graded: what the checkout ledger
+  *says* against what the dock bay *sees*, plus the requester's per-user cap. A seated device
+  the ledger still assigns to a prior holder is a hold with the contradiction named; an
+  unpaired device in a bay is contained; a clear ledger over an empty bay escalates; a cap
+  hit only by returns that never cleared is a hold, a cap genuinely reached a containment
+  (the cap axis is computed from counts, never asserted), and the observation's age is
+  graded against a bound the caller poses — a replayed snapshot never grants. Fail-closed;
+  the sweep of all 4,320 combos pins the single grant and 230,400 raw wire reports grant
+  exactly twice (the two spellings of a clear ledger); the family stays deferred in the
+  launch profile — built, not claimed. `proof:rtls-custody` (214 checks).
+
 - **Platform SSO** ([PLATFORM_SSO.md](PLATFORM_SSO.md)) — "passwordless" and "satisfies MFA"
   are not automatic; the **method** decides the credential's worth. Only a user-registered
   Secure Enclave key or smart card is phishing-resistant. A login policy claimed on a method
@@ -518,7 +530,7 @@ in one place.
   merely labels its checks "CIS" establishes nothing, and a run older than the operator's stated
   age bound cannot confirm anything today (all three temporal inputs supplied, never sampled).
   Titles and versions only — CIS rule content is licensed and is not reproduced.
-  `proof:benchmark-selection` (95 checks).
+  `proof:benchmark-selection` (104 checks).
 
 - **Shift context** ([SHIFT_CONTEXT.md](SHIFT_CONTEXT.md)) — right person, wrong time is still the
   wrong decision context. The labor plane (UKG, Dayforce, ADP and peers) already records whether a
@@ -558,7 +570,7 @@ in one place.
   a STANDING strong credential and only that; a perfectly-used bootstrap pass still reads
   monitor, because a temporary credential is an elevated state, not a clean one. Reading a
   credential record is not managing one: no pass is issued, revoked, or extended.
-  `proof:bootstrap-credential` (48 checks).
+  `proof:bootstrap-credential` (52 checks).
 
 - **Challenge capability** — the answerable step-up (intake ledger row 23; HID DigitalPersona's
   AD/LDS + Web Client inventory and Entra's authentication-methods registry are the reference
@@ -608,7 +620,7 @@ in one place.
 - **Dual control** ([DUAL_CONTROL.md](DUAL_CONTROL.md)) — two-person integrity for the
   highest-blast-radius actions: two distinct identities, distinct credential instances, user
   verification, action binding, role, co-presence, clean parse. `proof:dual-control`
-  (60 checks).
+  (78 checks).
 
 ## DockBridge candidate integration
 

@@ -56,6 +56,19 @@ asserting from intuition:
 how common it is. A frequency claim needs a sample, and this file does not have
 one yet.
 
+**Supporting input, 2026-09-12 (limitation first: one speaker, one company, and a
+central-engineering org rather than a hospital IT shop — it says the JOB exists at
+scale, not that our buyer has it).** A Netflix infrastructure leader, in a short talk
+clip the owner shared (transcribed locally; footage not committed), describes the
+shift from local teams building their own stacks to *"common infrastructure, common
+paved paths, solving problems once with a core set of capabilities"* once agents
+operate across many systems and want source-of-truth data — and says they now hire
+people who can look across business domains and abstract the building blocks. That
+is the standardising job of this finding named from the inside: the owner of the
+paved path. It is the person the orchestration layer (DR-035) is for, and "paved
+path" is the vocabulary to use with them. Source logged in
+`docs/agent/RESOURCE_INTAKE.md`.
+
 ## Finding 3 — the shift boundary is where it breaks
 
 **Tier 3, but specific.** Industry writing puts the failure at the handoff:

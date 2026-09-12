@@ -52,7 +52,14 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE MAC TICK NO LONGER FLOODS MAINLINE
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - DR-037 RECORDED: the owner ended
+              'lanes open, owner merges' ('I didn't want that on me'); the cloud lane now
+              merges its own green product PRs under five stated conditions, and landed
+              #656, #657, #653 (the Mac's combined #641+#645+#638), #649 and #654 that way.
+              Two owner videos absorbed (RESOURCE_INTAKE 2026-09-12): 'paved paths' as
+              the vocabulary of ICP Finding 2, and orchestrator-over-Opus-workers as the
+              cloud lane's build pattern (first fan-out: the pending brace-less guard
+              families). (Earlier 2026-09-12, cloud lane:) THE MAC TICK NO LONGER FLOODS MAINLINE
               (branch lane/cloud-tick-heartbeat-throttle-20260912-005000Z; owner merges): a
               SKIPPED tick result was exempt from the quiet throttle, so a checkout parked on
               mac/land-641-645-638 pushed a heartbeat to Alpha every 5 minutes, each push

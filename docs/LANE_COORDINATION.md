@@ -231,6 +231,30 @@ target — the same reasoning behind that bench's own 6,000x floor headroom.
    What still hands back: a change that would alter a RATIFIED decision
    (docs/DECISION_RECORDS.md), widen the launch profile, or edit the byte-faithful
    Swift ports for behaviour. Those are boundary changes, not defect repairs.
+7. **The cloud lane merges its own green product PRs (DR-037, owner-directed
+   2026-09-12).** "Lanes open, owner merges" (DR-032) held six green PRs on the owner
+   overnight; he ended it: *"I didn't want that on me."* A product PR is mergeable by
+   the cloud lane only when the gating check has passed on its CURRENT head, preflight
+   and the breadth lane passed locally before the push that made it, every review
+   thread is closed, and it is not conflicted — and the lane never approves, never
+   merges a change to the launch profile / launch-claims gate / publication boundary,
+   and never deletes a branch. The Mac lane's landing PRs are merged by the cloud
+   only when the Mac asked for it in mail (as #653 did). The first landings under
+   this rule: #656, #657, #653, #649, #654 on 2026-09-12.
+
+### How the cloud lane runs build work (2026-09-12)
+
+Orchestrator over workers, not one long session: the session model writes the spec
+(what changes, which check must fail without it, which gates must stay green),
+fans execution out to Opus sub-agents each in its own worktree with its own
+`pnpm install`, reviews what comes back against the spec, sends it back with the
+exact defects until it is good, and only then runs the full gates and opens the PR.
+The loop closes on a check that fails without the fix, never on a description of
+one. First application: the mutation guard's pending brace-less families
+(BUILD_BACKLOG campaign row) — one worker per family, the orchestrator holds the
+census. Absorbed from an owner-shared practitioner clip (RESOURCE_INTAKE 2026-09-12);
+the vendored `subagent-driven-development` and `dispatching-parallel-agents` skills
+already describe the mechanics.
 
 ## Collision log
 

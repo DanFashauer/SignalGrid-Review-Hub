@@ -23,8 +23,13 @@
 #      has SEEN the mail — runs from this tick, unattended.
 #
 # WHAT ONE TICK DOES, in order, each step reporting itself:
-#   a. fetch --prune; refuse to touch a DIRTY checkout (a person's work is never
-#      pulled over) — report and heartbeat "skipped: dirty";
+#   a. fetch --prune; never touch a DIRTY checkout or one parked on another branch
+#      (a person's work is never pulled over) — since 2026-09-12 the tick then runs
+#      from its OWN detached worktree (SIGNALGRID_TICK_WORKTREE, default a sibling
+#      directory `<repo>.tick`) at origin/SignalGrid_Alpha, so a person's checkout
+#      never stops the unattended work; before that it heartbeat "skipped" every 5
+#      minutes for as long as the checkout stayed parked (an hour and a half on
+#      2026-09-11/12, with a landing branch checked out);
 #   b. on SignalGrid_Alpha (the only branch it drives): fast-forward, install
 #      deps only if the lockfile moved (resume-lane.sh's stamp);
 #   c. run every PENDING sim request (`pnpm run sim:run-requests`) — results land
@@ -106,6 +111,40 @@ heartbeat() {
   fi
 }
 
+# ── the tick's own worktree, for when a person holds the main checkout ────────
+# DETACHED at origin/SignalGrid_Alpha on purpose: a worktree that held the branch
+# would make `git checkout SignalGrid_Alpha` in the main checkout refuse ("already
+# checked out at …"), which is the person's next move after parking. Nothing here
+# is pushed from a branch except the mac/tick-<stamp> result branches (step d).
+TICK_WT="${SIGNALGRID_TICK_WORKTREE:-$REPO_ROOT/../$(basename "$REPO_ROOT").tick}"
+IN_TICK_WT=0
+use_tick_worktree() {
+  why="$1"
+  if [ ! -e "$TICK_WT/.git" ]; then
+    if ! git worktree add -q --detach "$TICK_WT" origin/SignalGrid_Alpha >/dev/null 2>&1; then
+      RESULT="skipped: $why; and the tick worktree could not be created at $TICK_WT"
+      say "$RESULT"
+      heartbeat
+      exit 0
+    fi
+    say "created the tick worktree at $TICK_WT (detached at origin/SignalGrid_Alpha)"
+  fi
+  if ! cd "$TICK_WT"; then
+    RESULT="skipped: $why; and the tick worktree at $TICK_WT cannot be entered"
+    say "$RESULT"
+    heartbeat
+    exit 0
+  fi
+  if [ -n "$(git status --porcelain)" ]; then
+    RESULT="skipped: $why; and the tick worktree at $TICK_WT is dirty too (a person's work; not touching it)"
+    say "$RESULT"
+    heartbeat
+    exit 0
+  fi
+  IN_TICK_WT=1
+  say "$why — ticking from the tick worktree at $TICK_WT instead"
+}
+
 # ── a. sync, never over a person's work ──────────────────────────────────────
 if ! git fetch origin --prune >/dev/null 2>&1; then
   RESULT="skipped: origin unreachable (offline?)"
@@ -114,22 +153,27 @@ if ! git fetch origin --prune >/dev/null 2>&1; then
   exit 0
 fi
 if [ -n "$(git status --porcelain)" ]; then
-  RESULT="skipped: checkout dirty (a person's uncommitted work; not touching it)"
-  say "$RESULT"
-  heartbeat
-  exit 0
-fi
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-if [ "$BRANCH" != "SignalGrid_Alpha" ]; then
-  RESULT="skipped: checkout on $BRANCH, not SignalGrid_Alpha (a person is mid-work; leaving it)"
-  say "$RESULT"
-  heartbeat
-  exit 0
+  use_tick_worktree "checkout dirty (a person's uncommitted work; not touching it)"
+else
+  BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  if [ "$BRANCH" != "SignalGrid_Alpha" ]; then
+    use_tick_worktree "checkout on $BRANCH, not SignalGrid_Alpha (a person is mid-work; leaving it)"
+  fi
 fi
 
 # ── b. fast-forward + deps only when the lockfile moved ──────────────────────
 if ! git merge-base --is-ancestor origin/SignalGrid_Alpha HEAD 2>/dev/null; then
-  if git pull -q --ff-only origin SignalGrid_Alpha; then
+  if [ "$IN_TICK_WT" = "1" ]; then
+    # Detached: move to origin's tip directly (no branch to fast-forward).
+    if git checkout -q --detach origin/SignalGrid_Alpha; then
+      say "tick worktree moved to origin/SignalGrid_Alpha $(git rev-parse --short HEAD)"
+    else
+      RESULT="failed: the tick worktree could not move to origin/SignalGrid_Alpha"
+      say "$RESULT"
+      heartbeat
+      exit 1
+    fi
+  elif git pull -q --ff-only origin SignalGrid_Alpha; then
     say "fast-forwarded SignalGrid_Alpha to $(git rev-parse --short HEAD)"
   else
     RESULT="skipped: SignalGrid_Alpha diverged from origin; resolve by hand (docs/LANE_COORDINATION.md)"
@@ -227,7 +271,11 @@ if [ -n "$(git status --porcelain -- artifacts/sim-results artifacts/live-eviden
       RESULT="failed: ran $PENDING sim request(s) and produced results, but the $TICK_BRANCH commit/push chain broke — the cloud lane CANNOT see them; they are still in this checkout"
       say "$RESULT"
     fi
-    git checkout -q SignalGrid_Alpha || say "WARN could not return the checkout to SignalGrid_Alpha"
+    if [ "$IN_TICK_WT" = "1" ]; then
+      git checkout -q --detach origin/SignalGrid_Alpha || say "WARN could not return the tick worktree to origin/SignalGrid_Alpha"
+    else
+      git checkout -q SignalGrid_Alpha || say "WARN could not return the checkout to SignalGrid_Alpha"
+    fi
   fi
 elif [ "$PENDING" != "0" ] && [ "$DRY" = "0" ]; then
   RESULT="acted: ran $PENDING sim request(s); no new result files (see the run log)"

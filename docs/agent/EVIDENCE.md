@@ -15,6 +15,139 @@ Verdict:  holds | refuted (→ FALSE_CLAIMS.json) | not verifiable here (why)
 
 ---
 
+## 2026-09-12 — "86 skill directories from eleven collections were vendored BYTE-IDENTICAL at their pins; 85 stayed"
+Command:
+```
+# every pin re-verified in its own clone before a single file was copied
+for p in mattpocock/repo addyosmani/target google/google-skills nvidia/nvidia-skills \
+         kdense/sas awesome/cand/*; do git -C $p rev-parse HEAD; done
+# copy: git archive HEAD <path> | tar -x   (tracked files only), then diff back
+python3 verify-identity.py
+```
+Output:
+```
+diff -r over 86 vendored directories (excluding the added LICENSE|LICENSE-APACHE|LICENSE.md): 0 non-empty
+```
+Verdict:  **holds.** Every clone's `git rev-parse HEAD` matched the pin named in the
+brief before anything was copied (`mattpocock/skills` 3cca18b3, `addyosmani/agent-skills`
+6ca0cd7d, `google/skills` 150f8525, `NVIDIA/skills` 9ca28078,
+`K-Dense-AI/scientific-agent-skills` c1ed16d9, `rainmanjam/poka-yoke` 726a575e,
+`mcollina/skills` 856efd26, `Neeeophytee/finding-unknowns-skills` 6d7dda2a,
+`oliver-zehentleitner/keep-the-why` 9cf4ca65, `raintree-technology/hig-doctor` 3ec08f5a,
+`conorluddy/ios-simulator-skill` 4207f82f). The copy is
+`git archive` at the pin, so untracked working-tree files could not travel; the only
+addition to any vendored directory is its upstream LICENSE. ONE of the 86 was then
+removed again: `markdown-mermaid-writing` carries two U+200E LEFT-TO-RIGHT MARKs in
+`references/markdown_style_guide.md`, which `scripts/check-text-safety.mjs` refuses as
+hidden bidirectional text. A vendored file is not edited and a security gate is not
+given an exemption to admit one, so 85 stayed.
+
+## 2026-09-12 — "Every frontmatter `name:` in the new skill directories equals its directory"
+Command:
+```
+node scripts/check-skill-plane-conformance.mjs
+```
+Output:
+```
+Skill-plane conformance — 114 skill(s), 13 agent(s) walked
+
+Skill-plane conformance passed — every skill and agent carries a name that matches its home and a non-empty description.
+```
+Verdict:  **holds** — and one skill was refused BECAUSE of it rather than edited to pass.
+`NVIDIA/skills`' `skill-card-generator` writes its `name:` in quotes, which this gate
+reads as a name that does not equal its directory. A vendored file is not edited to make
+a gate green, so it is recorded in `.claude/skills/VENDORED.md` as not taken.
+
+## 2026-09-12 — "The vendored-set arithmetic moved with the tree, on both halves"
+Command:
+```
+node scripts/check-publication-boundary.mjs
+```
+Output:
+```
+  tracked paths: 3211
+  ✓ vendored-set arithmetic: 100 skill director(y/ies) under the vendored claim, 14 first-party carve-out(s) matching 14 table rows and the stated word, code figure 100
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+```
+Verdict:  **holds.** The arithmetic in the line above is the whole claim: tracked
+directories under `.claude/skills` now number 114, of which 14 are first-party and the
+rest upstream. The
+opener word in `.claude/skills/VENDORED.md` is unchanged at FOURTEEN; section E's number-word map was extended past FIFTEEN to THIRTY (and
+its opener regex taught to read a hyphenated word) so a future first-party skill does not
+have to edit a gate to be counted.
+
+## 2026-09-12 — "Bambushu/crucible is NOT in this tree, and what was measured of it before that call"
+Command:
+```
+git -C <pinned clone> rev-parse HEAD
+grep -n "OPENROUTER_API_KEY" scripts/discover-premium.sh
+sed -n '277p' skill.md
+node scripts/check-plugin-manifest.mjs      # with a copy staged at .claude/skills/crucible/
+```
+Output:
+```
+6d49aef4f71e984e40401e726a66fa456c035fed
+46:  mike_key=$(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}MIKE_OPENROUTER_API_KEY=…' "$HOME/.zshrc" | tail -1)
+53:  for f in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.zprofile" "$HOME/.profile" "$HOME/.env"; do
+**Safety note:** this stage executes MODEL-WRITTEN code against the target. The sandbox bounds
+network/CPU/file-size/wall-clock and runs against a copy, but filesystem reads are NOT isolated
+and the network block is in-process only …
+Plugin-manifest gate FAILED:
+  - skill crucible has no SKILL.md
+```
+Verdict:  **not taken, and the reason is not the gate.** Three things were measured at
+the pin and all three hold: its panel POSTs whole source files to four third-party models
+through OpenRouter under a key it will scrape out of a shell rc file; its `--verify`
+sandbox is porous by upstream's own note; and its entry point is `skill.md` in LOWER
+CASE, which `check-plugin-manifest.mjs` refuses for any directory under `.claude/skills/`
+and which a byte-identical copy may not be renamed to satisfy. The DISPOSITION, however,
+is the owner's list: it named one Crucible, and the Mac lane's DR-038 adopted a different
+project of that name (`raddue/crucible`, 52 skills, selective install through
+`scripts/install-crucible.mjs`, hooks off). Nothing of Bambushu/crucible is in this tree;
+the measurements above are appended to that intake row so the namesake is not re-evaluated
+from scratch by the next reader.
+
+## 2026-09-12 — "Two vendored instructions in the new set are commands the Bash deny list refuses, and both now carry an Overrides row"
+Command:
+```
+node scripts/check-skill-instruction-conflicts.mjs
+```
+Output (before the rows, with the new skills staged):
+```
+✗ 2 skill instruction(s) the Bash deny list refuses:
+  .claude/skills/constraint-driven-development/SKILL.md:287  [inline]  --no-verify
+  .claude/skills/crucible/docs/superpowers/plans/2026-06-01-dynamic-verification.md:1263  [inline]  rm -rf ~/soufflai/.crucible-cache/accept-*
+```
+Output (after):
+```
+skill↔deny-list: 840 files, 12692 candidates judged, 7 denied, 7 overridden (4475 inline spans read as mentions, not invocations; Overrides section present, 59 parsed row(s))
+  overridden: .claude/skills/constraint-driven-development/SKILL.md:287  --no-verify
+  … 6 more overridden, 29 spans REPORTED as mentions in warning prose
+✓ no tracked skill instructs a command the deny list refuses.
+```
+Verdict:  **holds.** The second site left the tree entirely when Bambushu/crucible was
+dropped (entry above), so only the first needed a row. `constraint-driven-development`
+lists `--no-verify` as the symptom of a slow edit-loop check; the gate judges the span as
+written, and the row is how a judgement is released here.
+
+## 2026-09-12 — "The one new skill that writes into a repository root is ignored by the TRACKED ignore files"
+Command:
+```
+node scripts/check-gitignore-producers.mjs
+```
+Output:
+```
+gitignore↔skill producers: 6 listed producers + 115 derived diagrams/ probes checked against 105 patterns from 7 tracked ignore file(s) in a pristine harness; 120/120 ignored
+✓ every listed and derived skill-produced path is ignored by the tracked ignore files alone.
+```
+Verdict:  **holds.** `nemo-rl-session-memory/SKILL.md:27` says
+`mkdir -p session/<session_date_time>` in the repository it is run from. It is now a
+producer entry with a tracked ignore rule, so it cannot flip
+`provenance.workingTreeClean` on a later sim result — belt and braces beside the override
+row that routes checkpoints to the session scratchpad. The same pass found the SELF-TEST
+carrying its own copy of the ignore rules, twice, positionally paired with PRODUCERS: one
+`FIXTURE_RULES` list now, plus an assertion that it has one rule per producer.
+
 ## 2026-08-24 — "The ungated-fetch gate covers every outbound path in the connector tree"
 Command:
 ```
@@ -1967,6 +2100,62 @@ wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read,
 Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
 ```
 Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated total to the files a person can actually read again; the two mailbox rows print `mailbox` in the Files column. `lane-deliver.mjs` keeps regenerating the page on every delivery — idempotent now, and still the catch for a page stale for any other reason. What this does NOT fix: a PR that itself changes the tracked-file set still moves the page, and two such PRs still conflict on it; that is the page doing its job.
+## 2026-09-12 — "proof:facility-trust-graph opts in to the brace-less mutator and the sweep has ZERO survivors: 22 one-line guards, 18 pinned by new checks, 4 deleted as shadowed, 0 allowlisted"
+Command:  the `oneline-cond-false` mutator (landed 2026-09-11 as a ratchet) reaches the guard shape three reviews found invisible — `if (cond) return x;` with no braces. This family carried 22 of them unfalsified: four copies of `instantOf`'s ISO shape gate (Date.parse accepts "2026-07-31", so without the regex a date-only string becomes midnight UTC and an illegible instant grades as a legible one), three copies of the bounded prototype walk, the recency and confidence bound readers (JS computes `"120" * 1000` and `0.93 >= "0.6"` happily, and `null >= 0` is true), and the zone-presence grader's input gates. 16 new checks drive the real malformed/hostile/boundary input through the public surface. FOUR guards were deleted as genuinely shadowed rather than pinned: `transition.ts`'s `graph.get(exitBoundaryId) === null` (every zonePath entry is a graph node, so an id the graph does not carry can never appear in it and the containment check one line below already refuses it as EXIT_BOUNDARY_INVALID), and the three `if (typeof k === "symbol") return true;` lines in evaluate/clinical/gateway — `known` holds only strings, so the unrecognized-key test one line down refuses every symbol on its own; the membership test is widened to `readonly (string | symbol)[]`, a TYPE cast only, matching the pattern already landed in `lib/verdict-attestation/src/attest.ts`. Nothing is allowlisted: the sweep's known-inert count for this family is unchanged from what the other families contribute.
+```
+node scripts/mutation-guard.mjs --proof=proof:facility-trust-graph
+pnpm run proof:facility-trust-graph ; pnpm run typecheck ; pnpm run review:invariants
+node scripts/check-guard-registries.mjs ; node scripts/check-mutation-sharding.mjs
+node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs ; node scripts/check-connector-discipline.mjs
+```
+Output:
+```
+mutations=136 killed=125 hung=0 known-inert=11 survivors=0
+figures=mutations=136,killed=125,inert=11,survivors=0
+brace-less sweep (oneline-cond-false): 1 of 1 targets opted in; 0 pending (REPORTED, never fatal — a target joins when its one-line guards are pinned or documented inert)
+Mutation guard passed — every registered guard is falsifiable, or documented as inert.
+summary=pass (140/140)
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Registry drift check passed — every allow-path proof and every published figure is accounted for.
+summary=pass (32/32)
+Proof-count check passed — all 59 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Connector-discipline gate passed.
+```
+Verdict:  holds. Before: `mutations=140 killed=107 known-inert=11 survivors=22`. The proof went 124 → 140 checks (measured: `summary=pass (124/124)` on HEAD's copy of the proof, `summary=pass (140/140)` on this one), and every new check was confirmed to fail with its guard disabled by re-running the sweep, not by inspection. The deleted symbol guards did not take their behaviour with them: a symbol own key is still refused on all three surfaces, now stated by a check ("a SYMBOL own key refuses on every surface") instead of by a line the sweep proved nothing noticed. No documented check count names this proof, so no doc figure moved. What this does NOT fix: the other targets that have not joined the brace-less sweep — the census line prints the pending count on every run, and 417 brace-less guards were measured across 49 of the 53 targets on 2026-09-11.
+## 2026-09-12 — "Four workflows the cloud lane ran by hand are now skills both lanes load from the tree — and the four additions move three registries that hold the skill plane's own count honest"
+Command:  four first-party skills authored from the day's records (the Graphify and video rows in RESOURCE_INTAKE, DR-037, the LANE_COORDINATION build-work section), then every gate that reads `.claude/skills/` plus the full per-push lane.
+```
+node scripts/check-skill-instruction-conflicts.mjs
+node scripts/check-plugin-manifest.mjs
+node scripts/check-publication-boundary.mjs
+node scripts/check-cited-paths.mjs
+node scripts/check-cited-commands.mjs
+node scripts/check-doc-orphans.mjs
+node scripts/check-launch-claims.mjs
+node scripts/check-skill-plane-conformance.mjs
+node scripts/check-surface-review-coverage.mjs --write
+node scripts/preflight.mjs
+```
+Output:
+```
+✓ no tracked skill instructs a command the deny list refuses.
+Plugin-manifest gate passed — signalgrid plugin: 13 agents (derived), skills + commands present; claude plugin validate exit 0.
+  ✓ vendored-set arithmetic: 14 skill director(y/ies) under the vendored claim, 16 first-party carve-out(s) matching 16 table rows and the stated word, code figure 14
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+Cited-path check passed — 2297 citation(s) across 492 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Cited-command check passed — every command a document promises is a command that exists.
+Doc-orphan check passed — no new unreachable documents.
+Launch-claims gate passed — nothing deferred is presented as current.
+Skill-plane conformance — 30 skill(s), 13 agent(s) walked
+Skill-plane conformance passed — every skill and agent carries a name that matches its home and a non-empty description.
+wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces
+Preflight PASSED — everything it runs is green.
+  2 proof(s) SELF-SKIPPED — they exited 0 without running:
+    · Proof: backup-restore (the restore path, exercised not assumed) (DATABASE_URL unset)
+    · Proof: db-role-split (the ledger append-only by privilege) (DATABASE_URL unset)
+```
+Verdict:  **holds, and the cited-commands gate caught the very pitfall one of the skills was being written to record.** `orchestrator-over-workers` quoted a silencing flag between `run` and the script name as its own worked example; the gate read the flag as the script name and failed the file — so the bullet now names the shape without printing it, and says that it tripped while being written. The four skills are `tool-evaluation-by-use`, `media-intake`, `landing-under-dr-037` and `orchestrator-over-workers`, each derived from a record in the tree (the Graphify and two-video rows of `docs/agent/RESOURCE_INTAKE.md` 2026-09-12, DR-037, and the "How the cloud lane runs build work" section of `docs/LANE_COORDINATION.md`). Registry arithmetic moved with them and is gated on both halves: four `tooling` carve-outs in `scripts/publication-boundary.mjs`, four table rows plus TWELVE→SIXTEEN and 26 = 14 + 12 → 30 = 14 + 16 in `.claude/skills/VENDORED.md`, and the number-word map in `scripts/check-publication-boundary.mjs`, which stopped at FIFTEEN and could not have read the new word at all. The same 26/12 pair is restated in four documents and one gate-lib comment, all moved. `.claude-plugin/plugin.json` needed nothing (`skills` is a directory; only `agents` is a hand-list) and `docs/agent/org-roster.json` needed nothing (its pointers resolve roster → disk, never the reverse). What this does NOT establish: no skill here was pressure-tested against a subagent the way `writing-skills` prescribes — they are records of procedures already executed, not procedures proven to survive an agent looking for a loophole.
 ## 2026-09-12 — "dual-control joins the brace-less mutation sweep with zero survivors: seven one-line guards in the request normalizer, six now pinned by checks that fail without them and one deleted as shadowed"
 Command:  the `oneline-cond-false` mutator was opt-in and dual-control had not joined; opting it in surfaced 7 survivors, all in `lib/dual-control/src/normalize.ts` — the three `v === undefined || v === null → false` arms (absence read as malformed was never asserted to be WRONG), the `typeof v !== "string"` arm of `enumMalformed` (every junk-enum vector was a string, so nothing reached it), the prototype walk's depth bound, the `depth > 0` clause (the inherited-key vectors were all MISSPELLED keys, caught by the spelling check too), and the `typeof k === "symbol"` clause.
 ```
@@ -2201,6 +2390,22 @@ banner-marked SUPERSEDED, which is exactly why the answer is a pointer to a trac
 must open and never a fact on its own. It is not a gate, no proof or doc figure reads it, and
 `docs:retrieve` refuses on CI so it cannot become a build input. It says nothing about the Mac
 lane's graph-mode install, which still waits on Ollama.
+## 2026-09-12 — "The four-skills branch reconciled with DR-040 (#666) before landing: media-intake folded into video-intake, and the vendored-set arithmetic holds at 32 = 15 + 17"
+Command:  after merging origin/SignalGrid_Alpha at fcea6f4d (which carries `cli-anything/`, `video-intake/` and the vendored `watch/`), `.claude/skills/media-intake/` was removed — its whole procedure (local faster-whisper transcript, footage never committed) was already `video-intake/`'s — and its one distinct section (where a clip's substance lands, plus three never-rules) moved into `video-intake/SKILL.md`. Every restatement of the pair was then recounted and the gates that read the registry re-run on the merged tree.
+```
+node scripts/check-publication-boundary.mjs ; node scripts/check-skill-plane-conformance.mjs
+node scripts/check-skill-instruction-conflicts.mjs ; node scripts/check-derived-doc-figures.mjs ; node scripts/check-markdown-links.mjs
+```
+Output:
+```
+  ✓ vendored-set arithmetic: 15 skill director(y/ies) under the vendored claim, 17 first-party carve-out(s) matching 17 table rows and the stated word, code figure 15
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+Skill-plane conformance passed — every skill and agent carries a name that matches its home and a non-empty description.
+✓ no tracked skill instructs a command the deny list refuses.   (3 overridden sites, all in watch/)
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+```
+Verdict:  holds. The entry above this one (30 = 14 + 16) was true on the tree it measured and stays as the record; this is the reconciled figure. The four docs that restate the pair (`docs/MCP_AND_SKILLS_LANE_PARITY.md`, `docs/MCP_ARCHITECTURE.md`, `docs/agent/BRAIN_CYCLE_DESIGN.md`, the `scripts/check-skill-instruction-conflicts.mjs` header) and the derived figure in `docs/research/MCP_MARKET_LEADERBOARDS.md` now read 32 / 15 / 17, and section E of the boundary gate is what fails the moment they drift again.
 ## 2026-09-12 — "The founder's post-decision cascade (self-resolve → notify the assigned team → ticket → change record → tell the people affected → monitor the fix) is modelled end to end in this tree"
 Command:
 ```

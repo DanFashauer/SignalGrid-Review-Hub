@@ -29,6 +29,7 @@ import {
   type LocationObservationRaw,
   type NormalizedLocationObservation,
   type SelectionAttestationRaw,
+  type ZonePresenceInput,
   type SpaceNode,
 } from "@workspace/facility-trust-graph";
 import { SIGNAL_KINDS, composeDeviceRisk, fromLocationCertainty } from "@workspace/posture-composition";
@@ -628,6 +629,117 @@ check("...and a confirmed certainty contributes none — the dimension never low
     { kind: "device_posture", posture: "healthy", action: "none", reason: "OK" },
     fromLocationCertainty(grant),
   ]).strongestAction === "none");
+
+// ── brace-less guard pins (`oneline-cond-false`, 2026-09-12) ────────────────────
+// The mutation sweep rewrites every one-line `if (cond) return x;` in this family to
+// `if (false) return x;`. These checks are what fails when it does: each drives the
+// real malformed / hostile / boundary input through the public surface and pins the
+// fail-closed answer, so none of these guards can be weakened without a named check
+// going red. (22 survivors, measured 2026-09-11.)
+
+// instantOf's ISO SHAPE GATE — four modules carry a copy. Date.parse is far more
+// permissive than the wire contract: it accepts "2026-07-31", so without the regex a
+// date-only string silently becomes midnight UTC and an illegible instant grades as a
+// legible one instead of raising.
+const dateOnlyObs = normalizeLocationObservation("iso", graph, clean({ observed_at: "2026-07-31" }),
+  { requirement: MED_REQ, referenceTime: REF });
+check("a DATE-ONLY observed_at is MALFORMED, never midnight — Date.parse accepts '2026-07-31' and only the ISO shape gate refuses it",
+  dateOnlyObs.reportIntegrity === "malformed" && dateOnlyObs.observedAt === null &&
+  evaluateLocationCertainty(dateOnlyObs, MED_REQ).reasonCode === "REPORT_MALFORMED");
+const safeCorr = (crossedAt: unknown, observedAt: unknown): string => {
+  try {
+    return correlateCrossing(graph, { doorSpaceId: DOOR, crossedAt: crossedAt as string },
+      { spaceId: "SG-RM0312-BED-B", observedAt: observedAt as string }, W).reasonCode;
+  } catch { return "THREW"; }
+};
+check("a date-only crossing or observation instant is INSTANT_UNREADABLE — never a correlation measured from midnight",
+  safeCorr("2026-07-31", "2026-07-31T14:00:30Z") === "INSTANT_UNREADABLE" &&
+  safeCorr("2026-07-31T14:00:00Z", "2026-07-31") === "INSTANT_UNREADABLE");
+check("a NON-STRING instant is INSTANT_UNREADABLE and never throws: the correlator answers on a number, a null and an object rather than crashing its caller",
+  safeCorr(1785456000000, "2026-07-31T14:00:30Z") === "INSTANT_UNREADABLE" &&
+  safeCorr("2026-07-31T14:00:00Z", null) === "INSTANT_UNREADABLE" &&
+  safeCorr({ iso: "2026-07-31T14:00:00Z" }, "2026-07-31T14:00:30Z") === "INSTANT_UNREADABLE");
+check("a date-only attested_at is MALFORMED, not 'stale' — an unreadable ceremony instant is not a graded one",
+  gradeExplicitSelection({ method: "wristband_scan", attested_at: "2026-07-31" }, SEL_POLICY).standing === "malformed");
+
+// The RECENCY and CONFIDENCE bounds: an unreadable bound is answered `unknown`, never
+// coerced into arithmetic. JS would happily compute `"120" * 1000` and `0.93 >= "0.6"`.
+const strBoundReq = { requiredClass: "bed_confirmed" as const, maxObservationAgeSeconds: "120" as unknown as number, minConfidence: 0.6 };
+const strBoundNorm = normalizeLocationObservation("bound", graph, clean(), { requirement: strBoundReq, referenceTime: REF });
+check("a NON-NUMERIC age bound ('120') reads as UNKNOWN recency and raises — a bound the fabric cannot read is never string-multiplied into 'current'",
+  strBoundNorm.recency === "unknown" && strBoundNorm.reportIntegrity === "clean" &&
+  evaluateLocationCertainty(strBoundNorm, strBoundReq).reasonCode === "LOCATION_STALE" &&
+  evaluateLocationCertainty(strBoundNorm, strBoundReq).recommendedAction === "step_up");
+const noInstants = normalizeLocationObservation("noinst", graph, clean({ observed_at: undefined }),
+  { requirement: MED_REQ, referenceTime: undefined });
+check("a bound is posed and NEITHER instant exists → recency unknown raises; null-minus-null must never arithmetic its way to a zero-second-old 'current' fix",
+  noInstants.recency === "unknown" &&
+  evaluateLocationCertainty(noInstants, MED_REQ).recommendedAction === "step_up" &&
+  evaluateLocationCertainty(noInstants, MED_REQ).reasonCode === "LOCATION_STALE");
+const strConfReq = { requiredClass: "bed_confirmed" as const, minConfidence: "0.6" as unknown as number };
+const strConfNorm = normalizeLocationObservation("conf", graph, clean(), { requirement: strConfReq, referenceTime: REF });
+check("a NON-NUMERIC or OUT-OF-RANGE confidence floor is UNKNOWN fit and raises — 0.93 >= '0.6' is true in JS and must not become a grant",
+  strConfNorm.confidenceFit === "unknown" &&
+  evaluateLocationCertainty(strConfNorm, strConfReq).reasonCode === "INSUFFICIENT_CONFIDENCE" &&
+  normalizeLocationObservation("conf", graph, clean(),
+    { requirement: { requiredClass: "bed_confirmed", minConfidence: 5 }, referenceTime: REF }).confidenceFit === "unknown");
+const zeroFloorReq = { requiredClass: "bed_confirmed" as const, minConfidence: 0 };
+const zeroFloorNorm = normalizeLocationObservation("zero", graph, clean({ confidence: undefined }),
+  { requirement: zeroFloorReq, referenceTime: REF });
+check("a floor of ZERO is still a POSED question: no confidence reported → unknown fit and step_up, never `null >= 0` reading as met",
+  zeroFloorNorm.confidenceFit === "unknown" &&
+  evaluateLocationCertainty(zeroFloorNorm, zeroFloorReq).recommendedAction === "step_up" &&
+  evaluateLocationCertainty(zeroFloorNorm, zeroFloorReq).reasonCode === "INSUFFICIENT_CONFIDENCE");
+
+// The BOUNDED PROTOTYPE WALK — three modules carry a copy, and it holds two distinct
+// guards: the depth ceiling (a chain longer than 64 links is refused rather than
+// walked), and "anything at depth > 0 is unrecognized". Only a prototype carrying a
+// RECOGNIZED key separates the second from the key-name test below it.
+check("an observation whose PROTOTYPE carries a recognized key ('confidence') is malformed — inherited state is never own state, even under a name the schema knows",
+  normalizeLocationObservation("proto", graph,
+    Object.assign(Object.create({ confidence: 0.99 }), clean()) as LocationObservationRaw,
+    { requirement: MED_REQ, referenceTime: REF }).reportIntegrity === "malformed");
+// A SYMBOL own key is refused by the SAME membership test the string keys use — the
+// separate `typeof k === "symbol"` guard that stood beside it was deleted as shadowed
+// (the sweep showed nothing noticed), so this is what keeps the behaviour stated.
+const SYM = Symbol.for("sg.proof.gps_hint");
+check("a SYMBOL own key refuses on every surface — an observation, an ADT assignment and an upstream record all refuse a field that cannot even be named as a string",
+  normalizeLocationObservation("sym", graph, { ...clean(), [SYM]: "trust me" } as LocationObservationRaw,
+    { requirement: MED_REQ, referenceTime: REF }).reportIntegrity === "malformed" &&
+  resolveClinicalAssignment(graph, { bed: "0312-A", [SYM]: "trust me" } as ClinicalAssignmentRaw, EHR).outcome === "malformed" &&
+  projectUpstreamRecord(graph, { ...upstreamBase, [SYM]: "trust me" }, "unit").refusal === "UNRECOGNIZED_FIELD");
+check("an ADT assignment behind a 100-deep prototype chain is malformed (the depth ceiling), and one whose prototype carries a recognized key ('bed') is malformed too",
+  resolveClinicalAssignment(graph, Object.assign(Object.create(deepProto), { bed: "0312-A" }) as ClinicalAssignmentRaw, EHR).outcome === "malformed" &&
+  resolveClinicalAssignment(graph, Object.assign(Object.create({ bed: "0312-A" }), { room: "0312" }) as ClinicalAssignmentRaw, EHR).outcome === "malformed");
+check("an upstream record behind a 100-deep prototype chain refuses, and so does one whose prototype carries a recognized key ('pseudonym') — an inherited field is not a declared one",
+  projectUpstreamRecord(graph, Object.assign(Object.create(deepProto), upstreamBase), "unit").refusal === "UNRECOGNIZED_FIELD" &&
+  projectUpstreamRecord(graph, Object.assign(Object.create({ pseudonym: "wf-inherited" }), upstreamBase), "unit").refusal === "UNRECOGNIZED_FIELD");
+
+// The zone-presence grader's input gates. Each answers with a verdict, never an
+// exception — a thrown TypeError is a crash in the caller's decision path.
+const safeZp = (observations: unknown, over: Record<string, unknown> = {}): string => {
+  try {
+    return gradeZonePresence(graph, {
+      zoneId: ZONE, exitBoundaryId: "SG-F03-UNIT-4W",
+      observations: observations as ZonePresenceInput["observations"],
+      policy: { entryDwellSeconds: 30, exitGraceSeconds: 60, maxObservationAgeSeconds: 120 },
+      referenceTime: "2026-07-31T14:32:30Z", ...over,
+    }).reasonCode;
+  } catch { return "THREW"; }
+};
+check("zone presence: a date-only, a non-string and a NULL observation entry are all OBSERVATION_UNREADABLE — and none of them throws",
+  safeZp([{ space_id: ZONE, observed_at: "2026-07-31" }]) === "OBSERVATION_UNREADABLE" &&
+  safeZp([{ space_id: ZONE, observed_at: 1785456000000 }]) === "OBSERVATION_UNREADABLE" &&
+  safeZp([null]) === "OBSERVATION_UNREADABLE");
+check("zone presence: an unreadable reference instant is REFERENCE_UNREADABLE — the caller's 'now' is graded BEFORE any observation, so a missing clock never reads as a future-dated fix",
+  safeZp([at("2026-07-31T14:31:00Z")], { referenceTime: "not-a-time" }) === "REFERENCE_UNREADABLE" &&
+  safeZp([at("2026-07-31T14:31:00Z")], { referenceTime: 0 }) === "REFERENCE_UNREADABLE");
+check("zone presence: an observations value that is not an ARRAY is OBSERVATION_UNREADABLE even when it is array-SHAPED — `{length: 0}` must not read as 'no observations'",
+  safeZp({ length: 0 }) === "OBSERVATION_UNREADABLE" &&
+  safeZp("2026-07-31T14:31:00Z") === "OBSERVATION_UNREADABLE" &&
+  safeZp(null) === "OBSERVATION_UNREADABLE");
+check("zone presence: an exit boundary the graph does not carry is EXIT_BOUNDARY_INVALID — it can never sit on the zone's path, which is the check that now covers it",
+  safeZp([at("2026-07-31T14:31:00Z")], { exitBoundaryId: "SG-GHOST-WING" }) === "EXIT_BOUNDARY_INVALID");
 
 // Determinism.
 const d1 = normalizeLocationObservation("det", graph, clean(), { requirement: MED_REQ, referenceTime: REF });

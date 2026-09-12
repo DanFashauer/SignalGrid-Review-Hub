@@ -72,7 +72,21 @@ const SKIP_DIR = /(^|\/)(node_modules|dist|build|\.git|coverage|\.claude\/worktr
 // declaration. The disposition it named ("fold the unique assertions into the
 // proof, then delete the orphan") is superseded: the test carries wire-visible
 // annotation coverage the proofs do not, so it earns its keep as an executed test.
-const DECLARED_UNEXECUTED = new Map([]);
+const DECLARED_UNEXECUTED = new Map([
+  [
+    ".claude/skills/node/rules/assets/graceful-server.test.ts",
+    "VENDORED EXAMPLE, not a test of this repository. mcollina/skills@856efd26, MIT © 2026 " +
+      "Matteo Collina, byte-identical (.claude/skills/VENDORED.md). It is an ASSET the `node` " +
+      "skill quotes to show what a graceful-shutdown test looks like — the skill's rules " +
+      "reference it as sample text, nothing imports it, and it exercises node:http rather than " +
+      "anything in this tree. It is not wired to a runner because running it would assert " +
+      "nothing about SignalGrid; it is not deleted because a vendored directory is held " +
+      "byte-identical and editing one to satisfy a gate is the move this repository does not " +
+      "make. DISPOSITION: it retires with the skill — a re-vendor that drops `node/` or an " +
+      "upstream that moves the asset removes this key, and the stale-declaration check below " +
+      "then fails until it is deleted.",
+  ],
+]);
 
 // ── build the corpus of everything the repository actually runs ──────────────
 function readIfExists(p) {

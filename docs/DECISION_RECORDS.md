@@ -2523,19 +2523,25 @@ run and quoted in `docs/agent/EVIDENCE.md`. The three mechanics quoted from the 
 were re-read in the clone: 26 `pipmaster` call sites, `.claude/settings.json` with a
 `SessionStart` hook, `lightrag/base.py:43` `load_dotenv(dotenv_path=".env", override=False)`.
 
-**Measured condition, folded from the Mac lane (2026-09-12).** The Mac's own LightRAG
-line — the GRAPH mode of DR-038, generative model `qwen3:8b` through Ollama on a 17 GB
-machine — failed extraction twice, 5 of 5 documents on `httpx.ReadTimeout`, first at the
-defaults and then at `MAX_ASYNC=1`, an 8k context and an 1800 s timeout; the 8B model's
-5.3 GB residency also made that session kill its own background jobs, and the models
-were unloaded. The Mac asked that this record carry the condition rather than the
-slogan, and it does: **for any LightRAG shape that calls a generative model, endpoint
-capacity is the precondition, not a key.** This record's shape has no such endpoint —
-`naive` mode, `PROCESS_OPTION_SKIP_KG`, a 384-dimension embedding model of about 130 MB
-on the CPU — so the timeout does not reach it; the 311-document index above was built
-with zero model calls. "Key-free" therefore describes this shape only. The Mac's graph
-mode stays under launchd for a smaller-model or remote-endpoint retry when the owner
-decides, and its intake row carries the measurement.
+**Measured condition, reported by the Mac lane (2026-09-12).** An externally reported
+observation, not a measurement reproduced in this tree: the Mac's own LightRAG line —
+the GRAPH mode of DR-038, generative model `qwen3:8b` through local Ollama on a 17 GB
+machine — failed extraction on `httpx.ReadTimeout` in both of its runs, 4 of 5 documents
+at the defaults and 5 of 5 after tuning to `MAX_ASYNC=1`, an 8k context and an 1800 s
+timeout; the 8B model's 5.3 GB residency also made that session kill its own background
+jobs, and the models were unloaded. The invocation, effective configuration and log
+lines live on the Mac and are cited from its intake row; a fresh checkout cannot re-run
+them. The Mac asked that this record carry the condition rather than the slogan, and it
+does, scoped to what was measured: **for that local endpoint, capacity was the blocker,
+not a credential.** A remote-endpoint retry goes through the DR-029 gateway, whose
+provider keys still apply — endpoint-specific authentication is not waived by this
+finding. This record's shape has no generative endpoint at all — `naive` mode,
+`PROCESS_OPTION_SKIP_KG`, the ~65 MB, 384-dimension embedding model named above running
+on the CPU — so the timeout does not reach it; the 311-document index above embedded
+1,940 chunks with zero generative (LLM) calls. "Key-free" therefore describes this
+shape only. The Mac's graph mode stays under launchd for a smaller-model or
+remote-endpoint retry when the owner decides, and its intake row carries the
+measurement.
 
 **Reversal.** The owner reverses by saying so: delete `scripts/install-lightrag.mjs`,
 `scripts/docs-retrieval.mjs`, `scripts/lib/docs-retrieval.py`, the two `package.json`

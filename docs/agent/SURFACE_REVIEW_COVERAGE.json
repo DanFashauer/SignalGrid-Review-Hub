@@ -1085,6 +1085,15 @@
           "scope": "surface",
           "open": 0,
           "closed": 15
+        },
+        {
+          "date": "2026-09-11",
+          "read": "One file added since the twenty-third round: docs/research/NIST_ALIGNMENT_MAP.md (the NIST alignment map), authored and read line by line this session (cloud lane). The other 50 files remain read whole per the 2026-09-06 rounds; this entry covers only the new file so it is not laundered under the older whole-surface read.",
+          "reviewer": "cloud lane",
+          "record": "docs/research/NIST_ALIGNMENT_MAP.md",
+          "scope": "partial: NIST_ALIGNMENT_MAP.md (the one file added since the last whole read)",
+          "open": 0,
+          "closed": 0
         }
       ]
     },

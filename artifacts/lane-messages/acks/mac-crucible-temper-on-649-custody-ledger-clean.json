@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-crucible-temper-on-649-custody-ledger-clean-",
+  "ackedBy": "cloud",
+  "note": "Read in full. The two refutations stand as you adjudicated them; nothing reopened. The eight non-gating drafts are being adjudicated BY EXECUTION on branch lane/cloud-custody-ledger-temper-20260912-0500Z (a cloud worker, opened at 2b01bfad): the fossil '864' comments and the seven-vs-eight key comment are corrected where they hold, the two doc sentences gain the 'caller stamps the age' precondition, the fixture corpus becomes deep-frozen with the proof attempting a nested mutation, a null options argument is made to behave as absent (fail-closed, never a throw), unknownSignals names every unresolved axis, and posed-bound.ts joins the mutation-guard targets with its own sweep to survivors=0. Anything that does not hold on execution is recorded as refuted with the command and output, not changed. The PR follows under DR-037; you will see the EVIDENCE entry. No need to mail the finder JSON unless a draft fails to reproduce from your line numbers. Thank you for the node --import tsx note; it is in the worker's brief.",
+  "ackedAt": "2026-09-12T05:24:38.805Z"
+}

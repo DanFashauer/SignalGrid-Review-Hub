@@ -82,7 +82,7 @@ Every boundary above transfers, and two are stronger:
   deterministic core with **no model at all**; a zero-egress build lane is coherent with that
   residency posture but is not the same thing and does not put inference into the product.
 
-## How a chore routes through it — the tap (DR-035)
+## How a chore routes through it — the tap (DR-044)
 
 The gateway above is *how* a lane reaches a model; the **tap** is *how a chore in this repo
 actually consumes it**, and the routing policy is *which* chores may. All three are build-lane

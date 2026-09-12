@@ -15,6 +15,139 @@ Verdict:  holds | refuted (→ FALSE_CLAIMS.json) | not verifiable here (why)
 
 ---
 
+## 2026-09-12 — "86 skill directories from eleven collections were vendored BYTE-IDENTICAL at their pins; 85 stayed"
+Command:
+```
+# every pin re-verified in its own clone before a single file was copied
+for p in mattpocock/repo addyosmani/target google/google-skills nvidia/nvidia-skills \
+         kdense/sas awesome/cand/*; do git -C $p rev-parse HEAD; done
+# copy: git archive HEAD <path> | tar -x   (tracked files only), then diff back
+python3 verify-identity.py
+```
+Output:
+```
+diff -r over 86 vendored directories (excluding the added LICENSE|LICENSE-APACHE|LICENSE.md): 0 non-empty
+```
+Verdict:  **holds.** Every clone's `git rev-parse HEAD` matched the pin named in the
+brief before anything was copied (`mattpocock/skills` 3cca18b3, `addyosmani/agent-skills`
+6ca0cd7d, `google/skills` 150f8525, `NVIDIA/skills` 9ca28078,
+`K-Dense-AI/scientific-agent-skills` c1ed16d9, `rainmanjam/poka-yoke` 726a575e,
+`mcollina/skills` 856efd26, `Neeeophytee/finding-unknowns-skills` 6d7dda2a,
+`oliver-zehentleitner/keep-the-why` 9cf4ca65, `raintree-technology/hig-doctor` 3ec08f5a,
+`conorluddy/ios-simulator-skill` 4207f82f). The copy is
+`git archive` at the pin, so untracked working-tree files could not travel; the only
+addition to any vendored directory is its upstream LICENSE. ONE of the 86 was then
+removed again: `markdown-mermaid-writing` carries two U+200E LEFT-TO-RIGHT MARKs in
+`references/markdown_style_guide.md`, which `scripts/check-text-safety.mjs` refuses as
+hidden bidirectional text. A vendored file is not edited and a security gate is not
+given an exemption to admit one, so 85 stayed.
+
+## 2026-09-12 — "Every frontmatter `name:` in the new skill directories equals its directory"
+Command:
+```
+node scripts/check-skill-plane-conformance.mjs
+```
+Output:
+```
+Skill-plane conformance — 114 skill(s), 13 agent(s) walked
+
+Skill-plane conformance passed — every skill and agent carries a name that matches its home and a non-empty description.
+```
+Verdict:  **holds** — and one skill was refused BECAUSE of it rather than edited to pass.
+`NVIDIA/skills`' `skill-card-generator` writes its `name:` in quotes, which this gate
+reads as a name that does not equal its directory. A vendored file is not edited to make
+a gate green, so it is recorded in `.claude/skills/VENDORED.md` as not taken.
+
+## 2026-09-12 — "The vendored-set arithmetic moved with the tree, on both halves"
+Command:
+```
+node scripts/check-publication-boundary.mjs
+```
+Output:
+```
+  tracked paths: 3211
+  ✓ vendored-set arithmetic: 100 skill director(y/ies) under the vendored claim, 14 first-party carve-out(s) matching 14 table rows and the stated word, code figure 100
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+```
+Verdict:  **holds.** The arithmetic in the line above is the whole claim: tracked
+directories under `.claude/skills` now number 114, of which 14 are first-party and the
+rest upstream. The
+opener word in `.claude/skills/VENDORED.md` is unchanged at FOURTEEN; section E's number-word map was extended past FIFTEEN to THIRTY (and
+its opener regex taught to read a hyphenated word) so a future first-party skill does not
+have to edit a gate to be counted.
+
+## 2026-09-12 — "Bambushu/crucible is NOT in this tree, and what was measured of it before that call"
+Command:
+```
+git -C <pinned clone> rev-parse HEAD
+grep -n "OPENROUTER_API_KEY" scripts/discover-premium.sh
+sed -n '277p' skill.md
+node scripts/check-plugin-manifest.mjs      # with a copy staged at .claude/skills/crucible/
+```
+Output:
+```
+6d49aef4f71e984e40401e726a66fa456c035fed
+46:  mike_key=$(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}MIKE_OPENROUTER_API_KEY=…' "$HOME/.zshrc" | tail -1)
+53:  for f in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.zprofile" "$HOME/.profile" "$HOME/.env"; do
+**Safety note:** this stage executes MODEL-WRITTEN code against the target. The sandbox bounds
+network/CPU/file-size/wall-clock and runs against a copy, but filesystem reads are NOT isolated
+and the network block is in-process only …
+Plugin-manifest gate FAILED:
+  - skill crucible has no SKILL.md
+```
+Verdict:  **not taken, and the reason is not the gate.** Three things were measured at
+the pin and all three hold: its panel POSTs whole source files to four third-party models
+through OpenRouter under a key it will scrape out of a shell rc file; its `--verify`
+sandbox is porous by upstream's own note; and its entry point is `skill.md` in LOWER
+CASE, which `check-plugin-manifest.mjs` refuses for any directory under `.claude/skills/`
+and which a byte-identical copy may not be renamed to satisfy. The DISPOSITION, however,
+is the owner's list: it named one Crucible, and the Mac lane's DR-038 adopted a different
+project of that name (`raddue/crucible`, 52 skills, selective install through
+`scripts/install-crucible.mjs`, hooks off). Nothing of Bambushu/crucible is in this tree;
+the measurements above are appended to that intake row so the namesake is not re-evaluated
+from scratch by the next reader.
+
+## 2026-09-12 — "Two vendored instructions in the new set are commands the Bash deny list refuses, and both now carry an Overrides row"
+Command:
+```
+node scripts/check-skill-instruction-conflicts.mjs
+```
+Output (before the rows, with the new skills staged):
+```
+✗ 2 skill instruction(s) the Bash deny list refuses:
+  .claude/skills/constraint-driven-development/SKILL.md:287  [inline]  --no-verify
+  .claude/skills/crucible/docs/superpowers/plans/2026-06-01-dynamic-verification.md:1263  [inline]  rm -rf ~/soufflai/.crucible-cache/accept-*
+```
+Output (after):
+```
+skill↔deny-list: 840 files, 12692 candidates judged, 7 denied, 7 overridden (4475 inline spans read as mentions, not invocations; Overrides section present, 59 parsed row(s))
+  overridden: .claude/skills/constraint-driven-development/SKILL.md:287  --no-verify
+  … 6 more overridden, 29 spans REPORTED as mentions in warning prose
+✓ no tracked skill instructs a command the deny list refuses.
+```
+Verdict:  **holds.** The second site left the tree entirely when Bambushu/crucible was
+dropped (entry above), so only the first needed a row. `constraint-driven-development`
+lists `--no-verify` as the symptom of a slow edit-loop check; the gate judges the span as
+written, and the row is how a judgement is released here.
+
+## 2026-09-12 — "The one new skill that writes into a repository root is ignored by the TRACKED ignore files"
+Command:
+```
+node scripts/check-gitignore-producers.mjs
+```
+Output:
+```
+gitignore↔skill producers: 6 listed producers + 115 derived diagrams/ probes checked against 105 patterns from 7 tracked ignore file(s) in a pristine harness; 120/120 ignored
+✓ every listed and derived skill-produced path is ignored by the tracked ignore files alone.
+```
+Verdict:  **holds.** `nemo-rl-session-memory/SKILL.md:27` says
+`mkdir -p session/<session_date_time>` in the repository it is run from. It is now a
+producer entry with a tracked ignore rule, so it cannot flip
+`provenance.workingTreeClean` on a later sim result — belt and braces beside the override
+row that routes checkpoints to the session scratchpad. The same pass found the SELF-TEST
+carrying its own copy of the ignore rules, twice, positionally paired with PRODUCERS: one
+`FIXTURE_RULES` list now, plus an assertion that it has one rule per producer.
+
 ## 2026-08-24 — "The ungated-fetch gate covers every outbound path in the connector tree"
 Command:
 ```
@@ -1683,3 +1816,722 @@ coordinator: docs figures nac 45->46, unsafe-claim 40->50, signalgrid-core 489->
 gates after: typecheck (all packages Done); review-invariants (determinism wider now names two remaining pinned defects — artifacts/mcp-server/src/index.ts and scripts/src/self-audit-proof.ts — and passes); known false claims, cited paths, markdown links, derived figures, docs sanity, cost figures, cross-doc banner parity, published-page scope banner, scheduled routines, launch-claims (0 violations, docs ceiling 416, retired 12 — no rise), proof figures (495 matches), proof counts (59), cited commands, cited symbols (92), doc line counts, lab-registry (48 entries, evidence age REPORTED), entry-guards self-test 12/12, catalog-structure self-test 45/45, parity self-test 18/18, gate census 189, surface coverage 100/100 — all passed
 ```
 Verdict:  **scripts/ was the surface where the guards live, and reading it whole found the guards themselves failing the way everything they watch fails — a self-test that could not go red, a kill rate over zero runs, a skip counted as a pass, a grep against text that is never printed, a ceiling that read corruption as a fresh start.** The pattern is the same one every prior round named, one level up: a check that cannot see the thing it guards. Every fix derives its scope from the thing that defines it — the core's fields, package.json, the installer's constants, git history for genesis — so the next member joins the check by itself, and two new gates now hold the two shapes reading found repeatedly (a module that runs its body on a filename match, a catalog total that no longer counts its rows). With this the ledger reads 100 of 100 surfaces READ; the six that were partial when Batch Y opened are closed. Left as owner decisions, not defects: the two remaining localeCompare pinned defects (artifacts/mcp-server directory listing, self-audit fingerprint), the k6 load drivers no runner invokes (tests surface, COMPANY_BUILD_PLAN row 43), and STATUS.md's "would run here now" column, whose generator cannot run to completion off a live-lane host and whose regeneration no gate enforces.
+
+## 2026-09-11 — "Brace-less `if (...) return x;` guards now enter the mutation sweep, opt-in per target, and the first four families are clean under it"
+Command:  the mutation guard's sweep only ever mutated braced `if` blocks; every one-line `if (cond) return x;` guard — the dominant shape in the newer fail-closed normalizers — sat outside it. A sixth mutator (oneline-cond-false: `if (cond) return x;` -> `if (false) return x;`) was added, gated behind `oneLine: true` on a TARGETS entry so an un-pinned family cannot turn the sweep red the day it lands, and measured across the whole registry before any target opted in. The custody family named below is a deferred family, not launch scope.
+```
+node scripts/mutation-guard.mjs                                  # full measurement, every target, mutator forced on
+node scripts/mutation-guard.mjs --proof=proof:rtls-custody       # opt-in sweep (deferred family)
+node scripts/mutation-guard.mjs --proof=proof:device-attestation
+node scripts/mutation-guard.mjs --proof=proof:verdict-attestation
+node scripts/mutation-guard.mjs --proof=proof:app-update
+pnpm run proof:verdict-attestation ; pnpm run proof:app-update
+pnpm run typecheck ; node scripts/check-proof-counts.mjs
+```
+Output:
+```
+full measurement (before any opt-in): mutations=1732 killed=1521 hung=4 known-inert=86 survivors=121 — 117 one-line survivors across 41 files, plus 4 braced break-glass disjuncts that were pinned separately on #645
+proof:rtls-custody (deferred family): mutations=14 killed=14 hung=0 known-inert=0 survivors=0
+proof:device-attestation:  mutations=25 killed=25 hung=0 known-inert=0 survivors=0
+proof:verdict-attestation: mutations=44 killed=37 hung=0 known-inert=4 survivors=3   (attest.ts:99 symbol-key guard, attest.ts:106 symbol-key guard, canonical.ts:45 early return)
+  -> after this round:     mutations=42 killed=38 hung=0 known-inert=4 survivors=0
+proof:app-update:          mutations=54 killed=50 hung=0 known-inert=4 survivors=0
+summary=pass (98/98)   proof:verdict-attestation (was 82)
+summary=pass (74/74)   proof:app-update (was 71)
+typecheck: all packages Done; proof counts: docs updated 82->98 (PRODUCT_CORE_THREAT_MODEL) and 71->74 (APP_UPDATE_CURRENCY, INTEGRATION_CATALOG)
+brace-less sweep (oneline-cond-false): 4 of 41 targets opted in; 37 pending (REPORTED, never fatal)
+```
+Verdict:  **holds — with three of the survivors turning out to be guards that could never fire.** attest.ts:99 was only reachable when Object.prototype carries the attestation's field names; it is now pinned by a check that plants those fields on Object.prototype, presents `Object.prototype` itself as the attestation, and expects `envelope_malformed` (restored in `finally`). attest.ts:106 and canonical.ts:45 were shadowed outright — a symbol key was already rejected by the `includes` membership check one line down, and the canonical early return fell through to the same `UNCANONICAL` the final line returns — so both were DELETED with a comment rather than allowlisted, and the membership check's cast now says why it accepts symbols. app-update's two shadowed guards (a symbol-key check under an `includes`, an empty-string check under a digits-only regex) went the same way, and `parseVersion` gained pins for `1e2.0`, `+1.0`, `1.0x`, empty, `v`, and whitespace. The other 37 families still carry their one-line survivors un-swept; the BUILD_BACKLOG campaign row lists them by survivor count, and each joins by adding `oneLine: true` once its survivors are pinned by a check that fails without them or documented inert with a reason. The guard REPORTS the pending count on every run and never fails on it — a family cannot be quietly counted as swept.
+## 2026-09-11 — "Two of the three runbook gaps modeled: the custody-ledger reconciliation (ledger vs bay vs cap) as a fixture corpus + fail-closed evaluator in the rtls-custody family, 48 new guards all falsifiable"
+Command:  the two gap rows in docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md that no surface modeled — "custody integrity" (a returned device still checked out to a prior holder / unpaired but occupying a slot) and the "per-user checkout cap" contradiction — built on the device-prep / supervision-identity pattern: lib/integrations/src/integrations/rtls-custody/custody-ledger.ts (6 normalized axes; the cap axis COMPUTED from three counts, never asserted; own-property reads, bounded chain scan, frozen domains and allowlist), a 19-fixture corpus, and a proof section in scripts/src/rtls-custody-proof.ts; registered with the mutation guard and the figure guard. Not a detect.ts detection and not a simulator change (both DR-020 territory — split to the backlog).
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:rtls-custody                               # 171 checks (was 63 on this base)
+node scripts/mutation-guard.mjs --proof=proof:rtls-custody
+node scripts/check-readiness-figure.mjs
+node scripts/generate-sync-manifest.mjs                   # regenerated, never hand-edited
+node scripts/check-proof-counts.mjs ; check-proof-figures ; check-cited-paths ; check-launch-claims ; check-known-false-claims ; docs:sanity ; review:invariants ; check-connector-discipline ; check-surface-review-coverage --write
+```
+Output:
+```
+figures=custodyLedgerCombos=864,custodyLedgerGrants=1
+summary=pass (171/171)
+mutations=62 killed=62 hung=0 known-inert=0 survivors=0     # 48 of the 62 are the new module's
+  (a) runbook ground truth       82%   14 modeled / 2 partial / 1 gap of 17 real-world elements   # on this base: the two partial rows are #641's, unmerged
+Proof-count check passed — all 60 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Cited-path check passed — 2241 citation(s) across 487 docs ...: all
+docs/**/*.md (REPORTED, not gated): 416 unhedged deferred-capability mention(s) ... (ceiling 416)   # four new blocks hedged where they sit
+Launch-claims gate passed — nothing deferred is presented as current.
+Known-false-claim check passed — every refutation holds, and no document re-states one.
+Docs sanity passed — required docs present, no unsafe claims.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Connector-discipline gate passed.
+wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces
+```
+Verdict:  **the runbooks' most-cited pain — a custody contradiction met as a mystery beep — is now a graded decision with a legible reason, and the two ground-truth rows read `modeled`.** The grant is a positive predicate over six axes (ledger clear with no holder, seated, paired, requester under cap, clean parse); the 864-state sweep pins it by equality (exactly one grant; `monitor` reachable only as "already held and not in the bay" and NOT ready; `escalate` only as "clear and the bay empty"; `alert` unreachable). The cap axis is derived from the requester's open count, the tenant cap and the docked-stale count with a strict integer parse, so "at cap only because a return never cleared" is a hold named `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN` and a cap genuinely reached is `CUSTODY_CAP_REACHED`. Every hostile-report shape the sibling surfaces learned from six review rounds is pinned on day one (inherited fields, polluted `Object.prototype`, throwing accessors and Proxy traps, unrecognized and symbol keys, the bounded walk, the frozen namespace). The one fixture that failed on the first run (`unpaired-absent`) was the proof's expectation, not the evaluator: a clear ledger over an empty bay is unaccounted (escalate) and outranks unpaired (restrict), so the fixture now isolates the unpaired branch with the device out with the requester, and the precedence is pinned as its own check. Readiness (a) moves to 16 modeled / 1 gap of 17 once #641 lands; the headline stays 0% on (b) until the Mac re-mint. The third gap — the end-to-end smart-charging simulator scenario — is simulator behavior (DR-020) and stays filed.
+
+## 2026-09-11 — "In-house fail-closed audit of custody-ledger.ts: no P1; three P2s and five P3s, each verified by running and fixed at the root or recorded — plus the coverage page the merge left stale"
+Command:  the fail-closed-auditor (read-only, no guard runs) over lib/integrations/src/integrations/rtls-custody/custody-ledger.ts and its proof section; every finding re-executed here before a line changed. Then: the CI red on #649 (25efe93c) — "Surface read coverage" — reproduced locally and root-caused.
+```
+pnpm run proof:rtls-custody                               # 171 -> 189 checks
+node scripts/mutation-guard.mjs --proof=proof:rtls-custody
+node scripts/check-proof-figures.mjs                      # three runs: a stale value was planted twice (865 in place of the 864 combos the docs previously carried; 57,601 in place of the 57,600 previously documented) — both must fail — then the real run must pass
+node scripts/check-surface-review-coverage.mjs            # check mode, before and after --write on a CLEAN index
+node scripts/generate-sync-manifest.mjs ; check-proof-counts ; check-readiness-figure ; review:invariants ; check-connector-discipline ; check-cited-paths ; check-launch-claims ; docs:sanity ; typecheck
+```
+Output:
+```
+figures=custodyLedgerCombos=864,custodyLedgerGrants=1,custodyLedgerRawCombos=57600,custodyLedgerRawGrants=2
+summary=pass (189/189)
+mutations=62 killed=62 hung=0 known-inert=0 survivors=0
+PLANT (the combos figure, previously 864, planted one higher)  → ✗ docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md — the planted value "in a section about proof:rtls-custody, ..." Figure guard FAILED: 1 problem.
+PLANT (the raw figure, previously 57,600, planted one higher)  → ✗ docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md — the planted value "is stated in a section about proof:rtls-custody, ..." Figure guard FAILED: 1 problem.
+REAL              → Figure guard passed — every measured figure in the docs matches a live proof run.
+coverage (check, before)  ✗ docs/agent/SURFACE_REVIEW_COVERAGE.md is STALE versus docs/agent/SURFACE_REVIEW_COVERAGE.json and the tree.
+coverage (check, after)   Surface-read-coverage gate passed — every tracked file belongs to a surface ...   # page 2340 -> 2338 in-scope files
+live-sync manifest UPDATED — version 70, fingerprint 82c47dbb598a…
+Proof-count check passed — all 60 documented counts match their proofs.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.   Connector-discipline gate passed.   Launch-claims gate passed (416 = ceiling).
+```
+Verdict:  **the audit found no grant reachable by an unconfirmed input (its own 2,097,152-report raw sweep agreed with the proof), and the three P2s were all about what the PROOF could not see.** P2-1: the proof's comment claimed the figure guard would catch a stale 864 — it could not, because the guard's noun pass needs whitespace after the digits and every doc wrote "864-state"; the docs were rewritten to say "864 combos" (the figure was 864 before the freshness axis; it is re-derived by the guard on every run), the proof adds a raw-space sweep whose comma-formatted figure (previously 57,600) the guard reads on its own, and both are proven visible by planting a stale value and watching the guard fail (above), not by asserting it. P2-2: a Proxy whose ownKeys trap UNDER-reports hides an unrecognized key from the chain scan and reads clean — the same accepted decision the sibling surfaces recorded (a JSON wire report is never a Proxy; detecting one needs node:util, which console-bundled lib code cannot import; every enumeration primitive goes through the same trap), now written in the module beside the guard it names. P2-3: only one of the four readEnum integrity threads was pinned — dropping the integrity argument from three call sites left 171/171 green; each slot now has a present-but-non-string check asserting malformed and the reason, and an out-of-vocabulary check asserting clean. P3s: the prototype-walk bound is pinned exactly (63 clean, 64 malformed — the first cut of that pin counted the base object twice and failed, which is what a pin is for); cap 1 and stale === open are pinned valid; the ledger_state mapping names its clear members and defaults to unknown (the first cut's default arm was the permissive one — a future wire member would have read clear); key-exact / value-case-insensitive is pinned in both directions; the docs' unpaired row now says an unaccounted device takes the higher rung. Identity refs stay unvalidated (family convention, recorded — and overturned by Codex in the next round). The rtls-custody family stays deferred in the launch profile: built, not claimed. The separate CI red was the coverage page: regenerated while the merge index still carried the conflicted file's three stages, it counted two files that do not exist — the rule from #641 stands: resolve first, regenerate second, then run the CHECK, not only the write.
+
+## 2026-09-11 — "Codex round one on #649: own-name fixture lookup, one-time axis snapshot, revoked Proxy, identity binding, a posed freshness bound — each executed before the fix; the sweep's one survivor was the dead check the own-name guard made redundant"
+Command:  five Codex findings on custody-ledger.ts (two P1, two P1-rated by the reviewer that the in-house audit had rated P3/none, one P2), each reproduced with a real call before a line changed; the module, the proof and the docs moved together; the launch-claims red on 696ffe47 (one unhedged block: the audit entry itself) hedged where it sits.
+```
+pnpm run typecheck ; pnpm run proof:rtls-custody
+node scripts/mutation-guard.mjs --proof=proof:rtls-custody     # twice: the first pass had one survivor
+node scripts/check-proof-figures.mjs ; check-proof-counts ; generate-sync-manifest ; check-readiness-figure ; review:invariants ; check-connector-discipline ; check-surface-review-coverage ; check-cited-paths ; check-launch-claims ; check-known-false-claims ; check-sim-requests ; check-lane-messages ; docs:sanity
+```
+Output:
+```
+figures=custodyLedgerCombos=4320,custodyLedgerGrants=1,custodyLedgerRawCombos=230400,custodyLedgerRawGrants=2
+summary=pass (214/214)                                                        # was 189
+sweep, first pass:  ✗ SURVIVED custody-ledger.ts:688  if (fixture === undefined) → if (false)   (dead after the own-name guard; removed)
+sweep, second pass: mutations=67 killed=67 hung=0 known-inert=0 survivors=0
+Figure guard passed — every measured figure in the docs matches a live proof run.     # 4,320 and 230,400 are comma-formatted: the guard reads them unaided
+Proof-count check passed — all 60 documented counts match their proofs.
+live-sync manifest UPDATED — version 71
+Surface-read-coverage gate passed ...   Invariant review passed ...   Connector-discipline gate passed.   Launch-claims gate passed (416 = ceiling).
+```
+Verdict:  **all five were real, and two of them overturned calls the in-house audit had made the other way — which is why both reviewers run.** (1) The fixture lookup was an inherited-property read: `evaluate…Fixture("toString")` returned a verdict built from a function, and with a grant-shaped object planted on Object.prototype a name that does not exist returned READY. Own-name only now, corpus frozen; and the sweep then showed the old `fixture === undefined` check dead behind the guard — removed rather than left as an unfalsifiable line. (2) The evaluator read each axis once per branch, so an accessor answering the branches with garbage and the domain guard with a valid value reached the grant on the second answer; every axis is now snapshotted once, a throwing read holds (`state_unreadable`). (3) `Array.isArray` on a REVOKED Proxy threw before any catch could keep the normalizer's no-throw promise; the shape check is now inside one. (4) Empty and whitespace refs granted — the audit called that a family convention; Codex was right that a per-device, per-requester authorization naming nobody is not a grant: `CUSTODY_IDENTITY_UNBOUND`, both refs checked, both branches pinned. (5) No freshness: a snapshot replayed later granted forever; the observation's age is now graded against a bound the caller poses through `posedBound` (default 300 s; NaN/Infinity/zero/negative never switch the check off — the axis goes unknown and raises; at exactly the bound the grant holds, one second past it is `CUSTODY_EVIDENCE_STALE`, an unreported age is unknown). The state space is 4,320 combos with the age axis and 230,400 raw wire reports (exactly two grant: the two spellings of a clear ledger). The rtls-custody family stays deferred in the launch profile: built, not claimed.
+## 2026-09-11 — "The last two runbook partials modeled — the supervision-identity lifecycle and the iOS update / device-prep workflow — and the evidence artifact learns to age itself"
+Command:  the two rows SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md still marked `partial` were built as distinct fixture corpora + fail-closed evaluators + proof sections on the break-glass fallback-sequence pattern, each registered with the mutation guard; `mintedAt` added to the mac-run.json emitter and preferred by the readiness age.
+```
+pnpm run typecheck                                        # exit 0 (all packages Done)
+pnpm run proof:device-attestation                         # summary=pass (119/119), was 77 — section 7 adds 42: 13 fixtures, 11 single-axis flips, a 288-state sweep pinning the one grant, a negative control, the normalizer on hostile wire
+pnpm run proof:app-update                                 # summary=pass (127/127), was 71 — device-prep adds 56: 20 fixtures, 18 flips, a 3,072-state sweep pinning the one grant; figures=…devicePrepCombos=3072,devicePrepGrants=1
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=42 killed=42 hung=0 known-inert=0 survivors=0
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=63 killed=59 hung=0 known-inert=4 survivors=0
+pnpm run review:invariants                                # Invariant review passed — fail-closed, deterministic, Assist-safe, truthful
+node scripts/check-connector-discipline.mjs               # Connector-discipline gate passed
+node scripts/check-readiness-figure.mjs --self-test       # self-test passed (19/19) — 6 new age cases: mintedAt preferred; unparseable/future stamp -> git; neither -> Infinity -> 0
+node scripts/check-readiness-figure.mjs                   # (a) 82% = 14 modeled / 0 partial / 3 gap of 17 (was 70%); (b) 0% — evidence covers 6f6a, tree 6989, age via git; (c) 100%; HEADLINE 0%
+node scripts/generate-sync-manifest.mjs                   # UPDATED version 70 (proofCounts device-attestation 77->119, app-update 71->127)
+node scripts/check-proof-counts.mjs                       # all 59 documented counts match their proofs
+node scripts/check-proof-figures.mjs                      # exit 0 (the 3,072 in APP_UPDATE_CURRENCY is a live figure of proof:app-update)
+node scripts/check-surface-review-coverage.mjs --write    # 102 read, 0 partial, 0 not read, of 102 surfaces
+node scripts/check-preflight-ci-parity.mjs                # preflight gates: 240 non-proof of 317; 373 wired, 0 unwired
+node scripts/preflight.mjs                                # Preflight PASSED — everything it runs is green. (317 gates ok; shellcheck installed in this container first — the run without it stopped at Shell lint)
+pnpm run verify:breadth                                   # Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Output:
+```
+supervision-identity.ts (device-attestation family) — the row's gap was that attestation was modeled but the supervision-identity LIFECYCLE was not a distinct fixture. It now is: supervision (supervised / unsupervised / unknown), identity binding (this org / another org / unbound = lost / unknown), enrollment (enrolled / lost / never / unknown), command channel (responsive / unresponsive / unknown), report integrity. A foreign identity, a lost identity or enrollment, never enrolled, or affirmatively unsupervised -> restrict (no management command can run); supervised-and-bound but answering nothing -> step_up; any unknown or a malformed report -> step_up. proof:device-attestation sweeps all 288 states and exactly one grants; no state resolves to monitor/alert/escalate. Normalizer: absent -> unknown and clean; out-of-vocabulary string -> unknown; present-but-non-string -> malformed; a boolean `supervised` accepted.
+device-prep.ts (app-update family) — the row's gap was that host-app VERSION currency was modeled but the prep / OS-update WORKFLOW was not. It now is: enrollment, profiles, required apps, OS update state (current / available / required / in progress / failed / unknown), prep stage, integrity. Failed prep or update, not provisioned, or update REQUIRED -> restrict; in progress / partial / pending / unknown -> step_up; an OPTIONAL update offered -> monitor (the one advisory); exactly one of 3,072 states grants; monitor reachable only through the optional update.
+Both evaluators use braced if/else-if chains so every guard is reachable by the mutators and carry no backstop predicate (the exhaustive sweep is the backstop that can be seen to fail): 0 survivors on both sweeps. Barrel exports, mutation-guard file lists, INTEGRATION_CATALOG and APP_UPDATE_CURRENCY prose, and the two ground-truth rows updated; the documented counts moved 77->119 and 71->127 (two claim sites each — one wrote "(N checks;" with a semicolon and a tight grep missed it twice), which regenerated the sync manifest to v70. Hardware evidence was already stale at 6f6a and stays stale until the Mac re-mints.
+mintedAt — verify-all.mjs stamps the mint time into mac-run.json (provenance, not a decision path; the artifact had 13 keys and none temporal, ROLE_LENS_REVIEW 2026-08-21). check-readiness-figure.evidenceAgeDays prefers it, falls back to the git commit date, and ignores an unparseable or FUTURE stamp (a wrong clock must never read fresh). LIVE_SYNC_LOOP.md corrected — it promised "no timestamps". The steward stops inferring age from GitHub commit history on a shallow clone once the Mac re-mints.
+The first preflight run stopped at Shell lint: shellcheck was not installed in this container. Installed (uid 0, plain apt-get) and re-run; the gate is a CI job either way.
+```
+Verdict:  **Dimension (a) of the readiness figure crossed the 80% floor — 14 of 17 runbook elements modeled, 0 partial — and did so by building the two missing surfaces as falsifiable, mutation-swept fixture corpora, not by relabeling rows.** The headline stays 0% on one Mac-side lever alone: re-mint mac-run.json against the current manifest; when it is minted it will carry its own age.
+
+## 2026-09-11 — "Three Codex findings on the runbook-partials PR (#641), each fixed at the root and pinned"
+Command:  the P1/P1/P2 findings on #641 verified against source before any edit (each was real), fixed, and gated; the earlier evidence line "unparseable/future stamp -> git" is superseded below.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (128/128) (was 119) — +9: inherited fields, Object.prototype, array/string, unrecognized own key, symbol key, 100-deep chain, throwing Proxy, honest path still grants
+pnpm run proof:app-update                                 # summary=pass (139/139) (was 127) — +9 of the same shapes for device-prep, +3 for readiness: readyForCheckout <=> (none | monitor), exactly 2 of 3,072 states ready
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=46 killed=46 hung=0 known-inert=0 survivors=0 (was 42/42)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=67 killed=63 hung=0 known-inert=4 survivors=0 (was 59 killed + 4 documented-inert of 63)
+node scripts/check-readiness-figure.mjs --self-test       # self-test passed (20/20) — 20 cases: an unparseable, FUTURE, or non-string mintedAt is now Infinity (invalid-mintedAt), never the git date
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 71, fingerprint 2daf941b6ed6 (proofCounts device-attestation 128, app-update 139)
+```
+Output:
+```
+P1 (both new normalizers) — the reads went through the prototype chain, so a report built with Object.create({...confirmed fields}) or a polluted prototype asserted nothing itself yet reached the one grant (trustPreconditionMet / readyForCheckout true). Reproduced in the proof before the fix. Fixed on the family's existing pattern (app-update-connector.ts): isPlainReport (rejects non-objects, arrays and Object.prototype itself), ownValue (own-property reads only), and a BOUNDED prototype-chain scan that marks any inherited or unrecognized key malformed. Every hostile shape is malformed + all-unknown + no grant; the honest own-property report still grants (the fix did not foreclose the path).
+P1 (check-readiness-figure.evidenceAgeDays) — a PRESENT-but-invalid mintedAt fell back to the git commit date, so re-committing an old artifact with a garbage or future stamp would have minted a fresh age and scored dimension (b) 100. Now: git is the LEGACY fallback only when no stamp exists at all; a present stamp that is not a string, unparseable, or in the future is Infinity (source invalid-mintedAt) and scores 0. Two self-test cases flipped, one added.
+P2 (device-prep readyForCheckout) — the boolean was false on the advisory (an OPTIONAL update offered on an otherwise fully-confirmed device), contradicting APP_UPDATE_CURRENCY's "not a hold" and the ladder's ok tier: a checkout consumer would have withheld a ready device over an update nobody requires. readyForCheckout is now "not held, not contained" = none | monitor; the sweep pins it by equality (exactly two of 3,072 states ready: the grant and the advisory; every step_up/restrict false), and the trailing-|| is a mutant the proof kills.
+Codex P2 on the lane-mail PR (#642, merged d11279ca) — "queue the re-mint in the unattended loop, not prose" — was already met by the sim request riding this branch; replied and resolved.
+Process defect recorded: the previous entry's paragraph was appended AFTER preflight ran, so no local gate saw it; CI's figure guard and the sim-requests "pending" rule caught two sentences. This entry is written BEFORE the gates in this chain run on it.
+```
+Verdict:  **Three real findings from an outside reviewer, each reproduced, fixed at the root, and pinned by a check that fails without the fix.** No verdict outside the two new modules changed; both families stay deferred; no claim moves.
+
+## 2026-09-11 — "Codex round three on #641: the grant becomes a positive predicate, and a throwing read is malformed"
+Command:  four findings on e2881cba, each verified real against source before any edit, fixed at the root and pinned.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (140/140) (was 128) — +8: throwing own getter, throwing Proxy get, one out-of-domain value per axis (5), a real concern keeps its own reason
+pnpm run proof:app-update                                 # summary=pass (153/153) (was 139) — +9: the same two throwing shapes, six out-of-domain axes, a real concern keeps its own reason
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=51 killed=51 hung=0 known-inert=0 survivors=0 (was 46/46)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=73 killed=69 hung=0 known-inert=4 survivors=0 (was 63 killed + 4 documented-inert of 67)
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 72, fingerprint 1532efcae09e
+```
+Output:
+```
+P1 (both evaluators) — the branches cover every declared union member and the exhaustive sweep pins the grant over those, but a NORMALIZED value outside the union (a JavaScript caller, a cast, a deserialized object — e.g. enrollment: "garbage") matched no branch, so the grant seed survived and readyForCheckout / trustPreconditionMet came back true. The sweep could not see it because it enumerates union members. Now the grant is a POSITIVE predicate: if no branch fired AND any axis is not exactly its confirmed value, a step_up hold (STATE_UNKNOWN, unknownSignals "state_out_of_domain") is pushed before the reduce — pushed as a candidate, not swapped into the seed, because a seed swap would win ties against a real concern's reason and break the named outcomes (pinned: an unresponsive channel / an in-progress prep keeps its own reason). Both mutators on the guard die: cond-false by the out-of-domain checks, the dropped trailing conjunct by the grant fixture.
+P2 (both normalizers) — a recognized OWN key whose read throws (an accessor property, a Proxy get trap) passed the key scan and the exception escaped. Reads now sit in one try/catch: on a throw the report is malformed and every axis unknown. Pinned with a throwing own getter and a throwing get-trap Proxy on each normalizer.
+```
+Verdict:  **Two more real findings per module, each reproduced by a check that fails without the fix.** The evaluators' comment that said "deliberately no backstop predicate" was wrong for a runtime boundary and is replaced. No verdict outside the two new modules changed; both families stay deferred.
+
+## 2026-09-11 — "Codex round four on #641: the guard fires whatever else fired — an in-domain check on every axis"
+Command:  one P1 on 0785cbaf, verified real against source before any edit: the round-three guard was gated on an empty candidate list, so an optional-update advisory (monitor, still ready) beside an out-of-domain stage skipped it and the device read as ready.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (142/142) (was 140) — +2: a hold and a containment beside an out-of-domain axis
+pnpm run proof:app-update                                 # summary=pass (155/155) (was 153) — +2: the advisory-plus-garbage two-axis case, and a containment-plus-garbage control
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=51 killed=51 hung=0 known-inert=0 survivors=0 (was 51/51)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=73 killed=69 hung=0 known-inert=4 survivors=0 (was 69 killed + 4 documented-inert of 73)
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 73, fingerprint ee0ed845694f
+```
+Output:
+```
+The guard is now an IN-DOMAIN check per axis — exported *_DOMAIN lists carrying every declared member, unknown included — evaluated independently of the candidate list. Any axis outside its domain pushes a step_up hold (STATE_UNKNOWN, unknownSignals "state_out_of_domain") whatever else fired: after a monitor the hold outranks the advisory (advisory + garbage stage → step_up, readyForCheckout false); after another hold or a containment the earlier concern keeps its own reason on the tie (unresponsive channel + garbage → CHANNEL_UNRESPONSIVE; foreign identity + garbage → restrict; prep failed + garbage → restrict / DEVICE_PREP_FAILED). The round-three per-axis unknown-signal pins stay, and are no longer load-bearing for the sweep: "unknown" is in-domain, so the unknown branches are no longer shadowed and a deleted one fails its fixture outright.
+```
+Verdict:  **The round-three fix was itself wrong in a way the next review round caught: a guard that only runs when nothing else fired is not a guard on the axis.** The in-domain check runs every time. No verdict outside the two new modules changed; both families stay deferred.
+
+## 2026-09-11 — "Codex round five on #641: the domain lists are frozen at runtime"
+Command:  two P1s on 3ef4e567, verified real: `readonly` is a compile-time promise only, so a JavaScript caller could push "garbage" onto an exported *_DOMAIN list, make it in-domain, and reopen the grant.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (144/144) (was 142) — +2: every domain list frozen; a push throws, does not widen, and the hold survives
+pnpm run proof:app-update                                 # summary=pass (157/157) (was 155) — +2: the same two on the device-prep lists
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=51 killed=51 hung=0 known-inert=0 survivors=0 (was 51/51)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=73 killed=69 hung=0 known-inert=4 survivors=0 (was 69 killed + 4 documented-inert of 73)
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 74, fingerprint b47aedd37229
+```
+Output:
+```
+Every exported *_DOMAIN list is now Object.freeze()d at construction; the type stays readonly T[]. In strict-mode ESM a push onto a frozen array throws a TypeError, the length is unchanged, and the in-domain guard still holds the out-of-domain value — pinned on one list per module, with Object.isFrozen asserted over all of them.
+```
+Verdict:  **A guard whose allowlist a caller can edit is not a guard; the lists are now immutable at runtime and the proof would notice if one were not.** No verdict outside the two new modules changed; both families stay deferred.
+
+## 2026-09-11 — "Round six on #641 was the in-house reviewer (Codex out of quota): two P1s in the code the last two rounds touched, and the sweep's blind spots"
+Command:  the fail-closed-auditor subagent, told what five Codex rounds had found, was asked to reach the grant any way it could and to plant each fix back and watch for an assertion that does not fail. It found five things; four are fixed here, one is a recorded decision.
+```
+pnpm run typecheck                                        # exit 0
+pnpm run proof:device-attestation                         # summary=pass (148/148) (was 144) — +4: namespace-wide "every exported array is frozen", an allowlist push, Object.prototype polluted + EMPTY report, + ABSENT report
+pnpm run proof:app-update                                 # summary=pass (161/161) (was 157) — +4: the same four on the device-prep side
+node scripts/mutation-guard.mjs --proof=proof:device-attestation   # mutations=57 killed=57 hung=0 known-inert=0 survivors=0 (was 51/51 — three chain-scan guards braced into the sweep's reach)
+node scripts/mutation-guard.mjs --proof=proof:app-update            # mutations=79 killed=75 hung=0 known-inert=4 survivors=0 (was 69 killed + 4 documented-inert of 73)
+node scripts/generate-sync-manifest.mjs                   # manifestVersion 75, fingerprint 72c7ce8069a6
+```
+Output:
+```
+F1 (P1, fixed) — round five froze the eleven *_DOMAIN lists by hand and left the OTHER allowlist in the same files open: *_REPORT_KEYS, which hasUnrecognizedKey reads. One push("vendor_note") turned an unrecognized assertion from malformed into clean and readyForCheckout / trustPreconditionMet true (reproduced by the auditor). Both are now Object.freeze()d — and the proof no longer enumerates lists by hand: it walks the module namespace and asserts every exported array is frozen. That check earned its keep on its first run: it failed on a THIRD unfrozen list, APP_UPDATE_REPORT_KEYS in the pre-existing app-update connector (types.ts), which the same barrel exports — frozen too. A hand-enumerated pin would have missed it exactly as round five did.
+F2 (P1, fixed) — ownValue's hasOwnProperty guard, the round-two fix, was pinned by nothing: every hostile case used Object.create, which the chain scan catches at depth 1 first; with the guard deleted both proofs stayed green (auditor: 157/157, 144/144). The vector the code comment names — a polluted Object.prototype — was never exercised, and with the guard gone an EMPTY and even an ABSENT report normalized to fully confirmed. Pinned: pollute Object.prototype with every recognized key, normalize {} and undefined, assert all-unknown and not ready / not trusted, restore in finally.
+F3 (P2, fixed in part) — the mutation guard's mutators match ") {", trailing && / ||, and bare return true/false; the normalizers' one-line "if (...) return true;" guards and multi-conjunct return expressions matched nothing, so "survivors=0" ran over a population that excluded them. The three reachable chain-scan guards (depth bound, inherited key, unrecognized key) are now braced and in the sweep; the redundant symbol-key guard is deleted (known holds strings, so includes() is false for any symbol and the last guard catches it). isPlainReport's return expression and ownValue stay outside the mutators — F2's pin is the falsifier for ownValue. The brace-less-clause mutator itself remains the filed follow-up (LOOP.md).
+F4 (P2, fixed) — both exhaustive sweeps enumerated HAND-TYPED domain lists; the exported *_DOMAIN lists were imported only for the freeze check. A member added to a domain with no evaluator branch would have been in-domain, fired nothing, and granted — invisible to the sweep, the combos assertion, and (because the doc figure is fed from the hand-typed product) the figure guard. The sweeps now walk the exported domains; the 3,072 / 288 literals stay as the documented figure pins so a grown domain moves the figures= line and trips the figure guard. (288 in INTEGRATION_CATALOG remains outside check-proof-figures' comma-formatted vocabulary — a known gap of that tool, now noted in the proof comment.)
+F5 (P3, DECISION: not closed) — a Proxy whose ownKeys trap hides a key can switch the unrecognized-key defence off for an in-process caller. A JSON.parse'd wire report cannot be a Proxy; rejecting Proxies would need node:util in lib code that the console also bundles. Recorded here as an accepted risk with the reasoning, not silently.
+Also verified clean by the auditor, running not reasoning: every code point U+0080–U+2FFFF against readEnum's trim().toLowerCase() (no homoglyph or case-fold reaches a vocabulary word); boxed Strings, arrays, toString objects, numbers on the wire and on the normalized struct; the worst-concern reduce over all 3,072 states (2 ready, 0 with findings); ESM namespace redefinition of a domain list; every 2026-09-11 doc figure against live runs.
+```
+Verdict:  **Codex running out of quota is an absent signal, not a clean round — the in-house reviewer found two P1s where the last two rounds had just worked.** Both are the same species as round five (an allowlist a caller could edit; a guard no check could tell from deleted), fixed the same way: at the root, with a check that fails without the fix. No verdict outside the two new modules changed; both families stay deferred.
+
+## 2026-09-11 — "The queued re-mint request is WITHDRAWN from this branch (Codex P2 on the merged lane-mail PR #648)"
+Command:  git rm artifacts/sim-requests/2026-09-11-re-mint-evidence-manifest-v70.json ; node scripts/check-sim-requests.mjs ; node scripts/check-cited-paths.mjs ; pnpm run docs:sanity
+Output:
+```
+Simulation request loop passed — every result binds to a request it was asked for.
+Cited-path check passed — 2240 citation(s) across 487 docs plus 26 gate-script reference(s) in lib/ source comments
+Docs sanity passed — required docs present, no unsafe claims.
+```
+Verdict:  **the request that rode this branch would have made the unattended tick mint against an intermediate manifest.** The Mac lane re-minted against mainline's v68 on its own (53c60f4e) and three product PRs (#638, #641, #645, plus the custody-ledger PR — a family the launch profile keeps deferred) each move the manifest; the plan mailed to the Mac is ONE re-mint after all of them land. Codex read the tick correctly (scripts/mac/lane-tick.sh runs every PENDING request the moment the checkout is back on SignalGrid_Alpha): had #641 landed first, its request would have run at once against v75, and a successor written later cannot supersede a request that has already run. So the request is withdrawn here, not superseded — nothing had run against it (no result binds to it, the gate above says so) — and a fresh request against the FINAL fingerprint is queued after the last of the three lands. The earlier entry that says "the sim request riding this branch" described the branch at that time; this entry records the withdrawal rather than rewriting it.
+
+## 2026-09-11 — "Codex round seven on #641: own-name fixture lookup, one-time axis snapshot, revoked-Proxy catch — the same three holes the custody-ledger review found, closed in both modules"
+Command:  three Codex findings on device-prep.ts and supervision-identity.ts (two P1, one P2), each reproduced with a real call before a line changed; the fix pattern is the one #649 took the same hour, applied to both modules and pinned in both proofs.
+```
+pnpm run typecheck ; pnpm run proof:device-attestation ; pnpm run proof:app-update
+node scripts/mutation-guard.mjs --proof=proof:device-attestation ; node scripts/mutation-guard.mjs --proof=proof:app-update
+node scripts/generate-sync-manifest.mjs ; check-proof-counts ; check-proof-figures ; check-readiness-figure ; review:invariants ; check-connector-discipline ; check-surface-review-coverage --write ; check-cited-paths ; check-launch-claims ; check-known-false-claims ; check-sim-requests ; docs:sanity
+```
+Output:
+```
+summary=pass (154/154)      # device-attestation, was 148
+summary=pass (167/167)      # app-update, was 161
+mutations=58 killed=58 hung=0 known-inert=0 survivors=0     # device-attestation
+mutations=80 killed=76 hung=0 known-inert=4 survivors=0     # app-update (the four inert are the documented ones)
+live-sync manifest UPDATED — version 76
+Proof-count check passed — all 59 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Surface-read-coverage gate passed ...   Invariant review passed ...   Connector-discipline gate passed.
+```
+Verdict:  **the reviewer read #649's round and asked whether the two sibling modules had the same three holes; they did, and each is pinned by a check that fails without the fix.** (1) `evaluateDevicePrepFixture("toString")` and `evaluateSupervisionIdentityFixture("toString")` returned a verdict built from a function, and a grant-shaped object planted on Object.prototype under a name that does not exist returned READY / trusted — both lookups are own-name only and both corpora frozen; the `fixture === undefined` check behind the guard was dead and is gone (the custody-ledger sweep had already shown that shape survives). (2) Both evaluators read each axis once per branch, so an accessor that answers the branches with an out-of-domain value and the domain guard with a valid one reached the grant on the second answer — every axis is snapshotted once, and a throwing read holds as `state_unreadable`. (3) `Array.isArray` on a REVOKED Proxy threw out of both normalizers before any catch could keep the no-throw promise — the shape check runs inside one. Nothing in the two grant predicates moved; the 288 / 3,072-state sweeps still pin one grant each. The device-attestation and app-update families stay deferred in the launch profile: built, not claimed.
+## 2026-09-12 — "The Mac tick pushed a heartbeat to mainline every 5 minutes because a SKIPPED result was exempt from the quiet throttle, and each push started four workflows; the throttle now keys on an UNCHANGED result, and a heartbeat-only push starts no workflow"
+Command:  read from the Actions run list for `SignalGrid_Alpha` (event push) and the failed job log on #654, then the tick script:
+```
+mcp github actions_list list_workflow_runs branch=SignalGrid_Alpha event=push     # what a heartbeat push starts
+mcp github get_job_logs 103467034731                                              # #654's failing step
+sed -n '60,100p' scripts/mac/lane-tick.sh                                         # the throttle
+bash -n scripts/mac/lane-tick.sh ; node scripts/check-sim-scripts-selfcheck.mjs ; pnpm run guard:ci-sync ; node scripts/check-preflight-ci-parity.mjs
+```
+Output:
+```
+push 60364d5b "Lane mail (mac): heartbeat mac-lane-tick" -> Supply Chain, SignalGrid CI, CodeQL, Connector Emulator Smoke (4 runs); the same at 00:36, 00:30, 00:25, 00:20, 00:15, 00:10 … — one push every 5 minutes
+SignalGrid CI on SignalGrid_Alpha: run 2537 (the #655 merge) conclusion=cancelled; 2536 cancelled; 2535 cancelled; 2533 cancelled; 2532 cancelled; 2530 cancelled — the next heartbeat cancels the mainline run of the merge before it
+#654 job 103467034731: ✗ could not reach the GitHub Actions API: GET …/actions/workflows/scheduled-verification.yml/runs?per_page=10&status=completed -> 403 rate limit exceeded (rate limited) (unchanged after 4 attempts) — every gate before check-ci-liveness passed
+lane-tick.sh: "Throttle ONLY a purely-quiet result … acted/skipped/failed always deliver" — and the tick has read "skipped: checkout on mac/land-641-645-638, not SignalGrid_Alpha" since 23:44Z, so it delivered every run
+after the change: bash syntax ok; sim-scripts-selfcheck 9 script(s) checked statically, 0 problem(s); Drift check passed — every proof runs in both places; preflight↔CI parity passed — every preflight gate is wired into a workflow, 0 unwired
+```
+Verdict:  **refuted — the tick's own comment said the throttle "keeps that from flooding SignalGrid_Alpha with heartbeat commits", and it did not: the exemption for skipped/failed results is the flood.** The throttle now compares the result to the one last delivered (kept beside the stamp in node_modules) and re-pushes an identical result at most once per window; a changed result — the first skip, the first failure, any acted tick — still delivers at once, so the steward's 3-hour staleness window and the "a tick that died silently" guarantee both hold. Separately, the four workflows that trigger on push to `SignalGrid_Alpha` now ignore a push that touches only `artifacts/agent-heartbeats/**`: lane-deliver already gates that file, it changes no code, and a heartbeat push must not cancel the mainline run of a real merge. What this does NOT fix: the Mac's checkout has been parked on `mac/land-641-645-638` since 23:44Z, so every tick still skips; returning it to Alpha is a person's action (mailed).
+## 2026-09-12 — "The surface-coverage page no longer moves on lane mail: the mailbox trees stay claimed surfaces, their record counts are withheld from the render, and the self-test proves the page is byte-identical before and after one more record lands"
+Command:  the page printed files-per-surface for `artifacts/lane-messages` and `artifacts/agent-heartbeats`, so every delivery (a send, an ack, a batch) regenerated it and every open product PR — the Mac's combined landing #653, the cloud's #649 and #654 — went unmergeable on that one generated file within the hour, each cycle, until somebody merged mainline in and regenerated. The generator now declares `MAILBOX_TREES`; a mailbox file is still claimed by exactly one surface (completeness untouched), only the NUMBER is withheld and left out of the header figures, and a per-key check fails a mailbox key that names no surface or holds no record.
+```
+node scripts/check-surface-review-coverage.mjs --self-test
+node scripts/check-surface-review-coverage.mjs --write ; node scripts/check-surface-review-coverage.mjs
+```
+Output:
+```
+  ok   — every declared mailbox tree is a derived surface and holds records (baseCover proves it)
+  ok   — a MAILBOX_TREES key that is not a surface is FATAL, naming the key
+  ok   — a MAILBOX_TREES key whose tree holds no record is FATAL, naming the key
+  ok   — one more record under a mailbox tree leaves the rendered page BYTE-IDENTICAL (the reason the trees are declared)
+  ok   — …and one more file under a NON-mailbox surface DOES change the page (the identity test is not vacuous)
+self-test: 54/54 controls passed
+wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces
+Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
+```
+Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated total to the files a person can actually read again; the two mailbox rows print `mailbox` in the Files column. `lane-deliver.mjs` keeps regenerating the page on every delivery — idempotent now, and still the catch for a page stale for any other reason. What this does NOT fix: a PR that itself changes the tracked-file set still moves the page, and two such PRs still conflict on it; that is the page doing its job.
+## 2026-09-12 — "proof:facility-trust-graph opts in to the brace-less mutator and the sweep has ZERO survivors: 22 one-line guards, 18 pinned by new checks, 4 deleted as shadowed, 0 allowlisted"
+Command:  the `oneline-cond-false` mutator (landed 2026-09-11 as a ratchet) reaches the guard shape three reviews found invisible — `if (cond) return x;` with no braces. This family carried 22 of them unfalsified: four copies of `instantOf`'s ISO shape gate (Date.parse accepts "2026-07-31", so without the regex a date-only string becomes midnight UTC and an illegible instant grades as a legible one), three copies of the bounded prototype walk, the recency and confidence bound readers (JS computes `"120" * 1000` and `0.93 >= "0.6"` happily, and `null >= 0` is true), and the zone-presence grader's input gates. 16 new checks drive the real malformed/hostile/boundary input through the public surface. FOUR guards were deleted as genuinely shadowed rather than pinned: `transition.ts`'s `graph.get(exitBoundaryId) === null` (every zonePath entry is a graph node, so an id the graph does not carry can never appear in it and the containment check one line below already refuses it as EXIT_BOUNDARY_INVALID), and the three `if (typeof k === "symbol") return true;` lines in evaluate/clinical/gateway — `known` holds only strings, so the unrecognized-key test one line down refuses every symbol on its own; the membership test is widened to `readonly (string | symbol)[]`, a TYPE cast only, matching the pattern already landed in `lib/verdict-attestation/src/attest.ts`. Nothing is allowlisted: the sweep's known-inert count for this family is unchanged from what the other families contribute.
+```
+node scripts/mutation-guard.mjs --proof=proof:facility-trust-graph
+pnpm run proof:facility-trust-graph ; pnpm run typecheck ; pnpm run review:invariants
+node scripts/check-guard-registries.mjs ; node scripts/check-mutation-sharding.mjs
+node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs ; node scripts/check-connector-discipline.mjs
+```
+Output:
+```
+mutations=136 killed=125 hung=0 known-inert=11 survivors=0
+figures=mutations=136,killed=125,inert=11,survivors=0
+brace-less sweep (oneline-cond-false): 1 of 1 targets opted in; 0 pending (REPORTED, never fatal — a target joins when its one-line guards are pinned or documented inert)
+Mutation guard passed — every registered guard is falsifiable, or documented as inert.
+summary=pass (140/140)
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Registry drift check passed — every allow-path proof and every published figure is accounted for.
+summary=pass (32/32)
+Proof-count check passed — all 59 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Connector-discipline gate passed.
+```
+Verdict:  holds. Before: `mutations=140 killed=107 known-inert=11 survivors=22`. The proof went 124 → 140 checks (measured: `summary=pass (124/124)` on HEAD's copy of the proof, `summary=pass (140/140)` on this one), and every new check was confirmed to fail with its guard disabled by re-running the sweep, not by inspection. The deleted symbol guards did not take their behaviour with them: a symbol own key is still refused on all three surfaces, now stated by a check ("a SYMBOL own key refuses on every surface") instead of by a line the sweep proved nothing noticed. No documented check count names this proof, so no doc figure moved. What this does NOT fix: the other targets that have not joined the brace-less sweep — the census line prints the pending count on every run, and 417 brace-less guards were measured across 49 of the 53 targets on 2026-09-11.
+## 2026-09-12 — "Four workflows the cloud lane ran by hand are now skills both lanes load from the tree — and the four additions move three registries that hold the skill plane's own count honest"
+Command:  four first-party skills authored from the day's records (the Graphify and video rows in RESOURCE_INTAKE, DR-037, the LANE_COORDINATION build-work section), then every gate that reads `.claude/skills/` plus the full per-push lane.
+```
+node scripts/check-skill-instruction-conflicts.mjs
+node scripts/check-plugin-manifest.mjs
+node scripts/check-publication-boundary.mjs
+node scripts/check-cited-paths.mjs
+node scripts/check-cited-commands.mjs
+node scripts/check-doc-orphans.mjs
+node scripts/check-launch-claims.mjs
+node scripts/check-skill-plane-conformance.mjs
+node scripts/check-surface-review-coverage.mjs --write
+node scripts/preflight.mjs
+```
+Output:
+```
+✓ no tracked skill instructs a command the deny list refuses.
+Plugin-manifest gate passed — signalgrid plugin: 13 agents (derived), skills + commands present; claude plugin validate exit 0.
+  ✓ vendored-set arithmetic: 14 skill director(y/ies) under the vendored claim, 16 first-party carve-out(s) matching 16 table rows and the stated word, code figure 14
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+Cited-path check passed — 2297 citation(s) across 492 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Cited-command check passed — every command a document promises is a command that exists.
+Doc-orphan check passed — no new unreachable documents.
+Launch-claims gate passed — nothing deferred is presented as current.
+Skill-plane conformance — 30 skill(s), 13 agent(s) walked
+Skill-plane conformance passed — every skill and agent carries a name that matches its home and a non-empty description.
+wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces
+Preflight PASSED — everything it runs is green.
+  2 proof(s) SELF-SKIPPED — they exited 0 without running:
+    · Proof: backup-restore (the restore path, exercised not assumed) (DATABASE_URL unset)
+    · Proof: db-role-split (the ledger append-only by privilege) (DATABASE_URL unset)
+```
+Verdict:  **holds, and the cited-commands gate caught the very pitfall one of the skills was being written to record.** `orchestrator-over-workers` quoted a silencing flag between `run` and the script name as its own worked example; the gate read the flag as the script name and failed the file — so the bullet now names the shape without printing it, and says that it tripped while being written. The four skills are `tool-evaluation-by-use`, `media-intake`, `landing-under-dr-037` and `orchestrator-over-workers`, each derived from a record in the tree (the Graphify and two-video rows of `docs/agent/RESOURCE_INTAKE.md` 2026-09-12, DR-037, and the "How the cloud lane runs build work" section of `docs/LANE_COORDINATION.md`). Registry arithmetic moved with them and is gated on both halves: four `tooling` carve-outs in `scripts/publication-boundary.mjs`, four table rows plus TWELVE→SIXTEEN and 26 = 14 + 12 → 30 = 14 + 16 in `.claude/skills/VENDORED.md`, and the number-word map in `scripts/check-publication-boundary.mjs`, which stopped at FIFTEEN and could not have read the new word at all. The same 26/12 pair is restated in four documents and one gate-lib comment, all moved. `.claude-plugin/plugin.json` needed nothing (`skills` is a directory; only `agents` is a hand-list) and `docs/agent/org-roster.json` needed nothing (its pointers resolve roster → disk, never the reverse). What this does NOT establish: no skill here was pressure-tested against a subagent the way `writing-skills` prescribes — they are records of procedures already executed, not procedures proven to survive an agent looking for a loophole.
+## 2026-09-12 — "dual-control joins the brace-less mutation sweep with zero survivors: seven one-line guards in the request normalizer, six now pinned by checks that fail without them and one deleted as shadowed"
+Command:  the `oneline-cond-false` mutator was opt-in and dual-control had not joined; opting it in surfaced 7 survivors, all in `lib/dual-control/src/normalize.ts` — the three `v === undefined || v === null → false` arms (absence read as malformed was never asserted to be WRONG), the `typeof v !== "string"` arm of `enumMalformed` (every junk-enum vector was a string, so nothing reached it), the prototype walk's depth bound, the `depth > 0` clause (the inherited-key vectors were all MISSPELLED keys, caught by the spelling check too), and the `typeof k === "symbol"` clause.
+```
+node scripts/mutation-guard.mjs --proof=proof:dual-control ; pnpm run proof:dual-control | tail -1
+node scripts/check-proof-counts.mjs | tail -1 ; pnpm run review:invariants | tail -1
+```
+Output:
+```
+   lib/dual-control/src/evaluate.ts — 19 mutations
+   lib/dual-control/src/normalize.ts — 26 mutations
+mutations=45 killed=43 hung=0 known-inert=2 survivors=0
+figures=mutations=45,killed=43,inert=2,survivors=0
+brace-less sweep (oneline-cond-false): 1 of 1 targets opted in; 0 pending (REPORTED, never fatal — a target joins when its one-line guards are pinned or documented inert)
+Mutation guard passed — every registered guard is falsifiable, or documented as inert.
+summary=pass (78/78)
+Proof-count check passed — all 59 documented counts match their proofs.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+```
+Verdict:  holds. Six guards gained checks that exercise the real hostile input (a non-string enum that would throw from `.trim()`, an 80-link prototype chain against a 4-link control, an inherited `userVerified: true`, a symbol own key, and every optional field omitted one at a time asserting `clean` — absence is silence, not a broken assertion, and marking it malformed would be safe-but-false). The `typeof k === "symbol"` clause was DELETED as shadowed: `known` holds strings only, so the `!knownKeys.includes(k)` check below it flags every symbol at depth 0 and the `depth > 0` clause above it flags every deeper level; the new symbol check is what fails if that ordering ever changes. Proof grows 60 → 78 checks (`DUAL_CONTROL.md`, `INTEGRATION_CATALOG.md` updated). What this does NOT change: no evaluator logic moved — `evaluate.ts` had no survivors — and the census line above counts only the target this filtered run swept, so it says nothing about how many other families have joined the brace-less sweep.
+## 2026-09-12 — "benchmark-selection joins the brace-less mutation sweep: its 7 one-line survivors are pinned by checks that fail without them or deleted as shadowed, and the sweep now prints survivors=0"
+Command:  the target opted in with `oneLine: true`; five survivors got proof checks that exercise the real hostile input (a non-string enum, a prototype-carried KNOWN key, an instant `Date.parse` accepts but the strict Zulu shape refuses, a blank entry in the operator's requirement list, a title the catalog does not carry asked of `highestVersionFor`); two were genuinely shadowed and deleted with the covering check named in a comment (`typeof k === "symbol"` — `known` holds strings, so the allowlist line below already refuses a symbol; `assessmentMs === null || referenceMs === null` — `ageMs` returns null for either, which the `age === null` line below resolves to `unknown`).
+```
+node scripts/mutation-guard.mjs --proof=proof:benchmark-selection
+pnpm run proof:benchmark-selection ; pnpm run typecheck ; node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs ; pnpm run review:invariants ; node scripts/check-connector-discipline.mjs
+```
+Output:
+```
+before: mutations=75 killed=61 hung=0 known-inert=7 survivors=7
+after:  mutations=73 killed=66 hung=0 known-inert=7 survivors=0
+Mutation guard passed — every registered guard is falsifiable, or documented as inert.
+brace-less sweep (oneline-cond-false): 1 of 1 targets opted in; 0 pending
+summary=pass (104/104)
+Proof-count check passed — all 59 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Connector-discipline gate passed.
+```
+Verdict:  holds. The family's one-line guards are now falsifiable by their own proof: the check count rose 95 → 104 (`docs/BENCHMARK_SELECTION.md`, `docs/INTEGRATION_CATALOG.md` updated from output, not memory). Nothing was loosened — every new check asserts the fail-closed outcome (`malformed`, `unknown`, never the grant), and each deleted guard was proven shadowed by a check that produces the identical answer for every input that reaches it. What this does NOT fix: the other pending families in the brace-less census (facility-trust-graph 22, dual-control 7, bootstrap-credential 6, …) are untouched; this target is one of the 41.
+## 2026-09-12 — "The bootstrap-credential family joins the brace-less mutation sweep with ZERO survivors: six one-line guards that no check could falsify are now pinned by four new proof checks, and one symbol guard proved shadowed and was deleted"
+Command:  the `oneline-cond-false` mutator rewrites a brace-less `if (cond) return x;` to `if (false) return x;`. Opting the target in exposed six guards in `bootstrap-credential-connector.ts` that the 48-check proof could not falsify — the non-string enum refusal, the prototype-walk depth bound, the inherited-own-key refusal, the symbol refusal, the strict ISO-8601 Zulu instant regex, and the expires-before-issued derivation. Five are real behaviour and now have checks; the symbol refusal is shadowed by the unrecognized-key check on the next line (`known` holds only strings, so `includes` of a symbol is always false) and was deleted with a comment naming its cover.
+```
+node scripts/mutation-guard.mjs --proof=proof:bootstrap-credential   # before the checks, and after
+pnpm run proof:bootstrap-credential ; node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs
+pnpm run review:invariants ; node scripts/check-connector-discipline.mjs ; pnpm run typecheck
+```
+Output:
+```
+before: mutations=53 killed=41 hung=0 known-inert=6 survivors=6
+        bootstrap-credential-connector.ts:51  if (typeof v !== "string") return true
+        bootstrap-credential-connector.ts:73  if (depth >= MAX_PROTOTYPE_DEPTH) return true
+        bootstrap-credential-connector.ts:75  if (depth > 0) return true
+        bootstrap-credential-connector.ts:76  if (typeof k === "symbol") return true
+        bootstrap-credential-connector.ts:98  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(s)) return null
+        bootstrap-credential-connector.ts:126 if (issuedMs !== null && issuedMs > expiresMs) return "unknown"
+after:  mutations=52 killed=46 hung=0 known-inert=6 survivors=0
+        brace-less sweep (oneline-cond-false): 1 of 1 targets opted in; 0 pending
+        Mutation guard passed — every registered guard is falsifiable, or documented as inert.
+summary=pass (52/52)
+Proof-count check passed — all 59 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Connector-discipline gate passed.
+typecheck exit=0
+```
+Verdict:  holds. The four new checks exercise the real hostile input that reaches each guard and assert the fail-closed outcome: a number/boolean/object in an enum slot is a malformed ASSERTION rather than a quiet fall to the unknown rung; a report buried under an 80-deep all-empty prototype chain is malformed because the walk's bound refuses rather than giving up and calling it clean; an inherited own key spelling a KNOWN field is still the prototype's claim; an offset-bearing or zone-less timestamp is unreadable rather than silently re-based onto a wall clock (expiry → `unbounded`, unreadable reference → lifetime `unknown`); and a window that expires before it was issued derives `unknown`, so the malformed rung is no longer the only thing holding that line. The containment window keeps its no-skew-allowance shape — nothing here widens it. `docs/INTEGRATION_CATALOG.md` moves 48 → 52 checks. What this does NOT fix: the six `known-inert` entries for this family are unchanged, and the other targets that have not joined the brace-less sweep still have guards this run never reached.
+
+## 2026-09-12 — "The /watch skill and the CLI-Anything plugin directory are in the tree byte-identical to their pins, and every gate that reads the skill plane is green with a second upstream in `.claude/skills/` (DR-040)"
+Command:  the owner overruled two "evaluated, not adopted" recommendations ("I'm going to challenge you on not adding CLI anything and the Claude video that's very essential"). Both trees were copied from the pinned scratch clones with `git archive` (tracked files only), the two export-ignored files (`.skillignore`, `.claude/skills/watch/scripts/build-skill.sh`) added from `git show`, and diffed back against the clones; then the registry, the boundary map and the four first-party edits were applied and the gates run on the staged worktree:
+```
+diff -r <clone>/skills/watch .claude/skills/watch -x __pycache__ -x LICENSE          # (empty)
+diff -r <clone>/cli-anything-plugin third_party/cli-anything -x __pycache__ -x VENDORED.md   # (empty)
+node scripts/check-skill-instruction-conflicts.mjs
+node scripts/check-publication-boundary.mjs
+node scripts/check-skill-plane-conformance.mjs
+node scripts/check-cited-paths.mjs ; node scripts/check-derived-doc-figures.mjs ; node scripts/check-plugin-manifest.mjs
+```
+Output:
+```
+watch byte-identical (12 files incl. .skillignore, build-skill.sh)
+cli-anything byte-identical
+  overridden: .claude/skills/watch/SKILL.md:193  rm -rf <dir>
+  overridden: .claude/skills/watch/scripts/setup.py:201  sudo apt install ffmpeg
+  overridden: .claude/skills/watch/scripts/setup.py:201  sudo dnf install ffmpeg
+✓ no tracked skill instructs a command the deny list refuses.
+  ✓ vendored-set arithmetic: 15 skill director(y/ies) under the vendored claim, 14 first-party carve-out(s) matching 14 table rows and the stated word, code figure 15
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+Skill-plane conformance — 29 skill(s), 13 agent(s) walked
+Cited-path check passed — 2307 citation(s) across 509 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Plugin-manifest gate passed — signalgrid plugin: 13 agents (derived), skills + commands present; claude plugin validate exit 0.
+```
+Verdict:  **landed as vendored, unmodified, with the two deny-list conflicts recorded as overrides instead of edits.** Before the two rows existed the conflicts gate failed on exactly those three spans (`✗ 3 skill instruction(s) the Bash deny list refuses`), and before the carve-outs and the figure moved the boundary gate failed on coverage (`26 tracked path(s) fall under NO declared area`, all under `third_party/cli-anything/`) — both failures were the gates doing their job on a second upstream, and both cleared without touching a vendored byte. What is NOT proven here: the transcription script has not been run on the Mac (the cloud measured the same path on 2026-09-12: 1,806 characters from a 70.61 s clip), and no session has yet invoked `/watch` from this directory rather than from a scratch clone. The first `video-intake` run on either lane is the live confirmation.
+## 2026-09-12 — "The ponytail pin 2ed6c52 is reproducible from upstream — the installer failed because it fetched an abbreviated id, which git treats as a ref name"
+Command:  the Mac lane reported `pnpm run ponytail:install` dying at `git fetch --depth=1 origin 2ed6c52` with "couldn't find remote ref 2ed6c52" and asked whether the vetted object exists. Probed upstream from the cloud, in a scratch clone:
+```
+git ls-remote --tags https://github.com/DietrichGebert/ponytail | grep v4.9.0
+git clone -q --depth 300 https://github.com/DietrichGebert/ponytail ponytail-probe
+git -C ponytail-probe cat-file -e 2ed6c52 ; git -C ponytail-probe log -1 --format='%H %ci %s' 2ed6c52
+git -C ponytail-probe merge-base --is-ancestor v4.9.0 2ed6c52 ; git -C ponytail-probe rev-list --count v4.9.0..2ed6c52
+git -C ponytail-probe diff --stat v4.9.0 2ed6c52 -- skills ; git -C ponytail-probe show 2ed6c52:.claude-plugin/plugin.json | grep version
+```
+Output:
+```
+0a4dd63ad4541f4f655c4108a295916f3c1d8fda	refs/tags/v4.9.0
+2ed6c52 present: yes
+2ed6c52c9d7e5e56942508591085fd45dea277d3 2026-08-08 00:44:01 +0300 feat: add Grok Build native skills adapter (revive #561) (#661)
+v4.9.0 ancestor of 2ed6c52: yes ; commits v4.9.0..2ed6c52: 3
+(skills dir diff: empty)            "version": "4.9.0",
+```
+Verdict:  **refuted as "unreproducible", confirmed as a real installer defect.** The object exists and is 3 commits after tag v4.9.0 (tests plus a Grok Build adapter; the skills tree the vetting read is byte-identical to the tag, and the plugin manifest at that commit says 4.9.0, which is what "= v4.9.0" meant). `git fetch origin <id>` fetches an object only by its FULL id; a 7-character id is looked up as a ref name and there is no ref by that name, so the installer could never have worked on a fresh clone — it worked on 2026-09-01 only because the object was already local. Fixed by pinning the full id; the DR-024 vetting stands unchanged.
+## 2026-09-12 — "All eight Crucible non-gating drafts on the custody-ledger family (#649) hold on execution: a shallow-frozen corpus that flips a fixture to a grant, a null options bag that throws, an unknown-axis list that omits the holder, an unswept posed-bound — plus four prose fossils"
+Command:  the Mac lane's `/temper` run on #649 mailed eight non-gating drafts (`artifacts/lane-messages/mac-crucible-temper-on-649-custody-ledger-clean-.json`). Each behavioural draft reproduced by execution against the unmodified tree before a line changed; then the fixes, the proof, and the sweep before and after:
+```
+node --import tsx <scratch repro of (e), (f), (g); not committed>     # against origin/SignalGrid_Alpha @ 2b01bfad
+node scripts/mutation-guard.mjs --proof=proof:rtls-custody    # before, then after adding posed-bound.ts to the target
+pnpm run proof:rtls-custody
+pnpm run typecheck ; node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs ; pnpm run review:invariants
+node scripts/check-connector-discipline.mjs ; node scripts/check-cited-paths.mjs ; node scripts/check-launch-claims.mjs ; node scripts/check-surface-review-coverage.mjs
+```
+Output:
+```
+(e) corpus frozen: true fixture 'unaccounted' frozen: false
+(e) mutation threw: false before: escalate false after: none true
+(f) null options threw: TypeError: Cannot read properties of null (reading 'maxObservationAgeSeconds') verdict: undefined
+(g) ledger unknown + holder unknown: ["ledger_state"]
+(g) checked_out + holder unknown + slot unknown: ["slot_state"]
+(g) clear + holder unknown + slot unknown: ["ledger_holder","slot_state"]
+(g) all three unknown: ["ledger_state","slot_state"]
+--- sweep BEFORE (posed-bound.ts in no target)
+   lib/integrations/src/integrations/rtls-custody/custody-ledger.ts — 53 mutations
+mutations=67 killed=67 hung=0 known-inert=0 survivors=0
+--- sweep AFTER (fixes in, posed-bound.ts added to the proof:rtls-custody target)
+   lib/integrations/src/integrations/rtls-custody/custody-ledger.ts — 58 mutations
+   lib/integrations/src/utils/posed-bound.ts — 2 mutations
+mutations=74 killed=74 hung=0 known-inert=0 survivors=0
+--- proof
+figures=custodyLedgerCombos=4320,custodyLedgerGrants=1,custodyLedgerRawCombos=230400,custodyLedgerRawGrants=2
+summary=pass (223/223)                              # was 214/214
+typecheck exit=0
+Proof-count check passed — all 60 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Connector-discipline gate passed.
+Cited-path check passed — 2327 citation(s) across 510 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Launch-claims gate passed — nothing deferred is presented as current.
+Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
+```
+Verdict:  **eight of eight held; none refuted.** (e) was the sharpest: `Object.isFrozen(CUSTODY_LEDGER_FIXTURES)` was true while a one-line nested write turned the `unaccounted` fixture (escalate) into the grant (`none`, ready) — the proof's "corpus is frozen" check was passing on the shallow freeze. The corpus is now deep-frozen and the check attempts the nested write. (f) `null` options threw a TypeError out of the evaluator; now `undefined` is the one spelling of "not posed" and `null`, a primitive, or a throwing read is a garbled pose — held on `observation_bound`, never the default (undefined and `{}` still grant, pinned). (g) the ledger-unknown and checked-out-over-unknown-bay branches now name `ledger_holder` when it is unknown, once, and a known holder is never named. (h) posed-bound.ts's two guards had never been swept in the 2026-09-11 registry-wide campaign either; both die on the existing NaN/Infinity/zero/negative bound checks — no new check was needed. (a)(b)(c)(d) were prose: the "864" fossil sat two lines from the 4,320 literal, "seven" from the eight-key list, the replay claim lacked its precondition in two of three docs, and "no record" could be read as "device not tracked" (which is `unknown`, not `clear`). The five new guards raise custody-ledger's mutation count 53→58 and every one is killed, so each new `if` is falsifiable by the proof that owns it. What is NOT proven: the cycle-free assumption in `freezeDeep` is enforced only by a stack overflow at module load, by design — the corpus is a literal.
+
+
+## 2026-09-12 — "LightRAG's key-free half runs with no LLM endpoint at all, and the installer and retrieval script hold their stated boundary (DR-041)"
+Command:
+```
+pnpm run lightrag:install                                   # node scripts/install-lightrag.mjs
+CI=true pnpm run lightrag:install                           # the CI refusal
+LIGHTRAG_DIR=<inside the tree> pnpm run lightrag:install    # the in-tree refusal
+pnpm run docs:retrieve -- --self-test
+pnpm run docs:retrieve -- --reindex                         # first full index
+pnpm run docs:retrieve -- --reindex                         # refresh, after rebasing onto a moved Alpha
+pnpm run docs:retrieve -- --top-k 3 "which document states the readiness floor that opens outreach"
+pnpm run docs:retrieve -- --status
+```
+Output:
+```
+lightrag 1.5.8 installed (pinned 2db12a3c, python 3.11.15, 73 packages, 34.6s) — venv <LIGHTRAG_DIR>/venv, model BAAI/bge-small-en-v1.5 (384-dim) cached in <LIGHTRAG_DIR>/models.
+NO generative model, no API key, no server, no hook, no graph. Index with: LIGHTRAG_DIR=<LIGHTRAG_DIR> pnpm run docs:retrieve -- --reindex
+
+--- pnpm run lightrag:install, with CI=true ---
+lightrag:install refused — this is CI. The index is a local research aid, never a build input; no gate, proof or doc figure may read it. Nothing was done.
+exit=1 (quoted from the run)
+--- pnpm run lightrag:install, with LIGHTRAG_DIR inside the tree ---
+lightrag:install refused — LIGHTRAG_DIR=<repo>/.lr-must-not-exist is inside the repo tree (<repo>); the venv and the index must live outside it — an untracked file in the tree flips `provenance.workingTreeClean` on every later sim result. Nothing was done.
+exit=1, and the directory was not created
+
+docs:retrieve --self-test
+
+  ✓ an in-tree LIGHTRAG_DIR is refused
+  ✓ and nothing was created inside the tree
+  ✓ the same refusal covers --reindex
+  ✓ a missing venv is refused and names the installer
+  ✓ and the refusal created no directory either
+  ✓ every corpus entry is tracked markdown under docs/
+  ✓ no untracked path reached the corpus (0 untracked path(s) under docs/ to test against — vacuous here)
+
+docs-retrieval self-test: green (corpus 312 tracked docs under docs/)
+
+docs:retrieve --reindex: 311 added, 0 changed (delete-then-reindex), 0 removed — 311 tracked docs.
+docs:retrieve --reindex: 311 documents indexed, 0 deleted first, 1940 texts embedded, 1636.2s. Manifest <LIGHTRAG_DIR>/docs-manifest.json.
+
+docs:retrieve --reindex: 1 added, 6 changed (delete-then-reindex), 0 removed — 312 tracked docs.
+docs:retrieve --reindex: 7 documents indexed, 6 deleted first, 101 texts embedded, 24.9s. Manifest <LIGHTRAG_DIR>/docs-manifest.json.
+
+docs:retrieve — "which document states the readiness floor that opens outreach"
+  mode naive, 3 chunks, 1.7s, 0 LLM calls (none is configured).
+
+  [1] docs/research/OUTREACH_EMAIL_TEMPLATES.md:1-106
+      # Outreach Email Templates
+      
+      > **SUPERSEDED 2026-08-23 — do not send from this file.**
+      > The live outreach surface is `docs/outreach/` (`TEMPLATES.md`,
+      > `OPERATING_RULES.md`, `TARGETS_CRITERIA.md`), which is gate-checked by
+      > `scripts/check-launch-claims.mjs` on every build. This document predates
+      > DR-011 (one ratified product label), DR-012 (the lean-IT market and the
+      > Fleet-first proof stack) and DR-013 (open-source proof IS product proof).
+      … (98 more lines — READ the file; this is a pointer, not a fact)
+
+  [2] docs/outreach/TEMPLATES.md:1-82
+      # Outreach templates — founder voice, every claim traced
+      
+      Governing rules (DR-011/DR-012 + the owner's confirmed guardrails,
+      2026-08-22): messages go out under the owner's identity via his connected
+      Gmail; **every product claim here traces to POSITIONING.md or a running
+      gate** — and that is now enforced by one, `scripts/check-launch-claims.mjs`,
+      which reads this file and the documents it cites and fails on a deferred
+      family presented as current; ~5–10 sends/day to researched targets only; every send and reply
+      … (74 more lines — READ the file; this is a pointer, not a fact)
+
+  [3] docs/research/DESIGN_PARTNER_READINESS.md:1-18
+      # Design Partner Readiness
+      
+      ## Readiness criteria
+      
+      - Executive one-pager reviewed.
+      - Demo script selected.
+      - Deterministic proof evidence shared.
+      - Public-safety guardrails accepted.
+      … (10 more lines — READ the file; this is a pointer, not a fact)
+
+Every line above is a pointer into a TRACKED file. Read it before citing it (DR-041).
+
+docs:retrieve status — index <LIGHTRAG_DIR>/index
+  indexed: 312 tracked docs (last refreshed 2026-09-12T04:18:23.061Z)
+  tracked now: 312
+  drift: 0 changed, 0 added, 0 removed
+  the index matches the tracked docs set.
+```
+Verdict:  **holds, and two defects were found by running it rather than by reading it.**
+DR-038 installed LightRAG on the Mac lane in its graph shape and recorded, honestly, that it is
+"not yet runnable: it needs an LLM AND an embedding endpoint, and this Mac has neither". The
+key-free half needs neither: `naive` mode with `only_need_context=True` makes 0 LLM calls, and
+`fastembed` embeds locally. The install resolves 73 packages from the pinned sha and warms
+`BAAI/bge-small-en-v1.5` to 384 dimensions with no API key in the process; the self-test proves
+both refusals (an in-tree `LIGHTRAG_DIR` exits 1 for `--status` and `--reindex` alike and creates
+nothing; a missing venv exits 1 and names the installer) and reports the third assertion's
+vacuity honestly rather than counting a check that cannot fail. Both scripts also refuse under
+`CI=true`. The index holds only the tracked markdown under `docs/` that `git ls-files` names, and
+`vdb_entities.json` / `vdb_relationships.json` are 48 bytes each — the graph is genuinely not
+built. The first full index is the slow part (1636.2 s) and is a one-time cost; the refresh
+immediately afterwards, when rebasing onto a moved `SignalGrid_Alpha` changed six tracked docs
+and added one, was 24.9 s.
+
+The two defects, both fixed before this branch was pushed and both invisible to a reading of the
+upstream README:
+1. **`ainsert` always runs entity extraction**, which is the LLM half. With no model configured
+   the first run left **311 of 311 documents FAILED after their chunks had already been embedded**
+   (1,934 chunks in `vdb_chunks.json`, queries answering normally) — an index green over its own
+   failure, the exact inversion this repo's fail-closed doctrine exists to stop. Fixed with
+   LightRAG's own first-class opt-out, process option `"!"` (`PROCESS_OPTION_SKIP_KG`, accepted
+   only by `apipeline_enqueue_documents`), plus a hard refusal if any document ends in a state
+   other than `processed`.
+2. **LightRAG canonicalizes a document's `file_path` to its BASENAME** and rejects a second
+   document sharing one. `docs/` holds several same-named files, so passing real relative paths
+   would have silently dropped all but the first `README.md`. The stored path is now tilde-joined
+   for uniqueness and the tracked path is recovered from the chunk id the worker assigns.
+
+What this does NOT establish: nothing about retrieval QUALITY beyond the sandbox evaluation's four
+questions (3 of 5, 1 of 5, 1 of 4, 1 of 5 top-5 hits against a grep ground truth). It is plain
+vector search, and the query above is a fair illustration — its top hit is a document
+banner-marked SUPERSEDED, which is exactly why the answer is a pointer to a tracked file the agent
+must open and never a fact on its own. It is not a gate, no proof or doc figure reads it, and
+`docs:retrieve` refuses on CI so it cannot become a build input. It says nothing about the Mac
+lane's graph-mode install, which still waits on Ollama.
+## 2026-09-12 — "The four-skills branch reconciled with DR-040 (#666) before landing: media-intake folded into video-intake, and the vendored-set arithmetic holds at 32 = 15 + 17"
+Command:  after merging origin/SignalGrid_Alpha at fcea6f4d (which carries `cli-anything/`, `video-intake/` and the vendored `watch/`), `.claude/skills/media-intake/` was removed — its whole procedure (local faster-whisper transcript, footage never committed) was already `video-intake/`'s — and its one distinct section (where a clip's substance lands, plus three never-rules) moved into `video-intake/SKILL.md`. Every restatement of the pair was then recounted and the gates that read the registry re-run on the merged tree.
+```
+node scripts/check-publication-boundary.mjs ; node scripts/check-skill-plane-conformance.mjs
+node scripts/check-skill-instruction-conflicts.mjs ; node scripts/check-derived-doc-figures.mjs ; node scripts/check-markdown-links.mjs
+```
+Output:
+```
+  ✓ vendored-set arithmetic: 15 skill director(y/ies) under the vendored claim, 17 first-party carve-out(s) matching 17 table rows and the stated word, code figure 15
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+Skill-plane conformance passed — every skill and agent carries a name that matches its home and a non-empty description.
+✓ no tracked skill instructs a command the deny list refuses.   (3 overridden sites, all in watch/)
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+```
+Verdict:  holds. The entry above this one (30 = 14 + 16) was true on the tree it measured and stays as the record; this is the reconciled figure. The four docs that restate the pair (`docs/MCP_AND_SKILLS_LANE_PARITY.md`, `docs/MCP_ARCHITECTURE.md`, `docs/agent/BRAIN_CYCLE_DESIGN.md`, the `scripts/check-skill-instruction-conflicts.mjs` header) and the derived figure in `docs/research/MCP_MARKET_LEADERBOARDS.md` now read 32 / 15 / 17, and section E of the boundary gate is what fails the moment they drift again.
+## 2026-09-12 — "The founder's post-decision cascade (self-resolve → notify the assigned team → ticket → change record → tell the people affected → monitor the fix) is modelled end to end in this tree"
+Command:
+```
+git ls-files 'lib/**/*.ts' | xargs grep -lniE "dead.?letter|dlq"
+git ls-files | xargs grep -ln "@workspace/incident-playbook"
+git ls-files | xargs grep -ln "integrations/itsm|@workspace/integrations/itsm"
+git ls-files 'lib/**/*.ts' | xargs grep -lniE "createChange|openChange|changeRequest|change_request"
+git ls-files 'lib/**/*.ts' | xargs grep -oniE "bullmq|kafkajs|amqplib|servicebus" | wc -l
+git ls-files '**/*.ts' | xargs grep -lniE "@opentelemetry" | wc -l
+node scripts/agent/absence-check.mjs "affected user notification"
+```
+Output:
+```
+# dead-letter / DLQ — outbound only
+lib/integrations/src/integrations/webhooks/dispatch.ts
+lib/integrations/src/integrations/webhooks/store.ts
+lib/integrations/src/integrations/webhooks/types.ts
+lib/signalgrid-core/src/types.ts
+lib/signalgrid-core/src/webhooks.ts
+
+# who imports the incident playbook
+docs/OPERATING_STACK_LAYER_MAP.md
+lib/incident-playbook/package.json
+lib/incident-playbook/src/index.ts
+pnpm-lock.yaml
+scripts/package.json
+scripts/src/fabric-evals-proof.ts
+scripts/src/fabric-scenario-proof.ts
+scripts/src/incident-playbook-proof.ts
+scripts/src/task-exception-proof.ts
+
+# who imports the itsm emitter family (lib/artifacts rows only shown)
+lib/integrations/package.json
+lib/integrations/src/index.ts
+scripts/src/emit-gate-proof.ts
+scripts/src/emitter-discipline-proof.ts
+scripts/src/itsm-credential-crypto-proof.ts
+scripts/src/itsm-template-proof.ts
+
+# anything that OPENS a change record
+(no matches)
+
+# broker dependency
+0
+
+# OpenTelemetry SDK in any .ts
+0
+
+# absence check, run BEFORE this change landed
+Absence check — "affected user notification" — presence needs one hit, absence needs exhaustion
+  empty  a tracked FILE OR DIRECTORY named for it
+  empty  a tracked file whose EXTENSION is it (.affected user notification)
+  empty  a CI WORKFLOW that builds or tests it
+  empty  the WORD appears in tracked source
+✓ CORROBORATED across 4 differently-shaped probes. Safe to claim — cite them.
+```
+Verdict:  **refuted as stated; the correct claim is narrower and is what DR-042 records.** Both ENDS of the cascade are built and the JOINS between them are not. Built and fixture-backed: remediation proposal (`lib/signalgrid-core/src/remediation.ts`, every proposal `approvalRequired` + `simulatedOnly`, `allow` produces none), the resolution planner and its simulation (`lib/signalgrid-core/src/resolution.ts`, `/v1/decisions/:id/resolution` and `/resolve`), the deterministic incident playbook (`lib/incident-playbook`, priority = impact × urgency, SLA per priority, assignment group, escalation flag), the orchestration planner (`lib/orchestration`), and deterministic webhook delivery with a recorded-never-awaited backoff and a `dead_letter` terminal state (`lib/signalgrid-core/src/webhooks.ts`). Connector stubs behind the live-call gate: the eight ITSM vendor adapters and the generic webhook emitter (`lib/integrations/src/integrations/itsm/`), the `change-window` reader, and the Redis-or-memory webhook DLQ (`lib/integrations/src/integrations/webhooks/`). **Absent:** every join. `@workspace/incident-playbook` is imported by FOUR PROOFS and by nothing in `lib/` or `artifacts/` — there is no code path from an `Incident` to an ITSM adapter, so no ticket can open. No identifier in `lib/**` opens or drafts a change record; the fabric only READS an approved one. No notification of an affected person exists anywhere (absence check CORROBORATED across all four probes, run before this change). Nothing observes whether a requested remediation landed — the architecture page's §9 already said so in its own words. Ingestion is not queued and there is no broker dependency; the queue vocabulary is outbound-only. No OpenTelemetry SDK is a dependency of any workspace package — the one `@opentelemetry` string in the tree is an externals entry in `artifacts/api-server/build.mjs`, and the live telemetry lane uses a collector CONTAINER (`scripts/lab/otel-collector.yaml`) against `/metrics`, which is metrics, not traces. **A note on the absence probe, because it matters for anyone re-running it:** after this change landed the same command returns INCONCLUSIVE with two matches, and both are this work's own prose (`docs/DECISION_RECORDS.md`, `docs/agent/RESOURCE_INTAKE.md`). A word appearing in a record ABOUT an absence is not the thing existing — that is the tool's documented verdict, and the CORROBORATED run above is the one that stands for the state of the tree before the six backlog items were opened.
+
+## 2026-09-12 — "The session-puck concept lands as DR-043 plus a hypothesis page plus five backlog items without adding one unhedged deferred-capability mention, one orphan, one dangling citation or one unreversible record"
+Command:
+```
+pnpm run check:absence "session puck"               # run with pnpm's -s (silent) flag, before the page existed
+git add docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md
+for g in check-cited-paths check-cited-commands check-markdown-links check-doc-orphans \
+         check-launch-claims check-known-false-claims check-decision-record-format \
+         check-derived-doc-figures check-doc-line-counts check-publication-boundary \
+         check-claim-inventory-anchors check-backlog-ownership check-text-safety; do
+  node scripts/$g.mjs; echo "exit=$?"; done
+```
+Output:
+```
+✓ CORROBORATED across 4 differently-shaped probes. Safe to claim — cite them.
+Cited-path check passed — 2433 citation(s) across 511 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Cited-command check passed — every command a document promises is a command that exists.
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+Doc-orphan check passed — no new unreachable documents.
+  docs/**/*.md (REPORTED, not gated): 416 unhedged deferred-capability mention(s) across 110 file(s) (53 more mention(s) in 6 engineering-doc(s) carved out per task #67, each verified) (ceiling 416)
+Launch-claims gate passed — nothing deferred is presented as current.
+Known-false-claim check passed — every refutation holds, and no document re-states one.
+  ✓ DR-043
+decision-record-format: 42 records, 0 without a reversal clause (GATED), 16 with prose-shaped sections (REPORTED); self-test green
+Decision-record format gate passed — every call states how it gets undone.
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+Claim-inventory anchors passed — 564 quoted claim(s) anchored and 105 cited fragment(s) in place; absent held at 0, remove-actioned still present at 0, evidence fragments absent at 0 (each may only fall).
+Backlog ownership check passed — every row with work left in it names a role from the registry.
+Text-safety gate passed.
+(all thirteen: exit=0)
+```
+Verdict:  **holds.** The cited-path count rose 2307 → 2433 (the new page and DR-043 cite the tree at path:line and every one resolves); the docs deferred-noun ceiling stayed at 416 with the page bannered as *nothing on this page is a claim of current capability* and every other touched block hedged in its own paragraph; the ceiling file was not rewritten (no drop, no rise); DR-043 is the 42nd record and carries a reversal clause. What this does NOT prove: that any of the five backlog items is buildable as specified — each is a design target until its proof is green and named — and nothing here measures the hardware, which is the point of DR-043 item 4. **Re-run after the same-day verification fixes** (four stale citations corrected, none of them affecting the gate outcome above): `node scripts/check-cited-paths.mjs` → `Cited-path check passed — 2435 citation(s) across 511 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).` — the count rose by two because the ES256 claim now cites the verifier and its proof row instead of an unrelated line, and `check-cited-commands` went red on this entry's own spelling of the absence command with the silent flag between `run` and the script name (the gate reads the flag as a script name) and is green again with the flag noted in a comment.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // =============================================================================
-// check-model-tap-boundary — the load-bearing fence for DR-035. It proves NO
+// check-model-tap-boundary — the load-bearing fence for DR-044. It proves NO
 // model can reach the product's deterministic decision path: no file under the
 // decision-path roots may import the tap/policy, name its env vars, or carry an
 // OpenAI-model-call shape — and the tap/policy themselves may import nothing from

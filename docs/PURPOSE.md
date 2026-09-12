@@ -27,9 +27,71 @@ the room. Open the app. **The identity is continuous; the systems are what is
 fragmented.** SignalGrid makes them behave as one, so the person never
 negotiates with technology.
 
+Each of those systems is owned, configured and defended by a different person or
+team, and every one of them has already decided how its own piece behaves. What
+the worker runs into is not only that the systems are separate — it is that
+**their owners are separate**, so no single administrator is in a position to
+make the chain work end to end. SignalGrid sits above that chain and ingests what
+each owner's system already publishes. It asks no owner to give up their system
+and it changes no owner's configuration.
+
+**The factor is the customer's choice, and the grid is agnostic to it.** Badge,
+prox/RFID, smart card, NFC, mobile credential, passkey or biometric — how a person
+proves who they are is an organization's decision and an organization's existing
+investment (`docs/CREDENTIAL_READER_SIGNAL_MODEL.md`). SignalGrid reads the result
+of whichever one is in use. A grid that required a particular reader would be the
+vendor lock it exists to remove.
+
+**A grant is scoped to what the person was assigned** — a department, an area, a
+room, a piece of equipment — not to the estate. The scope is the organization's own
+assignment, read from the systems that already hold it, never invented here.
+
 A decision is not the output. **A decision is the trigger for a cascade** -
 environment, workflow, verification, and escalation when reality does not match
 the expected outcome.
+
+### The cascade, named
+
+The cascade has stages, and naming them is what keeps "acts on the person's
+behalf" from being decoration. **Status is marked per stage, and a stage marked
+design intent is not a capability that ships today** — the launch profile and the
+publication boundary govern what may be said, and each unbuilt stage points at its
+`docs/BUILD_BACKLOG.md` item rather than at a promise.
+
+| Stage | What it means | Status |
+| --- | --- | --- |
+| **Decide** | allow / step-up / restrict / deny, deterministic and policy-versioned | **built** — `lib/signalgrid-core` |
+| **Plan the downstream actions** | the verdict plus room and workflow context become a plan of concrete actions, each classified auto / assist / step-up / blocked | **built** — `lib/orchestration` |
+| **Self-resolve what is safely resolvable** | a block with a known, reversible fix becomes an ordered, approval-gated, simulated resolution path | **built as a planner** — `lib/signalgrid-core/src/resolution.ts`, `/v1/decisions/{id}/resolution`. Nothing executes on a source system; see *Architectural prerequisite* |
+| **Route to the owner by the assigned protocol** | the failure is turned into a properly prioritized incident with an impact/urgency priority, an SLA, an assignment group and an escalation flag | **built as a deterministic playbook** — `lib/incident-playbook`; the dispatch half is the emitter families |
+| **Open the ticket** | the incident reaches the organization's ITSM as a ticket | **design intent** — the vendor emitters exist and are gated (`lib/integrations/src/integrations/itsm`); no live transport ships here |
+| **Open the change record** | a fix that is a change gets a change record, and the record governs the window | **design intent, one half built** — the fabric READS an approved change record (`change-window`) and does not open one |
+| **Tell the people affected** | the people whose work is interrupted learn what happened, **through the channel they already use** | **design intent** — and bound by §3: a notification SignalGrid invents that the worker has to go and read is a step added, which the law above forbids |
+| **Watch the fix, and step in** | the restriction lifts when the condition is observed to clear, not on a timer; if it does not clear, it escalates | **partial** — exception release and decision continuity exist; a general post-execution verifier does not (`docs/SIGNALGRID_CLOUD_PLATFORM_AND_CYBER_RESILIENCE_ARCHITECTURE.md` §9) |
+
+Two rules bind every stage and are not negotiable by any of them. Nothing in the
+cascade may **execute** a change on a source system without a recorded human
+approval — the read-before-write prerequisite below is the whole posture. And an
+unreachable or unknown downstream system **refuses**: a ticketing backend that
+cannot be reached leaves the failure open and says so, and never reports a ticket
+it did not open.
+
+### The system underneath is replaceable
+
+**Source-agnostic is the point, not a feature.** The building is the first scope; the
+same grid spans every system the company runs — across all of its sites and buildings —
+that exposes an API or SDK — the devices
+staff use, the admins who run those systems, and the workflows between them. Any such
+system is a candidate signal source. None is a dependency. **Vendor lock, in either
+direction, is the condition SignalGrid exists to remove** (DR-035).
+
+The decision shape is declared, not learned: *if X, this happens; if Y is not present,
+route to X or Y; solve, or deny.* Declared, versioned, deterministic, auditable — that is
+what lets an admin trust it and an auditor prove it.
+
+Replacing a system underneath is contract re-validation, not a rewrite: validate the new
+system's API against the same contract, and the same workflows carry over. The grid
+learns in the build loop and in what it recommends; what it *decides* stays declared.
 
 ## 3. The law that outranks everything else
 
@@ -210,6 +272,8 @@ decision noun may enter the tree.
   recommend or triage; the authoritative decision stays deterministic,
   policy-versioned, testable and auditable.
 - Write access to a source system on first deployment.
+- **Vendor lock, in either direction** — a design that needs one vendor underneath,
+  or that makes leaving SignalGrid cost the customer their workflows (DR-035).
 
 ## The test
 

@@ -241,6 +241,18 @@ check("deriveRecency maps its cases directly: an unreadable bound (zero, negativ
   deriveRecency({ requiredTitles: [OK_TITLE], maxAssessmentAgeDays: Number.NaN }, 0, 1) === "unknown" &&
   deriveRecency({ requiredTitles: [OK_TITLE] }, 0, 1) === "unbounded" &&
   deriveRecency(undefined, 0, 1) === "unbounded");
+check("an instant Date.parse ACCEPTS but the strict Zulu shape refuses (a +02:00 offset, a bare date, a local-time string) is unreadable → malformed, recency unknown, nothing carried: an ambiguous instant is not an instant",
+  ["2026-07-01T12:00:00+02:00", "2026-07-01", "2026-07-01T12:00:00"].every((t) => {
+    const n = normalizeReport("tz", clean({ assessment_time: t }), { requirement: AGE_REQ, referenceTime: REF });
+    return n.reportIntegrity === "malformed" && n.recency === "unknown" && n.assessmentTime === null;
+  }));
+check("a reference instant the CALLER poses in a non-Zulu shape is unreadable too → recency unknown, never silently current",
+  normalizeReport("tzr", clean({ assessment_time: "2026-07-01T12:00:00Z" }),
+    { requirement: AGE_REQ, referenceTime: "2026-07-31T00:00:00+02:00" }).recency === "unknown");
+check("recency is unknown when EITHER instant is missing — no run time at all, or no reference the caller posed",
+  deriveRecency(AGE_REQ, null, 1) === "unknown" &&
+  deriveRecency(AGE_REQ, 0, null) === "unknown" &&
+  deriveRecency(AGE_REQ, null, null) === "unknown");
 check("the run's own timestamp is carried as versioned evidence (the assessmentTime field), null when unreadable",
   normalizeReport("d", clean({ assessment_time: "2026-07-01T12:00:00Z" }), { requirement: AGE_REQ, referenceTime: REF }).assessmentTime === "2026-07-01T12:00:00Z" &&
   normalizeReport("d", clean(), { requirement: AGE_REQ, referenceTime: REF }).assessmentTime === null);
@@ -262,6 +274,25 @@ check("junk alignment alone → malformed",
   normalizeReport("j2", clean({ alignment: "mostly-ok" }), { requirement: REQUIREMENT }).reportIntegrity === "malformed");
 check("a version in a shape the catalog could never carry ('2.1') is a wire contradiction → malformed",
   normalizeReport("j3", clean({ benchmark_version: "2.1" }), { requirement: REQUIREMENT }).reportIntegrity === "malformed");
+let enumShapeThrew = false;
+let enumShapeMalformed = false;
+try {
+  enumShapeMalformed =
+    normalizeReport("j4", clean({ source_provenance: 42 }), { requirement: REQUIREMENT }).reportIntegrity === "malformed" &&
+    normalizeReport("j5", clean({ alignment: ["aligned"] }), { requirement: REQUIREMENT }).reportIntegrity === "malformed" &&
+    normalizeReport("j6", clean({ source_provenance: { value: "cis_published" } }), { requirement: REQUIREMENT }).reportIntegrity === "malformed";
+} catch { enumShapeThrew = true; }
+check("a NON-STRING enum (a number, an array, an object wrapping the right word) is an assertion in a shape no enum can carry → malformed, and never a thrown TypeError",
+  enumShapeMalformed && enumShapeThrew === false);
+const protoAsserted = Object.assign(Object.create({ benchmark_title: OK_TITLE }), clean()) as BenchmarkSelectionReportRaw;
+const protoAssertedNorm = normalizeReport("pk", protoAsserted, { requirement: REQUIREMENT });
+check("a report whose PROTOTYPE carries a key this connector UNDERSTANDS is malformed and cannot grant — value reads are own-only, so an inherited assertion in a known spelling would otherwise vanish from the record while still being asserted on the wire",
+  protoAssertedNorm.reportIntegrity === "malformed" &&
+  evaluateBenchmarkSelection(protoAssertedNorm).recommendedAction !== "none");
+const symbolKeyed = { ...clean() } as BenchmarkSelectionReportRaw;
+(symbolKeyed as Record<symbol, unknown>)[Symbol("scanner_note")] = "looks fine";
+check("a SYMBOL key on an otherwise-clean report is malformed — the allowlist holds strings, so a symbol is never a recognized key",
+  normalizeReport("sy", symbolKeyed, { requirement: REQUIREMENT }).reportIntegrity === "malformed");
 const inherited = evaluateBenchmarkSelection(
   normalizeReport("i", Object.create(clean()) as BenchmarkSelectionReportRaw, { requirement: REQUIREMENT }));
 check("a report with ZERO own keys asserts nothing and cannot grant", inherited.recommendedAction !== "none");
@@ -302,6 +333,10 @@ check(`the catalog spans ${catalog.derived.families} families, ${catalog.derived
 check("the derived totals reconcile: current + disa_stig = entries, and highest + superseded = entries",
   catalog.derived.sectionCurrent + catalog.derived.sectionDisaStig === catalog.derived.entries &&
   catalog.derived.highestVersionRows + catalog.derived.supersededRows === catalog.derived.entries);
+let highestForMissing: string | null = "threw";
+try { highestForMissing = catalog.highestVersionFor("Acme Hardening Standard"); } catch { /* left as "threw" */ }
+check("highestVersionFor answers null for a title the snapshot does not carry — the index is consulted, never assumed to hold the key",
+  highestForMissing === null && catalog.highestVersionFor(OK_TITLE) === OK_VERSION);
 const refuses = (doc: unknown): boolean => {
   try { buildBenchmarkCatalog(doc); return false; }
   catch (err) { return err instanceof BenchmarkSelectionConnectorError && err.code === "bad_catalog"; }
@@ -365,6 +400,13 @@ check("deriveRecognition maps the four cases directly, independent of the evalua
   deriveRecognition(catalog, "Microsoft Windows Server 2019 STIG", "3.0.0") === "version_superseded" &&
   deriveRecognition(catalog, OK_TITLE, "9.9.9") === "version_unlisted" &&
   deriveRecognition(catalog, "Nope", "1.0.0") === "not_in_catalog");
+check("a requirement list carrying a BLANK or NON-STRING title is unknown, never satisfied — an unreadable entry beside a real one must not be the cheapest route onto the requirement",
+  deriveRequirementFit({ requiredTitles: ["   ", OK_TITLE] }, OK_TITLE) === "unknown" &&
+  deriveRequirementFit({ requiredTitles: [""] }, OK_TITLE) === "unknown" &&
+  deriveRequirementFit({ requiredTitles: [42 as unknown as string, OK_TITLE] }, OK_TITLE) === "unknown");
+const blankReq = ev(clean(), { requiredTitles: ["   ", OK_TITLE] });
+check("...and end to end: a report citing the required benchmark still cannot grant when the list it is graded against carries that unreadable entry",
+  blankReq.recommendedAction !== "none" && blankReq.unknownSignals.includes("requirement"));
 check("deriveRequirementFit maps its four cases directly",
   deriveRequirementFit({ requiredTitles: [OK_TITLE] }, OK_TITLE) === "on_requirement" &&
   deriveRequirementFit({ requiredTitles: ["Other"] }, OK_TITLE) === "off_requirement" &&

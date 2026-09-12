@@ -45,11 +45,22 @@ export type MdmDeviceState = "compliant" | "noncompliant" | "unmanaged" | "unkno
 export type CarrierConnectivityState = "online" | "idle" | "offline" | "unknown";
 export type TamperState = "none" | "suspected" | "confirmed";
 export type ChargeState = "charging" | "discharging" | "full" | "unknown";
+/**
+ * For a `badge_access` event: whether the badge auth SUCCEEDED or FAILED at the reader.
+ *
+ * The base contract carries no denial-cause, so a bare `checkout_denied` cannot be
+ * attributed to the badge (it may be posture/policy-caused). This optional field is the
+ * positive evidence that lets a consumer distinguish a badge-auth failure — which makes
+ * a manual credential fallback legitimate — from any other denial. Absent or `unknown`
+ * is fail-closed: no positive evidence, so never treated as a badge failure.
+ */
+export type BadgeAuthOutcome = "success" | "failure" | "unknown";
 
 export const MDM_STATES: readonly MdmDeviceState[] = ["compliant", "noncompliant", "unmanaged", "unknown"];
 export const CARRIER_STATES: readonly CarrierConnectivityState[] = ["online", "idle", "offline", "unknown"];
 export const TAMPER_STATES: readonly TamperState[] = ["none", "suspected", "confirmed"];
 export const CHARGE_STATES: readonly ChargeState[] = ["charging", "discharging", "full", "unknown"];
+export const BADGE_AUTH_OUTCOMES: readonly BadgeAuthOutcome[] = ["success", "failure", "unknown"];
 
 /**
  * The canonical event. Every field the architecture doc enumerates is here.
@@ -83,6 +94,8 @@ export interface SignalGridEvent {
   mdmDeviceState?: MdmDeviceState;
   carrierConnectivityState?: CarrierConnectivityState;
   tamperState?: TamperState;
+  /** For a `badge_access` event: the badge-auth outcome at the reader (see BadgeAuthOutcome). */
+  badgeAuthOutcome?: BadgeAuthOutcome;
   /** Battery percentage 0–100. */
   batteryPercent?: number;
   chargeState?: ChargeState;

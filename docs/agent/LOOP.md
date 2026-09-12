@@ -52,7 +52,352 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-approved):
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SESSION PUCK IS ON THE RECORD AS A
+              HARDWARE HYPOTHESIS, NOT A PRODUCT (DR-043). The owner shared his own 25-page
+              research document ('Shared-Device Authentication Puck: Hardware and Form-Factor
+              Concept' - 'I'm going to blow your mind with this'). Read in full, held against
+              the tree with three read-only maps, every path:line re-read before citation.
+              Adopted under DR-039's bar: the three-function split (identity / custody binding
+              / ongoing presence) is doctrine for every session-gating surface; the puck or any
+              dock is a SOURCE OF EVIDENCE, never the policy engine (IdP owns identity, UEM
+              owns posture, PACS owns the physical credential, SignalGrid correlates); the
+              software half is five fail-closed backlog items built without hardware (attach
+              signal domain with unknown -> step_up never a grant; removal -> suspend joined to
+              DR-042's cascade items, no seventh; eight audit event names; a dock/undock/
+              re-dock simulator scenario carrying the policy matrix; a hardware tally column in
+              DISCOVERY_LOG); NO bench prototype, purchase or custom hardware until the
+              pre-registered gates are met (4 of 15 REQUIREMENT -> bench; 3 COMMITMENT ->
+              design-partner MVP; 5 PROBLEM with 0 COMMITMENT -> no-go; tally today 0/15, 0).
+              Substance in docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md with every vendor fact
+              attributed to the document; overlap recorded (badge_binding, dock/custody schema,
+              SmartDock, case-bay token, division of authority all pre-existed as deferred
+              design targets); new: worker-carried token across receivers, the prototype
+              ladder, the lost-credential sequence, the legacy-downgrade rule, the privacy
+              constraint. NOT claimed: HIPAA, disinfectant compatibility, relay-proof,
+              on-device enforcement, any hardware built. Disclosure noted - the tree is public
+              and the owner-gated IP-posture backlog row is still open. Nothing shipped moved;
+              custody/dock families stay deferred. Verification pass
+              (same day) found four stale citations this work had itself introduced: the
+              2-line insertion at the top of PHYSICAL_CUSTODY_SIGNAL_MODEL.md shifted the
+              dockState/custodyState rows to :20-22 while the page and DR-043 still said :18;
+              AUTHENTICATION_AND_CREDENTIAL_ARCHITECTURE.md:73 was offered for ES256
+              verification it does not describe (the real evidence is
+              lib/webauthn/src/webauthn/verify.ts, PROOF_COVERAGE_AUDIT.md:21 and the :56
+              step-up row); and the cross-reference sentence attributed badge_binding to a
+              schema that does not own it. All corrected, gates re-run green.
+              (Earlier 2026-09-12, cloud lane:) LIGHTRAG'S KEY-FREE HALF IS RUNNING AND IN
+              THE TREE (DR-041, branch lane/cloud-lightrag-retrieval-20260912-0520Z). The Mac
+              is running LightRAG in its GRAPH shape on Ollama and is still fighting it - five
+              docs at the defaults timed out 4/5, retuned and re-queued, first query pending
+              (entry below). The KEY-FREE half needs no LLM and no embedding endpoint at all:
+              naive mode with only_need_context makes 0 LLM calls and fastembed embeds
+              locally, so it answers today. There is now a pinned
+              installer (scripts/install-lightrag.mjs, lightrag-hku 1.5.8 @ the full sha, a
+              venv under ~/signalgrid-lightrag/key-free - the store convention DR-038 set -
+              NOT the [api] extra whose server binds 0.0.0.0 with a guest token, refuses on
+              CI) and pnpm run docs:retrieve over the TRACKED docs set, which writes nothing
+              inside the repository. Measured here: 73 packages in 34.6s; all 311 tracked docs
+              indexed in 1636.2s into a 34 MB store, then a 24.9s refresh of the seven docs the
+              rebase moved; a query answers in 1.7s with 0 LLM calls. The GRAPH half is
+              quantified and left out - two LLM calls per chunk, and the call and token totals
+              for one index of this corpus are in DR-041 and the EVIDENCE entry rather than
+              retyped here; that is the cost the Mac's Ollama plan is buying.
+              TWO DEFECTS FOUND BY BUILDING IT, both fixed before the push: ainsert always
+              runs entity extraction, so with no model every document ended FAILED after its
+              chunks were embedded - 311 of 311 failed with every chunk already in the vector
+              store and queries answering normally, an index green over its own failure -
+              fixed with LightRAG's own
+              PROCESS_OPTION_SKIP_KG plus a hard failure on any non-processed status; and
+              LightRAG canonicalizes file_path to its BASENAME and rejects duplicates, which
+              would have silently dropped all but the first README.md. Its answer is a POINTER
+              to a tracked file, never a fact, and it never replaces pnpm run check:absence.
+              Also landed: the GitHub Trending screening intake row and the three backlog
+              items it produced (maplibre console view, vendor-doc drift watch, rclone runbook
+              sentence).
+              (Earlier 2026-09-12, cloud lane:) THE SKILL COLLECTIONS ARE IN THE TREE,
+              UNDER THE OWNER'S BAR (DR-039): 85 skill directories from eleven upstreams
+              vendored byte-identical at their pins (mattpocock 25, addyosmani 24,
+              K-Dense 13, google 5, NVIDIA 4, mcollina 4, hig-doctor 3, finding-unknowns 3,
+              poka-yoke 2, keep-the-why 1, ios-simulator 1). The bar was
+              the owner's: adopted if any part of it can aid building any aspect of the
+              company; overlap is a ROW, never a refusal. The only exclusions are the four
+              hard lines - licence (trailofbits CC BY-SA, ramzesenok no LICENSE, and the
+              NC/proprietary/GPL/unlicensed K-Dense skills), auto-execution (every hook,
+              installer and marketplace manifest), egress (stated and overridden, never
+              silently accepted), directory collision (addyosmani's
+              test-driven-development loses to the incumbent). 37 override rows, not one
+              vendored file edited. One first-party addition:
+              docs/agent/SKILL_AUTHORING_STANDARD.md (the NVIDIA authoring bar in our own
+              words, plus the Trail of Bits doctrine written up rather than copied).
+              Bambushu/crucible NOT taken - the owner's list named one Crucible and the
+              Mac lane's DR-038 adopted a different project of that name; its measurements
+              are appended to that intake row. Vendored figure 15 -> 100, 117 tracked
+              directories under .claude/skills (100 + the 17 first-party, three of them
+              from #671 the same hour), section E holds all of it.
+              (Earlier 2026-09-12, cloud lane:) THREE HAND-RUN WORKFLOWS ARE NOW SKILLS BOTH LANES
+              LOAD FROM THE TREE (branch lane/cloud-four-skills-20260912-024500Z): tool-evaluation-by-use
+              (how an owner-shared tool is evaluated BY USE and written into the intake log),
+              landing-under-dr-037 (the five merge conditions, merge-then-regenerate order, one
+              evidence re-mint after the last family) and orchestrator-over-workers (spec-write /
+              fan-out / review / land one at a time). A fourth, media-intake, was written and then
+              folded into DR-040's video-intake before landing - same procedure, one skill per
+              resource kind; video-intake gained the placement rules (where a clip's substance
+              lands) and audio-only material. VENDORED.md now SEVENTEEN: 32 tracked = 15 upstream
+              + 17 first-party, section E holds it. Readiness untouched.
+              (Earlier 2026-09-12, cloud lane:) THE FOUNDER'S THESIS IS ON THE RECORD
+              IN HIS OWN WORDS (DR-042): dictated, quoted verbatim in WHY_THIS_EXISTS.md
+              under 'What only the founder can write' - the section that had been
+              deliberately blank since that page was written - and tested clause by clause
+              against PURPOSE.md with a path:line each. Three clauses PURPOSE did not carry
+              were added under DR-042's authority (DR-020's rule): the systems' OWNERS are
+              separate, not just the systems; the auth factor is the customer's choice and
+              the grid is agnostic to it; a grant is scoped to the department, area or
+              equipment the person was assigned. Plus 'The cascade, named' - a per-stage
+              status table, every unbuilt stage marked design intent and pointed at a
+              backlog item, no shipped-capability claim moved. CASCADE AUDIT: both ends
+              built, the joins missing - @workspace/incident-playbook is imported by four
+              PROOFS and by nothing in lib/ or artifacts/, so no ticket can open; nothing
+              opens a change record (the fabric only reads one); check:absence 'affected
+              user notification' CORROBORATED across four probes. Six fail-closed backlog
+              items opened for exactly those joins. The owner's infographic ('10 cloud
+              architecture concepts', Rajender Ponnala - not committed) mapped concept by
+              concept in the cloud-platform architecture page; several answers are
+              deliberate refusals (no cache in the decision path, no retry inside a
+              decision, no queue on ingestion) and no deployment-target claim was added.
+              (Earlier 2026-09-12, Mac lane:) THE SIX TOOLS ARE INSTALLED AND EACH USED ONCE
+              (owner ran the three refused installs himself). Crucible /temper on #649's custody-ledger
+              landing: three finder angles -> 11 candidates, 10 deduped, one drafted Important; the two
+              that could gate were adjudicated by execution and both REFUTED with the design cited
+              (clock-free evaluator by contract + family convention; 'none' is a documented positive
+              assertion the audit kept on purpose) -> tracked set empty -> Clean, ledger row emitted;
+              eight non-gating drafts mailed to the cloud (fossil '864' comment, seven-vs-eight key
+              comment, two doc sentences missing the 'caller stamps the age' precondition, shallow-
+              frozen fixtures, null options throws, unknownSignals omits the holder axis, posed-bound
+              outside the mutation sweep). /watch keyless: the Fleet demo's captions as a timestamped
+              transcript (full download hit YouTube 403; the cloud's vendored video-intake with local
+              faster-whisper is the better path, #666). LightRAG on Ollama (qwen3:8b + nomic-embed-
+              text, store outside the tree): five docs at the defaults timed out 4/5 - two concurrent
+              32k-context generations, not the model (12.7 tok/s) - retuned to one at a time / 8k /
+              1800 s and re-queued; first query pending. Sandbox lesson for probes: node --import tsx
+              runs TS where pnpm exec tsx dies on its IPC socket. Readiness untouched (the gate prints it: node scripts/check-readiness-figure.mjs).
+              (Earlier 2026-09-12, Mac lane:) SIX AGENT TOOLS ABSORBED BY USE (DR-038,
+              owner: 'install all of these and add them where needed and start using them now').
+              Installed at user scope, hooks off, nothing in the repo's .claude/: last30days 3.24.0
+              (first brief run - keyless coverage is HN-only and thin for niche topics), Ponytail
+              4.9.0 (the cloud fixed the pin's spelling the same day: a full 40-char id fetches, an
+              abbreviated one is read as a ref name), Graphify 0.9.58 (structural graph of this tree:
+              about sixteen thousand nodes and thirty thousand edges in 677 communities, built in 3 s;
+              strong on 'who calls X', blind to string-literal paths; semantic docs pass deferred),
+              CLI-Anything (no target here), lightrag-hku 1.5.6 (waits on Ollama), ffmpeg 9.0.1 +
+              yt-dlp. Owner-run because the auto-mode classifier refuses them for an agent: the
+              /watch plugin install, `pnpm run crucible:install` (selective, adversarial skills only,
+              pinned), `brew install ollama`. Repo side: five intake rows, DR-038, installer scripts +
+              package.json rows for all six, .gitignore rows for every output dir they can write.
+              Readiness untouched (the gate prints it: node scripts/check-readiness-figure.mjs). (Earlier 2026-09-12, cloud lane:) THE BAR IS THE FOUNDER'S (DR-039): a resource
+              with any part that can aid building the company is adopted; only licence,
+              auto-execution, egress without consent and directory collision exclude;
+              overlap is recorded, contradictions get override rows. The founder's resume
+              absorbed as standing context (docs/company/FOUNDER_PROFILE.md): a senior
+              platform engineer, not a non-technical founder - owner-comms corrected, the
+              base skill points every role at it, ICP Finding 9. (Earlier 2026-09-12, cloud lane:) THE MAC'S THREE ASKS ANSWERED IN ONE
+(Earlier 2026-09-12, cloud lane:) OWNER-DIRECTED VENDORING (DR-040): the
+              /watch skill from bradautomates/claude-video (pinned, hook NOT taken, two
+              instructions overridden not edited) and the CLI-Anything method (the plugin
+              directory under third_party/, the telemetry-bearing hub NOT taken) are in the
+              tree, with two first-party skills around them: video-intake (frames via
+              /watch, transcript locally with faster-whisper, no key, nothing uploaded)
+              and cli-anything (the seven phases mapped onto a signalgrid CLI over /v1 and
+              the MCP server, a backlog item). Vendored figure 14 -> 15, first-party
+              exceptions TWELVE -> FOURTEEN, section E holds them. (Earlier 2026-09-12, cloud lane:) THE MAC'S THREE ASKS ANSWERED IN ONE
+              PR: the ponytail pin is real (3 commits after tag v4.9.0, skills identical to
+              the tag) and the installer now fetches it by its FULL id (an abbreviated id is a
+              ref name to git - that was the whole failure); the LM Studio section of
+              AGENT_GATEWAY.md that #531 carried but never landed is ported verbatim;
+              Graphify measured in a sandbox and NOT adopted (hook-based integration,
+              tree-dirtying rebuilds, oscillating output, a benchmark denominator of nodes
+              x 50 words) - the intake row carries the numbers. (Earlier 2026-09-12, Mac lane:) READINESS INSIDE THE TARGET BAND, OUTREACH OPEN (the gate prints the number)
+              (minted 2026-09-12T02:05Z, manifest v72). Two Mac re-mints tonight, each right after a landing moved the
+              contract: v71 after #653 (134c25fd: headline 82%, the floor cleared for the
+              first time), then v72 after the cloud landed #649 (minted 2026-09-12T02:05Z, manifest v72). Each with
+              verify:all --require-mcp --emit-evidence (Review-Hub preflight PASS, breadth
+              PASS, signalgrid-mcp pytest 99 passed at 10c5b52, 22 MCP tools = doc), each
+              carrying its own mintedAt, full preflight PASSED on macOS before each push.
+              The gate, quoted: (a) runbook 94% (16 modeled / 0 partial / 1 gap of 17) -
+              (b) launch surface 100% (green on both halves, 0 days old, manifest 43771dfc,
+              age via mintedAt) - (c) end-to-end 100% (scenarios 11/11, live operations
+              8/8) -> HEADLINE 94%, OUTREACH OPEN (floor 80, target 92-95, goal 100). The
+              number is derived, never typed: node scripts/check-readiness-figure.mjs.
+              What moved it, all by proof: 62 -> 78 (three live ops proven on real
+              software, 09-10) -> 70 (cloud's #620 made the gate honest) -> 82 (cloud
+              modeled the last two partials in #641, landed via the Mac's #653) -> 94
+              (cloud modeled two of the three gap rows in #649: custody-ledger
+              reconciliation + the computed per-user checkout cap, rtls-custody family).
+              THE LAST ROW (row 81 of the map): a faithful end-to-end smart-charging
+              simulator scenario - badge -> dock -> provision -> in-use -> check-in with
+              the real failure branches - modeled = 17/17 = 100. How #641/#645/#638
+              landed: the owner said not to wait; the Mac's auto-mode classifier refuses
+              gh pr merge, so the Mac rehearsed the combined landing locally (manifest and
+              coverage page regenerated on the combined tree, preflight + breadth PASSED),
+              opened #653 through REST (GraphQL quota exhausted by the shared token), and
+              the cloud merged it under DR-037 (owner: the cloud merges green product PRs).
+              OWNED DEFECT: the Mac checkout sat on mac/land-641-645-638 from 23:44Z to
+              01:45Z and the pre-#657 tick pushed a 'skipped' heartbeat every 5 minutes -
+              23 pushes in 2h, each starting four workflows, cancelling the mainline CI run
+              before it, and exhausting GITHUB_TOKEN until check-ci-liveness failed on
+              #654. Cloud fixed the throttle in #657 (an UNCHANGED result re-pushes once
+              per 25 min); the Mac rule now: never leave the shared checkout parked past
+              the run that needed it. STANDING RULE: after every manifest move, (b) reads 0
+              by design until the Mac re-mints; keep mac-run.json within 7 days. (Earlier 2026-09-12, cloud lane:) DR-037 RECORDED: the owner ended
+              'lanes open, owner merges' ('I didn't want that on me'); the cloud lane now
+              merges its own green product PRs under five stated conditions, and landed
+              #656, #657, #653 (the Mac's combined #641+#645+#638) and #649 that way; #654 is
+              next, and the manifest moves again with it (v73), so ONE more re-mint follows.
+              Two owner videos absorbed (RESOURCE_INTAKE 2026-09-12): 'paved paths' as
+              the vocabulary of ICP Finding 2, and orchestrator-over-Opus-workers as the
+              cloud lane's build pattern (first fan-out: the pending brace-less guard
+              families).               (Earlier 2026-09-12, cloud lane:) THE MAC TICK NO LONGER FLOODS MAINLINE
+              (branch lane/cloud-tick-heartbeat-throttle-20260912-005000Z; owner merges): a
+              SKIPPED tick result was exempt from the quiet throttle, so a checkout parked on
+              mac/land-641-645-638 pushed a heartbeat to Alpha every 5 minutes, each push
+              starting four workflows, cancelling the mainline CI run of the merge before it,
+              and exhausting the GITHUB_TOKEN budget until check-ci-liveness failed #654 on a
+              403. The throttle now keys on an UNCHANGED result (a changed one still delivers
+              at once), and the four push-triggered workflows ignore heartbeat-only pushes.
+              The owner said YES (2026-09-12) to the cloud lane merging green product PRs
+              itself - recorded as DR-037 - so the cloud now lands #656 (merged aa5c8151),
+              this one, #653 (Mac landing of #641+#645+#638), #649 and #654 in that order. (Earlier 2026-09-12, cloud lane:) THE COVERAGE PAGE NO LONGER MOVES ON LANE MAIL
+              (#656, merged aa5c8151): the mailbox trees
+              (artifacts/lane-messages, artifacts/agent-heartbeats) stay claimed surfaces but
+              their record counts are withheld from the render, so a send/ack/batch delivery
+              leaves docs/agent/SURFACE_REVIEW_COVERAGE.md byte-identical (self-test proves
+              it, 54/54) and open product PRs stop going unmergeable on it every cycle. Open
+              for the owner: #653 (Mac's combined landing of #641+#645+#638), #649, #654
+              (brace-less guards join the mutation sweep). (Earlier 2026-09-11, cloud lane:) THE LAST TWO RUNBOOK PARTIALS MODELED
+              (PR #641, landed inside the Mac's combined #653 with #645 and #638):
+              the supervision-identity lifecycle (device-attestation/supervision-identity.ts:
+              supervised / this org vs another / identity lost / enrollment lost / never
+              enrolled / commands unresponsive / unknown -> grant, hold or contain; a
+              288-state sweep pins the single grant) and the iOS update / device-prep
+              workflow (app-update/device-prep.ts: enrolled / profiles / required apps /
+              prep stage / OS update -> ready, hold, contain, or advise; a 3072-state
+              sweep pins the single grant). Each is a distinct fixture corpus + fail-closed
+              evaluator + proof section on the break-glass fallback-sequence pattern;
+              mutation-swept 42/42 and 59 killed + 4 documented-inert of 63, 0 survivors.
+              READINESS (a) 70 -> 82% (14 modeled / 0 partial / 3 gap of 17) - the runbook
+              dimension is OVER THE FLOOR. HEADLINE still 0% ONLY on (b): mac-run.json
+              covers manifest 6f6a, the tree is now 6989 (manifest v70 after proofCounts
+              moved device-attestation 77->119 and app-update 71->127). The Mac re-mint
+              is the single remaining lever, and it got easier: verify-all.mjs now stamps
+              mintedAt into mac-run.json and check-readiness-figure prefers it over the
+              git date (a shallow clone mis-aged the file twice; fail-closed on a garbage
+              or future stamp, 6 new self-test cases). Also this session: the NIST org
+              absorbed as docs/research/NIST_ALIGNMENT_MAP.md (PR #638, awaits the
+              owner's merge) through six review rounds - Codex to its budget, then the in-house
+              fail-closed-auditor, which also showed the launch-claims vocabulary cannot
+              see any capability that map names (follow-up: a profile-id <-> doc-status
+              gate). The owner delegated routine merge calls this session (do what you
+              need to do unless blocked); lane-mail auto-merges, product PRs await the
+              owner because the harness refuses agent self-merge, self-approval, and
+              self-authorizing edits to AGENTS.md or a DR - so that rule text stands as
+              written. PR #641 then took three Codex findings, each real and each fixed
+              at the root: own-property reads in both new normalizers (an inherited field
+              could reach the grant), an invalid mintedAt is Infinity not the git date, and
+              an optional-update advisory stays checkout-ready; round three made the
+              grant a POSITIVE predicate (an out-of-union runtime value is held, not
+              granted) and a throwing field read malformed; round four caught that cut
+              (it skipped when an advisory had fired) - now an in-domain check on every
+              axis, run whatever else fired; round five froze the domain lists at runtime
+              (readonly is compile-time only); round six (Codex out of quota, so the
+              in-house fail-closed-auditor) froze the REPORT_KEYS allowlists too and pinned
+              the own-property read against a polluted Object.prototype - two P1s the
+              external rounds had just walked past. Round seven (Codex, back on quota)
+              closed the three holes the custody-ledger review had found the same hour -
+              own-name fixture lookup, one-time axis snapshot, a revoked-Proxy catch - in
+              both modules (proofs 148 -> 154 and 161 -> 167; sweeps 58/58 and 76 + 4 inert
+              of 80, 0 survivors). (Earlier 2026-09-11, cloud lane:) BRACE-LESS GUARDS JOIN THE MUTATION SWEEP
+              (branch lane/cloud-guard-braceless-20260911-220800Z; product PR, owner merges): the
+              mutation guard only ever mutated braced `if` blocks, so every one-line
+              `if (cond) return x;` guard - the dominant shape in the newer fail-closed
+              normalizers - was never swept. New mutator oneline-cond-false, opt-in per
+              target (`oneLine: true`), measured across the whole registry first: 1732
+              mutations, 121 survivors (117 one-line across 41 files). Four families opted
+              in and are clean under it (rtls-custody 14/14, device-attestation 25/25,
+              verdict-attestation 42 with 0 survivors after one new pin and two shadowed
+              guards DELETED, app-update 54 with 0 survivors after two shadowed guards
+              deleted and six parseVersion pins). Docs proof counts 82->98 and 71->74.
+              The guard now REPORTS "N of M targets opted in; K pending" every run and
+              never fails on it; as of 2026-09-11 the BUILD_BACKLOG campaign row lists the pending families
+              by survivor count. Still awaiting owner merge: #638, #641, #645, #649 (all
+              green; Mac re-mints evidence ONCE after they land). (#654 landed after #653 and #649 under DR-037; manifest regenerated on top.)
+              (Earlier 2026-09-11, cloud lane:) TWO OF THE THREE RUNBOOK GAPS MODELED
+              (branch lane/cloud-custody-ledger-20260911-203200Z; product PR, owner merges):
+              the custody-ledger RECONCILIATION in rtls-custody/custody-ledger.ts - what
+              the checkout ledger says vs what the dock bay sees, plus the requester's cap.
+              A seated device the ledger still assigns to a prior holder is a hold with the
+              contradiction named (the runbooks' phantom); an unpaired device in a bay is
+              contained; a clear ledger over an empty bay escalates; a cap hit only by
+              returns that never cleared is a hold (CUSTODY_CAP_BLOCKED_BY_STALE_RETURN), a
+              cap genuinely reached a containment - the cap axis is computed from three
+              counts, never asserted; the observation's age is graded against a bound the
+              caller poses, so a replayed snapshot never grants when the caller stamps the age at evaluation time. 21 fixtures, a sweep of
+              all 4,320 combos pinning the single grant plus a raw-space sweep (230,400
+              wire reports, two grant), every hostile-report shape from the sibling
+              surfaces' six review rounds pinned on day one, then an in-house fail-closed
+              audit (no P1; three P2s and five P3s, each verified and fixed or recorded)
+              and a Codex round (own-name fixture lookup, one-time axis snapshot, revoked
+              Proxy, identity binding, freshness - each executed before the fix);
+              proof:rtls-custody 63 -> 214; mutation-swept, 0 survivors. The family stays
+              deferred in the launch profile - built, not claimed. Ground-truth rows "custody integrity" and
+              "per-user checkout cap" now read modeled: readiness (a) 16 modeled / 1 gap of
+              17 once #641 lands (this base still carries #641's two rows as partial). The
+              third gap (the smart-charging simulator scenario) and the detect.ts timeline
+              detection are decision-core / simulator work (DR-020) and stay on the backlog
+              for a decision record. Headline readiness still 0% on (b) until the Mac
+              re-mint — no longer true on mainline, see the Mac's note next. (#649 landed after #653 under DR-037; manifest regenerated on top of v71.)
+              (Earlier 2026-09-11, Mac lane:)
+              HARDWARE EVIDENCE RE-MINTED against the
+              manifest mainline carries (v68 / ce58f6): 53c60f4e, from verify:all --require-mcp
+              --emit-evidence on this Mac (Review-Hub preflight PASS, breadth PASS, signalgrid-mcp
+              pytest 99 passed at 10c5b52 on a clean checkout, 22 MCP tools derived = doc); the
+              full preflight PASSED (319 gates) before the push. check-live-sync now prints
+              liveEvidence=fresh. Readiness on mainline reads (a) 70 / (b) 100 / (c) 100 ->
+              HEADLINE 70, OUTREACH CLOSED - bounded by the runbook rows until cloud's #641 lands
+              (it models the last two partials: (a) -> 14/17 = 82). CAUTION for whoever merges:
+              #641 carries manifest v75 / 72c7ce80 and #645 a DIFFERENT v70 / a5e4b3bc while
+              mainline is v68 - the second one merged needs its manifest regenerated on top of
+              the first, and the evidence reads stale-by-fingerprint again the moment either
+              lands (by design); the Mac re-mints then. mintedAt rides #641 too, so this
+              artifact still ages by commit date (the gate's legacy path). Four cloud messages
+              acked in one delivery (66be8a5) with those two corrections. The self-triggering
+              runner is PROVEN: the runner log shows PR checks on every push to #638 / #641 /
+              #645 today (latest run on each Succeeded), and the first nightly fired - cron
+              08:00Z queued until 12:23Z - lane=both Succeeded 12:30Z, lane=mcp Succeeded
+              12:34Z. signalgrid-mcp sibling pulled to 10c5b52 (#13). (Earlier 2026-09-11,
+              cloud lane:) READINESS-FIGURE HONESTY LANDED
+              (#620, 52b395d). The DR-036 readiness gate was OVER-reporting - it
+              fail-OPENED on two dimensions. Fixed at root, each with a control that
+              fails pre-fix: (a) parseGroundTruth dropped markdown-bold **gap** rows
+              from the denominator (runbook is 12 modeled/2 partial/3 gap = 70%, not
+              the reported 85%); (b) evidenceDimension is now fail-closed - dimension
+              (b) scores 100 only when mac-run.json's manifestFingerprint matches the
+              live-sync manifest (missing/mismatch/uncomputable -> 0). Plus #6
+              audit-evidence binding in the break-glass fallback (the out-of-band
+              accountability record must match the sequence tenant/correlation/
+              credential). HONEST readiness now 0% = lowest of (a) 70 / (b) 0
+              fail-closed on stale-contract evidence / (c) 100 - OUTREACH CLOSED, and
+              this is the gate telling the truth, not a regression. Recovery path:
+              finish the two remaining runbook partials (moves a past 80) AND the Mac
+              re-mints mac-run.json against manifest ce58f6 (requested via lane mail
+              #622). Corrected the earlier "85% floor cleared" over-declaration to the
+              owner. Verified: proof:break-glass 101/101, proof:event-contract 21/21,
+              preflight PASS; sync manifest regenerated v68/ce58f6; INTEGRATION_CATALOG
+              break-glass count 96->101. Steward heartbeat #621 + Mac evidence request
+              #622 delivered and merged. badgeAuthOutcome documented in EVENT_CONTRACT.md.
+              NOTE: this round's builder subagent HUNG (auto-mode classifier blocked it
+              mid pre-fix sabotage-check); recovered by TaskStop + manual revert + verify.
+              FILED (not done): the mutation-guard brace-less-clause mutator remains its
+              own triage cycle, as documented in scripts/mutation-guard.mjs. (Earlier
+              2026-09-10, Mac lane:) DR-034 LANDED (f5f084b2, owner-approved):
               the research basis is the founder's own domain practice, not customer
               engagement; the owner's Google Drive folder "Project > SignalGrid" is the
               canonical corpus of problems and solution ideas; an owner-supplied document
@@ -74,9 +419,34 @@ LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-app
               runner signalgrid-mac registered and running as a launchd service; the
               read-only workflow_dispatch job mac-runner-harness.yml landed (a779f692,
               owner-approved) - cloud can now run the Mac harness/preflight on this
-              hardware on demand. OPEN: the first dispatched run (owner or cloud clicks
-              Run workflow); re-push the Fleet restrictions profile. Preflight PASSED on
-              macOS.
+              hardware on demand. Its FIRST run caught a real defect no shallow clone can
+              see: sim result 2026-08-23-headwind-first-capture named a pre-rebase
+              provenance commit that never reached origin; re-minted from mainline with
+              run-requests.mjs --id (0a40d1b4), and the workflow now reports preflight
+              independently of the harness (b370417). The shared Mac MCP lane the owner
+              asked for: lane=mcp (e7473ba6) clones the public signalgrid-mcp sibling and
+              runs verify.sh + verify:all --require-mcp on real macOS for either lane
+              (no evidence minted); audit of that repo: 11 of 12 PRs merged, PR #9
+              superseded (cloud asked to close), its ubuntu CI smoke-only by design.
+              The runner now triggers itself (mac-runner-auto.yml, b08374a3, owner-approved):
+              every PR into mainline gets full-clone provenance + macOS preflight; nightly
+              08:00 UTC runs lane=both then lane=mcp; manual dispatch optional. OPEN: proof
+              of the first automatic run (next real PR / tonight's cron); re-push the Fleet
+              restrictions profile. DR-035 LANDED (613071e9): PURPOSE.md §2 says source-agnostic
+              is the point and forbids vendor lock; follow-up: widen the §2 sentence to "the
+              company" with its four mirrors (POSITIONING.md owner-reserved). DR-036 LANDED
+              (c97138d8, owner-approved): outreach is gated on a DERIVED readiness figure —
+              node scripts/check-readiness-figure.mjs, lowest of three dimensions, floor 80 /
+              target 92-95 / goal 100 — printed by loop:state every session; today it reads
+              under the floor, outreach CLOSED. The live-operations lever is DONE (request
+              fb9b5f46, result 59d00041: keycloak, location, edr all PASS on real software;
+              end-to-end now fully proven). THE ONLY GAP TO THE FLOOR is the three runbook
+              partials in SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md: supervision-identity
+              lifecycle, badge->manual fallback sequence, iOS update/device-prep - each a
+              fixture-backed surface + proof around the frozen engine; one row clears the
+              floor. Same session repaired mainline preflight (workflow count 15->16
+              fallout, a pinned self-test fixture, coverage page, one claim citation).
+              Preflight PASSED on macOS.
               (Earlier 2026-09-07, cloud lane:) PACKAGED THE REPO AS A CLAUDE
               CODE PLUGIN (DR-030, owner-directed). .claude-plugin/plugin.json
               names the `signalgrid` plugin and declares skills/agents/commands
@@ -605,88 +975,30 @@ LAST TOUCHED: 2026-09-10 (Mac lane, latest) - DR-034 LANDED (f5f084b2, owner-app
               deterministic, removes 3 old colour bugs) and landed; the iOS SwiftUI
               view-layer rebuild is now COMPLETE, and native/ios/README's file-tree
               was corrected to match.
-BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
-              mac/ponytail-native-cuts (41b5ad87). Cloud, to decide: the AppWorkflows
-              per-action step-up re-port and the parity-gate extension (backlog, row
-              101). Mac lane, non-blocking, still open: Ponytail native cuts part 2
-              (badge-reader registry, double delegate, nil-provider assertion); the
-              residual Phase 2/3 nits (minor type-scale, the Enrolling contrast
-              visual); SignalGridMobile adaptive tokens then the .dark pin (row 103);
-              the twin test's per-field checks are conditional; older items
-              (MockSignalGridAPI replayed vectors, DemoMode flag table).
-              mac/native-ledger-2026-09-02 is CLOSED - fully superseded by #385 and
-              later. Fleet/Headwind's 7 device dimensions: the Fleet half is DONE -
-              the owner handed the Premium key to the cloud lane 2026-09-06; teams,
-              inherited policies and the unlocked transfer endpoint are measured and
-              proven (proof:live-fleet section 11, docs/FLEET_LIVE_INTEGRATION.md);
-              Headwind's dimensions still need its live server. Owner, one item:
-              Screen Recording permission for Terminal (System Settings > Privacy &
-              Security > Screen Recording, then relaunch Terminal) - closes
-              2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land the plugin-packaging PR (DR-030) to SignalGrid_Alpha,
-              then hold for owner direction. Batch Z landed earlier (049e3f8);
-              the whole-repo review pass is complete and every surface is READ
-              (now 102 of 102 with .claude-plugin and docs/reference added).
-              Residual
-              follow-ups, none blocking: (0) STATUS.md's "would run here now"
-              column is cosmetically stale vs the F10 generator fix - no gate
-              reads it and the generator cannot run to completion off a
-              live-lane host, so regenerate it on the Mac lane or when a live
-              lane is reachable; the two remaining localeCompare pinned
-              defects (artifacts/mcp-server directory listing, self-audit
-              fingerprint) are gated against growth, not fixed; the k6 load
-              drivers no runner invokes (tests surface, COMPANY_BUILD_PLAN
-              row 43). Owner decisions still recorded rather than made: the
-              custody backstop blind to five custody axes (disclosed, pinned),
-              NOT_COVERED credential exposure resolving to monitor, a GAPS
-              entry for connector families unwired in the served core;
-              (2) the console's remaining open items above (connector status
-              rendered, the toaster, CATEGORY_ORDER derived, /sessions/:id
-              linked) and Dashboard's chart-style deeper-path pending arms the
-              error-state gate deliberately does not judge;
-              the 194 symbols the cited-symbols gate leaves unpaired and the
-              14 deny-list MENTIONS the skills gate reports are REPORTED, not
-              owed;
-              the 213 unasserted membership clauses are REPORTED, not owed -
-              an evidence sentence that names an id without an arm is not
-              wrong, only unchecked. OWNER: the ICP
-              segment ("75-1,000 employees, 1-10 in IT") is stated flatly in
-              INVESTOR_ONE_PAGER while ICP_EVIDENCE calls it an assumption -
-              your call, not a gate's. OWNER, once, on the Mac, now that
-              the installer is on mainline: `bash scripts/mac/install-launchd.sh`
-              then `--status` - the steward escalates once a day while the tick
-              stays silent. Mac lane (a person): nothing is owed; `pnpm run lane:inbox`
-              only PRINTS the unread messages - an ack goes through
-              `pnpm run lane:deliver batch <ops.json>` with a note per
-              message (the eighteenth round made a blank note a refusal); a Premium
-              re-run on the Mac is optional (FLEET_LICENSE_KEY in the env,
-              `./scripts/run-live-lanes.sh --only fleet`) before 2026-09-16.
-              EARLIER: land batch E, then keep reading unread surfaces (56 left; next
-              lib/api-spec, lib/iac, then the docs families) and build the three
-              gates batch E specified (NaN gate follows one helper hop;
-              review-invariants flags localeCompare in lib/*/src with the five
-              existing sites dispositioned; docs `path (N)` line counts
-              re-measured); the hourly steward opens a draft PR for every mac/*
-              branch on sight. Mac: use `pnpm run lane:deliver` and say whether gh
-              is on PATH. owner: flip Settings > Pages > Source to "GitHub Actions"
-              (the branch build has failed on every push since at least 09-04),
-              then say so and the cloud lane runs the deploy workflow; say whether
-              the three stale claude/* branches (ruleset-probe, two
-              steward-heartbeat) may be deleted. owner: to wake the cloud lane at
-              any moment, comment on PR #439 from the phone. owner:
-              discovery is a valued input now, not the gate (DR-033, past Customer Discovery).
-              owner: publish the MCP marketplace listing
-              (docs/SIGNALGRID_MCP_MARKET_LISTING.md) on the creator page - only
-              the owner has the login. owner decisions still pending: fork or
-              delete the two vendored agent definitions; the four pasted chat
-              files under attached_assets/.
-```
-
-**Customer Discovery as the operating phase ended 2026-09-10 (DR-033); the log stays open as an input.**
-**Conversations logged: 0 of 15 - now a valued input, no longer the loop's gate.**
-
----
-
+BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION_2026-09-12.md,
+              'The founder's queue'): Screen Recording for Terminal; 'activate' or 'hold' on the
+              Standing Brain Cycle (DR-032 Slice 3); 'yes' to the branch cleanup; pick the FIRST of
+              the seven DR-033 product gaps (docs/BUILD_BACKLOG.md, the full-evaluation section);
+              confirm or soften the ICP wording before the first outreach send (the gate is OPEN -
+              run node scripts/check-readiness-figure.mjs); IP/disclosure posture; Fleet Premium
+              before 2026-09-16 (DR-005 says do not renew); approve the ten Dependabot runs; the
+              PURPOSE.md s2 widening (DR-035 follow-up); LightRAG: smaller local model, remote
+              endpoint with his key, or leave it recorded as not-working. Nothing on the pipes is
+              blocked: lane mail 111/111 acked, sim requests 17/17, evidence fresh (v77).
+NEXT ACTION: cloud: (1) stamp a lane on every lane-less BUILD_BACKLOG row and extend
+              scripts/check-backlog-ownership.mjs to read BUILD_BACKLOG rows so a lane-less row fails;
+              (2) file and build the DR-036 proof-bindings row so readiness dimension (b) becomes a
+              ratio instead of a binary that reads 0 after every manifest move; (3) give the roster a
+              clock (nextActionDate + a REPORTED >7d line) and mark the seven done nextActions; (4)
+              the record-hygiene items the self-evaluation lists (SOLUTION_READINESS_ASSESSMENT DR-033
+              paragraph, DR-043 cites, NOTICE reconciliation, CONTINUITY.md, the Level 10 matrix);
+              (5) the mis-filed owner items that are engineering (AppWorkflows parity re-port, the
+              three decided deletions, the three safety defaults - propose, owner vetoes); (6) PR #531
+              merge-or-close; (7) then build: Puck 5, Puck 1, the smart-charging scenario behind a DR.
+              Mac: Fleet Premium on the owner's word; Ponytail native cuts part 2 + row 103 in an Xcode
+              session; re-run the two benches and re-date RELIABILITY_SLO.md; delete tests/load,
+              .agents metadata and site/index.html once the cloud opens the row; read the inbox BEFORE
+              any long measurement (a manifest move outranks a measurement). Owner: the BLOCKED ON list.
 ## The three things that are true right now
 
 1. **The doctrine is `docs/PURPOSE.md` v2 (DR-020).** SignalGrid is an

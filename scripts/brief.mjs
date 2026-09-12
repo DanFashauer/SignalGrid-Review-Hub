@@ -34,7 +34,7 @@ const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
 const JSON_OUT = process.argv.includes("--json");
 const SELF_TEST = process.argv.includes("--self-test");
 const FULL = process.argv.includes("--full"); // include the slow deep sections (status-summary)
-const NARRATE = process.argv.includes("--narrate"); // route a one-line dev summary to the free/local tier (DR-035)
+const NARRATE = process.argv.includes("--narrate"); // route a one-line dev summary to the free/local tier (DR-044)
 
 const C = process.stdout.isTTY && !JSON_OUT
   ? { g: "\x1b[32m", r: "\x1b[31m", y: "\x1b[33m", d: "\x1b[2m", b: "\x1b[1m", off: "\x1b[0m" }
@@ -394,7 +394,7 @@ if (SELF_TEST) {
   } else {
     console.log(render(sections));
     // --narrate would route a one-line developer summary to the FREE/LOCAL tier via
-    // the DR-035 tap. In THIS public repo the tap is fixture-backed (DR-029/DR-035): it
+    // the DR-044 tap. In THIS public repo the tap is fixture-backed (DR-029/DR-044): it
     // returns a canned draft, not a summary of the panel above, so presenting it as one
     // would print a generic line beneath real failures as if it described them. So a
     // fixture-backed draft is NOT shown as a summary — it is named as the placeholder it

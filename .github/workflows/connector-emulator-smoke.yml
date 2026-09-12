@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - SignalGrid_Alpha
+    # A heartbeat-only push (the Mac tick rewriting artifacts/agent-heartbeats/*.json,
+    # gated by lane-deliver's own checks) changes no code and used to start this
+    # workflow every 5 minutes, cancelling the mainline run of the merge before it
+    # (concurrency below) and spending the repository's GITHUB_TOKEN budget — the
+    # CI liveness gate failed a product PR on a 403 for exactly that (2026-09-12).
+    # A push that touches anything else still runs.
+    paths-ignore:
+      - "artifacts/agent-heartbeats/**"
   workflow_dispatch:
     inputs:
       scenarioGroup:

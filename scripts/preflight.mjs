@@ -98,6 +98,10 @@ const STEPS = [
   // this counts how many other sentences in the corpus also define the product.
   { name: "Product-sentence drift self-test (the detector must find the planted sentences)", cmd: ["node", "scripts/check-product-sentence-drift.mjs", "--self-test"] },
   { name: "Product-sentence drift REPORT (never fatal on findings; fatal on a broken derivation)", cmd: ["node", "scripts/check-product-sentence-drift.mjs"] },
+  // Readiness figure (DR-036): three derived dimensions, headline = lowest; the number that gates
+  // outreach. REPORT — a low number is information; only a broken derivation is fatal.
+  { name: "Readiness figure self-test (the derivation must be able to fail)", cmd: ["node", "scripts/check-readiness-figure.mjs", "--self-test"] },
+  { name: "Readiness figure REPORT (never fatal on the number; fatal on a broken derivation)", cmd: ["node", "scripts/check-readiness-figure.mjs"] },
   // Re-registered 2026-08-31: the gate census found this invoked by NO lane
   // and NO workflow — it had silently drifted out after #213 hardened it.
   { name: "Postman collection tracks the /v1 spec (57 paths at registration)", cmd: ["node", "scripts/build-postman.mjs", "--check"] },
@@ -152,7 +156,7 @@ const STEPS = [
   { name: "Env-doc readers (an instructed SIGNALGRID_* variable must be read by something)", cmd: ["node", "scripts/check-env-doc-readers.mjs"] },
   { name: "Env-doc-reader self-test (the gate can actually fail)", cmd: ["node", "scripts/check-env-doc-readers.mjs", "--self-test"] },
   { name: "Model-tap boundary self-test (the fence can actually fail)", cmd: ["node", "scripts/check-model-tap-boundary.mjs", "--self-test"] },
-  { name: "Model-tap boundary (no model reference reaches the /v1 decision path — DR-035, golden rule 2)", cmd: ["node", "scripts/check-model-tap-boundary.mjs"] },
+  { name: "Model-tap boundary (no model reference reaches the /v1 decision path — DR-044, golden rule 2)", cmd: ["node", "scripts/check-model-tap-boundary.mjs"] },
   // A browser follows `](FOO.md)` from the document's own directory and nowhere
   // else. 41 documents moved to docs/research/ on 2026-08-10 and their sibling
   // links pointed at nothing for four weeks — 35 dead links across the tree.

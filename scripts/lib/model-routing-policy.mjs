@@ -2,7 +2,7 @@
 // model-routing-policy — the ONE source of truth for how build-lane work is
 // routed to a model tier, imported by BOTH the tap (scripts/lib/agent-model-tap.mjs)
 // and the boundary gate (scripts/check-model-tap-boundary.mjs) so doctrine and
-// fence can never silently drift (DR-035, extending DR-029).
+// fence can never silently drift (DR-044, extending DR-029).
 //
 // THE MODEL, in one breath: the coordinating Claude session is the brain. For a
 // BULK, low-stakes, fully-recheckable chore it MAY hand a first draft to a

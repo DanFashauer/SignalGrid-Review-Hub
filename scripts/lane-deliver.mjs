@@ -233,12 +233,16 @@ let pushedSha = null;
 
   // ── 4. the commit ───────────────────────────────────────────────────────────
   mustGit(["add", "--", ...MAIL_DIRS.filter((d) => existsSync(join(wt, d)))], wt, "staging");
-  // The surface-review coverage page counts files per surface, and a NEW message
-  // file changes artifacts/lane-messages' count — so a delivery that adds one
-  // stales docs/agent/SURFACE_REVIEW_COVERAGE.md and the coverage gate fails the
-  // mail PR (#445 did exactly that). Regenerate it here, AFTER the mail is staged
-  // (the derivation reads the tracked set), with mainline's own generator, and let
-  // that one file ride along. A generator that refuses (a ledger the gate rejects)
+  // The surface-review coverage page used to print files-per-surface for the mailbox
+  // trees, so a NEW message file changed artifacts/lane-messages' count, staled
+  // docs/agent/SURFACE_REVIEW_COVERAGE.md and failed the mail PR (#445 did exactly
+  // that) — and, worse, every regenerated page then conflicted every open product PR
+  // (2026-09-12). Since then the generator declares the mailbox trees (MAILBOX_TREES)
+  // and withholds their counts, so a delivery normally leaves the page byte-identical.
+  // The regeneration STAYS: it is idempotent when nothing moved, and it still catches a
+  // page that is stale for any other reason. Run it AFTER the mail is staged (the
+  // derivation reads the tracked set), with mainline's own generator, and let that one
+  // file ride along when it did change. A generator that refuses (a ledger the gate rejects)
   // refuses the delivery: mail must never ship a page the gate will not accept.
   const stagedMail = mustGit(["diff", "--cached", "--name-only"], wt, "listing the stage").split("\n").filter(Boolean);
   const allowed = [...MAIL_DIRS];

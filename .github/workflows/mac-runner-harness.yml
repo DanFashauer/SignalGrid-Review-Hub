@@ -14,14 +14,20 @@
 name: Mac harness (self-hosted, on demand)
 
 on:
+  # Reusable: mac-runner-auto.yml calls this nightly with lane=both and lane=mcp.
+  workflow_call:
+    inputs:
+      lane:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       lane:
-        description: "harness = validate-sim-macos.sh (full, incl. web build); preflight = node scripts/preflight.mjs; both"
+        description: "harness = validate-sim-macos.sh (full, incl. web build); preflight = node scripts/preflight.mjs; both = harness+preflight; mcp = the signalgrid-mcp sibling verified on real macOS, then both halves against the shared posture-report contract (verify:all --require-mcp, no evidence minted)"
         required: true
         default: both
         type: choice
-        options: [harness, preflight, both]
+        options: [harness, preflight, both, mcp]
 
 concurrency:
   group: mac-runner
@@ -43,6 +49,7 @@ jobs:
           echo "docker: $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo absent)"
 
       - name: Install (frozen lockfile — what CI installs with)
+        id: install
         run: pnpm install --frozen-lockfile
 
       - name: Full harness (proofs + web build; darwin binaries supplied for the run, manifests restored)
@@ -52,10 +59,35 @@ jobs:
           tail -40 harness.log; exit "$code"
 
       - name: Preflight (every non-proof gate)
-        if: ${{ inputs.lane == 'preflight' || inputs.lane == 'both' }}
+        # Independent of the harness: a failing harness must not hide preflight's verdict
+        # (the first dispatched run showed only half an answer). Gated on the install
+        # instead of always(), so a broken checkout cannot produce a misleading failure.
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (inputs.lane == 'preflight' || inputs.lane == 'both') }}
         run: |
           code=0; node scripts/preflight.mjs > preflight.log 2>&1 || code=$?
           grep -E "Preflight (PASSED|FAILED)|FAILED at" preflight.log || true; exit "$code"
+
+      - name: MCP lane — signalgrid-mcp on real macOS, then both halves against the shared contract
+        # The MCP repo's own CI is ubuntu smoke-only by design (its probes answer only on a
+        # Mac). This is the real check, runnable by either lane on demand: clone the public
+        # sibling OUTSIDE the checkout (a nested dir would dirty the Review-Hub tree and trip
+        # provenance) into RUNNER_TEMP, which is fresh per job; let verify.sh pick a Python
+        # >= 3.10 (it prefers python3.12; Apple's python3 is 3.9); then verify:all binds its
+        # contract test to THIS repo's posture-report.contract.json. --emit-evidence is
+        # deliberately absent: verify-all refuses to mint on CI, and Mac-minted evidence
+        # from a runner is a separate decision record.
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && inputs.lane == 'mcp' }}
+        run: |
+          set -u
+          MCP="$RUNNER_TEMP/signalgrid-mcp"
+          git clone -q https://github.com/DanFashauer/signalgrid-mcp "$MCP"
+          echo "signalgrid-mcp @ $(git -C "$MCP" rev-parse --short HEAD)"
+          code=0
+          ( cd "$MCP" && ./verify.sh ) > mcp-verify.log 2>&1 || code=$?
+          grep -E "passed|failed|error|== [0-9]/3" mcp-verify.log | tail -6
+          SIGNALGRID_MCP_PATH="$MCP" pnpm run verify:all --require-mcp > verify-all.log 2>&1 || code=$?
+          grep -E "mcp tool count|Review-Hub preflight|Review-Hub breadth|signalgrid-mcp:|shared contract" verify-all.log || true
+          exit "$code"
 
       - name: Upload logs
         if: always()
@@ -65,4 +97,6 @@ jobs:
           path: |
             harness.log
             preflight.log
+            mcp-verify.log
+            verify-all.log
           if-no-files-found: ignore

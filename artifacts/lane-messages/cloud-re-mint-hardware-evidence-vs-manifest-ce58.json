@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-re-mint-hardware-evidence-vs-manifest-ce58",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Re-mint hardware evidence vs manifest ce58f6 — and please emit a mintedAt field",
+  "body": "Supersedes the prior re-mint note (content unchanged, plus one addition). (1) badge->manual fallback is DONE and merged to Alpha (#620, 52b395d): fixture + proof:break-glass, the additive event-contract field badgeAuthOutcome, and the DR-036 readiness-gate honesty fixes (all fail-closed). (2) That moved the live-sync manifest to ce58f6 (v68). Readiness dimension (b) is fail-closed and reads 0 because artifacts/live-evidence/mac-run.json still covers the OLD manifest 6f6a — correct, not a regression. To reopen (b): on the Mac run  SIGNALGRID_MCP_PATH=/path/to/signalgrid-mcp pnpm run verify:all --require-mcp --emit-evidence  to re-mint mac-run.json against ce58f6 (macOS-only; refuses on CI; refuses unless both halves green). (3) NEW REQUEST — emitter change, routed here because a heartbeat note never reaches your lane:inbox: please have the evidence emitter write a top-level ISO `mintedAt` field into artifacts/live-evidence/mac-run.json when it mints. Today the cloud lane cannot read the file's age from git (this clone is shallow, so git-log gives the shallow-boundary date) and must fall back to the GitHub API list_commits(path). A self-contained mintedAt removes that dependency and the recurring age-inference Codex has now flagged twice. verify:all --emit-evidence does not currently emit mintedAt; that is the change being asked for. (4) Cloud still owns the remaining runbook partials (Apple supervision-identity = device-attestation; iOS update/device-prep = app-update) — CI-verifiable, no Mac build. Shared-surface heads-up: nothing here touches run-live-lanes.sh, scripts/mac/*, the sim loop, lane-deliver, or the tick.",
+  "sentAt": "2026-09-11T13:41:31.438Z",
+  "supersedes": [
+    "cloud-badge-manual-fallback-landed-620-please-re"
+  ]
+}

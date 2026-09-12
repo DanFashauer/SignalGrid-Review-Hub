@@ -82,8 +82,12 @@ function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
       if (depth >= MAX_PROTOTYPE_DEPTH) return true;
       for (const k of Reflect.ownKeys(o)) {
         if (depth > 0) return true;
-        if (typeof k === "symbol") return true;
-        if (!known.includes(k)) return true;
+        // A symbol key needs no test of its own: it is covered by the allowlist line below —
+        // `known` holds only strings and `includes` compares with SameValueZero, so a symbol
+        // is never a member and the line returns true for it. (Deleted 2026-09-12: the
+        // brace-less mutation sweep found the separate symbol check unfalsifiable, because
+        // no input can reach it and produce a different answer.)
+        if (!(known as readonly (string | symbol)[]).includes(k)) return true;
       }
       o = Object.getPrototypeOf(o) as object | null;
     }
@@ -217,7 +221,11 @@ export function deriveRecency(
   const bound = requirement.maxAssessmentAgeDays;
   if (bound === undefined) return "unbounded";
   if (typeof bound !== "number" || !Number.isFinite(bound) || bound <= 0) return "unknown";
-  if (assessmentMs === null || referenceMs === null) return "unknown";
+  // A missing run time or a missing reference instant needs no test of its own: it is
+  // covered by the `age === null` line below — `ageMs` returns null when either instant
+  // is absent, and null resolves to `unknown` there. (The explicit pair-check was deleted
+  // 2026-09-12: the brace-less mutation sweep found it unfalsifiable, no input reaching it
+  // producing a different answer. `proof:benchmark-selection` pins both null inputs.)
   // Tolerance 0 is this family's DOCUMENTED position, quoted from the doc comment
   // above: "No skew allowance exists on purpose — an allowance is a tuned number,
   // and this fabric does not tune." It is also the non-lowering choice: widening to

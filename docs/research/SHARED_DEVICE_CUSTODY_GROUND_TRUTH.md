@@ -65,27 +65,32 @@ premises:
 | Badge tap → check-out / check-in lifecycle | `checkout_requested/granted/denied`, `device_removed`, `device_returned`, `badge_access` event types in [`lib/event-contract/src/types.ts`](../../lib/event-contract/src/types.ts) | modeled |
 | Dock bay state (seated / unlocked / relocked / timed-out) | `dock_unlocked`, `dock_relocked`, `dock_timeout` event types (same contract); custody signalled by the [`custody-beacon`](../../lib/integrations/src/integrations/custody-beacon) and [`rtls-custody`](../../lib/integrations/src/integrations/rtls-custody) families | modeled |
 | Badge / physical-access authority (zone entry) | [`pacs-access`](../../lib/integrations/src/integrations/pacs-access) and [`passkey-assurance`](../../lib/integrations/src/integrations/passkey-assurance) families | modeled |
-| Device "trust" = Apple supervision identity present | [`device-attestation`](../../lib/integrations/src/integrations/device-attestation) family — supervision/attestation as a trust precondition | partial (attestation modeled; the specific supervision-identity lifecycle is not a distinct fixture) |
+| Device "trust" = Apple supervision identity present | [`device-attestation`](../../lib/integrations/src/integrations/device-attestation) family — the supervision-identity LIFECYCLE as a distinct fixture corpus + evaluator in [`supervision-identity.ts`](../../lib/integrations/src/integrations/device-attestation/supervision-identity.ts) (supervised / this org's identity vs another org's / identity lost / enrollment lost / never enrolled / commands unresponsive / unknown → the one grant, step-up, or restrict, fail-closed; every unknown tightens; a 288-state sweep pins the single grant by equality), proven by [`scripts/src/device-attestation-proof.ts`](../../scripts/src/device-attestation-proof.ts) | modeled |
 | UEM / MDM posture (compliant / unmanaged / unknown) | [`lib/ddm-connector`](../../lib/ddm-connector) + [`macos-posture`](../../lib/integrations/src/integrations/macos-posture) + [`device-management-health`](../../lib/integrations/src/integrations/device-management-health); unknown/unreporting posture only *raises* assurance | modeled |
 | Network dependency (802.1x site net; tethered vs offline) | [`nac`](../../lib/integrations/src/integrations/nac) / [`network-nac`](../../lib/integrations/src/integrations/network-nac) for network authority; `reachability_changed` + `carrierConnectivityState` in the event contract; [`carrier`](../../lib/integrations/src/integrations/carrier) for the "alive on cellular" signal | modeled |
 | Decision must still be made when the network is down | [`local-authority`](../../lib/integrations/src/integrations/local-authority) family (offline/degraded, fail-closed) | modeled |
-| Manual check-out fallback (credentials when badge fails) | [`break-glass`](../../lib/integrations/src/integrations/break-glass) family — an explicit, audited override path | partial (override modeled; the badge→manual fallback sequence is not a distinct fixture) |
-| iOS update / device-prep workflows | [`app-update`](../../lib/integrations/src/integrations/app-update) family | partial |
+| Manual check-out fallback (credentials when badge fails) | [`break-glass`](../../lib/integrations/src/integrations/break-glass) family — the badge→manual fallback SEQUENCE as a distinct fixture corpus + evaluator in [`fallback-sequence.ts`](../../lib/integrations/src/integrations/break-glass/fallback-sequence.ts) (badge fails → audited manual credential → allow/step-up/deny, fail-closed), proven by [`scripts/src/break-glass-proof.ts`](../../scripts/src/break-glass-proof.ts) | modeled |
+| iOS update / device-prep workflows | [`app-update`](../../lib/integrations/src/integrations/app-update) family — the prep / OS-update WORKFLOW as a distinct fixture corpus + evaluator in [`device-prep.ts`](../../lib/integrations/src/integrations/app-update/device-prep.ts) (enrolled / profiles applied / required apps installed / prep complete / OS current → ready; in progress or unknown → hold; failed, not provisioned, or update required → contain; an optional update offered → advisory only; a 3,072-state sweep pins the single grant by equality), proven by [`scripts/src/app-update-proof.ts`](../../scripts/src/app-update-proof.ts) | modeled |
 | Shift-change automation windows (maintenance runs before/after shift) | [`change-window`](../../lib/integrations/src/integrations/change-window) family | modeled |
 | Cross-domain detection: checked out but never became compliant | `CHECKOUT_WITHOUT_COMPLIANCE` in [`lib/event-contract/src/detect.ts`](../../lib/event-contract/src/detect.ts) | modeled |
 | Cross-domain detection: dock tamper + connectivity loss | `DOCK_TAMPER_WITH_NETWORK_LOSS` (same file) | modeled |
 | Cross-domain detection: dark in MDM yet alive on cellular/badge | `INACTIVE_MDM_BUT_ACTIVE_ELSEWHERE` (same file) | modeled |
 | Deterministic remediation cascade (what the L1/L2 ladder does by hand) | [`lib/signalgrid-simulator/src/remediation-allow.ts`](../../lib/signalgrid-simulator/src/remediation-allow.ts), proven by [`scripts/src/remediation-allow-proof.ts`](../../scripts/src/remediation-allow-proof.ts) | modeled |
-| **Custody integrity: a returned device still checked out to a prior holder / "unpaired" but occupying a slot** | — | **gap** |
-| **Per-user checkout cap (a hard limit silently blocking a clinician when a prior return did not clear)** | — | **gap** |
+| Custody integrity: a returned device still checked out to a prior holder / "unpaired" but occupying a slot | [`rtls-custody`](../../lib/integrations/src/integrations/rtls-custody) family — the custody-ledger RECONCILIATION as a distinct fixture corpus + evaluator in [`custody-ledger.ts`](../../lib/integrations/src/integrations/rtls-custody/custody-ledger.ts) (what the ledger says vs what the bay sees: a seated device the ledger still assigns to a prior holder is a hold with the contradiction named; an unpaired device in a bay is contained; a clear ledger over an empty bay escalates; any unknown axis holds; fail-closed), proven by [`scripts/src/rtls-custody-proof.ts`](../../scripts/src/rtls-custody-proof.ts) | modeled |
+| Per-user checkout cap (a hard limit silently blocking a clinician when a prior return did not clear) | the same surface — the cap axis is COMPUTED from the requester's open-checkout count, the tenant cap, and how many of those checkouts are physically docked (never asserted by the wire): a cap hit only by returns that never cleared is a hold with the reason `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN`; a cap genuinely reached is contained with `CUSTODY_CAP_REACHED`; a missing count is unknown and raises; contradictory counts are a malformed report | modeled |
 | **A faithful end-to-end "smart-charging" simulator scenario (badge → dock → provision → in-use → check-in, with the real failure branches)** | — | **gap** |
 
 ## The three gaps, and why they are worth filing
 
 The mapping is dense with **modeled** rows — the domain fits the existing surfaces almost
 one-to-one, which is the strongest evidence yet that the event-contract-first design was
-the right bet. Three fidelity gaps are genuine and filed as backlog rows rather than
-implied:
+the right bet. Three fidelity gaps were genuine and filed as backlog rows rather than
+implied. **Two of the three were modeled on 2026-09-11** as a read-only, fixture-backed
+evaluator in the `rtls-custody` family (`custody-ledger.ts`, proven by `proof:rtls-custody`)
+— the same pattern the two partial rows took, touching neither the decision core nor the
+simulator: the contradiction is graded as a checkout decision with a legible reason, and a
+person reconciles it. The timeline-level detection in `detect.ts` that item 1 proposed is
+still a design target (decision core), recorded on the backlog. The third remains a gap.
 
 1. **The "phantom custody" detection.** The single most-cited operational pain is a device
    that reads as checked-out to someone who already walked away, or occupies a dock slot
@@ -100,9 +105,12 @@ implied:
    the real workflow and its failure branches (unpaired / network-down / cap-hit /
    dock-fault), so proofs exercise the real thing.
 
-Because all three touch the decision core / simulator (behavior, DR-020 territory), they
-are proposed here and filed to [`docs/BUILD_BACKLOG.md`](../BUILD_BACKLOG.md) for a decision
-record, not changed unilaterally.
+The detection form of item 1 and all of item 3 touch the decision core / simulator
+(behavior, DR-020 territory); they are proposed here and filed to
+[`docs/BUILD_BACKLOG.md`](../BUILD_BACKLOG.md) for a decision record, not changed
+unilaterally. Items 1 and 2 as *decisions* — the ledger-versus-bay and ledger-versus-cap
+contradictions graded with a named reason — live in `custody-ledger.ts` (see the table),
+read-only and fixture-backed, in a family the launch profile keeps deferred.
 
 ## What this sharpens beyond code
 

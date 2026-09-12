@@ -2523,6 +2523,20 @@ run and quoted in `docs/agent/EVIDENCE.md`. The three mechanics quoted from the 
 were re-read in the clone: 26 `pipmaster` call sites, `.claude/settings.json` with a
 `SessionStart` hook, `lightrag/base.py:43` `load_dotenv(dotenv_path=".env", override=False)`.
 
+**Measured condition, folded from the Mac lane (2026-09-12).** The Mac's own LightRAG
+line — the GRAPH mode of DR-038, generative model `qwen3:8b` through Ollama on a 17 GB
+machine — failed extraction twice, 5 of 5 documents on `httpx.ReadTimeout`, first at the
+defaults and then at `MAX_ASYNC=1`, an 8k context and an 1800 s timeout; the 8B model's
+5.3 GB residency also made that session kill its own background jobs, and the models
+were unloaded. The Mac asked that this record carry the condition rather than the
+slogan, and it does: **for any LightRAG shape that calls a generative model, endpoint
+capacity is the precondition, not a key.** This record's shape has no such endpoint —
+`naive` mode, `PROCESS_OPTION_SKIP_KG`, a 384-dimension embedding model of about 130 MB
+on the CPU — so the timeout does not reach it; the 311-document index above was built
+with zero model calls. "Key-free" therefore describes this shape only. The Mac's graph
+mode stays under launchd for a smaller-model or remote-endpoint retry when the owner
+decides, and its intake row carries the measurement.
+
 **Reversal.** The owner reverses by saying so: delete `scripts/install-lightrag.mjs`,
 `scripts/docs-retrieval.mjs`, `scripts/lib/docs-retrieval.py`, the two `package.json`
 scripts, the research-ops section and this record, then remove

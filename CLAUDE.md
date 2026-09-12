@@ -218,6 +218,8 @@ Vite 8's bundler, win32 bindings deliberately kept for the windows desktop CI), 
 
 ## Multiple Claude lanes
 
+- **Model routing and usage-limit fallback (DR-047).** Every subagent spawn names its own tier (Haiku for bulk mechanical work, Sonnet for reads/verification/build, Opus for judgment; Fable/Mythos never run an engineering or review stage) and never inherits the coordinator's model; an unavailable tier resolves UP to Opus and a spawn killed by a usage limit is logged pending and re-issued, never silently dropped. The owner sets the CLI primary-model auto-fallback to Opus so a limited coordinating model continues instead of going dark.
+
 Parallel Claude sessions work this repo (cloud + Mac). Before touching a
 shared surface (discipline gate, mutation guard, sync manifest, proof
 registration, connector families the other lane's commits name), read

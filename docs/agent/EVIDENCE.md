@@ -2536,6 +2536,81 @@ Text-safety gate passed.
 ```
 Verdict:  **holds.** The cited-path count rose 2307 → 2433 (the new page and DR-043 cite the tree at path:line and every one resolves); the docs deferred-noun ceiling stayed at 416 with the page bannered as *nothing on this page is a claim of current capability* and every other touched block hedged in its own paragraph; the ceiling file was not rewritten (no drop, no rise); DR-043 is the 42nd record and carries a reversal clause. What this does NOT prove: that any of the five backlog items is buildable as specified — each is a design target until its proof is green and named — and nothing here measures the hardware, which is the point of DR-043 item 4. **Re-run after the same-day verification fixes** (four stale citations corrected, none of them affecting the gate outcome above): `node scripts/check-cited-paths.mjs` → `Cited-path check passed — 2435 citation(s) across 511 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).` — the count rose by two because the ES256 claim now cites the verifier and its proof row instead of an unrelated line, and `check-cited-commands` went red on this entry's own spelling of the absence command with the silent flag between `run` and the script name (the gate reads the flag as a script name) and is green again with the flag noted in a comment.
 
+## 2026-09-12 — "Every open row in `docs/BUILD_BACKLOG.md` names a registered role, and `check-backlog-ownership.mjs` now fails when one does not"
+Command:
+```
+git show 1c95f6d8:docs/BUILD_BACKLOG.md > /tmp/build-backlog-baseline.md
+node --input-type=module -e '
+import { readFileSync } from "node:fs";
+const text = readFileSync("/tmp/build-backlog-baseline.md", "utf8");
+const roster = JSON.parse(readFileSync("docs/agent/org-roster.json", "utf8"));
+const ids = roster.roles.map((r) => r.id);
+const lines = text.split("\n");
+const rows = [];
+let cur = null;
+for (let i = 0; i < lines.length; i++) {
+  const line = lines[i];
+  if (/^- \[ \] \*\*/.test(line)) { if (cur) rows.push(cur); cur = { text: line }; continue; }
+  if (/^- \[x\] /.test(line) || /^#/.test(line)) { if (cur) { rows.push(cur); cur = null; } continue; }
+  if (cur) { if (/^- \[/.test(line)) { rows.push(cur); cur = null; continue; } cur.text += "\n" + line; }
+}
+if (cur) rows.push(cur);
+const names = (id) => new RegExp(`(?<![\\w-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`);
+const laneless = rows.filter((r) => !ids.some((id) => names(id).test(r.text))).length;
+console.log("total rows:", rows.length, "laneless:", laneless);
+'
+node scripts/check-backlog-ownership.mjs --self-test
+node scripts/check-backlog-ownership.mjs
+node scripts/check-cited-paths.mjs
+node scripts/check-markdown-links.mjs
+node scripts/check-launch-claims.mjs
+node scripts/check-doc-line-counts.mjs
+node scripts/check-derived-doc-figures.mjs
+node scripts/check-derived-doc-figures.mjs --self-test
+node scripts/check-gate-census.mjs
+```
+Output:
+```
+total rows: 58 laneless: 54
+```
+```
+self-test passed (37/37)
+```
+```
+Backlog ownership — docs/COMPANY_BUILD_PLAN.md: 193 row(s): 116 open, 5 partially done, 72 closed
+Backlog ownership — docs/BUILD_BACKLOG.md: 131 row(s): 64 open, 67 closed
+Backlog ownership check passed — every row with work left in it, in both documents, names a role from the registry.
+```
+```
+Cited-path check passed — 2536 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+```
+```
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+```
+```
+Launch-claims gate passed — nothing deferred is presented as current.
+```
+```
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+```
+```
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+```
+```
+Derived-doc-figures self-test passed
+```
+```
+OK Gate census - all 189 gates run somewhere (2 exempt by name with a reason).
+```
+Verdict: **holds, after a fix to this same change made from review.** Before stamping, docs/BUILD_BACKLOG.md had **54 lane-less** `- [ ] **` rows out of 58 total (the six DR-042 cascade joins, the five DR-043 puck items, the three "Now" rows the Mac flagged at lines 259/277/390, the DR-040 CLI-Anything harness item, both api-zod design targets missing a real role and one carrying an INVALID pseudo-role "gate-and-proof-engineer" that resolves to no registry entry, and the bulk of the ECC/full-evaluation findings) — several of those rows already read as owned in prose ("Cloud lane.", "Mac lane", "Native lane.") without naming an id `docs/agent/org-roster.json` actually has, which is exactly the false-affirmative shape CLAUDE.md rule 2 warns about. Every lane-less row now carries an appended `Lane: <role-id>.` clause naming a real roster role chosen by what the row builds (decision core → principal-engineer; ITSM/change-management cascade joins → itsm-ops-domain; iOS/Android → mobile-native-engineer; gates/proofs/tooling → devex-tooling-engineer or qa-engineer; UEM/MAM connectors → endpoint-uem-domain; API contract/OpenAPI → api-contract-architect; security-shaped fixes → security-engineer; Mac-only work → mac-lane-steward), with **zero** substantive changes to any row's text. **After: 0 laneless.** The DR-042 section also gained one appended line proposing a build order for the six joins (join 1 → 5 → 2 → 3 → 4 → 6, one sentence of reasoning per join), not a rewrite of the section.
+
+**Codex review (PR #688) found the change itself carried a fail-open, and this entry's own two placeholders — fixed in the same commit as the gate, not just described:**
+1. **The gate's own row-detection pattern excluded six real open rows.** `BACKLOG_OPEN_HEAD` originally required the bold marker (`- [ ] **`), so BUILD_BACKLOG's six non-bold `- [ ]` open rows (lines 1384, 1392, 1398, 1403, 1461, 1472) were invisible to the scan — not counted open, not required to name a role. All six had in fact already been stamped in the first pass, but a lane silently removed from one of them would have left the gate green. Fixed by widening `BACKLOG_OPEN_HEAD` to `/^- \[ \] /` (any open checkbox row, bold or not) — nothing in this document's own convention conditions "open" on bold formatting, so gating on the bold marker was gating a coincidence of style. The self-test that had asserted the non-bold row was "simply not seen" (baking the fail-open into the proof of correctness) is replaced with two controls: a planted un-stamped non-bold row is flagged, and a planted stamped non-bold row passes. Live open-row count moved from the old pattern's 58 to the correct **64** (58 bold + 6 non-bold), all 64 owned, self-test 36/36 → **37/37**.
+2. **This entry's own recorded baseline command was a `node -e '<...>'` English-description placeholder**, not executable (`SyntaxError: Unexpected token '<'`). Replaced with the real command above — `git show 1c95f6d8:docs/BUILD_BACKLOG.md` (the commit this branch started from, before either stamping commit) piped into the same row/laneless logic the gate uses — verified to run and to reproduce the original 58-total/54-laneless baseline exactly.
+3. **This entry's quoted cited-path count (2533) was stale** — measured before the widening fix and this entry's own rewrite added citations of its own. Re-run on the final tree above: **2536**.
+
+`check-backlog-ownership.mjs` was extended with `parseBacklogRows`/`auditBacklogFileOwnership`, scanning BUILD_BACKLOG's checkbox rows under the same `{problems, open, closed}` output shape as the existing COMPANY_BUILD_PLAN scan, with the checkbox itself as status (no free-prose vocabulary in this file — `- [x]` is skipped outright, every open `- [ ]` row must name a role, bold or not). `check-gate-census.mjs`, `check-cited-paths.mjs`, `check-markdown-links.mjs`, `check-launch-claims.mjs`, `check-doc-line-counts.mjs` and `check-derived-doc-figures.mjs` (plus its own `--self-test`) all pass on the tree that includes this fix; `check-backlog-ownership.mjs` was already registered in both `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml` before this change (confirmed by grep, not re-registered). `node scripts/preflight.mjs` → `Preflight PASSED — everything it runs is green.`; `pnpm run verify:breadth` → `Breadth lane PASSED — 56 breadth proofs green.` — both re-run after every edit in this entry, on the exact tree pushed.
+
 ## 2026-09-12 — "The org roster has no clock, so a role's nextAction can sit done or stale for weeks unnoticed" (org self-evaluation, item 4)
 Command:
 ```

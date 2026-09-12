@@ -2642,3 +2642,39 @@ Proof-count check passed — all 60 documented counts match their proofs.
 exit=1
 ```
 Verdict:  **holds.** Both races were real before the change: in memory, 43 of 516 interleavings deleted the user together with the credential enrolled mid-flight (the old code awaited the Redis client factory between the splice and `inMemoryUsers.delete`); under Redis, the unlocked revocation's stale snapshot erased `cred-100`. Neither is reachable after it. `hasValidStepUpSession` is NOT a fail-open — an unconditional `false` can never grant, so a caller must require a fresh step-up; what was wrong was a docstring describing a check never performed, now replaced by NOT IMPLEMENTED plus `@deprecated`, and nothing calls it (the grep above finds only the definition, exit 1). What is NOT done: the revoke route (the lock is latent until one exists) and the attestation-`'none'` comment at `lib/webauthn/src/webauthn/verify.ts:398` — both left on the row for `security-engineer`. The Redis half of the proof runs where CI provides a store (`scripts/docker-verify.mjs`); preflight does not run it.
+
+## 2026-09-12 — "the lock's release was CAS-protected but its WRITE was not: the fenced write closes it, measured 11/15 unfixed vs 15/15 fixed; the step-up deprecation note pointed at a binding-unsafe store; the port-parity field regex ate `readonly` as the field name"
+Command:  three Codex findings on `lane/cloud-misfiled-engineering-20260912-0940Z` (06f0e6f9) fixed in one commit. (1) `lib/webauthn/src/webauthn/store.ts`: `addCredential`/`removeCredential`'s user-record write inside `withUserLock` is now a Lua script (`FENCED_SET_LUA`/`FENCED_DEL_LUA`) that writes only if `GET lockKey == token`, else returns 0 and the caller throws "lock lost; not reporting a write that did not happen" — the lease (`LOCK_TTL_MS = 5_000`) is unchanged. `proof:enrollment-race` extended with a case that deletes the real lock key mid-critical-section (by patching ioredis's own `get`, on the same already-connected client, no production injection point added) and asserts the write is refused; run against the unfixed store, then the fixed one. (2) `lib/webauthn/src/stepUpStore.ts`: `hasValidStepUpSession`'s `@deprecated` note pointed callers at `getStepUpSession` in `./webauthn/store.ts` — a different key prefix (`webauthn:stepup:` there vs this module's own `stepup:`) that checks only expiry, no `userId`/`requestId`/`challenge` binding. Repointed at this module's own `verifyStepUpSession` + `consumeStepUpSession`, with the reason spelled out. (3) `scripts/check-decision-port-parity.mjs:416`: the TS field regex captured a leading `readonly`/`public`/`private` modifier as the field name, found no `:` after it, and matched nothing — `readonly actionBinding: string` was invisible to `tsFields`, so a Swift port dropping it would pass. Regex now skips an optional modifier before capturing the name; self-tested with a modifier-bearing field the Swift side lacks, which must be flagged.
+```
+redis-server --port 6380 --daemonize yes --save "" --appendonly no; redis-cli -p 6380 ping
+cd scripts && REDIS_URL=redis://127.0.0.1:6380 node --import tsx src/webauthn-enrollment-race-proof.ts   # unfixed store.ts (git show HEAD:...)
+cd scripts && REDIS_URL=redis://127.0.0.1:6380 node --import tsx src/webauthn-enrollment-race-proof.ts   # fixed store.ts restored
+node scripts/check-decision-port-parity.mjs --self-test; node scripts/check-decision-port-parity.mjs
+pnpm run typecheck; pnpm run review:invariants; node scripts/check-proof-counts.mjs
+node scripts/check-derived-doc-figures.mjs --self-test; node scripts/check-cited-paths.mjs
+```
+Output:
+```
+PONG
+  FAIL — addCredential: a lock deleted mid-section is REFUSED, not silently applied (throws "lock lost"): undefined
+  FAIL — …and the credential was never actually stored: credentials: [cred-500]
+  FAIL — removeCredential: a lock deleted mid-section is REFUSED, not silently applied (throws "lock lost"): undefined
+  FAIL — …and the credential was never actually removed: credentials: []
+concurrency=12 survived=12
+11/15 assertions passed
+  ok   — addCredential: a lock deleted mid-section is REFUSED, not silently applied (throws "lock lost")
+  ok   — …and the credential was never actually stored
+  ok   — removeCredential: a lock deleted mid-section is REFUSED, not silently applied (throws "lock lost")
+  ok   — …and the credential was never actually removed
+concurrency=12 survived=12
+15/15 assertions passed
+self-test: 18 passed, 0 failed
+Port parity passed — DecisionEngine emits the same verdicts wired the same way, and
+AppWorkflows offers the same vocabulary and the same gating operations.
+scripts typecheck: Done
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Proof-count check passed — all 60 documented counts match their proofs.
+self-test passed (82/82)
+Cited-path check passed — 2569 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+```
+Verdict:  **holds.** The unfixed run shows the exact defect: the enrolment silently stored `cred-500` despite its lock being gone (a plain `SET`, no token check), and the seeded revocation of `cred-501` then also landed unfenced, deleting the whole record. Both are refused on the fixed store, and the write is provably never applied (state re-read after each). `scripts` needed a direct `ioredis` dependency to reach the same physical module store.ts uses (pnpm-verified same real path) for the monkeypatch, added to `scripts/package.json` and the lockfile regenerated (`pnpm install --lockfile-only`), matching the existing `pg` precedent for infra-gated proofs. What is NOT done: `preflight.mjs`/`verify:breadth` were not run this pass — the coordinator's restart notice said they OOM'd the box; CI runs the full suite and the coordinator merges on green.

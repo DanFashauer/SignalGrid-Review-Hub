@@ -25,8 +25,21 @@
 // `inMemoryUsers.delete`, so an enrolment landing in that window was deleted with the user.
 // Both are asserted below: the in-memory interleave is swept deterministically (no Redis
 // needed, so it runs before the refusal), and the Redis race is run for real.
+//
+// THE THIRD RACE (Codex P2 finding, 2026-09-12). The lock itself is a 5s LEASE
+// (`SET NX PX`), and its release is a compare-and-delete against a per-caller token — but
+// that CAS only ever protected the LOCK KEY, never the record write that happens while the
+// critical section runs. If the lease expires, or the key is deleted, WHILE `body()` is
+// still executing (Redis latency, an event-loop stall — nothing requires the caller itself
+// to be slow), a second writer can take the lock while the first holder's write is still in
+// flight, and an unfenced `SET`/`DEL` lands anyway: the exact lost update the lock exists to
+// prevent, with both callers still answering success. `lockLostMidWriteRace` below deletes
+// the real lock key mid-section (see its own comment for how, without any production
+// injection point) and asserts the write is REFUSED, not applied — on both the enrolment
+// and the revocation path.
 
 import { webauthnStore, webauthnTypes } from "@workspace/webauthn";
+import IORedis from "ioredis";
 
 type WebAuthnCredential = webauthnTypes.WebAuthnCredential;
 
@@ -93,6 +106,124 @@ async function inMemoryRevocationSweep() {
   } finally {
     if (savedUrl !== undefined) process.env.REDIS_URL = savedUrl;
   }
+}
+
+/** Minimal shape this test needs from an ioredis client instance — enough to invoke the
+ *  real `get`/`del` without fighting the library's generated command-overload types. */
+interface MinimalRedisClient {
+  del(key: string): Promise<number>;
+}
+
+/**
+ * THE THIRD RACE, run for real (Codex P2 finding, 2026-09-12). See the file header for
+ * the defect. This asserts the FIX: a lock that vanishes mid-section makes the write
+ * throw rather than land.
+ *
+ * HOW THE LOSS IS SIMULATED. No production injection point was added, and none exists —
+ * the critical section's very first Redis call, in both `addCredential` and
+ * `removeCredential`, is a real `GET` of the user record, made on the SAME already-
+ * connected client that is holding the lock. So this monkeypatches ioredis's OWN `get`
+ * (a generic third-party dependency method, the same narrow-external-stub shape as
+ * `webhooks-proof.ts`'s `globalThis.fetch` / `Date.prototype.toISOString`): on the one
+ * call whose key matches this test's user record, it lets the real read finish and then,
+ * using that SAME client instance, issues a real `DEL` of the real lock key — genuinely
+ * deleting the lock the holder believes it still owns, mid-section, not merely asserting
+ * that it would happen. The patch fires once, then restores the original method in a
+ * `finally`. This exercises whatever write mechanism the store actually uses (a plain
+ * `SET`/`DEL` on the unfixed store, the fenced Lua write on the fixed one) rather than
+ * assuming which one is live — so the SAME test fails on the unfixed store (the write
+ * lands anyway) and passes on the fixed one (the write is refused).
+ */
+async function lockLostMidWriteRace() {
+  const userId = "t_proof:lock-lost";
+  const targetKey = `webauthn:user:${userId}`;
+  const lockKey = `${targetKey}:lock`;
+  const realGet = IORedis.prototype.get;
+
+  /** Patch `get` to fire the lock deletion on the NEXT call matching `targetKey`, once. */
+  function armLockDeletion(): () => void {
+    let fired = false;
+    (IORedis.prototype as unknown as { get: typeof realGet }).get = function (
+      this: MinimalRedisClient,
+      ...args: Parameters<typeof realGet>
+    ) {
+      const call = (realGet as (...a: unknown[]) => Promise<string | null>).apply(this, args);
+      if (!fired && args[0] === targetKey) {
+        fired = true;
+        return call.then(async (value) => {
+          await this.del(lockKey); // the REAL lock key, deleted for real, mid-section
+          return value;
+        });
+      }
+      return call;
+    } as typeof realGet;
+    return () => {
+      IORedis.prototype.get = realGet;
+    };
+  }
+
+  // Clean slate.
+  const prior = await webauthnStore.getUser(userId).catch(() => null);
+  for (const c of prior?.credentials ?? []) await webauthnStore.removeCredential(userId, c.id);
+
+  // 3a — addCredential: the lock disappears between the read and the write.
+  let disarm = armLockDeletion();
+  let addThrew: unknown;
+  try {
+    await webauthnStore.addCredential(userId, credential(500));
+  } catch (err) {
+    addThrew = err;
+  } finally {
+    disarm();
+  }
+  check(
+    'addCredential: a lock deleted mid-section is REFUSED, not silently applied (throws "lock lost")',
+    addThrew instanceof Error && /lock lost/i.test(addThrew.message),
+    String(addThrew),
+  );
+  const afterAdd = await webauthnStore.getUser(userId);
+  check(
+    "…and the credential was never actually stored",
+    !(afterAdd?.credentials ?? []).some((c) => c.id === "cred-500"),
+    `credentials: [${(afterAdd?.credentials ?? []).map((c) => c.id).join(", ")}]`,
+  );
+
+  // Seed EXACTLY one real credential — lock intact — for 3b to revoke. Cleaned first and
+  // independently of 3a's outcome: on the unfixed store 3a's write lands despite the
+  // refusal it should have hit, and an uncleaned cred-500 left sitting alongside cred-501
+  // would route 3b through the OTHER write branch (`fence.set` on a non-empty array)
+  // instead of the one it targets (`fence.del` on the now-empty array) — a correct 3a
+  // must not change which branch 3b exercises.
+  const betweenCases = await webauthnStore.getUser(userId).catch(() => null);
+  for (const c of betweenCases?.credentials ?? []) await webauthnStore.removeCredential(userId, c.id);
+  await webauthnStore.addCredential(userId, credential(501));
+
+  // 3b — removeCredential, last-credential branch (the fenced DELETE path): same fault
+  // injected, same refusal expected.
+  disarm = armLockDeletion();
+  let removeThrew: unknown;
+  try {
+    await webauthnStore.removeCredential(userId, "cred-501");
+  } catch (err) {
+    removeThrew = err;
+  } finally {
+    disarm();
+  }
+  check(
+    'removeCredential: a lock deleted mid-section is REFUSED, not silently applied (throws "lock lost")',
+    removeThrew instanceof Error && /lock lost/i.test(removeThrew.message),
+    String(removeThrew),
+  );
+  const afterRemove = await webauthnStore.getUser(userId);
+  check(
+    "…and the credential was never actually removed",
+    (afterRemove?.credentials ?? []).some((c) => c.id === "cred-501"),
+    `credentials: [${(afterRemove?.credentials ?? []).map((c) => c.id).join(", ")}]`,
+  );
+
+  // Cleanup, regardless of which branch actually persisted.
+  const cleanup = await webauthnStore.getUser(userId).catch(() => null);
+  for (const c of cleanup?.credentials ?? []) await webauthnStore.removeCredential(userId, c.id);
 }
 
 async function main() {
@@ -185,6 +316,10 @@ async function main() {
   check("the earlier enrolments were untouched by the revocation", stillThere.length === 0, `missing: ${stillThere.join(", ")}`);
 
   for (const c of afterRace?.credentials ?? []) await webauthnStore.removeCredential(USER_ID, c.id);
+
+  console.log("");
+  console.log("Lock-lease fence — a lock deleted mid-section must refuse the write, not apply it\n");
+  await lockLostMidWriteRace();
 
   // Deliberately NOT a `figures=` line. That marker registers a proof with the figure
   // guard, which re-runs it during the standard sweep — and this proof refuses to run

@@ -407,13 +407,25 @@ function depthZeroBody(src, open) {
   }
   return null;
 }
-/** `export interface X { a: T; b?: U; }` -> Set{a,b}. Comments are stripped by `code()`. */
+/** `export interface X { a: T; b?: U; readonly c: V; }` -> Set{a,b,c}. Comments are
+ *  stripped by `code()`. A leading `readonly` (interfaces) or `public`/`private`
+ *  (in case a shape is ever declared as a class instead) is a MODIFIER, not the field
+ *  name, and is skipped before the name is captured — a field regex that treated
+ *  `readonly` itself as the name would then fail to match the line at all (there is no
+ *  `:` right after it), so `readonly actionBinding: string` was invisible to this
+ *  function: present in TS, silently missing from `tsFields`, and so never compared
+ *  against the Swift side — a port that dropped it would still pass. Self-tested below
+ *  with a modifier-bearing field the Swift side lacks, which must FAIL. */
 function tsInterfaceFields(src, name) {
   const m = new RegExp(`export interface ${name}\\s*\\{`).exec(src);
   if (!m) return null;
   const body = depthZeroBody(src, m.index + m[0].length - 1);
   if (body === null) return null;
-  return new Set([...body.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\??\s*:/gm)].map((x) => x[1]));
+  return new Set(
+    [...body.matchAll(/^\s*(?:(?:readonly|public|private)\s+)*([A-Za-z_][A-Za-z0-9_]*)\??\s*:/gm)].map(
+      (x) => x[1],
+    ),
+  );
 }
 /** `struct X { let a: T; var b: U = … ; init(…) {…} }` -> Set{a,b}. Only stored
  *  properties at depth 0 count — an `init` parameter list is not a field. */
@@ -765,6 +777,43 @@ function runSelfTests() {
   const tsFixture = code("export interface Fx {\n  key: string;\n  /** c */\n  confirmer?: string;\n  nested: { inner: number };\n}\nexport interface Other { unrelated: number }");
   const tx = tsInterfaceFields(tsFixture, "Fx");
   t("shape: the TS parser reads depth-0 members only (a nested object type's members excluded)", tx !== null && tx.size === 3 && tx.has("nested") && !tx.has("inner"), tx ? `{${[...tx].join(", ")}}` : "null");
+
+  // P2 finding (2026-09-12): `readonly actionBinding: string` — the field regex treated
+  // the MODIFIER as the field name, could not then find a `:` right after it, and the
+  // whole line matched nothing, so a `readonly` (or `public`/`private`, if a shape is
+  // ever declared as a class) TS field was invisible to `tsFields` and a Swift port that
+  // dropped it would pass this gate silently.
+  const modifierFixture = code(
+    "export interface Fx {\n  key: string;\n  readonly actionBinding: string;\n  public also: string;\n}\n",
+  );
+  const txMod = tsInterfaceFields(modifierFixture, "Fx");
+  t(
+    "shape: a `readonly`/`public` modifier is skipped so the FIELD NAME is captured, not the modifier",
+    Boolean(txMod) &&
+      txMod.size === 3 &&
+      txMod.has("key") &&
+      txMod.has("actionBinding") &&
+      txMod.has("also") &&
+      !txMod.has("readonly") &&
+      !txMod.has("public"),
+    txMod ? `{${[...txMod].join(", ")}}` : "null",
+  );
+  // …and, planted through the REAL comparison the gate runs: a modifier-bearing TS field
+  // the Swift side lacks must be FLAGGED, not swallowed. Before the fix this ran on an
+  // empty `tsFields` for the modifier line and found nothing to report — a port-parity
+  // gap that passed.
+  const modifierDrift = compareShapes({
+    shape: "X",
+    tsFields: txMod ?? S(),
+    swiftFields: S("key", "also"),
+    declared: [],
+  });
+  t(
+    "shape: a `readonly` TS field absent from the Swift port is flagged (not swallowed by the modifier)",
+    modifierDrift.length === 1 && modifierDrift[0].includes("X.actionBinding"),
+    `${modifierDrift.length} finding(s)`,
+  );
+
   // Floors on the REAL files: the declared drift must be a real drift today.
   const realTs = tsInterfaceFields(code(readFileSync(resolve(repo, WF_TS), "utf8")), "AppPlanInput");
   const realSwift = swiftStructFields(code(readFileSync(resolve(repo, WF_SWIFT), "utf8")), "AppPlanInput");

@@ -165,7 +165,35 @@ const LOCK_RETRY_MS = 25;
 const RELEASE_LOCK_LUA =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
+/**
+ * FENCE THE WRITE ITSELF, not just the release (P2 finding, 2026-09-12). The 5s lease
+ * (`SET NX PX`) can expire while `body` is still running — Redis latency or an
+ * event-loop stall, not merely a slow caller — and a second writer then takes the lock
+ * while the first is still mid-write. The compare-and-delete on release only protects
+ * the LOCK: it stops the first holder from deleting the SECOND holder's lock, but the
+ * first holder's user-record write already happened by then, landing after (or
+ * interleaved with) the second holder's, exactly the lost-update this lock exists to
+ * prevent. So the record write is itself a Lua script gated on the same token: it
+ * writes only while `GET lockKey == token` still holds, atomically, and returns 0
+ * otherwise. A 0 means this holder's lock is already gone — the caller must throw
+ * rather than report a write that did not happen; see `LockFence` below.
+ */
+const FENCED_SET_LUA =
+  "if redis.call('get', KEYS[1]) == ARGV[1] then redis.call('set', KEYS[2], ARGV[2]); return 1 else return 0 end";
+/** Same fence as `FENCED_SET_LUA`, for the delete-on-last-credential path. */
+const FENCED_DEL_LUA =
+  "if redis.call('get', KEYS[1]) == ARGV[1] then redis.call('del', KEYS[2]); return 1 else return 0 end";
+
 type RedisClient = NonNullable<Awaited<ReturnType<typeof getRedisClient>>>;
+
+/** Write access to the user record that only succeeds while this holder's lock is
+ *  still the one recorded in Redis — see `FENCED_SET_LUA`. Both methods resolve
+ *  `false` (never throw) when the fence rejects the write; callers turn that into the
+ *  fail-closed refusal ("lock lost; not reporting a write that did not happen"). */
+interface LockFence {
+  set(value: string): Promise<boolean>;
+  del(): Promise<boolean>;
+}
 
 /**
  * Run `body` while holding the per-user credential lock in Redis.
@@ -187,16 +215,27 @@ type RedisClient = NonNullable<Awaited<ReturnType<typeof getRedisClient>>>;
 async function withUserLock<T>(
   userId: string,
   refusal: string,
-  body: (redis: RedisClient, key: string) => Promise<T>,
+  body: (redis: RedisClient, key: string, fence: LockFence) => Promise<T>,
 ): Promise<T> {
   const key = `${USER_PREFIX}${userId}`;
   const redis = (await getRedisClient()) as RedisClient;
   const lockKey = `${key}:lock`;
   // Crypto randomness, not Math.random(). The SET NX PX acquisition is what
   // actually serialises writers, so this token is not the only guard — but it
-  // is compared on RELEASE, and a predictable token on a security surface is
-  // the wrong primitive whether or not today's code path makes it exploitable.
+  // is compared on RELEASE (and now on every write — see FENCED_SET_LUA), and a
+  // predictable token on a security surface is the wrong primitive whether or
+  // not today's code path makes it exploitable.
   const lockToken = `${Date.now()}-${randomUUID()}`;
+  const fence: LockFence = {
+    async set(value: string): Promise<boolean> {
+      const result = await redis.eval(FENCED_SET_LUA, 2, lockKey, key, lockToken, value);
+      return result === 1;
+    },
+    async del(): Promise<boolean> {
+      const result = await redis.eval(FENCED_DEL_LUA, 2, lockKey, key, lockToken);
+      return result === 1;
+    },
+  };
   let held = false;
   try {
     await redis.connect();
@@ -213,7 +252,7 @@ async function withUserLock<T>(
     if (!held) throw new Error(refusal);
 
     // ── critical section ────────────────────────────────────────────────────
-    return await body(redis, key);
+    return await body(redis, key, fence);
   } finally {
     if (held) {
       await redis.eval(RELEASE_LOCK_LUA, 1, lockKey, lockToken).catch(() => undefined);
@@ -229,7 +268,7 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
     return withUserLock(
       userId,
       "WebAuthn credential enrollment could not acquire the per-user lock; not reporting an enrollment that was not persisted",
-      async (redis, key) => {
+      async (redis, key, fence) => {
         const data = await redis.get(key);
         const user: WebAuthnUser = data
           ? (JSON.parse(data) as WebAuthnUser)
@@ -240,10 +279,14 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
         if (!user.credentials.some((c) => c.id === credential.id)) {
           user.credentials.push(credential);
           // Durable, no TTL — matching saveUser. A credential is an enrollment record,
-          // not a session.
-          const setRes = await redis.set(key, JSON.stringify(user));
-          if (setRes !== "OK") {
-            throw new Error("WebAuthn credential persistence failed");
+          // not a session. Fenced against OUR lock token (FENCED_SET_LUA): if the lease
+          // expired or was deleted mid-section, the write is refused rather than landing
+          // over whatever the NEXT holder is doing.
+          const wrote = await fence.set(JSON.stringify(user));
+          if (!wrote) {
+            throw new Error(
+              "WebAuthn credential enrollment: lock lost; not reporting a write that did not happen",
+            );
           }
           stored = true;
         }
@@ -296,7 +339,7 @@ export async function removeCredential(userId: string, credentialId: string): Pr
     return withUserLock(
       userId,
       "WebAuthn credential revocation could not acquire the per-user lock; not reporting a revocation that was not persisted",
-      async (redis, key) => {
+      async (redis, key, fence) => {
         const data = await redis.get(key);
         if (!data) {
           inMemoryUsers.delete(userId); // Redis is authoritative: a miss is a miss (see getUser)
@@ -309,14 +352,24 @@ export async function removeCredential(userId: string, credentialId: string): Pr
           return false;
         }
         user.credentials.splice(index, 1);
+        // Both branches are fenced against OUR lock token (FENCED_DEL_LUA / FENCED_SET_LUA):
+        // a failure — including a lease that expired or was deleted mid-section — throws
+        // rather than reporting `true` over a write that never landed.
         if (user.credentials.length === 0) {
-          await redis.del(key); // a failure propagates — never `true` over a key still held
+          const removed = await fence.del();
+          if (!removed) {
+            throw new Error(
+              "WebAuthn credential revocation: lock lost; not reporting a write that did not happen",
+            );
+          }
           inMemoryUsers.delete(userId);
           return true;
         }
-        const setRes = await redis.set(key, JSON.stringify(user));
-        if (setRes !== "OK") {
-          throw new Error("WebAuthn credential revocation persistence failed");
+        const wrote = await fence.set(JSON.stringify(user));
+        if (!wrote) {
+          throw new Error(
+            "WebAuthn credential revocation: lock lost; not reporting a write that did not happen",
+          );
         }
         inMemoryUsers.set(userId, user);
         return true;

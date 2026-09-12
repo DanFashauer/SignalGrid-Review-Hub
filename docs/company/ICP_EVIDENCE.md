@@ -213,3 +213,24 @@ story is the asset, which is the premise `WHY_THIS_EXISTS.md` was written on.
    an MDM to build against, and there is a warm surface for a partner
    conversation. `positioning-messaging` and the owner own that call — it is an
    outreach decision, not a repo change.
+
+## Finding 9 — the founder is the ICP archetype, read from his own career record (2026-09-12)
+
+**Source.** The founder's résumé, shared 2026-09-12 (owner-held; summarised in
+[`FOUNDER_PROFILE.md`](FOUNDER_PROFILE.md), contact details not reproduced).
+
+**What it establishes.** The buyer-side persona the earlier findings describe from the
+outside — a senior platform engineer who owns endpoint, mobility, identity and
+shared-device workflows in a hospital system, on Intune, Workspace ONE, Jamf and Entra,
+working incidents in ServiceNow — is a real job with a real ladder, and the founder held
+every rung of it for ten years at one regional health system before taking the platform
+seat at a national one. Finding 2's "standardising the stack is somebody's job" names his
+job. The L1/L2 runbooks absorbed under DR-034 are his working documents, which is why
+they read as operations and not as marketing.
+
+**What it does NOT establish, stated first as the rest of this file does.** One person is
+not a segment. Nothing here is a customer conversation, a willingness to pay, a budget
+line, or evidence that his employers would buy anything; his employers are named nowhere
+in this tree as customers, partners or references, and may not be. It establishes
+founder-market fit as a fact about the founder, and it tells every role which vocabulary
+the buyer already speaks.

@@ -306,6 +306,7 @@ export const TARGETS = [
 
   {
     proof: "proof:facility-trust-graph",
+    oneLine: true,
     files: [
       "lib/facility-trust-graph/src/evaluate.ts",
       "lib/facility-trust-graph/src/graph.ts",

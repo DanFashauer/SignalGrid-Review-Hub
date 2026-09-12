@@ -52,7 +52,57 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (Mac lane, latest) - THE SIX TOOLS ARE INSTALLED AND EACH USED ONCE
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SKILL COLLECTIONS ARE IN THE TREE,
+              UNDER THE OWNER'S BAR (DR-039): 85 skill directories from eleven upstreams
+              vendored byte-identical at their pins (mattpocock 25, addyosmani 24,
+              K-Dense 13, google 5, NVIDIA 4, mcollina 4, hig-doctor 3, finding-unknowns 3,
+              poka-yoke 2, keep-the-why 1, ios-simulator 1). The bar was
+              the owner's: adopted if any part of it can aid building any aspect of the
+              company; overlap is a ROW, never a refusal. The only exclusions are the four
+              hard lines - licence (trailofbits CC BY-SA, ramzesenok no LICENSE, and the
+              NC/proprietary/GPL/unlicensed K-Dense skills), auto-execution (every hook,
+              installer and marketplace manifest), egress (stated and overridden, never
+              silently accepted), directory collision (addyosmani's
+              test-driven-development loses to the incumbent). 37 override rows, not one
+              vendored file edited. One first-party addition:
+              docs/agent/SKILL_AUTHORING_STANDARD.md (the NVIDIA authoring bar in our own
+              words, plus the Trail of Bits doctrine written up rather than copied).
+              Bambushu/crucible NOT taken - the owner's list named one Crucible and the
+              Mac lane's DR-038 adopted a different project of that name; its measurements
+              are appended to that intake row. Vendored figure 15 -> 100, 117 tracked
+              directories under .claude/skills (100 + the 17 first-party, three of them
+              from #671 the same hour), section E holds all of it.
+              (Earlier 2026-09-12, cloud lane:) THREE HAND-RUN WORKFLOWS ARE NOW SKILLS BOTH LANES
+              LOAD FROM THE TREE (branch lane/cloud-four-skills-20260912-024500Z): tool-evaluation-by-use
+              (how an owner-shared tool is evaluated BY USE and written into the intake log),
+              landing-under-dr-037 (the five merge conditions, merge-then-regenerate order, one
+              evidence re-mint after the last family) and orchestrator-over-workers (spec-write /
+              fan-out / review / land one at a time). A fourth, media-intake, was written and then
+              folded into DR-040's video-intake before landing - same procedure, one skill per
+              resource kind; video-intake gained the placement rules (where a clip's substance
+              lands) and audio-only material. VENDORED.md now SEVENTEEN: 32 tracked = 15 upstream
+              + 17 first-party, section E holds it. Readiness untouched.
+              (Earlier 2026-09-12, cloud lane:) THE FOUNDER'S THESIS IS ON THE RECORD
+              IN HIS OWN WORDS (DR-042): dictated, quoted verbatim in WHY_THIS_EXISTS.md
+              under 'What only the founder can write' - the section that had been
+              deliberately blank since that page was written - and tested clause by clause
+              against PURPOSE.md with a path:line each. Three clauses PURPOSE did not carry
+              were added under DR-042's authority (DR-020's rule): the systems' OWNERS are
+              separate, not just the systems; the auth factor is the customer's choice and
+              the grid is agnostic to it; a grant is scoped to the department, area or
+              equipment the person was assigned. Plus 'The cascade, named' - a per-stage
+              status table, every unbuilt stage marked design intent and pointed at a
+              backlog item, no shipped-capability claim moved. CASCADE AUDIT: both ends
+              built, the joins missing - @workspace/incident-playbook is imported by four
+              PROOFS and by nothing in lib/ or artifacts/, so no ticket can open; nothing
+              opens a change record (the fabric only reads one); check:absence 'affected
+              user notification' CORROBORATED across four probes. Six fail-closed backlog
+              items opened for exactly those joins. The owner's infographic ('10 cloud
+              architecture concepts', Rajender Ponnala - not committed) mapped concept by
+              concept in the cloud-platform architecture page; several answers are
+              deliberate refusals (no cache in the decision path, no retry inside a
+              decision, no queue on ingestion) and no deployment-target claim was added.
+              (Earlier 2026-09-12, Mac lane:) THE SIX TOOLS ARE INSTALLED AND EACH USED ONCE
               (owner ran the three refused installs himself). Crucible /temper on #649's custody-ledger
               landing: three finder angles -> 11 candidates, 10 deduped, one drafted Important; the two
               that could gate were adjudicated by execution and both REFUTED with the design cited

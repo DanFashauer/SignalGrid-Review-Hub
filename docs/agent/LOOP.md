@@ -65,7 +65,7 @@ LAST TOUCHED: 2026-09-12 (mac lane, latest) - NEEDLE INGESTED (DR-044): cactus-c
               Graphify semantic-docs pass DROPPED (LightRAG key-free naive mode already covers doc retrieval,
               DR-041); Crucible /temper NOT joining brain-cycle-config.json (redundant with the gauntlet's
               /code-review bugHunt stage) - that shared file UNCHANGED. Both decision benches re-run GREEN +
-              deterministic on the Mac (latency p95 0.19ms; throughput 29,535/sec agg on 10 workers, 3.86x).
+              deterministic on the Mac (latency p95 0.19ms; throughput `29,535/sec` agg on 10 workers, 3.86x).
               RELIABILITY_SLO.md NOT partial-re-dated: its 08-24 table is a coordinated single-machine measurement
               and this Mac is a faster class; routed the coordinated re-date (benches + test:load, one machine) to
               the cloud. Killed an orphaned self-hosted-runner api-server squatting port 5310 for 4h+ that made the

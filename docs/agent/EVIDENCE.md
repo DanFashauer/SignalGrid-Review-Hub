@@ -1994,3 +1994,21 @@ Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the
 Plugin-manifest gate passed — signalgrid plugin: 13 agents (derived), skills + commands present; claude plugin validate exit 0.
 ```
 Verdict:  **landed as vendored, unmodified, with the two deny-list conflicts recorded as overrides instead of edits.** Before the two rows existed the conflicts gate failed on exactly those three spans (`✗ 3 skill instruction(s) the Bash deny list refuses`), and before the carve-outs and the figure moved the boundary gate failed on coverage (`26 tracked path(s) fall under NO declared area`, all under `third_party/cli-anything/`) — both failures were the gates doing their job on a second upstream, and both cleared without touching a vendored byte. What is NOT proven here: the transcription script has not been run on the Mac (the cloud measured the same path on 2026-09-12: 1,806 characters from a 70.61 s clip), and no session has yet invoked `/watch` from this directory rather than from a scratch clone. The first `video-intake` run on either lane is the live confirmation.
+## 2026-09-12 — "The ponytail pin 2ed6c52 is reproducible from upstream — the installer failed because it fetched an abbreviated id, which git treats as a ref name"
+Command:  the Mac lane reported `pnpm run ponytail:install` dying at `git fetch --depth=1 origin 2ed6c52` with "couldn't find remote ref 2ed6c52" and asked whether the vetted object exists. Probed upstream from the cloud, in a scratch clone:
+```
+git ls-remote --tags https://github.com/DietrichGebert/ponytail | grep v4.9.0
+git clone -q --depth 300 https://github.com/DietrichGebert/ponytail ponytail-probe
+git -C ponytail-probe cat-file -e 2ed6c52 ; git -C ponytail-probe log -1 --format='%H %ci %s' 2ed6c52
+git -C ponytail-probe merge-base --is-ancestor v4.9.0 2ed6c52 ; git -C ponytail-probe rev-list --count v4.9.0..2ed6c52
+git -C ponytail-probe diff --stat v4.9.0 2ed6c52 -- skills ; git -C ponytail-probe show 2ed6c52:.claude-plugin/plugin.json | grep version
+```
+Output:
+```
+0a4dd63ad4541f4f655c4108a295916f3c1d8fda	refs/tags/v4.9.0
+2ed6c52 present: yes
+2ed6c52c9d7e5e56942508591085fd45dea277d3 2026-08-08 00:44:01 +0300 feat: add Grok Build native skills adapter (revive #561) (#661)
+v4.9.0 ancestor of 2ed6c52: yes ; commits v4.9.0..2ed6c52: 3
+(skills dir diff: empty)            "version": "4.9.0",
+```
+Verdict:  **refuted as "unreproducible", confirmed as a real installer defect.** The object exists and is 3 commits after tag v4.9.0 (tests plus a Grok Build adapter; the skills tree the vetting read is byte-identical to the tag, and the plugin manifest at that commit says 4.9.0, which is what "= v4.9.0" meant). `git fetch origin <id>` fetches an object only by its FULL id; a 7-character id is looked up as a ref name and there is no ref by that name, so the installer could never have worked on a fresh clone — it worked on 2026-09-01 only because the object was already local. Fixed by pinning the full id; the DR-024 vetting stands unchanged.

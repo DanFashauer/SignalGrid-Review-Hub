@@ -120,10 +120,15 @@ Fable, and when the coordinator hit its Fable limit every inherited subagent sta
 failing with 429 — a one-tier limit became a lane-wide stall. So:
 
 - **Every spawn states its model.** Registered `.claude/agents/*.md` roles do this by
-  frontmatter; an ad-hoc or background spawn states it in the brief. A spawn with no named
+  frontmatter; an ad-hoc or background spawn sets the `model:` argument on the spawn itself
+  (the tool field beside the prompt), not in the brief prose — a brief-only tier does not
+  select the runtime model. A spawn with no named
   tier is under-specified and does not run — the same bar as a worker with no falsifying check.
-- **Never inherit the coordinator's model, and never pile subagents onto it.** Each spawn is
-  metered against its own named tier, so exhausting one tier cannot cascade into all of them.
+- **Never inherit the coordinator's model.** Routing the bulk of work to Haiku/Sonnet keeps
+  those workers off the coordinator's Opus quota, so exhausting one tier does not cascade into
+  the others. The honest exception: an Opus judgment worker shares an Opus coordinator's quota
+  — naming the tier makes no separate bucket — so keep Opus-worker spawns few, and when the
+  Opus tier is exhausted let judgment work WAIT for the reset rather than downgrade it.
 
 ### When a model hits its usage limit — fall back and continue, never go dark (DR-047)
 

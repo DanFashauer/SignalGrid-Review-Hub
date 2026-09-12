@@ -2167,3 +2167,63 @@ deterministic; learning proposes (DR-035 item 5).
 **Reversal / amendment.** The owner reverses by saying so; amend the thresholds in
 `scripts/check-readiness-figure.mjs` and this record together. A dimension may be added or
 its derivation tightened by a later record that names what changed and why.
+
+## DR-037 — The cloud lane merges its own green product PRs; the owner is no longer the merge button (owner-directed 2026-09-12)
+
+**Decision.** From 2026-09-12 the cloud lane **merges product pull requests itself** once
+they are green, instead of parking them for the owner. The owner set this in chat on
+2026-09-12, after six green PRs had queued on him overnight and the lane explained that
+DR-032's "lanes open, owner merges" rule was the only thing holding them: asked whether
+the lane should merge them itself, he answered *"Yes I didn't want that and that was my
+mistake I didn't want that on me."* This record carries that answer; the lane wrote it,
+the owner decided it.
+
+**What "green" means here — every condition, none inferred.** A product PR is
+mergeable by the lane only when all of the following hold on its CURRENT head:
+
+1. The gating check "Typecheck, build, and proof scaffold" has **passed** on that head
+   (a `check_suite.completed` event alone is not it; the lane reads the check run).
+2. `node scripts/preflight.mjs` and `pnpm run verify:breadth` passed **locally on the
+   branch** before the push that produced the head, with output quoted in the PR body
+   or `docs/agent/EVIDENCE.md` — CI green is necessary, not sufficient (CLAUDE.md,
+   "Before you push").
+3. Every review thread is resolved and every bot finding was verified against the
+   source and either fixed or answered with the reason; the lane never resolves a
+   human reviewer's thread it did not address.
+4. The PR is not conflicted with `SignalGrid_Alpha`; a conflict is merged in and
+   regenerated files are regenerated with the repo's tooling, never by hand.
+5. The lane **never approves** a PR (approval is a human act and the harness keeps
+   refusing self-approval), and it never merges a PR it did not open or was not asked to
+   drive for its author, except the Mac lane's landing PRs when the Mac has asked for
+   that in mail (as #653 did).
+
+**What stays owner-gated.** `check-owner-gated-surfaces.mjs` still classifies
+`scripts/**`, `.github/workflows/**`, `lib/**/fixtures/**`, the brain-cycle veto config
+and the owner-reserved rules as SAFETY_MACHINERY / OWNER_RESERVED. This record changes
+who presses merge, not what the classifier says: the lane may merge a SAFETY_MACHINERY
+PR only when the five conditions above hold, and it must say so in the PR body under
+"Owner decision needed" as *"merged under DR-037"* with the check-run id. It still does
+not: edit `AGENTS.md` or a decision record on its own authority (a DR records an owner
+decision, as this one does); activate the Standing Brain Cycle (DR-032's activation clause
+is untouched — the cycle still auto-OPENS and never auto-merges); merge anything that
+changes the launch profile, the launch-claims gate or the publication boundary (DR-021 §2
+— those remain the owner's); or delete branches.
+
+**Consequences.** The owner's queue becomes review-when-he-wants, not merge-or-nothing:
+six green PRs (#656, #657, #653, #649, #654 and the lane-mail #655) sat for hours on
+2026-09-11/12 while the lane could only re-sync them each time a delivery moved the
+coverage page. The lane now lands them in order, regenerating the sync manifest on top of
+the previous landing (DR-036's readiness figure reads (b)=0 until the Mac re-mints against
+the final manifest — by design, unchanged). Every merge is still recorded: the PR body,
+the EVIDENCE entry, the LOOP STATE line and the steward heartbeat name the merged sha.
+
+**Alternatives considered.** Keep DR-032's rule and ask the owner to merge in batches —
+rejected by the owner ("I didn't want that on me"). Auto-merge on green via
+`enable_pr_auto_merge` — unavailable on this repository (the API refuses it), and it
+would merge on CI alone without condition 2. A per-PR allowlist the owner ticks —
+another button on the owner.
+
+**Reversal / amendment.** The owner reverses by saying so; the lane then reverts to
+opening-only for product PRs from the next cycle, and this record stays with the
+reversal date added. Narrowing (for example, "not `.github/workflows/**`") is an
+amendment to the "What stays owner-gated" list, in place.

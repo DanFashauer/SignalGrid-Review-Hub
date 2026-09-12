@@ -84,8 +84,15 @@ LAST TOUCHED: 2026-09-12 (Mac lane, latest) - READINESS 94%, OUTREACH OPEN INSID
               #654. Cloud fixed the throttle in #657 (an UNCHANGED result re-pushes once
               per 25 min); the Mac rule now: never leave the shared checkout parked past
               the run that needed it. STANDING RULE: after every manifest move, (b) reads 0
-              by design until the Mac re-mints; keep mac-run.json within 7 days.
-              (Earlier 2026-09-12, cloud lane:) THE MAC TICK NO LONGER FLOODS MAINLINE
+              by design until the Mac re-mints; keep mac-run.json within 7 days. (Earlier 2026-09-12, cloud lane:) DR-037 RECORDED: the owner ended
+              'lanes open, owner merges' ('I didn't want that on me'); the cloud lane now
+              merges its own green product PRs under five stated conditions, and landed
+              #656, #657, #653 (the Mac's combined #641+#645+#638) and #649 that way; #654 is
+              next, and the manifest moves again with it (v73), so ONE more re-mint follows.
+              Two owner videos absorbed (RESOURCE_INTAKE 2026-09-12): 'paved paths' as
+              the vocabulary of ICP Finding 2, and orchestrator-over-Opus-workers as the
+              cloud lane's build pattern (first fan-out: the pending brace-less guard
+              families).               (Earlier 2026-09-12, cloud lane:) THE MAC TICK NO LONGER FLOODS MAINLINE
               (branch lane/cloud-tick-heartbeat-throttle-20260912-005000Z; owner merges): a
               SKIPPED tick result was exempt from the quiet throttle, so a checkout parked on
               mac/land-641-645-638 pushed a heartbeat to Alpha every 5 minutes, each push

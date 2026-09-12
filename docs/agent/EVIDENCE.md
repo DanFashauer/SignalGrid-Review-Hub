@@ -2536,19 +2536,6 @@ Text-safety gate passed.
 ```
 Verdict:  **holds.** The cited-path count rose 2307 → 2433 (the new page and DR-043 cite the tree at path:line and every one resolves); the docs deferred-noun ceiling stayed at 416 with the page bannered as *nothing on this page is a claim of current capability* and every other touched block hedged in its own paragraph; the ceiling file was not rewritten (no drop, no rise); DR-043 is the 42nd record and carries a reversal clause. What this does NOT prove: that any of the five backlog items is buildable as specified — each is a design target until its proof is green and named — and nothing here measures the hardware, which is the point of DR-043 item 4. **Re-run after the same-day verification fixes** (four stale citations corrected, none of them affecting the gate outcome above): `node scripts/check-cited-paths.mjs` → `Cited-path check passed — 2435 citation(s) across 511 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).` — the count rose by two because the ES256 claim now cites the verifier and its proof row instead of an unrelated line, and `check-cited-commands` went red on this entry's own spelling of the absence command with the silent flag between `run` and the script name (the gate reads the flag as a script name) and is green again with the flag noted in a comment.
 
-## 2026-09-12 — "Puck 5: DISCOVERY_LOG.md's hardware tally (Rh/Ch/Ph) is derived by a new gate, never typed by hand, and the go/no-go table in SESSION_PUCK_HARDWARE_HYPOTHESIS.md reads it by name, not by value"
-Command:
-```
-node scripts/check-discovery-log.mjs --self-test
-node scripts/check-discovery-log.mjs
-node scripts/check-derived-doc-figures.mjs --self-test && node scripts/check-derived-doc-figures.mjs
-node scripts/check-cited-paths.mjs --self-test && node scripts/check-cited-paths.mjs
-node scripts/check-doc-line-counts.mjs --self-test && node scripts/check-doc-line-counts.mjs
-node scripts/check-markdown-links.mjs --self-test && node scripts/check-markdown-links.mjs
-node scripts/check-text-safety.mjs
-node scripts/check-launch-claims.mjs --self-test && node scripts/check-launch-claims.mjs
-pnpm run typecheck
-
 ## 2026-09-12 — "Row 101 is a judgment call, not a mechanical re-port: the Swift is untouched, and check-decision-port-parity now sees the AppWorkflows field drift it was green over"
 Command:  both ported files and both TS originals read in full; the drift located at `lib/app-workflows/src/index.ts:85-90,144-158` vs `native/ios/EnterpriseShell/Services/AppWorkflows.swift:85-95,122`; section 3b added to the gate (five record shapes compared field for field, `DECLARED_WORKFLOW_DRIFT` checked both ways, nine self-tests); then a live plant — a copy of the gate with the declaration emptied — run against the same tree.
 ```
@@ -2820,60 +2807,6 @@ pnpm run verify:breadth
 ```
 Output:
 ```
-self-test passed (11/11)
-discovery-log hardware tally: Rh 0 of 15 · Ch 0 of 15 · Ph 0 of 15, 0 problem(s)
-Discovery-log gate passed — docs/agent/DISCOVERY_LOG.md's hardware tally sentence matches the table it is derived from.
-self-test passed (82/82)
-Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
-self-test passed (52/52)
-Cited-path check passed — 2538 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
-self-test passed (10/10)
-Doc line-count gate passed — every `path (N)` figure matches the file it names.
-self-test passed (11/11)
-Markdown-link check passed — every relative link lands on a tracked file from its own document.
-Text-safety gate passed.
-self-test passed; Launch-claims gate passed — nothing deferred is presented as current.
-(typecheck: all workspace tsc projects "Done", exit 0)
-Preflight FAILED at: Preflight↔CI parity (a gate that runs only locally is not a gate). Fix before pushing.
-  ✗ scripts/check-discovery-log.mjs / --self-test: runs in preflight but is referenced by NO workflow
-```
-Verdict: **the new gate first failed its own repository's own rule** (a preflight-only gate is not a gate) — fixed by wiring both `check-discovery-log.mjs` steps into `.github/workflows/review-hub-ci.yml` beside `check-derived-doc-figures.mjs`, confirmed with `node scripts/check-preflight-ci-parity.mjs` on 2026-09-12 → `preflight↔CI parity: 375 preflight gates, 16 workflow files, 0 declared local-only, 0 unwired`. A second failure followed, expected and welcome: preflight's `Surface-read-coverage` gate caught the new tracked file — `docs/agent/SURFACE_REVIEW_COVERAGE.md is STALE versus … the tree` — fixed with `node scripts/check-surface-review-coverage.mjs --write` on the staged tree, which moved the `scripts` surface's file count 431 → 432 and the tracked-file total 2869 → 2870 (`git diff --stat`: 1 file, 2 lines). **After both fixes, a full re-run of every gate above plus `node scripts/preflight.mjs` and `pnpm run verify:breadth` from a clean re-stage was green**: preflight's own final lines end `EXIT_CODE=0`; breadth ends `Breadth lane PASSED — 56 breadth proofs green … EXIT_CODE=0`. The design: three columns (Rh/Ch/Ph) beside R/C/P in the Running tally table (`docs/agent/DISCOVERY_LOG.md`); a row's Rh/Ch/Ph cell counts only when the row's base R/C/P cell is also marked (enforced as a FATAL invariant, not assumed); the doc carries one derived sentence, `**Hardware (DR-043) — Rh: 0 of 15 · Ch: 0 of 15 · Ph: 0 of 15.**`, recomputed and string-matched on every run. **Today's honest count is zero on all three** — nobody has tagged a row hardware-specific yet, and none was retroactively tagged here (`docs/agent/DISCOVERY_LOG.md`'s single logged row is the unfilled template, row 1). `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`'s go/no-go table already typed no current count (checked before editing — the only numbers in it were the pre-registered thresholds, unchanged); the edit adds the tally-cell names (**Rh**, **Ch**, **Ph**) beside each threshold row and a sentence stating the count lives only at the Hardware (DR-043) line in `DISCOVERY_LOG.md`, never here. Two collateral figure fixes, both required by the edit itself and unrelated to the hardware tally's substance: `docs/COMPANY_BUILD_PLAN.md:4891` restated `scripts/preflight.mjs (737)` as `(741)` after the four new preflight lines: `wc -l scripts/preflight.mjs` → `741`; and `docs/agent/DISCOVERY_LOG.md`'s cited line numbers (121, 124, 149, 159 — all held by `docs/DECISION_RECORDS.md` DR-043, which this brief does not edit) were kept byte-identical by inserting every new line strictly AFTER line 159, verified with `cat -n docs/agent/DISCOVERY_LOG.md | sed -n '117,175p'` post-edit. Not done: no hardware row was tagged (none of the fifteen conversations has happened); the go/no-go table's own threshold NUMBERS (≥4 of 15, ≥3, ≥5) were left untouched per the backlog row's own instruction ("this adds the column, not a threshold").
-
-## 2026-09-12 — "PR #690 (Codex review) on Puck 5: six findings fixed in scripts/check-discovery-log.mjs, docs/BUILD_BACKLOG.md and docs/agent/SURFACE_REVIEW_COVERAGE.json"
-Command:
-```
-node scripts/check-discovery-log.mjs --self-test
-node scripts/check-derived-doc-figures.mjs --self-test && node scripts/check-derived-doc-figures.mjs
-node scripts/check-cited-paths.mjs
-node scripts/check-doc-line-counts.mjs
-node scripts/check-markdown-links.mjs
-node scripts/check-launch-claims.mjs
-node scripts/check-backlog-ownership.mjs
-node scripts/check-surface-review-coverage.mjs --write && node scripts/check-surface-review-coverage.mjs
-node scripts/check-preflight-ci-parity.mjs
-```
-Output:
-```
-self-test passed (26/26)
-self-test passed (82/82)
-Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
-Cited-path check passed — 2547 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
-Doc line-count gate passed — every `path (N)` figure matches the file it names.
-Markdown-link check passed — every relative link lands on a tracked file from its own document.
-Launch-claims gate passed — nothing deferred is presented as current.
-Backlog ownership check passed — every row with work left in it names a role from the registry.
-wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces
-Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
-Preflight↔CI parity passed — every preflight gate is wired into a workflow. (workflow-file count unchanged from the 2026-09-12 entry above — no .github/workflows/ file touched this round.)
-```
-Verdict: **all six findings fixed, each self-tested against a planted violation.** (1) Rh/Ch/Ph now accept only the canonical mark `X`; any other nonempty value (`?`, `pending`, `no`) is refused as a problem rather than silently counted or silently ignored — self-tested for all three columns. (2) table parsing now walks from the anchor to the first non-`|` line and never resumes, so a later, wider table anywhere in the document cannot be absorbed — self-tested with a trailing 12-column table, with and without a real hardware row present. (3) the gate now also reads `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md` and fails if the go/no-go table's REQUIREMENT/COMMITMENT/PROBLEM rows drop their Rh/Ch/Ph cell reference OR change the registered threshold (4/3/5) — self-tested for each of the three rows independently, for a changed threshold, and for a missing table entirely. (4) the separator row (`tableLines[1]`) is now shape-validated (`|---|` per cell) and a malformed one THROWS instead of being sliced away as if it were real — self-tested with a deleted separator (throws) against the same content with a real separator (correctly derives ph=5, not four). (5) `docs/BUILD_BACKLOG.md`'s Puck 5 row is now `- [x]` with a one-line LANDED note naming the gate and the self-test count; `node scripts/check-backlog-ownership.mjs` still passes (0 open-row regressions) and `node scripts/check-backlog-evidence.mjs` passes (the row cites a checkable gate + EVIDENCE.md). (6) `docs/agent/SURFACE_REVIEW_COVERAGE.json`'s `scripts` surface gained an eighth read entry dated 2026-09-12 naming `scripts/check-discovery-log.mjs` specifically and stating it postdates the 2026-09-06 whole-surface read — regenerated via `--write`, moving the surface's "Last read" to 2026-09-12 and reviewer/record to this entry while the aggregate state stays READ (now legitimately: 431 files by the earlier whole-surface read, the 432nd by this dedicated one). Not run this round: full `node scripts/preflight.mjs` / `pnpm run verify:breadth` — the coordinator reported the box OOM'd on the prior attempt and asked for the narrower gate list above instead; CI runs the full suite on the pushed branch.
-
-## 2026-09-12 — "PR #690 (Codex review, round 2) on Puck 5: six more findings closed with one row validator, not six patches"
-Command:
-```
-node scripts/check-discovery-log.mjs --self-test
-node scripts/check-discovery-log.mjs
-
 NEXT-ACTION CLOCK (as of 2026-09-12, source: today (process clock, UTC calendar date)) — 34 role(s) with nextAction older than 7d: ...
 Org roster — 42 role(s): 21 activated, 21 never yet run
 Org roster check passed — registry and chart agree, and every activation names what it produced.
@@ -2909,26 +2842,6 @@ node scripts/check-cited-paths.mjs
 node scripts/check-doc-line-counts.mjs
 node scripts/check-markdown-links.mjs
 node scripts/check-launch-claims.mjs
-node scripts/check-backlog-ownership.mjs
-node scripts/check-surface-review-coverage.mjs
-node scripts/check-preflight-ci-parity.mjs
-```
-Output:
-```
-self-test passed (30/30)
-discovery-log hardware tally: Rh 0 of 15 · Ch 0 of 15 · Ph 0 of 15, 0 problem(s)
-Discovery-log gate passed — docs/agent/DISCOVERY_LOG.md's hardware tally sentence matches its table, and docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md's go/no-go table reads it by name.
-self-test passed (82/82)
-Cited-path check passed — 2551 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
-Doc line-count gate passed — every `path (N)` figure matches the file it names.
-Markdown-link check passed — every relative link lands on a tracked file from its own document.
-Launch-claims gate passed — nothing deferred is presented as current.
-Backlog ownership check passed — every row with work left in it names a role from the registry.
-Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
-Preflight↔CI parity passed — every preflight gate is wired into a workflow.
-```
-Verdict: **root-caused four findings into one `validateTallyRow`, fixed the other two directly, stopped the seventh (authorization-surface scan) rather than half-build it.** All four old-line findings (duplicate rows counted twice at the former :180, an escaped `\|` shifting every column after it at the former :89, an ambiguous BASE mark read as "marked" at the former :196, an ambiguous HARDWARE mark at the former :91) were one root cause — no row shape was ever validated before its cells were trusted — so `validateTallyRow` now rejects a row outright (never counted, only flagged) unless: cell count exactly equals the header's (an unescaped pipe or a missing cell FAILS: self-tested with a genuine 13-vs-12 column mismatch); a `\|` is unescaped AFTER splitting on unescaped pipes only, so it never shifts a column (self-tested: a Role cell holding `\|` still derives its row's real hardware mark correctly); the "#" cell is an integer 1..15, unique across rows (self-tested: a reused number is rejected and its marks excluded from the tally, an out-of-range number is rejected); and every R/C/P/Rh/Ch/Ph cell is empty or exactly the canonical `X` — the SAME rule now applies to base columns, not just hardware ones (self-tested: a `?` in the base column R fails identically to a `?` in Rh). The former :213 finding (only the FIRST "Hardware (DR-043)" sentence was ever checked) is fixed by collecting every match and requiring exactly one — self-tested with a stale second sentence present alongside a correct first one, which now fails. The former :250 finding (the no-go row only had to name `Ph`, not also `Ch`, though the no-go threshold is PROBLEM>=5 AND COMMITMENT=0, a conjunction of both cells) now requires both names in that row — self-tested by dropping only `Ch` while keeping `Ph`. **Finding :73 (a tree-wide scan for a rogue DR-043 authorization surface) was NOT built**: `docs/DECISION_RECORDS.md` DR-043 rule 4 and `docs/BUILD_BACKLOG.md`'s own Puck 5 row both legitimately say "Rh -> bench prototype" / "design-partner MVP" / "no-go" in the same breath — that IS the rule being described, not a rogue second surface — and this gate has no standing to edit either file to launder the phrasing around a detector. Per the coordinator's own stop condition ("too broad to do cleanly... do not half-build it"), the header now proposes a marker-based alternative (an `<!-- dr-043-authorization-surface -->` comment the real surface carries, so the check becomes "every such marker is registered" — additive, never a doctrine-vs-decision parse). **Attempted to post this to the PR #690 review thread via `mcp__github__pull_request_read`/reply tools, twice, both attempts refused with "API rate limit already exceeded for user ID 202149891"** — the proposal is recorded here and in the script's own header comment instead; still owed: posting it to the actual thread once the rate limit clears. Not run this round (per the coordinator, prior attempt OOM'd the box): full `node scripts/preflight.mjs` / `pnpm run verify:breadth` — CI runs the full suite on the pushed branch.
-
 node scripts/preflight.mjs
 pnpm run verify:breadth
 ```
@@ -3006,3 +2919,100 @@ Separately, audited whether the six-workflow "carries paths-ignore today" premis
 For the three named commits (`af80bf16`, `689389df`, `30e35ef0`), each touching only `artifacts/agent-heartbeats/mac-lane-tick.json` (`git show --stat`), every statement below is CONFIGURATION-DERIVED: it says what the workflow files and git history make possible, never what any run did. At each of the three commits the four now-guarded workflows carried NO heartbeat path filter — `git show <sha>:.github/workflows/<w>.yml | grep -c agent-heartbeats` → `0` for `review-hub-ci`, `codeql`, `supply-chain` and `connector-emulator-smoke` — so each push was ELIGIBLE to start all four (a trigger proves eligibility, not a start). Ancestry, re-run in the correct direction on 2026-09-12 (`git merge-base --is-ancestor <sha> 6c5c2dc7`): `689389df` and `30e35ef0` ARE ancestors of the fix; `af80bf16` (2026-09-11 21:22 -0400) is the mainline commit immediately before `b39f1cc5` merged the fix from its PR branch (#657), so the ancestor test is false in both directions for it and the tree grep above is the decisive fact. The next first-parent commit on `SignalGrid_Alpha` after each (`git log --first-parent --reverse <sha>..origin/SignalGrid_Alpha | head -1`): `af80bf16` → `b39f1cc5` 3 minutes later, `689389df` → `df9b1553` 25 minutes later, `30e35ef0` → `98759c2c` 4 minutes later (an earlier revision of this entry named parents as successors; corrected). `review-hub-ci.yml`, `codeql.yml` and `supply-chain.yml` share `concurrency: group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true`, which cancels an earlier run of the same workflow on the same ref ONLY IF that run is still active when the next push arrives; `connector-emulator-smoke.yml` carries no `concurrency` block at any of the three commits, so a later push could not cancel it automatically. Whether any of those runs started, how long it ran, whether it was still active at the next push, and whether it passed, failed, timed out or was cancelled by hand is NOT derivable from configuration and is not claimed here. **No Actions run history was consulted — this session has no `gh` — so nothing above is a statement about a run; the runs themselves are for a session with `gh run list --commit <sha>` to read.**
 
 Gates ran sequentially, each quoted above with its real last line. `check-ci-job-timeouts.mjs` ran TWICE: once after the mainline merge (red — the two stale `DECLARED_UNBOUNDED` entries) and once after the entries were deleted (green); every other gate ran once, on the final tree.
+
+## 2026-09-12 — "Puck 5: DISCOVERY_LOG.md's hardware tally (Rh/Ch/Ph) is derived by a new gate, never typed by hand, and the go/no-go table in SESSION_PUCK_HARDWARE_HYPOTHESIS.md reads it by name, not by value"
+Command:
+```
+node scripts/check-discovery-log.mjs --self-test
+node scripts/check-discovery-log.mjs
+node scripts/check-derived-doc-figures.mjs --self-test && node scripts/check-derived-doc-figures.mjs
+node scripts/check-cited-paths.mjs --self-test && node scripts/check-cited-paths.mjs
+node scripts/check-doc-line-counts.mjs --self-test && node scripts/check-doc-line-counts.mjs
+node scripts/check-markdown-links.mjs --self-test && node scripts/check-markdown-links.mjs
+node scripts/check-text-safety.mjs
+node scripts/check-launch-claims.mjs --self-test && node scripts/check-launch-claims.mjs
+pnpm run typecheck
+node scripts/preflight.mjs
+pnpm run verify:breadth
+```
+Output:
+```
+self-test passed (11/11)
+discovery-log hardware tally: Rh 0 of 15 · Ch 0 of 15 · Ph 0 of 15, 0 problem(s)
+Discovery-log gate passed — docs/agent/DISCOVERY_LOG.md's hardware tally sentence matches the table it is derived from.
+self-test passed (82/82)
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+self-test passed (52/52)
+Cited-path check passed — 2538 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+self-test passed (10/10)
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+self-test passed (11/11)
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+Text-safety gate passed.
+self-test passed; Launch-claims gate passed — nothing deferred is presented as current.
+(typecheck: all workspace tsc projects "Done", exit 0)
+Preflight FAILED at: Preflight↔CI parity (a gate that runs only locally is not a gate). Fix before pushing.
+  ✗ scripts/check-discovery-log.mjs / --self-test: runs in preflight but is referenced by NO workflow
+```
+Verdict: **the new gate first failed its own repository's own rule** (a preflight-only gate is not a gate) — fixed by wiring both `check-discovery-log.mjs` steps into `.github/workflows/review-hub-ci.yml` beside `check-derived-doc-figures.mjs`, confirmed with `node scripts/check-preflight-ci-parity.mjs` on 2026-09-12 → `preflight↔CI parity: 375 preflight gates, 16 workflow files, 0 declared local-only, 0 unwired`. A second failure followed, expected and welcome: preflight's `Surface-read-coverage` gate caught the new tracked file — `docs/agent/SURFACE_REVIEW_COVERAGE.md is STALE versus … the tree` — fixed with `node scripts/check-surface-review-coverage.mjs --write` on the staged tree, which moved the `scripts` surface's file count 431 → 432 and the tracked-file total 2869 → 2870 (`git diff --stat`: 1 file, 2 lines). **After both fixes, a full re-run of every gate above plus `node scripts/preflight.mjs` and `pnpm run verify:breadth` from a clean re-stage was green**: preflight's own final lines end `EXIT_CODE=0`; breadth ends `Breadth lane PASSED — 56 breadth proofs green … EXIT_CODE=0`. The design: three columns (Rh/Ch/Ph) beside R/C/P in the Running tally table (`docs/agent/DISCOVERY_LOG.md`); a row's Rh/Ch/Ph cell counts only when the row's base R/C/P cell is also marked (enforced as a FATAL invariant, not assumed); the doc carries one derived sentence, `**Hardware (DR-043) — Rh: 0 of 15 · Ch: 0 of 15 · Ph: 0 of 15.**`, recomputed and string-matched on every run. **Today's honest count is zero on all three** — nobody has tagged a row hardware-specific yet, and none was retroactively tagged here (`docs/agent/DISCOVERY_LOG.md`'s single logged row is the unfilled template, row 1). `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`'s go/no-go table already typed no current count (checked before editing — the only numbers in it were the pre-registered thresholds, unchanged); the edit adds the tally-cell names (**Rh**, **Ch**, **Ph**) beside each threshold row and a sentence stating the count lives only at the Hardware (DR-043) line in `DISCOVERY_LOG.md`, never here. Two collateral figure fixes, both required by the edit itself and unrelated to the hardware tally's substance: `docs/COMPANY_BUILD_PLAN.md:4891` restated `scripts/preflight.mjs (737)` as `(741)` after the four new preflight lines: `wc -l scripts/preflight.mjs` → `741`; and `docs/agent/DISCOVERY_LOG.md`'s cited line numbers (121, 124, 149, 159 — all held by `docs/DECISION_RECORDS.md` DR-043, which this brief does not edit) were kept byte-identical by inserting every new line strictly AFTER line 159, verified with `cat -n docs/agent/DISCOVERY_LOG.md | sed -n '117,175p'` post-edit. Not done: no hardware row was tagged (none of the fifteen conversations has happened); the go/no-go table's own threshold NUMBERS (≥4 of 15, ≥3, ≥5) were left untouched per the backlog row's own instruction ("this adds the column, not a threshold").
+
+## 2026-09-12 — "PR #690 (Codex review) on Puck 5: six findings fixed in scripts/check-discovery-log.mjs, docs/BUILD_BACKLOG.md and docs/agent/SURFACE_REVIEW_COVERAGE.json"
+Command:
+```
+node scripts/check-discovery-log.mjs --self-test
+node scripts/check-derived-doc-figures.mjs --self-test && node scripts/check-derived-doc-figures.mjs
+node scripts/check-cited-paths.mjs
+node scripts/check-doc-line-counts.mjs
+node scripts/check-markdown-links.mjs
+node scripts/check-launch-claims.mjs
+node scripts/check-backlog-ownership.mjs
+node scripts/check-surface-review-coverage.mjs --write && node scripts/check-surface-review-coverage.mjs
+node scripts/check-preflight-ci-parity.mjs
+```
+Output:
+```
+self-test passed (26/26)
+self-test passed (82/82)
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Cited-path check passed — 2547 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+Launch-claims gate passed — nothing deferred is presented as current.
+Backlog ownership check passed — every row with work left in it names a role from the registry.
+wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces
+Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
+Preflight↔CI parity passed — every preflight gate is wired into a workflow. (workflow-file count unchanged from the 2026-09-12 entry above — no .github/workflows/ file touched this round.)
+```
+Verdict: **all six findings fixed, each self-tested against a planted violation.** (1) Rh/Ch/Ph now accept only the canonical mark `X`; any other nonempty value (`?`, `pending`, `no`) is refused as a problem rather than silently counted or silently ignored — self-tested for all three columns. (2) table parsing now walks from the anchor to the first non-`|` line and never resumes, so a later, wider table anywhere in the document cannot be absorbed — self-tested with a trailing 12-column table, with and without a real hardware row present. (3) the gate now also reads `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md` and fails if the go/no-go table's REQUIREMENT/COMMITMENT/PROBLEM rows drop their Rh/Ch/Ph cell reference OR change the registered threshold (4/3/5) — self-tested for each of the three rows independently, for a changed threshold, and for a missing table entirely. (4) the separator row (`tableLines[1]`) is now shape-validated (`|---|` per cell) and a malformed one THROWS instead of being sliced away as if it were real — self-tested with a deleted separator (throws) against the same content with a real separator (correctly derives ph=5, not four). (5) `docs/BUILD_BACKLOG.md`'s Puck 5 row is now `- [x]` with a one-line LANDED note naming the gate and the self-test count; `node scripts/check-backlog-ownership.mjs` still passes (0 open-row regressions) and `node scripts/check-backlog-evidence.mjs` passes (the row cites a checkable gate + EVIDENCE.md). (6) `docs/agent/SURFACE_REVIEW_COVERAGE.json`'s `scripts` surface gained an eighth read entry dated 2026-09-12 naming `scripts/check-discovery-log.mjs` specifically and stating it postdates the 2026-09-06 whole-surface read — regenerated via `--write`, moving the surface's "Last read" to 2026-09-12 and reviewer/record to this entry while the aggregate state stays READ (now legitimately: 431 files by the earlier whole-surface read, the 432nd by this dedicated one). Not run this round: full `node scripts/preflight.mjs` / `pnpm run verify:breadth` — the coordinator reported the box OOM'd on the prior attempt and asked for the narrower gate list above instead; CI runs the full suite on the pushed branch.
+
+## 2026-09-12 — "PR #690 (Codex review, round 2) on Puck 5: six more findings closed with one row validator, not six patches"
+Command:
+```
+node scripts/check-discovery-log.mjs --self-test
+node scripts/check-discovery-log.mjs
+node scripts/check-derived-doc-figures.mjs --self-test
+node scripts/check-cited-paths.mjs
+node scripts/check-doc-line-counts.mjs
+node scripts/check-markdown-links.mjs
+node scripts/check-launch-claims.mjs
+node scripts/check-backlog-ownership.mjs
+node scripts/check-surface-review-coverage.mjs
+node scripts/check-preflight-ci-parity.mjs
+```
+Output:
+```
+self-test passed (30/30)
+discovery-log hardware tally: Rh 0 of 15 · Ch 0 of 15 · Ph 0 of 15, 0 problem(s)
+Discovery-log gate passed — docs/agent/DISCOVERY_LOG.md's hardware tally sentence matches its table, and docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md's go/no-go table reads it by name.
+self-test passed (82/82)
+Cited-path check passed — 2551 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+Launch-claims gate passed — nothing deferred is presented as current.
+Backlog ownership check passed — every row with work left in it names a role from the registry.
+Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
+Preflight↔CI parity passed — every preflight gate is wired into a workflow.
+```
+Verdict: **root-caused four findings into one `validateTallyRow`, fixed the other two directly, stopped the seventh (authorization-surface scan) rather than half-build it.** All four old-line findings (duplicate rows counted twice at the former :180, an escaped `\|` shifting every column after it at the former :89, an ambiguous BASE mark read as "marked" at the former :196, an ambiguous HARDWARE mark at the former :91) were one root cause — no row shape was ever validated before its cells were trusted — so `validateTallyRow` now rejects a row outright (never counted, only flagged) unless: cell count exactly equals the header's (an unescaped pipe or a missing cell FAILS: self-tested with a genuine 13-vs-12 column mismatch); a `\|` is unescaped AFTER splitting on unescaped pipes only, so it never shifts a column (self-tested: a Role cell holding `\|` still derives its row's real hardware mark correctly); the "#" cell is an integer 1..15, unique across rows (self-tested: a reused number is rejected and its marks excluded from the tally, an out-of-range number is rejected); and every R/C/P/Rh/Ch/Ph cell is empty or exactly the canonical `X` — the SAME rule now applies to base columns, not just hardware ones (self-tested: a `?` in the base column R fails identically to a `?` in Rh). The former :213 finding (only the FIRST "Hardware (DR-043)" sentence was ever checked) is fixed by collecting every match and requiring exactly one — self-tested with a stale second sentence present alongside a correct first one, which now fails. The former :250 finding (the no-go row only had to name `Ph`, not also `Ch`, though the no-go threshold is PROBLEM>=5 AND COMMITMENT=0, a conjunction of both cells) now requires both names in that row — self-tested by dropping only `Ch` while keeping `Ph`. **Finding :73 (a tree-wide scan for a rogue DR-043 authorization surface) was NOT built**: `docs/DECISION_RECORDS.md` DR-043 rule 4 and `docs/BUILD_BACKLOG.md`'s own Puck 5 row both legitimately say "Rh -> bench prototype" / "design-partner MVP" / "no-go" in the same breath — that IS the rule being described, not a rogue second surface — and this gate has no standing to edit either file to launder the phrasing around a detector. Per the coordinator's own stop condition ("too broad to do cleanly... do not half-build it"), the header now proposes a marker-based alternative (an `<!-- dr-043-authorization-surface -->` comment the real surface carries, so the check becomes "every such marker is registered" — additive, never a doctrine-vs-decision parse). **Attempted to post this to the PR #690 review thread via `mcp__github__pull_request_read`/reply tools, twice, both attempts refused with "API rate limit already exceeded for user ID 202149891"** — the proposal is recorded here and in the script's own header comment instead; still owed: posting it to the actual thread once the rate limit clears. Not run this round (per the coordinator, prior attempt OOM'd the box): full `node scripts/preflight.mjs` / `pnpm run verify:breadth` — CI runs the full suite on the pushed branch.
+
+

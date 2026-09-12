@@ -1967,6 +1967,25 @@ wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read,
 Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
 ```
 Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated total to the files a person can actually read again; the two mailbox rows print `mailbox` in the Files column. `lane-deliver.mjs` keeps regenerating the page on every delivery — idempotent now, and still the catch for a page stale for any other reason. What this does NOT fix: a PR that itself changes the tracked-file set still moves the page, and two such PRs still conflict on it; that is the page doing its job.
+## 2026-09-12 — "benchmark-selection joins the brace-less mutation sweep: its 7 one-line survivors are pinned by checks that fail without them or deleted as shadowed, and the sweep now prints survivors=0"
+Command:  the target opted in with `oneLine: true`; five survivors got proof checks that exercise the real hostile input (a non-string enum, a prototype-carried KNOWN key, an instant `Date.parse` accepts but the strict Zulu shape refuses, a blank entry in the operator's requirement list, a title the catalog does not carry asked of `highestVersionFor`); two were genuinely shadowed and deleted with the covering check named in a comment (`typeof k === "symbol"` — `known` holds strings, so the allowlist line below already refuses a symbol; `assessmentMs === null || referenceMs === null` — `ageMs` returns null for either, which the `age === null` line below resolves to `unknown`).
+```
+node scripts/mutation-guard.mjs --proof=proof:benchmark-selection
+pnpm run proof:benchmark-selection ; pnpm run typecheck ; node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs ; pnpm run review:invariants ; node scripts/check-connector-discipline.mjs
+```
+Output:
+```
+before: mutations=75 killed=61 hung=0 known-inert=7 survivors=7
+after:  mutations=73 killed=66 hung=0 known-inert=7 survivors=0
+Mutation guard passed — every registered guard is falsifiable, or documented as inert.
+brace-less sweep (oneline-cond-false): 1 of 1 targets opted in; 0 pending
+summary=pass (104/104)
+Proof-count check passed — all 59 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Connector-discipline gate passed.
+```
+Verdict:  holds. The family's one-line guards are now falsifiable by their own proof: the check count rose 95 → 104 (`docs/BENCHMARK_SELECTION.md`, `docs/INTEGRATION_CATALOG.md` updated from output, not memory). Nothing was loosened — every new check asserts the fail-closed outcome (`malformed`, `unknown`, never the grant), and each deleted guard was proven shadowed by a check that produces the identical answer for every input that reaches it. What this does NOT fix: the other pending families in the brace-less census (facility-trust-graph 22, dual-control 7, bootstrap-credential 6, …) are untouched; this target is one of the 41.
 ## 2026-09-12 — "The bootstrap-credential family joins the brace-less mutation sweep with ZERO survivors: six one-line guards that no check could falsify are now pinned by four new proof checks, and one symbol guard proved shadowed and was deleted"
 Command:  the `oneline-cond-false` mutator rewrites a brace-less `if (cond) return x;` to `if (false) return x;`. Opting the target in exposed six guards in `bootstrap-credential-connector.ts` that the 48-check proof could not falsify — the non-string enum refusal, the prototype-walk depth bound, the inherited-own-key refusal, the symbol refusal, the strict ISO-8601 Zulu instant regex, and the expires-before-issued derivation. Five are real behaviour and now have checks; the symbol refusal is shadowed by the unrecognized-key check on the next line (`known` holds only strings, so `includes` of a symbol is always false) and was deleted with a comment naming its cover.
 ```

@@ -530,7 +530,7 @@ in one place.
   merely labels its checks "CIS" establishes nothing, and a run older than the operator's stated
   age bound cannot confirm anything today (all three temporal inputs supplied, never sampled).
   Titles and versions only — CIS rule content is licensed and is not reproduced.
-  `proof:benchmark-selection` (95 checks).
+  `proof:benchmark-selection` (104 checks).
 
 - **Shift context** ([SHIFT_CONTEXT.md](SHIFT_CONTEXT.md)) — right person, wrong time is still the
   wrong decision context. The labor plane (UKG, Dayforce, ADP and peers) already records whether a

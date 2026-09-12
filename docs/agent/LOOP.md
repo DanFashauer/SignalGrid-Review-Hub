@@ -72,6 +72,22 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE FOUNDER'S THESIS IS ON THE R
               concept in the cloud-platform architecture page; several answers are
               deliberate refusals (no cache in the decision path, no retry inside a
               decision, no queue on ingestion) and no deployment-target claim was added.
+              (Earlier 2026-09-12, Mac lane:) THE SIX TOOLS ARE INSTALLED AND EACH USED ONCE
+              (owner ran the three refused installs himself). Crucible /temper on #649's custody-ledger
+              landing: three finder angles -> 11 candidates, 10 deduped, one drafted Important; the two
+              that could gate were adjudicated by execution and both REFUTED with the design cited
+              (clock-free evaluator by contract + family convention; 'none' is a documented positive
+              assertion the audit kept on purpose) -> tracked set empty -> Clean, ledger row emitted;
+              eight non-gating drafts mailed to the cloud (fossil '864' comment, seven-vs-eight key
+              comment, two doc sentences missing the 'caller stamps the age' precondition, shallow-
+              frozen fixtures, null options throws, unknownSignals omits the holder axis, posed-bound
+              outside the mutation sweep). /watch keyless: the Fleet demo's captions as a timestamped
+              transcript (full download hit YouTube 403; the cloud's vendored video-intake with local
+              faster-whisper is the better path, #666). LightRAG on Ollama (qwen3:8b + nomic-embed-
+              text, store outside the tree): five docs at the defaults timed out 4/5 - two concurrent
+              32k-context generations, not the model (12.7 tok/s) - retuned to one at a time / 8k /
+              1800 s and re-queued; first query pending. Sandbox lesson for probes: node --import tsx
+              runs TS where pnpm exec tsx dies on its IPC socket. Readiness untouched (94%).
               (Earlier 2026-09-12, Mac lane:) SIX AGENT TOOLS ABSORBED BY USE (DR-038,
               owner: 'install all of these and add them where needed and start using them now').
               Installed at user scope, hooks off, nothing in the repo's .claude/: last30days 3.24.0

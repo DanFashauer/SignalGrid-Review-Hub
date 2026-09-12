@@ -514,6 +514,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:dual-control",
+    oneLine: true,
     files: [
       "lib/dual-control/src/evaluate.ts",
       "lib/dual-control/src/normalize.ts",

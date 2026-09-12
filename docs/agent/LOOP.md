@@ -52,7 +52,20 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE BAR IS THE FOUNDER'S (DR-039): a resource
+LAST TOUCHED: 2026-09-12 (Mac lane, latest) - SIX AGENT TOOLS ABSORBED BY USE (DR-038,
+              owner: 'install all of these and add them where needed and start using them now').
+              Installed at user scope, hooks off, nothing in the repo's .claude/: last30days 3.24.0
+              (first brief run - keyless coverage is HN-only and thin for niche topics), Ponytail
+              4.9.0 (the cloud fixed the pin's spelling the same day: a full 40-char id fetches, an
+              abbreviated one is read as a ref name), Graphify 0.9.58 (structural graph of this tree:
+              about sixteen thousand nodes and thirty thousand edges in 677 communities, built in 3 s;
+              strong on 'who calls X', blind to string-literal paths; semantic docs pass deferred),
+              CLI-Anything (no target here), lightrag-hku 1.5.6 (waits on Ollama), ffmpeg 9.0.1 +
+              yt-dlp. Owner-run because the auto-mode classifier refuses them for an agent: the
+              /watch plugin install, `pnpm run crucible:install` (selective, adversarial skills only,
+              pinned), `brew install ollama`. Repo side: five intake rows, DR-038, installer scripts +
+              package.json rows for all six, .gitignore rows for every output dir they can write.
+              Readiness untouched (94%). (Earlier 2026-09-12, cloud lane:) THE BAR IS THE FOUNDER'S (DR-039): a resource
               with any part that can aid building the company is adopted; only licence,
               auto-execution, egress without consent and directory collision exclude;
               overlap is recorded, contradictions get override rows. The founder's resume

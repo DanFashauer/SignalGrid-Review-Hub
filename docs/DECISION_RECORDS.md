@@ -2384,6 +2384,152 @@ outputs in `docs/agent/EVIDENCE.md` (2026-09-12).
 section, the two table rows and the two override rows from `VENDORED.md`; remove the
 two carve-outs and the area from `scripts/publication-boundary.mjs` and return its
 figure to 14 and the exception word to TWELVE; drop this record and the backlog item.
+
+## DR-041 — LightRAG is adopted as a key-free retrieval aid over `docs/`: naive mode, local embeddings, working dir outside the tree, hooks off; the graph is not built (owner-directed 2026-09-12)
+
+**Question.** The owner shared an image naming five tools — last30days, CLI-Anything,
+Claude-video, Crucible and **LightRAG** — with *"These also need to be added and absorbed
+into the 🧠"*, then *"Please install all of these and add them where needed and start
+using them now."* DR-038 installed all five on the Mac lane; LightRAG is the one still
+fighting, because the shape the Mac chose — the graph, the `[api]` server, a local Ollama
+chat model and an embedding endpoint — is the expensive one: five documents at the
+defaults timed out 4 of 5 and had to be retuned to one at a time, and the row says so
+honestly. Under the absorption bar the owner set the same day
+(DR-039: a resource is ADOPTED if any part of it can aid building any aspect of the
+company; the only exclusions are licence, auto-execution, egress without his own key
+decision, and a directory collision), the question is therefore not whether LightRAG is
+worth it but **which part runs today, and in what form** — and specifically whether a
+retrieval index over the tree is the same thing DR-026 already refused.
+
+**What LightRAG is, established by use.** `HKUDS/LightRAG` at
+`2db12a3caf9e702718fffd0593b99413a50edba5` (lightrag-hku 1.5.8, MIT). It has two halves
+and they cost completely different things. Measured in a sandbox on 2026-09-12 against
+this repository's `docs/*.md` corpus:
+
+- **The GRAPH half needs a generative model and is not reproducible.** Exactly 2 LLM
+  calls per chunk: 3,826 calls and at least 12,476,985 input tokens — 5.95× the
+  2,097,168-token corpus — for ONE index of 310 docs. A changed file re-inserted under
+  a path already held is REJECTED (`File name already exists.`), so every refresh is
+  delete-then-reindex, and the bytes it writes are never reproducible from the source.
+- **The KEY-FREE half works and costs nothing outbound.** `naive` mode with
+  `only_need_context=True` makes **0 LLM calls**. A real local embedding model
+  (`fastembed` 0.8.0 + `BAAI/bge-small-en-v1.5`, 384-dim, 65 MB) embedded 16,284 texts
+  in 1200.8 s on 4 CPU cores in the evaluation run — chunks plus the graph's entity and
+  relation descriptions — and answered a query in 0.02–0.08 s. Retrieval quality is
+  plain vector search, and was measured as such: 3 of 5, 1 of 5, 1 of 4 and 1 of 5 top-5
+  hits against a grep ground truth on four questions. It finds things. It does not
+  decide anything. The shipped, graph-free shape was measured again on this branch: 1,940
+  chunks over 311 tracked docs in 1636.2 s for the first full index, a 34 MB working
+  directory, and a query answered in 1.7–6.13 s end to end — nearly all of it the python
+  process starting and loading the model, since the evaluation measured the search itself
+  at 0.02–0.08 s. **The first index is the slow one and it is a one-time cost.** A
+  refresh touches only the files whose content hash moved, and one was measured here
+  immediately afterwards, when rebasing onto a moved `SignalGrid_Alpha` changed six
+  tracked docs and added one: **7 documents, 6 deleted first, 101 texts, 24.9 s.**
+- **Mechanics that must stay out**, each an existing hard line rather than a new one:
+  `pipmaster` pip-installs packages at IMPORT time in 26 modules; the upstream tree
+  ships its own `.claude/settings.json` `SessionStart` hook; `lightrag/base.py` runs
+  `load_dotenv(dotenv_path=".env")` at import; the working directory is 104–133 MB and
+  holds the corpus in plaintext (`kv_store_full_docs.json`, a 59.9 MB prompt cache);
+  the API server binds `0.0.0.0` and admits a guest token when no key is set. Upstream
+  tests at the pin: `8 failed, 8265 passed, 250 skipped`.
+
+**Call: the key-free half is adopted as a retrieval AID over `docs/`. The graph is not
+built, and no generative model is configured at all.**
+
+1. **Pinned, into a venv OUTSIDE the repository, under the store convention DR-038
+   already set.** `pnpm run lightrag:install` (`scripts/install-lightrag.mjs`) creates a
+   venv under `LIGHTRAG_DIR` — default `~/signalgrid-lightrag/key-free`, its own
+   subdirectory of the `~/signalgrid-lightrag/` store DR-038 chose, so the two installs
+   never share an index — and refuses if that path resolves inside the tree. It
+   `pip install`s `lightrag-hku @ git+https://github.com/HKUDS/LightRAG@2db12a3c…` plus
+   `fastembed==0.8.0`: the full sha rather than PyPI's moving 1.5.6, a venv rather than
+   `uv tool`, and **not** the `[api]` extra, whose server binds `0.0.0.0` and admits a
+   guest token when no key is set. The upstream TREE is not vendored and not cloned into
+   a session: pip takes the PACKAGE, so the `SessionStart` hook and the repo tree never
+   land. The installer refuses on CI. 73 packages resolve from PyPI at install time —
+   the same registry exposure DR-026 records for Neural Memory's nine.
+2. **No generative model, no key, no server, no hook.** `scripts/docs-retrieval.mjs`
+   constructs LightRAG with an `llm_model_func` that RAISES if anything reaches for it,
+   so a future mode change fails loudly instead of silently asking for a key.
+   `lightrag-hku[api]` — the server that binds `0.0.0.0` and admits a guest token — is
+   not installed. Nothing is wired into any settings file.
+3. **`naive` mode only, and indexing takes LightRAG's own skip-the-graph opt-out.**
+   Queries run `aquery_data(..., mode="naive", only_need_context=True)`: retrieval,
+   never generation. Indexing does NOT use `ainsert`, which always runs entity
+   extraction: with no model configured that leaves every document FAILED *after* its
+   chunks are embedded — an index that answers queries while its own status says it did
+   not build, which is precisely the shape of green-over-nothing this repo fails
+   closed against. It was measured here on the first run (311 of 311 documents FAILED,
+   1,934 chunks embedded, queries answering normally) and fixed by using the first-class
+   opt-out: process option `"!"` (`PROCESS_OPTION_SKIP_KG`), whose own pipeline comment
+   reads *"skipping entity/relation extraction ... chunks remain in the vector store so
+   naive / mix retrieval still works"*. Only `apipeline_enqueue_documents` accepts it, so
+   indexing is enqueue + process, and the worker FAILS if any document ends in a state
+   other than `processed`.
+4. **The corpus is the TRACKED docs set, and nothing else.** `git ls-files -- docs`
+   filtered to `.md`; an untracked draft cannot enter the index. Refresh is
+   delete-then-reindex of changed, added and removed paths — the measured limitation
+   above, made mechanical by a content-hash manifest. A second measured wrinkle is
+   handled here rather than papered over: LightRAG canonicalizes a document's
+   `file_path` to its BASENAME and rejects a second document sharing one, and `docs/`
+   holds several same-named files, so the stored path is sent tilde-joined for
+   uniqueness and the tracked path is recovered from the chunk id the worker assigned.
+   Sending real relative paths would have silently dropped all but the first
+   `README.md`.
+5. **It writes NOTHING inside the repository.** venv, index, embedding model and
+   manifest all live under `LIGHTRAG_DIR`; an in-tree path is refused before a
+   directory is created, and the check is repeated against the REAL path after
+   `mkdir` so a symlink cannot walk around it. This is not tidiness:
+   `provenance.workingTreeClean` in `artifacts/sim-results/*.json` counts UNTRACKED
+   files, so one stray index directory would stamp every later simulation result as
+   minted from a dirty tree — the exact defect `native/ios/build/` already caused once.
+   The worker re-checks containment itself, because it is the process that writes.
+6. **Its answer is a POINTER, never a fact.** The script prints tracked file paths and
+   the matching chunk with line numbers; the agent then READS those files and cites
+   them. It is the companion to `pnpm run check:absence`, never its replacement — a
+   vector search returning nothing is not evidence that nothing is there, and
+   `check:absence` exists because two in-repo documents claimed an absence while the
+   surface sat in the tree.
+7. **Barred from the product.** Nothing in `lib/*`, `/v1`, a connector, a proof or the
+   decision path may import, call or read it, and no gate, doc figure or launch claim
+   may cite it. A decision that consulted an embedding search would no longer be
+   deterministic (golden rule 2). `docs:retrieve` refuses on CI for the same reason —
+   it is a research aid, never a build input.
+
+**Boundary — why this is not the thing DR-026 refused.** DR-026 item 5 excludes "an
+index of the tree" from the Neural Memory store, and that exclusion stands. It is about
+a MEMORY: a mutable store that accumulates what sessions learned, that nothing rebuilds,
+and that could quietly become the source rather than a cache of the committed docs. This
+index is a different object on all three counts: it holds **no session state** (only
+chunk text and vectors); it is **rebuilt from tracked files** and self-reports its drift
+(`--status` names every changed, added and removed path); and it is **derived, never
+authoritative** — every answer is a path the agent must open. The committed docs remain
+the memory of record, exactly as DR-026 says. What the two records share is the shape
+that makes either safe: pinned, hooks off, store outside the tree, nothing in the
+product.
+
+**Evidence.** The measurements above, from the sandbox evaluation of 2026-09-12 (the
+clone, venv, scripts and outputs in that session's scratchpad, re-run where quoted). The
+install receipt on this box: lightrag 1.5.8, python 3.11.15, 73 packages, 34.6 s, model
+`BAAI/bge-small-en-v1.5` warmed to 384 dimensions with no key in the process. The index
+built on this branch: 311 of 311 documents `processed`, 1940 chunks, and
+`vdb_entities.json` / `vdb_relationships.json` 48 bytes each — the graph is genuinely not
+built. The refusal transcripts, run as `pnpm run docs:retrieve -- --self-test`: an in-tree
+`LIGHTRAG_DIR` exits 1 and creates nothing, for `--status` and `--reindex` alike; a
+missing venv exits 1 and names the installer; the corpus is the 312 tracked markdown
+files under `docs/` that `git ls-files` names, and no untracked path is in it. Both scripts also refuse under `CI=true`,
+run and quoted in `docs/agent/EVIDENCE.md`. The three mechanics quoted from the pin
+were re-read in the clone: 26 `pipmaster` call sites, `.claude/settings.json` with a
+`SessionStart` hook, `lightrag/base.py:43` `load_dotenv(dotenv_path=".env", override=False)`.
+
+**Reversal.** The owner reverses by saying so: delete `scripts/install-lightrag.mjs`,
+`scripts/docs-retrieval.mjs`, `scripts/lib/docs-retrieval.py`, the two `package.json`
+scripts, the research-ops section and this record, then remove
+`~/signalgrid-lightrag/key-free`. Nothing in the product, no gate and no doc figure
+depends on it, by construction — which is why the reversal is four deletions and a
+directory. DR-038's own LightRAG install is untouched by that reversal and by this
+record: this adds a second, key-free shape beside it, and takes nothing away.
 ---
 
 ## DR-042 — The founder's thesis in his words: the system of systems above the individually owned platforms (owner-directed 2026-09-12)

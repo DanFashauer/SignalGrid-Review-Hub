@@ -92,16 +92,33 @@ export const FORBIDDEN_ROOTS = Object.freeze([
   // ports. DecisionEngine.swift and AppWorkflows.swift are byte-faithful ports of the
   // TS simulator (golden rule 1); DecisionService.swift SELECTS and clamps the effective
   // outcome (local vs remote); PostureAllow.swift and RemediationAllow.swift are the
-  // guards AROUND the engine that can WITHHOLD an allow. A provider SDK or model endpoint
-  // in ANY of these would reach a decision as surely as one in lib/*, so the fence SCANS
-  // them all (a model-call shape is forbidden). It never modifies them, so parity is
-  // untouched. (Enumerated rather than globbed on Services/*.swift because that directory
-  // also holds non-verdict UI/config services; these five are the verdict sources.)
+  // guards AROUND the engine that can WITHHOLD an allow; SignalContext.swift's
+  // `AccessDecision.evaluate` is the single entry point that COMPOSES the zone pre-gate
+  // with the resolved DecisionService and RETURNS the effective verdict; and
+  // HostAppViewController.swift is where that verdict is actually PRODUCED for a live
+  // session — it builds the live signal/location context, CHOOSES which DecisionService
+  // controls access (`ClampedLocalDecisionService`, `RefusedDecisionService`, a remote
+  // provider), and calls `AccessDecision.evaluate` on it. A provider SDK or model endpoint
+  // in ANY of these seven files would reach a decision as surely as one in lib/*, so the
+  // fence SCANS them all (a model-call shape is forbidden). It never modifies them, so
+  // parity is untouched. (Enumerated rather than globbed on Services/*.swift or Views/*.swift
+  // because those directories also hold non-verdict UI/config files; these seven are the
+  // verdict sources. Codex review, 2026-09-12: the original five omitted the two files
+  // above — a model call added to either would have reached an effective verdict while the
+  // fence stayed green, since neither matched a declared root. Deriving this list from a
+  // Swift-aware call graph would close the class outright, but this repo's gates are
+  // text-scanners, not a Swift compiler front-end — see check-model-tap-boundary.mjs's own
+  // "LIMITS, stated honestly" for why per-file scanning, not import-graph resolution, is
+  // the tool this repo has; hand-enumerating the verdict SOURCES, one line per file with the
+  // reason it belongs, is what stays auditable at that tool's grain. A self-test below plants
+  // a model call in each of these two files and proves the fence reddens.)
   "native/ios/EnterpriseShell/Services/DecisionEngine.swift",
   "native/ios/EnterpriseShell/Services/AppWorkflows.swift",
   "native/ios/EnterpriseShell/Services/DecisionService.swift",
   "native/ios/EnterpriseShell/Services/PostureAllow.swift",
   "native/ios/EnterpriseShell/Services/RemediationAllow.swift",
+  "native/ios/EnterpriseShell/Services/SignalContext.swift",
+  "native/ios/EnterpriseShell/Views/HostAppViewController.swift",
 ]);
 
 // A decision-path file may reference NONE of these. Import specifiers for the tap

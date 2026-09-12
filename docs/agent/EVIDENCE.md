@@ -2606,3 +2606,33 @@ Preflight PASSED — everything it runs is green.                               
 Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
 ```
 Verdict:  **holds.** Merge commit b948f82a (mainline 1c95f6d8 into the branch; history kept, no rebase, no amend). Carried forward — mainline had NONE of it, each absence quoted above: the order-independent fabricated-status match; the plugin-manifest absent-key fail-closed check; the CORS `idempotency-key` allow + `Idempotency-Replay` expose with its assertion (test:api 410/410 — the branch's one added assertion is among them); the three EnterpriseShell DLP defaults flipped `?? true` → `?? false` with `scripts/check-ios-restriction-defaults.mjs` in preflight and CI; the model-routing tap (`scripts/brief.mjs`, `scripts/lib/agent-model-tap.mjs`, `scripts/lib/model-routing-policy.mjs`, `scripts/check-model-tap-boundary.mjs`, its fixture, the `AGENT_GATEWAY.md` LM Studio and tap sections, the `signalgrid-master` routing subsection, the intake rows); ENOTEMPTY-tolerant teardown in five gate self-tests and `lane-deliver.mjs`; `git grep -a` in `check-env-doc-readers.mjs`; the de-fossilised skew-grep headers. Superseded by mainline: nothing — no fix on the branch had landed by another route, so no mainline commit is cited as superseding one. Conflicts resolved to mainline in `DECISION_RECORDS.md`, `CLAIM_INVENTORY.md` and the coverage ledger; the branch's tap record, numbered DR-035 on the branch, collides with mainline's DR-035 (source-agnostic) and is appended after DR-043 as **DR-044** with all eleven citations renumbered; its Evidence figures re-measured today (33/33, 660 files across 9 roots — the record on the branch still said 20/20 and 651 across 4 roots, a fossil its own later commits had left behind). `DecisionEngine.swift` and `AppWorkflows.swift` untouched (the DLP defaults live in `ScreenCaptureGuard.swift`, `ActiveSessionView.swift`, `ManagedAppViewController.swift`). iOS builds cannot run here; `ios-ci.yml` on the PR verifies the Swift edits. Nothing on the PR is superseded; it should be merged, not closed.
+
+## 2026-09-12 — "The four Codex findings on 836445de (PR #531) are fixed: the model-tap-boundary fence's native scope, brief.mjs's first-heartbeat tolerance, check-ios-restriction-defaults' initializer default, and check-fabricated-status' brace balancing, each with a planted-regression self-test"
+Command:
+```
+node scripts/check-model-tap-boundary.mjs --self-test; node scripts/check-model-tap-boundary.mjs
+node scripts/brief.mjs --self-test; node scripts/brief.mjs
+node scripts/check-ios-restriction-defaults.mjs --self-test; node scripts/check-ios-restriction-defaults.mjs
+node scripts/check-fabricated-status.mjs --self-test; node scripts/check-fabricated-status.mjs
+pnpm run typecheck; pnpm run review:invariants
+node scripts/check-preflight-ci-parity.mjs; node scripts/check-derived-doc-figures.mjs --self-test
+node scripts/check-cited-paths.mjs; node scripts/check-decision-record-format.mjs
+```
+Output:
+```
+self-test passed (35/35)                                            # model-tap-boundary, includes the two new planted-real-file checks
+Model-tap boundary check passed — 662 decision-path file(s) across 11 roots reference no model tap, env, or call shape.
+self-test passed (19/19)                                            # brief.mjs, includes isNeverFiredMissing inside/overdue/fail-closed cases
+Lane heartbeats  FAIL    cloud-lane-hygiene-sweep: 29h ago · mac-lane-steward-duty-cycle: 6h ago (OVERDUE) · mac-lane-tick: 5h ago (OVERDUE)   # pre-existing overdue lanes, unaffected by the fix; report-only, exits 0
+PASS  self-test — 17 planted fixtures ... a permissive `allow<Feature>: Bool = true` initializer/function default ... caught
+ios-restriction-defaults: 77 .swift file(s) scanned, 0 violation(s); self-test green
+self-test: 17/17 controls passed                                    # check-fabricated-status, includes nested-object-before/after/multi-level/cross-return/string-literal cases
+Fabricated-status gate passed — no connector claims a status it did not observe.
+scripts typecheck: Done
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Preflight↔CI parity passed — every preflight gate is wired into a workflow.
+self-test passed (82/82)                                            # check-derived-doc-figures
+Cited-path check passed — 2570 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments.
+Decision-record format gate passed — every call states how it gets undone.
+```
+Verdict: **holds.** All four Codex findings fixed with a regression-proving self-test each; only the five gate/policy files changed (scripts/lib/model-routing-policy.mjs, scripts/check-model-tap-boundary.mjs, scripts/brief.mjs, scripts/check-ios-restriction-defaults.mjs, scripts/check-fabricated-status.mjs) — no lib/*, artifacts/api-server, or native Swift file touched (golden rule 1). Full `node scripts/preflight.mjs` / `pnpm run verify:breadth` were NOT run in this pass on coordinator instruction (a prior attempt OOM'd the shared box under concurrent lanes); CI runs the full suite on push and the coordinator merges on green.

@@ -25,12 +25,23 @@
 // anywhere under native/ios. The permissive literal on a restriction read is the whole
 // defect; the fix is `?? false` (deny on unknown) or the persona's real value.
 //
-// LIMITS, said out loud: this catches the `?? true` COALESCE form, the one the review
-// found. A restriction bool given a permissive DEFAULT PARAMETER (`allowCopyPaste: Bool =
-// true`) is a sibling shape this pattern does not see — it is a different, lower-signal
-// construct (many bools default true legitimately) and is left to review rather than
-// gated here. COMMENTS AND STRING LITERALS ARE MASKED via scripts/lib/sanitize.mjs, so the
-// header above and prose explaining the defect do not trip the gate.
+// ALSO GATED (added 2026-09-12, Codex finding): a restriction-named Bool INITIALIZER or
+// FUNCTION default that resolves permissive — `allowCopyPaste: Bool = true`. This is the
+// sibling shape the coalesce pattern above cannot see: `ManagedAppViewController`'s fix for
+// exactly this defect class was `allowCopyPaste: Bool = false` in its initializer signature
+// (fail-closed for every caller that omits the argument) — but nothing gated that DEFAULT
+// itself, so flipping it back to `= true` would reopen the same exfiltration path for every
+// omitting caller while this gate and its self-test both stayed green. Anchored on the SAME
+// `allow<Feature>` naming SessionRestrictions declares (allowCopyPaste, allowScreenCapture,
+// allowPrint, allowAirDrop) — a bare `Bool = true` is NOT flagged (many bools legitimately
+// default true; this gate knows the restriction vocabulary, not every truthy default in the
+// tree — the false-positive risk the original comment named for gating this shape at all).
+//
+// LIMITS, said out loud: only the PERMISSIVE polarity on this vocabulary is gated — an
+// inverse-named restriction default (`blockCopyPaste: Bool = false`, hypothetically) is a
+// shape this repo does not currently use anywhere under native/ios and is left to review.
+// COMMENTS AND STRING LITERALS ARE MASKED via scripts/lib/sanitize.mjs, so the header above
+// and prose explaining the defect do not trip the gate.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -53,16 +64,26 @@ const FILE_FLOOR = 40;
 // first split; scanning the joined source closes it.)
 const FAIL_OPEN = /\.restrictions\s*\??\s*\.\s*[A-Za-z_]\w*\s*\?\?\s*true\b/g;
 
+// A restriction-named Bool (or Bool?) parameter DEFAULT that resolves permissive, e.g.
+// `allowCopyPaste: Bool = true` in an initializer or function signature — the shape a
+// caller who omits the argument silently inherits. `allow[A-Z]` (not a bare `allow`)
+// anchors on the SessionRestrictions naming convention (allowCopyPaste,
+// allowScreenCapture, allowPrint, allowAirDrop) without also matching an unrelated
+// `allowedDomains`-style name (lowercase after `allow`, and not `Bool` typed anyway).
+const FAIL_OPEN_DEFAULT_PARAM = /\ballow[A-Z]\w*\s*:\s*Bool\??\s*=\s*true\b/g;
+
 function findViolations(rawSource) {
   const src = sanitize(rawSource);
   const rows = src.split("\n");
   const hits = [];
-  const re = new RegExp(FAIL_OPEN.source, "g");
-  let m;
-  while ((m = re.exec(src)) !== null) {
-    const line = src.slice(0, m.index).split("\n").length;
-    hits.push({ line, text: (rows[line - 1] || "").trim() || m[0].replace(/\s+/g, " ").trim() });
-    if (m.index === re.lastIndex) re.lastIndex += 1; // never loop on a zero-width match
+  for (const pattern of [FAIL_OPEN, FAIL_OPEN_DEFAULT_PARAM]) {
+    const re = new RegExp(pattern.source, "g");
+    let m;
+    while ((m = re.exec(src)) !== null) {
+      const line = src.slice(0, m.index).split("\n").length;
+      hits.push({ line, text: (rows[line - 1] || "").trim() || m[0].replace(/\s+/g, " ").trim() });
+      if (m.index === re.lastIndex) re.lastIndex += 1; // never loop on a zero-width match
+    }
   }
   return hits;
 }
@@ -89,6 +110,17 @@ const CASES = [
   ["a non-restriction `?? true` is not a restriction default", `let stale = session?.isExpired ?? true`, false],
   ["the same text in a comment is masked", `// restrictions.allowCopyPaste ?? true`, false],
   ["the same text in a string literal is masked", `let doc = "restrictions.allowCopyPaste ?? true"`, false],
+  // Restriction-named INITIALIZER-DEFAULT shape (Codex finding, 2026-09-12):
+  ["a permissive restriction-named Bool default in an initializer is caught",
+    `init(app: EnterpriseApp, url: URL, allowCopyPaste: Bool = true) {}`, true],
+  ["…the exact planted regression: ManagedAppViewController's own fail-closed default flipped back permissive",
+    `init(app: EnterpriseApp, url: URL, allowedDomains: [String]? = nil, allowCopyPaste: Bool = true) {`, true],
+  ["a permissive restriction-named OPTIONAL Bool default is also caught", `init(allowScreenCapture: Bool? = true) {}`, true],
+  ["a fail-closed restriction-named Bool default is allowed", `init(allowCopyPaste: Bool = false) {}`, false],
+  ["a non-restriction Bool default is not flagged (the vocabulary is restriction-specific)", `init(isEnabled: Bool = true) {}`, false],
+  ["`allowedDomains` (lowercase after `allow`, non-Bool) is not mistaken for a restriction Bool", `init(allowedDomains: [String]? = nil) {}`, false],
+  ["the restriction-named default in a comment is masked", `// allowCopyPaste: Bool = true`, false],
+  ["the restriction-named default in a string literal is masked", `let doc = "allowCopyPaste: Bool = true"`, false],
 ];
 
 function selfTest() {
@@ -110,8 +142,9 @@ if (failures.length > 0) {
 if (process.argv.includes("--self-test")) {
   console.log(
     `PASS  self-test — ${CASES.length} planted fixtures behave in both directions: a permissive ` +
-      "`.restrictions.<field> ?? true` (including optional-chained and multi-line) is caught, `?? false` and a " +
-      "non-restriction `?? true` are allowed, and comments/string literals are masked.",
+      "`.restrictions.<field> ?? true` (including optional-chained and multi-line) AND a permissive " +
+      "`allow<Feature>: Bool = true` initializer/function default are both caught; `?? false`, `Bool = false`, " +
+      "and a non-restriction default are allowed; and comments/string literals are masked.",
   );
   process.exit(0);
 }

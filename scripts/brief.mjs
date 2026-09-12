@@ -173,6 +173,25 @@ function overdueToleranceHours(declared) {
   return 12; // no declared routine, or tolerance field absent/malformed -> conservative
 }
 
+// Pure (Codex finding, 2026-09-12): does a cadence-checked routine that has NEVER
+// written its heartbeat count as MISSING right now, or is it merely YOUNG — still
+// inside its first tolerance window since authorization, with no fire expected yet?
+// Mirrors check-scheduled-routines.mjs's own clock exactly (same field, same
+// arithmetic: hours since `authorizedOn` vs the declared `cadenceToleranceHours`) so
+// the two checks can never diverge on what "overdue" means. Before this, `missing`
+// ignored authorizedOn entirely and flagged a routine the INSTANT it activated,
+// before its first scheduled fire could ever have happened — mirroring exactly the
+// bug check-scheduled-routines.mjs already fixed once (the "asleep is the reading
+// that let it sit" note in that file's own header). An unparseable/absent
+// authorizedOn cannot prove "not yet", so it fails closed (age -> Infinity ->
+// always past tolerance), never the other way (golden rule 2 — unknown tightens,
+// never loosens). `now` is injectable so the self-test can pin the clock.
+function isNeverFiredMissing(meta, now = Date.now()) {
+  const since = Date.parse(meta.authorizedOn ?? "");
+  const ageH = Number.isFinite(since) ? (now - since) / 3_600_000 : Infinity;
+  return ageH > meta.tol;
+}
+
 function heartbeatsSection() {
   const dir = join(repo, "artifacts/agent-heartbeats");
   if (!existsSync(dir)) return { key: "heartbeats", label: "Lane heartbeats", state: "ERROR", summary: "no heartbeat directory" };
@@ -189,7 +208,11 @@ function heartbeatsSection() {
     const list = Array.isArray(reg) ? reg : Array.isArray(reg.routines) ? reg.routines : [];
     for (const r of list) {
       if (!r || !r.id) continue;
-      routineById[r.id] = { tol: r.cadenceToleranceHours, status: r.status, hb: r.heartbeatPath ? String(r.heartbeatPath).split("/").pop() : null };
+      routineById[r.id] = {
+        tol: r.cadenceToleranceHours, status: r.status,
+        hb: r.heartbeatPath ? String(r.heartbeatPath).split("/").pop() : null,
+        authorizedOn: r.authorizedOn,
+      };
     }
   } catch { /* no registry -> fallback tolerance, unknown status, no expectation set */ }
   try {
@@ -207,7 +230,11 @@ function heartbeatsSection() {
     for (const [id, m] of Object.entries(routineById)) {
       const expects = m.status !== "retired" && m.status !== "awaiting-activation"
         && typeof m.tol === "number" && Number.isFinite(m.tol) && m.hb;
-      if (expects && !present.has(m.hb)) missing.push(id);
+      // Never fired yet is not automatically MISSING (see isNeverFiredMissing): a
+      // routine still inside its first tolerance window since authorization has not
+      // missed a fire — "the next fire writes the first" is the honest young case,
+      // mirrored from check-scheduled-routines.mjs.
+      if (expects && !present.has(m.hb) && isNeverFiredMissing(m)) missing.push(id);
     }
     if (!files.length && !missing.length) {
       return { key: "heartbeats", label: "Lane heartbeats", state: "OK", summary: "(none recorded yet)" };
@@ -380,6 +407,33 @@ async function selfTest() {
   // gate's own self-test instead of the panel.
   ok(["OK", "FAIL", "ERROR"].includes(discoverySection().state), "discovery section returns a state");
   ok(["OK", "FAIL", "ERROR"].includes(heartbeatsSection().state), "heartbeats section returns a state");
+
+  // 8. isNeverFiredMissing (Codex finding, 2026-09-12): a never-fired, cadence-checked
+  // routine still inside its first tolerance window is YOUNG, not missing.
+  ok(
+    !isNeverFiredMissing({ tol: 50, authorizedOn: new Date(Date.now() - 3 * 3_600_000).toISOString() }),
+    "a routine authorized 3h ago with a 50h tolerance is NOT missing yet — inside its first window",
+  );
+  // 9. Past its own declared tolerance with no heartbeat, it IS missing (overdue).
+  ok(
+    isNeverFiredMissing({ tol: 3, authorizedOn: new Date(Date.now() - 26 * 3_600_000).toISOString() }),
+    "a routine authorized 26h ago with a 3h tolerance and no heartbeat IS missing (overdue, never fired)",
+  );
+  // 9b. Right at the boundary: inside vs just past the declared tolerance.
+  ok(
+    !isNeverFiredMissing({ tol: 10, authorizedOn: new Date(Date.now() - 9 * 3_600_000).toISOString() }),
+    "9h into a 10h tolerance is still inside the window — not missing",
+  );
+  ok(
+    isNeverFiredMissing({ tol: 10, authorizedOn: new Date(Date.now() - 11 * 3_600_000).toISOString() }),
+    "11h into a 10h tolerance has elapsed the window — missing",
+  );
+  // 10. Fail-closed: an unparseable/absent authorizedOn cannot prove "not yet", so it is
+  // missing immediately rather than reading as fresh forever (golden rule 2).
+  ok(isNeverFiredMissing({ tol: 50, authorizedOn: undefined }),
+    "a cadence-checked routine with no parseable authorizedOn fails closed as missing immediately");
+  ok(isNeverFiredMissing({ tol: 50, authorizedOn: "not-a-date" }),
+    "an unparseable authorizedOn string also fails closed as missing immediately");
 
   console.log(failed === 0 ? `\nself-test passed (${checks}/${checks})` : `\nself-test FAILED (${checks - failed}/${checks})`);
   process.exit(failed === 0 ? 0 : 1);

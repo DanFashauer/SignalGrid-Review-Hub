@@ -48,14 +48,57 @@ const FAMILY_DIR = join(repo, "lib/integrations/src/integrations");
  * matched when `healthy: true` textually preceded `status: <n>` — so the identical
  * defect written `return { status: 200, healthy: true }` slipped past the gate. It now
  * captures each `return { … }` body and tests the two fields separately.
+ *
+ * The body is captured by BALANCING braces (returnObjectBodies below), not by a
+ * `[^}]*` stop-at-the-first-`}` regex. That regex read `return { metadata: {}, healthy:
+ * true, status: 200 }` as the truncated body `metadata: {` — no `healthy` and no
+ * `status` in it at all — so the exact fabricated-success-status defect this gate
+ * exists to catch passed clean the moment any nested object field sat before the two
+ * flat fields (Codex finding, 2026-09-12). Depth-counting also skips over string/
+ * template literal contents so a stray `{`/`}` inside quotes cannot desync the count.
  */
-const RETURN_OBJ = /return\s*\{([^}]*)\}/g;
 const HEALTHY_TRUE = /\bhealthy:\s*true\b/;
 const STATUS_NUM = /\bstatus:\s*(\d+)/;
+
+/** Every `return { … }` body in `src`, with nested `{ }` (object literals, arrays of
+ * objects, etc.) balanced rather than truncated at the first `}`. An unbalanced
+ * `return {` (no matching close before EOF) contributes no body — nothing to test,
+ * not a crash. */
+function returnObjectBodies(src) {
+  const bodies = [];
+  const RETURN_OPEN = /return\s*\{/g;
+  let m;
+  while ((m = RETURN_OPEN.exec(src)) !== null) {
+    let i = m.index + m[0].length; // just after the opening `{`
+    const start = i;
+    let depth = 1;
+    while (i < src.length && depth > 0) {
+      const ch = src[i];
+      if (ch === '"' || ch === "'" || ch === "`") {
+        // Skip a string/template literal whole, so a brace INSIDE one (e.g. a JSON
+        // sample in a message string) never throws off the depth count.
+        const quote = ch;
+        i += 1;
+        while (i < src.length && src[i] !== quote) {
+          if (src[i] === "\\") i += 1; // skip an escaped character (won't end the string)
+          i += 1;
+        }
+      } else if (ch === "{") {
+        depth += 1;
+      } else if (ch === "}") {
+        depth -= 1;
+      }
+      i += 1;
+    }
+    if (depth === 0) bodies.push(src.slice(start, i - 1));
+    RETURN_OPEN.lastIndex = i; // resume after this literal, never re-scan inside it
+  }
+  return bodies;
+}
+
 /** The hard-coded success status in `src`, or null if none. Field order does not matter. */
 function fabricatedStatus(src) {
-  for (const m of src.matchAll(RETURN_OBJ)) {
-    const body = m[1];
+  for (const body of returnObjectBodies(src)) {
     if (!HEALTHY_TRUE.test(body)) continue;
     const s = body.match(STATUS_NUM);
     if (s) return s[1];
@@ -211,6 +254,35 @@ function selfTest() {
     {
       name: "comments are stripped, so prose about status: 200 is not a finding",
       run: () => fabricatedStatus(stripComments("// return { healthy: true, status: 200 };")) === null,
+    },
+    {
+      // Codex finding, 2026-09-12: a nested object literal sitting before the two flat
+      // fields used to truncate the captured body at the first `}` and hide the defect.
+      name: "a nested object literal BEFORE the fields does not hide a fabricated status",
+      run: () => fabricatedStatus("return { metadata: {}, healthy: true, status: 200 };") !== null,
+    },
+    {
+      name: "…same shape with the nested object AFTER the fields",
+      run: () => fabricatedStatus("return { healthy: true, status: 201, metadata: {} };") !== null,
+    },
+    {
+      name: "…and with real content and multiple levels of nesting inside the object",
+      run: () => fabricatedStatus("return { metadata: { source: { id: 1 } }, healthy: true, status: 204 };") !== null,
+    },
+    {
+      // A prior `return { }` with a nested object must not leak into, or block, the
+      // NEXT `return { }` — each balanced body is scanned on its own.
+      name: "a nested-object return does not swallow or block a fabricated status in the NEXT return",
+      run: () => fabricatedStatus("return { metadata: {} }; return { healthy: true, status: 200 };") !== null,
+    },
+    {
+      name: "…and an honest response-derived status in the second return still counts as observed, not fabricated",
+      run: () =>
+        fabricatedStatus("return { metadata: {} }; return { healthy: res.ok, status: res.status };") === null,
+    },
+    {
+      name: "a brace inside a string literal does not desync the depth count",
+      run: () => fabricatedStatus('return { note: "a stray } in prose", healthy: true, status: 200 };') !== null,
     },
     {
       name: "the scan finds connector files at all (an empty sweep would pass vacuously)",

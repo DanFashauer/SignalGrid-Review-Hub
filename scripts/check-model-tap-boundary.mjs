@@ -287,10 +287,31 @@ function selfTest() {
   expect(rootBlob.includes("lib/integrations/src"), "the connectors root is declared");
   expect(/-proof\.ts/.test(rootBlob), "the proofs root is declared");
   expect(
-    ["DecisionEngine.swift", "AppWorkflows.swift", "DecisionService.swift", "PostureAllow.swift", "RemediationAllow.swift"]
-      .every((f) => rootBlob.includes(f)),
-    "all five native verdict sources (DecisionEngine, AppWorkflows, DecisionService, PostureAllow, RemediationAllow) are declared",
+    [
+      "DecisionEngine.swift", "AppWorkflows.swift", "DecisionService.swift", "PostureAllow.swift",
+      "RemediationAllow.swift", "SignalContext.swift", "HostAppViewController.swift",
+    ].every((f) => rootBlob.includes(f)),
+    "all seven native verdict sources (DecisionEngine, AppWorkflows, DecisionService, PostureAllow, " +
+      "RemediationAllow, SignalContext, HostAppViewController) are declared",
   );
+
+  // PLANTED RED (Codex finding, 2026-09-12): SignalContext.swift (`AccessDecision.evaluate`,
+  // which RETURNS the effective verdict) and HostAppViewController.swift (which CHOOSES the
+  // DecisionService whose result controls access) were the two operative verdict entry points
+  // missing from the original five-file enumeration — a model call added to either would have
+  // reached a decision while the fence stayed green. Prove the fence now reddens on EACH real
+  // file's actual content with a call planted in it, not just on a synthetic string: this is
+  // the regression control for the specific gap the review found, not a re-statement of the
+  // generic scanBody() checks above.
+  for (const f of ["native/ios/EnterpriseShell/Services/SignalContext.swift", "native/ios/EnterpriseShell/Views/HostAppViewController.swift"]) {
+    let planted = false;
+    try {
+      const real = readFileSync(join(repo, f), "utf8");
+      const injected = real + `\n// planted self-test call: await fetch(base + "/chat/completions", {});\n`;
+      planted = scanBody(injected).length > 0;
+    } catch { /* leave planted false — reported as a failure below */ }
+    expect(planted, `a model call planted in the real content of ${f} is flagged by the fence`);
+  }
 
   // The live tap/policy actually pass the reciprocal fence today.
   let liveReciprocalClean = true;

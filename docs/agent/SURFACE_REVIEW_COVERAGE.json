@@ -1930,6 +1930,15 @@
           "scope": "partial: scripts/check-discovery-log.mjs only, one file added to the surface after the twenty-fourth round's 2026-09-06 whole-surface read.",
           "open": 0,
           "closed": 6
+        },
+        {
+          "date": "2026-09-12",
+          "read": "mac/free-test-port.sh (new): frees the api-server test port 5310 of a RUNNER-OWNED orphan before and after a self-hosted Mac job. Read line by line this session: it kills ONLY a process whose command contains dist/index.mjs AND lies under $GITHUB_WORKSPACE (the Actions worktree), so a developer-local test:api on the same port from a different checkout is left alone; lsof/ps/kill are each guarded with `|| true`, no arrays (bash 3.2 safe), and it never aborts the job. Wired at start + always() teardown into mac-runner-auto.yml (pr-mac-checks, the path that actually failed) and mac-runner-harness.yml. Verified: bash -n clean, smoke-run kills 0 with no server (exit 0), both YAMLs parse.",
+          "reviewer": "cloud lane",
+          "record": "PR #696",
+          "scope": "partial: the one new script scripts/mac/free-test-port.sh; no other script re-read here.",
+          "open": 0,
+          "closed": 1
         }
       ]
     },

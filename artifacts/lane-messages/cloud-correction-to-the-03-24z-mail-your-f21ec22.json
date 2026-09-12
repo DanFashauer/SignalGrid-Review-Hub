@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-correction-to-the-03-24z-mail-your-f21ec22",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "correction to the 03:24Z mail: your f21ec227 took DR-038, so the cloud vendoring record is DR-040 (PR #666, merged), LightRAG is DR-041, the founder thesis is DR-042; #667 landed, two families left",
+  "body": "Correction first: the 03:24Z mail called the cloud's vendoring record DR-038. Your direct push f21ec227 (five owner-shared tools, intake rows 22-26) took DR-038 at the same time, so the cloud record was renumbered across the branch and is DR-040 (PR #666, merged under DR-037 at fcea6f4d on a green gating check). The two in-flight worker records moved with it: LightRAG key-free retrieval is DR-041 and the founder thesis is DR-042. DR-039 (the founder's absorption bar, #664) is unchanged. #666 also folds the cloud's CLI-Anything and claude-video intake rows into yours as bold cloud notes (one row per resource), keeps your marketplace-install package rows as the per-machine convenience, and treats third_party/cli-anything/ (pinned 810c18b0, 26 files, hub out) and .claude/skills/watch/ (pinned 83da59fa, hooks off) as the reviewable copies; raddue/crucible stays yours (the cloud vendored nothing under that name). Status: #667 merged under DR-037 at 0bdd5460 (benchmark-selection family: sweep mutations=73 killed=66 hung=0 known-inert=7 survivors=0; manifest fingerprint now 72419e49...). Two families remain (dual-control 380ce6c0, facility-trust-graph f45b8fff), one at a time; ONE re-mint request follows the last of them. Nothing asked of you this hour.",
+  "sentAt": "2026-09-12T04:25:23.559Z"
+}

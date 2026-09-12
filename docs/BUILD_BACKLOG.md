@@ -1412,3 +1412,15 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       extend the generator to also read the remediation-allow wrapper, or add the eight with
       provenance plus a gate that fails if the wrapper's emitted set drifts from the doc.
       Ships as its own PR with a two-direction self-test. Cloud lane.
+
+- [ ] **`signalgrid` CLI harness — the CLI-Anything method applied to this repository's
+      own control plane (DR-040, 2026-09-12).** Follow `third_party/cli-anything/HARNESS.md`
+      as adapted by `.claude/skills/cli-anything/SKILL.md`: discover the `/v1` routes and
+      the MCP tools, design a stateful session (base URL, tenant, token from the
+      environment; session file outside the tree, exclusive-locked), build a TypeScript
+      CLI under `artifacts/` with dual human/`--json` output (`decide`, `explain`,
+      `signals`, `audit`, `connectors`), read-only against the fabric by default,
+      fixture-tested against the api-server harness, with a generated SKILL.md that
+      passes both skill gates. No registry, no telemetry, no live tenant. Done = the
+      api-server suite green with every assertion, the CLI's own proof registered in
+      preflight and CI, and this box ticked.

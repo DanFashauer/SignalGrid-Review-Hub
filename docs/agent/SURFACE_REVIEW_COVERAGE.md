@@ -37,7 +37,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/build-loop` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/connector-emulator` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/lab-collections` | tree | 42 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
-| `artifacts/lane-messages` | tree | 209 | read | 1 | 2026-09-06 | fail-closed-auditor agent (cloud lane), every finding re-run firsthand; every fixed shape has an assertion that fails against the old code | docs/agent/EVIDENCE.md | 8 | 1 |
+| `artifacts/lane-messages` | tree | 210 | read | 1 | 2026-09-06 | fail-closed-auditor agent (cloud lane), every finding re-run firsthand; every fixed shape has an assertion that fails against the old code | docs/agent/EVIDENCE.md | 8 | 1 |
 | `artifacts/live-captures` | tree | 2 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/live-evidence` | tree | 2 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/mcp-server` | package | 4 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |

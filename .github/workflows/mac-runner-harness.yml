@@ -43,17 +43,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Free the api-server test port 5310 (kill a stale squatter from a prior killed job)
-        # A killed harness/preflight job can leave an ephemeral api-server (dist/index.mjs)
-        # bound to :5310, failing the next api:test on this box (mac orphan PID-4293, 2026-09-12).
-        # Kill only a dist/index.mjs holder of the port, never an unrelated process.
-        run: |
-          for pid in $(lsof -ti tcp:5310 2>/dev/null || true); do
-            if ps -o command= -p "$pid" 2>/dev/null | grep -q 'dist/index.mjs'; then
-              echo "freeing :5310 — killing stale api-server pid $pid: $(ps -o command= -p "$pid")"
-              kill -9 "$pid" 2>/dev/null || true
-            fi
-          done
+      - name: Free the api-server test port 5310 (runner-owned orphan from a prior killed job)
+        run: bash scripts/mac/free-test-port.sh 5310
 
       - name: Toolchain present on this Mac (report, never install here)
         run: |
@@ -103,13 +94,7 @@ jobs:
 
       - name: Free the api-server test port 5310 (teardown — do not orphan it for the next job)
         if: always()
-        run: |
-          for pid in $(lsof -ti tcp:5310 2>/dev/null || true); do
-            if ps -o command= -p "$pid" 2>/dev/null | grep -q 'dist/index.mjs'; then
-              echo "teardown: killing leftover api-server pid $pid: $(ps -o command= -p "$pid")"
-              kill -9 "$pid" 2>/dev/null || true
-            fi
-          done
+        run: bash scripts/mac/free-test-port.sh 5310
 
       - name: Upload logs
         if: always()

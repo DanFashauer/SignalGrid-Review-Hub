@@ -125,6 +125,26 @@ export const NON_SURFACE_TREES = new Map([
 ]);
 
 /**
+ * Trees that ARE surfaces (they were read, they keep their row, every file in them is
+ * claimed) but whose files are RECORDS the lanes append to — a message, an ack, a
+ * heartbeat — rather than code anyone reads again. Their file counts are therefore
+ * not printed, and they are left out of the in-scope figures in the page header.
+ *
+ * WHY (2026-09-12). The page printed those counts, so every lane delivery that added
+ * one message moved this generated file, and every open product PR — including the
+ * Mac's combined landing #653 and the cloud's #649/#654 — went unmergeable on it within
+ * the hour, each cycle, until somebody merged mainline in and regenerated. A page that
+ * changes on mail is a page nobody can land against. The completeness assertion is
+ * untouched: a mailbox file still belongs to exactly one surface; only the NUMBER is
+ * withheld from the render, and the self-test proves the page is byte-identical
+ * before and after one more record lands.
+ */
+export const MAILBOX_TREES = new Map([
+  ["artifacts/lane-messages", "lane mail — every send, ack and batch appends a message file"],
+  ["artifacts/agent-heartbeats", "routine heartbeats — a new routine appends a file; a firing rewrites one"],
+]);
+
+/**
  * Trees whose CHILDREN are the surfaces, rather than the tree itself. Deeper entries
  * must follow their parents; `native/ios` is expanded inside the already-expanded
  * `native` because its Swift targets are separate reading surfaces and its loose
@@ -299,6 +319,10 @@ export function coverTracked(surfaces, tracked) {
   // one still matches something. A key here that stays at 0 is a stale fossil — a hole
   // dressed as a decision — and is FATAL, distinct from the aggregate `outOfScope > 0`.
   const outOfScopeByKey = new Map([...NON_SURFACE_TREES.keys()].map((k) => [k, 0]));
+  // Mailbox records are claimed like any other file (below) AND tallied here, so the
+  // page can leave them out of the printed figures without losing them.
+  let mailbox = 0;
+  const mailboxByKey = new Map([...MAILBOX_TREES.keys()].map((k) => [k, 0]));
 
   // Longest path first, so a child surface always beats its parent tree.
   const exact = surfaces.filter((s) => !s.id.endsWith("/*") && s.id !== ROOT_ID).sort((a, b) => b.path.length - a.path.length);
@@ -306,6 +330,12 @@ export function coverTracked(surfaces, tracked) {
 
   for (const f of tracked) {
     const top = f.split("/")[0];
+    for (const key of mailboxByKey.keys()) {
+      if (f.startsWith(`${key}/`)) {
+        mailbox += 1;
+        mailboxByKey.set(key, mailboxByKey.get(key) + 1);
+      }
+    }
     if (NON_SURFACE_TREES.has(top)) {
       outOfScope += 1;
       outOfScopeByKey.set(top, outOfScopeByKey.get(top) + 1);
@@ -333,7 +363,7 @@ export function coverTracked(surfaces, tracked) {
     }
     uncovered.push(f);
   }
-  return { byId, uncovered, outOfScope, outOfScopeByKey, total: tracked.length };
+  return { byId, uncovered, outOfScope, outOfScopeByKey, mailbox, mailboxByKey, total: tracked.length };
 }
 
 // ── field validation ─────────────────────────────────────────────────────────
@@ -509,6 +539,23 @@ export function auditSurfaceCoverage(surfaces, ledger, opts = {}) {
     }
   }
 
+  // (1c) PER-KEY: every declared mailbox tree must be a derived surface AND still hold
+  // records. `MAILBOX_TREES` only decides what the page PRINTS; a key naming a tree that
+  // no longer exists, or that the derivation does not treat as a surface, is a fossil
+  // that would silently withhold a number from a surface it was never about.
+  const mailboxByKey = opts.mailboxByKey ?? cover?.mailboxByKey ?? null;
+  const mailboxKeys = opts.mailboxKeys ?? [...MAILBOX_TREES.keys()];
+  if (mailboxByKey) {
+    const ids = new Set(surfaces.map((s) => s.id));
+    for (const key of mailboxKeys) {
+      if (!ids.has(key)) {
+        fatal.push(`MAILBOX_TREES key \`${key}\` is not a derived surface — a mailbox declaration must name a surface row, or be deleted.`);
+      } else if ((mailboxByKey.get(key) ?? 0) === 0) {
+        fatal.push(`MAILBOX_TREES key \`${key}/\` holds no tracked record — a stale mailbox declaration withholds a count from nothing: delete the key.`);
+      }
+    }
+  }
+
   // (2) every derived surface has a row.
   for (const s of surfaces) {
     if (!Object.prototype.hasOwnProperty.call(rows, s.id)) {
@@ -671,10 +718,14 @@ export function renderPage(audit) {
   );
   L.push("");
   if (c) {
+    const mailbox = c.mailbox ?? 0;
     L.push(
-      `Coverage of the tree is asserted, not assumed: **${c.total - c.outOfScope - c.uncovered.length} of ` +
-        `${c.total - c.outOfScope} in-scope tracked files** belong to a surface on this page ` +
-        `(${c.outOfScope} more are in declared out-of-scope trees). A file belonging to no surface fails the gate.`,
+      `Coverage of the tree is asserted, not assumed: **${c.total - c.outOfScope - mailbox - c.uncovered.length} of ` +
+        `${c.total - c.outOfScope - mailbox} in-scope tracked files** belong to a surface on this page ` +
+        `(${c.outOfScope} more are in declared out-of-scope trees). A file belonging to no surface fails the gate. ` +
+        `The mailbox trees (${[...MAILBOX_TREES.keys()].map((k) => `\`${k}\``).join(", ")}) are surfaces like any other and ` +
+        "every record in them is claimed, but their counts are not printed and are left out of the figures above: " +
+        "every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.",
     );
     L.push("");
   }
@@ -690,7 +741,7 @@ export function renderPage(audit) {
   L.push("| --- | --- | ---: | --- | ---: | --- | --- | --- | ---: | ---: |");
   for (const r of audit.table) {
     L.push(
-      `| \`${r.id}\` | ${r.kind} | ${r.files} | ${r.state === "READ" ? "read" : r.state === "PARTIAL" ? "**partial**" : "**NOT READ**"} | ` +
+      `| \`${r.id}\` | ${r.kind} | ${MAILBOX_TREES.has(r.id) ? "mailbox" : r.files} | ${r.state === "READ" ? "read" : r.state === "PARTIAL" ? "**partial**" : "**NOT READ**"} | ` +
         `${r.count} | ${r.last ?? "—"} | ${r.reviewer || "—"} | ${r.record || "—"} | ${r.closed} | ${r.open} |`,
     );
   }
@@ -788,7 +839,10 @@ function makeTempRepo() {
   w("lib/core/src/index.ts", "export const x = 1;\n");
   w("artifacts/api-server/package.json", '{"name":"api"}\n');
   w("artifacts/api-server/src/index.ts", "export const y = 1;\n");
+  // One record under EVERY declared mailbox tree, so the fixture is consistent with the
+  // per-key mailbox check (a key naming no surface, or holding no record, is fatal).
   w("artifacts/lane-messages/one.json", "{}\n");
+  w("artifacts/agent-heartbeats/one.json", "{}\n");
   w("scripts/package.json", '{"name":"scripts"}\n');
   w("scripts/a.mjs", "// a\n");
   w("docs/TOP.md", "# top\n");
@@ -858,6 +912,34 @@ function selfTest() {
   });
   check("removing the bogus key clears that failure (the per-key check is not simply always red)", () => {
     return auditReal(ledger, { nonSurfaceKeys: [...NON_SURFACE_TREES.keys()] }).fatal.length === 0;
+  });
+
+  // ── the mailbox trees: claimed, counted, but the page must not move on mail ─
+  check("every declared mailbox tree is a derived surface and holds records (baseCover proves it)", () => {
+    const ids = new Set(base.map((s) => s.id));
+    return [...MAILBOX_TREES.keys()].every((k) => ids.has(k) && (baseCover.mailboxByKey.get(k) ?? 0) > 0);
+  });
+  check("a MAILBOX_TREES key that is not a surface is FATAL, naming the key", () => {
+    const { fatal } = auditReal(ledger, { mailboxKeys: [...MAILBOX_TREES.keys(), "artifacts/no_such_mailbox"] });
+    return fatal.some((f) => f.includes("artifacts/no_such_mailbox") && f.includes("not a derived surface"));
+  });
+  check("a MAILBOX_TREES key whose tree holds no record is FATAL, naming the key", () => {
+    const emptied = new Map(baseCover.mailboxByKey);
+    emptied.set("artifacts/lane-messages", 0);
+    const { fatal } = auditReal(ledger, { mailboxByKey: emptied });
+    return fatal.some((f) => f.includes("artifacts/lane-messages/") && f.includes("holds no tracked record"));
+  });
+  check("one more record under a mailbox tree leaves the rendered page BYTE-IDENTICAL (the reason the trees are declared)", () => {
+    const before = renderPage(auditReal(ledger));
+    const planted = [...tracked, "artifacts/lane-messages/self-test-planted-message.json", "artifacts/agent-heartbeats/self-test-planted.json"];
+    const cover = coverTracked(base, planted);
+    if (cover.uncovered.length !== 0 || cover.mailbox !== baseCover.mailbox + 2) return false;
+    return renderPage(auditSurfaceCoverage(base, ledger, { cover })) === before;
+  });
+  check("…and one more file under a NON-mailbox surface DOES change the page (the identity test is not vacuous)", () => {
+    const before = renderPage(auditReal(ledger));
+    const cover = coverTracked(base, [...tracked, "lib/integrations/self-test-planted.ts"]);
+    return cover.uncovered.length === 0 && renderPage(auditSurfaceCoverage(base, ledger, { cover })) !== before;
   });
 
   // ── plants on a REAL but THROWAWAY git tree ────────────────────────────────
@@ -1142,8 +1224,8 @@ function main({ write }) {
   console.log("            Never fatal — a ledger that reddens on the calendar gets switched off, and then reports nothing.");
   console.log("  NOT PROVEN by any row here: that the read was any good. The record is what proves that.\n");
 
-  const inScope = cover.total - cover.outOfScope;
-  console.log(`  tracked files: ${cover.total} — ${inScope - cover.uncovered.length}/${inScope} in-scope files belong to a surface, ${cover.outOfScope} in declared out-of-scope trees`);
+  const inScope = cover.total - cover.outOfScope - cover.mailbox;
+  console.log(`  tracked files: ${cover.total} — ${inScope - cover.uncovered.length}/${inScope} in-scope files belong to a surface, ${cover.outOfScope} in declared out-of-scope trees, ${cover.mailbox} mailbox records (claimed, not printed)`);
   console.log(`  READ:     ${audit.readCount} of ${audit.total} surfaces`);
   console.log(`  PARTIAL:  ${audit.partial.length} of ${audit.total} surfaces`);
   for (const s of audit.partial) console.log(`            · ${s.id} (${s.kind})`);

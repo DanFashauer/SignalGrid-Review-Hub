@@ -52,9 +52,25 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-11 (cloud lane, latest) - THE LAST TWO RUNBOOK PARTIALS MODELED
-              (branch lane/cloud-runbook-partials-20260911-154128Z; product PR, owner
-              merges - the harness structurally blocks agent self-merge of product PRs):
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE MAC TICK NO LONGER FLOODS MAINLINE
+              (branch lane/cloud-tick-heartbeat-throttle-20260912-005000Z; owner merges): a
+              SKIPPED tick result was exempt from the quiet throttle, so a checkout parked on
+              mac/land-641-645-638 pushed a heartbeat to Alpha every 5 minutes, each push
+              starting four workflows, cancelling the mainline CI run of the merge before it,
+              and exhausting the GITHUB_TOKEN budget until check-ci-liveness failed #654 on a
+              403. The throttle now keys on an UNCHANGED result (a changed one still delivers
+              at once), and the four push-triggered workflows ignore heartbeat-only pushes.
+              The owner said YES (2026-09-12) to the cloud lane merging green product PRs
+              itself - recorded as DR-037 - so the cloud now lands #656 (merged aa5c8151),
+              this one, #653 (Mac landing of #641+#645+#638), #649 and #654 in that order. (Earlier 2026-09-12, cloud lane:) THE COVERAGE PAGE NO LONGER MOVES ON LANE MAIL
+              (#656, merged aa5c8151): the mailbox trees
+              (artifacts/lane-messages, artifacts/agent-heartbeats) stay claimed surfaces but
+              their record counts are withheld from the render, so a send/ack/batch delivery
+              leaves docs/agent/SURFACE_REVIEW_COVERAGE.md byte-identical (self-test proves
+              it, 54/54) and open product PRs stop going unmergeable on it every cycle. Open
+              for the owner: #653 (Mac's combined landing of #641+#645+#638), #649, #654
+              (brace-less guards join the mutation sweep). (Earlier 2026-09-11, cloud lane:) THE LAST TWO RUNBOOK PARTIALS MODELED
+              (PR #641, landed inside the Mac's combined #653 with #645 and #638):
               the supervision-identity lifecycle (device-attestation/supervision-identity.ts:
               supervised / this org vs another / identity lost / enrollment lost / never
               enrolled / commands unresponsive / unknown -> grant, hold or contain; a
@@ -95,8 +111,8 @@ LAST TOUCHED: 2026-09-11 (cloud lane, latest) - THE LAST TWO RUNBOOK PARTIALS MO
               closed the three holes the custody-ledger review had found the same hour -
               own-name fixture lookup, one-time axis snapshot, a revoked-Proxy catch - in
               both modules (proofs 148 -> 154 and 161 -> 167; sweeps 58/58 and 76 + 4 inert
-              of 80, 0 survivors). (Earlier
-              2026-09-11, Mac lane:) HARDWARE EVIDENCE RE-MINTED against the
+              of 80, 0 survivors). (Earlier 2026-09-11, Mac lane:)
+              HARDWARE EVIDENCE RE-MINTED against the
               manifest mainline carries (v68 / ce58f6): 53c60f4e, from verify:all --require-mcp
               --emit-evidence on this Mac (Review-Hub preflight PASS, breadth PASS, signalgrid-mcp
               pytest 99 passed at 10c5b52 on a clean checkout, 22 MCP tools derived = doc); the

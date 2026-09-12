@@ -1834,3 +1834,38 @@ Figure guard passed — every measured figure in the docs matches a live proof r
 Surface-read-coverage gate passed ...   Invariant review passed ...   Connector-discipline gate passed.
 ```
 Verdict:  **the reviewer read #649's round and asked whether the two sibling modules had the same three holes; they did, and each is pinned by a check that fails without the fix.** (1) `evaluateDevicePrepFixture("toString")` and `evaluateSupervisionIdentityFixture("toString")` returned a verdict built from a function, and a grant-shaped object planted on Object.prototype under a name that does not exist returned READY / trusted — both lookups are own-name only and both corpora frozen; the `fixture === undefined` check behind the guard was dead and is gone (the custody-ledger sweep had already shown that shape survives). (2) Both evaluators read each axis once per branch, so an accessor that answers the branches with an out-of-domain value and the domain guard with a valid one reached the grant on the second answer — every axis is snapshotted once, and a throwing read holds as `state_unreadable`. (3) `Array.isArray` on a REVOKED Proxy threw out of both normalizers before any catch could keep the no-throw promise — the shape check runs inside one. Nothing in the two grant predicates moved; the 288 / 3,072-state sweeps still pin one grant each. The device-attestation and app-update families stay deferred in the launch profile: built, not claimed.
+## 2026-09-12 — "The Mac tick pushed a heartbeat to mainline every 5 minutes because a SKIPPED result was exempt from the quiet throttle, and each push started four workflows; the throttle now keys on an UNCHANGED result, and a heartbeat-only push starts no workflow"
+Command:  read from the Actions run list for `SignalGrid_Alpha` (event push) and the failed job log on #654, then the tick script:
+```
+mcp github actions_list list_workflow_runs branch=SignalGrid_Alpha event=push     # what a heartbeat push starts
+mcp github get_job_logs 103467034731                                              # #654's failing step
+sed -n '60,100p' scripts/mac/lane-tick.sh                                         # the throttle
+bash -n scripts/mac/lane-tick.sh ; node scripts/check-sim-scripts-selfcheck.mjs ; pnpm run guard:ci-sync ; node scripts/check-preflight-ci-parity.mjs
+```
+Output:
+```
+push 60364d5b "Lane mail (mac): heartbeat mac-lane-tick" -> Supply Chain, SignalGrid CI, CodeQL, Connector Emulator Smoke (4 runs); the same at 00:36, 00:30, 00:25, 00:20, 00:15, 00:10 … — one push every 5 minutes
+SignalGrid CI on SignalGrid_Alpha: run 2537 (the #655 merge) conclusion=cancelled; 2536 cancelled; 2535 cancelled; 2533 cancelled; 2532 cancelled; 2530 cancelled — the next heartbeat cancels the mainline run of the merge before it
+#654 job 103467034731: ✗ could not reach the GitHub Actions API: GET …/actions/workflows/scheduled-verification.yml/runs?per_page=10&status=completed -> 403 rate limit exceeded (rate limited) (unchanged after 4 attempts) — every gate before check-ci-liveness passed
+lane-tick.sh: "Throttle ONLY a purely-quiet result … acted/skipped/failed always deliver" — and the tick has read "skipped: checkout on mac/land-641-645-638, not SignalGrid_Alpha" since 23:44Z, so it delivered every run
+after the change: bash syntax ok; sim-scripts-selfcheck 9 script(s) checked statically, 0 problem(s); Drift check passed — every proof runs in both places; preflight↔CI parity passed — every preflight gate is wired into a workflow, 0 unwired
+```
+Verdict:  **refuted — the tick's own comment said the throttle "keeps that from flooding SignalGrid_Alpha with heartbeat commits", and it did not: the exemption for skipped/failed results is the flood.** The throttle now compares the result to the one last delivered (kept beside the stamp in node_modules) and re-pushes an identical result at most once per window; a changed result — the first skip, the first failure, any acted tick — still delivers at once, so the steward's 3-hour staleness window and the "a tick that died silently" guarantee both hold. Separately, the four workflows that trigger on push to `SignalGrid_Alpha` now ignore a push that touches only `artifacts/agent-heartbeats/**`: lane-deliver already gates that file, it changes no code, and a heartbeat push must not cancel the mainline run of a real merge. What this does NOT fix: the Mac's checkout has been parked on `mac/land-641-645-638` since 23:44Z, so every tick still skips; returning it to Alpha is a person's action (mailed).
+## 2026-09-12 — "The surface-coverage page no longer moves on lane mail: the mailbox trees stay claimed surfaces, their record counts are withheld from the render, and the self-test proves the page is byte-identical before and after one more record lands"
+Command:  the page printed files-per-surface for `artifacts/lane-messages` and `artifacts/agent-heartbeats`, so every delivery (a send, an ack, a batch) regenerated it and every open product PR — the Mac's combined landing #653, the cloud's #649 and #654 — went unmergeable on that one generated file within the hour, each cycle, until somebody merged mainline in and regenerated. The generator now declares `MAILBOX_TREES`; a mailbox file is still claimed by exactly one surface (completeness untouched), only the NUMBER is withheld and left out of the header figures, and a per-key check fails a mailbox key that names no surface or holds no record.
+```
+node scripts/check-surface-review-coverage.mjs --self-test
+node scripts/check-surface-review-coverage.mjs --write ; node scripts/check-surface-review-coverage.mjs
+```
+Output:
+```
+  ok   — every declared mailbox tree is a derived surface and holds records (baseCover proves it)
+  ok   — a MAILBOX_TREES key that is not a surface is FATAL, naming the key
+  ok   — a MAILBOX_TREES key whose tree holds no record is FATAL, naming the key
+  ok   — one more record under a mailbox tree leaves the rendered page BYTE-IDENTICAL (the reason the trees are declared)
+  ok   — …and one more file under a NON-mailbox surface DOES change the page (the identity test is not vacuous)
+self-test: 54/54 controls passed
+wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces
+Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
+```
+Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated total to the files a person can actually read again; the two mailbox rows print `mailbox` in the Files column. `lane-deliver.mjs` keeps regenerating the page on every delivery — idempotent now, and still the catch for a page stale for any other reason. What this does NOT fix: a PR that itself changes the tracked-file set still moves the page, and two such PRs still conflict on it; that is the page doing its job.

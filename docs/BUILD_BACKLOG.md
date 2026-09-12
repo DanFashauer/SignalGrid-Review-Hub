@@ -66,7 +66,7 @@ lone repairs into unreachable code).
       generator fail the day it stops being true: F7 fails if `putSignal` is ever called
       from outside the core, and F8 fails if `lib/persistence` ever gains a signals table.
       Either would mean a signal could be normalized by one build and evaluated by another,
-      at which point reopen this.
+      at which point reopen this. Lane: principal-engineer.
 
 - [x] **Change-window currency as a decision fact (intake row 45, the audit's one
       genuine near-term gap).** DONE — the `change-window` family
@@ -120,7 +120,7 @@ lone repairs into unreachable code).
       release check asserts every unresolved entry naming the task, not just the recorded
       one), plus the proof case that reproduces the overwrite. Bundle it with any future
       work that makes handoff-sim reachable rather than shipping a lone repair into a
-      package nothing calls.
+      package nothing calls. Lane: principal-engineer.
 
 - [ ] **Mirror `coreNormalizationVersion` into the Swift models (row 27a follow-through).**
       The stamp now rides three TypeScript carriers (`EvidenceSnapshot`, `Decision`,
@@ -132,7 +132,7 @@ lone repairs into unreachable code).
       uncompiled change is invisible until a human opens Xcode. Left as a recorded gap for
       the Mac lane rather than a plausible-looking patch. It is not urgent: the field is
       optional on every carrier and Swift's decoder ignores unknown keys, so the current
-      apps decode the new payload correctly today — they simply cannot yet SHOW the stamp.
+      apps decode the new payload correctly today — they simply cannot yet SHOW the stamp. Lane: mobile-native-engineer.
 
 - [ ] **A webhook WRITE route and its validation are one change, not two.**
       Opened as "should `CreateWebhookSchema`/`UpdateWebhookSchema` be `.strict()`?" and
@@ -159,7 +159,7 @@ lone repairs into unreachable code).
       `check-package-reachability.mjs`: a repair shipped into a path nothing calls is
       proven by a proof and reachable by nothing, and it leaves the next reader believing
       a boundary is defended when the boundary does not exist yet. The trap is marked at
-      both call sites and on both schemas instead.
+      both call sites and on both schemas instead. Lane: security-engineer.
 
 - [ ] **Mirror `reconcileDecisions` into Swift (intake row 51 follow-through).**
       `lib/signalgrid-core/src/continuity.ts` answers which decision wins when a device
@@ -172,7 +172,7 @@ lone repairs into unreachable code).
       the `SignalContext.swift` pattern — the port stays byte-faithful, and reconciliation
       is not part of what was ported. Nothing is broken meanwhile: the TS side reconciles
       whatever the device uploads, so the gap is that the device cannot decide locally
-      *whether its own held decision still stands* before it reconnects.
+      *whether its own held decision still stands* before it reconnects. Lane: mobile-native-engineer.
 
 - [x] **`/v1` arm for decision reconciliation (intake row 51 follow-through). BUILT.**
       `POST /v1/decisions/reconcile` — OpenAPI entry, Postman sample, and API integration
@@ -273,7 +273,7 @@ lone repairs into unreachable code).
       Entra + Intune + the one launch host app. Reference contract shape:
       [inspiration/MOBILE_CONFIG_RECORDER_CONTRACT.md](inspiration/MOBILE_CONFIG_RECORDER_CONTRACT.md)
       — sequenced AFTER normalization-version stamping, and its recorder
-      write-plane stays out of the public tree.
+      write-plane stays out of the public tree. Lane: endpoint-uem-domain.
 - [ ] **App Protection / MAM state as a decision dimension (intake row 33,
       verified candidate gap; SIGNAL_SOURCE_CATALOG's own
       "documentation-only roadmap" row).** No lib family models MAM
@@ -286,7 +286,7 @@ lone repairs into unreachable code).
       enters the tree (the uem actuator-deletion precedent); unknown/stale
       raises; MAM non-applicability is an asserted positive; the emulator
       expectation and the SIGNAL_SOURCE_CATALOG row status reconcile in the
-      same change; Intune App Protection first, other MAM vendors deferred.
+      same change; Intune App Protection first, other MAM vendors deferred. Lane: endpoint-uem-domain.
 
 _Derived from repo data, not memory: `check-connector-discipline` reports 51/51 (2026-09-06; it said 36/36 here from 2026-08-21, flagged by the role-lens review the same day and left standing)
 families with KNOWN_GAPS empty. The live-evidence status is NOT restated here —
@@ -388,7 +388,7 @@ already has a fixture proof; these add a real vendor behind it._
       rtls-custody: Traccar is outdoor GPS, not indoor RTLS.
 
 - [ ] **Android: AMAPI Colab + Test DPC on an emulator** — managed/kiosk custody
-      without hardware. Needs the Android SDK on the machine.
+      without hardware. Needs the Android SDK on the machine. Lane: mobile-native-engineer.
 
 Not free, stated so the absence is deliberate rather than forgotten: identity-risk
 and pim-activation have NO permanent free path (Entra P2 / Governance trial windows
@@ -427,7 +427,7 @@ caller-supplied), and each names the clause of his sentence it serves.
       already exports its 2xx-shape refusal reasons for exactly this). **Deterministic:**
       no wall clock — the correlation id derives from the decision id, as the playbook's
       already does. Proof: the mapper's full priority × category matrix, and one refusal
-      per refusal reason.
+      per refusal reason. Lane: itsm-ops-domain.
 
 - [ ] **Cascade join 2 — a change record is OPENED, not only read.**
       Serves *"and change management"*. The fabric today reads the change plane and
@@ -443,7 +443,7 @@ caller-supplied), and each names the clause of his sentence it serves.
       written down in that family's own header: a change window may never RELAX a
       control, and `change_class` (standard / normal / emergency) is carried as evidence
       and never graded — a draft that inherits those rules keeps them, and one that
-      quietly loosens them is the defect.
+      quietly loosens them is the defect. Lane: itsm-ops-domain.
 
 - [ ] **Cascade join 3 — the people affected are told through a channel they already use.**
       Serves *"while notification for users affected"*. `pnpm run check:absence "affected
@@ -460,7 +460,7 @@ caller-supplied), and each names the clause of his sentence it serves.
       be resolved routes to the named OWNER rather than to nobody, and a delivery that
       cannot be made is recorded as undelivered — silence is never reported as told.
       **Deterministic:** the audience is derived from evidence the decision already
-      carries, never from a live directory query inside the decision path.
+      carries, never from a live directory query inside the decision path. Lane: principal-engineer.
 
 - [ ] **Cascade join 4 — monitor the fix: a post-execution verifier for the resolution path.**
       Serves *"and monitor the fix or jump in and resolve problem"*. What exists is
@@ -476,7 +476,7 @@ caller-supplied), and each names the clause of his sentence it serves.
       `unobserved` is not `cleared` — an unobserved fix keeps the restriction in place
       and escalates on the second miss, which is the *"or jump in"* half of his sentence.
       **Deterministic:** no clock; the reference instant is an argument, as it is on every
-      recency axis in `lib/integrations`.
+      recency axis in `lib/integrations`. Lane: principal-engineer.
 
 - [ ] **Cascade join 5 — a durable outbound queue for the cascade emitters.**
       Serves *"notify the proper protocol and teams that are assign to that resource"*.
@@ -491,7 +491,7 @@ caller-supplied), and each names the clause of his sentence it serves.
       failure and never a silent drop, and a pending item never counts as delivered.
       **Deterministic:** the backoff schedule is computed and recorded; any path a proof
       drives never awaits it. No broker dependency — the point is one durable view, not
-      Kafka.
+      Kafka. Lane: sre.
 
 - [ ] **Cascade join 6 — `proof:decision-cascade`: the whole chain, and every refusal in it.**
       Serves the sentence end to end. Each stage above will land with its own proof; what
@@ -504,7 +504,9 @@ caller-supplied), and each names the clause of his sentence it serves.
       fix keeps the restriction. **It must fail without the fix** — a cascade proof that
       passes on a tree with the joins removed is a restatement, not a proof — and it
       registers in `package.json` as a `proof:*` script so the Mac harness enumerates it
-      automatically.
+      automatically. Lane: devex-tooling-engineer.
+
+**Proposed join order (cloud lane note, 2026-09-12):** join 1 first, because ITSM dispatch has the shortest path to an existing consumer (`lib/incident-playbook`) and gives every later join something real to hang off; join 5 second, so joins 2–4 emit through the one durable queue from the start instead of being retrofitted onto it; join 2 third, because it reuses join 1's gate-and-mapper shape almost verbatim; join 3 fourth, because it has no dependency on the ITSM or change planes and can proceed once the queue exists; join 4 fifth, because a post-execution verifier needs a remediation already dispatched by joins 1–3 to have anything to observe; join 6 last, because a chain proof written before every join lands cannot fail without the fix, which is the one property it exists to have.
 
 ### The session puck's software half — DR-043 (hardware-free, fail-closed)
 
@@ -542,7 +544,7 @@ item below is a design target until its proof is green and named.
       `scripts/check-launch-profile.mjs` fails on silent omission — which is the check
       that would fail without it. The proof pins exactly one attach state as
       non-raising and sweeps every other combination; it fails on a tree where
-      `unknown` is treated as `attached`. Cloud lane.
+      `unknown` is treated as `attached`. Cloud lane. Lane: principal-engineer.
 
 - [ ] **Puck 2 — removal → suspend, as a rule in the post-decision cascade (joins DR-042's six joins; adds no seventh).**
       The change: the `removed` transition on a live session is a cascade input that
@@ -559,7 +561,7 @@ item below is a design target until its proof is green and named.
       within N seconds resumes only after a full re-evaluation, never silently.
       **Deterministic:** N is policy, the instants are arguments. The check that fails
       without it: join 6's proof on a tree where a `removed` transition leaves the
-      session open. Deferred family; design target. Cloud lane.
+      session open. Deferred family; design target. Cloud lane. Lane: principal-engineer.
 
 - [ ] **Puck 3 — the puck lifecycle's audit events, in the Decision Envelope's ledger vocabulary.**
       The change: extend `AuditEventType` in
@@ -577,7 +579,7 @@ item below is a design target until its proof is green and named.
       without it: the audit proof's event-type census, which must count 14 and must
       refuse a fifteenth that is not in the union; and `proof:decision-cascade`, whose
       suspend hop asserts a `session.suspended` event exists in the chain. Design
-      target; no shipped-audit claim moves. Cloud lane.
+      target; no shipped-audit claim moves. Cloud lane. Lane: principal-engineer.
 
 - [ ] **Puck 4 — a simulator scenario: dock, session, undock, re-dock within N seconds, with the policy matrix as rows.**
       The change: one scenario in
@@ -597,7 +599,7 @@ item below is a design target until its proof is green and named.
       expected outcome; and the iOS parity rule (golden rule 1) — the scenario is added
       to the TS simulator and the Swift port's fixture set together, or the parity
       proof drifts. Design target; deferred family. Cloud lane for the TS half, Mac lane
-      for the Swift twin.
+      for the Swift twin. Lane: qa-engineer.
 
 - [ ] **Puck 5 — the hardware gate itself: a tally column in `docs/agent/DISCOVERY_LOG.md` that the go/no-go table reads from.**
       The change: the *Running tally* table gains a column **Rh** — a REQUIREMENT that
@@ -612,7 +614,7 @@ item below is a design target until its proof is green and named.
       column exists, `node scripts/check-readiness-figure.mjs` continues to derive the
       outreach figure independently of it (DR-036); neither number is typed. Nothing
       here builds hardware; the tally reads *0 of 15, 0 commitments* today. Design
-      target for the hardware; deferred throughout. Cloud lane.
+      target for the hardware; deferred throughout. Cloud lane. Lane: icp-customer-research.
 
 - [x] **Both findings from the "status reported rather than measured" sweep — FIXED.**
       The sweep that produced the `itsm` tri-state health fix turned up two more instances of the
@@ -766,7 +768,7 @@ item below is a design target until its proof is green and named.
       look before building, not a verdict to delete. It also corrected a hand count
       made during that pass — `lib/db` is untracked build residue (`dist/` and
       `node_modules/` with no manifest and no source), not a thirty-sixth package,
-      which is the ordinary reason a derived figure beats a remembered one.
+      which is the ordinary reason a derived figure beats a remembered one. Lane: principal-engineer.
 - [x] **186 vendored shadcn components are unreferenced, holding 21 packages alive.** **DONE 2026-09-01 (Ponytail cut 41a, ECC: GO):** the owner decision is resolved by DR-024 — code the ladder says should not exist is removed. Measured by import-graph closure (ui→ui edges followed): 131 unreached `components/ui` files deleted across the three web apps (app 34 of 53, review 48 of 52, web 49 of 53) and 90 manifest entries only they held (24 / 33 / 33, incl. `@hookform/resolvers` which peers on the removed `react-hook-form`). Typecheck green, all three apps build, SBOM unaffected (dev-only deps). `npx shadcn add <name>` restores any one when a screen needs it. The same vendored set in signalgrid-desktop, signalgrid-mobile-pwa and mockup-sandbox is the follow-up (mockup-sandbox is itself an owner-call delete).
 - [x] **Ponytail cut 4 (DR-024, 2026-09-02): the follow-up above (desktop/mobile-pwa vendored `ui/`), the A6 provider pattern generalized to the two apps the audit never covered, and a six-family emitter-resolver fold.** Measured by import-graph closure from each app's `artifacts/signalgrid-mobile-pwa/src/main.tsx`, same method as cut 41a:
   - `signalgrid-desktop`: 53 unreached `components/ui/*` and `hooks/*` files deleted (all 52 vendored ui files bar `tooltip.tsx`, which Dashboard's charts genuinely consume — kept, unlike the other three apps). `App.tsx` mounted `QueryClientProvider` and `<Toaster/>`. The toaster had zero `toast()` callers and is dropped. The `QueryClientProvider` was ALSO dropped on a "zero `useQuery`/`useMutation` in the app" grep — and that grep was true and the conclusion false: every page's data hook (`useListDecisions`, `useGetDecision`, …) is generated into `@workspace/api-client-react` on top of react-query, so the provider was the data path. The build stayed green; the client-surfaces E2E (`desktop reached the api-server: 0 calls`) caught it; the provider and the dependency are restored in the same PR. A consumer count must be taken over the dependency graph, not the app's own source. `TooltipProvider` kept. 40 now-unreachable `package.json` deps removed (`@tailwindcss/typography` too — zero `prose` class in the app, its `@plugin` line dropped from `index.css`). `git diff HEAD --shortstat -- artifacts/signalgrid-desktop`: 56 files changed, 8(+), 5379(-).
@@ -837,7 +839,7 @@ item below is a design target until its proof is green and named.
       shadcn components duplicated per artifact (chart 60, resizable 30, calendar 6).
       The browser E2E suite covers five of the six artifacts, so that migration can be
       verified as RENDERING rather than merely typechecking — which is the standard it
-      should be held to.
+      should be held to. Lane: web-engineer.
 
 - [ ] **IP / disclosure posture** ⚠️ **owner decision first.** Before ANY detailed
       invention material is committed, the owner must confirm repo **visibility**
@@ -852,7 +854,7 @@ item below is a design target until its proof is green and named.
       document from the architecture, add copyright/CONFIDENTIAL headers, and
       write a tiered-disclosure kit (public one-pager vs. NDA-gated technical
       brief) + an IP-and-disclosure posture document (planned, not yet written).
-      Do NOT commit a detailed provisional spec into a public repo.
+      Do NOT commit a detailed provisional spec into a public repo. Lane: commercial-counsel.
 
 ## Later / vision
 
@@ -1308,9 +1310,9 @@ live fail-open — the schemas are fail-closed by construction and the live `/v1
 (`v1.ts` → core `validateRequest`) is fail-closed end-to-end. **These are design targets,
 not shipped, and none is a live loosening.** Public-safe and fixture-first.
 
-- [ ] **api-zod wiring gate — a defined-but-dead input validator must not masquerade as coverage (design target, MEDIUM).** The generated `*Body`/`*QueryParams`/`*Params` schemas in `lib/api-zod/src/generated/api.ts` are mostly never invoked; the live `/v1` routes hand-roll validation in `artifacts/api-server/src/routes/v1.ts`. Add a gate that derives the exported generated input schemas and asserts each is referenced by a `.parse`/`.safeParse` in `artifacts/api-server/src/routes/**` (flagging orphans), OR deliberately mark the api-zod input schemas client/type-only. Must not assert *where* or *that the call is correct* — only non-orphaned. gate-and-proof-engineer.
-- [ ] **Latent api-zod schema tightenings — fix in the OpenAPI source, not the generated file (design target, LOW; deferred until the schemas are wired to a boundary).** `z.string()` with no `.min(1)` on identity/device/tenant/workflow fields; `z.coerce.number()` `limit` with `""`→0 and no `.int().min().max()`; `sourceTimestamp` `z.coerce.date()` with no upper bound (far-future reads as always-fresh). The file is orval-generated ("Do not edit manually"), so the durable fix is the OpenAPI spec + regenerate; a gate on the generated output will re-fire until the spec is corrected, which is correct.
-- [ ] **Defense-in-depth: reject empty bindings at the `/v1` boundary too (design target, LOW).** `parseEvaluate` (`v1.ts`) accepts an empty-string `identityRef`/`deviceRef`/`workflowKey`; the core's `validateRequest` already rejects it (`decision.ts:208`, `.trim().length === 0` → 400), so this is not a live fail-open — but rejecting at the boundary too matches the empty-scope-is-not-a-wildcard lesson (control-plane Finding 3).
+- [ ] **api-zod wiring gate — a defined-but-dead input validator must not masquerade as coverage (design target, MEDIUM).** The generated `*Body`/`*QueryParams`/`*Params` schemas in `lib/api-zod/src/generated/api.ts` are mostly never invoked; the live `/v1` routes hand-roll validation in `artifacts/api-server/src/routes/v1.ts`. Add a gate that derives the exported generated input schemas and asserts each is referenced by a `.parse`/`.safeParse` in `artifacts/api-server/src/routes/**` (flagging orphans), OR deliberately mark the api-zod input schemas client/type-only. Must not assert *where* or *that the call is correct* — only non-orphaned. gate-and-proof-engineer. Lane: devex-tooling-engineer.
+- [ ] **Latent api-zod schema tightenings — fix in the OpenAPI source, not the generated file (design target, LOW; deferred until the schemas are wired to a boundary).** `z.string()` with no `.min(1)` on identity/device/tenant/workflow fields; `z.coerce.number()` `limit` with `""`→0 and no `.int().min().max()`; `sourceTimestamp` `z.coerce.date()` with no upper bound (far-future reads as always-fresh). The file is orval-generated ("Do not edit manually"), so the durable fix is the OpenAPI spec + regenerate; a gate on the generated output will re-fire until the spec is corrected, which is correct. Lane: api-contract-architect.
+- [ ] **Defense-in-depth: reject empty bindings at the `/v1` boundary too (design target, LOW).** `parseEvaluate` (`v1.ts`) accepts an empty-string `identityRef`/`deviceRef`/`workflowKey`; the core's `validateRequest` already rejects it (`decision.ts:208`, `.trim().length === 0` → 400), so this is not a live fail-open — but rejecting at the boundary too matches the empty-scope-is-not-a-wildcard lesson (control-plane Finding 3). Lane: api-contract-architect.
 
 ### Shared-device custody fidelity — design targets (2026-09-04, from the owner's real runbooks)
 
@@ -1323,28 +1325,28 @@ reviewable PR with a deterministic proof. Public-safe and fixture-first.
 
 - [x] **"Phantom custody" — a device checked out to a prior holder, or unpaired yet occupying a dock slot (custody ground truth, HIGH). MODELED 2026-09-11** as a checkout DECISION, not (yet) a timeline detection: [`lib/integrations/src/integrations/rtls-custody/custody-ledger.ts`](../lib/integrations/src/integrations/rtls-custody/custody-ledger.ts) grades what the ledger says against what the bay sees — a seated device still assigned to a prior holder is a hold naming `stale_return_other`, an unpaired device in a bay is contained (`CUSTODY_UNPAIRED_IN_SLOT`), a clear ledger over an empty bay escalates (`CUSTODY_DEVICE_UNACCOUNTED`); a sweep of all 4,320 combos pins the single grant (`proof:rtls-custody`). The `detect.ts` detection over the event timeline is split out to the next row. Original text kept for the record: (deferred design target).** The single most-cited operational pain: a returned device still reads as another person's, or sits unpaired in a bay while the console shows it present. That is a custody-state contradiction across the dock, MAM and posture planes — exactly the shape [`lib/event-contract/src/detect.ts`](../lib/event-contract/src/detect.ts) exists to catch, and no current detection covers it. Add a deterministic `CUSTODY_STALE_OR_CONTESTED`-style cross-domain detection with fixtures, and an assertion that fails if it stops firing on the contested timeline. Cloud lane.
 - [x] **Checkout-cap contradiction surfaced as a decision, not a mystery beep (custody ground truth, MEDIUM). MODELED 2026-09-11** in the same surface: the cap axis is COMPUTED from the requester's open-checkout count, the tenant cap and the count of those checkouts physically docked — a cap hit only by returns that never cleared holds with `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN`, a cap genuinely reached is contained with `CUSTODY_CAP_REACHED`, a missing count is unknown and raises, contradictory counts are malformed. No decision record was needed: it is a read-only evaluator in an integration family, not a decision-core change. Original text kept for the record: (deferred design target).** A per-user checkout cap that blocks a clinician because a prior return never cleared is a fabric-visible condition today only as a dock beep code. Model the cap state and emit a legible reason when it blocks, with a fixture. Small state addition; DR first. Cloud lane.
-- [ ] **`CUSTODY_STALE_OR_CONTESTED` as a cross-domain DETECTION over the event timeline (custody ground truth follow-up, MEDIUM; decision-core, DR first).** The custody-ledger evaluator grades one reconciliation report; the timeline form — a `device_returned` / `dock_relocked` sequence with no matching ledger clear, seen in [`lib/event-contract/src/detect.ts`](../lib/event-contract/src/detect.ts) beside `CHECKOUT_WITHOUT_COMPLIANCE` — would catch the same phantom from the event stream without a ledger read. Decision core (DR-020 territory): a decision record first, then fixtures and an assertion that fails if it stops firing. Cloud lane.
-- [ ] **Brace-less guards join the mutation sweep, family by family (gate infrastructure, HIGH; ratchet opened 2026-09-11).** `scripts/mutation-guard.mjs` gained the `oneline-cond-false` mutator (`if (...) return x;` → `if (false) return x;`), the guard shape three reviews had found invisible to the sweep. Measured over every registered file before it landed: 1732 mutations, 117 new survivors across 41 files (plus 4 break-glass disjuncts a separate PR fixes). A gate that goes red over 117 unpinned guards gets switched off, so the mutator applies only to targets that opt in (`oneLine: true`) after their one-line guards are pinned by checks that fail without them or documented inert with a reason, and every run prints the census of targets that have not joined. Joined at the opening: rtls-custody, device-attestation, verdict-attestation (11 guards pinned — two of them the alg-membership and key/alg-mismatch refusals in signature verification, which no input had ever exercised), app-update (two shadowed guards deleted, three pinned). Pending, by survivors measured 2026-09-11: facility-trust-graph 22 · dual-control 7 · benchmark-selection 7 · bootstrap-credential 6 · macos-posture 5 · sse-egress, shift-context, pacs-access, nac, change-window 4 each · uem, service-lifecycle, pim-activation, passkey-assurance, challenge-capability 3 each · vuln-scan, task-exception, agent-behavior 2 each · sso-session, policy-binding, platform-sso, observability-integrity, network-nac, local-authority, entitlement-binding, device-management-health, decision-continuity, custody-beacon, credential-rotation, caep-events, agent-identity, access-governance 1 each. When `nac` joins, re-register `nac/cisco-ise.ts` and `nac/aruba-clearpass.ts` (de-registered 2026-08-25 for exactly this shape). Cloud lane.
-- [ ] **A faithful end-to-end smart-charging simulator scenario (custody ground truth, MEDIUM; deferred design target).** The simulator carries no scenario shaped like the real workflow (badge → dock → provision → in-use → check-in) with its real failure branches (unpaired / network-down / cap-hit / dock-fault). Add one so proofs exercise the real thing rather than abstractions. Builds on the remediation-allow cascade ([`lib/signalgrid-simulator/src/remediation-allow.ts`](../lib/signalgrid-simulator/src/remediation-allow.ts)). Cloud lane.
+- [ ] **`CUSTODY_STALE_OR_CONTESTED` as a cross-domain DETECTION over the event timeline (custody ground truth follow-up, MEDIUM; decision-core, DR first).** The custody-ledger evaluator grades one reconciliation report; the timeline form — a `device_returned` / `dock_relocked` sequence with no matching ledger clear, seen in [`lib/event-contract/src/detect.ts`](../lib/event-contract/src/detect.ts) beside `CHECKOUT_WITHOUT_COMPLIANCE` — would catch the same phantom from the event stream without a ledger read. Decision core (DR-020 territory): a decision record first, then fixtures and an assertion that fails if it stops firing. Cloud lane. Lane: principal-engineer.
+- [ ] **Brace-less guards join the mutation sweep, family by family (gate infrastructure, HIGH; ratchet opened 2026-09-11).** `scripts/mutation-guard.mjs` gained the `oneline-cond-false` mutator (`if (...) return x;` → `if (false) return x;`), the guard shape three reviews had found invisible to the sweep. Measured over every registered file before it landed: 1732 mutations, 117 new survivors across 41 files (plus 4 break-glass disjuncts a separate PR fixes). A gate that goes red over 117 unpinned guards gets switched off, so the mutator applies only to targets that opt in (`oneLine: true`) after their one-line guards are pinned by checks that fail without them or documented inert with a reason, and every run prints the census of targets that have not joined. Joined at the opening: rtls-custody, device-attestation, verdict-attestation (11 guards pinned — two of them the alg-membership and key/alg-mismatch refusals in signature verification, which no input had ever exercised), app-update (two shadowed guards deleted, three pinned). Pending, by survivors measured 2026-09-11: facility-trust-graph 22 · dual-control 7 · benchmark-selection 7 · bootstrap-credential 6 · macos-posture 5 · sse-egress, shift-context, pacs-access, nac, change-window 4 each · uem, service-lifecycle, pim-activation, passkey-assurance, challenge-capability 3 each · vuln-scan, task-exception, agent-behavior 2 each · sso-session, policy-binding, platform-sso, observability-integrity, network-nac, local-authority, entitlement-binding, device-management-health, decision-continuity, custody-beacon, credential-rotation, caep-events, agent-identity, access-governance 1 each. When `nac` joins, re-register `nac/cisco-ise.ts` and `nac/aruba-clearpass.ts` (de-registered 2026-08-25 for exactly this shape). Cloud lane. Lane: devex-tooling-engineer.
+- [ ] **A faithful end-to-end smart-charging simulator scenario (custody ground truth, MEDIUM; deferred design target).** The simulator carries no scenario shaped like the real workflow (badge → dock → provision → in-use → check-in) with its real failure branches (unpaired / network-down / cap-hit / dock-fault). Add one so proofs exercise the real thing rather than abstractions. Builds on the remediation-allow cascade ([`lib/signalgrid-simulator/src/remediation-allow.ts`](../lib/signalgrid-simulator/src/remediation-allow.ts)). Cloud lane. Lane: qa-engineer.
 
 ### ECC-role review findings (2026-09-01) — the ones not fixed in the same pass
 
 - [x] **UEM's check-in freshness axis was a dead axis presented as coverage (independent sweep, HIGH).** **DONE 2026-09-01:** `lastCheckInAgeSeconds` was documented on `NormalizedUemDeviceState` as this family's freshness axis while all three adapters hardcoded it `null`, `evaluateUem` never read it, only the fixtures carried numbers, and `evaluateUem` has no caller outside its own proof. The proof's one assertion about it (`null || Number.isInteger(...)`) could not fail — `null` satisfied it for every fixture and it would have stayed green after the field was deleted. Field removed from the type, the three adapters, the unknown-vendor record and every fixture; Jamf's `last_contact_time_utc` payload declaration is KEPT with a comment saying the vendor reports it and this family does not grade it; the vacuous assertion is replaced by a source scan that fails if the token reappears anywhere under `lib/integrations/src/integrations/uem/`, with a positive control so an empty walk cannot pass. Planted and reverted in both directions before claiming it. `proof:uem` 75 -> 76 checks, the state sweep and the nine-grant pin unmoved, mutation guard 29/29 killed. **The design for when this family gains a real consumer** (do not rebuild it before then): adapters carry `lastCheckInAt: string | null` — the vendor's own timestamp, not a derived age — `evaluateUem` takes `options.nowMs` plus a posed bound `staleCheckInSeconds` via `posedBound`, and grades with the four members of `mapCheckInFreshness` in `lib/integrations/src/integrations/device-management-health/graph-transport.ts` (`fresh`/`stale`/`never`/`unknown`, future-dated reads to `unknown` so a skewed clock cannot look healthy). `unknown` FORECLOSES — step_up at most, never a grant and never a deny — and is unreachable without a posed clock, so an unposed caller keeps today's behaviour byte-identically. Note two dated ledger rows in `docs/INTAKE_LEDGER.md` (rows 48 and 31) describe the field in the present tense; they are records of an adjudication on their date and were left alone.
 - [x] **`verdict-attestation` reads two posed bounds with `??` (posed-bound gate, reported not gated).** **DONE 2026-09-04** (re-found by the surface-review sweep and fixed with the package's own copy of the rule, as this row proposed): `verifyVerdict` now fails closed on a non-finite verification clock or bound — `if (!Number.isFinite(options.now) || !Number.isFinite(maxAge) || !Number.isFinite(maxSkew)) return fail("expired")` — before the two freshness comparisons, because `x > NaN`/`NaN > x` are both false and a `NaN` `now`/`maxAgeMs`/`maxSkewMs` (which `??` does not fill) would silently disable both checks and let a stale/future attestation verify. `isMalformed` already guarded `att.issuedAt`; this closes the caller-supplied half. Six proof vectors added (NaN clock → `expired` and never verified; Infinity clock → expired; non-finite maxAge/maxSkew cannot switch the check off; `openVerdict` on a NaN clock degrades to step_up), five of which fail without the guard (Infinity is already caught by the expiry comparison). `proof:verdict-attestation` 76 → 82 checks; the "(76 checks)" figure in `docs/PRODUCT_CORE_THREAT_MODEL.md` updated to 82; falsified in both directions.
-- [ ] **Two freshness values computed and consulted by nothing (sweep, MEDIUM).** `edr-threat/edr-connector.ts` carries `lastSeen` and `graph/posture-connector.ts` carries `deviceLastSeenAt`; no evaluator reads either, so a record last updated years ago that still claims a healthy agent grades protected. Grade them or stop carrying them.
+- [ ] **Two freshness values computed and consulted by nothing (sweep, MEDIUM).** `edr-threat/edr-connector.ts` carries `lastSeen` and `graph/posture-connector.ts` carries `deviceLastSeenAt`; no evaluator reads either, so a record last updated years ago that still claims a healthy agent grades protected. Grade them or stop carrying them. Lane: secops-domain.
 
 Two were fixed immediately (fleetDMFreshness future-date fail-open; /v1/step-up/challenge
 authorize gap). These remain; see `docs/agent/REVIEW_STRUCTURE_COMPARISON.md`.
 
 - [x] **Durable audit ledger is tenant-less and /v1/audit reads the in-memory ledger (architect, CONFIRMED high — candidate decision record).** **DONE 2026-09-01 (DR-025):** nullable `tenant_id` (migration v3), hashed only when present so pre-column rows keep their hashes, tenant-scoped READ over the one global chain, `/v1/audit` names its source (`durable` | `memory`) and pages; the Postgres half (migration v3 + every pg proof) ran on a disposable cluster in the cloud lane. Original finding: `audit_ledger` (migrations.ts:43) has no `tenant_id` while its sibling tables all do; `/v1/audit` (v1.ts) returns the in-memory `core.listAudit()` (wiped on restart, per-replica), and decision-evaluation audit events are never persisted durably while admin events go only to the durable global chain. You cannot hand tenant A a verifiable copy of only its events. This is the compliance differentiator — it needs a deliberate design (schema migration + tenant-scoped durable read + wiring /v1/audit to the durable ledger), likely a DR, not a rushed patch.
-- [ ] **Dead code: competing webhook implementations + unreachable adapters (refactor-cleaner, 3× medium).** Two webhook-endpoint implementations (the unused one still carries a full CRUD/admin surface) — open, not yet verified. Three vendor adapter files (siem/sentinel.ts, siem/splunk.ts, telemetry/mde.ts) unreachable from their own factories — declined, `scripts/src/emit-gate-proof.ts` reads their source. `webhooks/emitter.ts` — `webhooks/emitter.ts` went in the third cut, not the second (PR #366 claimed it; the file was still tracked; see FALSE_CLAIMS `pr-366-deleted-webhooks-emitter`).
+- [ ] **Dead code: competing webhook implementations + unreachable adapters (refactor-cleaner, 3× medium).** Two webhook-endpoint implementations (the unused one still carries a full CRUD/admin surface) — open, not yet verified. Three vendor adapter files (siem/sentinel.ts, siem/splunk.ts, telemetry/mde.ts) unreachable from their own factories — declined, `scripts/src/emit-gate-proof.ts` reads their source. `webhooks/emitter.ts` — `webhooks/emitter.ts` went in the third cut, not the second (PR #366 claimed it; the file was still tracked; see FALSE_CLAIMS `pr-366-deleted-webhooks-emitter`). Lane: devex-tooling-engineer.
 - [x] **iOS ExpiryPolicy/isExpired has no unit test (code-reviewer, medium — native lane).** The Mac lane's 5e3b5c3 nil-expiry fix is safety-critical and framed as closing a fail-open, but no EnterpriseShellTests file exercises `SessionData.isExpired`/`ExpiryPolicy` — a wrong-logic edit inside an existing case would compile and pass every gate. Add a Swift unit test. Mac lane. **DONE (a9116532):** `native/ios/EnterpriseShellTests/SessionExpiryTests.swift` (6 cases) pins the contract and was falsified against the old `.nonExpiring: return false` — the two blank-justification cases go red, the rest stay green. Hardened alongside: a `.nonExpiring` whose justification is blank reads as expired, because the justification is what makes that case a deliberate state rather than an unknown one. Scope stated honestly on land (cloud review): this is a value invariant, not a persistence defence — `KeychainService.getSession` has no caller today, a malformed blob throws on decode rather than yielding a blank justification, and a tamperer can write any justification; what it closes is a future producer that mints an unjustified `.nonExpiring`. `native/ios/EnterpriseShell/Models/SessionData.swift` wired into both the Xcode test target and the SwiftPM port. Verified on the Mac: xcodebuild TEST SUCCEEDED 63/0.
-- [ ] **Performance figures quoted outside `RELIABILITY_SLO.md` have no gate (fail-closed auditor, medium, 2026-09-02).** The four capacity figures (the 240/min limiter default, 585 req/sec over HTTP, 1,529 and 5,370 decisions/sec in process) are restated in `docs/DEPLOYMENT_MODELS.md` with their measurement date beside each, which is the dated-measurement rule's shape but not a binding: `check-derived-doc-figures` sweeps only tree-derived values, `check-proof-figures` binds figures to `proof:*` scopes, and neither reads a bare `240` or `585`. Specify: extend the derived-doc-figures sweep with a named set of performance figures whose authority is `RELIABILITY_SLO.md`, asserting every other occurrence under `docs/**` sits within the 80-character dated window or carries a declared exemption; exempt the historical quotations in `CLAIM_INVENTORY.md`, `INTAKE_LEDGER.md` and the product-limit quote in `PARTNER_ONBOARDING.md`; never cover percentile tables, which move on every runner; validate by planting a drifted figure in the deployment doc and watching it fail. Cloud lane.
-- [ ] **sim-result provenance can name a commit not in the repo (fail-closed auditor, medium, 2026-09-02).** `artifacts/sim-results/2026-09-02-ios-shell-repair.json` stamps `provenance.commit` 0c7f53a2, which `git cat-file -e` cannot resolve on Alpha — the sim runner samples the local HEAD before the runs (CLAUDE.md), and a squash-land drops that sha from shared history, so the committed provenance points at nothing and its green attestation cannot be checked. Specify a gate: for each `artifacts/sim-results/*.json`, assert `provenance.commit` resolves via `git cat-file -e` AND is an ancestor of HEAD, and that no file in the JSON's referenced evidence dir has a later last-touch commit than the JSON itself; REPORT (not fail) a cross-lane sha that has not landed yet, since this repo/CI is a shallow clone; never cover throughput/latency numbers. Mac lane re-mints this JSON at the merged head first (lane mail sent 2026-09-02). Cloud lane owns the gate.
-- [ ] **Console PolicyDetail renders a loaded-but-empty test set as 0/0 green (fail-closed auditor, low, 2026-09-02).** `artifacts/signalgrid-app/src/pages/policies/PolicyDetail.tsx` shows a loaded `tests.data.results` of length zero as "0/0 passed" with `bg-status-allow` (green) — a legitimately empty result reading as a pass. Pre-existing server semantics, outside the unknown-as-good batch that just landed. Confirm the server never returns zero tests as `passed:true`; if it can, render 0/0 as a neutral/unknown state, not green. Cloud lane.
-- [ ] **Webhook dead_letter status + fixture-sync fail-safe are untested (tdd-guide, medium).** The `dead_letter` terminal delivery status is defined and implemented but never produced or asserted; the 'unresolvable subject → skip, don't trust' fail-safe branch in both fixture-sync paths has no test. Add coverage.
+- [ ] **Performance figures quoted outside `RELIABILITY_SLO.md` have no gate (fail-closed auditor, medium, 2026-09-02).** The four capacity figures (the 240/min limiter default, 585 req/sec over HTTP, 1,529 and 5,370 decisions/sec in process) are restated in `docs/DEPLOYMENT_MODELS.md` with their measurement date beside each, which is the dated-measurement rule's shape but not a binding: `check-derived-doc-figures` sweeps only tree-derived values, `check-proof-figures` binds figures to `proof:*` scopes, and neither reads a bare `240` or `585`. Specify: extend the derived-doc-figures sweep with a named set of performance figures whose authority is `RELIABILITY_SLO.md`, asserting every other occurrence under `docs/**` sits within the 80-character dated window or carries a declared exemption; exempt the historical quotations in `CLAIM_INVENTORY.md`, `INTAKE_LEDGER.md` and the product-limit quote in `PARTNER_ONBOARDING.md`; never cover percentile tables, which move on every runner; validate by planting a drifted figure in the deployment doc and watching it fail. Cloud lane. Lane: devex-tooling-engineer.
+- [ ] **sim-result provenance can name a commit not in the repo (fail-closed auditor, medium, 2026-09-02).** `artifacts/sim-results/2026-09-02-ios-shell-repair.json` stamps `provenance.commit` 0c7f53a2, which `git cat-file -e` cannot resolve on Alpha — the sim runner samples the local HEAD before the runs (CLAUDE.md), and a squash-land drops that sha from shared history, so the committed provenance points at nothing and its green attestation cannot be checked. Specify a gate: for each `artifacts/sim-results/*.json`, assert `provenance.commit` resolves via `git cat-file -e` AND is an ancestor of HEAD, and that no file in the JSON's referenced evidence dir has a later last-touch commit than the JSON itself; REPORT (not fail) a cross-lane sha that has not landed yet, since this repo/CI is a shallow clone; never cover throughput/latency numbers. Mac lane re-mints this JSON at the merged head first (lane mail sent 2026-09-02). Cloud lane owns the gate. Lane: devex-tooling-engineer.
+- [ ] **Console PolicyDetail renders a loaded-but-empty test set as 0/0 green (fail-closed auditor, low, 2026-09-02).** `artifacts/signalgrid-app/src/pages/policies/PolicyDetail.tsx` shows a loaded `tests.data.results` of length zero as "0/0 passed" with `bg-status-allow` (green) — a legitimately empty result reading as a pass. Pre-existing server semantics, outside the unknown-as-good batch that just landed. Confirm the server never returns zero tests as `passed:true`; if it can, render 0/0 as a neutral/unknown state, not green. Cloud lane. Lane: web-engineer.
+- [ ] **Webhook dead_letter status + fixture-sync fail-safe are untested (tdd-guide, medium).** The `dead_letter` terminal delivery status is defined and implemented but never produced or asserted; the 'unresolvable subject → skip, don't trust' fail-safe branch in both fixture-sync paths has no test. Add coverage. Lane: qa-engineer.
 
-- [ ] **iOS fixed-height rows truncate scaled Dynamic Type text (native lane).** 2026-09-01, flagged by the Mac lane after the Dynamic Type conversion (row 78): `HostAppViewController` has 5 `heightAnchor.constraint(equalToConstant:)` and 0 `greaterThanOrEqualToConstant`, so the now-scaling labels sit in fixed rows and will truncate/overlap at large accessibility text sizes — the conversion was necessary but not sufficient. Static-confirmed; needs a real AX render on the Assist-gate screen (behind a demo-badge injection) to verify each row. Mac lane owns it (Swift + simulator). Screenshot at tools/ios-ax-render.png on the Mac.
+- [ ] **iOS fixed-height rows truncate scaled Dynamic Type text (native lane).** 2026-09-01, flagged by the Mac lane after the Dynamic Type conversion (row 78): `HostAppViewController` has 5 `heightAnchor.constraint(equalToConstant:)` and 0 `greaterThanOrEqualToConstant`, so the now-scaling labels sit in fixed rows and will truncate/overlap at large accessibility text sizes — the conversion was necessary but not sufficient. Static-confirmed; needs a real AX render on the Assist-gate screen (behind a demo-badge injection) to verify each row. Mac lane owns it (Swift + simulator). Screenshot at tools/ios-ax-render.png on the Mac. Lane: mobile-native-engineer.
 
 ### ECC full evaluation (run 2026-09-05) — findings not fixed in the same pass
 
@@ -1352,15 +1354,15 @@ From `docs/agent/ECC_FULL_EVALUATION_2026-09-01.md`, the owner-directed six-stag
 the Mac lane. None changes what the gates certify today; each names the lane that owns
 the surface.
 
-- [ ] **`createStepUpSession` dual-writes when Redis is authoritative and swallows the Redis error (ECC security-reviewer, LOW, dormant path).** `lib/webauthn/src/webauthn/store.ts:485-509` writes Redis inside a swallowing `try`/`catch` and then sets the in-memory mirror unconditionally, outside `if (redis)` — the rule `saveChallenge` and `getUser` in the same file state and follow says Redis is the SOLE store when configured. Loosens (a failed durable write reads as success; a session invalidated on the authoritative store can read live from another instance). Unreachable today: `verifyStepUp` has no caller in `artifacts/api-server`; the live path uses `lib/webauthn/src/stepUpStore.ts`. Fix: make the mirror conditional on `!redis` and propagate the error — or delete the dead path with `verifyStepUp`. Cloud lane.
-- [ ] **Step-up session ids logged in cleartext (ECC security-reviewer, LOW, module not yet wired).** `lib/webauthn/src/stepUpStore.ts:161, 167, 197, 209, 215, 221, 227` print the full `stepUpSessionId` on every branch; inside the 300 s TTL that id is bearer-equivalent for the operation it gates. Log a truncated hash (the `keyReference` pattern in `lib/enterprise-auth`). Cloud lane.
-- [ ] **`/v1` per-key rate limiter keys on the rotatable OIDC bearer (ECC security-reviewer, LOW).** `artifacts/api-server/src/middlewares/rateLimit.ts:54-72` buckets by the raw JWT before `requireTenantContext` runs (`artifacts/api-server/src/routes/v1.ts:56`), so a refreshed or concurrently minted JWT is a fresh bucket; `artifacts/api-server/src/middlewares/idempotency.ts:54-64` already solves the same hazard for its cache by keying on the principal. Keep the ordering (a 429 must carry `x-request-id`; the limiter must stay upstream of auth) and key on a non-verifying claim peek instead. Cloud lane.
+- [ ] **`createStepUpSession` dual-writes when Redis is authoritative and swallows the Redis error (ECC security-reviewer, LOW, dormant path).** `lib/webauthn/src/webauthn/store.ts:485-509` writes Redis inside a swallowing `try`/`catch` and then sets the in-memory mirror unconditionally, outside `if (redis)` — the rule `saveChallenge` and `getUser` in the same file state and follow says Redis is the SOLE store when configured. Loosens (a failed durable write reads as success; a session invalidated on the authoritative store can read live from another instance). Unreachable today: `verifyStepUp` has no caller in `artifacts/api-server`; the live path uses `lib/webauthn/src/stepUpStore.ts`. Fix: make the mirror conditional on `!redis` and propagate the error — or delete the dead path with `verifyStepUp`. Cloud lane. Lane: security-engineer.
+- [ ] **Step-up session ids logged in cleartext (ECC security-reviewer, LOW, module not yet wired).** `lib/webauthn/src/stepUpStore.ts:161, 167, 197, 209, 215, 221, 227` print the full `stepUpSessionId` on every branch; inside the 300 s TTL that id is bearer-equivalent for the operation it gates. Log a truncated hash (the `keyReference` pattern in `lib/enterprise-auth`). Cloud lane. Lane: security-engineer.
+- [ ] **`/v1` per-key rate limiter keys on the rotatable OIDC bearer (ECC security-reviewer, LOW).** `artifacts/api-server/src/middlewares/rateLimit.ts:54-72` buckets by the raw JWT before `requireTenantContext` runs (`artifacts/api-server/src/routes/v1.ts:56`), so a refreshed or concurrently minted JWT is a fresh bucket; `artifacts/api-server/src/middlewares/idempotency.ts:54-64` already solves the same hazard for its cache by keying on the principal. Keep the ordering (a 429 must carry `x-request-id`; the limiter must stay upstream of auth) and key on a non-verifying claim peek instead. Cloud lane. Lane: security-engineer.
 - [ ] **`lib/api-spec/v1-openapi.yaml` under-documents the server's fail-closed refusals and is looser than its validation (Schemathesis 4.4.4, 2,632 cases over 59 operations, 0 server errors).** 401 is documented on no protected operation while every one returns it to a missing or unknown bearer; 404 is undocumented on `GET /v1/policies/{id}/versions`, `GET /v1/policies/{id}/tests`, `GET /v1/connectors/{id}/sync-runs`; 429 appears nowhere; and ten operations (`POST /v1/authorize`, `/v1/decisions/evaluate`, `/v1/decisions/reconcile`, the three `/v1/step-up/*` writes, `/v1/app-workflows/evaluate` and three more) answer 400 to bodies the document allows because `parseEvaluate`/`parseReconcile`/`sanitizeContext` in `artifacts/api-server/src/routes/v1.ts` validate more strictly than the schemas state. The server is the stricter party; the document is what to tighten. Cloud lane (api-contract-architect).
-- [ ] **`lib/api-spec/openapi.yaml` (the legacy `/api` monitoring document) has drifted from the served fixtures (Schemathesis, 613 cases over 15 operations).** `GET /api/integrations` returns `lastSync: null` against `string, date-time`; `GET /api/metrics/dashboard` returns `avgLatencyMs: 11.4` against `integer` (both fixtures in `artifacts/api-server/src/routes/monitoring.ts` and `artifacts/api-server/src/routes/integrations.ts`); the document's write operations (`POST /api/decisions`, `POST /api/signals/ingest`, `POST /api/policies`, `GET`/`PUT`/`DELETE /api/policies/{id}`) hit the JSON 404 catch-all; three enum query parameters (`outcome`, `signalType`, `window`) are accepted as any string and filter to empty (the tightening direction, but not what an enum promises). Decide whether this document is retired or brought under the drift gate that already guards the `/v1` document (`docs/API_CONTRACT_AUDIT.md`). Cloud lane.
-- [ ] **Ponytail native cuts, part 2 (Mac lane).** Part 1 (`mac/ponytail-native-cuts`, 2026-09-05) retired the identity-provider registry, the configuration service's dead surface and two wrapper scripts. Still on the audit's list (`docs/agent/PONYTAIL_AUDIT_2026-09-01.md`): the badge-reader plug-in registry (`HTTPWebhookBadgeReaderProvider` with its no-op server, `MDMBadgeReaderProvider` whose query always throws, `MDMProviderConfig`/`MDMProviderType`, the unregistered `nfc`/`serial` cases and their inert `BADGE_SERIAL_PORT`/`BADGE_BAUD_RATE` reads — keep `keyboardWedge`, `bluetoothLE`, `usbAccessory`, `usbC`; a switch replaces the factory), the `SessionStateManager` double delegate conformance, and the fail-closed assertion for a nil badge provider. Each needs Xcode; each is a separate build-and-test.
-- [ ] **AppWorkflows port parity: TS releases step-up per action, the Swift port still uses one global boolean (review row 101, Mac lane found, cloud lane decides).** `lib/app-workflows/src/index.ts:124-137` computes `releasedKeys`/`heldKeys`/`allHeldReleased` and a per-action `actionReleased`; `native/ios/EnterpriseShell/Services/AppWorkflows.swift:122` has only `stepUpDone`. `scripts/check-decision-port-parity.mjs` compares "3 enums + 4 operations" — vocabulary and operation shape — so it cannot see this divergence and stays green. Latent today (`HostAppViewController` reads one action out of the plan; `plan.mode`/`plan.summary` are read nowhere) but `v1.ts` already speaks the scoped form. `AppWorkflows.swift` is a golden-rule byte-faithful port: the re-port from the current TS is parity maintenance, not a behaviour change, and is the cloud lane's and the owner's call — with a parity-gate extension that would have caught it.
+- [ ] **`lib/api-spec/openapi.yaml` (the legacy `/api` monitoring document) has drifted from the served fixtures (Schemathesis, 613 cases over 15 operations).** `GET /api/integrations` returns `lastSync: null` against `string, date-time`; `GET /api/metrics/dashboard` returns `avgLatencyMs: 11.4` against `integer` (both fixtures in `artifacts/api-server/src/routes/monitoring.ts` and `artifacts/api-server/src/routes/integrations.ts`); the document's write operations (`POST /api/decisions`, `POST /api/signals/ingest`, `POST /api/policies`, `GET`/`PUT`/`DELETE /api/policies/{id}`) hit the JSON 404 catch-all; three enum query parameters (`outcome`, `signalType`, `window`) are accepted as any string and filter to empty (the tightening direction, but not what an enum promises). Decide whether this document is retired or brought under the drift gate that already guards the `/v1` document (`docs/API_CONTRACT_AUDIT.md`). Cloud lane. Lane: api-contract-architect.
+- [ ] **Ponytail native cuts, part 2 (Mac lane).** Part 1 (`mac/ponytail-native-cuts`, 2026-09-05) retired the identity-provider registry, the configuration service's dead surface and two wrapper scripts. Still on the audit's list (`docs/agent/PONYTAIL_AUDIT_2026-09-01.md`): the badge-reader plug-in registry (`HTTPWebhookBadgeReaderProvider` with its no-op server, `MDMBadgeReaderProvider` whose query always throws, `MDMProviderConfig`/`MDMProviderType`, the unregistered `nfc`/`serial` cases and their inert `BADGE_SERIAL_PORT`/`BADGE_BAUD_RATE` reads — keep `keyboardWedge`, `bluetoothLE`, `usbAccessory`, `usbC`; a switch replaces the factory), the `SessionStateManager` double delegate conformance, and the fail-closed assertion for a nil badge provider. Each needs Xcode; each is a separate build-and-test. Lane: mac-lane-steward.
+- [ ] **AppWorkflows port parity: TS releases step-up per action, the Swift port still uses one global boolean (review row 101, Mac lane found, cloud lane decides).** `lib/app-workflows/src/index.ts:124-137` computes `releasedKeys`/`heldKeys`/`allHeldReleased` and a per-action `actionReleased`; `native/ios/EnterpriseShell/Services/AppWorkflows.swift:122` has only `stepUpDone`. `scripts/check-decision-port-parity.mjs` compares "3 enums + 4 operations" — vocabulary and operation shape — so it cannot see this divergence and stays green. Latent today (`HostAppViewController` reads one action out of the plan; `plan.mode`/`plan.summary` are read nowhere) but `v1.ts` already speaks the scoped form. `AppWorkflows.swift` is a golden-rule byte-faithful port: the re-port from the current TS is parity maintenance, not a behaviour change, and is the cloud lane's and the owner's call — with a parity-gate extension that would have caught it. Lane: mobile-native-engineer.
 
-- [ ] **SignalGridMobile theme tokens are dark-only behind a `.preferredColorScheme(.dark)` pin (review row 103, Mac lane).** `native/ios/SignalGridMobile/SignalGridOperator/SignalGridOperatorApp.swift:11` pins dark; `native/ios/SignalGridMobile/SignalGridOperator/Theme.swift` carries fixed dark hex tokens. Cloud's note stands: make the tokens adaptive FIRST (light and dark pairs measured against AA, the way `DesignSystem.swift` does for EnterpriseShell), then drop the pin — dropping the pin first would render a dark palette on a light system. Row 104's background token was corrected on `mac/ponytail-native-cuts`; this is the design pass that remains. Needs the simulator in both appearances.
+- [ ] **SignalGridMobile theme tokens are dark-only behind a `.preferredColorScheme(.dark)` pin (review row 103, Mac lane).** `native/ios/SignalGridMobile/SignalGridOperator/SignalGridOperatorApp.swift:11` pins dark; `native/ios/SignalGridMobile/SignalGridOperator/Theme.swift` carries fixed dark hex tokens. Cloud's note stands: make the tokens adaptive FIRST (light and dark pairs measured against AA, the way `DesignSystem.swift` does for EnterpriseShell), then drop the pin — dropping the pin first would render a dark palette on a light system. Row 104's background token was corrected on `mac/ponytail-native-cuts`; this is the design pass that remains. Needs the simulator in both appearances. Lane: mobile-native-engineer.
 
 ### Full-evaluation completion list (2026-09-01) — the real distance to a paying customer
 
@@ -1369,13 +1371,13 @@ Surfaced by the independent six-dimension evaluation; see
 `scripts/launch-profile.mjs` GAPS on 2026-09-06 (this said "six of seven"; one of the seven,
 assist-wire-unserved, was retired by DR-023) — the evaluation confirms that accounting is honest.
 
-- [ ] **Non-demo core constructor.** The served API builds `SignalGridCore.demo()`; it never wires the real Graph connector in `lib/`. Largest gap to a real customer. (gap `non-demo-core-constructor`.)
-- [ ] **Verdict enforcement / step-up answerability.** The gate returns `step_up` in shadow mode with no launch route to answer one. (gap `step-up-answerability`.)
-- [ ] **Real connector auth in the deployable image.** Graph transport exists but the shipped server imports none of it; prod image runs the fixture core. (gap `device-management-health`.)
-- [ ] **Secrets management.** No manager exists; DR-010 model unimplemented, rotation is a runbook claim. The one real security gap. (`docs/SECRET_MODEL.md`.)
-- [ ] **Data lifecycle (retention / deletion / DSAR).** None implemented in any durable store; caller request-context persisted with no deletion path. (`docs/DATA_RETENTION_AND_PERSONAL_DATA.md`, DR-003.)
+- [ ] **Non-demo core constructor.** The served API builds `SignalGridCore.demo()`; it never wires the real Graph connector in `lib/`. Largest gap to a real customer. (gap `non-demo-core-constructor`.) Lane: principal-engineer.
+- [ ] **Verdict enforcement / step-up answerability.** The gate returns `step_up` in shadow mode with no launch route to answer one. (gap `step-up-answerability`.) Lane: principal-engineer.
+- [ ] **Real connector auth in the deployable image.** Graph transport exists but the shipped server imports none of it; prod image runs the fixture core. (gap `device-management-health`.) Lane: release-engineer.
+- [ ] **Secrets management.** No manager exists; DR-010 model unimplemented, rotation is a runbook claim. The one real security gap. (`docs/SECRET_MODEL.md`.) Lane: security-engineer.
+- [ ] **Data lifecycle (retention / deletion / DSAR).** None implemented in any durable store; caller request-context persisted with no deletion path. (`docs/DATA_RETENTION_AND_PERSONAL_DATA.md`, DR-003.) Lane: compliance-analyst.
 - [x] **Serve the Assist wire the SDKs bind.** Kotlin/Rust SDKs bind a planned `POST /v1/authorize` not served or specced; real envelope is `POST /v1/decisions/evaluate`. (gap `assist-wire-unserved`, DR-007.) **DONE 2026-09-01 (DR-023):** served in `v1.ts` + registered in `v1-openapi.yaml` (`AssistResult`); gap entry retired, route classified `launch`, `LAUNCH_PROFILE_VERSION` 4→5; server-side contract bound in `test:api` (200 / vocab / agreement with evaluate / restrict-with-reasons / 401 / 403 / 400). Same decision, second envelope — the host-app obedience surface stays minimal.
-- [ ] **Runtime enforced-vs-observed status route.** No route reports what the running server actually enforces per signal kind (Blocker 10). (gap `runtime-launch-status`.)
+- [ ] **Runtime enforced-vs-observed status route.** No route reports what the running server actually enforces per signal kind (Blocker 10). (gap `runtime-launch-status`.) Lane: api-contract-architect.
 
 New ideas land here first (CLAUDE.md scope rule), then get ranked.
 
@@ -1386,24 +1388,24 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       proceed right now?") and the page's flow still frame SignalGrid as a
       yes/no gate, not the DR-020 orchestration grid (a decision as the trigger
       for a cascade; the worker never sees it). That is a copy/design pass, not
-      a label swap — same shape as the Sessions-first IA rework in the app.
+      a label swap — same shape as the Sessions-first IA rework in the app. Lane: positioning-messaging.
 - [ ] Credential revocation has storage but no semantics. 2026-08-31 (IAM
       coverage sweep): `removeCredential` exists in the WebAuthn store with no
       route exposing it and no proof asserting revocation behavior — and the
       security roster (row 82) separately found it lacks the lock its
       neighbors have. Route + lock + an add/remove concurrency proof belong in
-      one change. See `docs/research/IAM_CORE_COVERAGE_MAP.md`.
+      one change. See `docs/research/IAM_CORE_COVERAGE_MAP.md`. Lane: security-engineer.
 - [ ] The iOS shell captures SAML config keys backed by nothing. 2026-08-31
       (IAM coverage sweep): `ProviderConfigurationService.swift` accepts
       SAML_ENTRY_POINT / SAML_LOGOUT_URL / SAML_CERTIFICATE while no SAML
       assertion processing exists anywhere — a dangling surface to remove or
-      implement, never to leave half-present. Native lane.
+      implement, never to leave half-present. Native lane. Lane: mobile-native-engineer.
 - [ ] The retention/deletion admin job is still undesigned. 2026-08-31 (IAM
       coverage sweep): DR-003's status note ratifies that no durable store has
       a retention mechanism and the runtime role is proven-denied DELETE, so
       honoring any window or DSAR needs an admin-credential job that does not
       exist. `check-retention-claims` keeps surfaces honest meanwhile. See
-      `docs/DATA_RETENTION_AND_PERSONAL_DATA.md`.
+      `docs/DATA_RETENTION_AND_PERSONAL_DATA.md`. Lane: compliance-analyst.
 - [x] **The legacy OpenAPI spec generates a TypeScript SDK with six operations the
       server never serves, and a shipped page calls one. 2026-09-01 (contract-drift
       sweep, HIGH).** **DONE 2026-09-05, one sub-item open:** the six operations are
@@ -1433,7 +1435,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       eight unserved, servers `api.signalgrid.local`, committed 2026-08-03, referenced
       by nothing, validated by no gate, sitting in the directory `REPO_LAYOUT.md`
       calls "The OpenAPI contract". Anyone importing it builds against phantom
-      routes. Fix: delete it, or move under `docs/archive/` with a header.
+      routes. Fix: delete it, or move under `docs/archive/` with a header. Lane: api-contract-architect.
 - [ ] **SDK docs say "append `/v1/authorize` to the base URL"; the server serves it
       at `/api/v1/authorize`. 2026-09-01 (contract-drift sweep, MEDIUM, latent).**
       `GateEndpoint.kt` and `endpoint.rs` trim a trailing slash "so callers can
@@ -1443,19 +1445,19 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       neither native shell issues HTTP yet — but iOS hit exactly this trap
       (`DecisionService.swift:74`). Fix: document `/api/v1/authorize` and have
       `check-assist-wire-served.mjs` assert the prefix, or make `validate()`
-      append `/api`.
+      append `/api`. Lane: api-contract-architect.
 - [ ] **`/v1/app-workflows/evaluate` — the one route a shipping native client binds —
       has no response schema and omits 401/403 in the spec. 2026-09-01
       (contract-drift sweep, MEDIUM).** iOS decodes `{decision:{outcome,reasonCodes,
       explanation}, plan:{outcome,mode}}`; the spec's 200 is description-only, so a
       partner cannot learn `plan.outcome` exists. The api tests already pin the shape
       — the schema can be written from them. `API_CONTRACT_AUDIT.md` lists response
-      shapes as unchecked; this is the highest-consequence instance.
+      shapes as unchecked; this is the highest-consequence instance. Lane: api-contract-architect.
 - [ ] **Small contract-name drift. 2026-09-01 (contract-drift sweep, LOW).**
       `LAUNCH_CONSOLE_WIREFRAMES.md` names `GET /v1/connectors/:id/syncs`; the served
       path is `/sync-runs`. The SDKs and vectors read an optional `obligations` array
       that `AssistResult` and the handler never emit (tolerated, but an SDK-documented
-      field no server sends — either emit it on step_up or drop it from the SDK docs).
+      field no server sends — either emit it on step_up or drop it from the SDK docs). Lane: api-contract-architect.
 - [ ] Census figures in `docs/PRODUCT_COMPLETION_PLAN.md` read as a dated
       point-in-time analysis but risk drifting from live counts. 2026-09-01
       (security/adversarial scan, fail-closed auditor): the doc's "48 deferred
@@ -1466,7 +1468,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       each figure would need to be tied to a live category before rewriting —
       but a fossil risk on a hand-maintained census. Either derive the numbers
       or mark the doc as a fixed dated snapshot so a reader stops treating them
-      as current measurements.
+      as current measurements. Lane: docs-writer.
 - [ ] Default `review-demo` profile mounts sim + control-plane routes
       unauthenticated. 2026-09-01 (security/adversarial scan, attack-surface
       review): informational, not a code defect — `POST /api/sim/room-entry`
@@ -1475,7 +1477,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       gated: `SIGNALGRID_PRODUCT_PROFILE=shared-device-gateway` unmounts both
       routers, cross-checked by `scripts/check-launch-profile.mjs`. A real
       (non-review) deployment must set that variable — a deployment-checklist
-      item, not an in-code bypass.
+      item, not an in-code bypass. Lane: security-engineer.
 - [ ] **`check-console-unknown-render` — the unknown-as-good-state gate for the
       console (G2 from the 2026-09-02 console fix batch). SPEC ONLY, deferred: a
       deterministic version could not be built at acceptable precision in the
@@ -1501,7 +1503,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       is covered by the widened doctrine review, not a gate. Ships as its own PR
       with a two-direction self-test (a bug shape flagged, a data-presence-gated
       shape not) and a validation that plants an unknown-as-emerald into a real
-      component and watches it fail. Cloud lane.
+      component and watches it fail. Cloud lane. Lane: devex-tooling-engineer.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared
@@ -1531,7 +1533,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       fixture-tested against the api-server harness, with a generated SKILL.md that
       passes both skill gates. No registry, no telemetry, no live tenant. Done = the
       api-server suite green with every assertion, the CLI's own proof registered in
-      preflight and CI, and this box ticked.
+      preflight and CI, and this box ticked. Lane: devex-tooling-engineer.
 
 ### GitHub Trending screening — three follow-ups (2026-09-12, from the owner's Trending snapshot)
 

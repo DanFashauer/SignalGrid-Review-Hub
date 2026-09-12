@@ -9,6 +9,20 @@
 // roster can be fully staffed while the actual work sits in prose owned by
 // nobody, which is the state this file was written in.
 //
+// SECOND SURFACE, ADDED 2026-09-12: `docs/BUILD_BACKLOG.md` is a second place
+// open work accumulates, in a different row shape — a GitHub-style checkbox
+// (`- [ ] **Title.** body...`) rather than a numbered heading, and no free-prose
+// completion vocabulary at all: the checkbox itself is the status. `- [x]` rows
+// are done and skipped; every `- [ ] **` row is open and must name a role, full
+// stop — there is no PARTIAL bucket here, because this file has no "HALF DONE"
+// convention to detect. Same fail-closed shape as the PLAN scan below, same
+// output shape, same roster: a bare `git grep` audit on 2026-09-12 found the org
+// self-evaluation's own new rows — six DR-042 cascade joins, five DR-043 puck
+// items, the api-zod design targets, the full-evaluation completion list — all
+// carrying prose like "Cloud lane." or "Native lane." that names no ID this
+// registry actually has, which is exactly the false-affirmative shape rule 2
+// warns about: it READS as ownership and resolves to nobody.
+//
 // Completion is recorded in this document as free prose — DONE, FIXED,
 // DECIDED, and a "HALF DONE" that contains the word DONE — so classification
 // here reads a CLOSED SET of markers, tested partial-first, and matched
@@ -67,6 +81,7 @@ import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLAN = "docs/COMPANY_BUILD_PLAN.md";
+const BACKLOG = "docs/BUILD_BACKLOG.md";
 const ROSTER = "docs/agent/org-roster.json";
 
 // Order matters: PARTIAL is tested first, because "HALF DONE" contains "DONE".
@@ -217,6 +232,92 @@ export function rosterIds(root) {
   return Array.isArray(r?.roles) ? r.roles.map((x) => x?.id).filter((x) => typeof x === "string") : [];
 }
 
+// --- The second surface: docs/BUILD_BACKLOG.md ---------------------------
+//
+// This file has no free-prose status vocabulary — the checkbox IS the status.
+// `- [ ] **Title.** body...` is open; `- [x] ...` is done and is SKIPPED
+// entirely, exactly as the task that added this scan specifies. There is no
+// PARTIAL bucket here: a document with no "HALF DONE" convention has nothing
+// for that bucket to detect, and inventing one would be gating a vocabulary
+// this file does not use.
+//
+// Row shape is a GitHub checkbox heading, not a numbered heading, so rows are
+// split the same defensive way as parseRows above (a heading, plus every
+// following line that is blank or INDENTED) with one addition: a non-blank
+// line that starts at COLUMN ZERO and is not itself a new row or a markdown
+// heading is a separate paragraph (the free-floating notes this document
+// carries between bulleted items) and must not be swallowed into the row
+// above — the same swallowing bug ROW_HEAD_LOOSE exists to catch for the
+// PLAN, found here by hand while building this scan: the naive "anything not
+// a new row" rule glued an italic footer paragraph onto the row before it.
+const BACKLOG_OPEN_HEAD = /^- \[ \] \*\*/;
+const BACKLOG_CLOSED_HEAD = /^- \[x\] /;
+
+/** Split docs/BUILD_BACKLOG.md into `{ line, status, text }` rows. */
+export function parseBacklogRows(mdText) {
+  const lines = mdText.split("\n");
+  const rows = [];
+  let cur = null;
+  const closeCur = () => {
+    if (cur) rows.push(cur);
+    cur = null;
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (BACKLOG_OPEN_HEAD.test(line)) {
+      closeCur();
+      cur = { line: i + 1, status: "open", text: line };
+      continue;
+    }
+    if (BACKLOG_CLOSED_HEAD.test(line)) {
+      closeCur();
+      cur = { line: i + 1, status: "closed", text: line };
+      continue;
+    }
+    if (/^#/.test(line)) {
+      closeCur();
+      continue;
+    }
+    if (!cur) continue;
+    if (line.trim() === "") continue; // blank: neither extends nor closes on its own
+    if (/^\s/.test(line)) {
+      cur.text += "\n" + line;
+      continue;
+    }
+    // Non-blank, column zero, not a row head, not a heading: a different
+    // paragraph. The row ends here, without consuming it.
+    closeCur();
+  }
+  closeCur();
+  return rows;
+}
+
+/** Pure audit of docs/BUILD_BACKLOG.md, same shape as auditBacklogOwnership above. */
+export function auditBacklogFileOwnership(mdText, roleIds) {
+  const problems = [];
+  const rows = parseBacklogRows(mdText);
+  const open = [];
+  const closed = [];
+
+  if (rows.length === 0) {
+    problems.push(`${BACKLOG}: parsed ZERO \`- [ ] **\` / \`- [x]\` rows — the file moved or its shape changed, and a gate with no subject is not a gate`);
+    return { problems, open, closed };
+  }
+
+  for (const row of rows) {
+    if (row.status === "closed") {
+      closed.push(row.line);
+      continue;
+    }
+    open.push(row.line);
+    const owners = roleIds.filter((id) => names(id).test(row.text));
+    if (owners.length === 0) {
+      problems.push(`${BACKLOG}: the open row at line ${row.line} has work left and names no role from ${ROSTER} — a backlog row nobody owns is a wish`);
+    }
+  }
+  return { problems, open, closed };
+}
+
 function selfTest() {
   const checks = [];
   const IDS = ["web-engineer", "sre", "mobile-native-engineer"];
@@ -311,6 +412,53 @@ function selfTest() {
   const live = rosterIds(repo);
   checks.push(["role ids are READ from the registry, not listed in this file", live.length > 0 && live.includes("sre")]);
 
+  // --- docs/BUILD_BACKLOG.md scan: the three controls the task specifies ---
+  const backlog = (...rows) => `# SignalGrid build backlog\n\n## Now\n\n${rows.join("\n")}\n\n## Next\n`;
+
+  a = auditBacklogFileOwnership(backlog("- [ ] **A planted lane-less row.** Nobody named here."), IDS);
+  checks.push(["BUILD_BACKLOG: a planted lane-less row is flagged", a.problems.some((p) => p.includes("nobody owns")) && a.open.length === 1]);
+
+  a = auditBacklogFileOwnership(backlog("- [ ] **A stamped row.** Owned. Lane: sre."), IDS);
+  checks.push(["BUILD_BACKLOG: a stamped row (a real role id present) passes", a.problems.length === 0 && a.open.length === 1]);
+
+  a = auditBacklogFileOwnership(backlog("- [x] **A done row, unstamped.** Nobody named, and none needed."), IDS);
+  checks.push(["BUILD_BACKLOG: a `- [x]` row is skipped, not flagged", a.problems.length === 0 && a.closed.length === 1 && a.open.length === 0]);
+
+  // Positive/negative controls beyond the three named, mirroring the PLAN's own hardening.
+  a = auditBacklogFileOwnership(backlog(
+    "- [ ] **First row.** No role.",
+    "- [x] **Second row, closed.** No role needed.",
+    "- [ ] **Third row.** Owned by sre."
+  ), IDS);
+  checks.push(["BUILD_BACKLOG: rows are bucketed independently of the PLAN's buckets", a.open.length === 2 && a.closed.length === 1]);
+  checks.push(["BUILD_BACKLOG: only the truly lane-less open row is a problem", a.problems.length === 1]);
+
+  a = auditBacklogFileOwnership(backlog(
+    "- [ ] Not bold at all — the gate's row shape requires `**`, so this line is invisible to it.",
+    "- [ ] **A real row beside it.** sre."
+  ), IDS);
+  checks.push(["BUILD_BACKLOG: a checkbox row with no bold heading is not this gate's row shape and is simply not seen", a.open.length === 1 && a.problems.length === 0]);
+
+  a = auditBacklogFileOwnership(backlog(
+    "- [ ] **A row with a free-floating paragraph after it, not swallowed.**",
+    "      Body text, indented, still part of the row. No role here.",
+    "",
+    "_A free paragraph at column zero, between bullets — must not absorb the",
+    "role search into unrelated prose, and must not itself need an owner._",
+    "",
+    "- [ ] **A second real row.** sre."
+  ), IDS);
+  checks.push(["BUILD_BACKLOG: a column-zero paragraph between rows is not swallowed into the row above", a.open.length === 2]);
+  checks.push(["BUILD_BACKLOG: the swallow bug (found while building this scan) stays fixed — the unowned first row still fails on its own, not masked by the second row's owner", a.problems.length === 1]);
+
+  a = auditBacklogFileOwnership("# no checkbox rows in this file", IDS);
+  checks.push(["BUILD_BACKLOG: a file with no parsable rows is FATAL, not a vacuous pass", a.problems.some((p) => p.includes("ZERO"))]);
+
+  const liveBacklogText = readFileSync(join(repo, BACKLOG), "utf8");
+  const liveBacklog = auditBacklogFileOwnership(liveBacklogText, live);
+  checks.push([`LIVE: ${BACKLOG} parses at least one row (${liveBacklog.open.length} open, ${liveBacklog.closed.length} closed)`, liveBacklog.open.length + liveBacklog.closed.length > 0]);
+  checks.push([`LIVE: every open row in ${BACKLOG} names a registered role (${liveBacklog.problems.length} unowned)`, liveBacklog.problems.length === 0]);
+
   const failed = checks.filter(([, k]) => !k);
   for (const [name, k] of checks) console.log(`  ${k ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -323,8 +471,13 @@ if (runAsCli) runGate();
 
 function runGate() {
   const planPath = join(repo, PLAN);
+  const backlogPath = join(repo, BACKLOG);
   if (!existsSync(planPath)) {
     console.error(`Backlog ownership check FAILED: ${PLAN} does not exist.`);
+    process.exit(1);
+  }
+  if (!existsSync(backlogPath)) {
+    console.error(`Backlog ownership check FAILED: ${BACKLOG} does not exist.`);
     process.exit(1);
   }
   const ids = rosterIds(repo);
@@ -332,18 +485,28 @@ function runGate() {
     console.error(`Backlog ownership check FAILED: read no role ids from ${ROSTER} — refusing to check ownership against an empty roster.`);
     process.exit(1);
   }
-  const { problems, open, partial, closed } = auditBacklogOwnership(readFileSync(planPath, "utf8"), ids);
+  const plan = auditBacklogOwnership(readFileSync(planPath, "utf8"), ids);
+  const backlog = auditBacklogFileOwnership(readFileSync(backlogPath, "utf8"), ids);
+  const problems = [...plan.problems, ...backlog.problems];
 
-  const total = open.length + partial.length + closed.length;
-  console.log(`Backlog ownership — ${total} row(s): ${open.length} open, ${partial.length} partially done, ${closed.length} closed`);
-  if (open.length + partial.length > 0) {
-    console.log(`\n  STILL CARRYING WORK (${open.length + partial.length} of ${total}) — every one names the role that owns it:`);
-    console.log(`    ${[...open, ...partial].join(", ")}`);
+  const planTotal = plan.open.length + plan.partial.length + plan.closed.length;
+  console.log(`Backlog ownership — ${PLAN}: ${planTotal} row(s): ${plan.open.length} open, ${plan.partial.length} partially done, ${plan.closed.length} closed`);
+  if (plan.open.length + plan.partial.length > 0) {
+    console.log(`\n  STILL CARRYING WORK (${plan.open.length + plan.partial.length} of ${planTotal}) — every one names the role that owns it:`);
+    console.log(`    ${[...plan.open, ...plan.partial].join(", ")}`);
   }
+
+  const backlogTotal = backlog.open.length + backlog.closed.length;
+  console.log(`\nBacklog ownership — ${BACKLOG}: ${backlogTotal} row(s): ${backlog.open.length} open, ${backlog.closed.length} closed`);
+  if (backlog.open.length > 0) {
+    console.log(`\n  STILL CARRYING WORK (${backlog.open.length} of ${backlogTotal}) — every one names the role that owns it:`);
+    console.log(`    line ${backlog.open.join(", line ")}`);
+  }
+
   if (problems.length > 0) {
     console.error(`\nBacklog ownership check FAILED: ${problems.length} problem(s).`);
     for (const p of problems) console.error(`  ✗ ${p}`);
     process.exit(1);
   }
-  console.log("\nBacklog ownership check passed — every row with work left in it names a role from the registry.");
+  console.log("\nBacklog ownership check passed — every row with work left in it, in both documents, names a role from the registry.");
 }

@@ -204,6 +204,7 @@
     "@workspace/verdict-attestation": "workspace:*",
     "@workspace/webauthn": "workspace:*",
     "@workspace/work-context": "workspace:*",
+    "ioredis": "^5.4.1",
     "pg": "^8.23.0"
   },
   "devDependencies": {

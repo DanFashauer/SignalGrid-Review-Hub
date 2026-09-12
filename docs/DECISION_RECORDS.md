@@ -2279,7 +2279,7 @@ Addy Osmani's, Google's, NVIDIA's, K-Dense's, the VoltAgent index, a GitHub Tren
 page) came back on 2026-09-12 with most candidates marked "evaluated, not adopted" on
 grounds of overlap with an existing skill, thinness, or no current activity that would
 use them — after the owner had already overruled two such verdicts the same hour
-(DR-038). He then shared his résumé and corrected the posture directly:
+(DR-040). He then shared his résumé and corrected the posture directly:
 
 > *"You need to probably stop and think of something real quick you need to understand
 > I'm not asking you to check if they really worth anything if it has any part of the
@@ -2321,9 +2321,66 @@ nothing vendored is executed by a gate. What moves is the default answer to a sh
 resource: from "evaluated, not adopted" to "adopted, in this form".
 
 **Evidence.** The seven evaluation reports (measurements preserved in their intake
-rows); the two overruled verdicts of DR-038; the owner's message quoted above; the
+rows); the two overruled verdicts of DR-040; the owner's message quoted above; the
 founder's résumé (owner-held).
 
 **Reversal.** Delete this record, rule 5 of `docs/agent/RESOURCE_INTAKE.md`,
 `docs/company/FOUNDER_PROFILE.md`, ICP Finding 9, the pointer in the base skill and the
 three owner-comms edits; the exclusion list reverts to the evaluators' judgement.
+
+## DR-040 — Owner-directed: the `/watch` skill and the CLI-Anything method are vendored, hooks off, hub out, transcription local (owner-directed 2026-09-12)
+
+**Context.** The owner shared an image naming five tools (last30days, CLI-Anything,
+Claude-video, Crucible, LightRAG): "These also need to be added and absorbed into the
+🧠". Two evaluators measured CLI-Anything and Claude-video in sandboxes at a pin and
+recommended "evaluated, not adopted" on mechanics — an upload-only transcript path and
+a `SessionStart` hook in one, a telemetry-bearing unpinned installer in the other. The
+owner overruled: *"I'm going to challenge you on not adding CLI anything and the Claude
+video that's very essential."* The owner decides; the measurements shape the form.
+
+**Call.** Both are adopted, in the form that keeps every measured finding true.
+
+1. **`bradautomates/claude-video` — `skills/watch/` vendored unmodified** at
+   `83da59fa78c3eee9e20f515fe75c438bb5166efd` (MIT © 2026 Bradley Bonanno) into
+   `.claude/skills/watch/`, the second upstream in that directory. NOT taken: `hooks/`
+   (a `SessionStart` hook that runs third-party bash on every session start — the
+   hooks-off rule of DR-026), `tests/`, the marketplace manifests. Two of its
+   instructions are overridden in `.claude/skills/VENDORED.md` rather than edited: the
+   recursive delete in its clean-up step and a printed `sudo` install hint.
+2. **Its transcript path stays keyless.** A first-party `video-intake/` skill supplies
+   the transcript locally with faster-whisper — the path that transcribed the owner's
+   two videos on 2026-09-12 (1,806 characters from a 70.61 s clip, no key, nothing
+   uploaded; the vendored skill without a key returned frames and `Transcript: none
+   available` for the same file) — and the intake procedure around it. A Whisper key in
+   `~/.config/watch/.env` is the owner's decision per machine; keys never enter the tree
+   (DR-029).
+3. **`HKUDS/CLI-Anything` — `cli-anything-plugin/` vendored unmodified** at
+   `810c18b0d1ab9b234bc996c9fd999318523a3ef0` (Apache-2.0) under
+   `third_party/cli-anything/`, activated through a first-party `cli-anything/` skill
+   that maps the seven-phase method onto SignalGrid's own control plane: the
+   `signalgrid` CLI over `/v1` and the MCP server, TypeScript, read-only against the
+   fabric by default, fixture-tested (`docs/BUILD_BACKLOG.md`). NOT taken: `cli-hub`
+   (a live unpinned registry whose install strings run under `shell=True`, telemetry on
+   by default posting the agent's fingerprint and the user's query), the 79 harnesses,
+   the marketplace manifests.
+4. **The vendored-set arithmetic moves with it.** `scripts/publication-boundary.mjs`
+   states 15 skills vendored (14 + 1) with a third `third_party_intake` area for
+   `third_party/cli-anything`; `.claude/skills/VENDORED.md` opens with FOURTEEN
+   exceptions and carries a second upstream section; section E of
+   `scripts/check-publication-boundary.mjs` holds the halves to each other.
+
+**Boundary.** Nothing here touches `lib/*`, `/v1`, a connector, a proof or the decision
+path; no claim moves; the launch profile and the publication boundary are untouched. A
+vendored skill is a procedure the agent may follow, and the two skill gates
+(`check-skill-plane-conformance.mjs`, `check-skill-instruction-conflicts.mjs`) hold it
+to the deny list. Nothing vendored is executed by a gate, a hook or a script.
+
+**Evidence.** The two intake rows in `docs/agent/RESOURCE_INTAKE.md` (measurements
+quoted); `third_party/cli-anything/VENDORED.md`; the byte-identity diffs and gate
+outputs in `docs/agent/EVIDENCE.md` (2026-09-12).
+
+**Reversal.** Delete `.claude/skills/watch/`, `.claude/skills/video-intake/`,
+`.claude/skills/cli-anything/` and `third_party/cli-anything/`; drop the second upstream
+section, the two table rows and the two override rows from `VENDORED.md`; remove the
+two carve-outs and the area from `scripts/publication-boundary.mjs` and return its
+figure to 14 and the exception word to TWELVE; drop this record and the backlog item.

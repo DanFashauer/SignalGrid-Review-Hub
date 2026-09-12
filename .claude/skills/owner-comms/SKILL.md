@@ -119,7 +119,7 @@ If the owner asked a question, answer it before any of this.
 - Never pre-announce. Describe what exists and what's decided, not what might
   ship someday.
 - When he pushes back, that is a decision, not an objection to answer. Restate it in
-  one line and execute it in the form that keeps the hard lines (DR-037, DR-038 and
+  one line and execute it in the form that keeps the hard lines (DR-037, DR-040 and
   DR-039 were each a correction of a posture too cautious for him).
 
 ## Anti-patterns seen in this project's own history

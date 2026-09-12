@@ -52,7 +52,14 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (Mac lane, latest) - READINESS 94%, OUTREACH OPEN INSIDE THE TARGET
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE MAC'S THREE ASKS ANSWERED IN ONE
+              PR: the ponytail pin is real (3 commits after tag v4.9.0, skills identical to
+              the tag) and the installer now fetches it by its FULL id (an abbreviated id is a
+              ref name to git - that was the whole failure); the LM Studio section of
+              AGENT_GATEWAY.md that #531 carried but never landed is ported verbatim;
+              Graphify measured in a sandbox and NOT adopted (hook-based integration,
+              tree-dirtying rebuilds, oscillating output, a benchmark denominator of nodes
+              x 50 words) - the intake row carries the numbers. (Earlier 2026-09-12, Mac lane:) READINESS 94%, OUTREACH OPEN INSIDE THE TARGET
               (minted 2026-09-12T02:05Z, manifest v72). Two Mac re-mints tonight, each right after a landing moved the
               contract: v71 after #653 (134c25fd: headline 82%, the floor cleared for the
               first time), then v72 after the cloud landed #649 (minted 2026-09-12T02:05Z, manifest v72). Each with

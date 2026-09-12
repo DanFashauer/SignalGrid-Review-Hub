@@ -2535,3 +2535,55 @@ Text-safety gate passed.
 (all thirteen: exit=0)
 ```
 Verdict:  **holds.** The cited-path count rose 2307 → 2433 (the new page and DR-043 cite the tree at path:line and every one resolves); the docs deferred-noun ceiling stayed at 416 with the page bannered as *nothing on this page is a claim of current capability* and every other touched block hedged in its own paragraph; the ceiling file was not rewritten (no drop, no rise); DR-043 is the 42nd record and carries a reversal clause. What this does NOT prove: that any of the five backlog items is buildable as specified — each is a design target until its proof is green and named — and nothing here measures the hardware, which is the point of DR-043 item 4. **Re-run after the same-day verification fixes** (four stale citations corrected, none of them affecting the gate outcome above): `node scripts/check-cited-paths.mjs` → `Cited-path check passed — 2435 citation(s) across 511 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).` — the count rose by two because the ES256 claim now cites the verifier and its proof row instead of an unrelated line, and `check-cited-commands` went red on this entry's own spelling of the absence command with the silent flag between `run` and the script name (the gate reads the flag as a script name) and is green again with the flag noted in a comment.
+## 2026-09-12 — "Readiness dimension (b) is now a RATIO over the proofs the 23 launch items bind, fail-closed on a record that does not exist, and the binding itself is gated"
+
+DR-036 item 2 named it: "(b) is binary until launch items carry explicit proof bindings — a named follow-up." Executed on branch `lane/cloud-launch-proof-bindings-20260912-0940Z` (owner-merged; DR-037 bars the cloud lane from merging launch-profile changes).
+
+Command:
+```
+node scripts/check-readiness-figure.mjs            # BEFORE, on origin/SignalGrid_Alpha b9399fc8
+node scripts/check-launch-proof-bindings.mjs       # AFTER: the new gate, then its self-test
+node scripts/check-launch-proof-bindings.mjs --self-test
+node scripts/check-readiness-figure.mjs --self-test
+node scripts/check-readiness-figure.mjs            # AFTER, same evidence file
+node -e '…evidenceDimension(evidence, age, currentFingerprint, bound)…'   # the ratio, driven with planted records against the REAL bound set and the REAL tree fingerprint
+node scripts/generate-sync-manifest.mjs && git status --short artifacts/sync
+```
+Output:
+```
+BEFORE
+  (b) launch surface, evidence  100%   green on both halves, 0 day(s) old, manifest ee348c4a0afd (age via mintedAt); launch 23 · deferred 134 (deferred is the freeze, not a defect)
+  HEADLINE 94%  → OUTREACH OPEN — readiness 94% meets the 92–95% target (goal 100%)
+AFTER — the gate
+Launch-proof bindings — 23 launch items bind 17 distinct proof(s); preflight registers 77 proofs of 144 in package.json
+Launch-proof bindings passed — every launch item names at least one proof, and every named proof exists in package.json, runs in preflight, and never self-skips.
+self-test passed (15/15)
+self-test passed (30/30)
+AFTER — the derivation, same committed evidence file (minted 08:42Z, before the emitter recorded per-proof results)
+  (b) launch surface, evidence    0%   proofs current 0/17 (bound by 23 launch items) — evidence records no per-proof results (proofs.passed absent — minted before the emitter recorded them); refresh on the Mac (age via mintedAt); launch 23 · deferred 134 (deferred is the freeze, not a defect)
+  HEADLINE 0%  → OUTREACH CLOSED — readiness 0% is below the 80% floor
+THE RATIO MOVES (real bound set of 17, real tree fingerprint ee348c4a0afd, real evidence age 0)
+as committed (no proofs.passed)                              0%  0/17  evidence records no per-proof results (proofs.passed absent — minted before the emitter recorded them); refresh on the Mac
+planted: 9 of 17 bound proofs recorded passed               52%  9/17  9/17 bound proofs recorded passed against manifest ee348c4a0afd; not current: proof:mdm-profile, proof:microso…
+planted: all 17 recorded passed                            100%  17/17  17/17 bound proofs recorded passed — green on both halves, 0 day(s) old, manifest ee348c4a0afd
+planted: all 17 recorded, file fingerprint STALE             0%  0/17  0/17 bound proofs current — evidence covers manifest 000000000000, tree is ee348c4a0afd; refresh on the Mac
+planted: one record missing (16 of 17)                      94%  16/17  16/17 bound proofs recorded passed against manifest ee348c4a0afd; not current: proof:api-client-react
+MANIFEST
+  kinds=41 categories=17 taskExceptionCodes=13 ceilings=3 refusals=9 proofs=60 mcpTools=16
+  (git status --short artifacts/sync: empty — the bindings do not move the manifest fingerprint)
+```
+Gates on the final tree (7cc35c98, after the claim inventory was re-anchored — my insertions had moved 29 evidence citations' line numbers in launch-profile.mjs and verify-all.mjs, and preflight's first run failed there):
+```
+node scripts/check-launch-profile.mjs          → Launch-profile gate passed — every declared item exists, and every real item is classified.
+node scripts/check-preflight-ci-parity.mjs     → Preflight↔CI parity passed — every preflight gate is wired into a workflow.
+node scripts/check-gate-census.mjs             → OK Gate census - all 189 gates run somewhere (2 exempt by name with a reason).
+node scripts/check-launch-claims.mjs           → Launch-claims gate passed — nothing deferred is presented as current.
+node scripts/check-cited-paths.mjs             → Cited-path check passed — 2543 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments … all resolve to TRACKED files
+node scripts/check-derived-doc-figures.mjs     → Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe
+node scripts/check-doc-line-counts.mjs         → Doc line-count gate passed — every `path (N)` figure matches the file it names.  (COMPANY_BUILD_PLAN.md: preflight.mjs 737→742, launch-profile.mjs 764→811)
+pnpm run typecheck                             → scripts typecheck: Done
+node scripts/preflight.mjs                     → Preflight PASSED — everything it runs is green.   (✓ Launch-proof bindings self-test · ✓ Launch-proof bindings · ✓ Readiness figure self-test · ✓ Readiness figure REPORT)
+pnpm run verify:breadth                        → Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Verdict: **holds, with one consequence stated rather than hidden.** (b) is a ratio over 17 distinct bound proofs and the self-test shows it moving (2/2 → 100, 1/2 → 50, missing record → 0, stale file fingerprint → 0 unless a per-proof record carries the current one, no `proofs.passed` → 0 of N). Against the committed evidence file it reads **0/17 — headline 0%, OUTREACH CLOSED** — because that file was minted before `verify-all.mjs` recorded per-proof results, and a missing field may never raise the ratio. One Mac re-mint against the merged tree (`SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence`) records `proofs.passed` for all 131 non-self-skipping lane proofs, which includes all 17 bound ones (dry-run of the emitter's roster logic on this tree: registered 133, passed 131, notRecorded proof:backup-restore + proof:db-role-split, bound 17 all in passed). (a) and (c) untouched; the manifest fingerprint did not move.
+

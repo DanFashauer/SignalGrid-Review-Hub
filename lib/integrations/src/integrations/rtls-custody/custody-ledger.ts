@@ -36,8 +36,11 @@
 
 import { posedBound } from "../../utils/posed-bound";
 
-/** What the checkout ledger says about this device. `returned` and `no record` both
- *  normalize to `clear`: neither assigns the device to anyone. */
+/** What the checkout ledger says about this device. `returned` and `none` (no OPEN
+ *  checkout record) both normalize to `clear`: neither assigns the device to anyone. A
+ *  device the ledger does not track at all leaves `ledger_state` ABSENT — `unknown`, a
+ *  hold — never `none` (Crucible draft (d): "no record" read loosely enough that a bridge
+ *  author could map "device not tracked" onto the clear spelling). */
 export type LedgerState = "checked_out" | "clear" | "unknown";
 /** Whom the ledger names as holder, RELATIVE to the person now requesting. */
 export type LedgerHolder = "requester" | "other" | "none" | "unknown";
@@ -186,6 +189,23 @@ export interface EvaluateCustodyLedgerOptions {
 }
 const OBSERVATION_AGE_SECONDS_DEFAULT = 300;
 
+/** Read the caller's posed bound off the options bag WITHOUT trusting the bag. `undefined`
+ *  options is the one spelling of "not posed" — the default applies, exactly as before. A
+ *  bag that is not an object — `null` included, which a default parameter does not cover
+ *  and which used to throw a TypeError out of the evaluator against the "held, never
+ *  thrown" contract (Crucible draft (f)) — or a primitive, or a bag whose read throws, is a
+ *  GARBLED pose: `null`, so the bound axis resolves to unknown and holds. Substituting the
+ *  default would accept an unreadable question and answer a different one (posed-bound.ts). */
+function readPosedObservationBound(options: EvaluateCustodyLedgerOptions | null | undefined): number | null {
+  if (options === undefined) return OBSERVATION_AGE_SECONDS_DEFAULT;
+  if (options === null || typeof options !== "object") return null;
+  try {
+    return posedBound(options.maxObservationAgeSeconds, OBSERVATION_AGE_SECONDS_DEFAULT);
+  } catch {
+    return null;
+  }
+}
+
 /** Every axis read ONCE, up front (review finding): a direct caller's accessor or Proxy
  *  could otherwise answer the branch reads with one value and the domain guard with
  *  another, and the grant would survive on the second answer. A read that throws leaves
@@ -241,7 +261,7 @@ function snapshotAxes(s: NormalizedCustodyLedger): { snap: AxisSnapshot; unreada
  */
 export function evaluateCustodyLedger(
   s: NormalizedCustodyLedger,
-  options: EvaluateCustodyLedgerOptions = {},
+  options?: EvaluateCustodyLedgerOptions | null,
 ): CustodyLedgerVerdict {
   const criticalFindings: string[] = [];
   const contradictions: string[] = [];
@@ -318,6 +338,12 @@ export function evaluateCustodyLedger(
       }
     } else {
       unknownSignals.push("slot_state");
+      // The holder read above was never reached; an unknown holder is still an unresolved
+      // axis and is named (Crucible draft (g): the clear-ledger sibling named both axes,
+      // this branch named one).
+      if (snap.ledgerHolder === "unknown") {
+        unknownSignals.push("ledger_holder");
+      }
       candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
     }
   } else if (snap.ledgerState === "clear") {
@@ -340,6 +366,10 @@ export function evaluateCustodyLedger(
   } else {
     unknownSignals.push("ledger_state");
     candidates.push({ posture: "custody_unverified", action: "step_up", reason: "CUSTODY_STATE_UNKNOWN" });
+    // Every axis this branch never resolved is named, not only the bay (draft (g)).
+    if (snap.ledgerHolder === "unknown") {
+      unknownSignals.push("ledger_holder");
+    }
     if (snap.slotState === "unknown") {
       unknownSignals.push("slot_state");
     }
@@ -363,7 +393,7 @@ export function evaluateCustodyLedger(
   // "clear" are current or they are nothing. The bound is posed by the caller and read
   // through posedBound — a garbled pose (NaN, Infinity, zero, negative) cannot answer the
   // question, so the axis is unknown and raises rather than the check switching off.
-  const bound = posedBound(options.maxObservationAgeSeconds, OBSERVATION_AGE_SECONDS_DEFAULT);
+  const bound = readPosedObservationBound(options);
   const age = snap.observationAgeSeconds;
   if (bound === null) {
     unknownSignals.push("observation_bound");
@@ -544,8 +574,10 @@ function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
 
 /** Normalize a raw reconciliation report into the one shape the fabric reads.
  *  An ABSENT report is silence (every axis unknown, integrity clean); a report that is
- *  not a plain object, or that carries any key beyond the recognized seven — own or
- *  inherited — is an assertion we could not read: every axis unknown AND malformed. */
+ *  not a plain object, or that carries any key beyond the recognized eight in
+ *  `CUSTODY_LEDGER_REPORT_KEYS` — own or inherited — is an assertion we could not read:
+ *  every axis unknown AND malformed. (The count lives in the list, not here: this comment
+ *  said "seven" after `observation_age_seconds` made it eight — Crucible draft (b).) */
 export function normalizeCustodyLedger(
   deviceRef: string,
   requesterRef: string,
@@ -630,10 +662,25 @@ const CLEAR: NormalizedCustodyLedger = {
   reportIntegrity: "clean",
 };
 
-/** FROZEN, and looked up by OWN name only (review finding: an inherited name such as
+/** Freeze a value and everything reachable from it. Deterministic, no I/O, no cycle
+ *  guard ON PURPOSE: the corpus below is a literal, acyclic tree we own, and a cycle
+ *  would overflow the stack at module load — loud, not a silent partial freeze — whereas
+ *  a `seen` guard would be a branch no proof can falsify. */
+function freezeDeep<T>(value: T): T {
+  if (typeof value === "object" && value !== null) {
+    Object.freeze(value);
+    for (const member of Object.values(value)) freezeDeep(member);
+  }
+  return value;
+}
+
+/** DEEP-FROZEN, and looked up by OWN name only (review finding: an inherited name such as
  *  "constructor", or a fixture-shaped object planted on Object.prototype, evaluated to a
- *  verdict instead of the documented `undefined`). */
-export const CUSTODY_LEDGER_FIXTURES: Readonly<Record<string, NormalizedCustodyLedger>> = Object.freeze({
+ *  verdict instead of the documented `undefined`). Deep, because the first cut froze the
+ *  map alone: `(FIXTURES.unaccounted as any).slotState = "seated"` flipped the named
+ *  fixture to a grant while the proof's "corpus is frozen" check stayed green (Crucible
+ *  draft (e)). */
+export const CUSTODY_LEDGER_FIXTURES: Readonly<Record<string, NormalizedCustodyLedger>> = freezeDeep({
   /** The one grant: ledger clear, no holder, seated, paired, requester under cap. */
   "clear": CLEAR,
   /** THE PHANTOM: back in its bay, still assigned to the person who walked away. */

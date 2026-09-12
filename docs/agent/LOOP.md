@@ -52,37 +52,40 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (Mac lane, latest) - READINESS CLEARED THE FLOOR: 82%, OUTREACH OPEN
-              (134c25fd). Right after #653 landed, the Mac re-minted
-              artifacts/live-evidence/mac-run.json against manifest v71 / 71042575 with
+LAST TOUCHED: 2026-09-12 (Mac lane, latest) - READINESS 94%, OUTREACH OPEN INSIDE THE TARGET
+              (minted 2026-09-12T02:05Z, manifest v72). Two Mac re-mints tonight, each right after a landing moved the
+              contract: v71 after #653 (134c25fd: headline 82%, the floor cleared for the
+              first time), then v72 after the cloud landed #649 (minted 2026-09-12T02:05Z, manifest v72). Each with
               verify:all --require-mcp --emit-evidence (Review-Hub preflight PASS, breadth
-              PASS, signalgrid-mcp pytest 99 passed at 10c5b52, 22 MCP tools = doc) - the
-              first artifact carrying its own mintedAt (2026-09-12T01:49:03Z). Full
-              preflight PASSED on macOS before the push. The gate, quoted: (a) runbook
-              82% (14 modeled / 0 partial / 3 gap of 17) - (b) launch surface 100% (green
-              on both halves, 0 days old, manifest 71042575, age via mintedAt) - (c)
-              end-to-end 100% (scenarios 11/11, live operations 8/8) -> HEADLINE 82%,
-              OUTREACH OPEN at the floor (target 92-95, goal 100). The number is derived,
-              never typed: node scripts/check-readiness-figure.mjs. What moved it, all by
-              proof: 62 -> 78 (three live ops proven on real software, 2026-09-10) -> 70
-              (cloud's #620 made the gate honest: gap rows count, evidence must match the
-              contract fingerprint) -> 82 (cloud modeled the last two runbook partials in
-              #641; Mac re-minted twice, v68 then v71). How #641/#645/#638 landed: the
-              owner said not to wait; the Mac's auto-mode classifier refuses gh pr merge, so
-              the Mac rehearsed the combined landing locally (manifest and coverage page
-              regenerated on the combined tree, preflight + breadth PASSED), opened #653
-              through REST (GraphQL quota exhausted by the shared token), and the cloud
-              merged it under DR-037 (owner: the cloud merges green product PRs). OWNED
-              DEFECT: the Mac checkout sat on mac/land-641-645-638 from 23:44Z to 01:45Z and
-              the pre-#657 tick pushed a 'skipped' heartbeat every 5 minutes - 23 pushes in
-              2h, each starting four workflows, cancelling the mainline CI run before it,
-              and exhausting GITHUB_TOKEN until check-ci-liveness failed on #654. Cloud fixed
-              the throttle in #657 (an UNCHANGED result re-pushes once per 25 min); the Mac
-              rule now: never leave the shared checkout parked past the run that needed it.
-              NEXT LEVERS to 92-95: dimension (a) is the only one under 100 - three GAP rows
-              in SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md; each modeled row is +6 points (15/17
-              = 88, 16/17 = 94, 17/17 = 100). Keep mac-run.json within 7 days and re-mint
-              after every manifest move or (b) reads 0 by design. (Earlier 2026-09-12, cloud lane:) THE MAC TICK NO LONGER FLOODS MAINLINE
+              PASS, signalgrid-mcp pytest 99 passed at 10c5b52, 22 MCP tools = doc), each
+              carrying its own mintedAt, full preflight PASSED on macOS before each push.
+              The gate, quoted: (a) runbook 94% (16 modeled / 0 partial / 1 gap of 17) -
+              (b) launch surface 100% (green on both halves, 0 days old, manifest 43771dfc,
+              age via mintedAt) - (c) end-to-end 100% (scenarios 11/11, live operations
+              8/8) -> HEADLINE 94%, OUTREACH OPEN (floor 80, target 92-95, goal 100). The
+              number is derived, never typed: node scripts/check-readiness-figure.mjs.
+              What moved it, all by proof: 62 -> 78 (three live ops proven on real
+              software, 09-10) -> 70 (cloud's #620 made the gate honest) -> 82 (cloud
+              modeled the last two partials in #641, landed via the Mac's #653) -> 94
+              (cloud modeled two of the three gap rows in #649: custody-ledger
+              reconciliation + the computed per-user checkout cap, rtls-custody family).
+              THE LAST ROW (row 81 of the map): a faithful end-to-end smart-charging
+              simulator scenario - badge -> dock -> provision -> in-use -> check-in with
+              the real failure branches - modeled = 17/17 = 100. How #641/#645/#638
+              landed: the owner said not to wait; the Mac's auto-mode classifier refuses
+              gh pr merge, so the Mac rehearsed the combined landing locally (manifest and
+              coverage page regenerated on the combined tree, preflight + breadth PASSED),
+              opened #653 through REST (GraphQL quota exhausted by the shared token), and
+              the cloud merged it under DR-037 (owner: the cloud merges green product PRs).
+              OWNED DEFECT: the Mac checkout sat on mac/land-641-645-638 from 23:44Z to
+              01:45Z and the pre-#657 tick pushed a 'skipped' heartbeat every 5 minutes -
+              23 pushes in 2h, each starting four workflows, cancelling the mainline CI run
+              before it, and exhausting GITHUB_TOKEN until check-ci-liveness failed on
+              #654. Cloud fixed the throttle in #657 (an UNCHANGED result re-pushes once
+              per 25 min); the Mac rule now: never leave the shared checkout parked past
+              the run that needed it. STANDING RULE: after every manifest move, (b) reads 0
+              by design until the Mac re-mints; keep mac-run.json within 7 days.
+              (Earlier 2026-09-12, cloud lane:) THE MAC TICK NO LONGER FLOODS MAINLINE
               (branch lane/cloud-tick-heartbeat-throttle-20260912-005000Z; owner merges): a
               SKIPPED tick result was exempt from the quiet throttle, so a checkout parked on
               mac/land-641-645-638 pushed a heartbeat to Alpha every 5 minutes, each push

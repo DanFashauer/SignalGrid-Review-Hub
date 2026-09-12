@@ -2857,3 +2857,98 @@ hardware step, not only once); a prototype started on appetite rather than on a 
 gate is a violation of this record, not a reversal of it. The do-not-claim list in
 item 5 does not move on appetite either: a line leaves it only when the test or
 review that would make the claim true is recorded in `docs/agent/EVIDENCE.md`.
+
+
+## DR-044 — cactus-compute/needle is a NARROW, base-weights-only, offline extraction helper kept on the shelf, never on the decision path: its confidence is a learned score with the wrong failure polarity for golden rule 2, and no needle output may seed a fixture, rank evidence, feed a figure, or serve as an oracle (owner-directed 2026-09-12)
+
+**Question.** The owner shared [cactus-compute/needle](https://github.com/cactus-compute/needle)
+with *"Do everything please and also this will be really helpful so ingest this please."*
+Needle is an on-device tool-calling + structured-extraction model with a learned
+confidence head that escalates below a threshold — a shape that visibly resembles
+SignalGrid's own allow/step_up/escalate ladder, and the low-memory on-device tool
+that RUNS on this Mac where LightRAG (DR-041) did not. DR-039 sets the absorption
+bar (a resource is taken if any part can aid building the company; the only
+exclusions are licence, auto-execution, egress without consent, directory
+collision), the tool-evaluation-by-use skill requires a measurement not a memo,
+and golden rule 2 / DR-029 forbid ANY model on the decision path. What does the
+tree adopt, in what form, and what is the boundary?
+
+**Measured by use (isolated venv, python 3.12, `NEEDLE_TELEMETRY=0 DO_NOT_TRACK=1`,
+installed from the LOCAL CLONE at `53df049c4a1a82fca1027b81f9ff21336dfb0861`, base
+weights).** The engine is a single 14.2 MB native `libneedle.dylib` (the model is
+compiled in; no separate weights file) fetched once from HuggingFace
+`Cactus-Compute/needle2` and loaded in-process via ctypes. Warm inference footprint
+is ~48 MB process RSS / 46-56 MB engine self-report (the README's "~28 MB constant"
+understates it; the one-time cold download run measured ~129 MB and is not the
+steady state). Output is deterministic PER FIXED SESSION STATE — identical across
+separate processes and across `extract()` calls, which open and close a fresh engine
+each call — but NOT a pure function of input: a reused `Needle` gives path-dependent
+confidence unless `reset()` is called, so `extract()` is the safe entrypoint and
+reusing one instance across documents is a footgun. Offline: warm-cache inference
+makes ZERO HuggingFace calls (`_register_download` fires only when the dylib is
+absent, not on every init) and runs under `HF_HUB_OFFLINE=1`; only the first-ever run
+needs network. On extraction quality the confidence head is honest in the ONE
+direction that matters and unreliable in the other: no high-confidence-wrong output
+was produced (garbage → 0.0, wrong-domain → ~0.24), but a CORRECT SignalGrid
+extraction landed at 0.38, so a threshold does NOT cleanly separate correct from
+incorrect — the score gates "a call was produced", not "the call is right". Per
+needle's own `doc/apis.md` the score is `min(calibrated head, decode likelihood)` — a
+fail-closed gate, calibrated for the base model only — and `extract()` DISCARDS the
+field entirely (returns `None` on refusal), so the gate is reachable only through
+`complete()`/`run()`; finetuning DISABLES the head (forced to `None`), so the
+"calibrated confidence" strength and the "finetune it for our tools" remedy are
+mutually exclusive. The base model extracts terse/structured input correctly
+un-finetuned (`Decision: ALLOW. Subject: worker-7. …` → correct) and fails only on
+narrative prose (a 6-field access-decision narrative → empty, confidence 0.004).
+The default `strict=True` raises `ExtractionValidationError` on a legitimately
+grounded numeric (the README's own invoice `total=1200.0`): the native engine flags
+it ungrounded and the Python wrapper promotes any non-date ungrounded field to a hard
+raise, so `strict=False` is required for numeric fields.
+
+**Surfaces found (paths in `docs/agent/RESOURCE_INTAKE.md`).** Egress: (1) anonymous
+telemetry to a Supabase endpoint — DISABLED and verified in code, `track()` returns
+before spawning its thread when `NEEDLE_TELEMETRY=0`/`DO_NOT_TRACK`/`CI` is set, and
+plain `import needle` triggers none of it; (2) the one-time HF engine pull; (3) an
+OpenRouter (deepseek) call in the `[train]`/`--generate` data-synthesis path; (4) a
+HuggingFace UPLOAD in `build --upload` — (3) and (4) are consent-gated behind flags
+and keys but are real and were not in the first pass. No `hf_hub_download` passes
+`revision=`, and fetched artifacts are `pickle.load`ed, so "pinned 2.0.4" is a
+FILENAME convention, not an integrity pin. The inference engine binary's LICENCE is
+unverified — the repo's Apache-2.0 covers only the Python wrapper; the dylib is a
+separate HF-hosted artifact. `.github/workflows/` carries a daily-cron PyPI publish
+and a `v*`-tag GHCR publish that would auto-execute and collide with our tags if the
+repo were ever vendored. There are NO Claude Code hooks.
+
+**Call.**
+
+1. **Adopted-by-reference as a NARROW offline extraction helper, base weights only,
+   kept on the shelf — not a standing pipeline component.** If used at all: the
+   installed pip package (never the repo vendored), telemetry disabled, engine cached,
+   run by hand on TERSE/STRUCTURED text, and a human RE-KEYS the fields into the tree
+   after checking them against the source. Never the `[train]`/`--generate`/`--upload`
+   paths without explicit owner consent (external egress, CLAUDE.md "Ask before").
+
+2. **THE BOUNDARY (golden rule 2, DR-029).** *needle's confidence is a
+   45M-parameter neural net's learned probability about its own output; its
+   determinism is incidental to the computation and never a license to admit it, and
+   SignalGrid verdicts derive ONLY from fixture-backed, human-auditable signals — so
+   no needle score, extraction, or synthetic sample may be cited by, seed a fixture
+   for, rank evidence within, or serve as a test oracle to any gate, proof,
+   doc-figure, /v1 decision, or lib/\* path.* The allow/step_up/escalate resemblance
+   is architectural coincidence: SignalGrid gates on known signal STATE, needle on
+   model self-doubt, and needle's score moves the WRONG way for golden rule 2 — it
+   LOWERS on uncertainty, where the rule requires uncertainty to RAISE assurance. The
+   four one-hop laundering paths are barred explicitly: (a) using `needle
+   generate-data` to mint fixtures that back the core; (b) using its confidence to
+   rank/prioritize evidence or as a proof assertion; (c) feeding any needle-derived
+   number into a doc figure or `check-readiness-figure.mjs`, or pasting its JSON into
+   the tree; (d) finetuning on SignalGrid tool schemas — the result is still a model
+   and still barred.
+
+3. **Nothing of needle is in the tree.** The clone and venv live in the session
+   scratchpad only; this record and the `RESOURCE_INTAKE.md` row are the whole
+   footprint. It is the low-memory on-device option LightRAG (DR-041) is not, but the
+   two solve different problems (retrieval over a corpus vs. single-document
+   extraction) and neither is on the decision path.
+
+**Reversal.** The owner reverses by saying so; the reversal is two deletions — this record and the `RESOURCE_INTAKE.md` needle row — because nothing of needle is vendored, installed into a session, or referenced by any gate, proof, doc-figure or code path, by construction. Adopting it into any pipeline, or crossing the boundary in item 2 (needle output on the decision path, seeding a fixture, ranking evidence, feeding a figure, or a finetuned model), is a violation of this record, not a reversal of it, and needs its own decision record first.

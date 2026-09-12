@@ -52,7 +52,15 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-11 (Mac lane, latest) - HARDWARE EVIDENCE RE-MINTED against the
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE COVERAGE PAGE NO LONGER MOVES ON LANE
+              MAIL (branch lane/cloud-coverage-mailbox-trees-20260912-003000Z): the mailbox trees
+              (artifacts/lane-messages, artifacts/agent-heartbeats) stay claimed surfaces but
+              their record counts are withheld from the render, so a send/ack/batch delivery
+              leaves docs/agent/SURFACE_REVIEW_COVERAGE.md byte-identical (self-test proves
+              it, 54/54) and open product PRs stop going unmergeable on it every cycle. Open
+              for the owner: #653 (Mac's combined landing of #641+#645+#638), #649, #654
+              (brace-less guards join the mutation sweep). (Earlier 2026-09-11, Mac lane:)
+              HARDWARE EVIDENCE RE-MINTED against the
               manifest mainline carries (v68 / ce58f6): 53c60f4e, from verify:all --require-mcp
               --emit-evidence on this Mac (Review-Hub preflight PASS, breadth PASS, signalgrid-mcp
               pytest 99 passed at 10c5b52 on a clean checkout, 22 MCP tools derived = doc); the

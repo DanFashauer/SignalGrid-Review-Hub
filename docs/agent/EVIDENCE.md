@@ -2535,3 +2535,39 @@ Text-safety gate passed.
 (all thirteen: exit=0)
 ```
 Verdict:  **holds.** The cited-path count rose 2307 → 2433 (the new page and DR-043 cite the tree at path:line and every one resolves); the docs deferred-noun ceiling stayed at 416 with the page bannered as *nothing on this page is a claim of current capability* and every other touched block hedged in its own paragraph; the ceiling file was not rewritten (no drop, no rise); DR-043 is the 42nd record and carries a reversal clause. What this does NOT prove: that any of the five backlog items is buildable as specified — each is a design target until its proof is green and named — and nothing here measures the hardware, which is the point of DR-043 item 4. **Re-run after the same-day verification fixes** (four stale citations corrected, none of them affecting the gate outcome above): `node scripts/check-cited-paths.mjs` → `Cited-path check passed — 2435 citation(s) across 511 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).` — the count rose by two because the ES256 claim now cites the verifier and its proof row instead of an unrelated line, and `check-cited-commands` went red on this entry's own spelling of the absence command with the silent flag between `run` and the script name (the gate reads the flag as a script name) and is green again with the flag noted in a comment.
+
+## 2026-09-12 — "Puck 5: DISCOVERY_LOG.md's hardware tally (Rh/Ch/Ph) is derived by a new gate, never typed by hand, and the go/no-go table in SESSION_PUCK_HARDWARE_HYPOTHESIS.md reads it by name, not by value"
+Command:
+```
+node scripts/check-discovery-log.mjs --self-test
+node scripts/check-discovery-log.mjs
+node scripts/check-derived-doc-figures.mjs --self-test && node scripts/check-derived-doc-figures.mjs
+node scripts/check-cited-paths.mjs --self-test && node scripts/check-cited-paths.mjs
+node scripts/check-doc-line-counts.mjs --self-test && node scripts/check-doc-line-counts.mjs
+node scripts/check-markdown-links.mjs --self-test && node scripts/check-markdown-links.mjs
+node scripts/check-text-safety.mjs
+node scripts/check-launch-claims.mjs --self-test && node scripts/check-launch-claims.mjs
+pnpm run typecheck
+node scripts/preflight.mjs
+pnpm run verify:breadth
+```
+Output:
+```
+self-test passed (11/11)
+discovery-log hardware tally: Rh 0 of 15 · Ch 0 of 15 · Ph 0 of 15, 0 problem(s)
+Discovery-log gate passed — docs/agent/DISCOVERY_LOG.md's hardware tally sentence matches the table it is derived from.
+self-test passed (82/82)
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+self-test passed (52/52)
+Cited-path check passed — 2538 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+self-test passed (10/10)
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+self-test passed (11/11)
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+Text-safety gate passed.
+self-test passed; Launch-claims gate passed — nothing deferred is presented as current.
+(typecheck: all workspace tsc projects "Done", exit 0)
+Preflight FAILED at: Preflight↔CI parity (a gate that runs only locally is not a gate). Fix before pushing.
+  ✗ scripts/check-discovery-log.mjs / --self-test: runs in preflight but is referenced by NO workflow
+```
+Verdict: **the new gate first failed its own repository's own rule** (a preflight-only gate is not a gate) — fixed by wiring both `check-discovery-log.mjs` steps into `.github/workflows/review-hub-ci.yml` beside `check-derived-doc-figures.mjs`, confirmed with `node scripts/check-preflight-ci-parity.mjs` on 2026-09-12 → `preflight↔CI parity: 375 preflight gates, 16 workflow files, 0 declared local-only, 0 unwired`. A second failure followed, expected and welcome: preflight's `Surface-read-coverage` gate caught the new tracked file — `docs/agent/SURFACE_REVIEW_COVERAGE.md is STALE versus … the tree` — fixed with `node scripts/check-surface-review-coverage.mjs --write` on the staged tree, which moved the `scripts` surface's file count 431 → 432 and the tracked-file total 2869 → 2870 (`git diff --stat`: 1 file, 2 lines). **After both fixes, a full re-run of every gate above plus `node scripts/preflight.mjs` and `pnpm run verify:breadth` from a clean re-stage was green**: preflight's own final lines end `EXIT_CODE=0`; breadth ends `Breadth lane PASSED — 56 breadth proofs green … EXIT_CODE=0`. The design: three columns (Rh/Ch/Ph) beside R/C/P in the Running tally table (`docs/agent/DISCOVERY_LOG.md`); a row's Rh/Ch/Ph cell counts only when the row's base R/C/P cell is also marked (enforced as a FATAL invariant, not assumed); the doc carries one derived sentence, `**Hardware (DR-043) — Rh: 0 of 15 · Ch: 0 of 15 · Ph: 0 of 15.**`, recomputed and string-matched on every run. **Today's honest count is zero on all three** — nobody has tagged a row hardware-specific yet, and none was retroactively tagged here (`docs/agent/DISCOVERY_LOG.md`'s single logged row is the unfilled template, row 1). `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`'s go/no-go table already typed no current count (checked before editing — the only numbers in it were the pre-registered thresholds, unchanged); the edit adds the tally-cell names (**Rh**, **Ch**, **Ph**) beside each threshold row and a sentence stating the count lives only at the Hardware (DR-043) line in `DISCOVERY_LOG.md`, never here. Two collateral figure fixes, both required by the edit itself and unrelated to the hardware tally's substance: `docs/COMPANY_BUILD_PLAN.md:4891` restated `scripts/preflight.mjs (737)` as `(741)` after the four new preflight lines: `wc -l scripts/preflight.mjs` → `741`; and `docs/agent/DISCOVERY_LOG.md`'s cited line numbers (121, 124, 149, 159 — all held by `docs/DECISION_RECORDS.md` DR-043, which this brief does not edit) were kept byte-identical by inserting every new line strictly AFTER line 159, verified with `cat -n docs/agent/DISCOVERY_LOG.md | sed -n '117,175p'` post-edit. Not done: no hardware row was tagged (none of the fifteen conversations has happened); the go/no-go table's own threshold NUMBERS (≥4 of 15, ≥3, ≥5) were left untouched per the backlog row's own instruction ("this adds the column, not a threshold").

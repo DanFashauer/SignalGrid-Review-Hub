@@ -148,15 +148,30 @@ profile, their answer counts.
 
 ## Running tally
 
-| # | Date | Role | S | I | P | R | Rt | **C** |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | | | | | | | | |
+| # | Date | Role | S | I | P | R | Rt | **C** | Rh | Ch | Ph |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | | | | | | | | | | | |
 
 *S ubstitute · I ndifference · P roblem · R equirement · R(ou)t(ing) ·
-**C ommitment***
+**C ommitment*** · **Rh** hardware REQUIREMENT · **Ch** hardware COMMITMENT · **Ph** hardware PROBLEM — each requires the base column (R / C / P) marked too, and never the reverse (DR-043).
 
 **Experiment started: 2026-08-27**
 **Conversations logged: 0 of 15 · Commitments: 0**
+
+**Hardware (DR-043) — Rh: 0 of 15 · Ch: 0 of 15 · Ph: 0 of 15.** Rh counts
+REQUIREMENT rows also marked hardware-specific — a requirement that maps
+specifically to faster or stronger physical session authentication or the
+deferred design-target custody mechanism; Ch counts COMMITMENT rows also
+marked hardware-specific (willingness to scope and test that workflow); Ph
+counts PROBLEM rows also marked hardware-specific, read together with Ch
+(PROBLEM with COMMITMENT = 0 is the no-go signal). Derived by
+`node scripts/check-discovery-log.mjs` from the
+marks in the table above — never typed by hand — and read by name, not by
+value, in [`docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`](../SESSION_PUCK_HARDWARE_HYPOTHESIS.md)'s
+go/no-go table (DR-043 rule 4, `docs/BUILD_BACKLOG.md` "Puck 5"). Nobody has
+tagged a row hardware-specific yet, so all three read zero — the honest
+boundary below applies here exactly as it does to every other cell in this
+table: this sentence cannot be advanced by editing it.
 
 ---
 

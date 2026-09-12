@@ -1967,6 +1967,33 @@ wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read,
 Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
 ```
 Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated total to the files a person can actually read again; the two mailbox rows print `mailbox` in the Files column. `lane-deliver.mjs` keeps regenerating the page on every delivery — idempotent now, and still the catch for a page stale for any other reason. What this does NOT fix: a PR that itself changes the tracked-file set still moves the page, and two such PRs still conflict on it; that is the page doing its job.
+## 2026-09-12 — "The bootstrap-credential family joins the brace-less mutation sweep with ZERO survivors: six one-line guards that no check could falsify are now pinned by four new proof checks, and one symbol guard proved shadowed and was deleted"
+Command:  the `oneline-cond-false` mutator rewrites a brace-less `if (cond) return x;` to `if (false) return x;`. Opting the target in exposed six guards in `bootstrap-credential-connector.ts` that the 48-check proof could not falsify — the non-string enum refusal, the prototype-walk depth bound, the inherited-own-key refusal, the symbol refusal, the strict ISO-8601 Zulu instant regex, and the expires-before-issued derivation. Five are real behaviour and now have checks; the symbol refusal is shadowed by the unrecognized-key check on the next line (`known` holds only strings, so `includes` of a symbol is always false) and was deleted with a comment naming its cover.
+```
+node scripts/mutation-guard.mjs --proof=proof:bootstrap-credential   # before the checks, and after
+pnpm run proof:bootstrap-credential ; node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs
+pnpm run review:invariants ; node scripts/check-connector-discipline.mjs ; pnpm run typecheck
+```
+Output:
+```
+before: mutations=53 killed=41 hung=0 known-inert=6 survivors=6
+        bootstrap-credential-connector.ts:51  if (typeof v !== "string") return true
+        bootstrap-credential-connector.ts:73  if (depth >= MAX_PROTOTYPE_DEPTH) return true
+        bootstrap-credential-connector.ts:75  if (depth > 0) return true
+        bootstrap-credential-connector.ts:76  if (typeof k === "symbol") return true
+        bootstrap-credential-connector.ts:98  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(s)) return null
+        bootstrap-credential-connector.ts:126 if (issuedMs !== null && issuedMs > expiresMs) return "unknown"
+after:  mutations=52 killed=46 hung=0 known-inert=6 survivors=0
+        brace-less sweep (oneline-cond-false): 1 of 1 targets opted in; 0 pending
+        Mutation guard passed — every registered guard is falsifiable, or documented as inert.
+summary=pass (52/52)
+Proof-count check passed — all 59 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Connector-discipline gate passed.
+typecheck exit=0
+```
+Verdict:  holds. The four new checks exercise the real hostile input that reaches each guard and assert the fail-closed outcome: a number/boolean/object in an enum slot is a malformed ASSERTION rather than a quiet fall to the unknown rung; a report buried under an 80-deep all-empty prototype chain is malformed because the walk's bound refuses rather than giving up and calling it clean; an inherited own key spelling a KNOWN field is still the prototype's claim; an offset-bearing or zone-less timestamp is unreadable rather than silently re-based onto a wall clock (expiry → `unbounded`, unreadable reference → lifetime `unknown`); and a window that expires before it was issued derives `unknown`, so the malformed rung is no longer the only thing holding that line. The containment window keeps its no-skew-allowance shape — nothing here widens it. `docs/INTEGRATION_CATALOG.md` moves 48 → 52 checks. What this does NOT fix: the six `known-inert` entries for this family are unchanged, and the other targets that have not joined the brace-less sweep still have guards this run never reached.
 
 ## 2026-09-12 — "The /watch skill and the CLI-Anything plugin directory are in the tree byte-identical to their pins, and every gate that reads the skill plane is green with a second upstream in `.claude/skills/` (DR-038)"
 Command:  the owner overruled two "evaluated, not adopted" recommendations ("I'm going to challenge you on not adding CLI anything and the Claude video that's very essential"). Both trees were copied from the pinned scratch clones with `git archive` (tracked files only), the two export-ignored files (`.skillignore`, `.claude/skills/watch/scripts/build-skill.sh`) added from `git show`, and diffed back against the clones; then the registry, the boundary map and the four first-party edits were applied and the gates run on the staged worktree:

@@ -72,6 +72,15 @@ LAST TOUCHED: 2026-09-12 (Mac lane, latest) - SIX AGENT TOOLS ABSORBED BY USE (D
               absorbed as standing context (docs/company/FOUNDER_PROFILE.md): a senior
               platform engineer, not a non-technical founder - owner-comms corrected, the
               base skill points every role at it, ICP Finding 9. (Earlier 2026-09-12, cloud lane:) THE MAC'S THREE ASKS ANSWERED IN ONE
+(Earlier 2026-09-12, cloud lane:) OWNER-DIRECTED VENDORING (DR-040): the
+              /watch skill from bradautomates/claude-video (pinned, hook NOT taken, two
+              instructions overridden not edited) and the CLI-Anything method (the plugin
+              directory under third_party/, the telemetry-bearing hub NOT taken) are in the
+              tree, with two first-party skills around them: video-intake (frames via
+              /watch, transcript locally with faster-whisper, no key, nothing uploaded)
+              and cli-anything (the seven phases mapped onto a signalgrid CLI over /v1 and
+              the MCP server, a backlog item). Vendored figure 14 -> 15, first-party
+              exceptions TWELVE -> FOURTEEN, section E holds them. (Earlier 2026-09-12, cloud lane:) THE MAC'S THREE ASKS ANSWERED IN ONE
               PR: the ponytail pin is real (3 commits after tag v4.9.0, skills identical to
               the tag) and the installer now fetches it by its FULL id (an abbreviated id is a
               ref name to git - that was the whole failure); the LM Studio section of

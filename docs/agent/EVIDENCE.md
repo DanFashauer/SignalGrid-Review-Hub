@@ -2033,6 +2033,32 @@ typecheck exit=0
 ```
 Verdict:  holds. The four new checks exercise the real hostile input that reaches each guard and assert the fail-closed outcome: a number/boolean/object in an enum slot is a malformed ASSERTION rather than a quiet fall to the unknown rung; a report buried under an 80-deep all-empty prototype chain is malformed because the walk's bound refuses rather than giving up and calling it clean; an inherited own key spelling a KNOWN field is still the prototype's claim; an offset-bearing or zone-less timestamp is unreadable rather than silently re-based onto a wall clock (expiry → `unbounded`, unreadable reference → lifetime `unknown`); and a window that expires before it was issued derives `unknown`, so the malformed rung is no longer the only thing holding that line. The containment window keeps its no-skew-allowance shape — nothing here widens it. `docs/INTEGRATION_CATALOG.md` moves 48 → 52 checks. What this does NOT fix: the six `known-inert` entries for this family are unchanged, and the other targets that have not joined the brace-less sweep still have guards this run never reached.
 
+## 2026-09-12 — "The /watch skill and the CLI-Anything plugin directory are in the tree byte-identical to their pins, and every gate that reads the skill plane is green with a second upstream in `.claude/skills/` (DR-040)"
+Command:  the owner overruled two "evaluated, not adopted" recommendations ("I'm going to challenge you on not adding CLI anything and the Claude video that's very essential"). Both trees were copied from the pinned scratch clones with `git archive` (tracked files only), the two export-ignored files (`.skillignore`, `.claude/skills/watch/scripts/build-skill.sh`) added from `git show`, and diffed back against the clones; then the registry, the boundary map and the four first-party edits were applied and the gates run on the staged worktree:
+```
+diff -r <clone>/skills/watch .claude/skills/watch -x __pycache__ -x LICENSE          # (empty)
+diff -r <clone>/cli-anything-plugin third_party/cli-anything -x __pycache__ -x VENDORED.md   # (empty)
+node scripts/check-skill-instruction-conflicts.mjs
+node scripts/check-publication-boundary.mjs
+node scripts/check-skill-plane-conformance.mjs
+node scripts/check-cited-paths.mjs ; node scripts/check-derived-doc-figures.mjs ; node scripts/check-plugin-manifest.mjs
+```
+Output:
+```
+watch byte-identical (12 files incl. .skillignore, build-skill.sh)
+cli-anything byte-identical
+  overridden: .claude/skills/watch/SKILL.md:193  rm -rf <dir>
+  overridden: .claude/skills/watch/scripts/setup.py:201  sudo apt install ffmpeg
+  overridden: .claude/skills/watch/scripts/setup.py:201  sudo dnf install ffmpeg
+✓ no tracked skill instructs a command the deny list refuses.
+  ✓ vendored-set arithmetic: 15 skill director(y/ies) under the vendored claim, 14 first-party carve-out(s) matching 14 table rows and the stated word, code figure 15
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+Skill-plane conformance — 29 skill(s), 13 agent(s) walked
+Cited-path check passed — 2307 citation(s) across 509 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Plugin-manifest gate passed — signalgrid plugin: 13 agents (derived), skills + commands present; claude plugin validate exit 0.
+```
+Verdict:  **landed as vendored, unmodified, with the two deny-list conflicts recorded as overrides instead of edits.** Before the two rows existed the conflicts gate failed on exactly those three spans (`✗ 3 skill instruction(s) the Bash deny list refuses`), and before the carve-outs and the figure moved the boundary gate failed on coverage (`26 tracked path(s) fall under NO declared area`, all under `third_party/cli-anything/`) — both failures were the gates doing their job on a second upstream, and both cleared without touching a vendored byte. What is NOT proven here: the transcription script has not been run on the Mac (the cloud measured the same path on 2026-09-12: 1,806 characters from a 70.61 s clip), and no session has yet invoked `/watch` from this directory rather than from a scratch clone. The first `video-intake` run on either lane is the live confirmation.
 ## 2026-09-12 — "The ponytail pin 2ed6c52 is reproducible from upstream — the installer failed because it fetched an abbreviated id, which git treats as a ref name"
 Command:  the Mac lane reported `pnpm run ponytail:install` dying at `git fetch --depth=1 origin 2ed6c52` with "couldn't find remote ref 2ed6c52" and asked whether the vetted object exists. Probed upstream from the cloud, in a scratch clone:
 ```

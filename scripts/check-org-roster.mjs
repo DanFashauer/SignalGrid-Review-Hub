@@ -141,18 +141,27 @@ export function daysStale(datedIso, asOfIso) {
 /**
  * Which roles' nextActionDate is more than STALE_AFTER_DAYS before asOfIso.
  * Pure and testable: asOfIso is passed in, never read from the clock here.
- * Three buckets, all REPORTED and none fatal:
+ * Four buckets, all REPORTED and none fatal:
  *   stale     — has a nextActionDate, and it is more than 7 days old.
  *   unparseable — has a nextActionDate that does not parse as a date; an
  *               unreadable clock is not the same claim as a fresh one.
  *   noClock   — has a nextAction but no nextActionDate at all yet.
+ *   future    — has a nextActionDate LATER than asOfIso (a negative age — a
+ *               typo like a 2027 year, or a plain mistake). Added 2026-09-12
+ *               (Codex round 2 on #685): a negative age fell through BOTH the
+ *               `=== null` check and the `> STALE_AFTER_DAYS` check above —
+ *               neither null nor stale, so it printed as fresh. A date after
+ *               "today" is not a earlier-set action aging normally; it is
+ *               invalid on its face (nothing can be SET in the future), so it
+ *               gets its own bucket rather than silently passing as healthy.
  */
 export function auditNextActionClock(roles, asOfIso) {
   const stale = [];
   const unparseable = [];
   const noClock = [];
+  const future = [];
   if (typeof asOfIso !== "string" || asOfIso.trim() === "") {
-    return { stale, unparseable, noClock };
+    return { stale, unparseable, noClock, future };
   }
   for (const role of roles) {
     const id = typeof role?.id === "string" ? role.id : "(no id)";
@@ -164,11 +173,13 @@ export function auditNextActionClock(roles, asOfIso) {
     const age = daysStale(role.nextActionDate, asOfIso);
     if (age === null) {
       unparseable.push({ id, nextActionDate: role.nextActionDate });
+    } else if (age < 0) {
+      future.push({ id, nextActionDate: role.nextActionDate, days: age });
     } else if (age > STALE_AFTER_DAYS) {
       stale.push({ id, nextActionDate: role.nextActionDate, days: age });
     }
   }
-  return { stale, unparseable, noClock };
+  return { stale, unparseable, noClock, future };
 }
 
 /**
@@ -184,7 +195,7 @@ export function auditOrgRoster(roster, chartText, known = null, asOfIso = null) 
   const unactivated = [];
   const activated = [];
 
-  const emptyClock = { stale: [], unparseable: [], noClock: [] };
+  const emptyClock = { stale: [], unparseable: [], noClock: [], future: [] };
   const roles = Array.isArray(roster?.roles) ? roster.roles : null;
   if (roles === null) {
     problems.push(`${ROSTER}: no \`roles\` array — the registry is unreadable`);
@@ -389,6 +400,7 @@ function selfTest() {
     const edgeRole = { ...ok, id: "edge", nextActionDate: "2026-09-05" }; // exactly 7 days old
     const noClockRole = { ...ok, id: "noclock" }; // no nextActionDate at all
     const badDateRole = { ...ok, id: "baddate", nextActionDate: "not-a-date" };
+    const futureRole = { ...ok, id: "future", nextActionDate: "2027-01-01" }; // a typo'd year, AFTER asOf
 
     a = auditOrgRoster({ roles: [freshRole] }, chart("fresh"), KNOWN, asOf);
     checks.push(["a nextActionDate inside 7 days is not reported stale, and never fatal", a.problems.length === 0 && a.clock.stale.length === 0]);
@@ -405,8 +417,17 @@ function selfTest() {
     a = auditOrgRoster({ roles: [badDateRole] }, chart("baddate"), KNOWN, asOf);
     checks.push(["an unparseable nextActionDate is REPORTED as unparseable, not silently treated as fresh or as maximally stale — the freshness gate's NaN-date silent pass, not repeated here", a.problems.length === 0 && a.clock.unparseable.length === 1 && a.clock.stale.length === 0]);
 
+    // ── Codex finding, round 2 on e4c13df3: a nextActionDate LATER than asOf
+    // (age < 0) fell through both the `=== null` branch and the `> 7` branch —
+    // landing in NEITHER bucket, so `clock.stale.length === 0` read exactly
+    // like a genuinely fresh role. A typo'd year (2027 for 2026) must be
+    // REPORTED as invalid, never silently pass as healthy.
+    a = auditOrgRoster({ roles: [futureRole] }, chart("future"), KNOWN, asOf);
+    checks.push(["a nextActionDate AFTER the as-of date is REPORTED in the future/invalid bucket, not in fresh (stale empty) or in unparseable", a.problems.length === 0 && a.clock.future.length === 1 && a.clock.future[0].id === "future" && a.clock.stale.length === 0 && a.clock.unparseable.length === 0]);
+    checks.push(["daysStale on a future date is negative, which is how the future bucket recognises it", daysStale("2027-01-01", asOf) < 0]);
+
     a = auditOrgRoster({ roles: [staleRole] }, chart("stale"), KNOWN, null);
-    checks.push(["with no asOf date supplied, the clock report is empty rather than guessed — the CLI always supplies one", a.clock.stale.length === 0 && a.clock.unparseable.length === 0 && a.clock.noClock.length === 0]);
+    checks.push(["with no asOf date supplied, the clock report is empty rather than guessed — the CLI always supplies one", a.clock.stale.length === 0 && a.clock.unparseable.length === 0 && a.clock.noClock.length === 0 && a.clock.future.length === 0]);
 
     checks.push(["daysStale is a plain day count, positive when the date is in the past", daysStale("2026-09-01", "2026-09-12") === 11]);
     checks.push(["daysStale returns null on a bad date rather than NaN, so callers cannot accidentally compare NaN > 7 and get false", daysStale("nonsense", "2026-09-12") === null]);
@@ -505,7 +526,10 @@ function runGate() {
     if (clock.unparseable.length > 0) {
       for (const u of clock.unparseable) console.log(`    · ${u.id} — nextActionDate \`${u.nextActionDate}\` is not a valid calendar date`);
     }
-    if (staleSorted.length === 0 && clock.noClock.length === 0 && clock.unparseable.length === 0) {
+    if (clock.future.length > 0) {
+      for (const f of clock.future) console.log(`    · ${f.id} — nextActionDate \`${f.nextActionDate}\` is AFTER the as-of date (${-f.days}d in the future) — invalid, not fresh`);
+    }
+    if (staleSorted.length === 0 && clock.noClock.length === 0 && clock.unparseable.length === 0 && clock.future.length === 0) {
       console.log("    · none — every nextAction was set within the last 7 days.");
     }
   }

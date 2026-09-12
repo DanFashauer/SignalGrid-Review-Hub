@@ -2548,6 +2548,273 @@ node scripts/check-markdown-links.mjs --self-test && node scripts/check-markdown
 node scripts/check-text-safety.mjs
 node scripts/check-launch-claims.mjs --self-test && node scripts/check-launch-claims.mjs
 pnpm run typecheck
+
+## 2026-09-12 — "Row 101 is a judgment call, not a mechanical re-port: the Swift is untouched, and check-decision-port-parity now sees the AppWorkflows field drift it was green over"
+Command:  both ported files and both TS originals read in full; the drift located at `lib/app-workflows/src/index.ts:85-90,144-158` vs `native/ios/EnterpriseShell/Services/AppWorkflows.swift:85-95,122`; section 3b added to the gate (five record shapes compared field for field, `DECLARED_WORKFLOW_DRIFT` checked both ways, nine self-tests); then a live plant — a copy of the gate with the declaration emptied — run against the same tree.
+```
+node scripts/check-decision-port-parity.mjs
+node scripts/check-decision-port-parity.mjs --self-test
+sed 's/^const DECLARED_WORKFLOW_DRIFT = \[/const DECLARED_WORKFLOW_DRIFT = [];\nconst _UNUSED = [/' scripts/check-decision-port-parity.mjs > scripts/.plant-parity.mjs && node scripts/.plant-parity.mjs; echo "exit=$?"
+```
+Output:
+```
+app-workflows parity: 3 enums + 4 operations compared
+app-workflows shapes: 5 record type(s) compared field-for-field, 1 declared drift(s) pinned both ways (AppPlanInput.stepUpSatisfiedActionKeys — TS only)
+Port parity passed — DecisionEngine emits the same verdicts wired the same way, and
+AppWorkflows offers the same vocabulary and the same gating operations.
+  ✓ shape: an undeclared TS-only field is flagged — 1 finding(s)
+  ✓ shape: an undeclared Swift-only field is flagged — 1 finding(s)
+  ✓ shape: a declared TS-only drift is accepted while it holds — 0 finding(s)
+  ✓ shape: a declared drift whose port has LANDED is flagged (remove the declaration) — 1 finding(s)
+  ✓ shape: a declared drift whose TS field is GONE is flagged (stale declaration) — 1 finding(s)
+  ✓ shape: a declaration for shape X does not excuse the same field on shape Y — 1 finding(s)
+  ✓ shape: the Swift parser reads stored properties only (init params and nested lets excluded) — {key, confirmer}
+  ✓ shape: the TS parser reads depth-0 members only (a nested object type's members excluded) — {key, confirmer, nested}
+  ✓ shape: the real AppPlanInput parses on both sides above the floor — ts=7 swift=6
+self-test: 16 passed, 0 failed
+  ✗ AppPlanInput.stepUpSatisfiedActionKeys: present in the TS reference, ABSENT from the Swift port and not declared — the device cannot express it
+Decision-port parity FAILED.
+exit=1
+```
+Verdict:  **holds — as a finding, not a repair.** No generator exists from the TS to the Swift (the port was hand-written in #107, the same commit that added the scoped release to the TS), and the gate proves vocabulary and shape, not bodies, so there is no regeneration it could then prove byte-faithful; this lane cannot compile Swift. The Swift files are byte-identical to `origin/SignalGrid_Alpha`. What the gate now does: read `AppPlanInput` on both sides (7 TS fields, 6 Swift), pin the one missing field, and fail the day the declaration goes stale or the port lands unrecorded. What it still cannot see: the confirmer-fallback string divergence (`"an authorized confirmer"` vs `"supervisor"`), recorded in the backlog row instead. The re-port is `mobile-native-engineer`'s, in Xcode.
+
+## 2026-09-12 — "The three decided deletions now have a row a Mac session can execute, and every claim in it was re-derived on this tree"
+Command:
+```
+git ls-files tests/load .agents site
+for f in tests/load .agents/agent_assets_metadata.toml site/index.html; do git log -1 --format='%h %ad %s' --date=short -- "$f"; done
+git grep -l -F "site/index.html" -- '*.mjs' '*.yml' '*.json' '*.ts'
+git grep -l agent_assets_metadata -- '*.mjs' '*.yml' '*.ts'; echo "exit=$?"
+node scripts/check-backlog-ownership.mjs; node scripts/check-cited-paths.mjs
+```
+Output:
+```
+.agents/agent_assets_metadata.toml
+site/CNAME
+site/index.html
+tests/load/location-report.js
+tests/load/session-start.js
+tests/load/webhooks.js
+4b50c4d9 2026-09-05 tests/load: the k6 drivers could not fail — 404, 401 and 400 counted as success, and webhooks.js posted to a third-party host by default
+c95b97ac 2026-07-17 ci: bump the github-actions group across 1 directory with 10 updates (#63)
+29e29f73 2026-09-05 Seventh round, the shipping site: thirteen evidence links to a branch that does not exist, a landing page outside the scan, a figure with a false provenance badge — fixed, gated, mutation-proven
+.github/workflows/pages.yml
+docs/agent/SURFACE_REVIEW_COVERAGE.json
+scripts/check-launch-claims.mjs
+scripts/check-product-framing.mjs
+exit=1
+Backlog ownership check passed — every row with work left in it names a role from the registry.
+Cited-path check passed — 2565 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+```
+Verdict:  **holds.** Nothing was deleted (the six paths are still tracked). The row names `mac-lane-steward`, lists per path what references it, its last commit and which gate reads it — `check-product-framing.mjs:59` names `site/index.html` and skips it if absent, `check-launch-claims.mjs:166` derives `site/*.html`, nothing reads the toml, `check-test-execution.mjs:46` says the k6 drivers are invoked by nothing — and which fixtures move (the `tests` and `.agents` coverage rows, three `.agents/**` surface lines, one `tests/load/**` glob, `README.md:60` on an owner-reserved surface, and every backticked citation the cited-path gate holds). What is NOT proven: that the deleting commit will be green — that is the Mac session's quote to make.
+
+## 2026-09-12 — "DR-045 proposes the fail-closed value of the three 2026-09-06 'recorded rather than made' safety defaults at their exact code sites, and changes none of them"
+Command:  the 2026-09-06 wording recovered (`git show 5f0017c6 -- docs/agent/LOOP.md` → "the custody backstop blind to five custody axes (disclosed, pinned), NOT_COVERED credential exposure resolving to monitor, a GAPS entry for connector families unwired in the served core"); each site read; the record appended; the gates that read it run.
+```
+grep -rn 'reasonCode: "NOT_COVERED", recommendedAction: "monitor"' lib/integrations/src/integrations/*/evaluate.ts | wc -l
+grep -rln "@workspace/integrations" artifacts/api-server/src; echo "exit=$?"
+git diff --stat -- lib/signalgrid-core lib/integrations scripts/launch-profile.mjs
+node scripts/check-decision-record-format.mjs; node scripts/check-launch-claims.mjs; node scripts/check-cited-paths.mjs
+```
+Output:
+```
+4
+exit=1
+(no output — nothing under those paths changed)
+  ✓ DR-045
+decision-record-format: 44 records, 0 without a reversal clause (GATED), 16 with prose-shaped sections (REPORTED); self-test green
+  docs/**/*.md (REPORTED, not gated): 416 unhedged deferred-capability mention(s) across 110 file(s) (53 more mention(s) in 6 engineering-doc(s) carved out per task #67, each verified) (ceiling 416)
+Launch-claims gate passed — nothing deferred is presented as current.
+Cited-path check passed — 2565 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+```
+Verdict:  **holds.** DR-045 carries a question, a proposal, evidence and a reversal (the owner vetoes by saying so, before or after each item's PR). The first draft pushed the deferred-noun ceiling 416 → 418 by naming custody unhedged in two blocks; hedged where the claim is, back to 416. Four sibling `NOT_COVERED → monitor` lines exist beside the one the note named (the grep above counts the `{ ...base, … }` form; `challenge-capability` uses `verdict(…)` and is the fifth); all five are proposed together. Not decided here: any of the three — the code at every site is byte-identical to the branch point.
+
+## 2026-09-12 — "removeCredential now runs under the same per-user lock as addCredential, and the revocation race it lost is measured on both stores: 9/11 unfixed, 11/11 fixed; hasValidStepUpSession's `return false` is fail-closed, only its docstring lied"
+Command:  `lib/webauthn/src/webauthn/store.ts` and `lib/webauthn/src/stepUpStore.ts` read in full; `proof:enrollment-race` extended first (a 516-interleaving in-memory sweep of a revocation racing an enrolment, and a Redis race of one revocation against twelve enrolments) and run against the UNFIXED store; then the lock factored into `withUserLock` and applied to both writers, the in-memory branch made await-free between read and write, the swallowed `DEL` failure made to propagate; run again.
+```
+redis-server --port 6390 --daemonize yes --save "" --appendonly no; redis-cli -p 6390 ping
+cd scripts && REDIS_URL=redis://127.0.0.1:6390 node --import tsx src/webauthn-enrollment-race-proof.ts   # unfixed store
+cd scripts && REDIS_URL=redis://127.0.0.1:6390 node --import tsx src/webauthn-enrollment-race-proof.ts   # fixed store
+pnpm run typecheck; pnpm run review:invariants; node scripts/check-proof-counts.mjs
+git grep -n hasValidStepUpSession -- '*.ts' | grep -v "stepUpStore.ts" ; echo "exit=$?"
+```
+Output:
+```
+PONG
+  FAIL — in-memory: a revocation of the last credential never deletes an enrolment that lands mid-flight (516 interleavings swept): microtask×27 → revoked=true enrolled=true after=[]; microtask×35 → revoked=true enrolled=true after=[]; microtask×47 → revoked=true enrolled=true after=[]; microtask×57 → revoked=true enrolled=true after=[]; … 43 lost
+  FAIL — all 12 enrolments that raced the revocation survived it (the revocation's snapshot did not erase them): missing: cred-100
+9/11 assertions passed
+  ok   — in-memory: a revocation of the last credential never deletes an enrolment that lands mid-flight (516 interleavings swept)
+  ok   — the revoked credential is GONE after the race (a stale write did not restore it)
+  ok   — all 12 enrolments that raced the revocation survived it (the revocation's snapshot did not erase them)
+concurrency=12 survived=12
+11/11 assertions passed
+scripts typecheck: Done
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Proof-count check passed — all 60 documented counts match their proofs.
+exit=1
+```
+Verdict:  **holds.** Both races were real before the change: in memory, 43 of 516 interleavings deleted the user together with the credential enrolled mid-flight (the old code awaited the Redis client factory between the splice and `inMemoryUsers.delete`); under Redis, the unlocked revocation's stale snapshot erased `cred-100`. Neither is reachable after it. `hasValidStepUpSession` is NOT a fail-open — an unconditional `false` can never grant, so a caller must require a fresh step-up; what was wrong was a docstring describing a check never performed, now replaced by NOT IMPLEMENTED plus `@deprecated`, and nothing calls it (the grep above finds only the definition, exit 1). What is NOT done: the revoke route (the lock is latent until one exists) and the attestation-`'none'` comment at `lib/webauthn/src/webauthn/verify.ts:398` — both left on the row for `security-engineer`. The Redis half of the proof runs where CI provides a store (`scripts/docker-verify.mjs`); preflight does not run it.
+
+## 2026-09-12 — "the lock's release was CAS-protected but its WRITE was not: the fenced write closes it, measured 11/15 unfixed vs 15/15 fixed; the step-up deprecation note pointed at a binding-unsafe store; the port-parity field regex ate `readonly` as the field name"
+Command:  three Codex findings on `lane/cloud-misfiled-engineering-20260912-0940Z` (06f0e6f9) fixed in one commit. (1) `lib/webauthn/src/webauthn/store.ts`: `addCredential`/`removeCredential`'s user-record write inside `withUserLock` is now a Lua script (`FENCED_SET_LUA`/`FENCED_DEL_LUA`) that writes only if `GET lockKey == token`, else returns 0 and the caller throws "lock lost; not reporting a write that did not happen" — the lease (`LOCK_TTL_MS = 5_000`) is unchanged. `proof:enrollment-race` extended with a case that deletes the real lock key mid-critical-section (by patching ioredis's own `get`, on the same already-connected client, no production injection point added) and asserts the write is refused; run against the unfixed store, then the fixed one. (2) `lib/webauthn/src/stepUpStore.ts`: `hasValidStepUpSession`'s `@deprecated` note pointed callers at `getStepUpSession` in `./webauthn/store.ts` — a different key prefix (`webauthn:stepup:` there vs this module's own `stepup:`) that checks only expiry, no `userId`/`requestId`/`challenge` binding. Repointed at this module's own `verifyStepUpSession` + `consumeStepUpSession`, with the reason spelled out. (3) `scripts/check-decision-port-parity.mjs:416`: the TS field regex captured a leading `readonly`/`public`/`private` modifier as the field name, found no `:` after it, and matched nothing — `readonly actionBinding: string` was invisible to `tsFields`, so a Swift port dropping it would pass. Regex now skips an optional modifier before capturing the name; self-tested with a modifier-bearing field the Swift side lacks, which must be flagged.
+```
+redis-server --port 6380 --daemonize yes --save "" --appendonly no; redis-cli -p 6380 ping
+cd scripts && REDIS_URL=redis://127.0.0.1:6380 node --import tsx src/webauthn-enrollment-race-proof.ts   # unfixed store.ts (git show HEAD:...)
+cd scripts && REDIS_URL=redis://127.0.0.1:6380 node --import tsx src/webauthn-enrollment-race-proof.ts   # fixed store.ts restored
+node scripts/check-decision-port-parity.mjs --self-test; node scripts/check-decision-port-parity.mjs
+pnpm run typecheck; pnpm run review:invariants; node scripts/check-proof-counts.mjs
+node scripts/check-derived-doc-figures.mjs --self-test; node scripts/check-cited-paths.mjs
+```
+Output:
+```
+PONG
+  FAIL — addCredential: a lock deleted mid-section is REFUSED, not silently applied (throws "lock lost"): undefined
+  FAIL — …and the credential was never actually stored: credentials: [cred-500]
+  FAIL — removeCredential: a lock deleted mid-section is REFUSED, not silently applied (throws "lock lost"): undefined
+  FAIL — …and the credential was never actually removed: credentials: []
+concurrency=12 survived=12
+11/15 assertions passed
+  ok   — addCredential: a lock deleted mid-section is REFUSED, not silently applied (throws "lock lost")
+  ok   — …and the credential was never actually stored
+  ok   — removeCredential: a lock deleted mid-section is REFUSED, not silently applied (throws "lock lost")
+  ok   — …and the credential was never actually removed
+concurrency=12 survived=12
+15/15 assertions passed
+self-test: 18 passed, 0 failed
+Port parity passed — DecisionEngine emits the same verdicts wired the same way, and
+AppWorkflows offers the same vocabulary and the same gating operations.
+scripts typecheck: Done
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Proof-count check passed — all 60 documented counts match their proofs.
+self-test passed (82/82)
+Cited-path check passed — 2569 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+```
+Verdict:  **holds.** The unfixed run shows the exact defect: the enrolment silently stored `cred-500` despite its lock being gone (a plain `SET`, no token check), and the seeded revocation of `cred-501` then also landed unfenced, deleting the whole record. Both are refused on the fixed store, and the write is provably never applied (state re-read after each). `scripts` needed a direct `ioredis` dependency to reach the same physical module store.ts uses (pnpm-verified same real path) for the monkeypatch, added to `scripts/package.json` and the lockfile regenerated (`pnpm install --lockfile-only`), matching the existing `pg` precedent for infra-gated proofs. What is NOT done: `preflight.mjs`/`verify:breadth` were not run this pass — the coordinator's restart notice said they OOM'd the box; CI runs the full suite and the coordinator merges on green.
+
+## 2026-09-12 — "Every open row in `docs/BUILD_BACKLOG.md` names a registered role, and `check-backlog-ownership.mjs` now fails when one does not"
+Command:
+```
+git show 1c95f6d8:docs/BUILD_BACKLOG.md > /tmp/build-backlog-baseline.md
+node --input-type=module -e '
+import { readFileSync } from "node:fs";
+const text = readFileSync("/tmp/build-backlog-baseline.md", "utf8");
+const roster = JSON.parse(readFileSync("docs/agent/org-roster.json", "utf8"));
+const ids = roster.roles.map((r) => r.id);
+const lines = text.split("\n");
+const rows = [];
+let cur = null;
+for (let i = 0; i < lines.length; i++) {
+  const line = lines[i];
+  if (/^- \[ \] \*\*/.test(line)) { if (cur) rows.push(cur); cur = { text: line }; continue; }
+  if (/^- \[x\] /.test(line) || /^#/.test(line)) { if (cur) { rows.push(cur); cur = null; } continue; }
+  if (cur) { if (/^- \[/.test(line)) { rows.push(cur); cur = null; continue; } cur.text += "\n" + line; }
+}
+if (cur) rows.push(cur);
+const names = (id) => new RegExp(`(?<![\\w-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`);
+const laneless = rows.filter((r) => !ids.some((id) => names(id).test(r.text))).length;
+console.log("total rows:", rows.length, "laneless:", laneless);
+'
+node scripts/check-backlog-ownership.mjs --self-test
+node scripts/check-backlog-ownership.mjs
+node scripts/check-cited-paths.mjs
+node scripts/check-markdown-links.mjs
+node scripts/check-launch-claims.mjs
+node scripts/check-doc-line-counts.mjs
+node scripts/check-derived-doc-figures.mjs
+node scripts/check-derived-doc-figures.mjs --self-test
+node scripts/check-gate-census.mjs
+```
+Output:
+```
+total rows: 58 laneless: 54
+```
+```
+self-test passed (37/37)
+```
+```
+Backlog ownership — docs/COMPANY_BUILD_PLAN.md: 193 row(s): 116 open, 5 partially done, 72 closed
+Backlog ownership — docs/BUILD_BACKLOG.md: 131 row(s): 64 open, 67 closed
+Backlog ownership check passed — every row with work left in it, in both documents, names a role from the registry.
+```
+```
+Cited-path check passed — 2536 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+```
+```
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+```
+```
+Launch-claims gate passed — nothing deferred is presented as current.
+```
+```
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+```
+```
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+```
+```
+Derived-doc-figures self-test passed
+```
+```
+OK Gate census - all 189 gates run somewhere (2 exempt by name with a reason).
+```
+Verdict: **holds, after a fix to this same change made from review.** Before stamping, docs/BUILD_BACKLOG.md had **54 lane-less** `- [ ] **` rows out of 58 total (the six DR-042 cascade joins, the five DR-043 puck items, the three "Now" rows the Mac flagged at lines 259/277/390, the DR-040 CLI-Anything harness item, both api-zod design targets missing a real role and one carrying an INVALID pseudo-role "gate-and-proof-engineer" that resolves to no registry entry, and the bulk of the ECC/full-evaluation findings) — several of those rows already read as owned in prose ("Cloud lane.", "Mac lane", "Native lane.") without naming an id `docs/agent/org-roster.json` actually has, which is exactly the false-affirmative shape CLAUDE.md rule 2 warns about. Every lane-less row now carries an appended `Lane: <role-id>.` clause naming a real roster role chosen by what the row builds (decision core → principal-engineer; ITSM/change-management cascade joins → itsm-ops-domain; iOS/Android → mobile-native-engineer; gates/proofs/tooling → devex-tooling-engineer or qa-engineer; UEM/MAM connectors → endpoint-uem-domain; API contract/OpenAPI → api-contract-architect; security-shaped fixes → security-engineer; Mac-only work → mac-lane-steward), with **zero** substantive changes to any row's text. **After: 0 laneless.** The DR-042 section also gained one appended line proposing a build order for the six joins (join 1 → 5 → 2 → 3 → 4 → 6, one sentence of reasoning per join), not a rewrite of the section.
+
+**Codex review (PR #688) found the change itself carried a fail-open, and this entry's own two placeholders — fixed in the same commit as the gate, not just described:**
+1. **The gate's own row-detection pattern excluded six real open rows.** `BACKLOG_OPEN_HEAD` originally required the bold marker (`- [ ] **`), so BUILD_BACKLOG's six non-bold `- [ ]` open rows (lines 1384, 1392, 1398, 1403, 1461, 1472) were invisible to the scan — not counted open, not required to name a role. All six had in fact already been stamped in the first pass, but a lane silently removed from one of them would have left the gate green. Fixed by widening `BACKLOG_OPEN_HEAD` to `/^- \[ \] /` (any open checkbox row, bold or not) — nothing in this document's own convention conditions "open" on bold formatting, so gating on the bold marker was gating a coincidence of style. The self-test that had asserted the non-bold row was "simply not seen" (baking the fail-open into the proof of correctness) is replaced with two controls: a planted un-stamped non-bold row is flagged, and a planted stamped non-bold row passes. Live open-row count moved from the old pattern's 58 to the correct **64** (58 bold + 6 non-bold), all 64 owned, self-test 36/36 → **37/37**.
+2. **This entry's own recorded baseline command was a `node -e '<...>'` English-description placeholder**, not executable (`SyntaxError: Unexpected token '<'`). Replaced with the real command above — `git show 1c95f6d8:docs/BUILD_BACKLOG.md` (the commit this branch started from, before either stamping commit) piped into the same row/laneless logic the gate uses — verified to run and to reproduce the original 58-total/54-laneless baseline exactly.
+3. **This entry's quoted cited-path count (2533) was stale** — measured before the widening fix and this entry's own rewrite added citations of its own. Re-run on the final tree above: **2536**.
+
+`check-backlog-ownership.mjs` was extended with `parseBacklogRows`/`auditBacklogFileOwnership`, scanning BUILD_BACKLOG's checkbox rows under the same `{problems, open, closed}` output shape as the existing COMPANY_BUILD_PLAN scan, with the checkbox itself as status (no free-prose vocabulary in this file — `- [x]` is skipped outright, every open `- [ ]` row must name a role, bold or not). `check-gate-census.mjs`, `check-cited-paths.mjs`, `check-markdown-links.mjs`, `check-launch-claims.mjs`, `check-doc-line-counts.mjs` and `check-derived-doc-figures.mjs` (plus its own `--self-test`) all pass on the tree that includes this fix; `check-backlog-ownership.mjs` was already registered in both `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml` before this change (confirmed by grep, not re-registered). `node scripts/preflight.mjs` → `Preflight PASSED — everything it runs is green.`; `pnpm run verify:breadth` → `Breadth lane PASSED — 56 breadth proofs green.` — both re-run after every edit in this entry, on the exact tree pushed.
+
+## 2026-09-12 — "The org roster has no clock, so a role's nextAction can sit done or stale for weeks unnoticed" (org self-evaluation, item 4)
+Command:
+```
+node scripts/check-org-roster.mjs
+node scripts/check-org-roster.mjs --self-test
+node scripts/check-plugin-manifest.mjs
+node scripts/check-cited-paths.mjs
+node scripts/check-doc-line-counts.mjs
+node scripts/check-derived-doc-figures.mjs
+node scripts/preflight.mjs
+pnpm run verify:breadth
+```
+Output (CORRECTED 2026-09-12, see the round-2 entry below: the block originally quoted here was captured BEFORE commit dd027dd3 landed, so it showed the pre-commit "as of 2026-09-07" reading a stale commit-date source that has since been replaced — this is the same output re-run on the committed tree, post the round-2 fixes, with the new `--as-of`/env/process-clock source):
+```
+Org roster — 42 role(s): 21 activated, 21 never yet run
+  NEXT-ACTION CLOCK (as of 2026-09-12, source: today (process clock, UTC calendar date)) — 34 role(s) with nextAction older than 7d:
+    · competitive-analyst — nextAction older than 7d (set 2026-08-19, 24d ago)
+    · docs-writer — nextAction older than 7d (set 2026-08-19, 24d ago)
+    ... (32 more)
+Org roster check passed — registry and chart agree, and every activation names what it produced.
+
+self-test passed (36/36) — CORRECTED count 2026-09-12: 26/26 at the time this entry was first written; round 2 (isRealCalendarDate + resolveAsOfDate) brought it to 34/34; round 3 (the future/invalid-date bucket) brought it to 36/36, current as of this tree.
+
+Plugin-manifest gate passed — signalgrid plugin: 13 agents (derived), skills + commands present; claude plugin validate exit 0.
+Cited-path check passed — 2533 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+
+Preflight: every step green except Browser E2E, which failed once on a genuine cross-lane port collision (`Error: Port 4614 is already in use` / `Port 4615 is already in use` — another worktree's playwright run was live on the fixed E2E ports at the same moment). Re-run standalone once those ports freed: `pnpm --filter @workspace/scripts run test:e2e` → `53 passed (1.4m)`.
+
+Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Verdict:  **holds.** Every role that carries a `nextAction` (42 of 42) now also carries `nextActionDate` (ISO date, the day that action was SET — for the 34 untouched roles, recovered from `git log -S'<nextAction fragment>' --format=%cs -- docs/agent/org-roster.json | tail -1`, i.e. the commit that first introduced that exact text; never guessed). `scripts/check-org-roster.mjs` gained a pure, testable staleness audit (`auditNextActionClock`/`daysStale`) reported under a new "NEXT-ACTION CLOCK" section, the gate's existing FATAL checks untouched. **SUPERSEDED 2026-09-12 (Codex round 2 on #685): the design described in this sentence at the time it was written — "as of" sourced from the roster file's own latest commit date via `git log -1 --format=%cs`, three buckets, 26/26 self-test — is NOT what shipped.** It was replaced the same day, before this branch was ever pushed for review, by the design the round-2 and round-3 entries below describe: `resolveAsOfDate()` (flag → env → process clock, four buckets including the round-2 future/invalid-date fix, 36/36 self-test). Read this paragraph as history of an intermediate design, not as a description of the code in this tree; the entries below are accurate. Seven nextActions the org self-evaluation found already executed were marked DONE in place with the commit/PR that did the work (verified by `git log`/`git show` before marking, not assumed): devex-tooling-engineer row 73 (f97cebf6, e94b2829/#399, 049e3f8e/#492), mobile-native-engineer dynamic-type + row 58 (5e3b5c32), data-persistence-engineer SHIFT 2 (b7219453/#222), positioning-messaging retired labels (26fc83f1/#322), brand-design DR-006 allow re-tone (d7beda62/#224 — landed 2026-08-21, three days BEFORE the nextAction asking for it was even written, so that nextAction was stale from the moment it was set), desktop-engineer CI (the `app` job with WebKitGTK has built and tested the Tauri shell since 079cfd25/#199, 2026-08-08; main.rs finalized 92df48f2, 2026-09-02), finance-fundraising COST_MODEL.md (4f656d59/#251). `activated`+`produced` were filled for the three roles whose nextAction literally says "FIRST EXECUTION DONE" while `activated` sat `null`: mobile-native-engineer (2026-08-24), accessibility-specialist (2026-08-24), desktop-engineer (2026-08-25) — each verified against a real execution record before being set, not merely against the role's own prose. Additionally, on the coordinator's instruction: design-partner-outreach's BLOCKED nextAction was checked against the two roles its trigger names — positioning-messaging (label reconciliation landed 26fc83f1/#322; docs/POSITIONING.md exists, created f4bb9ec 2026-08-22, refreshed 5f0017c6 2026-09-06, though the role's own `activated`/`produced` fields are still null — a bookkeeping gap, not a missing deliverable) and icp-customer-research (roster-activated 2026-08-24, `produced` names docs/company/ICP_EVIDENCE.md, which exists) — both show real, verifiable output, and `node scripts/check-readiness-figure.mjs` independently reads `HEADLINE ... -> OUTREACH OPEN` on this checkout, so the role was rewritten UNBLOCKED (prepares addressed drafts only against docs/outreach/TARGETS_CRITERIA.md's criteria — the account list itself lives in the owner's private Drive — and never sends; DR-036's rule against typing the derived figure was kept). What this does NOT prove: that any of the 34 REPORTED-stale roles' underlying work is actually abandoned rather than legitimately quiet — the report only says the clock has not moved, exactly as designed; and the Browser E2E failure, while diagnosed here as a port collision (confirmed by `lsof -i :4614 -i :4615` showing another lane's live chrome/vite processes at the moment of failure, and a clean 53/53 once those ports freed), was not re-run inside a single unbroken `preflight.mjs` invocation — the two data points (full preflight run minus E2E, and standalone E2E) were taken separately.
+
+## 2026-09-12 (round 2) — "Seven Codex findings on dd027dd3 (PR #685): the clock never advances, no calendar-date check, three docs still stale, two roles' inputs mis-scoped"
+Command:
+```
+node scripts/check-org-roster.mjs
+node scripts/check-org-roster.mjs --self-test
+node scripts/check-role-coverage.mjs
+node scripts/check-derived-doc-figures.mjs
+node scripts/check-derived-doc-figures.mjs --self-test
+node scripts/check-role-heading-status.mjs
+node scripts/check-cited-paths.mjs
+node scripts/check-doc-line-counts.mjs
+node scripts/check-markdown-links.mjs
+node scripts/check-launch-claims.mjs
+node scripts/check-plugin-manifest.mjs
 node scripts/preflight.mjs
 pnpm run verify:breadth
 ```
@@ -2606,6 +2873,37 @@ Command:
 ```
 node scripts/check-discovery-log.mjs --self-test
 node scripts/check-discovery-log.mjs
+
+NEXT-ACTION CLOCK (as of 2026-09-12, source: today (process clock, UTC calendar date)) — 34 role(s) with nextAction older than 7d: ...
+Org roster — 42 role(s): 21 activated, 21 never yet run
+Org roster check passed — registry and chart agree, and every activation names what it produced.
+
+self-test passed (34/34) — CORRECTED count 2026-09-12: round 3 (the future/invalid-date bucket, below) brought it to 36/36; see that entry for the live number.
+
+  283 of 4147 owned file(s) read across 35 roles with a surface (6.8%).
+Role-coverage check passed — the committed ratchet equals the recompute from the ledger.
+
+self-test passed (82/82)
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Role-heading-status check passed — no role title asserts a status its table would have to defend.
+Cited-path check passed — 2534 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+Launch-claims gate passed — nothing deferred is presented as current.
+Plugin-manifest gate passed — signalgrid plugin: 13 agents (derived), skills + commands present; claude plugin validate exit 0.
+
+Preflight PASSED — everything it runs is green.  (includes: ▶ Browser E2E (review console, website, admin) … ok — a clean, unbroken run this time; ports were free)
+
+Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Verdict:  **holds, all seven.** (1) The "as of" date no longer needs the roster file to be edited to advance: `resolveAsOfDate` (scripts/check-org-roster.mjs) resolves `--as-of YYYY-MM-DD` / `--as-of=VALUE`, then `SIGNALGRID_AS_OF`, then today's UTC calendar date from the process clock, and the CLI prints which source won on every run — verified live: default run reads `source: today (process clock, UTC calendar date)` at `2026-09-12`; `SIGNALGRID_AS_OF=2026-10-01` reads `source: SIGNALGRID_AS_OF env` and reports 42 (not 34) roles stale; `--as-of=2026-09-19` reads `source: --as-of flag`. This IS a `Date.now()`-shaped read and is documented as such in the file's header comment: it does not need golden-rule-2 discipline because (a) `scripts/review-invariants.mjs`'s determinism scan derives its scope from `lib/*/src/` only (`determinismScope()`), so `scripts/` was never in scope, and (b) this section is REPORTED, never FATAL. The self-test never touches the clock — every fixture passes a literal ISO string for `asOfIso`. (2) `nextActionDate` is now validated as exactly `/^\d{4}-\d{2}-\d{2}$/` AND a real calendar date, via a new `isRealCalendarDate` that round-trips through `Date.UTC` and compares the reconstructed year/month/day against the input — `2026-09-31` (a real trap: `new Date("2026-09-31")` silently becomes October 1st) and `2026-2-3` (fails the shape check before it ever reaches `Date.parse`) both land in the unparseable bucket, proven by two new self-test cases plus a third that drives the full `auditOrgRoster` path with a planted `2026-09-31` and confirms it reports unparseable, not stale-or-fresh. (3) docs/company/ROLE_ACTIVATION_MATRIX.md rows for Accessibility Specialist (:56) and Client Engineer (:65) rewritten to match the roster's own activated dates and produced summaries for mobile-native-engineer (2026-08-24), desktop-engineer (2026-08-25), and accessibility-specialist (2026-08-24) — `check-derived-doc-figures` (+self-test) and `check-role-heading-status` re-run clean, confirming the edit did not touch any gated figure or role-heading status word. (4) docs/COMPANY_BUILD_PLAN.md row 7 (:41) rewritten from an open blocking item to DONE, citing docs/POSITIONING.md (f4bb9ec, 2026-08-22, #252) and the label reconciliation (26fc83f1, 2026-08-26, #322), and states design-partner-outreach is no longer blocked on it — `check-doc-line-counts` re-run clean (same-line edit, file line count unchanged at 4915, so no `path (N)` citation elsewhere could have drifted). (5) The stale EVIDENCE.md quote from the first entry (captured before dd027dd3 landed, showing the now-retired commit-date source reading "2026-09-07") is corrected in place with a note explaining why it was stale and the re-run output on the committed tree. (6) finance-fundraising's nextAction rewritten: verified against docs/COST_MODEL.md that Claude and domain are supplied via the owner-private channel (:9-15), GitHub CI is owner-confirmed at $0 (:51-52), and the Apple Developer fee is CLOSED at $0 while unenrolled (:82) — none of these were actually open, contrary to the prior entry's "four owner billing numbers" framing. What remains open is the three agent-computable lines in the "What closes each TBD" table (:80-81): VM hosting, backup storage, and Fleet Premium's per-device price, each explicitly marked "any lane" in that table — the nextAction now says the lane computes these, not the owner. (7) positioning-messaging's `activated`/`produced` were `null` despite design-partner-outreach's UNBLOCKED rewrite depending on it having run — set `activated: "2026-08-22"` (verified via `git log --diff-filter=A -- docs/POSITIONING.md` → `f4bb9ec4 2026-08-22`) and `produced` naming docs/POSITIONING.md plus the label reconciliation (26fc83f1, #322); confirmed by re-running `node scripts/check-org-roster.mjs`: positioning-messaging no longer appears under "CALL THESE NEXT" (the priority-1 unactivated list dropped from 2 to 1 entries, leaving only endpoint-uem-domain), and the activated count rose from 20 to 21. What this does NOT re-verify: the 34-role stale count and the specific fragments/dates recovered in round 1 for the untouched roles — those were not touched this round and are taken as still correct.
+
+## 2026-09-12 (round 3) — "Three more Codex findings on e4c13df3: a dead label in the DONE row, a silent-fresh negative-age bug, a stale round-1 verdict"
+Command:
+```
+node scripts/check-org-roster.mjs
+node scripts/check-org-roster.mjs --self-test
+node scripts/check-derived-doc-figures.mjs
 node scripts/check-derived-doc-figures.mjs --self-test
 node scripts/check-cited-paths.mjs
 node scripts/check-doc-line-counts.mjs
@@ -2631,4 +2929,80 @@ Preflight↔CI parity passed — every preflight gate is wired into a workflow.
 ```
 Verdict: **root-caused four findings into one `validateTallyRow`, fixed the other two directly, stopped the seventh (authorization-surface scan) rather than half-build it.** All four old-line findings (duplicate rows counted twice at the former :180, an escaped `\|` shifting every column after it at the former :89, an ambiguous BASE mark read as "marked" at the former :196, an ambiguous HARDWARE mark at the former :91) were one root cause — no row shape was ever validated before its cells were trusted — so `validateTallyRow` now rejects a row outright (never counted, only flagged) unless: cell count exactly equals the header's (an unescaped pipe or a missing cell FAILS: self-tested with a genuine 13-vs-12 column mismatch); a `\|` is unescaped AFTER splitting on unescaped pipes only, so it never shifts a column (self-tested: a Role cell holding `\|` still derives its row's real hardware mark correctly); the "#" cell is an integer 1..15, unique across rows (self-tested: a reused number is rejected and its marks excluded from the tally, an out-of-range number is rejected); and every R/C/P/Rh/Ch/Ph cell is empty or exactly the canonical `X` — the SAME rule now applies to base columns, not just hardware ones (self-tested: a `?` in the base column R fails identically to a `?` in Rh). The former :213 finding (only the FIRST "Hardware (DR-043)" sentence was ever checked) is fixed by collecting every match and requiring exactly one — self-tested with a stale second sentence present alongside a correct first one, which now fails. The former :250 finding (the no-go row only had to name `Ph`, not also `Ch`, though the no-go threshold is PROBLEM>=5 AND COMMITMENT=0, a conjunction of both cells) now requires both names in that row — self-tested by dropping only `Ch` while keeping `Ph`. **Finding :73 (a tree-wide scan for a rogue DR-043 authorization surface) was NOT built**: `docs/DECISION_RECORDS.md` DR-043 rule 4 and `docs/BUILD_BACKLOG.md`'s own Puck 5 row both legitimately say "Rh -> bench prototype" / "design-partner MVP" / "no-go" in the same breath — that IS the rule being described, not a rogue second surface — and this gate has no standing to edit either file to launder the phrasing around a detector. Per the coordinator's own stop condition ("too broad to do cleanly... do not half-build it"), the header now proposes a marker-based alternative (an `<!-- dr-043-authorization-surface -->` comment the real surface carries, so the check becomes "every such marker is registered" — additive, never a doctrine-vs-decision parse). **Attempted to post this to the PR #690 review thread via `mcp__github__pull_request_read`/reply tools, twice, both attempts refused with "API rate limit already exceeded for user ID 202149891"** — the proposal is recorded here and in the script's own header comment instead; still owed: posting it to the actual thread once the rate limit clears. Not run this round (per the coordinator, prior attempt OOM'd the box): full `node scripts/preflight.mjs` / `pnpm run verify:breadth` — CI runs the full suite on the pushed branch.
 
+node scripts/preflight.mjs
+pnpm run verify:breadth
+```
+Output:
+```
+self-test passed (36/36)
+NEXT-ACTION CLOCK (as of 2026-09-12, source: today (process clock, UTC calendar date)) — 34 role(s) with nextAction older than 7d: ...
+Org roster check passed — registry and chart agree, and every activation names what it produced.
 
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+self-test passed (82/82)
+Cited-path check passed — 2535 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+Launch-claims gate passed — nothing deferred is presented as current.
+
+Preflight PASSED — everything it runs is green.  (▶ Browser E2E (review console, website, admin) … ok — clean, unbroken run, ports free)
+
+Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Verdict:  **holds, all three.** (1) docs/COMPANY_BUILD_PLAN.md row 7 (:41) still said "reconciled to the ratified DR-004 label" after being marked DONE last round — read DR-019 (docs/DECISION_RECORDS.md:1022-1042): it explicitly **SUPERSEDES** DR-004's ratification of "Shared-Device Trust Gateway" and **ratifies NO replacement**, deferring the category question to customer discovery. Read docs/POSITIONING.md:10-34 ("The label question — superseded, and deliberately left open... So there is no ratified product-category name to put here") and docs/ECOSYSTEM_POSITIONING.md:3-13 ("There is no ratified category label (DR-019 ratified none...)") — both already carry the DR-019/DR-020 outcome, reconciled in ab723558/#372 (2026-09-01) and cecf6652 (2026-09-01) respectively. docs/EXECUTIVE_ONE_PAGER.md (c64c3fdd, 2026-08-23) never carried a category label to begin with — confirmed by grep, zero hits for any retired label spelling. Row 7 rewritten to record the DR-019 outcome (label retired, no replacement ratified, reconciliation already landed everywhere) instead of pointing docs-writer at the dead DR-004 label; the prior "REMAINING: docs-writer reconciliation" clause is removed since both named docs are already correct. check-doc-line-counts re-run clean (same-line edit, 4915 lines unchanged). (2) scripts/check-org-roster.mjs:168's `auditNextActionClock` had a real gap: `age < 0` (a `nextActionDate` LATER than `asOfIso` — e.g. a `2027` typo) satisfied neither `age === null` nor `age > STALE_AFTER_DAYS`, so it landed in no bucket and `clock.stale.length === 0` read exactly like a genuinely fresh role. Added a fourth bucket, `future`, checked before the `stale` branch; the CLI now prints `nextActionDate \`X\` is AFTER the as-of date (Nd in the future) — invalid, not fresh`. Two new self-test cases (a planted `2027-01-01` role landing in `future` and nowhere else, plus a `daysStale` sign check) bring the suite to 36/36; verified live that the real roster has zero future-dated entries today (`34 role(s) with nextAction older than 7d`, unchanged — the fix adds a bucket, it does not move any existing role). (3) The round-1 EVIDENCE.md verdict paragraph (originally at :2571) still described the git-commit-date "as of" source, three buckets and 26/26 self-test as current, two rounds after that design was replaced — corrected in place with an explicit SUPERSEDED note pointing at the round-2/round-3 entries as the accurate description, and the two stale self-test-count quotes in the round-1 and round-2 Output blocks (26/26, 34/34) each got a one-line correction naming the current 36/36. What this does NOT re-verify: the 34-role stale list and the round-1/round-2 fragment-recovered dates for untouched roles, unaffected by any of these three fixes.
+
+## 2026-09-12 (round 4) — "One more Codex P1 on #685 head c0390273: the same dead-DR-004-label theme, now in the roster record itself"
+Command:
+```
+node scripts/check-org-roster.mjs --self-test
+node scripts/check-launch-claims.mjs
+node scripts/check-cited-paths.mjs
+node scripts/check-derived-doc-figures.mjs --self-test
+node scripts/check-doc-line-counts.mjs
+```
+Output:
+```
+self-test passed (36/36)
+Launch-claims gate passed — nothing deferred is presented as current.
+Cited-path check passed — 2535 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+self-test passed (82/82)
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+```
+Verdict:  **holds.** docs/agent/org-roster.json's positioning-messaging role carried the identical defect just fixed in docs/COMPANY_BUILD_PLAN.md row 7 (round 3, this file), in its own `produced` and `nextAction` fields: both said the four retired-label instances (README.md, ReviewDashboard.tsx, About.tsx) were reconciled "to the ratified DR-004 label." Traced the actual history: 26fc83f1 (#322, 2026-08-26) DID reconcile them to DR-004's "Shared-Device Trust Gateway" — accurate for a few hours, since DR-019 (docs/DECISION_RECORDS.md:1022-1042) superseded that ratification the same day and ratified no replacement (DR-020 reinforced it). The label's actual removal from those three surfaces landed later — `git log -S"Shared-Device Trust Gateway"` shows e1274c57 (2026-08-31, ReviewDashboard.tsx + About.tsx) and aec28c86 (2026-09-01, README.md rebuilt) — so the roster's claim was stale even by the time it described a settled state. Both fields rewritten to record the DR-019/DR-020 outcome (label retired, no replacement ratified, reconciliation actually landed in e1274c57/aec28c86, current state re-verified as zero retired-label instances across all three files) rather than asserting DR-004's label as current or ratified; docs/POSITIONING.md:10-34 and docs/ECOSYSTEM_POSITIONING.md:3-13 are cited as where this outcome now lives in prose, matching the round-3 fix to COMPANY_BUILD_PLAN.md. `check-launch-claims.mjs` re-run clean (the RETIRED_LABELS denylist at :625/:688, correctly cited, was never the defect — the roster's PROSE was). Preflight and breadth were not run this round per the coordinator's instruction (Codex has hit its review usage limit; CI runs the full suite before the 15:11Z merge sweep).
+
+## 2026-09-12 — "cloud/fix-ci-timeout-reusable-callers merged and finished: the gate resolves reusable-workflow callers, 0 unbounded; and no push-triggered workflow needs a heartbeat paths-ignore it lacks"
+Command:
+```
+node scripts/check-ci-job-timeouts.mjs        # after merging origin/SignalGrid_Alpha in
+node scripts/check-derived-doc-figures.mjs
+node scripts/check-preflight-ci-parity.mjs
+node scripts/preflight.mjs
+pnpm run verify:breadth
+node scripts/check-action-pinning.mjs
+node scripts/check-ci-preflight-sync.mjs
+```
+Output:
+```
+  ✗ mac-runner-auto.yml:nightly-both: now bounded, but still carries a declared-unbounded entry — remove the exemption
+  ✗ mac-runner-auto.yml:nightly-mcp: now bounded, but still carries a declared-unbounded entry — remove the exemption
+ci-job-timeouts: 35 jobs, 2 unbounded; self-test green
+CI-job-timeout gate FAILED — bound the job, or declare it with a reason.
+
+[after deleting the two now-stale DECLARED_UNBOUNDED entries]
+ci-job-timeouts: 35 jobs, 0 unbounded; self-test green
+CI-job-timeout gate passed — every job declares how long it may run.
+
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Preflight↔CI parity passed — every preflight gate is wired into a workflow.
+Preflight PASSED — everything it runs is green.
+Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+Action pinning check passed — every third-party action is pinned to an immutable commit.
+Drift check passed — every proof runs in both places, or is exempt by name with a reason.
+```
+Verdict: **branch dcd9cff8 was NOT superseded** — mainline still carried two hand-written `DECLARED_UNBOUNDED` string exemptions for `mac-runner-auto.yml`'s `nightly-both`/`nightly-mcp` jobs, each ending in the same sentence: "Follow-up: resolve a local `uses:` and inherit the callee's bound, then delete this entry." Merging `origin/SignalGrid_Alpha` (344 commits) into the branch turned that prophecy into a gate failure — the new `isBounded()` now resolves the local callee and verifies both jobs bounded on their own, so the two exemptions became stale and the gate caught it the OTHER direction ("now bounded, but still carries a declared-unbounded entry"). Deleted both; the gate is now empty (`DECLARED_UNBOUNDED` has zero entries), which is the file's own stated goal state. Five merge conflicts resolved toward mainline (`docs/CLAIM_INVENTORY.md`, `docs/agent/CLAIM_INVENTORY.json` — PURPOSE.md line numbers moved; `docs/STATUS.md` — mainline's last generated run was green; `docs/agent/SURFACE_REVIEW_COVERAGE.md` — mainline's tree grew past this branch's counts; `scripts/check-derived-doc-figures.mjs` — mainline evolved its fifteen/sixteen-workflow self-test independently); `scripts/check-ci-job-timeouts.mjs` itself auto-merged with no conflict.
+
+Separately, audited whether the six-workflow "carries paths-ignore today" premise in the assignment held: **it did not, on two counts.** Only 5 files match `paths-ignore` in `.github/workflows/` (`codeql.yml`, `connector-emulator-smoke.yml`, `mac-runner-auto.yml`, `review-hub-ci.yml`, `supply-chain.yml`) — `pr-triage.yml` carries none, and it isn't push-triggered at all (`pull_request_target` only). `mac-runner-auto.yml`'s `paths-ignore` guards a `pull_request` trigger, not `push`, so it doesn't bear on a direct push to `SignalGrid_Alpha` either. Of the 16 workflows (counted 2026-09-12), exactly 8 trigger on `push`: `android`, `codeql`, `connector-emulator-smoke`, `desktop`, `firmware`, `ios-ci`, `review-hub-ci`, `supply-chain`. Four already carry `paths-ignore: ["artifacts/agent-heartbeats/**"]` (`codeql`, `connector-emulator-smoke`, `review-hub-ci`, `supply-chain` — landed in 6c5c2dc7, itself dated before the three named heartbeat commits). The other four (`android`, `desktop`, `firmware`, `ios-ci`) use a `paths:` ALLOWLIST scoped to their own native tree (e.g. `native/android/**`, `native/shared/**`, their own workflow file) that never includes `artifacts/agent-heartbeats/**` — a heartbeat-only push cannot match any entry in an allowlist, so GitHub never starts these workflows for one; they were never exposed to the defect and adding `paths-ignore` to an allowlisted trigger would be redundant. **Conclusion: no workflow needs an edit — every push-triggered workflow is already immune, either explicitly or structurally.** No `.github/workflows/*.yml` file was changed for this half of the task.
+
+For the three named commits (`af80bf16`, `689389df`, `30e35ef0`), each touching only `artifacts/agent-heartbeats/mac-lane-tick.json` (`git show --stat`), every statement below is CONFIGURATION-DERIVED: it says what the workflow files and git history make possible, never what any run did. At each of the three commits the four now-guarded workflows carried NO heartbeat path filter — `git show <sha>:.github/workflows/<w>.yml | grep -c agent-heartbeats` → `0` for `review-hub-ci`, `codeql`, `supply-chain` and `connector-emulator-smoke` — so each push was ELIGIBLE to start all four (a trigger proves eligibility, not a start). Ancestry, re-run in the correct direction on 2026-09-12 (`git merge-base --is-ancestor <sha> 6c5c2dc7`): `689389df` and `30e35ef0` ARE ancestors of the fix; `af80bf16` (2026-09-11 21:22 -0400) is the mainline commit immediately before `b39f1cc5` merged the fix from its PR branch (#657), so the ancestor test is false in both directions for it and the tree grep above is the decisive fact. The next first-parent commit on `SignalGrid_Alpha` after each (`git log --first-parent --reverse <sha>..origin/SignalGrid_Alpha | head -1`): `af80bf16` → `b39f1cc5` 3 minutes later, `689389df` → `df9b1553` 25 minutes later, `30e35ef0` → `98759c2c` 4 minutes later (an earlier revision of this entry named parents as successors; corrected). `review-hub-ci.yml`, `codeql.yml` and `supply-chain.yml` share `concurrency: group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true`, which cancels an earlier run of the same workflow on the same ref ONLY IF that run is still active when the next push arrives; `connector-emulator-smoke.yml` carries no `concurrency` block at any of the three commits, so a later push could not cancel it automatically. Whether any of those runs started, how long it ran, whether it was still active at the next push, and whether it passed, failed, timed out or was cancelled by hand is NOT derivable from configuration and is not claimed here. **No Actions run history was consulted — this session has no `gh` — so nothing above is a statement about a run; the runs themselves are for a session with `gh run list --commit <sha>` to read.**
+
+Gates ran sequentially, each quoted above with its real last line. `check-ci-job-timeouts.mjs` ran TWICE: once after the mainline merge (red — the two stale `DECLARED_UNBOUNDED` entries) and once after the entries were deleted (green); every other gate ran once, on the final tree.

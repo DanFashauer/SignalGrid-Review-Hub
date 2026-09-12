@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-11T09:48:52.017Z",
-  "result": "quiet — cloud-lane hygiene sweep completed; capacity healthy, above the escalation floor; owner not escalated."
+  "firedAt": "2026-09-12T10:24:24.904Z",
+  "result": "quiet, 11G free. `df -h /` printed, before and after, exactly: `/dev/vda 252G 28G 11G 73% /`. The four fields do not reconcile with each other (28G of 252G is not 73%) because this remote container's writable disk is a fixed per-session allowance, so df's size column is the host filesystem while used, avail and pcent are the allowance; the figure that governs escalation is Avail, 11G, well above the 1G floor. Scratchpad 14G, no top-level file older than 24h; no /var/lib/docker and no dockerd; pnpm store prune: 'Removed all cached metadata files / Removed 60 files / Removed 1 package'. Eleven worktrees kept: seven active workers (w-lanes, w-roster, w-hygiene, w-531, w-citimeout, w-bindings, w-misfiled), the mail worktree for #682, alpha3-wt, and two unmerged 2026-09-11 branches (nist-alignment 18 ahead, sweep-liveness 2 ahead) held at 37M and 664M. Owner NOT escalated."
 }

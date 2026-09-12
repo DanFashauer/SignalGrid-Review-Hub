@@ -555,8 +555,8 @@
         "README.md",
         "artifacts/signalgrid-web/**"
       ],
-      "activated": null,
-      "produced": null,
+      "activated": "2026-08-22",
+      "produced": "docs/POSITIONING.md (created f4bb9ec, 2026-08-22, #252) is the settled positioning surface — the sentence a buyer would use and the boundary between what SignalGrid does and what the host app / MDM / IdP does. Later reconciled the four retired-label instances (README.md, ReviewDashboard.tsx, About.tsx) to the ratified DR-004 label and added the RETIRED_LABELS denylist to scripts/check-launch-claims.mjs (26fc83f1, 2026-08-26, #322).",
       "priority": 1,
       "nextAction": "DONE 2026-08-26 (26fc83f1, #322, \"Retire the dead category labels and reconcile the README launch boundary\"): all four cited instances (README.md, ReviewDashboard.tsx, About.tsx) reconciled to the ratified DR-004 label, and scripts/check-launch-claims.mjs gained the RETIRED_LABELS denylist (:625) plus the quoted-fragment near-miss variant (:688) so a future regression is gated, not merely found — reconfirmed this session: a repo-wide search for the three retired strings across README.md and the two dashboards returns nothing. docs/POSITIONING.md (created f4bb9ec 2026-08-22, refreshed 5f0017c6 2026-09-06) is the settled positioning surface design-partner-outreach's trigger names. Next: re-check on any future rebrand or new customer-facing surface; nothing queued today.",
       "nextActionDate": "2026-09-12"
@@ -645,7 +645,7 @@
       "activated": null,
       "produced": null,
       "priority": 2,
-      "nextAction": "docs/COST_MODEL.md landed DONE (4f656d59, 2026-08-22, #251, \"Row 22: the cost model lands\"): Fleet Premium is out of baseline COGS per DR-005 (baseline is Fleet Community $0 license plus actual hosting; Premium prices as a customer-specific dependency if ever required), and every figure in the doc is repo-verified or marked TBD/ASSUMED. STILL OPEN, unchanged: the four owner billing numbers (Claude, Apple Developer, GitHub, domains) are the only remaining inputs — never estimated, TBD until the owner sends them in chat.",
+      "nextAction": "docs/COST_MODEL.md landed DONE (4f656d59, 2026-08-22, #251, \"Row 22: the cost model lands\"). CORRECTED 2026-09-12 (Codex finding on dd027dd3): the prior version of this entry said all four owner billing numbers were still open — false. Claude and domain are SUPPLIED via the owner-private channel (COST_MODEL.md:9-15); GitHub CI is owner-confirmed at $0 across all seven public repos (COST_MODEL.md:51-52, free plan); the Apple Developer fee is CLOSED at $0 while unenrolled (COST_MODEL.md:82, enrollment scheduled by the device-path milestone). What actually remains open is the three AGENT-COMPUTABLE lines in the \"What closes each TBD\" table (COST_MODEL.md:80-81): VM hosting and backup storage for sg_pgdata (read from a public cloud price list at deployment-decision time) and Fleet Premium’s per-device price (read from Fleet’s own public pricing page). Both are marked \"any lane\" in that table on purpose — a public price list needs no owner input. Next: any lane pulls those three numbers and lands them in COST_MODEL.md’s Line items (:31-32) and Fleet Premium row (:38-39); nothing here is blocked on the owner.",
       "nextActionDate": "2026-09-12"
     },
     {

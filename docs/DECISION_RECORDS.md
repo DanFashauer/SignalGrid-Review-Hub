@@ -2168,6 +2168,23 @@ deterministic; learning proposes (DR-035 item 5).
 `scripts/check-readiness-figure.mjs` and this record together. A dimension may be added or
 its derivation tightened by a later record that names what changed and why.
 
+**Follow-up executed 2026-09-12 (the named follow-up in item 2).** Every `launch` entry in
+`scripts/launch-profile.mjs` now carries `proofs: ["proof:<name>", …]` — the package.json
+proof scripts that certify it — and `scripts/check-launch-proof-bindings.mjs` (preflight
+and CI, self-tested) fails when an entry binds nothing, a name that is not a proof script,
+a proof not registered in `scripts/preflight.mjs`, or one that self-skips without an env
+var. Dimension (b) is no longer binary: `scripts/check-readiness-figure.mjs` reads the
+distinct proofs the launch items bind and reports the share that
+`artifacts/live-evidence/mac-run.json` records as passed (`proofs.passed`, written by
+`scripts/verify-all.mjs --emit-evidence` from the preflight + breadth rosters at mint
+time) against the manifest the tree carries — fail-closed: a bound proof with no record is
+0, a record bound to a stale manifest fingerprint is 0 unless it carries the current one
+itself, and an evidence file with no per-proof results (minted before the emitter recorded
+them) is 0 of N. Dimensions (a) and (c), the thresholds and the lowest-wins headline are
+unchanged. Consequence stated plainly: the evidence file committed at the time of this
+change predates the field, so (b) reads 0 of N until the Mac re-mints once against the
+merged tree; that is the fail-closed reading, not a regression to work around.
+
 ## DR-037 — The cloud lane merges its own green product PRs; the owner is no longer the merge button (owner-directed 2026-09-12)
 
 **Decision.** From 2026-09-12 the cloud lane **merges product pull requests itself** once

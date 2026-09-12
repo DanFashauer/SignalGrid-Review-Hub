@@ -2555,7 +2555,7 @@ BEFORE
   (b) launch surface, evidence  100%   green on both halves, 0 day(s) old, manifest ee348c4a0afd (age via mintedAt); launch 23 · deferred 134 (deferred is the freeze, not a defect)
   HEADLINE 94%  → OUTREACH OPEN — readiness 94% meets the 92–95% target (goal 100%)
 AFTER — the gate
-Launch-proof bindings — 23 launch items bind 17 distinct proof(s); preflight registers 77 proofs of 144 in package.json
+Launch-proof bindings (counted 2026-09-12) — 23 launch items bind 17 distinct proof(s); preflight registers 77 proofs of 144 in package.json
 Launch-proof bindings passed — every launch item names at least one proof, and every named proof exists in package.json, runs in preflight, and never self-skips.
 self-test passed (15/15)
 self-test passed (30/30)

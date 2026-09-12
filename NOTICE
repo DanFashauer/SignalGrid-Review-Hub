@@ -70,6 +70,49 @@ licensed analyst reports and two full page scrapes — were found already commit
 here. They have been removed from the tree; note that removal from HEAD does not
 remove them from git history.
 
+------------------------------------------------------------------------
+Vendored skills and CLI methods (.claude/skills/, third_party/)
+------------------------------------------------------------------------
+
+This repository vendors third-party agent-skill and CLI-method content,
+copied in unmodified, each under its own upstream license, with the
+license text retained alongside the copy and the exact upstream commit
+recorded. This notice is a summary; `.claude/skills/VENDORED.md`,
+`third_party/cli-anything/VENDORED.md`, and
+`third_party/everything-claude-code/VENDORED.md` are authoritative for
+scope, contents, and what was deliberately not taken.
+
+  Upstream                                    | Author                              | License                                    | Commit (short)
+  -------------------------------------------- | ------------------------------------ | ------------------------------------------- | ---------------
+  obra/superpowers                             | Jesse Vincent                        | MIT                                         | b36e0829c6
+  bradautomates/claude-video (`watch/`)        | Bradley Bonanno                      | MIT (c) 2026                               | 83da59fa78
+  mattpocock/skills                            | Matt Pocock                          | MIT (c) 2026                               | 3cca18b368
+  addyosmani/agent-skills                      | Addy Osmani                          | MIT (c) 2025                               | 6ca0cd7db3
+  google/skills                                | Google LLC                           | Apache-2.0                                  | 150f8525e7
+  NVIDIA/skills                                | NVIDIA Corporation & Affiliates       | Apache-2.0; nvidia-skill-finder also CC-BY-4.0 | 9ca28078c7
+  K-Dense-AI/scientific-agent-skills           | K-Dense Inc.                         | MIT (c) 2025                               | c1ed16d97d
+  rainmanjam/poka-yoke                         | rainmanjam                           | MIT (c) 2026                               | 726a575e3d
+  mcollina/skills                              | Matteo Collina                       | MIT (c) 2026                               | 856efd268a
+  Neeeophytee/finding-unknowns-skills          | Neeeophytee                          | MIT (c) 2026                               | 6d7dda2a7b
+  oliver-zehentleitner/keep-the-why            | Oliver Zehentleitner                 | MIT (c) 2026                               | 9cf4ca6508
+  raintree-technology/hig-doctor               | Raintree Technology                  | MIT (c) 2025                               | 3ec08f5a6f
+  conorluddy/ios-simulator-skill               | Conor Luddy                          | MIT (c) 2025                               | 4207f82fc2
+  HKUDS/CLI-Anything (plugin dir only)         | HKU Data Intelligence Lab & contributors | Apache-2.0                             | 810c18b0d1
+  affaan-m/everything-claude-code              | Affaan Mustafa                       | MIT                                         | d8409a4b08
+
+13 upstreams above are vendored into `.claude/skills/` (100 upstream
+skill directories, alongside 17 first-party skill directories authored
+in this repository — see the table in `.claude/skills/VENDORED.md` for
+which is which); the remaining two (`HKUDS/CLI-Anything`,
+`affaan-m/everything-claude-code`) are vendored into `third_party/`.
+Each directory's own `LICENSE` file (or per-skill `LICENSE`/`LICENSE.md`
+copy) is the operative grant; this table does not supersede it. Where an
+upstream's own README, plugin manifest, or per-file frontmatter names a
+different license for part of its tree, only the license actually read
+and recorded in the relevant `VENDORED.md` governs what was vendored —
+see that file for the parts of each upstream that were deliberately NOT
+taken and why.
+
 Third-party components
 ------------------------------------------------------------------------
 

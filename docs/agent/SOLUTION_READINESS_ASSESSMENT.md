@@ -9,6 +9,19 @@ so two independent verdicts could be compared; it landed 2026-09-05 and the
 comparison is `docs/agent/ECC_FULL_EVALUATION_2026-09-01.md` §7. This is a snapshot of what the code
 does today — not a certification.**
 
+**Phase note (2026-09-12).** This assessment was written 2026-09-01, while the
+operating phase was still Customer Discovery, and its language below ("the
+discovery number, not the code, is what moves next") reflects that. The phase
+changed nine days later: DR-033 (2026-09-10) moved the company to **Build /
+execution** and made discovery an input, not the gate. DR-036 (2026-09-10) then
+defined what "ready" means numerically — a readiness figure derived by
+`node scripts/check-readiness-figure.mjs` (the lowest of three measured
+dimensions, never a typed number) — and set the bar: outreach opens only once
+that figure clears 80% (floor), targets 92–95%, and the goal is 100%. Read the
+completion list and scorecard below as engineering findings from 2026-09-01;
+read the phase and the gate on outreach from DR-033 and DR-036, not from this
+document's original framing.
+
 ## The one-paragraph verdict
 
 SignalGrid is an **unusually rigorous, unusually honest engineering demonstrator

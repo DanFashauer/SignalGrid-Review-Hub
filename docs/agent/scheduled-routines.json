@@ -101,6 +101,24 @@
    "status": "awaiting-activation",
    "awaitingReason": "Slice 1 lands the machinery (freshness gate, decision core, config, this row) DORMANT. The account trigger is deliberately not created and the row is not active until the owner gives an explicit go on the cadence, per DR-032 and the awaiting-activation contract — no consent is inferred from the build directive.",
    "awaitingSince": "2026-09-09"
+  },
+  {
+   "id": "dependabot-queue-review",
+   "trigger": "awaiting-activation — no account trigger yet; a fresh-session-per-fire trigger would be created via create_trigger once the owner or the cloud lane's persistent session confirms the cadence. Not yet a trig_*.",
+   "cron": "0 9 * * 1",
+   "binding": "fresh session per fire (cloud lane)",
+   "authorizedBy": "Dan Fashauer (owner)",
+   "authorizedOn": "2026-09-12",
+   "authorizationEvidence": "The owner asked for the 2026-09-12 organization self-evaluation ('make sure everything in this project is being worked on and has eyes on it ... through the proper channels'); its pipes reader found ten Dependabot PRs (#352-#361) open 11 days with CI never run and 'no roster role, routine, backlog row or LOOP line owns the monthly queue' (docs/agent/ORG_SELF_EVALUATION_2026-09-12.md row 6), and named the fix as 'roster row for the monthly queue'. This record-hygiene pass (docs/agent/EVIDENCE.md, 2026-09-12) executes exactly that named fix. `.github/dependabot.yml` sets `schedule.interval: monthly` for both its npm ecosystem groups, so the underlying QUEUE this routine watches is monthly and already running on GitHub; the CRON here is the CHECK cadence, and it is weekly rather than monthly on purpose — see the cron note below.",
+   "writeScope": "No repository write scope of its own — it reviews and (per DR-037's landing conditions) may merge Dependabot's own PRs once green; it never edits `.github/dependabot.yml`, `pnpm-lock.yaml` by hand outside a Dependabot PR, or any file `check-owner-gated-surfaces.mjs` classifies SAFETY_MACHINERY/OWNER_RESERVED. Owned by the `devex-tooling-engineer` role (docs/agent/org-roster.json, docs/ORG_CHART.md:91): 'A gate changes, or one is suspected of passing vacuously' already covers a lockfile-changing PR; this row adds the recurring queue-check that role was missing.",
+   "escalationBoundary": "Escalates to the owner only for a major-version Dependabot PR that needs code changes to pass, or a run stuck in `action_required` needing the owner's one-time workflow approval (docs/OWNER_ACTIONS.md); a quiet week with nothing new and no PR older than its tolerance sends no owner message. Never bypasses DR-037's landing conditions to merge a red or unreviewed PR.",
+   "heartbeatPath": null,
+   "heartbeatPathReason": "This is a review-and-merge-PRs duty, not a write-to-the-tree duty outside those PRs; the fired PRs (merged or left open with a reason) on GitHub are the evidence a run happened, the same shape nightly-build-agent used for its own null heartbeat above.",
+   "cadenceToleranceHours": null,
+   "status": "awaiting-activation",
+   "awaitingReason": "Declared in this pass to close the gap the 2026-09-12 self-evaluation found; the account trigger is deliberately not created here because a recurring fresh-session cadence needs the owner's or the persistent cloud-lane session's confirmation before it starts spawning sessions on its own, per the awaiting-activation contract this registry already uses for brain-cycle.",
+   "awaitingSince": "2026-09-12",
+   "cronNote": "Dependabot's own schedule is `.github/dependabot.yml`'s `interval: monthly` — this registry's `cronIntervalHours` (scripts/check-scheduled-routines.mjs) can only read every-N-minutes, hourly, every-N-hours, daily, or weekly-single-weekday shapes; it has no monthly primitive, and an unparseable cron on a non-retired routine fails this gate's own self-test floor. So the cron above is WEEKLY (Monday 09:00 UTC), not monthly: it checks the monthly-generated queue often enough that an open PR is never unreviewed for the 11 days the self-evaluation found, which is a tighter bound than monthly would give and the one the finding actually calls for."
   }
  ]
 }

@@ -2742,7 +2742,7 @@ profile, a design target and not a shipped surface.
    registration and authentication-strength policy; the UEM (Intune or equivalent)
    owns posture as an *independent* input the puck cannot substitute for; the PACS
    (HID or equivalent) owns the physical-credential lifecycle where a badge is
-   reused. This is the stance `docs/HARDWARE_PARTNER_MATRIX.md:25` and
+   reused. This is the stance `docs/HARDWARE_PARTNER_MATRIX.md:27` and
    `docs/DOCKBRIDGE_STRATEGY.md:31` already take for every hardware category; the
    puck inherits it and adds nothing above it. A puck registers through the
    organization's existing identity plane, never a SignalGrid key database.
@@ -2779,7 +2779,7 @@ profile, a design target and not a shipped surface.
    hardware and 3D-printed mechanics; **≥ 5 PROBLEM with COMMITMENT = 0** → no-go on
    productization. Development order when it does move: mechanical → NFC/FIDO → BLE
    only if needed → UWB only if proven necessary. The tally today reads *0 of 15
-   conversations, 0 commitments* (`docs/agent/DISCOVERY_LOG.md:149`), so every
+   conversations, 0 commitments* (`docs/agent/DISCOVERY_LOG.md:159`), so every
    hardware row is closed. Under DR-036 these gates sit beside the readiness figure
    that gates outreach; neither substitutes for the other. Dock and custody signals
    stay deferred throughout.
@@ -2835,13 +2835,16 @@ and remains open; this record adds the document's substance and the tree's own
 prior art, and no invention disclosure, drawings or claims — those wait on that
 decision.
 
-**Evidence.** The owner's document, read in full (25 pages) before anything was
-written; three parallel read-only maps of the tree, each path:line re-read before
-citation; DR-020 (`docs/DECISION_RECORDS.md:1068` — hardware needs a record first),
+**Evidence.** An owner-shared research document (25 pages; owner-produced, reads
+as a research-model report he commissioned — `docs/agent/RESOURCE_INTAKE.md:91`),
+absorbed by a workflow of three Sonnet readers producing independent parallel
+read-only maps of the tree, one main-model author who wrote this record from
+those maps, and three Sonnet verifiers who each re-read every path:line
+citation against the tree before publication; DR-020 (`docs/DECISION_RECORDS.md:1068` — hardware needs a record first),
 DR-021 (`:1111` — building unfrozen, claiming unchanged), DR-033 (`:1892` — Build /
 execution phase), DR-036 (`:2104` — the readiness figure), DR-039 (`:2275` — the
-absorption bar), DR-042 (`:2389` — the cascade items this record's item (b) joins);
-`docs/agent/DISCOVERY_LOG.md:112`–`149` (thresholds and tally); the gate outputs
+absorption bar), DR-042 (`:2555` — the cascade items this record's item (b) joins);
+`docs/agent/DISCOVERY_LOG.md:112`–`159` (thresholds and tally); the gate outputs
 recorded in `docs/agent/EVIDENCE.md` (2026-09-12); the intake row in
 `docs/agent/RESOURCE_INTAKE.md`.
 

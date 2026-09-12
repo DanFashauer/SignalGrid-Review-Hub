@@ -59,7 +59,7 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE BAR IS THE FOUNDER'S (DR-039
               absorbed as standing context (docs/company/FOUNDER_PROFILE.md): a senior
               platform engineer, not a non-technical founder - owner-comms corrected, the
               base skill points every role at it, ICP Finding 9. (Earlier 2026-09-12, cloud lane:) THE MAC'S THREE ASKS ANSWERED IN ONE
-(Earlier 2026-09-12, cloud lane:) OWNER-DIRECTED VENDORING (DR-038): the
+(Earlier 2026-09-12, cloud lane:) OWNER-DIRECTED VENDORING (DR-040): the
               /watch skill from bradautomates/claude-video (pinned, hook NOT taken, two
               instructions overridden not edited) and the CLI-Anything method (the plugin
               directory under third_party/, the telemetry-bearing hub NOT taken) are in the

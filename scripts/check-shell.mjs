@@ -57,7 +57,7 @@ if (listed.status !== 0) {
 // could only ever be answered by editing the vendored file or by a suppression, and
 // neither is allowed. Nothing under third_party/ is executed by any gate, hook or
 // script (each directory's VENDORED.md says so). Added 2026-09-12 when the first
-// vendored shell script arrived (third_party/cli-anything/, DR-038) and SC2034 fired on
+// vendored shell script arrived (third_party/cli-anything/, DR-040) and SC2034 fired on
 // an unused variable this repository must not touch. First-party shell — including
 // every script a vendored SKILL under .claude/skills/ tells Claude to run — is still
 // linted; only the third_party/ prefix is excluded, and the non-vacuity floor below

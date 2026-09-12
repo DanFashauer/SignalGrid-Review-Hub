@@ -3,7 +3,7 @@
 
 The vendored `/watch` skill (.claude/skills/watch) extracts frames without a key, but
 its transcript path POSTs the audio to Groq or OpenAI under a paid key. This repository
-does not send owner media to a third party by default (DR-038), so the transcript comes
+does not send owner media to a third party by default (DR-040), so the transcript comes
 from this script instead: ffmpeg (the imageio-ffmpeg wheel) turns the file into 16 kHz
 mono, faster-whisper runs on the CPU, and the only network event is the one-time model
 download on first use. The audio never leaves the machine.

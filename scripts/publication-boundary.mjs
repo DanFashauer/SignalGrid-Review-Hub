@@ -101,19 +101,19 @@ export const AREAS = [
   // The LICENSE and copyright notice travel WITH the copy, and .claude/skills/VENDORED.md
   // records the upstream commit plus the licence survey that rejected five other
   // collections — three of which carry no licence at all.
-  { path: ".claude/skills", class: "third_party_intake", reason: "15 skills vendored unmodified: obra/superpowers, 14 under MIT © 2025 Jesse Vincent, and bradautomates/claude-video, 1 (watch/) under MIT © 2026 Bradley Bonanno (DR-038). Licence basis, upstream commits and the rejected alternatives are stated in .claude/skills/VENDORED.md." },
+  { path: ".claude/skills", class: "third_party_intake", reason: "15 skills vendored unmodified: obra/superpowers, 14 under MIT © 2025 Jesse Vincent, and bradautomates/claude-video, 1 (watch/) under MIT © 2026 Bradley Bonanno (DR-040). Licence basis, upstream commits and the rejected alternatives are stated in .claude/skills/VENDORED.md." },
   // SECOND vendor, DR-016. The owner supplied a fork URL that carries NO licence file
   // (verified HTTP 404) while declaring "MIT" inside a JSON manifest; a declaration is
   // not a grant, and this directory's sibling above already states the rule — absence of
   // a licence is not permission. Vendored instead from the licensed upstream it forks
   // from, at its current commit, restricted to the component set the owner approved.
   { path: "third_party/everything-claude-code", class: "third_party_intake", reason: "affaan-m/everything-claude-code, 60 files vendored unmodified under MIT © 2026 Affaan Mustafa. Licence basis, upstream commit, the rejected fork and what was deliberately not taken are stated in third_party/everything-claude-code/VENDORED.md (DR-016)." },
-  // THIRD vendor, DR-038 (owner-directed 2026-09-12). The upstream plugin directory only —
+  // THIRD vendor, DR-040 (owner-directed 2026-09-12). The upstream plugin directory only —
   // the method (HARNESS.md, commands, guides) and three stdlib Python modules nothing here
   // executes. The cli-hub package manager (live unpinned registry, shell=True installs,
   // telemetry on by default) and the 79 harnesses were deliberately NOT taken; the
   // directory's VENDORED.md records the pin, the licence and the diff.
-  { path: "third_party/cli-anything", class: "third_party_intake", reason: "HKUDS/CLI-Anything, the cli-anything-plugin directory (26 files) vendored unmodified under Apache-2.0 at 810c18b0d1ab9b234bc996c9fd999318523a3ef0. Licence basis, upstream commit and what was deliberately not taken are stated in third_party/cli-anything/VENDORED.md (DR-038)." },
+  { path: "third_party/cli-anything", class: "third_party_intake", reason: "HKUDS/CLI-Anything, the cli-anything-plugin directory (26 files) vendored unmodified under Apache-2.0 at 810c18b0d1ab9b234bc996c9fd999318523a3ef0. Licence basis, upstream commit and what was deliberately not taken are stated in third_party/cli-anything/VENDORED.md (DR-040)." },
   // Activated copies of nine agents from the vendor tree above — same licence, same
   // grant. Held byte-identical to their vendored source and checked by
   // scripts/check-agent-roster.mjs, so an edit here shows up as drift rather than as a
@@ -140,8 +140,8 @@ export const AREAS = [
   { path: ".claude/skills/loop-end", class: "tooling", reason: "First-party session-end ritual, authored here on 2026-08-31 (e075109, DR-021). Not part of the 14 vendored skills; carved out so the third_party_intake claim above stays literally true." },
   { path: ".claude/skills/research-ops", class: "tooling", reason: "First-party evidence-first research skill, authored here on 2026-09-03 — after the obra/superpowers vendoring on 2026-08-20. Not part of the 14 vendored skills; carved out so the third_party_intake claim above stays literally true. Absorbed by use from the MCP Market leaderboards the owner shared (docs/research/MCP_MARKET_LEADERBOARDS.md), which name research/market/discovery skills repeatedly." },
   { path: ".claude/skills/stack-reference", class: "tooling", reason: "First-party stack quick-reference skill, authored here on 2026-09-04 — after the obra/superpowers vendoring on 2026-08-20. Not part of the 14 vendored skills; carved out so the third_party_intake claim above stays literally true. Absorbed by use from the Fechin/reference cheatsheet site the owner shared (docs/agent/RESOURCE_INTAKE.md, 2026-09-04): 215 sheets held against this tree by nine reader agents, the doubtful commands run on the Mac lane, kept as the 102 contradictions between generic advice and this repository's rules plus the items that survived." },
-  { path: ".claude/skills/cli-anything", class: "tooling", reason: "First-party adapter skill, authored here on 2026-09-12 (DR-038): how the CLI-Anything method vendored under third_party/cli-anything/ applies to this repository's own control plane. Not part of the 15 vendored skills; carved out so the third_party_intake claim above stays literally true." },
-  { path: ".claude/skills/video-intake", class: "tooling", reason: "First-party video-intake skill, authored here on 2026-09-12 (DR-038): frames through the vendored watch/ skill, a transcript produced locally with faster-whisper, an intake row. Not part of the 15 vendored skills; carved out so the third_party_intake claim above stays literally true." },
+  { path: ".claude/skills/cli-anything", class: "tooling", reason: "First-party adapter skill, authored here on 2026-09-12 (DR-040): how the CLI-Anything method vendored under third_party/cli-anything/ applies to this repository's own control plane. Not part of the 15 vendored skills; carved out so the third_party_intake claim above stays literally true." },
+  { path: ".claude/skills/video-intake", class: "tooling", reason: "First-party video-intake skill, authored here on 2026-09-12 (DR-040): frames through the vendored watch/ skill, a transcript produced locally with faster-whisper, an intake row. Not part of the 15 vendored skills; carved out so the third_party_intake claim above stays literally true." },
   { path: "docker", class: "tooling", reason: "Container assets." },
   { path: "Dockerfile.api", class: "tooling", reason: "API image build." },
   { path: "Dockerfile.web", class: "tooling", reason: "Web image build." },

@@ -6,13 +6,13 @@ Third-party work, copied in unmodified. **Not ours.**
 > FIRST-PARTY, written in this repository and NOT part of the upstream set. They live
 > here because the harness loads skills from this directory. Everything else below
 > describes the other 15 — 14 from obra/superpowers and, since 2026-09-12, `watch/` from
-> bradautomates/claude-video (its own section at the end of this file, DR-038). Counted, not remembered: `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`
+> bradautomates/claude-video (its own section at the end of this file, DR-040). Counted, not remembered: `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`
 > lists 29 tracked directories = 15 upstream + the 14 in the table (tracked, because only
 > tracked paths publish; section E of `scripts/check-publication-boundary.mjs` holds this
 > table, this count and the carve-outs to one another since 2026-09-02). This line said SEVEN until 2026-09-02,
 > then TEN, then ELEVEN on 2026-09-03 when `research-ops/` was authored, then TWELVE on
 > 2026-09-04 when `stack-reference/` was authored, then FOURTEEN on 2026-09-12 when
-> `cli-anything/` and `video-intake/` were authored (DR-038) — the same drift
+> `cli-anything/` and `video-intake/` were authored (DR-040) — the same drift
 > that took it from "one exception" to seven, recorded below and now caught by section E
 > the moment the count and the carve-outs disagree.
 >
@@ -46,8 +46,8 @@ Third-party work, copied in unmodified. **Not ours.**
 > | `loop-end/` | 2026-08-31 | the session-end ritual — handoff enforcement pack, DR-021 |
 > | `research-ops/` | 2026-09-03 | evidence-first market/competitive/discovery research discipline (MCP Market leaderboards intake) |
 > | `stack-reference/` | 2026-09-04 | the corrected quick reference for every tool in the stack — 102 verified places generic cheatsheet advice breaks a rule here, and the form to use instead (Fechin/reference intake) |
-> | `cli-anything/` | 2026-09-12 | the first-party adapter for the CLI-Anything method, vendored unmodified under `third_party/cli-anything/` — how the seven phases map onto the `signalgrid` CLI over `/v1` and the MCP server (DR-038) |
-> | `video-intake/` | 2026-09-12 | owner-shared video → frames through the vendored `watch/` skill, a transcript produced locally with faster-whisper (no key, no upload), an intake row (DR-038) |
+> | `cli-anything/` | 2026-09-12 | the first-party adapter for the CLI-Anything method, vendored unmodified under `third_party/cli-anything/` — how the seven phases map onto the `signalgrid` CLI over `/v1` and the MCP server (DR-040) |
+> | `video-intake/` | 2026-09-12 | owner-shared video → frames through the vendored `watch/` skill, a transcript produced locally with faster-whisper (no key, no upload), an intake row (DR-040) |
 >
 > **This note said "one exception" until 2026-08-24, and it was true when written on
 > 08-20.** The five `signalgrid-*` skills landed on 08-22, after it, and nothing
@@ -188,7 +188,7 @@ CLAUDE.md's "Truth and completion" block.
 # Vendored: bradautomates/claude-video — `watch/`
 
 Third-party work, copied in unmodified. **Not ours.** The second upstream in this
-directory (DR-038, owner-directed 2026-09-12); its licence file travels with it as
+directory (DR-040, owner-directed 2026-09-12); its licence file travels with it as
 `watch/LICENSE` because the directory-level `LICENSE` above is Jesse Vincent's.
 
 | | |

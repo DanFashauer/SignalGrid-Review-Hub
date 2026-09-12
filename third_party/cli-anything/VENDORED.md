@@ -12,7 +12,7 @@ Third-party work, copied in unmodified. **Not ours.**
 | Vendored | 2026-09-12 |
 | Contents | 26 files — the upstream `cli-anything-plugin/` directory: `HARNESS.md`, 5 commands, 8 guides, 3 Python modules, 1 template, 1 test file, 2 shell scripts, `README.md`, `QUICKSTART.md`, `PUBLISHING.md`, the plugin manifest and `LICENSE`. **Nothing here is executed by any gate, hook or script.** |
 | Byte-identity | `diff -r <upstream>/cli-anything-plugin third_party/cli-anything -x __pycache__` empty on 2026-09-12 (this file is the one addition) |
-| Basis | DR-038 (owner-directed 2026-09-12); intake row in `docs/agent/RESOURCE_INTAKE.md` |
+| Basis | DR-040 (owner-directed 2026-09-12); intake row in `docs/agent/RESOURCE_INTAKE.md` |
 | Activated through | `.claude/skills/cli-anything/SKILL.md` — a first-party adapter that says how the method applies to this repository. Nothing in this directory is loaded by the harness directly. |
 
 ## What was taken

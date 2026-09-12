@@ -8,7 +8,7 @@ description: The CLI-Anything method (HKUDS/CLI-Anything, vendored at a pin unde
 CLI-Anything's thesis is the owner's: software should be reachable by an agent as a
 first-class citizen. Its seven-phase harness SOP is vendored here unmodified at
 `810c18b0d1ab9b234bc996c9fd999318523a3ef0` (Apache-2.0), and this skill is the
-first-party adapter that says how the method applies to THIS repository (DR-038).
+first-party adapter that says how the method applies to THIS repository (DR-040).
 Read the vendored text; do not paraphrase it back into the tree.
 
 ## What is vendored, and what is deliberately not
@@ -61,7 +61,7 @@ template does not:
 | 7. Publish | Nothing is published outside the tree; the launch profile and the publication boundary govern what may be said to ship. |
 
 This is a build item, recorded in `docs/BUILD_BACKLOG.md`, not a claim: nothing about
-it changes how green is certified, so no decision record beyond DR-038 is needed.
+it changes how green is certified, so no decision record beyond DR-040 is needed.
 
 ## Rules that override the upstream text
 

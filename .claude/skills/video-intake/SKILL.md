@@ -11,7 +11,7 @@ use). Two videos on 2026-09-12 produced DR-037 and three intake rows. This skill
 the repeatable form of what that took, built on two parts:
 
 - **`/watch`** — `bradautomates/claude-video`, vendored unmodified at a pin under
-  `.claude/skills/watch/` (DR-038). It extracts frames with `ffmpeg`, scene-aware,
+  `.claude/skills/watch/` (DR-040). It extracts frames with `ffmpeg`, scene-aware,
   and hands them to `Read`. Its own transcript path is an UPLOAD: the only two
   endpoints in its code are Groq's and OpenAI's `/audio/transcriptions`, under a paid
   key. Owner media does not go to a third party by default, so that path stays off.
@@ -32,7 +32,7 @@ the repeatable form of what that took, built on two parts:
    results — provenance is the product").
 2. **No key by default.** A Whisper key in `~/.config/watch/.env` turns `/watch`'s
    transcript into an upload of the audio. That is the owner's decision to make per
-   DR-038, never a session's; keys live outside the tree in any case (DR-029).
+   DR-040, never a session's; keys live outside the tree in any case (DR-029).
 3. **A transcript is model output.** Quote it in an intake row or an evidence entry;
    never make it a fixture, a decision input, or a documented figure.
 4. **Say what you did not watch.** A frame budget is a sample. State the detail

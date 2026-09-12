@@ -59,7 +59,7 @@ API-enabled platform tooling for administration, troubleshooting and workflow va
    documentation and operational standards, cross-functional coordination, vendor
    collaboration. "Numbers come from output, never memory" is how a platform engineer
    troubleshoots; the gates are that habit made mechanical.
-4. **He decides; roles execute — and his pushback is a decision.** DR-037, DR-038 and
+4. **He decides; roles execute — and his pushback is a decision.** DR-037, DR-040 and
    DR-039 were each a correction of a posture that was too cautious for him. When he
    says "I want this", the work is to land it in the form that keeps the hard lines,
    and to say in one line which line shaped the form.

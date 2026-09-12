@@ -2228,7 +2228,7 @@ opening-only for product PRs from the next cycle, and this record stays with the
 reversal date added. Narrowing (for example, "not `.github/workflows/**`") is an
 amendment to the "What stays owner-gated" list, in place.
 
-## DR-038 — Owner-directed: the `/watch` skill and the CLI-Anything method are vendored, hooks off, hub out, transcription local (owner-directed 2026-09-12)
+## DR-040 — Owner-directed: the `/watch` skill and the CLI-Anything method are vendored, hooks off, hub out, transcription local (owner-directed 2026-09-12)
 
 **Context.** The owner shared an image naming five tools (last30days, CLI-Anything,
 Claude-video, Crucible, LightRAG): "These also need to be added and absorbed into the
@@ -2291,7 +2291,7 @@ Addy Osmani's, Google's, NVIDIA's, K-Dense's, the VoltAgent index, a GitHub Tren
 page) came back on 2026-09-12 with most candidates marked "evaluated, not adopted" on
 grounds of overlap with an existing skill, thinness, or no current activity that would
 use them — after the owner had already overruled two such verdicts the same hour
-(DR-038). He then shared his résumé and corrected the posture directly:
+(DR-040). He then shared his résumé and corrected the posture directly:
 
 > *"You need to probably stop and think of something real quick you need to understand
 > I'm not asking you to check if they really worth anything if it has any part of the
@@ -2333,7 +2333,7 @@ nothing vendored is executed by a gate. What moves is the default answer to a sh
 resource: from "evaluated, not adopted" to "adopted, in this form".
 
 **Evidence.** The seven evaluation reports (measurements preserved in their intake
-rows); the two overruled verdicts of DR-038; the owner's message quoted above; the
+rows); the two overruled verdicts of DR-040; the owner's message quoted above; the
 founder's résumé (owner-held).
 
 **Reversal.** Delete this record, rule 5 of `docs/agent/RESOURCE_INTAKE.md`,

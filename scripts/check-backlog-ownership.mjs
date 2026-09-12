@@ -250,7 +250,19 @@ export function rosterIds(root) {
 // above — the same swallowing bug ROW_HEAD_LOOSE exists to catch for the
 // PLAN, found here by hand while building this scan: the naive "anything not
 // a new row" rule glued an italic footer paragraph onto the row before it.
-const BACKLOG_OPEN_HEAD = /^- \[ \] \*\*/;
+//
+// FAIL-OPEN FOUND ON REVIEW (Codex, #688, 2026-09-12): the first version of
+// this pattern required the bold marker (`- [ ] **`), so an open row typed
+// WITHOUT bold — this document has six of them — was invisible to the scan
+// entirely: not counted open, not required to name a role, and a lane
+// silently deleted from one of those six would still leave this gate green.
+// A row's status here is the checkbox alone; nothing in this document's own
+// convention conditions "open" on bold formatting, so gating on the bold
+// marker was gating a coincidence of style, not the thing that makes a row
+// open. Fixed by matching ANY open checkbox row, and proven by a planted
+// UN-stamped non-bold row in the self-test below (see "BUILD_BACKLOG: a
+// non-bold open row with no role is flagged, not silently skipped").
+const BACKLOG_OPEN_HEAD = /^- \[ \] /;
 const BACKLOG_CLOSED_HEAD = /^- \[x\] /;
 
 /** Split docs/BUILD_BACKLOG.md into `{ line, status, text }` rows. */
@@ -433,11 +445,23 @@ function selfTest() {
   checks.push(["BUILD_BACKLOG: rows are bucketed independently of the PLAN's buckets", a.open.length === 2 && a.closed.length === 1]);
   checks.push(["BUILD_BACKLOG: only the truly lane-less open row is a problem", a.problems.length === 1]);
 
+  // Codex finding, #688, 2026-09-12: the FIRST version of BACKLOG_OPEN_HEAD required
+  // the bold marker, so an open row typed without one was invisible to the scan —
+  // not counted open, not required to name a role, and a lane silently deleted from
+  // one of those rows would still leave this gate green. That version baked the
+  // fail-open into this very self-test (asserting the row was "simply not seen" as
+  // if that were correct). Replaced with the two controls that catch it: an
+  // UN-stamped non-bold row must be flagged, and a STAMPED non-bold row must pass.
   a = auditBacklogFileOwnership(backlog(
-    "- [ ] Not bold at all — the gate's row shape requires `**`, so this line is invisible to it.",
+    "- [ ] Not bold at all, and un-stamped — this must still be seen and flagged.",
     "- [ ] **A real row beside it.** sre."
   ), IDS);
-  checks.push(["BUILD_BACKLOG: a checkbox row with no bold heading is not this gate's row shape and is simply not seen", a.open.length === 1 && a.problems.length === 0]);
+  checks.push(["BUILD_BACKLOG: a non-bold open row with no role is flagged, not silently skipped", a.open.length === 2 && a.problems.some((p) => p.includes("nobody owns"))]);
+
+  a = auditBacklogFileOwnership(backlog(
+    "- [ ] Not bold at all, but stamped. Lane: sre."
+  ), IDS);
+  checks.push(["BUILD_BACKLOG: a non-bold open row that DOES name a role passes, bold is not required for ownership", a.open.length === 1 && a.problems.length === 0]);
 
   a = auditBacklogFileOwnership(backlog(
     "- [ ] **A row with a free-floating paragraph after it, not swallowed.**",

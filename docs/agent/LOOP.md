@@ -277,7 +277,7 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SKILL COLLECTIONS ARE IN THE
               returns that never cleared is a hold (CUSTODY_CAP_BLOCKED_BY_STALE_RETURN), a
               cap genuinely reached a containment - the cap axis is computed from three
               counts, never asserted; the observation's age is graded against a bound the
-              caller poses, so a replayed snapshot never grants. 21 fixtures, a sweep of
+              caller poses, so a replayed snapshot never grants when the caller stamps the age at evaluation time. 21 fixtures, a sweep of
               all 4,320 combos pinning the single grant plus a raw-space sweep (230,400
               wire reports, two grant), every hostile-report shape from the sibling
               surfaces' six review rounds pinned on day one, then an in-house fail-closed

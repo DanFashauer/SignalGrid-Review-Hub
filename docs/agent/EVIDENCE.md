@@ -2266,6 +2266,44 @@ v4.9.0 ancestor of 2ed6c52: yes ; commits v4.9.0..2ed6c52: 3
 (skills dir diff: empty)            "version": "4.9.0",
 ```
 Verdict:  **refuted as "unreproducible", confirmed as a real installer defect.** The object exists and is 3 commits after tag v4.9.0 (tests plus a Grok Build adapter; the skills tree the vetting read is byte-identical to the tag, and the plugin manifest at that commit says 4.9.0, which is what "= v4.9.0" meant). `git fetch origin <id>` fetches an object only by its FULL id; a 7-character id is looked up as a ref name and there is no ref by that name, so the installer could never have worked on a fresh clone — it worked on 2026-09-01 only because the object was already local. Fixed by pinning the full id; the DR-024 vetting stands unchanged.
+## 2026-09-12 — "All eight Crucible non-gating drafts on the custody-ledger family (#649) hold on execution: a shallow-frozen corpus that flips a fixture to a grant, a null options bag that throws, an unknown-axis list that omits the holder, an unswept posed-bound — plus four prose fossils"
+Command:  the Mac lane's `/temper` run on #649 mailed eight non-gating drafts (`artifacts/lane-messages/mac-crucible-temper-on-649-custody-ledger-clean-.json`). Each behavioural draft reproduced by execution against the unmodified tree before a line changed; then the fixes, the proof, and the sweep before and after:
+```
+node --import tsx <scratch repro of (e), (f), (g); not committed>     # against origin/SignalGrid_Alpha @ 2b01bfad
+node scripts/mutation-guard.mjs --proof=proof:rtls-custody    # before, then after adding posed-bound.ts to the target
+pnpm run proof:rtls-custody
+pnpm run typecheck ; node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs ; pnpm run review:invariants
+node scripts/check-connector-discipline.mjs ; node scripts/check-cited-paths.mjs ; node scripts/check-launch-claims.mjs ; node scripts/check-surface-review-coverage.mjs
+```
+Output:
+```
+(e) corpus frozen: true fixture 'unaccounted' frozen: false
+(e) mutation threw: false before: escalate false after: none true
+(f) null options threw: TypeError: Cannot read properties of null (reading 'maxObservationAgeSeconds') verdict: undefined
+(g) ledger unknown + holder unknown: ["ledger_state"]
+(g) checked_out + holder unknown + slot unknown: ["slot_state"]
+(g) clear + holder unknown + slot unknown: ["ledger_holder","slot_state"]
+(g) all three unknown: ["ledger_state","slot_state"]
+--- sweep BEFORE (posed-bound.ts in no target)
+   lib/integrations/src/integrations/rtls-custody/custody-ledger.ts — 53 mutations
+mutations=67 killed=67 hung=0 known-inert=0 survivors=0
+--- sweep AFTER (fixes in, posed-bound.ts added to the proof:rtls-custody target)
+   lib/integrations/src/integrations/rtls-custody/custody-ledger.ts — 58 mutations
+   lib/integrations/src/utils/posed-bound.ts — 2 mutations
+mutations=74 killed=74 hung=0 known-inert=0 survivors=0
+--- proof
+figures=custodyLedgerCombos=4320,custodyLedgerGrants=1,custodyLedgerRawCombos=230400,custodyLedgerRawGrants=2
+summary=pass (223/223)                              # was 214/214
+typecheck exit=0
+Proof-count check passed — all 60 documented counts match their proofs.
+Figure guard passed — every measured figure in the docs matches a live proof run.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Connector-discipline gate passed.
+Cited-path check passed — 2327 citation(s) across 510 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Launch-claims gate passed — nothing deferred is presented as current.
+Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
+```
+Verdict:  **eight of eight held; none refuted.** (e) was the sharpest: `Object.isFrozen(CUSTODY_LEDGER_FIXTURES)` was true while a one-line nested write turned the `unaccounted` fixture (escalate) into the grant (`none`, ready) — the proof's "corpus is frozen" check was passing on the shallow freeze. The corpus is now deep-frozen and the check attempts the nested write. (f) `null` options threw a TypeError out of the evaluator; now `undefined` is the one spelling of "not posed" and `null`, a primitive, or a throwing read is a garbled pose — held on `observation_bound`, never the default (undefined and `{}` still grant, pinned). (g) the ledger-unknown and checked-out-over-unknown-bay branches now name `ledger_holder` when it is unknown, once, and a known holder is never named. (h) posed-bound.ts's two guards had never been swept in the 2026-09-11 registry-wide campaign either; both die on the existing NaN/Infinity/zero/negative bound checks — no new check was needed. (a)(b)(c)(d) were prose: the "864" fossil sat two lines from the 4,320 literal, "seven" from the eight-key list, the replay claim lacked its precondition in two of three docs, and "no record" could be read as "device not tracked" (which is `unknown`, not `clear`). The five new guards raise custody-ledger's mutation count 53→58 and every one is killed, so each new `if` is falsifiable by the proof that owns it. What is NOT proven: the cycle-free assumption in `freezeDeep` is enforced only by a stack overflow at module load, by design — the corpus is a literal.
 
 ## 2026-09-12 — "The four-skills branch reconciled with DR-040 (#666) before landing: media-intake folded into video-intake, and the vendored-set arithmetic holds at 32 = 15 + 17"
 Command:  after merging origin/SignalGrid_Alpha at fcea6f4d (which carries `cli-anything/`, `video-intake/` and the vendored `watch/`), `.claude/skills/media-intake/` was removed — its whole procedure (local faster-whisper transcript, footage never committed) was already `video-intake/`'s — and its one distinct section (where a clip's substance lands, plus three never-rules) moved into `video-intake/SKILL.md`. Every restatement of the pair was then recounted and the gates that read the registry re-run on the merged tree.

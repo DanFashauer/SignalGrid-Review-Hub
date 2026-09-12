@@ -35,6 +35,7 @@ import {
   type CustodyLedgerReportIntegrity,
   type CustodyLedgerReportRaw,
   type CustodyLedgerVerdict,
+  type EvaluateCustodyLedgerOptions,
   type LedgerHolder,
   type LedgerState,
   type NormalizedCustodyLedger,
@@ -283,8 +284,10 @@ check("an unreported badge over a long dwell → monitor/BADGE_UNVERIFIED, never
 // return never cleared. Distinct from the physical-custody evaluator above (where the
 // device IS) — this grades what the LEDGER SAYS against what the BAY SEES, plus the
 // requester's cap. Named outcomes, single-axis flips of the one grant, the exhaustive
-// 864-state sweep pinning that grant by equality, the normalizer on hostile wire input,
-// and the computed cap axis on every count shape.
+// sweep of all 4,320 combos pinning that grant by equality, the normalizer on hostile
+// wire input, and the computed cap axis on every count shape. (This line said "864" until
+// the Crucible lens read it beside the 3*4*3*3*4*5*2 literal — a fossil the figure guard
+// cannot see because it reads docs, not proof comments.)
 const L = (name: string): CustodyLedgerVerdict => {
   const v = evaluateCustodyLedgerFixture(name);
   if (v === undefined) throw new Error(`custody-ledger fixture missing: ${name}`);
@@ -389,13 +392,15 @@ for (const [label, patch, action, reason] of ledgerFlips) {
 }
 
 // the grant set, pinned by equality over the whole state space
-// The sweep walks the MODULE's exported domains, not a hand-typed copy. The 864 below is
-// the documented figure and stays literal on purpose: if a domain grows, this line fails
-// first. The docs↔proof figure guard binds a documented figure only when it can SEE it —
-// a comma-formatted number of 1,000 or more, or "N … combos" / "N … grants" with
-// whitespace after the digits — so the docs write "864 combos" (never "864-state", which
-// the guard's noun pass cannot read: in-house review finding) and the raw-space sweep
-// below adds a comma-formatted figure the guard reads on its own.
+// The sweep walks the MODULE's exported domains, not a hand-typed copy. The 4,320 below
+// (3*4*3*3*4*5*2, spelled as the product) is the documented figure and stays literal on
+// purpose: if a domain grows, this line fails first. The docs↔proof figure guard binds a
+// documented figure only when it can SEE it — a comma-formatted number of 1,000 or more,
+// or "N … combos" / "N … grants" with whitespace after the digits — so the docs write
+// "4,320 combos" (never "4,320-state", which the guard's noun pass cannot read: in-house
+// review finding) and the raw-space sweep below adds a second comma-formatted figure the
+// guard reads on its own. (Both figures here read "864" — the pre-freshness-axis count —
+// until 2026-09-12; the guard reads the `figures=` line and the docs, never this prose.)
 const ledgerDomains = {
   ledgerState: LEDGER_STATE_DOMAIN,
   ledgerHolder: LEDGER_HOLDER_DOMAIN,
@@ -690,7 +695,9 @@ check("custody-ledger: 'toString' / '__proto__' / 'constructor' are not fixture 
     delete proto["planted-fixture"];
   }
 }
-check("custody-ledger: the fixture corpus is frozen", Object.isFrozen(CUSTODY_LEDGER_FIXTURES) && Object.keys(CUSTODY_LEDGER_FIXTURES).length === 21);
+check("custody-ledger: the fixture corpus is frozen — the map AND every fixture in it",
+  Object.isFrozen(CUSTODY_LEDGER_FIXTURES) && Object.keys(CUSTODY_LEDGER_FIXTURES).length === 21 &&
+  Object.values(CUSTODY_LEDGER_FIXTURES).every((f) => Object.isFrozen(f)));
 // Every axis is read ONCE: an accessor that answers the branch reads with garbage and the
 // domain guard with a valid value must not reach the grant on the second answer.
 {
@@ -789,6 +796,62 @@ const ledgerRawWrong = enumerateGrantSafety<CustodyLedgerReportRaw, CustodyLedge
 });
 check("custody-ledger RAW NEGATIVE CONTROL: declaring the counts irrelevant is CAUGHT (mismatches > 0)",
   ledgerRawWrong.mismatches > 0 && typeof ledgerRawWrong.firstMismatch === "string");
+
+// ── Crucible /temper on #649 (Mac lane, 2026-09-12): the eight non-gating drafts, each
+// reproduced by execution before the fix (docs/agent/EVIDENCE.md, same date) ────────
+// (e) The corpus was SHALLOW-frozen: `(FIXTURES.unaccounted as any).slotState = "seated"`
+// flipped the named fixture to a grant while "the fixture corpus is frozen" stayed green.
+// Now every fixture is frozen too, and the check ATTEMPTS the nested write.
+{
+  const target = CUSTODY_LEDGER_FIXTURES["unaccounted"] as unknown as Record<string, unknown>;
+  let nestedWriteThrew = false;
+  try { target.slotState = "seated"; } catch { nestedWriteThrew = true; }
+  const after = evaluateCustodyLedgerFixture("unaccounted");
+  check("custody-ledger: a nested write into a fixture throws (strict mode) and does NOT take effect — 'unaccounted' still escalates, never a grant",
+    nestedWriteThrew && CUSTODY_LEDGER_FIXTURES["unaccounted"].slotState === "absent" &&
+    after !== undefined && after.recommendedAction === "escalate" && after.readyForCheckout === false);
+}
+// (f) `evaluateCustodyLedger(fixture, null)` threw a TypeError out of the evaluator — the
+// default parameter covers undefined only — against the "held, never thrown" contract.
+// `undefined` is the one spelling of "not posed"; `null` is a value the caller handed over
+// that cannot be read as an options bag: a GARBLED pose, held on the bound axis.
+{
+  let nullThrew = false;
+  let nullVerdict: CustodyLedgerVerdict | undefined;
+  try { nullVerdict = evaluateCustodyLedger(ledgerBase, null as unknown as EvaluateCustodyLedgerOptions); } catch { nullThrew = true; }
+  check("custody-ledger: a NULL options bag is held (step_up, 'observation_bound'), never a throw and never the grant",
+    !nullThrew && nullVerdict !== undefined && nullVerdict.recommendedAction === "step_up" &&
+    nullVerdict.readyForCheckout === false && nullVerdict.unknownSignals.includes("observation_bound"));
+  check("custody-ledger: a primitive where the options bag should be (7) is a garbled pose — held, never the default bound",
+    evaluateCustodyLedger(ledgerBase, 7 as unknown as EvaluateCustodyLedgerOptions).unknownSignals.includes("observation_bound") &&
+    evaluateCustodyLedger(ledgerBase, 7 as unknown as EvaluateCustodyLedgerOptions).readyForCheckout === false);
+  const hostileOptions = Object.defineProperty({}, "maxObservationAgeSeconds", { get() { throw new Error("hostile bound"); }, enumerable: true }) as EvaluateCustodyLedgerOptions;
+  let getterThrew = false;
+  let getterVerdict: CustodyLedgerVerdict | undefined;
+  try { getterVerdict = evaluateCustodyLedger(ledgerBase, hostileOptions); } catch { getterThrew = true; }
+  check("custody-ledger: an options bag whose bound read THROWS is held on the bound axis, never an exception out of the evaluator",
+    !getterThrew && getterVerdict !== undefined && getterVerdict.readyForCheckout === false && getterVerdict.unknownSignals.includes("observation_bound"));
+  check("custody-ledger: an absent options bag (undefined) and an empty one ({}) still grant on the default bound — the null fix did not degrade into 'always hold'",
+    evaluateCustodyLedger(ledgerBase).readyForCheckout === true && evaluateCustodyLedger(ledgerBase, {}).readyForCheckout === true &&
+    evaluateCustodyLedger(ledgerBase, undefined).readyForCheckout === true);
+}
+// (g) unknownSignals named `ledger_holder` only on the branches that reached the holder
+// read: with the ledger unknown, or checked out over an unknown bay, an unknown holder went
+// unnamed while the clear-ledger sibling named both axes. Every unresolved axis is named.
+check("custody-ledger: ledger unknown beside holder unknown names BOTH ('ledger_state' and 'ledger_holder')",
+  evaluateCustodyLedger({ ...ledgerBase, ledgerState: "unknown", ledgerHolder: "unknown" }).unknownSignals.includes("ledger_holder") &&
+  evaluateCustodyLedger({ ...ledgerBase, ledgerState: "unknown", ledgerHolder: "unknown" }).unknownSignals.includes("ledger_state"));
+check("custody-ledger: checked out over an unknown bay to an unknown holder names BOTH ('slot_state' and 'ledger_holder')",
+  evaluateCustodyLedger({ ...ledgerBase, ledgerState: "checked_out", ledgerHolder: "unknown", slotState: "unknown" }).unknownSignals.includes("ledger_holder") &&
+  evaluateCustodyLedger({ ...ledgerBase, ledgerState: "checked_out", ledgerHolder: "unknown", slotState: "unknown" }).unknownSignals.includes("slot_state"));
+{
+  const allThree = evaluateCustodyLedger({ ...ledgerBase, ledgerState: "unknown", ledgerHolder: "unknown", slotState: "unknown" }).unknownSignals;
+  check("custody-ledger: ledger, holder and bay all unknown → all three axes named, once each",
+    ["ledger_state", "ledger_holder", "slot_state"].every((axis) => allThree.filter((s) => s === axis).length === 1));
+}
+check("custody-ledger: a KNOWN holder beside an unknown ledger or bay is NOT named as unknown (the axis list names only what was unresolved)",
+  !evaluateCustodyLedger({ ...ledgerBase, ledgerState: "unknown", ledgerHolder: "none" }).unknownSignals.includes("ledger_holder") &&
+  !evaluateCustodyLedger({ ...ledgerBase, ledgerState: "checked_out", ledgerHolder: "other", slotState: "unknown" }).unknownSignals.includes("ledger_holder"));
 
 // ── connector guarantees ──────────────────────────────────────────────────────
 

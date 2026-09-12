@@ -654,6 +654,11 @@ export const TARGETS = [
       // verdict and normalizes a reconciliation report (the cap axis is computed from
       // counts), so its guards are mutable decision logic that must be swept.
       "lib/integrations/src/integrations/rtls-custody/custody-ledger.ts",
+      // The garbled-bound reader every posed-bound family reads through (seven consumers)
+      // was in NO target: its two guards had never been swept (Crucible draft (h),
+      // 2026-09-12). This proof pins it directly — a NaN / Infinity / zero / negative bound
+      // must resolve the axis to unknown, and an unposed bound must still grant.
+      "lib/integrations/src/utils/posed-bound.ts",
     ],
   },
   {

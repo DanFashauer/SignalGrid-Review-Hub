@@ -2127,3 +2127,60 @@ Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the
 Markdown-link check passed — every relative link lands on a tracked file from its own document.
 ```
 Verdict:  holds. The entry above this one (30 = 14 + 16) was true on the tree it measured and stays as the record; this is the reconciled figure. The four docs that restate the pair (`docs/MCP_AND_SKILLS_LANE_PARITY.md`, `docs/MCP_ARCHITECTURE.md`, `docs/agent/BRAIN_CYCLE_DESIGN.md`, the `scripts/check-skill-instruction-conflicts.mjs` header) and the derived figure in `docs/research/MCP_MARKET_LEADERBOARDS.md` now read 32 / 15 / 17, and section E of the boundary gate is what fails the moment they drift again.
+## 2026-09-12 — "The founder's post-decision cascade (self-resolve → notify the assigned team → ticket → change record → tell the people affected → monitor the fix) is modelled end to end in this tree"
+Command:
+```
+git ls-files 'lib/**/*.ts' | xargs grep -lniE "dead.?letter|dlq"
+git ls-files | xargs grep -ln "@workspace/incident-playbook"
+git ls-files | xargs grep -ln "integrations/itsm|@workspace/integrations/itsm"
+git ls-files 'lib/**/*.ts' | xargs grep -lniE "createChange|openChange|changeRequest|change_request"
+git ls-files 'lib/**/*.ts' | xargs grep -oniE "bullmq|kafkajs|amqplib|servicebus" | wc -l
+git ls-files '**/*.ts' | xargs grep -lniE "@opentelemetry" | wc -l
+node scripts/agent/absence-check.mjs "affected user notification"
+```
+Output:
+```
+# dead-letter / DLQ — outbound only
+lib/integrations/src/integrations/webhooks/dispatch.ts
+lib/integrations/src/integrations/webhooks/store.ts
+lib/integrations/src/integrations/webhooks/types.ts
+lib/signalgrid-core/src/types.ts
+lib/signalgrid-core/src/webhooks.ts
+
+# who imports the incident playbook
+docs/OPERATING_STACK_LAYER_MAP.md
+lib/incident-playbook/package.json
+lib/incident-playbook/src/index.ts
+pnpm-lock.yaml
+scripts/package.json
+scripts/src/fabric-evals-proof.ts
+scripts/src/fabric-scenario-proof.ts
+scripts/src/incident-playbook-proof.ts
+scripts/src/task-exception-proof.ts
+
+# who imports the itsm emitter family (lib/artifacts rows only shown)
+lib/integrations/package.json
+lib/integrations/src/index.ts
+scripts/src/emit-gate-proof.ts
+scripts/src/emitter-discipline-proof.ts
+scripts/src/itsm-credential-crypto-proof.ts
+scripts/src/itsm-template-proof.ts
+
+# anything that OPENS a change record
+(no matches)
+
+# broker dependency
+0
+
+# OpenTelemetry SDK in any .ts
+0
+
+# absence check, run BEFORE this change landed
+Absence check — "affected user notification" — presence needs one hit, absence needs exhaustion
+  empty  a tracked FILE OR DIRECTORY named for it
+  empty  a tracked file whose EXTENSION is it (.affected user notification)
+  empty  a CI WORKFLOW that builds or tests it
+  empty  the WORD appears in tracked source
+✓ CORROBORATED across 4 differently-shaped probes. Safe to claim — cite them.
+```
+Verdict:  **refuted as stated; the correct claim is narrower and is what DR-042 records.** Both ENDS of the cascade are built and the JOINS between them are not. Built and fixture-backed: remediation proposal (`lib/signalgrid-core/src/remediation.ts`, every proposal `approvalRequired` + `simulatedOnly`, `allow` produces none), the resolution planner and its simulation (`lib/signalgrid-core/src/resolution.ts`, `/v1/decisions/:id/resolution` and `/resolve`), the deterministic incident playbook (`lib/incident-playbook`, priority = impact × urgency, SLA per priority, assignment group, escalation flag), the orchestration planner (`lib/orchestration`), and deterministic webhook delivery with a recorded-never-awaited backoff and a `dead_letter` terminal state (`lib/signalgrid-core/src/webhooks.ts`). Connector stubs behind the live-call gate: the eight ITSM vendor adapters and the generic webhook emitter (`lib/integrations/src/integrations/itsm/`), the `change-window` reader, and the Redis-or-memory webhook DLQ (`lib/integrations/src/integrations/webhooks/`). **Absent:** every join. `@workspace/incident-playbook` is imported by FOUR PROOFS and by nothing in `lib/` or `artifacts/` — there is no code path from an `Incident` to an ITSM adapter, so no ticket can open. No identifier in `lib/**` opens or drafts a change record; the fabric only READS an approved one. No notification of an affected person exists anywhere (absence check CORROBORATED across all four probes, run before this change). Nothing observes whether a requested remediation landed — the architecture page's §9 already said so in its own words. Ingestion is not queued and there is no broker dependency; the queue vocabulary is outbound-only. No OpenTelemetry SDK is a dependency of any workspace package — the one `@opentelemetry` string in the tree is an externals entry in `artifacts/api-server/build.mjs`, and the live telemetry lane uses a collector CONTAINER (`scripts/lab/otel-collector.yaml`) against `/metrics`, which is metrics, not traces. **A note on the absence probe, because it matters for anyone re-running it:** after this change landed the same command returns INCONCLUSIVE with two matches, and both are this work's own prose (`docs/DECISION_RECORDS.md`, `docs/agent/RESOURCE_INTAKE.md`). A word appearing in a record ABOUT an absence is not the thing existing — that is the tool's documented verdict, and the CORROBORATED run above is the one that stands for the state of the tree before the six backlog items were opened.

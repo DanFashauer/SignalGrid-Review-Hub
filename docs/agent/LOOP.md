@@ -179,7 +179,7 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SESSION PUCK IS ON THE RECOR
               text, store outside the tree): five docs at the defaults timed out 4/5 - two concurrent
               32k-context generations, not the model (12.7 tok/s) - retuned to one at a time / 8k /
               1800 s and re-queued; first query pending. Sandbox lesson for probes: node --import tsx
-              runs TS where pnpm exec tsx dies on its IPC socket. Readiness untouched (94%).
+              runs TS where pnpm exec tsx dies on its IPC socket. Readiness untouched (the gate prints it: node scripts/check-readiness-figure.mjs).
               (Earlier 2026-09-12, Mac lane:) SIX AGENT TOOLS ABSORBED BY USE (DR-038,
               owner: 'install all of these and add them where needed and start using them now').
               Installed at user scope, hooks off, nothing in the repo's .claude/: last30days 3.24.0
@@ -193,7 +193,7 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SESSION PUCK IS ON THE RECOR
               /watch plugin install, `pnpm run crucible:install` (selective, adversarial skills only,
               pinned), `brew install ollama`. Repo side: five intake rows, DR-038, installer scripts +
               package.json rows for all six, .gitignore rows for every output dir they can write.
-              Readiness untouched (94%). (Earlier 2026-09-12, cloud lane:) THE BAR IS THE FOUNDER'S (DR-039): a resource
+              Readiness untouched (the gate prints it: node scripts/check-readiness-figure.mjs). (Earlier 2026-09-12, cloud lane:) THE BAR IS THE FOUNDER'S (DR-039): a resource
               with any part that can aid building the company is adopted; only licence,
               auto-execution, egress without consent and directory collision exclude;
               overlap is recorded, contradictions get override rows. The founder's resume
@@ -215,7 +215,7 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SESSION PUCK IS ON THE RECOR
               AGENT_GATEWAY.md that #531 carried but never landed is ported verbatim;
               Graphify measured in a sandbox and NOT adopted (hook-based integration,
               tree-dirtying rebuilds, oscillating output, a benchmark denominator of nodes
-              x 50 words) - the intake row carries the numbers. (Earlier 2026-09-12, Mac lane:) READINESS 94%, OUTREACH OPEN INSIDE THE TARGET
+              x 50 words) - the intake row carries the numbers. (Earlier 2026-09-12, Mac lane:) READINESS INSIDE THE TARGET BAND, OUTREACH OPEN (the gate prints the number)
               (minted 2026-09-12T02:05Z, manifest v72). Two Mac re-mints tonight, each right after a landing moved the
               contract: v71 after #653 (134c25fd: headline 82%, the floor cleared for the
               first time), then v72 after the cloud landed #649 (minted 2026-09-12T02:05Z, manifest v72). Each with
@@ -975,88 +975,30 @@ LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SESSION PUCK IS ON THE RECOR
               deterministic, removes 3 old colour bugs) and landed; the iOS SwiftUI
               view-layer rebuild is now COMPLETE, and native/ios/README's file-tree
               was corrected to match.
-BLOCKED ON: nothing cloud-side; Alpha is green. Cloud, to review + land:
-              mac/ponytail-native-cuts (41b5ad87). Cloud, to decide: the AppWorkflows
-              per-action step-up re-port and the parity-gate extension (backlog, row
-              101). Mac lane, non-blocking, still open: Ponytail native cuts part 2
-              (badge-reader registry, double delegate, nil-provider assertion); the
-              residual Phase 2/3 nits (minor type-scale, the Enrolling contrast
-              visual); SignalGridMobile adaptive tokens then the .dark pin (row 103);
-              the twin test's per-field checks are conditional; older items
-              (MockSignalGridAPI replayed vectors, DemoMode flag table).
-              mac/native-ledger-2026-09-02 is CLOSED - fully superseded by #385 and
-              later. Fleet/Headwind's 7 device dimensions: the Fleet half is DONE -
-              the owner handed the Premium key to the cloud lane 2026-09-06; teams,
-              inherited policies and the unlocked transfer endpoint are measured and
-              proven (proof:live-fleet section 11, docs/FLEET_LIVE_INTEGRATION.md);
-              Headwind's dimensions still need its live server. Owner, one item:
-              Screen Recording permission for Terminal (System Settings > Privacy &
-              Security > Screen Recording, then relaunch Terminal) - closes
-              2026-09-02-android-desktop-first-run.
-NEXT ACTION: cloud: land the plugin-packaging PR (DR-030) to SignalGrid_Alpha,
-              then hold for owner direction. Batch Z landed earlier (049e3f8);
-              the whole-repo review pass is complete and every surface is READ
-              (now 102 of 102 with .claude-plugin and docs/reference added).
-              Residual
-              follow-ups, none blocking: (0) STATUS.md's "would run here now"
-              column is cosmetically stale vs the F10 generator fix - no gate
-              reads it and the generator cannot run to completion off a
-              live-lane host, so regenerate it on the Mac lane or when a live
-              lane is reachable; the two remaining localeCompare pinned
-              defects (artifacts/mcp-server directory listing, self-audit
-              fingerprint) are gated against growth, not fixed; the k6 load
-              drivers no runner invokes (tests surface, COMPANY_BUILD_PLAN
-              row 43). Owner decisions still recorded rather than made: the
-              custody backstop blind to five custody axes (disclosed, pinned),
-              NOT_COVERED credential exposure resolving to monitor, a GAPS
-              entry for connector families unwired in the served core;
-              (2) the console's remaining open items above (connector status
-              rendered, the toaster, CATEGORY_ORDER derived, /sessions/:id
-              linked) and Dashboard's chart-style deeper-path pending arms the
-              error-state gate deliberately does not judge;
-              the 194 symbols the cited-symbols gate leaves unpaired and the
-              14 deny-list MENTIONS the skills gate reports are REPORTED, not
-              owed;
-              the 213 unasserted membership clauses are REPORTED, not owed -
-              an evidence sentence that names an id without an arm is not
-              wrong, only unchecked. OWNER: the ICP
-              segment ("75-1,000 employees, 1-10 in IT") is stated flatly in
-              INVESTOR_ONE_PAGER while ICP_EVIDENCE calls it an assumption -
-              your call, not a gate's. OWNER, once, on the Mac, now that
-              the installer is on mainline: `bash scripts/mac/install-launchd.sh`
-              then `--status` - the steward escalates once a day while the tick
-              stays silent. Mac lane (a person): nothing is owed; `pnpm run lane:inbox`
-              only PRINTS the unread messages - an ack goes through
-              `pnpm run lane:deliver batch <ops.json>` with a note per
-              message (the eighteenth round made a blank note a refusal); a Premium
-              re-run on the Mac is optional (FLEET_LICENSE_KEY in the env,
-              `./scripts/run-live-lanes.sh --only fleet`) before 2026-09-16.
-              EARLIER: land batch E, then keep reading unread surfaces (56 left; next
-              lib/api-spec, lib/iac, then the docs families) and build the three
-              gates batch E specified (NaN gate follows one helper hop;
-              review-invariants flags localeCompare in lib/*/src with the five
-              existing sites dispositioned; docs `path (N)` line counts
-              re-measured); the hourly steward opens a draft PR for every mac/*
-              branch on sight. Mac: use `pnpm run lane:deliver` and say whether gh
-              is on PATH. owner: flip Settings > Pages > Source to "GitHub Actions"
-              (the branch build has failed on every push since at least 09-04),
-              then say so and the cloud lane runs the deploy workflow; say whether
-              the three stale claude/* branches (ruleset-probe, two
-              steward-heartbeat) may be deleted. owner: to wake the cloud lane at
-              any moment, comment on PR #439 from the phone. owner:
-              discovery is a valued input now, not the gate (DR-033, past Customer Discovery).
-              owner: publish the MCP marketplace listing
-              (docs/SIGNALGRID_MCP_MARKET_LISTING.md) on the creator page - only
-              the owner has the login. owner decisions still pending: fork or
-              delete the two vendored agent definitions; the four pasted chat
-              files under attached_assets/.
-```
-
-**Customer Discovery as the operating phase ended 2026-09-10 (DR-033); the log stays open as an input.**
-**Conversations logged: 0 of 15 - now a valued input, no longer the loop's gate.**
-
----
-
+BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION_2026-09-12.md,
+              'The founder's queue'): Screen Recording for Terminal; 'activate' or 'hold' on the
+              Standing Brain Cycle (DR-032 Slice 3); 'yes' to the branch cleanup; pick the FIRST of
+              the seven DR-033 product gaps (docs/BUILD_BACKLOG.md, the full-evaluation section);
+              confirm or soften the ICP wording before the first outreach send (the gate is OPEN -
+              run node scripts/check-readiness-figure.mjs); IP/disclosure posture; Fleet Premium
+              before 2026-09-16 (DR-005 says do not renew); approve the ten Dependabot runs; the
+              PURPOSE.md s2 widening (DR-035 follow-up); LightRAG: smaller local model, remote
+              endpoint with his key, or leave it recorded as not-working. Nothing on the pipes is
+              blocked: lane mail 111/111 acked, sim requests 17/17, evidence fresh (v77).
+NEXT ACTION: cloud: (1) stamp a lane on every lane-less BUILD_BACKLOG row and extend
+              scripts/check-backlog-ownership.mjs to read BUILD_BACKLOG rows so a lane-less row fails;
+              (2) file and build the DR-036 proof-bindings row so readiness dimension (b) becomes a
+              ratio instead of a binary that reads 0 after every manifest move; (3) give the roster a
+              clock (nextActionDate + a REPORTED >7d line) and mark the seven done nextActions; (4)
+              the record-hygiene items the self-evaluation lists (SOLUTION_READINESS_ASSESSMENT DR-033
+              paragraph, DR-043 cites, NOTICE reconciliation, CONTINUITY.md, the Level 10 matrix);
+              (5) the mis-filed owner items that are engineering (AppWorkflows parity re-port, the
+              three decided deletions, the three safety defaults - propose, owner vetoes); (6) PR #531
+              merge-or-close; (7) then build: Puck 5, Puck 1, the smart-charging scenario behind a DR.
+              Mac: Fleet Premium on the owner's word; Ponytail native cuts part 2 + row 103 in an Xcode
+              session; re-run the two benches and re-date RELIABILITY_SLO.md; delete tests/load,
+              .agents metadata and site/index.html once the cloud opens the row; read the inbox BEFORE
+              any long measurement (a manifest move outranks a measurement). Owner: the BLOCKED ON list.
 ## The three things that are true right now
 
 1. **The doctrine is `docs/PURPOSE.md` v2 (DR-020).** SignalGrid is an

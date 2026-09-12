@@ -156,7 +156,10 @@ async function derive() {
   const b = { ...evidenceDimension(evidence, ageDays, currentFingerprint), ageSource, surfaces: counts };
   // (c) scenarios — run the engine's own list through the engine (seconds)
   // Spawned from scripts/: tsx and @workspace/signalgrid-simulator resolve in that package, not at the root.
-  const sc = spawnSync("pnpm", ["exec", "tsx", "src/readiness-scenarios.ts"], { cwd: join(repo, "scripts"), encoding: "utf8" });
+  // `node --import tsx`, not `pnpm exec tsx`: the tsx CLI opens an IPC socket under /tmp that a
+  // sandboxed Claude session cannot bind (EPERM listen), so the gate read BROKEN in every such
+  // session while the same TypeScript ran fine through the loader hook (self-evaluation 2026-09-12).
+  const sc = spawnSync(process.execPath, ["--import", "tsx", "src/readiness-scenarios.ts"], { cwd: join(repo, "scripts"), encoding: "utf8" });
   if (sc.status !== 0) throw new Broken(`simulator scenarios could not be run: ${(sc.stderr || "").trim().split("\n").pop()}`);
   const scen = JSON.parse(sc.stdout.trim().split("\n").pop());
   if (!(scen.declared > 0)) throw new Broken("the engine declares zero scenarios");

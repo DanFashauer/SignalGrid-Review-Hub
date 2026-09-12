@@ -130,7 +130,7 @@ identified by memory.
 Two collections were read closely and **not** vendored, for reasons that have nothing to
 do with their quality. Their transferable doctrine is written up here, in our own words,
 because ideas are not copyrightable expression — the same precedent this repository used
-for the CLI-Anything method (DR-038).
+for the CLI-Anything method (DR-040; the vendoring record was renumbered on 2026-09-12 after the Mac lane's DR-038 landed first).
 
 ### trailofbits/skills — CC BY-SA 4.0
 

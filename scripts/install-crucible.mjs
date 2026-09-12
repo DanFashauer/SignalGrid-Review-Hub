@@ -16,7 +16,7 @@
 // crucible: shell-out sequence, not a library; ceiling = git's and ln's own errors.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
-const PIN = "13d7f8c8"; // TODO(owner/cloud): expand to the full 40-char id at first successful install — see install-ponytail.mjs
+const PIN = "13d7f8c8901dc785e9db95ec8da4517bfbd32a36"; // full id on purpose: an abbreviated one is looked up as a REF NAME by git fetch (see install-ponytail.mjs); first successful install 2026-09-12
 const DIR = process.env.CRUCIBLE_DIR ?? `${process.env.HOME}/raddue/crucible`;
 const HOME = process.env.HOME;
 const SKILLS = ["quality-gate", "red-team", "inquisitor", "adversarial-tester", "temper", "audit", "shared"];

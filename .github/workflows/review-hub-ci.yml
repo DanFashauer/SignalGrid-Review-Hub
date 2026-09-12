@@ -252,6 +252,10 @@ jobs:
         run: node scripts/check-ios-policy-defaults.mjs --self-test
       - name: iOS policy defaults (no managed-config default derived from the absence of policy)
         run: node scripts/check-ios-policy-defaults.mjs
+      - name: iOS restriction defaults self-test (the gate must be able to fail)
+        run: node scripts/check-ios-restriction-defaults.mjs --self-test
+      - name: iOS restriction defaults (no persona DLP restriction defaults permissive on an unknown session)
+        run: node scripts/check-ios-restriction-defaults.mjs
       - name: Sim-script self-check self-test (the gate must be able to fail)
         run: node scripts/check-sim-scripts-selfcheck.mjs --self-test
       - name: Sim-script self-check (a queued Mac operation must name a script that runs)
@@ -632,6 +636,13 @@ jobs:
         run: node scripts/check-env-doc-readers.mjs
       - name: "Env-doc-reader self-test (the gate can actually fail)"
         run: node scripts/check-env-doc-readers.mjs --self-test
+      # No model may reach the deterministic /v1 decision path: the DR-044 tap
+      # (free/local models for chores) is fenced out of lib/*, the /v1 server,
+      # connectors and proofs — golden rule 2, enforced by construction.
+      - name: "Model-tap boundary self-test (the fence can actually fail)"
+        run: node scripts/check-model-tap-boundary.mjs --self-test
+      - name: "Model-tap boundary (no model reference reaches the /v1 decision path — DR-044)"
+        run: node scripts/check-model-tap-boundary.mjs
       # A browser follows `](FOO.md)` from the document's own directory and nowhere
       # else; 35 relocation fossils were dead links for four weeks.
       - name: "Markdown links (a relative link resolves from its own document to a tracked file)"

@@ -82,6 +82,66 @@ network/access posture; it provides no SASE, SD-WAN, FWaaS, SWG, or DNS control.
 | ZTNA (as a decision) | the decision core returns the zero-trust verdict; the *network* enforces it | partial (decision only) |
 | SASE / SD-WAN / Cloud FWaaS / SWG / DNS security / segmentation | **not covered** — network/SASE-vendor responsibility | out of scope |
 
+## Second reference cross-check — Zero Trust AI-application layer (2026-09-08)
+
+**Absorbed** from a second owner-shared reference: a *"Zero Trust — Never Trust,
+Always Verify"* infographic that draws the same doctrine in **AI-application** framing
+(USER → ACCESS CONTROL → CLOUD LAYER → AI APPLICATION LAYER → SECURITY & GOVERNANCE →
+OBSERVABILITY → CONTINUOUS TRUST). It is the same zero-trust model as the five-layer
+stack above, so most bands are already mapped; this cross-check records where each lands
+and the two things this framing genuinely adds. No new surface, dependency, or launch
+claim — intake logged in `docs/agent/RESOURCE_INTAKE.md`.
+
+- **USER / ACCESS CONTROL** (MFA · SSO · IAM · RBAC/ABAC · verify device + risk + policy) —
+  Layer 3 above (`proof:webauthn-verify`, `proof:passkey-assurance`, the bound
+  `/v1/step-up/challenge`, `proof:intune-entra-posture`, `proof:policy-binding`,
+  `proof:orchestration`).
+- **CLOUD LAYER** (encryption · key/secrets management · logging & audit) — Layer 2 above
+  (`proof:itsm-credential-crypto`, `proof:credential-rotation`, the hash-chained
+  `proof:audit-ledger`). **Network segmentation / private endpoints / firewall-WAF** stay
+  the network/SASE vendor's — the Layer 5 "decision point, not a network enforcer" line.
+- **AI APPLICATION LAYER — Agentic AI** (agent authorization → Tool/MCP → API/DB/SaaS,
+  plus guardrails) — Layer 1 above (`proof:agent-identity`, `proof:agent-behavior`,
+  `proof:mcp-answer-discipline`, `proof:mcp-server`): a fail-closed MCP plane where an
+  unknown tightens and is never fabricated into a grant.
+- **AI APPLICATION LAYER — RAG** (query authorization → retrieval → Top-K/rerank → LLM →
+  prompt guardrails) — **divergence, not a gap.** SignalGrid decides deterministically and
+  fail-closed (see `docs/PURPOSE.md` for what it is), not a RAG/LLM application: there is no
+  LLM in its decision path and no retrieval/rerank stage (golden rule 2 — no model
+  nondeterminism in a decision). Its
+  nearest analogue is deterministic *evidence* gathering that authorizes and fuses signals,
+  not documents (`proof:evidence-coverage`, `proof:grid-coverage`); the LLM/guardrail band
+  applies only to the agent-facing MCP plane above, never to the verdict.
+- **SECURITY & GOVERNANCE** (PII · DLP · content safety · policy enforcement · audit ·
+  secrets · compliance) — DLP posture as a signal (Layer 2, `proof:data-protection`);
+  policy enforcement through the deterministic core (`proof:policy-binding`,
+  `proof:signalgrid-core`); audit through `proof:audit-ledger`. **PII / content redaction is
+  a gap, not a covered control:** `scripts/lib/sanitize.mjs` masks comment and
+  string-literal content in emitted output and `scripts/check-publication-boundary.mjs` has
+  only narrow rules for scraped pages and credential-bearing URLs — neither detects or
+  redacts PII, so this band is named here as unaddressed rather than claimed. **Compliance
+  is not a guarantee** — CLAUDE.md is explicit
+  that SignalGrid does not certify HIPAA/SOC 2 and a human review is required.
+- **OBSERVABILITY & MONITORING** (identity · AI-quality · security monitoring) — the one
+  band the five-layer stack above carries no row for, and the genuine addition from this
+  reference. **Identity + security monitoring** are covered: `proof:observability`,
+  `proof:observability-integrity`, `proof:telemetry-up`, `proof:telemetry-posture-cache`.
+  **AI-quality monitoring is a GAP, not a covered control:** `proof:fabric-evals` scores
+  the *deterministic* multi-signal posture composition and incident routing — it never
+  evaluates an LLM, a prompt, a retrieval result, a model response, or the fixture-backed
+  tap, and no other proof measures model quality either. There is no LLM in the decision
+  path to monitor (golden rule 2), so this band is named here as unaddressed rather than
+  claimed; if an out-of-tree model tap is ever exercised for real, its output quality would
+  need its own monitoring.
+- **CONTINUOUS TRUST — "Verify Every Request"** — this closing principle *is* SignalGrid's
+  own thesis, not a new requirement: every decision is re-evaluated per request, fail-closed
+  and deterministic, and an unknown or stale signal raises assurance rather than lowering it
+  (DR-020; `proof:signalgrid-core`, `proof:decision-continuity`, the freshness/skew gate).
+
+The verdict is unchanged from the five-layer map: SignalGrid's role in this reference is
+the one `docs/PURPOSE.md` defines (DR-020, the canonical description) — it does not become a
+RAG app, a WAF, a DLP product, or an APM by appearing as a band in someone's diagram.
+
 ## What this map is careful not to say
 
 - **No layer here is "done" or "certified."** Deferred means the family has a

@@ -224,6 +224,8 @@
     "sim:run-requests": "node scripts/mac/run-requests.mjs",
     "sim:signalgrid": "pnpm run proof:signalgrid-simulator",
     "smoke:connector-emulator": "pnpm run proof:connector-emulator",
+    "brief": "node scripts/brief.mjs",
+    "brief:full": "node scripts/brief.mjs --full",
     "status": "node scripts/status-summary.mjs",
     "status:write": "node scripts/status-summary.mjs --write",
     "sync": "node scripts/sync.mjs",

@@ -41,8 +41,27 @@ import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const FAMILY_DIR = join(repo, "lib/integrations/src/integrations");
 
-/** A success return that hard-codes a numeric status — the defect. */
-const FABRICATED = /return\s*\{[^}]*\bhealthy:\s*true\b[^}]*\bstatus:\s*(\d+)/;
+/**
+ * A success return that hard-codes a numeric status — the defect. ORDER-INDEPENDENT:
+ * the two fields may appear in either order inside the object literal. An earlier
+ * draft was `/return\s*\{[^}]*\bhealthy:\s*true\b[^}]*\bstatus:\s*(\d+)/`, which only
+ * matched when `healthy: true` textually preceded `status: <n>` — so the identical
+ * defect written `return { status: 200, healthy: true }` slipped past the gate. It now
+ * captures each `return { … }` body and tests the two fields separately.
+ */
+const RETURN_OBJ = /return\s*\{([^}]*)\}/g;
+const HEALTHY_TRUE = /\bhealthy:\s*true\b/;
+const STATUS_NUM = /\bstatus:\s*(\d+)/;
+/** The hard-coded success status in `src`, or null if none. Field order does not matter. */
+function fabricatedStatus(src) {
+  for (const m of src.matchAll(RETURN_OBJ)) {
+    const body = m[1];
+    if (!HEALTHY_TRUE.test(body)) continue;
+    const s = body.match(STATUS_NUM);
+    if (s) return s[1];
+  }
+  return null;
+}
 /**
  * A status read off an HTTP response, which is a measurement rather than a claim.
  *
@@ -89,8 +108,8 @@ function main() {
   for (const path of files) {
     const src = stripComments(readFileSync(path, "utf8"));
     const rel = path.slice(repo.length + 1);
-    const m = src.match(FABRICATED);
-    if (m) offenders.push({ rel, status: m[1] });
+    const status = fabricatedStatus(src);
+    if (status !== null) offenders.push({ rel, status });
     if (OBSERVED.test(src)) observedCount += 1;
   }
 
@@ -147,19 +166,26 @@ function selfTest() {
   const controls = [
     {
       name: "a hard-coded success status is caught",
-      run: () => FABRICATED.test("return { healthy: true, status: 200 };"),
+      run: () => fabricatedStatus("return { healthy: true, status: 200 };") !== null,
     },
     {
       name: "…at any status number, not just 200",
-      run: () => FABRICATED.test("return { healthy: true, status: 204 };"),
+      run: () => fabricatedStatus("return { healthy: true, status: 204 };") !== null,
+    },
+    {
+      // Regression control for the order-dependence bug: the same defect with the fields
+      // reversed (status before healthy) must still be caught, or a connector author who
+      // writes them the other way slips straight through the gate.
+      name: "…in either field order — status BEFORE healthy is still caught",
+      run: () => fabricatedStatus("return { status: 200, healthy: true };") !== null,
     },
     {
       name: "a null success status is NOT flagged (the honest form)",
-      run: () => !FABRICATED.test("return { healthy: true, status: null };"),
+      run: () => fabricatedStatus("return { healthy: true, status: null };") === null,
     },
     {
       name: "a FAILURE path with a real number is not flagged (the error carries one)",
-      run: () => !FABRICATED.test("return { healthy: false, status: 401 };"),
+      run: () => fabricatedStatus("return { healthy: false, status: 401 };") === null,
     },
     {
       name: "a status read off a response counts as observed",
@@ -184,7 +210,7 @@ function selfTest() {
     },
     {
       name: "comments are stripped, so prose about status: 200 is not a finding",
-      run: () => !FABRICATED.test(stripComments("// return { healthy: true, status: 200 };")),
+      run: () => fabricatedStatus(stripComments("// return { healthy: true, status: 200 };")) === null,
     },
     {
       name: "the scan finds connector files at all (an empty sweep would pass vacuously)",

@@ -132,6 +132,20 @@ for brainstorming, writing/executing plans, TDD, systematic debugging, parallel
 agents, code review, verification-before-completion, branch finishing, and
 worktrees.
 SignalGrid-specific truth and decision records always outrank a vendored workflow.
+## Route by model tier
+You are the brain that decides which model does a task (DR-044). Hand a bulk,
+low-stakes, fully-recheckable chore — log/CI triage, first-draft prose, bulk
+classification, changelog/commit-message drafts — to the free/local tier via
+`scripts/lib/agent-model-tap.mjs` (`draftWithModel`), reached through the DR-029
+gateway. Keep anything that decides, judges, or authors shippable output —
+code changes, review verdicts, decision records, gate design, security,
+launch/publication claims, owner-facing copy — on Claude, done inline; the tap is
+not called for it. NEVER route, and never let any model reach, the deterministic
+decision path (`lib/*`, `/v1`, a connector, a proof) — `scripts/check-model-tap-boundary.mjs`
+enforces that floor. A model draft is an INPUT, never a verdict (`verified:false`
+always): every routed draft still passes the same preflight/breadth/proof/review
+pipeline, so the discipline holds whatever tier drafted. The task class → tier map
+is single-sourced in `scripts/lib/model-routing-policy.mjs`.
 ## Build from failure cases
 Before implementation, write the failure case.
 Any change that can produce or preserve trust needs an executed counterexample

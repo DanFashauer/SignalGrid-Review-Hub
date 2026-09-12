@@ -82,6 +82,36 @@ Every boundary above transfers, and two are stronger:
   deterministic core with **no model at all**; a zero-egress build lane is coherent with that
   residency posture but is not the same thing and does not put inference into the product.
 
+## How a chore routes through it — the tap (DR-044)
+
+The gateway above is *how* a lane reaches a model; the **tap** is *how a chore in this repo
+actually consumes it**, and the routing policy is *which* chores may. All three are build-lane
+only and fenced out of the product's decision path.
+
+- **The policy — one source of truth.** `scripts/lib/model-routing-policy.mjs` maps each task
+  class to a tier: a FREE/LOCAL tier reached through this gateway for bulk, low-stakes work a
+  gate can fully re-check (log/CI triage, first-draft prose, bulk classification), and a CLAUDE
+  tier — the coordinating session does it inline — for anything that decides, judges, or
+  authors shippable output. An unknown class resolves to CLAUDE (fail-closed: unknown tightens,
+  never loosens).
+- **The tap — report-only, and public-safe by construction.** The public Review Hub makes NO
+  live API calls (AGENTS.md), so the in-repo `scripts/lib/agent-model-tap.mjs` makes no network
+  call: `draftWithModel()` returns a committed FIXTURE draft for a routable class (always
+  labeled `verified:false`) or `null`. The real FREE/LOCAL gateway client — which reads
+  `SIGNALGRID_AGENT_MODEL_BASE_URL` / `SIGNALGRID_AGENT_MODEL_NAME`, optional
+  `SIGNALGRID_AGENT_MODEL_KEY` (ENV-only, keys-out-of-tree per DR-029) — lives OUT of this
+  repository and is referenced only; the env names are declared in the routing policy as that
+  out-of-tree contract. The tap never throws, blocks, writes, gates, or decides; with no
+  fixture for a class it returns `null` and the caller proceeds on its deterministic path or
+  hands the task to Claude. First consumer: `scripts/brief.mjs --narrate`.
+- **The fence — by construction.** `scripts/check-model-tap-boundary.mjs` (preflight + CI)
+  proves no file under `lib/**`, the `/v1` server, a connector, or a proof references the tap,
+  its env vars, or a model-call shape; that the tap imports nothing from the decision path
+  (the reciprocal fence, including the `@workspace/` alias form); and that the in-repo tap
+  itself contains no live-call shape — so a model, free or local, can never reach a verdict
+  (golden rule 2) and no live API call enters the public surface (AGENTS.md). This is the same
+  boundary the OmniRoute record states, now enforced, not just asserted.
+
 ## What this repo does and does not carry
 
 - **Carries:** this adoption record, DR-029, and the intake row. That is the whole

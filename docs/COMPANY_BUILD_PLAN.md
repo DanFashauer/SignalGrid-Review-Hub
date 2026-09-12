@@ -283,7 +283,7 @@ earlier — that is the loop working, not a reason to soften the record.
     eleven lines below, plus one more in `lib/persistence`, for NINE fail-open
     sites in total (see the widening note below).
     All nine are fixed to treat unparseable as expired/stale.
-    `scripts/check-nan-fail-open.mjs` (preflight + CI, four rules, self-tested)
+    `scripts/check-nan-fail-open.mjs` (preflight + CI, five rules, self-tested)
     holds the line. Two measurements, each attributed to the gate version that
     produced it, because conflating them is how a figure goes stale:
     the FIRST (clock-operand-only) gate, run against the pre-fix sources,
@@ -4888,7 +4888,7 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (737) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (741) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (764) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (188) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

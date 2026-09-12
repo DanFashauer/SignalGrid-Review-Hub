@@ -155,6 +155,8 @@ const STEPS = [
   // and read by nothing, anywhere, for as long as the documents existed.
   { name: "Env-doc readers (an instructed SIGNALGRID_* variable must be read by something)", cmd: ["node", "scripts/check-env-doc-readers.mjs"] },
   { name: "Env-doc-reader self-test (the gate can actually fail)", cmd: ["node", "scripts/check-env-doc-readers.mjs", "--self-test"] },
+  { name: "Model-tap boundary self-test (the fence can actually fail)", cmd: ["node", "scripts/check-model-tap-boundary.mjs", "--self-test"] },
+  { name: "Model-tap boundary (no model reference reaches the /v1 decision path — DR-044, golden rule 2)", cmd: ["node", "scripts/check-model-tap-boundary.mjs"] },
   // A browser follows `](FOO.md)` from the document's own directory and nowhere
   // else. 41 documents moved to docs/research/ on 2026-08-10 and their sibling
   // links pointed at nothing for four weeks — 35 dead links across the tree.
@@ -260,6 +262,8 @@ const STEPS = [
   { name: "iOS dead stored properties (a field nothing assigns makes every read of it dead)", cmd: ["node", "scripts/check-ios-dead-stored-properties.mjs"] },
   { name: "iOS policy defaults self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-policy-defaults.mjs", "--self-test"] },
   { name: "iOS policy defaults (no managed-config default derived from the absence of policy)", cmd: ["node", "scripts/check-ios-policy-defaults.mjs"] },
+  { name: "iOS restriction defaults self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs", "--self-test"] },
+  { name: "iOS restriction defaults (no persona DLP restriction defaults permissive on an unknown session)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs"] },
   { name: "Sim-script self-check self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs", "--self-test"] },
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },

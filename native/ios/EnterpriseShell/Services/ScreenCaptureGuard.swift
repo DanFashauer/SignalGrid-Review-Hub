@@ -36,7 +36,10 @@ final class ScreenCaptureGuard {
     }
 
     private var allowScreenCapture: Bool {
-        SessionStateManager.shared.currentSession?.persona.restrictions.allowScreenCapture ?? true
+        // Fail-closed: an unknown session denies screen capture, never grants it. The
+        // ScreenCapturePolicy `sessionActive &&` gate already compensates, but the default
+        // itself must tighten on unknown input (golden rule 2), not loosen.
+        SessionStateManager.shared.currentSession?.persona.restrictions.allowScreenCapture ?? false
     }
 
     private func refresh() {

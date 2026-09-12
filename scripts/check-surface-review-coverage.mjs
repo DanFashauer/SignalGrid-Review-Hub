@@ -1046,7 +1046,12 @@ function selfTest() {
       }
     });
   } finally {
-    if (temp) rmSync(temp, { recursive: true, force: true });
+    // maxRetries: the self-test spawns many synchronous `git` commands in `temp`
+    // (init/add/commit), and on CI a recursive rmSync of the `.git` tree it leaves
+    // can race a not-yet-settled write and throw ENOTEMPTY — which Node's rimraf
+    // retries ONLY when maxRetries > 0. Without it, that transient crashed the whole
+    // gate (seen on PR #546, 2026-09-08). retryDelay backs each attempt off.
+    if (temp) rmSync(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 
   check("workspaceGlobs fails closed on a workspace file it cannot read", () => {

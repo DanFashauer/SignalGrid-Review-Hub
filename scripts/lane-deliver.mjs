@@ -156,7 +156,11 @@ let wt = mkdtempSync(join(tmpdir(), "sg-lane-deliver-"));
 function cleanup() {
   if (!wt) return;
   git(["worktree", "remove", "--force", wt], repo);
-  rmSync(wt, { recursive: true, force: true });
+  // maxRetries: this dir held a git worktree; a recursive rmSync of any leftover
+  // can race a settling git write and throw ENOTEMPTY, which Node's rimraf retries
+  // only when maxRetries > 0. This is the critical delivery path — don't let a
+  // transient teardown abort it.
+  rmSync(wt, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   git(["worktree", "prune"], repo);
   wt = null;
 }

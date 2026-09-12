@@ -364,6 +364,80 @@ check("sealing is deterministic for a fixed nonce and clock", seal(ALLOW).attest
 check("two different verdicts never seal alike", seal(ALLOW).attestation.digest !== seal(RESTRICT).attestation.digest);
 
 console.log(`figures=states=${enumRes.combos},verifying=${enumRes.noneCount},usableGrants=${usableGrants}`);
+// ── the one-line guards the brace-less mutator reached (2026-09-11) ──────────────
+//
+// Each of these `if (...) return ...;` guards survived the first sweep that could see
+// them: some were shadowed by a later guard for every input the proof used, some were
+// simply never exercised. Each pin below is built so the guard under test is the ONLY
+// thing that can refuse.
+const fail = (r: unknown): string => (r as { failure: string }).failure;
+// attest.ts: the alg membership check is shadowed by the key/alg mismatch check whenever
+// the ring's key carries a supported alg. Register a key whose alg is the bogus one:
+// then only the membership check stands between "none" and a verified allow.
+{
+  const noneRing = [{ ...KEY, alg: "none" as unknown as AttestationKey["alg"] }];
+  const noneEnv = { ...sealed, attestation: { ...sealed.attestation, alg: "none" as unknown as AttestedVerdict<Verdict>["attestation"]["alg"] } };
+  const r = verifyVerdict(noneEnv, noneRing, opts());
+  check("an unsupported alg is refused EVEN WHEN the ring's key claims the same alg (membership is its own check, not the mismatch check)",
+    r.verified === false && fail(r) === "unsupported_alg");
+}
+// attest.ts: the key/alg mismatch check — the envelope says a supported alg, the ring
+// entry for that keyId was registered under another. The digest would verify.
+{
+  const otherAlgRing = [{ ...KEY, alg: "hs512" as unknown as AttestationKey["alg"] }];
+  const r = verifyVerdict(sealed, otherAlgRing, opts());
+  check("an envelope whose alg differs from the KEY's registered alg is refused as unsupported_alg (never a digest check against the wrong scheme)",
+    r.verified === false && fail(r) === "unsupported_alg");
+}
+// attest.ts: the attestation block itself is not a plain object.
+for (const [label, att] of [["null", null], ["an array", []], ["a string", "sealed"], ["Object.prototype", Object.prototype]] as const) {
+  const r = verifyVerdict({ verdict: ALLOW, attestation: att as unknown as AttestedVerdict<Verdict>["attestation"] }, RING, opts());
+  check(`an attestation block that is ${label} is envelope_malformed`, r.verified === false && fail(r) === "envelope_malformed");
+}
+// attest.ts: the Object.prototype exclusion is load-bearing ONLY under pollution — every
+// other non-object shape is refused by the own-field reads that follow. Plant a genuine
+// attestation's fields on Object.prototype and present Object.prototype itself: the
+// exclusion is then the one thing between a polluted prototype and a verified allow.
+{
+  const proto = Object.prototype as unknown as Record<string, unknown>;
+  try {
+    for (const [k, v] of Object.entries(sealed.attestation)) Object.defineProperty(proto, k, { value: v, configurable: true, enumerable: false, writable: true });
+    const r = verifyVerdict({ verdict: ALLOW, attestation: Object.prototype as unknown as AttestedVerdict<Verdict>["attestation"] }, RING, opts());
+    check("Object.prototype presented as the attestation is envelope_malformed EVEN WHEN a genuine attestation's fields are planted on it",
+      r.verified === false && fail(r) === "envelope_malformed");
+  } finally {
+    for (const k of Object.keys(sealed.attestation)) delete proto[k];
+  }
+}
+// attest.ts: the prototype walk's depth bound is exact; inherited and symbol keys refuse.
+{
+  const chain = (n: number): object => { let o: object = {}; for (let i = 1; i < n; i += 1) o = Object.create(o); return o; };
+  const within = { ...sealed, attestation: Object.assign(Object.create(chain(31)), sealed.attestation) as AttestedVerdict<Verdict>["attestation"] };
+  const beyond = { ...sealed, attestation: Object.assign(Object.create(chain(32)), sealed.attestation) as AttestedVerdict<Verdict>["attestation"] };
+  check("an attestation behind 31 empty prototypes is within the walk bound and still verifies", verifyVerdict(within, RING, opts()).verified === true);
+  check("an attestation behind 32 empty prototypes hits the walk bound and is envelope_malformed", fail(verifyVerdict(beyond, RING, opts())) === "envelope_malformed");
+  const inherited = { ...sealed, attestation: Object.assign(Object.create({ nonce: "planted" }), sealed.attestation) as AttestedVerdict<Verdict>["attestation"] };
+  check("an attestation that INHERITS a recognized key is envelope_malformed (the prototype's claim is not the envelope's)", fail(verifyVerdict(inherited, RING, opts())) === "envelope_malformed");
+  const symbolic = { ...sealed, attestation: { ...sealed.attestation, [Symbol("x")]: 1 } as AttestedVerdict<Verdict>["attestation"] };
+  check("an attestation carrying a symbol key is envelope_malformed", fail(verifyVerdict(symbolic, RING, opts())) === "envelope_malformed");
+}
+// attest.ts: a verdict whose bytes cannot be reproduced is envelope_malformed, not a
+// digest mismatch — there is no digest to mismatch.
+{
+  const r = verifyVerdict({ ...sealed, verdict: { ...ALLOW, weight: Number.NaN } as unknown as Verdict }, RING, opts());
+  check("a verdict that cannot be canonicalized (NaN inside) is refused as envelope_malformed, never as a digest mismatch", r.verified === false && fail(r) === "envelope_malformed");
+}
+// canonical.ts: the leaf cases, each asserted on its exact bytes.
+check("null canonicalizes to the literal null", canonicalize(null) === "null" && canonicalize({ a: null }) === '{"a":null}');
+check("booleans canonicalize to their literals", canonicalize(true) === "true" && canonicalize(false) === "false");
+check("a function, a symbol and top-level undefined are UNCANONICAL",
+  canonicalize(() => 1) === UNCANONICAL && canonicalize(Symbol("s")) === UNCANONICAL && canonicalize(undefined) === UNCANONICAL);
+{
+  const nest = (n: number): unknown => { let v: unknown = 1; for (let i = 0; i < n; i += 1) v = { a: v }; return v; };
+  check("nesting within the depth bound canonicalizes; nesting beyond it is UNCANONICAL (bounded, not trusted)",
+    typeof canonicalize(nest(10)) === "string" && canonicalize(nest(40)) === UNCANONICAL);
+}
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

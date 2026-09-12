@@ -61,6 +61,40 @@ second document making the same claim a third time, which is how a figure drifts
    MDM/DEX/RMM/SIEM/SOAR/ITSM/NAC. Name a target company only as a candidate, not
    a customer or partner. Retired category labels stay retired.
 
+## Retrieval over the docs corpus (LightRAG naive mode, local embeddings, no key)
+
+The corpus above is 300-odd files and nobody has read all of them. Before you write a
+finding, find out which document already says it — that is what this is for, and it is
+the only thing it is for.
+
+```bash
+pnpm run lightrag:install                  # once, per machine: a pinned venv OUTSIDE the repo
+pnpm run docs:retrieve -- --reindex        # index/refresh the TRACKED docs set
+pnpm run docs:retrieve -- "which doc states the readiness floor for outreach"
+```
+
+`--status` reports drift (what changed, was added or was removed since the last index);
+`--self-test` proves the two refusals still refuse. It reads only tracked markdown under
+`docs/` and writes nothing inside the repository — the venv, index and model live under
+`LIGHTRAG_DIR`, and an in-tree path is refused before anything is created. No generative
+model is configured, so there is no key and no call out; a run costs CPU and nothing else.
+DR-041 has the measurements and the boundary.
+
+**Its answer is a pointer, never a fact.** What comes back is a tracked file path, a line
+range and the matching chunk. READ the file before you cite it. A chunk is not a
+quotation, retrieval ranks by embedding similarity rather than by truth, and its measured
+quality on this corpus was plain vector search — 3 of 5, 1 of 5, 1 of 4 and 1 of 5 top-5
+hits against a grep ground truth on four questions. Nothing it prints may be cited as
+evidence, become a figure, or reach a gate.
+
+**It is the companion to `pnpm run check:absence`, never its replacement.** Rule 2 above
+is unchanged: before writing that something does not exist, run the absence check and
+read the matches yourself. A retrieval query returning nothing means this index found
+nothing — an index that is stale, or was never refreshed, or whose embedding simply
+missed. That is not the same sentence as "it is not there", and the two documents that
+already claimed an absence while the surface sat in the tree are why the distinction is
+written down rather than assumed.
+
 ## Discovery is an input, not the gate
 
 Discovery work is governed by `docs/agent/DISCOVERY_LOG.md`, not by this file:

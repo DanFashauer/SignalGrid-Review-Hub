@@ -44,6 +44,23 @@ const DEFERRED = new Map([
       reason: "Mac lane owns this file (LANE_COORDINATION.md); coordinate before editing",
     },
   ],
+  // A VENDORED SKILL script, which is the one case the third_party/ exclusion above
+  // does NOT cover: it lives under .claude/skills/ because that is where the harness
+  // loads skills from, and it is held byte-identical to mattpocock/skills@3cca18b3
+  // (.claude/skills/VENDORED.md). So it can carry neither an edit nor an inline
+  // disable, and DEFERRED is the mechanism that fits: the code is recorded, not
+  // waved through, and if a re-vendor makes the finding disappear the stale-deferral
+  // check above FAILS and someone re-reads the file. RED is assigned in both arms of
+  // the colour probe at :17 and :19 and then never used by the library half of the
+  // template — the author is expected to use it in the stages half they write below
+  // the marker, which is exactly why upstream leaves it there.
+  [
+    ".claude/skills/wizard/template.sh",
+    {
+      codes: ["SC2034"],
+      reason: "vendored byte-identical (mattpocock/skills@3cca18b3); no edit and no inline disable is permitted in .claude/skills/",
+    },
+  ],
 ]);
 
 const listed = spawnSync("git", ["ls-files", "*.sh"], { encoding: "utf8" });
@@ -51,7 +68,18 @@ if (listed.status !== 0) {
   console.error("✗ could not list shell files");
   process.exit(1);
 }
-const files = listed.stdout.split("\n").filter(Boolean);
+// VENDORED TREES ARE NOT LINTED. `third_party/**` is copied in byte-identical under
+// someone else's licence (`scripts/publication-boundary.mjs`, class third_party_intake)
+// and the rule there is "do not edit files here" — so a finding in one of those scripts
+// could only ever be answered by editing the vendored file or by a suppression, and
+// neither is allowed. Nothing under third_party/ is executed by any gate, hook or
+// script (each directory's VENDORED.md says so). Added 2026-09-12 when the first
+// vendored shell script arrived (third_party/cli-anything/, DR-040) and SC2034 fired on
+// an unused variable this repository must not touch. First-party shell — including
+// every script a vendored SKILL under .claude/skills/ tells Claude to run — is still
+// linted; only the third_party/ prefix is excluded, and the non-vacuity floor below
+// still applies to what remains.
+const files = listed.stdout.split("\n").filter(Boolean).filter((f) => !f.startsWith("third_party/"));
 
 // NON-VACUITY. A glob that matched nothing would make this gate pass forever while
 // checking not one line — the shape of "green because nothing ran" this repo treats

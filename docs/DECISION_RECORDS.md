@@ -2069,7 +2069,9 @@ authoritative decision; this record cites that rule rather than restating it.
 
 1. **Scope.** The building is the first scope, not the boundary. The same grid spans every
    system the company runs that exposes an API or SDK — for the devices staff use, the
-   admins who run those systems, and the workflows between them.
+   admins who run those systems, and the workflows between them. **[Amended 2026-09-10 by DR-036:
+   a company is many sites and buildings; the grid spans all of them, and a site is
+   configuration, not a separate product.]**
 2. **Source-agnostic is the point.** Any system with an API or SDK is a candidate signal
    source; none is a dependency. Vendor lock — in either direction — is the condition
    SignalGrid exists to remove, and a design that requires one vendor underneath is a
@@ -2097,3 +2099,761 @@ enum, the determinism invariant, and the Decision Envelope are untouched.
 **Reversal / amendment.** The owner reverses by saying so; amend items 1–5 in place and
 keep the record. If the §2 sentence is later widened to "the company," that is a
 follow-up record that names the mirrors it changes.
+
+
+## DR-036 — The agentic operating model, the readiness figure that gates outreach (floor 80 / target 92–95 / goal 100), and multi-site scope (owner-directed 2026-09-10)
+
+**Question.** DR-033 set the object of the phase — a working core product before go-to-market —
+without saying what "working" means or who decides it, and the operating model the owner has
+been building (lanes that research, plan, execute and monitor) was described in chat, never in
+a record. A bar nobody can measure is a feeling; this repository's discipline is that numbers
+come from output.
+
+**The directive.** The owner, 2026-09-10, in his own words, with the "Agentic AI (goal-driven,
+multi-agent system)" picture attached: *"This is the end goal for what I need you to be and
+become successful to build the product from all sides period and everything else we've
+discussed already. Then once everything is completed and confirmed that this solution works
+80% or higher then I'll start the outreach — I don't want to burn contacts or sources when I
+don't have a valid and effective solution that's working. I mean the goal is 100% working but
+stretch is 80 then target is 92–95%."* Asked which definition of "working" should gate
+outreach: *"Why not all?"* And: *"a company can have multiple location/buildings within the
+company itself."*
+
+**Grounding — measured 2026-09-10 by `node scripts/check-readiness-figure.mjs`.**
+(a) runbook ground truth 78% — 11 modeled / 3 partial / 0 gap of 14 real-world
+elements in `docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`; (b) launch surface,
+evidence-bound 100% — green on both halves, 1 day(s) old; launch 23 · deferred 134;
+(c) end-to-end 62% — scenarios 11/11, live operations proven 5/8
+(unproven: live-keycloak, live-location, live-edr). Headline **62%** — OUTREACH CLOSED — readiness 62% is below the 80% floor. Launch items map to proof
+names 3 of 23 (they are routes, packages and families), which is why (b) is evidence-bound
+rather than an invented per-item ratio.
+
+**The call.**
+
+1. **The operating model, named.** The lanes are the orchestrator in the owner's picture, built
+   from parts the repo already has: *research* = the research-ops skill, the owner's Drive
+   corpus (DR-034) and the live lanes; *planning* = the planning skills, the backlog and the
+   brain cycle's candidate selection; *execution* = the two lanes, the self-hosted Mac runner
+   and the sim-request loop; *monitoring* = the gates, `loop:state`, the heartbeats, the
+   nightly runner and this readiness figure; *memory* = neural memory (DR-026) and the file
+   memory; *self-correction* = `FALSE_CLAIMS.json`, decision records and mutation-proven
+   gates; *orchestrator* = the Standing Brain Cycle (DR-032) under the owner's decisions —
+   auto-merge stays behind the owner's GREEN switch. The gap this record closes: the
+   monitoring role had no single number for the goal.
+2. **The readiness figure is derived, never typed.** `scripts/check-readiness-figure.mjs`
+   computes three dimensions — (a) runbook ground truth, (b) launch surface evidence-bound,
+   (c) end-to-end scenarios and live operations — and the headline is the LOWEST of the
+   three, so no single easy dimension can carry the product. `loop:state` prints it every
+   session; preflight and CI run it as a REPORT (a low number is information; only a broken
+   derivation is fatal). Dimension (b) is binary until launch items carry explicit proof
+   bindings — a named follow-up; stale evidence (older than 7 days) reads as 0%, which
+   closes outreach until a real Mac run refreshes it.
+3. **The bar.** Outreach opens at a headline of 80% (floor), the target is 92–95%, the goal
+   100%. Below the floor no contact or source is spent on the product; the second-opinion
+   review's activation recommendations stay retired until the bar is met. Discovery evidence
+   remains an input (DR-033).
+4. **Multi-site scope.** A company is many sites and buildings; the grid spans all of them,
+   and a site is configuration, not a separate product — amends DR-035 item 1 in place and
+   the PURPOSE.md §2 subsection.
+5. **Surfaces reconciled in this change:** `scripts/check-readiness-figure.mjs` (new, with
+   `scripts/src/readiness-scenarios.ts`), `scripts/loop-state.mjs` (the row),
+   `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml` (self-test + REPORT),
+   `docs/PURPOSE.md` §2 (multi-site line), `CLAUDE.md` (scope line), and DR-035 item 1.
+
+**What does not change.** Claim discipline (DR-021 §2, DR-033 item 4) — the figure is an
+internal readiness measure, never a buyer-facing claim. The decision core stays
+deterministic; learning proposes (DR-035 item 5).
+
+**Reversal / amendment.** The owner reverses by saying so; amend the thresholds in
+`scripts/check-readiness-figure.mjs` and this record together. A dimension may be added or
+its derivation tightened by a later record that names what changed and why.
+
+## DR-037 — The cloud lane merges its own green product PRs; the owner is no longer the merge button (owner-directed 2026-09-12)
+
+**Decision.** From 2026-09-12 the cloud lane **merges product pull requests itself** once
+they are green, instead of parking them for the owner. The owner set this in chat on
+2026-09-12, after six green PRs had queued on him overnight and the lane explained that
+DR-032's "lanes open, owner merges" rule was the only thing holding them: asked whether
+the lane should merge them itself, he answered *"Yes I didn't want that and that was my
+mistake I didn't want that on me."* This record carries that answer; the lane wrote it,
+the owner decided it.
+
+**What "green" means here — every condition, none inferred.** A product PR is
+mergeable by the lane only when all of the following hold on its CURRENT head:
+
+1. The gating check "Typecheck, build, and proof scaffold" has **passed** on that head
+   (a `check_suite.completed` event alone is not it; the lane reads the check run).
+2. `node scripts/preflight.mjs` and `pnpm run verify:breadth` passed **locally on the
+   branch** before the push that produced the head, with output quoted in the PR body
+   or `docs/agent/EVIDENCE.md` — CI green is necessary, not sufficient (CLAUDE.md,
+   "Before you push").
+3. Every review thread is resolved and every bot finding was verified against the
+   source and either fixed or answered with the reason; the lane never resolves a
+   human reviewer's thread it did not address.
+4. The PR is not conflicted with `SignalGrid_Alpha`; a conflict is merged in and
+   regenerated files are regenerated with the repo's tooling, never by hand.
+5. The lane **never approves** a PR (approval is a human act and the harness keeps
+   refusing self-approval), and it never merges a PR it did not open or was not asked to
+   drive for its author, except the Mac lane's landing PRs when the Mac has asked for
+   that in mail (as #653 did).
+
+**What stays owner-gated.** `check-owner-gated-surfaces.mjs` still classifies
+`scripts/**`, `.github/workflows/**`, `lib/**/fixtures/**`, the brain-cycle veto config
+and the owner-reserved rules as SAFETY_MACHINERY / OWNER_RESERVED. This record changes
+who presses merge, not what the classifier says: the lane may merge a SAFETY_MACHINERY
+PR only when the five conditions above hold, and it must say so in the PR body under
+"Owner decision needed" as *"merged under DR-037"* with the check-run id. It still does
+not: edit `AGENTS.md` or a decision record on its own authority (a DR records an owner
+decision, as this one does); activate the Standing Brain Cycle (DR-032's activation clause
+is untouched — the cycle still auto-OPENS and never auto-merges); merge anything that
+changes the launch profile, the launch-claims gate or the publication boundary (DR-021 §2
+— those remain the owner's); or delete branches.
+
+**Consequences.** The owner's queue becomes review-when-he-wants, not merge-or-nothing:
+six green PRs (#656, #657, #653, #649, #654 and the lane-mail #655) sat for hours on
+2026-09-11/12 while the lane could only re-sync them each time a delivery moved the
+coverage page. The lane now lands them in order, regenerating the sync manifest on top of
+the previous landing (DR-036's readiness figure reads (b)=0 until the Mac re-mints against
+the final manifest — by design, unchanged). Every merge is still recorded: the PR body,
+the EVIDENCE entry, the LOOP STATE line and the steward heartbeat name the merged sha.
+
+**Alternatives considered.** Keep DR-032's rule and ask the owner to merge in batches —
+rejected by the owner ("I didn't want that on me"). Auto-merge on green via
+`enable_pr_auto_merge` — unavailable on this repository (the API refuses it), and it
+would merge on CI alone without condition 2. A per-PR allowlist the owner ticks —
+another button on the owner.
+
+**Reversal / amendment.** The owner reverses by saying so; the lane then reverts to
+opening-only for product PRs from the next cycle, and this record stays with the
+reversal date added. Narrowing (for example, "not `.github/workflows/**`") is an
+amendment to the "What stays owner-gated" list, in place.
+
+## DR-038 — Five owner-shared agent tools installed on the Mac lane and absorbed by use, each inside its boundary (owner-directed 2026-09-12)
+
+**Decision.** The owner shared a five-item list — last30days, CLI-Anything, Claude-video,
+Crucible, LightRAG — and said *"Please install all of these and add them where needed and
+start using them now."* The Mac lane installs all five (plus Graphify, from the same night's
+listicle, DR-038 covers it too) at **user scope on the Mac**, pinned where a pin exists,
+hooks OFF, nothing written into this repository's `.claude/` or `CLAUDE.md`, every output
+directory they can produce gitignored before first use, and no data leaving the machine
+unless a later record says so. Each tool is used once on a real SignalGrid question the same
+night and the measured result is the intake row (`docs/agent/RESOURCE_INTAKE.md`, rows dated
+2026-09-12). The lane wrote this record; the owner decided it.
+
+**Per tool — what was decided, from the five independent reads and the first uses.**
+
+| Tool | Disposition | Boundary |
+| --- | --- | --- |
+| `last30days` 3.24.0 | Installed and run (was doctrine-only since DR-031). Keyless coverage today is Hacker News + GitHub; the first brief was thin and off-topic for a niche hospital query. | DR-031 stands: live runs owner-gated, cookies off, never `--publish-html`, never a save dir inside the tree. Source keys are the owner's to add. |
+| CLI-Anything | Installed, no target: it wraps open-source GUI apps whose source it can read; SignalGrid's targets are closed and its own surfaces already have agent handles (`/v1`, MCP, Bruno). | Generation output gitignored (`agent-harness/`, `skills/cli-anything-*/`, state files). Never pointed at this tree. |
+| Claude-video (`/watch`) | ffmpeg 9.0.1 + yt-dlp installed, marketplace added; the plugin install line is the owner's (classifier refused it for the agent). Fit: the missing video modality of the research transports. | Working dir is the system temp dir; audio transcribed locally unless a key is set; never `--out-dir` inside the tree. |
+| Crucible (raddue) | Selective: only the adversarial half (quality-gate, red-team, inquisitor, adversarial-tester, temper, audit, shared/, four agents), via the pinned `pnpm run crucible:install` the owner runs. Its lifecycle half duplicates the vendored obra/superpowers set (two name collisions); excluded. | Hooks off (one is a blocking PreToolUse guard), consensus MCP excluded (third-party egress), build/checkpoint/compass/adr excluded (untracked writes into `docs/`, gitignored regardless). Lenses run report-only in a git worktree; a lens joins `brain-cycle-config.json` only after a measured run. |
+| LightRAG 1.5.6 | Installed; runnable only once the owner installs Ollama (classifier refused). Shape: local chat + embedding models, store under `~/signalgrid-lightrag/`, bound to 127.0.0.1 with an API key. | DR-026: the store is a cache of the committed docs, never their source, never inside the tree. Golden rule 2 / DR-029: never a product component. Answers cite; grep confirms. |
+| Graphify 0.9.58 | Installed and measured: structural graph of this tree (16,229 nodes / 29,512 edges / 677 communities, 3 s), skill at user scope only. Strong for symbol-level "who calls X"; blind to string-literal paths and cross-language twins. | `graphify-out/` gitignored; never `graphify install --project` (it would write into the repo's `.claude/` and `CLAUDE.md`). Optional local index, not a gate; semantic docs pass deferred. |
+
+**Why this way.** The repository absorbs owner-shared material by use, never with a memo
+(handoff rule; DR-021). Pins, user scope and hooks-off are the house pattern every prior
+tool followed (DR-024 Ponytail, DR-026 neural-memory, DR-029 OmniRoute, DR-030). Output
+directories are gitignored first because `provenance.workingTreeClean` on every sim result
+reads untracked files as dirt (CLAUDE.md, "Simulation results — provenance is the product").
+
+**What stays owner-run.** The Mac's auto-mode permission classifier refuses, for an agent,
+plugin installs that write hooks or third-party binaries and any clone into the home
+directory; three commands are therefore the owner's, listed in the intake rows and in
+`package.json` (`claude-video:install`, `crucible:install`) plus `brew install ollama`. The
+lane does not retry a refused install; it hands the line over.
+
+**Consequences.** Six more tools on the Mac lane, each with an installer row in
+`package.json` so a new machine reproduces the set; the readiness figure (DR-036) is
+untouched by any of them — none enters `lib/*`, `/v1`, connectors or proofs.
+
+**Reversal / amendment.** The owner reverses by saying so; `claude plugin uninstall`,
+`uv tool uninstall`, and removing the symlinks undo each install without touching the
+tree. Adding a tool's hook, giving it a key, or letting any of them into the decision path
+is an amendment here, not a quiet change.
+
+## DR-039 — The absorption bar is the founder's: anything with a part that can aid building the company is taken; only licence, auto-execution, egress without consent and directory collision exclude (owner-directed 2026-09-12)
+
+**Context.** Seven evaluations of owner-shared skills collections (Matt Pocock's,
+Addy Osmani's, Google's, NVIDIA's, K-Dense's, the VoltAgent index, a GitHub Trending
+page) came back on 2026-09-12 with most candidates marked "evaluated, not adopted" on
+grounds of overlap with an existing skill, thinness, or no current activity that would
+use them — after the owner had already overruled two such verdicts the same hour
+(DR-040). He then shared his résumé and corrected the posture directly:
+
+> *"You need to probably stop and think of something real quick you need to understand
+> I'm not asking you to check if they really worth anything if it has any part of the
+> main core of this in any fashion that can aid in building all aspects of this
+> company: brand: solution: apps: websites all of it and I mean everything. Please
+> check yourself and readjust what you're looking at should be my assistant that thinks
+> like me and should know my responses and knowledge."*
+
+**Call.**
+
+1. **The bar.** A resource the owner shares is ADOPTED if any part of it can aid
+   building any aspect of the company — product, apps, websites, brand, docs,
+   operations, the skills plane itself. The evaluator's question is no longer "is it
+   worth it" but "which part, and in what form".
+2. **The only exclusions**, each an existing hard line: (a) a licence that cannot be
+   republished from this public MIT tree — none, NonCommercial, ShareAlike, proprietary
+   — excludes the FILES, and the ideas still land in our own words with the source
+   named; (b) auto-execution — hooks, run-time code fetches, HEAD-tracking installs —
+   excludes the MECHANISM, and the skill is taken without it (DR-026, DR-030);
+   (c) egress of owner data or repository source without the owner's own key decision —
+   taken, with the egress stated in the wrapper and keys out of the tree (DR-029);
+   (d) a directory collision under `.claude/skills/`.
+3. **Overlap is recorded, never refused.** "Restates CLAUDE.md", "duplicates a vendored
+   skill", "nothing uses it yet" and "thin" go in the intake row as facts.
+4. **Contradictions get override rows.** An instruction that contradicts CLAUDE.md is
+   recorded in `.claude/skills/VENDORED.md` `## Overrides`, not edited and not a ground
+   for exclusion.
+5. **Domain-irrelevant collections still yield their transferable part** — an authoring
+   standard, a doctrine, a pattern — as a first-party document naming the source.
+6. **"Thinks like me" is standing context, not a mood.** `docs/company/FOUNDER_PROFILE.md`
+   records who the founder is and how he works; the owner-comms skill no longer calls
+   him non-technical; the base `signalgrid` skill points every role at the profile
+   before it touches anything.
+
+**Boundary.** The hard lines do not move: hooks off, pins only, keys out of the tree,
+the publication boundary, the launch-claims gate and the launch profile untouched;
+nothing vendored enters `lib/*`, `/v1`, a connector, a proof or the decision path, and
+nothing vendored is executed by a gate. What moves is the default answer to a shared
+resource: from "evaluated, not adopted" to "adopted, in this form".
+
+**Evidence.** The seven evaluation reports (measurements preserved in their intake
+rows); the two overruled verdicts of DR-040; the owner's message quoted above; the
+founder's résumé (owner-held).
+
+**Reversal.** Delete this record, rule 5 of `docs/agent/RESOURCE_INTAKE.md`,
+`docs/company/FOUNDER_PROFILE.md`, ICP Finding 9, the pointer in the base skill and the
+three owner-comms edits; the exclusion list reverts to the evaluators' judgement.
+
+## DR-040 — Owner-directed: the `/watch` skill and the CLI-Anything method are vendored, hooks off, hub out, transcription local (owner-directed 2026-09-12)
+
+**Context.** The owner shared an image naming five tools (last30days, CLI-Anything,
+Claude-video, Crucible, LightRAG): "These also need to be added and absorbed into the
+🧠". Two evaluators measured CLI-Anything and Claude-video in sandboxes at a pin and
+recommended "evaluated, not adopted" on mechanics — an upload-only transcript path and
+a `SessionStart` hook in one, a telemetry-bearing unpinned installer in the other. The
+owner overruled: *"I'm going to challenge you on not adding CLI anything and the Claude
+video that's very essential."* The owner decides; the measurements shape the form.
+
+**Call.** Both are adopted, in the form that keeps every measured finding true.
+
+1. **`bradautomates/claude-video` — `skills/watch/` vendored unmodified** at
+   `83da59fa78c3eee9e20f515fe75c438bb5166efd` (MIT © 2026 Bradley Bonanno) into
+   `.claude/skills/watch/`, the second upstream in that directory. NOT taken: `hooks/`
+   (a `SessionStart` hook that runs third-party bash on every session start — the
+   hooks-off rule of DR-026), `tests/`, the marketplace manifests. Two of its
+   instructions are overridden in `.claude/skills/VENDORED.md` rather than edited: the
+   recursive delete in its clean-up step and a printed `sudo` install hint.
+2. **Its transcript path stays keyless.** A first-party `video-intake/` skill supplies
+   the transcript locally with faster-whisper — the path that transcribed the owner's
+   two videos on 2026-09-12 (1,806 characters from a 70.61 s clip, no key, nothing
+   uploaded; the vendored skill without a key returned frames and `Transcript: none
+   available` for the same file) — and the intake procedure around it. A Whisper key in
+   `~/.config/watch/.env` is the owner's decision per machine; keys never enter the tree
+   (DR-029).
+3. **`HKUDS/CLI-Anything` — `cli-anything-plugin/` vendored unmodified** at
+   `810c18b0d1ab9b234bc996c9fd999318523a3ef0` (Apache-2.0) under
+   `third_party/cli-anything/`, activated through a first-party `cli-anything/` skill
+   that maps the seven-phase method onto SignalGrid's own control plane: the
+   `signalgrid` CLI over `/v1` and the MCP server, TypeScript, read-only against the
+   fabric by default, fixture-tested (`docs/BUILD_BACKLOG.md`). NOT taken: `cli-hub`
+   (a live unpinned registry whose install strings run under `shell=True`, telemetry on
+   by default posting the agent's fingerprint and the user's query), the 79 harnesses,
+   the marketplace manifests.
+4. **The vendored-set arithmetic moves with it.** `scripts/publication-boundary.mjs`
+   states 15 skills vendored (14 + 1) with a third `third_party_intake` area for
+   `third_party/cli-anything`; `.claude/skills/VENDORED.md` opens with FOURTEEN
+   exceptions and carries a second upstream section; section E of
+   `scripts/check-publication-boundary.mjs` holds the halves to each other.
+
+**Boundary.** Nothing here touches `lib/*`, `/v1`, a connector, a proof or the decision
+path; no claim moves; the launch profile and the publication boundary are untouched. A
+vendored skill is a procedure the agent may follow, and the two skill gates
+(`check-skill-plane-conformance.mjs`, `check-skill-instruction-conflicts.mjs`) hold it
+to the deny list. Nothing vendored is executed by a gate, a hook or a script.
+
+**Evidence.** The two intake rows in `docs/agent/RESOURCE_INTAKE.md` (measurements
+quoted); `third_party/cli-anything/VENDORED.md`; the byte-identity diffs and gate
+outputs in `docs/agent/EVIDENCE.md` (2026-09-12).
+
+**Reversal.** Delete `.claude/skills/watch/`, `.claude/skills/video-intake/`,
+`.claude/skills/cli-anything/` and `third_party/cli-anything/`; drop the second upstream
+section, the two table rows and the two override rows from `VENDORED.md`; remove the
+two carve-outs and the area from `scripts/publication-boundary.mjs` and return its
+figure to 14 and the exception word to TWELVE; drop this record and the backlog item.
+
+## DR-041 — LightRAG is adopted as a key-free retrieval aid over `docs/`: naive mode, local embeddings, working dir outside the tree, hooks off; the graph is not built (owner-directed 2026-09-12)
+
+**Question.** The owner shared an image naming five tools — last30days, CLI-Anything,
+Claude-video, Crucible and **LightRAG** — with *"These also need to be added and absorbed
+into the 🧠"*, then *"Please install all of these and add them where needed and start
+using them now."* DR-038 installed all five on the Mac lane; LightRAG is the one still
+fighting, because the shape the Mac chose — the graph, the `[api]` server, a local Ollama
+chat model and an embedding endpoint — is the expensive one: five documents at the
+defaults timed out 4 of 5 and had to be retuned to one at a time, and the row says so
+honestly. Under the absorption bar the owner set the same day
+(DR-039: a resource is ADOPTED if any part of it can aid building any aspect of the
+company; the only exclusions are licence, auto-execution, egress without his own key
+decision, and a directory collision), the question is therefore not whether LightRAG is
+worth it but **which part runs today, and in what form** — and specifically whether a
+retrieval index over the tree is the same thing DR-026 already refused.
+
+**What LightRAG is, established by use.** `HKUDS/LightRAG` at
+`2db12a3caf9e702718fffd0593b99413a50edba5` (lightrag-hku 1.5.8, MIT). It has two halves
+and they cost completely different things. Measured in a sandbox on 2026-09-12 against
+this repository's `docs/*.md` corpus:
+
+- **The GRAPH half needs a generative model and is not reproducible.** Exactly 2 LLM
+  calls per chunk: 3,826 calls and at least 12,476,985 input tokens — 5.95× the
+  2,097,168-token corpus — for ONE index of 310 docs. A changed file re-inserted under
+  a path already held is REJECTED (`File name already exists.`), so every refresh is
+  delete-then-reindex, and the bytes it writes are never reproducible from the source.
+- **The KEY-FREE half works and costs nothing outbound.** `naive` mode with
+  `only_need_context=True` makes **0 LLM calls**. A real local embedding model
+  (`fastembed` 0.8.0 + `BAAI/bge-small-en-v1.5`, 384-dim, 65 MB) embedded 16,284 texts
+  in 1200.8 s on 4 CPU cores in the evaluation run — chunks plus the graph's entity and
+  relation descriptions — and answered a query in 0.02–0.08 s. Retrieval quality is
+  plain vector search, and was measured as such: 3 of 5, 1 of 5, 1 of 4 and 1 of 5 top-5
+  hits against a grep ground truth on four questions. It finds things. It does not
+  decide anything. The shipped, graph-free shape was measured again on this branch: 1,940
+  chunks over 311 tracked docs in 1636.2 s for the first full index, a 34 MB working
+  directory, and a query answered in 1.7–6.13 s end to end — nearly all of it the python
+  process starting and loading the model, since the evaluation measured the search itself
+  at 0.02–0.08 s. **The first index is the slow one and it is a one-time cost.** A
+  refresh touches only the files whose content hash moved, and one was measured here
+  immediately afterwards, when rebasing onto a moved `SignalGrid_Alpha` changed six
+  tracked docs and added one: **7 documents, 6 deleted first, 101 texts, 24.9 s.**
+- **Mechanics that must stay out**, each an existing hard line rather than a new one:
+  `pipmaster` pip-installs packages at IMPORT time in 26 modules; the upstream tree
+  ships its own `.claude/settings.json` `SessionStart` hook; `lightrag/base.py` runs
+  `load_dotenv(dotenv_path=".env")` at import; the working directory is 104–133 MB and
+  holds the corpus in plaintext (`kv_store_full_docs.json`, a 59.9 MB prompt cache);
+  the API server binds `0.0.0.0` and admits a guest token when no key is set. Upstream
+  tests at the pin: `8 failed, 8265 passed, 250 skipped`.
+
+**Call: the key-free half is adopted as a retrieval AID over `docs/`. The graph is not
+built, and no generative model is configured at all.**
+
+1. **Pinned, into a venv OUTSIDE the repository, under the store convention DR-038
+   already set.** `pnpm run lightrag:install` (`scripts/install-lightrag.mjs`) creates a
+   venv under `LIGHTRAG_DIR` — default `~/signalgrid-lightrag/key-free`, its own
+   subdirectory of the `~/signalgrid-lightrag/` store DR-038 chose, so the two installs
+   never share an index — and refuses if that path resolves inside the tree. It
+   `pip install`s `lightrag-hku @ git+https://github.com/HKUDS/LightRAG@2db12a3c…` plus
+   `fastembed==0.8.0`: the full sha rather than PyPI's moving 1.5.6, a venv rather than
+   `uv tool`, and **not** the `[api]` extra, whose server binds `0.0.0.0` and admits a
+   guest token when no key is set. The upstream TREE is not vendored and not cloned into
+   a session: pip takes the PACKAGE, so the `SessionStart` hook and the repo tree never
+   land. The installer refuses on CI. 73 packages resolve from PyPI at install time —
+   the same registry exposure DR-026 records for Neural Memory's nine.
+2. **No generative model, no key, no server, no hook.** `scripts/docs-retrieval.mjs`
+   constructs LightRAG with an `llm_model_func` that RAISES if anything reaches for it,
+   so a future mode change fails loudly instead of silently asking for a key.
+   `lightrag-hku[api]` — the server that binds `0.0.0.0` and admits a guest token — is
+   not installed. Nothing is wired into any settings file.
+3. **`naive` mode only, and indexing takes LightRAG's own skip-the-graph opt-out.**
+   Queries run `aquery_data(..., mode="naive", only_need_context=True)`: retrieval,
+   never generation. Indexing does NOT use `ainsert`, which always runs entity
+   extraction: with no model configured that leaves every document FAILED *after* its
+   chunks are embedded — an index that answers queries while its own status says it did
+   not build, which is precisely the shape of green-over-nothing this repo fails
+   closed against. It was measured here on the first run (311 of 311 documents FAILED,
+   1,934 chunks embedded, queries answering normally) and fixed by using the first-class
+   opt-out: process option `"!"` (`PROCESS_OPTION_SKIP_KG`), whose own pipeline comment
+   reads *"skipping entity/relation extraction ... chunks remain in the vector store so
+   naive / mix retrieval still works"*. Only `apipeline_enqueue_documents` accepts it, so
+   indexing is enqueue + process, and the worker FAILS if any document ends in a state
+   other than `processed`.
+4. **The corpus is the TRACKED docs set, and nothing else.** `git ls-files -- docs`
+   filtered to `.md`; an untracked draft cannot enter the index. Refresh is
+   delete-then-reindex of changed, added and removed paths — the measured limitation
+   above, made mechanical by a content-hash manifest. A second measured wrinkle is
+   handled here rather than papered over: LightRAG canonicalizes a document's
+   `file_path` to its BASENAME and rejects a second document sharing one, and `docs/`
+   holds several same-named files, so the stored path is sent tilde-joined for
+   uniqueness and the tracked path is recovered from the chunk id the worker assigned.
+   Sending real relative paths would have silently dropped all but the first
+   `README.md`.
+5. **It writes NOTHING inside the repository.** venv, index, embedding model and
+   manifest all live under `LIGHTRAG_DIR`; an in-tree path is refused before a
+   directory is created, and the check is repeated against the REAL path after
+   `mkdir` so a symlink cannot walk around it. This is not tidiness:
+   `provenance.workingTreeClean` in `artifacts/sim-results/*.json` counts UNTRACKED
+   files, so one stray index directory would stamp every later simulation result as
+   minted from a dirty tree — the exact defect `native/ios/build/` already caused once.
+   The worker re-checks containment itself, because it is the process that writes.
+6. **Its answer is a POINTER, never a fact.** The script prints tracked file paths and
+   the matching chunk with line numbers; the agent then READS those files and cites
+   them. It is the companion to `pnpm run check:absence`, never its replacement — a
+   vector search returning nothing is not evidence that nothing is there, and
+   `check:absence` exists because two in-repo documents claimed an absence while the
+   surface sat in the tree.
+7. **Barred from the product.** Nothing in `lib/*`, `/v1`, a connector, a proof or the
+   decision path may import, call or read it, and no gate, doc figure or launch claim
+   may cite it. A decision that consulted an embedding search would no longer be
+   deterministic (golden rule 2). `docs:retrieve` refuses on CI for the same reason —
+   it is a research aid, never a build input.
+
+**Boundary — why this is not the thing DR-026 refused.** DR-026 item 5 excludes "an
+index of the tree" from the Neural Memory store, and that exclusion stands. It is about
+a MEMORY: a mutable store that accumulates what sessions learned, that nothing rebuilds,
+and that could quietly become the source rather than a cache of the committed docs. This
+index is a different object on all three counts: it holds **no session state** (only
+chunk text and vectors); it is **rebuilt from tracked files** and self-reports its drift
+(`--status` names every changed, added and removed path); and it is **derived, never
+authoritative** — every answer is a path the agent must open. The committed docs remain
+the memory of record, exactly as DR-026 says. What the two records share is the shape
+that makes either safe: pinned, hooks off, store outside the tree, nothing in the
+product.
+
+**Evidence.** The measurements above, from the sandbox evaluation of 2026-09-12 (the
+clone, venv, scripts and outputs in that session's scratchpad, re-run where quoted). The
+install receipt on this box: lightrag 1.5.8, python 3.11.15, 73 packages, 34.6 s, model
+`BAAI/bge-small-en-v1.5` warmed to 384 dimensions with no key in the process. The index
+built on this branch: 311 of 311 documents `processed`, 1940 chunks, and
+`vdb_entities.json` / `vdb_relationships.json` 48 bytes each — the graph is genuinely not
+built. The refusal transcripts, run as `pnpm run docs:retrieve -- --self-test`: an in-tree
+`LIGHTRAG_DIR` exits 1 and creates nothing, for `--status` and `--reindex` alike; a
+missing venv exits 1 and names the installer; the corpus is the 312 tracked markdown
+files under `docs/` that `git ls-files` names, and no untracked path is in it. Both scripts also refuse under `CI=true`,
+run and quoted in `docs/agent/EVIDENCE.md`. The three mechanics quoted from the pin
+were re-read in the clone: 26 `pipmaster` call sites, `.claude/settings.json` with a
+`SessionStart` hook, `lightrag/base.py:43` `load_dotenv(dotenv_path=".env", override=False)`.
+
+**Measured condition, reported by the Mac lane (2026-09-12).** An externally reported
+observation, not a measurement reproduced in this tree: the Mac's own LightRAG line —
+the GRAPH mode of DR-038, generative model `qwen3:8b` through local Ollama on a 17 GB
+machine — failed extraction on `httpx.ReadTimeout` in both of its runs, 4 of 5 documents
+at the defaults and 5 of 5 after tuning to `MAX_ASYNC=1`, an 8k context and an 1800 s
+timeout; the 8B model's 5.3 GB residency also made that session kill its own background
+jobs, and the models were unloaded. The invocation, effective configuration and log
+lines live on the Mac and are cited from its intake row; a fresh checkout cannot re-run
+them. The Mac asked that this record carry the condition rather than the slogan, and it
+does, scoped to what was measured: **for that local endpoint, capacity was the blocker,
+not a credential.** A remote-endpoint retry goes through the DR-029 gateway, whose
+provider keys still apply — endpoint-specific authentication is not waived by this
+finding. This record's shape has no generative endpoint at all — `naive` mode,
+`PROCESS_OPTION_SKIP_KG`, the ~65 MB, 384-dimension embedding model named above running
+on the CPU — so the timeout does not reach it; the 311-document index above embedded
+1,940 chunks with zero generative (LLM) calls. "Key-free" therefore describes this
+shape only. The Mac's graph mode stays under launchd for a smaller-model or
+remote-endpoint retry when the owner decides, and its intake row carries the
+measurement.
+
+**Reversal.** The owner reverses by saying so: delete `scripts/install-lightrag.mjs`,
+`scripts/docs-retrieval.mjs`, `scripts/lib/docs-retrieval.py`, the two `package.json`
+scripts, the research-ops section and this record, then remove
+`~/signalgrid-lightrag/key-free`. Nothing in the product, no gate and no doc figure
+depends on it, by construction — which is why the reversal is four deletions and a
+directory. DR-038's own LightRAG install is untouched by that reversal and by this
+record: this adds a second, key-free shape beside it, and takes nothing away.
+---
+
+## DR-042 — The founder's thesis in his words: the system of systems above the individually owned platforms (owner-directed 2026-09-12)
+
+**Question.** The owner sent a third-party infographic — *"10 cloud architecture
+concepts"* by **Rajender Ponnala** — and, alongside it, the first complete
+statement of his own thesis he has ever put into words for this repository. Does
+the canonical purpose doc already say what he said; where it does not, what is the
+smallest truthful addition; and how much of what he describes does the tree
+actually model?
+
+The reader this record assumes is the one `docs/company/FOUNDER_PROFILE.md` describes
+(DR-039): a senior platform engineer across UEM, identity and ITSM, so the statement is
+read as an architect's design brief, not as a layperson's wish list.
+
+**The statement, verbatim.** Dictated, and reproduced without correction —
+punctuation, spelling and grammar as he said them. Tidying it is how a founder's
+thesis quietly becomes somebody else's paraphrase.
+
+> "This is also another great example of all of this stuff is individual
+> controlled by people and sometimes teams and they all have to decide how to do
+> what and config this to make whatever communicate with it for end users and
+> customers or whoever the person in other end needs X on the device no matter the
+> platform will need to go through all this process and chain of commands and
+> whatever else is going on but my point is with SignalGrid my solution sits on top
+> of all of this that ingest to crest super simple automated workflows to simply
+> allow or deny based on how you want auth to be handled which in this case using
+> some sort of RFID and or security token that allows access and usage of any
+> device within there department or assigned area or equipment then if X process
+> breaks then the solution can self resolve and notify the proper protocol and
+> teams that are assign to that resource and monitor the fix or jump in and resolve
+> problem and it will kick off tickets and change management while notification for
+> users affected and all that it's the smart system of systems that orchestras
+> every to ask it to do for you for the entire company no matter the product or
+> solution you use we will ingest in the signal and power the grid plan and
+> simple."
+
+**Call: the statement is recorded as product doctrine, tested clause by clause
+against `docs/PURPOSE.md`, and the three clauses PURPOSE did not carry are added to
+PURPOSE under this record's authority (DR-020's rule that a PURPOSE change rides a
+decision record). The quote itself lands in `docs/WHY_THIS_EXISTS.md`, in the
+section that has been deliberately blank since that page was written.**
+
+**Why `WHY_THIS_EXISTS.md` and not PURPOSE.** That page carries a section headed
+*"What only the founder can write"* whose entire body was: *"This section is
+deliberately blank, and should stay blank until he fills it."* The page's own
+argument was that everything else on it had been inferred from his artifacts by
+someone else, and that the part which cannot be inferred is his to write. He wrote
+it. It goes where the page reserved for it, and the page's opening sentence — which
+said the clearest statement of the thesis was *not* in this repository — is
+corrected in the same change, because it is no longer true.
+
+### What the statement asserts, and where the tree already said it
+
+| # | Assertion | Status | Where it is stated |
+| --- | --- | --- | --- |
+| **a** | SignalGrid sits ABOVE individually owned platforms and ingests their signals. | **partial → now stated in full** | The SYSTEM half was canonical: `docs/PURPOSE.md:20` (*"connects the systems a building already runs … into one grid"*), `CLAUDE.md:10`, `docs/ECOSYSTEM_POSITIONING.md:15`. The OWNERSHIP half — that each system has a different owner who has already decided how it behaves, and that this is *why* nothing joins them — was implied only: `docs/WHY_THIS_EXISTS.md:37` (*"Nothing joins the layers up"*) and `:133` (*"no layer is accountable for the join"*). **Added: `docs/PURPOSE.md:30`.** |
+| **b** | The output is simple automated allow/deny workflows. | **stated** | The verdict enum at `docs/PURPOSE.md:163`–`170` (`allow` / `step-up` / `restrict` / `deny`); the cascade sentence at `:49`; the app-workflow surface (`lib/app-workflows`, `docs/APP_WORKFLOW_TEMPLATES.md`). His *"allow or deny"* is the two ends of a four-rung ladder, not a different model — `step_up` and `restrict` are the rungs that let the answer be *"yes, with one more thing"* instead of a refusal. |
+| **c** | The auth factor is the customer's choice; the grid is factor-agnostic. | **partial → now stated** | `docs/PURPOSE.md:24` already listed *"badge, phone, token, biometric"*, and `docs/CREDENTIAL_READER_SIGNAL_MODEL.md:66` already models prox, RFID, NFC, smart card, BLE/mobile credential, barcode and passkey as one `credentialTechnology` axis. What no page said is that the CHOICE is the customer's and the grid is agnostic to it — which is the same argument as DR-035's vendor-lock line, applied to the reader. **Added: `docs/PURPOSE.md:38`.** |
+| **d** | A grant is scoped to a department, an assigned area, or a piece of equipment. | **not stated → now stated** | The vocabulary existed in pieces — rooms, zones, units and bays in `lib/orchestration` and `lib/facility-trust-graph`, entitlement scope in the `entitlement-binding` and `access-governance` dimensions — but no page said a grant is bounded by the organization's own assignment. `pnpm run check:absence "assigned area"` and `"assigned equipment"` were both run on 2026-09-12 BEFORE this record was written and returned four empty probes each; re-run now they are INCONCLUSIVE and the only matches are this record and the intake row, which is the tool's documented behaviour when a document records an absence. The absence was of the SENTENCE, not of the machinery — rooms, units, bays and entitlement scope were all modelled. **Added: `docs/PURPOSE.md:45`.** |
+| **e** | When a process breaks the system self-resolves where it can, notifies the assigned team by the assigned protocol, monitors the fix or steps in. | **partial** | The doctrine sentence was there — `docs/PURPOSE.md:49`, *"A decision is the trigger for a cascade — environment, workflow, verification, and escalation"* — and `CLAUDE.md` says the same. What was never written down is the cascade's STAGES, which is what makes the sentence checkable. `docs/OPERATIONAL_TRUST_ORCHESTRATION.md:71`–`72` and `:122`–`124` reach the same list (*"Who owns it?"*, *"How do we verify completion?"*, *"routes approved actions"*, *"verifies expected outcomes"*) but that page is **retired history** and is bannered as such, so it cannot be cited as current doctrine. **Added as a named, per-stage status table: `docs/PURPOSE.md:53`.** |
+| **f** | It opens tickets and change-management records and notifies affected users. | **partial, and one clause needed a doctrinal ruling** | Tickets: the priority/SLA/assignment-group model is built and deterministic (`lib/incident-playbook`), and eight gated vendor emitters exist (`lib/integrations/src/integrations/itsm`) — but nothing joins them, so no ticket opens. Change records: the fabric READS an approved change record (`change-window`) and never opens one. Affected users: `pnpm run check:absence "affected user notification"` returned CORROBORATED across all four probes on 2026-09-12. **The ruling:** notifying affected people is doctrine, but it may never become a SignalGrid surface the worker has to go and read — `docs/PURPOSE.md:98`, *"The worker never sees SignalGrid"*, outranks it. The notification goes through the channel the person already uses, or it does not go. **Added with that constraint attached: `docs/PURPOSE.md:53` (stage table).** |
+| **g** | It is product-agnostic — *"no matter the product or solution you use we will ingest in the signal and power the grid"*. | **stated** | `docs/PURPOSE.md:81` (*"Source-agnostic is the point, not a feature"*), ratified as DR-035, with the vendor-lock prohibition in the forbidden list. This is the one clause where the canonical page was already ahead of the statement rather than behind it. |
+
+### What this record does NOT license
+
+Every addition above is **doctrine about what the product is and does by design**.
+None of it is a claim that a capability ships today. The cascade table added to
+PURPOSE marks each stage BUILT, PARTIAL or DESIGN INTENT and points every unbuilt
+stage at a `docs/BUILD_BACKLOG.md` item rather than at a promise. The
+launch-claims gate, the launch-profile classification and the publication boundary
+are unchanged by this record and still govern what may be SAID to ship. Building
+and claiming remain different acts (DR-021 §2).
+
+Two of his clauses carry a specific hazard and are constrained rather than adopted
+whole:
+
+- ***"the solution can self resolve"*** — the resolution planner is real
+  (`lib/signalgrid-core/src/resolution.ts`), and everything it produces is
+  approval-gated and simulated. PURPOSE's forbidden list already bans claiming
+  *autonomous remediation* (`docs/PURPOSE.md:265`) and the read-before-write
+  prerequisite (`:186`) is unchanged. Self-resolve means *the system knows the fix
+  and prepares it*; a human still approves the write.
+- ***"notification for users affected"*** — see (f). Adopted with the embedded UX
+  law attached, because a notification SignalGrid invents is a step added to the
+  worker's day, which §3 forbids outright.
+
+### The cascade audit, and what it produced
+
+The measurement behind (e) and (f) is recorded with its commands and output in
+`docs/agent/EVIDENCE.md` (2026-09-12). The short form: **both ends of the cascade
+are built and the joins between them are not.** Modelled and fixture-backed —
+remediation proposal, resolution planning and simulation, the incident playbook,
+orchestration planning, deterministic webhook delivery with dead-lettering.
+Connector stubs behind a live-call gate — eight ITSM vendors, the generic webhook
+emitter, the change-window reader. Prose only — the cascade as a sequence. Absent —
+any path from an incident to a ticket, any change-record draft, any notification of
+an affected person, and any observation that a requested fix landed. Six
+`docs/BUILD_BACKLOG.md` items were opened for exactly those joins, each fail-closed
+and deterministic by construction, each naming the clause of his sentence it serves.
+
+### The infographic
+
+Mapped rather than filed, in
+`docs/SIGNALGRID_CLOUD_PLATFORM_AND_CYBER_RESILIENCE_ARCHITECTURE.md` — one row per
+concept: what it means for a deterministic, fixture-backed decision fabric, what
+the tree has, what it deliberately does NOT do, and what is backlog. Several of the
+answers are refusals, and that is the value of the exercise: a generic cloud
+pattern applied to a fail-closed decision path can invert it. No cache in the
+decision path, because a stale `allow` is the failure the five-minute idempotency
+window was cut from twenty-four hours to prevent. No retry inside a decision,
+because an honest `unknown` beats a slow answer while someone waits at a door. No
+queue on ingestion, because a queued verdict arrives after the person has left.
+The image is third-party and is not committed; it is described, and its author is
+named. **No deployment-target claim is added in either direction** — the tree
+speaks Microsoft Graph, Intune, Entra and ServiceNow because that is the estate it
+reads, which says nothing about where it runs.
+
+**Evidence.** The founder's statement as dictated (quoted above in full);
+`docs/PURPOSE.md` read in full before editing; `CLAUDE.md` *"What this is"*;
+`docs/WHY_THIS_EXISTS.md`; `docs/OPERATIONAL_TRUST_ORCHESTRATION.md` (retired, and
+treated as retired); `docs/ECOSYSTEM_POSITIONING.md`; the grep audit and
+`check:absence` runs recorded in `docs/agent/EVIDENCE.md`; DR-020 (PURPOSE
+canonical), DR-034 (his inputs ARE the research), DR-035 (source-agnostic), DR-033
+(Build / execution phase).
+
+**Reversal.** The owner reverses any line of this by saying so — it is his
+statement and his doctrine. Mechanically: if a cascade stage is built and shipped,
+its row in `docs/PURPOSE.md`'s stage table moves from DESIGN INTENT to BUILT and
+the matching backlog item closes; if a stage is refused on evidence, the row says
+refused and names the reason, as backlog row 27b already does for a refusal. The
+one line that does not move on appetite is (f)'s constraint: a worker-facing
+SignalGrid notification surface reopens only if the embedded UX law itself is
+reopened, which takes its own decision record.
+
+**Confidence: high** on the record and the assertion table — every status is
+anchored to a path and a line that was read, and the absences were probed rather
+than assumed. **Medium** on the backlog shaping: six joins is the right count for
+what the audit found, but the ORDER between them is a sequencing call nobody has
+made yet, and the first one built should be the one a design partner asks for.
+
+## DR-043 — The shared-device session puck is recorded as a customer-testable HARDWARE HYPOTHESIS, not a product: three functions kept separate, the puck is evidence and never the policy engine, the software half is built hardware-free, and no hardware moves until the discovery gates are met (owner-directed 2026-09-12)
+
+**Question.** The owner shared a 25-page research document he produced,
+*"Shared-Device Authentication Puck: Hardware and Form-Factor Concept"* — a
+removable, worker-carried cryptographic token that docks into a receiver on a
+shared device, so that docking opens a session and removal suspends it — with the
+words *"I'm going to blow your mind with this."* DR-039 sets the bar (anything with
+a part that can aid building the company is taken; overlap is recorded, never
+refused) and DR-020 sets the order (a new hardware surface gets a decision record
+before work begins). What does the tree adopt, in what form, what already existed,
+and what does the repository refuse to claim? No record numbered DR-041 appears in
+this file at the time of writing (grep, 2026-09-12); this record follows DR-042.
+
+**The document, in one paragraph.** Its own recommendation is *not* "build the
+hardware product". It is: preserve the concept as a customer-testable hardware
+hypothesis; build only a low-cost bench prototype — an off-the-shelf certified FIDO
+key inside a 3D-printed puck with a mechanical receiver — once discovery produces
+repeated REQUIREMENT evidence or concrete COMMITMENT; and never begin with custom
+silicon or a custom authenticator. It separates three functions (identity
+authentication, session/custody binding, ongoing presence), places the puck as a
+source of evidence under an unchanged division of authority (IdP, UEM, PACS,
+SignalGrid), and ends on the one unvalidated question: whether healthcare mobility
+teams need the physical credential to become the "key in the ignition" for a
+shared-device session strongly enough to change workflow, deploy receivers,
+provision credentials, support replacements and pay for it. The substance, in this
+repository's own words and with every vendor fact attributed to the document, is
+`docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`. The document itself is owner-held and not
+committed; custody, dock and reader signal families remain deferred in the launch
+profile, a design target and not a shipped surface.
+
+**Call.**
+
+1. **The three-function split is doctrine for every session-gating surface.**
+   Identity authentication (which worker), session/custody binding (that this worker
+   intentionally attached their credential to this device) and ongoing presence (when
+   removal, distance, inactivity or a posture change suspends) are three functions
+   proven by different evidence, owned by different systems, and failing in different
+   ways. A dock event is custody intent and never identity; a radio "nearby" is never
+   custody; a radio "gone" never by itself ends a session while the credential is
+   physically seated. The tree already models each function separately — the
+   passkey-assurance grade (`docs/PASSKEY_ASSURANCE.md:184`), the `badge_binding`
+   dimension (`lib/signalgrid-core/src/dock.ts:51`,
+   `docs/CREDENTIAL_READER_SIGNAL_MODEL.md:9`), zone-level presence in `rtls-custody`
+   (`lib/integrations/src/integrations/rtls-custody/types.ts:10`) — all deferred
+   design targets; what it never stated is that they must not be conflated. Now it
+   does.
+2. **The puck, and any dock or receiver, is a SOURCE OF EVIDENCE — never the policy
+   engine.** SignalGrid correlates; the IdP (Entra or equivalent) owns identity, FIDO
+   registration and authentication-strength policy; the UEM (Intune or equivalent)
+   owns posture as an *independent* input the puck cannot substitute for; the PACS
+   (HID or equivalent) owns the physical-credential lifecycle where a badge is
+   reused. This is the stance `docs/HARDWARE_PARTNER_MATRIX.md:25` and
+   `docs/DOCKBRIDGE_STRATEGY.md:31` already take for every hardware category; the
+   puck inherits it and adds nothing above it. A puck registers through the
+   organization's existing identity plane, never a SignalGrid key database.
+3. **The software half is built now, hardware-free.** Five backlog items in
+   `docs/BUILD_BACKLOG.md` (*The session puck's software half*), each fail-closed
+   and deterministic by construction: (a) a fixture-backed dock/attach signal domain
+   — `attached` / `removed` / `unknown` — as a connector-style input with its own
+   proof, where `unknown` is at least `step_up` and never a grant — a stricter bar
+   than the sibling dimensions, which pin `badgeBinding: "unknown"` and
+   `dockState: "unknown"` to `allow` under the day-one-quiet pattern
+   (`lib/signalgrid-core/src/seed.ts:480`, `:484`); the divergence is deliberate and
+   stated on the hypothesis page, because for a puck-gated session the attach event
+   is the custody-intent evidence itself; (b) a
+   removal-to-suspend rule in the post-decision cascade, joining the six cascade
+   items DR-042 opened rather than duplicating them; (c) the puck lifecycle's audit
+   event names in the Decision Envelope's ledger vocabulary; (d) a simulator scenario
+   *dock → session → undock → re-dock within N seconds* carrying the document's
+   policy-matrix rows, including "radio says gone, puck seated → do not assume gone"
+   and "legacy read for a strong-enrolled worker → deny"; (e) the hardware gate
+   itself — a hardware-specific tally column in `docs/agent/DISCOVERY_LOG.md` that the
+   go/no-go table reads from. If (a) adds a signal kind, a connector directory or an
+   API path, it is classified **deferred** in `scripts/launch-profile.mjs` in the same
+   change under this record's authority, so the profile's silent-omission arm never
+   fires and no status changes without a record (DR-005). Nothing in (a)–(e) is a
+   shipped-capability claim.
+4. **No bench prototype, purchase, or custom hardware work begins until the
+   discovery gates in the document are met** — and they are the thresholds already
+   pre-registered in `docs/agent/DISCOVERY_LOG.md:121`–`124`, applied to hardware, not
+   a new mechanism: **≥ 4 of 15** conversations independently repeating a requirement
+   that maps to faster or stronger physical session authentication or custody binding
+   → authorize a bench prototype (family A: off-the-shelf FIDO key, printed puck,
+   mechanical receiver); **≥ 3 concrete COMMITMENTS** including willingness to scope
+   and test the workflow → authorize a design-partner MVP with off-the-shelf FIDO/NFC
+   hardware and 3D-printed mechanics; **≥ 5 PROBLEM with COMMITMENT = 0** → no-go on
+   productization. Development order when it does move: mechanical → NFC/FIDO → BLE
+   only if needed → UWB only if proven necessary. The tally today reads *0 of 15
+   conversations, 0 commitments* (`docs/agent/DISCOVERY_LOG.md:149`), so every
+   hardware row is closed. Under DR-036 these gates sit beside the readiness figure
+   that gates outreach; neither substitutes for the other. Dock and custody signals
+   stay deferred throughout.
+5. **The claims the repository will NOT make**, in any tense, about the puck, a
+   receiver, the software or a pilot: HIPAA compliance, certification or approval
+   (HIPAA certifies no badge technology; a human compliance review is required, not
+   optional — `CLAUDE.md`); "hospital disinfectant compatible" or any
+   cleaning-durability claim until the exact resin, markings, adhesive, antenna and
+   ferrite stack, gasket and regimen are tested (the document's own do-not-claim
+   line); "relay-proof", "clone-proof", or that any mitigation *prevents* an attack
+   (each raises assurance or reduces risk — none is a guarantee); on-device
+   enforcement (a puck or receiver locks, kiosks, restricts or wipes nothing; that is
+   the OS and Fleet MDM on a supervised device — golden rule 4); that a dock attach
+   identifies anyone; that any puck, receiver, reader dock, BLE or UWB hardware is
+   built, tested, shipping, piloted, partnered or certified; any cost figure as a
+   fact (the document's bands are estimates and are not reproduced).
+
+**What already existed, recorded rather than refused (DR-039 rule 3).** The FIDO2
+identity root, graded (`docs/PASSKEY_ASSURANCE.md:184`) and verified server-side
+(`lib/webauthn/src/webauthn/verify.ts`, proof row `docs/PROOF_COVERAGE_AUDIT.md:21`, step-up row
+`docs/AUTHENTICATION_AND_CREDENTIAL_ARCHITECTURE.md:56`);
+a case-mounted FIDO2 token concept scoped to dual-control step-up
+(`docs/HARDWARE_ELEVATED_ACCESS_TOKEN.md:13`); attach = session / removal = restrict /
+forced removal = deny, built as `badge_binding`; the dock, custody and tamper fixture
+schema (`docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md:20-22`) and the SmartDock's continuous
+`present` / `removed` / `forced` read (`docs/SIGNALGRID_SMARTDOCK.md:44`); the
+division of authority; the discovery thresholds. All deferred design targets, none
+claimed as shipping. **Genuinely new:** the worker-carried token that moves between
+phone, tablet and desktop receivers (`pnpm run check:absence "session puck"`
+returned CORROBORATED across four probes on 2026-09-12, before the page existed);
+the prototype ladder and "no custom silicon first" as written doctrine; the
+lost-credential operating sequence (report lost → disable FIDO registration and
+physical credential → invalidate session mappings → reissue with a new keypair); the
+legacy-downgrade rule (a strong-enrolled worker is never authenticated on a legacy
+125 kHz read by the same multi-technology reader); the privacy constraint that an
+always-on presence token is an employee-tracking system unless retention is
+purpose-limited; the cleaning, ergonomics and accessibility requirement set for a
+carried token.
+
+**Boundary.** Nothing here touches `lib/*`, `/v1`, a connector, a proof, the
+decision path, `docs/PURPOSE.md`, the launch profile or the publication boundary
+in this change; the backlog items that will touch `lib/*` are each one reviewable
+PR with a proof, and item (a)'s launch-profile classification is the only profile
+edit this record authorizes. Building and claiming remain different acts (DR-021
+§2, DR-033 §4). Golden rules 1–4 apply unchanged: a puck integration that ever
+reached `native/ios/EnterpriseShell` would go around `DecisionEngine.swift` and
+`AppWorkflows.swift`, never through them.
+
+**Disclosure note.** This tree is public. Recording the concept here discloses it.
+The owner-gated *IP / disclosure posture* row in `docs/BUILD_BACKLOG.md` (the
+provisional-patent and repository-visibility decision) was open before this record
+and remains open; this record adds the document's substance and the tree's own
+prior art, and no invention disclosure, drawings or claims — those wait on that
+decision.
+
+**Evidence.** The owner's document, read in full (25 pages) before anything was
+written; three parallel read-only maps of the tree, each path:line re-read before
+citation; DR-020 (`docs/DECISION_RECORDS.md:1068` — hardware needs a record first),
+DR-021 (`:1111` — building unfrozen, claiming unchanged), DR-033 (`:1892` — Build /
+execution phase), DR-036 (`:2104` — the readiness figure), DR-039 (`:2275` — the
+absorption bar), DR-042 (`:2389` — the cascade items this record's item (b) joins);
+`docs/agent/DISCOVERY_LOG.md:112`–`149` (thresholds and tally); the gate outputs
+recorded in `docs/agent/EVIDENCE.md` (2026-09-12); the intake row in
+`docs/agent/RESOURCE_INTAKE.md`.
+
+**Reversal.** The owner reverses any line of this by saying so — it is his research
+and his call. Mechanically: to withdraw the hypothesis, delete
+`docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`, its three inbound links (`docs/INDEX.md`,
+`docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md`, `docs/HARDWARE_PARTNER_MATRIX.md`), the five
+backlog items and this record; the three-function doctrine then reverts to being
+implied by the separate dimensions rather than stated. To *advance* it, a
+discovery-gate row in item 4 must be met on the tally and quoted, and the bench
+prototype then gets its own decision record (DR-020's rule applies again at the
+hardware step, not only once); a prototype started on appetite rather than on a met
+gate is a violation of this record, not a reversal of it. The do-not-claim list in
+item 5 does not move on appetite either: a line leaves it only when the test or
+review that would make the claim true is recorded in `docs/agent/EVIDENCE.md`.

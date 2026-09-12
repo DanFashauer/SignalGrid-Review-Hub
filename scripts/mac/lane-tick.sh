@@ -23,8 +23,13 @@
 #      has SEEN the mail — runs from this tick, unattended.
 #
 # WHAT ONE TICK DOES, in order, each step reporting itself:
-#   a. fetch --prune; refuse to touch a DIRTY checkout (a person's work is never
-#      pulled over) — report and heartbeat "skipped: dirty";
+#   a. fetch --prune; never touch a DIRTY checkout or one parked on another branch
+#      (a person's work is never pulled over) — since 2026-09-12 the tick then runs
+#      from its OWN detached worktree (SIGNALGRID_TICK_WORKTREE, default a sibling
+#      directory `<repo>.tick`) at origin/SignalGrid_Alpha, so a person's checkout
+#      never stops the unattended work; before that it heartbeat "skipped" every 5
+#      minutes for as long as the checkout stayed parked (an hour and a half on
+#      2026-09-11/12, with a landing branch checked out);
 #   b. on SignalGrid_Alpha (the only branch it drives): fast-forward, install
 #      deps only if the lockfile moved (resume-lane.sh's stamp);
 #   c. run every PENDING sim request (`pnpm run sim:run-requests`) — results land
@@ -64,34 +69,80 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG_PREFIX="lane-tick $STAMP"
 say() { printf '%s  %s\n' "$LOG_PREFIX" "$1"; }
 
-# A QUIET tick heartbeats at most once per this many minutes, so a short launchd
+# An UNCHANGED tick heartbeats at most once per this many minutes, so a short launchd
 # interval does not push a heartbeat commit to Alpha every run. Override with
 # SIGNALGRID_QUIET_HEARTBEAT_MIN. The local stamp sits beside the install stamp in
-# node_modules (gitignored, never pushed); its mtime is the last delivered heartbeat.
+# node_modules (gitignored, never pushed); its mtime is the last delivered heartbeat
+# and the sibling file holds the RESULT that heartbeat carried.
+#
+# "Unchanged", not "quiet" (2026-09-12): the throttle used to exempt every skipped
+# and failed result, so a checkout parked on a landing branch for an hour pushed
+# "skipped: checkout on mac/land-…" to Alpha every 5 minutes — twelve pushes an hour,
+# each starting four workflows, each cancelling the mainline CI run before it, and
+# between them exhausting the repository's GITHUB_TOKEN budget until the CI liveness
+# gate failed a product PR on a 403. A repeated result is not news; a CHANGED result
+# is, and still delivers at once — including the first skip and the first failure.
 QUIET_HEARTBEAT_MIN="${SIGNALGRID_QUIET_HEARTBEAT_MIN:-25}"
 HB_STAMP="node_modules/.sg-last-heartbeat"
+HB_LAST_RESULT="node_modules/.sg-last-heartbeat-result"
 
 # The heartbeat is the tick's ONLY obligation on every path, including failure
 # paths: a tick that died silently is exactly what this script exists to prevent.
 RESULT="quiet"
 heartbeat() {
   if [ "$DRY" = "1" ]; then say "dry-run: would heartbeat: $RESULT"; return 0; fi
-  # Throttle ONLY a purely-quiet result ("quiet", or "quiet; N …unread" appended
-  # below): acted/skipped/failed always deliver. `find -mmin -N` is BSD/bash-3.2 safe.
-  case "$RESULT" in
-    quiet|quiet\;*)
-      if [ -f "$HB_STAMP" ] && [ -n "$(find "$HB_STAMP" -mmin -"$QUIET_HEARTBEAT_MIN" 2>/dev/null)" ]; then
-        say "quiet, last heartbeat <${QUIET_HEARTBEAT_MIN}m ago — tick ran, not re-pushing (avoids flooding Alpha)"
-        return 0
-      fi
-      ;;
-  esac
+  # Throttle a result IDENTICAL to the last delivered one ("quiet" again, the same
+  # "skipped: …" again, the same failure again) inside the window; anything that
+  # differs from what Alpha already carries delivers now. A tick that ACTED names
+  # what it did, so its result differs and always delivers. `find -mmin -N` and the
+  # `cat` comparison are BSD/bash-3.2 safe; a missing result file compares unequal.
+  LAST_RESULT=""
+  [ -f "$HB_LAST_RESULT" ] && LAST_RESULT="$(cat "$HB_LAST_RESULT" 2>/dev/null)"
+  if [ "$RESULT" = "$LAST_RESULT" ] && [ -f "$HB_STAMP" ] && [ -n "$(find "$HB_STAMP" -mmin -"$QUIET_HEARTBEAT_MIN" 2>/dev/null)" ]; then
+    say "unchanged ($RESULT), last heartbeat <${QUIET_HEARTBEAT_MIN}m ago — tick ran, not re-pushing (avoids flooding Alpha)"
+    return 0
+  fi
   if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" >/dev/null 2>&1; then
     touch "$HB_STAMP" 2>/dev/null || true
+    printf '%s' "$RESULT" > "$HB_LAST_RESULT" 2>/dev/null || true
     say "heartbeat delivered: $RESULT"
   else
     say "WARN heartbeat delivery FAILED (push refused or offline): $RESULT"
   fi
+}
+
+# ── the tick's own worktree, for when a person holds the main checkout ────────
+# DETACHED at origin/SignalGrid_Alpha on purpose: a worktree that held the branch
+# would make `git checkout SignalGrid_Alpha` in the main checkout refuse ("already
+# checked out at …"), which is the person's next move after parking. Nothing here
+# is pushed from a branch except the mac/tick-<stamp> result branches (step d).
+TICK_WT="${SIGNALGRID_TICK_WORKTREE:-$REPO_ROOT/../$(basename "$REPO_ROOT").tick}"
+IN_TICK_WT=0
+use_tick_worktree() {
+  why="$1"
+  if [ ! -e "$TICK_WT/.git" ]; then
+    if ! git worktree add -q --detach "$TICK_WT" origin/SignalGrid_Alpha >/dev/null 2>&1; then
+      RESULT="skipped: $why; and the tick worktree could not be created at $TICK_WT"
+      say "$RESULT"
+      heartbeat
+      exit 0
+    fi
+    say "created the tick worktree at $TICK_WT (detached at origin/SignalGrid_Alpha)"
+  fi
+  if ! cd "$TICK_WT"; then
+    RESULT="skipped: $why; and the tick worktree at $TICK_WT cannot be entered"
+    say "$RESULT"
+    heartbeat
+    exit 0
+  fi
+  if [ -n "$(git status --porcelain)" ]; then
+    RESULT="skipped: $why; and the tick worktree at $TICK_WT is dirty too (a person's work; not touching it)"
+    say "$RESULT"
+    heartbeat
+    exit 0
+  fi
+  IN_TICK_WT=1
+  say "$why — ticking from the tick worktree at $TICK_WT instead"
 }
 
 # ── a. sync, never over a person's work ──────────────────────────────────────
@@ -102,22 +153,27 @@ if ! git fetch origin --prune >/dev/null 2>&1; then
   exit 0
 fi
 if [ -n "$(git status --porcelain)" ]; then
-  RESULT="skipped: checkout dirty (a person's uncommitted work; not touching it)"
-  say "$RESULT"
-  heartbeat
-  exit 0
-fi
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-if [ "$BRANCH" != "SignalGrid_Alpha" ]; then
-  RESULT="skipped: checkout on $BRANCH, not SignalGrid_Alpha (a person is mid-work; leaving it)"
-  say "$RESULT"
-  heartbeat
-  exit 0
+  use_tick_worktree "checkout dirty (a person's uncommitted work; not touching it)"
+else
+  BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  if [ "$BRANCH" != "SignalGrid_Alpha" ]; then
+    use_tick_worktree "checkout on $BRANCH, not SignalGrid_Alpha (a person is mid-work; leaving it)"
+  fi
 fi
 
 # ── b. fast-forward + deps only when the lockfile moved ──────────────────────
 if ! git merge-base --is-ancestor origin/SignalGrid_Alpha HEAD 2>/dev/null; then
-  if git pull -q --ff-only origin SignalGrid_Alpha; then
+  if [ "$IN_TICK_WT" = "1" ]; then
+    # Detached: move to origin's tip directly (no branch to fast-forward).
+    if git checkout -q --detach origin/SignalGrid_Alpha; then
+      say "tick worktree moved to origin/SignalGrid_Alpha $(git rev-parse --short HEAD)"
+    else
+      RESULT="failed: the tick worktree could not move to origin/SignalGrid_Alpha"
+      say "$RESULT"
+      heartbeat
+      exit 1
+    fi
+  elif git pull -q --ff-only origin SignalGrid_Alpha; then
     say "fast-forwarded SignalGrid_Alpha to $(git rev-parse --short HEAD)"
   else
     RESULT="skipped: SignalGrid_Alpha diverged from origin; resolve by hand (docs/LANE_COORDINATION.md)"
@@ -215,7 +271,11 @@ if [ -n "$(git status --porcelain -- artifacts/sim-results artifacts/live-eviden
       RESULT="failed: ran $PENDING sim request(s) and produced results, but the $TICK_BRANCH commit/push chain broke — the cloud lane CANNOT see them; they are still in this checkout"
       say "$RESULT"
     fi
-    git checkout -q SignalGrid_Alpha || say "WARN could not return the checkout to SignalGrid_Alpha"
+    if [ "$IN_TICK_WT" = "1" ]; then
+      git checkout -q --detach origin/SignalGrid_Alpha || say "WARN could not return the tick worktree to origin/SignalGrid_Alpha"
+    else
+      git checkout -q SignalGrid_Alpha || say "WARN could not return the checkout to SignalGrid_Alpha"
+    fi
   fi
 elif [ "$PENDING" != "0" ] && [ "$DRY" = "0" ]; then
   RESULT="acted: ran $PENDING sim request(s); no new result files (see the run log)"

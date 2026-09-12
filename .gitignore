@@ -101,6 +101,13 @@ artifacts/bruno/
 # Neural Memory (DR-026) writes a store into any `.git`/`package.json` root it is pointed at; the store lives outside the tree.
 .neuralmemory/
 
+# Python bytecode. `scripts/lib/docs-retrieval.py` (DR-041) runs as __main__ and writes none
+# today, but any future import of it — or of the two other tracked .py files — mints a
+# __pycache__/ beside the source, and an untracked directory in the tree flips
+# provenance.workingTreeClean on every LATER sim result. Ignored ahead of the first one.
+__pycache__/
+*.pyc
+
 # Paths a vendored skill under .claude/skills/ can create INSIDE this repository.
 # Same reason as native/ios/build/ and .obsidian/ above: run-requests.mjs derives
 # provenance.workingTreeClean from `git status --porcelain`, untracked files
@@ -124,6 +131,34 @@ artifacts/bruno/
 # does not exist in a fresh clone or on a CI runner: ignored on exactly one machine.
 **/.claude/worktrees/
 
+# The NeMo-RL session-memory checkpoint directory (nemo-rl-session-memory/SKILL.md:27
+# says `mkdir -p session/<session_date_time>` in the repo it is run from). Checkpoints
+# belong under the session scratchpad; this is the second line of defence, because one
+# untracked directory stamps every LATER sim result as minted from a dirty tree.
+# Project root only, hence the leading slash.
+/session/
+
 # Local knowledge corpus symlinked from iCloud by scripts/mac/sg-brain-link.sh.
 # NEVER committed: some of it is confidential and the Review Hub is public-safe.
 reference/
+
+# Graphify (owner-directed 2026-09-12): the knowledge-graph build output lives in the tree but is
+# never committed — untracked output would flip provenance.workingTreeClean on every sim result.
+graphify-out/
+
+# CLI-Anything (owner-directed 2026-09-12): generation writes an agent-harness/ tree, a skills/cli-anything-<x>/
+# skill and runtime state files into whatever tree it targets — never this one on purpose, and never committed.
+agent-harness/
+skills/cli-anything-*/
+session.json
+trajectory.json
+.blend-cli.json
+
+# Crucible (owner-directed 2026-09-12): its compass/adr/build/checkpoint skills write these into docs/ and the
+# root; the adversarial lenses are report-only here and none of this is ever committed.
+docs/compass.md
+docs/decisions/
+docs/handoffs/
+docs/plans/
+build-gate-ledger.md
+.lock-compass/

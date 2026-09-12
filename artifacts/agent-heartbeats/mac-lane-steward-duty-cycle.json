@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-10T21:26:22.693Z",
-  "result": "acted: Mac tick still 'skipped: checkout dirty' at 2026-09-10T21:24:08Z (blocked since ~20:43Z). Owner informed DIRECTLY in the live session — the lane-mail channel can't reach a dirty-blocked lane (lane-tick.sh exits before fast-forward) and the skip keeps beating so the 3h-silence alarm never fires; brief tickWatch now reads a fresh-but-skipped tick as FAIL (fix on #531 d95feb8). Not re-mailing: mailbox clean 99/99 and the owner is clearing it live. Else quiet: sim 16/16 requests bound, 0 pending; live-evidence commit 2026-09-09T22:54:43Z = ~22h (0.9d), under 3d; no new/moved mac/* branches (native-ledger-2026-09-02 + fleet-premium-proof remain stale prune candidates); no new sim-results."
+  "firedAt": "2026-09-12T08:25:12.026Z",
+  "result": "quiet: no Mac-lane commits beyond tick heartbeats since the 07:24Z cycle; no new or moved mac/* branch (fleet-premium-proof and native-ledger-2026-09-02 unmoved prune candidates); no new sim-results; sim-requests all bound; no mail addressed to cloud; manifest unchanged at v77 ee348c4a. The 06:24Z re-mint request stands unread and mac-run.json still binds v72; no second ask. Nothing open from the cloud lane. TICK: quiet at 2026-09-12T08:24:39.142Z. live-evidence: minted 2026-09-11T22:11:17-04:00 (v72) = 6h old against manifest v77. Owner NOT escalated."
 }

@@ -16,7 +16,7 @@
 // `.obsidian/`, ignored ahead of the first vault rather than after the first bad
 // stamp.
 //
-// `.claude/skills/` holds 14 vendored third-party skills. Several of them WRITE
+// `.claude/skills/` holds 100 vendored third-party skills. Several of them WRITE
 // INTO THE REPOSITORY ROOT as a documented step, and none of those paths was in
 // the tracked `.gitignore` when this gate was written. One of them,
 // `.claude/worktrees/`, was ignored only through `.git/info/exclude` — a file that
@@ -135,6 +135,11 @@ export const PRODUCERS = [
     probe: ".claude/worktrees/x",
     what: "the agent harness's worktree root — ignored ONLY by .git/info/exclude until this gate",
     sites: [{ path: `${SKILLS_DIR}/stack-reference/ai-cli.md`, line: 77, needle: ".claude/worktrees/" }],
+  },
+  {
+    probe: "session/x",
+    what: "the NeMo-RL session-memory checkpoint directory, which the skill creates in the repository root it is run from",
+    sites: [{ path: `${SKILLS_DIR}/nemo-rl-session-memory/SKILL.md`, line: 27, needle: "mkdir -p session/" }],
   },
 ];
 
@@ -396,11 +401,29 @@ function selfTest() {
 
   const probes = PRODUCERS.map((p) => p.probe);
 
+  // THE FIXTURE RULES, once. One rule per PRODUCER, in the SAME ORDER — the plant loop
+  // below removes rules[i] and expects exactly probes[i] to be flagged, so the two lists
+  // are positionally paired. They were written out twice, inline, and a producer added
+  // without its fixture rule left the fixture short: the complete-fixture assertion
+  // failed AND every plant blamed the unlisted probes as well as its own. Deliberately
+  // NOT read from the tracked .gitignore — the fixture must be independent of the file
+  // the gate is judging, or the self-test proves nothing.
+  const FIXTURE_RULES = [
+    ".superpowers/",
+    "/.worktrees/",
+    "/worktrees/",
+    "/.claude/skills/*/diagrams/",
+    "**/.claude/worktrees/",
+    "/session/",
+  ];
+  check(
+    `the fixture carries one rule per producer (${FIXTURE_RULES.length} rules, ${probes.length} producers)`,
+    FIXTURE_RULES.length === probes.length,
+    `add the ignore rule for the new producer to FIXTURE_RULES, in the same position as its PRODUCERS entry`,
+  );
+
   // 1. A fixture ignore text carrying every producer → nothing flagged.
-  const complete = new Map([[
-    ".gitignore",
-    ["node_modules", ".superpowers/", "/.worktrees/", "/worktrees/", "/.claude/skills/*/diagrams/", "**/.claude/worktrees/"].join("\n"),
-  ]]);
+  const complete = new Map([[".gitignore", ["node_modules", ...FIXTURE_RULES].join("\n")]]);
   let h = buildHarness(complete);
   try {
     const a = checkIgnored(h, probes);
@@ -412,7 +435,7 @@ function selfTest() {
   // 2. THE PLANT: the same fixture with ONE producer's rule removed → that one, and
   //    only that one, is flagged. Run for every producer in turn, so no entry can be
   //    passing by accident.
-  const rules = [".superpowers/", "/.worktrees/", "/worktrees/", "/.claude/skills/*/diagrams/", "**/.claude/worktrees/"];
+  const rules = FIXTURE_RULES;
   let plantOk = true;
   const plantDetail = [];
   for (let i = 0; i < probes.length; i += 1) {

@@ -197,7 +197,9 @@ The assurance model is the whole point — a cryptographic proof outranks any se
 - hardware **provably not attestation-capable** (Intel Macs, no Secure Enclave) → `not_attestable`/`none` — it **abstains**: attestation is an assurance *upgrade*, not a universal requirement, and the baseline posture is gated by the other dimensions. The abstain is granted **only** to a *self-consistent* report (declares incapable **and** carries no chain or attested facts); a report that claims `attestable:false` yet still presents a verified chain is malformed/tampered — it never abstains, it fails closed (a conflicting chain proving SIP off still `escalate`s; a conflicting "clean" chain is floored at `step_up`, never the top tier);
 - an unrecognized value normalizes to the safe `unknown`, a non-boolean flag becomes `null` (never a fabricated `true`), and a device no attestation source covers is a blind spot (`unknown`/`step_up`), never attested-secure.
 
-Proven fully offline by `pnpm run proof:device-attestation` (77 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. The trust boundary is deliberate: an upstream read-only bridge performs the X.509 chain verification to Apple's Enterprise Attestation Root and decodes the leaf OIDs; **SignalGrid consumes that already-verified record** — it normalizes and decides on it, and does not itself perform the crypto, issue certificates, or mint attestations. Every signal is read-only, and this is not an Apple partnership or certification claim.
+**The supervision-identity lifecycle — "device trust" as a precondition** (`supervision-identity.ts`, same family, a distinct surface). Hardware attestation says what the Secure Enclave *proves* about the device; it says nothing about whether the **organization still holds the device's supervision identity** — the runbooks' "device trust", without which no management command runs, and whose loss is a named root cause of shared-device failures (`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`). This surface grades that lifecycle as read from the UEM, fail-closed: another org's identity, a lost identity, a lost enrollment, never enrolled, or affirmatively unsupervised → `restrict` (this org can run nothing on it); supervised-and-bound but answering no command → `step_up`; any axis unknown or a malformed report → `step_up`. The one grant — supervised, bound to *this* org, enrolled, answering commands, clean parse — is pinned by equality over all 288 lifecycle states, every non-grant is a hold or a containment (never merely `monitor`/`alert`/`escalate`), and a 13-fixture corpus falsifies each branch on its own.
+
+Proven fully offline by `pnpm run proof:device-attestation` (154 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. The trust boundary is deliberate: an upstream read-only bridge performs the X.509 chain verification to Apple's Enterprise Attestation Root and decodes the leaf OIDs; **SignalGrid consumes that already-verified record** — it normalizes and decides on it, and does not itself perform the crypto, issue certificates, or mint attestations. Every signal is read-only, and this is not an Apple partnership or certification claim.
 
 ## SSO session-binding — the shared-device identity dimension (built, fixture-backed)
 
@@ -465,7 +467,22 @@ in one place.
 - **App-update currency** ([APP_UPDATE_CURRENCY.md](APP_UPDATE_CURRENCY.md)) — the honest
   half of "custom OTA updates". An iOS app cannot install or replace itself; distribution
   stays with itms-services / MDM InstallApplication / ABM. What *is* posture: `min_version`
-  floors, `force_update`, and install-channel provenance. `proof:app-update` (71 checks).
+  floors, `force_update`, and install-channel provenance — and, as a distinct surface in
+  the same family, the iOS update / device-prep **workflow** (enrolled, profiles, required
+  apps, prep complete, OS update current / required / failed: ready, hold, or contain,
+  fail-closed; the 3,072-state sweep pins the single grant). `proof:app-update` (170 checks).
+
+- **Custody-ledger reconciliation** ([PHYSICAL_CUSTODY_SIGNAL_MODEL.md](PHYSICAL_CUSTODY_SIGNAL_MODEL.md),
+  in the `rtls-custody` family) — the runbooks' phantom, graded: what the checkout ledger
+  *says* against what the dock bay *sees*, plus the requester's per-user cap. A seated device
+  the ledger still assigns to a prior holder is a hold with the contradiction named; an
+  unpaired device in a bay is contained; a clear ledger over an empty bay escalates; a cap
+  hit only by returns that never cleared is a hold, a cap genuinely reached a containment
+  (the cap axis is computed from counts, never asserted), and the observation's age is
+  graded against a bound the caller poses — a replayed snapshot never grants when the caller stamps the age at evaluation time. Fail-closed;
+  the sweep of all 4,320 combos pins the single grant and 230,400 raw wire reports grant
+  exactly twice (the two spellings of a clear ledger); the family stays deferred in the
+  launch profile — built, not claimed. `proof:rtls-custody` (223 checks).
 
 - **Platform SSO** ([PLATFORM_SSO.md](PLATFORM_SSO.md)) — "passwordless" and "satisfies MFA"
   are not automatic; the **method** decides the credential's worth. Only a user-registered
@@ -513,7 +530,7 @@ in one place.
   merely labels its checks "CIS" establishes nothing, and a run older than the operator's stated
   age bound cannot confirm anything today (all three temporal inputs supplied, never sampled).
   Titles and versions only — CIS rule content is licensed and is not reproduced.
-  `proof:benchmark-selection` (95 checks).
+  `proof:benchmark-selection` (104 checks).
 
 - **Shift context** ([SHIFT_CONTEXT.md](SHIFT_CONTEXT.md)) — right person, wrong time is still the
   wrong decision context. The labor plane (UKG, Dayforce, ADP and peers) already records whether a
@@ -553,7 +570,7 @@ in one place.
   a STANDING strong credential and only that; a perfectly-used bootstrap pass still reads
   monitor, because a temporary credential is an elevated state, not a clean one. Reading a
   credential record is not managing one: no pass is issued, revoked, or extended.
-  `proof:bootstrap-credential` (48 checks).
+  `proof:bootstrap-credential` (52 checks).
 
 - **Challenge capability** — the answerable step-up (intake ledger row 23; HID DigitalPersona's
   AD/LDS + Web Client inventory and Entra's authentication-methods registry are the reference
@@ -603,7 +620,7 @@ in one place.
 - **Dual control** ([DUAL_CONTROL.md](DUAL_CONTROL.md)) — two-person integrity for the
   highest-blast-radius actions: two distinct identities, distinct credential instances, user
   verification, action binding, role, co-presence, clean parse. `proof:dual-control`
-  (60 checks).
+  (78 checks).
 
 ## DockBridge candidate integration
 
@@ -618,7 +635,7 @@ recently. Their documented counts are enforced by `pnpm run check:proof-counts`,
 which runs each proof and fails the build when a number here disagrees with what the
 proof reports — the numbers below are therefore evidence, not claims.
 
-- **`proof:break-glass` (46 checks)** — emergency-override accountability, the one genuine
+- **`proof:break-glass` (105 checks)** — emergency-override accountability, the one genuine
   gap the Healthcare 360 audit returned (intake ledger row 59). A **648-state exhaustive
   sweep**. This is the sharpest row-45 candidate in the fabric, because break-glass is BY
   DESIGN a grant that bypasses the checks — that is its correct function — so an
@@ -640,7 +657,17 @@ proof reports — the numbers below are therefore evidence, not claims.
   reading as health, inside the dimension written to catch it. A second survivor indicted the
   proof rather than the source: the clean set was pinned by negative conditions
   (`scope !== "broad"`), which `unknown` satisfies, and is now pinned by EQUALITY to one
-  enumerated shape.
+  enumerated shape. The proof now also covers the **badge→manual fallback SEQUENCE**
+  (`lib/integrations/src/integrations/break-glass/fallback-sequence.ts`): a badge tap that
+  fails at a charging dock, falling back to an audited manual credential check-out,
+  expressed in the canonical event contract's `badge_access`/`checkout_*` types. That is a
+  DISTINCT surface from the accountability grader above — it decides a DEVICE check-out, not
+  an EHR-record read — so unlike the `alert` ceiling it CAN deny and step up, because
+  denying a shared device is not a clinical-safety harm (the clinician takes another device
+  or calls support). Fail-closed throughout: an unknown credential denies exactly as a
+  rejected one, an unconfirmed badge precondition steps up, and a malformed event stream or
+  an unauditable check-out denies — ignorance never reaches `allow`, and the allow set is
+  pinned by equality over the whole sequence state space.
 - **`proof:session-readiness` (63 checks)** — the DEX/EUC readiness dimension, from the
   IGEL + ControlUp tap-to-app work (intake ledger row 57). A **1,728-state exhaustive
   sweep** whose clean set is pinned to exact SHAPES rather than a count. The headline law

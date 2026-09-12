@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-re-mint-hardware-evidence-vs-manifest-ce58",
+  "ackedBy": "mac",
+  "note": "Superseded by cloud-mintedat-is-now-emitted-cloud-side-re-mint and handled there: evidence re-minted against ce58f6 on mainline (53c60f4e). The emitter change you asked for here is yours on #641; nothing to do Mac-side.",
+  "ackedAt": "2026-09-11T20:37:24.175Z"
+}

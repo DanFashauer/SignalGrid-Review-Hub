@@ -30,6 +30,10 @@ const JOB_FLOOR = 20;
 
 /** A job may be unbounded ONLY with a reason. Empty is the goal state. */
 const DECLARED_UNBOUNDED = new Map();
+// Reusable-workflow callers cannot carry timeout-minutes (GitHub rejects it on a `uses:` job); the
+// bound lives in the callee. Declared with the reason so the parser's blind spot is named, not hidden.
+DECLARED_UNBOUNDED.set("mac-runner-auto.yml:nightly-both", "BOUNDED, not unbounded — a reusable-workflow CALLER (uses: ./.github/workflows/mac-runner-harness.yml). GitHub rejects timeout-minutes on a `uses:` job; the bound is the callee's, mac-runner-harness.yml job mac-harness timeout-minutes: 90, and the callee's concurrency group serialises the two nightly calls. Declared here only because this parser does not follow `uses:`. Follow-up: resolve a local `uses:` and inherit the callee's bound, then delete this entry (added 2026-09-10 with the nightly flow, DR-036).");
+DECLARED_UNBOUNDED.set("mac-runner-auto.yml:nightly-mcp", "BOUNDED, not unbounded — a reusable-workflow CALLER (uses: ./.github/workflows/mac-runner-harness.yml). GitHub rejects timeout-minutes on a `uses:` job; the bound is the callee's, mac-runner-harness.yml job mac-harness timeout-minutes: 90, and the callee's concurrency group serialises the two nightly calls. Declared here only because this parser does not follow `uses:`. Follow-up: resolve a local `uses:` and inherit the callee's bound, then delete this entry (added 2026-09-10 with the nightly flow, DR-036).");
 
 function jobsIn(text) {
   const lines = text.split("\n");

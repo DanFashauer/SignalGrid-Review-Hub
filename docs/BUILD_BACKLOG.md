@@ -396,6 +396,224 @@ only), and the DDM rig is gated on an APNs push certificate.
 
 ## Next
 
+### The post-decision cascade — the six stages DR-042 measured against the tree
+
+Added 2026-09-12 from the founder's thesis statement (DR-042; quoted in full in
+`docs/WHY_THIS_EXISTS.md`). His sentence describes what happens AFTER a verdict:
+*"then if X process breaks then the solution can self resolve and notify the proper
+protocol and teams that are assign to that resource and monitor the fix or jump in
+and resolve problem and it will kick off tickets and change management while
+notification for users affected."* The audit behind DR-042 found the two ends
+built — the resolution planner and the incident playbook on one side, the gated
+vendor emitters on the other — and **the joins between them missing**. These six
+items are those joins, and nothing else. Each is fail-closed by construction (an
+unknown or unreachable downstream REFUSES and says so; it never pretends), each is
+deterministic (no wall clock in a decision path; every reference instant is
+caller-supplied), and each names the clause of his sentence it serves.
+
+- [ ] **Cascade join 1 — the ticket actually opens: a fail-closed ITSM dispatch seam.**
+      Serves *"it will kick off tickets"*. Both halves exist and nothing joins them:
+      `lib/incident-playbook` turns a composed posture or a detection into a properly
+      prioritized `Incident` (priority = impact × urgency on the ServiceNow matrix, an
+      SLA per priority, an assignment group, an escalation flag, a correlation id,
+      ranked drivers) and is pure; `lib/integrations/src/integrations/itsm` holds eight
+      vendor adapters behind a live-call gate. There is no code path from one to the
+      other, and no `/v1` route asks for a ticket. Build a pure mapper from `Incident`
+      to the adapters' ticket-request shape, plus a dispatch seam that goes through the
+      existing emission gate — so in this tree the resolved mode is always fixture and
+      the result says so. **Fail-closed:** an unknown vendor, an absent credential or an
+      unreachable backend REFUSES with a named reason and leaves the incident open; a
+      fabricated ticket id and a 2xx-shaped non-answer are both failures (the family
+      already exports its 2xx-shape refusal reasons for exactly this). **Deterministic:**
+      no wall clock — the correlation id derives from the decision id, as the playbook's
+      already does. Proof: the mapper's full priority × category matrix, and one refusal
+      per refusal reason.
+
+- [ ] **Cascade join 2 — a change record is OPENED, not only read.**
+      Serves *"and change management"*. The fabric today reads the change plane and
+      never writes to it: `lib/integrations/src/integrations/change-window` grades
+      whether a change-class operation is happening inside a window the organization
+      approved, by the implementer the record names. Nothing anywhere drafts a change
+      record. Build a change-request DRAFT derived from the resolution plan — what would
+      change, on which target, why, and which reason codes it would clear — emitted
+      through the same gate as the ticket seam. **Fail-closed:** the draft is
+      `requires_approval` and simulated, exactly as `proposeRemediation` already is; an
+      absent or unreachable change plane means *no change record exists*, which can
+      never itself authorize the change. **The trap this must not walk into** is already
+      written down in that family's own header: a change window may never RELAX a
+      control, and `change_class` (standard / normal / emergency) is carried as evidence
+      and never graded — a draft that inherits those rules keeps them, and one that
+      quietly loosens them is the defect.
+
+- [ ] **Cascade join 3 — the people affected are told through a channel they already use.**
+      Serves *"while notification for users affected"*. `pnpm run check:absence "affected
+      user notification"` returned CORROBORATED across all four probes on 2026-09-12:
+      nothing in the tree notifies an affected person. The constraint that shapes the
+      build is `docs/PURPOSE.md` §3 and golden rule 3 — **SignalGrid may not add a
+      surface the worker has to go and read**, so a SignalGrid notification app or a
+      SignalGrid inbox is not the answer and never will be. Build an audience derivation
+      (who else holds a device, a session or an assignment inside the affected scope —
+      the department, area, room or equipment the grant was scoped to) plus a routing
+      decision over the `ResolutionChannel` values that already exist in
+      `lib/signalgrid-core/src/types.ts`, with delivery delegated to the host app or the
+      organization's own communications system. **Fail-closed:** an audience that cannot
+      be resolved routes to the named OWNER rather than to nobody, and a delivery that
+      cannot be made is recorded as undelivered — silence is never reported as told.
+      **Deterministic:** the audience is derived from evidence the decision already
+      carries, never from a live directory query inside the decision path.
+
+- [ ] **Cascade join 4 — monitor the fix: a post-execution verifier for the resolution path.**
+      Serves *"and monitor the fix or jump in and resolve problem"*. What exists is
+      narrower than the sentence: `simulateResolution` PREVIEWS the outcome after the
+      resolvable fixes are applied, exception release lifts a restriction when the
+      condition is observed to clear rather than on a timer, and decision continuity
+      settles which verdict wins after a partition. Nothing observes whether a requested
+      remediation actually landed —
+      `docs/SIGNALGRID_CLOUD_PLATFORM_AND_CYBER_RESILIENCE_ARCHITECTURE.md` §9 says so in
+      its own words. Build a record that pairs a requested remediation with the next real
+      evidence read for the same subject and derives `cleared` / `not_cleared` /
+      `unobserved` against a caller-supplied reference instant. **Fail-closed:**
+      `unobserved` is not `cleared` — an unobserved fix keeps the restriction in place
+      and escalates on the second miss, which is the *"or jump in"* half of his sentence.
+      **Deterministic:** no clock; the reference instant is an argument, as it is on every
+      recency axis in `lib/integrations`.
+
+- [ ] **Cascade join 5 — a durable outbound queue for the cascade emitters.**
+      Serves *"notify the proper protocol and teams that are assign to that resource"*.
+      The retry, backoff-with-jitter and dead-letter shapes exist
+      (`lib/integrations/src/integrations/webhooks/retry.ts`, `dispatch.ts`, `store.ts`,
+      and the deterministic model in `lib/signalgrid-core/src/webhooks.ts` whose backoff
+      schedule is recorded and never awaited), but they are per-emitter and the store is
+      Redis-or-memory. A cascade that spans a ticket, a change draft and an audience
+      notification needs one queue with one dead-letter view, so a failure to notify is
+      visible in the same place as a failure to ticket. **Fail-closed:** an unreachable
+      backend leaves the item QUEUED and reports it; a dead-letter entry is a visible
+      failure and never a silent drop, and a pending item never counts as delivered.
+      **Deterministic:** the backoff schedule is computed and recorded; any path a proof
+      drives never awaits it. No broker dependency — the point is one durable view, not
+      Kafka.
+
+- [ ] **Cascade join 6 — `proof:decision-cascade`: the whole chain, and every refusal in it.**
+      Serves the sentence end to end. Each stage above will land with its own proof; what
+      none of them covers is the chain, and the chain is the product claim — CLAUDE.md's
+      *"a decision is the trigger for a cascade, not the end of it."* Build one proof that
+      walks a fixture from a non-allow decision through plan → resolution path → incident
+      → (gated) ticket request → change draft → audience routing → verification, and
+      asserts at every hop that the fail-closed arm is reachable: an unreachable ITSM
+      leaves the incident open, an unresolvable audience reaches the owner, an unobserved
+      fix keeps the restriction. **It must fail without the fix** — a cascade proof that
+      passes on a tree with the joins removed is a restatement, not a proof — and it
+      registers in `package.json` as a `proof:*` script so the Mac harness enumerates it
+      automatically.
+
+### The session puck's software half — DR-043 (hardware-free, fail-closed)
+
+Added 2026-09-12 from the owner's research document *"Shared-Device Authentication
+Puck: Hardware and Form-Factor Concept"* (DR-043; substance in
+[`docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`](SESSION_PUCK_HARDWARE_HYPOTHESIS.md)). The
+hardware is a hypothesis behind the discovery gates and none of it moves here. These
+five items are the half that needs no hardware at all — a fixture-backed signal
+domain, a cascade rule, audit vocabulary, a simulator scenario and the gate itself —
+each fail-closed by construction (an unknown attach state raises assurance and never
+grants; a missing downstream refuses and says so) and deterministic (no wall clock in
+a decision path; every reference instant caller-supplied). Dock and custody inputs
+remain a deferred family in the launch profile: building is not claiming, and every
+item below is a design target until its proof is green and named.
+
+- [ ] **Puck 1 — a dock/attach signal domain: `attached` | `removed` | `unknown`, fixture-backed, with a proof.**
+      The change: a connector-style input in the deferred dock/custody family that
+      normalizes a receiver's attach record (credential identifier, device identifier,
+      observed-at, the receiver's own identity) into one of three states, beside the
+      existing `badge_binding` dimension
+      ([`lib/signalgrid-core/src/dock.ts`](../lib/signalgrid-core/src/dock.ts)) rather
+      than replacing it — the badge read answers *who is bound*, this answers *is the
+      credential physically seated*. Any wire value outside the two positive states, an
+      unparseable record, a missing receiver identity or an observation older than the
+      caller's bound is `unknown`. **Fail-closed:** `unknown` is at least `step_up` and
+      is never a grant — deliberately stricter than the sibling `badgeBinding` and
+      `dockState` fixtures, which pin `unknown` to `allow` under the day-one-quiet
+      pattern ([`lib/signalgrid-core/src/seed.ts`](../lib/signalgrid-core/src/seed.ts)
+      lines 480 and 484); the proof must pin the divergence, not inherit the sibling
+      rule; `attached` alone grants nothing — it is one axis, and identity
+      and posture must each positively confirm. **Deterministic:** the freshness bound
+      and the reference instant are arguments. If this adds a signal kind, a connector
+      directory or an API path, the same PR classifies it **deferred** in
+      `scripts/launch-profile.mjs` under DR-043's authority, or
+      `scripts/check-launch-profile.mjs` fails on silent omission — which is the check
+      that would fail without it. The proof pins exactly one attach state as
+      non-raising and sweeps every other combination; it fails on a tree where
+      `unknown` is treated as `attached`. Cloud lane.
+
+- [ ] **Puck 2 — removal → suspend, as a rule in the post-decision cascade (joins DR-042's six joins; adds no seventh).**
+      The change: the `removed` transition on a live session is a cascade input that
+      requests suspension through the same seam the six cascade-join items above build
+      — the resolution path, the audience routing of join 3 (the host app is told,
+      never the worker through a SignalGrid surface), and the post-execution verifier of
+      join 4, which records `cleared` / `not_cleared` / `unobserved` for the suspend
+      exactly as it does for a remediation. It lands as a hop inside
+      `proof:decision-cascade` (join 6), not as its own proof: the cascade proof walks
+      `attached → session → removed → suspend requested → suspend verified` and asserts
+      the fail-closed arm at each hop. **Fail-closed:** an unobserved suspend is not a
+      suspended session — the restriction stays and the second miss escalates; a forced
+      or torn removal is `deny`, as the `badge_binding` rule already says; a re-dock
+      within N seconds resumes only after a full re-evaluation, never silently.
+      **Deterministic:** N is policy, the instants are arguments. The check that fails
+      without it: join 6's proof on a tree where a `removed` transition leaves the
+      session open. Deferred family; design target. Cloud lane.
+
+- [ ] **Puck 3 — the puck lifecycle's audit events, in the Decision Envelope's ledger vocabulary.**
+      The change: extend `AuditEventType` in
+      [`lib/signalgrid-core/src/types.ts`](../lib/signalgrid-core/src/types.ts) (today six
+      members: `decision.evaluated`, `connector.synced`, `policy.version_activated`,
+      `evidence.captured`, `remediation.requested`, `remediation.approved`) with the
+      eight the document's nine-event chain needs and the ledger cannot yet name —
+      `credential.presented`, `dock.attached`, `identity.authenticated`,
+      `posture.observed`, `session.opened`, `dock.removed`, `session.suspended`,
+      `credential.revoked` — each carried in the tamper-evident chain with the
+      envelope field it evidences, and each recording what the system knew at that
+      instant, never rewritten afterwards. **Fail-closed:** an event with no
+      `decisionId` or no subject is refused, not recorded blank. **Deterministic:** the
+      chain digest is over the canonical body, as it is today. The check that fails
+      without it: the audit proof's event-type census, which must count 14 and must
+      refuse a fifteenth that is not in the union; and `proof:decision-cascade`, whose
+      suspend hop asserts a `session.suspended` event exists in the chain. Design
+      target; no shipped-audit claim moves. Cloud lane.
+
+- [ ] **Puck 4 — a simulator scenario: dock, session, undock, re-dock within N seconds, with the policy matrix as rows.**
+      The change: one scenario in
+      [`lib/signalgrid-simulator/src/scenarios.ts`](../lib/signalgrid-simulator/src/scenarios.ts)
+      beside the existing `dock.device_undocked` signal, whose steps are the document's
+      situation table on this tree's verdict ladder: known worker + compliant device +
+      docked → `allow`; higher-risk app → `step_up`; removed → `restrict`, forced →
+      `deny`; re-dock within N → resume after re-evaluation; walked away, puck seated →
+      inactivity lock; **radio says gone, puck seated → do not assume gone**; lost or
+      revoked puck → `deny`; **legacy 125 kHz read for a strong-enrolled worker →
+      `deny`** (the downgrade rule); attach state `unknown` → `step_up`. Every branch is
+      fixture-only — the note on the scenario says so, as every scenario's
+      `safeDemoNote` already does. **Fail-closed:** the scenario's expected outcomes
+      include no grant on any branch where a single axis is unknown. **Deterministic:**
+      N and the instants are scenario data. The check that fails without it:
+      `proof:signalgrid-simulator`, which enumerates scenarios and asserts each
+      expected outcome; and the iOS parity rule (golden rule 1) — the scenario is added
+      to the TS simulator and the Swift port's fixture set together, or the parity
+      proof drifts. Design target; deferred family. Cloud lane for the TS half, Mac lane
+      for the Swift twin.
+
+- [ ] **Puck 5 — the hardware gate itself: a tally column in `docs/agent/DISCOVERY_LOG.md` that the go/no-go table reads from.**
+      The change: the *Running tally* table gains a column **Rh** — a REQUIREMENT that
+      maps specifically to faster or stronger physical session authentication or
+      custody binding — beside R, so the hardware rows of the go/no-go table in
+      `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md` read a number that exists rather than a
+      feeling. The gate stays the pre-registered one (≥ 4 of 15 Rh → bench prototype;
+      ≥ 3 COMMITMENT → design-partner MVP; ≥ 5 PROBLEM with 0 COMMITMENT → no-go); this
+      adds the column, not a threshold. The check that fails without it: a hardware
+      authorization anywhere in the tree that cites no tally row — the same
+      claim-must-quote-output rule `CLAUDE.md` applies to every number — and, once the
+      column exists, `node scripts/check-readiness-figure.mjs` continues to derive the
+      outreach figure independently of it (DR-036); neither number is typed. Nothing
+      here builds hardware; the tally reads *0 of 15, 0 commitments* today. Design
+      target for the hardware; deferred throughout. Cloud lane.
+
 - [x] **Both findings from the "status reported rather than measured" sweep — FIXED.**
       The sweep that produced the `itsm` tri-state health fix turned up two more instances of the
       same class. Both are now closed and both are pinned.
@@ -1103,8 +1321,10 @@ design targets, not shipped capability.** All touch the decision core / simulato
 (behaviour), so each is DR-020 territory (deferred) — a decision record first, then one
 reviewable PR with a deterministic proof. Public-safe and fixture-first.
 
-- [ ] **"Phantom custody" detection — a device checked out to a prior holder, or unpaired yet occupying a dock slot (custody ground truth, HIGH; deferred design target).** The single most-cited operational pain: a returned device still reads as another person's, or sits unpaired in a bay while the console shows it present. That is a custody-state contradiction across the dock, MAM and posture planes — exactly the shape [`lib/event-contract/src/detect.ts`](../lib/event-contract/src/detect.ts) exists to catch, and no current detection covers it. Add a deterministic `CUSTODY_STALE_OR_CONTESTED`-style cross-domain detection with fixtures, and an assertion that fails if it stops firing on the contested timeline. Cloud lane.
-- [ ] **Checkout-cap contradiction surfaced as a decision, not a mystery beep (custody ground truth, MEDIUM; deferred design target).** A per-user checkout cap that blocks a clinician because a prior return never cleared is a fabric-visible condition today only as a dock beep code. Model the cap state and emit a legible reason when it blocks, with a fixture. Small state addition; DR first. Cloud lane.
+- [x] **"Phantom custody" — a device checked out to a prior holder, or unpaired yet occupying a dock slot (custody ground truth, HIGH). MODELED 2026-09-11** as a checkout DECISION, not (yet) a timeline detection: [`lib/integrations/src/integrations/rtls-custody/custody-ledger.ts`](../lib/integrations/src/integrations/rtls-custody/custody-ledger.ts) grades what the ledger says against what the bay sees — a seated device still assigned to a prior holder is a hold naming `stale_return_other`, an unpaired device in a bay is contained (`CUSTODY_UNPAIRED_IN_SLOT`), a clear ledger over an empty bay escalates (`CUSTODY_DEVICE_UNACCOUNTED`); a sweep of all 4,320 combos pins the single grant (`proof:rtls-custody`). The `detect.ts` detection over the event timeline is split out to the next row. Original text kept for the record: (deferred design target).** The single most-cited operational pain: a returned device still reads as another person's, or sits unpaired in a bay while the console shows it present. That is a custody-state contradiction across the dock, MAM and posture planes — exactly the shape [`lib/event-contract/src/detect.ts`](../lib/event-contract/src/detect.ts) exists to catch, and no current detection covers it. Add a deterministic `CUSTODY_STALE_OR_CONTESTED`-style cross-domain detection with fixtures, and an assertion that fails if it stops firing on the contested timeline. Cloud lane.
+- [x] **Checkout-cap contradiction surfaced as a decision, not a mystery beep (custody ground truth, MEDIUM). MODELED 2026-09-11** in the same surface: the cap axis is COMPUTED from the requester's open-checkout count, the tenant cap and the count of those checkouts physically docked — a cap hit only by returns that never cleared holds with `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN`, a cap genuinely reached is contained with `CUSTODY_CAP_REACHED`, a missing count is unknown and raises, contradictory counts are malformed. No decision record was needed: it is a read-only evaluator in an integration family, not a decision-core change. Original text kept for the record: (deferred design target).** A per-user checkout cap that blocks a clinician because a prior return never cleared is a fabric-visible condition today only as a dock beep code. Model the cap state and emit a legible reason when it blocks, with a fixture. Small state addition; DR first. Cloud lane.
+- [ ] **`CUSTODY_STALE_OR_CONTESTED` as a cross-domain DETECTION over the event timeline (custody ground truth follow-up, MEDIUM; decision-core, DR first).** The custody-ledger evaluator grades one reconciliation report; the timeline form — a `device_returned` / `dock_relocked` sequence with no matching ledger clear, seen in [`lib/event-contract/src/detect.ts`](../lib/event-contract/src/detect.ts) beside `CHECKOUT_WITHOUT_COMPLIANCE` — would catch the same phantom from the event stream without a ledger read. Decision core (DR-020 territory): a decision record first, then fixtures and an assertion that fails if it stops firing. Cloud lane.
+- [ ] **Brace-less guards join the mutation sweep, family by family (gate infrastructure, HIGH; ratchet opened 2026-09-11).** `scripts/mutation-guard.mjs` gained the `oneline-cond-false` mutator (`if (...) return x;` → `if (false) return x;`), the guard shape three reviews had found invisible to the sweep. Measured over every registered file before it landed: 1732 mutations, 117 new survivors across 41 files (plus 4 break-glass disjuncts a separate PR fixes). A gate that goes red over 117 unpinned guards gets switched off, so the mutator applies only to targets that opt in (`oneLine: true`) after their one-line guards are pinned by checks that fail without them or documented inert with a reason, and every run prints the census of targets that have not joined. Joined at the opening: rtls-custody, device-attestation, verdict-attestation (11 guards pinned — two of them the alg-membership and key/alg-mismatch refusals in signature verification, which no input had ever exercised), app-update (two shadowed guards deleted, three pinned). Pending, by survivors measured 2026-09-11: facility-trust-graph 22 · dual-control 7 · benchmark-selection 7 · bootstrap-credential 6 · macos-posture 5 · sse-egress, shift-context, pacs-access, nac, change-window 4 each · uem, service-lifecycle, pim-activation, passkey-assurance, challenge-capability 3 each · vuln-scan, task-exception, agent-behavior 2 each · sso-session, policy-binding, platform-sso, observability-integrity, network-nac, local-authority, entitlement-binding, device-management-health, decision-continuity, custody-beacon, credential-rotation, caep-events, agent-identity, access-governance 1 each. When `nac` joins, re-register `nac/cisco-ise.ts` and `nac/aruba-clearpass.ts` (de-registered 2026-08-25 for exactly this shape). Cloud lane.
 - [ ] **A faithful end-to-end smart-charging simulator scenario (custody ground truth, MEDIUM; deferred design target).** The simulator carries no scenario shaped like the real workflow (badge → dock → provision → in-use → check-in) with its real failure branches (unpaired / network-down / cap-hit / dock-fault). Add one so proofs exercise the real thing rather than abstractions. Builds on the remediation-allow cascade ([`lib/signalgrid-simulator/src/remediation-allow.ts`](../lib/signalgrid-simulator/src/remediation-allow.ts)). Cloud lane.
 
 ### ECC-role review findings (2026-09-01) — the ones not fixed in the same pass
@@ -1300,3 +1520,26 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       extend the generator to also read the remediation-allow wrapper, or add the eight with
       provenance plus a gate that fails if the wrapper's emitted set drifts from the doc.
       Ships as its own PR with a two-direction self-test. Cloud lane.
+
+- [ ] **`signalgrid` CLI harness — the CLI-Anything method applied to this repository's
+      own control plane (DR-040, 2026-09-12).** Follow `third_party/cli-anything/HARNESS.md`
+      as adapted by `.claude/skills/cli-anything/SKILL.md`: discover the `/v1` routes and
+      the MCP tools, design a stateful session (base URL, tenant, token from the
+      environment; session file outside the tree, exclusive-locked), build a TypeScript
+      CLI under `artifacts/` with dual human/`--json` output (`decide`, `explain`,
+      `signals`, `audit`, `connectors`), read-only against the fabric by default,
+      fixture-tested against the api-server harness, with a generated SKILL.md that
+      passes both skill gates. No registry, no telemetry, no live tenant. Done = the
+      api-server suite green with every assertion, the CLI's own proof registered in
+      preflight and CI, and this box ticked.
+
+### GitHub Trending screening — three follow-ups (2026-09-12, from the owner's Trending snapshot)
+
+Filed from the intake row in [`docs/agent/RESOURCE_INTAKE.md`](agent/RESOURCE_INTAKE.md) for the
+GitHub Trending snapshot the owner shared: 23 repository rows screened against the tree, 20 touch
+nothing, these three do. **None is shipped capability, and none is a claim about a partnership,
+integration or endorsement with any of the projects named.** Public-safe and fixture-first.
+
+- [ ] **A maplibre-gl-js operator map over the shipped facility trust graph (console view, MEDIUM; blocked on tiles).** [`docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md`](inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md) already names `maplibre/maplibre-gl-js` (BSD-3-Clause) as the operator-map renderer beside the shipped `lib/facility-trust-graph`, which today has no spatial view at all. The blocker is not the renderer: it is **where vector tiles come from in a repository with no network calls and no tenant data** — a fixture tile set, a floor-plan raster, or nothing. Resolve the tile source FIRST, in one paragraph, then a console view with a deterministic fixture and no live vendor call. Do not add a map that silently fetches a hosted style. web-engineer.
+- [ ] **Vendor-doc drift is unwatched — decide whether a report-only watcher is worth its operator machine (research infrastructure, MEDIUM).** `docs/` cites 2,209 unique external URLs across 996 hosts (measured 2026-09-12) and every link gate in this repo is OFFLINE by design, so a vendor renaming or retiring a page is found only by hand — twice so far, both recorded in the catalogs (CyberArk → Idira; the `privx-ot` product URL now 404). `dgtlmoon/changedetection.io` (Apache-2.0, with a hosting-triggered commercial licence that matters only if we ever hosted it) is the shape that would watch them. Scope if taken: report-only, on the operator's own machine, never a gate, never in CI, no page content committed — only "this URL changed, look at it". The real question this row answers is whether the watch list is maintainable at 996 hosts or should be a curated 30. records-archivist.
+- [ ] **`docs/BACKUP_AND_RESTORE.md` states "No encryption at rest, and no opinion about where archives live" — give it one, as a runbook sentence (docs, LOW).** The gap is named in the document itself and has no filling. rclone's `crypt` (client-side encryption over any remote) and `hashsum` (verify an archive after transfer) are the two backends that close it in operator terms; the deliverable is a paragraph in that runbook naming the commands and what they do and do not promise — NOT a dependency, NOT a script in this tree, and NOT a compliance claim. docs-writer.

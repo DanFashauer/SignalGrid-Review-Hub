@@ -8,6 +8,9 @@ import { AppUpdateConnectorError, type AppUpdateReportRaw } from "./types";
 export * from "./types";
 export * from "./evaluate";
 export * from "./app-update-connector";
+// The iOS update / device-prep WORKFLOW — readiness to hand out, a distinct surface
+// from host-app version currency (docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md).
+export * from "./device-prep";
 export { createMockAppUpdateTransport, type MockAppUpdateOptions } from "./mock-transport";
 
 /**

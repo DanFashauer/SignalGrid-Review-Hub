@@ -252,6 +252,13 @@
     "ponytail:install": "node scripts/install-ponytail.mjs",
     "neural-memory:install": "node scripts/install-neural-memory.mjs",
     "context7:install": "node scripts/install-context7.mjs",
+    "graphify:install": "node scripts/install-graphify.mjs",
+    "crucible:install": "node scripts/install-crucible.mjs",
+    "last30days:install": "claude plugin marketplace add mvanhorn/last30days-skill && claude plugin install last30days@last30days-skill --scope user",
+    "claude-video:install": "claude plugin marketplace add bradautomates/claude-video && claude plugin install watch@claude-video --scope user && brew install ffmpeg yt-dlp",
+    "cli-anything:install": "claude plugin marketplace add HKUDS/CLI-Anything && claude plugin install cli-anything@cli-anything --scope user",
+    "lightrag:install": "node scripts/install-lightrag.mjs",
+    "docs:retrieve": "node scripts/docs-retrieval.mjs",
     "mcp:setup": "node scripts/setup-mcp-lane.mjs"
   },
   "private": true,

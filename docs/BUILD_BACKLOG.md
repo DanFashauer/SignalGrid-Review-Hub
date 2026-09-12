@@ -506,6 +506,110 @@ caller-supplied), and each names the clause of his sentence it serves.
       registers in `package.json` as a `proof:*` script so the Mac harness enumerates it
       automatically.
 
+### The session puck's software half — DR-043 (hardware-free, fail-closed)
+
+Added 2026-09-12 from the owner's research document *"Shared-Device Authentication
+Puck: Hardware and Form-Factor Concept"* (DR-043; substance in
+[`docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`](SESSION_PUCK_HARDWARE_HYPOTHESIS.md)). The
+hardware is a hypothesis behind the discovery gates and none of it moves here. These
+five items are the half that needs no hardware at all — a fixture-backed signal
+domain, a cascade rule, audit vocabulary, a simulator scenario and the gate itself —
+each fail-closed by construction (an unknown attach state raises assurance and never
+grants; a missing downstream refuses and says so) and deterministic (no wall clock in
+a decision path; every reference instant caller-supplied). Dock and custody inputs
+remain a deferred family in the launch profile: building is not claiming, and every
+item below is a design target until its proof is green and named.
+
+- [ ] **Puck 1 — a dock/attach signal domain: `attached` | `removed` | `unknown`, fixture-backed, with a proof.**
+      The change: a connector-style input in the deferred dock/custody family that
+      normalizes a receiver's attach record (credential identifier, device identifier,
+      observed-at, the receiver's own identity) into one of three states, beside the
+      existing `badge_binding` dimension
+      ([`lib/signalgrid-core/src/dock.ts`](../lib/signalgrid-core/src/dock.ts)) rather
+      than replacing it — the badge read answers *who is bound*, this answers *is the
+      credential physically seated*. Any wire value outside the two positive states, an
+      unparseable record, a missing receiver identity or an observation older than the
+      caller's bound is `unknown`. **Fail-closed:** `unknown` is at least `step_up` and
+      is never a grant; `attached` alone grants nothing — it is one axis, and identity
+      and posture must each positively confirm. **Deterministic:** the freshness bound
+      and the reference instant are arguments. If this adds a signal kind, a connector
+      directory or an API path, the same PR classifies it **deferred** in
+      `scripts/launch-profile.mjs` under DR-043's authority, or
+      `scripts/check-launch-profile.mjs` fails on silent omission — which is the check
+      that would fail without it. The proof pins exactly one attach state as
+      non-raising and sweeps every other combination; it fails on a tree where
+      `unknown` is treated as `attached`. Cloud lane.
+
+- [ ] **Puck 2 — removal → suspend, as a rule in the post-decision cascade (joins DR-042's six joins; adds no seventh).**
+      The change: the `removed` transition on a live session is a cascade input that
+      requests suspension through the same seam the six cascade-join items above build
+      — the resolution path, the audience routing of join 3 (the host app is told,
+      never the worker through a SignalGrid surface), and the post-execution verifier of
+      join 4, which records `cleared` / `not_cleared` / `unobserved` for the suspend
+      exactly as it does for a remediation. It lands as a hop inside
+      `proof:decision-cascade` (join 6), not as its own proof: the cascade proof walks
+      `attached → session → removed → suspend requested → suspend verified` and asserts
+      the fail-closed arm at each hop. **Fail-closed:** an unobserved suspend is not a
+      suspended session — the restriction stays and the second miss escalates; a forced
+      or torn removal is `deny`, as the `badge_binding` rule already says; a re-dock
+      within N seconds resumes only after a full re-evaluation, never silently.
+      **Deterministic:** N is policy, the instants are arguments. The check that fails
+      without it: join 6's proof on a tree where a `removed` transition leaves the
+      session open. Deferred family; design target. Cloud lane.
+
+- [ ] **Puck 3 — the puck lifecycle's audit events, in the Decision Envelope's ledger vocabulary.**
+      The change: extend `AuditEventType` in
+      [`lib/signalgrid-core/src/types.ts`](../lib/signalgrid-core/src/types.ts) (today six
+      members: `decision.evaluated`, `connector.synced`, `policy.version_activated`,
+      `evidence.captured`, `remediation.requested`, `remediation.approved`) with the
+      eight the document's nine-event chain needs and the ledger cannot yet name —
+      `credential.presented`, `dock.attached`, `identity.authenticated`,
+      `posture.observed`, `session.opened`, `dock.removed`, `session.suspended`,
+      `credential.revoked` — each carried in the tamper-evident chain with the
+      envelope field it evidences, and each recording what the system knew at that
+      instant, never rewritten afterwards. **Fail-closed:** an event with no
+      `decisionId` or no subject is refused, not recorded blank. **Deterministic:** the
+      chain digest is over the canonical body, as it is today. The check that fails
+      without it: the audit proof's event-type census, which must count 14 and must
+      refuse a fifteenth that is not in the union; and `proof:decision-cascade`, whose
+      suspend hop asserts a `session.suspended` event exists in the chain. Design
+      target; no shipped-audit claim moves. Cloud lane.
+
+- [ ] **Puck 4 — a simulator scenario: dock, session, undock, re-dock within N seconds, with the policy matrix as rows.**
+      The change: one scenario in
+      [`lib/signalgrid-simulator/src/scenarios.ts`](../lib/signalgrid-simulator/src/scenarios.ts)
+      beside the existing `dock.device_undocked` signal, whose steps are the document's
+      situation table on this tree's verdict ladder: known worker + compliant device +
+      docked → `allow`; higher-risk app → `step_up`; removed → `restrict`, forced →
+      `deny`; re-dock within N → resume after re-evaluation; walked away, puck seated →
+      inactivity lock; **radio says gone, puck seated → do not assume gone**; lost or
+      revoked puck → `deny`; **legacy 125 kHz read for a strong-enrolled worker →
+      `deny`** (the downgrade rule); attach state `unknown` → `step_up`. Every branch is
+      fixture-only — the note on the scenario says so, as every scenario's
+      `safeDemoNote` already does. **Fail-closed:** the scenario's expected outcomes
+      include no grant on any branch where a single axis is unknown. **Deterministic:**
+      N and the instants are scenario data. The check that fails without it:
+      `proof:signalgrid-simulator`, which enumerates scenarios and asserts each
+      expected outcome; and the iOS parity rule (golden rule 1) — the scenario is added
+      to the TS simulator and the Swift port's fixture set together, or the parity
+      proof drifts. Design target; deferred family. Cloud lane for the TS half, Mac lane
+      for the Swift twin.
+
+- [ ] **Puck 5 — the hardware gate itself: a tally column in `docs/agent/DISCOVERY_LOG.md` that the go/no-go table reads from.**
+      The change: the *Running tally* table gains a column **Rh** — a REQUIREMENT that
+      maps specifically to faster or stronger physical session authentication or
+      custody binding — beside R, so the hardware rows of the go/no-go table in
+      `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md` read a number that exists rather than a
+      feeling. The gate stays the pre-registered one (≥ 4 of 15 Rh → bench prototype;
+      ≥ 3 COMMITMENT → design-partner MVP; ≥ 5 PROBLEM with 0 COMMITMENT → no-go); this
+      adds the column, not a threshold. The check that fails without it: a hardware
+      authorization anywhere in the tree that cites no tally row — the same
+      claim-must-quote-output rule `CLAUDE.md` applies to every number — and, once the
+      column exists, `node scripts/check-readiness-figure.mjs` continues to derive the
+      outreach figure independently of it (DR-036); neither number is typed. Nothing
+      here builds hardware; the tally reads *0 of 15, 0 commitments* today. Design
+      target for the hardware; deferred throughout. Cloud lane.
+
 - [x] **Both findings from the "status reported rather than measured" sweep — FIXED.**
       The sweep that produced the `itsm` tri-state health fix turned up two more instances of the
       same class. Both are now closed and both are pinned.

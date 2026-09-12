@@ -2135,3 +2135,37 @@ Absence check — "affected user notification" — presence needs one hit, absen
 ✓ CORROBORATED across 4 differently-shaped probes. Safe to claim — cite them.
 ```
 Verdict:  **refuted as stated; the correct claim is narrower and is what DR-042 records.** Both ENDS of the cascade are built and the JOINS between them are not. Built and fixture-backed: remediation proposal (`lib/signalgrid-core/src/remediation.ts`, every proposal `approvalRequired` + `simulatedOnly`, `allow` produces none), the resolution planner and its simulation (`lib/signalgrid-core/src/resolution.ts`, `/v1/decisions/:id/resolution` and `/resolve`), the deterministic incident playbook (`lib/incident-playbook`, priority = impact × urgency, SLA per priority, assignment group, escalation flag), the orchestration planner (`lib/orchestration`), and deterministic webhook delivery with a recorded-never-awaited backoff and a `dead_letter` terminal state (`lib/signalgrid-core/src/webhooks.ts`). Connector stubs behind the live-call gate: the eight ITSM vendor adapters and the generic webhook emitter (`lib/integrations/src/integrations/itsm/`), the `change-window` reader, and the Redis-or-memory webhook DLQ (`lib/integrations/src/integrations/webhooks/`). **Absent:** every join. `@workspace/incident-playbook` is imported by FOUR PROOFS and by nothing in `lib/` or `artifacts/` — there is no code path from an `Incident` to an ITSM adapter, so no ticket can open. No identifier in `lib/**` opens or drafts a change record; the fabric only READS an approved one. No notification of an affected person exists anywhere (absence check CORROBORATED across all four probes, run before this change). Nothing observes whether a requested remediation landed — the architecture page's §9 already said so in its own words. Ingestion is not queued and there is no broker dependency; the queue vocabulary is outbound-only. No OpenTelemetry SDK is a dependency of any workspace package — the one `@opentelemetry` string in the tree is an externals entry in `artifacts/api-server/build.mjs`, and the live telemetry lane uses a collector CONTAINER (`scripts/lab/otel-collector.yaml`) against `/metrics`, which is metrics, not traces. **A note on the absence probe, because it matters for anyone re-running it:** after this change landed the same command returns INCONCLUSIVE with two matches, and both are this work's own prose (`docs/DECISION_RECORDS.md`, `docs/agent/RESOURCE_INTAKE.md`). A word appearing in a record ABOUT an absence is not the thing existing — that is the tool's documented verdict, and the CORROBORATED run above is the one that stands for the state of the tree before the six backlog items were opened.
+
+## 2026-09-12 — "The session-puck concept lands as DR-043 plus a hypothesis page plus five backlog items without adding one unhedged deferred-capability mention, one orphan, one dangling citation or one unreversible record"
+Command:
+```
+pnpm run -s check:absence "session puck"            # before the page existed
+git add docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md
+for g in check-cited-paths check-cited-commands check-markdown-links check-doc-orphans \
+         check-launch-claims check-known-false-claims check-decision-record-format \
+         check-derived-doc-figures check-doc-line-counts check-publication-boundary \
+         check-claim-inventory-anchors check-backlog-ownership check-text-safety; do
+  node scripts/$g.mjs; echo "exit=$?"; done
+```
+Output:
+```
+✓ CORROBORATED across 4 differently-shaped probes. Safe to claim — cite them.
+Cited-path check passed — 2433 citation(s) across 511 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Cited-command check passed — every command a document promises is a command that exists.
+Markdown-link check passed — every relative link lands on a tracked file from its own document.
+Doc-orphan check passed — no new unreachable documents.
+  docs/**/*.md (REPORTED, not gated): 416 unhedged deferred-capability mention(s) across 110 file(s) (53 more mention(s) in 6 engineering-doc(s) carved out per task #67, each verified) (ceiling 416)
+Launch-claims gate passed — nothing deferred is presented as current.
+Known-false-claim check passed — every refutation holds, and no document re-states one.
+  ✓ DR-043
+decision-record-format: 42 records, 0 without a reversal clause (GATED), 16 with prose-shaped sections (REPORTED); self-test green
+Decision-record format gate passed — every call states how it gets undone.
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Doc line-count gate passed — every `path (N)` figure matches the file it names.
+Publication-boundary gate passed — every tracked path is classified, and no declared breach is present.
+Claim-inventory anchors passed — 564 quoted claim(s) anchored and 105 cited fragment(s) in place; absent held at 0, remove-actioned still present at 0, evidence fragments absent at 0 (each may only fall).
+Backlog ownership check passed — every row with work left in it names a role from the registry.
+Text-safety gate passed.
+(all thirteen: exit=0)
+```
+Verdict:  **holds.** The cited-path count rose 2307 → 2433 (the new page and DR-043 cite the tree at path:line and every one resolves); the docs deferred-noun ceiling stayed at 416 with the page bannered as *nothing on this page is a claim of current capability* and every other touched block hedged in its own paragraph; the ceiling file was not rewritten (no drop, no rise); DR-043 is the 42nd record and carries a reversal clause. What this does NOT prove: that any of the five backlog items is buildable as specified — each is a design target until its proof is green and named — and nothing here measures the hardware, which is the point of DR-043 item 4.

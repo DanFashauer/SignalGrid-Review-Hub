@@ -2524,3 +2524,163 @@ anchored to a path and a line that was read, and the absences were probed rather
 than assumed. **Medium** on the backlog shaping: six joins is the right count for
 what the audit found, but the ORDER between them is a sequencing call nobody has
 made yet, and the first one built should be the one a design partner asks for.
+
+## DR-043 — The shared-device session puck is recorded as a customer-testable HARDWARE HYPOTHESIS, not a product: three functions kept separate, the puck is evidence and never the policy engine, the software half is built hardware-free, and no hardware moves until the discovery gates are met (owner-directed 2026-09-12)
+
+**Question.** The owner shared a 25-page research document he produced,
+*"Shared-Device Authentication Puck: Hardware and Form-Factor Concept"* — a
+removable, worker-carried cryptographic token that docks into a receiver on a
+shared device, so that docking opens a session and removal suspends it — with the
+words *"I'm going to blow your mind with this."* DR-039 sets the bar (anything with
+a part that can aid building the company is taken; overlap is recorded, never
+refused) and DR-020 sets the order (a new hardware surface gets a decision record
+before work begins). What does the tree adopt, in what form, what already existed,
+and what does the repository refuse to claim? No record numbered DR-041 appears in
+this file at the time of writing (grep, 2026-09-12); this record follows DR-042.
+
+**The document, in one paragraph.** Its own recommendation is *not* "build the
+hardware product". It is: preserve the concept as a customer-testable hardware
+hypothesis; build only a low-cost bench prototype — an off-the-shelf certified FIDO
+key inside a 3D-printed puck with a mechanical receiver — once discovery produces
+repeated REQUIREMENT evidence or concrete COMMITMENT; and never begin with custom
+silicon or a custom authenticator. It separates three functions (identity
+authentication, session/custody binding, ongoing presence), places the puck as a
+source of evidence under an unchanged division of authority (IdP, UEM, PACS,
+SignalGrid), and ends on the one unvalidated question: whether healthcare mobility
+teams need the physical credential to become the "key in the ignition" for a
+shared-device session strongly enough to change workflow, deploy receivers,
+provision credentials, support replacements and pay for it. The substance, in this
+repository's own words and with every vendor fact attributed to the document, is
+`docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`. The document itself is owner-held and not
+committed; custody, dock and reader signal families remain deferred in the launch
+profile, a design target and not a shipped surface.
+
+**Call.**
+
+1. **The three-function split is doctrine for every session-gating surface.**
+   Identity authentication (which worker), session/custody binding (that this worker
+   intentionally attached their credential to this device) and ongoing presence (when
+   removal, distance, inactivity or a posture change suspends) are three functions
+   proven by different evidence, owned by different systems, and failing in different
+   ways. A dock event is custody intent and never identity; a radio "nearby" is never
+   custody; a radio "gone" never by itself ends a session while the credential is
+   physically seated. The tree already models each function separately — the
+   passkey-assurance grade (`docs/PASSKEY_ASSURANCE.md:184`), the `badge_binding`
+   dimension (`lib/signalgrid-core/src/dock.ts:51`,
+   `docs/CREDENTIAL_READER_SIGNAL_MODEL.md:9`), zone-level presence in `rtls-custody`
+   (`lib/integrations/src/integrations/rtls-custody/types.ts:10`) — all deferred
+   design targets; what it never stated is that they must not be conflated. Now it
+   does.
+2. **The puck, and any dock or receiver, is a SOURCE OF EVIDENCE — never the policy
+   engine.** SignalGrid correlates; the IdP (Entra or equivalent) owns identity, FIDO
+   registration and authentication-strength policy; the UEM (Intune or equivalent)
+   owns posture as an *independent* input the puck cannot substitute for; the PACS
+   (HID or equivalent) owns the physical-credential lifecycle where a badge is
+   reused. This is the stance `docs/HARDWARE_PARTNER_MATRIX.md:25` and
+   `docs/DOCKBRIDGE_STRATEGY.md:31` already take for every hardware category; the
+   puck inherits it and adds nothing above it. A puck registers through the
+   organization's existing identity plane, never a SignalGrid key database.
+3. **The software half is built now, hardware-free.** Five backlog items in
+   `docs/BUILD_BACKLOG.md` (*The session puck's software half*), each fail-closed
+   and deterministic by construction: (a) a fixture-backed dock/attach signal domain
+   — `attached` / `removed` / `unknown` — as a connector-style input with its own
+   proof, where `unknown` is at least `step_up` and never a grant; (b) a
+   removal-to-suspend rule in the post-decision cascade, joining the six cascade
+   items DR-042 opened rather than duplicating them; (c) the puck lifecycle's audit
+   event names in the Decision Envelope's ledger vocabulary; (d) a simulator scenario
+   *dock → session → undock → re-dock within N seconds* carrying the document's
+   policy-matrix rows, including "radio says gone, puck seated → do not assume gone"
+   and "legacy read for a strong-enrolled worker → deny"; (e) the hardware gate
+   itself — a hardware-specific tally column in `docs/agent/DISCOVERY_LOG.md` that the
+   go/no-go table reads from. If (a) adds a signal kind, a connector directory or an
+   API path, it is classified **deferred** in `scripts/launch-profile.mjs` in the same
+   change under this record's authority, so the profile's silent-omission arm never
+   fires and no status changes without a record (DR-005). Nothing in (a)–(e) is a
+   shipped-capability claim.
+4. **No bench prototype, purchase, or custom hardware work begins until the
+   discovery gates in the document are met** — and they are the thresholds already
+   pre-registered in `docs/agent/DISCOVERY_LOG.md:121`–`124`, applied to hardware, not
+   a new mechanism: **≥ 4 of 15** conversations independently repeating a requirement
+   that maps to faster or stronger physical session authentication or custody binding
+   → authorize a bench prototype (family A: off-the-shelf FIDO key, printed puck,
+   mechanical receiver); **≥ 3 concrete COMMITMENTS** including willingness to scope
+   and test the workflow → authorize a design-partner MVP with off-the-shelf FIDO/NFC
+   hardware and 3D-printed mechanics; **≥ 5 PROBLEM with COMMITMENT = 0** → no-go on
+   productization. Development order when it does move: mechanical → NFC/FIDO → BLE
+   only if needed → UWB only if proven necessary. The tally today reads *0 of 15
+   conversations, 0 commitments* (`docs/agent/DISCOVERY_LOG.md:149`), so every
+   hardware row is closed. Under DR-036 these gates sit beside the readiness figure
+   that gates outreach; neither substitutes for the other. Dock and custody signals
+   stay deferred throughout.
+5. **The claims the repository will NOT make**, in any tense, about the puck, a
+   receiver, the software or a pilot: HIPAA compliance, certification or approval
+   (HIPAA certifies no badge technology; a human compliance review is required, not
+   optional — `CLAUDE.md`); "hospital disinfectant compatible" or any
+   cleaning-durability claim until the exact resin, markings, adhesive, antenna and
+   ferrite stack, gasket and regimen are tested (the document's own do-not-claim
+   line); "relay-proof", "clone-proof", or that any mitigation *prevents* an attack
+   (each raises assurance or reduces risk — none is a guarantee); on-device
+   enforcement (a puck or receiver locks, kiosks, restricts or wipes nothing; that is
+   the OS and Fleet MDM on a supervised device — golden rule 4); that a dock attach
+   identifies anyone; that any puck, receiver, reader dock, BLE or UWB hardware is
+   built, tested, shipping, piloted, partnered or certified; any cost figure as a
+   fact (the document's bands are estimates and are not reproduced).
+
+**What already existed, recorded rather than refused (DR-039 rule 3).** The FIDO2
+identity root, graded and verified (`docs/AUTHENTICATION_AND_CREDENTIAL_ARCHITECTURE.md:73`);
+a case-mounted FIDO2 token concept scoped to dual-control step-up
+(`docs/HARDWARE_ELEVATED_ACCESS_TOKEN.md:13`); attach = session / removal = restrict /
+forced removal = deny, built as `badge_binding`; the dock, custody and tamper fixture
+schema (`docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md:18`) and the SmartDock's continuous
+`present` / `removed` / `forced` read (`docs/SIGNALGRID_SMARTDOCK.md:44`); the
+division of authority; the discovery thresholds. All deferred design targets, none
+claimed as shipping. **Genuinely new:** the worker-carried token that moves between
+phone, tablet and desktop receivers (`pnpm run check:absence "session puck"`
+returned CORROBORATED across four probes on 2026-09-12, before the page existed);
+the prototype ladder and "no custom silicon first" as written doctrine; the
+lost-credential operating sequence (report lost → disable FIDO registration and
+physical credential → invalidate session mappings → reissue with a new keypair); the
+legacy-downgrade rule (a strong-enrolled worker is never authenticated on a legacy
+125 kHz read by the same multi-technology reader); the privacy constraint that an
+always-on presence token is an employee-tracking system unless retention is
+purpose-limited; the cleaning, ergonomics and accessibility requirement set for a
+carried token.
+
+**Boundary.** Nothing here touches `lib/*`, `/v1`, a connector, a proof, the
+decision path, `docs/PURPOSE.md`, the launch profile or the publication boundary
+in this change; the backlog items that will touch `lib/*` are each one reviewable
+PR with a proof, and item (a)'s launch-profile classification is the only profile
+edit this record authorizes. Building and claiming remain different acts (DR-021
+§2, DR-033 §4). Golden rules 1–4 apply unchanged: a puck integration that ever
+reached `native/ios/EnterpriseShell` would go around `DecisionEngine.swift` and
+`AppWorkflows.swift`, never through them.
+
+**Disclosure note.** This tree is public. Recording the concept here discloses it.
+The owner-gated *IP / disclosure posture* row in `docs/BUILD_BACKLOG.md` (the
+provisional-patent and repository-visibility decision) was open before this record
+and remains open; this record adds the document's substance and the tree's own
+prior art, and no invention disclosure, drawings or claims — those wait on that
+decision.
+
+**Evidence.** The owner's document, read in full (25 pages) before anything was
+written; three parallel read-only maps of the tree, each path:line re-read before
+citation; DR-020 (`docs/DECISION_RECORDS.md:1068` — hardware needs a record first),
+DR-021 (`:1111` — building unfrozen, claiming unchanged), DR-033 (`:1892` — Build /
+execution phase), DR-036 (`:2104` — the readiness figure), DR-039 (`:2275` — the
+absorption bar), DR-042 (`:2389` — the cascade items this record's item (b) joins);
+`docs/agent/DISCOVERY_LOG.md:112`–`149` (thresholds and tally); the gate outputs
+recorded in `docs/agent/EVIDENCE.md` (2026-09-12); the intake row in
+`docs/agent/RESOURCE_INTAKE.md`.
+
+**Reversal.** The owner reverses any line of this by saying so — it is his research
+and his call. Mechanically: to withdraw the hypothesis, delete
+`docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`, its three inbound links (`docs/INDEX.md`,
+`docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md`, `docs/HARDWARE_PARTNER_MATRIX.md`), the five
+backlog items and this record; the three-function doctrine then reverts to being
+implied by the separate dimensions rather than stated. To *advance* it, a
+discovery-gate row in item 4 must be met on the tally and quoted, and the bench
+prototype then gets its own decision record (DR-020's rule applies again at the
+hardware step, not only once); a prototype started on appetite rather than on a met
+gate is a violation of this record, not a reversal of it. The do-not-claim list in
+item 5 does not move on appetite either: a line leaves it only when the test or
+review that would make the claim true is recorded in `docs/agent/EVIDENCE.md`.

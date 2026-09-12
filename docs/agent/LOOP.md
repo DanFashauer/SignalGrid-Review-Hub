@@ -52,7 +52,32 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE FOUNDER'S THESIS IS ON THE RECORD
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SESSION PUCK IS ON THE RECORD AS A
+              HARDWARE HYPOTHESIS, NOT A PRODUCT (DR-043). The owner shared his own 25-page
+              research document ('Shared-Device Authentication Puck: Hardware and Form-Factor
+              Concept' - 'I'm going to blow your mind with this'). Read in full, held against
+              the tree with three read-only maps, every path:line re-read before citation.
+              Adopted under DR-039's bar: the three-function split (identity / custody binding
+              / ongoing presence) is doctrine for every session-gating surface; the puck or any
+              dock is a SOURCE OF EVIDENCE, never the policy engine (IdP owns identity, UEM
+              owns posture, PACS owns the physical credential, SignalGrid correlates); the
+              software half is five fail-closed backlog items built without hardware (attach
+              signal domain with unknown -> step_up never a grant; removal -> suspend joined to
+              DR-042's cascade items, no seventh; eight audit event names; a dock/undock/
+              re-dock simulator scenario carrying the policy matrix; a hardware tally column in
+              DISCOVERY_LOG); NO bench prototype, purchase or custom hardware until the
+              pre-registered gates are met (4 of 15 REQUIREMENT -> bench; 3 COMMITMENT ->
+              design-partner MVP; 5 PROBLEM with 0 COMMITMENT -> no-go; tally today 0/15, 0).
+              Substance in docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md with every vendor fact
+              attributed to the document; overlap recorded (badge_binding, dock/custody schema,
+              SmartDock, case-bay token, division of authority all pre-existed as deferred
+              design targets); new: worker-carried token across receivers, the prototype
+              ladder, the lost-credential sequence, the legacy-downgrade rule, the privacy
+              constraint. NOT claimed: HIPAA, disinfectant compatibility, relay-proof,
+              on-device enforcement, any hardware built. Disclosure noted - the tree is public
+              and the owner-gated IP-posture backlog row is still open. Nothing shipped moved;
+              custody/dock families stay deferred.
+              (Earlier 2026-09-12, cloud lane:) THE FOUNDER'S THESIS IS ON THE RECORD
               IN HIS OWN WORDS (DR-042): dictated, quoted verbatim in WHY_THIS_EXISTS.md
               under 'What only the founder can write' - the section that had been
               deliberately blank since that page was written - and tested clause by clause

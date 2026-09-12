@@ -1,6 +1,6 @@
 ---
 name: video-intake
-description: Turn a video the owner shares (a phone clip, a talk, a screen recording) into evidence this repository can use — frames through the vendored /watch skill, a transcript produced locally with faster-whisper (no key, no upload), and an intake row. Use whenever the owner shares footage, pastes a video link, or asks to watch or transcribe a video. The footage itself never enters the tree.
+description: Turn a video or audio the owner shares (a phone clip, a talk, a screen recording, a podcast link) into evidence this repository can use — frames through the vendored /watch skill, a transcript produced locally with faster-whisper (no key, no upload), and an intake row. Use whenever the owner shares footage, pastes a video link, or asks to watch or transcribe a video. The footage itself never enters the tree.
 ---
 
 # SignalGrid — Video intake
@@ -81,6 +81,26 @@ reason is stated.
 **Step 4 — leave nothing behind.** The `/watch` working directory and the transcript
 live under the scratchpad or the temp dir; the harness reclaims them. Do not delete
 with a recursive remove — the deny list refuses it, and nothing here needs it.
+
+## Where the substance lands
+
+Each clip resolves to a document, never to a summary of the clip:
+
+- **Buyer or market evidence** → a dated supporting paragraph in
+  `docs/company/ICP_EVIDENCE.md`, under the finding it supports, with its LIMITATION
+  stated first (one speaker, one company, not the target vertical). Quote the
+  speaker's own vocabulary when it is better than ours.
+- **A working practice** → an operating note in `docs/LANE_COORDINATION.md` or the
+  relevant skill, written as what this lane does from now on.
+- **Something to build** → a row in `docs/BUILD_BACKLOG.md`, phrased as the change
+  and the check that would fail without it.
+
+A clip that resolves to none of the three is logged and closed with that finding.
+Never paste a long transcript into a document; never let a speaker's enthusiasm
+become a capability sentence (the launch-claims gate and the launch profile govern
+what may be said to ship, whatever a video says); never attribute a private
+individual by name in a committed document. Audio-only material (a podcast, a voice
+memo) skips Step 1 and goes straight to Step 2.
 
 ## What this skill does not do
 

@@ -194,6 +194,87 @@ check("distinctAuthorizers is false when both identities are present and equal",
 check("distinctAuthorizers is null when one identity is absent (never guessed distinct)", normalizeDualControlRequest("d2", { ...CONFIRMED, approver: B({ identityRef: undefined }) }).distinctAuthorizers === null);
 check("distinctAuthorizers is true only when both are present and different", normalizeDualControlRequest("d3", CONFIRMED).distinctAuthorizers === true);
 
+// ── ABSENCE is not malformation (the brace-less `undefined || null → false` guards) ──
+//
+// Every field on the wire is optional, and an OMITTED field is silence, not a broken
+// assertion: the normalizer reads it as the fail-safe unknown/null, and an unknown can
+// never grant. Marking an absence `malformed` would be safe-but-FALSE — it tells an audit
+// reader "the host sent something we could not read" when the host sent nothing at all,
+// and it collapses the one distinction `RequestIntegrity` exists to keep. These pin the
+// three absent→false guards (enum / boolean / reference); with any of them disabled an
+// omitted field alone flips the envelope to malformed.
+for (const field of ["actionClass", "coPresence", "actionId"] as const) {
+  const norm = normalizeDualControlRequest("abs", { ...CONFIRMED, [field]: undefined } as DualControlRequestRaw);
+  check(`an omitted top-level '${field}' reads as ABSENT, never as malformed`, norm.requestIntegrity === "clean");
+}
+for (const field of [
+  "authenticatorClass", "userVerified", "boundToAction", "roleAuthorized",
+  "identityRef", "credentialRef",
+] as const) {
+  const norm = normalizeDualControlRequest("absa", { ...CONFIRMED, approver: B({ [field]: undefined } as never) });
+  check(`an omitted authorizer '${field}' reads as ABSENT, never as malformed`, norm.requestIntegrity === "clean");
+}
+// ...and the absence still cannot release the action — absent is unknown, not confirmed.
+check("an omitted authorizer field is clean AND cannot Grant (absent is unknown, not confirmed)",
+  ev({ ...CONFIRMED, approver: B({ userVerified: undefined }) }).outcome === "SecondAuthorizerRequired");
+
+// A PRESENT enum that is not a string at all — a number, a boolean, an object — is an
+// assertion we could not read. It must land on `malformed` and must not escape as a
+// thrown TypeError from `.trim()` on the way there (the junk-enum vectors above are all
+// strings, so nothing reached the non-string arm).
+for (const [where, req] of [
+  ["top-level actionClass", { ...CONFIRMED, actionClass: 7 }],
+  ["top-level coPresence", { ...CONFIRMED, coPresence: true }],
+  ["authorizer authenticatorClass", { ...CONFIRMED, approver: B({ authenticatorClass: 7 }) }],
+] as const) {
+  let threw = false;
+  let integrity: string | null = null;
+  try { integrity = normalizeDualControlRequest("nse", req as DualControlRequestRaw).requestIntegrity; }
+  catch { threw = true; }
+  check(`a NON-STRING ${where} is malformed, not a thrown TypeError`, threw === false && integrity === "malformed");
+}
+
+// ── the bounded prototype walk ────────────────────────────────────────────────────
+//
+// A hostile caller can hand back a fresh prototype forever (a Proxy `getPrototypeOf`), so
+// the walk is bounded. A chain longer than the bound is a shape we could not finish
+// reading, and fails closed to malformed. Each link here is KEY-LESS, so nothing but the
+// depth bound can flag it — and the short chain proves the bound is a bound, not a blanket
+// rejection of every object that has a prototype.
+const deepChain = (leaf: object, links: number): object => {
+  let proto: object = Object.prototype;
+  for (let i = 0; i < links; i += 1) proto = Object.create(proto) as object;
+  return Object.assign(Object.create(proto) as object, leaf);
+};
+check("a prototype chain LONGER than the bound fails closed to malformed",
+  normalizeDualControlRequest("dpl", { ...CONFIRMED, approver: deepChain(B(), 80) as AuthorizerAttestationRaw }).requestIntegrity === "malformed");
+check("a prototype chain SHORTER than the bound is read normally, not rejected",
+  normalizeDualControlRequest("dps", { ...CONFIRMED, approver: deepChain(B(), 4) as AuthorizerAttestationRaw }).requestIntegrity === "clean");
+
+// Beyond the object's own level, ANY key is unrecognized — including a correctly spelled
+// one. That is the harder case, not the softer one: values are read own-only, so an
+// inherited `userVerified: true` is a confirmation the caller asserted and nobody read.
+// The inherited-ALIAS vectors above are caught by the spelling check as well, so only a
+// known key isolates the depth clause.
+const protoKnownAuthorizer = normalizeDualControlRequest("pka", {
+  ...CONFIRMED,
+  approver: Object.assign(Object.create({ userVerified: true }) as object, B()) as AuthorizerAttestationRaw,
+});
+check("a RECOGNIZED key INHERITED by an authorizer is unrecognized at depth (asserted by the caller, read by nobody)",
+  protoKnownAuthorizer.requestIntegrity === "malformed");
+const protoKnownRequest = normalizeDualControlRequest("pkr",
+  Object.assign(Object.create({ coPresence: "confirmed" }) as object, { ...CONFIRMED }) as DualControlRequestRaw);
+check("a RECOGNIZED key INHERITED by the request envelope is unrecognized at depth too",
+  protoKnownRequest.requestIntegrity === "malformed");
+
+// A SYMBOL own key is unrecognized by the same membership test that catches a misspelled
+// string key: the known-key list holds strings, so a symbol is never a member. This is the
+// check that covers the deleted `typeof k === "symbol"` clause — if that ordering ever
+// changes, this is what fails.
+const symbolKeyed = Object.assign(B(), { [Symbol("smuggled")]: "x" }) as AuthorizerAttestationRaw;
+check("a SYMBOL own key on an authorizer marks the request malformed",
+  normalizeDualControlRequest("syk", { ...CONFIRMED, approver: symbolKeyed }).requestIntegrity === "malformed");
+
 // ── exhaustive (normalized): Granted requires ALL twelve confirmations ─────────────
 //
 // Enumerate the full normalized decision space. actionId is fixed present (its null case

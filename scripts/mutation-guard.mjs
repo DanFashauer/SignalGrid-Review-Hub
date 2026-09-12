@@ -387,6 +387,7 @@ export const TARGETS = [
 
   {
     proof: "proof:benchmark-selection",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
       "lib/integrations/src/integrations/benchmark-selection/benchmark-selection-connector.ts",
@@ -513,6 +514,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:dual-control",
+    oneLine: true,
     files: [
       "lib/dual-control/src/evaluate.ts",
       "lib/dual-control/src/normalize.ts",

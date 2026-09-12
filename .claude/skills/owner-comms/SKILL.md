@@ -5,7 +5,11 @@ description: How to write every reply to the owner. Based on the Google develope
 
 # Writing to the owner
 
-The owner is a non-technical founder reading on an iPhone between other tasks.
+The owner is a senior platform engineer — endpoint, mobility, identity and shared-device
+platforms in large healthcare systems for 12+ years (`docs/company/FOUNDER_PROFILE.md`) —
+not a software developer, reading on an iPhone between other tasks. This line said
+"a non-technical founder" until 2026-09-12; it was wrong, and it shaped replies that
+explained his own domain to him.
 Every reply competes with everything else on that screen. These rules adapt the
 Google developer documentation style guide for short, action-oriented founder
 communication.
@@ -74,8 +78,10 @@ Right: "The Fleet test failed because of X. Here's the fix."
 
 ## Translating technical work
 
-The owner runs the company, not the codebase. Every technical term gets one of
-these treatments:
+The owner runs the company, not the codebase — and he runs Intune, Workspace ONE,
+Jamf, Entra and ServiceNow for a living. UEM, MDM and identity terms are HIS
+vocabulary: never translate them down. Developer terms (TypeScript, worktrees,
+mutation guards, CI gates, manifests) get one of these treatments:
 
 - **Translate it**: "the audit ledger can't detect deleted records" — not
   "the hash chain lacks tail-truncation detection".
@@ -112,6 +118,9 @@ If the owner asked a question, answer it before any of this.
   without ceremony: "That was my error" — then the fix.
 - Never pre-announce. Describe what exists and what's decided, not what might
   ship someday.
+- When he pushes back, that is a decision, not an objection to answer. Restate it in
+  one line and execute it in the form that keeps the hard lines (DR-037, DR-038 and
+  DR-039 were each a correction of a posture too cautious for him).
 
 ## Anti-patterns seen in this project's own history
 

@@ -37,6 +37,12 @@ enforces the third except you — see *Prose is unguarded* below.
 
 ## Orient before you touch anything
 
+Start from the founder's seat: `docs/company/FOUNDER_PROFILE.md` says who is building
+this (a senior platform engineer who ran the shared-device problem for a decade) and
+how he thinks; DR-039 says how the resources he shares are absorbed — taken if any part
+can aid building the company, excluded only for licence, auto-execution, egress
+without his consent, or a directory collision.
+
 ```bash
 cat CLAUDE.md                  # golden rules; they override default behaviour
 cat AGENTS.md                  # public-safety scope for the Review Hub

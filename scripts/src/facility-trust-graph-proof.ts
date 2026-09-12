@@ -699,6 +699,15 @@ check("an observation whose PROTOTYPE carries a recognized key ('confidence') is
   normalizeLocationObservation("proto", graph,
     Object.assign(Object.create({ confidence: 0.99 }), clean()) as LocationObservationRaw,
     { requirement: MED_REQ, referenceTime: REF }).reportIntegrity === "malformed");
+// A SYMBOL own key is refused by the SAME membership test the string keys use — the
+// separate `typeof k === "symbol"` guard that stood beside it was deleted as shadowed
+// (the sweep showed nothing noticed), so this is what keeps the behaviour stated.
+const SYM = Symbol.for("sg.proof.gps_hint");
+check("a SYMBOL own key refuses on every surface — an observation, an ADT assignment and an upstream record all refuse a field that cannot even be named as a string",
+  normalizeLocationObservation("sym", graph, { ...clean(), [SYM]: "trust me" } as LocationObservationRaw,
+    { requirement: MED_REQ, referenceTime: REF }).reportIntegrity === "malformed" &&
+  resolveClinicalAssignment(graph, { bed: "0312-A", [SYM]: "trust me" } as ClinicalAssignmentRaw, EHR).outcome === "malformed" &&
+  projectUpstreamRecord(graph, { ...upstreamBase, [SYM]: "trust me" }, "unit").refusal === "UNRECOGNIZED_FIELD");
 check("an ADT assignment behind a 100-deep prototype chain is malformed (the depth ceiling), and one whose prototype carries a recognized key ('bed') is malformed too",
   resolveClinicalAssignment(graph, Object.assign(Object.create(deepProto), { bed: "0312-A" }) as ClinicalAssignmentRaw, EHR).outcome === "malformed" &&
   resolveClinicalAssignment(graph, Object.assign(Object.create({ bed: "0312-A" }), { room: "0312" }) as ClinicalAssignmentRaw, EHR).outcome === "malformed");

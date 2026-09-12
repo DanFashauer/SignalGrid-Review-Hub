@@ -108,8 +108,10 @@ function hasUnrecognizedKey(record: object, known: readonly string[]): boolean {
       if (depth >= MAX_PROTOTYPE_DEPTH) return true;
       for (const k of Reflect.ownKeys(o)) {
         if (depth > 0) return true;
-        if (typeof k === "symbol") return true; // inert: the key-name test below already returns true for any symbol (a readonly string[] never contains one); kept as the narrowing that lets known.includes(k) typecheck
-        if (!known.includes(k)) return true;
+        // A SYMBOL own key needs no test of its own: `known` holds only strings, so the
+        // unrecognized-key check below already refuses every symbol (`includes` of a symbol is
+        // always false — the widening is a TYPE cast only, not a behaviour change).
+        if (!(known as readonly (string | symbol)[]).includes(k)) return true;
       }
       o = Object.getPrototypeOf(o) as object | null;
     }

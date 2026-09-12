@@ -1894,3 +1894,22 @@ wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read,
 Surface-read-coverage gate passed — every tracked file belongs to a surface, every surface has a row, and every read in it is attributable.
 ```
 Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated total to the files a person can actually read again; the two mailbox rows print `mailbox` in the Files column. `lane-deliver.mjs` keeps regenerating the page on every delivery — idempotent now, and still the catch for a page stale for any other reason. What this does NOT fix: a PR that itself changes the tracked-file set still moves the page, and two such PRs still conflict on it; that is the page doing its job.
+## 2026-09-12 — "dual-control joins the brace-less mutation sweep with zero survivors: seven one-line guards in the request normalizer, six now pinned by checks that fail without them and one deleted as shadowed"
+Command:  the `oneline-cond-false` mutator was opt-in and dual-control had not joined; opting it in surfaced 7 survivors, all in `lib/dual-control/src/normalize.ts` — the three `v === undefined || v === null → false` arms (absence read as malformed was never asserted to be WRONG), the `typeof v !== "string"` arm of `enumMalformed` (every junk-enum vector was a string, so nothing reached it), the prototype walk's depth bound, the `depth > 0` clause (the inherited-key vectors were all MISSPELLED keys, caught by the spelling check too), and the `typeof k === "symbol"` clause.
+```
+node scripts/mutation-guard.mjs --proof=proof:dual-control ; pnpm run -s proof:dual-control | tail -1
+node scripts/check-proof-counts.mjs | tail -1 ; pnpm run -s review:invariants | tail -1
+```
+Output:
+```
+   lib/dual-control/src/evaluate.ts — 19 mutations
+   lib/dual-control/src/normalize.ts — 26 mutations
+mutations=45 killed=43 hung=0 known-inert=2 survivors=0
+figures=mutations=45,killed=43,inert=2,survivors=0
+brace-less sweep (oneline-cond-false): 1 of 1 targets opted in; 0 pending (REPORTED, never fatal — a target joins when its one-line guards are pinned or documented inert)
+Mutation guard passed — every registered guard is falsifiable, or documented as inert.
+summary=pass (78/78)
+Proof-count check passed — all 59 documented counts match their proofs.
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+```
+Verdict:  holds. Six guards gained checks that exercise the real hostile input (a non-string enum that would throw from `.trim()`, an 80-link prototype chain against a 4-link control, an inherited `userVerified: true`, a symbol own key, and every optional field omitted one at a time asserting `clean` — absence is silence, not a broken assertion, and marking it malformed would be safe-but-false). The `typeof k === "symbol"` clause was DELETED as shadowed: `known` holds strings only, so the `!knownKeys.includes(k)` check below it flags every symbol at depth 0 and the `depth > 0` clause above it flags every deeper level; the new symbol check is what fails if that ordering ever changes. Proof grows 60 → 78 checks (`DUAL_CONTROL.md`, `INTEGRATION_CATALOG.md` updated). What this does NOT change: no evaluator logic moved — `evaluate.ts` had no survivors — and the census line above counts only the target this filtered run swept, so it says nothing about how many other families have joined the brace-less sweep.

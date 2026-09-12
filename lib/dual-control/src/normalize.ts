@@ -71,14 +71,20 @@ const MAX_PROTOTYPE_DEPTH = 64;
  *  own-only it would otherwise be asserted by the caller and read by nobody. Bounded,
  *  because a Proxy may return a fresh prototype on every call. */
 function hasUnrecognizedKey(obj: object, known: readonly string[]): boolean {
+  // Widened so a symbol key can be tested against the SAME membership check as a string
+  // one: `known` holds strings only, so `includes` is false for every symbol and flags it
+  // as unrecognized. A separate `typeof k === "symbol"` clause sat here and was deleted
+  // 2026-09-12 as shadowed — covered by `!knownKeys.includes(k)` below at depth 0 and by
+  // the `depth > 0` clause above it at every deeper level (pinned by the proof check
+  // "a SYMBOL own key on an authorizer marks the request malformed").
+  const knownKeys: readonly (string | symbol)[] = known;
   try {
     let o: object | null = obj;
     for (let depth = 0; o !== null && o !== Object.prototype; depth += 1) {
       if (depth >= MAX_PROTOTYPE_DEPTH) return true;
       for (const k of Reflect.ownKeys(o)) {
         if (depth > 0) return true;
-        if (typeof k === "symbol") return true;
-        if (!known.includes(k)) return true;
+        if (!knownKeys.includes(k)) return true;
       }
       o = Object.getPrototypeOf(o) as object | null;
     }

@@ -52,8 +52,18 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE COVERAGE PAGE NO LONGER MOVES ON LANE
-              MAIL (branch lane/cloud-coverage-mailbox-trees-20260912-003000Z): the mailbox trees
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE MAC TICK NO LONGER FLOODS MAINLINE
+              (branch lane/cloud-tick-heartbeat-throttle-20260912-005000Z; owner merges): a
+              SKIPPED tick result was exempt from the quiet throttle, so a checkout parked on
+              mac/land-641-645-638 pushed a heartbeat to Alpha every 5 minutes, each push
+              starting four workflows, cancelling the mainline CI run of the merge before it,
+              and exhausting the GITHUB_TOKEN budget until check-ci-liveness failed #654 on a
+              403. The throttle now keys on an UNCHANGED result (a changed one still delivers
+              at once), and the four push-triggered workflows ignore heartbeat-only pushes.
+              The owner said YES (2026-09-12) to the cloud lane merging green product PRs
+              itself - recorded as DR-037 - so the cloud now lands #656 (merged aa5c8151),
+              this one, #653 (Mac landing of #641+#645+#638), #649 and #654 in that order. (Earlier 2026-09-12, cloud lane:) THE COVERAGE PAGE NO LONGER MOVES ON LANE MAIL
+              (#656, merged aa5c8151): the mailbox trees
               (artifacts/lane-messages, artifacts/agent-heartbeats) stay claimed surfaces but
               their record counts are withheld from the render, so a send/ack/batch delivery
               leaves docs/agent/SURFACE_REVIEW_COVERAGE.md byte-identical (self-test proves

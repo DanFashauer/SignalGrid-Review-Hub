@@ -1898,7 +1898,7 @@ Verdict:  holds. The page's in-scope figure drops from the mailbox-inflated tota
 Command:  the target opted in with `oneLine: true`; five survivors got proof checks that exercise the real hostile input (a non-string enum, a prototype-carried KNOWN key, an instant `Date.parse` accepts but the strict Zulu shape refuses, a blank entry in the operator's requirement list, a title the catalog does not carry asked of `highestVersionFor`); two were genuinely shadowed and deleted with the covering check named in a comment (`typeof k === "symbol"` — `known` holds strings, so the allowlist line below already refuses a symbol; `assessmentMs === null || referenceMs === null` — `ageMs` returns null for either, which the `age === null` line below resolves to `unknown`).
 ```
 node scripts/mutation-guard.mjs --proof=proof:benchmark-selection
-pnpm run -s proof:benchmark-selection ; pnpm run -s typecheck ; node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs ; pnpm run -s review:invariants ; node scripts/check-connector-discipline.mjs
+pnpm run proof:benchmark-selection ; pnpm run typecheck ; node scripts/check-proof-counts.mjs ; node scripts/check-proof-figures.mjs ; pnpm run review:invariants ; node scripts/check-connector-discipline.mjs
 ```
 Output:
 ```

@@ -93,6 +93,15 @@ check("lifetime boundaries: alive THROUGH the expiry instant inclusive; expired 
   deriveLifetimeStanding(null, Date.parse("2026-07-31T14:00:00Z"), Date.parse("2026-07-31T14:00:00Z")) === "within_lifetime" &&
   deriveLifetimeStanding(null, Date.parse("2026-07-31T14:00:00Z"), Date.parse("2026-07-31T14:00:00.001Z")) === "expired" &&
   ev(bootstrap({ issued_at: "2026-07-31T16:00:00Z" })).reasonCode === "REPORT_MALFORMED");
+check("a window that expires BEFORE it was issued derives lifetime `unknown` — the malformed rung is not the only thing holding that line, so the derivation itself never reads a contradictory window as alive",
+  normalizeBootstrapReport("s-1", bootstrap({ issued_at: "2026-07-31T16:00:00Z" }), { referenceTime: REF }).lifetime === "unknown" &&
+  deriveLifetimeStanding(Date.parse("2026-07-31T16:00:00Z"), Date.parse("2026-07-31T15:00:00Z"), Date.parse("2026-07-31T14:00:00Z")) === "unknown");
+check("instants must be strict ISO-8601 ZULU: an offset-bearing or zone-less timestamp is UNREADABLE, never silently re-based onto a wall clock — the expiry reads `unbounded` and malformed, and an unreadable REFERENCE leaves the lifetime `unknown` rather than alive",
+  normalizeBootstrapReport("s-1", bootstrap({ expires_at: "2026-07-31T15:00:00+02:00" }), { referenceTime: REF }).lifetime === "unbounded" &&
+  ev(bootstrap({ expires_at: "2026-07-31T15:00:00+02:00" })).reasonCode === "REPORT_MALFORMED" &&
+  ev(bootstrap({ expires_at: "2026-07-31T15:00:00" })).reasonCode === "REPORT_MALFORMED" &&
+  normalizeBootstrapReport("s-1", bootstrap(), { referenceTime: "2026-07-31 14:00:00" }).lifetime === "unknown" &&
+  normalizeBootstrapReport("s-1", bootstrap(), { referenceTime: "2026-07-31 14:00:00" }).referenceTime === null);
 
 // ── issuance defects: the PASS is wrong, not just this session ──────────────────
 check("a pass MINTED BROAD → alert — an issuance defect someone upstream must see; it outranks every step_up on the record",
@@ -126,6 +135,10 @@ check("an unrecognized key, a junk enum spelling, a junk instant, a non-object r
   ev(bootstrap({ expires_at: "tomorrow" })).reasonCode === "REPORT_MALFORMED" &&
   ev("bootstrap" as unknown as BootstrapCredentialReportRaw).reasonCode === "REPORT_MALFORMED" &&
   ev(new Proxy({}, { ownKeys: () => { throw new Error("hostile"); } }) as BootstrapCredentialReportRaw).reasonCode === "REPORT_MALFORMED");
+check("a NON-STRING value in an enum slot is a malformed ASSERTION, never a quiet fall to the unknown rung — a number, a boolean and an object each refuse",
+  ev(bootstrap({ scope: 42 })).reasonCode === "REPORT_MALFORMED" &&
+  ev(bootstrap({ one_time: true })).reasonCode === "REPORT_MALFORMED" &&
+  ev(bootstrap({ issuance_verification: { kind: "help_desk" } })).reasonCode === "REPORT_MALFORMED");
 check("a junk SCOPE, ONE-TIME, or ISSUANCE spelling is malformed — never quietly coerced to the unknown rung",
   ev(bootstrap({ scope: "wide" })).reasonCode === "REPORT_MALFORMED" &&
   ev(bootstrap({ one_time: "multi" })).reasonCode === "REPORT_MALFORMED" &&
@@ -136,6 +149,17 @@ check("a report whose property GETTER throws, and Object.prototype itself posing
 check("enum spellings are case/whitespace-folded; an inherited key is the prototype's claim, not this report's (and is refused as unrecognized)",
   ev(bootstrap({ credential_class: " Bootstrap " })).posture === "bootstrap_in_scope" &&
   ev(Object.create({ pass_hint: "leak" }, Object.getOwnPropertyDescriptors(bootstrap())) as BootstrapCredentialReportRaw).reasonCode === "REPORT_MALFORMED");
+/** A report buried under a prototype chain LONGER than the walk's own bound. Every
+ *  level is empty, so no inherited key can stop the walk — only the bound can. */
+const deepProtoChainReport = (): BootstrapCredentialReportRaw => {
+  let proto: object = Object.prototype;
+  for (let i = 0; i < 80; i += 1) proto = Object.create(proto) as object;
+  return Object.create(proto, Object.getOwnPropertyDescriptors(bootstrap())) as BootstrapCredentialReportRaw;
+};
+check("the prototype walk fails CLOSED on every shape: a report buried under a chain deeper than the walk's bound is malformed (the bound refuses, it does not give up and call the report clean), an inherited own key that spells a KNOWN field is still the prototype's claim and is refused, and a SYMBOL own key is refused as unrecognized",
+  ev(deepProtoChainReport()).reasonCode === "REPORT_MALFORMED" &&
+  ev(Object.create({ scope: "broad" }, Object.getOwnPropertyDescriptors(bootstrap())) as BootstrapCredentialReportRaw).reasonCode === "REPORT_MALFORMED" &&
+  ev((() => { const r = { ...bootstrap() } as Record<PropertyKey, unknown>; r[Symbol("pass_hint")] = "leak"; return r as unknown as BootstrapCredentialReportRaw; })()).reasonCode === "REPORT_MALFORMED");
 const norm = normalizeBootstrapReport("s-1", bootstrap(), { referenceTime: REF });
 check("evidence is carried verbatim or null — never a fabricated placeholder",
   norm.idpSubjectRef === "idp-91c4" && norm.expiresAt === "2026-07-31T15:00:00Z" &&

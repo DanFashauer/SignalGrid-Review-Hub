@@ -386,6 +386,7 @@ export const TARGETS = [
 
   {
     proof: "proof:benchmark-selection",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/benchmark-selection/evaluate.ts",
       "lib/integrations/src/integrations/benchmark-selection/benchmark-selection-connector.ts",

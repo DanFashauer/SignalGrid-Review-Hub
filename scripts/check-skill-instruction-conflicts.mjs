@@ -128,7 +128,8 @@
 // those numbers anywhere — the summary line prints the current ones.
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -140,6 +141,11 @@ const VENDORED = ".claude/skills/VENDORED.md";
 const FILE_FLOOR = 20;
 const CANDIDATE_FLOOR = 200;
 const CONCURRENCY = 8;
+// A hook that never closes hangs this Promise — and with it the whole gate and all
+// of preflight — forever. Reported by the Mac lane 2026-09-13: a ReDoS in the
+// deny-list hook's unwrap loop hung it on one command under BSD sed. A hung hook is
+// neither pass nor fail; the doctrine is fail-closed, so a timeout is FATAL.
+const HOOK_TIMEOUT_MS = 10000;
 
 const FENCE_LANGS = new Set(["bash", "sh", "shell", "console"]);
 
@@ -292,41 +298,60 @@ export function isOverridden(entries, relPathFromSkills, line) {
 
 class HookFatal extends Error {}
 
-/** One PreToolUse call, shaped exactly as Claude Code sends it. */
-function askHook(hookPath, command) {
+/** One PreToolUse call, shaped exactly as Claude Code sends it.
+ *  @param {number} [timeoutMs] override for the self-test only; the real default
+ *    is HOOK_TIMEOUT_MS. A hook that does not close within it is killed and the
+ *    call rejects fail-closed, naming the command — never hangs, never allows. */
+function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn("bash", [hookPath], { cwd: repo, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
+    // Whichever of {timeout, error, EPIPE, close} fires FIRST settles the Promise;
+    // the rest must be no-ops — a killed child still emits 'close' after the timeout
+    // already rejected, and a double-settle would either throw or resolve an
+    // already-failed call to allow.
+    let settled = false;
+    const settle = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(arg);
+    };
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      settle(reject, new HookFatal(`${hookPath} did not answer within ${timeoutMs}ms judging ${JSON.stringify(command)} — it hung (fail-closed).`));
+    }, timeoutMs);
     child.stdout.on("data", (d) => { stdout += d; });
     child.stderr.on("data", (d) => { stderr += d; });
-    child.on("error", (e) => reject(new HookFatal(`could not execute ${hookPath}: ${e.message}`)));
+    child.on("error", (e) => settle(reject, new HookFatal(`could not execute ${hookPath}: ${e.message}`)));
     // The write below can fail (EPIPE) when the child is gone before the payload lands —
     // seen 2026-09-12 under three parallel preflights, where it surfaced as an UNHANDLED
     // 'error' event that crashed the self-test instead of a gate verdict. An unasked hook
     // is a hook that could not be executed: FATAL, fail-closed, never an allow.
-    child.stdin.on("error", (e) => reject(new HookFatal(`could not deliver the call to ${hookPath}: ${e.code ?? e.message}`)));
+    child.stdin.on("error", (e) => settle(reject, new HookFatal(`could not deliver the call to ${hookPath}: ${e.code ?? e.message}`)));
     child.on("close", (code) => {
+      if (settled) return;
       if (code !== 0) {
-        reject(new HookFatal(`${hookPath} exited ${code} judging ${JSON.stringify(command)} — stderr: ${stderr.trim()}`));
+        settle(reject, new HookFatal(`${hookPath} exited ${code} judging ${JSON.stringify(command)} — stderr: ${stderr.trim()}`));
         return;
       }
       const raw = stdout.trim();
       if (raw === "") {
-        resolvePromise(false);
+        settle(resolvePromise, false);
         return;
       }
       let parsed;
       try {
         parsed = JSON.parse(raw);
       } catch {
-        reject(new HookFatal(`${hookPath} answered something this gate cannot parse as JSON: ${raw.slice(0, 200)}`));
+        settle(reject, new HookFatal(`${hookPath} answered something this gate cannot parse as JSON: ${raw.slice(0, 200)}`));
         return;
       }
       const decision = parsed?.hookSpecificOutput?.permissionDecision;
-      if (decision === "deny") resolvePromise(true);
-      else if (decision === undefined || decision === "allow") resolvePromise(false);
-      else reject(new HookFatal(`${hookPath} answered permissionDecision=${JSON.stringify(decision)}, which this gate cannot judge`));
+      if (decision === "deny") settle(resolvePromise, true);
+      else if (decision === undefined || decision === "allow") settle(resolvePromise, false);
+      else settle(reject, new HookFatal(`${hookPath} answered permissionDecision=${JSON.stringify(decision)}, which this gate cannot judge`));
     });
     child.stdin.end(JSON.stringify({ tool_name: "Bash", tool_input: { command } }));
   });
@@ -605,6 +630,32 @@ async function selfTest() {
     fatal = e instanceof HookFatal;
   }
   check("a hook that cannot be executed is FATAL (fail-closed), not an allow", fatal);
+
+  // 7b. a hook that HANGS (never closes) must be killed and rejected within the
+  //     timeout, NAMING the command — not left to hang the gate and preflight
+  //     forever. Reported by the Mac lane 2026-09-13 (ReDoS in the deny-list hook
+  //     under BSD sed). A short injected timeout keeps this test fast; the real
+  //     default (HOOK_TIMEOUT_MS) is untouched.
+  const hangStub = resolve(tmpdir(), `sg-hang-hook-${process.pid}.sh`);
+  writeFileSync(hangStub, "sleep 30\n");
+  const hangCommand = "echo this-command-name-must-appear";
+  let hangFatal = false;
+  let hangNamed = false;
+  const hangStarted = Date.now();
+  try {
+    await askHook(hangStub, hangCommand, 1000);
+  } catch (e) {
+    hangFatal = e instanceof HookFatal;
+    hangNamed = e instanceof HookFatal && e.message.includes(JSON.stringify(hangCommand));
+  } finally {
+    try { unlinkSync(hangStub); } catch { /* best-effort */ }
+  }
+  const hangElapsed = Date.now() - hangStarted;
+  check(
+    "a hook that HANGS is killed and REJECTS with HookFatal within the timeout, naming the command",
+    hangFatal && hangNamed && hangElapsed < 5000,
+    `fatal=${hangFatal} named=${hangNamed} elapsed=${hangElapsed}ms`,
+  );
 
   // 8. plant/remove against the REAL tree: the real files plus one planted fence
   //    must yield exactly one MORE finding than the real files alone.

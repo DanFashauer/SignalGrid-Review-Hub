@@ -46,7 +46,14 @@ judge() {
   i=0
   while [ "$i" -lt 4 ]; do
     # `-c`, `-lc`, `-ec`, `-x -c` … any flag cluster ending in c introduces the payload.
-    next=$(printf '%s' "$unwrapped" | sed -E "s/(^| )(sh|bash|zsh|dash) (-[A-Za-z]+ )*-[A-Za-z]*c '([^']*)'/\1\2 -c \4/g; s/(^| )(sh|bash|zsh|dash) (-[A-Za-z]+ )*-[A-Za-z]*c \"([^\"]*)\"/\1\2 -c \4/g")
+    # The leading `-` is factored OUT of the flag-run star so the run is `-([A-Za-z]+ -)*`
+    # — each iteration ends in the ` -` delimiter, giving a flag run exactly ONE parse.
+    # The old form `(-[A-Za-z]+ )*-[A-Za-z]*c` had two quantifiers that could both claim a
+    # c-ending flag token (adjacent ambiguous quantifiers), which catastrophically
+    # backtracks on BSD sed (Mac) for a long flag run with no closing quote — GNU sed's DFA
+    # hides it, so only the Mac hung. Matches the SAME language (proven by differential test
+    # old≡new over a wrapped/pathological corpus); only the backtracking cost changed.
+    next=$(printf '%s' "$unwrapped" | sed -E "s/(^| )(sh|bash|zsh|dash) -([A-Za-z]+ -)*[A-Za-z]*c '([^']*)'/\1\2 -c \4/g; s/(^| )(sh|bash|zsh|dash) -([A-Za-z]+ -)*[A-Za-z]*c \"([^\"]*)\"/\1\2 -c \4/g")
     [ "$next" = "$unwrapped" ] && break
     unwrapped=$next
     i=$((i + 1))
@@ -94,6 +101,14 @@ if [ "${1:-}" = "--self-test" ]; then
   expect_deny "git branch -D main"
   expect_allow "git branch -d merged-topic"
   expect_allow "echo 'sudo is not available here'"
+  # ReDoS regression (Mac lane, 2026-09-13): a long flag run with no closing quote
+  # and no forbidden pattern must judge quickly and ALLOW. The old adjacent-ambiguous
+  # unwrap quantifiers hung BSD sed here; the linear form returns instantly. On a
+  # reintroduced ReDoS this whole self-test would hang, which is the signal.
+  redos_input="bash"
+  for k in $(seq 1 200); do redos_input="$redos_input -x"; done
+  redos_input="$redos_input 'no closing quote and nothing forbidden"
+  expect_allow "$redos_input"
   # The input path: unreadable stdin must DENY, and a well-formed harmless call must ALLOW.
   if printf 'not json' | bash "$0" | grep -q '"deny"'; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "  ✗ unreadable stdin should DENY"; fi
   if [ -z "$(printf '{"tool_input":{"command":"ls -la"}}' | bash "$0")" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "  ✗ a harmless command should ALLOW"; fi

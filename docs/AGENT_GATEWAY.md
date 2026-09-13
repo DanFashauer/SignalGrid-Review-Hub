@@ -82,10 +82,60 @@ Every boundary above transfers, and two are stronger:
   deterministic core with **no model at all**; a zero-egress build lane is coherent with that
   residency posture but is not the same thing and does not put inference into the product.
 
+## The routing brain — Switchyard
+
+[Switchyard](https://github.com/NVIDIA-NeMo/Switchyard) (NVIDIA, Apache-2.0) sits a layer
+ABOVE the access gateways above. Where OmniRoute and LM Studio decide *how to reach* a
+model, Switchyard decides *which* model each call should go to — "route each LLM call to
+the cheapest model that can still do the job, without changing a line of your agent." It
+preserves native OpenAI and Anthropic API compatibility, so it drops into the same "point
+the lane's base URL at an endpoint" mechanism (step 3 above) and can treat an OmniRoute or
+LM Studio endpoint as one of its own targets.
+
+Three integration shapes, matching how a lane already runs: **embed the library**
+(`switchyard-libsy`, Python `nemo-switchyard` / Rust — your harness makes every model call,
+Switchyard only picks the model, so transport, retries and credentials stay yours), **run
+the standalone proxy** (`switchyard-server`, OpenAI+Anthropic-compatible, Demo-grade only),
+or **plug into a gateway** (LiteLLM router, NeMo Relay). Its routing algorithms are the part
+that matters for the org's own tiered agent work: **escalation** (start on an efficient
+model; an LLM judge escalates to a capable one on detected issues) and **advisor-gate** (a
+stronger model approves a weaker one's plans and "done" claims, or sends it back) are almost
+exactly the shape of the standing multi-tier pipeline — cheap model does the slice, a
+stronger model reviews, escalate only when the work needs it. NVIDIA reports Terminal-Bench
+2.1 at 95-99% of an Opus-4.8 baseline's accuracy for 13-30% less cost.
+
+Where it fits here:
+
+- **The standing multi-tier pipeline's routing layer** — the concrete "route bulk work to
+  the cheapest capable model, escalate the hard slices" mechanism, running *over* the
+  provider access OmniRoute/LM Studio give it.
+- **A candidate backend for the model-routing tap** (`docs/DECISION_RECORDS.md`, DR-035, the
+  chore-only, report-only helper): the tap decides *whether* a low-stakes, fully-recheckable
+  task may leave the main model; Switchyard's `libsy` is a ready-made *which-model* picker
+  for that path.
+
+Every boundary above transfers unchanged, and one is sharpest:
+
+- **Never in the decision path.** Switchyard is LLM-judge routing — nondeterministic and
+  network-dependent by construction. Nothing under `lib/*`, `artifacts/api-server`'s `/v1`
+  decision path, a connector, or a proof may call, import, or depend on it. A model must
+  never decide a verdict, and a router that *chooses the model* is one layer further from
+  determinism, not closer (golden rule 2).
+- **Keys out of the tree.** Its `routes.toml` reads provider keys from the environment
+  (`api_key_env`); those stay owner secrets, exactly as OmniRoute's do.
+- **By reference, pinned, not run in a live session.** Adopted by reference (Apache-2.0),
+  not vendored, not a dependency here. It is **pre-1.0** — its components range Demo/Alpha/
+  Beta and the README says pin the version you integrate. Its install paths build from
+  source (`pip install git+…`, `cargo install`), which is install-time execution; per DR-041
+  and DR-022 it is **not** cloned or built into a live working session. When the pipeline
+  actually runs it, it runs in an isolated per-run container with env-only keys, never
+  touching this checkout or the decision path.
+
 ## What this repo does and does not carry
 
-- **Carries:** this adoption record, DR-029, and the intake row. That is the whole
-  in-tree footprint by design.
-- **Does not carry:** the gateway itself, its dependencies, any provider key, or any code
-  path that reaches it. Removing OmniRoute from the org is deleting three documents; the
-  product is unaffected, by construction.
+- **Carries:** this adoption record (OmniRoute under DR-029, plus the LM Studio and
+  Switchyard sections above), and their intake rows. That is the whole in-tree footprint by
+  design.
+- **Does not carry:** any gateway or router itself, its dependencies, any provider key, or
+  any code path that reaches one. Removing OmniRoute, LM Studio or Switchyard from the org
+  is deleting documentation; the product is unaffected, by construction.

@@ -14,9 +14,9 @@ the standard passes so the collection is used consistently instead of ad hoc.
 
 | Pass | Command | Chains | Green when |
 | --- | --- | --- | --- |
-| Review a change / PR | `/review-pass` | signalgrid-reviewer + fail-closed-auditor + code-reviewer, plus verdict-core-reader / gate-and-proof-engineer / security-reviewer when the diff warrants; findings verified | `preflight` + `verify:breadth` green, `test:api` N/N if the API moved; findings ranked |
-| Refactor | `/refactor-pass` | refactor-cleaner + ponytail (ultra) | `typecheck` + `review:invariants` + `preflight` green, one runnable check left behind |
-| Fix the build | `/build-fix` | build-error-resolver, minimal diff | the failing check, re-run, now passes (quoted) |
+| Review a change / PR | `/review-pass` | DR-024 stack: ponytail-review FIRST, then fail-closed-auditor + security-reviewer + code-reviewer (+ verdict-core-reader / gate-and-proof-engineer by surface); the signalgrid-reviewer discipline applied as a SKILL, not a spawned agent; findings verified | `preflight` + `verify:breadth` green, `test:api` N/N if the API moved; findings ranked |
+| Refactor (`lib/` only) | `/refactor-pass` | refactor-cleaner + ponytail (ultra), dead-code via typecheck + `check-package-reachability.mjs` + `git grep` (never `npx knip/depcheck/ts-prune`) | `typecheck` + `review:invariants` + `preflight` + `verify:breadth` green, one runnable check left behind |
+| Fix the build | `/build-fix` | routed by failing surface: build-error-resolver (`artifacts/`), gate-and-proof-engineer (`scripts/`); decision paths + Swift twins escalate | the failing check, re-run, now passes (quoted) |
 
 Each command file carries its own **failure mode** — read it before running.
 

@@ -108,6 +108,13 @@ the build lane's model-routing doctrine is already set by **DR-047** (usage-limi
 and token-smart tiering), and Switchyard's default behavior conflicts with it. See "Why it
 is not yet the router" below; promotion from candidate to router has explicit prerequisites.
 
+Its placement is governed by **DR-050** (Mac = always-on live brain, cloud = final review
+board, owner-directed 2026-09-13), whose resource-placement table routes Switchyard here as a
+cloud-review-board, adopt-by-reference item: it runs fully on the Mac (no GPU, no keys) but
+its two jobs are already covered — OmniRoute (DR-029) is the gateway and DR-047 owns
+Claude-tier selection — so it is a documented candidate, not a live component. This PR adds
+no decision record of its own; DR-050 is that record.
+
 Three integration shapes, matching how a lane already runs: **embed the library**
 (`switchyard-libsy`, Python `nemo-switchyard` / Rust — your harness makes every model call,
 Switchyard only picks the model, so transport, retries and credentials stay yours), **run

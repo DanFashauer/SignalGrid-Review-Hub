@@ -127,29 +127,36 @@ powers a coordinating session and its subagents: each spawn selects an explicit 
 (rule 1), tier is assigned by work-class deterministically (rule 2), and on an unavailable
 tier the work resolves UP to Opus, with Opus judgment work WAITING rather than downgrading
 (rules 3-4). Switchyard's default is the opposite: a runtime LLM judge substitutes a
-*cheaper* model for the one a call selected. Its **escalation** direction (start efficient,
-escalate on detected issues) is compatible with DR-047's resolve-up; its cheapest-model
-*downgrade* is not, and would violate rule 4 outright for an Opus judgment spawn. So
-Switchyard may enter the pipeline only **constrained to the tier the spawn already
-selected** (failover or escalation within/above that tier), or after DR-047 is amended by
-its own record — never as an unconstrained cheapest-model picker. Its **advisor-gate** (a
+*cheaper* model for the one a call selected. That downgrade is barred outright — it overrides
+the deterministic per-work-class tier (rule 2) and would violate rule 4 for an Opus judgment
+spawn. Its **escalation** (start efficient, escalate on detected issues) is DR-047-compatible
+in only one narrow shape: the rule-3 fallback, routing UP when the assigned tier is
+unavailable or unknown. A judge that escalates above an *available* assigned tier still
+overrides rule 2's deterministic assignment, so judge-triggered escalation is not
+DR-047-compatible either. So Switchyard may enter the pipeline only **constrained to the
+spawn-selected tier** — routing UP solely as the unavailable/unknown-tier fallback, never
+re-picking a tier the spawn fixed and the assigned tier can still serve — or after DR-047 is
+amended by its own record; never as an unconstrained cheapest-model picker. Its **advisor-gate** (a
 stronger model approves a weaker one's plans and "done" claims) is an external *verification*
 behavior; adopting it in that role runs through the external-verification-tool gate
 (`AGENTS.md`, the evidence-toolchain skill + open-source lab registry), not this section.
 
 **Promotion from candidate to router requires all three**, when the pipeline is actually
-built: (1) DR-047 alignment — constrain Switchyard to the spawn-selected tier, or amend
-DR-047 with a record; (2) a pinned, vetted revision (it is pre-1.0 and builds from source;
-only `README @ main` has been read, so no commit is vetted — "pinned" is a requirement not
-yet met); (3) **open-source lab registry intake — unconditional.** The evidence-toolchain
+built, and is owned by `principal-engineer` — the role `docs/agent/EVIDENCE_TOOLCHAIN_OWNERSHIP.md`
+assigns any promotion from research/reference into a deployed dependency and the recording of
+its reversal path: (1) DR-047 alignment — constrain Switchyard to the spawn-selected tier, or
+amend DR-047 with a record; (2) a pinned, vetted revision (it is pre-1.0 and builds from
+source; only `README @ main` has been read, so no commit is vetted — "pinned" is a requirement
+not yet met); (3) **open-source lab registry intake — unconditional.** The evidence-toolchain
 promotion rule (`docs/agent/EVIDENCE_TOOLCHAIN_OWNERSHIP.md`) requires that before any
 source/tool becomes installed, deployed, CI-required, product-visible or a production
-connector, the owner role record its classification, tier, accountable role, licence basis,
-credential class, mutation rights and deployment evidence in `docs/OPEN_SOURCE_LAB_REGISTRY.md`
-and its JSON twin — whether or not `advisor-gate` is enabled. The advisor-gate verification
-role only sharpens *why* intake matters; it never conditions *whether*. Until all three land,
-Switchyard stays a documentation reference, exactly as OmniRoute is — nothing in the tree
-calls, imports, depends on, or is directed to use it.
+connector, `principal-engineer` records its classification, tier, accountable role, licence
+basis, credential class, mutation rights and deployment evidence in
+`docs/OPEN_SOURCE_LAB_REGISTRY.md` and its JSON twin — whether or not `advisor-gate` is
+enabled. The advisor-gate verification role only sharpens *why* intake matters; it never
+conditions *whether*. Until all three land, Switchyard stays a documentation reference,
+exactly as OmniRoute is — nothing in the tree calls, imports, depends on, or is directed to
+use it.
 
 Every boundary above transfers unchanged, and one is sharpest:
 
@@ -179,8 +186,9 @@ Every boundary above transfers unchanged, and one is sharpest:
 ## What this repo does and does not carry
 
 - **Carries:** this adoption record (OmniRoute under DR-029, plus the LM Studio and
-  Switchyard sections above), and their intake rows. That is the whole in-tree footprint by
-  design.
+  Switchyard sections above) and the two dedicated intake rows that exist — OmniRoute's and
+  Switchyard's. LM Studio is documented in this file only and has no dedicated intake row.
+  That is the whole in-tree footprint by design.
 - **Does not carry:** any gateway or router itself, its dependencies, any provider key, or
   any code path that reaches one. Removing OmniRoute, LM Studio or Switchyard **from this
   repo** is deleting documentation, and the product is unaffected, by construction. Removing

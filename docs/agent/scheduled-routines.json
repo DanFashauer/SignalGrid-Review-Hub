@@ -88,7 +88,7 @@
   },
   {
    "id": "brain-cycle",
-   "trigger": "awaiting-activation — no account trigger yet; will be a cloud self-session trigger created via create_trigger AFTER the owner's explicit go (DR-032, Slice 3). Not a launchd agent, not yet a trig_*.",
+   "trigger": "trig_019ufqWVeG9vbwSdm4LzLbSe — cloud self-session trigger created 2026-09-13 via create_trigger on the owner's explicit go (DR-032, Slice 3). Not a launchd agent; this tree cannot read the account scheduler, so this field is documentation, not gate-checked.",
    "cron": "35 8 * * *",
    "binding": "self-session (resumes the operating session)",
    "authorizedBy": "Dan Fashauer (owner)",
@@ -98,9 +98,9 @@
    "escalationBoundary": "escalates to the owner every owner-gated route, every tie, and every unrecognised/ambiguous tier; auto-OPEN (draft) is the ceiling and auto-MERGE is off (owner GREEN switch in docs/agent/brain-cycle-config.json, default false). Fail-closed halts (not ships): a stale brain (check-brain-freshness), an absent or ran:false expected lens, or an unverifiable surface stops the cycle.",
    "heartbeatPath": "artifacts/agent-heartbeats/brain-cycle.json",
    "cadenceToleranceHours": 50,
-   "status": "awaiting-activation",
-   "awaitingReason": "Slice 1 lands the machinery (freshness gate, decision core, config, this row) DORMANT. The account trigger is deliberately not created and the row is not active until the owner gives an explicit go on the cadence, per DR-032 and the awaiting-activation contract — no consent is inferred from the build directive.",
-   "awaitingSince": "2026-09-09"
+   "status": "active",
+   "activatedOn": "2026-09-13",
+   "activationEvidence": "Slice 3 go: the owner activated the Standing Brain Cycle in-session 2026-09-13 — 'the RESOURCE_INTAKE header everything in this needs to be added and used period', then answered 'Activate it now' to the explicit Brain Cycle activation question. The cloud self-session trigger trig_019ufqWVeG9vbwSdm4LzLbSe was created against this operating session at the 35 8 * * * cadence; auto-OPEN draft is the ceiling and auto-MERGE stays OFF (docs/agent/brain-cycle-config.json autoMergeGreenSwitch:false). The never-fired clock runs from authorizedOn until the first fire writes artifacts/agent-heartbeats/brain-cycle.json."
   }
  ]
 }

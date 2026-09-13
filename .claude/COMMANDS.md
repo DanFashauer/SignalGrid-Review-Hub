@@ -8,8 +8,11 @@
 > not belong inside a directory whose contents are executable.
 
 
-Nine commands, chained the way the work actually flows: a messy idea goes in one
-end, a usable prompt comes out the other. Each is also fine on its own.
+Nine authoring commands, chained the way the work actually flows: a messy idea goes
+in one end, a usable prompt comes out the other. Each is also fine on its own.
+(Three more commands — `/review-pass`, `/refactor-pass`, `/build-fix` — are a
+different kind: repeatable multi-agent *passes*, documented in
+[`WORKFLOWS.md`](./WORKFLOWS.md), not authoring aids.)
 
 ```
 messy idea
@@ -54,6 +57,17 @@ reason a command beats remembering. Three worth knowing:
 
 - **`/handoff` separates verified from assumed.** Blurring those is how a session
   inherits a false belief and builds on it.
+
+## The workflow passes
+
+Separate from the authoring chain above, three commands turn the agent collection
+in `.claude/agents/` into repeatable passes wired to this repo's gates — a workflow,
+not a single prompt (DR-048). See [`WORKFLOWS.md`](./WORKFLOWS.md):
+
+- **`/review-pass`** — the SignalGrid multi-agent review pass (reviewer +
+  fail-closed auditor + code-reviewer, verified, gates green).
+- **`/refactor-pass`** — refactor-cleaner + ponytail, behavior proven unchanged.
+- **`/build-fix`** — reproduce the failing check, minimal-diff fix, prove it green.
 
 ## Adding to the set
 

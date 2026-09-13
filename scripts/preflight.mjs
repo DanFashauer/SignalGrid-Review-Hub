@@ -80,6 +80,7 @@ const STEPS = [
   // validate-sim-macos.sh is DEFERRED rather than excluded.
   { name: "Shell lint (the one language with no static analysis)", cmd: ["node", "scripts/check-shell.mjs"] },
   { name: "Bash deny-list hook self-test (a wrapped `sh -c` payload and unreadable input must DENY)", cmd: ["node", "scripts/check-hook-denylist.mjs"] },
+  { name: "Bash deny-list gate self-test (a hung hook self-test must fail closed within the timeout and reap its descendant)", cmd: ["node", "scripts/check-hook-denylist.mjs", "--self-test"] },
   { name: "Docs-sanity self-test (a planted over-claim fails; empty scan roots fail via the floor)", cmd: ["node", "scripts/docs-sanity.mjs", "--self-test"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },

@@ -96,7 +96,6 @@ The machinery runs: three clocks fire on cadence, lane mail is 111/111 acked, si
 ## The founder's queue (only he can do these)
 
 - Screen Recording → Terminal (System Settings > Privacy & Security), then say so — unblocks sim request 2026-09-02-android-desktop-first-run (failed 2026-09-04; asked 5+ times)
-- 'activate' or 'hold' on the Standing Brain Cycle (DR-032 Slice 3, cron 35 8 * * *) — unblocks the daily cycle and the 7 agents only it dispatches (awaiting since 2026-09-09; auto-merge stays off either way)
 - 'yes' to branch cleanup (`pnpm run branches:clean --apply` + the 3 claude/*, 3 shift*-hold, mac-sim, cloud/fix-ci-timeout residue) — unblocks an honest lane:inbox and takes mac/fleet-premium-proof, mac/native-ledger-2026-09-02 and the .hypothesis/ worktree cache with it
 - Pick the first of the seven DR-033 product gaps (BUILD_BACKLOG.md:1372-1378) — unblocks the phase objective; today no row carries a lane
 - Outreach is OPEN at 94%: confirm or soften 'Lean IT teams (75–1,000 employees, 1–10 IT staff)' (INVESTOR_ONE_PAGER.md:22 vs ICP_EVIDENCE.md:119 'assumption') and name the first send (Smplify hello@ or a feedback contact) — unblocks design-partner-outreach

@@ -215,8 +215,8 @@ Because `brain-cycle.mjs` and `check-brain-freshness.mjs` are `scripts/**` = SAF
 - Mac-only surfaces routed to `sim-requests`, marked UNVERIFIED, reconciled on the next cloud fire from `artifacts/sim-results/`. Winners on those surfaces auto-OPEN as **draft**, held.
 - The surface-fingerprint **cost cache** in the board (`git tree hash` of exactly the audited paths), with a self-test proving BOTH the hit and miss paths — recurring audits re-run only changed surfaces.
 
-### Slice 3 — the account trigger + owner GREEN switch (owner-gated)
-- After Dan authorizes: `create_trigger` (self-session, cloud), transcribe the `trig_*` id, flip the row off `awaiting-activation`.
+### Slice 3 — the account trigger + owner GREEN switch (owner-authorized 2026-09-13; registry-first bootstrap)
+- Activation is owner-authorized (2026-09-13, "Activate it now"); what remains is a **registry-first bootstrap in this exact order** — NOT `create_trigger` first (a same-session activation on 2026-09-13 was reverted for that ordering error, Codex #705): (1) land the active `brain-cycle` row on `SignalGrid_Alpha` (flip off `awaiting-activation`) AND at the same flip refresh `authorizedOn`/`awaitingSince` to the activation date so `check-scheduled-routines.mjs` measures the no-heartbeat window from activation, not the 2026-09-09 build date; prove a Slice-2 dry run end-to-end (its proof lands in the per-cycle board `artifacts/brain-cycle/<sha>/`, NEVER in `heartbeatPath`); (2) THEN `create_trigger` (self-session, cloud) and transcribe the `trig_*` id into the row; (3) let the first REAL scheduled fire write the heartbeat at artifacts/agent-heartbeats/brain-cycle.json (un-backticked: it does not exist until the first fire) — do NOT hand-write a heartbeat before the trigger exists (`check-scheduled-routines.mjs` reads any heartbeat as proof of a fire).
 - Wire `enable_pr_auto_merge` behind `classifyDiff==autonomous` AND GREEN AND the explicit owner opt-in switch (`docs/agent/brain-cycle-config.json`), default OFF.
 - Promote `scan-agent-plane`'s DR-018 mirror-drift compare from report-only to a blocking STEP 0 header line.
 

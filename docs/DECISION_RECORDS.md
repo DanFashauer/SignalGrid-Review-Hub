@@ -1892,7 +1892,11 @@ registry row, the three self-tests from preflight + CI, the one-line
 runs to stop. ONCE ACTIVATED (a live cloud self-session trigger exists): reversal MUST FIRST
 `delete_trigger` (or disable it in the account routines UI) and CONFIRM it is gone
 (`list_triggers` no longer shows it) BEFORE removing any file — otherwise it keeps resuming a
-session against deleted scripts. Nothing in the product depends on any of it.
+session against deleted scripts. And if the routine ever FIRED (a `brain-cycle.json` heartbeat
+exists), RETIRE the registry row (`status: retired` + retirement evidence) rather than deleting
+it — a heartbeat for a deleted row makes `check-scheduled-routines.mjs` fatal on an orphan
+heartbeat (the established retire-not-delete shape, which also preserves proof the lane once ran).
+Nothing in the product depends on any of it.
 ## DR-033 — The company is past Customer Discovery; the current phase is Build / execution, and a phase change is a decision record before either lane acts on it (owner-directed 2026-09-10)
 
 **Question.** The operating phase changed but the change was never written down. The

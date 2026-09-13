@@ -93,14 +93,15 @@ the lane's base URL at an endpoint" mechanism (step 3 above) and can treat an Om
 LM Studio endpoint as one of its own routing targets.
 
 **"Above OmniRoute/LM Studio" is a target architecture, not an operational one today**
-(established by the Mac lane's independent by-use read, 2026-09-13). Switchyard's README says
+(established by the Mac lane's independent source read, 2026-09-13). Switchyard's README says
 it "runs inside gateways you may already have — NeMo Relay or LiteLLM"; the org runs neither,
-and OmniRoute (DR-029) is not a documented Switchyard host. The one component deployable
-without a host gateway — the standalone `switchyard-server` proxy, the base-URL-repoint shape
-— is rated by upstream's own component table as "Demo — Demos and evaluation only. Not for
-production," the package is `Development Status :: 3 - Alpha`, pre-1.0, and its README warns
-routing behavior can change between releases. So the placement below is a candidate shape to
-grow into, not a wiring that exists.
+and OmniRoute (DR-029) is not a documented Switchyard host. The **base-URL-repoint** shape —
+the standalone `switchyard-server` proxy, the one that drops into the step-3 mechanism without
+writing harness code — is rated by upstream's own component table as "Demo — Demos and
+evaluation only. Not for production," the package is `Development Status :: 3 - Alpha`, pre-1.0,
+and its README warns routing behavior can change between releases. (The embedded `libsy` shape
+is also host-free but is not a base-URL repoint — the harness makes the calls.) So the
+placement below is a candidate shape to grow into, not a wiring that exists.
 
 It is logged here as a **research candidate for Axis-B routing only — an automatic
 remote-vs-local picker between OmniRoute and LM Studio — not a Claude-tier router.** DR-050 §3
@@ -112,19 +113,23 @@ owned by OmniRoute (DR-029) with LM Studio as its local twin. DR-050 §3 places 
 endpoints" — and rules it "REDUNDANT-and-harmful the moment it touches Axis A." So it is never
 a candidate for the Claude-tier pipeline; see "Why it is confined to Axis B" below.
 
-Its placement is governed by **DR-050** (Mac = always-on live brain, cloud = final review
-board, owner-directed 2026-09-13), whose resource-placement table routes Switchyard here as a
-cloud-review-board, adopt-by-reference item: it runs fully on the Mac (no GPU, no keys) but
-its two jobs are already covered — OmniRoute (DR-029) is the gateway and DR-047 owns
-Claude-tier selection — so it is a documented candidate, not a live component. This PR adds
-no decision record of its own; DR-050 is that record.
+Its **placement** is governed by **DR-050** (Mac = always-on live brain, cloud = final review
+board, owner-directed 2026-09-13): DR-050 §3 fixes Switchyard on Axis B and its
+resource-placement table records that it runs fully on the Mac (no GPU, no keys) but its two
+jobs are already covered — OmniRoute (DR-029) is the gateway, DR-047 owns Claude-tier
+selection. DR-050 deliberately **defers Switchyard's adoption strength to this PR** rather than
+settling it; so this PR records that disposition — a by-reference research candidate, not
+adopted — and adds no decision record of its own. Placement is DR-050's; the by-reference
+disposition is this PR's.
 
 Three integration shapes, matching how a lane already runs: **embed the library**
 (`switchyard-libsy`, Python `nemo-switchyard` / Rust — your harness makes every model call,
 Switchyard only picks the model, so transport, retries and credentials stay yours), **run
-the standalone proxy** (`switchyard-server`, OpenAI+Anthropic-compatible, and the only
-host-free shape — but upstream-rated demo/evaluation only, not for production, as above),
-or **plug into a host gateway** (LiteLLM router, NeMo Relay — neither of which the org runs).
+the standalone proxy** (`switchyard-server`, OpenAI+Anthropic-compatible, the host-free
+base-URL-repoint shape — but upstream-rated demo/evaluation only, not for production, as
+above), or **plug into a host gateway** (LiteLLM router, NeMo Relay — neither of which the org
+runs). The embedded and standalone-proxy shapes are both host-free; only the gateway plug-in
+needs a host.
 Its routing algorithms — **escalation** (start efficient; an LLM judge escalates on detected
 issues) and **advisor-gate** (a stronger model approves a weaker one's plans and "done"
 claims) — resemble the org's tiered agent work, but that resemblance is to **Axis A**, which

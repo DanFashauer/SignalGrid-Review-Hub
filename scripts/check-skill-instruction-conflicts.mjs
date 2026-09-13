@@ -128,7 +128,7 @@
 // those numbers anywhere — the summary line prints the current ones.
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -636,7 +636,11 @@ async function selfTest() {
   //     forever. Reported by the Mac lane 2026-09-13 (ReDoS in the deny-list hook
   //     under BSD sed). A short injected timeout keeps this test fast; the real
   //     default (HOOK_TIMEOUT_MS) is untouched.
-  const hangStub = resolve(tmpdir(), `sg-hang-hook-${process.pid}.sh`);
+  // mkdtempSync creates a fresh 0700 directory with an unpredictable suffix — no
+  // predictable path in the shared temp dir for another process to pre-create or
+  // symlink-race (js/insecure-temporary-file, CodeQL #716).
+  const hangDir = mkdtempSync(resolve(tmpdir(), "sg-hang-hook-"));
+  const hangStub = resolve(hangDir, "hook.sh");
   writeFileSync(hangStub, "sleep 30\n");
   const hangCommand = "echo this-command-name-must-appear";
   let hangFatal = false;
@@ -648,7 +652,7 @@ async function selfTest() {
     hangFatal = e instanceof HookFatal;
     hangNamed = e instanceof HookFatal && e.message.includes(JSON.stringify(hangCommand));
   } finally {
-    try { unlinkSync(hangStub); } catch { /* best-effort */ }
+    try { rmSync(hangDir, { recursive: true, force: true }); } catch { /* best-effort */ }
   }
   const hangElapsed = Date.now() - hangStarted;
   check(

@@ -35,11 +35,14 @@ the failure is in, then:
 - other `lib/*` → the owning library writer; if unclear, escalate rather than
   cross a boundary.
 - `docs/` (a docs-sanity, figure, or prose gate) → **doc-updater**.
-- `.claude/`, `.agents/`, `artifacts/mcp-server/` (the skills/agents/commands/MCP
-  plane) → **agent-platform-steward**.
-- root manifests/config, `native/**`, or ANY surface with no registered owner in
-  `agent-tiers.json` → **STOP and escalate.** Never guess a fix across an unowned
-  boundary — reproduce the failure, report it, and hand it up.
+- `.claude/` (skills/agents/commands plane) → **agent-platform-steward** — its
+  agent-tiers.json writeScope is `.claude/` ONLY.
+- `artifacts/mcp-server/` → **build-error-resolver** (writeScope `artifacts/`);
+  agent-platform-steward may only read-and-report there, not write it.
+- `.agents/`, root manifests/config, `native/**`, or ANY surface with no
+  registered WRITER in `agent-tiers.json` (`.agents/` is read-and-report-only for
+  agent-platform-steward, so it has none) → **STOP and escalate.** Never guess a
+  fix across an unowned boundary — reproduce the failure, report it, and hand it up.
 
 Whichever agent you route to: it operates only within its
 `docs/agent/agent-tiers.json` writeScope and MUST follow the LOCAL tool

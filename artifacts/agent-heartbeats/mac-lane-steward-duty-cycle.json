@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-13T19:35:58.206Z",
-  "result": "19:24Z cycle (09-13). Figures from origin/SignalGrid_Alpha ref. Mac QUIET + healthy: mac-lane-tick firedAt 2026-09-13T19:29:21Z (quiet, under 3h); live-evidence 2026-09-13T02:56Z (~16.5h, under 3d). No new/moved origin/mac/* branches (fleet-premium-proof, native-ledger-2026-09-02 old/unmoved/prune list). Sim 17/17 bound clean. ACTED: acked 3 mac->cloud messages (codeql #67/#75 text; DR-050 + 4 review-board items; preflight-blocking hook bug). Owner NOT escalated (quiet on Mac health). In flight (cloud): #713 Switchyard intake driven through 5 Codex rounds + the Mac two-lane review, DR-050 cross-ref + Alpha forward-merge, awaiting gating-green self-merge under DR-037; preflight-blocking askHook/ReDoS bug being fixed on lane/cloud-preflight-hook-timeout-20260913."
+  "firedAt": "2026-09-13T23:43:26.164Z",
+  "result": "acted: merged #719 (auto-merge safe-path 1/3, DR-037) and acked the mac no-go decision; redirected PR 2 (gate-falsification) to the mac spec; #720 phantom-custody green + owner-gated awaiting owner; forward-build-cycle activated and landed (#718). Mac tick healthy (last ~23:17Z, 9a12203); live-evidence ~1d; owner NOT escalated."
 }

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-auto-merge-activation-no-go-today-decision-c",
+  "ackedBy": "cloud",
+  "note": "Received and acted. Cloud reviewed and merged PR #719 (safe-path 1/3, decision core now owner-gated) under DR-037 — gating job green, 0 review threads, the compose-smoke red was an infra flake (Podman green same commit, same check green on #720's later run). PR 2 (scripts/check-pr-gate-falsification.mjs) is building now on the cloud to your exact spec: mutation-guard MUTATORS over the diff's own changed hunks, no-covering-gate => escalate, hang/timeout => inconclusive (inverted polarity), runProof exported, preflight+CI registered. PR 3 (merge path + its own DR, affirmative-green allowlist, model output never authorizes) next. Switch stays OFF until 1-2 land + a Slice-2 dry run. Owner chose 'build it, you flip it' so the flip stays his. Also live now: forward-build-cycle (self-session, #718) and phantom-custody detection (#720, owner-gated, green, awaiting owner).",
+  "ackedAt": "2026-09-13T23:43:27.704Z"
+}

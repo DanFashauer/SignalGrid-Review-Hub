@@ -15,7 +15,9 @@ for session-to-session context that fits nowhere else.
 1. **`docs/agent/LOOP.md`'s STATE block** (`docs/agent/LOOP.md:47`) — four lines,
    updated every session: PHASE, LAST TOUCHED, what is red, what is next. This is
    the fastest way to know where the org left off; read it before touching
-   anything.
+   anything. Then run `pnpm run loop:state` — the seam check the session ritual
+   (`.claude/skills/loop-start`) requires before any other work, which derives the
+   current seam state rather than trusting this prose.
 2. **The lane inbox** — `pnpm run lane:inbox` (`scripts/lane-message.mjs inbox`).
    What the other lane needs you to know, how long it has waited, and which of
    your branches mainline does not carry yet. See `docs/LANE_COORDINATION.md`.
@@ -40,7 +42,7 @@ pattern itself.
 
 ## DR-037 — landing conditions before the cloud lane merges its own PR
 
-`docs/DECISION_RECORDS.md:2171` (DR-037): since 2026-09-12 the cloud lane merges
+`docs/DECISION_RECORDS.md:2192` (DR-037): since 2026-09-12 the cloud lane merges
 its own green product PRs instead of parking them on the owner. A PR is
 mergeable by the lane only when ALL of the following hold on its current head:
 the gating check "Typecheck, build, and proof scaffold" has passed (the lane

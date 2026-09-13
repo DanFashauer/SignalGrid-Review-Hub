@@ -222,7 +222,7 @@
       "division": "engineering",
       "title": "DevEx / tooling engineer",
       "charter": "The gate fabric itself — preflight, the proof harness, mutation guard, parity checks. Guards the guards.",
-      "trigger": "A gate is added or changed, or a gate is suspected of passing vacuously. Standing question: is any gate path-filtered away from part of its own subject?",
+      "trigger": "A gate is added or changed, or a gate is suspected of passing vacuously. Standing question: is any gate path-filtered away from part of its own subject? Also owns the recurring review/merge cadence of the monthly Dependabot dependency queue (the dependabot-queue-review routine in scheduled-routines.json); package.json/pnpm-lock.yaml CONTENT stays release-engineer's surface, this role owns the queue-review cadence over .github/dependabot.yml and the lockfile.",
       "executor": "agent:gate-and-proof-engineer",
       "surface": [
         "scripts/**",
@@ -233,6 +233,7 @@
         ".npmrc",
         ".gitignore",
         "pnpm-workspace.yaml",
+        "pnpm-lock.yaml",
         "tsconfig.json",
         "tsconfig.base.json",
         "mac-kickoff.sh"

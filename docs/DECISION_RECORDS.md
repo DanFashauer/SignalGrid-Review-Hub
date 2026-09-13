@@ -2859,14 +2859,14 @@ prior art, and no invention disclosure, drawings or claims — those wait on tha
 decision.
 
 **Evidence.** An owner-shared research document (25 pages; owner-produced, reads
-as a research-model report he commissioned — `docs/agent/RESOURCE_INTAKE.md:91`),
+as a research-model report he commissioned — `docs/agent/RESOURCE_INTAKE.md:93`),
 absorbed by a workflow of three Sonnet readers producing independent parallel
 read-only maps of the tree, one main-model author who wrote this record from
 those maps, and three Sonnet verifiers who each re-read every path:line
 citation against the tree before publication; DR-020 (`docs/DECISION_RECORDS.md:1068` — hardware needs a record first),
-DR-021 (`:1111` — building unfrozen, claiming unchanged), DR-033 (`:1892` — Build /
-execution phase), DR-036 (`:2104` — the readiness figure), DR-039 (`:2275` — the
-absorption bar), DR-042 (`:2555` — the cascade items this record's item (b) joins);
+DR-021 (`:1111` — building unfrozen, claiming unchanged), DR-033 (`:1913` — Build /
+execution phase), DR-036 (`:2125` — the readiness figure), DR-039 (`:2298` — the
+absorption bar), DR-042 (`:2578` — the cascade items this record's item (b) joins);
 `docs/agent/DISCOVERY_LOG.md:112`–`159` (thresholds and tally); the gate outputs
 recorded in `docs/agent/EVIDENCE.md` (2026-09-12); the intake row in
 `docs/agent/RESOURCE_INTAKE.md`.

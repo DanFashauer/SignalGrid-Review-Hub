@@ -3019,6 +3019,7 @@ Verdict: **root-caused four findings into one `validateTallyRow`, fixed the othe
 
 
 ## 2026-09-12 — "Record hygiene from the org self-evaluation (assignments 4 and 7b): seven items, verified against the tree before any fix"
+*(Validation in the Output block below was captured on this branch's original base before it was forward-merged onto SignalGrid_Alpha; the branch was re-validated on the merged head after the merge — see the Re-validation note at the end of this entry.)*
 Command:
 ```
 for g in check-cited-paths check-markdown-links check-doc-orphans check-launch-claims \
@@ -3060,3 +3061,5 @@ Verdict: **holds, with one self-inflicted red found and fixed before landing** �
 7. **scheduled-routines.json had no row for the monthly Dependabot queue.** Tree said: true — `.github/dependabot.yml` sets `schedule.interval: monthly` on both npm groups, and `docs/agent/ORG_SELF_EVALUATION_2026-09-12.md` row 6 found ten Dependabot PRs open 11 days with "no roster role, routine, backlog row or LOOP line" owning the queue. Changed: added `dependabot-queue-review`, owned by `devex-tooling-engineer`, `status: awaiting-activation` (no live account trigger created), weekly check cron with a `cronNote` explaining the monthly-queue/weekly-check distinction; `check-scheduled-routines.mjs` and its `--self-test` both pass (59/59).
 
 Not done in this pass (out of scope for this branch, named so the gap is not silent): item 3 of the assignment list ("bring the LEVEL_10 matrix in line with the roster") is item 5 above under this branch's own numbering — no separate row was skipped. `docs/agent/ORG_SELF_EVALUATION_2026-09-12.md`'s OWN recommendation for the LEVEL_10 matrix was "mark historical" rather than re-attribute; this branch followed the explicit worker brief (re-attribute owner cells to roster roles) instead, and that choice is recorded here rather than silently overriding the self-evaluation's suggestion.
+
+**Re-validation (2026-09-13, after the forward-merge onto SignalGrid_Alpha).** The doc-gate suite was re-run on the merged head: `check-cited-paths` now reports 2646 citations across 939 docs; `check-decision-record-format` reports 48 records; `check-scheduled-routines` (+ `--self-test`), `check-publication-boundary`, `check-markdown-links`, `check-doc-orphans`, `check-surface-review-coverage`, `check-org-roster`, `check-launch-claims` and `check-known-false-claims` all pass. CI runs the full preflight and verify:breadth suite on this head. The DECISION_RECORDS.md line cites in DR-043's provenance were re-pointed to the merged-head lines the forward-merge shifted them to (DR-033 :1913, DR-036 :2125, DR-039 :2298, DR-042 :2578; the RESOURCE_INTAKE.md puck row :93; DR-037 :2192 in CONTINUITY.md).

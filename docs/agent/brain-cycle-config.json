@@ -1,7 +1,7 @@
 {
   "$comment": "Config for the Standing Brain Cycle (DR-032, docs/agent/BRAIN_CYCLE_DESIGN.md). The deterministic decision core (scripts/brain-cycle-decide.mjs) and the orchestrator read this file so the cycle's behaviour is declared, not buried in code. Owner-directed 2026-09-09 (standing recurring cycle, full autonomous tier, daily target, auto-OPEN gated by a security+code validation gauntlet, auto-MERGE off).",
   "routineId": "brain-cycle",
-  "cadenceTarget": "35 8 * * * (daily) — declared in docs/agent/scheduled-routines.json; ACTIVATED 2026-09-13 (Slice 3) on the owner's explicit go, cloud self-session trigger trig_019ufqWVeG9vbwSdm4LzLbSe. auto-MERGE remains OFF (autoMergeGreenSwitch:false); auto-OPEN draft is the ceiling.",
+  "cadenceTarget": "35 8 * * * (daily) — declared in docs/agent/scheduled-routines.json; ACTIVATED 2026-09-13 (Slice 3) on the owner's explicit go, via a cloud self-session trigger whose trig_* id is held in private operational state, not published here (AGENTS.md: no environment-specific private identifiers in public files). auto-MERGE remains OFF (autoMergeGreenSwitch:false); auto-OPEN draft is the ceiling.",
   "scope": "full autonomous tier — any route whose classifyDiff() tier is 'autonomous' is eligible; owner-gated surfaces (SAFETY_MACHINERY / OWNER_RESERVED) ESCALATE and are never auto-opened",
   "vetoLenses": ["security-reviewer", "fail-closed-auditor"],
   "minConfidence": 0.7,

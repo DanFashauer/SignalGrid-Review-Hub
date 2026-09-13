@@ -141,9 +141,15 @@ behavior; adopting it in that role runs through the external-verification-tool g
 built: (1) DR-047 alignment — constrain Switchyard to the spawn-selected tier, or amend
 DR-047 with a record; (2) a pinned, vetted revision (it is pre-1.0 and builds from source;
 only `README @ main` has been read, so no commit is vetted — "pinned" is a requirement not
-yet met); (3) an open-source lab registry entry if adopted for its advisor-gate verification
-role. Until all three land, Switchyard stays a documentation reference, exactly as OmniRoute
-is — nothing in the tree calls, imports, depends on, or is directed to use it.
+yet met); (3) **open-source lab registry intake — unconditional.** The evidence-toolchain
+promotion rule (`docs/agent/EVIDENCE_TOOLCHAIN_OWNERSHIP.md`) requires that before any
+source/tool becomes installed, deployed, CI-required, product-visible or a production
+connector, the owner role record its classification, tier, accountable role, licence basis,
+credential class, mutation rights and deployment evidence in `docs/OPEN_SOURCE_LAB_REGISTRY.md`
+and its JSON twin — whether or not `advisor-gate` is enabled. The advisor-gate verification
+role only sharpens *why* intake matters; it never conditions *whether*. Until all three land,
+Switchyard stays a documentation reference, exactly as OmniRoute is — nothing in the tree
+calls, imports, depends on, or is directed to use it.
 
 Every boundary above transfers unchanged, and one is sharpest:
 

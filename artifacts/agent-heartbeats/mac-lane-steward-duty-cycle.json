@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-13T00:25:13.046Z",
-  "result": "00:24Z cycle (09-13). Quiet. Mac tick fresh (firedAt 00:05Z). live-evidence under 3d. Sim requests fully bound. Sync manifest no drift. No new or moved mac branches. One unread lane message is cloud->mac (CodeQL alerts #67/#75), awaiting the mac's read. Owner NOT escalated."
+  "firedAt": "2026-09-13T01:25:07.505Z",
+  "result": "01:24Z cycle (09-13). Quiet. Mac tick fresh (firedAt 01:20Z). live-evidence under 3d. Sim requests fully bound. Sync manifest no drift. No new or moved mac branches. One unread lane message is cloud->mac (CodeQL alerts #67/#75), awaiting the mac's read. Owner NOT escalated."
 }

@@ -165,7 +165,13 @@ function selfTest() {
   // a known-alive marker and MISS it once killed. Without this a reaped-assertion
   // could pass because pgrep never worked, not because the descendant died.
   const ctlMarker = `sgctl-${process.pid}-${Math.random().toString(36).slice(2)}`;
-  const ctl = spawn("sh", ["-c", `sleep 300 # ${ctlMarker}`], { detached: true, stdio: "ignore" });
+  // The marker must stay in the LIVE process's argv on both GNU and BSD. A single
+  // `sh -c "sleep 300 # marker"` is one simple command, so the shell EXEC-optimizes
+  // into `sleep` and the marker (a comment) vanishes from argv — dash kept it, bash
+  // 3.2 (macOS /bin/sh) exec'd it away, so pgrep found nothing (found=false on Mac).
+  // A two-command script (`: marker; sleep 300`) is never exec-optimized: the shell
+  // stays alive with the marker as a real argv token, so pgrep -f matches everywhere.
+  const ctl = spawn("sh", ["-c", `: ${ctlMarker}; sleep 300`], { detached: true, stdio: "ignore" });
   ctl.unref();
   const ctlFound = waitForProcessState(ctlMarker, true, 3000);
   try { process.kill(-ctl.pid, "SIGKILL"); } catch { /* already gone */ }
@@ -176,7 +182,11 @@ function selfTest() {
   // outlives the bash leader — exactly the shape the timeout must reap.
   const hangMarker = `sgreap-${process.pid}-${Math.random().toString(36).slice(2)}`;
   const hangStub = join(dir, "hang.sh");
-  writeFileSync(hangStub, `if [ "\${1:-}" = "--self-test" ]; then sh -c "sleep 300 # ${hangMarker}" & wait; fi\n`);
+  // Same argv-durability fix as the positive control: a two-command `: marker; sleep`
+  // keeps the marker in the backgrounded shell's argv on BSD too, so the reap check
+  // below is real (a comment marker would exec-optimize away on macOS and make
+  // "descendant gone" pass vacuously — pgrep never found it alive).
+  writeFileSync(hangStub, `if [ "\${1:-}" = "--self-test" ]; then sh -c ": ${hangMarker}; sleep 300" & wait; fi\n`);
   const started = Date.now();
   const hung = runHookSelfTest(hangStub, 1000);
   const elapsed = Date.now() - started;

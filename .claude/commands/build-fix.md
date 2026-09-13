@@ -34,6 +34,12 @@ the failure is in, then:
   not build-fix scope.
 - other `lib/*` → the owning library writer; if unclear, escalate rather than
   cross a boundary.
+- `docs/` (a docs-sanity, figure, or prose gate) → **doc-updater**.
+- `.claude/`, `.agents/`, `artifacts/mcp-server/` (the skills/agents/commands/MCP
+  plane) → **agent-platform-steward**.
+- root manifests/config, `native/**`, or ANY surface with no registered owner in
+  `agent-tiers.json` → **STOP and escalate.** Never guess a fix across an unowned
+  boundary — reproduce the failure, report it, and hand it up.
 
 Whichever agent you route to: it operates only within its
 `docs/agent/agent-tiers.json` writeScope and MUST follow the LOCAL tool
@@ -50,7 +56,11 @@ lockfile (`pnpm install --lockfile-only`) and commit it; never hand-edit
 `pnpm-lock.yaml`.
 
 **3. Prove it green.** Re-run the SAME check from step 1 and quote the passing
-output, then run `node scripts/preflight.mjs` to confirm nothing else broke.
+output, then run `node scripts/preflight.mjs` to confirm nothing else broke. If
+the fix touched a deferred-family library (NAC, webhooks, device-attestation,
+credential exposure, …) or a script used only by its proof, ALSO run
+`pnpm run verify:breadth` — preflight deliberately EXCLUDES those proofs, so
+preflight-green does not prove that lane and the fix would go unexercised.
 
 **Never** `--no-verify`, never stash-to-dodge, never a quiet flag, never push past
 the lockfile pre-push hook. A red gate is fixed at its cause (by the surface's

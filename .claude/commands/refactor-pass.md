@@ -40,9 +40,13 @@ decision, gating or planner `switch` keeps its `default:`. Unknown raises assura
 because the deferred-family proofs (NAC, webhooks, device-attestation, credential
 exposure, …) live only there, not in preflight, so a `lib/` change can pass every
 preflight gate while its own proof goes unrun. `test:api` N/N if a served surface
-moved. Leave ONE runnable check that fails if the refactored logic breaks — an
-assert-based self-check or one small test — per the repo's own rule; a trivial
-one-liner needs none.
+moved. Leave ONE runnable check that fails if the refactored logic breaks — prefer an
+assert-based self-check or small test co-located in `lib/`, which is inside
+refactor-cleaner's writeScope. If the only adequate check is a `proof:*` under
+`scripts/`, do NOT have refactor-cleaner write it (its writeScope is `lib/`) —
+dispatch **gate-and-proof-engineer** to add it, or identify and name an existing
+runnable check that already covers the refactored behavior. A trivial one-liner
+needs none.
 
 **Failure mode this guards:** a "cleanup" that quietly changes behavior; one that
 shrinks the diff by moving the bug; a refactor-cleaner edit outside `lib/`; an

@@ -84,13 +84,23 @@ Every boundary above transfers, and two are stronger:
 
 ## A routing-layer candidate — Switchyard
 
-[Switchyard](https://github.com/NVIDIA-NeMo/Switchyard) (NVIDIA, Apache-2.0) sits a layer
-ABOVE the access gateways above. Where OmniRoute and LM Studio decide *how to reach* a
+[Switchyard](https://github.com/NVIDIA-NeMo/Switchyard) (NVIDIA, Apache-2.0) would sit a
+layer ABOVE the access gateways above. Where OmniRoute and LM Studio decide *how to reach* a
 model, Switchyard decides *which* model each call should go to — "route each LLM call to
 the cheapest model that can still do the job, without changing a line of your agent." It
 preserves native OpenAI and Anthropic API compatibility, so it drops into the same "point
 the lane's base URL at an endpoint" mechanism (step 3 above) and can treat an OmniRoute or
-LM Studio endpoint as one of its own targets.
+LM Studio endpoint as one of its own routing targets.
+
+**"Above OmniRoute/LM Studio" is a target architecture, not an operational one today**
+(established by the Mac lane's independent by-use read, 2026-09-13). Switchyard's README says
+it "runs inside gateways you may already have — NeMo Relay or LiteLLM"; the org runs neither,
+and OmniRoute (DR-029) is not a documented Switchyard host. The one component deployable
+without a host gateway — the standalone `switchyard-server` proxy, the base-URL-repoint shape
+— is rated by upstream's own component table as "Demo — Demos and evaluation only. Not for
+production," the package is `Development Status :: 3 - Alpha`, pre-1.0, and its README warns
+routing behavior can change between releases. So the placement below is a candidate shape to
+grow into, not a wiring that exists.
 
 It is logged here as a **research candidate for the pipeline's routing layer, not a
 ratified router** — the same by-reference status OmniRoute holds, and for a sharper reason:
@@ -101,8 +111,9 @@ is not yet the router" below; promotion from candidate to router has explicit pr
 Three integration shapes, matching how a lane already runs: **embed the library**
 (`switchyard-libsy`, Python `nemo-switchyard` / Rust — your harness makes every model call,
 Switchyard only picks the model, so transport, retries and credentials stay yours), **run
-the standalone proxy** (`switchyard-server`, OpenAI+Anthropic-compatible, Demo-grade only),
-or **plug into a gateway** (LiteLLM router, NeMo Relay). Its routing algorithms are the part
+the standalone proxy** (`switchyard-server`, OpenAI+Anthropic-compatible, and the only
+host-free shape — but upstream-rated demo/evaluation only, not for production, as above),
+or **plug into a host gateway** (LiteLLM router, NeMo Relay — neither of which the org runs). Its routing algorithms are the part
 that matters for the org's own tiered agent work: **escalation** (start on an efficient
 model; an LLM judge escalates to a capable one on detected issues) and **advisor-gate** (a
 stronger model approves a weaker one's plans and "done" claims, or sends it back) are almost
@@ -126,10 +137,13 @@ Where it could fit here, once gated:
 powers a coordinating session and its subagents: each spawn selects an explicit tier
 (rule 1), tier is assigned by work-class deterministically (rule 2), and on an unavailable
 tier the work resolves UP to Opus, with Opus judgment work WAITING rather than downgrading
-(rules 3-4). Switchyard's default is the opposite: a runtime LLM judge substitutes a
-*cheaper* model for the one a call selected. That downgrade is barred outright — it overrides
-the deterministic per-work-class tier (rule 2) and would violate rule 4 for an Opus judgment
-spawn. Its **escalation** (start efficient, escalate on detected issues) is DR-047-compatible
+(rules 3-4). Switchyard's default is the opposite: its `stage_router` default `efficient_first`
+(and the `auto` policy) fails DOWN to the cheap tier on low confidence — a runtime LLM judge
+substitutes a *cheaper* model for the one a call selected. That downgrade is barred outright —
+it overrides the deterministic per-work-class tier (rule 2) and would violate rule 4 for an
+Opus judgment spawn. **Independent of the decision-path boundary, Switchyard must never be
+wired in front of the coordinating Claude Code session or its subagents** — the DR-047 actors
+— precisely because its default picker fails the wrong way. Its **escalation** (start efficient, escalate on detected issues) is DR-047-compatible
 in only one narrow shape: the rule-3 fallback, routing UP when the assigned tier is
 unavailable or unknown. A judge that escalates above an *available* assigned tier still
 overrides rule 2's deterministic assignment, so judge-triggered escalation is not
@@ -166,7 +180,10 @@ Every boundary above transfers unchanged, and one is sharpest:
   never decide a verdict, and a router that *chooses the model* is one layer further from
   determinism, not closer (golden rule 2).
 - **Keys out of the tree.** Its `routes.toml` reads provider keys from the environment
-  (`api_key_env`); those stay owner secrets, exactly as OmniRoute's do.
+  (`api_key_env`); those stay owner secrets, exactly as OmniRoute's do. `api_key_env` is
+  optional — a keyless local target is architecturally supported ("omit to send no
+  authentication") — but no upstream example demonstrates it and every documented example uses
+  a provider key, so treat Switchyard as **keyless-capable, not keyless-by-default**.
 - **By reference; pinning required before any run; not run in a live session.** Adopted by
   reference (Apache-2.0), not vendored, not a dependency here. It is **pre-1.0** — its
   components range Demo/Alpha/Beta and the README says pin the version you integrate. No

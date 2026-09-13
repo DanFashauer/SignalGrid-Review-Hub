@@ -102,11 +102,15 @@ production," the package is `Development Status :: 3 - Alpha`, pre-1.0, and its 
 routing behavior can change between releases. So the placement below is a candidate shape to
 grow into, not a wiring that exists.
 
-It is logged here as a **research candidate for the pipeline's routing layer, not a
-ratified router** — the same by-reference status OmniRoute holds, and for a sharper reason:
-the build lane's model-routing doctrine is already set by **DR-047** (usage-limit fallback
-and token-smart tiering), and Switchyard's default behavior conflicts with it. See "Why it
-is not yet the router" below; promotion from candidate to router has explicit prerequisites.
+It is logged here as a **research candidate for Axis-B routing only — an automatic
+remote-vs-local picker between OmniRoute and LM Studio — not a Claude-tier router.** DR-050 §3
+splits the one model-routing story into two axes: **Axis A** (which *Claude* model runs an
+agentic stage) is owned entirely by **DR-047** through the harness's `model:` field, with no
+HTTP gateway in the path; **Axis B** (which endpoint serves a raw, non-Claude-Code call) is
+owned by OmniRoute (DR-029) with LM Studio as its local twin. DR-050 §3 places Switchyard on
+**Axis B only** — "at most an automatic remote-vs-local picker between the two Axis-B
+endpoints" — and rules it "REDUNDANT-and-harmful the moment it touches Axis A." So it is never
+a candidate for the Claude-tier pipeline; see "Why it is confined to Axis B" below.
 
 Its placement is governed by **DR-050** (Mac = always-on live brain, cloud = final review
 board, owner-directed 2026-09-13), whose resource-placement table routes Switchyard here as a
@@ -120,55 +124,51 @@ Three integration shapes, matching how a lane already runs: **embed the library*
 Switchyard only picks the model, so transport, retries and credentials stay yours), **run
 the standalone proxy** (`switchyard-server`, OpenAI+Anthropic-compatible, and the only
 host-free shape — but upstream-rated demo/evaluation only, not for production, as above),
-or **plug into a host gateway** (LiteLLM router, NeMo Relay — neither of which the org runs). Its routing algorithms are the part
-that matters for the org's own tiered agent work: **escalation** (start on an efficient
-model; an LLM judge escalates to a capable one on detected issues) and **advisor-gate** (a
-stronger model approves a weaker one's plans and "done" claims, or sends it back) are almost
-exactly the shape of the standing multi-tier pipeline — cheap model does the slice, a
-stronger model reviews, escalate only when the work needs it. NVIDIA reports Terminal-Bench
+or **plug into a host gateway** (LiteLLM router, NeMo Relay — neither of which the org runs).
+Its routing algorithms — **escalation** (start efficient; an LLM judge escalates on detected
+issues) and **advisor-gate** (a stronger model approves a weaker one's plans and "done"
+claims) — resemble the org's tiered agent work, but that resemblance is to **Axis A**, which
+DR-047 owns and Switchyard may not touch (below). On its permitted Axis-B role it is far
+simpler: a remote-vs-local endpoint picker, not a tier judge. NVIDIA reports Terminal-Bench
 2.1 at 95-99% of an Opus-4.8 baseline's accuracy for 13-30% less cost.
 
-Where it could fit here, once gated:
+Where it could fit here, once gated — Axis B only:
 
-- **A candidate mechanism for the standing multi-tier pipeline's routing layer** — the
-  "route bulk work to the cheapest capable model, escalate the hard slices" shape, running
-  *over* the provider access OmniRoute/LM Studio give it. Candidate, not the designated
-  router — see the DR-047 conflict below.
+- **A candidate remote-vs-local picker between the two Axis-B endpoints** — deciding, for a
+  raw non-Claude-Code call, whether OmniRoute's remote providers or LM Studio's local twin
+  serves it. That is the whole of the role DR-050 §3 permits ("at most an automatic
+  remote-vs-local picker between the two Axis-B endpoints"). It never selects a Claude tier.
 - **A candidate backend for the model-tap boundary** that `docs/DECISION_RECORDS.md` DR-047
-  rule 7 names alongside DR-029's gateway boundary: the tap decides *whether* a low-stakes,
-  fully-recheckable task may leave the main model, and Switchyard's `libsy` is a ready-made
-  *which-model* picker for that path. (The tap's own defining record lives on an open branch,
-  not yet in this tree; this section does not stand in for it.)
+  rule 7 names alongside DR-029's gateway boundary: once the tap has decided a low-stakes,
+  fully-recheckable task may leave the main (Claude) model, the work is an Axis-B call, and
+  Switchyard's `libsy` could pick which Axis-B endpoint serves it — still never choosing the
+  Claude tier itself. (The tap's own defining record lives on an open branch, not yet in this
+  tree; this section does not stand in for it.)
 
-**Why it is not yet the router — the DR-047 conflict.** DR-047 governs which Claude model
-powers a coordinating session and its subagents: each spawn selects an explicit tier
-(rule 1), tier is assigned by work-class deterministically (rule 2), and on an unavailable
-tier the work resolves UP to Opus, with Opus judgment work WAITING rather than downgrading
-(rules 3-4). Switchyard's default is the opposite: its `stage_router` default `efficient_first`
-(and the `auto` policy) fails DOWN to the cheap tier on low confidence — a runtime LLM judge
-substitutes a *cheaper* model for the one a call selected. That downgrade is barred outright —
-it overrides the deterministic per-work-class tier (rule 2) and would violate rule 4 for an
-Opus judgment spawn. **Independent of the decision-path boundary, Switchyard must never be
-wired in front of the coordinating Claude Code session or its subagents** — the DR-047 actors
-— precisely because its default picker fails the wrong way. Its **escalation** (start efficient, escalate on detected issues) is DR-047-compatible
-in only one narrow shape: the rule-3 fallback, routing UP when the assigned tier is
-unavailable or unknown. A judge that escalates above an *available* assigned tier still
-overrides rule 2's deterministic assignment, so judge-triggered escalation is not
-DR-047-compatible either. So Switchyard may enter the pipeline only **constrained to the
-spawn-selected tier** — routing UP solely as the unavailable/unknown-tier fallback, never
-re-picking a tier the spawn fixed and the assigned tier can still serve — or after DR-047 is
-amended by its own record; never as an unconstrained cheapest-model picker. Its **advisor-gate** (a
-stronger model approves a weaker one's plans and "done" claims) is an external *verification*
-behavior; adopting it in that role runs through the external-verification-tool gate
+**Why it is confined to Axis B — the DR-047 / DR-050 boundary.** Axis A (which Claude model
+runs an agentic stage) is owned entirely by DR-047: each spawn sets an explicit tier via the
+harness `model:` field, tier is assigned by work-class deterministically, and an
+unavailable/unknown tier resolves UP to Opus with Opus judgment work WAITING rather than
+downgrading. Switchyard's default is the opposite: its `stage_router` default `efficient_first`
+(and the `auto` policy) fails DOWN to the cheap tier on low confidence. DR-050 §3 draws the
+line from this directly: Switchyard is "REDUNDANT-and-harmful the moment it touches Axis A"
+and "is never wired in front of the coordinating Claude Code session or its subagents." So
+there is **no Axis-A promotion path** — not "constrained to the spawn-selected tier," not "if
+DR-047 is amended"; a router whose default fails DOWN has no business on the axis whose rule is
+fail-UP, and DR-047 already routes tiers with no gateway in the path. Switchyard's only
+candidate role here is the Axis-B remote-vs-local pick above. Its **advisor-gate** (a stronger
+model approves a weaker one's plans and "done" claims) is a separate, external *verification*
+behavior; adopting it in that role would run through the external-verification-tool gate
 (`AGENTS.md`, the evidence-toolchain skill + open-source lab registry), not this section.
 
-**Promotion from candidate to router requires all three**, when the pipeline is actually
-built, and is owned by `principal-engineer` — the role `docs/agent/EVIDENCE_TOOLCHAIN_OWNERSHIP.md`
-assigns any promotion from research/reference into a deployed dependency and the recording of
-its reversal path: (1) DR-047 alignment — constrain Switchyard to the spawn-selected tier, or
-amend DR-047 with a record; (2) a pinned, vetted revision (it is pre-1.0 and builds from
-source; only `README @ main` has been read, so no commit is vetted — "pinned" is a requirement
-not yet met); (3) **open-source lab registry intake — unconditional.** The evidence-toolchain
+**Promotion from candidate to an Axis-B picker requires all three**, when there is a real
+Axis-B need for it, and is owned by `principal-engineer` — the role
+`docs/agent/EVIDENCE_TOOLCHAIN_OWNERSHIP.md` assigns any promotion from research/reference into
+a deployed dependency and the recording of its reversal path: (1) confinement to Axis B — wired
+only between OmniRoute and LM Studio for raw non-Claude-Code calls, never in front of the
+coordinating session or its subagents (DR-050 §3); (2) a pinned, vetted revision (it is pre-1.0
+and builds from source; only `README @ main` has been read, so no commit is vetted — "pinned"
+is a requirement not yet met); (3) **open-source lab registry intake — unconditional.** The evidence-toolchain
 promotion rule (`docs/agent/EVIDENCE_TOOLCHAIN_OWNERSHIP.md`) requires that before any
 source/tool becomes installed, deployed, CI-required, product-visible or a production
 connector, `principal-engineer` records its classification, tier, accountable role, licence

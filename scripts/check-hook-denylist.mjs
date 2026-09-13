@@ -15,7 +15,7 @@
 // FAIL-CLOSED: a hook that cannot be found or cannot be executed is a failure,
 // not a skip — the deny list being absent is the loosest state it can be in.
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -38,17 +38,35 @@ function timedOut(r) {
   return r.error?.code === "ETIMEDOUT" || (r.status === null && r.signal === "SIGKILL");
 }
 
-/** Run `bash <hookPath> --self-test` under a bounded timeout.
+/** Run `bash <args>` under a bounded timeout, fail-closed, killing the whole
+ *  PROCESS GROUP on timeout — not just the bash we spawned. spawnSync's native
+ *  timeout SIGKILLs only the group LEADER (the bash), leaving a hung DESCENDANT
+ *  (the BSD sed in the deny hook, Codex #716) orphaned and still consuming CPU.
+ *  `detached: true` makes the child its own process-group leader FIRST — required
+ *  before any negative-pid kill, because WITHOUT it the child shares this node
+ *  process's group and `process.kill(-pid)` would kill the gate itself. After the
+ *  call returns timed-out, the descendant kept the dead leader's pgid, so
+ *  `process.kill(-r.pid)` reaches it.
  *  @param {number} [timeoutMs] override for the self-test harness only; the real
- *    default is HOOK_TIMEOUT_MS. A hung self-test is caught here, never left to
- *    hang the gate and preflight forever. */
-function runHookSelfTest(hookPath, timeoutMs = HOOK_TIMEOUT_MS) {
-  return spawnSync("bash", [hookPath, "--self-test"], {
+ *    default is HOOK_TIMEOUT_MS. */
+function spawnHookBounded(args, { timeoutMs = HOOK_TIMEOUT_MS, input } = {}) {
+  const r = spawnSync("bash", args, {
     cwd: repo,
     encoding: "utf8",
     timeout: timeoutMs,
     killSignal: "SIGKILL",
+    detached: true,
+    ...(input !== undefined ? { input } : {}),
   });
+  if (timedOut(r) && typeof r.pid === "number") {
+    try { process.kill(-r.pid, "SIGKILL"); } catch { /* group already gone */ }
+  }
+  return r;
+}
+
+/** Run `bash <hookPath> --self-test` under a bounded, group-killing timeout. */
+function runHookSelfTest(hookPath, timeoutMs = HOOK_TIMEOUT_MS) {
+  return spawnHookBounded([hookPath, "--self-test"], { timeoutMs });
 }
 
 function runGate() {
@@ -93,16 +111,11 @@ function runGate() {
   }
   const unheld = [];
   for (const pattern of bashDenies) {
-    // Bounded too: a probe that hangs (same ReDoS class) must not hang the gate.
-    // A timed-out probe answered nothing, so it is not a deny — it lands in `unheld`
-    // and fails the gate, fail-closed.
-    const probe = spawnSync("bash", [HOOK], {
-      cwd: repo,
-      encoding: "utf8",
-      input: JSON.stringify({ tool_input: { command: `${pattern} x` } }),
-      timeout: HOOK_TIMEOUT_MS,
-      killSignal: "SIGKILL",
-    });
+    // Bounded and group-killed too (same ReDoS class): a probe that hangs must not
+    // hang the gate, and its descendant sed must not be orphaned. A timed-out probe
+    // answered nothing, so it is not a deny — it lands in `unheld` and fails the
+    // gate, fail-closed.
+    const probe = spawnHookBounded([HOOK], { input: JSON.stringify({ tool_input: { command: `${pattern} x` } }) });
     if (!/"deny"/.test(probe.stdout ?? "")) unheld.push(pattern);
   }
   if (unheld.length > 0) {
@@ -114,9 +127,31 @@ function runGate() {
 }
 
 // ── self-test ────────────────────────────────────────────────────────────────
-// Prove the invoker timeout catches a hanging self-test and fails closed within
-// the bound — the exact path Codex #716 flagged. A short injected timeout keeps it
-// fast; the real HOOK_TIMEOUT_MS is untouched.
+// Prove the invoker timeout catches a hanging self-test, fails closed within the
+// bound, AND reaps the hung descendant (not just the bash it spawned) — the exact
+// path Codex #716 flagged. A short injected timeout keeps it fast; the real
+// HOOK_TIMEOUT_MS is untouched.
+
+/** Synchronous sleep — the self-test must poll for process death without going async. */
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** Is any process's command line matching `marker` alive? (pgrep exits 0 on a hit.) */
+function processAlive(marker) {
+  return spawnSync("pgrep", ["-f", marker], { encoding: "utf8" }).status === 0;
+}
+
+/** Poll processAlive until it reads `want`, or the budget runs out. */
+function waitForProcessState(marker, want, budgetMs) {
+  const end = Date.now() + budgetMs;
+  while (Date.now() < end) {
+    if (processAlive(marker) === want) return true;
+    sleepSync(100);
+  }
+  return processAlive(marker) === want;
+}
+
 function selfTest() {
   const results = [];
   const check = (name, ok, detail = "") => {
@@ -126,9 +161,22 @@ function selfTest() {
 
   const dir = mkdtempSync(join(tmpdir(), "sg-denylist-selftest-"));
 
-  // A hook stub whose --self-test never returns.
+  // POSITIVE CONTROL: the pgrep detection itself must be trustworthy — it must FIND
+  // a known-alive marker and MISS it once killed. Without this a reaped-assertion
+  // could pass because pgrep never worked, not because the descendant died.
+  const ctlMarker = `sgctl-${process.pid}-${Math.random().toString(36).slice(2)}`;
+  const ctl = spawn("sh", ["-c", `sleep 300 # ${ctlMarker}`], { detached: true, stdio: "ignore" });
+  ctl.unref();
+  const ctlFound = waitForProcessState(ctlMarker, true, 3000);
+  try { process.kill(-ctl.pid, "SIGKILL"); } catch { /* already gone */ }
+  const ctlGone = waitForProcessState(ctlMarker, false, 3000);
+  check("pgrep detection works: it finds a live marker process and misses it once killed", ctlFound && ctlGone, `found=${ctlFound} gone=${ctlGone}`);
+
+  // A hook stub whose --self-test hangs AND forks a uniquely-marked descendant that
+  // outlives the bash leader — exactly the shape the timeout must reap.
+  const hangMarker = `sgreap-${process.pid}-${Math.random().toString(36).slice(2)}`;
   const hangStub = join(dir, "hang.sh");
-  writeFileSync(hangStub, 'if [ "${1:-}" = "--self-test" ]; then sleep 30; fi\n');
+  writeFileSync(hangStub, `if [ "\${1:-}" = "--self-test" ]; then sh -c "sleep 300 # ${hangMarker}" & wait; fi\n`);
   const started = Date.now();
   const hung = runHookSelfTest(hangStub, 1000);
   const elapsed = Date.now() - started;
@@ -137,6 +185,10 @@ function selfTest() {
     timedOut(hung) && elapsed < 5000,
     `timedOut=${timedOut(hung)} elapsed=${elapsed}ms status=${hung.status} signal=${hung.signal} err=${hung.error?.code}`,
   );
+  // The heart of Codex #716: killing only the bash leaves the descendant alive.
+  // The group kill must have reaped it.
+  const descendantGone = waitForProcessState(hangMarker, false, 3000);
+  check("the hung DESCENDANT (not just the bash) is reaped by the group kill", descendantGone);
 
   // A well-behaved self-test is NOT misread as a timeout.
   const okStub = join(dir, "ok.sh");

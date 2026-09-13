@@ -1063,6 +1063,9 @@ jobs:
       - name: Bash deny-list hook self-test (a wrapped `sh -c` payload and unreadable input must DENY)
         run: node scripts/check-hook-denylist.mjs
 
+      - name: Bash deny-list gate self-test (a hung hook self-test must fail closed within the timeout and reap its descendant)
+        run: node scripts/check-hook-denylist.mjs --self-test
+
       - name: Evidence Coverage page is committed in sync
         run: |
           git ls-files --error-unmatch docs/evidence-coverage.html > /dev/null || (echo "::error::docs/evidence-coverage.html is not tracked — generated pages must be committed." && exit 1)

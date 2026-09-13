@@ -16,8 +16,9 @@ changed nine days later: DR-033 (2026-09-10) moved the company to **Build /
 execution** and made discovery an input, not the gate. DR-036 (2026-09-10) then
 defined what "ready" means numerically — a readiness figure derived by
 `node scripts/check-readiness-figure.mjs` (the lowest of three measured
-dimensions, never a typed number) — and set the bar: outreach opens only once
-that figure clears 80% (floor), targets 92–95%, and the goal is 100%. Read the
+dimensions, never a typed number) — and set the bar: outreach opens once
+that figure is 80% or higher (floor — exactly 80 opens it), targets 92–95%, and
+the goal is 100%. Read the
 completion list and scorecard below as engineering findings from 2026-09-01;
 read the phase and the gate on outreach from DR-033 and DR-036, not from this
 document's original framing.

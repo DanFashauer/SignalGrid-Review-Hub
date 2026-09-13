@@ -58,3 +58,12 @@ named exception, only when the Mac asked for it in mail). `scripts/**`,
 stay owner-gated (`check-owner-gated-surfaces.mjs`); a merge that touches one
 of those must say so in the PR body as "merged under DR-037" with the check-run
 id.
+
+DR-037 also carries ABSOLUTE exclusions the lane may NEVER self-merge, green CI
+or not: the launch profile, the launch-claims gate, and the publication boundary
+(these live under `scripts/**` but are owner-reserved regardless of green CI),
+and any surface `check-owner-gated-surfaces.mjs` classifies SAFETY_MACHINERY or
+OWNER_RESERVED. Those always escalate to the owner. A "green + DR-037 note" does
+NOT make those surfaces self-mergeable — the note documents an owner-approved
+merge of an owner-gated surface, it never substitutes for the owner's decision on
+one of these exclusions.

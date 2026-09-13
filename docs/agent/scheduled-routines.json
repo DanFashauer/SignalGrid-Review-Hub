@@ -88,7 +88,7 @@
   },
   {
    "id": "brain-cycle",
-   "trigger": "a cloud self-session trig_* created 2026-09-13 via create_trigger on the owner's explicit go (DR-032, Slice 3); the id is held in private operational state, not published here (AGENTS.md). Not a launchd agent; this tree cannot read the account scheduler, so this field is documentation, not gate-checked.",
+   "trigger": "awaiting-activation — a cloud self-session trigger is created via create_trigger only AFTER this active row lands on SignalGrid_Alpha AND a Slice-2 dry run is proven end-to-end (DR-032 registry-first bootstrap). A same-session activation on 2026-09-13 was created out of that order and REVERTED (trigger deleted) per Codex #705. Not a launchd agent.",
    "cron": "35 8 * * *",
    "binding": "self-session (resumes the operating session)",
    "authorizedBy": "Dan Fashauer (owner)",
@@ -98,9 +98,9 @@
    "escalationBoundary": "escalates to the owner every owner-gated route, every tie, and every unrecognised/ambiguous tier; auto-OPEN (draft) is the ceiling and auto-MERGE is off (owner GREEN switch in docs/agent/brain-cycle-config.json, default false). Fail-closed halts (not ships): a stale brain (check-brain-freshness), an absent or ran:false expected lens, or an unverifiable surface stops the cycle.",
    "heartbeatPath": "artifacts/agent-heartbeats/brain-cycle.json",
    "cadenceToleranceHours": 50,
-   "status": "active",
-   "activatedOn": "2026-09-13",
-   "activationEvidence": "Slice 3 go: the owner activated the Standing Brain Cycle in-session 2026-09-13 — 'the RESOURCE_INTAKE header everything in this needs to be added and used period', then answered 'Activate it now' to the explicit Brain Cycle activation question. A cloud self-session trigger (its trig_* id held in private operational state, not published here per AGENTS.md) was created against this operating session at the 35 8 * * * cadence; auto-OPEN draft is the ceiling and auto-MERGE stays OFF (docs/agent/brain-cycle-config.json autoMergeGreenSwitch:false). The never-fired clock runs from authorizedOn until the first fire writes artifacts/agent-heartbeats/brain-cycle.json."
+   "status": "awaiting-activation",
+   "awaitingReason": "Machinery ready and owner-authorized (2026-09-09, re-affirmed 2026-09-13 'Activate it now'). A same-session activation on 2026-09-13 was REVERTED (trigger deleted): it created the trigger BEFORE this active row reached SignalGrid_Alpha (a fire could not heartbeat — check-scheduled-routines fatals on a heartbeat for an awaiting routine) and before the dispatch->gauntlet->PR path was proven end-to-end. Re-activation follows the design order: land this row active on Alpha, prove a Slice-2 dry run, THEN create_trigger (DR-032; Codex #705).",
+   "awaitingSince": "2026-09-09"
   }
  ]
 }

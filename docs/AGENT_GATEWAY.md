@@ -82,7 +82,7 @@ Every boundary above transfers, and two are stronger:
   deterministic core with **no model at all**; a zero-egress build lane is coherent with that
   residency posture but is not the same thing and does not put inference into the product.
 
-## A routing-layer candidate — Switchyard
+## An Axis-B routing candidate — Switchyard
 
 [Switchyard](https://github.com/NVIDIA-NeMo/Switchyard) (NVIDIA, Apache-2.0) would sit a
 layer ABOVE the access gateways above. Where OmniRoute and LM Studio decide *how to reach* a

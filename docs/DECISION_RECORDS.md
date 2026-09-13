@@ -1824,10 +1824,13 @@ machinery is SAFETY_MACHINERY, so it can never self-merge its own improvements; 
 to it is an owner-reviewed PR, which deliberately paces the effort. Slice 1 ships the
 machinery DORMANT (`status: awaiting-activation`). The 2026-09-09 build directive authorized
 BUILDING only; ACTIVATION was subsequently authorized by the owner on 2026-09-13 ("Activate it
-now"), so no further owner consent is pending. What remains before the account trigger is
-created is the registry-first bootstrap (land the active row on `SignalGrid_Alpha`, prove a
-Slice-2 dry run, THEN `create_trigger`) — a technical prerequisite, not an owner gate (a
-same-session activation on 2026-09-13 was created out of that order and reverted, Codex #705).
+now"), so no further owner consent is pending. What remains is Slice-3 activation ENGINEERING,
+not an owner gate: activation is not yet mechanically landable (BRAIN_CYCLE_DESIGN.md Slice 3 —
+`authorizedOn` doubles as the gate's active-no-heartbeat clock, and `lane-deliver` gates
+pre-commit without staging the registry, so the awaiting→active transition needs a gate
+`activatedOn` baseline and a dedicated atomic path built and tested as code), and `create_trigger`
+must still come registry-first after a proven dry run (a same-session activation on 2026-09-13
+was created out of that order and reverted, Codex #705).
 
 **Doctrine guardrails.** Fail-closed (golden rule 2): a stale/unverifiable brain refuses;
 any absent / `ran:false` / UNVERIFIED expected lens is a HARD NO in the orchestrator's own

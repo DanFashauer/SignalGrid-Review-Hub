@@ -177,7 +177,7 @@ Composes the two disjoint layers that already exist (`docs/SELF_REVIEW.md`; `DEF
 - `cadenceToleranceHours: 50` — rule 3 requires ≤ `max(3×interval, 3h)` = 72 for daily; the registry uses 50
 - `writeScope`: `artifacts/brain-cycle/**` + `artifacts/lane-messages/**` + `artifacts/agent-heartbeats/<routine>.json (created on first fire)`
 - `heartbeatPath: artifacts/agent-heartbeats/<routine>.json (created on first fire)`
-- `authorizedBy` + `authorizationEvidence` quoting a **real** owner message — FATAL if missing; no consent inferred. Until Dan authorizes, ship the row as `status:"awaiting-activation"` with `awaitingReason` ≥40 chars + `awaitingSince`, exactly like `mac-lane-tick`.
+- `authorizedBy` + `authorizationEvidence` quoting a **real** owner message — FATAL if missing; no consent inferred. The row ships `status:"awaiting-activation"` with `awaitingReason` ≥40 chars + `awaitingSince`, exactly like `mac-lane-tick`, whenever it is declared-but-not-firing. It shipped that way in Slice 1 pending owner authorization; authorization landed 2026-09-13, so it now stays `awaiting-activation` pending the mechanical Slice-3 activation (the `activatedOn` baseline + atomic transition), not pending consent.
 - Bump the registry's top-level `transcribedFrom` to the new `trig_*` transcription date (an undated transcription is itself FATAL).
 
 **Gate.** `scripts/check-scheduled-routines.mjs` validates the row unchanged (preflight + CI + inside `lane-deliver`'s worktree) and holds the declaration against the firing evidence. It gets one new self-test case.
@@ -186,7 +186,7 @@ Composes the two disjoint layers that already exist (`docs/SELF_REVIEW.md`; `DEF
 
 **Both lanes, no new Mac routine.** The Mac half is **not** a second account trigger: brain-cycle's Mac-only audits are queued as `artifacts/sim-requests/` and serviced by the existing `scripts/mac/lane-tick.sh` `*/30` launchd tick → `sim:run-requests` → committed `artifacts/sim-results/`, which is how the cloud learns the Mac run happened.
 
-**BOOTSTRAP ORDER (strict).** Land the `brain-cycle` row on `SignalGrid_Alpha` FIRST — `lane-deliver` builds its worktree from origin and reads mainline's registry, so a heartbeat for an undeclared routine refuses ("not a routine declared") and an unowned heartbeat file would be FATAL. Deliver the first heartbeat SECOND.
+**BOOTSTRAP ORDER (strict).** Land the `brain-cycle` row on `SignalGrid_Alpha` FIRST — `lane-deliver` builds its worktree from origin and reads mainline's registry, so a heartbeat for an undeclared routine refuses ("not a routine declared") and an unowned heartbeat file would be FATAL. Do NOT then hand-deliver a first heartbeat: per the Slice-3 activation finding (round-4 below), `check-scheduled-routines.mjs` treats ANY heartbeat as proof of a fire, so the first heartbeat must come only from a REAL scheduled fire after `create_trigger`. The active row is landed via the gate `activatedOn` baseline (an active row with no heartbeat, its no-heartbeat clock measured from the activation date, not the 2026-09-09 consent date), and any dry-run proof lands in the board `artifacts/brain-cycle/<sha>/`, never at `heartbeatPath`.
 
 ---
 
@@ -254,4 +254,4 @@ Because `brain-cycle.mjs` and `check-brain-freshness.mjs` are `scripts/**` = SAF
 1. **Authorization.** ~~Do you want `brain-cycle` to exist, and at what cadence (daily `35 8 * * *` proposed)?~~ **RESOLVED 2026-09-13:** the owner authorized both existence and the daily `35 8 * * *` cadence ("Activate it now"). This question is closed; what remains is the technical registry-first bootstrap in Slice 3 above, not an owner decision (canonical: DR-032).
 2. **Mac tick.** Will you run `bash scripts/mac/install-launchd.sh` on your Mac? Without it, Swift/iOS/evidence audits never fire unattended.
 3. **GREEN auto-merge.** Keep it OFF (auto-OPEN only, you merge)? I recommend OFF until per-PR gate falsification exists — the mutation sweep that would catch a weakened gate runs post-merge.
-4. **Scope of what the cycle may auto-OPEN.** Start narrow (fossil-figure / dead-field fixes) and widen slice by slice, or open it to the full autonomous tier at Slice 2?
+4. **Scope of what the cycle may auto-OPEN.** ~~Start narrow, or open to the full autonomous tier at Slice 2?~~ **RESOLVED:** the owner directed the **full autonomous tier** (2026-09-09, "auto ... for the winner"), declared in `docs/agent/brain-cycle-config.json`. Slice 1 deliberately starts narrower (fossil-figure / dead-field) as an implementation ramp and widens to the full declared tier by Slice 2. Auto-OPEN (draft) is the ceiling either way; auto-MERGE stays behind the owner GREEN switch (open question 3), default OFF.

@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **102 of 102 surfaces have been read. 0 are partially read. 0 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2872 of 2872 in-scope tracked files** belong to a surface on this page (79 more are in declared out-of-scope trees). A file belonging to no surface fails the gate. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`) are surfaces like any other and every record in them is claimed, but their counts are not printed and are left out of the figures above: every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.
+Coverage of the tree is asserted, not assumed: **2876 of 2876 in-scope tracked files** belong to a surface on this page (79 more are in declared out-of-scope trees). A file belonging to no surface fails the gate. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`) are surfaces like any other and every record in them is claimed, but their counts are not printed and are left out of the figures above: every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -20,9 +20,9 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | --- | --- | ---: | --- | ---: | --- | --- | --- | ---: | ---: |
 | `.agents` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 1 |
 | `.claude-plugin` | tree | 1 | read | 1 | 2026-09-07 | cloud | docs/DECISION_RECORDS.md | 0 | 0 |
-| `.claude/*` | loose files | 2 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
+| `.claude/*` | loose files | 3 | read | 2 | 2026-09-13 | cloud lane (firsthand author + Codex #704 adversarial review across successive rounds, every finding verified against the files and addressed on this branch) | docs/DECISION_RECORDS.md | 1 | 0 |
 | `.claude/agents` | tree | 13 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 0 |
-| `.claude/commands` | tree | 9 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
+| `.claude/commands` | tree | 12 | read | 2 | 2026-09-13 | cloud lane (firsthand author + Codex #704 adversarial review across successive rounds, every finding verified against the files and addressed on this branch) | docs/DECISION_RECORDS.md | 25 | 0 |
 | `.claude/hooks` | tree | 3 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 11 | 0 |
 | `.claude/skills` | tree | 804 | read | 4 | 2026-09-06 | cloud lane (one independent fail-closed audit agent + firsthand read of every edit site and of the hook's verdicts) | docs/agent/EVIDENCE.md | 21 | 1 |
 | `.githooks` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |

@@ -647,10 +647,13 @@ async function selfTest() {
   // symlink-race (js/insecure-temporary-file, CodeQL #716).
   const hangDir = mkdtempSync(resolve(tmpdir(), "sg-hang-hook-"));
   const hangStub = resolve(hangDir, "hook.sh");
-  // An unusual sleep duration → a marker unique to this test. Plain `sleep` (no exec)
-  // so bash FORKS it as a descendant — the orphan case Codex #716 is about: killing
-  // only the bash would leave this sleep running.
-  const hangMarker = "sleep 314.159";
+  // A UNIQUE sleep duration → a marker no OTHER concurrent preflight can match.
+  // A fixed marker (e.g. "sleep 314.159") collides when two preflights run at once:
+  // each pgrep -f / pkill -f would see or kill the other test's descendant (Codex
+  // #716). process.pid is distinct per concurrent run; a random suffix guards pid
+  // reuse. Plain `sleep` (no exec) so bash FORKS it as a descendant — the orphan
+  // case: killing only the bash would leave this sleep running.
+  const hangMarker = `sleep 300.${process.pid}${Math.floor(Math.random() * 1e6)}`;
   writeFileSync(hangStub, `${hangMarker}\n`);
   const hangCommand = "echo this-command-name-must-appear";
   let hangFatal = false;

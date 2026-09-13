@@ -166,9 +166,15 @@ Every boundary above transfers unchanged, and one is sharpest:
   revision is vetted yet: only `README @ main` has been read, so "pinned" is a prerequisite
   (a vetted commit or tag) that a future run must satisfy, not a property this record already
   holds. Its install paths build from source (`pip install git+…`, `cargo install`), which is
-  install-time execution; per DR-041 and DR-022 it is **not** cloned or built into a live
-  working session. When the pipeline actually runs it, it runs in an isolated per-run
-  container with env-only keys, never touching this checkout or the decision path.
+  install-time execution. It is not installed or run in this working session. The isolation
+  shape a future run should take — an isolated per-run container, env-only keys, report-only,
+  never touching this checkout or the decision path — follows the same disciplined pattern the
+  repo's prior tool adoptions each set for their own tool (DR-022 installed Firecrawl as a
+  *pinned*, keys-env-only, report-only MCP client, not the vendor one-liner; DR-041 ran
+  LightRAG with its working directory *outside the tree* and hooks off). Those records govern
+  their own tools, not Switchyard; the concrete run constraint for Switchyard is ratified at
+  promotion, through the lab-registry intake and a record, not asserted as already-governing
+  here.
 
 ## What this repo does and does not carry
 

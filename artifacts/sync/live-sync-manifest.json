@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 77,
-  "fingerprint": "ee348c4a0afd2fb9225a37350e941c97786be77a19cddf0884aea83e7032fa63",
+  "manifestVersion": 78,
+  "fingerprint": "4afa60cf2fd5551d7754c70a1b0a6e46df579bf0f1d89dcfd8a0bd53a8d936f9",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -144,7 +144,7 @@
       "posture-allow": 189,
       "provisioning-order": 42,
       "provisioning-teardown": 28,
-      "reliability": 30,
+      "reliability": 33,
       "remediation-allow": 115,
       "response-accountability": 82,
       "rtls-custody": 223,

@@ -89,7 +89,7 @@ gates, then land the next. The landing conditions are DR-037's
 - Never let the orchestrator also be the author of the code it reviews; the fixer
   is never the reviewer.
 
-## Which model runs a stage (owner directive, 2026-09-12)
+## Which model runs a stage, and what happens when one runs out (owner directive, 2026-09-12; DR-047)
 
 The owner's words: "You need to be passing off tasks to other models and or use best
 ultracode model that uses the least amount but best results." So a stage runs on the
@@ -98,10 +98,46 @@ cheapest model that can do it, and the choice is stated in the brief:
 - **Reading, mapping, checking, mechanical edits, adversarial verification** run on the
   smaller tier (Sonnet). These stages are bounded by what is in the tree, not by
   judgment, and three cheap verifiers with distinct lenses beat one expensive one.
+- **Bulk, high-volume, fully-recheckable mechanical work** — log/output scanning, reads for
+  mapping, doc and codemap regeneration, simple reformatting — drops one tier further to
+  **Haiku**, the floor of the ladder (this is why `doc-updater` is `model: haiku`).
 - **Authorship and judgment** (a decision record, a doctrine paragraph, a design
-  choice, the reconciliation of two lanes' edits) run on the main model.
+  choice, gate-and-proof design, fail-closed auditing, decision-core reading, the
+  reconciliation of two lanes' edits) run on the main model (Opus).
+- **Fable / Mythos are the creative tier and never run an engineering or review stage.**
 - **The orchestrator never does a worker's reading itself.** It writes the brief,
   names the model, reads the report, and keeps the conclusion.
 
 The first run in this shape was the session-puck absorption on 2026-09-12: three
 Sonnet readers, one main-model author, three Sonnet verifiers, one fix round.
+
+### The tier is named in every spawn, and is never inherited (DR-047)
+
+A second owner directive, 2026-09-12: "no matter the model I'm currently running the
+fallback is ultracode and use Opus or whichever other model makes most sense for smarter
+token usage." A session on Fable 5.1 spawned subagents with no `model:`; each inherited
+Fable, and when the coordinator hit its Fable limit every inherited subagent started
+failing with 429 — a one-tier limit became a lane-wide stall. So:
+
+- **Every spawn states its model.** Registered `.claude/agents/*.md` roles do this by
+  frontmatter; an ad-hoc or background spawn sets the `model:` argument on the spawn itself
+  (the tool field beside the prompt), not in the brief prose — a brief-only tier does not
+  select the runtime model. A spawn with no named
+  tier is under-specified and does not run — the same bar as a worker with no falsifying check.
+- **Never inherit the coordinator's model.** Routing the bulk of work to Haiku/Sonnet keeps
+  those workers off the coordinator's Opus quota, so exhausting one tier does not cascade into
+  the others. The honest exception: an Opus judgment worker shares an Opus coordinator's quota
+  — naming the tier makes no separate bucket — so keep Opus-worker spawns few, and when the
+  Opus tier is exhausted let judgment work WAIT for the reset rather than downgrade it.
+
+### When a model hits its usage limit — fall back and continue, never go dark (DR-047)
+
+- **An unavailable or unknown tier resolves UP to Opus, never down to the limited model.**
+  Unknown tightens, never loosens (golden rule 2).
+- **A subagent killed by a 429 is logged as a still-open, pending unit and re-issued on the
+  fallback tier** — never silently absorbed. This is the `check-sim-requests.mjs` "pending
+  never counts green" discipline applied to an in-session spawn.
+- **What the orchestrator cannot do itself:** re-point its *own* coordinating model mid-turn.
+  Only the CLI's primary-model auto-fallback setting can, and the owner sets that to Opus so
+  the session continues at full capability instead of waiting for a human to notice silence.
+  Name that limit honestly in any run report rather than claiming the coordinator self-healed.

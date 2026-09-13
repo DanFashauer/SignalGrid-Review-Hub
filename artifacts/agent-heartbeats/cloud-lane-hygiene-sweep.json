@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-11T09:48:52.017Z",
-  "result": "quiet — cloud-lane hygiene sweep completed; capacity healthy, above the escalation floor; owner not escalated."
+  "firedAt": "2026-09-13T09:44:43.555Z",
+  "result": "quiet sweep — 9.5G free (75% used, well above the 1GB floor); pnpm store pruned (60 files, 1 pkg); 4 stale scratchpad op-files removed; no docker daemon or layer cache present"
 }

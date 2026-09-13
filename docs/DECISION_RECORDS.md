@@ -1822,9 +1822,15 @@ defects and escalate everything else — without ever merging a change to its ow
 ever assuming the Mac is awake, or ever letting a model decide a verdict. The cycle's own
 machinery is SAFETY_MACHINERY, so it can never self-merge its own improvements; every change
 to it is an owner-reviewed PR, which deliberately paces the effort. Slice 1 ships the
-machinery DORMANT (`status: awaiting-activation`); ACTIVATION (creating the account trigger
-and flipping the row active) needs a further explicit owner go — no consent is inferred from
-the build directive.
+machinery DORMANT (`status: awaiting-activation`). The 2026-09-09 build directive authorized
+BUILDING only; ACTIVATION was subsequently authorized by the owner on 2026-09-13 ("Activate it
+now"), so no further owner consent is pending. What remains is Slice-3 activation ENGINEERING,
+not an owner gate: activation is not yet mechanically landable (BRAIN_CYCLE_DESIGN.md Slice 3 —
+`authorizedOn` doubles as the gate's active-no-heartbeat clock, and `lane-deliver` gates
+pre-commit without staging the registry, so the awaiting→active transition needs a gate
+`activatedOn` baseline and a dedicated atomic path built and tested as code), and `create_trigger`
+must still come registry-first after a proven dry run (a same-session activation on 2026-09-13
+was created out of that order and reverted, Codex #705).
 
 **Doctrine guardrails.** Fail-closed (golden rule 2): a stale/unverifiable brain refuses;
 any absent / `ran:false` / UNVERIFIED expected lens is a HARD NO in the orchestrator's own
@@ -1884,10 +1890,25 @@ new self-test arms (config `{vetoLenses:[]}` + a security BLOCK → no winner; c
 applied, no crash) plus a new owner-gated self-test arm; all three exploit shapes reproduced against the
 real `decide()` and confirmed closed. The freshness gate and the import guard were re-confirmed SOLID.
 
-**Reversal.** Delete the five new files (freshness gate, decision core, spine, config, design
-doc), remove the `brain-cycle` registry row, unwire the three self-tests from preflight + CI,
-revert the one-line `check-owner-gated-surfaces.mjs` import guard and this record. No account
-trigger was created and the row is dormant, so nothing runs to stop; nothing in the product
+**Reversal.** WHILE DORMANT (the current state — a same-session activation on 2026-09-13 was
+created out of order and REVERTED, the trigger deleted, per Codex #705): delete the three
+machinery scripts (freshness gate, decision core, spine) and the config file, the `brain-cycle`
+registry row, the three self-tests from preflight + CI, the one-line
+`check-owner-gated-surfaces.mjs` import guard, and this record; no trigger exists, so nothing
+runs to stop. The design doc `docs/agent/BRAIN_CYCLE_DESIGN.md` is CITED (backticked) from
+`docs/agent/RESOURCE_INTAKE.md` and `docs/agent/EVIDENCE.md`, so `check-cited-paths.mjs` fails
+if it is removed while those citations stand: either delete it AND drop both citations in the
+SAME commit, or keep it as a historical tombstone. ONCE ACTIVATED (a live cloud self-session
+trigger exists): reversal MUST FIRST `delete_trigger` and CONFIRM it is gone (`list_triggers`
+no longer shows it) BEFORE removing any file — otherwise it keeps resuming a session against
+deleted scripts. A merely DISABLED trigger is NOT sufficient for the file-deletion path: a
+disabled trigger still appears in `list_triggers` (the `nightly-build-agent` shape,
+`enabled:false`) and can be re-enabled against the very files you are about to delete, so if you
+disable rather than delete, LEAVE the machinery in place and RETIRE the row instead. And if the
+routine ever FIRED (a `brain-cycle.json` heartbeat exists), RETIRE the registry row
+(`status: retired` + retirement evidence) rather than deleting it — a heartbeat for a deleted
+row makes `check-scheduled-routines.mjs` fatal on an orphan heartbeat (the established
+retire-not-delete shape, which also preserves proof the lane once ran). Nothing in the product
 depends on any of it.
 ## DR-033 — The company is past Customer Discovery; the current phase is Build / execution, and a phase change is a decision record before either lane acts on it (owner-directed 2026-09-10)
 
@@ -2204,8 +2225,10 @@ who presses merge, not what the classifier says: the lane may merge a SAFETY_MAC
 PR only when the five conditions above hold, and it must say so in the PR body under
 "Owner decision needed" as *"merged under DR-037"* with the check-run id. It still does
 not: edit `AGENTS.md` or a decision record on its own authority (a DR records an owner
-decision, as this one does); activate the Standing Brain Cycle (DR-032's activation clause
-is untouched — the cycle still auto-OPENS and never auto-merges); merge anything that
+decision, as this one does); activate the Standing Brain Cycle as part of THIS self-merge
+authority (DR-032 governs the cycle's activation separately — owner-authorized 2026-09-13 and
+proceeding via its registry-first bootstrap; the cycle still auto-OPENS and never auto-merges);
+merge anything that
 changes the launch profile, the launch-claims gate or the publication boundary (DR-021 §2
 — those remain the owner's); or delete branches.
 
@@ -2860,3 +2883,331 @@ hardware step, not only once); a prototype started on appetite rather than on a 
 gate is a violation of this record, not a reversal of it. The do-not-claim list in
 item 5 does not move on appetite either: a line leaves it only when the test or
 review that would make the claim true is recorded in `docs/agent/EVIDENCE.md`.
+
+## DR-044 — cactus-compute/needle is a NARROW, base-weights-only, offline extraction helper kept on the shelf, never on the decision path: its confidence is a learned score with the wrong failure polarity for golden rule 2, and no needle output may seed a fixture, rank evidence, feed a figure, or serve as an oracle (owner-directed 2026-09-12)
+
+**Question.** The owner shared [cactus-compute/needle](https://github.com/cactus-compute/needle)
+with *"Do everything please and also this will be really helpful so ingest this please."*
+Needle is an on-device tool-calling + structured-extraction model with a learned
+confidence head that escalates below a threshold — a shape that visibly resembles
+SignalGrid's own allow/step_up/escalate ladder, and the low-memory on-device tool
+that RUNS on this Mac where LightRAG (DR-041) did not. DR-039 sets the absorption
+bar (a resource is taken if any part can aid building the company; the only
+exclusions are licence, auto-execution, egress without consent, directory
+collision), the tool-evaluation-by-use skill requires a measurement not a memo,
+and golden rule 2 / DR-029 forbid ANY model on the decision path. What does the
+tree adopt, in what form, and what is the boundary?
+
+**Measured by use (isolated venv, python 3.12, `NEEDLE_TELEMETRY=0 DO_NOT_TRACK=1`,
+installed from the LOCAL CLONE at `53df049c4a1a82fca1027b81f9ff21336dfb0861`, base
+weights).** The engine is a single 14.2 MB native `libneedle.dylib` (the model is
+compiled in; no separate weights file) fetched once from HuggingFace
+`Cactus-Compute/needle2` and loaded in-process via ctypes. Warm inference footprint
+is ~48 MB process RSS / 46-56 MB engine self-report (the README's "~28 MB constant"
+understates it; the one-time cold download run measured ~129 MB and is not the
+steady state). Output is deterministic PER FIXED SESSION STATE — identical across
+separate processes and across `extract()` calls, which open and close a fresh engine
+each call — but NOT a pure function of input: a reused `Needle` gives path-dependent
+confidence unless `reset()` is called, so `extract()` is the safe entrypoint and
+reusing one instance across documents is a footgun. Offline: warm-cache inference
+makes ZERO HuggingFace calls (`_register_download` fires only when the dylib is
+absent, not on every init) and runs under `HF_HUB_OFFLINE=1`; only the first-ever run
+needs network. On extraction quality the confidence head is honest in the ONE
+direction that matters and unreliable in the other: no high-confidence-wrong output
+was produced (garbage → 0.0, wrong-domain → ~0.24), but a CORRECT SignalGrid
+extraction landed at 0.38, so a threshold does NOT cleanly separate correct from
+incorrect — the score gates "a call was produced", not "the call is right". Per
+needle's own `doc/apis.md` the score is `min(calibrated head, decode likelihood)` — a
+fail-closed gate, calibrated for the base model only — and `extract()` DISCARDS the
+field entirely (returns `None` on refusal), so the gate is reachable only through
+`complete()`/`run()`; finetuning DISABLES the head (forced to `None`), so the
+"calibrated confidence" strength and the "finetune it for our tools" remedy are
+mutually exclusive. The base model extracts terse/structured input correctly
+un-finetuned (`Decision: ALLOW. Subject: worker-7. …` → correct) and fails only on
+narrative prose (a 6-field access-decision narrative → empty, confidence 0.004).
+The default `strict=True` raises `ExtractionValidationError` on a legitimately
+grounded numeric (the README's own invoice `total=1200.0`): the native engine flags
+it ungrounded and the Python wrapper promotes any non-date ungrounded field to a hard
+raise, so `strict=False` is required for numeric fields.
+
+**Surfaces found (paths in `docs/agent/RESOURCE_INTAKE.md`).** Egress: (1) anonymous
+telemetry to a Supabase endpoint — DISABLED and verified in code, `track()` returns
+before spawning its thread when `NEEDLE_TELEMETRY=0`/`DO_NOT_TRACK`/`CI` is set, and
+plain `import needle` triggers none of it; (2) the one-time HF engine pull; (3) an
+OpenRouter (deepseek) call in the `[train]`/`--generate` data-synthesis path; (4) a
+HuggingFace UPLOAD in `build --upload` — (3) and (4) are consent-gated behind flags
+and keys but are real and were not in the first pass. No `hf_hub_download` passes
+`revision=`, and fetched artifacts are `pickle.load`ed, so "pinned 2.0.4" is a
+FILENAME convention, not an integrity pin. The inference engine binary's LICENCE is
+unverified — the repo's Apache-2.0 covers only the Python wrapper; the dylib is a
+separate HF-hosted artifact. `.github/workflows/` carries a daily-cron PyPI publish
+and a `v*`-tag GHCR publish that would auto-execute and collide with our tags if the
+repo were ever vendored. There are NO Claude Code hooks.
+
+**Call.**
+
+1. **Adopted-by-reference as a NARROW offline extraction helper, base weights only,
+   kept on the shelf — not a standing pipeline component.** If used at all: the
+   installed pip package (never the repo vendored), telemetry disabled, engine cached,
+   run by hand on TERSE/STRUCTURED text, and a human RE-KEYS the fields into the tree
+   after checking them against the source. Never the `[train]`/`--generate`/`--upload`
+   paths without explicit owner consent (external egress, CLAUDE.md "Ask before").
+
+2. **THE BOUNDARY (golden rule 2, DR-029).** *needle's confidence is a
+   45M-parameter neural net's learned probability about its own output; its
+   determinism is incidental to the computation and never a license to admit it, and
+   SignalGrid verdicts derive ONLY from fixture-backed, human-auditable signals — so
+   no needle score, extraction, or synthetic sample may be cited by, seed a fixture
+   for, rank evidence within, or serve as a test oracle to any gate, proof,
+   doc-figure, /v1 decision, or lib/\* path.* The allow/step_up/escalate resemblance
+   is architectural coincidence: SignalGrid gates on known signal STATE, needle on
+   model self-doubt, and needle's score moves the WRONG way for golden rule 2 — it
+   LOWERS on uncertainty, where the rule requires uncertainty to RAISE assurance. The
+   four one-hop laundering paths are barred explicitly: (a) using `needle
+   generate-data` to mint fixtures that back the core; (b) using its confidence to
+   rank/prioritize evidence or as a proof assertion; (c) feeding any needle-derived
+   number into a doc figure or `check-readiness-figure.mjs`, or pasting its JSON into
+   the tree; (d) finetuning on SignalGrid tool schemas — the result is still a model
+   and still barred.
+
+3. **Nothing of needle is in the tree.** The clone and venv live in the session
+   scratchpad only; this record and the `RESOURCE_INTAKE.md` row are the whole
+   footprint. It is the low-memory on-device option LightRAG (DR-041) is not, but the
+   two solve different problems (retrieval over a corpus vs. single-document
+   extraction) and neither is on the decision path.
+
+**Reversal.** The owner reverses by saying so; the reversal is two deletions — this record and the `RESOURCE_INTAKE.md` needle row — because nothing of needle is vendored, installed into a session, or referenced by any gate, proof, doc-figure or code path, by construction. Adopting it into any pipeline, or crossing the boundary in item 2 (needle output on the decision path, seeding a fixture, ranking evidence, feeding a figure, or a finetuned model), is a violation of this record, not a reversal of it, and needs its own decision record first.
+
+## DR-045 — Three safety defaults recorded on 2026-09-06 rather than made: the fail-closed value of each is proposed here with its code site, nothing is changed in this branch, and the owner vetoes by saying so (cloud lane, 2026-09-12)
+
+**Question.** Batch Y (2026-09-06, commit `5f0017c6`) closed its audit of the loose
+docs with three calls it recorded as the owner's rather than making: "the custody
+backstop blind to five custody axes (disclosed, pinned), NOT_COVERED credential
+exposure resolving to monitor, a GAPS entry for connector families unwired in the
+served core." The org self-evaluation of 2026-09-12 (`docs/agent/ORG_SELF_EVALUATION_2026-09-12.md:84`)
+found them still waiting, and read `docs/OWNER_ACTIONS.md:145-152` the way the owner
+wrote it on 2026-08-19: a reversible technical default is the team's to propose, and
+what is asked of him is a veto, not a design. So: for each of the three, what is the
+site, what is the value today, what is the fail-closed value under CLAUDE.md golden
+rule 2 (an unknown or unreachable signal raises assurance, never lowers it), and what
+does the owner have to say to stop it? (Custody is a deferred family here — not
+shipping; nothing in this record changes what is claimed.)
+
+**Proposal — three defaults, each fail-closed, none made here.** This record proposes;
+the code at every site below is untouched in the branch that carries it. Each item is
+made in its own PR, opened after this record is on the owner board, and only if the
+owner has not said otherwise; a veto before the PR stops it, a veto after the PR
+reverts it. Silence during the branch that wrote this is not consent — the PRs are
+opened by the next session that reads the board, not by this one.
+
+**1. The core backstop and the custody axes (a deferred family — not shipping).**
+*Site.* `lib/signalgrid-core/src/evidence.ts:104-156`, `deriveCriticalSignalsPresent`
+— the layer that holds when a custom rule set does not. Pinned at
+`scripts/src/signalgrid-core-proof.ts:3116` (`BACKSTOP_FIELDS`, seven fields) and
+`scripts/src/zero-trust-principles-proof.ts:476` (`DECLARED_AXES`, the same seven);
+the boundary itself is asserted in the affirmative at `scripts/src/zero-trust-principles-proof.ts:245-259`.
+*Current value.* The ladder disqualifies on `identityEnabled`, `deviceCompliance`,
+`deviceManaged`, `deviceEncrypted`, `osSupported`, `postureFreshness` and
+`dockEvidenceFreshness`. The custody fields of the same evidence record —
+`custodyState`, `dockChargeState`, `batteryHealth`, `tamperState`, `dockState`,
+`badgeBinding` (`lib/signalgrid-core/src/types.ts:486-532`; the 2026-09-06 note said
+five, the record has six outside the ladder, `dockEvidenceFreshness` being the one
+inside it) — are not in it, so with every custody field `unknown` a compliant device on
+a critical workflow ALLOWS. The zero-trust proof records why that is deliberate
+(`:207-218`): `unknown` is what every tenant without custody hardware reports, and a
+blanket rule would step up every dockless fleet forever; a channel that EXISTS and
+cannot vouch (`offline`, `faulted`, `sensor_unavailable`, `removed`) already removes
+allow (`:221-238`). The gap is the quiet middle: a tenant that HAS a custody channel
+whose feed stops arriving as `unknown` rather than as `offline` — for that tenant the
+unknown lowers nothing, which golden rule 2 forbids. (Custody is a deferred family in
+the launch profile: not shipping, built behind proofs. This item changes what the
+proofs assert, not a customer's verdict today.)
+*Proposed value.* The backstop gains the six custody fields CONDITIONALLY: a tenant
+declares its custody channel once (`Tenant` in `lib/signalgrid-core/src/types.ts:41`
+gains `custodyChannel: "none" | "dock" | "rtls"`, no default), and for a tenant that
+declared a channel, `unknown` on any of the six disqualifies `criticalSignalsPresent`
+exactly as an unknown compliance answer does today. A tenant that declares `none`
+keeps the boundary the proof pins. An UNDECLARED tenant is treated as declared — the
+raising answer — so the seeded demo tenants declare `none` in the fixture and nothing
+else moves. Custody stays a deferred family throughout: this moves what the proofs
+assert, not a claim. Fail-closed because the one unknown that existed here (does this fleet have
+a channel?) stops being resolved in the loosening direction. Moves in the same commit:
+`BACKSTOP_FIELDS`, `DECLARED_AXES`, and the BOUNDARY assertion (split into "declared
+none → allow" and "declared dock, all unknown → step_up").
+*Veto.* The owner says so; the boundary stays as pinned today and this item is marked
+VETOED here with the date.
+
+**2. `NOT_COVERED` resolving to `monitor`.**
+*Site.* `lib/integrations/src/integrations/credential-exposure/evaluate.ts:81` — the
+one the 2026-09-06 note named — and the identical line in four siblings:
+`lib/integrations/src/integrations/identity-risk/evaluate.ts:77`,
+`lib/integrations/src/integrations/data-protection/evaluate.ts:80`,
+`lib/integrations/src/integrations/peripheral-control/evaluate.ts:82`,
+`lib/integrations/src/integrations/challenge-capability/evaluate.ts:74`.
+*Current value.* `posture: "unknown", reasonCode: "NOT_COVERED", recommendedAction: "monitor"`
+— a device (or principal) no scanner, IdP risk feed, DLP feed or peripheral-control
+policy covers is graded a blind spot to investigate. `monitor` sits one rung above
+`none` on the family's own ladder (`lib/integrations/src/integrations/credential-exposure/evaluate.ts:23-28`:
+none < monitor < step_up < alert < restrict < escalate) and changes nothing the
+holder meets. Pinned at `scripts/src/credential-exposure-proof.ts:91` (posture and
+reason only) and `scripts/src/challenge-capability-proof.ts:162` (which pins `monitor`).
+*Proposed value.* `step_up` — the answer the rest of the catalogue already gives the
+same condition: `lib/integrations/src/integrations/sse-egress/evaluate.ts:76`,
+`lib/integrations/src/integrations/macos-posture/evaluate.ts:90`,
+`lib/integrations/src/integrations/pacs-access/evaluate.ts:137`, and custody-beacon
+(itself a deferred family, not shipping; `scripts/src/custody-beacon-proof.ts:91`: "covered=false → step_up, never a
+confirmation"). Fail-closed because "we have no coverage of this device" is exactly the
+unknown golden rule 2 says must raise, and `monitor` does not raise. Two pins and one
+doc move with it (`challenge-capability-proof.ts:162`, `docs/CREDENTIAL_EXPOSURE_SIGNAL.md:60`;
+`credential-exposure-proof.ts:91` needs an action assertion added, since today it has
+none). Scope, stated plainly: these five are library surfaces the served `/v1` core does
+not import (`docs/DEPLOYMENT.md:97`, measured 2026-09-06), so the change alters what
+the proofs and any future wiring assert, not a verdict a customer meets today. The
+compounding row — an UNREPORTED collection grading `trusted` / `clean` (the
+"unreported collection → verdict" table in `docs/BUILD_BACKLOG.md`, owner-gated on an
+"observed" distinction) — is a different defect and stays where it is.
+*Veto.* The owner says so; `monitor` stays and this item is marked VETOED with the date.
+
+**3. A `GAPS` entry for the connector families the served core does not consume.**
+*Site.* `scripts/launch-profile.mjs:692`, the `GAPS` array — four entries today, and the
+only one on `surface: "connector-families"` (`:695`) is the Graph transport default.
+An owner-merged file (worker rule; `scripts/check-owner-gated-surfaces.mjs` classifies
+it SAFETY_MACHINERY), so the entry is written out here and not applied.
+*Current value.* No declared gap says what `docs/DEPLOYMENT.md:97` measures: every
+connector family under `lib/integrations` is exercised by its proof and imported by
+nothing under `artifacts/api-server/src` (`grep -rn "@workspace/integrations" artifacts/api-server/src --include=*.ts`
+→ no output), so a family "built" is not a family the `/v1` verdict reads. The launch
+profile is what `scripts/check-launch-claims.mjs` and the readiness figure read; a gap
+that is true in a deployment doc and absent from the profile is a claim by omission.
+*Proposed value.* Add to `GAPS`:
+`id: "connector-families-unwired-in-served-core"`, `surface: "connector-families"`,
+`whatIsMissing: "The served /v1 decision path reads no connector family: artifacts/api-server/src imports nothing from @workspace/integrations, so every family's evidence reaches a verdict only through its proof and the simulator. A family's proof being green is not that family deciding for a customer."`,
+`closedWhen: [{ dir: "artifacts/api-server/src", anyFileContainsAll: ['"@workspace/integrations"'] }]`
+— the same self-closing shape the four existing entries use, so the entry deletes
+itself (the build fails until it is removed) the day the served core imports the
+package. Fail-closed because until then the profile, and everything that reads it,
+counts the wired surface as the shipped one instead of letting the library surface
+stand in for it.
+*Veto.* The owner says so, or merges a different wording; the profile is his file.
+
+**Already closed, so not proposed twice.** Two neighbours the 2026-09-12 evaluation
+listed beside these are done in the tree: the `vuln-scan` empty-set default is now
+derived (`options.scanned ?? findings.length > 0`; the BUILD_BACKLOG entry is ticked)
+and the eleven paginating connectors throw `incomplete_read` at the page cap
+(`KNOWN_SILENT` empty). Both are cited here so nobody re-opens them as owner calls.
+
+**Evidence.** Each site above read in full on this branch before citation; the
+2026-09-06 wording recovered from `git show 5f0017c6 -- docs/agent/LOOP.md`; the
+proof pins located by running `grep -rn "NOT_COVERED" scripts/src/*.ts` and
+`grep -n BACKSTOP_FIELDS scripts/src/signalgrid-core-proof.ts`; the served-core
+measurement re-run 2026-09-12 (`grep -rln "@workspace/integrations" artifacts/api-server/src`
+→ nothing). Golden rule 2 as written in `CLAUDE.md`; the delegation rule as written in
+`docs/OWNER_ACTIONS.md:145-152` and this file's preamble.
+
+**Reversal.** The owner vetoes any item by saying so — one line, in chat or on the
+board — before or after its PR; before, the PR is not opened; after, the PR is
+reverted and the pins go back to what they assert today. The item is then marked
+VETOED here with the date and the reason he gave, and stays on the record so the
+next audit does not re-propose it. Nothing in this record changes what may be
+CLAIMED (DR-021 §2): each of the three is a library or governance surface, and the
+launch-claims gate governs the prose either way.
+
+## DR-047 — Usage-limit fallback and token-smart model routing for the coordinating lane and its subagents (owner-directed 2026-09-12)
+
+**Context.** On 2026-09-12 a cloud-lane session ran on Fable 5.1 — the creative-writing tier (`.claude/commands/fable.md`), already a mismatch for engineering orchestration. Background subagents were spawned without an explicit `model:`, so each inherited the coordinator's model. When the coordinator hit "You've reached your Fable limit," the same quota that stopped it started returning 429 on every inherited subagent call — including work with no creative content and no reason to be blocked. Nothing detected the usage-limit signal and re-issued the turn on a capable model; a human switched the session to Opus after roughly an hour, during which the cloud lane went dark. (The exact timestamps and the identities of the killed subagents are not in the tree; whoever amends this record should attach the transcript evidence the way every other DR cites concrete output.) The repo already proves the safe pattern is normal: all 13 `.claude/agents/*.md` roles pin an explicit tier (`architect`/`planner`/`fail-closed-auditor`/`gate-and-proof-engineer`/`verdict-core-reader`/`agent-platform-steward` on opus; `code-reviewer`/`security-reviewer`/`e2e-runner`/`refactor-cleaner`/`tdd-guide`/`build-error-resolver` on sonnet; `doc-updater` on haiku), `docs/agent/BRAIN_CYCLE_DESIGN.md` assigns opus/sonnet lenses per review subagent, and `docs/agent/agent-tiers.json` derives tier from that frontmatter rather than trusting prose. The hole is the ad-hoc / background spawn path, which has no frontmatter to declare a tier against and no gate to catch its absence — so inheritance of a possibly-limited model stays possible exactly there.
+
+**The question this settles.** Given what the coordinating agent can and cannot control, what routing and fallback doctrine keeps a model usage-limit from ever again stalling the lane, and routes subagents token-smart?
+
+**The directive (owner, in his own words, 2026-09-12).** "no matter the model I'm currently running the fallback is ultracode and use Opus or whichever other model makes most sense for smarter token usage." ("Ultracode" is the owner's term for running at maximum capability; the model-family reference carries no id by that name, so the concrete model that satisfies it here is Opus.)
+
+**What the coordinating agent controls, and what it does not — stated first, because a rule aimed at the wrong actor is a fait accompli, the failure the DR format exists to prevent.**
+- The AGENT controls: the model tier of every subagent it spawns; never letting a spawn inherit the coordinator's model; never over-spawning onto the model that is already limited; and treating a usage-limit / 429 as a fallback-and-continue-and-log event rather than a silent death.
+- The OWNER / CLI controls: whether the *coordinating* session auto-switches its own primary model when that model hits its usage limit. A running session cannot re-point its own brain mid-turn — only the client-side primary-model auto-fallback setting can. This record cannot gate that behavior; it names the one owner action instead (rule 6).
+
+**Decision.**
+1. **Explicit tier per spawn; never inherit.** Every subagent or background dispatch sets its model on the spawn's own `model:` field (the tool argument beside the prompt), never only in the brief prose — a tier named in the brief does NOT select the runtime model, so a brief-only spawn still inherits the coordinator's. A spawn that omits the `model:` field is under-specified and must not run — the same bar the orchestrator applies to a worker with no falsifying check. Registered `.claude/agents/*.md` roles set it by frontmatter; ad-hoc and background spawns set the `model:` argument directly.
+2. **Token-smart tiering, concrete (cheapest tier that can do the stage).** Bulk, high-volume, fully-recheckable mechanical work — log/output scanning, reads for mapping, doc and codemap regeneration, simple reformatting — runs on **Haiku 4.5**. Reading/mapping that feeds a decision, mechanical edits, implementation, test-writing, refactors, and adversarial verification run on **Sonnet 5** (three cheap verifiers with distinct lenses beat one expensive one). Authorship and judgment where a wrong call is expensive to unwind — decision records, doctrine, design/architecture, gate-and-proof design, fail-closed auditing, decision-core reading, reconciling two lanes' edits — run on **Opus** (5 / 4.8). **Fable / Mythos** are the creative tier and are never assigned to an engineering or review spawn.
+3. **Fail-closed on an unavailable tier.** If an assigned tier is unavailable or unknown, the work resolves UP to Opus, never down to the model that is already limited. This mirrors golden rule 2 and DR-044's own words: unknown tightens, never loosens.
+4. **Contain a tier's exhaustion; be honest where it cannot be contained.** No spawn inherits the coordinator's model. Routing the bulk of work to Haiku/Sonnet keeps those workers off the coordinator's Opus quota, so exhausting one tier does not cascade into the others — the mechanism that turned one Fable limit into a lane-wide 429 storm. The exception, stated plainly: an Opus judgment worker shares an Opus coordinator's quota (naming the tier does not create a separate bucket), so Opus-worker spawns are kept few, and when the Opus tier itself is exhausted, judgment work WAITS for the reset (fail-closed, rule 3) rather than downgrading to a weaker model.
+5. **A usage limit is an event, not an ending.** A subagent killed by a 429 is recorded as a still-open, pending unit of work and continued on the fallback tier — never silently absorbed. This extends the existing "pending is reported on every run and never counts green" discipline (`check-sim-requests.mjs`) from cross-machine sim requests to an in-session spawn that died mid-task.
+6. **The one owner action (rule 3 for the coordinator's own model).** The owner sets the CLI's primary-model auto-fallback to Opus, so that when the current coordinating model hits its usage limit the session continues on Opus at full agentic capability instead of going dark. The agent cannot perform this switch on itself; naming it here is the record's honest boundary.
+7. **The decision-path boundary is untouched.** This record governs which *Claude* model powers a coordinating session and its subagents — a different axis from DR-029's gateway boundary and the model-tap boundary, which keep every model, Claude or otherwise, out of the deterministic decision path. Neither is relaxed. DR-029's boundary is a RUNTIME one — product code must not call, import, or depend on the AI gateway — and it does NOT bar an engineering or review agent from READING `lib/*` or a proof; rule 2 deliberately assigns an Opus agent to read the decision core (`.claude/agents/verdict-core-reader.md`). No model is added to the runtime decision path.
+
+**Consequences.** Routing becomes cheaper and a single tier's exhaustion is contained to that tier. The lane no longer depends on a human noticing silence: the coordinator falls back (owner setting, rule 6) and stalled spawns survive as pending (rule 5). A follow-up may add a gate over the ad-hoc spawn path, owned by `gate-and-proof-engineer`, in the shape of `check-agent-roster.mjs` — deriving-and-gating the declared tier rather than trusting convention; until it exists, rules 1–5 are operating doctrine backed by review, not yet by a script, and this record says so honestly. Numbering note: DR-044 and DR-045 currently live only on open branches and DR-046 is unclaimed; this record takes DR-047 to avoid a collision as those land, and must be renumbered if they merge in a different order.
+
+**What does not change.** Claim discipline (DR-021 §2, DR-033 item 4): this is internal build-lane doctrine, never a buyer-facing claim. The verdict enum, the determinism invariant, and the Decision Envelope are untouched. DR-029 and the (unmerged) DR-044 boundary gate stand as written.
+
+**Reversal / amendment.** The owner reverses by saying so; amend the numbered rules and the SKILL section ("Which model runs a stage") together and keep the record and its history. A tier assignment may be re-mapped, or the ad-hoc-spawn gate added, by a later record that names what changed and why.
+
+## DR-048 — fast-check is adopted as property-based testing INSIDE the proof suite: dev-only, seeded/deterministic, invariants proven over generated inputs — the first intake from the GitHub resource scanner (owner-directed 2026-09-12)
+
+**Question.** The owner directed that the strongest fits from the new GitHub
+resource scanner (`pnpm run scan:resources`) be intaken and wired into the org's
+machinery so the lanes are freed to build what tools cannot — *"add it to the
+brain and allow for more time of others in the organization."* The first pick is
+[dubzzz/fast-check](https://github.com/dubzzz/fast-check) (MIT, 5.1k★): a pure
+property-based testing library, no MCP, no hooks, no egress, no session-config.
+What is adopted, where does it land, and what keeps it from becoming a way green
+is certified dishonestly?
+
+**Measured by use.** Installed `fast-check@^4.10.0` as a devDependency of the
+`@workspace/scripts` workspace only (lockfile regenerated clean, no darwin drift).
+Extended the existing gating proof `proof:reliability` with three properties, each
+run over 500 GENERATED windows with a fixed seed (4321): (a) worst-status-wins —
+`computeReliability(...).overall` equals the max-rank of its SLO statuses; (b)
+golden rule 2 as a property — appending a failed-open record never LOWERS the
+overall status rank; (c) purity — the same window computes an identical report.
+Result: 33/33 checks pass (was 30). Falsifiability confirmed independently: a
+deliberately false property throws and is caught, a true one passes — the
+properties are real gates, not vacuous. Deterministic: fast-check uses its own
+seeded PRNG, not `Math.random`, so the gate is reproducible run to run.
+
+**Call.**
+
+1. **Adopted as a dev/test-only property-testing capability INSIDE the proof
+   suite.** It is a devDependency of `@workspace/scripts`; it never enters `lib/*`,
+   `/v1`, connectors, shipped code, or a decision path. Property generators MUST be
+   seeded so every gate stays deterministic — an unseeded generator in a gate would
+   reintroduce the `Math.random` non-determinism golden rule 2 forbids.
+
+2. **This record exists because fast-check changes HOW GREEN IS CERTIFIED**
+   (intake rule 3, `docs/agent/RESOURCE_INTAKE.md` — the shape DR-029 and DR-031
+   also took): the proof now asserts invariants over generated inputs, not only
+   fixtures. That is the value — an invariant proven for ALL shapes of input, not
+   the handful we thought to write down — and it is why it is gated behind a DR.
+
+3. **What it offloads.** Property tests can now be added to any pure proof, so the
+   org stops hand-enumerating edge cases a generator finds in seconds. This is the
+   first intake from the scanner; the next candidates (an MCP build helper for the
+   Mac, an MCP/agent security scanner to automate the intake security review) each
+   get their own measured pass and, where they change how green is certified, their
+   own record.
+
+**Reversal.** The owner reverses by saying so; the reversal is three edits —
+remove `fast-check` from `scripts/package.json`, delete the property section
+(section 6) from `scripts/src/reliability-proof.ts`, and regenerate the lockfile —
+because nothing else depends on it, by construction. Putting fast-check output on
+a decision path, or an unseeded generator into any gate, is a violation of this
+record, not a reversal of it.
+
+## DR-049 — The agent collection as repeatable passes: `/review-pass`, `/refactor-pass`, `/build-fix` (owner-directed 2026-09-13)
+
+**Context.** The owner re-shared [affaan-m/ECC](https://github.com/affaan-m/ecc) (already absorbed 2026-08-30, installed on demand via `pnpm run ecc:install`) with a sharpened directive, in his own words: *"The agent collection is the key idea here — turning repeatable review, refactor, and build-fix tasks into a workflow is more useful than treating Claude Code like a single prompt box. This should be applied to everything so far plus add this and help utilize this."* Held against the tree first (DR-021 §4, DR-024 review-stack): the repo already HAS the agents ECC names — `.claude/agents/` carries `code-reviewer`, `refactor-cleaner`, `build-error-resolver`, plus the first-party `signalgrid-reviewer` skill, `fail-closed-auditor`, `gate-and-proof-engineer`, and `verdict-core-reader` — and the generic built-ins `/code-review`, `/simplify`, `/security-review`. What it did NOT have was any repeatable *pass* that runs the right agents together and requires this repo's own gates green. The agents were invoked ad hoc, one prompt at a time — exactly the "single prompt box" the owner is calling out. ECC's own quick-reference shows the shape to adopt: `/code-review`, `/review-pr`, `/build-fix`, `/santa-loop`, `/orch-*` are each a named pass, not a lone agent.
+
+**The question this settles.** How to turn the existing agent collection into repeatable, SignalGrid-mapped passes for the three tasks the owner named, without duplicating what already ships and without pulling in ECC's whole surface before a need names it.
+
+**Decision.**
+1. **Three passes, each a thin orchestrator of EXISTING agents wired to this repo's gates** — new command files under `.claude/commands/`, each carrying its own failure mode per the `COMMANDS.md` convention:
+   - `/review-pass` — ponytail-review FIRST (DR-024's minimalism lens on every diff), then a parallel panel of the two always-on vetoes **fail-closed-auditor + security-reviewer** plus **code-reviewer** (adding verdict-core-reader when a decision path moves). **gate-and-proof-engineer runs AFTER the panel in its own isolated worktree** — it plants defects, so it is never in the shared-checkout parallel panel — and **signalgrid-reviewer is LOADED AS A SKILL** for its discipline, not dispatched as a parallel agent. Every dispatched agent stays inside its agent-tiers.json writeScope and uses the local tool corrections recorded there. Findings adversarially verified, then `preflight` + `verify:breadth` green (and `test:api` N/N if the API moved). It is the local mirror of what CI and the Codex reviewer do.
+   - `/refactor-pass` — refactor-cleaner (scoped to `lib/`, reachability proven with the repo's `typecheck` + `check-package-reachability.mjs` + `git grep`, never `npx knip/depcheck/ts-prune`) + ponytail (ultra), golden rules enforced (no behavior edit to DecisionEngine.swift/AppWorkflows.swift; no Date.now()/Math.random()/I/O in a decision path; every gating switch keeps its default), behavior proven unchanged by `typecheck` + `review:invariants` + `preflight` + `verify:breadth`, one runnable check left behind.
+   - `/build-fix` — reproduce the failing check from output, then route the minimal-diff fix to the agent that OWNS the failing surface (`artifacts/` → build-error-resolver; `scripts/src/e2e/` → e2e-runner; the rest of `scripts/` or a gate/proof → gate-and-proof-engineer; a decision path or DecisionEngine.swift/AppWorkflows.swift → STOP and escalate), each following its agent-tiers.json tool corrections; prove it green by re-running the SAME check; never a gate bypass.
+2. **A router, `.claude/WORKFLOWS.md`**, names the standard passes, when to run each, the DR-047 model tiering they use, and what is deliberately deferred. It is the "used the same way every time" that turns a collection into workflows.
+3. **Reuse, do not duplicate.** The generic `/code-review`, `/simplify`, `/security-review` built-ins stand; the passes are the SignalGrid-specific version that also runs the repo's own agents and REQUIRES its gates. The steward and merge cycles are already workflows (Routines); the loop rituals are `/loop-start` / `/loop-end`.
+4. **Defer the rest of ECC until a need names it (YAGNI).** Per-language review passes, the adversarial dual-model convergence loop (`/santa-loop`), and the end-to-end orchestrated feature/defect workflows (`/orch-*`) are NOT wired into the repo's command set. ECC is installed on demand if one is wanted. Adding one is a later `agent-platform-steward` change with its own record.
+5. **Ownership and gate-safety.** This is `agent-platform-steward`'s surface. The plugin manifest (DR-030) references `commands` as a directory, so new command files need no manifest edit; the content is generic build tooling (no product/tenant/customer/PHI/launch claim), taking the `.claude` `tooling` class under the publication boundary. `COMMANDS.md`'s count was corrected in the same change (truth doctrine — a stale count is a false statement).
+
+**Consequences.** Review, refactor and build-fix become one repeatable invocation each, wired to the gates that actually certify green here, instead of a remembered sequence of agent prompts. The passes are thin — they add no new logic, only composition — so they cannot drift from the agents or gates they name without those failing first. No new gate is added yet; a follow-up owned by `gate-and-proof-engineer` could assert each pass names only agents that exist (the same shape as the DR-047 ad-hoc-spawn gate), but until it exists these passes are operating doctrine backed by review, and this record says so honestly.
+
+**What does not change.** Claim discipline (DR-021 §2, DR-033 item 4): this is internal build-lane tooling, never a buyer-facing claim. The verdict enum, the determinism invariant, the Decision Envelope, DR-029's runtime decision-path boundary, and DR-024's review-stack order (ponytail on top, then ECC, then the correctness/fail-closed scans) are untouched — these passes are how the stack is invoked, not a change to it.
+
+**Reversal / amendment.** The owner reverses by saying so; delete the three command files and `WORKFLOWS.md` and revert the `COMMANDS.md` count (fully reversible, no code depends on them). Amend a pass by editing its command file through `agent-platform-steward` and noting what changed here.

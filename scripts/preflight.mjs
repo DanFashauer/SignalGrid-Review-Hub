@@ -141,6 +141,10 @@ const STEPS = [
   { name: "Compose healthcheck self-test (a planted port without a healthcheck must fail)", cmd: ["node", "scripts/check-compose-healthchecks.mjs", "--self-test"] },
   { name: "Compose healthchecks (every published port has a service that says whether it answers)", cmd: ["node", "scripts/check-compose-healthchecks.mjs"] },
   { name: "Derived doc figures (a stated count equals the artifact it describes)", cmd: ["node", "scripts/check-derived-doc-figures.mjs"] },
+  // DR-043 rule 4 (Puck 5): the hardware tally in docs/agent/DISCOVERY_LOG.md's
+  // Running tally (Rh/Ch/Ph) is derived from row marks, never typed by hand.
+  { name: "Discovery-log self-test (a planted hardware-tally drift must fail; a hardware-tagged row must move the count)", cmd: ["node", "scripts/check-discovery-log.mjs", "--self-test"] },
+  { name: "Discovery-log hardware tally (the typed Rh/Ch/Ph sentence matches the Running tally's marks)", cmd: ["node", "scripts/check-discovery-log.mjs"] },
   // Two documents stated the four tier branches as live after all four were pruned.
   // Offline by design: it compares prose to the tracked prune record, not to origin.
   { name: "Documented-branch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-documented-branches.mjs", "--self-test"] },

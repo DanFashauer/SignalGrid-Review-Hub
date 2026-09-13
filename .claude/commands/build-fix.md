@@ -46,8 +46,9 @@ Whichever agent you route to: it operates only within its
 corrections recorded there, never the vendored default command — the brief has to
 say so. build-error-resolver's `npx eslint` / `npm run build` / `npm install` /
 denied cache-removal are each replaced with the repo's registered commands
-(agent-tiers.json ~line 80), and e2e-runner's nonexistent `tests/auth.spec.ts`
-invocation is replaced (~line 56); an agent handed only a minimal-diff brief will
+(agent-tiers.json ~line 80), and e2e-runner's nonexistent example spec path (one
+that does not exist in this repo) is replaced (~line 56); an agent handed
+only a minimal-diff brief will
 otherwise run an invalid command instead of reproducing the named check. Tell it:
 "reproduce and fix the named check using your agent-tiers.json correction, never
 the vendored command." Then fix the error ONLY — no refactor, no architecture

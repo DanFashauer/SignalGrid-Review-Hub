@@ -304,7 +304,9 @@ class HookFatal extends Error {}
  *    call rejects fail-closed, naming the command — never hangs, never allows. */
 function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn("bash", [hookPath], { cwd: repo, stdio: ["pipe", "pipe", "pipe"] });
+    // detached:true makes the child its own process-group leader, so a hung
+    // DESCENDANT (the BSD sed in the deny hook, Codex #716) can be killed with it.
+    const child = spawn("bash", [hookPath], { cwd: repo, stdio: ["pipe", "pipe", "pipe"], detached: true });
     let stdout = "";
     let stderr = "";
     // Whichever of {timeout, error, EPIPE, close} fires FIRST settles the Promise;
@@ -319,7 +321,11 @@ function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS) {
       fn(arg);
     };
     const timer = setTimeout(() => {
-      child.kill("SIGKILL");
+      // Kill the whole process group (negative pid), not just the bash we spawned —
+      // otherwise a hung descendant (the BSD sed, Codex #716) is orphaned and keeps
+      // consuming CPU. Fall back to the child alone if the group is already gone.
+      try { process.kill(-child.pid, "SIGKILL"); }
+      catch { try { child.kill("SIGKILL"); } catch { /* already exited */ } }
       settle(reject, new HookFatal(`${hookPath} did not answer within ${timeoutMs}ms judging ${JSON.stringify(command)} — it hung (fail-closed).`));
     }, timeoutMs);
     child.stdout.on("data", (d) => { stdout += d; });
@@ -641,7 +647,11 @@ async function selfTest() {
   // symlink-race (js/insecure-temporary-file, CodeQL #716).
   const hangDir = mkdtempSync(resolve(tmpdir(), "sg-hang-hook-"));
   const hangStub = resolve(hangDir, "hook.sh");
-  writeFileSync(hangStub, "sleep 30\n");
+  // An unusual sleep duration → a marker unique to this test. Plain `sleep` (no exec)
+  // so bash FORKS it as a descendant — the orphan case Codex #716 is about: killing
+  // only the bash would leave this sleep running.
+  const hangMarker = "sleep 314.159";
+  writeFileSync(hangStub, `${hangMarker}\n`);
   const hangCommand = "echo this-command-name-must-appear";
   let hangFatal = false;
   let hangNamed = false;
@@ -651,14 +661,36 @@ async function selfTest() {
   } catch (e) {
     hangFatal = e instanceof HookFatal;
     hangNamed = e instanceof HookFatal && e.message.includes(JSON.stringify(hangCommand));
-  } finally {
-    try { rmSync(hangDir, { recursive: true, force: true }); } catch { /* best-effort */ }
   }
   const hangElapsed = Date.now() - hangStarted;
   check(
     "a hook that HANGS is killed and REJECTS with HookFatal within the timeout, naming the command",
     hangFatal && hangNamed && hangElapsed < 5000,
     `fatal=${hangFatal} named=${hangNamed} elapsed=${hangElapsed}ms`,
+  );
+
+  // The whole process GROUP must die, not just the bash we spawned — else the forked
+  // `sleep` (stand-in for the hung BSD sed, Codex #716) is orphaned and keeps burning
+  // CPU. Confirm the descendant is gone. A positive control on this very node process
+  // guards against an absent pgrep making the check pass vacuously.
+  let pgrepUsable = false;
+  try { execFileSync("pgrep", ["-f", "node"], { stdio: "ignore" }); pgrepUsable = true; }
+  catch (e) { pgrepUsable = e?.status === 1; /* ran but no match = usable; ENOENT = absent */ }
+  let descendantReaped = false;
+  if (pgrepUsable) {
+    for (let i = 0; i < 40; i++) {
+      let present = false;
+      try { execFileSync("pgrep", ["-f", hangMarker], { stdio: "ignore" }); present = true; } catch { present = false; }
+      if (!present) { descendantReaped = true; break; }
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    if (!descendantReaped) { try { execFileSync("pkill", ["-f", hangMarker], { stdio: "ignore" }); } catch { /* cleanup */ } }
+  }
+  try { rmSync(hangDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+  check(
+    "a hung hook's whole process GROUP is killed — no orphaned descendant survives (Codex #716)",
+    pgrepUsable ? descendantReaped : true,
+    pgrepUsable ? `reaped=${descendantReaped}` : "pgrep unavailable — descendant check skipped",
   );
 
   // 8. plant/remove against the REAL tree: the real files plus one planted fence

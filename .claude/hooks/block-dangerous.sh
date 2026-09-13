@@ -106,7 +106,7 @@ if [ "${1:-}" = "--self-test" ]; then
   # unwrap quantifiers hung BSD sed here; the linear form returns instantly. On a
   # reintroduced ReDoS this whole self-test would hang, which is the signal.
   redos_input="bash"
-  for k in $(seq 1 200); do redos_input="$redos_input -x"; done
+  for _ in $(seq 1 200); do redos_input="$redos_input -x"; done
   redos_input="$redos_input 'no closing quote and nothing forbidden"
   expect_allow "$redos_input"
   # The input path: unreadable stdin must DENY, and a well-formed harmless call must ALLOW.

@@ -2222,8 +2222,10 @@ who presses merge, not what the classifier says: the lane may merge a SAFETY_MAC
 PR only when the five conditions above hold, and it must say so in the PR body under
 "Owner decision needed" as *"merged under DR-037"* with the check-run id. It still does
 not: edit `AGENTS.md` or a decision record on its own authority (a DR records an owner
-decision, as this one does); activate the Standing Brain Cycle (DR-032's activation clause
-is untouched — the cycle still auto-OPENS and never auto-merges); merge anything that
+decision, as this one does); activate the Standing Brain Cycle as part of THIS self-merge
+authority (DR-032 governs the cycle's activation separately — owner-authorized 2026-09-13 and
+proceeding via its registry-first bootstrap; the cycle still auto-OPENS and never auto-merges);
+merge anything that
 changes the launch profile, the launch-claims gate or the publication boundary (DR-021 §2
 — those remain the owner's); or delete branches.
 

@@ -101,9 +101,12 @@ scope, contents, and what was deliberately not taken.
   affaan-m/everything-claude-code              | Affaan Mustafa                       | MIT                                         | d8409a4b08
 
 13 upstreams above are vendored into `.claude/skills/` (100 upstream
-skill directories, alongside 17 first-party skill directories authored
-in this repository — see the table in `.claude/skills/VENDORED.md` for
-which is which); the remaining two (`HKUDS/CLI-Anything`,
+skill directories, alongside 17 first-party skill directories — 16
+authored in this repository, plus `signalgrid-master/`, which is a MIRROR
+of the owner's separately-synced skill (per `.claude/skills/VENDORED.md`),
+not originally authored here — see the table in
+`.claude/skills/VENDORED.md` for which is which); the remaining two
+(`HKUDS/CLI-Anything`,
 `affaan-m/everything-claude-code`) are vendored into `third_party/`.
 Each directory's own `LICENSE` file (or per-skill `LICENSE`/`LICENSE.md`
 copy) is the operative grant; this table does not supersede it. Where an

@@ -12,12 +12,14 @@ for session-to-session context that fits nowhere else.
 
 ## What a fresh session reads first, in order
 
-1. **`docs/agent/LOOP.md`'s STATE block** (`docs/agent/LOOP.md:47`) — four lines,
-   updated every session: PHASE, LAST TOUCHED, what is red, what is next. This is
-   the fastest way to know where the org left off; read it before touching
-   anything. Then run `pnpm run loop:state` — the seam check the session ritual
-   (`.claude/skills/loop-start`) requires before any other work, which derives the
-   current seam state rather than trusting this prose.
+1. **`docs/agent/LOOP.md` — read it IN FULL first.** Its STATE block
+   (`docs/agent/LOOP.md:47`) is the four-line summary to quote — PHASE, LAST
+   TOUCHED, what is red, what is next — but the canonical procedure
+   (`.claude/skills/loop-start`) requires reading the whole file before the seam
+   check, not only the STATE block. This is the fastest way to know where the org
+   left off; read it before touching anything. Then run `pnpm run loop:state` —
+   the seam check the session ritual requires before any other work, which derives
+   the current seam state rather than trusting this prose.
 2. **The lane inbox** — `pnpm run lane:inbox` (`scripts/lane-message.mjs inbox`).
    What the other lane needs you to know, how long it has waited, and which of
    your branches mainline does not carry yet. See `docs/LANE_COORDINATION.md`.

@@ -24,9 +24,10 @@ to locate the break.
 the failure is in, then:
 
 - `artifacts/` (api-server, web) → **build-error-resolver** (its writeScope is
-  `artifacts/`; it uses `pnpm run typecheck` / `pnpm run build` / `pnpm install
-  --frozen-lockfile`, never npm/eslint/`rm -rf` recovery).
-- `scripts/` or a gate/proof → **gate-and-proof-engineer** (it owns `scripts/`).
+  `artifacts/`).
+- `scripts/src/e2e/` → **e2e-runner** (that subtree is carved OUT of
+  gate-and-proof-engineer and assigned to e2e-runner in agent-tiers.json).
+- the rest of `scripts/` or a gate/proof → **gate-and-proof-engineer**.
 - `lib/signalgrid-core` / `lib/signalgrid-simulator` (a decision path) or
   `native/ios/.../DecisionEngine.swift` / `AppWorkflows.swift` → **STOP and
   escalate.** Those are golden-rule surfaces (determinism, byte-faithful ports),

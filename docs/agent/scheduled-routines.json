@@ -88,18 +88,18 @@
   },
   {
    "id": "brain-cycle",
-   "trigger": "awaiting-activation — no account trigger yet; will be a cloud self-session trigger created via create_trigger AFTER the owner's explicit go (DR-032, Slice 3). Not a launchd agent, not yet a trig_*.",
+   "trigger": "awaiting-activation — a cloud self-session trigger is created via create_trigger only AFTER this active row lands on SignalGrid_Alpha AND a Slice-2 dry run is proven end-to-end (DR-032 registry-first bootstrap). A same-session activation on 2026-09-13 was created out of that order and REVERTED (trigger deleted) per Codex #705. Not a launchd agent.",
    "cron": "35 8 * * *",
    "binding": "self-session (resumes the operating session)",
    "authorizedBy": "Dan Fashauer (owner)",
    "authorizedOn": "2026-09-09",
-   "authorizationEvidence": "owner directed the standing Brain Cycle in-session 2026-09-09: shared the '9 Architectures for Multi-Agent Systems' graphic with 'I'm looking for a 🧠 to operate things and each one of these repos I've shared will do the same thing in this graph', then chose 'Standing recurring cycle', 'once a day', and 'auto but does x amount of security and code check validation for bugs and other problems for the winner'. This authorizes BUILDING the machinery (Slice 1, dormant); ACTIVATION (creating the trigger + flipping to active) needs a further explicit owner go per the awaiting-activation contract.",
+   "authorizationEvidence": "owner directed the standing Brain Cycle in-session 2026-09-09: shared the '9 Architectures for Multi-Agent Systems' graphic with 'I'm looking for a 🧠 to operate things and each one of these repos I've shared will do the same thing in this graph', then chose 'Standing recurring cycle', 'once a day', and 'auto but does x amount of security and code check validation for bugs and other problems for the winner'. This 2026-09-09 message authorizes BUILDING the machinery (Slice 1, dormant). ACTIVATION was subsequently authorized by the owner on 2026-09-13 ('Activate it now'), so no further owner consent is pending; what remains before the trigger is created is the registry-first sequence (land the active row on SignalGrid_Alpha, prove a Slice-2 dry run, then create_trigger) per the awaiting-activation contract and DR-032 — a technical prerequisite, not an owner gate.",
    "writeScope": "artifacts/brain-cycle/** (the per-cycle audit blackboard), artifacts/lane-messages/** and artifacts/agent-heartbeats/brain-cycle.json (heartbeat via scripts/lane-deliver.mjs onto a lane/cloud-mail-* branch, never the code branch); opens DRAFT PRs for winning autonomous-tier routes only (classifyDiff==autonomous). Never auto-merges; never opens a PR touching SAFETY_MACHINERY or OWNER_RESERVED surfaces (those escalate).",
    "escalationBoundary": "escalates to the owner every owner-gated route, every tie, and every unrecognised/ambiguous tier; auto-OPEN (draft) is the ceiling and auto-MERGE is off (owner GREEN switch in docs/agent/brain-cycle-config.json, default false). Fail-closed halts (not ships): a stale brain (check-brain-freshness), an absent or ran:false expected lens, or an unverifiable surface stops the cycle.",
    "heartbeatPath": "artifacts/agent-heartbeats/brain-cycle.json",
    "cadenceToleranceHours": 50,
    "status": "awaiting-activation",
-   "awaitingReason": "Slice 1 lands the machinery (freshness gate, decision core, config, this row) DORMANT. The account trigger is deliberately not created and the row is not active until the owner gives an explicit go on the cadence, per DR-032 and the awaiting-activation contract — no consent is inferred from the build directive.",
+   "awaitingReason": "Machinery ready and owner-authorized (2026-09-09, re-affirmed 2026-09-13 'Activate it now'). A same-session activation on 2026-09-13 was REVERTED (trigger deleted): it created the trigger BEFORE this active row reached SignalGrid_Alpha (a fire could not heartbeat — check-scheduled-routines fatals on a heartbeat for an awaiting routine) and before the dispatch->gauntlet->PR path was proven end-to-end. Re-activation follows the design order: land this row active on Alpha, prove a Slice-2 dry run, THEN create_trigger (DR-032; Codex #705).",
    "awaitingSince": "2026-09-09"
   }
  ]

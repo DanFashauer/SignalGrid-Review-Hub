@@ -11,6 +11,8 @@
 //   4. PLAIN LANGUAGE — the summary counts objectives needing attention, words a
 //      fail-open breach as critical, and leaks no internal status enum.
 //   5. DETERMINISM + IMMUTABILITY.
+//   6. PROPERTY-BASED (fast-check, DR-048) — worst-wins, fail-open monotonicity and purity
+//      proven over 500 seeded generated windows, not just fixtures.
 //
 // Run: pnpm --filter @workspace/scripts run proof:reliability
 
@@ -26,6 +28,7 @@ import {
   type ReliabilityReport,
   type Slo,
 } from "@workspace/reliability";
+import * as fc from "fast-check";
 
 let passed = 0;
 const failures: string[] = [];
@@ -148,6 +151,45 @@ check("summarizeReliability is deterministic",
   JSON.stringify(summarizeReliability(mixedReport)) === JSON.stringify(summarizeReliability(mixedReport)));
 check("report and budgets are deep-frozen",
   Object.isFrozen(cleanReport) && Object.isFrozen(cleanReport.budgets) && cleanReport.budgets.every((b) => Object.isFrozen(b) && Object.isFrozen(b.slo)));
+
+// ── (6) PROPERTY-BASED (fast-check) — core invariants over GENERATED windows, not just fixtures ──
+// Adopted 2026-09-12 (DR-048): fast-check runs each property over 500 generated windows and shrinks
+// any counterexample to its minimal form. Seeded, so the gate is deterministic and reproducible —
+// no wall-clock, no Math.random, exactly as a proof requires. This is what fixtures cannot do:
+// assert an invariant holds for ALL shapes of input, not the handful we thought to write down.
+const recordArb = fc.record({
+  produced: fc.boolean(),
+  latencyMs: fc.integer({ min: 0, max: 5000 }),
+  failedOpen: fc.boolean(),
+});
+const windowArb = fc.array(recordArb, { maxLength: 250 });
+const FC = { seed: 4321, numRuns: 500 } as const;
+const holds = (name: string, prop: Parameters<typeof fc.assert>[0]) => {
+  try { fc.assert(prop, FC); check(name, true); }
+  catch (e) { check(`${name} — ${(e as Error).message.split("\n")[0]}`, false); }
+};
+
+// (a) worst-status-wins: overall equals the MAX-rank of its SLO statuses — the fail-closed fold.
+holds("property: overall status equals the worst (max-rank) SLO status, over 500 windows",
+  fc.property(windowArb, (records: DecisionRecord[]) => {
+    const r = computeReliability(records);
+    const maxRank = Math.max(...r.budgets.map((b) => BUDGET_STATUS_RANK[b.status]));
+    return BUDGET_STATUS_RANK[r.overall] === maxRank;
+  }));
+
+// (b) golden rule 2 as a property: a fail-open can only WORSEN reliability, never improve it —
+//     appending a failed-open record never LOWERS the overall status rank.
+holds("property: appending a fail-open record never lowers the overall status rank, over 500 windows",
+  fc.property(windowArb, (records: DecisionRecord[]) => {
+    const before = BUDGET_STATUS_RANK[computeReliability(records).overall];
+    const after = BUDGET_STATUS_RANK[computeReliability([...records, { produced: true, latencyMs: 1, failedOpen: true }]).overall];
+    return after >= before;
+  }));
+
+// (c) purity/determinism: the same window computes an identical report every time.
+holds("property: computeReliability is a pure function of its input, over 500 windows",
+  fc.property(windowArb, (records: DecisionRecord[]) =>
+    JSON.stringify(computeReliability(records)) === JSON.stringify(computeReliability(records))));
 
 // ── figures (guarded against the docs) ─────────────────────────────────────────────
 const slos = DEFAULT_SLOS.length;

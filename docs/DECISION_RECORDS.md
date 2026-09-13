@@ -3113,7 +3113,58 @@ launch-claims gate governs the prose either way.
 
 **Reversal / amendment.** The owner reverses by saying so; amend the numbered rules and the SKILL section ("Which model runs a stage") together and keep the record and its history. A tier assignment may be re-mapped, or the ad-hoc-spawn gate added, by a later record that names what changed and why.
 
-## DR-048 — The agent collection as repeatable passes: `/review-pass`, `/refactor-pass`, `/build-fix` (owner-directed 2026-09-13)
+## DR-048 — fast-check is adopted as property-based testing INSIDE the proof suite: dev-only, seeded/deterministic, invariants proven over generated inputs — the first intake from the GitHub resource scanner (owner-directed 2026-09-12)
+
+**Question.** The owner directed that the strongest fits from the new GitHub
+resource scanner (`pnpm run scan:resources`) be intaken and wired into the org's
+machinery so the lanes are freed to build what tools cannot — *"add it to the
+brain and allow for more time of others in the organization."* The first pick is
+[dubzzz/fast-check](https://github.com/dubzzz/fast-check) (MIT, 5.1k★): a pure
+property-based testing library, no MCP, no hooks, no egress, no session-config.
+What is adopted, where does it land, and what keeps it from becoming a way green
+is certified dishonestly?
+
+**Measured by use.** Installed `fast-check@^4.10.0` as a devDependency of the
+`@workspace/scripts` workspace only (lockfile regenerated clean, no darwin drift).
+Extended the existing gating proof `proof:reliability` with three properties, each
+run over 500 GENERATED windows with a fixed seed (4321): (a) worst-status-wins —
+`computeReliability(...).overall` equals the max-rank of its SLO statuses; (b)
+golden rule 2 as a property — appending a failed-open record never LOWERS the
+overall status rank; (c) purity — the same window computes an identical report.
+Result: 33/33 checks pass (was 30). Falsifiability confirmed independently: a
+deliberately false property throws and is caught, a true one passes — the
+properties are real gates, not vacuous. Deterministic: fast-check uses its own
+seeded PRNG, not `Math.random`, so the gate is reproducible run to run.
+
+**Call.**
+
+1. **Adopted as a dev/test-only property-testing capability INSIDE the proof
+   suite.** It is a devDependency of `@workspace/scripts`; it never enters `lib/*`,
+   `/v1`, connectors, shipped code, or a decision path. Property generators MUST be
+   seeded so every gate stays deterministic — an unseeded generator in a gate would
+   reintroduce the `Math.random` non-determinism golden rule 2 forbids.
+
+2. **This record exists because fast-check changes HOW GREEN IS CERTIFIED**
+   (intake rule 3, `docs/agent/RESOURCE_INTAKE.md` — the shape DR-029 and DR-031
+   also took): the proof now asserts invariants over generated inputs, not only
+   fixtures. That is the value — an invariant proven for ALL shapes of input, not
+   the handful we thought to write down — and it is why it is gated behind a DR.
+
+3. **What it offloads.** Property tests can now be added to any pure proof, so the
+   org stops hand-enumerating edge cases a generator finds in seconds. This is the
+   first intake from the scanner; the next candidates (an MCP build helper for the
+   Mac, an MCP/agent security scanner to automate the intake security review) each
+   get their own measured pass and, where they change how green is certified, their
+   own record.
+
+**Reversal.** The owner reverses by saying so; the reversal is three edits —
+remove `fast-check` from `scripts/package.json`, delete the property section
+(section 6) from `scripts/src/reliability-proof.ts`, and regenerate the lockfile —
+because nothing else depends on it, by construction. Putting fast-check output on
+a decision path, or an unseeded generator into any gate, is a violation of this
+record, not a reversal of it.
+
+## DR-049 — The agent collection as repeatable passes: `/review-pass`, `/refactor-pass`, `/build-fix` (owner-directed 2026-09-13)
 
 **Context.** The owner re-shared [affaan-m/ECC](https://github.com/affaan-m/ecc) (already absorbed 2026-08-30, installed on demand via `pnpm run ecc:install`) with a sharpened directive, in his own words: *"The agent collection is the key idea here — turning repeatable review, refactor, and build-fix tasks into a workflow is more useful than treating Claude Code like a single prompt box. This should be applied to everything so far plus add this and help utilize this."* Held against the tree first (DR-021 §4, DR-024 review-stack): the repo already HAS the agents ECC names — `.claude/agents/` carries `code-reviewer`, `refactor-cleaner`, `build-error-resolver`, plus the first-party `signalgrid-reviewer` skill, `fail-closed-auditor`, `gate-and-proof-engineer`, and `verdict-core-reader` — and the generic built-ins `/code-review`, `/simplify`, `/security-review`. What it did NOT have was any repeatable *pass* that runs the right agents together and requires this repo's own gates green. The agents were invoked ad hoc, one prompt at a time — exactly the "single prompt box" the owner is calling out. ECC's own quick-reference shows the shape to adopt: `/code-review`, `/review-pr`, `/build-fix`, `/santa-loop`, `/orch-*` are each a named pass, not a lone agent.
 

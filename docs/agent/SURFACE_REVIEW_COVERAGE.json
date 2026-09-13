@@ -67,7 +67,7 @@
         },
         {
           "date": "2026-09-13",
-          "read": "The new .claude/WORKFLOWS.md router authored and read this session — it names the three repeatable passes, when to run each, DR-047 tiering, and defers ECC's rest. DR-048.",
+          "read": "The new .claude/WORKFLOWS.md router authored and read this session — it names the three repeatable passes, when to run each, DR-047 tiering, and defers ECC's rest. DR-049.",
           "reviewer": "cloud lane (firsthand author + Codex #704 adversarial review, 15 findings over two rounds all addressed)",
           "record": "docs/DECISION_RECORDS.md",
           "scope": "partial: the new .claude/WORKFLOWS.md added 2026-09-13",
@@ -104,7 +104,7 @@
         },
         {
           "date": "2026-09-13",
-          "read": "The three new workflow-pass commands (review-pass, refactor-pass, build-fix) authored and read line-by-line this session and reworked against Codex #704: each routes/dispatches only within the agents' agent-tiers.json boundaries and local tool corrections, reviews the right revision (merge-base/PR-head), and carries its failure mode. DR-048.",
+          "read": "The three new workflow-pass commands (review-pass, refactor-pass, build-fix) authored and read line-by-line this session and reworked against Codex #704: each routes/dispatches only within the agents' agent-tiers.json boundaries and local tool corrections, reviews the right revision (merge-base/PR-head), and carries its failure mode. DR-049.",
           "reviewer": "cloud lane (firsthand author + Codex #704 adversarial review, 15 findings over two rounds all addressed)",
           "record": "docs/DECISION_RECORDS.md",
           "scope": "partial: the three new command files added 2026-09-13; the nine prior authoring commands unchanged",

@@ -6,7 +6,7 @@
 
 The agents in `.claude/agents/` are a collection, not a prompt box. The value is
 in running the RIGHT ones together, the same way every time, wired to this repo's
-own gates — a workflow, not a one-off ask (DR-048, adopting the ECC agent-collection
+own gates — a workflow, not a one-off ask (DR-049, adopting the ECC agent-collection
 idea that is already installed on demand via `pnpm run ecc:install`). This file names
 the standard passes so the collection is used consistently instead of ad hoc.
 

@@ -62,7 +62,7 @@ reason a command beats remembering. Three worth knowing:
 
 Separate from the authoring chain above, three commands turn the agent collection
 in `.claude/agents/` into repeatable passes wired to this repo's gates — a workflow,
-not a single prompt (DR-048). See [`WORKFLOWS.md`](./WORKFLOWS.md):
+not a single prompt (DR-049). See [`WORKFLOWS.md`](./WORKFLOWS.md):
 
 - **`/review-pass`** — the SignalGrid multi-agent review pass (reviewer +
   fail-closed auditor + code-reviewer, verified, gates green).

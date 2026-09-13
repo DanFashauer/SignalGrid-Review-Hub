@@ -3211,3 +3211,166 @@ record, not a reversal of it.
 **What does not change.** Claim discipline (DR-021 §2, DR-033 item 4): this is internal build-lane tooling, never a buyer-facing claim. The verdict enum, the determinism invariant, the Decision Envelope, DR-029's runtime decision-path boundary, and DR-024's review-stack order (ponytail on top, then ECC, then the correctness/fail-closed scans) are untouched — these passes are how the stack is invoked, not a change to it.
 
 **Reversal / amendment.** The owner reverses by saying so; delete the three command files and `WORKFLOWS.md` and revert the `COMMANDS.md` count (fully reversible, no code depends on them). Amend a pass by editing its command file through `agent-platform-steward` and noting what changed here.
+
+## DR-050 — The Mac runs the local resources as an always-on live brain that works with the cloud; the cloud is the final review board (owner-directed 2026-09-13)
+
+**Context.** The owner directed, in his own words on 2026-09-13, that *"the Mac runs all
+local resources fully as an always-on live brain that works with the cloud; the cloud is
+the final review board."* This is the operating shape of two decisions already on the
+books — the Mac was made the primary lab on 2026-08-23 (operate local-first, install what
+is needed to build), and DR-037 moved the merge button off the owner and onto the cloud
+lane for green product PRs — plus DR-032's cloud-fired brain cycle that auto-OPENS and
+never auto-merges. Four resources were assessed by use against this directive: NVIDIA-NeMo
+Switchyard, Firecrawl, OmniRoute, and LightRAG. One of the owner's premises inside the
+directive — *"use Switchyard fully on the Mac"* — is corrected here on the evidence, not
+confirmed. The lane wrote this record; the owner decided the doctrine.
+
+**The question this settles.** What "Mac = always-on live brain, cloud = final review
+board" means concretely — which resource lives where, on-demand or resident; what the ONE
+model-routing story is; what minimal always-on slice is buildable now versus owner-gated;
+and the boundary that keeps all of it out of the product.
+
+### 1. The doctrine, in the owner's terms
+
+**The Mac is the lab and the live brain.** It uses the local resources — runs what
+genuinely runs and helps here, resident when it is cheap, on-demand when it is not — and
+it never goes dark: a resident 5-minute pulse (`lane-tick`) pulls mainline, runs the
+verification work the cloud lane queued, mints evidence, opens PRs, and heartbeats without
+a Claude session attached. The Mac PROPOSES, BUILDS, and OPENS.
+
+**The cloud is the final review board.** Per DR-037 the cloud lane REVIEWS and MERGES green
+product PRs — the owner is no longer the merge button. The brain cycle (DR-032) fires on
+the cloud, asserts brain-parity at STEP 0, fans its lens panel, and auto-OPENS the winner
+as a DRAFT — never auto-merges (`autoMergeGreenSwitch:false`). SAFETY_MACHINERY and
+OWNER_RESERVED surfaces stay owner-gated in both lanes, and the brain cycle's own machinery
+IS SAFETY_MACHINERY, so it can never self-merge its own improvements.
+
+**"Full local resource utilization" is not "resident-load everything."** It means run every
+local resource that earns its place, on the cheapest footprint that delivers its value.
+The build/verify lane PREEMPTS the brain lane: nothing holding GB-scale model weights runs
+`KeepAlive true`, and every brain service must be unloadable. The Mac has 17 GB and is
+measured tight live (~322 MB free, ~4.5 GB compressed, active swap), and a resident local
+generative model has already broken it — qwen3:8b's 5.3 GB residency made a session kill
+its own background jobs (RESOURCE_INTAKE 2026-09-12). "Runs fully" is a hardware fact;
+"has full value here" is a separate test, and Switchyard passes the first and fails the
+second.
+
+### 2. Placement table
+
+| Resource | Runs on Mac | Keyless | Placement | On-demand / always-on | One-line reason |
+| --- | --- | --- | --- | --- | --- |
+| **Switchyard** (NVIDIA-NeMo; PR #713 docs-only, unmerged; no DR) | Yes, fully (no GPU/keys: `dependencies=[]`, ordinary Rust) | Partial (schema supports a keyless target; no example demonstrates it) | Cloud review board (PR #713, adopt-by-reference) | n/a — reference only | Runs fully on the Mac, but its two jobs are already covered (OmniRoute = gateway, DR-047 = Claude-tier); the Mac's by-use caveats (host-free component is upstream demo-only, no host gateway present, `efficient_first` fails DOWN vs DR-047's fail-UP) are posted to #713 for the review board to settle. |
+| **Firecrawl** (DR-022) | Yes, fully (pinned MCP client) | Partial (keyless Search/Scrape/Parse; account tools need a key) | Both (per-machine, Mac is the usual venue) | On-demand | Report-only research/`check:absence` capability registered per machine at cycle STEP 0; not a process in the always-on tick, recurring watches run on Firecrawl's servers. |
+| **OmniRoute** (DR-029) | Yes (thin Node/Docker proxy, no weights) | Partial (~52 keyless providers; the rest need owner keys) | Both; Mac if the owner self-hosts | Always-on IF adopted (near-zero idle) | The multi-provider gateway for the lanes' raw model calls; resident is cheap because it holds no weights, but self-hosting + keys is owner infrastructure, not a repo edit. |
+| **LightRAG** (DR-041 naive / DR-038, DR-026) | Naive: yes. Graph: blocked (needs a local chat model; qwen3:8b timed out 5/5) | Naive: yes (0 LLM calls). Graph: no | Mac | On-demand (naive); graph parked dormant | Key-free naive retrieval is 0 LLM calls / ~65 MB fastembed / ~34 MB store — always-AVAILABLE without being always-resident; graph mode is a rare extraction cost, not always-on infra. |
+
+**Switchyard premise, corrected plainly.** The owner's *"use Switchyard fully on the Mac"*
+rests on a GPU/keys asymmetry that does not exist: Switchyard is not GPU-gated
+(`dependencies=[]`, a maturin Rust wheel, `OS Independent`; the one PyTorch path,
+`prefill_router`, is optional, off by default, and explicitly valid on `cpu`), and it is
+architecturally keyless-capable (`api_key_env` is optional, *"omit to send no
+authentication"*). So there is no "Mac gets it fully, cloud gets some of its value" to
+correct in its favor. The real correction is the other direction: **running fully is not a
+reason to adopt.** Its own maintainers rate `switchyard-server` — the only piece deployable
+without a host gateway — *"Demo… Not for production,"* inside a `Development Status :: 3 -
+Alpha`, pre-1.0 repo whose README warns *"routing behavior can change between releases."*
+The org runs neither host gateway it supports (NeMo Relay, LiteLLM); it runs OmniRoute,
+which is not a documented Switchyard host. And its flagship value — LLM-judged
+efficient-vs-capable routing — is exactly what DR-047 already does by hand and what
+OmniRoute already fills as a gateway. Building an always-on daemon out of a demo-only
+component to route traffic that does not exist is the wrong foundation. **Disposition: the cloud lane owns it as review board.** Its PR #713 adopts Switchyard
+documentation-first by reference — a documented candidate above OmniRoute/LM Studio, never in
+the decision path. The Mac's by-use evaluation (the demo-only standalone rating, the absent
+host gateway, the `efficient_first`↔DR-047 collision, keyless-capable-but-undemonstrated) is
+posted to #713 as review input. This record does NOT settle Switchyard's adoption strength;
+the cloud does, on #713, with the Mac's evidence in hand — which is exactly what "the cloud
+is the final review board" means for a contested resource.
+
+### 3. The one routing story — two axes, not three routers
+
+There is a single model-routing model, and the three names sit on two different axes; they
+collide only if Switchyard is allowed to scope-creep.
+
+- **Axis A — which *Claude* model runs an agentic stage (the primary).** Owned entirely by
+  **DR-047**, expressed through the Claude Code harness's own `model:` field on every spawn
+  (Opus / Sonnet / Haiku by cost-to-unwind; Fable/Mythos never on engineering work;
+  unknown resolves UP to Opus). No HTTP gateway is involved — this decision is made inside
+  the CLI before any call a proxy could intercept. This is the primary router for the
+  lanes' own work.
+- **Axis B — which endpoint serves a raw, non-Claude-Code model call.** Owned by
+  **OmniRoute (DR-029)** — remote, ~352 providers — with **LM Studio** as its local,
+  zero-egress twin (same OpenAI-compatible base-URL mechanism). This is the axis a script
+  or a LightRAG graph-mode remote retry would use.
+- **Switchyard relates to Axis B only, and is not adopted.** The single description
+  available (the cloud lane's own phrase, *"the routing brain above OmniRoute/LM Studio"*)
+  places it — at most — as an automatic remote-vs-local picker BETWEEN the two Axis-B
+  endpoints. It is COMPLEMENTARY only if kept strictly there. It becomes
+  REDUNDANT-and-harmful the moment it touches Axis A: its default `stage_router` picker
+  (`efficient_first`) fails DOWN to the cheap tier on low confidence, and **DR-047 rule 3
+  requires unknown/unavailable to resolve UP to Opus, never down.** So Switchyard is never
+  wired in front of the coordinating Claude Code session or its subagents — independent of
+  the decision-path rule — and, since it is not adopted (§2), it is not part of the live
+  routing story at all today.
+
+### 4. The always-on live brain — the buildable first slice
+
+**What is resident (cheap) vs on-demand vs never-resident:**
+- **Resident, ~0 RAM:** `com.signalgrid.lane-tick` (exists) — the 5-minute autonomic pulse.
+- **On-demand, memory-win:** key-free LightRAG naive retrieval (`pnpm run docs:retrieve`) —
+  0 LLM calls, ~65 MB loaded per call, no Ollama. Always-AVAILABLE, never always-resident.
+- **Resident but cheap only because it holds no weights:** OmniRoute proxy on 127.0.0.1
+  (~100–300 MB Node) — *if and when the owner self-hosts it.*
+- **Never resident:** any local generative model, and `lightrag-server` graph mode
+  (needs Ollama + a chat model). Kept on-demand and unloadable — qwen3:8b's 5.3 GB
+  residency is the exact thing that broke the box.
+- **No new Mac trigger for the brain cycle:** its Mac-only audits (Swift twins,
+  xcodebuild, `mac-run.json` evidence) arrive as sim-requests serviced by the existing
+  pulse (BRAIN_CYCLE_DESIGN §8).
+
+**Buildable NOW, split by ownership so it does not self-authorize an owner-gated act:**
+1. **Out-of-tree, per-machine (no code PR):** document and wire the five existing launch
+   agents (`lane-tick`, `lightrag`, `docker-ready`, `session-autostart`, the self-hosted
+   Actions runner) as one named brain set via the `install-launchd.sh` conventions; set
+   `OLLAMA_KEEP_ALIVE=0` as a launchd env var (verify the mechanism before it goes in a
+   config line); leave `docs:retrieve` on-demand. Touches only `~/Library/LaunchAgents`
+   and env — no tree edit.
+2. **One owner-reviewed PR (correctly SAFETY_MACHINERY, not self-mergeable):** a
+   memory-budget preempt guard in `scripts/mac/lane-tick.sh` that defers heavy sim
+   operations under memory pressure (a `vm_stat` free/compressor threshold). It lands like
+   `brain-cycle.mjs` did — a normal owner PR.
+
+**Stays a proposal for the owner:**
+- **OmniRoute as a resident 127.0.0.1 gateway** — needs the owner to self-host it and
+  provision provider keys (DR-029: the repo cannot provision keys; the ~52 keyless
+  providers are the keyless path, LM Studio the memory-expensive local-weights path to
+  avoid resident).
+- **Brain-cycle Slice-3 activation** — owner-authorized 2026-09-13, proceeding via its
+  registry-first bootstrap; still auto-OPENS, never auto-merges.
+- **The GREEN auto-merge switch** — kept OFF until a per-PR gate-falsification check exists.
+- **Any resident local generative model** — recommended against; recorded to break this
+  hardware.
+
+### 5. The boundary, stated once, load-bearing
+
+Golden rule 2 / DR-029, with no exception and no softening for locality: **nothing here —
+no model, router, gateway, or RAG (OmniRoute, LM Studio, Switchyard if ever adopted,
+LightRAG naive or graph, Ollama/qwen3, fastembed, Firecrawl, or DR-047's Claude-tier
+routing) — may call, import, or depend on `lib/*`, `artifacts/api-server`'s `/v1` decision
+path, a connector, or a proof.** A model resident on the Mac is barred from a verdict for
+the same reason a remote one is (AGENT_GATEWAY.md says this explicitly for LM Studio;
+Switchyard's own default algorithms are LLM-as-judge, nondeterministic by construction —
+the exact thing golden rule 2 forbids on the decision path). Every element of this record
+is agent-lane / dev / research / brain tooling ONLY. The decision core stays deterministic,
+offline, and fixture-backed; the live brain NEVER becomes the decision engine, and nothing
+here is claimable under DR-021/DR-033.
+
+**What does not change.** The verdict enum, the determinism invariant, the Decision
+Envelope, DR-037's merge authority, DR-032's auto-OPEN-never-merge cycle, DR-029's runtime
+gateway boundary, and DR-047's Claude-tier routing are untouched — this record composes
+them into one operating shape, it does not amend them.
+
+**Reversal / amendment.** The owner reverses by saying so; the out-of-tree wiring is
+un-done by unloading the named launch agents and the one PR is reverted (nothing in the
+tree depends on either), and this record stays with the reversal date added. Adopting
+Switchyard, self-hosting OmniRoute, or flipping the GREEN switch is each a later record
+that names what changed and its measured verdict, not a reversal of this one.

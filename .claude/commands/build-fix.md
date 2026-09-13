@@ -35,7 +35,16 @@ the failure is in, then:
 - other `lib/*` → the owning library writer; if unclear, escalate rather than
   cross a boundary.
 
-Whichever agent you route to: fix the error ONLY — no refactor, no architecture
+Whichever agent you route to: it operates only within its
+`docs/agent/agent-tiers.json` writeScope and MUST follow the LOCAL tool
+corrections recorded there, never the vendored default command — the brief has to
+say so. build-error-resolver's `npx eslint` / `npm run build` / `npm install` /
+denied cache-removal are each replaced with the repo's registered commands
+(agent-tiers.json ~line 80), and e2e-runner's nonexistent `tests/auth.spec.ts`
+invocation is replaced (~line 56); an agent handed only a minimal-diff brief will
+otherwise run an invalid command instead of reproducing the named check. Tell it:
+"reproduce and fix the named check using your agent-tiers.json correction, never
+the vendored command." Then fix the error ONLY — no refactor, no architecture
 change, no new dependency, smallest diff. Changed a package's deps? Regenerate the
 lockfile (`pnpm install --lockfile-only`) and commit it; never hand-edit
 `pnpm-lock.yaml`.

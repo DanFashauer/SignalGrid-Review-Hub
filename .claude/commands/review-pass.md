@@ -11,8 +11,8 @@ $ARGUMENTS
 
 **1. Establish the diff AND the revision to gate — read-only, never touching the index.**
 
-- **PR number/URL** in `<scope>`: resolve the PR's CURRENT head sha, and check it out in a TEMPORARY detached worktree (`git worktree add --detach <tmp> <headsha>`). The diff is that PR's diff; **run the gates in step 4 in that worktree**, not the local tree, so the verdict is about the PR's revision and not whatever is checked out here. Remove the worktree after.
-- **Pathspec** in `<scope>`: `git --no-pager diff "$(git merge-base HEAD origin/SignalGrid_Alpha)"...HEAD -- <pathspec>` plus untracked matches from `git ls-files --others --exclude-standard -- <pathspec>`; pass the SAME pathspec to every lens and to the gates' scope where they take one.
+- **PR number/URL** in `<scope>`: resolve the PR's CURRENT head sha, then **fetch that head so the object is local** (`git fetch origin <headref>`, or `git fetch origin pull/<n>/head` for a fork or an unfetched tip — `git worktree add` aborts with `fatal: invalid reference` on a sha Git does not have locally, so this must precede it), and check it out in a TEMPORARY detached worktree (`git worktree add --detach <tmp> <headsha>`). A fresh worktree carries only tracked files and **no `node_modules`**, so **run `pnpm install --frozen-lockfile` inside it before any lens or gate** — otherwise step 4 fails on missing `@workspace/*` packages and `node` type definitions instead of evaluating the PR. The diff is that PR's diff; **run the gates in step 4 in that worktree**, not the local tree, so the verdict is about the PR's revision and not whatever is checked out here. Remove the worktree after.
+- **Pathspec** in `<scope>`: `git --no-pager diff "$(git merge-base HEAD origin/SignalGrid_Alpha)"...HEAD -- <pathspec>` LAYERED with tracked-but-uncommitted edits (`git --no-pager diff HEAD -- <pathspec>` — the `...HEAD` form stops at the last commit, so a pre-commit `/review-pass <path>` would otherwise miss the exact local edit it was asked about, exactly as the no-argument branch layers them) plus untracked matches from `git ls-files --others --exclude-standard -- <pathspec>`; pass the SAME pathspec to every lens and to the gates' scope where they take one.
 - **No argument:** review the whole branch, not just the working tree. Base = `git merge-base HEAD origin/SignalGrid_Alpha`; the diff is `git --no-pager diff base...HEAD` (this includes committed-but-unpushed work — a plain `git diff HEAD` is EMPTY on a clean worktree after you commit, so the panel would review nothing) LAYERED with any working-tree changes (`git --no-pager diff HEAD`) and untracked files (`git ls-files --others --exclude-standard`, each via `git --no-pager diff --no-index -- /dev/null <file>`). Never `git add -A -N` (it stages a tracked deletion).
 
 **2. The DR-024 review stack, in order:**
@@ -25,7 +25,7 @@ $ARGUMENTS
 
 **3. Verify before reporting.** Adversarial second look at each finding; drop what does not survive.
 
-**4. Gates are not optional**, and they run against the REVIEWED revision (the PR-head worktree in PR mode; the branch tip otherwise): `node scripts/preflight.mjs` and `pnpm run verify:breadth` green (quote them), `test:api` N/N if the API moved. A green panel over a red gate is not done.
+**4. Gates are not optional**, and they run against the REVIEWED revision (the PR-head worktree in PR mode; **the current worktree otherwise — it holds the layered working-tree and untracked edits step 1 reviewed, so preflight sees exactly the reviewed code. Do NOT gate a clean `HEAD` checkout: it drops those edits and a green there certifies the pre-change tree, not what you reviewed**): `node scripts/preflight.mjs` and `pnpm run verify:breadth` green (quote them), `test:api` N/N if the API moved. A green panel over a red gate is not done.
 
 Report findings ranked most-severe first, each with a `file:line`. Nothing found: say so with the gate output that backs it.
 

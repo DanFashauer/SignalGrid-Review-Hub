@@ -998,8 +998,8 @@ LAST TOUCHED: 2026-09-12 (mac lane, latest) - NEEDLE INGESTED (DR-044): cactus-c
               view-layer rebuild is now COMPLETE, and native/ios/README's file-tree
               was corrected to match.
 BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION_2026-09-12.md,
-              'The founder's queue'): Screen Recording for Terminal; 'activate' or 'hold' on the
-              Standing Brain Cycle (DR-032 Slice 3); 'yes' to the branch cleanup; pick the FIRST of
+              'The founder's queue'): Screen Recording for Terminal; 'yes' to the
+              branch cleanup; pick the FIRST of
               the seven DR-033 product gaps (docs/BUILD_BACKLOG.md, the full-evaluation section);
               confirm or soften the ICP wording before the first outreach send (the gate is OPEN -
               run node scripts/check-readiness-figure.mjs); IP/disclosure posture; Fleet Premium

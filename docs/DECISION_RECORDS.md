@@ -1822,9 +1822,15 @@ defects and escalate everything else — without ever merging a change to its ow
 ever assuming the Mac is awake, or ever letting a model decide a verdict. The cycle's own
 machinery is SAFETY_MACHINERY, so it can never self-merge its own improvements; every change
 to it is an owner-reviewed PR, which deliberately paces the effort. Slice 1 ships the
-machinery DORMANT (`status: awaiting-activation`); ACTIVATION (creating the account trigger
-and flipping the row active) needs a further explicit owner go — no consent is inferred from
-the build directive.
+machinery DORMANT (`status: awaiting-activation`). The 2026-09-09 build directive authorized
+BUILDING only; ACTIVATION was subsequently authorized by the owner on 2026-09-13 ("Activate it
+now"), so no further owner consent is pending. What remains is Slice-3 activation ENGINEERING,
+not an owner gate: activation is not yet mechanically landable (BRAIN_CYCLE_DESIGN.md Slice 3 —
+`authorizedOn` doubles as the gate's active-no-heartbeat clock, and `lane-deliver` gates
+pre-commit without staging the registry, so the awaiting→active transition needs a gate
+`activatedOn` baseline and a dedicated atomic path built and tested as code), and `create_trigger`
+must still come registry-first after a proven dry run (a same-session activation on 2026-09-13
+was created out of that order and reverted, Codex #705).
 
 **Doctrine guardrails.** Fail-closed (golden rule 2): a stale/unverifiable brain refuses;
 any absent / `ran:false` / UNVERIFIED expected lens is a HARD NO in the orchestrator's own
@@ -1884,10 +1890,25 @@ new self-test arms (config `{vetoLenses:[]}` + a security BLOCK → no winner; c
 applied, no crash) plus a new owner-gated self-test arm; all three exploit shapes reproduced against the
 real `decide()` and confirmed closed. The freshness gate and the import guard were re-confirmed SOLID.
 
-**Reversal.** Delete the five new files (freshness gate, decision core, spine, config, design
-doc), remove the `brain-cycle` registry row, unwire the three self-tests from preflight + CI,
-revert the one-line `check-owner-gated-surfaces.mjs` import guard and this record. No account
-trigger was created and the row is dormant, so nothing runs to stop; nothing in the product
+**Reversal.** WHILE DORMANT (the current state — a same-session activation on 2026-09-13 was
+created out of order and REVERTED, the trigger deleted, per Codex #705): delete the three
+machinery scripts (freshness gate, decision core, spine) and the config file, the `brain-cycle`
+registry row, the three self-tests from preflight + CI, the one-line
+`check-owner-gated-surfaces.mjs` import guard, and this record; no trigger exists, so nothing
+runs to stop. The design doc `docs/agent/BRAIN_CYCLE_DESIGN.md` is CITED (backticked) from
+`docs/agent/RESOURCE_INTAKE.md` and `docs/agent/EVIDENCE.md`, so `check-cited-paths.mjs` fails
+if it is removed while those citations stand: either delete it AND drop both citations in the
+SAME commit, or keep it as a historical tombstone. ONCE ACTIVATED (a live cloud self-session
+trigger exists): reversal MUST FIRST `delete_trigger` and CONFIRM it is gone (`list_triggers`
+no longer shows it) BEFORE removing any file — otherwise it keeps resuming a session against
+deleted scripts. A merely DISABLED trigger is NOT sufficient for the file-deletion path: a
+disabled trigger still appears in `list_triggers` (the `nightly-build-agent` shape,
+`enabled:false`) and can be re-enabled against the very files you are about to delete, so if you
+disable rather than delete, LEAVE the machinery in place and RETIRE the row instead. And if the
+routine ever FIRED (a `brain-cycle.json` heartbeat exists), RETIRE the registry row
+(`status: retired` + retirement evidence) rather than deleting it — a heartbeat for a deleted
+row makes `check-scheduled-routines.mjs` fatal on an orphan heartbeat (the established
+retire-not-delete shape, which also preserves proof the lane once ran). Nothing in the product
 depends on any of it.
 ## DR-033 — The company is past Customer Discovery; the current phase is Build / execution, and a phase change is a decision record before either lane acts on it (owner-directed 2026-09-10)
 
@@ -2204,8 +2225,10 @@ who presses merge, not what the classifier says: the lane may merge a SAFETY_MAC
 PR only when the five conditions above hold, and it must say so in the PR body under
 "Owner decision needed" as *"merged under DR-037"* with the check-run id. It still does
 not: edit `AGENTS.md` or a decision record on its own authority (a DR records an owner
-decision, as this one does); activate the Standing Brain Cycle (DR-032's activation clause
-is untouched — the cycle still auto-OPENS and never auto-merges); merge anything that
+decision, as this one does); activate the Standing Brain Cycle as part of THIS self-merge
+authority (DR-032 governs the cycle's activation separately — owner-authorized 2026-09-13 and
+proceeding via its registry-first bootstrap; the cycle still auto-OPENS and never auto-merges);
+merge anything that
 changes the launch profile, the launch-claims gate or the publication boundary (DR-021 §2
 — those remain the owner's); or delete branches.
 

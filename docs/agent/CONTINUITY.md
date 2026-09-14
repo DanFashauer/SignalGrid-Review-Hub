@@ -55,17 +55,26 @@ body or `docs/agent/EVIDENCE.md`; every review thread is resolved and every bot
 finding verified and fixed or answered; the branch is not conflicted with
 `SignalGrid_Alpha`; and the lane never approves a PR and never merges one it
 did not open or was not asked to drive (the Mac lane's landing PRs are the
-named exception, only when the Mac asked for it in mail). `scripts/**`,
-`.github/workflows/**`, `lib/**/fixtures/**` and the brain-cycle veto config
-stay owner-gated (`check-owner-gated-surfaces.mjs`); a merge that touches one
-of those must say so in the PR body as "merged under DR-037" with the check-run
-id.
+named exception, only when the Mac asked for it in mail).
 
-DR-037 also carries ABSOLUTE exclusions the lane may NEVER self-merge, green CI
-or not: the launch profile, the launch-claims gate, and the publication boundary
-(these live under `scripts/**` but are owner-reserved regardless of green CI),
-and any surface `check-owner-gated-surfaces.mjs` classifies SAFETY_MACHINERY or
-OWNER_RESERVED. Those always escalate to the owner. A "green + DR-037 note" does
-NOT make those surfaces self-mergeable — the note documents an owner-approved
-merge of an owner-gated surface, it never substitutes for the owner's decision on
-one of these exclusions.
+DR-037's merge button covers AUTONOMOUS PRs only. Anything
+`check-owner-gated-surfaces.mjs` classifies SAFETY_MACHINERY, OWNER_RESERVED or
+DECISION_PATH — `scripts/**`, `.github/workflows/**`, `lib/**`,
+`artifacts/api-server/**`, the native decision ports, any fixtures directory, the
+lockfile, the decision records, the brain-cycle veto config, the launch profile,
+the launch-claims gate, the publication boundary, licence, pricing and
+buyer-facing copy — the lane may NEVER self-merge, green CI or not. Those always
+escalate to the owner. A "green + DR-037 note" does NOT make them self-mergeable:
+the note records an owner-approved merge of an owner-gated surface, it never
+substitutes for the owner's decision.
+
+This paragraph used to contradict the one above it, which repeated DR-037's
+permissive wording. That contradiction cost five merges — #719, #716, #708, #689,
+#704 — landed in good faith on the wrong half. DR-037 is amended (2026-09-14) to
+the strict reading, and the rule is no longer prose anyone has to remember:
+`node scripts/check-merge-authorization.mjs --base <ref> --head <sha> --branch
+<branch> --checks <file.json>` runs `classifyDiff` over the diff it derives from
+git itself and exits non-zero on anything owner-gated, on a branch tip that moved
+since the checks were read, and on any red, pending or unrecognised check. Run it
+before you merge anything of your own. Exit 0 means no mechanical reason to refuse
+was found; it is not an approval.

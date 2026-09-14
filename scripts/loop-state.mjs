@@ -111,6 +111,34 @@ if (hubListed && hubBranches.length === 0) {
  * So membership is derived from WHERE a branch lives. An agent can rename its
  * branch; it cannot escape its worktree.
  */
+/**
+ * Has this branch's content already landed on mainline?
+ *
+ * TRUE only when every file the branch changes relative to its merge base is
+ * byte-identical to mainline's copy. That is what survives a SQUASH merge, which
+ * rewrites the commit and defeats `merge-base --is-ancestor`.
+ *
+ * Fail-closed in every direction: an unreadable diff, a file mainline does not have, a
+ * file whose bytes differ, or any git error returns false and the branch stays reported
+ * as unpushed. The only way to pass is for mainline to already carry every byte the
+ * branch would add — which is precisely what "already on the Review Hub" means.
+ */
+function hasLandedByContent(branch) {
+  const names = git("diff", "--name-only", `origin/SignalGrid_Alpha...${branch}`);
+  if (!names) return false;
+  const files = names.split("\n").map((f) => f.trim()).filter(Boolean);
+  // A branch that touches nothing is not evidence of landing — it is an unreadable
+  // diff, or a branch identical to its base. Say nothing rather than clear it.
+  if (files.length === 0) return false;
+  for (const file of files) {
+    const mine = git("show", `${branch}:${file}`);
+    const theirs = git("show", `origin/SignalGrid_Alpha:${file}`);
+    if (mine === null || theirs === null || mine === undefined || theirs === undefined) return false;
+    if (mine !== theirs) return false;
+  }
+  return true;
+}
+
 function branchesInAgentWorktrees() {
   const out = git("worktree", "list", "--porcelain");
   if (!out) return [];
@@ -152,12 +180,30 @@ if (hubBranches.length) {
   const ephemeral = localBranches.filter(
     (b) => b.startsWith("worktree-agent-") || inWorktrees.includes(b),
   );
-  const unpushed = localBranches.filter((b) => !hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b));
+  const noRemote = localBranches.filter((b) => !hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b));
+  // THE SQUASH-MERGE HOLE, and it is the same shape as the one above. A branch merged
+  // with squash has no remote afterwards (GitHub deletes it) and is NOT an ancestor of
+  // mainline, because the squash makes a new commit. So this seam reported "local work
+  // not on the Review Hub" about content sitting in mainline — and both remedies it
+  // offers are wrong again: pushing recreates a dead branch on the shared remote after
+  // every single merge, and deletion is refused twice over, once by this repo's own
+  // dangerous-command hook (which denies the force form) and once by git itself (the
+  // safe form declines a branch that is not an ancestor, which a squash guarantees).
+  // Measured on 2026-09-14: three merges, three false failures, each cleared only by
+  // re-pushing the corpse.
+  //
+  // So membership is derived from CONTENT here too, not from reachability. Fail-closed
+  // by construction: one differing file, one file mainline lacks, an unreadable diff or
+  // any git error and the branch is still reported unpushed. Real work is a difference,
+  // and a difference can never pass this.
+  const landed = noRemote.filter((b) => hasLandedByContent(b));
+  const unpushed = noRemote.filter((b) => !landed.includes(b));
   const ephemeralNote = ephemeral.length ? ` (${ephemeral.length} ephemeral agent-worktree branch(es) not counted)` : "";
+  const landedNote = landed.length ? ` (${landed.length} squash-landed, content already on mainline: ${landed.join(", ")})` : "";
   if (unpushed.length) {
-    add("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}`);
+    add("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}${landedNote}`);
   } else {
-    add("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}`);
+    add("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}${landedNote}`);
   }
 
   // REPORTED, never fatal — the lane-message rule, for the same reason. The work

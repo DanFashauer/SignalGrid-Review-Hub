@@ -813,11 +813,25 @@ function selfTest() {
   // E2E: the probe preconditions as the live path actually calls them. The lock lives in
   // the git dir, so taking it here dirties nothing a gate can see.
   const lp = lockPath();
-  const hadLock = existsSync(lp);
-  if (hadLock) {
+  // Take the lock the way the LIVE path takes it (`wx` — create-exclusive, which fails
+  // if it already exists), not existsSync-then-write. Between a check and a write another
+  // run can take the lock, and this would then clobber a live probe's claim on it and
+  // restore-delete it out from under them. CodeQL flagged exactly that (high, "potential
+  // file system race condition") and was right: the live acquisition already used `wx`,
+  // so the two sites were giving different answers to one question. Now they agree.
+  let tookLock = false;
+  try {
+    writeFileSync(lp, JSON.stringify({ pid: process.pid, mutating: "self-test" }), { flag: "wx" });
+    tookLock = true;
+  } catch (err) {
+    // Busy is the ONLY tolerable failure here. Anything else (a read-only git dir, a
+    // missing parent) is a broken assumption, and swallowing it would silently skip the
+    // arm that proves the lock works.
+    if (err?.code !== "EEXIST") throw err;
+  }
+  if (!tookLock) {
     checks.push(["E2E: probe-lock arm SKIPPED — a lock is already held (another run)", false]);
   } else {
-    writeFileSync(lp, JSON.stringify({ pid: process.pid, mutating: "self-test" }));
     const held = runChild(["--self-test-child=probe-ready"]);
     rmSync(lp, { force: true });
     checks.push(["E2E: a HELD probe lock refuses the live run (exit 2)", held.status === 2 && /holds the lock/.test(held.out)]);

@@ -86,18 +86,99 @@ if (hubListed && hubBranches.length === 0) {
   );
 }
 
+/**
+ * Every branch checked out in an agent's isolated worktree, derived from
+ * `git worktree list` rather than from the branch's NAME.
+ *
+ * WHY THE NAME WAS THE WRONG KEY. The rule below used to be
+ * `b.startsWith("worktree-agent-")`, which catches only the branches the Agent
+ * tool names itself. It missed two shapes that occur constantly:
+ *
+ *   - a sub-agent that creates its OWN branch inside its worktree, because the
+ *     branch it was told to use is already checked out elsewhere (`wt-...`);
+ *   - a deliberate ATTACK reproduction (`attack-b1`), built to prove a gate
+ *     wrongly approves a weakening — on 2026-09-14 one such branch carried a
+ *     neutered prototype-depth bound.
+ *
+ * Both failed this seam on every session, and neither could be cleared: the
+ * message offers "push, or confirm the remote", and pushing is WRONG for both —
+ * it puts scratch names on the shared remote for the Mac lane to prune, and in
+ * the attack case it publishes a disabled safety guard indistinguishable at a
+ * glance from real work. The only other move is deleting a branch out from under
+ * a running agent. A seam whose every remedy is wrong is one a session learns to
+ * narrate past, which is how a real unpushed branch would eventually slip by.
+ *
+ * So membership is derived from WHERE a branch lives. An agent can rename its
+ * branch; it cannot escape its worktree.
+ */
+function branchesInAgentWorktrees() {
+  const out = git("worktree", "list", "--porcelain");
+  if (!out) return [];
+  const found = new Set();
+  const agentPaths = [];
+  let path = "";
+  for (const line of out.split("\n")) {
+    if (line.startsWith("worktree ")) {
+      path = line.slice("worktree ".length);
+      // The Agent tool's isolated checkouts live under `.claude/worktrees/`.
+      if (path.includes("/.claude/worktrees/")) agentPaths.push(path);
+    } else if (line.startsWith("branch refs/heads/") && path.includes("/.claude/worktrees/")) {
+      found.add(line.slice("branch refs/heads/".length));
+    }
+  }
+
+  // The checked-out branch is only the one an agent is on RIGHT NOW. An agent that
+  // builds several branches — three successive attack reproductions, say — leaves
+  // the others behind as refs, and those escaped a location-only rule and failed
+  // the seam anyway. Git keeps a PER-WORKTREE HEAD reflog, so every branch a given
+  // worktree ever checked out is recoverable from it. That is the full set an agent
+  // created, not just its current one.
+  for (const p of agentPaths) {
+    const log = git("-C", p, "reflog", "show", "--format=%gs", "HEAD");
+    if (!log) continue;
+    for (const line of log.split("\n")) {
+      const m = /^checkout: moving from (\S+) to (\S+)$/.exec(line.trim());
+      if (m) { found.add(m[1]); found.add(m[2]); }
+    }
+  }
+  return [...found];
+}
+
 if (hubBranches.length) {
-  // `worktree-agent-*` branches are the Agent tool's ephemeral isolated
-  // checkouts: created for one subagent run, never meant to be pushed, and
-  // deleted with the worktree. They are counted and named here so the
-  // exclusion is visible, not silent.
-  const ephemeral = localBranches.filter((b) => b.startsWith("worktree-agent-"));
+  // Ephemeral by NAME (the Agent tool's own) or by LOCATION (anything checked out
+  // in an agent worktree). Named in the output either way: the exclusion is
+  // visible, never silent.
+  const inWorktrees = branchesInAgentWorktrees();
+  const ephemeral = localBranches.filter(
+    (b) => b.startsWith("worktree-agent-") || inWorktrees.includes(b),
+  );
   const unpushed = localBranches.filter((b) => !hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b));
-  const ephemeralNote = ephemeral.length ? ` (${ephemeral.length} ephemeral worktree-agent-* branch(es) not counted)` : "";
+  const ephemeralNote = ephemeral.length ? ` (${ephemeral.length} ephemeral agent-worktree branch(es) not counted)` : "";
   if (unpushed.length) {
     add("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}`);
   } else {
     add("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}`);
+  }
+
+  // REPORTED, never fatal — the lane-message rule, for the same reason. The work
+  // is not lost (the worktree belongs to a live agent, and anything real is pushed
+  // from it), but an agent branch carrying commits beyond mainline is still worth
+  // a session's eyes, so it is named rather than swallowed by the exclusion above.
+  const carrying = ephemeral
+    .filter((b) => !hubBranches.includes(b))
+    // Commits reachable from the branch and from NO origin ref at all — a truer
+    // reading of "carrying work the remote does not have" than a diff against one
+    // named branch, which would miscount a branch cut from a different base.
+    .map((b) => ({ b, ahead: git("rev-list", "--count", b, "--not", "--remotes=origin") }))
+    .filter((x) => x.ahead && x.ahead !== "0");
+  if (carrying.length) {
+    add(
+      "warn",
+      "Agent-worktree branches carrying commits",
+      `${carrying.map((x) => `${x.b} (+${x.ahead})`).join(", ")} — reported, never fatal: they belong to a live agent's ` +
+        `isolated checkout and are not the session's to push or delete. An attack reproduction MUST NOT be pushed.`,
+      false,
+    );
   }
 }
 

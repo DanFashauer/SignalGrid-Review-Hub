@@ -59,10 +59,18 @@ const ARTIFACT = "artifacts/sync/core-normalization-version.json";
 const GENERATED_TS = `${CORE_SRC}/core-normalization-version.ts`;
 
 /** The mint sites. `decision.ts` is the sole caller of buildSnapshot/buildEvidence;
- *  the other three are the only `store.putSignal` producers in the package. A file the
- *  mint path reads cannot be missed by this derivation, because reaching it requires
- *  importing it. */
-const ROOTS = ["decision.ts", "connector.ts", "dock.ts", "shift.ts"];
+ *  `connector.ts`, `dock.ts` and `shift.ts` are the only `store.putSignal` producers in
+ *  the package. A file the mint path reads cannot be missed by this derivation, because
+ *  reaching it requires importing it.
+ *
+ *  `live-sync.ts` is named EXPLICITLY because nothing in the closure imports it — it
+ *  imports connector.ts, not the other way round — so following imports alone would
+ *  leave it uncovered while it decides, on the live path, whether a sync reports
+ *  `success` or `partial` and whether a connector is `healthy` or `degraded`. An
+ *  uncovered fail-closed arm can be inverted with this gate staying green, which is
+ *  the one failure this stamp exists to make impossible. A sync ENTRY POINT belongs
+ *  in ROOTS on the same grounds the three putSignal producers do. */
+const ROOTS = ["decision.ts", "connector.ts", "dock.ts", "shift.ts", "live-sync.ts"];
 
 /** The generated file is excluded from its own digest — otherwise the hash would
  *  depend on the value derived from the hash. Floor F6 proves nothing else hides there. */

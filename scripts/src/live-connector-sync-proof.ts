@@ -7,15 +7,20 @@
 // from the environment, and takes no opt-in env var — so it runs in the DEFAULT
 // suite and cannot silently stop running the way an opt-in live proof can.
 //
-// The SSRF guard is proven by asserting it REFUSES the loopback mock (and a
-// private-range target, and a plain-http one), which is exactly why the read
-// arms drive `runLiveSync` with a direct source rather than through
-// `resolveLivePostureSource`.
+// TWO KINDS OF ARM, and the split is deliberate. Sections 5–8 drive `runLiveSync`
+// with a MOCK source: what is under test is the RUNNER (zero signals, `partial`,
+// `degraded`, a class-only note), and the runner is source-agnostic by contract.
+// Section 9 drives the REAL `fleetPostureSource`, because what is under test
+// there is precisely that the destination guard sits on the path that FETCHES —
+// an earlier draft checked the URL at arm time while the adapter re-resolved its
+// own at read time, so the checked and fetched addresses could differ. The
+// assertion is that the loopback listener records ZERO requests.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { AddressInfo } from "node:net";
 import {
   CoreError,
   SignalGridCore,
+  classifyLiveFailure,
   evaluateDecision,
   fixedClock,
   runDockSync,
@@ -29,8 +34,7 @@ import {
 } from "@workspace/signalgrid-core";
 import {
   fleetHostsToRecords,
-  guardReadOnly,
-  LivePostureMethodError,
+  fleetPostureSource,
   resolveLivePosture,
   resolveLivePostureSource,
 } from "@workspace/integration-bridge";
@@ -51,7 +55,9 @@ function check(name: string, ok: boolean, detail = ""): void {
 
 // ── The loopback mock ────────────────────────────────────────────────────────
 
-type MockMode = "hosts" | "hosts-unmanaged" | "hosts-unknown-mgmt" | "401" | "403" | "non-json" | "array" | "empty" | "silent";
+type MockMode =
+  | "hosts" | "hosts-unmanaged" | "hosts-unknown-mgmt" | "hosts-none"
+  | "401" | "403" | "non-json" | "array" | "empty" | "silent";
 
 interface Mock {
   server: Server;
@@ -79,6 +85,10 @@ function body(mock: Mock): { status: number; payload: string } {
     case "hosts-unknown-mgmt":
       // A well-formed host carrying a management value nothing recognises.
       return { status: 200, payload: JSON.stringify({ hosts: [{ ...HOST_OK, mdm: { enrollment_status: "Pending" } }] }) };
+    case "hosts-none":
+      // The shape a revoked token scoped to nothing, a wrong team filter and an
+      // emptied Fleet all return: a 200 with an empty inventory.
+      return { status: 200, payload: JSON.stringify({ hosts: [] }) };
     case "401":
       return { status: 401, payload: JSON.stringify({ message: "Authentication required" }) };
     case "403":
@@ -124,20 +134,29 @@ async function stopMock(mock: Mock): Promise<void> {
  * A live source pointed at the loopback mock. It drives the SAME mapper the
  * production resolver uses (`fleetHostsToRecords`) and bounds its own I/O, which
  * is the contract `LivePostureSource` states.
+ *
+ * It fails in the STRUCTURED shapes `classifyLiveFailure` reads, exactly as the
+ * real transport does: `status` on a non-ok response (as `getHosts` attaches it),
+ * a stated `failureClass` on a bad envelope, and the runtime's own SyntaxError /
+ * TypeError-with-`cause.code` otherwise. Nothing is classified by message text.
  */
 function mockSource(mock: Mock, timeoutMs = 400): LivePostureSource {
   return async (ctx) => {
-    guardReadOnly("GET");
     const res = await fetch(`${mock.url}/api/v1/fleet/hosts`, {
       method: "GET",
       signal: AbortSignal.timeout(timeoutMs),
       redirect: "manual",
     });
-    if (!res.ok) throw new Error(`Fleet getHosts failed: ${res.status}`);
+    if (!res.ok) {
+      throw Object.assign(new Error(`Fleet getHosts failed: ${res.status}`), { status: res.status });
+    }
     const text = await res.text();
     const data = JSON.parse(text) as { hosts?: unknown };
     if (!Array.isArray(data.hosts)) {
-      throw new Error("Fleet list hosts returned a malformed envelope: `hosts` is missing or not an array");
+      throw Object.assign(
+        new Error("Fleet list hosts returned a malformed envelope: `hosts` is missing or not an array"),
+        { failureClass: "malformed_response" },
+      );
     }
     return fleetHostsToRecords(data.hosts, { tenantId: ctx.tenantId, nowIso: ctx.nowIso });
   };
@@ -219,10 +238,6 @@ async function main(): Promise<void> {
   check("no credential → refused, and the refusal NAMES the credential",
     "refused" in noToken && /FLEETDM_API_TOKEN/.test(noToken.refused),
     "refused" in noToken ? noToken.refused : "armed");
-  const noUrl = resolveLivePosture({ ...armed, FLEETDM_BASE_URL: undefined });
-  check("no destination → refused, by its own reason",
-    "refused" in noUrl && /FLEETDM_BASE_URL/.test(noUrl.refused),
-    "refused" in noUrl ? noUrl.refused : "armed");
   const noTenant = resolveLivePosture({ ...armed, SIGNALGRID_LIVE_POSTURE_TENANT: undefined });
   check("no tenant → refused, by its own reason",
     "refused" in noTenant && /TENANT/.test(noTenant.refused),
@@ -231,8 +246,14 @@ async function main(): Promise<void> {
   check("everything set but tier=dev → refused, and the refusal names the tier",
     "refused" in devTier && /tier "dev"/.test(devTier.refused),
     "refused" in devTier ? devTier.refused : "armed");
-  check("all five conditions → a spec IS produced (the gate is a gate, not a wall)",
+  check("all arm-time conditions → a spec IS produced (the gate is a gate, not a wall)",
     "spec" in resolveLivePosture(armed));
+  // Arm time does NOT judge the destination, and saying so here is the point:
+  // the address is resolved and checked at READ time, against the object the
+  // adapter is handed. Section 9 proves that. If this ever starts refusing, the
+  // two-places split has silently become a parallel check again.
+  check("arm time does NOT pre-judge the destination (the read-time guard is the only one)",
+    "spec" in resolveLivePosture({ ...armed, FLEETDM_BASE_URL: "http://127.0.0.1:8080" }));
 
   const coreA = SignalGridCore.demo();
   const coreB = SignalGridCore.demo();
@@ -303,7 +324,10 @@ async function main(): Promise<void> {
   check("no identity signal is minted from a device-posture read (Fleet answers nothing about people)",
     h.store.listSignalsForSubject(h.tenantId, "identity", `id_${h.tenantId}_live.operator`)
       .every((s) => s.connectorId !== h.live.id));
-  check("read-only, ENFORCED: the mock recorded exactly ['GET']",
+  // NOT an enforcement claim: this mock source issues a GET, which says nothing
+  // about the production source. Section 9 proves the stronger reachable
+  // property — on a refused destination NO request of ANY method leaves at all.
+  check("this mock source issued only GET (a property of the driver, not an enforcement)",
     JSON.stringify([...new Set(ok.methods)]) === JSON.stringify(["GET"]), ok.methods.join(","));
 
   // Determinism: same fixed clock, same payload, same ids.
@@ -340,6 +364,8 @@ async function main(): Promise<void> {
   const beforeU = u.store.listSignalsForSubject(u.tenantId, "device", u.deviceId).length;
   const uRun = await runLiveSync(u.store, u.clock, u.live, mockSource(ok));
   failClosed(uRun, u.store, u, "unreachable", beforeU);
+  check("unreachable: the note names the class, derived from the socket code on `cause`",
+    /\(unreachable\)/.test(uRun.note ?? ""), uRun.note ?? "");
   // The bar-raising claim is about a store whose ONLY posture source is the live
   // one. (With the fixture twin present its fresh healthy reading legitimately
   // still stands — a failed read must not erase another connector's evidence,
@@ -375,6 +401,8 @@ async function main(): Promise<void> {
     const beforeA = a.store.listSignalsForSubject(a.tenantId, "device", a.deviceId).length;
     const aRun = await runLiveSync(a.store, a.clock, a.live, mockSource(mock));
     failClosed(aRun, a.store, a, `HTTP ${status}`, beforeA);
+    check(`HTTP ${status}: the note names authentication_refused, derived from the STATUS`,
+      /\(authentication_refused\)/.test(aRun.note ?? ""), aRun.note ?? "");
     check(`HTTP ${status}: exactly one request — no retry, no fallback to a cached healthy`,
       mock.methods.length === 1, mock.methods.join(","));
     await stopMock(mock);
@@ -403,27 +431,101 @@ async function main(): Promise<void> {
       .some((s) => s.connectorId === k.live.id && s.category === "device_management" && s.value === false));
   await stopMock(unknownMgmt);
 
-  // ── 9. READ-ONLY, ENFORCED NOT ASSUMED ─────────────────────────────────────
-  console.log("\n9. read-only");
-  for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
-    let thrown: unknown;
-    try { guardReadOnly(method); } catch (err) { thrown = err; }
-    check(`the read-only guard throws a typed error on ${method}`,
-      thrown instanceof LivePostureMethodError, String(thrown));
-  }
-  check("…and accepts GET", (() => { try { guardReadOnly("GET"); return true; } catch { return false; } })());
+  // An EMPTY inventory is an UNKNOWN, not a healthy zero: a revoked token scoped
+  // to nothing, a wrong team filter and an emptied Fleet all answer `{"hosts":[]}`.
+  const none = await startMock("hosts-none");
+  const n = liveFixture();
+  const beforeN = n.store.listSignalsForSubject(n.tenantId, "device", n.deviceId).length;
+  const nRun = await runLiveSync(n.store, n.clock, n.live, mockSource(none));
+  failClosed(nRun, n.store, n, "200 with an EMPTY host list", beforeN);
+  check("…and the connector is NOT healthy on an empty inventory",
+    n.store.getConnector(n.tenantId, n.live.id)?.status !== "healthy");
+  await stopMock(none);
 
-  // ── 10. THE URL GUARD IS WIRED INTO THE RESOLVER ───────────────────────────
-  console.log("\n10. the SSRF guard refuses the destinations it must");
-  const loop = resolveLivePosture({ ...armed, FLEETDM_BASE_URL: "https://127.0.0.1:8080" });
-  check("a LOOPBACK destination is refused, and the refusal names the loopback rule",
-    "refused" in loop && /loopback/i.test(loop.refused), "refused" in loop ? loop.refused : "armed");
-  const priv = resolveLivePosture({ ...armed, FLEETDM_BASE_URL: "https://10.0.0.5" });
-  check("a PRIVATE-RANGE destination is refused, and the refusal names the private-range rule",
-    "refused" in priv && /private/i.test(priv.refused), "refused" in priv ? priv.refused : "armed");
-  const plain = resolveLivePosture({ ...armed, FLEETDM_BASE_URL: "http://posture.example.invalid" });
-  check("a plain-HTTP destination is refused, and the refusal names the HTTPS rule",
-    "refused" in plain && /HTTPS/i.test(plain.refused), "refused" in plain ? plain.refused : "armed");
+  // A hostile or broken server's unbounded strings must not be persisted whole:
+  // `raw.id` interpolates into `fleet:host#…` and `raw.uuid` becomes the host
+  // reference, and the reference is copied onto EVERY signal the record mints.
+  const huge = "x".repeat(3_000_000);
+  const [bounded] = fleetHostsToRecords(
+    [{ ...HOST_OK, id: huge, uuid: huge }],
+    { tenantId: "t", nowIso: NOW },
+  );
+  check("a multi-megabyte host id is BOUNDED before it reaches a record",
+    (bounded?.sourceReference.length ?? Infinity) < 1_000 &&
+      (bounded?.deviceRef.length ?? Infinity) < 1_000,
+    `sourceReference=${bounded?.sourceReference.length} deviceRef=${bounded?.deviceRef.length}`);
+  check("…and the truncation is STATED, not silent",
+    /truncated, 3000\d{3} characters total/.test(bounded?.sourceReference ?? ""),
+    (bounded?.sourceReference ?? "").slice(-60));
+
+  // ── 9. THE DESTINATION GUARD SITS ON THE PATH THAT FETCHES ─────────────────
+  // The assertion that matters is `methods.length === 0`: a guard that validated
+  // one address while the transport fetched another would leave a request on this
+  // listener with the bearer token attached.
+  console.log("\n9. the destination guard, driven through the REAL fleetPostureSource");
+  const target = await startMock("hosts");
+  const saved = {
+    tier: process.env.SIGNALGRID_TIER,
+    live: process.env.SIGNALGRID_LIVE_INTEGRATIONS,
+    token: process.env.FLEETDM_API_TOKEN,
+    base: process.env.FLEETDM_BASE_URL,
+  };
+  const drive = async (baseUrl: string): Promise<string> => {
+    process.env.SIGNALGRID_TIER = "prod";
+    process.env.SIGNALGRID_LIVE_INTEGRATIONS = "true";
+    process.env.FLEETDM_API_TOKEN = "not-a-real-token";
+    process.env.FLEETDM_BASE_URL = baseUrl;
+    try {
+      await fleetPostureSource({ connectorId: "c", tenantId: "tenant_northwind", nowIso: NOW });
+      return "RESOLVED — the read was not refused";
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+  };
+  const REFUSED = /^live posture destination refused: /;
+  const loopMsg = await drive(target.url); // http://127.0.0.1:<port>
+  check("the LOOPBACK mock is refused at read time, and the refusal names a rule",
+    REFUSED.test(loopMsg) && /loopback|HTTPS/i.test(loopMsg), loopMsg);
+  const privMsg = await drive("https://10.0.0.5");
+  check("a PRIVATE-RANGE destination is refused, naming the private-range rule",
+    REFUSED.test(privMsg) && /private/i.test(privMsg), privMsg);
+  const plainMsg = await drive("http://posture.example.invalid");
+  check("a plain-HTTP destination is refused, naming the HTTPS rule",
+    REFUSED.test(plainMsg) && /HTTPS/i.test(plainMsg), plainMsg);
+  check("NO REQUEST OF ANY METHOD reached the loopback listener across all three",
+    target.methods.length === 0, target.methods.join(","));
+  // And the guard is a gate, not a wall: an https public-shaped destination gets
+  // PAST it and is stopped by the next thing instead.
+  const passMsg = await drive("https://posture.example.invalid");
+  check("an HTTPS public-shaped destination passes the guard (stopped later, by the adapter gate)",
+    !REFUSED.test(passMsg), passMsg);
+  check("…and still nothing reached the loopback listener", target.methods.length === 0, target.methods.join(","));
+  process.env.SIGNALGRID_TIER = saved.tier;
+  process.env.SIGNALGRID_LIVE_INTEGRATIONS = saved.live;
+  process.env.FLEETDM_API_TOKEN = saved.token;
+  process.env.FLEETDM_BASE_URL = saved.base;
+  await stopMock(target);
+
+  // ── 10. THE CLASSIFIER READS STRUCTURED FACTS, NOT MESSAGE TEXT ────────────
+  console.log("\n10. classifyLiveFailure is not steerable by remote text");
+  check("a 502 whose body quotes a 403 is NOT authentication_refused",
+    classifyLiveFailure(Object.assign(new Error("Bad Gateway: upstream said 403 forbidden"), { status: 502 })) ===
+      "source_error");
+  check("a real 401 IS authentication_refused, from the status property",
+    classifyLiveFailure(Object.assign(new Error("nope"), { status: 401 })) === "authentication_refused");
+  check("a malformed body is malformed_response, from the SyntaxError the parse threw",
+    classifyLiveFailure((() => { try { JSON.parse("<html>"); return null; } catch (e) { return e; } })()) ===
+      "malformed_response");
+  check("an envelope error that states its class is honoured",
+    classifyLiveFailure(Object.assign(new Error("x"), { failureClass: "malformed_response" })) ===
+      "malformed_response");
+  check("a class the source invents is NOT honoured — it falls back",
+    classifyLiveFailure(Object.assign(new Error("x"), { failureClass: "all_clear" })) === "source_error");
+  check("a socket code on `cause` is unreachable",
+    classifyLiveFailure(Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } })) ===
+      "unreachable");
+  check("an error whose MESSAGE alone says ECONNREFUSED is not classified from it",
+    classifyLiveFailure(new Error("ECONNREFUSED talking to the vendor")) === "source_error");
 
   const total = passed + failures.length;
   console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${total})`);

@@ -152,9 +152,9 @@ export const GA_ALLOWED_ROUTES: readonly { method: string; path: string }[] = [
   // connector this process holds is fixture-mode and no route here reaches a
   // source system. In a deployment that arms one at its own process edge (which
   // requires beta/prod tier, SIGNALGRID_LIVE_INTEGRATIONS === 'true', a
-  // credential, a named tenant and an SSRF-validated destination), this route
-  // performs a READ (GET only, bounded, redirect:'manual') and never a write or
-  // a device action.
+  // credential and a named tenant), this route performs a READ — the destination
+  // checked against the SSRF guard at the moment it is fetched, GET only,
+  // bounded, redirect:'manual' — and never a write or a device action.
   { method: "GET", path: "/v1/connectors" },
   { method: "GET", path: "/v1/connectors/:id/sync-runs" },
   { method: "POST", path: "/v1/connectors/:id/sync" },

@@ -19,9 +19,25 @@
 // The fail-closed arm is the default outcome, not the error path. On ANY
 // rejection — connection refused, timeout, auth failure, malformed body — this
 // writes ZERO signals, reports the run `partial`, and marks the connector
-// `degraded`. No signal written means the evidence readers see the previous
-// observedAt age out into `unverified`, which RAISES the assurance bar. It never
-// synthesizes a healthy reading and it never returns `success`.
+// `degraded`. It never synthesizes a healthy reading and it never returns
+// `success`. In a store whose only posture source is this connector, a failed
+// first read leaves no posture at all, and the evidence readers grade an absent
+// category `missing` — which raises the assurance bar. `proof:live-connector-sync`
+// drives that arm.
+//
+// WHAT IS NOT CLAIMED, because an earlier draft of this header claimed it: a
+// reading ALREADY in the store does NOT age out when a later read fails. Posture
+// freshness is graded ONCE, at sync time, against `record.lastSyncAt`, and stored
+// as the `posture_freshness` signal's VALUE, which `buildEvidence` reads back
+// verbatim — so a reading that graded `fresh` yesterday still reads `fresh`
+// however long the connector has been degraded. Re-grading at read time against
+// the evaluation clock is the fix and is an owner decision, not a comment: it
+// moves every decision the core makes on every existing fixture (DR-053, "WHAT IS
+// NOT CLOSED").
+//
+// This file IS inside the `CORE_NORMALIZATION_VERSION` import closure (named in
+// ROOTS by scripts/generate-core-normalization-version.mjs), so inverting
+// `partial` to `success` below cannot pass with the version gate green.
 import type { MemoryStore } from "./store";
 import type { Clock } from "./util";
 import { deterministicId } from "./util";
@@ -49,6 +65,29 @@ export type LivePostureSource = (
   ctx: LivePostureSourceContext,
 ) => Promise<FixturePostureRecord[]>;
 
+/** The classes a run note may name. Anything unrecognised is `source_error`. */
+const FAILURE_CLASSES = new Set([
+  "timeout",
+  "unreachable",
+  "authentication_refused",
+  "malformed_response",
+  "source_error",
+]);
+
+/** Socket-level codes Node reports on `err.cause.code` for a fetch that never
+ *  reached an HTTP response. */
+const UNREACHABLE_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "EPIPE",
+  "UND_ERR_SOCKET",
+  "UND_ERR_CONNECT_TIMEOUT",
+]);
+
 /**
  * The failure CLASS, and nothing else.
  *
@@ -56,19 +95,38 @@ export type LivePostureSource = (
  * carry the destination URL, a query string or a response body, and any of those
  * can carry a credential. So the note names a class derived here and never
  * echoes the message.
+ *
+ * EVERY TEST BELOW IS A STRUCTURED FACT — the error's constructor name, the
+ * socket code on `cause`, the HTTP status the transport carried, or a class the
+ * source stated outright. None reads the message text. The previous version
+ * matched substrings and was wrong in both directions: a 502 whose body quoted a
+ * 403 read as `authentication_refused`. A classifier steerable by remote text is
+ * being told its answer by the thing it is classifying.
  */
 export function classifyLiveFailure(err: unknown): string {
-  const name = err instanceof Error ? err.name : "";
-  const message = err instanceof Error ? err.message : String(err ?? "");
-  if (name === "TimeoutError" || name === "AbortError") return "timeout";
-  if (/\b(401|403)\b|unauthor|forbidden|invalid token|authentication/i.test(message)) {
-    return "authentication_refused";
+  if (typeof err !== "object" || err === null) return "source_error";
+  const e = err as {
+    name?: unknown;
+    status?: unknown;
+    failureClass?: unknown;
+    cause?: { code?: unknown } | null;
+  };
+
+  // A source that KNOWS its class says so. Honoured only if it names one of ours.
+  if (typeof e.failureClass === "string" && FAILURE_CLASSES.has(e.failureClass)) {
+    return e.failureClass;
   }
-  if (/ECONNREFUSED|ENOTFOUND|ECONNRESET|EHOSTUNREACH|fetch failed|socket hang up|network/i.test(message)) {
-    return "unreachable";
-  }
-  if (/JSON|malformed|unexpected token|not an array|envelope|parse/i.test(message)) {
-    return "malformed_response";
+  // The constructor's own name: AbortSignal.timeout rejects with TimeoutError,
+  // an aborted fetch with AbortError, and JSON.parse throws SyntaxError.
+  if (e.name === "TimeoutError" || e.name === "AbortError") return "timeout";
+  if (e.name === "SyntaxError") return "malformed_response";
+  // The socket code the runtime attached — a fetch that never got a response.
+  const code = e.cause?.code;
+  if (typeof code === "string" && UNREACHABLE_CODES.has(code)) return "unreachable";
+  // The HTTP status the transport carried as a property (fleetdm.ts attaches it
+  // on every non-ok response). 401/403 are the auth pair; nothing else is guessed.
+  if (typeof e.status === "number") {
+    return e.status === 401 || e.status === 403 ? "authentication_refused" : "source_error";
   }
   return "source_error";
 }
@@ -106,9 +164,8 @@ export async function runLiveSync(
       recordsProcessed: 0,
       signalsNormalized: 0,
       note:
-        `Live sync did not complete (${failureClass}). No signals were written, so the ` +
-        "previously observed posture ages out into unverified rather than being replaced " +
-        "by a reading nobody took.",
+        `Live sync did not complete (${failureClass}). No signals were written and the ` +
+        "connector is degraded; nothing was replaced by a reading nobody took.",
     };
     store.putSyncRun(run);
     store.putConnector({ ...connector, status: "degraded", lastSyncAt: completedAt });

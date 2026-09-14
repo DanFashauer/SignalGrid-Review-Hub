@@ -52,7 +52,50 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-14 (cloud lane, latest) - THE MERGE BUTTON IS NOW MACHINE-LOCKED, and the
+LAST TOUCHED: 2026-09-14 16:36Z (cloud lane, latest) - THE QUEUE IS THE BOTTLENECK, MEASURED, NOT
+              GUESSED. Ran scripts/check-merge-authorization.mjs (from #729's worktree; it is not on
+              mainline yet, which is itself the loop) against all eleven open PRs. Every one REFUSED
+              as owner-gated: #727, #730, #729, #723, #737, #732, #741, #742, #744, #745, #748 all
+              touch scripts/** or lib/**. The ONLY authorized merge in the set was #750, this
+              session's own lane mail, merged through that verdict pinned to 2ccef410. So the layer
+              the owner asked to see built and verified IS built and verified; it is waiting on
+              eleven clicks, not on more engineering. REVIEWED the Mac lane's new PR #748
+              (mac/custody-removal-suspends, 752d9106 - an unclaimed lift from the dock is a custody
+              exception, DR-043's removal-suspends item). The rule is good and was FALSIFIED rather
+              than trusted: dropping hasUnauthorizedRemoval from the routing branch fails
+              custody-removal-without-session (80/81); forcing it true fails BOTH
+              custody-removal-with-session and the pre-existing healthy-shared-device-checkout
+              (82/84). Clean run 82/82, up from 73/73. typecheck, review:invariants and
+              check-decision-port-parity all green. BLOCKED on one line: preflight fails at the doc
+              line-count gate because the branch itself invalidates a figure -
+              docs/COMPANY_BUILD_PLAN.md:4871 says decisionEngine.ts (336) and the branch makes the
+              file 361 (mainline measured 336). Two ungated figures also go stale:
+              VALIDATION_EVIDENCE.md:33 says '11 scenarios / 51 assertions ... the scenario count
+              still holds' (now 13 / 82) and PROOF_COVERAGE_AUDIT.md:25,:68 say '11 scenarios x 22
+              risk mutations' (proof:signalgrid-grid prints 11/231 on mainline, 13/273 on the
+              branch). THE CAVEAT WORTH KEEPING: port parity is green BY CONSTRUCTION. The Mac lane
+              reused CUSTODY_EXCEPTION with its existing outcome set, and that gate compares
+              vocabulary and wiring, not predicates - its own header says it cannot prove behavioural
+              equivalence. native/ios/EnterpriseShell/Services/DecisionEngine.swift:66-80 holds the
+              mirror of that block and has NO removal rule, so after #748 merges an unclaimed lift
+              decides CUSTODY_EXCEPTION in the fabric and allow on the phone with nothing going red
+              anywhere - the exact failure that gate exists to catch. Golden rule 1 means it is not
+              fixable inside that PR; it wants a decision record naming the re-port, or a declared
+              drift pinned both ways like AppPlanInput.stepUpSatisfiedActionKeys already is. All of
+              it posted on #748 and mailed to the Mac lane (both in #750). ALSO LANDED AS A BRANCH:
+              #751, claude/build-custody-v1-wiring, docs-only - why evaluateCustodyLedger is still
+              unwired. The wiring was built end to end (two read-only fixture routes live,
+              test:api 409/409 -> 416/416, eleven surfaces synced) and then REVERTED, because
+              check-deployment-runbook.mjs resolves the api-server's TRANSITIVE @workspace/*
+              dependencies and declaring @workspace/integrations adds 80 distinct env vars (119 ->
+              ~199) for families the custody route cannot use. A subpath import does not help: the
+              gate reads the dependency graph, not the import graph, which is correct. Documenting
+              80 knobs that do not exist would be the dishonesty that gate exists to prevent, so the
+              finding was filed instead; the fix shape (extract the evaluator into its own env-free
+              package, re-export from rtls-custody) is a lib/** change and owner-gated. preflight
+              and verify:breadth both exit 0 on it; the launch-claims ceiling dropped 416 -> 408 and
+              the gate wrote that itself.
+              (Earlier 2026-09-14, cloud lane:) THE MERGE BUTTON IS NOW MACHINE-LOCKED, and the
               headline readiness is 94%, not 0%. PR 3 of the auto-merge safe path landed as #729
               (owner-gated, green, awaiting the owner): scripts/check-merge-authorization.mjs refuses
               a self-merge unless classifyDiff says the diff is autonomous, the branch tip still
@@ -1048,8 +1091,17 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               before 2026-09-16 (DR-005 says do not renew); approve the ten Dependabot runs; the
               PURPOSE.md s2 widening (DR-035 follow-up); LightRAG: smaller local model, remote
               endpoint with his key, or leave it recorded as not-working. Nothing on the pipes is
-              blocked: lane mail 111/111 acked, sim requests 17/17, evidence fresh (v77).
-NEXT ACTION: cloud: (1) stamp a lane on every lane-less BUILD_BACKLOG row and extend
+              blocked: lane mail 111/111 acked, sim requests 17/17, evidence fresh (v77). AND, measured
+              2026-09-14 16:36Z by running the authorizer against every open PR: ELEVEN PRs - #727,
+              #730, #729, #723, #737, #732, #741, #742, #744, #745, #748 - are all REFUSED as
+              owner-gated and cannot be landed by either lane however green. #730 closes the last
+              readiness gap and has been green since 06:30. This is now the binding constraint on
+              the whole build; nothing else in the queue moves until those merge.
+NEXT ACTION: cloud: (0) NOTHING ELSE IS THE BOTTLENECK - the eleven owner-gated PRs above are.
+              While they sit: watch #748 for the Mac lane's (336)->(361) fix and land nothing on
+              their branch; file the DecisionEngine.swift removal-rule drift as a decision record or
+              a declared drift once the owner picks; (1) stamp a lane on every lane-less
+              BUILD_BACKLOG row and extend
               scripts/check-backlog-ownership.mjs to read BUILD_BACKLOG rows so a lane-less row fails;
               (2) file and build the DR-036 proof-bindings row so readiness dimension (b) becomes a
               ratio instead of a binary that reads 0 after every manifest move; (3) give the roster a

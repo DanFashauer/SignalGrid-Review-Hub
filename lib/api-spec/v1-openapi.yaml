@@ -418,10 +418,18 @@ paths:
       operationId: syncConnector
       tags: [connectors]
       parameters: [{ $ref: "#/components/parameters/Id" }]
-      summary: Replay the fixture connector sync (read-only)
+      summary: Run the connector sync (read-only against the source system)
+      description: >-
+        Dispatched by connector mode. A fixture-mode connector replays the deterministic fixture
+        pipeline; a live-mode one reads through the source its process registered (GET only,
+        bounded, redirects never followed). A live read that is unreachable, times out, is refused
+        or returns a malformed body writes ZERO signals and reports the run `partial` with the
+        connector `degraded` — it never reports success.
       responses:
         "200": { description: Sync run }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: No connector with that id in the caller's tenant }
+        "503": { description: "`connector_unavailable` — a live-mode connector whose source is not registered in this process" }
 
   /v1/audit:
     get:

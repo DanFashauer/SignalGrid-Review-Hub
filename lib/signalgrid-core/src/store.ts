@@ -231,13 +231,14 @@ export class MemoryStore {
 
   /**
    * Whether ANY connector in this process is something other than a fixture — a
-   * deployment fact, so deliberately unscoped by tenant. `ConnectorMode` is
-   * fixture-only today, so this cannot return true until a live mode exists; that
-   * is the point. The deployment's stated signal source derives from THIS, not from
+   * deployment fact, so deliberately unscoped by tenant. A live mode now exists,
+   * so this CAN return true — but only in a process that called
+   * `registerLiveConnector`, which no route and no seed does. The deployment's
+   * stated signal source still derives from the connectors actually held, not from
    * an environment flag that could assert a posture the core does not have.
    */
   hasNonFixtureConnector(): boolean {
-    return [...this.connectors.values()].some((row) => (row.mode as string) !== "fixture");
+    return [...this.connectors.values()].some((row) => row.mode !== "fixture");
   }
 
   putSyncRun(run: ConnectorSyncRun): void {

@@ -165,7 +165,7 @@ export function ConnectorSetup() {
               {runSync.isPending ? "SYNCING…" : "RUN FIXTURE SYNC"}
             </button>
             <span className="text-xs text-muted-foreground">
-              runs with the demo owner key (connector:sync — the operator role deliberately lacks it); the core refuses non-fixture connectors, so no source system can be touched
+              runs with the demo owner key (connector:sync — the operator role deliberately lacks it); every connector in this build is fixture-mode, so no source system can be touched
             </span>
           </div>
           {runSync.error && (

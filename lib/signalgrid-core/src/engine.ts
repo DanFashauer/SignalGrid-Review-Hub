@@ -1,5 +1,6 @@
 import { assertSameTenant, authenticate, authorize } from "./auth";
 import { runFixtureSync, type FixturePostureRecord } from "./connector";
+import { runLiveSync, type LivePostureSource } from "./live-sync";
 import { runDockSync, type DockCustodyRecord } from "./dock";
 import { runShiftSync, type ShiftContextRecord } from "./shift";
 import { evaluateDecision } from "./decision";
@@ -25,6 +26,7 @@ import {
   type ApiKeyRecord,
   type AuditEvent,
   type Connector,
+  type ConnectorKind,
   type ConnectorSyncRun,
   type Decision,
   type EvaluateRequest,
@@ -69,6 +71,9 @@ export class SignalGridCore {
   private readonly fixtureRecords: Record<string, FixturePostureRecord[]>;
   private readonly dockRecords: Record<string, DockCustodyRecord[]>;
   private readonly shiftRecords: Record<string, ShiftContextRecord[]>;
+  /** Live posture sources, keyed by connector id. Empty unless a process edge
+   *  called `registerLiveConnector`; no route and no seed can add to it. */
+  private readonly liveSources = new Map<string, LivePostureSource>();
   /** True only for a core built via `demo()`; gates the public-safe demo-key accessor. */
   private readonly demoMode: boolean;
 
@@ -244,6 +249,37 @@ export class SignalGridCore {
     return this.store.hasNonFixtureConnector() ? "live" : "fixtures";
   }
 
+  /**
+   * Register a live posture source for a connector THIS PROCESS owns.
+   *
+   * Like `signalSource()`, no token: it is a fact about the process, not a
+   * tenant call. It is not reachable from any HTTP route, and NOTHING IN THIS
+   * REPOSITORY CALLS IT — not the api-server, not a seed, not a script (DR-053).
+   * A deployment that wants live posture arms it at its own process edge. That
+   * absence of a call site, rather than a guarded call site, is what makes "dark
+   * by default" a structural claim instead of a default value.
+   */
+  registerLiveConnector(spec: {
+    tenantId: string;
+    id: string;
+    kind: ConnectorKind;
+    permissionScope: string;
+    credentialRef: string;
+    source: LivePostureSource;
+  }): void {
+    this.store.putConnector({
+      tenantId: spec.tenantId,
+      id: spec.id,
+      kind: spec.kind,
+      permissionScope: spec.permissionScope,
+      credentialRef: spec.credentialRef,
+      mode: "live",
+      status: "never_synced",
+      lastSyncAt: null,
+    });
+    this.liveSources.set(spec.id, spec.source);
+  }
+
   listSyncRuns(token: string, connectorId: string): ConnectorSyncRun[] {
     const principal = authenticate(this.store, token);
     authorize(principal, "connector:read");
@@ -254,13 +290,32 @@ export class SignalGridCore {
     return this.store.listSyncRuns(principal.tenantId, connectorId);
   }
 
-  /** Replay the fixture connector sync deterministically (read-only). */
-  syncConnector(token: string, connectorId: string): ConnectorSyncRun {
+  /**
+   * Run a connector sync. Read-only AGAINST THE SOURCE SYSTEM in both modes:
+   * nothing on this path writes to, or actuates, anything outside this process.
+   *
+   * A live-mode connector reads through the source its process registered; a
+   * fixture one replays the deterministic fixture pipeline.
+   */
+  async syncConnector(token: string, connectorId: string): Promise<ConnectorSyncRun> {
     const principal = authenticate(this.store, token);
     authorize(principal, "connector:sync");
     const connector = this.store.getConnector(principal.tenantId, connectorId);
     if (!connector) {
       throw new CoreError("not_found", `Connector "${connectorId}" not found.`, 404);
+    }
+    if (connector.mode !== "fixture") {
+      const source = this.liveSources.get(connector.id);
+      if (!source) {
+        // Fail closed: a live-mode row with no registered source is a
+        // misconfiguration, not a reason to quietly replay fixtures.
+        throw new CoreError(
+          "connector_unavailable",
+          `Connector "${connectorId}" is live-mode but no source is registered in this process.`,
+          503,
+        );
+      }
+      return runLiveSync(this.store, this.clock, connector, source);
     }
     if (connector.kind === "dockbridge-custody") {
       const dock = this.dockRecords[connector.id] ?? [];

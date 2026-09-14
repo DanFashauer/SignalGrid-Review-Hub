@@ -85,6 +85,9 @@ jobs:
       - name: SignalGrid simulator proof
         run: pnpm run proof:signalgrid-simulator
 
+      - name: Custody journey proof (the smart-charging workflow end to end, and its four failure branches)
+        run: pnpm run proof:custody-journey
+
       - name: Remediation-allow proof (a remediation record must not buy an allow the base-trust gate would refuse)
         run: pnpm run proof:remediation-allow
 

@@ -408,6 +408,11 @@ const STEPS = [
   // Drives the built bundles, so it inherits the same platform constraint.
   { name: "Browser E2E (review console, website, admin)", cmd: ["pnpm", "run", "test:e2e"], heavy: true, needsNativeBuild: true },
   { name: "Proof: signalgrid-simulator", cmd: ["pnpm", "run", "proof:signalgrid-simulator"] },
+  // The ORDERED journey through the same engine (DR-054). Sits in preflight beside
+  // the simulator proof, not in the breadth lane: the readiness figure's end-to-end
+  // dimension counts the scenarios this registers, so it is launch-surface coverage
+  // even though the family evaluators it drives are deferred.
+  { name: "Proof: custody-journey (badge → dock → provision → in-use → check-in, and the four branches that withdraw the grant)", cmd: ["pnpm", "run", "proof:custody-journey"] },
   // Sibling of the proof above, one layer OUT. The simulator engine's remediation
   // branch grants `allow` without the `outcomes.size === 0` guard the base-trust
   // allow requires, so a verified remediation record buys a grant that the identical

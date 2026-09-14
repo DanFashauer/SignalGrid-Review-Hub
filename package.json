@@ -93,6 +93,7 @@
     "proof:credential-exposure": "pnpm --filter @workspace/scripts run proof:credential-exposure",
     "proof:credential-rotation": "pnpm --filter @workspace/scripts run proof:credential-rotation",
     "proof:custody-beacon": "pnpm --filter @workspace/scripts run proof:custody-beacon",
+    "proof:custody-journey": "pnpm --filter @workspace/scripts run proof:custody-journey",
     "proof:data-protection": "pnpm --filter @workspace/scripts run proof:data-protection",
     "proof:ddm-connector": "pnpm --filter @workspace/scripts run proof:ddm-connector",
     "proof:decision-continuity": "pnpm --filter @workspace/scripts run proof:decision-continuity",

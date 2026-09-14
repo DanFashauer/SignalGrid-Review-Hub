@@ -47,6 +47,7 @@
     "proof:credential-exposure": "tsx ./src/credential-exposure-proof.ts",
     "proof:credential-rotation": "tsx ./src/credential-rotation-proof.ts",
     "proof:custody-beacon": "tsx ./src/custody-beacon-proof.ts",
+    "proof:custody-journey": "tsx ./src/custody-journey-proof.ts",
     "proof:data-protection": "tsx ./src/data-protection-proof.ts",
     "proof:ddm-connector": "tsx ./src/ddm-connector-proof.ts",
     "proof:decision-continuity": "tsx ./src/decision-continuity-proof.ts",

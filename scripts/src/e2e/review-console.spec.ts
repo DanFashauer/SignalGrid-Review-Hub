@@ -1,4 +1,21 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
+import { EVIDENCE_AXES, buildCoverageReport } from "@workspace/flows";
+
+// DERIVED, not typed — the same change made in evidence-coverage-page.spec.ts and for the
+// same reason: four evidence axes landing in one branch broke five specs across these two
+// files, every break on a NUMBER rather than a behaviour, while the specs that assert
+// shape passed untouched. The model's figures are pinned by equality in
+// `proof:evidence-coverage` and `api.test.mjs`; what these specs are for is whether the
+// CONSOLE renders what the model says, so they read the live model and compare it to the
+// rendered page. A console built against a stale model still fails here, as it should.
+const COVERAGE_AXES = EVIDENCE_AXES.length;
+const darkOf = (r: ReturnType<typeof buildCoverageReport>) =>
+  r.findings.filter((f) => f.coverage === "needs_instrumentation").length;
+const notSourcedOf = (r: ReturnType<typeof buildCoverageReport>) =>
+  r.findings.filter((f) => f.coverage === "not_sourced").length;
+const WEDGE = buildCoverageReport(["identity", "device_management"]);
+const WEDGE_WFM = buildCoverageReport(["identity", "device_management", "workforce_management"]);
+const EMPTY = buildCoverageReport([]);
 
 /**
  * signalgrid-review (operator/review console) — browser-level E2E.
@@ -214,15 +231,15 @@ test("evidence coverage opens on the Entra + Intune wedge and names its silent h
   const c = coverage(page);
   await expect(c.getByText("Evidence Coverage — what can your systems actually tell us?")).toBeVisible();
 
-  // The default estate is the wedge. Its figures — 12 answerable, 6 silent holes (21 axes since 2026-09-06) — are
+  // The default estate is the wedge. Its figures — derived above from the live model, not retyped here — are
   // pinned by equality in TWO other places (`proof:evidence-coverage` and
   // `api.test.mjs`), so this assertion is not the only thing standing between a table
   // edit and a changed sales number. (It used to cite the proof alone, which at the time
   // asserted only `> 0`: dropping a plane from one axis moved the wedge to 9/7 and left
   // the proof green. The citation is the claim; an uncheckable one is the defect this
   // whole section is about.)
-  expect(await stat(page, "stat-answerable")).toBe(12);
-  expect(await stat(page, "stat-silent-holes")).toBe(6);
+  expect(await stat(page, "stat-answerable")).toBe(WEDGE.answerable);
+  expect(await stat(page, "stat-silent-holes")).toBe(WEDGE.silentHoles);
 
   // A silent hole must SAY it is one on screen. The count alone would let a reader
   // conclude the product is 10-for-18 and move on.
@@ -231,7 +248,7 @@ test("evidence coverage opens on the Entra + Intune wedge and names its silent h
   ).toContainText("the active rules grant when this is unknown");
 
   const holes = c.locator('tr[data-silent-hole="true"]');
-  await expect(holes).toHaveCount(6);
+  await expect(holes).toHaveCount(WEDGE.silentHoles);
 
   // Every silent-hole row must NAME what would answer it. Asserted, not asserted-in-a-
   // comment: blanking that column left the count assertion above perfectly green, and a
@@ -252,7 +269,7 @@ test("evidence coverage opens on the Entra + Intune wedge and names its silent h
   // The three buckets partition the axis table; the headline is a SUBSET of the dark
   // ones. Rendered as four peer figures they summed to 24 across 18 axes.
   await expect(c.getByTestId("coverage-denominator")).toContainText(
-    "12 + 6 + 3 = 21 evidence axes",
+    `${WEDGE.answerable} + ${darkOf(WEDGE)} + ${notSourcedOf(WEDGE)} = ${COVERAGE_AXES} evidence axes`,
   );
 });
 
@@ -284,7 +301,7 @@ test("declaring a plane converts its dark axes, and undeclaring every plane expo
   );
   await expect(shift).toHaveAttribute("data-coverage", "answerable");
   await expect(shift).toHaveAttribute("data-silent-hole", "false");
-  expect(await stat(page, "stat-silent-holes")).toBe(5);
+  expect(await stat(page, "stat-silent-holes")).toBe(WEDGE_WFM.silentHoles);
 
   // Now strip the estate to nothing. The honest opening position: every axis dark
   // AND ungraded, with the count carried by the assertion below rather than by this
@@ -292,8 +309,11 @@ test("declaring a plane converts its dark axes, and undeclaring every plane expo
   for (const plane of ["Workforce Management", "Identity", "Device Management"]) {
     await planeToggle(page, plane).click();
   }
-  expect(await stat(page, "stat-answerable")).toBe(0);
-  expect(await stat(page, "stat-silent-holes")).toBe(13);
+  expect(await stat(page, "stat-answerable")).toBe(EMPTY.answerable);
+  expect(await stat(page, "stat-silent-holes")).toBe(EMPTY.silentHoles);
+  // NON-VACUITY: an empty estate answers NOTHING, so the derivations cannot be agreeing
+  // with the page by accident.
+  expect(EMPTY.answerable).toBe(0);
 
   // `workflowRiskTier` is posed by the calling app. It must stay NOT SOURCED in the
   // empty estate rather than being counted as a gap — an inflated finding count is as

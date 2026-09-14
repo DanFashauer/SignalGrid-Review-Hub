@@ -119,6 +119,17 @@ const escapeHtml = (s) =>
   s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 const mdCode = (s) => `<code>${escapeHtml(s)}</code>`;
 
+/** One rendered line, forced onto ONE line.
+ *
+ *  `escapeHtml` neutralises MARKUP but not LINE STRUCTURE, and the audit record is a
+ *  line-structured document. `k.reason` embeds `err.message`, which splices in
+ *  `body.slice(0, 200)` — the raw text of whatever answered the request. A JSON error
+ *  body is one line; a 502 HTML page from an edge proxy is not, so a single kept entry
+ *  could expand into several lines and forge a `### Result` block inside the record
+ *  that is the only evidence of what the run did. Every element of these arrays is
+ *  MEANT to be one line, so collapsing the breaks costs nothing and closes it. */
+const oneLine = (s) => String(s).replaceAll(/[\r\n\u2028\u2029]+/gu, " ");
+
 /** Is this URL on the SAME ORIGIN as the API we hold a token for? Used to refuse a
  *  rel="next" link that would carry the Actions bearer to another host. Anything
  *  unparseable, relative, or on another scheme/host/port is not. */
@@ -156,6 +167,11 @@ const encodeRefPath = (ref) => ref.split("/").map(encodeURIComponent).join("/");
     [isSameApiOrigin("https://api.github.com:8443/x"), false], // port differs
     [isSameApiOrigin("/repositories/1/branches?page=2"), false], // relative is unparseable here
     [isSameApiOrigin("not a url"), false],
+    // Line-structure collapse: a multi-line error body must not be able to forge a
+    // second block inside the audit record.
+    [oneLine("a\nb"), "a b"],
+    [oneLine("a\r\n### Result\r\n- deleted: 0"), "a ### Result - deleted: 0"],
+    [oneLine("plain"), "plain"],
   ];
   const bad = cases.filter(([got, want]) => got !== want);
   if (bad.length > 0) {
@@ -351,11 +367,15 @@ const summary = [
 ];
 
 /** Append to the run's job summary. Split out because the recovery record and the
- *  result are written at DIFFERENT MOMENTS, which is the whole safety property. */
+ *  result are written at DIFFERENT MOMENTS, which is the whole safety property.
+ *
+ *  Every line is passed through `oneLine` HERE rather than at each call site: this is
+ *  the one place untrusted text reaches the file, so it is the one place that cannot
+ *  be forgotten by a future caller. */
 async function appendSummary(lines) {
   if (!process.env.GITHUB_STEP_SUMMARY) return;
   const { appendFileSync } = await import("node:fs");
-  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.map(oneLine).join("\n")}\n`);
 }
 
 // THE RECOVERY RECORD IS WRITTEN HERE, BEFORE THE DELETE LOOP.

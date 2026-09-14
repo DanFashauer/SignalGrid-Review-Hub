@@ -211,7 +211,7 @@
    "claim": "\"SignalGrid decides and explains; it does not act. Carrying out a response belongs to the host app and to the systems of record, and any high-risk response is simulated or approval-required.\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Grounded: docs/WHAT_SIGNALGRID_DOES_TODAY.md:128 (\"Every high-risk action … approval-gated and simulated — recorded, never executed on a source system\"); scripts/launch-profile.mjs:369-374 (/v1/connectors/{id}/sync: \"No write to any source system exists on this route\").",
+   "evidence": "Grounded, narrowed 2026-09-14 (DR-053): no source-system WRITE or device action exists on any route; source-system READS are dark by default — a live-mode connector exists only where a process calls core.registerLiveConnector, and this repository contains no such call at all. docs/WHAT_SIGNALGRID_DOES_TODAY.md:128 (\"Every high-risk action … approval-gated and simulated — recorded, never executed on a source system\"); scripts/launch-profile.mjs:388-394 (/v1/connectors/{id}/sync: \"No write to any source system exists on this route\"); lib/integration-bridge/src/live-posture.ts (the dark edge — the only place a live connector can be born).",
    "action": "keep",
    "resolution": "SUPERSEDED 2026-09-01 by the README rebuild (#370, aec28c8): the quoted sentence no longer appears in README.md — the row stands as the extraction record; nothing on the surface asserts it now. Recorded 2026-09-06 by check-claim-inventory-anchors."
   },
@@ -7867,7 +7867,7 @@
   {
    "file": "artifacts/signalgrid-app/src/pages/ConnectorSetup.tsx",
    "line": ":165, 168",
-   "claim": "Button \"RUN FIXTURE SYNC\" with \"runs with the demo owner key (connector:sync — the operator role deliberately lacks it); the core refuses non-fixture connectors, so no source system can be touched\"",
+   "claim": "Button \"RUN FIXTURE SYNC\" with \"runs with the demo owner key (connector:sync — the operator role deliberately lacks it); every connector in this build is fixture-mode, so no source system can be touched\"",
    "kind": "capability",
    "classification": "launch",
    "evidence": "Button text itself says FIXTURE, and the caption discloses both the key used and the authorization split. Claims refusal, not reach.",
@@ -9799,7 +9799,7 @@
    "claim": "\"SignalGrid reads before it writes and delegates action.\" — \"**Not a system of record.** IAM, UEM, MDM, ITSM, SIEM and NAC stay authoritative\"",
    "kind": "framework",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:386-392 (/v1/connectors/{id}/sync — \"No write to any source system exists on this route\"); every other launch path at :324-385 is read-side or the gate itself; docs/WHAT_SIGNALGRID_DOES_TODAY.md:142 (high-risk actions \"approval-gated and simulated — recorded, never executed on a source system\"); docs/PILOT_PACKAGE.md:1,8-11 (pilot is \"shadow mode, read-only\" and \"blocks nothing\").",
+   "evidence": "Grounded, narrowed 2026-09-14 (DR-053): no source-system WRITE or device action exists on any route; source-system READS are dark by default — a live-mode connector exists only where a process calls core.registerLiveConnector, and this repository contains no such call at all — see lib/integration-bridge/src/live-posture.ts. scripts/launch-profile.mjs:388-394 (/v1/connectors/{id}/sync — \"No write to any source system exists on this route\"); every other launch path at :324-385 is read-side or the gate itself; docs/WHAT_SIGNALGRID_DOES_TODAY.md:142 (high-risk actions \"approval-gated and simulated — recorded, never executed on a source system\"); docs/PILOT_PACKAGE.md:1,8-11 (pilot is \"shadow mode, read-only\" and \"blocks nothing\").",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },

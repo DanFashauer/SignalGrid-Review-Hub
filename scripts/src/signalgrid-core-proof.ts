@@ -1510,7 +1510,7 @@ if (pending) {
   );
   if (smartdock) {
     // It re-syncs deterministically and normalizes custody signals (read-only).
-    const run = core.syncConnector(T.owner, smartdock.id);
+    const run = await core.syncConnector(T.owner, smartdock.id);
     check("smartdock: re-sync normalizes custody signals (read-only)", run.signalsNormalized > 0);
   }
 

@@ -67,6 +67,7 @@
     "./token-binding": "./src/integrations/token-binding/index.ts",
     "./uem": "./src/integrations/uem/index.ts",
     "./utils/freshness": "./src/utils/freshness.ts",
+    "./utils/guard-read-only": "./src/utils/guardReadOnly.ts",
     "./vuln-scan": "./src/integrations/vuln-scan/index.ts",
     "./webhooks": "./src/integrations/webhooks/index.ts",
     "./webhooks/store": "./src/integrations/webhooks/store.ts",

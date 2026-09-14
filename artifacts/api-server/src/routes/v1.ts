@@ -428,7 +428,7 @@ router.get("/v1/connectors/:id/sync-runs", (req: Request, res: Response) => {
 
 router.post("/v1/connectors/:id/sync", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const run = core.syncConnector(token(req), param(req, "id"));
+    const run = await core.syncConnector(token(req), param(req, "id"));
     await audit(req, "connector.sync.triggered", core.context(token(req)).principal.subjectId,
       { type: "connector", id: param(req, "id") }, { syncRunId: run.id, status: run.status });
     res.json(envelope(req, { syncRun: run }));

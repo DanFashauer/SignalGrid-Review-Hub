@@ -111,10 +111,14 @@ export function deviceManagementEvidenceToDrafts(evidence: DeviceManagementEvide
 
 /** Fields the DM contract does not carry but a full posture record needs. */
 export interface EvidenceRecordContext {
-  identityRef: string;
-  identityEnabled: boolean;
-  encrypted: boolean;
-  osSupported: boolean;
+  /** Every field here is OPTIONAL because the DM contract does not carry any of
+   *  them: a caller that knows the answer says so, and a caller that does not
+   *  (a device-posture source answers nothing about an identity) leaves it out
+   *  and the core writes no signal rather than an unread one. */
+  identityRef?: string;
+  identityEnabled?: boolean;
+  encrypted?: boolean;
+  osSupported?: boolean;
   managementHealth?: ManagementHealthState;
   localAuthority?: LocalAuthorityGrantState;
 }
@@ -145,12 +149,12 @@ export function deviceManagementEvidenceToFixtureRecord(
     e.policyState === "passing" ? "aligned" : e.policyState === "failing" ? "drifted" : undefined;
   return {
     deviceRef: e.deviceId,
-    identityRef: ctx.identityRef,
-    identityEnabled: ctx.identityEnabled,
+    ...(ctx.identityRef !== undefined ? { identityRef: ctx.identityRef } : {}),
+    ...(ctx.identityEnabled !== undefined ? { identityEnabled: ctx.identityEnabled } : {}),
     managed: e.managedState === "managed",
     compliance: e.complianceState === "noncompliant" ? "non_compliant" : e.complianceState,
-    encrypted: ctx.encrypted,
-    osSupported: ctx.osSupported,
+    ...(ctx.encrypted !== undefined ? { encrypted: ctx.encrypted } : {}),
+    ...(ctx.osSupported !== undefined ? { osSupported: ctx.osSupported } : {}),
     lastSyncAt: e.lastSeenAt ?? null,
     ...(baseline ? { baseline } : {}),
     ...(ctx.managementHealth ? { managementHealth: ctx.managementHealth } : {}),

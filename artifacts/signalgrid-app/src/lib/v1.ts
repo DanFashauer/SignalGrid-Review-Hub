@@ -256,8 +256,10 @@ export async function listSyncRunsV1(connectorId: string): Promise<V1SyncRun[]> 
 // Triggering a sync requires `connector:sync`, which the operator role
 // DELIBERATELY lacks (owner/admin and the connector service role hold it).
 // The demo uses the public-safe owner key for this one action and says so in
-// the UI. The core refuses non-fixture connectors inside runFixtureSync, so
-// this route can never touch a source system.
+// the UI. The core dispatches this route by connector MODE; a live-mode
+// connector exists only where a process calls core.registerLiveConnector, and
+// the api-server calls it nowhere, so here the route can only ever replay
+// fixtures.
 const DEMO_OWNER_TOKEN = "sgk_demo_northwind_owner";
 
 export async function triggerSyncV1(connectorId: string): Promise<V1SyncRun> {

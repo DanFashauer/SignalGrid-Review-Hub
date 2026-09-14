@@ -90,6 +90,7 @@
     "proof:kpi-kri-kci": "tsx ./src/kpi-kri-kci-model-proof.ts",
     "proof:launch-profile": "tsx ./src/launch-profile-proof.ts",
     "proof:launch-seam": "tsx ./src/launch-seam-proof.ts",
+    "proof:live-connector-sync": "tsx ./src/live-connector-sync-proof.ts",
     "proof:link-usability": "tsx ./src/link-usability-proof.ts",
     "proof:live-edr": "tsx ./src/live-edr-proof.ts",
     "proof:live-fleet": "tsx ./src/live-fleet-proof.ts",

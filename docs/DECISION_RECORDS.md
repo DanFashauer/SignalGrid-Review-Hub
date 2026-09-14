@@ -3374,3 +3374,63 @@ un-done by unloading the named launch agents and the one PR is reverted (nothing
 tree depends on either), and this record stays with the reversal date added. Adopting
 Switchyard, self-hosting OmniRoute, or flipping the GREEN switch is each a later record
 that names what changed and its measured verdict, not a reversal of this one.
+
+## DR-053 — An inert live-capable connector sync path: `ConnectorMode` widens to arm the fail-closed guards, the live read reuses the transport and gates that already exist, and nothing is armed in this repository (PROPOSAL — cloud lane, 2026-09-14)
+
+Status: **PROPOSED.** Nothing in this record is in effect until the owner merges the PR that carries it. Merging is the approval; a comment saying no is the veto and the branch is dropped.
+
+### QUESTION
+
+SignalGrid's connector sync path has never been able to reach a real source system, and the repository says so in four places (`profile.ts`, `launch-profile.mjs`, and two entries in `CLAIM_INVENTORY.json`). The reason it cannot is not a design — it is a one-member union. `ConnectorMode = "fixture"` (types.ts:124) means the three `mode !== "fixture"` refusals at connector.ts:69, dock.ts:67 and shift.ts:46 are dead code: they assert a fail-closed property that nothing in the tree can test. The question is whether to build the seam that lets a connector read a real source, and on what terms it can land in a public review repository whose AGENTS.md bans live vendor calls outright.
+
+The honest framing: the fixture-only posture is currently enforced by an absence, and an absence is the weakest form of enforcement this repo recognises. A guard that has never been able to fire is not a proven guard.
+
+### CALL
+
+Build the seam. Ship it dark. Five terms, all of them load-bearing:
+
+1. **Widen `ConnectorMode` to `"fixture" | "live"` FIRST.** This is the whole point of the change and the smallest part of it. Widening arms the three existing refusals, which the new proof then exercises for the first time. The fail-closed behaviour the launch profile rests on stops being an assertion and becomes a test.
+
+2. **Write no new transport.** The live read is `FleetDMAdapter.getHosts()`, which already exists in `lib/integrations/src/integrations/telemetry/fleetdm.ts`, already sits behind `resolveEmission`, already carries `AbortSignal.timeout(TIMEOUT_PRESETS.normal)` and `redirect: 'manual'`, and is already watched by `check-ungated-fetch.mjs` and `check-connector-discipline.mjs`. The normalization is `fleetHostToDeviceManagementEvidence` → `deviceManagementEvidenceToFixtureRecord`, the chain `scripts/src/live-fleet-workflow-proof.ts` already drives end to end against a real server. **No new connector family, no new fetch call site, no new URL field, no new egress guard, no new credential store.** The launch-profile family derivation, the `OPERATOR_URL_FIELDS` registry and the discipline gate's five rules all stay green with no registry edit — because nothing new was added for them to police. The entire net-new surface is one runner in the core and one resolver in `integration-bridge`.
+
+3. **Dark means dark, and "dark" is a structural claim, not a default value.** No route, no config file and no seed can create a live connector. The only way one comes into existence is a call to the core's `registerLiveConnector`, and **this repository contains no such call at all** — not in the api-server, not in a seed, not in a script. The seam ships as a library.
+
+   The dark-edge resolver in `integration-bridge` is what a deployment would use to build the source, and it returns `null` unless all five of: beta/prod tier, `SIGNALGRID_LIVE_INTEGRATIONS === "true"`, a non-empty `FLEETDM_API_TOKEN`, a `FLEETDM_BASE_URL` that passes `validateWebhookUrl(url, { live: true })`, and a `SIGNALGRID_LIVE_POSTURE_TENANT` naming the tenant the connector belongs to (there is no default tenant — guessing one is how a posture read lands in the wrong one).
+
+   The first four are the variables the TRANSPORT already reads — `FleetDMAdapter` resolves its base URL and token from exactly those. A first draft gated on two new `SIGNALGRID_LIVE_POSTURE_*` names and so validated a URL nothing would ever fetch: the SSRF guard would have passed on one address while the adapter called another. `SIGNALGRID_LIVE_POSTURE_TENANT` is the single new variable this seam introduces.
+
+   **Wiring it into the api-server was written, measured and then REMOVED**, which is the most useful thing this record can report. Importing the bridge into the server makes the server depend on `@workspace/integrations`, and `scripts/check-deployment-runbook.mjs` — which derives the server's boot-read environment from its dependency closure — went from 29 boot-read variables to 170, all of them undocumented. That is a large, permanent widening of the deployed surface in exchange for a path nothing in this repository configures. So there is no process edge here, which is a stronger claim than a guarded one. With no configuration the behaviour is byte-identical to today, `signalSource()` still returns `"fixtures"`, and zero outbound calls are made. The proof asserts that arm first.
+
+4. **Fail-closed is the default outcome, not the error path.** An unreachable, timed-out, unauthenticated or malformed live read writes ZERO signals, reports the run `partial`, and marks the connector `degraded`. It never synthesizes a healthy reading, never reports `success`, and never coerces an unknown management state onto `managed: false` — a host whose management value nothing recognises is DROPPED, and a response whose every host is dropped is a read that learned nothing and lands in the fail-closed arm rather than reading as a clean sync of an empty fleet. Absent fresh signals age into `unverified`, which raises the assurance bar. That is golden rule 2 arriving by construction rather than by remembering. The same rule widened the record shape: `identityRef`, `identityEnabled`, `encrypted` and `osSupported` are now OPTIONAL on `FixturePostureRecord`, because a device-posture source answers nothing about a person and a boolean cannot hold "unanswered" — absent emits no signal, exactly as `baseline`, `managementHealth` and `localAuthority` already did.
+
+5. **Read-only, and the word is doing work.** GET only, asserted with the existing `createReadOnlyGuard` so a future non-GET is a typed throw rather than a code-review catch. No writes, no device actuation, no remediation. Actuators were deleted from `nac/` and `uem/` rather than gated, and nothing here reopens that door.
+
+**What this change does NOT do, stated so it is not read in.** It does not claim a live integration exists, a partnership exists, or that anything is production-ready. It adds no vendor call that AGENTS.md did not already permit — the Fleet read is pre-existing and gated, and this record adds no new one, which is why AGENTS.md needs no amendment and is not amended here. It does not create an API route for registering connectors; there is still no way for a customer's connector to be loaded, and that remains true after this lands. It does not change what may be *claimed* to ship: DR-021 §2 keeps claim discipline frozen, and the claim sites named below are being made MORE precise, not more permissive.
+
+**The claim sites move in the same commit.** `artifacts/api-server/src/lib/profile.ts`, `scripts/launch-profile.mjs`, `docs/agent/CLAIM_INVENTORY.json` entries 214 and 9802, `docs/SECURITY_QUESTIONNAIRE_PACK.md`, `artifacts/signalgrid-app/src/lib/v1.ts` and the connector-setup caption all currently ground the repo-wide "never executed on a source system" claim on the sentence "runFixtureSync throws on any non-fixture connector". That sentence becomes false the day `ConnectorMode` widens. Each is rewritten to the narrower truth that survives: **no source-system WRITE or device action exists on any route**, and source-system READS are dark by default behind five conditions this repository's builds do not set. A registry left pointing at a stale justification is the exact failure `docs/agent/FALSE_CLAIMS.json` exists to record.
+
+### GROUNDING
+
+Read before writing this, with line numbers, not from memory:
+
+- `lib/signalgrid-core/src/types.ts:123-124` — both connector unions are closed; `ConnectorMode` has one member.
+- `lib/signalgrid-core/src/connector.ts:63-197` — the guard, the normalizer, the skip/`partial`/`degraded` accounting, and connector.ts:210-224, where the signal id deliberately includes the connector id so a second source can coexist with the fixture one without overwriting it. That comment is the precondition this whole change rests on, and it was written for exactly this case.
+- `lib/signalgrid-core/src/dock.ts:67-73`, `shift.ts:46-52` — the two sibling copies of the guard the fence comment does not name.
+- `lib/signalgrid-core/src/engine.ts:257-274` — the only dispatch point; three branches, three identical store-write terminations.
+- `lib/signalgrid-core/src/store.ts:232-241` — `hasNonFixtureConnector()` and its comment stating out loud that it cannot return true until a live mode exists. It can after this; the comment moves with it.
+- `lib/signalgrid-core/tsconfig.json` — the core compiles with NO node and NO dom types, which is why the live runner holds no timer and no `AbortSignal`: the bound lives at the socket, in the source, where it already existed.
+- `lib/integration-bridge/src/evidence.ts:121-163` — the seam, and the refusal at 139-146 to map unknown management onto a boolean.
+- `lib/integrations/src/integrations/telemetry/fleetdm.ts:39,67` — the gated Fleet read this change reuses; :403-437 for the separate-approval precedent on live query, which this change does not touch.
+- `lib/integrations/src/integrations/adapters/emit-gate.ts` — the three-condition gate, `EmissionCredential`, `NO_CREDENTIAL`, and the record of what happened when the third clause was optional.
+- `lib/integrations/src/integrations/adapters/url-guard.ts:75-93,109` — `OPERATOR_URL_FIELDS` (telemetry.baseUrl already REPORTED), the unconditional SSRF block, and the residue the header names: the guard checks the LITERAL host, so a public name resolving to a link-local address passes it and is stopped by nothing here. Not claimed as covered.
+- `scripts/src/live-fleet-workflow-proof.ts:112-181` — the chain already works end to end against a real server, with a mutation control proving the live fields are load-bearing.
+- `scripts/check-connector-discipline.mjs` — verified green on this tree: `51 of 51 families are gated, proven and action-free`, KNOWN_GAPS empty. No family is added, so no row moves.
+- `AGENTS.md`, `docs/DECISION_RECORDS.md` DR-021 §§1-2, `docs/SECURITY_REVIEW_PACKAGE.md` (the fixture/live boundary is what it tells external assessors to verify first).
+
+### REVERSAL
+
+**Reversal is one line, and it is the first line of the change.** Set `ConnectorMode` back to `"fixture"` in `lib/signalgrid-core/src/types.ts`. Every live path becomes unconstructable at the type level again, `registerLiveConnector` cannot produce a valid row, the three guards return to dead code, and `hasNonFixtureConnector()` returns to structurally-false. The compiler enforces the reversal; nothing has to be remembered or hunted for.
+
+The full reversal path, if the seam is to be removed entirely rather than disarmed: revert this PR. It deletes three files — the core's live runner, the bridge's dark-edge resolver and the new proof — folds the shared normalizer back inline into the fixture entry point, drops the `await` at the `/v1/connectors/:id/sync` route, and restores the claim sites to their current wording — at which point that wording is true again. No data migration, no persisted state, no external system was ever contacted, so there is nothing to undo outside the tree.
+
+A reversal to the disarmed-but-present state (term 1 reverted, seam kept) is also valid and is the expected first response to any concern: the code stays for review, and nothing can run it.

@@ -136,6 +136,7 @@
     "proof:kpi-kri-kci": "pnpm --filter @workspace/scripts run proof:kpi-kri-kci",
     "proof:launch-profile": "pnpm --filter @workspace/scripts run proof:launch-profile",
     "proof:launch-seam": "pnpm --filter @workspace/scripts run proof:launch-seam",
+    "proof:live-connector-sync": "pnpm --filter @workspace/scripts run proof:live-connector-sync",
     "proof:link-usability": "pnpm --filter @workspace/scripts run proof:link-usability",
     "proof:live-edr": "pnpm --filter @workspace/scripts run proof:live-edr",
     "proof:live-fleet": "pnpm --filter @workspace/scripts run proof:live-fleet",

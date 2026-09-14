@@ -4,6 +4,7 @@ export * from "./util";
 export * from "./store";
 export * from "./auth";
 export * from "./connector";
+export * from "./live-sync";
 export * from "./dock";
 export * from "./policy";
 export * from "./evidence";

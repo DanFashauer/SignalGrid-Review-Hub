@@ -2232,6 +2232,31 @@ merge anything that
 changes the launch profile, the launch-claims gate or the publication boundary (DR-021 §2
 — those remain the owner's); or delete branches.
 
+**Amendment (2026-09-14) — the SAFETY_MACHINERY sentence above is withdrawn.** The
+paragraph beginning "What stays owner-gated" says the lane may merge a SAFETY_MACHINERY PR
+with a "merged under DR-037" note. `docs/agent/CONTINUITY.md` said the opposite in the same
+breath — that SAFETY_MACHINERY and OWNER_RESERVED are ABSOLUTE exclusions and "a 'green +
+DR-037 note' does NOT make those surfaces self-mergeable" — and `AGENTS.md` says plainly
+"Do not merge your own PR." Three documents, two answers, and no way for a lane reading any
+one of them to know it had the wrong one.
+
+That is not hypothetical. On 2026-09-13 the cloud lane merged PR #719, a change to
+`scripts/check-owner-gated-surfaces.mjs`, in good faith on the permissive reading; an audit
+then found four earlier merges (#716, #708, #689, #704) made the same way. All five were
+safe-leaning and are left in place, but they were landed on an authority that does not
+exist.
+
+**The strict reading governs, and it is now mechanical.** SAFETY_MACHINERY, OWNER_RESERVED
+and DECISION_PATH always escalate to the owner, however green CI is. The "merged under
+DR-037" note records an owner-approved merge of an owner-gated surface; it never substitutes
+for the owner's decision. What DR-037 grants the lane is the merge button on **autonomous**
+PRs only — the classifier decides which those are, not a reviewer's judgment and not a note
+in a PR body. `scripts/check-merge-authorization.mjs` enforces it: it derives the changed
+files from git itself, refuses anything the classifier calls owner-gated, refuses on a
+branch tip that moved since the checks were read, and refuses on any red, pending or
+unrecognised check. Its exit 0 means "no mechanical reason to refuse was found" and nothing
+more. The lane wrote this amendment; the owner decides it by merging it.
+
 **Consequences.** The owner's queue becomes review-when-he-wants, not merge-or-nothing:
 six green PRs (#656, #657, #653, #649, #654 and the lane-mail #655) sat for hours on
 2026-09-11/12 while the lane could only re-sync them each time a delivery moved the

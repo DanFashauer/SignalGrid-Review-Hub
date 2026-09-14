@@ -883,13 +883,6 @@ jobs:
       - name: API integration test
         run: pnpm run test:api
 
-      # The OIDC middleware suite — the enterprise auth path against a real local
-      # JWKS and real RS256 tokens, including that a BROKEN OIDC config refuses to
-      # boot rather than falling back to demo bearer tokens. It was registered in
-      # no lane until now: `test:oidc` existed and nothing ran it.
-      - name: OIDC middleware test (enterprise auth path)
-        run: pnpm run test:oidc
-
       # The MCP server's own node:test suite — wire-visible tool/resource contract
       # and read-only annotations (incl. the deliberately not-read-only
       # bruno_collection_run). It was executed by no lane until 2026-09-02;

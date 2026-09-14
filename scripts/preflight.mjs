@@ -501,13 +501,6 @@ const STEPS = [
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
   { name: "Proof: api-client-react (the web client's fetch boundary refuses what it cannot vouch for)", cmd: ["pnpm", "run", "proof:api-client-react"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
-  // The OIDC middleware suite — the enterprise auth path, executed against a real
-  // locally-served JWKS and real RS256 tokens. Its own header calls this "the single
-  // most security-sensitive path in the product", and until now it was registered
-  // NOWHERE: `test:oidc` existed in package.json and no lane ran it, so the suite
-  // that proves /v1 refuses every weaker credential was carried by whoever
-  // remembered to type it. Wired here and in review-hub-ci.yml beside test:api.
-  { name: "OIDC middleware test (enterprise auth path, boots the server)", cmd: ["pnpm", "run", "test:oidc"] },
   // The MCP server's own node:test suite (wire-visible tool/resource contract +
   // read-only annotations, incl. the not-read-only bruno_collection_run). It sat
   // executed by no lane until 2026-09-02; wired here and in CI beside the

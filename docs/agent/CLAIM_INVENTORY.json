@@ -5402,7 +5402,7 @@
   },
   {
    "file": "docs/room-entry-console.html",
-   "line": "196",
+   "line": "213",
    "claim": "Scenario group headings presented as supported verticals — \"Smart hospital\", \"Warehouse\", \"Global fleet\"",
    "kind": "availability",
    "classification": "demo-only",
@@ -5440,7 +5440,7 @@
   },
   {
    "file": "docs/room-entry-console.html",
-   "line": "232",
+   "line": "249",
    "claim": "Rendered control — \"Complete step-up · badge tap\"",
    "kind": "capability",
    "classification": "deferred",
@@ -5449,7 +5449,7 @@
   },
   {
    "file": "docs/room-entry-console.html",
-   "line": "238",
+   "line": "255",
    "claim": "Panel heading — \"Signals evaluated\", listing per-signal vendor-shaped states (compliant / bound / drifted / stale / tampered) as though read from source systems",
    "kind": "capability",
    "classification": "demo-only",
@@ -5458,7 +5458,7 @@
   },
   {
    "file": "docs/room-entry-console.html",
-   "line": "248",
+   "line": "265",
    "claim": "Panel heading — \"Downstream orchestration\"",
    "kind": "capability",
    "classification": "demo-only",

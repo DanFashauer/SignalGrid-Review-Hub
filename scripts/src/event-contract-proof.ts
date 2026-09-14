@@ -251,6 +251,92 @@ expectExactly(
   [],
 );
 
+// ── pinned silence: what a per-timeline detector cannot see ──────────────────
+// The silences above are the other half of a conjunction — the detector looked and
+// found the exonerating event. These two are different: there is nothing to look
+// at. Every rule here is set membership over ONE correlation timeline, so no
+// userId, deviceId or dock slot ever reaches a predicate.
+//
+// Stated precisely, because the loose version is false: both a slot axis and a
+// per-user cap axis DO exist in this repo —
+// `lib/integrations/src/integrations/rtls-custody/custody-ledger.ts` defines
+// `SlotState` ("seated" | "absent" | "unknown") and `CapState`, and grades the
+// phantom at `ledgerState === "checked_out" && slotState === "seated"` →
+// `CUSTODY_STALE_RETURN_OWN`/`_OTHER`. What does not exist is any path from a
+// SignalGridEvent[] to that judgement: `evaluateCustodyLedger` grades a supplied
+// snapshot, nothing derives such a snapshot from a timeline, and `detect.ts` has
+// no equivalent of either axis. The gap is the wiring, not the idea.
+//
+// Pinned as [] so the day either axis reaches the event fabric it lands as a
+// failing check and a diff to this file rather than as behaviour that moved
+// quietly. If you are here because one went red: that is the intended signal —
+// update the fixture to the detections you now expect, do not revert the detector.
+//
+// Each event is validated first: a silence caused by malformed input would be a
+// false finding, not a gap.
+
+// The device is physically back in its bay (device_removed, then dock_relocked)
+// but no device_returned ever closed the grant, so the fabric still believes u1
+// holds dev-a while the next request is denied. This is the "phantom custody"
+// shape docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md calls the most-cited
+// operational pain. Nothing fires: rule 1 saw a compliant posture, rule 2 saw the
+// badge-in, and rules 3-5 need an offline, a lapse, a tamper or a dark MDM state,
+// none of which a phantom produces.
+const PHANTOM_CHECKOUT: SignalGridEvent[] = [
+  ev("p1", { eventType: "posture_changed", mdmDeviceState: "compliant", deviceId: "dev-a" }),
+  ev("g1", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-a" }),
+  ev("rm1", { eventType: "device_removed", deviceId: "dev-a" }),
+  ev("b1", { eventType: "badge_access", userId: "u1" }),
+  ev("rl1", { eventType: "dock_relocked", deviceId: "dev-a" }),
+  ev("d1", { eventType: "checkout_denied", userId: "u1", deviceId: "dev-b" }),
+];
+
+// Three devices granted, ONE compliant posture, and that posture names no device.
+// Rule 1 asks whether the timeline contains any compliant posture at all, so this
+// single event exonerates dev-a, dev-b and dev-c alike — yet only one device was
+// ever observed compliant. The detector stays silent on the two that were not, and
+// had it fired, its own reason ("no compliant posture was ever observed for it")
+// could not have been true of all three. Per-device posture coverage is the axis
+// missing here; a cap is NOT: `cap_reached` is graded `restrict` in custody-ledger
+// as the policy working, and detect.ts firing on a grant count would be inventing
+// a tenant cap the event contract does not carry.
+const POSTURE_COVERS_EVERY_DEVICE: SignalGridEvent[] = [
+  ev("p1", { eventType: "posture_changed", mdmDeviceState: "compliant" }),
+  ev("g1", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-a" }),
+  ev("g2", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-b" }),
+  ev("g3", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-c" }),
+];
+
+check(
+  "both gap timelines are well-formed events (the silence is a gap, not a rejection)",
+  [...PHANTOM_CHECKOUT, ...POSTURE_COVERS_EVERY_DEVICE].every((e) => validateEvent(e).ok),
+);
+expectExactly(
+  "a grant left open while the device sits back in its bay fires nothing (no slot axis reaches detect.ts)",
+  PHANTOM_CHECKOUT,
+  [],
+);
+expectExactly(
+  "one undirected compliant posture exonerates three granted devices (no per-device posture axis)",
+  POSTURE_COVERS_EVERY_DEVICE,
+  [],
+);
+// And the tell that the silence carries no information: a timeline where each
+// granted device really was observed compliant is byte-identical in outcome. The
+// detector cannot distinguish the sound case from the unsound one.
+expectExactly(
+  "per-device compliant postures yield the same nothing — the two cases are indistinguishable",
+  [
+    ev("p1", { eventType: "posture_changed", mdmDeviceState: "compliant", deviceId: "dev-a" }),
+    ev("p2", { eventType: "posture_changed", mdmDeviceState: "compliant", deviceId: "dev-b" }),
+    ev("p3", { eventType: "posture_changed", mdmDeviceState: "compliant", deviceId: "dev-c" }),
+    ev("g1", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-a" }),
+    ev("g2", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-b" }),
+    ev("g3", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-c" }),
+  ],
+  [],
+);
+
 // Determinism: identical timeline ⇒ identical detections.
 const t = [
   ev("t1", { eventType: "tamper_detected", tamperState: "confirmed" }),

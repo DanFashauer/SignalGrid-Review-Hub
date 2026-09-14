@@ -857,7 +857,16 @@ export type AuditEventType =
   | "policy.version_activated"
   | "evidence.captured"
   | "remediation.requested"
-  | "remediation.approved";
+  | "remediation.approved"
+  // ── Credential/puck custody lifecycle (DR-043 item (c)) ──────────────────
+  // The ledger names for the three transitions the attach domain can observe.
+  // They are EMITTED (by the DockBridge fixture connector), not reserved: a
+  // vocabulary nothing writes is a claim, not a capability. Each records what the
+  // dock OBSERVED; none of them commands a dock or asserts hardware exists.
+  /** The credential was seated in the device it gates. */
+  | "credential.attached"
+  /** The credential was lifted out of the device it gates. */
+  | "credential.removed";
 
 export interface AuditEvent {
   id: string;

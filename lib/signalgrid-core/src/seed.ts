@@ -652,6 +652,10 @@ function northwindDockCustody(): DockCustodyRecord[] {
     ...benignDock("ipad-loan-01", 11),
     custodyState: "overdue",
     dockState: "empty",
+    // An empty BAY is the device being checked out; the credential travels WITH it
+    // and stays seated. Bay-occupancy and credential-seating are different questions
+    // — conflating them (an earlier cut of this change did) turns every ordinary
+    // checkout into a removal restrict.
     attachState: "attached",
   });
   records.push({
@@ -1003,6 +1007,27 @@ function runDockConnector(
     references: [connector.id, run.id],
     recordedAt: run.completedAt,
   });
+  // The credential/puck custody lifecycle in the ledger (DR-043 item (c)). Emitted
+  // from what the dock OBSERVED — a record that carries no attach read produces no
+  // event, because silence is not a transition. A removal the dock itself flags as a
+  // custody exception is named as one; an ordinary lift is just a removal.
+  for (const record of records) {
+    if (record.attachState === undefined) continue;
+    const type =
+      record.attachState === "attached" ? "credential.attached" : "credential.removed";
+    appendAudit(store, {
+      tenantId,
+      type,
+      actor: "dockbridge-fixture",
+      subject: record.deviceRef,
+      summary:
+        type === "credential.attached"
+          ? `Credential seated in ${record.deviceRef} at ${record.dockId}/${record.bayId} (observed, not commanded).`
+          : `Credential lifted from ${record.deviceRef} at ${record.dockId}/${record.bayId} (custody state: ${record.custodyState}).`,
+      references: [connector.id, run.id, record.sourceReference],
+      recordedAt: record.observedAt,
+    });
+  }
   return connector.id;
 }
 

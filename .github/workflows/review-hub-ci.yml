@@ -85,6 +85,9 @@ jobs:
       - name: SignalGrid simulator proof
         run: pnpm run proof:signalgrid-simulator
 
+      - name: Custody journey proof (the smart-charging workflow end to end, and its four failure branches)
+        run: pnpm run proof:custody-journey
+
       - name: Remediation-allow proof (a remediation record must not buy an allow the base-trust gate would refuse)
         run: pnpm run proof:remediation-allow
 
@@ -470,6 +473,8 @@ jobs:
         run: node scripts/check-owner-gated-surfaces.mjs
       - name: Owner-gated surfaces self-test (classify routes owner-gated diffs to the owner)
         run: node scripts/check-owner-gated-surfaces.mjs --self-test
+      - name: Merge-authorization self-test (the lane cannot self-merge an owner-gated or stale-green PR)
+        run: node scripts/check-merge-authorization.mjs --self-test
       - name: Cited commands (documents may not promise a command that is gone)
         run: node scripts/check-cited-commands.mjs
       - name: Cited-command self-test (the gate can fail)

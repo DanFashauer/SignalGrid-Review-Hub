@@ -408,6 +408,11 @@ const STEPS = [
   // Drives the built bundles, so it inherits the same platform constraint.
   { name: "Browser E2E (review console, website, admin)", cmd: ["pnpm", "run", "test:e2e"], heavy: true, needsNativeBuild: true },
   { name: "Proof: signalgrid-simulator", cmd: ["pnpm", "run", "proof:signalgrid-simulator"] },
+  // The ORDERED journey through the same engine (DR-054). Sits in preflight beside
+  // the simulator proof, not in the breadth lane: the readiness figure's end-to-end
+  // dimension counts the scenarios this registers, so it is launch-surface coverage
+  // even though the family evaluators it drives are deferred.
+  { name: "Proof: custody-journey (badge → dock → provision → in-use → check-in, and the four branches that withdraw the grant)", cmd: ["pnpm", "run", "proof:custody-journey"] },
   // Sibling of the proof above, one layer OUT. The simulator engine's remediation
   // branch grants `allow` without the `outcomes.size === 0` guard the base-trust
   // allow requires, so a verified remediation record buys a grant that the identical
@@ -461,6 +466,7 @@ const STEPS = [
   { name: "Role-coverage self-test (the gate can actually fail)", cmd: ["node", "scripts/check-role-coverage.mjs", "--self-test"] },
   { name: "Owner-gated surfaces manifest (the autonomous-merge escalation line is non-empty and well-formed)", cmd: ["node", "scripts/check-owner-gated-surfaces.mjs"] },
   { name: "Owner-gated surfaces self-test (classify routes safety-machinery + owner-reserved diffs to the owner)", cmd: ["node", "scripts/check-owner-gated-surfaces.mjs", "--self-test"] },
+  { name: "Merge-authorization self-test (the lane cannot merge an owner-gated or stale-green PR of its own)", cmd: ["node", "scripts/check-merge-authorization.mjs", "--self-test"] },
   { name: "Cited commands (a command a document promises must still exist)", cmd: ["node", "scripts/check-cited-commands.mjs"] },
   { name: "Cited-command self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-commands.mjs", "--self-test"] },
   { name: "Review coverage (a green gate suite is not a reviewed codebase)", cmd: ["node", "scripts/check-review-coverage.mjs"] },

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-14T18:43:24.118Z",
-  "result": "acted: new Mac branch mac/gh-pr-rest-helper already had PR #755 open — subscribed, reviewed, and PUSHED its one blocker rather than mailing it back (SURFACE_REVIEW_COVERAGE.md was stale because a new script is a new surface; regenerated with --write as 8364c1da, preflight now PASSED on the branch). Script approved: look-before-create is the right fix for the invisible-PR incident, it fails closed when it cannot list, self-test 8/8. One gap flagged: nothing invokes that --self-test, so classifyFailure can drift unnoticed. Tick firedAt 2026-09-14T18:19:08.002Z quiet; live-evidence 2026-09-12 22:56 (under 3d); sync manifest v78 unchanged; lane mail and sim requests both clean; no owner escalation."
+  "firedAt": "2026-09-14T19:27:42.240Z",
+  "result": "quiet — no new or moved mac/* branch (gh-pr-rest-helper's tip is the cloud's own 18:42Z coverage-page fix, now 17/17 green on #755). #748 and #753 unmoved and still red on the blockers mailed at 17:32 and 18:43; nothing new to say, so no second mail. Tick firedAt 2026-09-14T19:09:43.520Z quiet; live-evidence 2026-09-12 22:56 (under 3d); manifest v78 unchanged; lane mail and sim requests clean; stale prune list unchanged (fleet-premium-proof, native-ledger-2026-09-02, decision-path-classifier-gap); no owner escalation."
 }

@@ -47,9 +47,11 @@
 // authorizes an owner-gated surface, and this gate's whole job is to make sure the lane
 // asks for it.
 
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { classifyDiff } from "./check-owner-gated-surfaces.mjs";
 
@@ -222,6 +224,50 @@ function selfTest() {
 
   // Non-vacuity: the required list has a subject.
   t("REQUIRED_CHECKS is non-empty", REQUIRED_CHECKS.length > 0);
+
+  // ── END-TO-END: the EXIT CODE is the contract, so test the exit code ──────────
+  // Everything above drives authorize() directly, which leaves the CLI untested —
+  // and the CLI is what the lane actually runs. An adversarial review of the sibling
+  // authorizer in #723 found exactly this hole: four broken-authorizer mutants,
+  // including `EXIT = { green: 0, inconclusive: 0, escalate: 0 }` — every PR
+  // authorized — each passed its 22/22 self-test, because the self-test never
+  // spawned the thing it was certifying. A mutation that made a REFUSAL exit 0
+  // would have passed every assertion above this line too.
+  //
+  // So these arms spawn this file as a subprocess and assert the observed exit
+  // status. They are deliberately cheap: no network, no proof run, and the one
+  // arm that reaches git uses this repo's own refs.
+  const self = fileURLToPath(import.meta.url);
+  const tmp = mkdtempSync(join(tmpdir(), "merge-auth-selftest-"));
+  const spawn = (args) => spawnSync(process.execPath, [self, ...args], { encoding: "utf8" });
+  try {
+    const checksFile = join(tmp, "checks.json");
+    writeFileSync(checksFile, JSON.stringify([green(GATE)]));
+
+    const noArgs = spawn([]);
+    t("CLI with no arguments exits NON-ZERO (usage is not authorization)", noArgs.status !== 0);
+
+    const missingFile = spawn(["--base", "HEAD~1", "--head", "HEAD", "--branch", "x", "--checks", join(tmp, "nope.json")]);
+    t("CLI with a missing checks file exits 1 and says REFUSED",
+      missingFile.status === 1 && /REFUSED/.test(missingFile.stderr));
+
+    // A ref that cannot be resolved must fail closed through the catch, not crash open.
+    const badRef = spawn(["--base", "definitely-not-a-ref-xyz", "--head", "HEAD", "--branch", "x", "--checks", checksFile]);
+    t("CLI with an unresolvable base ref exits 1, never 0", badRef.status === 1);
+
+    // The real refusal path, end to end: HEAD~1..HEAD of THIS repo is a real diff,
+    // and this file is itself SAFETY_MACHINERY, so the owner-gated lock must fire.
+    // (Asserted as non-zero rather than a passing green: what matters is that a
+    // refusal can never be mistaken for an authorization by the exit status.)
+    const refusal = spawn(["--base", "HEAD~1", "--head", "HEAD", "--branch", "x", "--checks", checksFile]);
+    t("CLI on a real refusal exits NON-ZERO and prints REFUSED, never AUTHORIZED",
+      refusal.status !== 0 && /REFUSED/.test(refusal.stderr) && !/^AUTHORIZED/m.test(refusal.stdout));
+
+    t("CLI never prints AUTHORIZED on a non-zero exit (the two can never disagree)",
+      [noArgs, missingFile, badRef, refusal].every((r) => r.status === 0 || !/AUTHORIZED/.test(r.stdout)));
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 
   const failed = checks.filter(([, o]) => !o);
   for (const [name, o] of checks) console.log(`  ${o ? "ok" : "FAIL"} — self-test: ${name}`);

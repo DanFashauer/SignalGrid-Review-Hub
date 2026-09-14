@@ -1310,6 +1310,57 @@ _These need the owner's call — an agent should not act on them unsupervised._
 
 ## Discovered
 
+### Wiring the custody-ledger evaluator into `/v1` needs a package extraction first — OWNER-GATED, deferred family (2026-09-14, measured by attempting it)
+
+`evaluateCustodyLedger` grades the custody contradiction the runbooks cite most (the custody
+and dock families stay deferred in the launch profile; none of this is shipped or claimed) — what the
+checkout ledger says about a device against what the dock bay sees, plus the requester's
+cap. It is built, proven by `proof:rtls-custody`, and has **no product caller**: its only
+callers are its own file and its proof, and `artifacts/api-server/src` imports
+`@workspace/integrations` zero times. (Correcting a stronger claim made earlier the same
+day: the family IS exported — `./rtls-custody` is one of 67 per-family subpath exports in
+`lib/integrations/package.json`. It is reachable; nothing reaches for it.)
+
+**The wiring was built end to end and then reverted, and the reason is the useful part.**
+Nothing below is a claim of current capability — the family remains deferred.
+Two read-only fixture-backed routes (`GET /v1/custody/ledger/fixtures` and
+`/fixtures/{name}`) worked against a live server — the phantom fixture graded
+`stale_return` / `step_up` / `CUSTODY_STALE_RETURN_OTHER`, `readyForCheckout: false`, with
+the contradiction named; unknown name 404, unauthenticated 401 — and `test:api` went
+409/409 to 416/416. Eleven surfaces stayed in sync (OpenAPI spec, API tests, the
+route-count figure, Postman requests + env, two derived request counts, a file-length
+figure, the claim-inventory anchors after the spec insertion moved a cited line, the Bruno
+collection + env, and four `.bru`-count sentences).
+
+**What stopped it: `check-deployment-runbook.mjs`.** That gate resolves the server's
+TRANSITIVE `@workspace/*` runtime dependencies to their source dirs and requires every env
+var any of them boot-reads to appear in the deployment runbook's table. Declaring
+`@workspace/integrations` as an api-server dependency therefore adds **80 distinct env
+vars** — measured, not estimated — taking the documented surface from 119 to ~199.
+Narrowing the import to a new `./rtls-custody/custody-ledger` subpath did NOT help: the
+gate reads the dependency graph, not the import graph, which is the correct design because
+a declared runtime dependency *could* read any of them.
+
+Those 80 belong to other deferred families — access-governance, agent-behavior, agent-identity,
+credential-exposure, MDE, SSO, SSE and more — and the custody route cannot use one of
+them; `evaluateCustodyLedgerFixture` is pure. Documenting them to pass the gate would tell
+an operator those knobs exist on this service when they do not, which is the exact
+dishonesty the runbook gate exists to prevent. Fixing the copy to fit the gate is right;
+fitting the gate's *inputs* to the copy is not.
+
+**The shape that would work**, for whoever takes it, with the family still deferred: extract
+the evaluator into its own
+small workspace package with no env reads (`custody-ledger.ts` imports exactly one thing,
+`posedBound` from `../../utils/posed-bound`), have `rtls-custody` re-export from it so
+there stays one definition and one proof, and depend the api-server on that. It is a
+`lib/**` structural change (DECISION_PATH under `classifyDiff`), so it is owner-gated and
+wants a deliberate decision rather than a rider on an unrelated branch.
+
+The honest summary, for a family that stays deferred either way: the custody layer is not
+unwired by oversight. It is unwired because
+the obvious wiring widens the API's configuration surface by 80 variables it cannot use,
+and a gate refuses to let that go undocumented.
+
 ### api-zod / v1 input-validation hardening — design targets (2026-09-04, from the fail-closed audit)
 
 Filed from the `lib/api-zod` fail-closed audit (recorded in `docs/agent/EVIDENCE.md`). No

@@ -56,8 +56,12 @@ LAST TOUCHED: 2026-09-14 21:20Z (mac lane, latest) - DR-043 ITEM (d) IS COMPLETE
               ARE IN THE CORE. Row 1 (removal suspends the session, CUSTODY_EXCEPTION) landed in #748.
               Row 2 - a legacy read for a strong-enrolled worker DENIES with CREDENTIAL_DOWNGRADE - is
               on #753 (head 8c7bcb80), carried by two new signal domains, enrollment_strength and
-              credential_read_method, alongside attach_state and presence_state. 21 signal categories,
-              25 evidence fields. The distinction the family rests on: not_applicable (no such
+              credential_read_method, alongside attach_state and presence_state. On that branch,
+              `21` signal categories and `24` evidence fields — quoted from #753's own run, NOT
+              mainline's, which still measures 17 and 20 until it lands. (The earlier version of this
+              line said `25` evidence fields; proof:signalgrid-core on 8c7bcb80 prints
+              evidenceFields=24, which the quoted-green block below had right and this sentence had
+              wrong.) The distinction the family rests on: not_applicable (no such
               credential is in play) is NOT unknown (a read attempted and failed); collapsing them
               would step up every puck-less deployment on day one.
               WHAT THE PROOF CAUGHT, and it is wider than one rule: credential-downgrade is the core's
@@ -73,8 +77,9 @@ LAST TOUCHED: 2026-09-14 21:20Z (mac lane, latest) - DR-043 ITEM (d) IS COMPLETE
               owner-gated: DECISION_PATH on lib/* and the /v1 server, OWNER_RESERVED on the
               buyer-facing site. That is the machinery working, not a blocker - the cloud review board
               merges it per DR-037.
-              Green, quoted: preflight EXIT=0, verify:breadth 56 proofs EXIT=0, proof:signalgrid-core
-              assertions=526 categories=21 evidenceFields=24, proof:evidence-coverage 30/30 axes=25,
+              Green, quoted FROM #753 (head 8c7bcb80), not from mainline: preflight EXIT=0,
+              verify:breadth 56 proofs EXIT=0, proof:signalgrid-core
+              `assertions=526 categories=21 evidenceFields=24`, proof:evidence-coverage `30/30 axes=25`,
               proof:signal-radar 22/22, test:api 409/409, room-console sigClass 176 vectors + 10 pins,
               manifest v81, CORE_NORMALIZATION_VERSION 18 -> 19.
               STILL OWED BY CLOUD: the skill-instruction-conflicts gate hangs preflight forever

@@ -52,7 +52,37 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-14 16:36Z (cloud lane, latest) - THE QUEUE IS THE BOTTLENECK, MEASURED, NOT
+LAST TOUCHED: 2026-09-14 21:20Z (mac lane, latest) - DR-043 ITEM (d) IS COMPLETE: BOTH POLICY ROWS
+              ARE IN THE CORE. Row 1 (removal suspends the session, CUSTODY_EXCEPTION) landed in #748.
+              Row 2 - a legacy read for a strong-enrolled worker DENIES with CREDENTIAL_DOWNGRADE - is
+              on #753 (head 8c7bcb80), carried by two new signal domains, enrollment_strength and
+              credential_read_method, alongside attach_state and presence_state. 21 signal categories,
+              25 evidence fields. The distinction the family rests on: not_applicable (no such
+              credential is in play) is NOT unknown (a read attempted and failed); collapsing them
+              would step up every puck-less deployment on day one.
+              WHAT THE PROOF CAUGHT, and it is wider than one rule: credential-downgrade is the core's
+              FIRST two-condition rule, and the core proof's scope derivation could not see it. It
+              probes one field at a time from one healthy baseline, so a field that is only ever half
+              of an AND never fires the rule that names it. enrollmentStrength derived as out-of-scope
+              while the sweep swept it, and the exact-equality scope check refused the mismatch rather
+              than quietly shrinking coverage. Fixed IN THE DERIVATION - unresolved fields escalate to
+              a derived family of bases (healthy plus every single-field perturbation) - not by typing
+              a field into a list. The escalation's comment names what it does NOT close: the
+              derivation sees conjunctions, the sweep is still single-axis.
+              AUTO-MERGE IS ON AND #753 IS DELIBERATELY NOT ELIGIBLE. classifyDiff returns
+              owner-gated: DECISION_PATH on lib/* and the /v1 server, OWNER_RESERVED on the
+              buyer-facing site. That is the machinery working, not a blocker - the cloud review board
+              merges it per DR-037.
+              Green, quoted: preflight EXIT=0, verify:breadth 56 proofs EXIT=0, proof:signalgrid-core
+              assertions=526 categories=21 evidenceFields=24, proof:evidence-coverage 30/30 axes=25,
+              proof:signal-radar 22/22, test:api 409/409, room-console sigClass 176 vectors + 10 pins,
+              manifest v81, CORE_NORMALIZATION_VERSION 18 -> 19.
+              STILL OWED BY CLOUD: the skill-instruction-conflicts gate hangs preflight forever
+              (askHook spawns .claude/hooks/block-dangerous.sh with no timeout; traced to cloud's
+              DR-047 skill commits). Also: scripts/mac/gh-pr.mjs is still only on
+              mac/gh-pr-rest-helper, and its `open` exited 0 WITHOUT patching the PR body - the body
+              had to land via `gh api -X PATCH`. Both are real defects, neither is fixed.
+2026-09-14 16:36Z (cloud lane) - THE QUEUE IS THE BOTTLENECK, MEASURED, NOT
               GUESSED. Ran scripts/check-merge-authorization.mjs (from #729's worktree; it is not on
               mainline yet, which is itself the loop) against all eleven open PRs. Every one REFUSED
               as owner-gated: #727, #730, #729, #723, #737, #732, #741, #742, #744, #745, #748 all

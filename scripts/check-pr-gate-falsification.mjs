@@ -36,7 +36,7 @@
 // provenance.workingTreeClean for every later sim result.
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -157,14 +157,40 @@ function reportForFile(file, touched, worktree) {
   if (baselineVerdict !== "survivor") return { ...base, baseline: "fail" };
 
   const abs = join(worktree, file);
-  if (!existsSync(abs)) return { ...base, baseline: "pass" };
+  // NO existsSync-then-write. Two problems with the pair this replaces, and CodeQL
+  // flagged the smaller one:
+  //   · TOCTOU — the check and the use were separate calls, so the answer could be
+  //     stale by the time it was acted on.
+  //   · The semantics were worse than the race. A file this run could not find was
+  //     answered with `baseline: "pass"` — the word for "the proof passes on the
+  //     unmutated tree" — when the truth is that nothing was established at all.
+  // Attempt the operation and let its failure BE the answer: unreadable or unwritable
+  // is INCONCLUSIVE, which escalates, and never a pass. (`mutationsTried: 0` already
+  // escalated downstream, so this tightens a name that was wrong rather than a hole
+  // that was open — but a checker that reports the wrong reason is how the next hole
+  // gets argued as fine.)
+  let restore;
+  try {
+    restore = readFileSync(abs, "utf8");
+  } catch {
+    return { ...base, baseline: "inconclusive", inconclusive: true };
+  }
   const all = mutationsFor(file).filter((m) => touched.has(m.lineNo));
   let killed = 0;
   let inconclusive = false;
   for (const mut of all) {
-    writeFileSync(abs, mut.content);
-    const v = runProof(proof);
-    writeFileSync(abs, mut.original);
+    let v;
+    try {
+      writeFileSync(abs, mut.content);
+      v = runProof(proof);
+    } catch {
+      inconclusive = true;
+    } finally {
+      // The original goes back even when the run threw, so one failed mutation cannot
+      // leave a mutated file behind for the next one to measure against.
+      try { writeFileSync(abs, mut.original ?? restore); } catch { inconclusive = true; }
+    }
+    if (inconclusive) break;
     if (v === "hung") { inconclusive = true; break; }
     if (v === "killed") { killed += 1; break; } // one kill per file is the bar
   }

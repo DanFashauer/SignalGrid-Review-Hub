@@ -37,6 +37,7 @@ export const EVALUATED_CATEGORIES = [
   "benchmark_selection",
   "shift_context",
   "badge_binding",
+  "attach_state",
   "device_management_health",
   "local_authority",
 ] as const;

@@ -111,6 +111,7 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "offline",
     "unknown",
   ]),
+  attachState: new Set(["attached", "removed", "unknown", "not_applicable"]),
   baselineState: new Set([
     "aligned",
     "partial",
@@ -371,6 +372,8 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
       return condition.in.includes(evidence.tamperState);
     case "dockState":
       return condition.in.includes(evidence.dockState);
+    case "attachState":
+      return condition.in.includes(evidence.attachState);
     case "baselineState":
       return condition.in.includes(evidence.baselineCompliance);
     case "benchmarkSelectionState":
@@ -600,6 +603,24 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     outcome: "restrict",
     reasonCode: "DOCK_FAULTED",
     severity: "high",
+  },
+  {
+    id: "attach-removed",
+    description:
+      "The physical credential was removed from the device it gates — the key is out of the ignition, so the session it authorized no longer has the custody evidence it rested on.",
+    match: [{ field: "attachState", in: ["removed"] }],
+    outcome: "restrict",
+    reasonCode: "ATTACH_REMOVED",
+    severity: "high",
+  },
+  {
+    id: "attach-unknown",
+    description:
+      "Whether the credential is still seated is unknown. The attach event IS the custody evidence for a puck-gated session, so silence never grants — step up. Diverges from badge/dock unknown by design.",
+    match: [{ field: "attachState", in: ["unknown"] }],
+    outcome: "step_up",
+    reasonCode: "ATTACH_UNKNOWN",
+    severity: "medium",
   },
   {
     id: "dock-offline",

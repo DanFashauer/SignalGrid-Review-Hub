@@ -283,6 +283,31 @@ export type DockState =
   | "faulted"
   | "offline"
   | "unknown";
+
+/**
+ * PUCK/CREDENTIAL ATTACH STATE (DR-043 item (a)) — whether the physical credential
+ * is seated in the device it gates.
+ *
+ * This domain is DELIBERATELY STRICTER than its siblings. `badgeBinding: "unknown"`
+ * and `dockState: "unknown"` both resolve to `allow` under the day-one-quiet pattern
+ * (seed.ts) — silence there must not fabricate a block. Here silence is different in
+ * kind: for a puck-gated session the attach event IS the custody-intent evidence, so
+ * not knowing whether the credential is seated is not a quiet day, it is the absence
+ * of the very thing the session rests on. `unknown` is therefore at least `step_up`
+ * and NEVER a grant. The divergence is stated on the hypothesis page and is the
+ * point of the domain, not an inconsistency with the siblings.
+ */
+export type AttachState =
+  | "attached"
+  | "removed"
+  /** A puck-gated session whose attach read FAILED — step up, never a grant. */
+  | "unknown"
+  /** No credential is in play for this decision (the default when no attach signal
+   *  exists at all). Distinct from "unknown" on purpose: absence of a puck is not a
+   *  failed read, and treating it as one would step up every decision in a
+   *  deployment that has no pucks — the day-one-quiet guarantee the sibling
+   *  dimensions rest on. The strict arm fires on an EMITTED unknown, not on silence. */
+  | "not_applicable";
 /**
  * Battery HEALTH, which is a different question from `ChargeState`.
  *
@@ -338,6 +363,7 @@ export const SIGNAL_CATEGORIES = [
   "battery_health",
   "tamper_state",
   "dock_state",
+  "attach_state",
   "security_baseline",
   "benchmark_selection",
   "shift_context",
@@ -405,6 +431,7 @@ export const EVIDENCE_FIELDS = [
   "batteryHealth",
   "tamperState",
   "dockState",
+  "attachState",
   "baselineState",
   "benchmarkSelectionState",
   "shiftContextState",
@@ -430,6 +457,7 @@ export type RuleCondition =
   | { field: "batteryHealth"; in: BatteryHealthState[] }
   | { field: "tamperState"; in: TamperState[] }
   | { field: "dockState"; in: DockState[] }
+  | { field: "attachState"; in: AttachState[] }
   | { field: "baselineState"; in: BaselineState[] }
   | { field: "benchmarkSelectionState"; in: BenchmarkSelectionState[] }
   | { field: "shiftContextState"; in: ShiftContextState[] }
@@ -518,6 +546,10 @@ export interface DecisionEvidence {
    * so `allow` should not rest on it. See docs/SIGNALGRID_SMARTDOCK.md.
    */
   dockState: DockState;
+  /** Whether the physical credential/puck is seated in the device (default
+   *  "unknown"). Unlike its siblings, "unknown" here is never a grant — see
+   *  AttachState. */
+  attachState: AttachState;
   /** Security-baseline (CIS/hardening) alignment for the device (default "unknown"). */
   baselineCompliance: BaselineState;
   /** Whether the baseline answer above came from the RIGHT test (default

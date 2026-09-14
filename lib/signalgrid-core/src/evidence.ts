@@ -12,6 +12,7 @@ import type {
   CustodyState,
   DecisionEvidence,
   Device,
+  AttachState,
   DockState,
   EvidenceSnapshot,
   Freshness,
@@ -82,6 +83,7 @@ export function buildEvidence(
     tamperState: readTamper(latestByCategory),
     dockEvidenceFreshness: readDockEvidenceFreshness(latestByCategory),
     dockState: readDock(latestByCategory),
+    attachState: readAttach(latestByCategory),
     baselineCompliance: readBaseline(latestByCategory),
     benchmarkSelection: readBenchmarkSelection(latestByCategory),
     shiftContext: readShiftContext(latestByCategory),
@@ -508,6 +510,7 @@ const CUSTODY_STATES = [
 const CHARGE_STATES = ["charging", "charged", "low", "critical", "not_present"] as const;
 const TAMPER_STATES = ["none", "suspected", "confirmed", "sensor_unavailable"] as const;
 const DOCK_STATES = ["occupied", "empty", "reserved", "faulted", "offline"] as const;
+const ATTACH_STATES = ["attached", "removed", "unknown"] as const;
 const BATTERY_HEALTH_STATES = ["healthy", "degraded", "failing"] as const;
 const BASELINE_STATES = ["aligned", "partial", "drifted", "not_assessed"] as const;
 // Only the two AFFIRMATIVE values are readable from a signal. Absent or
@@ -537,6 +540,7 @@ const DOCK_CATEGORIES = [
   "battery_health",
   "tamper_state",
   "dock_state",
+  "attach_state",
   "badge_binding",
 ] as const;
 
@@ -590,6 +594,7 @@ export const EVIDENCE_VALUE_DOMAINS = {
   batteryHealth: { members: BATTERY_HEALTH_STATES, good: ["healthy"] },
   tamper: { members: TAMPER_STATES, good: ["none"] },
   dock: { members: DOCK_STATES, good: ["occupied", "empty", "reserved"] },
+  attach: { members: ATTACH_STATES, good: ["attached"] },
   baseline: { members: BASELINE_STATES, good: ["aligned"] },
   benchmarkSelection: { members: BENCHMARK_SELECTION_STATES, good: ["confirmed"] },
   shiftContext: { members: SHIFT_CONTEXT_STATES, good: ["confirmed"] },
@@ -736,6 +741,13 @@ function readTamper(latestByCategory: LatestByCategory): TamperState {
 
 function readDock(latestByCategory: LatestByCategory): DockState {
   return readEnum(latestByCategory, "dock_state", EVIDENCE_VALUE_DOMAINS.dock) ?? "unknown";
+}
+
+/** No attach reading is "unknown", and unknown is NOT a grant here (see AttachState).
+ *  The default is the same shape as its siblings; what differs is what the policy
+ *  does with it. */
+function readAttach(latestByCategory: LatestByCategory): AttachState {
+  return readEnum(latestByCategory, "attach_state", EVIDENCE_VALUE_DOMAINS.attach) ?? "not_applicable";
 }
 
 function readEnum<T extends string>(

@@ -451,6 +451,7 @@ function seedPolicyTests(
     tamperState: "none",
     dockEvidenceFreshness: "missing",
     dockState: "occupied",
+    attachState: "attached",
     baselineCompliance: "aligned",
     benchmarkSelection: "confirmed",
     shiftContext: "confirmed",
@@ -482,6 +483,9 @@ function seedPolicyTests(
     { name: "SmartDock faulted → restrict", evidence: { ...base, dockState: "faulted" }, expectedOutcome: "restrict", expectedReasonCode: "DOCK_FAULTED" },
     { name: "SmartDock offline → step-up", evidence: { ...base, dockState: "offline" }, expectedOutcome: "step_up", expectedReasonCode: "DOCK_OFFLINE" },
     { name: "dock state unknown → still allow (no fabricated block)", evidence: { ...base, dockState: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "credential removed → restrict (the key is out of the ignition)", evidence: { ...base, attachState: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "ATTACH_REMOVED" },
+    { name: "attach unknown → step-up, NEVER a grant (the deliberate divergence from badgeBinding/dockState unknown above, which stay allow under day-one-quiet)", evidence: { ...base, attachState: "unknown" }, expectedOutcome: "step_up", expectedReasonCode: "ATTACH_UNKNOWN" },
+    { name: "credential seated → allow (the attach domain does not block the ordinary case)", evidence: { ...base, attachState: "attached" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "tamper sensor unavailable → step-up (no fail-open)", evidence: { ...base, tamperState: "sensor_unavailable" }, expectedOutcome: "step_up", expectedReasonCode: "TAMPER_SENSOR_UNAVAILABLE" },
   ];
   for (const [index, spec] of cases.entries()) {
@@ -625,6 +629,7 @@ function benignDock(deviceRef: string, index: number): DockCustodyRecord {
     bayId: `bay-${String(index).padStart(2, "0")}`,
     chargeState: "charged",
     dockState: "occupied",
+    attachState: "attached",
     custodyState: "checked_out",
     tamperState: "none",
     badgeBinding: "present",
@@ -647,6 +652,7 @@ function northwindDockCustody(): DockCustodyRecord[] {
     ...benignDock("ipad-loan-01", 11),
     custodyState: "overdue",
     dockState: "empty",
+    attachState: "attached",
   });
   records.push({
     ...benignDock("ipad-loan-02", 12),
@@ -656,6 +662,7 @@ function northwindDockCustody(): DockCustodyRecord[] {
     ...benignDock("ipad-loan-03", 13),
     chargeState: "critical",
     dockState: "empty",
+    attachState: "attached",
   });
   // Deliberately FULLY CHARGED with a failing battery. If `batteryHealth` were
   // merely a proxy for `chargeState`, this record would produce no finding at

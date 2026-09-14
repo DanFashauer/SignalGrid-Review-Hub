@@ -193,7 +193,12 @@ for (const scenario of scenarios) {
 // sample body moved; the digest function is unchanged. (seed.ts is outside the normalization
 // closure; the same change set bumped the version 9 -> 10 for store.ts, which is inside it.)
 // Was 9347fb8f9ad49d31.
-const LEGACY_SNAPSHOT_DIGEST = "621410dc07677bb2";
+// 2026-09-14: the attach signal domain (DR-043 item (a)) added `attachState` to
+// DecisionEvidence, so the pinned SAMPLE body moved; the digest function is unchanged.
+// Real pre-stamp rows in Postgres are unaffected — they carry their own stored evidence
+// bytes, which do not gain the field; this fixture is derived from a LIVE snapshot and
+// therefore does. Was 621410dc07677bb2.
+const LEGACY_SNAPSHOT_DIGEST = "8bc18b2e5269f8b0";
 const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
 
 // The exact shape a pre-stamp row deserializes into: every field the same, no stamp.
@@ -3036,6 +3041,12 @@ const monotonicityTable: string[] = [];
       reading: (m, at) => sig("dock_state", m as string, { observedAt: at }),
     },
     {
+      field: "attachState",
+      category: "attach_state",
+      domain: EVIDENCE_VALUE_DOMAINS.attach,
+      reading: (m, at) => sig("attach_state", m as string, { observedAt: at }),
+    },
+    {
       field: "baselineCompliance",
       category: "security_baseline",
       domain: EVIDENCE_VALUE_DOMAINS.baseline,
@@ -3233,6 +3244,15 @@ const monotonicityTable: string[] = [];
     // quiet", because no tenant-level EXPECTATION of a category is modelled
     // anywhere — that is a real deferred capability, not a bug in this sweep, and
     // it is REPORTED here rather than gated.
+    {
+      name: "attach-absence-is-not-an-attach-answer",
+      field: "attachState",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["removed", "unknown"],
+      reason:
+        "removed→allow and step_up→allow. The SAME shape named above: the attach reading is what carries the bad news, so with it gone the field falls back to 'not_applicable' and no attach rule matches. A deployment with no pucks emits no attach signal at all, and the core cannot tell that from a puck deployment whose dock went quiet — the tenant-level EXPECTATION this would need is the deferred capability this block already names. NOTE the asymmetry that is NOT exempted: an attach reading that EXISTS and says 'unknown' still steps up (the strict arm), which is the divergence from badgeBinding/dockState unknown and is asserted positively in the seed policy matrix. This exemption covers ABSENCE only.",
+    },
     {
       name: "identity-signal-absence-is-not-an-identity-answer",
       field: "identityEnabled",

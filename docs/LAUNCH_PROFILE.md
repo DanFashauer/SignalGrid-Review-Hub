@@ -217,6 +217,30 @@ derives from
 `git ls-files`, which is one reproducible answer everywhere and also the right
 question: a directory that is not in version control is output, not a surface.
 
+### Every launch item names the proofs that certify it
+
+Since 2026-09-12 (DR-036's named follow-up) every `launch` entry in
+`scripts/launch-profile.mjs` carries `proofs: ["proof:<name>", …]` — the `proof:*`
+scripts in `package.json` that certify it. A binding is a claim, so
+`scripts/check-launch-proof-bindings.mjs` (preflight and CI, self-tested) fails the
+build when a launch entry binds nothing, binds a name that is not a proof script,
+binds a proof that is not registered in `scripts/preflight.mjs` (launch coverage runs
+per push; the breadth lane refuses launch families), or binds a proof that skips
+itself when an env var is unset. Non-launch entries may not carry `proofs`. A binding
+is not a status: adding or changing one does not move the profile version.
+
+The bindings are what the readiness figure's dimension (b) divides by. Until this
+change (b) was binary — 100 while the last Mac evidence run was green, fresh and
+covered the current manifest, else 0 — because only 3 of the 23 launch ids happened
+to match a proof name. Now `node scripts/check-readiness-figure.mjs` reads the
+distinct proofs the launch items bind and reports the share that
+`artifacts/live-evidence/mac-run.json` records as passed (`proofs.passed`) against
+the manifest the tree carries. It is fail-closed on every side: a bound proof with no
+record is 0, a record bound to a manifest fingerprint the tree no longer carries is 0,
+and an evidence file with no per-proof results at all (minted before the emitter
+recorded them) is 0 of N — a missing field never raises the ratio. The numbers are
+derived, never typed here; run the command.
+
 `proof:launch-profile` publishes the figures quoted under **What the profile says**,
 and the docs↔proof figure guard fails the build if that section and the profile ever
 disagree. Read the scope of that guard exactly: it judges a number only inside a

@@ -414,6 +414,13 @@ jobs:
       # "unexamined" is the door breadth walks back in through.
       - name: "Launch profile (declared product edge == real one)"
         run: node scripts/check-launch-profile.mjs
+      # DR-036's named follow-up: every launch item binds the proof:* scripts that certify
+      # it (readiness dimension (b) divides by that set). No proof, a phantom, an
+      # unregistered or a self-skipping proof is a hollow claim — fatal.
+      - name: "Launch-proof bindings self-test (the gate must be able to fail)"
+        run: node scripts/check-launch-proof-bindings.mjs --self-test
+      - name: "Launch-proof bindings (every launch item names real, per-push proofs)"
+        run: node scripts/check-launch-proof-bindings.mjs
       - name: Proof — launch profile (Limited GA scope is coherent; figures published)
         run: pnpm run proof:launch-profile
       # The connector→decision seam, closed and pinned: fixture-mode resolution

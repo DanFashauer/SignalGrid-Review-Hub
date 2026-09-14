@@ -197,18 +197,28 @@ if (process.argv.includes("--list")) {
 }
 
 if (process.argv.includes("--self-test")) {
-  const bad = '<div class="m">12 dimensions composed into <b>one posture</b>.</div>';
-  const good = '<div class="m">17 dimensions composed into <b>one posture</b>.</div>';
+  // THE FIXTURES ARE DERIVED, not typed. They used to read `17` and `3` as
+  // literals, so every category added to the core broke this SELF-TEST — the gate
+  // itself stayed correct and the page it was pointed at was already fixed, but
+  // preflight failed at "the right category count is clean" because the fixture
+  // still described a 17-category grid. A self-test that has to be hand-re-dated
+  // every time the thing it guards changes is a second stale figure, planted
+  // inside the gate that exists to catch stale figures. `wrong` is derived too:
+  // it must be a value the tree cannot hold, not a number that happens to differ
+  // today. (2026-09-14, categories 17 → 19 → 21 inside one branch.)
+  const wrong = (n) => n + 5;
+  const bad = `<div class="m">${wrong(categories)} dimensions composed into <b>one posture</b>.</div>`;
+  const good = `<div class="m">${categories} dimensions composed into <b>one posture</b>.</div>`;
   const otherSense = "<p>the catalog taxonomy shows 16 categories of candidate source</p>";
-  const badGaps = "<p>There are 3 declared gaps.</p>";
+  const badGaps = `<p>There are ${wrong(profile.gaps)} declared gaps.</p>`;
   // F3: the other-sense word as the SUBJECT of the sentence, not as the qualifier of
   // the count. The whole-line test called this exempt; it is a claim about
   // SIGNAL_CATEGORIES and 17 is the derived value, so it must fail.
-  const subjectSense = "<p>Our taxonomy composes 12 dimensions into one posture.</p>";
+  const subjectSense = `<p>Our taxonomy composes ${wrong(categories)} dimensions into one posture.</p>`;
   // F3, the other direction: a wrong figure sitting far from an unrelated occurrence
   // of the word, the shape a single-line HTML section actually makes.
   const distantWord =
-    '<nav><a href="#">Integration catalog</a></nav><div class="m">12 dimensions composed into one posture</div>';
+    `<nav><a href="#">Integration catalog</a></nav><div class="m">${wrong(categories)} dimensions composed into one posture</div>`;
   const checks = [
     ["a wrong category count is caught", scan("st0.html", bad).violations.length > 0],
     ["the right category count is clean", scan("st1.html", good).violations.length === 0],

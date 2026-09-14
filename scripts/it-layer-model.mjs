@@ -279,6 +279,23 @@ export const REASON_CODE_LAYERS = [
   // different desks, and it is the clearest illustration of why the model is useful.
   { code: "BADGE_FORCED_REMOVAL", layer: "it_security_risk_management", domain: "Threat Detection & Response", systemOfRecord: "badge reader case", evidenceType: "duress / forced-removal event", owner: "security_operations_owner" },
 
+  // ── Credential attach / presence / strength (DR-043) ──────────────────────
+  // The puck half of the session model. Three of these four route to facilities
+  // for the same reason BADGE_REMOVED does — somebody has to physically go and
+  // look at a bay, a sensor or a worker — and the fourth does NOT, for the same
+  // reason BADGE_FORCED_REMOVAL does not.
+  { code: "ATTACH_REMOVED", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "credential attach sensor", evidenceType: "physical credential binding", owner: "facilities_operations_owner" },
+  // The attach READING failed, which is a sensor problem before it is a security
+  // problem — the same split TAMPER_SENSOR_UNAVAILABLE makes against TAMPER_*.
+  { code: "ATTACH_UNKNOWN", layer: "it_operations", domain: "IT Monitoring & Maintenance", systemOfRecord: "credential attach sensor", evidenceType: "sensor reachability", owner: "facilities_operations_owner" },
+  { code: "PRESENCE_ABSENT_UNSEATED", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "presence radio / credential proximity", evidenceType: "credential presence", owner: "facilities_operations_owner" },
+  // A strong-enrolled worker whose credential was read by a legacy method is a
+  // DOWNGRADE, and a downgrade is an attack shape, not a maintenance ticket: no
+  // amount of walking to a dock explains it. Routed to the security desk for the
+  // same reason forced removal is, and it is the second pair in this table where
+  // neighbouring codes deliberately part company.
+  { code: "CREDENTIAL_DOWNGRADE", layer: "it_security_risk_management", domain: "Threat Detection & Response", systemOfRecord: "identity provider enrollment record", evidenceType: "enrollment strength vs read method", owner: "security_operations_owner" },
+
   // ── Business / labour plane ───────────────────────────────────────────────
   { code: "SHIFT_CONTEXT_MISFIT", layer: "software_development_applications", domain: "Enterprise Applications", systemOfRecord: "workforce management", evidenceType: "shift / punch state", owner: "application_owner" },
   { code: "SHIFT_CONTEXT_UNESTABLISHED_STRICT", layer: "software_development_applications", domain: "Enterprise Applications", systemOfRecord: "workforce management", evidenceType: "shift / punch state", owner: "application_owner" },

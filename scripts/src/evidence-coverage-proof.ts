@@ -100,6 +100,8 @@ const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
     dockState: "occupied",
     attachState: "attached",
     presenceState: "present",
+    enrollmentStrength: "strong",
+    credentialReadMethod: "strong",
     baselineCompliance: "aligned",
     benchmarkSelection: "confirmed",
     shiftContext: "confirmed",
@@ -217,6 +219,8 @@ const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
     dockState: "unknown",
     attachState: "unknown",
     presenceState: "unknown",
+    enrollmentStrength: "unknown",
+    credentialReadMethod: "unknown",
     baselineCompliance: "unknown",
     benchmarkSelection: "unverified",
     shiftContext: "unverified",
@@ -359,13 +363,22 @@ const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
   // axis table was missing `managementHealthState` and `localAuthorityState`, both of
   // which an Entra + Intune estate CAN answer. The wedge did not get better; the
   // denominator stopped omitting two of its rows.
+  // MOVED 12 → 14 on 2026-09-14 (DR-043, the credential half of the session). Four
+  // axes joined the table: `enrollmentStrength` and `credentialReadMethod` are both
+  // answerable from the IdP, so the wedge genuinely gained two; `attachState` and
+  // `presenceState` need hardware the wedge does not have, so they arrive DARK and
+  // the denominator grew by four. The wedge did not get better by two-fourths — it
+  // got two real answers and two new named gaps, which is what the ratio now says.
+  // Silent holes 6 → 7: `presenceState` is dark AND day-one quiet. `attachState` is
+  // dark and NOT quiet (its ignorance member steps up), so it is a VISIBLE gap and
+  // deliberately does not count here — the distinction this figure exists to make.
   check(
-    `the Entra + Intune wedge answers EXACTLY 12 of ${wedge.totalAxes} axes and leaves ${dark.length} needing instrumentation`,
-    wedge.answerable === 12 && dark.length === 6,
+    `the Entra + Intune wedge answers EXACTLY 14 of ${wedge.totalAxes} axes and leaves ${dark.length} needing instrumentation`,
+    wedge.answerable === 14 && dark.length === 8,
   );
   check(
-    `…of which EXACTLY 6 are SILENT holes — dark AND ungraded, where a naive backtest would read health`,
-    wedge.silentHoles === 6 && wedge.silentHoles <= dark.length,
+    `…of which EXACTLY 7 are SILENT holes — dark AND ungraded, where a naive backtest would read health`,
+    wedge.silentHoles === 7 && wedge.silentHoles <= dark.length,
   );
   check(
     "every dark axis names the planes that would answer it, so the gap is actionable rather than a complaint",

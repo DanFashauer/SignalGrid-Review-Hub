@@ -298,6 +298,33 @@ export type DockState =
  * point of the domain, not an inconsistency with the siblings.
  */
 /**
+ * CREDENTIAL ENROLLMENT STRENGTH — what the worker actually HOLDS (DR-043 item (d),
+ * the "legacy read for a strong-enrolled worker" row). "strong" is a phishing-resistant
+ * enrollment (FIDO2/passkey, or a puck that carries one); "legacy" is a cloneable
+ * factor such as a prox card or a PIN.
+ */
+export type EnrollmentStrength =
+  | "strong"
+  | "legacy"
+  | "unknown"
+  /** No enrollment answer is in play (the default when no signal exists). */
+  | "not_applicable";
+
+/**
+ * HOW THIS PARTICULAR READ ARRIVED — the other half of the downgrade question. A
+ * worker who HOLDS a strong credential presenting over a legacy path is the classic
+ * downgrade attack: the legacy path is exactly what a cloned prox card uses, and the
+ * strong enrollment is the reason nobody should need it. See the credential-downgrade
+ * rule in policy.ts — the join is done in the deterministic core, not delegated to the
+ * connector that reported either half.
+ */
+export type CredentialReadMethod =
+  | "strong"
+  | "legacy"
+  | "unknown"
+  | "not_applicable";
+
+/**
  * RADIO/PROXIMITY PRESENCE (DR-043 item (d), the "radio says gone, puck seated" row).
  *
  * What a presence radio (BLE/RTLS/beacon) claims about whether the holder is still
@@ -383,6 +410,8 @@ export const SIGNAL_CATEGORIES = [
   "dock_state",
   "attach_state",
   "presence_state",
+  "enrollment_strength",
+  "credential_read_method",
   "security_baseline",
   "benchmark_selection",
   "shift_context",
@@ -452,6 +481,8 @@ export const EVIDENCE_FIELDS = [
   "dockState",
   "attachState",
   "presenceState",
+  "enrollmentStrength",
+  "credentialReadMethod",
   "baselineState",
   "benchmarkSelectionState",
   "shiftContextState",
@@ -479,6 +510,8 @@ export type RuleCondition =
   | { field: "dockState"; in: DockState[] }
   | { field: "attachState"; in: AttachState[] }
   | { field: "presenceState"; in: PresenceState[] }
+  | { field: "enrollmentStrength"; in: EnrollmentStrength[] }
+  | { field: "credentialReadMethod"; in: CredentialReadMethod[] }
   | { field: "baselineState"; in: BaselineState[] }
   | { field: "benchmarkSelectionState"; in: BenchmarkSelectionState[] }
   | { field: "shiftContextState"; in: ShiftContextState[] }
@@ -575,6 +608,11 @@ export interface DecisionEvidence {
    *  "not_applicable"). The weakest custody evidence here — a radio saying "gone"
    *  never by itself ends a session whose credential is still seated. */
   presenceState: PresenceState;
+  /** The strength of the credential the worker HOLDS (default "not_applicable"). */
+  enrollmentStrength: EnrollmentStrength;
+  /** How THIS read arrived (default "not_applicable"). A legacy read by a
+   *  strong-enrolled worker is a downgrade and is denied. */
+  credentialReadMethod: CredentialReadMethod;
   /** Security-baseline (CIS/hardening) alignment for the device (default "unknown"). */
   baselineCompliance: BaselineState;
   /** Whether the baseline answer above came from the RIGHT test (default

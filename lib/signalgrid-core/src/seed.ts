@@ -453,6 +453,8 @@ function seedPolicyTests(
     dockState: "occupied",
     attachState: "attached",
     presenceState: "present",
+    enrollmentStrength: "strong",
+    credentialReadMethod: "strong",
     baselineCompliance: "aligned",
     benchmarkSelection: "confirmed",
     shiftContext: "confirmed",
@@ -490,6 +492,9 @@ function seedPolicyTests(
     { name: "radio says gone AND the credential is not seated → step-up", evidence: { ...base, presenceState: "absent", attachState: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "ATTACH_REMOVED" },
     { name: "radio says gone, puck SEATED → do NOT assume gone (the seated credential vetoes radio absence; DR-043 policy matrix)", evidence: { ...base, presenceState: "absent", attachState: "attached" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "radio says gone with no credential in play → step-up (nothing vetoes the radio)", evidence: { ...base, presenceState: "absent", attachState: "not_applicable" }, expectedOutcome: "step_up", expectedReasonCode: "PRESENCE_ABSENT_UNSEATED" },
+    { name: "legacy read for a STRONG-enrolled worker → deny (the downgrade attack; DR-043 policy matrix)", evidence: { ...base, enrollmentStrength: "strong", credentialReadMethod: "legacy" }, expectedOutcome: "deny", expectedReasonCode: "CREDENTIAL_DOWNGRADE" },
+    { name: "legacy read for a LEGACY-enrolled worker → allow (no downgrade: it is the only credential they hold)", evidence: { ...base, enrollmentStrength: "legacy", credentialReadMethod: "legacy" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "strong read for a strong-enrolled worker → allow (the rule punishes the downgrade, never the strong credential)", evidence: { ...base, enrollmentStrength: "strong", credentialReadMethod: "strong" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "tamper sensor unavailable → step-up (no fail-open)", evidence: { ...base, tamperState: "sensor_unavailable" }, expectedOutcome: "step_up", expectedReasonCode: "TAMPER_SENSOR_UNAVAILABLE" },
   ];
   for (const [index, spec] of cases.entries()) {

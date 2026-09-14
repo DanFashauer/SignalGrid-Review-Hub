@@ -11,7 +11,7 @@ Under the embedded-UX law the verdict plus its reason codes ARE the product
 surface: the host app renders the worker's message from them, so this catalog
 is the contract a host-app developer builds against.
 
-**40 codes** the decision core can emit: 28 reachable
+**44 codes** the decision core can emit: 32 reachable
 through the launch evaluate surface, 5 only via the draft-policy
 test route, 7 only through deferred routes. Worker/operator
 language comes from the engine's own resolution descriptors; a code without a
@@ -30,12 +30,15 @@ falsify the contract for every tenant with a custom rule.
 | Code | Verdicts | Resolution class | Worker-facing action | Operator-facing action | Fixture |
 |---|---|---|---|---|---|
 | `ALLOW_SUPPRESSED_DEGRADED_EVIDENCE` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | — |
+| `ATTACH_REMOVED` | restrict | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `credential removed → restrict (the key is out of the ignitio` |
+| `ATTACH_UNKNOWN` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `attach unknown → step-up, NEVER a grant (the deliberate dive` |
 | `BADGE_FORCED_REMOVAL` | deny | manual_only | This device is locked out — the badge was forcibly removed. Use a different device and report it. | Out of service: forced badge removal / reader-case tamper — route to security operations; do not clear automatically. | `badge forced removal → deny` |
 | `BADGE_REMOVED` | restrict | auto_proposed | Re-insert your badge into the reader case to re-bind it to this device, then retry. | Confirm the worker's badge is re-seated in the reader case, then re-evaluate. | `badge removed → restrict` |
 | `BASELINE_DRIFTED` | step_up | auto_proposed | This device has drifted from its security baseline — return it to its dock or reconnect so the hardening profile re-applies, then retry. | Request a baseline (CIS/hardening) re-scan and profile re-apply from the endpoint-management source, then re-evaluate. | `baseline drift → step-up` |
 | `BATTERY_CRITICAL` | step_up | auto_proposed | Battery is critically low — swap to a charged shared device, or dock this one before starting. | Direct the worker to a charged device; the low-battery device can keep charging in its bay. | — |
 | `BATTERY_FAILING` | restrict | manual_only | This device's battery can no longer hold a shift — charging will not fix it. Use a different device and hand this one in. | Pull the device for battery replacement; it will keep failing on charge. Do not clear this by re-docking. | — |
 | `BENCHMARK_SELECTION_MISFIT` | step_up | requires_approval | This device's hardening result was measured against the wrong benchmark. It needs a security owner — nothing you can do on the device changes it. | Assign the benchmark that matches this device's platform and this workflow's requirement, re-run the assessment, then re-evaluate. | `benchmark misfit → step-up (an 'aligned' answer from the wro` |
+| `CREDENTIAL_DOWNGRADE` | deny | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `legacy read for a STRONG-enrolled worker → deny (the downgra` |
 | `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` | deny | manual_only | This high-risk workflow requires a managed, trusted device — switch to one to continue. | Advise the worker to use a managed shared device; do not grant this workflow on an untrusted device. | — |
 | `CUSTODY_EXCEPTION` | restrict | requires_approval | A custody issue was flagged — an operator is reviewing the device's dock/bay status. | Review the custody exception (removed without a session?) and clear or route it. | — |
 | `CUSTODY_MAINTENANCE` | restrict | requires_approval | This device is in maintenance — use a different device; an operator can release it from maintenance. | Confirm the device has completed maintenance and release it (check it back in), then re-evaluate. | `custody maintenance → restrict` |
@@ -52,6 +55,7 @@ falsify the contract for every tenant with a custom rule.
 | `NO_RULE_MATCHED_DEFAULT_STEP_UP` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | — |
 | `POSTURE_MISSING` | restrict | auto_proposed | Bring the device online and let it check in (dock or reconnect), then retry. | Request a posture check-in; if the device never reports, escalate to device operations. | `missing posture → restrict` |
 | `POSTURE_STALE` | step_up | auto_proposed | Reconnect the device (or return it to its dock) to refresh its compliance check, then retry. | Request a posture re-sync from the device-management source, then re-evaluate. | `stale posture → step-up` |
+| `PRESENCE_ABSENT_UNSEATED` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `radio says gone with no credential in play → step-up (nothin` |
 | `SHIFT_CONTEXT_MISFIT` | step_up | requires_approval | The labor system does not show you on shift for this. Ask your supervisor to confirm your shift record — do not clock in to get past this. | Have the supervisor or workforce-management owner verify this worker's shift, punch state and site, correct the record if it is wrong, then re-evaluate. | `shift-context misfit → step-up (the labor plane disagrees wi` |
 | `TAMPER_CONFIRMED` | deny | manual_only | This device is out of service (tamper confirmed) — use a different device and report it. | Remove the device from service and route to security operations; do not clear automatically. | — |
 | `TAMPER_SENSOR_UNAVAILABLE` | step_up | requires_approval | This device's tamper sensor isn't reporting — an operator will confirm the device is intact before it can be used. | Physically confirm the device is intact (or move it to a dock with a working tamper sensor), then approve to clear. | `tamper sensor unavailable → step-up (no fail-open)` |
@@ -93,7 +97,7 @@ them as launch surface.
 
 ## The descriptor gap, stated
 
-10 of 40 codes have no resolution descriptor, so
+14 of 44 codes have no resolution descriptor, so
 `buildResolutionPlan` has no STEP to offer for them. What changed on
 2026-09-02 (verdict-core finding V9) is that it no longer stays quiet about it.
 

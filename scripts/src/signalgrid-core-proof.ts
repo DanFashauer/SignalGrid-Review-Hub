@@ -202,7 +202,13 @@ for (const scenario of scenarios) {
 // `presenceState` to DecisionEvidence, moving the pinned SAMPLE body again. Digest
 // function unchanged; real pre-stamp rows carry their own stored bytes and are
 // unaffected. Was 8bc18b2e5269f8b0 (attach), 621410dc07677bb2 before that.
-const LEGACY_SNAPSHOT_DIGEST = "d3e0340b94402087";
+// 2026-09-14 (same change set, third field pair): the credential-strength domain
+// (DR-043 item (d), second policy row) added `enrollmentStrength` and
+// `credentialReadMethod` to DecisionEvidence, moving the pinned SAMPLE body once
+// more. Digest function unchanged; real pre-stamp rows carry their own stored
+// bytes and are unaffected. Was d3e0340b94402087 (presence), 8bc18b2e5269f8b0
+// (attach), 621410dc07677bb2 before that.
+const LEGACY_SNAPSHOT_DIGEST = "9e0455f0dc8db510";
 const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
 
 // The exact shape a pre-stamp row deserializes into: every field the same, no stamp.
@@ -2887,6 +2893,14 @@ const monotonicityTable: string[] = [];
     sig("device_encryption", true),
     sig("os_support", true),
     sig("posture_freshness", "fresh"),
+    // A strong-enrolled worker who used their strong credential — the real happy
+    // path, and REQUIRED here for scope: credential-downgrade is a TWO-condition
+    // rule, so a single-field probe can only reach it from a base that already
+    // holds the other half. Without this the sweep would sweep both fields while
+    // the derivation could never see them, and the scope check would (correctly)
+    // refuse the mismatch.
+    sig("enrollment_strength", "strong"),
+    sig("credential_read_method", "strong"),
   ];
   const healthyEvidence = buildEvidence(identity, device, workflow, healthy);
   // The live v1 rule set, so the verdict dimension below is measured through the
@@ -3057,6 +3071,18 @@ const monotonicityTable: string[] = [];
       reading: (m, at) => sig("presence_state", m as string, { observedAt: at }),
     },
     {
+      field: "enrollmentStrength",
+      category: "enrollment_strength",
+      domain: EVIDENCE_VALUE_DOMAINS.enrollment,
+      reading: (m, at) => sig("enrollment_strength", m as string, { observedAt: at }),
+    },
+    {
+      field: "credentialReadMethod",
+      category: "credential_read_method",
+      domain: EVIDENCE_VALUE_DOMAINS.readMethod,
+      reading: (m, at) => sig("credential_read_method", m as string, { observedAt: at }),
+    },
+    {
       field: "baselineCompliance",
       category: "security_baseline",
       domain: EVIDENCE_VALUE_DOMAINS.baseline,
@@ -3099,15 +3125,54 @@ const monotonicityTable: string[] = [];
   // This is what pulled eleven rule-carrying families in that a backstop-only
   // sweep never saw.
   const baselineOutcome = evaluatePolicy(monoV1, healthyEvidence).outcome;
-  const verdictFields = (Object.keys(healthyEvidence) as (keyof DecisionEvidence)[]).filter((key) =>
-    PROBES.some(
+  const allEvidenceFields = Object.keys(healthyEvidence) as (keyof DecisionEvidence)[];
+  /** Can substituting `key` change the answer FROM THIS BASE? The base's own
+   *  outcome is recomputed here rather than closed over: comparing a perturbed
+   *  base's results against the HEALTHY baseline's outcome would re-create
+   *  exactly the blindness the escalation below exists to remove. */
+  const changesOutcomeFrom = (base: DecisionEvidence, key: keyof DecisionEvidence): boolean => {
+    const baseOutcome = evaluatePolicy(monoV1, base).outcome;
+    return PROBES.some(
       (probe) =>
-        evaluatePolicy(monoV1, {
-          ...healthyEvidence,
-          [key]: probe,
-        } as unknown as DecisionEvidence).outcome !== baselineOutcome,
-    ),
+        evaluatePolicy(monoV1, { ...base, [key]: probe } as unknown as DecisionEvidence).outcome !==
+        baseOutcome,
+    );
+  };
+  const singleBaselineFields = allEvidenceFields.filter((key) =>
+    changesOutcomeFrom(healthyEvidence, key),
   );
+  // THE DERIVATION IS CONJUNCTION-BLIND WITHOUT THIS (2026-09-14). A rule whose
+  // `match` carries TWO conditions can only fire when both hold, so a field that
+  // is only ever HALF of an AND is invisible to probing from one baseline: the
+  // other half never holds there, the rule never fires, and the field reads as
+  // "cannot change the verdict" while a live deny rule names it. `credential-
+  // downgrade` (enrollmentStrength strong AND credentialReadMethod legacy → deny)
+  // is the first such rule in the core and it exposed this — `enrollmentStrength`
+  // derived as out-of-scope while the sweep swept it, and the scope check caught
+  // the mismatch rather than the hole. So: any field the single-baseline probe
+  // leaves unresolved is escalated to a DERIVED family of bases — the healthy
+  // evidence plus every single-field perturbation of it — and counts as in scope
+  // if it can change the answer from ANY of them. Only unresolved fields are
+  // escalated, so the cost is paid for the few fields that need it, not for all.
+  //
+  // WHAT THIS DOES NOT CLOSE, said plainly because the check's headline could be
+  // read as more than it is: the DERIVATION now sees conjunctions, but the SWEEP
+  // below is still single-axis. `enrollmentStrength` is swept with
+  // `credentialReadMethod` pinned at "strong", so no enrollment mutation in that
+  // sweep can reach the downgrade rule — the field passes monotonicity through an
+  // axis that cannot fire the rule that names it. The other direction is asserted
+  // positively instead, in the seed policy matrix: strong+legacy→deny,
+  // legacy+legacy→allow, strong+strong→allow.
+  const perturbedBases: DecisionEvidence[] = [healthyEvidence];
+  for (const axis of allEvidenceFields) {
+    for (const probe of PROBES) {
+      perturbedBases.push({ ...healthyEvidence, [axis]: probe } as unknown as DecisionEvidence);
+    }
+  }
+  const conjunctiveFields = allEvidenceFields
+    .filter((key) => !singleBaselineFields.includes(key))
+    .filter((key) => perturbedBases.some((base) => changesOutcomeFrom(base, key)));
+  const verdictFields = [...singleBaselineFields, ...conjunctiveFields];
   // Two fields are in that derived set but cannot be swept by these mutations,
   // and they are named rather than silently dropped: they are NOT read from a
   // signal at all — they come from the resolved device and workflow rows — so
@@ -3271,6 +3336,15 @@ const monotonicityTable: string[] = [];
       members: ["removed", "unknown"],
       reason:
         "removed→allow and step_up→allow. The SAME shape named above: the attach reading is what carries the bad news, so with it gone the field falls back to 'not_applicable' and no attach rule matches. A deployment with no pucks emits no attach signal at all, and the core cannot tell that from a puck deployment whose dock went quiet — the tenant-level EXPECTATION this would need is the deferred capability this block already names. NOTE the asymmetry that is NOT exempted: an attach reading that EXISTS and says 'unknown' still steps up (the strict arm), which is the divergence from badgeBinding/dockState unknown and is asserted positively in the seed policy matrix. This exemption covers ABSENCE only.",
+    },
+    {
+      name: "read-method-absence-is-not-a-downgrade",
+      field: "credentialReadMethod",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["legacy"],
+      reason:
+        "deny→allow, and it is NOT the shape named above — nothing here goes quiet. `credential-downgrade` is the core's first TWO-condition rule, so deleting the credential_read_method signal removes HALF OF AN AND while the other half (enrollmentStrength: 'strong') is still present and still true. The post-deletion state is a real and common deployment: a strong-enrolled worker in a tenant whose readers report no read method at all. That is the not_applicable-vs-unknown distinction this domain was built on — absence of the reading is 'not_applicable', which is not a downgrade and must not deny, while a reading that EXISTS and says 'legacy' still denies, which is the DR-043 row and is asserted positively in the seed policy matrix (strong+legacy→deny, legacy+legacy→allow, strong+strong→allow). Only the 'legacy' cell is exempt.",
     },
     {
       name: "identity-signal-absence-is-not-an-identity-answer",

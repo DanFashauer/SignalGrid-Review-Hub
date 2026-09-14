@@ -1121,6 +1121,8 @@ components:
           items: { type: string }
           x-signalgrid-reason-codes:
             - ALLOW_SUPPRESSED_DEGRADED_EVIDENCE
+            - ATTACH_REMOVED
+            - ATTACH_UNKNOWN
             - BADGE_FORCED_REMOVAL
             - BADGE_REMOVED
             - BASELINE_DRIFTED
@@ -1130,6 +1132,7 @@ components:
             - BENCHMARK_SELECTION_MISFIT
             - BENCHMARK_SELECTION_UNESTABLISHED_STRICT
             - CRITICAL_WORKFLOW_UNTRUSTED_DEVICE
+            - CREDENTIAL_DOWNGRADE
             - CUSTODY_EXCEPTION
             - CUSTODY_MAINTENANCE
             - CUSTODY_OVERDUE
@@ -1151,6 +1154,7 @@ components:
             - POSTURE_MISSING
             - POSTURE_STALE
             - POSTURE_STALE_STRICT
+            - PRESENCE_ABSENT_UNSEATED
             - PROVENANCE_CONTESTED_FAIL_CLOSED
             - PROVENANCE_UNIFORM_ACROSS_RECORDS
             - SHIFT_CONTEXT_MISFIT

@@ -1310,6 +1310,44 @@ _These need the owner's call — an agent should not act on them unsupervised._
 
 ## Discovered
 
+### The event contract cannot express "we were blind" — OWNER-GATED (2026-09-14, from the iLOQ intake)
+
+`lib/event-contract/src/types.ts` carries exactly **one** time field: `occurredAt`,
+"supplied by the emitter". There is no `ingestedAt` / `receivedAt` / `recordedAt`
+anywhere in the canonical contract (verified by field enumeration and by grep across
+`lib/` and `artifacts/api-server/src`; `occurredAt` has only two non-fixture consumers,
+`validate.ts` and the CAEP format adapter).
+
+In the **connected** topology `SIGNALGRID_SMARTDOCK.md` assumes — "the dock connects to
+power and network" — that is harmless: occurred-time and learned-time are the same
+instant. In a **carrier** topology, where a puck or phone physically ferries state
+between an offline endpoint and the fabric (the shape iLOQ ships, and the shape
+`SESSION_PUCK_HARDWARE_HYPOTHESIS.md` describes), every event is late by construction
+and the gap between those instants IS the blind window. One timestamp cannot carry both,
+so a stale fact and a just-learned one are the same value and nothing downstream can
+raise assurance for the window — which golden rule 2 would otherwise require.
+
+The repo already refuses this exact collapse one layer down:
+`firmware/dock/core/src/custody.rs` — built firmware, unlike the deferred dock families
+above — keeps `NotReported` and `Faulted` distinct because
+"a sensor that is simply absent from this build is not the same as one that answered
+with garbage or timed out".
+
+**Why this is not built here.** Adding a field to the canonical event contract is a
+decision-core change (DR-020 territory) and needs a decision record the lane may not
+write. The custody/dock families are also still deferred in the launch profile, so
+nothing about this is claimable today. The shape a record would have to settle, stated
+so the decision is cheap to make and not re-derived:
+
+- whether the second instant is a contract FIELD or a transport-layer envelope value
+  that never enters a decision path (determinism: no clock in `lib/signalgrid-core`);
+- whether an absent second instant means "connected topology, treat as simultaneous"
+  (fail-open) or "unknown blind window, raise assurance" (fail-closed) — the latter is
+  what golden rule 2 says, and it changes every existing emitter;
+- whether the blind window is evidence only, or gates a verdict.
+
+No code, contract, proof, gate or claim changed for this entry.
+
 ### api-zod / v1 input-validation hardening — design targets (2026-09-04, from the fail-closed audit)
 
 Filed from the `lib/api-zod` fail-closed audit (recorded in `docs/agent/EVIDENCE.md`). No

@@ -3390,6 +3390,22 @@ that names what changed and its measured verdict, not a reversal of this one.
 - **(a) Stale at dock** — the bay re-locked around a device (`dock_relocked`) while a checkout is still open (`checkout_granted`, no `device_returned`): racked, but the ledger still shows it out.
 - **(b) Contested** — more than one `checkout_granted` on one timeline with no clearing `device_returned`: handed out again while a prior holder's hold was never cleared.
 - **(c) Unpaired but present** — a seated device (`dock_relocked`) that posture reports `unmanaged`/`unknown`: a slot the console shows occupied by a device that is not paired/managed.
+## DR-052 — Add a `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN` cross-domain detection to the event-fabric timeline detector (cloud lane — proposal, 2026-09-14)
+
+**Status: PROPOSAL — a deferred capability, not claimed as current and not Limited GA until merged.** This record changes decision-core BEHAVIOR (a new cross-domain detection over the event timeline), so it is DR-020 territory. The code and its proof are carried in the PR that adds this record; the owner APPROVES by merging that PR and VETOES by saying so or closing it. Nothing here is claimable under DR-021/DR-033 until merged.
+
+**Context (deferred design target until merged).** `docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md` names a per-user checkout cap that blocks a clinician when a prior return never cleared as a shared-clinical-device pain: the phone refuses a new checkout, and the only fabric-visible trace is an opaque dock beep code — the clinician cannot tell whether the cap is genuinely reached or is being held by a stale record nobody cleared. `docs/BUILD_BACKLOG.md` split this into the checkout-DECISION form (already modeled 2026-09-11 as the deferred `rtls-custody` ledger evaluator, which grades the requester's open-checkout count against the tenant cap and the docked-stale count into `CUSTODY_CAP_REACHED`/`CUSTODY_CAP_BLOCKED_BY_STALE_RETURN`) and the timeline DETECTION form over the pure event stream — the subject of this record, and the twin of DR-051's `CUSTODY_STALE_OR_CONTESTED` for phantom custody.
+
+**The question this settles.** Whether to add a deterministic, fixture-backed cross-domain detection — `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN` — beside `CHECKOUT_WITHOUT_COMPLIANCE`, that surfaces this cap-block-by-stale-return contradiction from the event timeline alone (no ledger read) as a legible decision instead of a beep, and how it stays fail-closed.
+
+### 1. The detection (deferred until merged)
+
+`CUSTODY_CAP_BLOCKED_BY_STALE_RETURN` (severity `high`) fires when a checkout is DENIED on a correlation timeline while a PRIOR checkout against the requester never cleared — the cap was held by a stale record, not by a genuine limit:
+
+- a `checkout_denied` is present (the block the clinician met as a beep), AND
+- a prior checkout is still unresolved: a `checkout_granted` or `device_removed` with NO `device_returned` (still out), OR a `non_return` / `custody_expired` on record (a lapsed prior).
+
+The evidence event ids are the denial plus whatever established the unresolved prior. A bare `checkout_denied` with no prior open checkout is deliberately NOT attributed here — its cause is unproven, so no false legible reason is asserted.
 
 ### 2. Why it satisfies golden rule 2 (fail-closed, deterministic — deferred until merged)
 
@@ -3404,5 +3420,15 @@ This deferred detection does not duplicate the `rtls-custody` ledger evaluator: 
 ### 4. Proof and scope
 
 Proven by ADDING assertions to the existing, already-registered `scripts/src/event-contract-proof.ts` (`proof:event-contract`): three positive shapes, a severity+evidence check, and a negative control (a properly returned-and-racked device must NOT fire it). No new proof script, so no new preflight/CI/guard registration. The verdict enum, the Decision Envelope, and every launch-claim surface are untouched; no launch claim is made or implied.
+- **Fail-closed.** It only ADDS a detection; it never suppresses one and never manufactures an allow. An ABSENT `device_returned` is read as "still out", never "cleared"; a lapsed prior (`non_return`/`custody_expired`) raises assurance. Unknown / stale / missing checkout facts raise assurance, never lower it. The block is SURFACED (an incident by severity), never softened into a grant. The covered failure is the false negative — a cap held by a stale record passing as a genuine limit — which the shapes and the proof's negative controls guard.
+- **Truthful.** It reports only the contradiction it can prove from the stream, with the evidence event ids that established it, and withholds the attribution when the cause is unproven.
+
+### 3. Relationship to the existing surface (both remain deferred design targets)
+
+This deferred detection does not duplicate the `rtls-custody` ledger evaluator: that evaluator grades one reconciliation report (a ledger read) into a checkout decision, resolving the same contradiction to `step_up`; this detection catches it from the raw event timeline with no ledger read, feeding the same timeline → detection → incident path the other cross-domain detections use (`mapDetectionToIncident` routes by severity, so a new code needs no change there). The shared reason name `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN` keeps one legible name for the contradiction across both surfaces.
+
+### 4. Proof and scope
+
+Proven by ADDING assertions to the existing, already-registered `scripts/src/event-contract-proof.ts` (`proof:event-contract`): three positive shapes (prior grant never returned, prior `non_return`, prior `custody_expired`), a severity+evidence check, and two negative controls (a properly returned prior does NOT fire it; a bare denial with no prior open checkout does NOT fire it). No new proof script, so no new preflight/CI/guard registration. The verdict enum, the Decision Envelope, and every launch-claim surface are untouched; no launch claim is made or implied.
 
 **Reversal / amendment.** The owner vetoes by not merging, or reverses a merged form by reverting the one PR with the reversal date added here.

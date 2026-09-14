@@ -112,6 +112,7 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "unknown",
   ]),
   attachState: new Set(["attached", "removed", "unknown", "not_applicable"]),
+  presenceState: new Set(["present", "absent", "unknown", "not_applicable"]),
   baselineState: new Set([
     "aligned",
     "partial",
@@ -374,6 +375,8 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
       return condition.in.includes(evidence.dockState);
     case "attachState":
       return condition.in.includes(evidence.attachState);
+    case "presenceState":
+      return condition.in.includes(evidence.presenceState);
     case "baselineState":
       return condition.in.includes(evidence.baselineCompliance);
     case "benchmarkSelectionState":
@@ -603,6 +606,23 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     outcome: "restrict",
     reasonCode: "DOCK_FAULTED",
     severity: "high",
+  },
+  {
+    // "Radio says gone, puck seated -> do not assume gone" (DR-043's policy matrix).
+    // Both conditions are required, which is the whole point: a seated credential
+    // VETOES radio absence by simply not matching. Radios drop, walls absorb,
+    // batteries sag — an absent radio is a hint, and a hint may not end a session
+    // whose credential is still physically in the device.
+    id: "presence-absent-unseated",
+    description:
+      "A presence radio says the holder is gone AND the credential is not seated. Radio absence alone is never custody — a seated credential vetoes this rule, so only the two together step up.",
+    match: [
+      { field: "presenceState", in: ["absent"] },
+      { field: "attachState", in: ["removed", "unknown", "not_applicable"] },
+    ],
+    outcome: "step_up",
+    reasonCode: "PRESENCE_ABSENT_UNSEATED",
+    severity: "medium",
   },
   {
     id: "attach-removed",

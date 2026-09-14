@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 79,
-  "fingerprint": "af3215446de470b6a64c3847fa28e37c4d4d48000ee63858febf859bee20b71e",
+  "manifestVersion": 80,
+  "fingerprint": "b3094379105631f570d9cb3ae0fb2b27710d64c7f24457c8f9af54012e2f1347",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -63,6 +63,7 @@
       "tamper_state",
       "dock_state",
       "attach_state",
+      "presence_state",
       "security_baseline",
       "benchmark_selection",
       "shift_context",

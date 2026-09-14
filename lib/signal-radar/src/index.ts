@@ -38,6 +38,7 @@ export const EVALUATED_CATEGORIES = [
   "shift_context",
   "badge_binding",
   "attach_state",
+  "presence_state",
   "device_management_health",
   "local_authority",
 ] as const;

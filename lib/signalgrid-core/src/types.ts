@@ -297,6 +297,24 @@ export type DockState =
  * and NEVER a grant. The divergence is stated on the hypothesis page and is the
  * point of the domain, not an inconsistency with the siblings.
  */
+/**
+ * RADIO/PROXIMITY PRESENCE (DR-043 item (d), the "radio says gone, puck seated" row).
+ *
+ * What a presence radio (BLE/RTLS/beacon) claims about whether the holder is still
+ * near the device. It is the WEAKEST custody evidence in the fabric and is treated as
+ * such: radios drop, walls absorb, batteries sag. A radio saying "gone" is a hint,
+ * never a custody fact, and it may not by itself end a session whose credential is
+ * still physically seated — see the presence-absent-unseated rule in policy.ts.
+ */
+export type PresenceState =
+  | "present"
+  /** The radio no longer sees the holder. A HINT, not a custody fact. */
+  | "absent"
+  /** A presence read that failed. */
+  | "unknown"
+  /** No presence radio is in play (the default when no signal exists at all). */
+  | "not_applicable";
+
 export type AttachState =
   | "attached"
   | "removed"
@@ -364,6 +382,7 @@ export const SIGNAL_CATEGORIES = [
   "tamper_state",
   "dock_state",
   "attach_state",
+  "presence_state",
   "security_baseline",
   "benchmark_selection",
   "shift_context",
@@ -432,6 +451,7 @@ export const EVIDENCE_FIELDS = [
   "tamperState",
   "dockState",
   "attachState",
+  "presenceState",
   "baselineState",
   "benchmarkSelectionState",
   "shiftContextState",
@@ -458,6 +478,7 @@ export type RuleCondition =
   | { field: "tamperState"; in: TamperState[] }
   | { field: "dockState"; in: DockState[] }
   | { field: "attachState"; in: AttachState[] }
+  | { field: "presenceState"; in: PresenceState[] }
   | { field: "baselineState"; in: BaselineState[] }
   | { field: "benchmarkSelectionState"; in: BenchmarkSelectionState[] }
   | { field: "shiftContextState"; in: ShiftContextState[] }
@@ -550,6 +571,10 @@ export interface DecisionEvidence {
    *  "unknown"). Unlike its siblings, "unknown" here is never a grant — see
    *  AttachState. */
   attachState: AttachState;
+  /** What a presence radio claims about the holder being nearby (default
+   *  "not_applicable"). The weakest custody evidence here — a radio saying "gone"
+   *  never by itself ends a session whose credential is still seated. */
+  presenceState: PresenceState;
   /** Security-baseline (CIS/hardening) alignment for the device (default "unknown"). */
   baselineCompliance: BaselineState;
   /** Whether the baseline answer above came from the RIGHT test (default

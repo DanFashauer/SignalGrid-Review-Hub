@@ -198,7 +198,11 @@ for (const scenario of scenarios) {
 // Real pre-stamp rows in Postgres are unaffected — they carry their own stored evidence
 // bytes, which do not gain the field; this fixture is derived from a LIVE snapshot and
 // therefore does. Was 621410dc07677bb2.
-const LEGACY_SNAPSHOT_DIGEST = "8bc18b2e5269f8b0";
+// 2026-09-14 (same change set): the presence domain (DR-043 item (d)) added
+// `presenceState` to DecisionEvidence, moving the pinned SAMPLE body again. Digest
+// function unchanged; real pre-stamp rows carry their own stored bytes and are
+// unaffected. Was 8bc18b2e5269f8b0 (attach), 621410dc07677bb2 before that.
+const LEGACY_SNAPSHOT_DIGEST = "d3e0340b94402087";
 const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
 
 // The exact shape a pre-stamp row deserializes into: every field the same, no stamp.
@@ -3047,6 +3051,12 @@ const monotonicityTable: string[] = [];
       reading: (m, at) => sig("attach_state", m as string, { observedAt: at }),
     },
     {
+      field: "presenceState",
+      category: "presence_state",
+      domain: EVIDENCE_VALUE_DOMAINS.presence,
+      reading: (m, at) => sig("presence_state", m as string, { observedAt: at }),
+    },
+    {
       field: "baselineCompliance",
       category: "security_baseline",
       domain: EVIDENCE_VALUE_DOMAINS.baseline,
@@ -3244,6 +3254,15 @@ const monotonicityTable: string[] = [];
     // quiet", because no tenant-level EXPECTATION of a category is modelled
     // anywhere — that is a real deferred capability, not a bug in this sweep, and
     // it is REPORTED here rather than gated.
+    {
+      name: "presence-absence-is-not-a-presence-answer",
+      field: "presenceState",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["absent"],
+      reason:
+        "step_up→allow. The same shape as the attach and identity rows above: the presence reading is what carries the bad news, so with it gone the field falls back to 'not_applicable' and presence-absent-unseated cannot match. A deployment with no presence radio emits nothing at all, and the core cannot tell that from a radio that went quiet — the tenant-level EXPECTATION this needs is the deferred capability this block already names. Only the 'absent' cell is exempt: a presence reading that EXISTS and says absent still steps up whenever the credential is not seated, which is the row DR-043 asked for and is asserted positively in the seed policy matrix (including its veto direction, where a SEATED credential keeps the answer at allow).",
+    },
     {
       name: "attach-absence-is-not-an-attach-answer",
       field: "attachState",

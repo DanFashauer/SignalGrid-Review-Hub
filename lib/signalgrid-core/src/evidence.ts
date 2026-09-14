@@ -13,6 +13,7 @@ import type {
   DecisionEvidence,
   Device,
   AttachState,
+  PresenceState,
   DockState,
   EvidenceSnapshot,
   Freshness,
@@ -84,6 +85,7 @@ export function buildEvidence(
     dockEvidenceFreshness: readDockEvidenceFreshness(latestByCategory),
     dockState: readDock(latestByCategory),
     attachState: readAttach(latestByCategory),
+    presenceState: readPresence(latestByCategory),
     baselineCompliance: readBaseline(latestByCategory),
     benchmarkSelection: readBenchmarkSelection(latestByCategory),
     shiftContext: readShiftContext(latestByCategory),
@@ -511,6 +513,7 @@ const CHARGE_STATES = ["charging", "charged", "low", "critical", "not_present"] 
 const TAMPER_STATES = ["none", "suspected", "confirmed", "sensor_unavailable"] as const;
 const DOCK_STATES = ["occupied", "empty", "reserved", "faulted", "offline"] as const;
 const ATTACH_STATES = ["attached", "removed", "unknown"] as const;
+const PRESENCE_STATES = ["present", "absent", "unknown"] as const;
 const BATTERY_HEALTH_STATES = ["healthy", "degraded", "failing"] as const;
 const BASELINE_STATES = ["aligned", "partial", "drifted", "not_assessed"] as const;
 // Only the two AFFIRMATIVE values are readable from a signal. Absent or
@@ -541,6 +544,7 @@ const DOCK_CATEGORIES = [
   "tamper_state",
   "dock_state",
   "attach_state",
+  "presence_state",
   "badge_binding",
 ] as const;
 
@@ -595,6 +599,7 @@ export const EVIDENCE_VALUE_DOMAINS = {
   tamper: { members: TAMPER_STATES, good: ["none"] },
   dock: { members: DOCK_STATES, good: ["occupied", "empty", "reserved"] },
   attach: { members: ATTACH_STATES, good: ["attached"] },
+  presence: { members: PRESENCE_STATES, good: ["present"] },
   baseline: { members: BASELINE_STATES, good: ["aligned"] },
   benchmarkSelection: { members: BENCHMARK_SELECTION_STATES, good: ["confirmed"] },
   shiftContext: { members: SHIFT_CONTEXT_STATES, good: ["confirmed"] },
@@ -748,6 +753,12 @@ function readDock(latestByCategory: LatestByCategory): DockState {
  *  does with it. */
 function readAttach(latestByCategory: LatestByCategory): AttachState {
   return readEnum(latestByCategory, "attach_state", EVIDENCE_VALUE_DOMAINS.attach) ?? "not_applicable";
+}
+
+/** No presence radio at all is "not_applicable"; a radio that answered "absent" is a
+ *  hint the rules weigh only alongside the attach domain. */
+function readPresence(latestByCategory: LatestByCategory): PresenceState {
+  return readEnum(latestByCategory, "presence_state", EVIDENCE_VALUE_DOMAINS.presence) ?? "not_applicable";
 }
 
 function readEnum<T extends string>(

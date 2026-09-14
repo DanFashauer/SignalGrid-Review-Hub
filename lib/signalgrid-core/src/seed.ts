@@ -452,6 +452,7 @@ function seedPolicyTests(
     dockEvidenceFreshness: "missing",
     dockState: "occupied",
     attachState: "attached",
+    presenceState: "present",
     baselineCompliance: "aligned",
     benchmarkSelection: "confirmed",
     shiftContext: "confirmed",
@@ -486,6 +487,9 @@ function seedPolicyTests(
     { name: "credential removed → restrict (the key is out of the ignition)", evidence: { ...base, attachState: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "ATTACH_REMOVED" },
     { name: "attach unknown → step-up, NEVER a grant (the deliberate divergence from badgeBinding/dockState unknown above, which stay allow under day-one-quiet)", evidence: { ...base, attachState: "unknown" }, expectedOutcome: "step_up", expectedReasonCode: "ATTACH_UNKNOWN" },
     { name: "credential seated → allow (the attach domain does not block the ordinary case)", evidence: { ...base, attachState: "attached" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "radio says gone AND the credential is not seated → step-up", evidence: { ...base, presenceState: "absent", attachState: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "ATTACH_REMOVED" },
+    { name: "radio says gone, puck SEATED → do NOT assume gone (the seated credential vetoes radio absence; DR-043 policy matrix)", evidence: { ...base, presenceState: "absent", attachState: "attached" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "radio says gone with no credential in play → step-up (nothing vetoes the radio)", evidence: { ...base, presenceState: "absent", attachState: "not_applicable" }, expectedOutcome: "step_up", expectedReasonCode: "PRESENCE_ABSENT_UNSEATED" },
     { name: "tamper sensor unavailable → step-up (no fail-open)", evidence: { ...base, tamperState: "sensor_unavailable" }, expectedOutcome: "step_up", expectedReasonCode: "TAMPER_SENSOR_UNAVAILABLE" },
   ];
   for (const [index, spec] of cases.entries()) {

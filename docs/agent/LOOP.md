@@ -52,7 +52,49 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-12 (mac lane, latest) - NEEDLE INGESTED (DR-044): cactus-compute/needle
+LAST TOUCHED: 2026-09-14 (cloud lane, latest) - THE MERGE BUTTON IS NOW MACHINE-LOCKED, and the
+              headline readiness is 94%, not 0%. PR 3 of the auto-merge safe path landed as #729
+              (owner-gated, green, awaiting the owner): scripts/check-merge-authorization.mjs refuses
+              a self-merge unless classifyDiff says the diff is autonomous, the branch tip still
+              equals the sha the checks describe (read from the remote with git ls-remote, because
+              this session's GitHub surface returns check runs with NO head_sha field - verified on
+              #727 on both the list and single-check calls), every check is completed and none red,
+              and the gating check is present and green by name. The changed-file list is DERIVED
+              (`git diff --name-only base...head` run by the script), never supplied, so a model
+              cannot shorten the list it is judged on - which is exactly what #719 got wrong.
+              Self-test 27/27; live it REFUSED #727 (17 checks green, DECISION_PATH + SAFETY_MACHINERY)
+              and REFUSED then AUTHORIZED #728, which was merged through that verdict pinned to its
+              sha. First live run found a real defect in the gate itself (an abbreviated sha refused
+              against its own full branch tip on a plain ===) - fixed with prefix matching, two
+              self-test cases. #729 also carries a DR-037 AMENDMENT for the owner to decide by
+              merging: DR-037 permitted a SAFETY_MACHINERY self-merge with a note, CONTINUITY.md
+              called the same class an ABSOLUTE exclusion ten lines after repeating the permissive
+              wording, and AGENTS.md says "Do not merge your own PR" - three documents, two answers,
+              which is what produced the #719 overstep and four earlier ones (#716, #708, #689, #704;
+              all safe-leaning, all left in place). The strict reading governs and is now mechanical.
+              MEASURED CONSEQUENCE, stated because it changes what the switch buys: over 14 days, 173
+              real merges - 59 autonomous, 114 owner-gated; of the 59, 47 are pure lane bookkeeping
+              and 12 are docs/evidence. ZERO product code would land unattended, because #719 made
+              all of lib/ DECISION_PATH and lib/ is the product. The narrowing (a PR whose changed
+              gates are proven falsifiable on that PR by #723 may land itself, decision core still
+              owner-only) is the next step, after #723 and #729 land. READINESS: check-readiness-figure
+              prints (a) 94 / (b) 100 / (c) 100 -> HEADLINE 94%, OUTREACH OPEN. The single binding
+              item is ONE ground-truth gap: the faithful end-to-end smart-charging journey (badge ->
+              dock -> provision -> in-use -> check-in with the unpaired / network-down / cap-hit /
+              dock-fault branches). Building now on lane/cloud-custody-journey. CAUTION for whoever
+              lands it: a new proof moves proofCounts, which is INSIDE the sync-manifest fingerprint,
+              so (b) fail-closes to 0 and the headline reads 0% until the Mac re-mints - queue an
+              `evidence` sim request with the landing so the unattended tick does it. #725 (inert live
+              connector path) REWORKED against its 11 findings (b60a081c) and deliberately NOT proposed
+              for merge: nine fixed or truthfully withdrawn, #727 carries finding 2, and finding 5 (the
+              fail-closed freshness guarantee) is parked on an owner decision rather than decided
+              unilaterally. The shipped core was checked and is SOUND on that axis - buildEvidence takes
+              no evaluation clock, but connector.ts grades freshness against an injected nowIso, a silent
+              connector emits nothing and reads `missing`, and dock staleness already travels as its own
+              input into a fail-closed backstop (types.ts:494). Owner's merge list, security first: #727,
+              #720, #724, #723, #729. Independent adversarial reviews running on #720/#723/#724 because
+              Codex is out of review credits and #725 proved green CI means little here.
+              (Earlier 2026-09-12, mac lane:) NEEDLE INGESTED (DR-044): cactus-compute/needle
               evaluated by use (isolated venv, base weights, telemetry off) then hardened by a 4-agent workflow;
               adopted-by-reference as a NARROW base-weights-only OFFLINE extraction helper, NEVER on the decision
               path. It runs where LightRAG did not (~48MB warm, offline from cache, deterministic per fixed session

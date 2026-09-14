@@ -59,6 +59,12 @@ export function decideMerge(ctx) {
   if (!cls || typeof cls.tier !== "string") {
     blockers.push("no classification of the real head diff — an unclassified diff can never be proven autonomous");
   } else {
+    // `matched` MUST be a real array. `?? []` alone read a malformed classification
+    // as "matched nothing", so a classification claiming tier "autonomous" with no
+    // (or a non-array) `matched` would clear the DECISION_PATH bar by default —
+    // the same absent-passes shape as the panel fields below, found while fixing
+    // them rather than reported separately.
+    if (!Array.isArray(cls.matched)) blockers.push("the classification has no `matched` array — a classification that cannot be read cannot clear the decision-path bar");
     const cats = (cls.matched ?? []).map((m) => m.category);
     if (cats.includes("DECISION_PATH")) blockers.push("the diff touches the DECISION PATH (lib/*, /v1, connectors, native ports) — golden rule 2: never auto-merged, escalate to the owner");
     if (cls.tier !== "autonomous") blockers.push(`head diff classifies "${cls.tier}", not autonomous — owner-gated surfaces escalate`);
@@ -81,11 +87,26 @@ export function decideMerge(ctx) {
   const p = c.panel;
   if (!p) blockers.push("no adversarial panel result — an unreviewed diff never auto-merges");
   else {
+    // EVERY panel field is a THREE-STATE answer — true, false, or "the panel never
+    // said" — and all five are read that way now. The first two always were
+    // (`!== true`). The last three were read for TRUTHINESS, so ABSENT PASSED: a
+    // panel reporting only `unanimous` and `expectedLensesRan` authorized an
+    // unattended merge with three of its five guards never answered. Cloud's review
+    // of #758 reproduced it — `panel missing confirmedCritical/failOpen/vetoBlock
+    // -> merge=true` — and it is precisely the denylist this file's header forbids,
+    // applied to the lens FINDINGS rather than the lens RUN. The producers that
+    // reach it are ordinary: one that omits falsy keys, a renamed field, a panel
+    // that threw before populating findings.
+    //
+    // `!== false` is deliberately stricter than `!== true` would be on the inverse:
+    // only an explicit boolean false is "the panel looked and found none". A string
+    // "none", a null, a 0, an absent key are all "it did not say", and it does not
+    // say for you.
     if (p.expectedLensesRan !== true) blockers.push("an expected lens did not run — a reviewer that did not run is a NO");
     if (p.unanimous !== true) blockers.push("the adversarial panel is not unanimous");
-    if (p.confirmedCritical) blockers.push("a CONFIRMED critical finding stands");
-    if (p.failOpen) blockers.push("a fail-open finding stands — the one class this fabric exists to prevent");
-    if (p.vetoBlock) blockers.push("a veto lens (security-reviewer / fail-closed-auditor) returned BLOCK");
+    if (p.confirmedCritical !== false) blockers.push("a CONFIRMED critical finding stands, or the panel never answered whether one does — absent is not \"none\"");
+    if (p.failOpen !== false) blockers.push("a fail-open finding stands, or the panel never answered — the one class this fabric exists to prevent, and silence about it is not absence of it");
+    if (p.vetoBlock !== false) blockers.push("a veto lens (security-reviewer / fail-closed-auditor) returned BLOCK, or never reported — an unanswered veto is a veto");
   }
 
   // 4. The remaining affirmative greens.
@@ -144,6 +165,34 @@ function selfTest() {
   t("a confirmed critical blocks", decideMerge(okCtx({ panel: { ...okCtx().panel, confirmedCritical: true } })).merge === false);
   t("a fail-open finding blocks", decideMerge(okCtx({ panel: { ...okCtx().panel, failOpen: true } })).merge === false);
   t("a veto BLOCK blocks", decideMerge(okCtx({ panel: { ...okCtx().panel, vetoBlock: true } })).merge === false);
+
+  // ── the ABSENT arm, which 28 passing self-tests did not cover ───────────────
+  // Every case below returned merge=true before the `!== false` fix. They exist as
+  // separate cases per field because a single combined case would still pass if
+  // only one of the three were repaired.
+  const withoutPanelKeys = (...drop) => {
+    const panel = { ...okCtx().panel };
+    for (const k of drop) delete panel[k];
+    return okCtx({ panel });
+  };
+  t(
+    "the REPRODUCTION from cloud's #758 review: a panel reporting only unanimous + expectedLensesRan does NOT authorize",
+    decideMerge(withoutPanelKeys("confirmedCritical", "failOpen", "vetoBlock")).merge === false,
+  );
+  t("an ABSENT confirmedCritical blocks — absent is not \"none\"", decideMerge(withoutPanelKeys("confirmedCritical")).merge === false);
+  t("an ABSENT failOpen blocks — silence about a fail-open is not absence of one", decideMerge(withoutPanelKeys("failOpen")).merge === false);
+  t("an ABSENT vetoBlock blocks — an unanswered veto is a veto", decideMerge(withoutPanelKeys("vetoBlock")).merge === false);
+  t(
+    "a NON-BOOLEAN answer blocks in the lenient direction too (confirmedCritical: \"none\" is not a boolean false)",
+    decideMerge(okCtx({ panel: { ...okCtx().panel, confirmedCritical: "none" } })).merge === false,
+  );
+  t("an UNDEFINED-valued key is the same as a missing one", decideMerge(okCtx({ panel: { ...okCtx().panel, failOpen: undefined } })).merge === false);
+  t(
+    "a classification with a NON-ARRAY matched blocks — it cannot clear the decision-path bar by being unreadable",
+    decideMerge(okCtx({ headClassification: { tier: "autonomous", matched: undefined } })).merge === false,
+  );
+  // NON-VACUITY: the happy path must still authorize, or the cases above prove nothing.
+  t("…and the untouched happy path still authorizes", decideMerge(okCtx()).merge === true);
   t("a missing panel blocks", decideMerge(okCtx({ panel: null })).merge === false);
   t("bugHunt not green blocks", decideMerge(okCtx({ bugHunt: "inconclusive" })).merge === false);
   t("falsification not green blocks", decideMerge(okCtx({ falsification: "not-green" })).merge === false);

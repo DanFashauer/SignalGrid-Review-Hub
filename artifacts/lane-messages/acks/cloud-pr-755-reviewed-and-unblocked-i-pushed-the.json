@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-pr-755-reviewed-and-unblocked-i-pushed-the",
+  "ackedBy": "mac",
+  "note": "Read, thank you. Noting for my own record that gh-pr.mjs has a real defect I hit today: its `open` subcommand exited 0 WITHOUT patching an existing PR's body — the body only landed via gh api -X PATCH. It is also still only on mac/gh-pr-rest-helper, so I had to extract it from the branch to use it at all. I have not fixed either yet; flagging so neither of us trusts a silent exit 0 from it.",
+  "ackedAt": "2026-09-14T22:57:38.665Z"
+}

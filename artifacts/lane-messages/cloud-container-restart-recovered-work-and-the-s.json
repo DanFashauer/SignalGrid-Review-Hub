@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-container-restart-recovered-work-and-the-s",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "container restart, recovered work, and the six PRs now waiting on the owner",
+  "body": "Cloud-side status you may need. A container restart around 10:30Z killed two running agents and two preflights and dropped this session's mailbox subscription (re-subscribed). No work was lost: the gate-authorizer rework had committed seconds before the restart and was recovered from its worktree, re-verified and pushed. SIX owner-gated PRs now await the owner: #727 (IPv4-in-IPv6 SSRF fix, hand-verified against the platform URL parser), #732 (detect.ts falsifiable + registered with the mutation guard, 29 planted mutants all killed), #730 (end-to-end custody journey, closes the last runbook ground-truth gap, readiness 94% -> 100%), #729 (merge authorizer, which caught one of my own mislabelled PRs), #723 (gate-falsification authorizer reworked: five reproduced false-green paths closed, plus a CodeQL high TOCTOU on its own probe lock), #737 (loop:state classifies agent-worktree branches by location rather than by name). TWO THINGS WORTH YOUR ATTENTION. First, #723's rework is honest that green is now very hard to reach — every changed line must be mutable and killed, so an ordinary diff (a comment, an import, a renamed local) escalates. That caps what the auto-merge path can ever deliver, and it is a judgement call rather than a defect. Second, a verification trap I fell into and you should not: the attack-reproduction branches are cut from the ORIGINAL authorizer commit, so checking one out runs the OLD script — you measure the before-state and can mistake it for the after. Cherry-pick the attack onto the FIX and use the fix as the base. #720 and #724 remain withdrawn pending rework; do not build on their detections. Manifest still v78 / 4afa60cf2fd5, so no evidence re-mint is owed.",
+  "sentAt": "2026-09-14T11:24:55.558Z"
+}

@@ -17,7 +17,13 @@
 // the shape of check-launch-claims.mjs, not a sentence the steward is trusted to
 // apply.
 //
-// TWO CATEGORIES, both owner-gated, kept distinct for the escalation message:
+// THREE CATEGORIES, all owner-gated, kept distinct for the escalation message:
+//   DECISION_PATH — golden rule 2's core: the deterministic verdict logic and its
+//     connectors/flows (lib/*), the /v1 decision API, and the byte-faithful native
+//     ports (golden rule 1). A model-judged auto-merge may NEVER land a change to how
+//     SignalGrid DECIDES, regardless of how green the gauntlet is — this is the line
+//     the auto-merge switch exists to protect. lib/* IS the decision core, so the
+//     rule is blanket and fail-closed.
 //   SAFETY_MACHINERY — the gates/CI/proofs themselves. "Green" proves nothing about
 //     a weakened gate (the sweep that would catch it runs post-merge), so a robot
 //     can never merge a change to its own safety net. This is the confirmed-unsafe
@@ -53,6 +59,26 @@ export const OWNER_RESERVED = [
   { rule: "buyer-facing site & outreach", re: /^(artifacts\/signalgrid-(web|review)\/|README\.md$|docs\/outreach\/)/ },
 ];
 
+// A changed path matching ANY of these is DECISION_PATH — golden rule 2's core. A
+// model-judged auto-merge may NEVER merge these; they escalate to the owner however
+// green the gauntlet is. lib/* IS the decision core (CLAUDE.md), so the rule is
+// blanket and fail-closed: an unrecognised lib/ shape escalates rather than merges.
+export const DECISION_PATH = [
+  { rule: "the decision core / connectors / flows (lib/*)", re: /^lib\// },
+  { rule: "the /v1 decision API server", re: /^artifacts\/api-server\// },
+  { rule: "the byte-faithful native decision ports", re: /^native\/ios\/EnterpriseShell\/Services\/(DecisionEngine|AppWorkflows)\.swift$/ },
+];
+
+// Normalize a diff path before classifying, so an owner-gated file cannot be laundered
+// past the manifest on a path-shape technicality — a leading ./, a git a//b/ diff
+// prefix, or a backslash separator. Fail-closed toward the canonical repo-relative form.
+function normalizePath(f) {
+  let x = String(f).replace(/\\/g, "/"); // backslash -> forward slash
+  x = x.replace(/^\.\//, "");             // strip leading ./
+  x = x.replace(/^[ab]\//, "");            // strip a git a/ or b/ diff prefix
+  return x;
+}
+
 /**
  * Classify a set of changed file paths (repo-relative, forward slashes). Returns
  * the merge tier and the exact rules that matched. "autonomous" only when NO file
@@ -61,7 +87,9 @@ export const OWNER_RESERVED = [
  */
 export function classifyDiff(files) {
   const matched = [];
-  for (const f of files) {
+  for (const raw of files) {
+    const f = normalizePath(raw);
+    for (const p of DECISION_PATH) if (p.re.test(f)) matched.push({ file: f, category: "DECISION_PATH", rule: p.rule });
     for (const p of SAFETY_MACHINERY) if (p.re.test(f)) matched.push({ file: f, category: "SAFETY_MACHINERY", rule: p.rule });
     for (const p of OWNER_RESERVED) if (p.re.test(f)) matched.push({ file: f, category: "OWNER_RESERVED", rule: p.rule });
   }
@@ -90,8 +118,19 @@ function selfTest() {
 
   // The other direction: ordinary product/connector code IS autonomous, or the gate
   // refuses everything and means nothing.
-  t("a connector evaluator is autonomous", cls(["lib/integrations/src/integrations/task-exception/evaluate.ts"]).tier === "autonomous");
-  t("core decision logic is autonomous", cls(["lib/signalgrid-core/src/decision.ts"]).tier === "autonomous");
+  t("a connector evaluator is DECISION_PATH owner-gated", cls(["lib/integrations/src/integrations/task-exception/evaluate.ts"]).tier === "owner-gated");
+  t("core decision logic is DECISION_PATH owner-gated", cls(["lib/signalgrid-core/src/decision.ts"]).tier === "owner-gated");
+  // DECISION_PATH positives — the golden-rule-2 core must never classify autonomous.
+  t("the engine is DECISION_PATH", cls(["lib/signalgrid-core/src/engine.ts"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("the /v1 API server is DECISION_PATH", cls(["artifacts/api-server/src/routes/v1.ts"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("the native DecisionEngine port is DECISION_PATH", cls(["native/ios/EnterpriseShell/Services/DecisionEngine.swift"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("AppWorkflows port is DECISION_PATH", cls(["native/ios/EnterpriseShell/Services/AppWorkflows.swift"]).tier === "owner-gated");
+  // A non-decision doc under lib is not caught by DECISION_PATH's blanket only if it is NOT under lib/ — lib/* is blanket, so this stays autonomous because it is a docs path.
+  // Path-normalization bypasses must NOT launder an owner-gated file to autonomous.
+  t("a leading ./ does not launder scripts/ to autonomous", cls(["./scripts/mutation-guard.mjs"]).tier === "owner-gated");
+  t("a git a/ diff prefix does not launder scripts/ to autonomous", cls(["a/scripts/mutation-guard.mjs"]).tier === "owner-gated");
+  t("a backslash separator does not launder scripts/ to autonomous", cls(["scripts\\mutation-guard.mjs"]).tier === "owner-gated");
+  t("a normalized lib/ path is DECISION_PATH", cls(["b/lib/signalgrid-core/src/decision.ts"]).tier === "owner-gated");
   t("a roster-scoped doc is autonomous", cls(["docs/GLOSSARY.md"]).tier === "autonomous");
 
   // A mixed diff with even one owner-gated file is owner-gated (the unsafe half wins).
@@ -99,7 +138,7 @@ function selfTest() {
     cls(["lib/signalgrid-core/src/decision.ts", "scripts/mutation-guard.mjs"]).tier === "owner-gated");
 
   // Non-vacuity: both lists carry rules, so the gate has a subject.
-  t("both manifests are non-empty", SAFETY_MACHINERY.length > 0 && OWNER_RESERVED.length > 0);
+  t("all three manifests are non-empty", DECISION_PATH.length > 0 && SAFETY_MACHINERY.length > 0 && OWNER_RESERVED.length > 0);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
@@ -111,17 +150,17 @@ function validate() {
   // At rest there is no diff to classify; the gate proves the manifest is well-formed
   // and non-vacuous so a later empty manifest cannot silently classify everything
   // autonomous. The behaviour is proven by --self-test, which preflight also runs.
-  if (SAFETY_MACHINERY.length === 0 || OWNER_RESERVED.length === 0) {
+  if (DECISION_PATH.length === 0 || SAFETY_MACHINERY.length === 0 || OWNER_RESERVED.length === 0) {
     console.error("owner-gated manifest is empty — every diff would classify autonomous. Refusing.");
     process.exit(1);
   }
-  for (const p of [...SAFETY_MACHINERY, ...OWNER_RESERVED]) {
+  for (const p of [...DECISION_PATH, ...SAFETY_MACHINERY, ...OWNER_RESERVED]) {
     if (!(p.re instanceof RegExp) || typeof p.rule !== "string" || !p.rule) {
       console.error(`malformed manifest entry: ${JSON.stringify(p)}`);
       process.exit(1);
     }
   }
-  console.log(`Owner-gated surfaces manifest ok — ${SAFETY_MACHINERY.length} safety-machinery rules, ${OWNER_RESERVED.length} owner-reserved rules.`);
+  console.log(`Owner-gated surfaces manifest ok — ${DECISION_PATH.length} decision-path rules, ${SAFETY_MACHINERY.length} safety-machinery rules, ${OWNER_RESERVED.length} owner-reserved rules.`);
   console.log("Run with --self-test to exercise classifyDiff (preflight + CI do).");
 }
 

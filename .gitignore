@@ -66,6 +66,7 @@ Thumbs.db
 
 # Self-audit real-run status (one machine's run; never the canonical repo state)
 artifacts/self-audit/
+artifacts/resource-scan/
 # build-loop: the per-run status is ignored, but history.jsonl is TRACKED and read
 # by scripts/build-loop.mjs and check-surface-ownership.mjs. Without the
 # negation a deleted-and-recreated history would be silently refused by `git add`.

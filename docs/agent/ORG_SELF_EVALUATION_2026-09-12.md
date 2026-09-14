@@ -88,7 +88,7 @@ The machinery runs: three clocks fire on cadence, lane mail is 111/111 acked, si
 - The outreach gate opened (94%, OUTREACH OPEN, both this run and at 883b566d) and no board line, lane mail or roster nextAction tells the owner the sends are now his; design-partner-outreach is still marked BLOCKED on positioning that is recorded done
 - nightly-build-agent retired by the cloud lane on the owner's silence (scheduled-routines.json:55 'not yet confirmed by him') — a decision with no DR; DR-005's own reversal rule says silence does not decide
 - DR-042's join order — 'a sequencing call nobody has made yet' — lives in a DR's confidence paragraph, not as a row or an ask; same for DR-038's Crucible lens decision, whose condition (a measured run) is now met
-- The brain-cycle activation (DR-032 Slice 3) needs an explicit owner go that nothing has asked for: `grep -c -i -E 'brain.cycle\|DR-032' docs/agent/LOOP.md` → 0, no owner-gated backlog row, no lane mail
+- The brain-cycle activation (DR-032 Slice 3) needs an explicit owner go that nothing has asked for: `grep -c -i -E 'brain.cycle\|DR-032' docs/agent/LOOP.md` → 0, no owner-gated backlog row, no lane mail [SUPERSEDED 2026-09-13: the owner gave that go ("Activate it now"); what remains is the technical registry-first bootstrap, not an owner ask — see DR-032 and scheduled-routines.json]
 - check-ci-job-timeouts local-`uses:` fix claimed 'implemented on my closed branch cloud/fix-ci-timeout-reusable-callers (dcd9cff)' in lane mail — `git log dcd9cff` → not a valid object; work claimed in mail, absent from the tree
 - The Dependabot queue was hand-cleared once (OWNER_ACTIONS.md:112, 2026-08-18) and the monthly billing recompute lives in COST_MODEL.md:84 prose — recurring duties with no routine row
 - The 'Fleet Premium decision due 2026-09-16' is carried as open in COMPANY_BUILD_PLAN row 23, COST_MODEL.md:39-41, LOOP_COVERAGE.md:62, roster:657 and a Mac memory note, but DR-005 already decided (do not renew) and EVIDENCE.md:1323 shows Premium verified 2026-09-06 — reader 7's evidence beats readers 1/2/3/5 on this; what remains is branch cleanup, not a decision
@@ -96,7 +96,6 @@ The machinery runs: three clocks fire on cadence, lane mail is 111/111 acked, si
 ## The founder's queue (only he can do these)
 
 - Screen Recording → Terminal (System Settings > Privacy & Security), then say so — unblocks sim request 2026-09-02-android-desktop-first-run (failed 2026-09-04; asked 5+ times)
-- 'activate' or 'hold' on the Standing Brain Cycle (DR-032 Slice 3, cron 35 8 * * *) — unblocks the daily cycle and the 7 agents only it dispatches (awaiting since 2026-09-09; auto-merge stays off either way)
 - 'yes' to branch cleanup (`pnpm run branches:clean --apply` + the 3 claude/*, 3 shift*-hold, mac-sim, cloud/fix-ci-timeout residue) — unblocks an honest lane:inbox and takes mac/fleet-premium-proof, mac/native-ledger-2026-09-02 and the .hypothesis/ worktree cache with it
 - Pick the first of the seven DR-033 product gaps (BUILD_BACKLOG.md:1372-1378) — unblocks the phase objective; today no row carries a lane
 - Outreach is OPEN at 94%: confirm or soften 'Lean IT teams (75–1,000 employees, 1–10 IT staff)' (INVESTOR_ONE_PAGER.md:22 vs ICP_EVIDENCE.md:119 'assumption') and name the first send (Smplify hello@ or a feedback contact) — unblocks design-partner-outreach

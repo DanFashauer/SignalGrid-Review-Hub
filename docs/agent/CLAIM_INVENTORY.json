@@ -10133,7 +10133,7 @@
    "claim": "\"`workingTreeClean` (untracked files included) sampled *before* the run by\" — provenance of sim-results; live evidence refreshable only by the Mac lane, \"never from CI\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Grounded: scripts/mac/run-requests.mjs:79 (`workingTreeClean: git([\"status\", \"--porcelain\"]) === \"\"` — porcelain lists untracked files) and :216 (comment on sampling before the loop); scripts/verify-all.mjs:285 (flags), :71 (IN_CI detection), :271 (\"--emit-evidence: REFUSED — running on a CI runner (macOS or not)\"), :283 (refused off darwin), :294 (not emitted unless both halves green); `artifacts/live-evidence` tracked (2 files); artifacts/sim-results tracked (47 files). package.json verify:all → scripts/verify-all.mjs.",
+   "evidence": "Grounded: scripts/mac/run-requests.mjs:79 (`workingTreeClean: git([\"status\", \"--porcelain\"]) === \"\"` — porcelain lists untracked files) and :216 (comment on sampling before the loop); scripts/verify-all.mjs:330 (flags), :71 (IN_CI detection), :271 (\"--emit-evidence: REFUSED — running on a CI runner (macOS or not)\"), :283 (refused off darwin), :294 (not emitted unless both halves green); `artifacts/live-evidence` tracked (2 files); artifacts/sim-results tracked (47 files). package.json verify:all → scripts/verify-all.mjs.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },

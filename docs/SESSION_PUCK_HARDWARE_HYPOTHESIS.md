@@ -361,16 +361,23 @@ is not the current uncertainty*, and it would be very easy to spend months makin
 the concept impressive. The table reapplies the thresholds pre-registered in
 [`docs/agent/DISCOVERY_LOG.md`](agent/DISCOVERY_LOG.md) (lines 121–124) to hardware;
 it does not invent a parallel mechanism. The tally those thresholds read from is the
-*Running tally* table in the same file, and the backlog item under DR-043 adds the
-hardware-specific column that this table reads. Under DR-036 these gates sit
-beside, not instead of, the readiness figure that gates outreach.
+*Running tally* table in the same file, and the backlog item under DR-043 ("Puck 5",
+`docs/BUILD_BACKLOG.md`) adds the hardware-specific columns that table reads: **Rh**,
+**Ch** and **Ph**, beside R, C and P — a row's Rh/Ch/Ph mark counts only when the row
+also carries the matching base mark, gated by
+[`scripts/check-discovery-log.mjs`](../scripts/check-discovery-log.mjs). The three rows
+below name the tally cell each threshold reads, not a value — this page states no
+current count, only the cell and the threshold; the count itself lives at the
+**Hardware (DR-043)** line in the Running tally section of `docs/agent/DISCOVERY_LOG.md`
+and nowhere else. Under DR-036 these gates sit beside, not instead of, the readiness
+figure that gates outreach.
 
 | External evidence | Hardware decision |
 | --- | --- |
 | 0–3 REQUIREMENT mentions | Do not start custom hardware. Keep the concept as a hypothesis. |
-| ≥ 4 of 15 independently repeat a requirement that maps specifically to faster or stronger physical session authentication or custody binding | **Authorize a bench prototype** (family A). This is the pre-registered repeated-REQUIREMENT trigger. |
-| ≥ 3 concrete COMMITMENTS, including willingness to scope and test this workflow | **Authorize a design-partner MVP** using off-the-shelf FIDO/NFC hardware and 3D-printed mechanics. |
-| ≥ 5 PROBLEM but COMMITMENT = 0 | **No-go on productization.** The problem exists but is not important enough to justify hardware. |
+| ≥ 4 of 15 independently repeat a requirement that maps specifically to faster or stronger physical session authentication or custody binding (the **Rh** tally cell) | **Authorize a bench prototype** (family A). This is the pre-registered repeated-REQUIREMENT trigger. |
+| ≥ 3 concrete COMMITMENTS, including willingness to scope and test this workflow (the **Ch** tally cell) | **Authorize a design-partner MVP** using off-the-shelf FIDO/NFC hardware and 3D-printed mechanics. |
+| ≥ 5 PROBLEM but COMMITMENT = 0 (the **Ph** tally cell, read against **Ch**) | **No-go on productization.** The problem exists but is not important enough to justify hardware. |
 | ≥ 5 name the same incumbent or substitute | Investigate whether that incumbent already covers authentication *and* custody or session binding before differentiating on hardware. |
 | A design site says "must use our existing badge" repeatedly | Prefer the reader-dock architecture (family B) over issuing a new puck. |
 | A design site says hands-free auto-lock or distance assurance is essential | Add a BLE prototype first (family D); UWB (family E) only if BLE's ambiguity is demonstrably insufficient. |

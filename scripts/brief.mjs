@@ -34,7 +34,7 @@ const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
 const JSON_OUT = process.argv.includes("--json");
 const SELF_TEST = process.argv.includes("--self-test");
 const FULL = process.argv.includes("--full"); // include the slow deep sections (status-summary)
-const NARRATE = process.argv.includes("--narrate"); // route a one-line dev summary to the free/local tier (DR-044)
+const NARRATE = process.argv.includes("--narrate"); // route a one-line dev summary to the free/local tier (DR-046)
 
 const C = process.stdout.isTTY && !JSON_OUT
   ? { g: "\x1b[32m", r: "\x1b[31m", y: "\x1b[33m", d: "\x1b[2m", b: "\x1b[1m", off: "\x1b[0m" }

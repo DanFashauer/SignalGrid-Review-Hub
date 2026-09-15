@@ -604,6 +604,12 @@ jobs:
         run: node scripts/check-derived-doc-figures.mjs --self-test
       - name: "Derived doc figures (a stated count equals the artifact it describes)"
         run: node scripts/check-derived-doc-figures.mjs
+      # DR-043 rule 4 (Puck 5): the hardware tally (Rh/Ch/Ph) in docs/agent/DISCOVERY_LOG.md's
+      # Running tally is derived from row marks, never typed by hand.
+      - name: "Discovery-log self-test (a planted hardware-tally drift must fail; a hardware-tagged row must move the count)"
+        run: node scripts/check-discovery-log.mjs --self-test
+      - name: "Discovery-log hardware tally (the typed Rh/Ch/Ph sentence matches the Running tally's marks)"
+        run: node scripts/check-discovery-log.mjs
       # The `path (N)` line counts in the build plan's tier lists were measured
       # once and quoted forever — 20 of 29 were wrong on 2026-09-05.
       - name: "Doc line-count self-test (a planted drift must fail; the real tree must be clean)"
@@ -641,7 +647,7 @@ jobs:
       # connectors and proofs — golden rule 2, enforced by construction.
       - name: "Model-tap boundary self-test (the fence can actually fail)"
         run: node scripts/check-model-tap-boundary.mjs --self-test
-      - name: "Model-tap boundary (no model reference reaches the /v1 decision path — DR-044)"
+      - name: "Model-tap boundary (no model reference reaches the /v1 decision path — DR-046)"
         run: node scripts/check-model-tap-boundary.mjs
       # A browser follows `](FOO.md)` from the document's own directory and nowhere
       # else; 35 relocation fossils were dead links for four weeks.
@@ -1067,6 +1073,9 @@ jobs:
 
       - name: Bash deny-list hook self-test (a wrapped `sh -c` payload and unreadable input must DENY)
         run: node scripts/check-hook-denylist.mjs
+
+      - name: Bash deny-list gate self-test (a hung hook self-test must fail closed within the timeout and reap its descendant)
+        run: node scripts/check-hook-denylist.mjs --self-test
 
       - name: Evidence Coverage page is committed in sync
         run: |

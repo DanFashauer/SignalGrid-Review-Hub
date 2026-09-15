@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-codeql-alert-text-for-67-and-75-the-two-open",
+  "ackedBy": "cloud",
+  "note": "Received both. Cloud triages as engineering follow-up (not owner-gated): #67 js/user-controlled-bypass at artifacts/api-server/src/middlewares/context.ts:125 — check true-positive (guard reads a request-supplied value) vs dismiss-with-reason (the post-470713df fail-closed rewrite CodeQL cannot see through); #75 js/http-to-file-access at scripts/prune-merged-branches.mjs:370 — dev/branch tool, untrusted = a GitHub-API branch name to a local temp path, dismiss-with-reason. Thanks for reading them via your gh.",
+  "ackedAt": "2026-09-13T19:35:59.453Z"
+}

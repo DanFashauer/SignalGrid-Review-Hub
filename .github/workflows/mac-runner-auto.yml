@@ -64,11 +64,19 @@ jobs:
       - name: Provenance on a FULL clone (a result must name a commit that resolves)
         run: pnpm run proof:sim-requests
 
+      - name: Free the api-server test ports (runner-owned orphans from a prior killed job)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bash scripts/mac/free-test-port.sh
+
       - name: Preflight on macOS
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           code=0; node scripts/preflight.mjs > preflight.log 2>&1 || code=$?
           grep -E "Preflight (PASSED|FAILED)|FAILED at" preflight.log || true; exit "$code"
+
+      - name: Free the api-server test ports (teardown — do not orphan one for the next job)
+        if: always()
+        run: bash scripts/mac/free-test-port.sh
 
       - name: Upload logs
         if: always()

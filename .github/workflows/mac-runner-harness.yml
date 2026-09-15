@@ -43,6 +43,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Free the api-server test ports (runner-owned orphans from a prior killed job)
+        run: bash scripts/mac/free-test-port.sh
+
       - name: Toolchain present on this Mac (report, never install here)
         run: |
           node -v; pnpm -v; xcodebuild -version | head -1 || true
@@ -88,6 +91,10 @@ jobs:
           SIGNALGRID_MCP_PATH="$MCP" pnpm run verify:all --require-mcp > verify-all.log 2>&1 || code=$?
           grep -E "mcp tool count|Review-Hub preflight|Review-Hub breadth|signalgrid-mcp:|shared contract" verify-all.log || true
           exit "$code"
+
+      - name: Free the api-server test ports (teardown — do not orphan one for the next job)
+        if: always()
+        run: bash scripts/mac/free-test-port.sh
 
       - name: Upload logs
         if: always()

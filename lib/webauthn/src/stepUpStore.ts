@@ -247,8 +247,26 @@ export async function consumeStepUpSession(stepUpSessionId: string): Promise<boo
 }
 
 /**
- * Check if a step-up session exists and is valid (without consuming it)
- * Useful for checking if user has recently completed step-up
+ * NOT IMPLEMENTED — always `false`, and `false` is the fail-closed answer here: it means
+ * "no valid step-up session is known for this user", so a caller must require a fresh
+ * step-up. It can never say `true` about a session that does not exist. What was wrong
+ * was the docstring, which described a check this function has never performed ("Check
+ * if a step-up session exists and is valid"); a reader trusting it would take a `false`
+ * as "verified absent" when it means "never looked". Kept under this name because
+ * `lib/webauthn/src/index.ts` re-exports the module; no route or proof calls it.
+ * Deleting or deprecating this parallel store is an open owner cut (DR-024; security
+ * roster row 82, item 3).
+ * @deprecated Verify a NAMED session with THIS module's `verifyStepUpSession`, then
+ * invalidate it with THIS module's `consumeStepUpSession` (P2 finding, 2026-09-12: an
+ * earlier version of this note pointed at `getStepUpSession` in `./webauthn/store.ts`,
+ * which is not a binding-safe substitute — it lives under a different key prefix
+ * (`webauthn:stepup:` there vs this module's own `stepup:`, so the two stores can never
+ * see each other's sessions even for the same session id) and it checks only expiry: no
+ * `userId` match, no `requestId` match, no `challenge` match. `verifyStepUpSession` here
+ * checks all four, which is the entire reason step-up sessions carry a user and a
+ * request id in the first place — a caller that switched to the store.ts lookup would
+ * silently drop that binding and accept a step-up session hijacked from another user or
+ * request.
  */
 export async function hasValidStepUpSession(
   userId: string,

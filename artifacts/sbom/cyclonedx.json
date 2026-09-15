@@ -14317,6 +14317,20 @@
     },
     {
       "type": "library",
+      "name": "fast-check",
+      "version": "4.10.0",
+      "bom-ref": "pkg:npm/fast-check@4.10.0",
+      "purl": "pkg:npm/fast-check@4.10.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "fast-copy",
       "version": "4.0.3",
       "bom-ref": "pkg:npm/fast-copy@4.0.3",
@@ -17538,6 +17552,20 @@
       "version": "2.3.1",
       "bom-ref": "pkg:npm/punycode.js@2.3.1",
       "purl": "pkg:npm/punycode.js@2.3.1",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "pure-rand",
+      "version": "8.4.2",
+      "bom-ref": "pkg:npm/pure-rand@8.4.2",
+      "purl": "pkg:npm/pure-rand@8.4.2",
       "licenses": [
         {
           "license": {

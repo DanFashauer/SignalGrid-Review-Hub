@@ -128,7 +128,8 @@
 // those numbers anywhere — the summary line prints the current ones.
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -140,6 +141,11 @@ const VENDORED = ".claude/skills/VENDORED.md";
 const FILE_FLOOR = 20;
 const CANDIDATE_FLOOR = 200;
 const CONCURRENCY = 8;
+// A hook that never closes hangs this Promise — and with it the whole gate and all
+// of preflight — forever. Reported by the Mac lane 2026-09-13: a ReDoS in the
+// deny-list hook's unwrap loop hung it on one command under BSD sed. A hung hook is
+// neither pass nor fail; the doctrine is fail-closed, so a timeout is FATAL.
+const HOOK_TIMEOUT_MS = 10000;
 
 const FENCE_LANGS = new Set(["bash", "sh", "shell", "console"]);
 
@@ -292,41 +298,66 @@ export function isOverridden(entries, relPathFromSkills, line) {
 
 class HookFatal extends Error {}
 
-/** One PreToolUse call, shaped exactly as Claude Code sends it. */
-function askHook(hookPath, command) {
+/** One PreToolUse call, shaped exactly as Claude Code sends it.
+ *  @param {number} [timeoutMs] override for the self-test only; the real default
+ *    is HOOK_TIMEOUT_MS. A hook that does not close within it is killed and the
+ *    call rejects fail-closed, naming the command — never hangs, never allows. */
+function askHook(hookPath, command, timeoutMs = HOOK_TIMEOUT_MS) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn("bash", [hookPath], { cwd: repo, stdio: ["pipe", "pipe", "pipe"] });
+    // detached:true makes the child its own process-group leader, so a hung
+    // DESCENDANT (the BSD sed in the deny hook, Codex #716) can be killed with it.
+    const child = spawn("bash", [hookPath], { cwd: repo, stdio: ["pipe", "pipe", "pipe"], detached: true });
     let stdout = "";
     let stderr = "";
+    // Whichever of {timeout, error, EPIPE, close} fires FIRST settles the Promise;
+    // the rest must be no-ops — a killed child still emits 'close' after the timeout
+    // already rejected, and a double-settle would either throw or resolve an
+    // already-failed call to allow.
+    let settled = false;
+    const settle = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(arg);
+    };
+    const timer = setTimeout(() => {
+      // Kill the whole process group (negative pid), not just the bash we spawned —
+      // otherwise a hung descendant (the BSD sed, Codex #716) is orphaned and keeps
+      // consuming CPU. Fall back to the child alone if the group is already gone.
+      try { process.kill(-child.pid, "SIGKILL"); }
+      catch { try { child.kill("SIGKILL"); } catch { /* already exited */ } }
+      settle(reject, new HookFatal(`${hookPath} did not answer within ${timeoutMs}ms judging ${JSON.stringify(command)} — it hung (fail-closed).`));
+    }, timeoutMs);
     child.stdout.on("data", (d) => { stdout += d; });
     child.stderr.on("data", (d) => { stderr += d; });
-    child.on("error", (e) => reject(new HookFatal(`could not execute ${hookPath}: ${e.message}`)));
+    child.on("error", (e) => settle(reject, new HookFatal(`could not execute ${hookPath}: ${e.message}`)));
     // The write below can fail (EPIPE) when the child is gone before the payload lands —
     // seen 2026-09-12 under three parallel preflights, where it surfaced as an UNHANDLED
     // 'error' event that crashed the self-test instead of a gate verdict. An unasked hook
     // is a hook that could not be executed: FATAL, fail-closed, never an allow.
-    child.stdin.on("error", (e) => reject(new HookFatal(`could not deliver the call to ${hookPath}: ${e.code ?? e.message}`)));
+    child.stdin.on("error", (e) => settle(reject, new HookFatal(`could not deliver the call to ${hookPath}: ${e.code ?? e.message}`)));
     child.on("close", (code) => {
+      if (settled) return;
       if (code !== 0) {
-        reject(new HookFatal(`${hookPath} exited ${code} judging ${JSON.stringify(command)} — stderr: ${stderr.trim()}`));
+        settle(reject, new HookFatal(`${hookPath} exited ${code} judging ${JSON.stringify(command)} — stderr: ${stderr.trim()}`));
         return;
       }
       const raw = stdout.trim();
       if (raw === "") {
-        resolvePromise(false);
+        settle(resolvePromise, false);
         return;
       }
       let parsed;
       try {
         parsed = JSON.parse(raw);
       } catch {
-        reject(new HookFatal(`${hookPath} answered something this gate cannot parse as JSON: ${raw.slice(0, 200)}`));
+        settle(reject, new HookFatal(`${hookPath} answered something this gate cannot parse as JSON: ${raw.slice(0, 200)}`));
         return;
       }
       const decision = parsed?.hookSpecificOutput?.permissionDecision;
-      if (decision === "deny") resolvePromise(true);
-      else if (decision === undefined || decision === "allow") resolvePromise(false);
-      else reject(new HookFatal(`${hookPath} answered permissionDecision=${JSON.stringify(decision)}, which this gate cannot judge`));
+      if (decision === "deny") settle(resolvePromise, true);
+      else if (decision === undefined || decision === "allow") settle(resolvePromise, false);
+      else settle(reject, new HookFatal(`${hookPath} answered permissionDecision=${JSON.stringify(decision)}, which this gate cannot judge`));
     });
     child.stdin.end(JSON.stringify({ tool_name: "Bash", tool_input: { command } }));
   });
@@ -605,6 +636,65 @@ async function selfTest() {
     fatal = e instanceof HookFatal;
   }
   check("a hook that cannot be executed is FATAL (fail-closed), not an allow", fatal);
+
+  // 7b. a hook that HANGS (never closes) must be killed and rejected within the
+  //     timeout, NAMING the command — not left to hang the gate and preflight
+  //     forever. Reported by the Mac lane 2026-09-13 (ReDoS in the deny-list hook
+  //     under BSD sed). A short injected timeout keeps this test fast; the real
+  //     default (HOOK_TIMEOUT_MS) is untouched.
+  // mkdtempSync creates a fresh 0700 directory with an unpredictable suffix — no
+  // predictable path in the shared temp dir for another process to pre-create or
+  // symlink-race (js/insecure-temporary-file, CodeQL #716).
+  const hangDir = mkdtempSync(resolve(tmpdir(), "sg-hang-hook-"));
+  const hangStub = resolve(hangDir, "hook.sh");
+  // A UNIQUE sleep duration → a marker no OTHER concurrent preflight can match.
+  // A fixed marker (e.g. "sleep 314.159") collides when two preflights run at once:
+  // each pgrep -f / pkill -f would see or kill the other test's descendant (Codex
+  // #716). process.pid is distinct per concurrent run; a random suffix guards pid
+  // reuse. Plain `sleep` (no exec) so bash FORKS it as a descendant — the orphan
+  // case: killing only the bash would leave this sleep running.
+  const hangMarker = `sleep 300.${process.pid}${Math.floor(Math.random() * 1e6)}`;
+  writeFileSync(hangStub, `${hangMarker}\n`);
+  const hangCommand = "echo this-command-name-must-appear";
+  let hangFatal = false;
+  let hangNamed = false;
+  const hangStarted = Date.now();
+  try {
+    await askHook(hangStub, hangCommand, 1000);
+  } catch (e) {
+    hangFatal = e instanceof HookFatal;
+    hangNamed = e instanceof HookFatal && e.message.includes(JSON.stringify(hangCommand));
+  }
+  const hangElapsed = Date.now() - hangStarted;
+  check(
+    "a hook that HANGS is killed and REJECTS with HookFatal within the timeout, naming the command",
+    hangFatal && hangNamed && hangElapsed < 5000,
+    `fatal=${hangFatal} named=${hangNamed} elapsed=${hangElapsed}ms`,
+  );
+
+  // The whole process GROUP must die, not just the bash we spawned — else the forked
+  // `sleep` (stand-in for the hung BSD sed, Codex #716) is orphaned and keeps burning
+  // CPU. Confirm the descendant is gone. A positive control on this very node process
+  // guards against an absent pgrep making the check pass vacuously.
+  let pgrepUsable = false;
+  try { execFileSync("pgrep", ["-f", "node"], { stdio: "ignore" }); pgrepUsable = true; }
+  catch (e) { pgrepUsable = e?.status === 1; /* ran but no match = usable; ENOENT = absent */ }
+  let descendantReaped = false;
+  if (pgrepUsable) {
+    for (let i = 0; i < 40; i++) {
+      let present = false;
+      try { execFileSync("pgrep", ["-f", hangMarker], { stdio: "ignore" }); present = true; } catch { present = false; }
+      if (!present) { descendantReaped = true; break; }
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    if (!descendantReaped) { try { execFileSync("pkill", ["-f", hangMarker], { stdio: "ignore" }); } catch { /* cleanup */ } }
+  }
+  try { rmSync(hangDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+  check(
+    "a hung hook's whole process GROUP is killed — no orphaned descendant survives (Codex #716)",
+    pgrepUsable ? descendantReaped : true,
+    pgrepUsable ? `reaped=${descendantReaped}` : "pgrep unavailable — descendant check skipped",
+  );
 
   // 8. plant/remove against the REAL tree: the real files plus one planted fence
   //    must yield exactly one MORE finding than the real files alone.

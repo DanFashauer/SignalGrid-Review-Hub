@@ -80,6 +80,7 @@ const STEPS = [
   // validate-sim-macos.sh is DEFERRED rather than excluded.
   { name: "Shell lint (the one language with no static analysis)", cmd: ["node", "scripts/check-shell.mjs"] },
   { name: "Bash deny-list hook self-test (a wrapped `sh -c` payload and unreadable input must DENY)", cmd: ["node", "scripts/check-hook-denylist.mjs"] },
+  { name: "Bash deny-list gate self-test (a hung hook self-test must fail closed within the timeout and reap its descendant)", cmd: ["node", "scripts/check-hook-denylist.mjs", "--self-test"] },
   { name: "Docs-sanity self-test (a planted over-claim fails; empty scan roots fail via the floor)", cmd: ["node", "scripts/docs-sanity.mjs", "--self-test"] },
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },
@@ -141,6 +142,10 @@ const STEPS = [
   { name: "Compose healthcheck self-test (a planted port without a healthcheck must fail)", cmd: ["node", "scripts/check-compose-healthchecks.mjs", "--self-test"] },
   { name: "Compose healthchecks (every published port has a service that says whether it answers)", cmd: ["node", "scripts/check-compose-healthchecks.mjs"] },
   { name: "Derived doc figures (a stated count equals the artifact it describes)", cmd: ["node", "scripts/check-derived-doc-figures.mjs"] },
+  // DR-043 rule 4 (Puck 5): the hardware tally in docs/agent/DISCOVERY_LOG.md's
+  // Running tally (Rh/Ch/Ph) is derived from row marks, never typed by hand.
+  { name: "Discovery-log self-test (a planted hardware-tally drift must fail; a hardware-tagged row must move the count)", cmd: ["node", "scripts/check-discovery-log.mjs", "--self-test"] },
+  { name: "Discovery-log hardware tally (the typed Rh/Ch/Ph sentence matches the Running tally's marks)", cmd: ["node", "scripts/check-discovery-log.mjs"] },
   // Two documents stated the four tier branches as live after all four were pruned.
   // Offline by design: it compares prose to the tracked prune record, not to origin.
   { name: "Documented-branch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-documented-branches.mjs", "--self-test"] },
@@ -156,7 +161,7 @@ const STEPS = [
   { name: "Env-doc readers (an instructed SIGNALGRID_* variable must be read by something)", cmd: ["node", "scripts/check-env-doc-readers.mjs"] },
   { name: "Env-doc-reader self-test (the gate can actually fail)", cmd: ["node", "scripts/check-env-doc-readers.mjs", "--self-test"] },
   { name: "Model-tap boundary self-test (the fence can actually fail)", cmd: ["node", "scripts/check-model-tap-boundary.mjs", "--self-test"] },
-  { name: "Model-tap boundary (no model reference reaches the /v1 decision path — DR-044, golden rule 2)", cmd: ["node", "scripts/check-model-tap-boundary.mjs"] },
+  { name: "Model-tap boundary (no model reference reaches the /v1 decision path — DR-046, golden rule 2)", cmd: ["node", "scripts/check-model-tap-boundary.mjs"] },
   // A browser follows `](FOO.md)` from the document's own directory and nowhere
   // else. 41 documents moved to docs/research/ on 2026-08-10 and their sibling
   // links pointed at nothing for four weeks — 35 dead links across the tree.

@@ -86,18 +86,145 @@ if (hubListed && hubBranches.length === 0) {
   );
 }
 
+/**
+ * Every branch checked out in an agent's isolated worktree, derived from
+ * `git worktree list` rather than from the branch's NAME.
+ *
+ * WHY THE NAME WAS THE WRONG KEY. The rule below used to be
+ * `b.startsWith("worktree-agent-")`, which catches only the branches the Agent
+ * tool names itself. It missed two shapes that occur constantly:
+ *
+ *   - a sub-agent that creates its OWN branch inside its worktree, because the
+ *     branch it was told to use is already checked out elsewhere (`wt-...`);
+ *   - a deliberate ATTACK reproduction (`attack-b1`), built to prove a gate
+ *     wrongly approves a weakening — on 2026-09-14 one such branch carried a
+ *     neutered prototype-depth bound.
+ *
+ * Both failed this seam on every session, and neither could be cleared: the
+ * message offers "push, or confirm the remote", and pushing is WRONG for both —
+ * it puts scratch names on the shared remote for the Mac lane to prune, and in
+ * the attack case it publishes a disabled safety guard indistinguishable at a
+ * glance from real work. The only other move is deleting a branch out from under
+ * a running agent. A seam whose every remedy is wrong is one a session learns to
+ * narrate past, which is how a real unpushed branch would eventually slip by.
+ *
+ * So membership is derived from WHERE a branch lives. An agent can rename its
+ * branch; it cannot escape its worktree.
+ */
+/**
+ * Has this branch's content already landed on mainline?
+ *
+ * TRUE only when every file the branch changes relative to its merge base is
+ * byte-identical to mainline's copy. That is what survives a SQUASH merge, which
+ * rewrites the commit and defeats `merge-base --is-ancestor`.
+ *
+ * Fail-closed in every direction: an unreadable diff, a file mainline does not have, a
+ * file whose bytes differ, or any git error returns false and the branch stays reported
+ * as unpushed. The only way to pass is for mainline to already carry every byte the
+ * branch would add — which is precisely what "already on the Review Hub" means.
+ */
+function hasLandedByContent(branch) {
+  const names = git("diff", "--name-only", `origin/SignalGrid_Alpha...${branch}`);
+  if (!names) return false;
+  const files = names.split("\n").map((f) => f.trim()).filter(Boolean);
+  // A branch that touches nothing is not evidence of landing — it is an unreadable
+  // diff, or a branch identical to its base. Say nothing rather than clear it.
+  if (files.length === 0) return false;
+  for (const file of files) {
+    const mine = git("show", `${branch}:${file}`);
+    const theirs = git("show", `origin/SignalGrid_Alpha:${file}`);
+    if (mine === null || theirs === null || mine === undefined || theirs === undefined) return false;
+    if (mine !== theirs) return false;
+  }
+  return true;
+}
+
+function branchesInAgentWorktrees() {
+  const out = git("worktree", "list", "--porcelain");
+  if (!out) return [];
+  const found = new Set();
+  const agentPaths = [];
+  let path = "";
+  for (const line of out.split("\n")) {
+    if (line.startsWith("worktree ")) {
+      path = line.slice("worktree ".length);
+      // The Agent tool's isolated checkouts live under `.claude/worktrees/`.
+      if (path.includes("/.claude/worktrees/")) agentPaths.push(path);
+    } else if (line.startsWith("branch refs/heads/") && path.includes("/.claude/worktrees/")) {
+      found.add(line.slice("branch refs/heads/".length));
+    }
+  }
+
+  // The checked-out branch is only the one an agent is on RIGHT NOW. An agent that
+  // builds several branches — three successive attack reproductions, say — leaves
+  // the others behind as refs, and those escaped a location-only rule and failed
+  // the seam anyway. Git keeps a PER-WORKTREE HEAD reflog, so every branch a given
+  // worktree ever checked out is recoverable from it. That is the full set an agent
+  // created, not just its current one.
+  for (const p of agentPaths) {
+    const log = git("-C", p, "reflog", "show", "--format=%gs", "HEAD");
+    if (!log) continue;
+    for (const line of log.split("\n")) {
+      const m = /^checkout: moving from (\S+) to (\S+)$/.exec(line.trim());
+      if (m) { found.add(m[1]); found.add(m[2]); }
+    }
+  }
+  return [...found];
+}
+
 if (hubBranches.length) {
-  // `worktree-agent-*` branches are the Agent tool's ephemeral isolated
-  // checkouts: created for one subagent run, never meant to be pushed, and
-  // deleted with the worktree. They are counted and named here so the
-  // exclusion is visible, not silent.
-  const ephemeral = localBranches.filter((b) => b.startsWith("worktree-agent-"));
-  const unpushed = localBranches.filter((b) => !hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b));
-  const ephemeralNote = ephemeral.length ? ` (${ephemeral.length} ephemeral worktree-agent-* branch(es) not counted)` : "";
+  // Ephemeral by NAME (the Agent tool's own) or by LOCATION (anything checked out
+  // in an agent worktree). Named in the output either way: the exclusion is
+  // visible, never silent.
+  const inWorktrees = branchesInAgentWorktrees();
+  const ephemeral = localBranches.filter(
+    (b) => b.startsWith("worktree-agent-") || inWorktrees.includes(b),
+  );
+  const noRemote = localBranches.filter((b) => !hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b));
+  // THE SQUASH-MERGE HOLE, and it is the same shape as the one above. A branch merged
+  // with squash has no remote afterwards (GitHub deletes it) and is NOT an ancestor of
+  // mainline, because the squash makes a new commit. So this seam reported "local work
+  // not on the Review Hub" about content sitting in mainline — and both remedies it
+  // offers are wrong again: pushing recreates a dead branch on the shared remote after
+  // every single merge, and deletion is refused twice over, once by this repo's own
+  // dangerous-command hook (which denies the force form) and once by git itself (the
+  // safe form declines a branch that is not an ancestor, which a squash guarantees).
+  // Measured on 2026-09-14: three merges, three false failures, each cleared only by
+  // re-pushing the corpse.
+  //
+  // So membership is derived from CONTENT here too, not from reachability. Fail-closed
+  // by construction: one differing file, one file mainline lacks, an unreadable diff or
+  // any git error and the branch is still reported unpushed. Real work is a difference,
+  // and a difference can never pass this.
+  const landed = noRemote.filter((b) => hasLandedByContent(b));
+  const unpushed = noRemote.filter((b) => !landed.includes(b));
+  const ephemeralNote = ephemeral.length ? ` (${ephemeral.length} ephemeral agent-worktree branch(es) not counted)` : "";
+  const landedNote = landed.length ? ` (${landed.length} squash-landed, content already on mainline: ${landed.join(", ")})` : "";
   if (unpushed.length) {
-    add("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}`);
+    add("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}${landedNote}`);
   } else {
-    add("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}`);
+    add("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}${landedNote}`);
+  }
+
+  // REPORTED, never fatal — the lane-message rule, for the same reason. The work
+  // is not lost (the worktree belongs to a live agent, and anything real is pushed
+  // from it), but an agent branch carrying commits beyond mainline is still worth
+  // a session's eyes, so it is named rather than swallowed by the exclusion above.
+  const carrying = ephemeral
+    .filter((b) => !hubBranches.includes(b))
+    // Commits reachable from the branch and from NO origin ref at all — a truer
+    // reading of "carrying work the remote does not have" than a diff against one
+    // named branch, which would miscount a branch cut from a different base.
+    .map((b) => ({ b, ahead: git("rev-list", "--count", b, "--not", "--remotes=origin") }))
+    .filter((x) => x.ahead && x.ahead !== "0");
+  if (carrying.length) {
+    add(
+      "warn",
+      "Agent-worktree branches carrying commits",
+      `${carrying.map((x) => `${x.b} (+${x.ahead})`).join(", ")} — reported, never fatal: they belong to a live agent's ` +
+        `isolated checkout and are not the session's to push or delete. An attack reproduction MUST NOT be pushed.`,
+      false,
+    );
   }
 }
 

@@ -8,3 +8,7 @@
 export * from "./resolve";
 export * from "./adapter";
 export * from "./change-draft";
+// Cascade join 1 (DR-042): the pure Incident → ticket-request mapper and the
+// dispatch seam that routes it through the emission gate. Fail-closed at every
+// step; in this tree the gate always resolves suppressed and the result says so.
+export * from "./dispatch";

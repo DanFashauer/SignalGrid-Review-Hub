@@ -119,6 +119,28 @@ const escapeHtml = (s) =>
   s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 const mdCode = (s) => `<code>${escapeHtml(s)}</code>`;
 
+/** One rendered line, forced onto ONE line.
+ *
+ *  `escapeHtml` neutralises MARKUP but not LINE STRUCTURE, and the audit record is a
+ *  line-structured document. `k.reason` embeds `err.message`, which splices in
+ *  `body.slice(0, 200)` — the raw text of whatever answered the request. A JSON error
+ *  body is one line; a 502 HTML page from an edge proxy is not, so a single kept entry
+ *  could expand into several lines and forge a `### Result` block inside the record
+ *  that is the only evidence of what the run did. Every element of these arrays is
+ *  MEANT to be one line, so collapsing the breaks costs nothing and closes it. */
+const oneLine = (s) => String(s).replaceAll(/[\r\n\u2028\u2029]+/gu, " ");
+
+/** Is this URL on the SAME ORIGIN as the API we hold a token for? Used to refuse a
+ *  rel="next" link that would carry the Actions bearer to another host. Anything
+ *  unparseable, relative, or on another scheme/host/port is not. */
+const isSameApiOrigin = (u) => {
+  try {
+    return new URL(u).origin === new URL(API).origin;
+  } catch {
+    return false; // unparseable is not this origin
+  }
+};
+
 /** Encode a ref for a URL path WITHOUT destroying its slashes — `claude/foo` is
  *  two path segments and must stay two, but a `%` inside a segment is a legal ref
  *  character that would otherwise be read as the start of a percent-escape. */
@@ -135,6 +157,21 @@ const encodeRefPath = (ref) => ref.split("/").map(encodeURIComponent).join("/");
     [mdCode("<script>"), "<code>&lt;script&gt;</code>"],
     [encodeRefPath("claude/a b"), "claude/a%20b"],
     [encodeRefPath("claude/100%"), "claude/100%25"],
+    // The rel="next" origin pin. These are the shapes that would otherwise send the
+    // Actions token somewhere it was never issued for; an origin check that has
+    // quietly stopped checking looks exactly like one that works.
+    [isSameApiOrigin(`${API}/repositories/1/branches?page=2`), true],
+    [isSameApiOrigin("https://attacker.example/steal?p=2"), false],
+    [isSameApiOrigin("http://api.github.com/x"), false], // scheme differs
+    [isSameApiOrigin("https://api.github.com.evil.test/x"), false], // suffix, not the host
+    [isSameApiOrigin("https://api.github.com:8443/x"), false], // port differs
+    [isSameApiOrigin("/repositories/1/branches?page=2"), false], // relative is unparseable here
+    [isSameApiOrigin("not a url"), false],
+    // Line-structure collapse: a multi-line error body must not be able to forge a
+    // second block inside the audit record.
+    [oneLine("a\nb"), "a b"],
+    [oneLine("a\r\n### Result\r\n- deleted: 0"), "a ### Result - deleted: 0"],
+    [oneLine("plain"), "plain"],
   ];
   const bad = cases.filter(([got, want]) => got !== want);
   if (bad.length > 0) {
@@ -162,6 +199,20 @@ async function paginate(path) {
     if (!res.ok) throw new Error(`GET ${url} → ${res.status}`);
     out.push(...(await res.json()));
     const next = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get("link") ?? "");
+    // PIN THE NEXT PAGE TO THIS ORIGIN. `headers` carries the Actions token, and
+    // `next[1]` is a URL out of a RESPONSE HEADER — so following it unchecked sends
+    // a `contents: write` bearer to whatever host the header names. That is the same
+    // untrusted-network-data class CodeQL flags on the summary write below, with a
+    // worse sink than the file: the credential itself. Observed leaving for
+    // `https://attacker.example/steal?p=2` with the bearer attached when the header
+    // was crafted. A next-page link that is not on this API is not a next page.
+    if (next) {
+      if (!isSameApiOrigin(next[1])) {
+        throw new Error(
+          `GET ${url} returned a rel="next" link off this API (${next[1]}) — refusing to send the token there.`,
+        );
+      }
+    }
     url = next ? next[1] : null;
   }
   return out;
@@ -181,7 +232,11 @@ const kept = []; // {branch, reason}
 
 for (const b of branches) {
   const name = b.name;
-  const sha = b.commit?.sha ?? "";
+  // NOT `?? ""`. An empty sha renders the restore line as
+  // `git push origin :refs/heads/'x'` — an empty SOURCE refspec, which git reads as
+  // DELETE. The "paste this to undo the deletion" line would have deleted the branch
+  // instead, so a missing field would have produced the MORE destructive outcome.
+  const sha = typeof b.commit?.sha === "string" ? b.commit.sha.trim() : "";
 
   if (name === defaultBranch) {
     kept.push({ name, reason: "default branch" });
@@ -191,8 +246,22 @@ for (const b of branches) {
     kept.push({ name, reason: "dependabot-owned (deleting makes it reopen)" });
     continue;
   }
-  if (b.protected) {
-    kept.push({ name, reason: "branch protection" });
+  // `!== false`, not truthiness: an ABSENT `protected` field is unknown management
+  // state, and unknown must tighten. The old form deleted a branch whose protection
+  // the response never asserted — the server twin of the iOS `managedBool` rule in
+  // CLAUDE.md ("never derive a policy default from the ABSENCE of managed
+  // configuration"). GitHub always sends the field, so this is latent, not live.
+  if (b.protected !== false) {
+    kept.push({
+      name,
+      reason: b.protected === true ? "branch protection" : "protection state not reported — unknown is kept",
+    });
+    continue;
+  }
+  // Likewise a branch whose tip sha the API did not report: it cannot be restored,
+  // so it is not a deletion candidate.
+  if (!sha) {
+    kept.push({ name, reason: "no commit sha reported — unrestorable, so never deleted" });
     continue;
   }
 
@@ -297,6 +366,30 @@ const summary = [
   "",
 ];
 
+/** Append to the run's job summary. Split out because the recovery record and the
+ *  result are written at DIFFERENT MOMENTS, which is the whole safety property.
+ *
+ *  Every line is passed through `oneLine` HERE rather than at each call site: this is
+ *  the one place untrusted text reaches the file, so it is the one place that cannot
+ *  be forgotten by a future caller. */
+async function appendSummary(lines) {
+  if (!process.env.GITHUB_STEP_SUMMARY) return;
+  const { appendFileSync } = await import("node:fs");
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.map(oneLine).join("\n")}\n`);
+}
+
+// THE RECOVERY RECORD IS WRITTEN HERE, BEFORE THE DELETE LOOP.
+//
+// The header of this file says "REVERSIBILITY IS PRINTED BEFORE ANYTHING IS DELETED
+// … this is the only moment that record can be made", and the `summary` array above
+// says "emitted BEFORE any deletion". Both were true of when the array was BUILT and
+// false of when it was WRITTEN: the single appendFileSync sat after the entire delete
+// loop, so a run interrupted mid-loop — a cancelled job, a runner eviction, a throw
+// from the forced-branch path — deleted branches and wrote no restore record at all.
+// The file's central safety claim held only when nothing went wrong, which is the one
+// case it was not written for.
+await appendSummary(summary);
+
 for (const d of doomed) console.log(`  prune  ${d.name}  — ${d.why}  ${d.sha}`);
 for (const f of forced) {
   console.log(`  FORCE  ${f.name}  — ${f.unique} unique commit(s); archive tag first, then delete  ${f.sha}`);
@@ -358,16 +451,12 @@ if (APPLY) {
     }
   }
 
-  summary.push(`### Result`, "", `- deleted: ${deleted}`, `- failed: ${failed.length}`, "");
-  for (const f of failed) summary.push(`- ${mdCode(f)}`);
+  const result = [`### Result`, "", `- deleted: ${deleted}`, `- failed: ${failed.length}`, ""];
+  for (const f of failed) result.push(`- ${mdCode(f)}`);
+  await appendSummary(result);
   console.log(`\ndeleted=${deleted} failed=${failed.length}`);
 } else {
   console.log(`\nDRY RUN — nothing was deleted. Re-run with apply=true to act on this plan.`);
-}
-
-if (process.env.GITHUB_STEP_SUMMARY) {
-  const { appendFileSync } = await import("node:fs");
-  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary.join("\n")}\n`);
 }
 
 // A failed deletion is a failed run. Partial success reported as green is the

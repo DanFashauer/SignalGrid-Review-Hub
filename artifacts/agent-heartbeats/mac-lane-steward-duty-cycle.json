@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-15T04:25:07.297Z",
-  "result": "quiet — fifth consecutive. No new or moved mac/* branch, nothing addressed to cloud, nothing owed. Tick firedAt 2026-09-15T04:06:50.477Z quiet; live-evidence 2026-09-12 22:56 = 2.06 days COMPUTED (crosses the 3-day threshold ~2026-09-16 02:56Z, roughly 22h out; earlier cycles quoted this by eye and drifted, so it is measured from here on); manifest v78 unchanged; pipes clean; no owner escalation."
+  "firedAt": "2026-09-15T05:24:54.883Z",
+  "result": "quiet — sixth consecutive. No new or moved mac/* branch, nothing addressed to cloud, nothing owed. Tick firedAt 2026-09-15T04:57:20.368Z quiet; live-evidence 2.10 days computed (threshold 3d, crosses ~2026-09-16 02:56Z); manifest v78 unchanged; pipes clean; no owner escalation."
 }

@@ -634,7 +634,9 @@ final class ActiveSessionModel: ObservableObject {
                     app: app,
                     url: url,
                     allowedDomains: session?.persona.restrictions.allowedDomains,
-                    allowCopyPaste: session?.persona.restrictions.allowCopyPaste ?? true
+                    // Fail-closed: an unknown session must not open the copy/paste
+                    // exfiltration path the persona may forbid (golden rule 2).
+                    allowCopyPaste: session?.persona.restrictions.allowCopyPaste ?? false
                 )
             )
             return
@@ -688,7 +690,9 @@ final class ActiveSessionModel: ObservableObject {
                     ManagedAppViewController(
                         app: app,
                         url: url,
-                        allowedDomains: SessionStateManager.shared.currentSession?.persona.restrictions.allowedDomains
+                        allowedDomains: SessionStateManager.shared.currentSession?.persona.restrictions.allowedDomains,
+                        // Fail-closed: reflect the persona's restriction, block on unknown.
+                        allowCopyPaste: SessionStateManager.shared.currentSession?.persona.restrictions.allowCopyPaste ?? false
                     )
                 )
             }

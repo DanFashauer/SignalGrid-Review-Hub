@@ -31,7 +31,9 @@ final class ManagedAppViewController: UIViewController {
     }()
     private let progress = UIActivityIndicatorView(style: .medium)
 
-    init(app: EnterpriseApp, url: URL, allowedDomains: [String]? = nil, allowCopyPaste: Bool = true) {
+    // allowCopyPaste defaults to false (fail-closed): a caller that does not state the
+    // persona's restriction must get the restrictive answer, never the exfiltration path.
+    init(app: EnterpriseApp, url: URL, allowedDomains: [String]? = nil, allowCopyPaste: Bool = false) {
         self.app = app
         self.url = url
         self.allowedDomains = allowedDomains

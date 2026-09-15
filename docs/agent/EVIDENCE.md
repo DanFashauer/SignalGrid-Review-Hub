@@ -3063,3 +3063,103 @@ Verdict: **holds, with one self-inflicted red found and fixed before landing** �
 Not done in this pass (out of scope for this branch, named so the gap is not silent): item 3 of the assignment list ("bring the LEVEL_10 matrix in line with the roster") is item 5 above under this branch's own numbering — no separate row was skipped. `docs/agent/ORG_SELF_EVALUATION_2026-09-12.md`'s OWN recommendation for the LEVEL_10 matrix was "mark historical" rather than re-attribute; this branch followed the explicit worker brief (re-attribute owner cells to roster roles) instead, and that choice is recorded here rather than silently overriding the self-evaluation's suggestion.
 
 **Re-validation (2026-09-13, after the forward-merge onto SignalGrid_Alpha).** The doc-gate suite was re-run on the merged head: `check-cited-paths` now reports 2646 citations across 939 docs; `check-decision-record-format` reports 48 records; `check-scheduled-routines` (+ `--self-test`), `check-publication-boundary`, `check-markdown-links`, `check-doc-orphans`, `check-surface-review-coverage`, `check-org-roster`, `check-launch-claims` and `check-known-false-claims` all pass. CI runs the full preflight and verify:breadth suite on this head. The DECISION_RECORDS.md line cites in DR-043's provenance were re-pointed to the merged-head lines the forward-merge shifted them to (DR-033 :1913, DR-036 :2125, DR-039 :2298, DR-042 :2578; the RESOURCE_INTAKE.md puck row :93; DR-037 :2192 in CONTINUITY.md).
+## 2026-09-12 — "PR #531 is brought onto current mainline by a merge commit; every one of its fixes and the model-routing tap is carried forward because mainline had landed none of them, and its decision record is renumbered DR-046"
+Command:
+```
+git fetch --deepen=400 origin SignalGrid_Alpha claude/signalgrid-launch-plan-emxm01   # the checkout was shallow: no merge base
+git merge-base HEAD origin/SignalGrid_Alpha; git rev-list --left-right --count origin/SignalGrid_Alpha...HEAD
+for f in scripts/check-ios-restriction-defaults.mjs scripts/check-model-tap-boundary.mjs scripts/brief.mjs \
+         scripts/lib/agent-model-tap.mjs scripts/lib/model-routing-policy.mjs; do git cat-file -e origin/SignalGrid_Alpha:$f || echo "$f absent"; done
+git grep -n "idempotency-key" origin/SignalGrid_Alpha -- artifacts/api-server/src/app.ts
+git grep -n "allowScreenCapture ??\|allowCopyPaste ??\|allowCopyPaste: Bool =" origin/SignalGrid_Alpha -- native/ios/EnterpriseShell
+git grep -n "typeof manifest.skills" origin/SignalGrid_Alpha -- scripts/check-plugin-manifest.mjs
+git grep -c "maxRetries: 10" origin/SignalGrid_Alpha -- scripts/check-doc-line-counts.mjs scripts/check-gitignore-producers.mjs scripts/lane-deliver.mjs
+git merge --no-ff --no-commit origin/SignalGrid_Alpha        # 4 conflicts: AGENT_GATEWAY, CLAIM_INVENTORY, DECISION_RECORDS, SURFACE_REVIEW_COVERAGE
+node scripts/generate-sync-manifest.mjs
+node scripts/check-fabricated-status.mjs --self-test; node scripts/check-fabricated-status.mjs
+node scripts/check-plugin-manifest.mjs --self-test; node scripts/check-plugin-manifest.mjs
+node scripts/check-ios-restriction-defaults.mjs --self-test; node scripts/check-ios-restriction-defaults.mjs
+node scripts/check-model-tap-boundary.mjs --self-test; node scripts/check-model-tap-boundary.mjs
+node scripts/check-preflight-ci-parity.mjs; node scripts/check-decision-record-format.mjs; node scripts/check-cited-paths.mjs
+node scripts/check-derived-doc-figures.mjs; node scripts/check-proof-counts.mjs; node scripts/check-claim-inventory-anchors.mjs
+node scripts/check-doc-line-counts.mjs; node scripts/check-surface-review-coverage.mjs --write
+pnpm run typecheck; pnpm --filter @workspace/api-server run test:api
+node scripts/preflight.mjs        # first run stopped at the throughput bench under a load average of 24–37 on 4 cores (other lanes); the bench re-run standalone, then preflight re-run whole
+pnpm run bench:decision-throughput
+node scripts/preflight.mjs; pnpm run verify:breadth
+```
+Output:
+```
+98395b7f408a9677a696b0a38358a83949ab6f1c
+381	26                                                  # mainline 381 ahead, the branch 26 ahead — not 565/356, that was the shallow clone
+scripts/check-ios-restriction-defaults.mjs absent
+scripts/check-model-tap-boundary.mjs absent
+scripts/brief.mjs absent
+scripts/lib/agent-model-tap.mjs absent
+scripts/lib/model-routing-policy.mjs absent
+(idempotency-key: no match in origin/SignalGrid_Alpha:artifacts/api-server/src/app.ts)
+origin/SignalGrid_Alpha:native/ios/EnterpriseShell/Services/ScreenCaptureGuard.swift:39:        SessionStateManager.shared.currentSession?.persona.restrictions.allowScreenCapture ?? true
+origin/SignalGrid_Alpha:native/ios/EnterpriseShell/Views/ActiveSessionView.swift:637:                    allowCopyPaste: session?.persona.restrictions.allowCopyPaste ?? true
+origin/SignalGrid_Alpha:native/ios/EnterpriseShell/Views/ManagedAppViewController.swift:34:    init(app: EnterpriseApp, url: URL, allowedDomains: [String]? = nil, allowCopyPaste: Bool = true) {
+(typeof manifest.skills !== "string" fail-closed check: no match on mainline; mainline still has the skipping `=== "string"` form at :76)
+(maxRetries: 10 — no match on mainline in any of the three)
+CONFLICT (content): Merge conflict in docs/AGENT_GATEWAY.md
+CONFLICT (content): Merge conflict in docs/CLAIM_INVENTORY.md
+CONFLICT (content): Merge conflict in docs/DECISION_RECORDS.md
+CONFLICT (content): Merge conflict in docs/agent/SURFACE_REVIEW_COVERAGE.md
+live-sync manifest unchanged — version 77, fingerprint ee348c4a0afd2fb9…
+self-test: 11/11 controls passed
+Fabricated-status gate passed — no connector claims a status it did not observe.
+plugin-manifest self-test: complete=clean, missing=flagged, extra=flagged, absent-skills=flagged, nonstring-commands=flagged — green
+Plugin-manifest gate passed — signalgrid plugin: 13 agents (derived), skills + commands present; claude plugin validate exit 0.
+PASS  self-test — 9 planted fixtures behave in both directions: a permissive `.restrictions.<field> ?? true` (including optional-chained and multi-line) is caught, `?? false` and a non-restriction `?? true` are not
+iOS restriction-defaults gate passed — no persona restriction defaults permissive on an unknown session.
+self-test passed (33/33)
+Model-tap boundary check passed — 660 decision-path file(s) across 9 roots reference no model tap, env, or call shape; the tap imports nothing from the decision path and makes no live model call.
+Preflight↔CI parity passed — every preflight gate is wired into a workflow.
+Decision-record format gate passed — every call states how it gets undone.
+Cited-path check passed — 2565 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).
+Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe, and every other statement of those figures is gated or explained.
+Proof-count check passed — all 60 documented counts match their proofs.
+Claim-inventory anchors passed — 564 quoted claim(s) anchored and 105 cited fragment(s) in place; absent held at 0, remove-actioned still present at 0, evidence fragments absent at 0 (each may only fall).
+  ✗ docs/COMPANY_BUILD_PLAN.md:4891 states scripts/preflight.mjs (737), but the file is 741 lines — update the sentence   # before the fix
+Doc line-count gate passed — every `path (N)` figure matches the file it names.                                              # after 737 → 741
+wrote docs/agent/SURFACE_REVIEW_COVERAGE.md — 102 read, 0 partial, 0 not read, of 102 surfaces                              # 2869 → 2875 in-scope files, `scripts` 431 → 437
+scripts typecheck: Done
+API integration test: 410/410 assertions passed
+FAIL: no parallel gain: 4 workers sustained 1413/sec against 1984/sec on one core.        # first preflight, load average 24.28 on 4 cores
+PASS: 2,011/sec on one core (floor 1.33/sec), 1.38x under saturation, identical verdicts on all 4 workers.   # the bench standalone, same load
+Preflight PASSED — everything it runs is green.                                                    # second run, whole; 2 proofs SELF-SKIPPED (DATABASE_URL unset — not run, not passed)
+Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Verdict:  **holds.** Merge commit b948f82a (mainline 1c95f6d8 into the branch; history kept, no rebase, no amend). Carried forward — mainline had NONE of it, each absence quoted above: the order-independent fabricated-status match; the plugin-manifest absent-key fail-closed check; the CORS `idempotency-key` allow + `Idempotency-Replay` expose with its assertion (test:api 410/410 — the branch's one added assertion is among them); the three EnterpriseShell DLP defaults flipped `?? true` → `?? false` with `scripts/check-ios-restriction-defaults.mjs` in preflight and CI; the model-routing tap (`scripts/brief.mjs`, `scripts/lib/agent-model-tap.mjs`, `scripts/lib/model-routing-policy.mjs`, `scripts/check-model-tap-boundary.mjs`, its fixture, the `AGENT_GATEWAY.md` LM Studio and tap sections, the `signalgrid-master` routing subsection, the intake rows); ENOTEMPTY-tolerant teardown in five gate self-tests and `lane-deliver.mjs`; `git grep -a` in `check-env-doc-readers.mjs`; the de-fossilised skew-grep headers. Superseded by mainline: nothing — no fix on the branch had landed by another route, so no mainline commit is cited as superseding one. Conflicts resolved to mainline in `DECISION_RECORDS.md`, `CLAIM_INVENTORY.md` and the coverage ledger; the branch's tap record, numbered DR-035 on the branch, collides with mainline's DR-035 (source-agnostic) and is appended after DR-043 as **DR-046** with all eleven citations renumbered; its Evidence figures re-measured today (33/33, 660 files across 9 roots — the record on the branch still said 20/20 and 651 across 4 roots, a fossil its own later commits had left behind). `DecisionEngine.swift` and `AppWorkflows.swift` untouched (the DLP defaults live in `ScreenCaptureGuard.swift`, `ActiveSessionView.swift`, `ManagedAppViewController.swift`). iOS builds cannot run here; `ios-ci.yml` on the PR verifies the Swift edits. Nothing on the PR is superseded; it should be merged, not closed.
+
+## 2026-09-12 — "The four Codex findings on 836445de (PR #531) are fixed: the model-tap-boundary fence's native scope, brief.mjs's first-heartbeat tolerance, check-ios-restriction-defaults' initializer default, and check-fabricated-status' brace balancing, each with a planted-regression self-test"
+Command:
+```
+node scripts/check-model-tap-boundary.mjs --self-test; node scripts/check-model-tap-boundary.mjs
+node scripts/brief.mjs --self-test; node scripts/brief.mjs
+node scripts/check-ios-restriction-defaults.mjs --self-test; node scripts/check-ios-restriction-defaults.mjs
+node scripts/check-fabricated-status.mjs --self-test; node scripts/check-fabricated-status.mjs
+pnpm run typecheck; pnpm run review:invariants
+node scripts/check-preflight-ci-parity.mjs; node scripts/check-derived-doc-figures.mjs --self-test
+node scripts/check-cited-paths.mjs; node scripts/check-decision-record-format.mjs
+```
+Output:
+```
+self-test passed (35/35)                                            # model-tap-boundary, includes the two new planted-real-file checks
+Model-tap boundary check passed — 662 decision-path file(s) across 11 roots reference no model tap, env, or call shape.
+self-test passed (19/19)                                            # brief.mjs, includes isNeverFiredMissing inside/overdue/fail-closed cases
+Lane heartbeats  FAIL    cloud-lane-hygiene-sweep: 29h ago · mac-lane-steward-duty-cycle: 6h ago (OVERDUE) · mac-lane-tick: 5h ago (OVERDUE)   # pre-existing overdue lanes, unaffected by the fix; report-only, exits 0
+PASS  self-test — 17 planted fixtures ... a permissive `allow<Feature>: Bool = true` initializer/function default ... caught
+ios-restriction-defaults: 77 .swift file(s) scanned, 0 violation(s); self-test green
+self-test: 17/17 controls passed                                    # check-fabricated-status, includes nested-object-before/after/multi-level/cross-return/string-literal cases
+Fabricated-status gate passed — no connector claims a status it did not observe.
+scripts typecheck: Done
+Invariant review passed — fail-closed, deterministic, Assist-safe, truthful.
+Preflight↔CI parity passed — every preflight gate is wired into a workflow.
+self-test passed (82/82)                                            # check-derived-doc-figures
+Cited-path check passed — 2570 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments.
+Decision-record format gate passed — every call states how it gets undone.
+```
+Verdict: **holds.** All four Codex findings fixed with a regression-proving self-test each; only the five gate/policy files changed (scripts/lib/model-routing-policy.mjs, scripts/check-model-tap-boundary.mjs, scripts/brief.mjs, scripts/check-ios-restriction-defaults.mjs, scripts/check-fabricated-status.mjs) — no lib/*, artifacts/api-server, or native Swift file touched (golden rule 1). Full `node scripts/preflight.mjs` / `pnpm run verify:breadth` were NOT run in this pass on coordinator instruction (a prior attempt OOM'd the shared box under concurrent lanes); CI runs the full suite on push and the coordinator merges on green.

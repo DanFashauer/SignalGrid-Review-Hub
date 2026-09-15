@@ -52,149 +52,7 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-14 21:20Z (mac lane, latest) - DR-043 ITEM (d) IS COMPLETE: BOTH POLICY ROWS
-              ARE IN THE CORE. Row 1 (removal suspends the session, CUSTODY_EXCEPTION) landed in #748.
-              Row 2 - a legacy read for a strong-enrolled worker DENIES with CREDENTIAL_DOWNGRADE - is
-              on #753 (head 8c7bcb80), carried by two new signal domains, enrollment_strength and
-              credential_read_method, alongside attach_state and presence_state. On that branch,
-              `21` signal categories and `24` evidence fields — quoted from #753's own run, NOT
-              mainline's, which still measures 17 and 20 until it lands. (The earlier version of this
-              line said `25` evidence fields; proof:signalgrid-core on 8c7bcb80 prints
-              evidenceFields=24, which the quoted-green block below had right and this sentence had
-              wrong.) The distinction the family rests on: not_applicable (no such
-              credential is in play) is NOT unknown (a read attempted and failed); collapsing them
-              would step up every puck-less deployment on day one.
-              WHAT THE PROOF CAUGHT, and it is wider than one rule: credential-downgrade is the core's
-              FIRST two-condition rule, and the core proof's scope derivation could not see it. It
-              probes one field at a time from one healthy baseline, so a field that is only ever half
-              of an AND never fires the rule that names it. enrollmentStrength derived as out-of-scope
-              while the sweep swept it, and the exact-equality scope check refused the mismatch rather
-              than quietly shrinking coverage. Fixed IN THE DERIVATION - unresolved fields escalate to
-              a derived family of bases (healthy plus every single-field perturbation) - not by typing
-              a field into a list. The escalation's comment names what it does NOT close: the
-              derivation sees conjunctions, the sweep is still single-axis.
-              AUTO-MERGE IS ON AND #753 IS DELIBERATELY NOT ELIGIBLE. classifyDiff returns
-              owner-gated: DECISION_PATH on lib/* and the /v1 server, OWNER_RESERVED on the
-              buyer-facing site. That is the machinery working, not a blocker - the cloud review board
-              merges it per DR-037.
-              Green, quoted FROM #753 (head 8c7bcb80), not from mainline: preflight EXIT=0,
-              verify:breadth 56 proofs EXIT=0, proof:signalgrid-core
-              `assertions=526 categories=21 evidenceFields=24`, proof:evidence-coverage `30/30 axes=25`,
-              proof:signal-radar 22/22, test:api 409/409, room-console sigClass 176 vectors + 10 pins,
-              manifest v81, CORE_NORMALIZATION_VERSION 18 -> 19.
-              STILL OWED BY CLOUD: the skill-instruction-conflicts gate hangs preflight forever
-              (askHook spawns .claude/hooks/block-dangerous.sh with no timeout; traced to cloud's
-              DR-047 skill commits). Also: scripts/mac/gh-pr.mjs is still only on
-              mac/gh-pr-rest-helper, and its `open` exited 0 WITHOUT patching the PR body - the body
-              had to land via `gh api -X PATCH`. Both are real defects, neither is fixed.
-2026-09-14 16:36Z (cloud lane) - THE QUEUE IS THE BOTTLENECK, MEASURED, NOT
-              GUESSED. Ran scripts/check-merge-authorization.mjs (from #729's worktree; it is not on
-              mainline yet, which is itself the loop) against all eleven open PRs. Every one REFUSED
-              as owner-gated: #727, #730, #729, #723, #737, #732, #741, #742, #744, #745, #748 all
-              touch scripts/** or lib/**. The ONLY authorized merge in the set was #750, this
-              session's own lane mail, merged through that verdict pinned to 2ccef410. So the layer
-              the owner asked to see built and verified IS built and verified; it is waiting on
-              eleven clicks, not on more engineering. REVIEWED the Mac lane's new PR #748
-              (mac/custody-removal-suspends, 752d9106 - an unclaimed lift from the dock is a custody
-              exception, DR-043's removal-suspends item). The rule is good and was FALSIFIED rather
-              than trusted: dropping hasUnauthorizedRemoval from the routing branch fails
-              custody-removal-without-session (80/81); forcing it true fails BOTH
-              custody-removal-with-session and the pre-existing healthy-shared-device-checkout
-              (82/84). Clean run 82/82, up from 73/73. typecheck, review:invariants and
-              check-decision-port-parity all green. BLOCKED on one line: preflight fails at the doc
-              line-count gate because the branch itself invalidates a figure -
-              docs/COMPANY_BUILD_PLAN.md:4871 says decisionEngine.ts (336) and the branch makes the
-              file 361 (mainline measured 336). Two ungated figures also go stale:
-              VALIDATION_EVIDENCE.md:33 says '11 scenarios / 51 assertions ... the scenario count
-              still holds' (now 13 / 82) and PROOF_COVERAGE_AUDIT.md:25,:68 say '11 scenarios x 22
-              risk mutations' (proof:signalgrid-grid prints 11/231 on mainline, 13/273 on the
-              branch). THE CAVEAT WORTH KEEPING: port parity is green BY CONSTRUCTION. The Mac lane
-              reused CUSTODY_EXCEPTION with its existing outcome set, and that gate compares
-              vocabulary and wiring, not predicates - its own header says it cannot prove behavioural
-              equivalence. native/ios/EnterpriseShell/Services/DecisionEngine.swift:66-80 holds the
-              mirror of that block and has NO removal rule, so after #748 merges an unclaimed lift
-              decides CUSTODY_EXCEPTION in the fabric and allow on the phone with nothing going red
-              anywhere - the exact failure that gate exists to catch. Golden rule 1 means it is not
-              fixable inside that PR; it wants a decision record naming the re-port, or a declared
-              drift pinned both ways like AppPlanInput.stepUpSatisfiedActionKeys already is. All of
-              it posted on #748 and mailed to the Mac lane (both in #750). ALSO LANDED AS A BRANCH:
-              #751, claude/build-custody-v1-wiring, docs-only - why evaluateCustodyLedger is still
-              unwired. The wiring was built end to end (two read-only fixture routes live,
-              test:api 409/409 -> 416/416, eleven surfaces synced) and then REVERTED, because
-              check-deployment-runbook.mjs resolves the api-server's TRANSITIVE @workspace/*
-              dependencies and declaring @workspace/integrations adds 80 distinct env vars (119 ->
-              ~199) for families the custody route cannot use. A subpath import does not help: the
-              gate reads the dependency graph, not the import graph, which is correct. Documenting
-              80 knobs that do not exist would be the dishonesty that gate exists to prevent, so the
-              finding was filed instead; the fix shape (extract the evaluator into its own env-free
-              package, re-export from rtls-custody) is a lib/** change and owner-gated. preflight
-              and verify:breadth both exit 0 on it; the launch-claims ceiling dropped 416 -> 408 and
-              the gate wrote that itself.
-              (Earlier 2026-09-14, cloud lane:) THE MERGE BUTTON IS NOW MACHINE-LOCKED, and the
-              headline readiness is 94%, not 0%. PR 3 of the auto-merge safe path landed as #729
-              (owner-gated, green, awaiting the owner): scripts/check-merge-authorization.mjs refuses
-              a self-merge unless classifyDiff says the diff is autonomous, the branch tip still
-              equals the sha the checks describe (read from the remote with git ls-remote, because
-              this session's GitHub surface returns check runs with NO head_sha field - verified on
-              #727 on both the list and single-check calls), every check is completed and none red,
-              and the gating check is present and green by name. The changed-file list is DERIVED
-              (`git diff --name-only base...head` run by the script), never supplied, so a model
-              cannot shorten the list it is judged on - which is exactly what #719 got wrong.
-              Self-test 27/27; live it REFUSED #727 (17 checks green, DECISION_PATH + SAFETY_MACHINERY)
-              and REFUSED then AUTHORIZED #728, which was merged through that verdict pinned to its
-              sha. First live run found a real defect in the gate itself (an abbreviated sha refused
-              against its own full branch tip on a plain ===) - fixed with prefix matching, two
-              self-test cases. #729 also carries a DR-037 AMENDMENT for the owner to decide by
-              merging: DR-037 permitted a SAFETY_MACHINERY self-merge with a note, CONTINUITY.md
-              called the same class an ABSOLUTE exclusion ten lines after repeating the permissive
-              wording, and AGENTS.md says "Do not merge your own PR" - three documents, two answers,
-              which is what produced the #719 overstep and four earlier ones (#716, #708, #689, #704;
-              all safe-leaning, all left in place). The strict reading governs and is now mechanical.
-              MEASURED CONSEQUENCE, stated because it changes what the switch buys: over 14 days, 173
-              real merges - 59 autonomous, 114 owner-gated; of the 59, 47 are pure lane bookkeeping
-              and 12 are docs/evidence. ZERO product code would land unattended, because #719 made
-              all of lib/ DECISION_PATH and lib/ is the product. The narrowing (a PR whose changed
-              gates are proven falsifiable on that PR by #723 may land itself, decision core still
-              owner-only) is the next step, after #723 and #729 land. READINESS: check-readiness-figure
-              prints (a) 94 / (b) 100 / (c) 100 -> HEADLINE 94%, OUTREACH OPEN. The single binding
-              item is ONE ground-truth gap: the faithful end-to-end smart-charging journey (badge ->
-              dock -> provision -> in-use -> check-in with the unpaired / network-down / cap-hit /
-              dock-fault branches). Building now on lane/cloud-custody-journey. CAUTION for whoever
-              lands it: a new proof moves proofCounts, which is INSIDE the sync-manifest fingerprint,
-              so (b) fail-closes to 0 and the headline reads 0% until the Mac re-mints - queue an
-              `evidence` sim request with the landing so the unattended tick does it. #725 (inert live
-              connector path) REWORKED against its 11 findings (b60a081c) and deliberately NOT proposed
-              for merge: nine fixed or truthfully withdrawn, #727 carries finding 2, and finding 5 (the
-              fail-closed freshness guarantee) is parked on an owner decision rather than decided
-              unilaterally. The shipped core was checked and is SOUND on that axis - buildEvidence takes
-              no evaluation clock, but connector.ts grades freshness against an injected nowIso, a silent
-              connector emits nothing and reads `missing`, and dock staleness already travels as its own
-              input into a fail-closed backstop (types.ts:494). Owner's merge list, security first: #727,
-              #720, #724, #723, #729. Independent adversarial reviews running on #720/#723/#724 because
-              Codex is out of review credits and #725 proved green CI means little here.
-              (Earlier 2026-09-12, mac lane:) NEEDLE INGESTED (DR-044): cactus-compute/needle
-              evaluated by use (isolated venv, base weights, telemetry off) then hardened by a 4-agent workflow;
-              adopted-by-reference as a NARROW base-weights-only OFFLINE extraction helper, NEVER on the decision
-              path. It runs where LightRAG did not (~48MB warm, offline from cache, deterministic per fixed session
-              state), but the workflow corrected first-pass claims and found real surfaces: confidence is a
-              fail-closed GATE not a calibrated probability (a correct extraction landed at 0.38; polarity is
-              BACKWARDS for golden rule 2; extract() discards the score; finetuning disables the head); the
-              inference-engine binary's LICENCE is unverified; no revision= pin + pickle.load on fetched artifacts;
-              .github has auto-publish workflows so NEVER vendor it; two more consent-gated egress paths. Boundary +
-              reversal in DR-044; nothing of needle is in the tree. SAME COMMIT closed two self-eval Mac items:
-              Graphify semantic-docs pass DROPPED (LightRAG key-free naive mode already covers doc retrieval,
-              DR-041); Crucible /temper NOT joining brain-cycle-config.json (redundant with the gauntlet's
-              /code-review bugHunt stage) - that shared file UNCHANGED. Both decision benches re-run GREEN +
-              deterministic on the Mac (latency p95 0.19ms; throughput `29,535/sec` agg on 10 workers, 3.86x).
-              RELIABILITY_SLO.md NOT partial-re-dated: its 08-24 table is a coordinated single-machine measurement
-              and this Mac is a faster class; routed the coordinated re-date (benches + test:load, one machine) to
-              the cloud. Killed an orphaned self-hosted-runner api-server squatting port 5310 for 4h+ that made the
-              local api:test crash (fresh server couldn't bind; hit the stale old-build server); test:api then
-              409/409 - the mac-runner-harness should SIGKILL leftover dist/index.mjs on 5310 at job teardown.
-              Owner directive recorded (memory + [[ultracode-opus-fallback-default]]): default to ultracode
-              workflows + Opus/smartest model, per-stage model choice, use the installed tools. Full preflight
-              green; cloud mailed.
-              2026-09-12 (cloud lane) - THE SESSION PUCK IS ON THE RECORD AS A
+LAST TOUCHED: 2026-09-12 (cloud lane, latest) - THE SESSION PUCK IS ON THE RECORD AS A
               HARDWARE HYPOTHESIS, NOT A PRODUCT (DR-043). The owner shared his own 25-page
               research document ('Shared-Device Authentication Puck: Hardware and Form-Factor
               Concept' - 'I'm going to blow your mind with this'). Read in full, held against
@@ -1118,25 +976,16 @@ LAST TOUCHED: 2026-09-14 21:20Z (mac lane, latest) - DR-043 ITEM (d) IS COMPLETE
               view-layer rebuild is now COMPLETE, and native/ios/README's file-tree
               was corrected to match.
 BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION_2026-09-12.md,
-              'The founder's queue'): Screen Recording for Terminal; 'yes' to the
-              branch cleanup; pick the FIRST of
+              'The founder's queue'): Screen Recording for Terminal; 'activate' or 'hold' on the
+              Standing Brain Cycle (DR-032 Slice 3); 'yes' to the branch cleanup; pick the FIRST of
               the seven DR-033 product gaps (docs/BUILD_BACKLOG.md, the full-evaluation section);
               confirm or soften the ICP wording before the first outreach send (the gate is OPEN -
               run node scripts/check-readiness-figure.mjs); IP/disclosure posture; Fleet Premium
               before 2026-09-16 (DR-005 says do not renew); approve the ten Dependabot runs; the
               PURPOSE.md s2 widening (DR-035 follow-up); LightRAG: smaller local model, remote
               endpoint with his key, or leave it recorded as not-working. Nothing on the pipes is
-              blocked: lane mail 111/111 acked, sim requests 17/17, evidence fresh (v77). AND, measured
-              2026-09-14 16:36Z by running the authorizer against every open PR: ELEVEN PRs - #727,
-              #730, #729, #723, #737, #732, #741, #742, #744, #745, #748 - are all REFUSED as
-              owner-gated and cannot be landed by either lane however green. #730 closes the last
-              readiness gap and has been green since 06:30. This is now the binding constraint on
-              the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (0) NOTHING ELSE IS THE BOTTLENECK - the eleven owner-gated PRs above are.
-              While they sit: watch #748 for the Mac lane's (336)->(361) fix and land nothing on
-              their branch; file the DecisionEngine.swift removal-rule drift as a decision record or
-              a declared drift once the owner picks; (1) stamp a lane on every lane-less
-              BUILD_BACKLOG row and extend
+              blocked: lane mail 111/111 acked, sim requests 17/17, evidence fresh (v77).
+NEXT ACTION: cloud: (1) stamp a lane on every lane-less BUILD_BACKLOG row and extend
               scripts/check-backlog-ownership.mjs to read BUILD_BACKLOG rows so a lane-less row fails;
               (2) file and build the DR-036 proof-bindings row so readiness dimension (b) becomes a
               ratio instead of a binary that reads 0 after every manifest move; (3) give the roster a
@@ -1146,13 +995,10 @@ NEXT ACTION: cloud: (0) NOTHING ELSE IS THE BOTTLENECK - the eleven owner-gated 
               (5) the mis-filed owner items that are engineering (AppWorkflows parity re-port, the
               three decided deletions, the three safety defaults - propose, owner vetoes); (6) PR #531
               merge-or-close; (7) then build: Puck 5, Puck 1, the smart-charging scenario behind a DR.
-              Mac: DONE 2026-09-12 - needle DR-044 + the two self-eval closures (Graphify drop, Crucible
-              lens) + both benches re-run; the RELIABILITY_SLO re-date is ROUTED TO THE CLOUD as a coordinated
-              single-machine job (benches + test:load together, one machine, one commit) rather than a partial
-              cross-machine overwrite. REMAINING Mac: Fleet Premium on the owner's word; Ponytail native cuts
-              part 2 + row 103 in an Xcode session; delete tests/load, .agents metadata and site/index.html once
-              the cloud opens the row; read the inbox BEFORE any long measurement (a manifest move outranks a
-              measurement). Owner: the BLOCKED ON list.
+              Mac: Fleet Premium on the owner's word; Ponytail native cuts part 2 + row 103 in an Xcode
+              session; re-run the two benches and re-date RELIABILITY_SLO.md; delete tests/load,
+              .agents metadata and site/index.html once the cloud opens the row; read the inbox BEFORE
+              any long measurement (a manifest move outranks a measurement). Owner: the BLOCKED ON list.
 ## The three things that are true right now
 
 1. **The doctrine is `docs/PURPOSE.md` v2 (DR-020).** SignalGrid is an

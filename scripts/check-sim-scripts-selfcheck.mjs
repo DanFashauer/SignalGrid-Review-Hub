@@ -561,7 +561,10 @@ function selfTest() {
     expect("derivation reads argv", derived.size === 1 && derived.get("scripts/mac/run-everything.sh")?.length === 2,
       `derivation returned ${JSON.stringify([...derived])} — it must find mac shell scripts and only those`);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    // maxRetries: this dir holds a `git init`ed work tree; a recursive rmSync of
+    // `.git` can race a not-yet-settled git write and throw ENOTEMPTY, which Node's
+    // rimraf retries only when maxRetries > 0. Without it a transient crashes the gate.
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
   return failures;
 }

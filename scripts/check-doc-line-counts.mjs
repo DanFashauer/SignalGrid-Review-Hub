@@ -133,7 +133,10 @@ function selfTest() {
     checks.push([`…and the real tree carries at least ${HIT_FLOOR} figures (hit-count floor: the matcher must actually match)`, real.figures.length >= HIT_FLOOR]);
     checks.push(["…and the real tree is clean right now (the positive control)", real.problems.length === 0]);
   } finally {
-    rmSync(temp, { recursive: true, force: true });
+    // maxRetries: this temp holds a `git init`ed tree; a recursive rmSync of `.git`
+    // can race a not-yet-settled git write and throw ENOTEMPTY, which Node's rimraf
+    // retries only when maxRetries > 0. Without it a transient crashes the gate.
+    rmSync(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
   const failed = checks.filter(([, k]) => !k);
   for (const [n, k] of checks) console.log(`  ${k ? "ok" : "FAIL"} — self-test: ${n}`);

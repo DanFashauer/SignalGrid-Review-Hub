@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-11T09:48:52.017Z",
-  "result": "quiet — cloud-lane hygiene sweep completed; capacity healthy, above the escalation floor; owner not escalated."
+  "firedAt": "2026-09-14T09:42:27.088Z",
+  "result": "freed 13.1GB (5.3GB -> 18GB free, 86% -> 53%): fourteen stale external-resource evaluation working dirs from 2026-09-11/12 whose conclusions already landed in DR-041/DR-044 and RESOURCE_INTAKE.md (eval-lightrag alone was 9GB), plus pnpm store prune (60 files, 1 package). No docker daemon and no /var/lib/docker, so step 3 was a no-op. Repo tree and all 8 worktrees untouched; the two scratchpad worktrees holding uncommitted work (w-531, w-puck4) were deliberately NOT swept — a blanket find -mtime would have destroyed them, so the removal was an explicit named list instead. Owner NOT escalated."
 }

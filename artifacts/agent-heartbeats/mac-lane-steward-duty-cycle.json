@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-15T05:24:54.883Z",
-  "result": "quiet — sixth consecutive. No new or moved mac/* branch, nothing addressed to cloud, nothing owed. Tick firedAt 2026-09-15T04:57:20.368Z quiet; live-evidence 2.10 days computed (threshold 3d, crosses ~2026-09-16 02:56Z); manifest v78 unchanged; pipes clean; no owner escalation."
+  "firedAt": "2026-09-15T06:26:13.734Z",
+  "result": "quiet on branches, but ONE DEVELOPING SIGNAL: the Mac tick has not fired since 2026-09-15T04:57:20.368Z — 1.48 hours as of this cycle, where it normally ticks every 5 minutes. Same firedAt as the 05:24 cycle, so it is genuinely stalled rather than just quiet. Still UNDER the 3-hour escalation threshold, which it crosses at 07:57Z; if the 07:24 cycle still shows 04:57 I will escalate to the owner once per the routine (launchd reinstall). No new or moved mac/* branch, nothing addressed to cloud, nothing owed. live-evidence 2.15 days computed (under 3d); manifest v78 unchanged; pipes clean; owner NOT escalated this cycle."
 }

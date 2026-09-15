@@ -1648,3 +1648,35 @@ integration or endorsement with any of the projects named.** Public-safe and fix
 - [ ] **A maplibre-gl-js operator map over the shipped facility trust graph (console view, MEDIUM; blocked on tiles).** [`docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md`](inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md) already names `maplibre/maplibre-gl-js` (BSD-3-Clause) as the operator-map renderer beside the shipped `lib/facility-trust-graph`, which today has no spatial view at all. The blocker is not the renderer: it is **where vector tiles come from in a repository with no network calls and no tenant data** — a fixture tile set, a floor-plan raster, or nothing. Resolve the tile source FIRST, in one paragraph, then a console view with a deterministic fixture and no live vendor call. Do not add a map that silently fetches a hosted style. web-engineer.
 - [ ] **Vendor-doc drift is unwatched — decide whether a report-only watcher is worth its operator machine (research infrastructure, MEDIUM).** `docs/` cites 2,209 unique external URLs across 996 hosts (measured 2026-09-12) and every link gate in this repo is OFFLINE by design, so a vendor renaming or retiring a page is found only by hand — twice so far, both recorded in the catalogs (CyberArk → Idira; the `privx-ot` product URL now 404). `dgtlmoon/changedetection.io` (Apache-2.0, with a hosting-triggered commercial licence that matters only if we ever hosted it) is the shape that would watch them. Scope if taken: report-only, on the operator's own machine, never a gate, never in CI, no page content committed — only "this URL changed, look at it". The real question this row answers is whether the watch list is maintainable at 996 hosts or should be a curated 30. records-archivist.
 - [ ] **`docs/BACKUP_AND_RESTORE.md` states "No encryption at rest, and no opinion about where archives live" — give it one, as a runbook sentence (docs, LOW).** The gap is named in the document itself and has no filling. rclone's `crypt` (client-side encryption over any remote) and `hashsum` (verify an archive after transfer) are the two backends that close it in operator terms; the deliverable is a paragraph in that runbook naming the commands and what they do and do not promise — NOT a dependency, NOT a script in this tree, and NOT a compliance claim. docs-writer.
+
+### GitHub Pages is being built twice, and the failing builder is the one protecting the site (2026-09-15, from the steward cycle)
+
+Found while reading mainline's own check runs rather than a PR's: `build` is **red on
+every mainline commit** (measured on `32bfd5fc`), and has been since 2026-08-23. It is not
+a CI job — it is GitHub's legacy `pages build and deployment` (Jekyll, workflow id
+`313396927`, event `dynamic`), which fires on every push to the default branch. Of its
+last 100 runs, **97 failed and 3 were cancelled**; the last success was
+`2026-08-23T05:54:08Z`. The error is the same one each time, rendering a vendored file:
+
+```
+Liquid syntax error (line 368): Variable '{{ height: `${virtualizer.getTotalSize()}'
+  was not properly terminated with regexp: /\}\}/
+  — third_party/everything-claude-code/skills/frontend-patterns/SKILL.md
+```
+
+Jekyll parses every markdown file in the repository as a Liquid template (the build log
+shows `jekyll-optional-front-matter` loaded), so a `{{` inside a vendored code fence is
+enough to stop it.
+
+**Do not fix the Liquid error.** The red is what is keeping the site correct. The
+repository's intended publisher is [`.github/workflows/pages.yml`](../.github/workflows/pages.yml)
+— `workflow_dispatch` only, by design, building `artifacts/signalgrid-web`. Its last run
+succeeded `2026-08-31T12:14:51Z`, and deployment `160933de` from `2026-08-31T12:15:25Z` is
+what `https://danfashauer.github.io/SignalGrid-Review-Hub/` serves today (HTTP 200,
+`last-modified: Mon, 31 Aug 2026 12:15:31 GMT`, the hand-authored marketing `index.html`
+carrying `<meta name="robots" content="index, follow">`). Both publishers write the same
+`github-pages` environment, so whichever deploys last wins: **a green Jekyll build would
+publish a Jekyll render of the whole repository over the marketing site**, on a public,
+indexed domain, without passing the publication boundary the site's own sources pass.
+
+- [ ] **Owner action, one setting: Settings → Pages → Source = "GitHub Actions" (LOW effort, MEDIUM consequence).** The legacy builder only runs while the source is "Deploy from a branch", so switching the source both clears the standing red on mainline and removes the path by which an unreviewed render could replace the site. The lane cannot verify or change this: `GET /repos/{owner}/{repo}/pages` is refused through this session's proxy (`403 … not permitted through this proxy`), so the branch-source reading above is INFERRED from the legacy workflow still firing, not read from the setting.

@@ -186,7 +186,11 @@ async function main(): Promise<void> {
   // ---- past the factory: the two refusals and the one success the real factory
   // can never reach in this tree, driven through the injected adapter.
   const LIVE = { SIGNALGRID_TIER: "prod", SIGNALGRID_LIVE_INTEGRATIONS: "true" } as NodeJS.ProcessEnv;
-  const adapterThat = (createTicket: ITSMAdapter["createTicket"]): ITSMAdapter => ({ createTicket });
+  const adapterThat = (createTicket: ITSMAdapter["createTicket"]): ITSMAdapter => ({
+    name: "proof stand-in",
+    vendor: "servicenow",
+    createTicket,
+  });
 
   const opened = await dispatchIncident(incident("P1", "general"), "servicenow", CONFIG, LIVE, () =>
     adapterThat(async () => ({ ticketId: "INC0012345", ticketUrl: "https://vendor.invalid/t/1", status: "new" }) as ITSMTicketResponse),

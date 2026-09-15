@@ -462,7 +462,7 @@ if (SELF_TEST) {
   } else {
     console.log(render(sections));
     // --narrate would route a one-line developer summary to the FREE/LOCAL tier via
-    // the DR-044 tap. In THIS public repo the tap is fixture-backed (DR-029/DR-044): it
+    // the DR-046 tap. In THIS public repo the tap is fixture-backed (DR-029/DR-046): it
     // returns a canned draft, not a summary of the panel above, so presenting it as one
     // would print a generic line beneath real failures as if it described them. So a
     // fixture-backed draft is NOT shown as a summary — it is named as the placeholder it

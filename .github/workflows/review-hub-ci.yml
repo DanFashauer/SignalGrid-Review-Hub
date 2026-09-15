@@ -790,6 +790,12 @@ jobs:
         run: pnpm run proof:absent-collection
       - name: "Mutation sharding partitions the registry (the daily sweep loses no target)"
         run: node scripts/check-mutation-sharding.mjs
+      # Pre-merge gate-falsification authorizer (DR-050). CI runs its SELF-TEST — the live
+      # authorizer needs a base ref, a committed head diff and the covering proofs, so it
+      # belongs to the auto-merge lane, not a per-push gate. The self-test proves it can
+      # fail both ways (killed mutant → green; survivor / uncovered / hung → never green).
+      - name: "PR gate-falsification authorizer self-test (a weakened gate cannot be authorized green)"
+        run: node scripts/check-pr-gate-falsification.mjs --self-test
       - name: "Backlog row citations name rows that exist"
         run: node scripts/check-row-citations.mjs
       - name: "Row-citation gate self-test (it can actually fail)"

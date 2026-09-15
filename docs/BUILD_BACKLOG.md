@@ -1310,6 +1310,94 @@ _These need the owner's call — an agent should not act on them unsupervised._
 
 ## Discovered
 
+### The event contract cannot express "we were blind" — OWNER-GATED (2026-09-14, from the iLOQ intake)
+
+`lib/event-contract/src/types.ts` carries exactly **one** time field: `occurredAt`,
+"supplied by the emitter". There is no `ingestedAt` / `receivedAt` / `recordedAt`
+anywhere in the canonical contract (verified by field enumeration and by grep across
+`lib/` and `artifacts/api-server/src`; `occurredAt` has only two non-fixture consumers,
+`validate.ts` and the CAEP format adapter).
+
+In the **connected** topology `SIGNALGRID_SMARTDOCK.md` assumes — "the dock connects to
+power and network" — that is harmless: occurred-time and learned-time are the same
+instant. In a **carrier** topology, where a puck or phone physically ferries state
+between an offline endpoint and the fabric (the shape iLOQ ships, and the shape
+`SESSION_PUCK_HARDWARE_HYPOTHESIS.md` describes), every event is late by construction
+and the gap between those instants IS the blind window. One timestamp cannot carry both,
+so a stale fact and a just-learned one are the same value and nothing downstream can
+raise assurance for the window — which golden rule 2 would otherwise require.
+
+The repo already refuses this exact collapse one layer down:
+`firmware/dock/core/src/custody.rs` — built firmware, unlike the deferred dock families
+above — keeps `NotReported` and `Faulted` distinct because
+"a sensor that is simply absent from this build is not the same as one that answered
+with garbage or timed out".
+
+**Why this is not built here.** Adding a field to the canonical event contract is a
+decision-core change (DR-020 territory) and needs a decision record the lane may not
+write. The custody/dock families are also still deferred in the launch profile, so
+nothing about this is claimable today. The shape a record would have to settle, stated
+so the decision is cheap to make and not re-derived:
+
+- whether the second instant is a contract FIELD or a transport-layer envelope value
+  that never enters a decision path (determinism: no clock in `lib/signalgrid-core`);
+- whether an absent second instant means "connected topology, treat as simultaneous"
+  (fail-open) or "unknown blind window, raise assurance" (fail-closed) — the latter is
+  what golden rule 2 says, and it changes every existing emitter;
+- whether the blind window is evidence only, or gates a verdict.
+
+No code, contract, proof, gate or claim changed for this entry.
+### Wiring the custody-ledger evaluator into `/v1` needs a package extraction first — OWNER-GATED, deferred family (2026-09-14, measured by attempting it)
+
+`evaluateCustodyLedger` grades the custody contradiction the runbooks cite most (the custody
+and dock families stay deferred in the launch profile; none of this is shipped or claimed) — what the
+checkout ledger says about a device against what the dock bay sees, plus the requester's
+cap. It is built, proven by `proof:rtls-custody`, and has **no product caller**: its only
+callers are its own file and its proof, and `artifacts/api-server/src` imports
+`@workspace/integrations` zero times. (Correcting a stronger claim made earlier the same
+day: the family IS exported — `./rtls-custody` is one of 67 per-family subpath exports in
+`lib/integrations/package.json`. It is reachable; nothing reaches for it.)
+
+**The wiring was built end to end and then reverted, and the reason is the useful part.**
+Nothing below is a claim of current capability — the family remains deferred.
+Two read-only fixture-backed routes (`GET /v1/custody/ledger/fixtures` and
+`/fixtures/{name}`) worked against a live server — the phantom fixture graded
+`stale_return` / `step_up` / `CUSTODY_STALE_RETURN_OTHER`, `readyForCheckout: false`, with
+the contradiction named; unknown name 404, unauthenticated 401 — and `test:api` went
+409/409 to 416/416. Eleven surfaces stayed in sync (OpenAPI spec, API tests, the
+route-count figure, Postman requests + env, two derived request counts, a file-length
+figure, the claim-inventory anchors after the spec insertion moved a cited line, the Bruno
+collection + env, and four `.bru`-count sentences).
+
+**What stopped it: `check-deployment-runbook.mjs`.** That gate resolves the server's
+TRANSITIVE `@workspace/*` runtime dependencies to their source dirs and requires every env
+var any of them boot-reads to appear in the deployment runbook's table. Declaring
+`@workspace/integrations` as an api-server dependency therefore adds **80 distinct env
+vars** — measured, not estimated — taking the documented surface from 119 to ~199.
+Narrowing the import to a new `./rtls-custody/custody-ledger` subpath did NOT help: the
+gate reads the dependency graph, not the import graph, which is the correct design because
+a declared runtime dependency *could* read any of them.
+
+Those 80 belong to other deferred families — access-governance, agent-behavior, agent-identity,
+credential-exposure, MDE, SSO, SSE and more — and the custody route cannot use one of
+them; `evaluateCustodyLedgerFixture` is pure. Documenting them to pass the gate would tell
+an operator those knobs exist on this service when they do not, which is the exact
+dishonesty the runbook gate exists to prevent. Fixing the copy to fit the gate is right;
+fitting the gate's *inputs* to the copy is not.
+
+**The shape that would work**, for whoever takes it, with the family still deferred: extract
+the evaluator into its own
+small workspace package with no env reads (`custody-ledger.ts` imports exactly one thing,
+`posedBound` from `../../utils/posed-bound`), have `rtls-custody` re-export from it so
+there stays one definition and one proof, and depend the api-server on that. It is a
+`lib/**` structural change (DECISION_PATH under `classifyDiff`), so it is owner-gated and
+wants a deliberate decision rather than a rider on an unrelated branch.
+
+The honest summary, for a family that stays deferred either way: the custody layer is not
+unwired by oversight. It is unwired because
+the obvious wiring widens the API's configuration surface by 80 variables it cannot use,
+and a gate refuses to let that go undocumented.
+
 ### api-zod / v1 input-validation hardening — design targets (2026-09-04, from the fail-closed audit)
 
 Filed from the `lib/api-zod` fail-closed audit (recorded in `docs/agent/EVIDENCE.md`). No

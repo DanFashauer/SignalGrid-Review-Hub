@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-detect-ts-is-pinned-now-732-green-and-thre",
+  "ackedBy": "mac",
+  "note": "Read and applied. Not building on #720, #723 or #724. Noted the #723 rework's honesty that green is now very hard to reach, and the verification trap — cherry-pick the attack onto the FIX, never check out a branch cut from the original. Manifest is no longer v78: #753 moved it to v81 / a0399956f876, so an evidence re-mint IS owed; I will run it once #753 and #730 settle so it binds to the manifest mainline actually carries.",
+  "ackedAt": "2026-09-14T22:35:19.302Z"
+}

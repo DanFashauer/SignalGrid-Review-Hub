@@ -1458,7 +1458,7 @@
    "claim": "\"A hardened device carrier that physically binds badge custody to digital identity. BLE + UWB zone detection, electromagnetic badge lock, eSIM cellular keepalive, and tamper-evident post-exit recovery — in a shift-durable form factor. Custody, charge, and tamper events feed the decision engine through the DockBridge custody connector.\"",
    "kind": "capability",
    "classification": "deferred",
-   "evidence": "Present tense (\"binds\", \"feed\") for hardware that does not exist. custody deferred at scripts/launch-profile.mjs:275, location deferred at :281, pacs_access at :287. DockBridge is fixture-only — lib/signalgrid-core/src/dock.ts:147 \"DockBridge fixture sync ...: synthetic custody events only, read-only, no dock action.\" DR-005 (docs/DECISION_RECORDS.md:236-259) removes present-tense claims for deferred badge capabilities.",
+   "evidence": "Present tense (\"binds\", \"feed\") for hardware that does not exist. custody deferred at scripts/launch-profile.mjs:275, location deferred at :281, pacs_access at :287. DockBridge is fixture-only — lib/signalgrid-core/src/dock.ts:160 \"DockBridge fixture sync ...: synthetic custody events only, read-only, no dock action.\" DR-005 (docs/DECISION_RECORDS.md:236-259) removes present-tense claims for deferred badge capabilities.",
    "action": "rewrite"
   },
   {
@@ -1577,7 +1577,7 @@
    "claim": "SmartDock: \"Power + network in, nothing else required\" — \"The embedded SignalGrid agent streams normalized custody/charge/tamper/dock/badge signals — every ALLOW / STEP-UP / RESTRICT / DENY decision runs in your own deployment. The dock supplies signals and never decides.\"",
    "kind": "capability",
    "classification": "deferred",
-   "evidence": "Present tense (\"streams\") for a dock that does not exist; custody deferred at scripts/launch-profile.mjs:275, pacs_access (badge) at :287. The fixture path is lib/signalgrid-core/src/dock.ts:147 (\"synthetic custody events only, read-only, no dock action\"). The four-verdict vocabulary and the \"never decides\" split are true of the core.",
+   "evidence": "Present tense (\"streams\") for a dock that does not exist; custody deferred at scripts/launch-profile.mjs:275, pacs_access (badge) at :287. The fixture path is lib/signalgrid-core/src/dock.ts:160 (\"synthetic custody events only, read-only, no dock action\"). The four-verdict vocabulary and the \"never decides\" split are true of the core.",
    "action": "rewrite"
   },
   {
@@ -1651,7 +1651,7 @@
    "claim": "\"Modeled end-to-end in the deterministic core (connector → sync → normalized signals → decision → audit), fixture-backed and read-only.\"",
    "kind": "capability",
    "classification": "demo-only",
-   "evidence": "True of the fixture path: lib/signalgrid-core/src/dock.ts:147 runs the sync and stamps \"synthetic custody events only, read-only, no dock action\"; `pnpm run proof:rtls-custody` and `pnpm run proof:custody-beacon` exist in package.json. Accurately labeled fixture-backed and read-only.",
+   "evidence": "True of the fixture path: lib/signalgrid-core/src/dock.ts:160 runs the sync and stamps \"synthetic custody events only, read-only, no dock action\"; `pnpm run proof:rtls-custody` and `pnpm run proof:custody-beacon` exist in package.json. Accurately labeled fixture-backed and read-only.",
    "action": "keep"
   },
   {
@@ -5402,7 +5402,7 @@
   },
   {
    "file": "docs/room-entry-console.html",
-   "line": "196",
+   "line": "213",
    "claim": "Scenario group headings presented as supported verticals — \"Smart hospital\", \"Warehouse\", \"Global fleet\"",
    "kind": "availability",
    "classification": "demo-only",
@@ -5440,7 +5440,7 @@
   },
   {
    "file": "docs/room-entry-console.html",
-   "line": "232",
+   "line": "249",
    "claim": "Rendered control — \"Complete step-up · badge tap\"",
    "kind": "capability",
    "classification": "deferred",
@@ -5449,7 +5449,7 @@
   },
   {
    "file": "docs/room-entry-console.html",
-   "line": "238",
+   "line": "255",
    "claim": "Panel heading — \"Signals evaluated\", listing per-signal vendor-shaped states (compliant / bound / drifted / stale / tampered) as though read from source systems",
    "kind": "capability",
    "classification": "demo-only",
@@ -5458,7 +5458,7 @@
   },
   {
    "file": "docs/room-entry-console.html",
-   "line": "248",
+   "line": "265",
    "claim": "Panel heading — \"Downstream orchestration\"",
    "kind": "capability",
    "classification": "demo-only",
@@ -10366,7 +10366,7 @@
    "claim": "\"Source unreachable or late → the decision tightens\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "lib/signalgrid-core/src/evidence.ts:573 \"this classification can only ever RAISE assurance, never lower it\"; lib/signalgrid-core/src/continuity.ts:42 \"an unreachable signal raises assurance\"; `pnpm run review:invariants` in CI (.github/workflows/review-hub-ci.yml:63; scripts/review-invariants.mjs:12-17)",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:589 \"this classification can only ever RAISE assurance, never lower it\"; lib/signalgrid-core/src/continuity.ts:42 \"an unreachable signal raises assurance\"; `pnpm run review:invariants` in CI (.github/workflows/review-hub-ci.yml:63; scripts/review-invariants.mjs:12-17)",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },
@@ -10720,7 +10720,7 @@
    "claim": "\"it tightens the verdict instead of passing as green\" — a stale compliant",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "lib/signalgrid-core/src/evidence.ts:573 (\"can only ever RAISE assurance, never lower it\"); `pnpm run proof:device-management-health` (package.json:100)",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:589 (\"can only ever RAISE assurance, never lower it\"); `pnpm run proof:device-management-health` (package.json:100)",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },
@@ -10760,7 +10760,7 @@
    "claim": "\"There is no configuration in which absence reads as fine.\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "lib/signalgrid-core/src/evidence.ts:573 — the classification \"can only ever RAISE assurance, never lower it\" is structural, not a setting; lib/posture-composition/src/adapters.ts:221-269 every dimension \"never lowers what any other dimension says\"; scripts/check-ios-policy-defaults.mjs (CLAUDE.md iOS specifics) gates the managed-config default on the host side",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:589 — the classification \"can only ever RAISE assurance, never lower it\" is structural, not a setting; lib/posture-composition/src/adapters.ts:221-269 every dimension \"never lowers what any other dimension says\"; scripts/check-ios-policy-defaults.mjs (CLAUDE.md iOS specifics) gates the managed-config default on the host side",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },

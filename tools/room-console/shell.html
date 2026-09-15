@@ -145,6 +145,19 @@
   // `absent` is deliberately amber, not red: the core's own type comment calls an unbound
   // shared device "not itself a fault". `removed` and `forced` are the affirmative ones.
   const U_BADGE    = {present:'ok', removed:'bad', forced:'bad', absent:'warn', unknown:'warn'};
+  // DR-043's credential half. `not_applicable` is GREEN on all four, and deliberately:
+  // it means no such credential is in play, which for a fleet with no pucks is the
+  // expected reading — amber there would paint every row of every puckless deployment
+  // on day one. `unknown` (a read attempted and FAILED) stays amber.
+  const U_ATTACH   = {attached:'ok', removed:'bad', unknown:'warn', not_applicable:'ok'};
+  // `absent` is a radio HINT, not a custody fact — the engine steps up only when it
+  // coincides with an unseated credential, and a seated one vetoes it. Amber, not red.
+  const U_PRESENCE = {present:'ok', absent:'warn', unknown:'warn', not_applicable:'ok'};
+  const U_ENROLL   = {strong:'ok', legacy:'warn', unknown:'warn', not_applicable:'ok'};
+  // `legacy` is amber ALONE and denies only against a strong enrolment. A per-value
+  // colour cannot express a conjunction; the deny reaches the operator as the verdict
+  // and CREDENTIAL_DOWNGRADE, not as a red cell here.
+  const U_READ     = {strong:'ok', legacy:'warn', unknown:'warn', not_applicable:'ok'};
   const U_MGMT     = {healthy:'ok', degraded:'warn', broken:'bad', unknown:'warn'};
   const U_AUTH     = {verified:'ok', withheld:'bad', unverified:'warn'};
   // Keys are `DecisionEvidence` field names, exactly as `Object.entries(d.signals)` yields
@@ -168,6 +181,10 @@
     benchmarkSelection: U_BENCH,
     shiftContext: U_SHIFT,
     badgeBinding: U_BADGE,
+    attachState: U_ATTACH,
+    presenceState: U_PRESENCE,
+    enrollmentStrength: U_ENROLL,
+    credentialReadMethod: U_READ,
     managementHealthState: U_MGMT,
     localAuthorityState: U_AUTH,
     criticalSignalsPresent: U_BOOL,

@@ -12,6 +12,10 @@ import type {
   CustodyState,
   DecisionEvidence,
   Device,
+  AttachState,
+  PresenceState,
+  EnrollmentStrength,
+  CredentialReadMethod,
   DockState,
   EvidenceSnapshot,
   Freshness,
@@ -82,6 +86,10 @@ export function buildEvidence(
     tamperState: readTamper(latestByCategory),
     dockEvidenceFreshness: readDockEvidenceFreshness(latestByCategory),
     dockState: readDock(latestByCategory),
+    attachState: readAttach(latestByCategory),
+    presenceState: readPresence(latestByCategory),
+    enrollmentStrength: readEnrollment(latestByCategory),
+    credentialReadMethod: readReadMethod(latestByCategory),
     baselineCompliance: readBaseline(latestByCategory),
     benchmarkSelection: readBenchmarkSelection(latestByCategory),
     shiftContext: readShiftContext(latestByCategory),
@@ -508,6 +516,10 @@ const CUSTODY_STATES = [
 const CHARGE_STATES = ["charging", "charged", "low", "critical", "not_present"] as const;
 const TAMPER_STATES = ["none", "suspected", "confirmed", "sensor_unavailable"] as const;
 const DOCK_STATES = ["occupied", "empty", "reserved", "faulted", "offline"] as const;
+const ATTACH_STATES = ["attached", "removed", "unknown"] as const;
+const PRESENCE_STATES = ["present", "absent", "unknown"] as const;
+const ENROLLMENT_STRENGTHS = ["strong", "legacy", "unknown"] as const;
+const READ_METHODS = ["strong", "legacy", "unknown"] as const;
 const BATTERY_HEALTH_STATES = ["healthy", "degraded", "failing"] as const;
 const BASELINE_STATES = ["aligned", "partial", "drifted", "not_assessed"] as const;
 // Only the two AFFIRMATIVE values are readable from a signal. Absent or
@@ -537,6 +549,10 @@ const DOCK_CATEGORIES = [
   "battery_health",
   "tamper_state",
   "dock_state",
+  "attach_state",
+  "presence_state",
+  "enrollment_strength",
+  "credential_read_method",
   "badge_binding",
 ] as const;
 
@@ -590,6 +606,10 @@ export const EVIDENCE_VALUE_DOMAINS = {
   batteryHealth: { members: BATTERY_HEALTH_STATES, good: ["healthy"] },
   tamper: { members: TAMPER_STATES, good: ["none"] },
   dock: { members: DOCK_STATES, good: ["occupied", "empty", "reserved"] },
+  attach: { members: ATTACH_STATES, good: ["attached"] },
+  presence: { members: PRESENCE_STATES, good: ["present"] },
+  enrollment: { members: ENROLLMENT_STRENGTHS, good: ["strong"] },
+  readMethod: { members: READ_METHODS, good: ["strong"] },
   baseline: { members: BASELINE_STATES, good: ["aligned"] },
   benchmarkSelection: { members: BENCHMARK_SELECTION_STATES, good: ["confirmed"] },
   shiftContext: { members: SHIFT_CONTEXT_STATES, good: ["confirmed"] },
@@ -736,6 +756,27 @@ function readTamper(latestByCategory: LatestByCategory): TamperState {
 
 function readDock(latestByCategory: LatestByCategory): DockState {
   return readEnum(latestByCategory, "dock_state", EVIDENCE_VALUE_DOMAINS.dock) ?? "unknown";
+}
+
+/** No attach reading is "unknown", and unknown is NOT a grant here (see AttachState).
+ *  The default is the same shape as its siblings; what differs is what the policy
+ *  does with it. */
+function readAttach(latestByCategory: LatestByCategory): AttachState {
+  return readEnum(latestByCategory, "attach_state", EVIDENCE_VALUE_DOMAINS.attach) ?? "not_applicable";
+}
+
+/** No presence radio at all is "not_applicable"; a radio that answered "absent" is a
+ *  hint the rules weigh only alongside the attach domain. */
+function readPresence(latestByCategory: LatestByCategory): PresenceState {
+  return readEnum(latestByCategory, "presence_state", EVIDENCE_VALUE_DOMAINS.presence) ?? "not_applicable";
+}
+
+function readEnrollment(latestByCategory: LatestByCategory): EnrollmentStrength {
+  return readEnum(latestByCategory, "enrollment_strength", EVIDENCE_VALUE_DOMAINS.enrollment) ?? "not_applicable";
+}
+
+function readReadMethod(latestByCategory: LatestByCategory): CredentialReadMethod {
+  return readEnum(latestByCategory, "credential_read_method", EVIDENCE_VALUE_DOMAINS.readMethod) ?? "not_applicable";
 }
 
 function readEnum<T extends string>(

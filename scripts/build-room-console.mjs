@@ -80,7 +80,14 @@ const typesSrc = readFileSync(resolve(repo, TYPES_REL), "utf8");
 function parseStringUnions(source) {
   const unions = new Map();
   for (const m of source.matchAll(/export type (\w+)\s*=\s*([^;]*);/g)) {
-    const rhs = m[2];
+    // COMMENTS COME OUT FIRST, and the order matters twice. A `/** … */` on a union
+    // MEMBER is ordinary TypeScript, and the four DR-043 credential unions document
+    // theirs — but the purity test below reads any leftover text as "this union has a
+    // non-literal member" and skips the whole type, which surfaced as the derivation
+    // refusing to resolve `AttachState` at all rather than as a parse warning. And
+    // stripping BEFORE extracting values matters on its own: a quoted phrase inside a
+    // doc comment would otherwise be harvested as a member of the union.
+    const rhs = m[2].replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
     const values = [...rhs.matchAll(/"([^"]*)"/g)].map((v) => v[1]);
     if (values.length === 0) continue;
     if (!/^[|\s]*$/.test(rhs.replace(/"[^"]*"/g, ""))) continue;
@@ -176,6 +183,21 @@ const EXPECTED_CLASSES = {
   BenchmarkSelectionState: { confirmed: "ok", misfit: "bad", unverified: "warn" },
   ShiftContextState: { confirmed: "ok", misfit: "bad", unverified: "warn" },
   BadgeBindingState: { present: "ok", removed: "bad", forced: "bad", absent: "warn", unknown: "warn" },
+  // DR-043's credential half. `not_applicable` is "ok" on all four, and that is the
+  // judgement worth arguing with: it means NO SUCH CREDENTIAL IS IN PLAY, which for a
+  // fleet with no pucks is the expected reading, not a degraded one. Colouring it
+  // "warn" would paint every row of every puckless deployment amber on day one —
+  // the same day-one-quiet guarantee the `not_applicable` / `unknown` split exists to
+  // keep. `unknown` (a read that was attempted and FAILED) is "warn" on all four.
+  AttachState: { attached: "ok", removed: "bad", unknown: "warn", not_applicable: "ok" },
+  // `absent` is a HINT from a radio, not a custody fact — the engine only steps up when
+  // it coincides with an unseated credential, and a seated one vetoes it. Amber, not red.
+  PresenceState: { present: "ok", absent: "warn", unknown: "warn", not_applicable: "ok" },
+  EnrollmentStrength: { strong: "ok", legacy: "warn", unknown: "warn", not_applicable: "ok" },
+  // "legacy" is amber ALONE and denies only in combination with a strong enrolment —
+  // a per-value colour cannot express a conjunction, and should not try to. The deny
+  // reaches the operator as the verdict and CREDENTIAL_DOWNGRADE, not as a red cell.
+  CredentialReadMethod: { strong: "ok", legacy: "warn", unknown: "warn", not_applicable: "ok" },
   ManagementHealthState: { healthy: "ok", degraded: "warn", broken: "bad", unknown: "warn" },
   LocalAuthorityGrantState: { verified: "ok", withheld: "bad", unverified: "warn" },
 };

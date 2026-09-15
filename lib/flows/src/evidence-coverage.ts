@@ -189,6 +189,37 @@ export const EVIDENCE_AXES: readonly EvidenceAxis[] = [
     answerableBy: ["dock_hardware"],
     dayOneQuiet: true,
   },
+  // ── The credential half of the session (DR-043) ───────────────────────────
+  {
+    id: "attachState",
+    question: "Is the worker's credential still physically attached to the device it was issued with?",
+    answerableBy: ["dock_hardware", "badge_custody"],
+    // MEASURED, and the ONE axis in this family that is not quiet: an ignorant
+    // `attachState` steps up, because a credential whose whereabouts cannot be
+    // read is not the same as a deployment that has no such credential. Absence
+    // resolves to `not_applicable` and stays silent; illegibility does not.
+    dayOneQuiet: false,
+  },
+  {
+    id: "presenceState",
+    question: "Is the worker actually here, or did the device stay behind when they walked away?",
+    answerableBy: ["badge_custody"],
+    // Docks sense SEATING, radios sense PROXIMITY — different connectors, so this
+    // axis does not inherit the dock plane.
+    dayOneQuiet: true,
+  },
+  {
+    id: "enrollmentStrength",
+    question: "How strong is the credential this worker was actually enrolled with?",
+    answerableBy: ["identity"],
+    dayOneQuiet: true,
+  },
+  {
+    id: "credentialReadMethod",
+    question: "Was this credential read by the strong method it was enrolled for, or by a weaker fallback?",
+    answerableBy: ["identity", "badge_custody"],
+    dayOneQuiet: true,
+  },
   {
     id: "baselineCompliance",
     question: "Is the device hardened to the security baseline you chose?",

@@ -283,6 +283,76 @@ export type DockState =
   | "faulted"
   | "offline"
   | "unknown";
+
+/**
+ * PUCK/CREDENTIAL ATTACH STATE (DR-043 item (a)) — whether the physical credential
+ * is seated in the device it gates.
+ *
+ * This domain is DELIBERATELY STRICTER than its siblings. `badgeBinding: "unknown"`
+ * and `dockState: "unknown"` both resolve to `allow` under the day-one-quiet pattern
+ * (seed.ts) — silence there must not fabricate a block. Here silence is different in
+ * kind: for a puck-gated session the attach event IS the custody-intent evidence, so
+ * not knowing whether the credential is seated is not a quiet day, it is the absence
+ * of the very thing the session rests on. `unknown` is therefore at least `step_up`
+ * and NEVER a grant. The divergence is stated on the hypothesis page and is the
+ * point of the domain, not an inconsistency with the siblings.
+ */
+/**
+ * CREDENTIAL ENROLLMENT STRENGTH — what the worker actually HOLDS (DR-043 item (d),
+ * the "legacy read for a strong-enrolled worker" row). "strong" is a phishing-resistant
+ * enrollment (FIDO2/passkey, or a puck that carries one); "legacy" is a cloneable
+ * factor such as a prox card or a PIN.
+ */
+export type EnrollmentStrength =
+  | "strong"
+  | "legacy"
+  | "unknown"
+  /** No enrollment answer is in play (the default when no signal exists). */
+  | "not_applicable";
+
+/**
+ * HOW THIS PARTICULAR READ ARRIVED — the other half of the downgrade question. A
+ * worker who HOLDS a strong credential presenting over a legacy path is the classic
+ * downgrade attack: the legacy path is exactly what a cloned prox card uses, and the
+ * strong enrollment is the reason nobody should need it. See the credential-downgrade
+ * rule in policy.ts — the join is done in the deterministic core, not delegated to the
+ * connector that reported either half.
+ */
+export type CredentialReadMethod =
+  | "strong"
+  | "legacy"
+  | "unknown"
+  | "not_applicable";
+
+/**
+ * RADIO/PROXIMITY PRESENCE (DR-043 item (d), the "radio says gone, puck seated" row).
+ *
+ * What a presence radio (BLE/RTLS/beacon) claims about whether the holder is still
+ * near the device. It is the WEAKEST custody evidence in the fabric and is treated as
+ * such: radios drop, walls absorb, batteries sag. A radio saying "gone" is a hint,
+ * never a custody fact, and it may not by itself end a session whose credential is
+ * still physically seated — see the presence-absent-unseated rule in policy.ts.
+ */
+export type PresenceState =
+  | "present"
+  /** The radio no longer sees the holder. A HINT, not a custody fact. */
+  | "absent"
+  /** A presence read that failed. */
+  | "unknown"
+  /** No presence radio is in play (the default when no signal exists at all). */
+  | "not_applicable";
+
+export type AttachState =
+  | "attached"
+  | "removed"
+  /** A puck-gated session whose attach read FAILED — step up, never a grant. */
+  | "unknown"
+  /** No credential is in play for this decision (the default when no attach signal
+   *  exists at all). Distinct from "unknown" on purpose: absence of a puck is not a
+   *  failed read, and treating it as one would step up every decision in a
+   *  deployment that has no pucks — the day-one-quiet guarantee the sibling
+   *  dimensions rest on. The strict arm fires on an EMITTED unknown, not on silence. */
+  | "not_applicable";
 /**
  * Battery HEALTH, which is a different question from `ChargeState`.
  *
@@ -338,6 +408,10 @@ export const SIGNAL_CATEGORIES = [
   "battery_health",
   "tamper_state",
   "dock_state",
+  "attach_state",
+  "presence_state",
+  "enrollment_strength",
+  "credential_read_method",
   "security_baseline",
   "benchmark_selection",
   "shift_context",
@@ -405,6 +479,10 @@ export const EVIDENCE_FIELDS = [
   "batteryHealth",
   "tamperState",
   "dockState",
+  "attachState",
+  "presenceState",
+  "enrollmentStrength",
+  "credentialReadMethod",
   "baselineState",
   "benchmarkSelectionState",
   "shiftContextState",
@@ -430,6 +508,10 @@ export type RuleCondition =
   | { field: "batteryHealth"; in: BatteryHealthState[] }
   | { field: "tamperState"; in: TamperState[] }
   | { field: "dockState"; in: DockState[] }
+  | { field: "attachState"; in: AttachState[] }
+  | { field: "presenceState"; in: PresenceState[] }
+  | { field: "enrollmentStrength"; in: EnrollmentStrength[] }
+  | { field: "credentialReadMethod"; in: CredentialReadMethod[] }
   | { field: "baselineState"; in: BaselineState[] }
   | { field: "benchmarkSelectionState"; in: BenchmarkSelectionState[] }
   | { field: "shiftContextState"; in: ShiftContextState[] }
@@ -518,6 +600,19 @@ export interface DecisionEvidence {
    * so `allow` should not rest on it. See docs/SIGNALGRID_SMARTDOCK.md.
    */
   dockState: DockState;
+  /** Whether the physical credential/puck is seated in the device (default
+   *  "unknown"). Unlike its siblings, "unknown" here is never a grant — see
+   *  AttachState. */
+  attachState: AttachState;
+  /** What a presence radio claims about the holder being nearby (default
+   *  "not_applicable"). The weakest custody evidence here — a radio saying "gone"
+   *  never by itself ends a session whose credential is still seated. */
+  presenceState: PresenceState;
+  /** The strength of the credential the worker HOLDS (default "not_applicable"). */
+  enrollmentStrength: EnrollmentStrength;
+  /** How THIS read arrived (default "not_applicable"). A legacy read by a
+   *  strong-enrolled worker is a downgrade and is denied. */
+  credentialReadMethod: CredentialReadMethod;
   /** Security-baseline (CIS/hardening) alignment for the device (default "unknown"). */
   baselineCompliance: BaselineState;
   /** Whether the baseline answer above came from the RIGHT test (default
@@ -825,7 +920,16 @@ export type AuditEventType =
   | "policy.version_activated"
   | "evidence.captured"
   | "remediation.requested"
-  | "remediation.approved";
+  | "remediation.approved"
+  // ── Credential/puck custody lifecycle (DR-043 item (c)) ──────────────────
+  // The ledger names for the three transitions the attach domain can observe.
+  // They are EMITTED (by the DockBridge fixture connector), not reserved: a
+  // vocabulary nothing writes is a claim, not a capability. Each records what the
+  // dock OBSERVED; none of them commands a dock or asserts hardware exists.
+  /** The credential was seated in the device it gates. */
+  | "credential.attached"
+  /** The credential was lifted out of the device it gates. */
+  | "credential.removed";
 
 export interface AuditEvent {
   id: string;

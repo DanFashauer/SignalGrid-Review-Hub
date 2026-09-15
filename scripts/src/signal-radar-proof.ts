@@ -64,7 +64,7 @@ const order = scanSignals([{ category: "ätemp_sensor" }, { category: "zone_prob
 check("observations are in CODEPOINT order on any machine, not the process locale's collation", order === "Zebra_tag,a_new,zone_probe,ätemp_sensor");
 
 // ── catalog ──────────────────────────────────────────────────────────────────
-check("catalog lists the 17 evaluated categories (15 + the two launch families wired into the core on 2026-08-10)", signalCatalog().evaluated.length === 17);
+check("catalog lists the 21 evaluated categories (15 + the two launch families wired into the core on 2026-08-10 + DR-043's four credential categories, 2026-09-14)", signalCatalog().evaluated.length === 21);
 check("catalog lists candidate categories", signalCatalog().candidate.length > 0);
 
 const total = passed + failures.length;

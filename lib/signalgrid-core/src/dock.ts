@@ -3,6 +3,7 @@ import { classifyFreshness, deterministicId } from "./util";
 import type { Clock } from "./util";
 import {
   CoreError,
+  type AttachState,
   type BadgeBindingState,
   type BatteryHealthState,
   type ChargeState,
@@ -49,6 +50,14 @@ export interface DockCustodyRecord {
    * which normalizes to "unknown".
    */
   badgeBinding?: BadgeBindingState;
+  /**
+   * Whether the physical credential/puck is seated in the device (DR-043 item (a)).
+   * Optional: a dock that cannot sense the credential reports nothing, which
+   * normalizes to "unknown" — and unknown, for THIS domain alone, is a step-up and
+   * never a grant. Absent must therefore stay absent; inferring "attached" from a
+   * silent dock would fabricate the custody intent the session rests on.
+   */
+  attachState?: AttachState;
   observedAt: string;
   sourceReference: string;
 }
@@ -107,6 +116,10 @@ export function runDockSync(
     // The reader case reports a badge-binding read when present.
     if (record.badgeBinding !== undefined) {
       pairs.push({ category: "badge_binding", value: record.badgeBinding });
+    }
+    // Only a dock that can sense the credential reports attach. Absent stays absent.
+    if (record.attachState !== undefined) {
+      pairs.push({ category: "attach_state", value: record.attachState });
     }
     for (const pair of pairs) {
       store.putSignal({

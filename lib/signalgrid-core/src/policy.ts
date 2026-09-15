@@ -111,6 +111,10 @@ const IN_FIELDS: Record<string, ReadonlySet<string>> = {
     "offline",
     "unknown",
   ]),
+  attachState: new Set(["attached", "removed", "unknown", "not_applicable"]),
+  presenceState: new Set(["present", "absent", "unknown", "not_applicable"]),
+  enrollmentStrength: new Set(["strong", "legacy", "unknown", "not_applicable"]),
+  credentialReadMethod: new Set(["strong", "legacy", "unknown", "not_applicable"]),
   baselineState: new Set([
     "aligned",
     "partial",
@@ -371,6 +375,14 @@ function matches(condition: RuleCondition, evidence: DecisionEvidence): boolean 
       return condition.in.includes(evidence.tamperState);
     case "dockState":
       return condition.in.includes(evidence.dockState);
+    case "attachState":
+      return condition.in.includes(evidence.attachState);
+    case "presenceState":
+      return condition.in.includes(evidence.presenceState);
+    case "enrollmentStrength":
+      return condition.in.includes(evidence.enrollmentStrength);
+    case "credentialReadMethod":
+      return condition.in.includes(evidence.credentialReadMethod);
     case "baselineState":
       return condition.in.includes(evidence.baselineCompliance);
     case "benchmarkSelectionState":
@@ -600,6 +612,63 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     outcome: "restrict",
     reasonCode: "DOCK_FAULTED",
     severity: "high",
+  },
+  {
+    // "Legacy read for a strong-enrolled worker -> deny" (DR-043's policy matrix).
+    // The downgrade attack, stated as a rule: the worker HOLDS a phishing-resistant
+    // credential, yet this read arrived over a cloneable legacy path. The strong
+    // enrollment is precisely why nobody should need that path, so its use is not a
+    // convenience — it is the signature of a cloned prox card. DENY, not step_up: a
+    // step-up would let the attacker satisfy a second factor and proceed.
+    //
+    // The join lives HERE, in the deterministic core, rather than being delegated to
+    // whichever connector reported either half — one connector knowing both facts and
+    // reporting a verdict is the shape golden rule 2 keeps out of the decision path.
+    id: "credential-downgrade",
+    description:
+      "A worker enrolled with a strong, phishing-resistant credential authenticated over a legacy cloneable path. The strong enrolment is why that path should be unnecessary; its use is a downgrade. Deny.",
+    match: [
+      { field: "enrollmentStrength", in: ["strong"] },
+      { field: "credentialReadMethod", in: ["legacy"] },
+    ],
+    outcome: "deny",
+    reasonCode: "CREDENTIAL_DOWNGRADE",
+    severity: "critical",
+  },
+  {
+    // "Radio says gone, puck seated -> do not assume gone" (DR-043's policy matrix).
+    // Both conditions are required, which is the whole point: a seated credential
+    // VETOES radio absence by simply not matching. Radios drop, walls absorb,
+    // batteries sag — an absent radio is a hint, and a hint may not end a session
+    // whose credential is still physically in the device.
+    id: "presence-absent-unseated",
+    description:
+      "A presence radio says the holder is gone AND the credential is not seated. Radio absence alone is never custody — a seated credential vetoes this rule, so only the two together step up.",
+    match: [
+      { field: "presenceState", in: ["absent"] },
+      { field: "attachState", in: ["removed", "unknown", "not_applicable"] },
+    ],
+    outcome: "step_up",
+    reasonCode: "PRESENCE_ABSENT_UNSEATED",
+    severity: "medium",
+  },
+  {
+    id: "attach-removed",
+    description:
+      "The physical credential was removed from the device it gates — the key is out of the ignition, so the session it authorized no longer has the custody evidence it rested on.",
+    match: [{ field: "attachState", in: ["removed"] }],
+    outcome: "restrict",
+    reasonCode: "ATTACH_REMOVED",
+    severity: "high",
+  },
+  {
+    id: "attach-unknown",
+    description:
+      "Whether the credential is still seated is unknown. The attach event IS the custody evidence for a puck-gated session, so silence never grants — step up. Diverges from badge/dock unknown by design.",
+    match: [{ field: "attachState", in: ["unknown"] }],
+    outcome: "step_up",
+    reasonCode: "ATTACH_UNKNOWN",
+    severity: "medium",
   },
   {
     id: "dock-offline",

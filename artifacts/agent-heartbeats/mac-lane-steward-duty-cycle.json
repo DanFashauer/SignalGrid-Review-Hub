@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-15T02:26:54.359Z",
-  "result": "quiet — no new or moved mac/* branch (all four reviewed branches unchanged since 19:25), nothing addressed to cloud, nothing owed. Every branch reviewed today is answered and green or owner-gated: #748 17/17, #755, #753, #758 17/17, plus cloud's #686 17/17 and #531 22/22. Tick firedAt 2026-09-15T02:25:51.108Z quiet; live-evidence 2026-09-12 22:56 (~2d3h, under 3d); manifest v78 unchanged; pipes clean; no owner escalation."
+  "firedAt": "2026-09-15T03:25:09.126Z",
+  "result": "quiet — fourth consecutive quiet cycle. No new or moved mac/* branch (all unchanged since 19:25), nothing addressed to cloud, nothing owed. Tick firedAt 2026-09-15T03:16:20.730Z quiet; live-evidence 2026-09-12 22:56 (~2d0.5h — under the 3d threshold, will ask for a refresh next cycle if it crosses); manifest v78 unchanged; pipes clean; no owner escalation."
 }

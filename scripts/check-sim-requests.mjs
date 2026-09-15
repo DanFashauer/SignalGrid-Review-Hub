@@ -294,6 +294,20 @@ function selfTest() {
   checks.push(["a commit that resolves is clean (positive control)", a.problems.length === 0 && a.reported.length === 0]);
   a = auditSimRequests([req("r1", ["preflight"])], [{ ...green[0], provenance: { commit: "not-a-sha" } }], () => true, false);
   checks.push(["a provenance.commit that is not a hash is a failure even when the resolver would say yes", a.problems.some((p) => p.includes("is not a commit hash"))]);
+  // THE THIRD STATE (2026-09-15). A checkout with no git at all reached the FULL-clone
+  // arm, because `rev-parse --is-shallow-repository` fails there and its empty stdout is
+  // not "true". The caller now passes a null resolver instead, which must make this
+  // function decline to judge provenance rather than condemn every result; the caller
+  // adds the one true problem. THESE TWO CASES CONTROL THE DECLINE PATH ONLY — they
+  // pass against the code as it stood before the fix, because the null path already
+  // existed; what was missing was anyone passing null. The call-site change is
+  // falsified end to end instead, by running this script in a directory with no .git:
+  // before, 17 "does not resolve" problems; after, one naming the missing repository.
+  // Saying so here rather than letting a green self-test imply cover it does not have.
+  a = auditSimRequests([req("r1", ["preflight"])], green, null, false);
+  checks.push(["with NO resolver (no repository) provenance is DECLINED, not condemned — no 'does not resolve' verdict", !a.problems.some((p) => p.includes("does not resolve")) && !a.reported.some((p) => p.includes("does not resolve"))]);
+  a = auditSimRequests([req("r1", ["preflight"])], [{ ...green[0], provenance: {} }], null, false);
+  checks.push(["declining to resolve does NOT excuse a result that names no commit at all", a.problems.some((p) => p.includes("no provenance.commit"))]);
 
   // The hole this gate shipped with, now a permanent control.
   a = auditSimRequests(
@@ -355,8 +369,34 @@ const requests = loadDir(REQ_DIR);
 const results = loadDir(RES_DIR);
 const git = (args) => spawnSync("git", args, { cwd: repo, encoding: "utf8" });
 const commitExists = (sha) => git(["cat-file", "-e", `${sha}^{commit}`]).status === 0;
+// THREE STATES, NOT TWO. `shallow` distinguishes a full clone from a depth-1 one,
+// and the arm below reads FULL as "every miss is real". A checkout with NO GIT AT
+// ALL answered the same way: `rev-parse --is-shallow-repository` fails, its stdout
+// is empty, `"" !== "true"`, so the strictest verdict in the file was reached by
+// the one checkout that could not support any verdict — 17 results each declared
+// "the code that produced it cannot be identified" when the truth was that nothing
+// had been asked of a repository. That is the inversion golden rule 2 forbids:
+// unknown resolving to the confident answer instead of tightening.
+//
+// MEASURED, 2026-09-15, on the Mac runner: `/usr/bin/git version` answered "You
+// have not agreed to the Xcode license agreements", so `actions/checkout` reported
+// "The repository will be downloaded using the GitHub REST API" and unpacked a
+// tarball with no `.git`. `fetch-depth: 0` cannot deepen a clone that does not
+// exist. The job named "full-clone provenance" ran with no clone, three commits
+// across two PRs, and this file's output named the wrong subject each time.
+//
+// So: no repository ⇒ REFUSE to judge provenance (pass `null`, the file's existing
+// "cannot check" path) and fail with the one true sentence instead of N false ones.
+// Still fatal — an unanswerable question is not a pass.
+const hasGit = git(["rev-parse", "--git-dir"]).status === 0;
 const shallow = git(["rev-parse", "--is-shallow-repository"]).stdout.trim() === "true";
-const { problems, pending, superseded, reported } = auditSimRequests(requests, results, commitExists, shallow);
+const { problems, pending, superseded, reported } = auditSimRequests(requests, results, hasGit ? commitExists : null, shallow);
+if (!hasGit) {
+  problems.push(
+    `no git repository at ${repo} — provenance cannot be checked at all, so no result here is vouched for or condemned. ` +
+      "A runner reaches this state when actions/checkout finds git unusable and falls back to a REST tarball; fix the checkout, not the results.",
+  );
+}
 {
   // Every tracked markdown document, scope derived from git — never a hand list.
   const docFiles = git(["ls-files", "--", "*.md", "**/*.md"]).stdout.split("\n").filter(Boolean);

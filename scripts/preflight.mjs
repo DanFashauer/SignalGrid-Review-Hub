@@ -240,6 +240,8 @@ const STEPS = [
   { name: "Console launch families self-test (the check can actually fail)", cmd: ["node", "scripts/check-console-launch-families.mjs", "--self-test"] },
   { name: "Cost figures (every currency amount resolves to docs/COST_MODEL.md's register; no owner-only billing figure is published as our own spend)", cmd: ["node", "scripts/check-cost-figures.mjs"] },
   { name: "Cost figures self-test (the check can actually fail)", cmd: ["node", "scripts/check-cost-figures.mjs", "--self-test"] },
+  { name: "Decision-path purity (a verdict may not be fetched, spawned, or sampled from a model)", cmd: ["node", "scripts/check-decision-path-purity.mjs"] },
+  { name: "Decision-path purity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-decision-path-purity.mjs", "--self-test"] },
   { name: "Guard-registry drift (coverage lists derived, not trusted)", cmd: ["node", "scripts/check-guard-registries.mjs"] },
   { name: "CI\u2194preflight drift (every proof runs in both places)", cmd: ["node", "scripts/check-ci-preflight-sync.mjs"] },
   // Pure static analysis of the Dockerfiles against pnpm-workspace.yaml — no

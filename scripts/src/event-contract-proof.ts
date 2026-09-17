@@ -106,6 +106,14 @@ const REASONS: Record<DetectionCode, string> = {
   DOCK_TAMPER_WITH_NETWORK_LOSS: "Tamper was detected while the device also lost connectivity.",
   INACTIVE_MDM_BUT_ACTIVE_ELSEWHERE:
     "The device is unmanaged/unknown in MDM but is still active on cellular or badging in.",
+  // Added during the replay, not when this table was written. `Record<DetectionCode,
+  // string>` is a COMPLETE map by type, and #720 landed CUSTODY_STALE_OR_CONTESTED on
+  // mainline after this PR was cut — so the table went silently incomplete and
+  // expectExactly compared against `undefined`. Copied verbatim from detect.ts rather
+  // than paraphrased: a proof that quotes an approximation of the reason string is not
+  // pinning the string.
+  CUSTODY_STALE_OR_CONTESTED:
+    "Custody is stale or contested: the dock, checkout and posture planes disagree on who holds the device or whether it is seated.",
 };
 
 const ev = (
@@ -118,6 +126,12 @@ const ev = (
   tenantId: "tenant_northwind",
   ...over,
 });
+
+// Kept for the CUSTODY_STALE_OR_CONTESTED block ported from #720 below. The
+// expectExactly assertions this PR introduces are stricter and are the right shape
+// for new coverage; this set-membership helper stays only so the detection that
+// already landed on mainline keeps its proof rather than losing it to a rewrite.
+const codes = (ds: Detection[]): Set<string> => new Set(ds.map((d) => d.code));
 
 /** Everything a consumer of a detection actually reads, on one line. */
 const render = (d: Detection): string =>
@@ -145,14 +159,31 @@ const expectExactly = (
 
 // 1. CHECKOUT_WITHOUT_COMPLIANCE — EVERY grant is evidence and nothing else is; a
 //    `noncompliant` posture is not a compliant one.
+//
+// TWO detections, and the second one is why this assertion changed during the replay.
+// As originally written this expected CHECKOUT_WITHOUT_COMPLIANCE alone, and that was
+// correct when it was written. #720 then landed CUSTODY_STALE_OR_CONTESTED on
+// mainline, which fires on the same shape — a second grant with no clearing return is
+// a contested custody — so the timeline now produces both. Measured rather than
+// assumed, by driving detectCrossDomain directly on exactly these events:
+//
+//     CHECKOUT_WITHOUT_COMPLIANCE   high   evidence=[g1,g2]
+//     CUSTODY_STALE_OR_CONTESTED    high   evidence=[g1,g2]
+//
+// Naming both keeps the assertion EXACT. Dropping to a membership check would have
+// made it pass while no longer pinning what the fabric emits, which is the whole
+// property this rewrite exists to establish.
 expectExactly(
-  "grants that never became compliant → exactly CHECKOUT_WITHOUT_COMPLIANCE, evidence = both grants",
+  "grants that never became compliant → exactly CHECKOUT_WITHOUT_COMPLIANCE + CUSTODY_STALE_OR_CONTESTED, evidence = both grants",
   [
     ev("g1", { eventType: "checkout_granted" }),
     ev("p1", { eventType: "posture_changed", mdmDeviceState: "noncompliant" }),
     ev("g2", { eventType: "checkout_granted" }),
   ],
-  [["CHECKOUT_WITHOUT_COMPLIANCE", "high", ["g1", "g2"]]],
+  [
+    ["CHECKOUT_WITHOUT_COMPLIANCE", "high", ["g1", "g2"]],
+    ["CUSTODY_STALE_OR_CONTESTED", "high", ["g1", "g2"]],
+  ],
 );
 
 // 2. REMOVED_WITHOUT_BADGE_ACCESS — a `dock_unlocked` is not a removal. The

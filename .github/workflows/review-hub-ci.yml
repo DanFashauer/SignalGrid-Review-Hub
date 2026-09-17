@@ -85,6 +85,8 @@ jobs:
       - name: SignalGrid simulator proof
         run: pnpm run proof:signalgrid-simulator
 
+      - name: "Proof: affected-audience (the blast radius is told, and silence is never reported as told)"
+        run: pnpm run proof:affected-audience
       - name: Remediation-allow proof (a remediation record must not buy an allow the base-trust gate would refuse)
         run: pnpm run proof:remediation-allow
 

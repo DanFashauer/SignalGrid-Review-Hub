@@ -139,6 +139,29 @@ function hasLandedByContent(branch) {
   return true;
 }
 
+// THE ALIAS HOLE, and it is the third of exactly this shape. Membership was derived
+// from the branch NAME appearing on the hub, so a local branch pointing at a commit
+// that IS on the hub under a DIFFERENT name read as unpushed work. Subagents doing
+// merge-conflict triage produce precisely that: `pr782` checked out from
+// `origin/claude/build-itsm-dispatch-seam` is the same commit wearing a local name.
+// Measured 2026-09-17: EIGHT branches failed this seam at once while every one of
+// their commits sat on origin. And both remedies the message offers were wrong again —
+// pushing would litter the shared remote with duplicate names for branches already on
+// it, and deletion is refused by this repo's own dangerous-command hook.
+//
+// The tip being contained in ANY remote ref IS "confirm the remote", which is the
+// message's own second option. Fail-closed like its two siblings: a git error, an
+// unreadable ref or an empty answer leaves the branch REPORTED, never cleared. This
+// cannot clear real local work — a branch carrying a commit no remote has is contained
+// in no remote ref, and no amount of renaming changes that.
+function isOnHubBySha(branch) {
+  const sha = git("rev-parse", "--verify", `${branch}^{commit}`);
+  if (!sha) return false;
+  const containing = git("branch", "-r", "--contains", sha);
+  if (!containing) return false;
+  return containing.split("\n").map((l) => l.trim()).filter(Boolean).length > 0;
+}
+
 function branchesInAgentWorktrees() {
   const out = git("worktree", "list", "--porcelain");
   if (!out) return [];
@@ -196,14 +219,20 @@ if (hubBranches.length) {
   // by construction: one differing file, one file mainline lacks, an unreadable diff or
   // any git error and the branch is still reported unpushed. Real work is a difference,
   // and a difference can never pass this.
-  const landed = noRemote.filter((b) => hasLandedByContent(b));
-  const unpushed = noRemote.filter((b) => !landed.includes(b));
+  // Three independent ways a branch is already safe, each REPORTED by name so the
+  // exclusion is visible rather than silent: its commit is on the hub under another
+  // name, or its content is in mainline (squash), or neither — and then it is work.
+  const onHub = noRemote.filter((b) => isOnHubBySha(b));
+  const offHub = noRemote.filter((b) => !onHub.includes(b));
+  const landed = offHub.filter((b) => hasLandedByContent(b));
+  const unpushed = offHub.filter((b) => !landed.includes(b));
   const ephemeralNote = ephemeral.length ? ` (${ephemeral.length} ephemeral agent-worktree branch(es) not counted)` : "";
+  const onHubNote = onHub.length ? ` (${onHub.length} on the hub under another name: ${onHub.join(", ")})` : "";
   const landedNote = landed.length ? ` (${landed.length} squash-landed, content already on mainline: ${landed.join(", ")})` : "";
   if (unpushed.length) {
-    add("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}${landedNote}`);
+    add("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}${onHubNote}${landedNote}`);
   } else {
-    add("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}${landedNote}`);
+    add("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}${onHubNote}${landedNote}`);
   }
 
   // REPORTED, never fatal — the lane-message rule, for the same reason. The work

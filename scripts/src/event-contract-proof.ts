@@ -119,6 +119,62 @@ check(
   ])).has("INACTIVE_MDM_BUT_ACTIVE_ELSEWHERE"),
 );
 
+// CUSTODY_CAP_BLOCKED_BY_STALE_RETURN — the per-user checkout cap refused a new checkout
+// because a PRIOR custody never cleared (surfaced today only as an opaque dock beep). Fires
+// on a `checkout_denied` seen against an unresolved prior custody, in each of its shapes, and
+// stays silent when there is no stale prior — a bare denial or a properly returned prior.
+check(
+  "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN fires when a checkout is denied with a prior grant never returned",
+  codes(detectCrossDomain([
+    ev({ eventType: "checkout_granted" }),
+    ev({ eventType: "checkout_denied" }),
+  ])).has("CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"),
+);
+check(
+  "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN fires when a checkout is denied with a prior non_return on record",
+  codes(detectCrossDomain([
+    ev({ eventType: "non_return" }),
+    ev({ eventType: "checkout_denied" }),
+  ])).has("CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"),
+);
+check(
+  "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN fires when a checkout is denied with a prior custody_expired on record",
+  codes(detectCrossDomain([
+    ev({ eventType: "custody_expired" }),
+    ev({ eventType: "checkout_denied" }),
+  ])).has("CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"),
+);
+{
+  const capBlocked = detectCrossDomain([
+    ev({ eventType: "checkout_granted" }),
+    ev({ eventType: "checkout_denied" }),
+  ]);
+  const d = capBlocked.find((x) => x.code === "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN");
+  check(
+    "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN is high severity and carries evidence (fail-closed: raises assurance)",
+    d?.severity === "high" && (d?.evidenceEventIds.length ?? 0) > 0,
+  );
+}
+// Fail-closed edge: an ABSENT device_returned must be read as "still out", so the same
+// prior-grant timeline WITH a return does NOT fire — proving the return, not its absence,
+// is what clears the cap.
+check(
+  "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN stays silent when the prior custody was properly returned before the denial",
+  !codes(detectCrossDomain([
+    ev({ eventType: "checkout_granted" }),
+    ev({ eventType: "device_returned" }),
+    ev({ eventType: "checkout_denied" }),
+  ])).has("CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"),
+);
+// Negative control: a bare denial with NO prior open custody is not attributed to a stale
+// return (its cause is unproven), so an always-on detection cannot pass this proof.
+check(
+  "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN stays silent on a bare denial with no prior open custody",
+  !codes(detectCrossDomain([
+    ev({ eventType: "checkout_denied" }),
+  ])).has("CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"),
+);
+
 // A clean, well-behaved custody timeline fires NOTHING.
 const clean = detectCrossDomain([
   ev({ eventType: "checkout_granted" }),

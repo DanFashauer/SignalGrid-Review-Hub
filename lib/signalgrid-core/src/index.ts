@@ -11,6 +11,7 @@ export * from "./audit";
 export * from "./metrics";
 export * from "./simulate";
 export * from "./webhooks";
+export * from "./notification";
 export * from "./remediation";
 export * from "./resolution";
 export * from "./decision";

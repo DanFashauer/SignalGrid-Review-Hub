@@ -718,6 +718,27 @@ item below is a design target until its proof is green and named.
 
 ## Owner-gated (needs a decision before an agent builds it)
 
+- [ ] **OWNER DECISION — adopt an on-premises inference runtime (AirLLM or a peer), or decline it.**
+      Raised 2026-09-17 when the owner pointed at `github.com/lyogavin/airllm` and said it
+      should be part of the system. What it provides that this repository needs is real and
+      specific: **inference inside the building with no data egress, on modest hardware** —
+      a 70B model on ~4 GB of VRAM by streaming layers from disk. That is the constraint
+      that actually binds in the regulated verticals SignalGrid targets.
+      **The decision path is already fenced off and that part is done** —
+      `scripts/check-decision-path-purity.mjs` (preflight + CI) proves no verdict is
+      fetched, spawned or sampled, so adopting a runtime cannot quietly reach the core.
+      **What needs the owner, per the DR-020 rule DR-021 leaves standing:** a new inference
+      platform is a decision record before it is a dependency. The three questions a DR
+      would have to answer, none of which the README does: (a) WHICH surface — an
+      explanation/Assist path or offline evidence summarisation, never a verdict; (b) at
+      what LATENCY — AirLLM publishes no baseline figures at all, and layer-streaming from
+      disk trades throughput for memory by construction, so an interactive gate at a door
+      and a nightly batch are different propositions that only measurement separates;
+      (c) who OPERATES the model, since a model in a customer's building is a thing that
+      needs patching, and this repository has been careful never to claim on-device
+      enforcement it does not have. Nothing is in `package.json` or any build today.
+      Lane: solutions-architect (to draft the DR once the owner rules on whether to adopt at all).
+
 - [ ] **A REACHABLE dual-control surface — OWNER-GATED, and NOT the defect the
       row-45 audit first described.** A three-seam design pass with adversarial
       critique (and independent re-verification by hand) established facts that

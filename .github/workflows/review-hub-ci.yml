@@ -216,6 +216,10 @@ jobs:
       - name: Proof — verdict attestation (forged verdicts degrade)
         run: pnpm run proof:verdict-attestation
 
+      - name: "Decision-path purity (a verdict may not be fetched, spawned, or sampled from a model)"
+        run: node scripts/check-decision-path-purity.mjs
+      - name: "Decision-path purity self-test (the gate must be able to fail)"
+        run: node scripts/check-decision-path-purity.mjs --self-test
       - name: Guard-registry drift check
         run: node scripts/check-guard-registries.mjs
       # Runs in the fast source-reading job on purpose: it guards the Docker build

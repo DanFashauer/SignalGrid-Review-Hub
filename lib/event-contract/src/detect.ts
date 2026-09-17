@@ -188,6 +188,9 @@ export function detectCrossDomain(events: readonly SignalGridEvent[]): Detection
         "Custody is stale or contested: the dock, checkout and posture planes disagree on who holds the device or whether it is seated.",
       correlationId,
       evidenceEventIds: [...evidence],
+    });
+  }
+
   // 7. Checkout CAP blocked by a STALE prior return — the per-user cap refused a new
   //    checkout because a PRIOR custody against this requester never cleared, not because
   //    the limit was genuinely reached. Today that is fabric-visible only as an opaque
@@ -202,10 +205,30 @@ export function detectCrossDomain(events: readonly SignalGridEvent[]): Detection
   const staleRecords = idsWhere(
     (e) => e.eventType === "non_return" || e.eventType === "custody_expired",
   );
-  const openCustody = [...grants, ...removals];
-  const priorUnreturned = openCustody.length > 0 && !returned;
+  //    Scoped PER DEVICE, not over the whole timeline. Rule 3's `returned` is a single
+  //    boolean over every event, and reusing it here would have let ONE return silence a
+  //    cap block caused by a DIFFERENT device still out — unknown state loosening the
+  //    answer, which golden rule 2 forbids. Counting returns against opens is no better:
+  //    a `checkout_granted` and the `device_removed` that carries out that same checkout
+  //    are two events for ONE custody, so a normal returned loan would read 2 > 1 and fire.
+  //    The device is the axis that makes both cases right. A return whose deviceId is
+  //    absent clears only the equally-unidentified open — never a named one.
+  const deviceKey = (e: SignalGridEvent): string => e.deviceId ?? "(unidentified)";
+  const opensByDevice = new Map<string, string[]>();
+  for (const e of events) {
+    if (e.eventType !== "checkout_granted" && e.eventType !== "device_removed") continue;
+    const key = deviceKey(e);
+    opensByDevice.set(key, [...(opensByDevice.get(key) ?? []), e.eventId]);
+  }
+  const returnedDevices = new Set(
+    events.filter((e) => e.eventType === "device_returned").map(deviceKey),
+  );
+  const openCustody = [...opensByDevice]
+    .filter(([key]) => !returnedDevices.has(key))
+    .flatMap(([, ids]) => ids);
+  const priorUnreturned = openCustody.length > 0;
   if (denied.length > 0 && (priorUnreturned || staleRecords.length > 0)) {
-    const evidence = [...denied, ...staleRecords, ...(priorUnreturned ? openCustody : [])];
+    const evidence = [...denied, ...staleRecords, ...openCustody];
     detections.push({
       code: "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN",
       severity: "high",

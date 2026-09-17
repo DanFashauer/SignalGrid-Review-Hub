@@ -3390,6 +3390,23 @@ that names what changed and its measured verdict, not a reversal of this one.
 - **(a) Stale at dock** — the bay re-locked around a device (`dock_relocked`) while a checkout is still open (`checkout_granted`, no `device_returned`): racked, but the ledger still shows it out.
 - **(b) Contested** — more than one `checkout_granted` on one timeline with no clearing `device_returned`: handed out again while a prior holder's hold was never cleared.
 - **(c) Unpaired but present** — a seated device (`dock_relocked`) that posture reports `unmanaged`/`unknown`: a slot the console shows occupied by a device that is not paired/managed.
+
+### 2. Why it satisfies golden rule 2 (fail-closed, deterministic — deferred until merged)
+
+- **Deterministic.** Pure set-based reasoning over the events — no clock, no randomness, no I/O — exactly like the five detections it sits beside.
+- **Fail-closed.** It only ADDS a detection; it never suppresses one and never manufactures an allow. An ABSENT `device_returned` is read as "still out", never "cleared"; an `unknown` posture on a seated device FIRES it. Unknown / stale / missing facts raise assurance, never lower it. A false positive errs toward more scrutiny; the covered failure is the false negative, which the three shapes and the proof's negative control guard.
+- **Truthful.** It reports only the contradiction it can prove from the stream, with the evidence event ids that established it.
+
+### 3. Relationship to the existing surface (both remain deferred design targets)
+
+This deferred detection does not duplicate the `rtls-custody` ledger evaluator: that evaluator grades one reconciliation report (a ledger read) into a checkout decision, while this detection catches the same phantom from the raw event timeline with no ledger read, feeding the same timeline → detection → incident path the other cross-domain detections use (`mapDetectionToIncident` routes by severity, so a new code needs no change there).
+
+### 4. Proof and scope
+
+Proven by ADDING assertions to the existing, already-registered `scripts/src/event-contract-proof.ts` (`proof:event-contract`): three positive shapes, a severity+evidence check, and a negative control (a properly returned-and-racked device must NOT fire it). No new proof script, so no new preflight/CI/guard registration. The verdict enum, the Decision Envelope, and every launch-claim surface are untouched; no launch claim is made or implied.
+
+**Reversal / amendment.** The owner vetoes by not merging, or reverses a merged form by reverting the one PR with the reversal date added here.
+
 ## DR-052 — Add a `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN` cross-domain detection to the event-fabric timeline detector (cloud lane — proposal, 2026-09-14)
 
 **Status: PROPOSAL — a deferred capability, not claimed as current and not Limited GA until merged.** This record changes decision-core BEHAVIOR (a new cross-domain detection over the event timeline), so it is DR-020 territory. The code and its proof are carried in the PR that adds this record; the owner APPROVES by merging that PR and VETOES by saying so or closing it. Nothing here is claimable under DR-021/DR-033 until merged.
@@ -3407,19 +3424,11 @@ that names what changed and its measured verdict, not a reversal of this one.
 
 The evidence event ids are the denial plus whatever established the unresolved prior. A bare `checkout_denied` with no prior open checkout is deliberately NOT attributed here — its cause is unproven, so no false legible reason is asserted.
 
+**Amended during the replay (2026-09-17), before merge: "still out" is resolved PER DEVICE.** As first written this record reused rule 3's `returned` — one boolean over the whole timeline — so a single `device_returned` anywhere silenced the detection even when a DIFFERENT device was still held. That is an unrelated fact loosening the answer, which golden rule 2 forbids, and it was the false negative this record names as its covered failure. Counting returns against opens is not the fix either: a `checkout_granted` and the `device_removed` that carries out that same checkout are two events for ONE custody, so a cleanly returned loan reads 2 > 1 and fires. The device is the axis on which both readings come out right, and a `device_returned` carrying no `deviceId` clears only the equally unidentified open, never a named one. Both wrong readings are pinned by proof assertions that fail if the code reverts to either.
+
 ### 2. Why it satisfies golden rule 2 (fail-closed, deterministic — deferred until merged)
 
 - **Deterministic.** Pure set-based reasoning over the events — no clock, no randomness, no I/O — exactly like the five detections it sits beside.
-- **Fail-closed.** It only ADDS a detection; it never suppresses one and never manufactures an allow. An ABSENT `device_returned` is read as "still out", never "cleared"; an `unknown` posture on a seated device FIRES it. Unknown / stale / missing facts raise assurance, never lower it. A false positive errs toward more scrutiny; the covered failure is the false negative, which the three shapes and the proof's negative control guard.
-- **Truthful.** It reports only the contradiction it can prove from the stream, with the evidence event ids that established it.
-
-### 3. Relationship to the existing surface (both remain deferred design targets)
-
-This deferred detection does not duplicate the `rtls-custody` ledger evaluator: that evaluator grades one reconciliation report (a ledger read) into a checkout decision, while this detection catches the same phantom from the raw event timeline with no ledger read, feeding the same timeline → detection → incident path the other cross-domain detections use (`mapDetectionToIncident` routes by severity, so a new code needs no change there).
-
-### 4. Proof and scope
-
-Proven by ADDING assertions to the existing, already-registered `scripts/src/event-contract-proof.ts` (`proof:event-contract`): three positive shapes, a severity+evidence check, and a negative control (a properly returned-and-racked device must NOT fire it). No new proof script, so no new preflight/CI/guard registration. The verdict enum, the Decision Envelope, and every launch-claim surface are untouched; no launch claim is made or implied.
 - **Fail-closed.** It only ADDS a detection; it never suppresses one and never manufactures an allow. An ABSENT `device_returned` is read as "still out", never "cleared"; a lapsed prior (`non_return`/`custody_expired`) raises assurance. Unknown / stale / missing checkout facts raise assurance, never lower it. The block is SURFACED (an incident by severity), never softened into a grant. The covered failure is the false negative — a cap held by a stale record passing as a genuine limit — which the shapes and the proof's negative controls guard.
 - **Truthful.** It reports only the contradiction it can prove from the stream, with the evidence event ids that established it, and withholds the attribution when the cause is unproven.
 
@@ -3429,6 +3438,6 @@ This deferred detection does not duplicate the `rtls-custody` ledger evaluator: 
 
 ### 4. Proof and scope
 
-Proven by ADDING assertions to the existing, already-registered `scripts/src/event-contract-proof.ts` (`proof:event-contract`): three positive shapes (prior grant never returned, prior `non_return`, prior `custody_expired`), a severity+evidence check, and two negative controls (a properly returned prior does NOT fire it; a bare denial with no prior open checkout does NOT fire it). No new proof script, so no new preflight/CI/guard registration. The verdict enum, the Decision Envelope, and every launch-claim surface are untouched; no launch claim is made or implied.
+Proven by ADDING assertions to the existing, already-registered `scripts/src/event-contract-proof.ts` (`proof:event-contract`): three positive shapes (prior grant never returned, prior `non_return`, prior `custody_expired`), a severity+evidence check, two negative controls (a properly returned prior does NOT fire it; a bare denial with no prior open checkout does NOT fire it), and two device-axis assertions that fail if the amendment above is reverted (another device returned while this one is still out must STILL fire; a grant+removal+return for one device must STAY silent). No new proof script, so no new preflight/CI/guard registration. The verdict enum, the Decision Envelope, and every launch-claim surface are untouched; no launch claim is made or implied.
 
 **Reversal / amendment.** The owner vetoes by not merging, or reverses a merged form by reverting the one PR with the reversal date added here.

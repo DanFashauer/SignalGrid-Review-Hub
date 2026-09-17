@@ -114,6 +114,11 @@ const REASONS: Record<DetectionCode, string> = {
   // pinning the string.
   CUSTODY_STALE_OR_CONTESTED:
     "Custody is stale or contested: the dock, checkout and posture planes disagree on who holds the device or whether it is seated.",
+  // And again, one replay later, for exactly the same reason: this PR adds
+  // CUSTODY_CAP_BLOCKED_BY_STALE_RETURN to DetectionCode, so the map above is
+  // incomplete the moment the union grows. Verbatim from detect.ts.
+  CUSTODY_CAP_BLOCKED_BY_STALE_RETURN:
+    "A checkout was blocked by the per-user cap because a prior custody never cleared: an unreturned or lapsed prior record still counts against the requester, not a genuine limit. A person must clear the stale record.",
 };
 
 const ev = (
@@ -343,28 +348,28 @@ check(
 check(
   "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN fires when a checkout is denied with a prior grant never returned",
   codes(detectCrossDomain([
-    ev({ eventType: "checkout_granted" }),
-    ev({ eventType: "checkout_denied" }),
+    ev("g1", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-a" }),
+    ev("d1", { eventType: "checkout_denied", userId: "u1", deviceId: "dev-b" }),
   ])).has("CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"),
 );
 check(
   "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN fires when a checkout is denied with a prior non_return on record",
   codes(detectCrossDomain([
-    ev({ eventType: "non_return" }),
-    ev({ eventType: "checkout_denied" }),
+    ev("n1", { eventType: "non_return", userId: "u1", deviceId: "dev-a" }),
+    ev("d1", { eventType: "checkout_denied", userId: "u1", deviceId: "dev-b" }),
   ])).has("CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"),
 );
 check(
   "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN fires when a checkout is denied with a prior custody_expired on record",
   codes(detectCrossDomain([
-    ev({ eventType: "custody_expired" }),
-    ev({ eventType: "checkout_denied" }),
+    ev("x1", { eventType: "custody_expired", userId: "u1", deviceId: "dev-a" }),
+    ev("d1", { eventType: "checkout_denied", userId: "u1", deviceId: "dev-b" }),
   ])).has("CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"),
 );
 {
   const capBlocked = detectCrossDomain([
-    ev({ eventType: "checkout_granted" }),
-    ev({ eventType: "checkout_denied" }),
+    ev("g1", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-a" }),
+    ev("d1", { eventType: "checkout_denied", userId: "u1", deviceId: "dev-b" }),
   ]);
   const d = capBlocked.find((x) => x.code === "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN");
   check(
@@ -378,17 +383,46 @@ check(
 check(
   "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN stays silent when the prior custody was properly returned before the denial",
   !codes(detectCrossDomain([
-    ev({ eventType: "checkout_granted" }),
-    ev({ eventType: "device_returned" }),
-    ev({ eventType: "checkout_denied" }),
+    ev("g1", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-a" }),
+    ev("r1", { eventType: "device_returned", userId: "u1", deviceId: "dev-a" }),
+    ev("d1", { eventType: "checkout_denied", userId: "u1", deviceId: "dev-b" }),
   ])).has("CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"),
 );
+// The device axis, in the two cases that a whole-timeline answer gets wrong. Both were
+// written because the first draft of rule 7 reused rule 3's `returned` boolean and then
+// a return COUNT, and each reading is wrong in one direction:
+//   - one return, two devices out: `!returned` is false, so the cap block caused by the
+//     device still held would have been silenced by an unrelated device coming back —
+//     an unknown loosening the answer, which golden rule 2 forbids.
+//   - one loan, returned: a `checkout_granted` and the `device_removed` that carries out
+//     that same checkout are TWO events for ONE custody, so `opens > returns` reads 2 > 1
+//     and fires on a perfectly clean timeline.
+// Reverting detect.ts to either reading fails exactly one of these.
+check(
+  "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN still fires when ANOTHER device was returned but this one is still out",
+  codes(detectCrossDomain([
+    ev("g1", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-a" }),
+    ev("g2", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-b" }),
+    ev("r1", { eventType: "device_returned", userId: "u1", deviceId: "dev-a" }),
+    ev("d1", { eventType: "checkout_denied", userId: "u1", deviceId: "dev-c" }),
+  ])).has("CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"),
+);
+check(
+  "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN stays silent on a returned loan, though grant+removal are two events for one custody",
+  !codes(detectCrossDomain([
+    ev("g1", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-a" }),
+    ev("rm1", { eventType: "device_removed", deviceId: "dev-a" }),
+    ev("r1", { eventType: "device_returned", userId: "u1", deviceId: "dev-a" }),
+    ev("d1", { eventType: "checkout_denied", userId: "u1", deviceId: "dev-b" }),
+  ])).has("CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"),
+);
+
 // Negative control: a bare denial with NO prior open custody is not attributed to a stale
 // return (its cause is unproven), so an always-on detection cannot pass this proof.
 check(
   "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN stays silent on a bare denial with no prior open custody",
   !codes(detectCrossDomain([
-    ev({ eventType: "checkout_denied" }),
+    ev("d1", { eventType: "checkout_denied", userId: "u1", deviceId: "dev-b" }),
   ])).has("CUSTODY_CAP_BLOCKED_BY_STALE_RETURN"),
 );
 
@@ -474,10 +508,20 @@ check(
 // slot axis and no per-device posture axis, which is what the two fixtures below
 // demonstrate — they fire the same single detection whether the devices were each
 // observed compliant or not. The gap narrowed; it did not close.
+// This fixture now fires TWO detections, and the second one is not an over-fire: it was
+// always true of this timeline and nothing existed to say it. u1 was granted dev-a (g1),
+// took it off the dock (rm1), never returned it, and was then denied dev-b (d1) — the
+// per-user cap refusing a checkout because a PRIOR custody never cleared, which is
+// precisely rule 7. The fixture predates the rule; the pin is widened to the truth rather
+// than the rule narrowed to the pin. Written as an exact set, so a THIRD detection
+// appearing here still fails this check.
 expectExactly(
-  "a grant left open while the device sits back in its bay now fires CUSTODY_STALE_OR_CONTESTED (#720 closed this one)",
+  "a grant left open while the device sits back in its bay fires CUSTODY_STALE_OR_CONTESTED (#720) AND the cap block it always contained",
   PHANTOM_CHECKOUT,
-  [["CUSTODY_STALE_OR_CONTESTED", "high", ["rl1", "g1"]]],
+  [
+    ["CUSTODY_STALE_OR_CONTESTED", "high", ["rl1", "g1"]],
+    ["CUSTODY_CAP_BLOCKED_BY_STALE_RETURN", "high", ["d1", "g1", "rm1"]],
+  ],
 );
 expectExactly(
   "one undirected compliant posture still exonerates three granted devices — no per-device posture axis",

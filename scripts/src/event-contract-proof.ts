@@ -119,6 +119,53 @@ check(
   ])).has("INACTIVE_MDM_BUT_ACTIVE_ELSEWHERE"),
 );
 
+// CUSTODY_STALE_OR_CONTESTED — a custody-state contradiction across the dock / MAM
+// (checkout) / posture planes ("phantom custody"). Fires on any of three shapes, and
+// stays silent on a legitimately returned-and-racked device.
+check(
+  "CUSTODY_STALE_OR_CONTESTED fires when a device is granted again with no clearing return (contested)",
+  codes(detectCrossDomain([
+    ev({ eventType: "checkout_granted" }),
+    ev({ eventType: "checkout_granted" }),
+  ])).has("CUSTODY_STALE_OR_CONTESTED"),
+);
+check(
+  "CUSTODY_STALE_OR_CONTESTED fires when the dock re-locks around a still-checked-out device (stale)",
+  codes(detectCrossDomain([
+    ev({ eventType: "checkout_granted" }),
+    ev({ eventType: "dock_relocked" }),
+  ])).has("CUSTODY_STALE_OR_CONTESTED"),
+);
+check(
+  "CUSTODY_STALE_OR_CONTESTED fires when a seated device is unpaired/unknown in posture (phantom slot)",
+  codes(detectCrossDomain([
+    ev({ eventType: "dock_relocked" }),
+    ev({ eventType: "posture_changed", mdmDeviceState: "unknown" }),
+  ])).has("CUSTODY_STALE_OR_CONTESTED"),
+);
+{
+  const contested = detectCrossDomain([
+    ev({ eventType: "checkout_granted" }),
+    ev({ eventType: "checkout_granted" }),
+  ]);
+  const d = contested.find((x) => x.code === "CUSTODY_STALE_OR_CONTESTED");
+  check(
+    "CUSTODY_STALE_OR_CONTESTED is high severity and carries evidence (fail-closed: raises assurance)",
+    d?.severity === "high" && (d?.evidenceEventIds.length ?? 0) > 0,
+  );
+}
+// Negative control: a legitimately returned-and-racked device must NOT fire it, so an
+// always-on detection cannot pass this proof.
+check(
+  "CUSTODY_STALE_OR_CONTESTED stays silent when the device was properly returned and racked",
+  !codes(detectCrossDomain([
+    ev({ eventType: "checkout_granted" }),
+    ev({ eventType: "posture_changed", mdmDeviceState: "compliant" }),
+    ev({ eventType: "device_returned" }),
+    ev({ eventType: "dock_relocked" }),
+  ])).has("CUSTODY_STALE_OR_CONTESTED"),
+);
+
 // A clean, well-behaved custody timeline fires NOTHING.
 const clean = detectCrossDomain([
   ev({ eventType: "checkout_granted" }),

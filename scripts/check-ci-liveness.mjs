@@ -360,12 +360,43 @@ async function lastSweepSuccess() {
   const runs = await api(
     `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=${RUNS_TO_INSPECT}&status=completed`,
   );
-  for (const run of runs.workflow_runs ?? []) {
+  // WHAT THE WINDOW ACTUALLY CONTAINED. This line exists because on 2026-09-17 the
+  // gate returned OPPOSITE verdicts on the identical commit 19704f65 — attempt 1
+  // said the sweep had been dark 291h, attempt 2 passed, nothing pushed between
+  // them — and then said "dark" again on a later PR naming the SAME 2026-09-05 run
+  // both times. Four explanations were proposed and all four were falsified against
+  // the live API: the ten-run page is not overflowing (today's sweep sits at index
+  // 0), `apiWith` does not swallow a non-200 (it throws, and in CI that path is
+  // fatal), the runs carry 6 jobs against a per_page of 30, and the job names match
+  // SWEEP_JOB_PREFIX. Every one of those was ruled out by looking from OUTSIDE CI at
+  // a list the failing job never showed anyone.
+  //
+  // So this is not a fix and does not pretend to be one: the verdict logic below is
+  // untouched. It prints what the gate SAW, which is the one thing no amount of
+  // reasoning from outside could recover, and it is the difference between the next
+  // occurrence being another dead end and being a diagnosis. A gate that can fail
+  // for a reason its own output cannot express is a gate nobody can repair.
+  const window = runs.workflow_runs ?? [];
+  console.log(
+    `  window: ${window.length} completed run(s) of ${WORKFLOW_FILE} — ` +
+      (window.length === 0
+        ? "EMPTY (the API returned no runs at all)"
+        : window.map((r) => `${r.id}@${String(r.created_at ?? "?").slice(0, 16)}Z`).join(", ")),
+  );
+
+  for (const run of window) {
     const jobs = await api(`/repos/${REPO}/actions/runs/${run.id}/jobs?per_page=30`);
     const sweep = latestSweepSuccessInRun(jobs.jobs);
     // A run with no such job is not evidence either way — the job may have been
     // added later, or renamed. Keep looking rather than concluding from silence.
-    if (!sweep.present) continue;
+    // But SAY SO: silence that is not evidence still has to be visible, or a run
+    // skipped for a bad reason looks exactly like a run that was never there.
+    if (!sweep.present) {
+      console.log(
+        `  · run ${run.id} (${String(run.created_at ?? "").slice(0, 16)}Z): no "${SWEEP_JOB_PREFIX}" job among ${(jobs.jobs ?? []).length} job(s) — skipped, not counted either way`,
+      );
+      continue;
+    }
     // One line per inspected run so a red verdict can be read back later.
     console.log(`  · run ${run.id} (${String(run.created_at ?? "").slice(0, 16)}Z): ${sweep.succeeded}/${sweep.total} sweep shard(s) succeeded`);
     if (sweep.iso) {

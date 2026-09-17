@@ -751,9 +751,17 @@ item below is a design target until its proof is green and named.
       platform is a decision record before it is a dependency. The three questions a DR
       would have to answer, none of which the README does: (a) WHICH surface — an
       explanation/Assist path or offline evidence summarisation, never a verdict; (b) at
-      what LATENCY — AirLLM publishes no baseline figures at all, and layer-streaming from
-      disk trades throughput for memory by construction, so an interactive gate at a door
-      and a nightly batch are different propositions that only measurement separates;
+      what LATENCY — **ANSWERED 2026-09-17, by the Mac lane RUNNING it rather than reading
+      it** (`mac/intake-airllm`, PR #801): `TinyLlama-1.1B` produced 20 tokens in 207.1 s
+      and again in 205.7 s = **0.1 tok/s**, while `qwen3:8b` under the Ollama already
+      installed on that same Mac measures **12.7 tok/s** — roughly 100x faster on a model
+      about 7x larger. Peak footprint was 2.44 GB for a 2.2 GB model, so the layering saved
+      almost nothing, and `Llama-3.2-1B-Instruct` failed outright because the macOS backend
+      cannot load a tied-embedding model. The README's 70B-on-4GB claim is about MEMORY and
+      holds by construction; the cost it omits is TIME, which scales with layer count and
+      size, so a 70B on that hardware would be minutes per token. This does not retire the
+      want, it redirects it: the route to local inference with no egress is a quantized
+      model under the Ollama already installed, not this;
       (c) who OPERATES the model, since a model in a customer's building is a thing that
       needs patching, and this repository has been careful never to claim on-device
       enforcement it does not have. Nothing is in `package.json` or any build today.

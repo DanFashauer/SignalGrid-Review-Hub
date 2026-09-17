@@ -40,6 +40,7 @@
     "proof:caep-events": "tsx ./src/caep-events-proof.ts",
     "proof:carrier-reachability": "tsx ./src/carrier-reachability-proof.ts",
     "proof:challenge-capability": "tsx ./src/challenge-capability-proof.ts",
+    "proof:change-draft": "tsx ./src/change-draft-proof.ts",
     "proof:change-window": "tsx ./src/change-window-proof.ts",
     "proof:config-scope": "tsx ./src/config-scope-proof.ts",
     "proof:connector-emulator": "tsx ./src/connector-emulator-proof.ts",

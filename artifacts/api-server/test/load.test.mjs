@@ -133,6 +133,14 @@ const check = (name, ok) => {
   else { failures.push(name); console.log(`  FAIL — ${name}`); }
 };
 
+/** Why a burst request never produced a response at all. undici reports every
+ *  socket-level failure as a bare `TypeError: fetch failed`, so the part worth
+ *  printing is the cause underneath it (EPIPE, ECONNRESET, ECONNREFUSED). */
+const describeDrop = (err) => {
+  const cause = err?.cause;
+  return cause?.code ?? cause?.message ?? err?.code ?? err?.message ?? String(err);
+};
+
 const pct = (sorted, p) => sorted.length === 0 ? 0 : sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))];
 
 async function evaluateOnce(c) {
@@ -332,11 +340,31 @@ try {
         body: JSON.stringify(CASES[0].body),
       }));
     }
-    const settled = await Promise.all(burst);
-    const throttled = settled.filter((r) => r.status === 429);
-    const fived = settled.filter((r) => r.status >= 500);
+    // Promise.allSETTLED, not Promise.all. A connection the server DROPPED is exactly
+    // the condition the next check is named for — and under `Promise.all` a single
+    // rejected request out of 300 took the whole harness down with a stack trace
+    // before that check was ever reached. Measured on the macOS lane 2026-09-17:
+    // `write EPIPE` at index 136, surfacing as `TypeError: fetch failed`. A check that
+    // cannot distinguish its own two outcomes is not yet a check; settling makes a
+    // drop COUNT as a drop and fail by name.
+    //
+    // STRICTLY NO WEAKER than the throw it replaces. A drop fails the new assertion
+    // below; and because every count downstream now runs over the responses that
+    // actually arrived, a burst with drops ALSO fails `allowed === SHIPPED_V1_LIMIT`
+    // and can no longer reach the throttled-count check with a full house. Nothing
+    // that was red turns green — the failure just stops arriving as a stack trace.
+    const outcomes = await Promise.allSettled(burst);
+    const responses = outcomes.flatMap((o) => (o.status === "fulfilled" ? [o.value] : []));
+    const dropped = outcomes.flatMap((o) => (o.status === "rejected" ? [o.reason] : []));
+    check(
+      `deliberate overload is THROTTLED at the application, never DROPPED at the socket ` +
+        `(dropped=${dropped.length}/${burst.length}${dropped.length > 0 ? `, first: ${describeDrop(dropped[0])}` : ""})`,
+      dropped.length === 0,
+    );
+    const throttled = responses.filter((r) => r.status === 429);
+    const fived = responses.filter((r) => r.status >= 500);
     check(`deliberate overload is THROTTLED, not dropped (429s=${throttled.length})`, throttled.length > 0);
-    const allowed = settled.filter((r) => r.status === 200).length;
+    const allowed = responses.filter((r) => r.status === 200).length;
     check(
       `A ZERO LIMIT DOES NOT OPEN THE DOOR: a malformed value falls back to EXACTLY the shipped ceiling (allowed=${allowed}, expected ${SHIPPED_V1_LIMIT})`,
       // Exactly, not at-most. `<=` also passed if the fallback became 1, or if

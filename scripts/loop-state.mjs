@@ -134,9 +134,45 @@ function hasLandedByContent(branch) {
     const mine = git("show", `${branch}:${file}`);
     const theirs = git("show", `origin/SignalGrid_Alpha:${file}`);
     if (mine === null || theirs === null || mine === undefined || theirs === undefined) return false;
-    if (mine !== theirs) return false;
+    if (mine !== theirs && !fileEverMatchedMainline(branch, file)) return false;
   }
   return true;
+}
+
+// THE MOVED-ON HOLE, and it is the FOURTH of this exact shape in this one check.
+// The comparison above asks whether the branch's copy of a file matches mainline's
+// copy RIGHT NOW. So a branch that landed cleanly and was then overtaken — mainline
+// changed the same file again afterwards — stops matching and reverts to being
+// reported as unpushed work. Its work is on mainline; mainline has simply moved past
+// it.
+//
+// That is the common case, not an edge one: a squash-merged branch touching a shared
+// file (a registry, a figure, a generated page) is overtaken by the very next merge
+// that touches it. Measured 2026-09-17: SEVEN branches, every one of them a MERGED
+// pull request (#787, #790, #791, #741, #803), all reported as local work the Review
+// Hub had never seen. And the remedies the message offers are wrong for the fourth
+// time — pushing re-creates a dead branch, deleting is refused by this repo's own
+// dangerous-command hook.
+//
+// So the question becomes "was this content EVER on mainline", not "is it there
+// this instant". A blob that appeared in mainline's history for that path is content
+// that landed, whatever happened to the file since.
+//
+// Fail-closed, like its three siblings. Bounded to the most recent MAX_HISTORY
+// commits touching the path: an unbounded walk on a long history is a check nobody
+// waits for, and a check nobody waits for gets switched off. Exhausting the bound
+// without a match returns FALSE — reported, never cleared — so the failure mode of
+// looking too little is a branch that stays named, never one that vanishes quietly.
+const MAX_HISTORY = 400;
+function fileEverMatchedMainline(branch, file) {
+  const mine = git("rev-parse", `${branch}:${file}`);
+  if (!mine) return false;
+  const hist = git("log", `--max-count=${MAX_HISTORY}`, "--format=%H", "origin/SignalGrid_Alpha", "--", file);
+  if (!hist) return false;
+  for (const commit of hist.split("\n").map((c) => c.trim()).filter(Boolean)) {
+    if (git("rev-parse", `${commit}:${file}`) === mine) return true;
+  }
+  return false;
 }
 
 // THE ALIAS HOLE, and it is the third of exactly this shape. Membership was derived

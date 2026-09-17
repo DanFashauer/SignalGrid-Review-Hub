@@ -152,6 +152,93 @@ for (const [label, isLive] of [["live", true], ["suppressed", false]] as Readonl
   );
 }
 
+// 1b. THE IPv4-IN-IPv6 BYPASS -- an adversarial review found `validateWebhookUrl`
+//     compared the URL's LITERAL hostname against the rules above WITHOUT
+//     normalizing IPv4-mapped (`::ffff:a.b.c.d`) or IPv4-compatible (`::a.b.c.d`)
+//     IPv6 literals first, so every rule in 1. was evadable by respelling the SAME
+//     address: `https://[::ffff:127.0.0.1]/` (loopback), `https://[::ffff:169.254.169.254]/`
+//     (the cloud metadata endpoint) and `https://[::ffff:10.0.0.7]/` (RFC1918) all
+//     PASSED before this block existed to say otherwise. Reproduced against the
+//     pre-fix code (each of these `check`s failed) and pinned here so it cannot
+//     regress silently.
+//
+//     Every spelling below decodes to one of the SAME plain-IPv4 targets already
+//     refused in 1., so each assertion also names which one -- this is not a new
+//     rule, it is the existing rule made to see through six more spellings of an
+//     address it already refuses. One loop, not two nested ones, checks BOTH tiers
+//     per host so live and suppressed cannot silently diverge.
+for (const [host, decodesTo] of [
+  ["https://[::ffff:127.0.0.1]/hook", "127.0.0.1 (loopback)"],
+  ["https://[::ffff:169.254.169.254]/hook", "169.254.169.254 (cloud metadata)"],
+  ["https://[::ffff:10.0.0.7]/hook", "10.0.0.7 (RFC1918)"],
+  ["https://[::ffff:a9fe:a9fe]/hook", "169.254.169.254, hex-spelled mapped form"],
+  ["https://[::127.0.0.1]/hook", "127.0.0.1, IPv4-compatible (deprecated) form"],
+  ["https://[0:0:0:0:0:ffff:127.0.0.1]/hook", "127.0.0.1, fully expanded, no :: compression"],
+  ["https://[0000:0000:0000:0000:0000:FFFF:7F00:0001]/hook", "127.0.0.1, fully expanded hex, uppercase"],
+] as ReadonlyArray<readonly [string, string]>) {
+  check(
+    `live: ${host} (decodes to ${decodesTo}) is refused, not just its plain-IPv4 spelling`,
+    validateWebhookUrl(host, { live: true }).valid === false,
+  );
+  check(
+    `suppressed: ${host} (decodes to ${decodesTo}) is refused, not just its plain-IPv4 spelling`,
+    validateWebhookUrl(host, { live: false }).valid === false,
+  );
+}
+// NON-VACUITY, the same shape as 1.'s: a validator that refused every hostname
+// containing a colon (e.g. rejecting all IPv6 literals outright, or rejecting on
+// parse failure whenever hostname.includes(':')) would satisfy every refusal
+// above without actually decoding anything. A genuinely different, non-private
+// IPv6 literal must still be ACCEPTED, at both tiers.
+check(
+  "live: a public HTTPS target spelled as an unrelated global-unicast IPv6 literal is still accepted",
+  validateWebhookUrl("https://[2001:db8::1]/hook", { live: true }).valid === true,
+);
+check(
+  "suppressed: a public HTTPS target spelled as an unrelated global-unicast IPv6 literal is still accepted",
+  validateWebhookUrl("https://[2001:db8::1]/hook", { live: false }).valid === true,
+);
+// The decoded bypass and its plain-IPv4 twin fail for the SAME reason, not merely
+// both-fail-for-any-reason -- the fix reuses the EXISTING classification, it does not
+// bolt on a third, unclassified refusal path.
+check(
+  "the mapped-loopback bypass and plain 127.0.0.1 return the identical refusal reason",
+  validateWebhookUrl("https://[::ffff:127.0.0.1]/hook", { live: true }).error ===
+    validateWebhookUrl("https://127.0.0.1/hook", { live: true }).error,
+);
+check(
+  "the mapped-metadata bypass and plain 169.254.169.254 return the identical refusal reason",
+  validateWebhookUrl("https://[::ffff:169.254.169.254]/hook", { live: true }).error ===
+    validateWebhookUrl("https://169.254.169.254/hook", { live: true }).error,
+);
+check(
+  "the mapped-RFC1918 bypass and plain 10.0.0.7 return the identical refusal reason",
+  validateWebhookUrl("https://[::ffff:10.0.0.7]/hook", { live: true }).error ===
+    validateWebhookUrl("https://10.0.0.7/hook", { live: true }).error,
+);
+// Genuinely distinct IPv6 ranges the decode must NOT touch -- each still caught by
+// its OWN existing rule (privateRange for fe80/fc00, loopback for ::1), proving the
+// decode is scoped to the two zero-padded shapes and does not swallow real IPv6
+// address families.
+check(
+  "https://[fe80::1]/hook is still refused by its own existing rule, unaffected by the new decode",
+  validateWebhookUrl("https://[fe80::1]/hook", { live: true }).error === WEBHOOK_URL_REFUSALS.privateRange,
+);
+check(
+  "https://[fc00::1]/hook is still refused by its own existing rule, unaffected by the new decode",
+  validateWebhookUrl("https://[fc00::1]/hook", { live: true }).error === WEBHOOK_URL_REFUSALS.privateRange,
+);
+check(
+  "https://[::1]/hook is still refused by its own existing rule, unaffected by the new decode",
+  validateWebhookUrl("https://[::1]/hook", { live: true }).error === WEBHOOK_URL_REFUSALS.loopback,
+);
+// Fail closed: a zone id makes the literal unparseable for http/https, and an
+// unparseable hostname must be REFUSED, never allowed through.
+check(
+  "a zone-id-qualified IPv6 literal is refused as an invalid URL, not silently accepted",
+  validateWebhookUrl("https://[fe80::1%eth0]/hook", { live: true }).valid === false,
+);
+
 // 2. THE HTTPS RULE IS GATED ON LIVE DELIVERY, taken from the same resolution the
 //    delivery gate returns — not from a separate environment variable.
 check(

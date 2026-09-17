@@ -4873,7 +4873,7 @@ Decision core (the verdict mechanism):
 9. lib/posture-composition/src/adapters.ts (591) — maps connector output into composition; a silent mis-map fails open.
 
 Auth chain (bearer token to tenant principal):
-10. artifacts/api-server/src/middlewares/context.ts (198) — THE /v1 auth middleware; OIDC/demo-key fork; unread while neighbor rateLimit.ts was audited.
+10. artifacts/api-server/src/middlewares/context.ts (222) — THE /v1 auth middleware; OIDC/demo-key fork; unread while neighbor rateLimit.ts was audited.
 11. lib/enterprise-auth/src/jwt.ts (205) — token verification.
 12. lib/enterprise-auth/src/claims.ts (99) — claims-to-principal mapping; tenant derivation lives here.
 13. lib/enterprise-auth/src/jwks.ts (90) — key fetch/cache; wrong caching means accepting rotated-out keys.

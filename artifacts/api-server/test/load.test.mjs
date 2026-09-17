@@ -332,33 +332,75 @@ try {
     }
     check("the malformed-limit server boots", limitReady === true);
 
-    const burst = [];
-    for (let i = 0; i < 300; i += 1) {
-      burst.push(fetch(`${LIMIT_BASE}/v1/decisions/evaluate`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${KEYS.northwind}`, "content-type": "application/json" },
-        body: JSON.stringify(CASES[0].body),
-      }));
-    }
-    // Promise.allSETTLED, not Promise.all. A connection the server DROPPED is exactly
-    // the condition the next check is named for — and under `Promise.all` a single
-    // rejected request out of 300 took the whole harness down with a stack trace
-    // before that check was ever reached. Measured on the macOS lane 2026-09-17:
-    // `write EPIPE` at index 136, surfacing as `TypeError: fetch failed`. A check that
-    // cannot distinguish its own two outcomes is not yet a check; settling makes a
-    // drop COUNT as a drop and fail by name.
+    // THE BURST IS BOUNDED IN FLIGHT, AND THAT IS THE POINT OF THE CHECK BELOW.
     //
-    // STRICTLY NO WEAKER than the throw it replaces. A drop fails the new assertion
-    // below; and because every count downstream now runs over the responses that
-    // actually arrived, a burst with drops ALSO fails `allowed === SHIPPED_V1_LIMIT`
-    // and can no longer reach the throttled-count check with a full house. Nothing
-    // that was red turns green — the failure just stops arriving as a stack trace.
-    const outcomes = await Promise.allSettled(burst);
+    // This block opened all 300 connections at once until 2026-09-17, and on the
+    // macOS lane that measured the KERNEL rather than the application: macOS clamps
+    // a listener's backlog to `kern.ipc.somaxconn`, 128 by default, and resets the
+    // overflow. `preflight.log` from the Mac run of PR #801 recorded
+    // `dropped=144/300, first: ECONNRESET` — 144 connections the kernel killed before
+    // Express saw them. The three assertions after this one then failed as
+    // CONSEQUENCES of that, not on their own merits (`429s=0`, `allowed=156` against
+    // a 240 ceiling), which is why this one failure read as five. Linux passes the
+    // identical code only because its somaxconn is far larger and an overflowing
+    // accept queue drops the SYN for the client to retry instead of resetting it.
+    //
+    // Raising the backlog does NOT fix it: `listen(2)` on macOS clamps to somaxconn,
+    // so asking for 511 still yields 128, still short of 300. Bounding the in-flight
+    // count does, on every kernel — and it is what the assertion was always named
+    // for. "THROTTLED at the application, never DROPPED at the socket" is a claim
+    // about Express answering 429, and 300 simultaneous sockets never let Express
+    // answer at all. With the queue kept shallow, a drop here means the APPLICATION
+    // dropped it, which is the only version of this check worth gating.
+    //
+    // The overload is undiminished. The window is 60s and the whole burst completes
+    // in well under a second, so all 300 still land inside ONE window and still
+    // overrun the 240 ceiling by exactly 60 — `allowed === SHIPPED_V1_LIMIT` below is
+    // unchanged and still exact. Per-key counting does not depend on arrival order.
+    const BURST_TOTAL = 300;
+    // Comfortably under a default somaxconn of 128, with room for the readiness probe.
+    const BURST_CONCURRENCY = 32;
+    // Settled outcomes, not a throw. A connection the server DROPPED is exactly the
+    // condition the next check is named for — and collecting rejections rather than
+    // propagating them is what lets a drop COUNT as a drop and fail BY NAME, instead
+    // of taking the harness down with a stack trace before the check is reached. A
+    // check that cannot distinguish its own two outcomes is not yet a check.
+    //
+    // STRICTLY NO WEAKER than a throw. A drop fails the assertion below; and because
+    // every count downstream runs over the responses that actually arrived, a burst
+    // with drops ALSO fails `allowed === SHIPPED_V1_LIMIT` and can no longer reach
+    // the throttled-count check with a full house. Nothing that was red turns green.
+    const outcomes = [];
+    {
+      let issued = 0;
+      const burstWorker = async () => {
+        while (issued < BURST_TOTAL) {
+          issued += 1;
+          try {
+            outcomes.push({
+              status: "fulfilled",
+              value: await fetch(`${LIMIT_BASE}/v1/decisions/evaluate`, {
+                method: "POST",
+                headers: { authorization: `Bearer ${KEYS.northwind}`, "content-type": "application/json" },
+                body: JSON.stringify(CASES[0].body),
+              }),
+            });
+          } catch (err) {
+            outcomes.push({ status: "rejected", reason: err });
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: BURST_CONCURRENCY }, burstWorker));
+    }
+    check(
+      `the burst actually issued every request (issued=${outcomes.length}/${BURST_TOTAL})`,
+      outcomes.length === BURST_TOTAL,
+    );
     const responses = outcomes.flatMap((o) => (o.status === "fulfilled" ? [o.value] : []));
     const dropped = outcomes.flatMap((o) => (o.status === "rejected" ? [o.reason] : []));
     check(
       `deliberate overload is THROTTLED at the application, never DROPPED at the socket ` +
-        `(dropped=${dropped.length}/${burst.length}${dropped.length > 0 ? `, first: ${describeDrop(dropped[0])}` : ""})`,
+        `(dropped=${dropped.length}/${BURST_TOTAL}${dropped.length > 0 ? `, first: ${describeDrop(dropped[0])}` : ""})`,
       dropped.length === 0,
     );
     const throttled = responses.filter((r) => r.status === 429);

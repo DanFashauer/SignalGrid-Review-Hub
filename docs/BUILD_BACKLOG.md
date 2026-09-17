@@ -461,7 +461,17 @@ caller-supplied), and each names the clause of his sentence it serves.
       and never graded — a draft that inherits those rules keeps them, and one that
       quietly loosens them is the defect. Lane: itsm-ops-domain.
 
-- [ ] **Cascade join 3 — the people affected are told through a channel they already use.**
+- [x] **Cascade join 3 — the people affected are told through a channel they already use.** *(2026-09-17,
+      PR #796 — `lib/signalgrid-core/src/notification.ts`, `proof:affected-audience` 30/30.
+      The constraint turned out to BE the design: PURPOSE.md §3 forbids SignalGrid any
+      surface a worker must go and read, so this derives the audience and routes each
+      person on a channel they ALREADY use, then hands off — it ships no transport, and
+      cannot. Silence is never an outcome (four separate ways of resolving nobody all
+      route to the named owner, `backstop: true`) and silence is never reported as told
+      (`delivered` requires a host AND an instant; a blank either is refused back to
+      undelivered). Falsified three ways at 27/30 each. The load-bearing negative: an
+      area nobody supplied matches NOTHING — the widest audience is the wrong failure
+      for a notification path, and it is what a helpful default would produce.)*
       Serves *"while notification for users affected"*. `pnpm run check:absence "affected
       user notification"` returned CORROBORATED across all four probes on 2026-09-12:
       nothing in the tree notifies an affected person. The constraint that shapes the

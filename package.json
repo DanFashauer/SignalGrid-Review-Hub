@@ -132,6 +132,7 @@
     "proof:itsm-credential-crypto": "pnpm --filter @workspace/scripts run proof:itsm-credential-crypto",
     "proof:telemetry-posture-cache": "pnpm --filter @workspace/scripts run proof:telemetry-posture-cache",
     "proof:itsm-template": "pnpm --filter @workspace/scripts run proof:itsm-template",
+    "proof:itsm-dispatch": "pnpm --filter @workspace/scripts run proof:itsm-dispatch",
     "proof:itom-itsm-bridge": "pnpm --filter @workspace/scripts run proof:itom-itsm-bridge",
     "proof:kpi-kri-kci": "pnpm --filter @workspace/scripts run proof:kpi-kri-kci",
     "proof:launch-profile": "pnpm --filter @workspace/scripts run proof:launch-profile",

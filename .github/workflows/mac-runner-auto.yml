@@ -57,6 +57,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      # PIN THE RUNTIME. This is the only lane that ran on whatever node happened to
+      # be on the machine's PATH; every other lane in this repository pins 22 through
+      # actions/setup-node. The Mac had drifted to 24.18.0, and on 2026-09-17 that
+      # drift — not the machine, not any diff — is what turned `/v1 under concurrency`
+      # red on every PR: node 24's bundled undici throws
+      # `Error: setTypeOfService EINVAL` out of `writeH1` before the load driver sees a
+      # response, killing the request mid-flight (which is also why an earlier run
+      # reported ECONNRESET to ::1:5321 — the reset is the symptom, the throw is the
+      # cause). 209 gates passed ahead of it, and the identical `test:load` passes
+      # 16/16 with 600/600 responses on the node 22 lane.
+      #
+      # `engines.node` is ">=22", which 24 SATISFIES — so the Mac was breaking no
+      # written rule. That is exactly why this needed a pin rather than a reprimand.
+      # This pin does not by itself prove the Mac goes green; it makes the Mac lane
+      # run the runtime the passing lane runs, and the Mac's own next run is the proof.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Install (frozen lockfile)
         id: install
         run: pnpm install --frozen-lockfile

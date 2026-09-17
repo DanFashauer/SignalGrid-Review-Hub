@@ -435,7 +435,17 @@ caller-supplied), and each names the clause of his sentence it serves.
       already does. Proof: the mapper's full priority × category matrix, and one refusal
       per refusal reason. Lane: itsm-ops-domain.
 
-- [ ] **Cascade join 2 — a change record is OPENED, not only read.**
+- [x] **Cascade join 2 — a change record is OPENED, not only read.** *(2026-09-17 —
+      `lib/integrations/src/integrations/itsm/change-draft.ts`, `proof:change-draft`
+      42/42 with a 3/3 self-test. It landed in `itsm/` rather than `change-window/`
+      because that family's own header forbids it a write path in any form — reading
+      the change plane and opening a change record are different acts, so the draft
+      goes out through the outbound family's gate and the read-only family stays
+      read-only. `draftChangeRequest` cannot receive a `changeClass` at all — it is a
+      separate `withChangeClass` step — so the field this family refuses to grade
+      never reaches a branch that could grade it. The relax defect was planted to
+      check the proof can fail: an approved window dropping the approval-required
+      steps turns three independent checks red.)*
       Serves *"and change management"*. The fabric today reads the change plane and
       never writes to it: `lib/integrations/src/integrations/change-window` grades
       whether a change-class operation is happening inside a window the organization

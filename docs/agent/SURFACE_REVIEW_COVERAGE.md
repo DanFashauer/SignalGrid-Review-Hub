@@ -102,7 +102,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/self-audit` | package | 8 | read | 1 | 2026-09-04 | cloud lane | lib/self-audit/src/audit.ts | 1 | 1 |
 | `lib/signal-discovery` | package | 4 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
 | `lib/signal-radar` | package | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 0 |
-| `lib/signalgrid-core` | package | 23 | read | 3 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 10 | 1 |
+| `lib/signalgrid-core` | package | 24 | read | 3 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 10 | 1 |
 | `lib/signalgrid-simulator` | package | 10 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 2 |
 | `lib/verdict-attestation` | package | 5 | read | 1 | 2026-09-04 | cloud lane (adversarial sweep + independent verify) | #415 | 1 | 0 |
 | `lib/webauthn` | package | 8 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 6 | 1 |

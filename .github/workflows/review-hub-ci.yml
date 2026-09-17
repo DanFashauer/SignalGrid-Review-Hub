@@ -87,6 +87,8 @@ jobs:
 
       - name: "Proof: affected-audience (the blast radius is told, and silence is never reported as told)"
         run: pnpm run proof:affected-audience
+      - name: "Proof: remediation-verification (an unobserved fix is not a cleared fix)"
+        run: pnpm run proof:remediation-verification
       - name: Remediation-allow proof (a remediation record must not buy an allow the base-trust gate would refuse)
         run: pnpm run proof:remediation-allow
 

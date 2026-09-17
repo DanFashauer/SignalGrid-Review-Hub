@@ -87,6 +87,7 @@
     "proof:carrier-reachability": "pnpm --filter @workspace/scripts run proof:carrier-reachability",
     "proof:challenge-capability": "pnpm --filter @workspace/scripts run proof:challenge-capability",
     "proof:affected-audience": "pnpm --filter @workspace/scripts run proof:affected-audience",
+    "proof:remediation-verification": "pnpm --filter @workspace/scripts run proof:remediation-verification",
     "proof:change-draft": "pnpm --filter @workspace/scripts run proof:change-draft",
     "proof:change-window": "pnpm --filter @workspace/scripts run proof:change-window",
     "proof:config-scope": "pnpm --filter @workspace/scripts run proof:config-scope",

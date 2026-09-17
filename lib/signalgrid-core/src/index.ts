@@ -14,6 +14,7 @@ export * from "./webhooks";
 export * from "./notification";
 export * from "./remediation";
 export * from "./resolution";
+export * from "./verification";
 export * from "./decision";
 export * from "./continuity";
 export * from "./shift";

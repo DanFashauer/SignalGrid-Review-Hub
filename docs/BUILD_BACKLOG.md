@@ -488,7 +488,7 @@ caller-supplied), and each names the clause of his sentence it serves.
       **Deterministic:** the audience is derived from evidence the decision already
       carries, never from a live directory query inside the decision path. Lane: principal-engineer.
 
-- [ ] **Cascade join 4 — monitor the fix: a post-execution verifier for the resolution path.**
+- [x] **Cascade join 4 — monitor the fix: a post-execution verifier for the resolution path.** *(2026-09-17 —
       Serves *"and monitor the fix or jump in and resolve problem"*. What exists is
       narrower than the sentence: `simulateResolution` PREVIEWS the outcome after the
       resolvable fixes are applied, exception release lifts a restriction when the
@@ -503,6 +503,20 @@ caller-supplied), and each names the clause of his sentence it serves.
       and escalates on the second miss, which is the *"or jump in"* half of his sentence.
       **Deterministic:** no clock; the reference instant is an argument, as it is on every
       recency axis in `lib/integrations`. Lane: principal-engineer.
+      **DONE:** `lib/signalgrid-core/src/verification.ts` — `verifyRemediation`,
+      `restrictionHolds`, `needsIntervention`. It consumes the `RemediationAction`
+      `proposeRemediation` already mints rather than inventing a parallel request type.
+      Two fail-closed arms beyond the row's own ask: a remediation nobody APPROVED reads
+      `unobserved` regardless of the evidence (nothing executes here, so an unapproved
+      action had nothing to observe, and a coincidental improvement must not close a fix
+      never carried out), and `dismissed` holds the restriction but never escalates —
+      a person already ruled on it. How you'd check: `pnpm run
+      proof:remediation-verification` → `51/51`, `summary=pass`,
+      `figures=assertions=51,states=3,inadmissibleShapes=8,failClosedArms=7`.
+      FALSIFIED by three planted defects (`restrictionHolds` as `state === "not_cleared"`
+      → 5 fail; approval checked after the evidence → 5 fail; unparseable instant coerced
+      to `0` → 2 fail). The third run corrected the proof itself: a self-test asserted on
+      a case the defect could not reach and passed WITH it planted.)
 
 - [ ] **Cascade join 5 — a durable outbound queue for the cascade emitters.**
       Serves *"notify the proper protocol and teams that are assign to that resource"*.

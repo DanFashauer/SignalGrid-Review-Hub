@@ -407,21 +407,32 @@ check(
   "both gap timelines are well-formed events (the silence is a gap, not a rejection)",
   [...PHANTOM_CHECKOUT, ...POSTURE_COVERS_EVERY_DEVICE].every((e) => validateEvent(e).ok),
 );
+// UPDATED DURING THE REPLAY, exactly as the block above instructs: "update the
+// fixture to the detections you now expect, do not revert the detector." #720 landed
+// CUSTODY_STALE_OR_CONTESTED on mainline after this PR was cut, and it fires on
+// precisely this shape — a dock re-lock around a still-open grant. The silence this
+// pinned is PARTLY CLOSED, which is the good outcome the pin existed to notice.
+//
+// What is still open, and why the surrounding prose stands: the detection fires from
+// the dock/checkout disagreement on ONE correlation timeline. It still carries no
+// slot axis and no per-device posture axis, which is what the two fixtures below
+// demonstrate — they fire the same single detection whether the devices were each
+// observed compliant or not. The gap narrowed; it did not close.
 expectExactly(
-  "a grant left open while the device sits back in its bay fires nothing (no slot axis reaches detect.ts)",
+  "a grant left open while the device sits back in its bay now fires CUSTODY_STALE_OR_CONTESTED (#720 closed this one)",
   PHANTOM_CHECKOUT,
-  [],
+  [["CUSTODY_STALE_OR_CONTESTED", "high", ["rl1", "g1"]]],
 );
 expectExactly(
-  "one undirected compliant posture exonerates three granted devices (no per-device posture axis)",
+  "one undirected compliant posture still exonerates three granted devices — no per-device posture axis",
   POSTURE_COVERS_EVERY_DEVICE,
-  [],
+  [["CUSTODY_STALE_OR_CONTESTED", "high", ["g1", "g2", "g3"]]],
 );
 // And the tell that the silence carries no information: a timeline where each
 // granted device really was observed compliant is byte-identical in outcome. The
 // detector cannot distinguish the sound case from the unsound one.
 expectExactly(
-  "per-device compliant postures yield the same nothing — the two cases are indistinguishable",
+  "per-device compliant postures yield the SAME single detection — the two cases are still indistinguishable",
   [
     ev("p1", { eventType: "posture_changed", mdmDeviceState: "compliant", deviceId: "dev-a" }),
     ev("p2", { eventType: "posture_changed", mdmDeviceState: "compliant", deviceId: "dev-b" }),
@@ -430,7 +441,7 @@ expectExactly(
     ev("g2", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-b" }),
     ev("g3", { eventType: "checkout_granted", userId: "u1", deviceId: "dev-c" }),
   ],
-  [],
+  [["CUSTODY_STALE_OR_CONTESTED", "high", ["g1", "g2", "g3"]]],
 );
 
 // Determinism: identical timeline ⇒ identical detections.

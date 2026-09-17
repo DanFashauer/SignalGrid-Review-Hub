@@ -3127,15 +3127,15 @@ launch-claims gate governs the prose either way.
 **Decision.**
 1. **Explicit tier per spawn; never inherit.** Every subagent or background dispatch sets its model on the spawn's own `model:` field (the tool argument beside the prompt), never only in the brief prose — a tier named in the brief does NOT select the runtime model, so a brief-only spawn still inherits the coordinator's. A spawn that omits the `model:` field is under-specified and must not run — the same bar the orchestrator applies to a worker with no falsifying check. Registered `.claude/agents/*.md` roles set it by frontmatter; ad-hoc and background spawns set the `model:` argument directly.
 2. **Token-smart tiering, concrete (cheapest tier that can do the stage).** Bulk, high-volume, fully-recheckable mechanical work — log/output scanning, reads for mapping, doc and codemap regeneration, simple reformatting — runs on **Haiku 4.5**. Reading/mapping that feeds a decision, mechanical edits, implementation, test-writing, refactors, and adversarial verification run on **Sonnet 5** (three cheap verifiers with distinct lenses beat one expensive one). Authorship and judgment where a wrong call is expensive to unwind — decision records, doctrine, design/architecture, gate-and-proof design, fail-closed auditing, decision-core reading, reconciling two lanes' edits — run on **Opus** (5 / 4.8). **Fable / Mythos** are the creative tier and are never assigned to an engineering or review spawn.
-3. **Fail-closed on an unavailable tier.** If an assigned tier is unavailable or unknown, the work resolves UP to Opus, never down to the model that is already limited. This mirrors golden rule 2 and DR-044's own words: unknown tightens, never loosens.
+3. **Fail-closed on an unavailable tier.** If an assigned tier is unavailable or unknown, the work resolves UP to Opus, never down to the model that is already limited. This mirrors golden rule 2 and DR-046's own words: unknown tightens, never loosens.
 4. **Contain a tier's exhaustion; be honest where it cannot be contained.** No spawn inherits the coordinator's model. Routing the bulk of work to Haiku/Sonnet keeps those workers off the coordinator's Opus quota, so exhausting one tier does not cascade into the others — the mechanism that turned one Fable limit into a lane-wide 429 storm. The exception, stated plainly: an Opus judgment worker shares an Opus coordinator's quota (naming the tier does not create a separate bucket), so Opus-worker spawns are kept few, and when the Opus tier itself is exhausted, judgment work WAITS for the reset (fail-closed, rule 3) rather than downgrading to a weaker model.
 5. **A usage limit is an event, not an ending.** A subagent killed by a 429 is recorded as a still-open, pending unit of work and continued on the fallback tier — never silently absorbed. This extends the existing "pending is reported on every run and never counts green" discipline (`check-sim-requests.mjs`) from cross-machine sim requests to an in-session spawn that died mid-task.
 6. **The one owner action (rule 3 for the coordinator's own model).** The owner sets the CLI's primary-model auto-fallback to Opus, so that when the current coordinating model hits its usage limit the session continues on Opus at full agentic capability instead of going dark. The agent cannot perform this switch on itself; naming it here is the record's honest boundary.
 7. **The decision-path boundary is untouched.** This record governs which *Claude* model powers a coordinating session and its subagents — a different axis from DR-029's gateway boundary and the model-tap boundary, which keep every model, Claude or otherwise, out of the deterministic decision path. Neither is relaxed. DR-029's boundary is a RUNTIME one — product code must not call, import, or depend on the AI gateway — and it does NOT bar an engineering or review agent from READING `lib/*` or a proof; rule 2 deliberately assigns an Opus agent to read the decision core (`.claude/agents/verdict-core-reader.md`). No model is added to the runtime decision path.
 
-**Consequences.** Routing becomes cheaper and a single tier's exhaustion is contained to that tier. The lane no longer depends on a human noticing silence: the coordinator falls back (owner setting, rule 6) and stalled spawns survive as pending (rule 5). A follow-up may add a gate over the ad-hoc spawn path, owned by `gate-and-proof-engineer`, in the shape of `check-agent-roster.mjs` — deriving-and-gating the declared tier rather than trusting convention; until it exists, rules 1–5 are operating doctrine backed by review, not yet by a script, and this record says so honestly. Numbering note: DR-044 and DR-045 currently live only on open branches and DR-046 is unclaimed; this record takes DR-047 to avoid a collision as those land, and must be renumbered if they merge in a different order.
+**Consequences.** Routing becomes cheaper and a single tier's exhaustion is contained to that tier. The lane no longer depends on a human noticing silence: the coordinator falls back (owner setting, rule 6) and stalled spawns survive as pending (rule 5). A follow-up may add a gate over the ad-hoc spawn path, owned by `gate-and-proof-engineer`, in the shape of `check-agent-roster.mjs` — deriving-and-gating the declared tier rather than trusting convention; until it exists, rules 1–5 are operating doctrine backed by review, not yet by a script, and this record says so honestly. Numbering note: DR-044 and DR-045 currently live only on open branches and DR-046 is unclaimed; this record takes DR-047 to avoid a collision as those land, and must be renumbered if they merge in a different order. (RESOLVED 2026-09-15: they did merge in a different order — mainline's DR-044 became the needle record on 09-12 while the model-routing tap sat conflicted, so the tap took DR-046 on this branch, which is the slot this sentence names. DR-044 above and its citations are the needle record.)
 
-**What does not change.** Claim discipline (DR-021 §2, DR-033 item 4): this is internal build-lane doctrine, never a buyer-facing claim. The verdict enum, the determinism invariant, and the Decision Envelope are untouched. DR-029 and the (unmerged) DR-044 boundary gate stand as written.
+**What does not change.** Claim discipline (DR-021 §2, DR-033 item 4): this is internal build-lane doctrine, never a buyer-facing claim. The verdict enum, the determinism invariant, and the Decision Envelope are untouched. DR-029 and the (unmerged) DR-046 boundary gate stand as written.
 
 **Reversal / amendment.** The owner reverses by saying so; amend the numbered rules and the SKILL section ("Which model runs a stage") together and keep the record and its history. A tier assignment may be re-mapped, or the ad-hoc-spawn gate added, by a later record that names what changed and why.
 
@@ -3374,3 +3374,77 @@ un-done by unloading the named launch agents and the one PR is reverted (nothing
 tree depends on either), and this record stays with the reversal date added. Adopting
 Switchyard, self-hosting OmniRoute, or flipping the GREEN switch is each a later record
 that names what changed and its measured verdict, not a reversal of this one.
+## DR-046 — build-lane model-routing tap: chores may route low-stakes, fully-recheckable work to the DR-029 gateway through a report-only helper, fenced out of the decision path by construction (owner-directed 2026-09-09)
+
+**Context.** The owner asked for a routing "brain": the non-Claude models reached through
+one gateway, the coordinating session deciding per task which model to use — cheap/free/local
+models for bulk low-stakes work (log triage, first-draft prose), Claude for the real
+decisions — and the workflow/"ultracode" discipline applying whatever model runs a task.
+DR-029 already adopted [OmniRoute](https://github.com/diegosouzapw/OmniRoute) as the
+by-reference model-access gateway (env-configured endpoint, ~352 providers + free-tier
+aggregation) and its LM Studio addendum as the fully-local counterpart, but nothing in the
+tree actually *used* it. One hard fact bounds what the repo can build: **it cannot change
+which model a Claude Code session itself runs on** — that is the lane's owner-provisioned
+environment/gateway config — so the in-repo deliverable is a build-lane *tap* for chores, a
+documented *routing policy*, and a *boundary gate*, all report-only and outside the decision
+path. Designed by a judge-panel workflow (three independent designs → synthesis) on 2026-09-09.
+
+**Call: adopt the tap, its single-source policy, and the fence, extending DR-029 BY
+REFERENCE — no install, no npm dependency, endpoint ENV-only.**
+
+- `scripts/lib/model-routing-policy.mjs` is the ONE source of truth: `tierFor(taskClass)`
+  (unknown class → the CLAUDE tier, fail-closed), the tier→env map, and the boundary's
+  forbidden roots/tokens — imported by BOTH the tap and the gate so doctrine and fence cannot
+  drift.
+- `scripts/lib/agent-model-tap.mjs` exposes `draftWithModel({taskClass, system, input})`: for
+  a FREE/LOCAL class it POSTs an OpenAI-compatible request to the ENV endpoint and returns
+  `{text, model, tier, provenance:{drafted:'model', verified:false}}`; for the CLAUDE tier (or
+  any unknown class) it returns `null` without touching the network (the coordinating session
+  does that work inline — the tap is not the path). It **never throws, exits, blocks, writes
+  the tree, gates, or decides**; every miss returns `null` with one honest stderr line, and the
+  caller falls back deterministically or to Claude.
+- `scripts/check-model-tap-boundary.mjs` (preflight + CI, real + `--self-test`) proves no file
+  under the decision-path roots — `lib/**`, the `/v1` server, connectors, proofs, scope
+  DERIVED from the policy and floor-checked — imports the tap/policy, names its env vars, or
+  carries a model-call shape, and that the tap/policy import nothing from the decision path
+  (the reciprocal fence). A permanent planted-red fixture keeps it falsifiable.
+- First consumer: `scripts/brief.mjs --narrate` routes a one-line, explicitly-`unverified`
+  developer summary to the free tier; with no endpoint it is simply omitted. Routing doctrine
+  lives in a "Route by model tier" subsection of `.claude/skills/signalgrid-master/SKILL.md`
+  and a tap section in `docs/AGENT_GATEWAY.md`. Env vars: `SIGNALGRID_AGENT_MODEL_BASE_URL`,
+  `SIGNALGRID_AGENT_MODEL_NAME`, optional `SIGNALGRID_AGENT_MODEL_KEY` — ENV-only, never
+  committed (the DR-029 rule).
+
+**Boundary — the load-bearing halves.**
+
+- **Golden rule 2 holds regardless of tier, now BY CONSTRUCTION.** No model — free, local, or
+  Claude — may enter `lib/*`, the `/v1` decision path, a connector, or a `proof:*`; the
+  boundary gate (filesystem-derived scope + reciprocal fence + floor + permanent planted-red)
+  makes a breach a red build, not a matter of goodwill. A model-drafted output always carries
+  `provenance.verified:false` — it is an INPUT, never a verdict — and nothing model-drafted is
+  auto-written to any registry or owner-facing surface.
+- **"Ultracode regardless of model" is true because the discipline is a property of the LANE,
+  not the model.** The tap only returns text, so every routed draft re-enters the identical
+  preflight / `verify:breadth` / proof / adversarial-review pipeline, which keys off the
+  artifact, not its author; and the policy forbids routing to the free tier any task a gate
+  cannot fully re-check — the cheap tier may DRAFT, never be the final unverified word.
+- **The repo cannot reroute a Claude session's own model, and this record does not claim it
+  can.** The CLAUDE tier means the coordinating session does the work inline; the session's
+  model is owner-provisioned lane/gateway env. Adopted by reference: `pnpm-lock.yaml` is
+  untouched (no dependency). Building is not claiming — the launch-claims gate still governs
+  what may be said to ship.
+
+**Evidence.** `scripts/lib/model-routing-policy.mjs`, `scripts/lib/agent-model-tap.mjs`,
+`scripts/check-model-tap-boundary.mjs` (self-test 33/33 on 2026-09-12 — covering
+Anthropic/Claude, Ollama and Gemini shapes, comment/string-literal hiding, a deleted root
+and the live-call fence — real scan green over 660 decision-path files across 9 roots on
+the same date; both figures move with the tree, so re-run the gate rather than quote
+this line), `scripts/brief.mjs` (`--narrate`), the registrations in
+`scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml`, the routing sections in
+`.claude/skills/signalgrid-master/SKILL.md` and `docs/AGENT_GATEWAY.md`, and the intake
+lineage in `docs/agent/RESOURCE_INTAKE.md` (2026-09-09). Cites DR-029 and golden rule 2.
+
+**Reversal.** Delete the tap, the policy module, the boundary gate, this record, and the
+doc/skill routing sections, and remove the two gate registrations and the `--narrate` block.
+Nothing in the product depends on any of it — no dependency, no install, no decision-path
+code — so there is nothing else to undo.

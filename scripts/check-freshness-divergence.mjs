@@ -30,20 +30,17 @@
 //     30s   lib/location/src/validate.ts             hand-rolled, `-30_000`
 //     0     every other site (a caller-posed reference has no second clock to skew)
 //
-// Measured, not remembered. This grep, run against this tree on 2026-09-02, printed
-// SIX lines across exactly THREE files — the three tolerance sites plus three further
-// uses of the same two constants, and no fourth file:
+// Measured, not remembered — re-run the grep below for the LIVE set; a pinned line/file
+// count rots. On 2026-09-02 it printed six lines across three files; deviceRegistry.ts's
+// `FUTURE_SKEW_MS` re-export (2026-09-06) made it more without adding a tolerance. Every
+// hit beyond the three tolerance sites above is a reference or re-export of the same two
+// constants, not a fourth skew:
 //
 //     $ grep -rnE 'SKEW_MS|SKEW_TOLERANCE_MS|< *-[0-9_]+' lib/*/src --include=*.ts | grep -vE '//'
-//     lib/integrations/src/utils/freshness.ts:...:export const FUTURE_SKEW_TOLERANCE_MS = 60 * 1000;
-//     lib/integrations/src/utils/freshness.ts:...: * `skewToleranceMs` defaults to `FUTURE_SKEW_TOLERANCE_MS`. Pass `0` only with a
-//     lib/integrations/src/utils/freshness.ts:...:  skewToleranceMs: number = FUTURE_SKEW_TOLERANCE_MS,
-//     lib/location/src/validate.ts:10:  if (ageMs < -30_000) return { ok: false, error: "observedAt is in the future" };
-//     lib/verdict-attestation/src/attest.ts:18:const DEFAULT_MAX_SKEW_MS = 60_000;
-//     lib/verdict-attestation/src/attest.ts:186:  const maxSkew = options.maxSkewMs ?? DEFAULT_MAX_SKEW_MS;
 //
-// (freshness.ts's own line numbers are elided: they move whenever this header is
-// edited, and a number that rots is worse than no number. Re-run the grep.)
+// (Line numbers AND the hit count are deliberately elided: they move whenever a file
+// starts or stops referencing these constants, or this header is edited, and a number
+// that rots is worse than no number. Re-run the grep.)
 //
 // Every one of them already guarded the VERDICT. What one of them did not guard was
 // the published AGE: local-authority's `no_grant_policy` branch computed

@@ -1391,6 +1391,11 @@ async function run() {
       });
       const allowedHdrs = (preflight.headers.get("access-control-allow-headers") ?? "").toLowerCase();
       check("secret mode: CORS preflight permits x-enrollment-authorization for an allowed origin", preflight.headers.get("access-control-allow-origin") === "http://console.example" && allowedHdrs.includes("x-enrollment-authorization"));
+      // Same failure mode for the idempotency retry token (review finding): the
+      // idempotency middleware reads the `Idempotency-Key` request header, so the CORS
+      // allow-list must name it or a browser client on an allowed origin has its retry
+      // -safe POST blocked at preflight, before the server runs.
+      check("CORS preflight permits idempotency-key for an allowed origin", allowedHdrs.includes("idempotency-key"));
     } finally {
       server2.kill("SIGTERM");
     }

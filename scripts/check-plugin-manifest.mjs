@@ -17,8 +17,9 @@
 //   2. `agents` equals the tracked set `git ls-files .claude/agents/*.md`, exactly —
 //      no missing file, no extra, each path present on disk. Empty derivation fails
 //      (fail-closed: a vanished directory is a defect, not a pass).
-//   3. `skills` and `commands` resolve to directories that exist and are non-empty;
-//      every skill subdir has a SKILL.md.
+//   3. `skills` and `commands` are present string paths that resolve to directories that
+//      exist and are non-empty; every skill subdir has a SKILL.md. An absent or non-string
+//      field fails closed (it does not silently skip the check).
 //   4. Every path in the manifest is relative, starts with "./", and exists.
 //   5. When the `claude` CLI is on PATH, `claude plugin validate .` exits 0. When it is
 //      not, that is REPORTED, never silently green — the structural checks above still
@@ -72,6 +73,16 @@ function findViolations(manifest, derivedAgents, root) {
     }
   }
 
+  // `skills` and `commands` must be PRESENT and string paths. Without this, an absent
+  // or non-string field skipped every downstream check (the pathFields push below and the
+  // directory checks short-circuit on a falsy value) and the success line still printed
+  // "skills + commands present" — invariant #3 silently unenforced and the pass message
+  // untrue. Absence fails closed.
+  if (typeof manifest.skills !== "string")
+    v.push('`skills` must be a string path to the skills directory (absent or non-string field fails closed)');
+  if (typeof manifest.commands !== "string")
+    v.push('`commands` must be a string path to the commands directory (absent or non-string field fails closed)');
+
   const pathFields = [];
   if (typeof manifest.skills === "string") pathFields.push(["skills", manifest.skills]);
   if (typeof manifest.commands === "string") pathFields.push(["commands", manifest.commands]);
@@ -86,7 +97,7 @@ function findViolations(manifest, derivedAgents, root) {
   }
 
   // skills / commands must be non-empty directories; each skill dir needs a SKILL.md.
-  const skillsDir = manifest.skills && join(root, manifest.skills);
+  const skillsDir = typeof manifest.skills === "string" ? join(root, manifest.skills) : null;
   if (skillsDir && existsSync(skillsDir)) {
     const subs = readdirSync(skillsDir, { withFileTypes: true }).filter((e) => e.isDirectory());
     if (subs.length === 0) v.push(`skills directory ${manifest.skills} has no skill subdirectories`);
@@ -95,7 +106,7 @@ function findViolations(manifest, derivedAgents, root) {
         v.push(`skill ${s.name} has no SKILL.md`);
     }
   }
-  const commandsDir = manifest.commands && join(root, manifest.commands);
+  const commandsDir = typeof manifest.commands === "string" ? join(root, manifest.commands) : null;
   if (commandsDir && existsSync(commandsDir)) {
     const md = readdirSync(commandsDir).filter((f) => f.endsWith(".md"));
     if (md.length === 0) v.push(`commands directory ${manifest.commands} has no .md files`);
@@ -133,7 +144,25 @@ function selfTest() {
     console.error("SELF-TEST FAIL: a manifest naming a non-existent agent was not flagged");
     return 1;
   }
-  console.log("plugin-manifest self-test: complete=clean, missing=flagged, extra=flagged — green");
+  // A manifest missing (or non-stringing) `skills`/`commands` must be flagged, not
+  // silently passed — the vacuous-check class this gate exists to prevent.
+  const noSkills = findViolations({ ...base, skills: undefined }, derived, "/nonexistent-root").filter(
+    (s) => s.includes("`skills`"),
+  );
+  if (noSkills.length === 0) {
+    console.error("SELF-TEST FAIL: a manifest with no `skills` field was not flagged");
+    return 1;
+  }
+  const noCommands = findViolations({ ...base, commands: 123 }, derived, "/nonexistent-root").filter(
+    (s) => s.includes("`commands`"),
+  );
+  if (noCommands.length === 0) {
+    console.error("SELF-TEST FAIL: a manifest with a non-string `commands` field was not flagged");
+    return 1;
+  }
+  console.log(
+    "plugin-manifest self-test: complete=clean, missing=flagged, extra=flagged, absent-skills=flagged, nonstring-commands=flagged — green",
+  );
   return 0;
 }
 

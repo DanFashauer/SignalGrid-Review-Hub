@@ -219,6 +219,15 @@ check(
   badRead.state !== "cleared",
 );
 
+// The figures this proof MEASURES, for the docs↔proof guard. Each is derived from the
+// run rather than typed, so a doc quoting one cannot drift from what actually ran.
+const states = new Set([cleared.state, notCleared.state, none.state]).size;
+const inadmissible = [before, atRequest, afterAsOf, otherTarget, badRead, badRequest, badAsOf, emptyAsOf].length;
+const failClosedArms = [awaiting, dismissed, badRead, badRequest, badAsOf, emptyAsOf, none].length;
+console.log(
+  `figures=assertions=${passed + failures.length},states=${states},` +
+    `inadmissibleShapes=${inadmissible},failClosedArms=${failClosedArms}`,
+);
 console.log(`\nRemediation-verification proof: ${passed}/${passed + failures.length}`);
 if (failures.length > 0) {
   for (const f of failures) console.log(`  FAILED: ${f}`);

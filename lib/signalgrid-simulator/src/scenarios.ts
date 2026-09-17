@@ -91,6 +91,40 @@ export const simulatorScenarios: SimulatorScenario[] = [
     ],
   },
   {
+    id: "custody-removal-without-session",
+    title: "Credential removed with no session owning it",
+    summary:
+      "A shared device is lifted from its dock while nothing asserts an active session owns it — the key pulled from the ignition.",
+    persona: "Shared-device pool operator watching an unclaimed removal",
+    expectedOutcomes: ["create_ticket", "alert_operator", "route_to_owner", "record_audit"],
+    expectedOwnerTeam: "Shared device pool owner",
+    safeDemoNote:
+      "DockBridge undock events are software fixtures; no dock, puck or lock hardware is touched. SignalGrid OBSERVES the removal and correlates it — it never commands the dock.",
+    startingSignals: [
+      signal("identity.authenticated", "identity", "Entra fixture", "user:rn-204", "info", "A user session is valid elsewhere on the floor", { risk: "low" }),
+      signal("device.posture_observed", "device", "Intune fixture", "device:ios-shared-061", "info", "Device is compliant and fresh", { compliance: "compliant", freshness: "fresh" }),
+      signal("dock.device_undocked", "dockbridge", "DockBridge fixture", "device:ios-shared-061", "high", "Device was lifted from its bay", { dockId: "ED-02", slot: "03" }),
+      signal("workflow.assignment_changed", "workflow", "Workflow fixture", "workflow:none", "medium", "No active session claims the device", { active: false }),
+    ],
+  },
+  {
+    id: "custody-removal-with-session",
+    title: "Credential removed by the session that owns it",
+    summary:
+      "The same lift, with an active session bound to it — the ordinary shift handoff, which must stay allowed.",
+    persona: "Nurse taking an assigned shared device at shift start",
+    expectedOutcomes: ["allow", "record_audit"],
+    expectedOwnerTeam: "Clinical mobility operations",
+    safeDemoNote:
+      "Paired with custody-removal-without-session so the removal rule is proven in BOTH directions: it must fire on an unclaimed lift and stay silent on a claimed one.",
+    startingSignals: [
+      signal("identity.authenticated", "identity", "Entra fixture", "user:rn-204", "info", "User session is valid", { risk: "low" }),
+      signal("device.posture_observed", "device", "Intune fixture", "device:ios-shared-061", "info", "Device is compliant and fresh", { compliance: "compliant", freshness: "fresh" }),
+      signal("dock.device_undocked", "dockbridge", "DockBridge fixture", "device:ios-shared-061", "info", "Device was lifted from its bay by its assigned holder", { dockId: "ED-02", slot: "03" }),
+      signal("workflow.assignment_changed", "workflow", "Workflow fixture", "workflow:shift-am", "info", "An active session owns the device", { active: true }),
+    ],
+  },
+  {
     id: "low-battery-workflow-impact",
     title: "Low battery workflow impact",
     summary: "A shared device is assigned to an active workflow while battery is critical.",

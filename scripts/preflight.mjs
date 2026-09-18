@@ -421,6 +421,8 @@ const STEPS = [
   // byte-faithful original of DecisionEngine.swift (golden rule 1) — so the rule
   // lives in a wrapper around it, and this pins the wrapper against the same shared
   // vectors the Swift twin will be ported to.
+  { name: "Proof: affected-audience (the blast radius is told, and silence is never reported as told)", cmd: ["pnpm", "run", "proof:affected-audience"] },
+  { name: "Proof: remediation-verification (an unobserved fix is not a cleared fix)", cmd: ["pnpm", "run", "proof:remediation-verification"] },
   { name: "Proof: remediation-allow (a recorded-but-unverified remediation never buys an allow)", cmd: ["pnpm", "run", "proof:remediation-allow"] },
   { name: "Remediation-allow conformance (the shared vectors bind the TS side; the native port is REPORTED)", cmd: ["node", "scripts/check-remediation-allow-conformance.mjs"] },
   // The second guard around the engine (eighth verdict-core round): an UNKNOWN posture

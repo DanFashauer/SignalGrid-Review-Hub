@@ -24,6 +24,11 @@ const expectedOutcomeSets: Record<string, DecisionOutcome[]> = {
   "stale-checkin-shared-device": ["step_up", "request_remediation", "record_audit"],
   "wrong-zone-rtls-event": ["alert_operator", "route_to_owner", "record_audit"],
   "dock-missing-overdue-device": ["alert_operator", "create_ticket", "route_to_owner", "record_audit"],
+  // The custody-removal pair is asserted TOGETHER on purpose: the same lift, differing
+  // only in whether a session claims it. Without the second row a removal rule that
+  // fired on every legitimate checkout would still look green here.
+  "custody-removal-without-session": ["alert_operator", "create_ticket", "route_to_owner", "record_audit"],
+  "custody-removal-with-session": ["allow", "record_audit"],
   "low-battery-workflow-impact": ["alert_operator", "route_to_owner", "record_audit"],
   "operational-health-degradation": ["create_ticket", "route_to_owner", "record_audit"],
   "edr-security-risk": ["restrict", "alert_operator", "route_to_owner", "record_audit"],

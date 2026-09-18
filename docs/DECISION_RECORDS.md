@@ -3374,3 +3374,35 @@ un-done by unloading the named launch agents and the one PR is reverted (nothing
 tree depends on either), and this record stays with the reversal date added. Adopting
 Switchyard, self-hosting OmniRoute, or flipping the GREEN switch is each a later record
 that names what changed and its measured verdict, not a reversal of this one.
+
+## DR-051 — Add a `CUSTODY_STALE_OR_CONTESTED` cross-domain detection to the event-fabric timeline detector (cloud lane — proposal, 2026-09-13)
+
+**Status: PROPOSAL — a deferred capability, not claimed as current and not Limited GA until merged.** This record changes decision-core BEHAVIOR (a new cross-domain detection over the event timeline), so it is DR-020 territory. The code and its proof are carried in the PR that adds this record; the owner APPROVES by merging that PR and VETOES by saying so or closing it. Nothing here is claimable under DR-021/DR-033 until merged.
+
+**Context (deferred design target until merged).** `docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md` names the single most-cited operational pain in the shared-clinical-device runbooks as "phantom custody": a device that still reads as checked out to a holder who already walked away, or sits unpaired in a dock slot the console shows as present. That is a custody-state contradiction across three planes — the dock (is the bay seated?), the checkout ledger (is a hold open?), and posture (is the device paired/managed?). The ground-truth map filed it as a gap; `docs/BUILD_BACKLOG.md` split it into the checkout-DECISION form (already modeled 2026-09-11 as the deferred `rtls-custody` ledger evaluator) and the timeline DETECTION form over the pure event stream — still open, deferred, and the subject of this record.
+
+**The question this settles.** Whether to add a sixth deterministic, fixture-backed cross-domain detection — `CUSTODY_STALE_OR_CONTESTED` — beside `CHECKOUT_WITHOUT_COMPLIANCE`, that catches this deferred phantom-custody contradiction from the event timeline alone (no ledger read), and how it stays fail-closed.
+
+### 1. The detection (deferred until merged)
+
+`CUSTODY_STALE_OR_CONTESTED` (severity `high`) fires when the dock, checkout and posture planes disagree on a single correlation timeline, in any of three shapes:
+
+- **(a) Stale at dock** — the bay re-locked around a device (`dock_relocked`) while a checkout is still open (`checkout_granted`, no `device_returned`): racked, but the ledger still shows it out.
+- **(b) Contested** — more than one `checkout_granted` on one timeline with no clearing `device_returned`: handed out again while a prior holder's hold was never cleared.
+- **(c) Unpaired but present** — a seated device (`dock_relocked`) that posture reports `unmanaged`/`unknown`: a slot the console shows occupied by a device that is not paired/managed.
+
+### 2. Why it satisfies golden rule 2 (fail-closed, deterministic — deferred until merged)
+
+- **Deterministic.** Pure set-based reasoning over the events — no clock, no randomness, no I/O — exactly like the five detections it sits beside.
+- **Fail-closed.** It only ADDS a detection; it never suppresses one and never manufactures an allow. An ABSENT `device_returned` is read as "still out", never "cleared"; an `unknown` posture on a seated device FIRES it. Unknown / stale / missing facts raise assurance, never lower it. A false positive errs toward more scrutiny; the covered failure is the false negative, which the three shapes and the proof's negative control guard.
+- **Truthful.** It reports only the contradiction it can prove from the stream, with the evidence event ids that established it.
+
+### 3. Relationship to the existing surface (both remain deferred design targets)
+
+This deferred detection does not duplicate the `rtls-custody` ledger evaluator: that evaluator grades one reconciliation report (a ledger read) into a checkout decision, while this detection catches the same phantom from the raw event timeline with no ledger read, feeding the same timeline → detection → incident path the other cross-domain detections use (`mapDetectionToIncident` routes by severity, so a new code needs no change there).
+
+### 4. Proof and scope
+
+Proven by ADDING assertions to the existing, already-registered `scripts/src/event-contract-proof.ts` (`proof:event-contract`): three positive shapes, a severity+evidence check, and a negative control (a properly returned-and-racked device must NOT fire it). No new proof script, so no new preflight/CI/guard registration. The verdict enum, the Decision Envelope, and every launch-claim surface are untouched; no launch claim is made or implied.
+
+**Reversal / amendment.** The owner vetoes by not merging, or reverses a merged form by reverting the one PR with the reversal date added here.

@@ -706,6 +706,7 @@
       "surface": [
         ".claude/**",
         ".claude-plugin/**",
+        ".specify/**",
         ".agents/**",
         ".mcp.json",
         "artifacts/mcp-server/**",

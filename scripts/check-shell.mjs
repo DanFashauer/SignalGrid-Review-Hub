@@ -61,6 +61,28 @@ const DEFERRED = new Map([
       reason: "vendored byte-identical (mattpocock/skills@3cca18b3); no edit and no inline disable is permitted in .claude/skills/",
     },
   ],
+  // github/spec-kit's scaffold scripts, vendored 2026-09-18 at 5e952140 under the
+  // .specify third_party_intake area (scripts/publication-boundary.mjs) — the same
+  // case as the wizard template above: byte-identical to upstream, so neither an
+  // edit nor an inline disable is permitted, and DEFERRED records each code rather
+  // than waving the file through. They run only when a person invokes a /speckit-*
+  // skill; none is a hook. If a re-vendor clears a code, the stale-deferral check
+  // fails and someone re-reads the file. Four of the six scripts lint clean and need
+  // no entry.
+  [
+    ".specify/scripts/bash/common.sh",
+    {
+      codes: ["SC2120", "SC2155", "SC2221", "SC2222"],
+      reason: "vendored byte-identical (github/spec-kit@5e952140, RESOURCE_INTAKE.md 2026-09-18); no edit and no inline disable is permitted in a third_party_intake tree",
+    },
+  ],
+  [
+    ".specify/scripts/bash/create-new-feature.sh",
+    {
+      codes: ["SC2155"],
+      reason: "vendored byte-identical (github/spec-kit@5e952140, RESOURCE_INTAKE.md 2026-09-18); no edit and no inline disable is permitted in a third_party_intake tree",
+    },
+  ],
 ]);
 
 const listed = spawnSync("git", ["ls-files", "*.sh"], { encoding: "utf8" });

@@ -68,7 +68,16 @@ export function frontmatter(body) {
   const out = {};
   for (const line of m[1].split(/\r?\n/)) {
     const kv = line.match(/^([A-Za-z_-]+):\s*(.*)$/);
-    if (kv) out[kv[1]] = kv[2].trim();
+    if (kv) {
+      // A YAML scalar wrapped in one matching pair of quotes IS the bare string —
+      // `name: "speckit-analyze"` names speckit-analyze. This parser kept the quotes,
+      // so ten vendored github/spec-kit skills (2026-09-18) read as "disagreeing with
+      // their directory" while agreeing with it exactly. Unwrap one pair, never more:
+      // a value that is only quotes, or quoted on one side, is left as written.
+      const raw = kv[2].trim();
+      const q = /^(["'])(.*)\1$/.exec(raw);
+      out[kv[1]] = q ? q[2] : raw;
+    }
   }
   return out;
 }
@@ -167,13 +176,18 @@ function selfTest() {
     [`${SKILLS_DIR}/nodesc/SKILL.md`, "---\nname: nodesc\n---\nbody"],
     [`${SKILLS_DIR}/mismatch/SKILL.md`, "---\nname: something-else\ndescription: d\n---\nbody"],
     [`${SKILLS_DIR}/nofm/SKILL.md`, "no frontmatter here"],
+    // Quoted scalars, both directions: a quoted name that MATCHES its directory is
+    // conformant (the vendored spec-kit shape), and a quoted name that does NOT match
+    // still fails — unwrapping must not become a way to pass anything in quotes.
+    [`${SKILLS_DIR}/quoted/SKILL.md`, "---\nname: \"quoted\"\ndescription: \"d\"\n---\nbody"],
+    [`${SKILLS_DIR}/quotedwrong/SKILL.md`, "---\nname: \"somewhere-else\"\ndescription: d\n---\nbody"],
   ]);
   const agents = new Map([
     [`${AGENTS_DIR}/good.md`, good],
     [`${AGENTS_DIR}/noname.md`, "---\ndescription: d\n---\nbody"],
   ]);
   const fio = {
-    listSkills: () => ["good", "nodesc", "mismatch", "nofm"],
+    listSkills: () => ["good", "nodesc", "mismatch", "nofm", "quoted", "quotedwrong"],
     listAgents: () => ["good.md", "noname.md"],
     read: (rel) => {
       if (skills.has(rel)) return skills.get(rel);
@@ -188,11 +202,13 @@ function selfTest() {
   checks.push(["a well-formed skill raises no problem", !r.problems.some((p) => p.includes("good/SKILL.md"))]);
   checks.push(["a skill missing `description` is RED", has("nodesc/SKILL.md") && has("no non-empty `description`")]);
   checks.push(["a skill whose name disagrees with its directory is RED", has("mismatch/SKILL.md") && has("disagrees with its directory")]);
+  checks.push(["a QUOTED name that matches its directory is conformant (the vendored spec-kit shape)", !has("quoted/SKILL.md")]);
+  checks.push(["…and a QUOTED name that does NOT match is still RED — unwrapping is not a pass for anything in quotes", has("quotedwrong/SKILL.md") && has("disagrees with its directory")]);
   checks.push(["a skill with no frontmatter is RED", has("nofm/SKILL.md") && has("no YAML frontmatter")]);
   checks.push(["a well-formed agent raises no problem", !r.problems.some((p) => p.includes("good.md"))]);
   checks.push(["an agent missing `name` is RED", has("noname.md") && has("no non-empty `name`")]);
   // The counts the floors are checked against are the walked counts, not a guess.
-  checks.push(["the audit reports how many it actually walked", r.skills === 4 && r.agents === 2]);
+  checks.push(["the audit reports how many it actually walked", r.skills === 6 && r.agents === 2]);
 
   // FLOORS against the REAL tree: a walk that resolved nothing would make every
   // per-member check vacuous, which is the pass this gate exists to refuse.

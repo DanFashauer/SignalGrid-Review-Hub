@@ -72,9 +72,22 @@ function findViolations(manifest, derivedAgents, root) {
     }
   }
 
+  // FAIL-CLOSED ON AN ABSENT KEY, and this is a fix rather than a nicety. The two lines
+  // below used to be guarded by `typeof === "string"`, so a manifest that simply OMITTED
+  // `skills` (or gave it a number, or null) was never added to pathFields — and the
+  // directory invariant further down was guarded by the same falsy value, so it was
+  // skipped too. Invariant 3 in this file's own header promises those directories exist
+  // and are non-empty; a manifest could drop the key and collect a green from a gate that
+  // had quietly stopped checking. An absent key is unknown state, and unknown state must
+  // tighten the answer, never loosen it.
   const pathFields = [];
-  if (typeof manifest.skills === "string") pathFields.push(["skills", manifest.skills]);
-  if (typeof manifest.commands === "string") pathFields.push(["commands", manifest.commands]);
+  for (const key of ["skills", "commands"]) {
+    if (typeof manifest[key] === "string") {
+      pathFields.push([key, manifest[key]]);
+    } else {
+      v.push(`${key} must be a string path — invariant 3 cannot be checked without it, and an unchecked invariant is not a passing one (got ${JSON.stringify(manifest[key])})`);
+    }
+  }
   for (const a of declared || []) pathFields.push(["agents[]", a]);
 
   for (const [field, p] of pathFields) {
@@ -86,7 +99,12 @@ function findViolations(manifest, derivedAgents, root) {
   }
 
   // skills / commands must be non-empty directories; each skill dir needs a SKILL.md.
-  const skillsDir = manifest.skills && join(root, manifest.skills);
+  // Typed, not just truthy. `manifest.skills && join(root, manifest.skills)` threw
+  // ERR_INVALID_ARG_TYPE on a truthy non-string (`skills: 3`) — the gate crashed with a
+  // stack trace instead of reporting a reason. A crash does exit non-zero, so it was
+  // fail-closed by accident; it told the reader nothing. Found by the self-test arm added
+  // for the absent-key defect, not by reading.
+  const skillsDir = typeof manifest.skills === "string" ? join(root, manifest.skills) : null;
   if (skillsDir && existsSync(skillsDir)) {
     const subs = readdirSync(skillsDir, { withFileTypes: true }).filter((e) => e.isDirectory());
     if (subs.length === 0) v.push(`skills directory ${manifest.skills} has no skill subdirectories`);
@@ -95,7 +113,7 @@ function findViolations(manifest, derivedAgents, root) {
         v.push(`skill ${s.name} has no SKILL.md`);
     }
   }
-  const commandsDir = manifest.commands && join(root, manifest.commands);
+  const commandsDir = typeof manifest.commands === "string" ? join(root, manifest.commands) : null;
   if (commandsDir && existsSync(commandsDir)) {
     const md = readdirSync(commandsDir).filter((f) => f.endsWith(".md"));
     if (md.length === 0) v.push(`commands directory ${manifest.commands} has no .md files`);
@@ -133,7 +151,31 @@ function selfTest() {
     console.error("SELF-TEST FAIL: a manifest naming a non-existent agent was not flagged");
     return 1;
   }
-  console.log("plugin-manifest self-test: complete=clean, missing=flagged, extra=flagged — green");
+  // The absent-key arm, which is the defect this gate had. `skills`/`commands` were
+  // checked only when already a string, so OMITTING the key skipped both the path check
+  // and the directory invariant — a green from a gate that had stopped looking. Read off
+  // the full violation list rather than driftViol, which filters to agent drift only.
+  const keyViol = (m) => findViolations(m, derived, "/nonexistent-root").filter((x) => /must be a string path/.test(x));
+  if (keyViol(base).length !== 0) {
+    console.error("SELF-TEST FAIL: a complete manifest was flagged for a missing key");
+    return 1;
+  }
+  for (const [label, m] of [
+    ["absent", (({ skills, ...rest }) => rest)(base)],
+    ["null", { ...base, skills: null }],
+    ["a number", { ...base, skills: 3 }],
+  ]) {
+    if (keyViol(m).length === 0) {
+      console.error(`SELF-TEST FAIL: a manifest whose skills key is ${label} was not flagged — invariant 3 is being skipped, not passed`);
+      return 1;
+    }
+  }
+  if (keyViol((({ commands, ...rest }) => rest)(base)).length === 0) {
+    console.error("SELF-TEST FAIL: a manifest with no commands key was not flagged");
+    return 1;
+  }
+
+  console.log("plugin-manifest self-test: complete=clean, missing=flagged, extra=flagged, absent/null/non-string skills+commands=flagged — green");
   return 0;
 }
 

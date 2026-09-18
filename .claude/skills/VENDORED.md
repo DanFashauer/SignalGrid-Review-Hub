@@ -5,16 +5,16 @@ Third-party work, copied in unmodified. **Not ours.**
 > **SEVENTEEN exceptions in this directory — read this before any re-vendor.** These are
 > FIRST-PARTY, written in this repository and NOT part of the upstream set. They live
 > here because the harness loads skills from this directory. Everything else below
-> describes the other 100, from THIRTEEN upstreams — 14 from obra/superpowers, `watch/`
+> describes the other 110, from FOURTEEN upstreams — 14 from obra/superpowers, `watch/`
 > from bradautomates/claude-video (2026-09-12, DR-040), and, the same day, 85 more from
 > eleven collections the owner's bar admitted in one pass: mattpocock/skills (25),
 > addyosmani/agent-skills (24), K-Dense-AI/scientific-agent-skills (13),
 > mcollina/skills (4), google/skills (5), NVIDIA/skills (4),
 > raintree-technology/hig-doctor (3), Neeeophytee/finding-unknowns-skills (3),
 > rainmanjam/poka-yoke (2), oliver-zehentleitner/keep-the-why (1),
-> and conorluddy/ios-simulator-skill (1) — 14 + 1 + 85 = 100. Each has its own section
+> and conorluddy/ios-simulator-skill (1), then github/spec-kit (10) on 2026-09-18 — 14 + 1 + 85 + 10 = 110. Each has its own section
 > at the end of this file. Counted, not remembered: `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`
-> lists 117 tracked directories = 100 upstream + the 17 in the table (tracked, because only
+> lists 127 tracked directories = 110 upstream + the 17 in the table (tracked, because only
 > tracked paths publish; section E of `scripts/check-publication-boundary.mjs` holds this
 > table, this count and the carve-outs to one another since 2026-09-02). This line said SEVEN until 2026-09-02,
 > then TEN, then ELEVEN on 2026-09-03 when `research-ops/` was authored, then TWELVE on
@@ -474,3 +474,21 @@ Third-party work, copied in unmodified. **Not ours.**
 | How its scripts are treated | Exactly as the `watch/` skill's Python is: a PERSON runs them, on the Mac lane, against a booted simulator. Nothing in this tree auto-runs them, and no hook or `SessionStart` was taken. They are simulator drivers — `xcrun simctl` wrappers — so they cannot and do not claim on-device enforcement (CLAUDE.md, platform honesty: a simulator cannot be MDM-enrolled). |
 | Why it is here | CLAUDE.md already requires verifying EnterpriseShell at `accessibility-extra-large`, not just the default. `appearance.py` and `accessibility_audit.py` are that check with a handle on it. |
 | Overrides | None needed. |
+
+# Vendored: github/spec-kit — 10 skills
+
+Third-party work, copied in unmodified. **Not ours.**
+
+| | |
+|---|---|
+| Upstream | https://github.com/github/spec-kit |
+| Author | GitHub, Inc. |
+| Licence | MIT © GitHub, Inc. (`LICENSE` copied into each of the ten directories) |
+| Commit | `5e952140659287106580d32f242ba71365a3862b` (`main`; latest tag `v1.0.8`, package `specify-cli` 1.0.9.dev0) |
+| Committed upstream | 2026-09-17T12:48:39-05:00 |
+| Vendored | 2026-09-18 |
+| Contents | 10 skills (`speckit-analyze`, `-checklist`, `-clarify`, `-constitution`, `-converge`, `-implement`, `-plan`, `-specify`, `-tasks`, `-taskstoissues`), one `SKILL.md` each + 10 LICENSE copies, byte-identical to what `specify init --here --force --non-interactive --integration claude --ignore-agent-tools` writes at the pin — plus `.specify/` at the repository root (19 files: 5 templates, 6 bash scripts, workflow and integration manifests), vendored on the same terms and carved out in `scripts/publication-boundary.mjs`. |
+| NOT taken | The CLI itself (`src/specify_cli`, a Python 3.11 dependency); every `--extension` (`git`, `selftest`, URL-sourced) — measured to be the ONLY path that writes hook events into `.claude/settings.json`, and the intake rule refuses auto-execution; `tests/`, `docs/`, `presets/`, `bundles/`, the other agents' `integrations/`. |
+| How its scripts are treated | `.specify/scripts/bash/*.sh` run only when a person invokes a `/speckit-*` skill and that skill calls them; none registers as a hook and none creates a branch (grep at the pin: no `git checkout -b` / `git switch -c`; branch creation lives in the untaken git extension). `.specify/.gitignore` keeps `feature.json` — per-checkout state — out of the tree, so `provenance.workingTreeClean` is unaffected. |
+| Why it is here | Owner-directed 2026-09-18 ("I think you need to look at this will keep things going in right direction"). The METHOD was already here — `spec-driven-development` (addyosmani/agent-skills, 2026-09-12) carries the same specify → plan → tasks → implement gate — but not the tooling: the constitution artifact that `/speckit-plan` and `/speckit-analyze` check a plan against, the five templates, the `specs/NNN-name/` convention, and the clarify/analyze/checklist/converge steps. `.specify/memory/constitution.md` is filled from CLAUDE.md's golden rules and is first-party. Measured, not read: `init` exits 0 in 0.31 s, writes exactly 30 files, is byte-identical with every socket denied by a shim, differs between runs only in `installed_at` timestamps, sends nothing anywhere, and registers no hook. |
+| Overrides | None needed for the deny-list gate (no vendored line prescribes a denied command; scanned at the pin). Judgement, recorded for the reader: `/speckit-implement` and `/speckit-taskstoissues` describe committing, opening issues and PRs as part of their flow — in this repository those remain CLAUDE.md "Ask before" acts and owner-gated tiers; the skill proposes, the owner disposes. |

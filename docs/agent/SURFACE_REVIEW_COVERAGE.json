@@ -2011,6 +2011,20 @@
           "closed": 3
         }
       ]
+    },
+    ".specify": {
+      "path": ".specify",
+      "reads": [
+        {
+          "date": "2026-09-18",
+          "read": "github/spec-kit project scaffold, vendored at pin 5e952140 (RESOURCE_INTAKE.md row of this date). All 20 files read: 5 templates, 6 bash scripts under scripts/bash/ (none creates a branch; none is a hook), workflow + integration manifests, init-options.json, the scaffold's own .gitignore (keeps per-checkout feature.json out of the tree), and memory/constitution.md — the one FIRST-PARTY file, rewritten from CLAUDE.md's golden rules and carved out in scripts/publication-boundary.mjs. Read alongside the ten speckit-* skills under .claude/skills.",
+          "reviewer": "cloud lane (intake by use, 2026-09-18)",
+          "record": "docs/agent/RESOURCE_INTAKE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 0
+        }
+      ]
     }
   }
 }

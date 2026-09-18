@@ -61,6 +61,38 @@ const DEFERRED = new Map([
       reason: "vendored byte-identical (mattpocock/skills@3cca18b3); no edit and no inline disable is permitted in .claude/skills/",
     },
   ],
+  // github/spec-kit's scaffold scripts, vendored 2026-09-18 at 5e952140 under the
+  // .specify third_party_intake area (scripts/publication-boundary.mjs) — the same
+  // case as the wizard template above: byte-identical to upstream, so neither an
+  // edit nor an inline disable is permitted, and DEFERRED records each code rather
+  // than waving the file through. They run only when a person invokes a /speckit-*
+  // skill; none is a hook. If a re-vendor clears a code, the stale-deferral check
+  // fails and someone re-reads the file. Four of the six scripts lint clean and need
+  // no entry.
+  [
+    ".specify/scripts/bash/common.sh",
+    {
+      codes: ["SC2120", "SC2155", "SC2221", "SC2222"],
+      // SC2120 (find_specify_root references arguments none of its callers pass) is a
+      // CROSS-FILE finding, and whether shellcheck emits it at warning depends on the
+      // shellcheck: 0.9.0 (the cloud lane, measured 2026-09-18) reports it; the Mac
+      // runner's shellcheck did not, and the stale-deferral arm above then failed the
+      // Mac for a code the cloud had honestly seen. A deferral pinned to one version's
+      // output is not a fact about the file. So this one code is version-sensitive:
+      // still DEFERRED when emitted, and its ABSENCE is REPORTED with the shellcheck
+      // version rather than treated as an exemption that outlived its subject. The
+      // other three are emitted by both and stay fatal-if-absent.
+      versionSensitive: ["SC2120"],
+      reason: "vendored byte-identical (github/spec-kit@5e952140, RESOURCE_INTAKE.md 2026-09-18); no edit and no inline disable is permitted in a third_party_intake tree",
+    },
+  ],
+  [
+    ".specify/scripts/bash/create-new-feature.sh",
+    {
+      codes: ["SC2155"],
+      reason: "vendored byte-identical (github/spec-kit@5e952140, RESOURCE_INTAKE.md 2026-09-18); no edit and no inline disable is permitted in a third_party_intake tree",
+    },
+  ],
 ]);
 
 const listed = spawnSync("git", ["ls-files", "*.sh"], { encoding: "utf8" });
@@ -90,6 +122,9 @@ if (files.length === 0) {
 }
 
 const probe = spawnSync("shellcheck", ["--version"], { encoding: "utf8" });
+// Named in every version-sensitive report below, so a reader can tell which shellcheck
+// did not emit a code without reaching the machine that ran it.
+const shellcheckVersion = (/version:\s*(\S+)/.exec(probe.stdout ?? "") ?? [])[1] ?? "unknown";
 if (probe.status !== 0) {
   // Not installed is NOT a pass. A skipped check that prints nothing reads exactly
   // like a check that ran and found nothing.
@@ -116,11 +151,24 @@ const live = parsed.filter((f) => !DEFERRED.get(f.file)?.codes.includes(f.code))
 
 // A deferral that no longer describes anything is itself a finding.
 const stale = [];
-for (const [file, { codes }] of DEFERRED) {
+const versionNotes = [];
+for (const [file, { codes, versionSensitive = [] }] of DEFERRED) {
   const seen = new Set(parsed.filter((f) => f.file === file).map((f) => f.code));
   for (const code of codes) {
-    if (!seen.has(code)) stale.push(`${file} no longer reports ${code} — remove it from DEFERRED`);
+    if (seen.has(code)) continue;
+    // A code an entry names as version-sensitive is REPORTED when absent, never
+    // fatal: two shellchecks disagreeing is not the deferral outliving its subject.
+    // Every other absence still is, and still fails.
+    if (versionSensitive.includes(code)) {
+      versionNotes.push(`${file}: ${code} not emitted by this shellcheck (${shellcheckVersion}) — deferred where emitted, reported here, not an error`);
+    } else {
+      stale.push(`${file} no longer reports ${code} — remove it from DEFERRED`);
+    }
   }
+}
+if (versionNotes.length > 0) {
+  console.log("  version-sensitive deferrals absent on this shellcheck (REPORTED, not gated):");
+  for (const n of versionNotes) console.log(`    · ${n}`);
 }
 if (stale.length > 0) {
   console.error("✗ stale deferrals — an exemption that outlived its subject re-permits the gap:");

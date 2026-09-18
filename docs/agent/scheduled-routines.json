@@ -1,6 +1,6 @@
 {
  "$comment": "The committed registry of ALWAYS-ON agent routines (role-lens review, ai-ops next-work). Every recurring scheduled lane is declared here with its cadence, the human who authorized it, what it may write, where it stops and escalates, and where its firing evidence lands. scripts/check-scheduled-routines.mjs holds this file against the heartbeat artifacts and the org roster; its header states honestly that it gates the DECLARATION and the EVIDENCE OF FIRING — it cannot read the live account scheduler. Transcribed FROM the live scheduler (list_triggers) on 2026-08-21, not from memory. One-shot self-reminders (send_later check-ins) are deliberately out of scope: they are ephemeral work-pacing, not standing lanes.",
- "transcribedFrom": "live scheduler, 2026-09-05 (re-transcribed on moving mac-lane-steward-duty-cycle to hourly and both self-session routines onto lane-deliver; mac-lane-tick added the same day — it is a launchd agent on the owner's Mac, not an account trigger, so it is declared from scripts/mac/install-launchd.sh rather than from list_triggers; earlier: 2026-08-21; 2026-09-13: the brain-cycle account trigger was created then deleted — list_triggers confirms none exists — and its row is kept awaiting-activation)",
+ "transcribedFrom": "live scheduler, 2026-09-05 (re-transcribed on moving mac-lane-steward-duty-cycle to hourly and both self-session routines onto lane-deliver; mac-lane-tick added the same day — it is a launchd agent on the owner's Mac, not an account trigger, so it is declared from scripts/mac/install-launchd.sh rather than from list_triggers; earlier: 2026-08-21; 2026-09-13: the brain-cycle account trigger was created then deleted — list_triggers confirms none exists — and its row is kept awaiting-activation; 2026-09-13 (later): forward-build-cycle added as an ACTIVE self-session routine (trig_01XLv3hGCPob8qcEDsZJ2xM8) per the owner's explicit go to build the company forward continuously; the second brain-cycle trigger created that day was deleted again, so list_triggers still shows no brain-cycle trigger)",
  "routines": [
   {
    "id": "mac-lane-steward-duty-cycle",
@@ -119,6 +119,20 @@
    "awaitingReason": "Declared in this pass to close the gap the 2026-09-12 self-evaluation found; the account trigger is deliberately not created here because creating a recurring fresh-session cadence requires an EXPLICIT owner go (no consent is inferred from a build/evaluation directive), per the awaiting-activation contract this registry already uses for brain-cycle. Neither the cloud lane nor a persistent session may self-authorize it.",
    "awaitingSince": "2026-09-12",
    "cronNote": "Dependabot's own schedule is `.github/dependabot.yml`'s `interval: monthly` — this registry's `cronIntervalHours` (scripts/check-scheduled-routines.mjs) can only read every-N-minutes, hourly, every-N-hours, daily, or weekly-single-weekday shapes; it has no monthly primitive, and an unparseable cron on a non-retired routine fails this gate's own self-test floor. So the cron above is WEEKLY (Monday 09:00 UTC), not monthly: it checks the monthly-generated queue often enough that an open PR is never unreviewed for the 11 days the self-evaluation found, which is a tighter bound than monthly would give and the one the finding actually calls for."
+  },
+  {
+   "id": "forward-build-cycle",
+   "trigger": "trig_01XLv3hGCPob8qcEDsZJ2xM8",
+   "cron": "0 15 * * *",
+   "binding": "self-session (resumes the operating session)",
+   "authorizedBy": "Dan Fashauer (owner)",
+   "authorizedOn": "2026-09-13",
+   "authorizationEvidence": "owner message in-session 2026-09-13: 'I want you to continue to always have everyone building the company ... the system aka brain keeps everything running no matter what I'm currently chatting with you or ask you do something else.' This is an explicit go for STANDING autonomous operation (not a per-feature build directive), so a self-session cloud trigger (trig_01XLv3hGCPob8qcEDsZJ2xM8) was created the same day; self-session so it inherits the operating session's push + GitHub-PR + merge path — the capability the retired fresh-session nightly-build-agent (trig_01WaoZcckmBjv5Pqs8hGNhFS) never had. Registry-first order: this active row lands on SignalGrid_Alpha well before the trigger's first fire (2026-09-14T15:00Z).",
+   "writeScope": "claude/build-* code branches (ONE bounded product item per fire, opened as a PR to SignalGrid_Alpha for OWNER review/merge — the harness structurally blocks agent self-merge of product PRs), docs/BUILD_BACKLOG.md item status via that PR, and artifacts/agent-heartbeats/forward-build-cycle.json (heartbeat via scripts/lane-deliver.mjs onto a lane/cloud-mail-* branch, never the code branch). A purely autonomous-tier gate/doc/fossil-figure fix may self-merge under DR-037; it NEVER self-merges a product / launch-profile / launch-claims-gate / publication-boundary change.",
+   "escalationBoundary": "escalates to the owner only a genuine product decision (a new vertical / platform / hardware surface = DR-020) or a physical action he alone can take; a fire with nothing cleanly actionable builds nothing and heartbeats 'quiet' — no owner message. Runs in the operating session, so every fire is owner-supervisable.",
+   "heartbeatPath": "artifacts/agent-heartbeats/forward-build-cycle.json",
+   "cadenceToleranceHours": 50,
+   "status": "active"
   }
  ]
 }

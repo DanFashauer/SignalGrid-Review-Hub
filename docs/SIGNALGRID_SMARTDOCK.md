@@ -92,6 +92,62 @@ SmartDock (power + network in)
   owns identity, ITSM owns tickets, SIEM/SOAR owns detection. SmartDock adds
   custody signal and a charging/custody point; it does not replace any of them.
 
+## The connected assumption, and the topology it excludes
+
+**"Power and network in" is an ASSUMPTION, not a requirement of the problem.** It is
+stated twice on this page — "the dock connects to power and network, and nothing else
+is required of it", and the diagram above. Recording it as an assumption, because a
+shipping commercial system in this exact problem space is built on its opposite, and
+because a design constraint nobody has written down as a choice is one nobody can
+revisit.
+
+**The counter-example (read 2026-09-14, iloq.com).** iLOQ sells electronic locking to
+residential, critical-infrastructure and public/commercial estates, and its locks are
+**battery-free and cable-free**, in its own words working "without batteries, cables,
+or any need for an internet or Wi-Fi connection", including "during power outages or
+network disruptions". The admin plane is nevertheless real-time: "create, update, or
+cancel access rights remotely and in real time", with "built-in audit trails". Both
+halves are true at once because **the credential is the transport**: the phone or key
+carries energy into the lock and carries data both ways — updated rights in, audit
+records out. The endpoint is never online; the thing that moves is the network.
+
+The vendor page asserts the offline property and does not explain the mechanism; the
+mechanism above is this repository's reading of how the two halves reconcile, not a
+claim quoted from iLOQ. No product, partnership, evaluation or comparison is claimed
+here, and nothing about SignalGrid's shipped surface changes.
+
+**Why it matters here.** A session puck docking into a receiver
+(`docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`, DR-043) is the same shape as a key
+entering a lock. If the puck can carry credential state in and custody evidence out —
+a design target, with the custody and dock families deferred in the launch profile —
+then a dock needs neither network nor its own power budget for the fabric to stay
+truthful — the two properties this page currently requires. That is a genuinely
+different topology, not a variation on this one, and it is the one that reaches sites
+where running a network drop to every bay is the reason a deployment does not happen.
+
+**The contract consequence, measured.** In the connected topology, "when it happened"
+and "when we learned it" are the same instant, so one timestamp carries both. In the
+carrier topology every event is late by construction, and the gap between those two
+instants IS the window in which the fabric was blind. `lib/event-contract/src/types.ts`
+carries exactly **one** time field — `occurredAt`, "supplied by the emitter" — and no
+`ingestedAt` / `receivedAt` / `recordedAt`. So a late event and a timely one are the
+same value, and nothing downstream can raise assurance for the blind window, because
+the window cannot be expressed.
+
+The discipline already exists one layer down and is worth copying rather than
+inventing, and it is built firmware rather than a design target:
+`firmware/dock/core/src/custody.rs` refuses to collapse `NotReported` and
+`Faulted` into one "no value", because "a sensor that is simply absent from this build
+is not the same as one that answered with garbage or timed out". A timestamp that
+cannot separate *stale* from *only just learned* is the same collapse, at the contract
+layer.
+
+**This page does not resolve it.** Adding a field to the canonical event contract is a
+decision-core change and DR-020 territory, and the custody/dock families remain
+deferred in the launch profile. The choice is recorded in `docs/BUILD_BACKLOG.md`
+under Discovered, owner-gated, and stated here so the connected assumption is visible
+as a decision rather than a default.
+
 ## Relationship to shared-device access and mobility platforms
 
 Teams running shared and frontline devices often already use a mobile-access or

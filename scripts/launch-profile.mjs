@@ -418,6 +418,7 @@ export const SURFACES = [
       "/v1/app-workflows/evaluate",
       "/v1/step-up/enroll/options",
       "/v1/step-up/enroll/verify",
+      "/v1/step-up/enroll/revoke",
       "/v1/step-up/challenge",
       "/v1/app-workflows/complete-step-up",
       "/cp/v1/tenants",

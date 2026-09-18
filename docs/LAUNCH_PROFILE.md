@@ -65,7 +65,7 @@ surfaces. Every item carries exactly one status:
 | Status | Count | Meaning |
 |---|---|---|
 | `launch` | **23 launch items** | In the Limited GA surface. |
-| `deferred` | **134 deferred items** | Real, gated, proven, staying in the repository — not Limited GA. |
+| `deferred` | **135 deferred items** | Real, gated, proven, staying in the repository — not Limited GA. |
 | `demo_only` | **8 demo-only items** | Exists to demonstrate or explain. Must never be presented as shipping product. |
 | `internal` | **15 internal items** | Harness, generator or evidence plumbing. Not a product surface at all. |
 

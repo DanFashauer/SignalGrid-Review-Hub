@@ -1,5 +1,6 @@
 import { CoreError, SignalGridCore, type Clock, type EstateSpec } from "@workspace/signalgrid-core";
 import { resolveGraphPostureConnector, toEstateSubjects, type GraphPostureConnector } from "@workspace/integrations/graph";
+import { readSecret, outboundSecret, secretInventory } from "@workspace/secrets";
 import { logger } from "./logger";
 
 /**
@@ -63,12 +64,35 @@ function estateSpecFromEnv(): Omit<EstateSpec, "subjects" | "connector"> {
     ["owner", "SIGNALGRID_ESTATE_OWNER_TOKEN"],
     ["operator", "SIGNALGRID_ESTATE_OPERATOR_TOKEN"],
   ] as const) {
-    const token = (process.env[variable] ?? "").trim();
-    if (token === "" && role !== "owner") continue;
-    if (token.length < 24 || token.startsWith("sgk_demo_")) {
-      throw new Error(`${variable} must be at least 24 characters and not a demo key — refusing to start.`);
+    // Through the ONE read site (`@workspace/secrets`, DR-010). The accessor also
+    // hands back the STAGED SUCCESSOR, and a deployment's own bearer is the credential
+    // rotation matters most for: registering both as principals means the old key and
+    // the new one are simultaneously valid for exactly as long as both variables are
+    // set, so an integrator can move without a window of 401s. They get DIFFERENT
+    // subject ids on purpose — the audit line then says which key was used, which is
+    // the question somebody asks during a rotation.
+    const reading = readSecret(variable);
+    if (reading.presentButBlank) {
+      throw new Error(`${variable} (or its _NEXT successor) is set but blank — refusing to start.`);
     }
-    principals.push({ role, token, subjectId: `user_${slug}_${role}` });
+    for (const [token, suffix] of [
+      [reading.value, ""],
+      [reading.next, "_next"],
+    ] as const) {
+      if (token === undefined) {
+        // Only the OWNER is mandatory, and only in its current form.
+        if (suffix === "" && role === "owner") {
+          throw new Error(`${variable} must be set for SIGNALGRID_CORE=estate — refusing to start.`);
+        }
+        continue;
+      }
+      if (token.length < 24 || token.startsWith("sgk_demo_")) {
+        throw new Error(
+          `${variable}${suffix === "_next" ? "_NEXT" : ""} must be at least 24 characters and not a demo key — refusing to start.`,
+        );
+      }
+      principals.push({ role, token, subjectId: `user_${slug}_${role}${suffix}` });
+    }
   }
   return {
     tenant: { id: `tenant_${slug}`, slug, name: slug },
@@ -121,7 +145,14 @@ async function buildCore(): Promise<{ core: SignalGridCore; estate: EstateRead |
   // Wall time is read HERE, at the boundary, and handed to the core as its clock;
   // nothing inside the decision path reads it.
   const clock: Clock = { now: () => new Date() };
-  const resolution = resolveGraphPostureConnector(process.env);
+  // The Graph token comes through the ONE read site too (DR-010). The resolver still
+  // decides fixture-vs-live exactly as it does everywhere else; what changes is that
+  // the credential is resolved in one place, blank-checked there, and appears in the
+  // boot line as a fingerprint rather than not at all.
+  const resolution = resolveGraphPostureConnector({
+    ...process.env,
+    GRAPH_ACCESS_TOKEN: outboundSecret("GRAPH_ACCESS_TOKEN"),
+  });
   // Returned for the refresh loop: the SAME resolved connector and the SAME clock, so
   // a later pass reads from the source this process booted against rather than
   // re-resolving (and possibly re-deciding fixture-vs-live) behind the operator.
@@ -156,6 +187,19 @@ async function buildCore(): Promise<{ core: SignalGridCore; estate: EstateRead |
     throw err;
   }
 }
+
+/**
+ * ONE boot line naming every registered secret's STATE — configured, rotating,
+ * blank-but-set — by FINGERPRINT (8 hex characters of a SHA-256), never by value.
+ *
+ * It exists because the alternative is what this repo keeps finding: an operator
+ * cannot tell a configured secret from an unconfigured one without testing it in
+ * production, and cannot tell mid-rotation from finished at all. A fingerprint answers
+ * both — two deployments holding the same credential print the same eight characters —
+ * and answers nothing else. There is deliberately no accessor that returns the values
+ * together, so there is nothing here that a wider log level could turn into a leak.
+ */
+logger.info({ secrets: secretInventory() }, "secrets: registered inventory at boot (fingerprints only, never values)");
 
 const built = await buildCore();
 export const core: SignalGridCore = built.core;

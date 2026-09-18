@@ -100,6 +100,17 @@ services:
       SIGNALGRID_ESTATE_OWNER_TOKEN:
       SIGNALGRID_ESTATE_OPERATOR_TOKEN:
       GRAPH_ACCESS_TOKEN:
+      # ROTATION SUCCESSORS (DR-010, docs/SECRET_MODEL.md). Key-only for the same
+      # reason their base variables are: an empty string is a misconfiguration the
+      # server refuses, not a value. While a base variable and its _NEXT are BOTH set
+      # the server accepts either — which is the only reason a rotation can happen
+      # without a window in which a legitimate caller is refused. A successor that
+      # cannot be set through this file is a rotation that cannot be performed.
+      METRICS_TOKEN_NEXT:
+      SIGNALGRID_ENROLLMENT_SECRET_NEXT:
+      SIGNALGRID_ESTATE_OWNER_TOKEN_NEXT:
+      SIGNALGRID_ESTATE_OPERATOR_TOKEN_NEXT:
+      GRAPH_ACCESS_TOKEN_NEXT:
       GRAPH_BASE_URL: ${GRAPH_BASE_URL:-}
       STEPUP_TTL_SECONDS: ${STEPUP_TTL_SECONDS:-}
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}

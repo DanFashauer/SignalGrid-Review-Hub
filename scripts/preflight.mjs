@@ -391,6 +391,7 @@ const STEPS = [
   { name: "Proof: graph-wire (throttling, 5xx, auth and malformed bodies fail closed)", cmd: ["pnpm", "run", "proof:graph-wire"] },
   { name: "Proof: estate-core (a customer estate boots a core; no allow on unread facts)", cmd: ["pnpm", "run", "proof:estate-core"] },
   { name: "Proof: estate-refresh (a scheduled posture re-read re-decides, and fails closed)", cmd: ["pnpm", "run", "proof:estate-refresh"] },
+  { name: "Proof: secrets (one read site, fail-closed, and a rotation that actually rotates)", cmd: ["pnpm", "run", "proof:secrets"] },
   { name: "Figure-guard self-test (the baseline-age report must be able to fail)", cmd: ["node", "scripts/check-proof-figures.mjs", "--self-test"] },
   { name: "Docs\u2194proof FIGURE guard (a measured number must still be one)", cmd: ["node", "scripts/check-proof-figures.mjs"] },
   { name: "Proof-count self-test (a zeroed claim scan fails via the floor)", cmd: ["node", "scripts/check-proof-counts.mjs", "--self-test"] },

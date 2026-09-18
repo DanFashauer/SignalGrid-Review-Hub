@@ -79,6 +79,7 @@
     "proof:graph-wire": "tsx ./src/graph-wire-proof.ts",
     "proof:estate-core": "tsx ./src/estate-core-proof.ts",
     "proof:estate-refresh": "tsx ./src/estate-refresh-proof.ts",
+    "proof:secrets": "tsx ./src/secrets-proof.ts",
     "proof:grid-config": "tsx ./src/grid-config-proof.ts",
     "proof:grid-coverage": "tsx ./src/grid-coverage-proof.ts",
     "proof:grid-lifecycle": "tsx ./src/grid-lifecycle-proof.ts",
@@ -210,7 +211,8 @@
     "@workspace/webauthn": "workspace:*",
     "@workspace/work-context": "workspace:*",
     "ioredis": "^5.4.1",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "@workspace/secrets": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",

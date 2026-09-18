@@ -2358,6 +2358,46 @@ async function run() {
         await waitReady(PORT10));
     } finally {
       realToken.kill("SIGTERM");
+      await exitOf(realToken);
+    }
+
+    // ── THE ROTATION WINDOW, on the wire (DR-010 rule 4) ───────────────────
+    // `lib/secrets` gives every secret a `_NEXT` successor, accepted alongside the
+    // current value while both are set. proof:secrets pins the accessor; this pins
+    // that a RUNNING server honours it, because a rotation window that exists only
+    // in a library is a rotation nobody can perform. The blank-but-set refusal above
+    // is asserted for the successor too — a blank _NEXT is as much a
+    // misconfiguration as a blank base variable, and a server that shrugged at one
+    // while refusing the other would teach an operator the wrong lesson.
+    {
+      const CURRENT = "rotation-current-token";
+      const SUCCESSOR = "rotation-successor-token";
+      const rotating = spawn("node", [serverEntry], {
+        env: { ...process.env, PORT: String(PORT10), NODE_ENV: "production", LOG_LEVEL: "silent",
+          METRICS_TOKEN: CURRENT, METRICS_TOKEN_NEXT: SUCCESSOR },
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+      try {
+        check("a rotating server (METRICS_TOKEN + METRICS_TOKEN_NEXT) boots", await waitReady(PORT10));
+        const scrape = async (bearer) =>
+          (await fetch(`http://localhost:${PORT10}/metrics`, bearer === null ? {} : { headers: { authorization: `Bearer ${bearer}` } })).status;
+        check("mid-rotation the CURRENT metrics bearer still works", (await scrape(CURRENT)) === 200);
+        check("...and the SUCCESSOR works too — the window is open, so a scraper can move without an outage",
+          (await scrape(SUCCESSOR)) === 200);
+        check("...and a third value is still refused: the window widens to TWO, not to any",
+          (await scrape("rotation-some-other-token")) === 401 && (await scrape(null)) === 401);
+      } finally {
+        rotating.kill("SIGTERM");
+        await exitOf(rotating);
+      }
+      const blankNext = spawn("node", [serverEntry], {
+        env: { ...process.env, PORT: String(PORT10), NODE_ENV: "production", LOG_LEVEL: "silent",
+          METRICS_TOKEN: CURRENT, METRICS_TOKEN_NEXT: "   " },
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+      const blankNextExit = await exitOf(blankNext);
+      check("a blank-but-set METRICS_TOKEN_NEXT refuses at boot, exactly as a blank METRICS_TOKEN does",
+        blankNextExit !== "still-running" && blankNextExit !== 0);
     }
   }
 

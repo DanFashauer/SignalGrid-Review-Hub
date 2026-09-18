@@ -125,6 +125,7 @@
     "proof:graph-wire": "pnpm --filter @workspace/scripts run proof:graph-wire",
     "proof:estate-core": "pnpm --filter @workspace/scripts run proof:estate-core",
     "proof:estate-refresh": "pnpm --filter @workspace/scripts run proof:estate-refresh",
+    "proof:secrets": "pnpm --filter @workspace/scripts run proof:secrets",
     "proof:grid-config": "pnpm --filter @workspace/scripts run proof:grid-config",
     "proof:grid-coverage": "pnpm --filter @workspace/scripts run proof:grid-coverage",
     "proof:grid-lifecycle": "pnpm --filter @workspace/scripts run proof:grid-lifecycle",

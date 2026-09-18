@@ -356,6 +356,8 @@ jobs:
         run: pnpm run proof:estate-core
       - name: "Proof: estate-refresh (a scheduled posture re-read re-decides, and fails closed)"
         run: pnpm run proof:estate-refresh
+      - name: "Proof: secrets (one read site, fail-closed, and a rotation that actually rotates)"
+        run: pnpm run proof:secrets
       - name: "Assessor package (links/commands an external reviewer follows)"
         run: node scripts/check-assessor-package.mjs
       - name: OpenAPI validity (the published contract parses as OpenAPI)

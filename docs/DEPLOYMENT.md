@@ -65,6 +65,8 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `GRAPH_BASE_URL` | Graph base URL for the posture connector; only read when the live gate opens. | `https://graph.microsoft.com/v1.0` |
 | `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. **Required** once OIDC is on — without both, the config is invalid and every request is 401. | unset |
 | `OIDC_SUBJECT_CLAIM` | Claim used as the caller's subject id. | `sub` |
+| `METRICS_TOKEN_NEXT` / `SIGNALGRID_ENROLLMENT_SECRET_NEXT` / `SIGNALGRID_ESTATE_OWNER_TOKEN_NEXT` / `SIGNALGRID_ESTATE_OPERATOR_TOKEN_NEXT` | **Rotation successors** (DR-010, `docs/SECRET_MODEL.md`). Every secret named in `lib/secrets`' registry has one. While BOTH the variable and its `_NEXT` are set, **either value is accepted** — that window is the whole point: publish the successor, move the callers, promote it to the base variable, delete the successor. Nothing is ever dual-valued for longer than the operator leaves it so, and deleting the successor is the moment the old credential stops working. A `_NEXT` set but blank refuses at boot, exactly as the base variable does. | unset (not rotating) |
+| `GRAPH_ACCESS_TOKEN_NEXT` | Read and REPORTED (in the boot inventory, by fingerprint) but deliberately **not used**: a single outbound Graph call carries exactly one credential, so there is no dual-valued state to be in, and silently preferring the successor would make "which key made that request" unanswerable at the moment somebody needs to know. Stage it here, then promote it to `GRAPH_ACCESS_TOKEN`. | unset |
 | `OIDC_CLOCK_TOLERANCE_SEC` | Allowed clock skew when validating token times. | `60` |
 
 ### Running behind a proxy or ingress

@@ -14,6 +14,7 @@ import { getDecisionStore, getSessionStore, type Session } from "@workspace/pers
 import { appendAuditRecord, getAuditBackend, getAuditRecordsForTenant, verifyLedger, type Target as AuditTarget } from "@workspace/audit";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { webauthn, webauthnStore } from "@workspace/webauthn";
+import { readSecret, secretMatches } from "@workspace/secrets";
 import { core, DEMO_KEYS } from "../lib/core";
 import { decisionsTotal, auditEventsTotal } from "../lib/metrics";
 import { requireTenantContext } from "../middlewares/context";
@@ -600,12 +601,18 @@ function requireEnrollmentPrincipal(req: Request): { subjectId: string } {
  *  testable; compared as SHA-256 digests so `timingSafeEqual` gets equal-length inputs
  *  and the comparison never throws or leaks length. Fail closed on absent or wrong. */
 function requireOutOfBandEnrollmentAuthorization(req: Request): void {
-  const secret = process.env.SIGNALGRID_ENROLLMENT_SECRET;
-  if (!secret) return; // fixture demo: self-service by design, labeled honestly
+  // Through the ONE read site (`@workspace/secrets`, DR-010). Reading it at request
+  // time rather than at module load is kept — both modes stay testable — and the
+  // accessor adds the rotation window: SIGNALGRID_ENROLLMENT_SECRET_NEXT is accepted
+  // alongside the current value while both are set, so the secret can be changed
+  // without a moment in which a legitimate enroller is refused.
+  if (readSecret("SIGNALGRID_ENROLLMENT_SECRET").value === undefined) {
+    return; // fixture demo: self-service by design, labeled honestly
+  }
   const presented = req.get("x-enrollment-authorization") ?? "";
-  const a = createHash("sha256").update(presented, "utf8").digest();
-  const b = createHash("sha256").update(secret, "utf8").digest();
-  if (!timingSafeEqual(a, b)) {
+  // Constant-time inside the accessor, and it can never return true for an
+  // unconfigured secret — so the guard above is a policy decision, not a fallback.
+  if (!secretMatches("SIGNALGRID_ENROLLMENT_SECRET", presented)) {
     throw new CoreError(
       "forbidden",
       "Enrollment requires out-of-band authorization (x-enrollment-authorization header).",
@@ -619,7 +626,7 @@ function requireOutOfBandEnrollmentAuthorization(req: Request): void {
  *  gate is satisfiable with the published demo keys and that completion releases only
  *  simulated fixture plans. Absent (undefined) once a real deployment sets the secret. */
 function demoEnrollmentNote(): string | undefined {
-  if (process.env.SIGNALGRID_ENROLLMENT_SECRET) return undefined;
+  if (readSecret("SIGNALGRID_ENROLLMENT_SECRET").value !== undefined) return undefined;
   return (
     "Self-service demo ceremony: the operator/owner role gate is satisfiable with the " +
     "demo keys published by the unauthenticated /v1/keys route, and a completed step-up " +

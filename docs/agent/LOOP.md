@@ -52,7 +52,42 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-17 21:20Z (cloud lane, latest) - A LONG MERGE-AND-BUILD SESSION.
+LAST TOUCHED: 2026-09-18 08:40Z (cloud lane, latest) - THE MAC RED THAT WAS A CYCLE, AND THE GATE THAT NOW REFUSES IT.
+              MEASURED, not recalled: `5` pull requests merged on 2026-09-18 so far (all lane mail) and `38` open
+              (8 dependabot, 4 drafts); 2026-09-17 closed at `33` merged, not the 29 the previous entry counted at 21:20Z.
+              #819's Mac column read "0 files found under lib/" and nothing more. #825 kept the errno, and the Mac then
+              said ENAMETOOLONG under lib/integration-bridge/node_modules/@workspace/integrations/node_modules/
+              @workspace/incident-playbook/node_modules/... - #819 had added integrations -> incident-playbook for one
+              type-only import, incident-playbook already reached integrations through posture-composition, and pnpm
+              links a workspace cycle into node_modules as an infinite symlink loop. macOS's recursive readdir follows
+              it until the path overflows; Linux does not, so every Linux lane was green. Thirty-three gates walk lib/
+              that way. Three fixes, all green on both lanes, all owner-gated: #819 moves the dispatch seam UP into
+              incident-playbook (it reads every field of Incident; a structural copy would have duplicated the type)
+              and drops the dependency; #825's walker now PRUNES node_modules before descent and never follows a
+              symlink; #832 is a new gate, check-workspace-cycles, deriving the graph from pnpm-workspace.yaml and
+              every package.json (43 packages, 90 workspace edges, 0 cycles on mainline) - run against #819's
+              original manifest it names the cycle in order.
+              #828 (a heartbeat) reddened at CI liveness on a GitHub 403 rate limit, the same line as #654 on 09-12:
+              the gate retried a rate limit with six seconds of backoff and named neither the limit nor its reset.
+              #829 waits it out by the response's own retry-after / x-ratelimit-reset up to a 120 s cap, fails at
+              once naming the instant when that is past the cap, and prints the limit headers. What spent the token
+              this time is NOT known - 31 workflow runs in the 75 minutes before, none of them the throttled Mac
+              tick - and the next occurrence will say.
+              Mainline merged into #772, #774, #742 (green, pushed, commented). #742's new CodeQL medium - branch
+              names from the API written to the job summary - answered with an ingestion-time ref grammar: a name
+              outside it is refused unread, 17-case self-test, falsified twice. #686, #723, #758, #753 merged the same
+              way with their derived documents re-derived; their gates were running as this was written.
+              Readiness measured on mainline: (a) 94% (16 of 17), (b) 0% (evidence minted 2026-09-12 against
+              manifest 4afa60cf; the tree is 6906d8d9), (c) 100%; HEADLINE 0%. (b) needs a person at the Mac:
+              SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence. Two asks sit on mainline
+              unacknowledged; #821 carries the sim request for it and (a)'s last gap.
+              OWNED DEFECTS THIS SESSION, all in the cloud lane's own process, none in the product: a worktree run
+              without its install read a missing tsx as a gate failure; a gate loop that dropped the .mjs suffix
+              printed nine Node banners and was read as nine passes until re-run; and TWICE a chain waited on
+              pgrep -f 'node scripts/preflight.mjs' and matched that text inside its own bash -c wrapper - a script
+              that waits on its own name waits forever. Same shape the repo keeps finding: a signal that cannot tell
+              "could not look" from "looked".
+              (Earlier 2026-09-17 21:20Z, cloud lane:) A LONG MERGE-AND-BUILD SESSION.
               MEASURED, not recalled: `29` pull requests merged on 2026-09-17 and `27` still open.
               The open count barely moved (30 -> 27) and that is the honest shape of it: much of what
               merged was lane mail and heartbeats opened and landed in the same breath, and the OLDER
@@ -1167,7 +1202,14 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (0) NOTHING ELSE IS THE BOTTLENECK - the eleven owner-gated PRs above are.
+NEXT ACTION: cloud (2026-09-18): (0) the owner-gated stack is still the bottleneck and grew by three - #829,
+              #832, and the #819/#825 pair (#819 carries #825's commit, so either order lands); every one of
+              #815-#826, #742/#772/#774 and #755 is green or Mac-green and waits on the owner. While they sit: land
+              the #686/#723/#758/#753 merges when their gates pass; #725 (eight conflicts, hand-written documents
+              among them) is the last conflicted replay; the eight dependabot bumps are major versions and stay the
+              owner's. RULE, learned twice today: never wait on a process by a pattern that appears in your own
+              command line - anchor on the process name (^node scripts/...) or on a pid. (Earlier, 2026-09-14:)
+              cloud: (0) NOTHING ELSE IS THE BOTTLENECK - the eleven owner-gated PRs above are.
               While they sit: watch #748 for the Mac lane's (336)->(361) fix and land nothing on
               their branch; file the DecisionEngine.swift removal-rule drift as a decision record or
               a declared drift once the owner picks; (1) stamp a lane on every lane-less

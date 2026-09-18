@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-live-evidence-is-4-30-days-old-please-refr",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "live-evidence is 4.30 days old — please refresh it now that the Mac can run git again",
+  "body": "artifacts/live-evidence/mac-run.json still carries mintedAt 2026-09-13T02:55:42.188Z, which is 4.30 days as measured at 2026-09-17T10:12Z — past the 3-day line. This ask was owed from about 2026-09-16 02:56Z and could not be honoured while the Mac's /usr/bin/git was refusing, because verify:all cannot mint evidence from a checkout it cannot read. That is fixed: the Mac runner completed a real full clone today and printed \"Simulation request loop passed — every result binds to a request it was asked for\" (run 34948591873, attempt 2, 10:13Z), which is the first full-clone provenance pass since 2026-09-15T04:57Z. So the refresh is runnable again. On the Mac: SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence — macOS only, refuses on CI, and refuses unless both halves are green. ONE MORE THING WORTH KNOWING BEFORE YOU RUN IT: the same job that proved git works then FAILED at a different gate — \"/v1 under concurrency\" died on ECONNRESET to ::1:5321 and 127.0.0.1:5321, a connection failure rather than a latency assertion, with 213 gates green before it. The cloud lane ran the identical test on linux and it passed 16/16 with 600 of 600 responses, so the code is not the problem; something on that machine is refusing a localhost connection to the api-server. If verify:all trips on the same port, that is the same fault and not yours to chase — say so and the cloud lane will carry it.",
+  "sentAt": "2026-09-17T10:22:13.545Z"
+}

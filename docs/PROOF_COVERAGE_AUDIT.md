@@ -22,7 +22,7 @@ Across 28 per-gate coverage audits, overall proof health is **fair-to-good but u
 | audit-ledger | moderate | No | Recursive redaction of secret-named fields + SHA-256 hash-chain verify accepts genuine, detects in-place mutation |
 | audit-ledger-pg | moderate | No | Live-Postgres hash-chained ledger: persistence, tamper detection, redaction, 25-way concurrent append |
 | signalgrid-simulator | moderate | No | 11 fixtures through decisionEngine→routing→audit; a few allow-suppression negatives |
-| signalgrid-grid | moderate | No | 11 scenarios × 22 risk mutations for riskScore monotonicity (never checks baseline correctness) |
+| signalgrid-grid | moderate | No | 13 scenarios × 21 risk mutations = 273 for riskScore monotonicity (never checks baseline correctness). The "22" this row carried was never right in either era: the proof printed 11/231 on mainline and 13/273 here, and both divide by 21 |
 | microsoft-graph-sandbox | moderate | No | 11 synthetic Graph fixtures through an *inline* decision-mapper to expected decisions |
 | connector-emulator | moderate | No | Connector `decide()` maps posture/identity/custody/credential inputs to decision+reason with precedence |
 | orchestration | strong | No | `planOrchestration` turns outcome+room context into an Assist-safe action plan (sensitive actions held) |
@@ -65,7 +65,7 @@ Ranked by risk-reduction. Each is a concrete test to add.
 
 1. **`signalgrid-core` — reach the `ALLOW_SUPPRESSED_DEGRADED_EVIDENCE` guardrail directly.** The proof's headline fail-closed invariant is dead-code-untested: no allow rule is ungated from `criticalSignalsPresent`, so "allow with degraded critical evidence → suppress to step_up" is never constructed. Build a rule set whose allow rule isn't gated on critical signals, evaluate with `criticalSignalsPresent===false`, and assert suppression + the reason code.
 
-2. **`signalgrid-grid` — assert baseline decision correctness for all 11 scenarios.** Today baseline checks only that `primaryOutcome` is truthy and `reasonCodes.length>0`; if the engine returned `allow` instead of `restrict` for `non-compliant-clinical-device`, the proof still passes. Assert `result.status === "PASS"` (equivalently `outcomes` deep-equals `expectedOutcomes`).
+2. **`signalgrid-grid` — assert baseline decision correctness for all 13 scenarios.** Today baseline checks only that `primaryOutcome` is truthy and `reasonCodes.length>0`; if the engine returned `allow` instead of `restrict` for `non-compliant-clinical-device`, the proof still passes. Assert `result.status === "PASS"` (equivalently `outcomes` deep-equals `expectedOutcomes`).
 
 3. **`signalgrid-simulator` — exact-outcome-set assertions + explicit "allow absent" negatives on high-risk scenarios.** The current per-scenario check is a self-referential subset check that never fails on extra/over-permissive outcomes; `edr-security-risk`, `wrong-zone`, and `dock-missing-overdue-device` have no guard against a spurious `allow`. A security regression that trusts a high-risk device currently passes.
 

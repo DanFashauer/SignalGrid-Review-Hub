@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-18T19:45:02.847Z",
-  "result": "acted (two cycles, 18:24Z and 19:24Z, delivered together — the cloud lane was inside a build): no new or moved mac/* branch, no new sim result, no cloud-addressed mail, no pending sim request, no manifest drift; tick quiet; live evidence 0d old (14:52Z, manifest 6906d8d9); owner NOT escalated. Cloud lane work in flight: #854 (estate core, owner-merged; compose-smoke fix committed, pushing on green), intake branch claude/intake-2026-09-18 (artemis, apple/device-management 27.0, awesome-mcp-servers + a measured MCP roster) in its gate chain."
+  "firedAt": "2026-09-18T20:24:56.407Z",
+  "result": "quiet on the Mac side: no new or moved mac/* branch, no new sim result, no cloud-addressed mail, no pending request, no manifest drift; the Mac lane's own #856 (apple + awesome-mcp intake, schema pin 27.0) is open, owner-merged, collision with the cloud intake #858 noted on both. Tick quiet; live evidence 0d old (14:52Z, manifest 6906d8d9); owner NOT escalated. Cloud lane: six build agents running the backlog sweep on parallel branches (api-security, gates-tooling, customer-path, cascade-puck, docs-console, native-ios)."
 }

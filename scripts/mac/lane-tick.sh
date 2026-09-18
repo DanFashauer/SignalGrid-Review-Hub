@@ -258,8 +258,14 @@ if [ -n "$(git status --porcelain -- artifacts/sim-results artifacts/live-eviden
     # cloud lane was told work had been delivered to a branch that does not exist on
     # origin. The claim now lives INSIDE the success arm, and the failure arm says
     # what actually happened.
+    # A new result file moves the tracked-file count, and the derived coverage
+    # page is gated against it (check-surface-review-coverage): the first tick PR
+    # (#844, 2026-09-18) went red on exactly that and needed a cloud commit to
+    # land. Re-derive the page here so the result lands on its own.
+    node scripts/check-surface-review-coverage.mjs --write >/dev/null 2>&1 \
+      || say "WARN could not re-derive docs/agent/SURFACE_REVIEW_COVERAGE.md — the PR will fail the coverage gate until it is"
     if git checkout -q -b "$TICK_BRANCH" \
-      && git add artifacts/sim-results artifacts/live-evidence 2>/dev/null \
+      && git add artifacts/sim-results artifacts/live-evidence docs/agent/SURFACE_REVIEW_COVERAGE.md 2>/dev/null \
       && git commit -q -m "Mac tick $STAMP: sim results ($PENDING request(s))" \
       && git push -q -u origin "$TICK_BRANCH"; then
       say "pushed $TICK_BRANCH (the cloud steward opens its PR within the hour)"

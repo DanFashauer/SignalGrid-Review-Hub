@@ -130,11 +130,22 @@ function findPosedBoundReads(source, typesSource) {
 // prune, so SKIP is applied to each path rather than to the descent; a failed read
 // yields an empty list, which the FILE_FLOOR self-test then reports loudly rather
 // than passing off as a clean tree.
+// THE READ ERROR IS KEPT, not swallowed. This was `catch { return [] }`, and on
+// 2026-09-18 the Mac runner failed this gate with `only 0 files found under lib/`
+// and nothing else — a walk that COULD NOT LOOK was indistinguishable from a tree
+// that HAS NO FILES, so the reason existed only on a machine nobody could reach.
+// The floors are what stopped it becoming a silent green, and they did their job;
+// what they could not do is say why. Now the errno rides along and the self-test
+// prints it, so the next person diagnoses this from the CI log instead of needing
+// the hardware. (The same distinction this repo keeps having to relearn: see
+// check-ci-liveness's "could not look" vs "the sweep is dark".)
+export let walkError = null;
 function sourceFiles(root) {
   let entries;
   try {
     entries = readdirSync(root, { recursive: true, withFileTypes: true });
-  } catch {
+  } catch (err) {
+    walkError = `${err.code ?? err.name}: ${err.message}`;
     return [];
   }
   return entries
@@ -289,11 +300,33 @@ function runSelfTest() {
   );
   note(viaTypes.length === 1 && /\bnumber\b/.test(viaTypes[0]?.type ?? ""), "a type declared in ./types was not resolved");
 
+  // 5b. The walk's two ways of returning nothing must stay TELLABLE APART. Written
+  //     because the Mac runner reported `only 0 files found under lib/` and nothing
+  //     more, and the reason was unreachable from CI. Saves and restores the module's
+  //     `walkError` so probing with a bogus path cannot leak into the real verdict.
+  {
+    const saved = walkError;
+    walkError = null;
+    const gone = sourceFiles(join(repo, "lib-this-path-does-not-exist"));
+    note(gone.length === 0, "a bogus root did not return an empty list");
+    note(
+      typeof walkError === "string" && /ENOENT/.test(walkError),
+      "a FAILED directory read left no errno behind — 'could not look' is indistinguishable from 'found nothing', which is the defect this arm exists for",
+    );
+    walkError = null;
+    sourceFiles(join(repo, ROOT));
+    note(walkError === null, "a SUCCESSFUL directory read recorded an error that did not happen");
+    walkError = saved;
+  }
+
   // 6. Floors. A derivation that has quietly stopped resolving files reports a
   //    clean tree it never read.
   note(
     allFiles.length >= FILE_FLOOR,
-    `only ${allFiles.length} files found under ${ROOT}/ (floor ${FILE_FLOOR}) — the walk is not reaching the tree`,
+    `only ${allFiles.length} files found under ${ROOT}/ (floor ${FILE_FLOOR}) — the walk is not reaching the tree` +
+      (walkError
+        ? `; the directory read FAILED with ${walkError} — this is "could not look", not "looked and found nothing"`
+        : `; the directory read SUCCEEDED and returned ${allFiles.length} matching file(s), so the tree or the filters are what changed, not the read`),
   );
   note(
     scoped.length >= EVALUATOR_FLOOR,

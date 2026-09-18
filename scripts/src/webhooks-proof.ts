@@ -340,18 +340,21 @@ check(
     fn().then(() => false).catch(() => true);
   try {
     check("createWebhook REFUSES a non-URL `url` — the type says URL, the runtime now agrees",
-      await refuses(() => createWebhook({ name: "bad", url: "not-a-url", events: ["session.start"] } as never)));
+      await refuses(() => createWebhook({ name: "bad", url: "not-a-url", events: ["badge.delete"] } as never)));
     check("createWebhook REFUSES an empty `name`",
-      await refuses(() => createWebhook({ name: "", url: "https://hooks.example.test/x", events: ["session.start"] } as never)));
+      await refuses(() => createWebhook({ name: "", url: "https://hooks.example.test/x", events: ["badge.delete"] } as never)));
     check("createWebhook REFUSES an empty `events` list — a webhook subscribed to nothing is a stored URL and no more",
       await refuses(() => createWebhook({ name: "n", url: "https://hooks.example.test/x", events: [] } as never)));
     check("createWebhook REFUSES `secrets` for `secret` — stripped, it would have minted an UNSIGNED webhook",
       await refuses(() => createWebhook({
-        name: "n", url: "https://hooks.example.test/x", events: ["session.start"], secrets: "s".repeat(40),
+        name: "n", url: "https://hooks.example.test/x", events: ["badge.delete"], secrets: "s".repeat(40),
       } as never)));
     // The positive control: a well-formed create still succeeds, so the four above are
     // not passing because the function refuses everything.
-    const good = await createWebhook({ name: "boundary-control", url: "https://hooks.example.test/ok", events: ["session.start"] } as never);
+    // `badge.delete` is this block's own event type: the in-memory store is shared
+    // across blocks and `dispatchEvent` fans out to EVERY enabled subscriber, so a
+    // control hook left on someone else's event would silently change their counts.
+    const good = await createWebhook({ name: "boundary-control", url: "https://hooks.example.test/ok", events: ["badge.delete"] } as never);
     check("...and a well-formed create still SUCCEEDS (the four refusals above are not vacuous)", typeof good?.id === "string");
 
     check("updateWebhook REFUSES a misspelled `rotateSecret` — stripped, the operator believes a compromised secret was retired",
@@ -674,6 +677,32 @@ check(
         calls.length === 3 && calls.every((c) =>
           verifySignedWebhook(c.headers, c.body, SECRET,
             { toleranceMs: 300_000, now: Number(oneStamp) + 5_000 }).valid === true));
+
+      // 5f-DEAD-LETTER. GIVING UP IS A STATE, AND THE DELIVERY LOG NOW SAYS IT.
+      //
+      // `dead_letter` has been a member of `DeliveryStatusSchema` since the family
+      // was written and nothing ever wrote one: the last attempt recorded `failed`,
+      // byte-identical to every attempt before it, and only the DLQ — a separate
+      // list an operator has to know to open — carried the fact that we had stopped
+      // trying. The per-webhook delivery log, which is what an operator actually
+      // opens, could not distinguish "failed, will retry" from "failed, and nobody
+      // will try again". The retry loop now records a terminal row before the DLQ
+      // write.
+      //
+      // Driven off the three-attempt dispatch immediately above: every attempt threw
+      // at the transport, so the loop exhausted rather than returning permanent.
+      {
+        const dlLogs = await getDeliveryLogs(hook.id);
+        const terminal = dlLogs.filter((l) => l.status === "dead_letter");
+        check("an exhausted retry loop records a TERMINAL dead_letter delivery row, not a fourth indistinguishable `failed`",
+          terminal.length >= 1);
+        check("...and the terminal row carries the final error, so the log says WHY it was given up on",
+          (terminal[0]?.error ?? "").length > 0);
+        check("...and the newest row is the terminal one — an operator reading the top of the log sees the give-up",
+          dlLogs[0]?.status === "dead_letter");
+        check("...while the ATTEMPTS themselves are still recorded as `failed` (the terminal row is added, not a relabel)",
+          dlLogs.filter((l) => l.status === "failed").length >= 3);
+      }
     } finally {
       delete process.env[ENV_KEY];
     }

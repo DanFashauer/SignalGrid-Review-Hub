@@ -1252,7 +1252,13 @@ export const ALLOWED = [
 
 // ── runner ────────────────────────────────────────────────────────────────────
 
-function runProof(proof) {
+// Exported so the pre-merge authorizer (scripts/check-pr-gate-falsification.mjs) runs
+// mutations through the EXACT same proof runner this sweep uses — one summary parser,
+// one hang detection, one timeout — rather than forking a second copy that could drift.
+// NOTE FOR THAT CALLER: this returns "hung" as a distinct verdict; the sweep folds hung
+// into killed (a hang IS a detected regression here), but a MERGE AUTHORIZER must NOT —
+// there a hang is inconclusive, never a pass. The caller keeps the raw "hung" and decides.
+export function runProof(proof) {
   const run = spawnSync("pnpm", ["run", proof], {
     cwd: repoRoot,
     encoding: "utf8",

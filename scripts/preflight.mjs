@@ -286,6 +286,12 @@ const STEPS = [
   // a new rule fails this until a human classifies it — which is also one more
   // mechanical guard on the breadth freeze.
   { name: "Mutation sharding partitions the registry (the daily sweep loses no target)", cmd: ["node", "scripts/check-mutation-sharding.mjs"] },
+  // Pre-merge gate-falsification authorizer (DR-050). Its LIVE run needs a base ref, a
+  // committed head diff and the covering proofs — it belongs to the auto-merge lane, not a
+  // per-push gate — so preflight and CI run its SELF-TEST, which proves the authorizer can
+  // fail in both directions (a killed mutant → green, a survivor/uncovered/hung → not
+  // green) and floors the imported mutators + coverage map against a gutted registry.
+  { name: "PR gate-falsification authorizer self-test (a weakened gate cannot be authorized green)", cmd: ["node", "scripts/check-pr-gate-falsification.mjs", "--self-test"] },
   { name: "Backlog row citations name rows that exist", cmd: ["node", "scripts/check-row-citations.mjs"] },
   { name: "Row-citation gate self-test (it can actually fail)", cmd: ["node", "scripts/check-row-citations.mjs", "--self-test"] },
   { name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)", cmd: ["node", "scripts/check-it-layer-model.mjs"] },

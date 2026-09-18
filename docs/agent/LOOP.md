@@ -52,7 +52,31 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-17 21:20Z (cloud lane, latest) - A LONG MERGE-AND-BUILD SESSION.
+LAST TOUCHED: 2026-09-18 00:31Z (cloud lane, latest) - THE CONFLICTED BACKLOG, REPLAYED.
+              Four of the old conflicted PRs replayed onto current mainline as #815, #817, #818
+              and the ITSM join, cherry-picked with authorship preserved - no history rewritten,
+              no force-push, nothing merged that the owner gates.
+              EVERY REPLAY FOUND A DEFECT THE ORIGINAL BRANCH COULD NOT HAVE SEEN, and they are
+              all the same defect wearing different clothes - a signal that cannot tell "I could
+              not look" from "I looked and found nothing":
+                #815 - the CI-liveness gate called a rate-limited sweep DARK.
+                #818 - the cap-block detection reused a whole-timeline `returned` boolean, so one
+                       device coming back silenced a cap block held by a DIFFERENT device still
+                       out. That is the exact false negative DR-052 was written to catch, and it
+                       was fail-OPEN on it. Scoped per device; both wrong readings (the boolean,
+                       and counting returns against opens) pinned by assertions falsified by
+                       planting each in turn.
+                #818 - four positive assertions were driving the detector with `undefined`
+                       eventTypes, because `ev` gained a required id on mainline. They read GREEN
+                       on the original branch. Green against events that could match no rule.
+                ITSM  - nothing wrong with the join; the whole cost was in six derived figures
+                       that had moved twice. Re-derived, never merged as two stale numbers.
+              ALSO LEARNED, the hard way, three times: my own conflict resolution is now the
+              leading source of defects in this work. It dropped DR-051's reversal clause, spliced
+              DR-051's sections into DR-052, and ate a closing brace in detect.ts. Each was caught
+              by a gate, none by re-reading the diff. Resolve, then RUN THE GATES - reading it
+              again is not a check.
+              (Previously, 2026-09-17 21:20Z:) A LONG MERGE-AND-BUILD SESSION.
               MEASURED, not recalled: `29` pull requests merged on 2026-09-17 and `27` still open.
               The open count barely moved (30 -> 27) and that is the honest shape of it: much of what
               merged was lane mail and heartbeats opened and landed in the same breath, and the OLDER

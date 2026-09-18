@@ -72,6 +72,9 @@ export class SignalGridCore {
   private readonly shiftRecords: Record<string, ShiftContextRecord[]>;
   /** True only for a core built via `demo()`; gates the public-safe demo-key accessor. */
   private readonly demoMode: boolean;
+  /** Set only by `fromEstate`: the one connector a posture REFRESH may re-apply to.
+   *  Null on a demo core, which is what makes `refreshEstatePosture` refuse there. */
+  private estateConnector: { tenantId: string; id: string } | null = null;
 
   private constructor(
     store: MemoryStore,
@@ -98,7 +101,56 @@ export class SignalGridCore {
    */
   static fromEstate(clock: Clock, spec: EstateSpec, storeOptions?: { maxDecisionsPerTenant?: number }): SignalGridCore {
     const built = buildEstateStore(clock, spec, storeOptions);
-    return new SignalGridCore(built.store, clock, { [built.connectorId]: built.postureRecords }, {}, {}, false);
+    const core = new SignalGridCore(built.store, clock, { [built.connectorId]: built.postureRecords }, {}, {}, false);
+    core.estateConnector = { tenantId: spec.tenant.id, id: built.connectorId };
+    return core;
+  }
+
+  /**
+   * Re-apply posture the CALLER read from the estate's source — the refresh half of
+   * the boot-time read, so a deployment's answers track the estate instead of the
+   * moment it started.
+   *
+   * The core still performs NO I/O: whoever calls this fetched the posture first,
+   * exactly as `fromEstate` requires, and the same `runPostureSync` runs on it — same
+   * normalization, same freshness windows, the same SKIP-AND-COUNT rule for a record
+   * naming a subject this tenant does not hold, and one `ConnectorSyncRun` per pass
+   * (status `partial` and connector `degraded` the moment anything was skipped). Wall
+   * time is never read here; the clock is the one the caller handed `fromEstate`.
+   *
+   * Refuses on a demo core — there is no estate connector to refresh, and a refresh
+   * that silently did nothing would be indistinguishable from one that worked.
+   */
+  refreshEstatePosture(records: FixturePostureRecord[]): ConnectorSyncRun {
+    if (this.demoMode || this.estateConnector === null) {
+      throw new CoreError(
+        "forbidden",
+        "Posture refresh is an estate-core operation; this core holds no estate connector.",
+        403,
+      );
+    }
+    const { tenantId, id } = this.estateConnector;
+    const connector = this.store.getConnector(tenantId, id);
+    if (!connector) {
+      throw new CoreError("not_found", `Estate connector "${id}" not found.`, 404);
+    }
+    // The replayable record set moves with the live one, so a later
+    // POST /v1/connectors/:id/sync replays what the estate last reported, not what it
+    // reported at boot.
+    this.fixtureRecords[id] = records;
+    const run = runPostureSync(this.store, this.clock, connector, records);
+    appendAudit(this.store, {
+      tenantId,
+      type: "connector.synced",
+      actor: "estate-refresh",
+      subject: id,
+      summary:
+        `Estate posture refreshed: ${run.signalsNormalized} signals normalized from ` +
+        `${run.recordsProcessed} records (${run.status}). ${run.note}`,
+      references: [id, run.id],
+      recordedAt: run.completedAt,
+    });
+    return run;
   }
 
   /** Whether this core was built by `demo()`. Routes that publish demo bearers or

@@ -354,6 +354,8 @@ jobs:
         run: pnpm run proof:graph-wire
       - name: "Proof: estate-core (a customer estate boots a core; no allow on unread facts)"
         run: pnpm run proof:estate-core
+      - name: "Proof: estate-refresh (a scheduled posture re-read re-decides, and fails closed)"
+        run: pnpm run proof:estate-refresh
       - name: "Assessor package (links/commands an external reviewer follows)"
         run: node scripts/check-assessor-package.mjs
       - name: OpenAPI validity (the published contract parses as OpenAPI)

@@ -91,6 +91,10 @@ services:
       # to boot rather than falling back to demo.
       SIGNALGRID_CORE: ${SIGNALGRID_CORE:-}
       SIGNALGRID_ESTATE_TENANT: ${SIGNALGRID_ESTATE_TENANT:-}
+      # The posture REFRESH interval (seconds, >= 30). Empty ⇒ the boot read stands
+      # and no loop runs. Set on a non-estate core ⇒ the API refuses to start, so a
+      # refresh nobody configured a core for is a failed deploy, not a quiet no-op.
+      SIGNALGRID_ESTATE_REFRESH_SECONDS: ${SIGNALGRID_ESTATE_REFRESH_SECONDS:-}
       # Key-only: passed through only when the host sets them (a bearer token
       # handed an empty string would be a failed boot, not a silent one).
       SIGNALGRID_ESTATE_OWNER_TOKEN:

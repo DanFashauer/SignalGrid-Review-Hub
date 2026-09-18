@@ -1,5 +1,5 @@
 import { CoreError, SignalGridCore, type Clock, type EstateSpec } from "@workspace/signalgrid-core";
-import { resolveGraphPostureConnector, toEstateSubjects } from "@workspace/integrations/graph";
+import { resolveGraphPostureConnector, toEstateSubjects, type GraphPostureConnector } from "@workspace/integrations/graph";
 import { logger } from "./logger";
 
 /**
@@ -46,8 +46,10 @@ function maxDecisionsPerTenantFromEnv(): number | undefined {
  *     BOOT — a server that silently fell back to the demo core while claiming an
  *     estate would be the worst of both.
  *
- * The posture is read ONCE, here, before the socket opens; the core performs no
- * I/O afterwards. A refresh loop is a separate piece of work (BUILD_BACKLOG).
+ * The posture is read ONCE, here, before the socket opens. A scheduled RE-read is
+ * `SIGNALGRID_ESTATE_REFRESH_SECONDS` below; the core itself still performs no I/O
+ * either way — every read happens out here, at the boundary, and the records are
+ * handed in.
  */
 function estateSpecFromEnv(): Omit<EstateSpec, "subjects" | "connector"> {
   const slug = (process.env["SIGNALGRID_ESTATE_TENANT"] ?? "").trim();
@@ -74,14 +76,44 @@ function estateSpecFromEnv(): Omit<EstateSpec, "subjects" | "connector"> {
   };
 }
 
-async function buildCore(): Promise<SignalGridCore> {
+/**
+ * `SIGNALGRID_ESTATE_REFRESH_SECONDS` — how often the estate core RE-READS posture.
+ *
+ * Unset/empty means no refresh loop: the boot read stands, which is the behaviour
+ * before this knob existed. Anything else must be a positive integer and REFUSES AT
+ * BOOT otherwise — a deploy that believed it was refreshing hourly and was not is the
+ * silent failure this whole file is written against. A floor of 30s keeps a typo
+ * (`5` meant as minutes) from hammering the source.
+ */
+export function estateRefreshSecondsFromEnv(env: NodeJS.ProcessEnv = process.env): number | undefined {
+  const raw = env["SIGNALGRID_ESTATE_REFRESH_SECONDS"];
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const text = raw.trim();
+  if (!/^\d+$/.test(text) || Number(text) < 30) {
+    throw new Error(
+      `SIGNALGRID_ESTATE_REFRESH_SECONDS must be an integer of at least 30 seconds, got "${raw}" — ` +
+        "refusing to start rather than running with a refresh interval nobody meant.",
+    );
+  }
+  return Number(text);
+}
+
+/** The boot read's clock and connector, RETURNED beside the core so the refresh loop
+ *  reuses both. Returned rather than stashed in a module-level `let`: the boot read
+ *  is an output of building the core, and the demo path has none by construction. */
+interface EstateRead {
+  clock: Clock;
+  connector: GraphPostureConnector;
+}
+
+async function buildCore(): Promise<{ core: SignalGridCore; estate: EstateRead | null }> {
   const storeOptions = { maxDecisionsPerTenant: maxDecisionsPerTenantFromEnv() };
   // Unset AND empty both mean the default: the compose file passes every knob
   // through as `${SIGNALGRID_CORE:-}`, so an operator who never set it hands the
   // container "" — refusing that booted nothing at all (deploy-stack, 2026-09-18).
   // Anything else non-empty that is not a known mode still refuses.
   const mode = (process.env["SIGNALGRID_CORE"] ?? "").trim().toLowerCase() || "demo";
-  if (mode === "demo") return SignalGridCore.demo(undefined, storeOptions);
+  if (mode === "demo") return { core: SignalGridCore.demo(undefined, storeOptions), estate: null };
   if (mode !== "estate") {
     throw new Error(`SIGNALGRID_CORE must be "demo" or "estate", got "${mode}" — refusing to start.`);
   }
@@ -90,6 +122,10 @@ async function buildCore(): Promise<SignalGridCore> {
   // nothing inside the decision path reads it.
   const clock: Clock = { now: () => new Date() };
   const resolution = resolveGraphPostureConnector(process.env);
+  // Returned for the refresh loop: the SAME resolved connector and the SAME clock, so
+  // a later pass reads from the source this process booted against rather than
+  // re-resolving (and possibly re-deciding fixture-vs-live) behind the operator.
+  const estate: EstateRead = { clock, connector: resolution.connector };
   const signals = await resolution.connector.fetchPosture(clock.now().toISOString());
   const mapped = toEstateSubjects(signals);
   const sourceDescription =
@@ -99,7 +135,7 @@ async function buildCore(): Promise<SignalGridCore> {
     "estate core: posture read at boot",
   );
   try {
-    return SignalGridCore.fromEstate(
+    const estateCore = SignalGridCore.fromEstate(
       clock,
       {
         ...base,
@@ -113,6 +149,7 @@ async function buildCore(): Promise<SignalGridCore> {
       },
       storeOptions,
     );
+    return { core: estateCore, estate };
   } catch (err) {
     // The core's own refusals are the honest ones; surface them as boot failures.
     if (err instanceof CoreError) throw new Error(`estate core refused to build: ${err.message}`);
@@ -120,7 +157,74 @@ async function buildCore(): Promise<SignalGridCore> {
   }
 }
 
-export const core: SignalGridCore = await buildCore();
+const built = await buildCore();
+export const core: SignalGridCore = built.core;
+
+/**
+ * The estate posture REFRESH loop.
+ *
+ * A server-side interval, started once at boot. Every pass reads posture again
+ * through the SAME read-only connector the boot read used, maps it the same way,
+ * and hands the records to `core.refreshEstatePosture` — which re-runs the identical
+ * sync (same normalization, same skip-and-count rule) and writes one sync-run record
+ * per pass, visible at `GET /v1/connectors/{id}/sync-runs`.
+ *
+ * WALL TIME IS READ HERE AND NOWHERE ELSE. The interval is a boundary concern; the
+ * core is handed records and its own clock, exactly as at boot.
+ *
+ * NEVER IN DEMO MODE. The demo core is a fixed-clock fixture world with no estate
+ * connector — refreshing it would mint sync runs that describe nothing. Setting the
+ * knob on a demo core is a configuration error, and it refuses to start rather than
+ * running a loop the operator believes exists.
+ *
+ * A failing pass is LOGGED AND THE LOOP CONTINUES: a Graph outage must not take the
+ * server down, and the last good posture keeps deciding. It also does not silently
+ * become "fresh" — the previous sync run's timestamp is what the console shows, so a
+ * refresh that stopped working looks like a refresh that stopped working.
+ */
+const estateRefreshSeconds = estateRefreshSecondsFromEnv();
+if (estateRefreshSeconds !== undefined && (core.isDemo() || built.estate === null)) {
+  throw new Error(
+    "SIGNALGRID_ESTATE_REFRESH_SECONDS is set but this process does not serve an estate core " +
+      "(SIGNALGRID_CORE is not \"estate\") — refusing to start rather than reporting a refresh loop that would never run.",
+  );
+}
+if (estateRefreshSeconds !== undefined && built.estate !== null) {
+  const read = built.estate;
+  const timer = setInterval(() => {
+    void (async () => {
+      try {
+        const signals = await read.connector.fetchPosture(read.clock.now().toISOString());
+        const mapped = toEstateSubjects(signals);
+        const run = core.refreshEstatePosture(
+          mapped.subjects.map((subject) => ({
+            deviceRef: subject.device.externalRef,
+            identityRef: subject.identity.externalRef,
+            ...subject.posture,
+          })),
+        );
+        logger.info(
+          {
+            run: run.id,
+            status: run.status,
+            recordsProcessed: run.recordsProcessed,
+            signalsNormalized: run.signalsNormalized,
+            skippedOwnerless: mapped.skippedOwnerless,
+          },
+          "estate core: posture refreshed",
+        );
+      } catch (err) {
+        logger.error(
+          { err: err instanceof Error ? err.message : String(err) },
+          "estate core: posture refresh FAILED; the last good posture still decides and no sync run was recorded",
+        );
+      }
+    })();
+  }, estateRefreshSeconds * 1000);
+  // The loop must never be the reason a process refuses to exit.
+  timer.unref();
+  logger.info({ intervalSeconds: estateRefreshSeconds }, "estate core: posture refresh loop started");
+}
 
 /**
  * Mint a small, deterministic set of REAL decisions at boot so the console's

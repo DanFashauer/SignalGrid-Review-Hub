@@ -2218,6 +2218,90 @@ async function run() {
     }
   }
 
+  // ── Twelfth short-lived server: the ESTATE core and its posture refresh loop ──
+  //
+  // SIGNALGRID_CORE=estate builds the core around a deployment's own tenant, with
+  // posture read at boot through the read-only Graph posture connector. Everything
+  // here is asserted against a RUNNING server rather than the source that describes
+  // it: the estate core serves, it is NOT the demo core (no published demo bearers),
+  // the boot read left a real sync run, and the refresh knob refuses the two
+  // configurations that would leave an operator believing in a loop that never runs.
+  // What the loop then DOES on each pass is proven deterministically by
+  // `pnpm run proof:estate-refresh` — an interval this suite could only observe by
+  // sleeping past the 30s floor, and a gate that sleeps is a gate people switch off.
+  {
+    const PORT12 = 5325;
+    const BASE12 = `http://localhost:${PORT12}/api`;
+    const ESTATE_OWNER = "estate-owner-token-for-the-api-suite";
+    const estateEnv = (extra = {}) => ({
+      ...process.env,
+      PORT: String(PORT12),
+      NODE_ENV: "production",
+      LOG_LEVEL: "info",
+      SIGNALGRID_CORE: "estate",
+      SIGNALGRID_ESTATE_TENANT: "suite-estate",
+      SIGNALGRID_ESTATE_OWNER_TOKEN: ESTATE_OWNER,
+      ...extra,
+    });
+    const exitOf = (child) => new Promise((resolveExit) => {
+      const timer = setTimeout(() => { child.kill("SIGKILL"); resolveExit("still-running"); }, 8000);
+      child.on("exit", (code) => { clearTimeout(timer); resolveExit(code); });
+    });
+
+    const estate = spawn("node", [serverEntry], {
+      env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: "30" }),
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    let estateLog = "";
+    estate.stdout.on("data", (chunk) => { estateLog += String(chunk); });
+    try {
+      check("estate-core server came up", await waitReady(PORT12));
+      const asOwner = async (path) => {
+        const res = await fetch(`${BASE12}${path}`, { headers: { authorization: `Bearer ${ESTATE_OWNER}` } });
+        return { status: res.status, json: await res.json().catch(() => null) };
+      };
+      const ctx12 = await asOwner("/v1/context");
+      check("estate core: the deployment's OWN bearer authenticates (the token came from the environment, not a seed)",
+        ctx12.status === 200 && ctx12.json?.tenant?.slug === "suite-estate");
+      const keys12 = await fetch(`${BASE12}/v1/keys`);
+      const keysBody = await keys12.json().catch(() => null);
+      check("estate core: /v1/keys publishes NO bearers — demoApiKeys() is refused on a non-demo core",
+        Array.isArray(keysBody?.keys) && keysBody.keys.length === 0);
+      const connectors12 = await asOwner("/v1/connectors");
+      const estateConnector = connectors12.json?.connectors?.[0];
+      check("estate core: the boot read left one connector, recorded in fixture mode (no live gate opened)",
+        connectors12.status === 200 && connectors12.json?.connectors?.length === 1 && estateConnector?.mode === "fixture");
+      const runs12 = await asOwner(`/v1/connectors/${estateConnector?.id}/sync-runs`);
+      check("estate core: the boot posture read is recorded as a real sync run with normalized signals",
+        runs12.status === 200 && runs12.json?.syncRuns?.length === 1 && runs12.json.syncRuns[0].signalsNormalized > 0);
+      check("estate core: the refresh loop SAYS it started, with the interval it will use",
+        estateLog.split("\n").some((l) => l.includes("posture refresh loop started") && l.includes("30")));
+    } finally {
+      estate.kill("SIGTERM");
+      await exitOf(estate);
+    }
+
+    // Below the floor: a typo meant as minutes must not become a two-second hammer.
+    const tooFast = spawn("node", [serverEntry], {
+      env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: "5" }),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const tooFastExit = await exitOf(tooFast);
+    check("estate refresh: an interval below the 30s floor refuses at boot",
+      tooFastExit !== "still-running" && tooFastExit !== 0);
+
+    // Set on a DEMO core: there is no estate connector to refresh, so a server that
+    // booted anyway would report a loop that could never run.
+    const demoRefresh = spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(PORT12), NODE_ENV: "production", LOG_LEVEL: "silent",
+        SIGNALGRID_ESTATE_REFRESH_SECONDS: "60" },
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const demoRefreshExit = await exitOf(demoRefresh);
+    check("estate refresh: the knob set while SIGNALGRID_CORE is not estate refuses at boot (never a silent no-op loop)",
+      demoRefreshExit !== "still-running" && demoRefreshExit !== 0);
+  }
+
   // ── every spawned server binds its OWN port ──────────────────────────────
   // 5314 and 5315 were each used by TWO different spawned servers, and neither
   // predecessor is awaited on SIGTERM before the successor rebinds. That is a flake,

@@ -3431,3 +3431,144 @@ This deferred detection does not duplicate the `rtls-custody` ledger evaluator: 
 Proven by ADDING assertions to the existing, already-registered `scripts/src/event-contract-proof.ts` (`proof:event-contract`): three positive shapes, a severity+evidence check, and a negative control (a properly returned-and-racked device must NOT fire it). No new proof script, so no new preflight/CI/guard registration. The verdict enum, the Decision Envelope, and every launch-claim surface are untouched; no launch claim is made or implied.
 
 **Reversal / amendment.** The owner vetoes by not merging, or reverses a merged form by reverting the one PR with the reversal date added here.
+
+## DR-054 — PROPOSAL: the smart-charging custody journey as ordered simulator scenarios — fixture-backed, over deferred families, decision core untouched (cloud lane, 2026-09-14)
+
+**Status: PROPOSED. The owner decides by merging.** This record is written before the
+change lands, not after, because the item it settles is decision-core / simulator territory
+and `docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md` says in its own words that such an
+item is to be *"proposed here and filed … for a decision record, not changed unilaterally."*
+The branch is owner-gated (`lib/**`, `scripts/**`, `DECISION_RECORDS.md`) and the lane does
+not merge it.
+
+**Context.** The custody ground-truth map — the owner's real shared-clinical-device runbooks
+held against this tree (DR-034, absorbed by use per DR-021), every connector family it names
+being deferred under the launch profile — ended with three named fidelity
+gaps. Two were modeled on 2026-09-11 as a read-only evaluator in the `rtls-custody` family.
+The third was still open, in the map's own words: *"a faithful end-to-end 'smart-charging'
+simulator scenario (badge → dock → provision → in-use → check-in, with the real failure
+branches)."* It was the single `gap` row left in a 17-row table, and because
+`scripts/check-readiness-figure.mjs` derives the company headline as the LOWEST of three
+measured dimensions, that one row was holding the headline at 94% while the other two
+dimensions read 100%.
+
+**The question this settles.** How to make the simulator carry the real workflow and its real
+failure branches — an ORDERED journey, not another isolated scenario — without touching the
+decision core, and without inventing structure the tree does not need.
+
+**Decision.**
+
+1. **A journey is an ordered list of scenarios, so it is modeled as one.** Five stages —
+   `custody-journey-01-badge-tap`, `-02-dock-release`, `-03-provision`, `-04-in-use`,
+   `-05-check-in` — plus four branches, all in `lib/signalgrid-simulator/src/scenarios.ts`
+   under one `custody-journey-` id prefix. **The prefix is the journey identifier and the
+   array order is the order.** No field was added to `SimulatorScenario` and no stage-machine
+   type was invented: a `journey` field would have been a second way to say what an id
+   already says, and every consumer of that list — the `/v1` simulator route, the review
+   console, and three other proofs — would have had to learn it for nothing. Ordering and
+   contiguity are asserted by the proof, so a stage dropped, renamed or reordered fails.
+   All nine scenarios are fixture-backed and every family they stand for stays deferred.
+
+2. **The decision core is not touched.** `lib/signalgrid-simulator/src/decisionEngine.ts` is
+   byte-parity-gated against the frozen Swift port (`native/ios/EnterpriseShell/Services/
+   DecisionEngine.swift`, golden rule 1) and neither file changed. The journey is expressed
+   **entirely in fixtures the existing rules already read** — which is also the strongest
+   available evidence for the map's central finding: the domain fits the surfaces almost
+   one-to-one, and a faithful end-to-end workflow needed no new rule at all.
+
+3. **Every stage grants; every branch withdraws the grant, for its own named reason.** The
+   five stages each return `allow + record_audit` and nothing else. The four branches are the
+   ones the runbooks produce: **unpaired** (`DOCK_EXCEPTION` — contained and routed),
+   **network-down** (`STATE_FRESHNESS_FAILURE` + `POSTURE_STALE` — step-up and remediation
+   requested), **cap-hit** (`CUSTODY_EXCEPTION` — contained and routed), **dock-fault**
+   (`OPERATIONAL_HEALTH_DEGRADED` + `INTEGRATION_ROUTE_DEGRADED` — contained, routed and
+   queued). Not one allows, and the four name four distinct reason sets.
+
+4. **Each branch carries a RESTORED control, and this is the part that makes it a gate.**
+   "The branch refuses" is worth little on its own — a scenario can refuse for reasons that
+   have nothing to do with the fault it is named for. So each branch also declares the same
+   moment with ONLY its named fault removed, and that control MUST grant. A branch therefore
+   proves a grant **withdrawn by its named fault**, not a refusal in isolation.
+
+5. **Unknown raises assurance, on the journey and not only in the abstract.** The
+   network-down branch is stage 4 with the same person, the same device and the same
+   assignment — the only change is that the evidence stopped arriving, and the answer
+   tightened from `allow` to `step_up + request_remediation`. That is golden rule 2 shown as
+   a transition rather than asserted as a property, and the runbooks' first premise (*nearly
+   every failure root-causes to network or pairing*) made concrete.
+
+6. **The surfaces behind each stage are driven, not described** — every one of them a
+   deferred family, read-only and fixture-backed. `proof:custody-journey`
+   runs the real evaluators for the same moment each stage decides — `supervision-identity`
+   (device trust present), `custody-ledger` (ledger clear / unpaired / cap-blocked-by-stale-
+   return), `device-prep` (ready / prep-failed), `fallback-sequence` (a badge that SUCCEEDED
+   is allowed without a manual fallback), `custody-beacon`, `local-authority` (the decision
+   is still made when the network is down — and is not made loosely when the device cannot
+   establish its own standing), `network-nac`, and `change-window` — and replays the same
+   journey as an **event-contract timeline** through `lib/event-contract/src/detect.ts`. The
+   completed journey raises zero cross-domain detections; each branch timeline raises the
+   ones its evidence warrants.
+
+7. **Registered as a gate, all six steps.** `scripts/src/custody-journey-proof.ts`,
+   `proof:custody-journey` in both package manifests, registered in **both**
+   `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml` (so `guard:ci-sync`
+   passes), and a real `--self-test` mode that runs the planted-defect suite, prints a count
+   and exits on it. It enumerates no allow path and publishes no `figures=` line, so it needs
+   neither the mutation guard nor the figure guard — `guard:registries` derives both and
+   agrees. It sits in **preflight, not the breadth lane**, because the readiness figure's
+   end-to-end dimension counts the scenarios it registers: this is launch-surface coverage
+   even though the family evaluators it drives are deferred.
+
+**What this does NOT claim, stated because the temptation to round it up is real.** All four
+branch timelines resolve to the same `LEFT_PREMISES_WITHOUT_RETURN` detection on
+different evidence, because the event contract has exactly one "custody never closed"
+detection today. Telling them apart on the timeline is `CUSTODY_STALE_OR_CONTESTED`, which
+remains an open design target in `docs/BUILD_BACKLOG.md` under its own future record. The proof
+**asserts** that the four are not distinguishable by code today, so the tree cannot quietly
+start implying otherwise. Nothing here is a claim that SignalGrid runs in any deployment;
+every signal is a fixture and every routed action is `simulatedOnly`.
+
+**Consequences.** The simulator's scenario count moves 11 → 20 and
+`proof:signalgrid-simulator` 73 → 113 assertions (its hand-written exact-outcome map now
+covers the journey too, so a stage added without an entry fails rather than being skipped).
+The last `gap` row in the ground-truth map becomes `modeled`, and the derived readiness
+headline moves **94% → 100%** — derived, never typed (DR-036). Outreach was already open at
+94%; what changes is that the goal figure is now met on measurement rather than intent.
+
+**Corrected on the 2026-09-18 replay, by running the deriver rather than quoting this
+paragraph.** The sentence above was true when written and is not true now, and the reason
+has nothing to do with this change. Measured on the replay branch:
+
+```
+(a) runbook ground truth      100%   17 modeled / 0 partial / 0 gap of 17
+(b) launch surface, evidence    0%   evidence covers manifest 4afa60cf2fd5, tree is 6906d8d9ecc5
+(c) end-to-end                100%   scenarios 22/22 · live operations proven 8/8
+HEADLINE 0%  → OUTREACH CLOSED
+```
+
+Dimension (b) fail-closes to 0 because `artifacts/live-evidence/mac-run.json` was minted
+2026-09-13 against manifest fingerprint `4afa60cf2fd5` and the tree has since moved to
+`6906d8d9ecc5`. That drift is **already true of mainline** — `git show
+origin/SignalGrid_Alpha:artifacts/sync/live-sync-manifest.json` reports the same
+`6906d8d9ecc5` — so this record neither causes it nor can repair it: only the Mac lane can
+re-mint, via `SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence`,
+which refuses on CI by design.
+
+So what this record actually moves is dimension **(a) 94% → 100%** and the end-to-end
+scenario count, and the HEADLINE stays whatever (b) allows until the Mac re-mints. The
+original paragraph is kept above rather than rewritten, because a decision record that
+quietly edits its own predictions to match the outcome is not a record. The prediction was
+sound; the evidence went stale underneath it.
+
+**What does not change.** The verdict enum, the determinism invariant, the Decision Envelope,
+golden rules 1–4, the launch profile, the launch-claims gate and the publication boundary.
+Building is not claiming (DR-021 §2): the deferred families this journey drives stay deferred,
+and nothing here moves what may be *said* to ship.
+
+**Reversal / amendment.** The owner reverses by not merging, or by saying so afterwards:
+delete the nine journey scenarios, the proof file, its two `package.json` keys and its two
+registrations, and revert the ground-truth row to `gap` — the headline returns to 94% by
+derivation, with no other surface depending on any of it. Amend a stage or a branch by
+editing `scenarios.ts` and the expectation it is pinned to in
+`scripts/src/custody-journey-proof.ts`, which cannot drift apart without going red. Neither
+route changes what may be claimed: every family the journey stands for remains deferred.

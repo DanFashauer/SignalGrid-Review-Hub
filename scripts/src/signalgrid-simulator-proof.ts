@@ -34,6 +34,19 @@ const expectedOutcomeSets: Record<string, DecisionOutcome[]> = {
   "edr-security-risk": ["restrict", "alert_operator", "route_to_owner", "record_audit"],
   "api-integration-outage": ["alert_operator", "route_to_owner", "record_audit"],
   "remediation-verified": ["verify_remediation", "allow", "record_audit"],
+  // The smart-charging custody journey (DR-054). Held here as well as in
+  // `proof:custody-journey` deliberately: this map asserts the EXACT outcome set
+  // for every scenario the engine declares, so a journey stage added without an
+  // entry fails on the `expected !== undefined` check rather than being skipped.
+  "custody-journey-01-badge-tap": ["allow", "record_audit"],
+  "custody-journey-02-dock-release": ["allow", "record_audit"],
+  "custody-journey-03-provision": ["allow", "record_audit"],
+  "custody-journey-04-in-use": ["allow", "record_audit"],
+  "custody-journey-05-check-in": ["allow", "record_audit"],
+  "custody-journey-branch-unpaired": ["alert_operator", "create_ticket", "route_to_owner", "record_audit"],
+  "custody-journey-branch-network-down": ["step_up", "request_remediation", "record_audit"],
+  "custody-journey-branch-cap-hit": ["alert_operator", "create_ticket", "route_to_owner", "record_audit"],
+  "custody-journey-branch-dock-fault": ["alert_operator", "create_ticket", "route_to_owner", "record_audit"],
 };
 
 const scenarios = listSimulatorScenarios();

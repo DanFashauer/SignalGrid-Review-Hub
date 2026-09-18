@@ -673,6 +673,28 @@ export const SWEEP_EXEMPT = [
       "and regenerates the sentence; this gate defers to the owner of the line.",
   },
   {
+    doc: "docs/CLAIM_INVENTORY.md",
+    near: /proofs check"\)\s*\|\s*\|\s*148/,
+    count: 1,
+    reason:
+      "a claim-inventory ROW ID, not a count of anything. The sweep matches it because the PRECEDING row's " +
+      "evidence cell happens to end in \"not the catalogue the proofs check\", putting the words within its " +
+      "window. The matcher must satisfy two readers: the sweep hands it a whitespace-NORMALISED snippet, while the " +
+      "stale-exemption self-test tests it against the RAW document, where a newline sits between the two table " +
+      "cells. Hence `\\s*` rather than literal spaces — the literal-space form passes the sweep and fails the " +
+      "self-test. Tightness comes from `count`, which is 1 and fatal on any divergence.",
+  },
+  {
+    doc: "docs/agent/LOOP.md",
+    near: /proofs 148(?! proof)/,
+    count: 1,
+    reason:
+      "a dated record of review round seven: the number of ASSERTIONS in two proof modules before and after " +
+      "that round, not the number of proof:* scripts. It collides with the derived figure only by coincidence, " +
+      "and rewriting it to today's count would falsify the history it records. The negative lookahead keeps it " +
+      "off this file's OTHER 148 — the live `148 proof gates` sentence, which a FIGURES row owns.",
+  },
+  {
     doc: "docs/BUILD_BACKLOG.md",
     near: /\d+ `proof:\*/,
     count: 0,

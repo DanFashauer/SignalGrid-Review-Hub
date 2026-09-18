@@ -74,9 +74,9 @@
     "./adapters/payload-fields": "./src/integrations/adapters/payload-fields.ts"
   },
   "dependencies": {
+    "@workspace/audit": "workspace:*",
     "ioredis": "^5.4.1",
-    "zod": "catalog:",
-    "@workspace/audit": "workspace:*"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:"

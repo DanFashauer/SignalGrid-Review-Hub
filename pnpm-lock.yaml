@@ -256,7 +256,7 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
-        version: 1.30.0
+        version: 1.30.0(zod@3.25.76)
       '@workspace/facility-trust-graph':
         specifier: workspace:*
         version: link:../../lib/facility-trust-graph
@@ -797,6 +797,9 @@ importers:
       '@workspace/event-contract':
         specifier: workspace:*
         version: link:../event-contract
+      '@workspace/integrations':
+        specifier: workspace:*
+        version: link:../integrations
       '@workspace/posture-composition':
         specifier: workspace:*
         version: link:../posture-composition
@@ -991,7 +994,7 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
-        version: 1.30.0
+        version: 1.30.0(zod@3.25.76)
       '@workspace/adaptive-proposals':
         specifier: workspace:*
         version: link:../lib/adaptive-proposals
@@ -1700,6 +1703,7 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
+      zod: ^3.25 || ^4.0
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
@@ -5636,7 +5640,7 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@modelcontextprotocol/sdk@1.30.0':
+  '@modelcontextprotocol/sdk@1.30.0(zod@3.25.76)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.2)
       ajv: 8.20.0

@@ -106,6 +106,7 @@ paths:
                       assurance: { $ref: "#/components/schemas/Assurance" }
                     required: [principal, tenant, assurance]
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/decisions/evaluate:
     post:
@@ -133,6 +134,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/authorize:
     post:
@@ -166,6 +168,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/decisions:
     get:
@@ -187,8 +190,11 @@ paths:
                         items: { $ref: "#/components/schemas/DecisionRecord" }
                       total: { type: integer }
                     required: [decisions, total]
+        "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/decisions/{id}:
     get:
@@ -208,7 +214,9 @@ paths:
                     properties:
                       decision: { $ref: "#/components/schemas/DecisionRecord" }
                     required: [decision]
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/decisions/{id}/evidence:
     get:
@@ -231,7 +239,9 @@ paths:
                         type: boolean
                         description: Snapshot digest recomputed server-side on THIS request.
                     required: [evidence, verified]
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   # Reconciliation stores NOTHING. Every record is caller-supplied and the reduction is
   # pure, so there is no decision id to mint and no evidence snapshot to write — the
@@ -311,6 +321,8 @@ paths:
       responses:
         "200": { description: "The outcome that stands, its reason codes, the provenance frontier, whether it was contested, and which records expired" }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/decisions/{id}/simulate:
     post:
@@ -329,7 +341,10 @@ paths:
               required: [policyVersionId]
       responses:
         "200": { description: Simulation result }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/policies:
     get:
@@ -338,6 +353,8 @@ paths:
       summary: List policies
       responses:
         "200": { description: Policy list }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/policies/{id}/versions:
     get:
@@ -347,6 +364,8 @@ paths:
       summary: List policy versions
       responses:
         "200": { description: Version list }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
     post:
       operationId: createPolicyDraft
       tags: [policies]
@@ -365,7 +384,9 @@ paths:
               required: [rules]
       responses:
         "201": { description: Draft version created }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/policies/{id}/versions/{versionId}/activate:
     post:
@@ -380,8 +401,10 @@ paths:
       summary: Activate a policy version (owner/admin)
       responses:
         "200": { description: Policy with new active version }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/policies/{id}/tests:
     get:
@@ -395,6 +418,8 @@ paths:
       summary: Run a policy version's test fixtures
       responses:
         "200": { description: Test results + passed flag }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/connectors:
     get:
@@ -403,6 +428,8 @@ paths:
       summary: List connectors and health
       responses:
         "200": { description: Connector list }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/connectors/{id}/sync-runs:
     get:
@@ -412,6 +439,8 @@ paths:
       summary: List connector sync runs
       responses:
         "200": { description: Sync run history }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/connectors/{id}/sync:
     post:
@@ -421,7 +450,9 @@ paths:
       summary: Replay the fixture connector sync (read-only)
       responses:
         "200": { description: Sync run }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/audit:
     get:
@@ -437,7 +468,9 @@ paths:
         - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 }, description: Durable ledger only. }
       responses:
         "200": { description: "Audit events + chain verification; `source` names the ledger that answered. `chain.truncated`/`chain.evictedCount` report eviction by the per-tenant memory bound: a truncated `chain.valid: true` covers the RETAINED window only, never the whole history." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/metrics:
     get:
@@ -452,6 +485,8 @@ paths:
         never `allowRate`). Past the cap `pendingReview` counts DOWN and `restrictDenyRate` drifts.
       responses:
         "200": { description: "Metrics summary, with the `window` it was computed over" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/decisions/{id}/resolution:
     get:
@@ -461,7 +496,9 @@ paths:
       summary: Resolution Assistant plan for a decision (deterministic)
       responses:
         "200": { description: "Resolution plan (steps, classes, channels)" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/decisions/{id}/resolve:
     post:
@@ -471,7 +508,9 @@ paths:
       summary: Preview the outcome after resolvable fixes (simulated, approval-gated)
       responses:
         "200": { description: Resolution simulation (projected outcome) }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/webhooks:
     get:
@@ -480,6 +519,8 @@ paths:
       summary: List configured webhook endpoints (simulated sinks)
       responses:
         "200": { description: Webhook endpoints }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/webhooks/deliveries:
     get:
@@ -488,6 +529,8 @@ paths:
       summary: List simulated webhook deliveries with retry/backoff attempts
       responses:
         "200": { description: Delivery records }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/remediation:
     get:
@@ -496,6 +539,8 @@ paths:
       summary: List proposed remediation (always approval-required and simulated)
       responses:
         "200": { description: Remediation actions }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/remediation/{id}/approve:
     post:
@@ -505,8 +550,10 @@ paths:
       summary: Approve a remediation request (simulated only — never executed)
       responses:
         "200": { description: Approved (simulated) remediation }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/app-workflows/integrations:
     get:
@@ -519,6 +566,8 @@ paths:
           schema: { type: string }
       responses:
         "200": { description: App integrations }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/app-workflows/evaluate:
     post:
@@ -536,11 +585,23 @@ paths:
                 integrationId: { type: string }
                 identityRef: { type: string }
                 deviceRef: { type: string }
-                requestContext: { type: object, additionalProperties: { type: string } }
+                requestContext:
+                  # `sanitizeContext` in routes/v1.ts SILENTLY DROPS what it will not
+                  # carry — it is not a 400. An entry survives only if its value is a
+                  # string of at most 256 characters and its key matches the pattern
+                  # below and is not __proto__/constructor/prototype; at most 32 entries
+                  # are kept, in insertion order.
+                  type: object
+                  maxProperties: 32
+                  propertyNames:
+                    pattern: "^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$"
+                  additionalProperties: { type: string, maxLength: 256 }
       responses:
         "200": { description: Decision + app-session plan (as decided; a step_up keeps its high-assurance actions held) }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   # ── Step-up completion (real, user-verified WebAuthn) ──────────────────────
   # "User-verified", not "hardware-backed": registration requests attestation
@@ -578,11 +639,15 @@ paths:
               type: object
               required: [identityRef]
               properties:
-                identityRef: { type: string }
+                # `requireString` in routes/v1.ts refuses an empty string with a 400, so
+                # the document says minLength rather than leaving "" documented as valid.
+                identityRef: { type: string, minLength: 1 }
       responses:
         "200": { description: challengeId + WebAuthn PublicKeyCredentialCreationOptions (+ demoNote on a demo core with no out-of-band secret configured) }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: "Role not operator/owner, or the configured out-of-band authorization header is absent/wrong — fail closed" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/step-up/enroll/verify:
     post:
@@ -603,13 +668,17 @@ paths:
               type: object
               required: [identityRef, challengeId, response]
               properties:
-                identityRef: { type: string }
-                challengeId: { type: string }
+                identityRef: { type: string, minLength: 1 }
+                challengeId: { type: string, minLength: 1 }
                 response: { type: object, description: WebAuthn registration response (clientDataJSON + attestationObject) }
       responses:
         "200": { description: Credential enrolled (+ demoNote on a demo core with no out-of-band secret configured) }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: "Attestation failed verification, role not operator/owner, or out-of-band authorization absent/wrong — fail closed, nothing stored" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/step-up/challenge:
     post:
@@ -630,15 +699,17 @@ paths:
               type: object
               required: [identityRef, integrationId, deviceRef, actionKey]
               properties:
-                identityRef: { type: string }
-                integrationId: { type: string }
-                deviceRef: { type: string }
-                actionKey: { type: string, description: The one action of this integration the gesture will release }
+                identityRef: { type: string, minLength: 1 }
+                integrationId: { type: string, minLength: 1 }
+                deviceRef: { type: string, minLength: 1 }
+                actionKey: { type: string, minLength: 1, description: The one action of this integration the gesture will release }
       responses:
         "200": { description: challengeId + WebAuthn PublicKeyCredentialRequestOptions (userVerification required) }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: "Unknown app integration, or unknown action key for it" }
         "409": { description: No enrolled credential for this identity in this tenant — enroll first (fail closed) }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/app-workflows/complete-step-up:
     post:
@@ -661,18 +732,30 @@ paths:
               type: object
               required: [integrationId, identityRef, deviceRef, actionKey, challengeId, assertion]
               properties:
-                integrationId: { type: string }
-                identityRef: { type: string }
-                deviceRef: { type: string }
-                actionKey: { type: string, description: Must equal the action the challenge was minted for (the release is scoped to it) }
-                challengeId: { type: string }
+                integrationId: { type: string, minLength: 1 }
+                identityRef: { type: string, minLength: 1 }
+                deviceRef: { type: string, minLength: 1 }
+                actionKey: { type: string, minLength: 1, description: Must equal the action the challenge was minted for (the release is scoped to it) }
+                challengeId: { type: string, minLength: 1 }
                 assertion: { type: object, description: WebAuthn authentication response (clientDataJSON + authenticatorData + signature) }
-                requestContext: { type: object, additionalProperties: { type: string } }
+                requestContext:
+                  # `sanitizeContext` in routes/v1.ts SILENTLY DROPS what it will not
+                  # carry — it is not a 400. An entry survives only if its value is a
+                  # string of at most 256 characters and its key matches the pattern
+                  # below and is not __proto__/constructor/prototype; at most 32 entries
+                  # are kept, in insertion order.
+                  type: object
+                  maxProperties: 32
+                  propertyNames:
+                    pattern: "^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$"
+                  additionalProperties: { type: string, maxLength: 256 }
       responses:
         "200": { description: Decision + re-cut plan + stepUp verification record (released only if the current outcome was step_up) }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: "Assertion failed verification (bad signature, replayed/expired challenge, missing user-verification) — no plan returned" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   # ── Control plane (public management surface; see docs/DEPLOYMENT_MODELS.md) ──
   # The cloud half of the hybrid architecture: manages tenants/sites/fleet,
@@ -875,6 +958,7 @@ paths:
         ever PROPOSED — nothing is applied without a recorded human approval.
       responses:
         "200": { description: "Checklist report, plain-language summary, and proposed heals" }
+        "400": { $ref: "#/components/responses/ValidationError" }
 
   /cp/v1/reliability:
     get:
@@ -910,6 +994,7 @@ paths:
       summary: Which situations the Grid handles on its own, given active workflows + sourced signals
       responses:
         "200": { description: Sourcing summary + per-situation coverage }
+        "400": { $ref: "#/components/responses/ValidationError" }
 
   /cp/v1/grid/sourcing:
     get:
@@ -989,6 +1074,7 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/sessions/{id}:
     parameters:
@@ -1002,6 +1088,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/sessions/{id}/refresh:
     parameters:
@@ -1012,9 +1099,11 @@ paths:
       summary: Extend an active session's TTL
       responses:
         "200": { description: Session refreshed }
+        "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /v1/sessions/{id}/end:
     parameters:
@@ -1028,6 +1117,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
 components:
   securitySchemes:
@@ -1058,7 +1148,27 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     ValidationError:
-      description: Invalid request
+      description: >-
+        Invalid request. The server validates more strictly than these schemas state —
+        `parseEvaluate`, `parseReconcile` and the shared `requireString`/`requireObject`
+        helpers in `artifacts/api-server/src/routes/v1.ts` refuse an empty, wrong-typed
+        or absent field that a permissive reading of the schema would allow. Fail-closed
+        is deliberate: the refusal is the contract, not a bug in it.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: >-
+        The request is well formed but the identity is not in a state that can serve it —
+        e.g. a step-up challenge for an identity with no enrolled credential.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooManyRequests:
+      description: >-
+        Rate limit exceeded. EVERY `/v1` route is behind `v1RateLimiter` (default 240
+        requests/minute per key, `SIGNALGRID_V1_RATE_LIMIT`), so every operation below
+        can answer 429 — it was documented on none of them until 2026-09-18.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -1086,8 +1196,15 @@ components:
         deviceRef: { type: string }
         workflowKey: { type: string }
         requestContext:
+          # `sanitizeContext` in routes/v1.ts SILENTLY DROPS what it will not carry — it
+          # is not a 400. An entry survives only if its value is a string of at most 256
+          # characters and its key matches the pattern below and is not
+          # __proto__/constructor/prototype; at most 32 entries are kept.
           type: object
-          additionalProperties: { type: string }
+          maxProperties: 32
+          propertyNames:
+            pattern: "^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$"
+          additionalProperties: { type: string, maxLength: 256 }
       required: [identityRef, deviceRef, workflowKey]
     AssistResult:
       # The Assist wire (DR-007 / DR-023): the minimal envelope a shared-device host

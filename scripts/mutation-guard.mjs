@@ -416,6 +416,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:agent-identity",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/agent-identity/evaluate.ts",
       "lib/integrations/src/integrations/agent-identity/agent-identity-connector.ts",
@@ -680,6 +681,20 @@ export const TARGETS = [
 // a probe, without a sweep. A registry checkable only by the thing that consumes it
 // is a registry nobody checks.
 export const ALLOWED = [
+  {
+    file: "lib/integrations/src/integrations/agent-identity/agent-identity-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER — and the second half is why it is " +
+      "kept rather than deleted. `known` is a `readonly string[]`, so `known.includes(k)` on " +
+      "the very next line can never match a symbol and returns true for exactly the states " +
+      "this clause catches; that is why the brace-less sweep found it surviving `if (false)` " +
+      "with proof:agent-identity at 152/152. It was DELETED on 2026-09-18 and the delete did " +
+      "not survive `tsc --build`: TS2345 on the next line, because this is the type guard " +
+      "that narrows `k` from `string | symbol` to `string`. Verified in that order — " +
+      "mutated, then deleted, then restored — rather than argued. Labelled inert in the " +
+      "source with the same reason.",
+  },
   {
     file: "lib/integrations/src/integrations/edr-threat/edr-connector.ts",
     line: 'typeof endpoint.signatureAgeHours === "number" &&',

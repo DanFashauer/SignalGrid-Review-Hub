@@ -1333,6 +1333,131 @@ async function run() {
   });
   check("step-up credentials are tenant-scoped (other tenant → 409)", stepUpCrossTenant.status === 409);
 
+  // ── ANSWERING a step_up DECISION (the launch route, end to end) ──────────
+  // The gate returns four words; until 2026-09-18 only three could be acted on. This
+  // is the whole ceremony against the wire: evaluate → a step_up decision → a
+  // challenge BOUND to that decision → a genuinely-signed UV assertion → the answer
+  // recorded beside the decision. Every refusal below is asserted too, because the
+  // value of this route is entirely in what it will not accept.
+  {
+    const evalStepUp = await req("POST", "/v1/decisions/evaluate", {
+      token: KEYS.operator,
+      body: { identityRef: suIdentity, deviceRef: suDevice, workflowKey: "clinical-session" },
+    });
+    check("a seeded subject actually produces a step_up decision to answer (non-vacuity)",
+      evalStepUp.status === 200 && evalStepUp.json?.decision?.outcome === "step_up" && typeof evalStepUp.json?.decision?.decisionId === "string");
+    const stepUpDecisionId = evalStepUp.json?.decision?.decisionId;
+
+    // Before the answer: the decision detail says UNANSWERED, explicitly. A host app
+    // must be able to read "unresolved" rather than infer it from a missing key.
+    const before = await req("GET", `/v1/decisions/${stepUpDecisionId}`, { token: KEYS.operator });
+    check("an unanswered step_up decision reports stepUp: null (absent is not inferred)",
+      before.status === 200 && before.json?.stepUp === null);
+
+    // A decision that is NOT step_up has nothing to challenge — answering an allow
+    // would record a ceremony that released nothing.
+    const allowEval = await req("POST", "/v1/decisions/evaluate", {
+      token: KEYS.operator, body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" },
+    });
+    const allowChallenge = await req("POST", `/v1/decisions/${allowEval.json?.decision?.decisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
+    check("a challenge for a non-step_up decision → 409 (nothing to answer)",
+      allowEval.json?.decision?.outcome === "allow" && allowChallenge.status === 409);
+
+    // A decision this tenant does not hold is the same 404 a nonexistent id gets.
+    const foreignChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.atlas, body: {} });
+    check("a challenge for another tenant's decision → 404 (same answer a nonexistent id gets)", foreignChallenge.status === 404);
+
+    // A read-only auditor holds decision:read but not decision:evaluate; minting is
+    // part of the release flow, so it must refuse BEFORE probing enrollment.
+    const auditorDecisionChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.auditor, body: {} });
+    check("a decision step-up challenge refuses a read-only auditor → 403",
+      auditorDecisionChallenge.status === 403 && auditorDecisionChallenge.json?.challengeId === undefined);
+
+    // An identity with no enrolled credential cannot be challenged — fail closed,
+    // never a weaker completion path.
+    const unenrolledEval = await req("POST", "/v1/decisions/evaluate", {
+      token: KEYS.operator, body: { identityRef: "nurse.stale", deviceRef: "ipad-ward-03", workflowKey: "clinical-session" },
+    });
+    if (unenrolledEval.json?.decision?.outcome === "step_up") {
+      const unenrolledChallenge = await req("POST", `/v1/decisions/${unenrolledEval.json.decision.decisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
+      check("a step_up decision whose identity has no enrolled credential → 409 (enroll first)", unenrolledChallenge.status === 409);
+    } else {
+      check("a step_up decision whose identity has no enrolled credential → 409 (enroll first)", false);
+    }
+
+    const decisionChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
+    check("a decision step-up challenge → 200 with a challengeId and UV-required options",
+      decisionChallenge.status === 200 && typeof decisionChallenge.json?.challengeId === "string" &&
+      decisionChallenge.json?.publicKey?.userVerification === "required" &&
+      decisionChallenge.json?.decisionId === stepUpDecisionId);
+
+    // A challenge minted for THIS decision, answered against ANOTHER decision: the
+    // stored binding refuses before any cryptography runs, and leaves the challenge
+    // unconsumed (the legitimate answer below still succeeds).
+    const secondStepUp = await req("POST", "/v1/decisions/evaluate", {
+      token: KEYS.operator, body: { identityRef: suIdentity, deviceRef: suDevice, workflowKey: "clinical-session" },
+    });
+    const misbound = await req("POST", `/v1/decisions/${secondStepUp.json?.decision?.decisionId}/step-up`, {
+      token: KEYS.operator,
+      body: { challengeId: decisionChallenge.json.challengeId, assertion: authenticator.assertion(decisionChallenge.json.publicKey.challenge, { signCount: 40 }) },
+    });
+    check("a challenge minted for one decision cannot answer another → 403",
+      secondStepUp.json?.decision?.decisionId !== stepUpDecisionId && misbound.status === 403);
+
+    // An unknown challenge id is refused the same way an expired one is — the store
+    // cannot tell them apart and neither can the caller.
+    const unknownChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.operator, body: { challengeId: "chal_nothing_here", assertion: authenticator.assertion("x") },
+    });
+    check("an unknown or expired challenge → 403 (fail closed, nothing recorded)", unknownChallenge.status === 403);
+
+    // A tampered signature: real challenge, real credential, one flipped byte.
+    const tamperedAnswer = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.operator,
+      body: { challengeId: decisionChallenge.json.challengeId, assertion: authenticator.assertion(decisionChallenge.json.publicKey.challenge, { signCount: 41, tamper: true }) },
+    });
+    check("a tampered assertion → 403 and no answer is recorded", tamperedAnswer.status === 403);
+    const stillUnanswered = await req("GET", `/v1/decisions/${stepUpDecisionId}`, { token: KEYS.operator });
+    check("...and the decision is STILL unanswered after the refusal", stillUnanswered.json?.stepUp === null);
+
+    // THE ANSWER. A fresh challenge (the tampered attempt consumed the last one),
+    // a genuinely signed UV assertion.
+    const goodChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
+    const answered = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.operator,
+      body: { challengeId: goodChallenge.json.challengeId, assertion: authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 50 }) },
+    });
+    check("a verified assertion ANSWERS the step_up → 200 with the recorded answer",
+      answered.status === 200 && answered.json?.stepUp?.decisionId === stepUpDecisionId &&
+      answered.json?.stepUp?.method === "webauthn" && typeof answered.json?.stepUp?.answeredAt === "string");
+    check("the answer carries a MASKED credential reference, never the credential",
+      typeof answered.json?.stepUp?.credentialReference === "string" &&
+      answered.json.stepUp.credentialReference.length < 16 &&
+      answered.json.stepUp.credentialReference !== authenticator.credIdStr);
+    check("the DECISION is not rewritten — a step_up stays a step_up",
+      answered.json?.decision?.outcome === "step_up");
+    const after = await req("GET", `/v1/decisions/${stepUpDecisionId}`, { token: KEYS.operator });
+    check("the decision detail now shows the step-up as answered",
+      after.json?.stepUp?.id === answered.json?.stepUp?.id && after.json?.stepUp?.decisionId === stepUpDecisionId);
+    check("the answer is about the identity the DECISION was about, not one the request named",
+      after.json?.stepUp?.identityId === after.json?.decision?.identityId);
+
+    // The audit chain carries it, and still verifies.
+    const auditAfter = await req("GET", "/v1/audit", { token: KEYS.auditor });
+    check("the audit chain records the step-up answer and still verifies",
+      auditAfter.json?.chain?.valid === true &&
+      (auditAfter.json?.events ?? []).some((e) => e.type === "decision.step_up_answered"));
+
+    // Replay, twice over: the challenge is single-use AND one answer per decision.
+    const replayedAnswer = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.operator,
+      body: { challengeId: goodChallenge.json.challengeId, assertion: authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 51 }) },
+    });
+    check("replaying the same challenge → 403 (single-use)", replayedAnswer.status === 403);
+    const secondCeremony = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
+    check("an already-answered decision cannot be challenged again → 409", secondCeremony.status === 409);
+  }
+
   // ── out-of-band enrollment authorization (secret-configured mode) ────────
   // The block above proved the DEMO mode honest. This proves the REAL mode closed:
   // with SIGNALGRID_ENROLLMENT_SECRET configured, a published demo owner token alone
@@ -1555,13 +1680,20 @@ async function run() {
       });
       check("gateway DENIES the deferred POST /v1/decisions/reconcile (404)", gwReconcile.status === 404);
 
-      // The gateway half of the assurance assertion. /v1/context needs a credential,
-      // and under this profile the demo bearers are refused — so the posture is read
-      // from the 401 body's absence rather than guessed: what IS provable here without
-      // a real IdP is that the fence keeps the step-up routes out of the served set,
-      // which is exactly what stepUpAnswerable derives from.
+      // The gateway half of the assurance assertion, REWRITTEN 2026-09-18 when the
+      // `step-up-answerability` gap closed. It used to read "no served route can answer
+      // a step_up (shadow mode, 404)" and that is no longer true, so the assertion says
+      // what IS true and pins the boundary between the two ceremonies: the DECISION-scoped
+      // answer is served (not 404 — it needs a credential, which under this profile the
+      // demo bearers cannot supply, so 401 is the honest result), while the app-workflows
+      // variant stays deferred with the integration catalog it belongs to.
       const gwStepUp = await fetch(`${BASE4}/v1/step-up/challenge`, { method: "POST" });
-      check("gateway: no served route can answer a step_up (shadow mode, 404)", gwStepUp.status === 404);
+      check("gateway: the app-workflows step-up challenge stays deferred (404)", gwStepUp.status === 404);
+      const gwAnswer = await fetch(`${BASE4}/v1/decisions/dec_x/step-up`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: "{}",
+      });
+      check("gateway: the DECISION step-up answer IS served — the gate's fourth verdict is actionable at launch (401, not 404)",
+        gwAnswer.status === 401);
 
       // The demo console is not served at the root either — it renders verdicts with
       // no enforced/observed label, which is Blocker 10 in rendered form.

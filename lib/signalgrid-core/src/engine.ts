@@ -43,6 +43,7 @@ import {
   type ResolutionPlan,
   type ResolutionSimulation,
   type SimulationResult,
+  type StepUpAnswer,
   type Tenant,
   type WebhookDelivery,
   type WebhookEndpoint,
@@ -285,6 +286,114 @@ export class SignalGridCore {
 
   verifyEvidence(token: string, snapshotId: string): boolean {
     return verifySnapshot(this.getSnapshot(token, snapshotId));
+  }
+
+  /**
+   * Record that a `step_up` was ANSWERED — the half of the verdict nothing served
+   * could express before. The gate returns `step_up`; without this the host app had
+   * no route to say the challenge was satisfied, and the deployment was in shadow
+   * mode by omission rather than by decision.
+   *
+   * The verification itself happens OUTSIDE this core, at the boundary, because it is
+   * I/O and cryptography (a WebAuthn assertion verified against an enrolled
+   * credential). What the core enforces is everything the caller could otherwise get
+   * wrong, and each one fails CLOSED:
+   *
+   *   · the decision must exist IN THIS TENANT (404 otherwise, the same 404 a
+   *     nonexistent id gets, so a cross-tenant probe learns nothing);
+   *   · its outcome must be `step_up` — answering an `allow` records a ceremony that
+   *     released nothing, and answering a `deny` or `restrict` would read as an
+   *     upgrade the evidence never supported (409);
+   *   · one answer per decision (409 on a second), so a replayed ceremony cannot
+   *     appear as two independent satisfactions of the same challenge.
+   *
+   * The decision is NOT rewritten. It was computed from evidence that is immutable
+   * and digested; the answer is a separate, chained record beside it.
+   */
+  answerStepUp(token: string, decisionId: string, verification: { credentialReference: string }): StepUpAnswer {
+    const principal = authenticate(this.store, token);
+    // Answering is part of the decision flow, so it takes the same permission the
+    // evaluation did — a read-only auditor can SEE the answer and never mint one.
+    authorize(principal, "decision:evaluate");
+    const decision = this.store.getDecision(principal.tenantId, decisionId);
+    if (!decision) {
+      throw new CoreError("not_found", `Decision "${decisionId}" not found.`, 404);
+    }
+    if (decision.outcome !== "step_up") {
+      throw new CoreError(
+        "validation",
+        `Decision "${decisionId}" answered "${decision.outcome}", not "step_up" — there is nothing to answer.`,
+        409,
+      );
+    }
+    if (this.store.getStepUpAnswer(principal.tenantId, decisionId)) {
+      throw new CoreError(
+        "validation",
+        `Decision "${decisionId}" already carries a step-up answer; a second ceremony must answer a fresh decision.`,
+        409,
+      );
+    }
+    const reference = verification.credentialReference.trim();
+    if (reference === "") {
+      throw new CoreError("validation", "A step-up answer must carry a credential reference.", 400);
+    }
+    const answeredAt = this.clock.now().toISOString();
+    const answer: StepUpAnswer = {
+      id: `sua_${decision.id}`,
+      tenantId: principal.tenantId,
+      decisionId: decision.id,
+      // From the DECISION, never from the request: the answer is about the identity
+      // the gate stepped up, whoever posted it.
+      identityId: decision.identityId,
+      method: "webauthn",
+      credentialReference: reference,
+      answeredAt,
+    };
+    this.store.putStepUpAnswer(answer);
+    appendAudit(this.store, {
+      tenantId: principal.tenantId,
+      type: "decision.step_up_answered",
+      actor: this.actorLabel(principal),
+      subject: answer.id,
+      summary:
+        `Step-up answered for decision ${decision.id} by a verified ${answer.method} assertion ` +
+        `(credential ${reference}). The decision itself is unchanged.`,
+      references: [decision.id, answer.id],
+      recordedAt: answeredAt,
+    });
+    return answer;
+  }
+
+  /**
+   * The EXTERNAL refs of the subjects a decision was about.
+   *
+   * Exists so the step-up ceremony can bind itself to the decision instead of to
+   * something the caller typed: a WebAuthn credential is enrolled under an identity's
+   * external ref, and a route that took that ref from the request body would let a
+   * caller mint a challenge against one identity's credential for another identity's
+   * decision. Read-only, tenant-scoped, and 404 on a decision this tenant does not
+   * hold — the same 404 a nonexistent id gets.
+   */
+  decisionSubjectRefs(token: string, decisionId: string): { identityRef: string; deviceRef: string } {
+    const principal = authenticate(this.store, token);
+    authorize(principal, "decision:read");
+    const decision = this.store.getDecision(principal.tenantId, decisionId);
+    if (!decision) {
+      throw new CoreError("not_found", `Decision "${decisionId}" not found.`, 404);
+    }
+    const identity = this.store.getIdentity(principal.tenantId, decision.identityId);
+    const device = this.store.getDevice(principal.tenantId, decision.deviceId);
+    if (!identity || !device) {
+      throw new CoreError("not_found", `The subjects of decision "${decisionId}" are no longer held by this tenant.`, 404);
+    }
+    return { identityRef: identity.externalRef, deviceRef: device.externalRef };
+  }
+
+  /** The step-up answer recorded for a decision, or undefined if it is unanswered. */
+  getStepUpAnswer(token: string, decisionId: string): StepUpAnswer | undefined {
+    const principal = authenticate(this.store, token);
+    authorize(principal, "decision:read");
+    return this.store.getStepUpAnswer(principal.tenantId, decisionId);
   }
 
   listPolicies(token: string): Policy[] {

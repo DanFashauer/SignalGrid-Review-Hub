@@ -144,6 +144,17 @@ export const GA_ALLOWED_ROUTES: readonly { method: string; path: string }[] = [
   { method: "GET", path: "/v1/decisions/:id" },
   { method: "GET", path: "/v1/decisions/:id/evidence" },
   { method: "GET", path: "/v1/audit" },
+  // ANSWERING a step_up (the `step-up-answerability` gap, closed 2026-09-18). The
+  // gate returns four words and Limited GA could act on three: nothing served could
+  // carry a completed challenge back, so a deployment was in shadow mode by omission.
+  // These three are the whole ceremony and no more — enrollment, a challenge bound to
+  // ONE decision, and the verified answer. The app-workflows variants
+  // (POST /v1/step-up/challenge, POST /v1/app-workflows/complete-step-up) stay OFF the
+  // fence: they belong to the deferred integration catalog, not to the gate.
+  { method: "POST", path: "/v1/step-up/enroll/options" },
+  { method: "POST", path: "/v1/step-up/enroll/verify" },
+  { method: "POST", path: "/v1/decisions/:id/step-up/challenge" },
+  { method: "POST", path: "/v1/decisions/:id/step-up" },
   { method: "GET", path: "/v1/metrics" },
   // Launch wireframe screen 2 (connector setup/health) — read + fixture-sync
   // only. POST /sync runs the core's fixture pipeline; runFixtureSync throws on

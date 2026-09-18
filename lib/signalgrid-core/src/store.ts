@@ -13,6 +13,7 @@ import type {
   PolicyTest,
   PolicyVersion,
   RemediationAction,
+  StepUpAnswer,
   ResolutionConfig,
   Tenant,
   User,
@@ -95,6 +96,9 @@ export class MemoryStore {
   private readonly webhookEndpoints = new Map<string, WebhookEndpoint>();
   private readonly webhookDeliveries = new Map<string, WebhookDelivery>();
   private readonly remediations = new Map<string, RemediationAction>();
+  /** One answer per decision, keyed by decision id — so a second answer for the same
+   *  decision is a collision the caller is told about, not a silent second row. */
+  private readonly stepUpAnswers = new Map<string, StepUpAnswer>();
   private readonly resolutionConfigs = new Map<string, ResolutionConfig>();
   private readonly decisionSeq = new Map<string, number>();
   // Per tenant. `auditTail` deliberately not trimmed: seq must stay monotonic.
@@ -445,6 +449,19 @@ export class MemoryStore {
     return [...this.remediations.values()]
       .filter((row) => row.tenantId === tenantId)
       .sort((a, b) => cmpCodepoint(b.requestedAt, a.requestedAt));
+  }
+
+  // ── Step-up answers ───────────────────────────────────────────────────────
+  //
+  // Bounded by the decisions that raised them (one per decision, evicted with the
+  // decision order), so this collection can never outgrow the one knob.
+
+  putStepUpAnswer(answer: StepUpAnswer): void {
+    this.stepUpAnswers.set(`${answer.tenantId}::${answer.decisionId}`, answer);
+  }
+
+  getStepUpAnswer(tenantId: string, decisionId: string): StepUpAnswer | undefined {
+    return scoped(this.stepUpAnswers.get(`${tenantId}::${decisionId}`), tenantId);
   }
 
   // ── Resolution config ─────────────────────────────────────────────────────

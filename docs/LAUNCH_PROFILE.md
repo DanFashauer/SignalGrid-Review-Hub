@@ -146,7 +146,12 @@ and only a future decision record re-opens one.
 
 ## The gaps — read these before reading the launch set as readiness
 
-There are **4 declared gaps**: work a `launch` entry needs that does not exist yet.
+There are **3 declared gaps**: work a `launch` entry needs that does not exist yet.
+(It read **4** until 2026-09-18, when `step-up-answerability` was CLOSED rather than
+reworded: the gate's `step_up` verdict now has a launch route that answers it —
+`POST /v1/decisions/{id}/step-up`, a verified WebAuthn assertion bound to one
+decision — so the gap's `closedWhen` condition is met in code and the entry is gone.
+That is the only way this list ever loses an entry.)
 They are held as data in `GAPS`, not as prose, so the proof can count them and no
 document can quietly describe the launch set as complete — and since 2026-09-02
 `check-launch-profile.mjs` fails the build when this number and `GAPS.length`

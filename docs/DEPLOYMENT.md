@@ -100,7 +100,14 @@ part an attacker writes.
 | `PERIPHERAL_ACCESS_TOKEN` | Read-only token for the removable-media/peripheral-control connector. | unset (fixture mode) |
 | `DLP_ACCESS_TOKEN` | Read-only token for the data-protection/DLP posture connector. | unset (fixture mode) |
 
-**The ten `*_ACCESS_TOKEN` rows above describe library surfaces, not the served decision path.** Each connector family lives in `@workspace/integrations` and is exercised by its `proof:*` script; in this build `artifacts/api-server/src` does not import that package and no file under it reads any of the ten variables (measured 2026-09-06: `grep -rn "@workspace/integrations" artifacts/api-server/src --include=*.ts` → no output; `grep -rl <VAR> artifacts/api-server/src | wc -l` → 0 for all ten). Setting one of them alongside `SIGNALGRID_LIVE_INTEGRATIONS=true` therefore changes nothing the `/v1` API decides — neither a live read nor a fixture read runs there. Wiring a family into the served core is tracked as backlog work, not as a configuration step.
+**`GRAPH_ACCESS_TOKEN` is now one of the served decision path's inputs; the other nine `*_ACCESS_TOKEN` rows are still library surfaces.** The sentence here used to say the server imported `@workspace/integrations` at all — measured 2026-09-06, and true then. It stopped being true on 2026-09-18: `artifacts/api-server/src/lib/core.ts` imports `@workspace/integrations/graph` and `SIGNALGRID_CORE=estate` reads posture through `resolveGraphPostureConnector`, at boot and on every `SIGNALGRID_ESTATE_REFRESH_SECONDS` pass. Re-measured 2026-09-18:
+
+```
+grep -rn "@workspace/integrations" artifacts/api-server/src --include=*.ts   # → src/lib/core.ts
+grep -rl GRAPH_ACCESS_TOKEN artifacts/api-server/src | wc -l                 # → 0 (read via the resolver, not directly)
+```
+
+The second line is why the runbook gate follows the server's own import specifiers rather than its package dependencies: `GRAPH_ACCESS_TOKEN` is boot-read through `resolveGraphPostureConnector`, inside the `graph` subpath, and the nine other families' tokens are not reachable from the bundle at all. Setting one of THOSE nine alongside `SIGNALGRID_LIVE_INTEGRATIONS=true` still changes nothing the `/v1` API decides. Wiring another family into the served core remains backlog work, not a configuration step.
 
 ## Enterprise sign-in (OIDC) — gated
 
@@ -113,22 +120,41 @@ tenant-scoped principal. `alg:none` and HMAC (`HS*`) tokens are rejected outrigh
 keeps using the public-safe demo bearer keys and nothing here runs. Wiring it to a
 real Entra/Okta/Auth0 tenant is a one-time configuration step, no code change.
 
-## Read-only Microsoft Graph connector — gated
+## Read-only Microsoft Graph connector — gated, and WIRED
 
-> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `GRAPH_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
+> **Wired into the served `/v1` decision path since 2026-09-18, under `SIGNALGRID_CORE=estate`.** The line that stood here said the opposite, and it was true until that day; it is corrected rather than deleted because the correction is the useful part.
 
-The read-only Graph posture connector reads **users + managed devices** and
-normalizes them to SignalGrid's posture vocabulary. It is **read-only by
-construction** (only GET requests are issued) and **gated exactly like every
-other integration**: it makes live Graph calls only on `beta`/`prod` **and** with
-`SIGNALGRID_LIVE_INTEGRATIONS=true` **and** `GRAPH_ACCESS_TOKEN` set — otherwise it
-runs in offline **fixture mode**. So it is safe to stand up for evaluation with no
-tenant, and its normalization/pagination/error paths are proven offline in CI
-(`pnpm run proof:graph-connector`).
+The read-only Graph posture connector reads **users + managed devices** (and the
+Identity Protection risky-user list) and normalizes them to SignalGrid's posture
+vocabulary. It is **read-only by construction** — every path goes through a GET
+helper behind a read-only guard, so a non-GET request throws rather than ever
+mutating a tenant — and **gated exactly like every other integration**: live Graph
+calls happen only on tier `beta`/`prod` **and** with `SIGNALGRID_LIVE_INTEGRATIONS=true`
+**and** `GRAPH_ACCESS_TOKEN` set. Miss any one and the connector runs in offline
+**fixture mode**, and the connector's recorded `mode` — visible at `GET /v1/connectors`
+and behind `GET /v1/launch-status` — says which. So it is safe to stand up for
+evaluation with no tenant.
+
+**What the deployable image does with it.** With `SIGNALGRID_CORE=estate` the API
+reads posture through this connector once at boot, and again on each
+`SIGNALGRID_ESTATE_REFRESH_SECONDS` pass. `docker-compose.prod.yml` pins
+`SIGNALGRID_LIVE_INTEGRATIONS: "false"`, so that stack boots the estate core on the
+committed fixture dataset and records `mode: fixture`. Opening it is a deliberate
+edit to that line, on the `prod` tier, with a real token.
+
+**What is proven, and what is not.** `pnpm run proof:graph-connector` proves the
+normalization, pagination and error paths offline; `pnpm run proof:estate-core` proves
+an estate boots and decides from them; `pnpm run proof:estate-refresh` proves the
+re-read. The `test:api` suite additionally boots the BUILT image against a stub Graph
+on `127.0.0.1` and asserts the live path end to end — the reads were issued, every one
+of them a GET, carrying the configured bearer; the connector recorded `mode: live`;
+and with the tier gate closed the same configuration contacted the stub **zero** times.
+**No claim is made about a real tenant.** No Microsoft tenant has ever been read by
+this repository, and nothing here should be presented as if one had been.
 
 ## Post-exit reachability (carrier connectivity) — gated
 
-> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `CARRIER_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` imports only the `graph` subpath of `@workspace/integrations` (the estate posture read) and never reads `CARRIER_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
 
 Once a shared device leaves managed Wi-Fi, MDM "find/ring/lock" commands become
 opportunistic. The read-only **carrier reachability connector** reads per-SIM
@@ -144,7 +170,7 @@ otherwise fixture mode). Proven offline in CI (`pnpm run proof:carrier-reachabil
 
 ## EDR/EPP endpoint threat-state — gated
 
-> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `EDR_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` imports only the `graph` subpath of `@workspace/integrations` (the estate posture read) and never reads `EDR_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
 
 The vulnerability connector answers "what known CVEs does this device carry?";
 the read-only **EDR/EPP connector** answers the other half — "is this endpoint
@@ -166,7 +192,7 @@ the other dimensions by `@workspace/posture-composition`.
 
 ## Identity / SSO sign-in risk — gated
 
-> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `IDENTITY_RISK_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` imports only the `graph` subpath of `@workspace/integrations` (the estate posture read) and never reads `IDENTITY_RISK_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
 
 Every other dimension asks about the **device**; this one asks about the
 **person/session**: is the identity signing in actually who they claim, or is it
@@ -189,7 +215,7 @@ integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` +
 
 ## RTLS / badge-dwell physical custody — gated
 
-> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `RTLS_ACCESS_TOKEN` (RTLS is a deferred family; measured 2026-09-06, see the note under the environment table).
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` imports only the `graph` subpath of `@workspace/integrations` (the estate posture read) and never reads `RTLS_ACCESS_TOKEN` (RTLS is a deferred family; measured 2026-09-06, see the note under the environment table).
 
 The physical-plane signal that ties the cyber dimensions back to the two-plane
 custody model: **where is the shared device physically, and is its custody
@@ -213,7 +239,7 @@ integration (live only on `beta`/`prod` + `SIGNALGRID_LIVE_INTEGRATIONS=true` +
 
 ## Removable-media / peripheral control — gated
 
-> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `PERIPHERAL_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` imports only the `graph` subpath of `@workspace/integrations` (the estate posture read) and never reads `PERIPHERAL_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
 
 The data-exfiltration / malware-ingress surface: is an unauthorized or unencrypted
 removable device attached to the shared device? On a shared frontline (especially
@@ -237,7 +263,7 @@ the other dimensions by `@workspace/posture-composition`.
 
 ## Data-protection / DLP posture — gated
 
-> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` does not import `@workspace/integrations` and never reads `DLP_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
+> **Library surface, not wired into the served `/v1` decision path in this build.** Exercised by its `proof:*` script; `artifacts/api-server/src` imports only the `graph` subpath of `@workspace/integrations` (the estate posture read) and never reads `DLP_ACCESS_TOKEN` (measured 2026-09-06, see the note under the environment table).
 
 The peripheral-control dimension covers the hardware exfil surface (attached
 removable media); this one covers the **data exfil surface across every channel** —

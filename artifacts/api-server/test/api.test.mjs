@@ -2404,6 +2404,8 @@ async function run() {
     const PORT12 = 5325;
     const PORT13 = 5326;
     const STUB_PORT = 5327;
+    const PORT14 = 5328;
+    const GATED_STUB_PORT = 5329;
     const BASE12 = `http://localhost:${PORT12}/api`;
     // What the live transport actually put on the wire, recorded by the stub below.
     const graphStubSaw = [];
@@ -2535,6 +2537,73 @@ async function run() {
       liveServer.kill("SIGTERM");
       await exitOf(liveServer);
       await new Promise((r) => graphStub.close(r));
+    }
+
+    // ── The TIER GATE, asserted by a stub that must stay untouched ───────────
+    //
+    // The image can now read live. The other half of that sentence is what it will
+    // NOT do: live vendor calls are gated on tier beta/prod AND
+    // SIGNALGRID_LIVE_INTEGRATIONS=true AND a token — and the tier is the half nobody
+    // can set by accident. Here every live precondition is satisfied EXCEPT the tier,
+    // and the assertion is not merely that the connector records `fixture`: it is that
+    // the stub Graph recorded ZERO requests. A resolver that decided fixture AFTER
+    // calling out would pass a mode check and fail this one, and "no tenant was
+    // contacted" is the claim that actually matters to a customer.
+    {
+      const gatedSaw = [];
+      const gatedStub = netCreateHttpServer((httpReq, httpRes) => {
+        gatedSaw.push(`${httpReq.method} ${httpReq.url}`);
+        httpRes.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ value: [] }));
+      });
+      await new Promise((r) => gatedStub.listen(GATED_STUB_PORT, "127.0.0.1", r));
+      const gated = spawn("node", [serverEntry], {
+        env: estateEnv({
+          PORT: String(PORT14),
+          // SIGNALGRID_TIER left at its "dev" default — the one precondition missing.
+          SIGNALGRID_LIVE_INTEGRATIONS: "true",
+          GRAPH_ACCESS_TOKEN: "stub-graph-token-not-a-secret",
+          GRAPH_BASE_URL: `http://127.0.0.1:${GATED_STUB_PORT}`,
+        }),
+        stdio: ["ignore", "ignore", "inherit"],
+      });
+      try {
+        check("a below-beta estate server with every OTHER live precondition set still boots", await waitReady(PORT14));
+        const gatedConnectors = await fetch(`http://localhost:${PORT14}/api/v1/connectors`, {
+          headers: { authorization: `Bearer ${ESTATE_OWNER}` },
+        });
+        const gatedJson = await gatedConnectors.json().catch(() => null);
+        check("live mode is REFUSED without the tier gate — the connector records fixture, with a token and the live flag both set",
+          gatedJson?.connectors?.[0]?.mode === "fixture");
+        check("...and the tenant was never contacted: the stub Graph saw ZERO requests (the refusal happens before the wire, not after)",
+          gatedSaw.length === 0);
+        const gatedStatus = await fetch(`http://localhost:${PORT14}/api/v1/launch-status`, {
+          headers: { authorization: `Bearer ${ESTATE_OWNER}` },
+        });
+        const gatedStatusJson = await gatedStatus.json().catch(() => null);
+        check("...and launch-status says simulated, so the deployment cannot claim a posture the tier gate denied it",
+          gatedStatusJson?.families?.every((f) => f.status === "simulated") === true);
+      } finally {
+        gated.kill("SIGTERM");
+        await exitOf(gated);
+        await new Promise((r) => gatedStub.close(r));
+      }
+    }
+
+    // ── The BUILT ARTIFACT carries the live transport ────────────────────────
+    //
+    // The live Graph reads above prove it behaviourally. This reads the bundle itself,
+    // because the two failures are different: a bundle missing the transport would
+    // fail the block above loudly, while a bundle that kept the transport and lost the
+    // production ENDPOINT would pass it (the stub sets GRAPH_BASE_URL) and then address
+    // nothing in production. The default base URL has to be IN the artifact.
+    {
+      const bundle = await readFile(new URL("../dist/index.mjs", import.meta.url), "utf8");
+      check("the deployable bundle contains the production Graph endpoint as the connector's default base URL",
+        bundle.includes("https://graph.microsoft.com/v1.0"));
+      check("the deployable bundle contains the read-only Graph reads themselves (managedDevices, riskyUsers)",
+        bundle.includes("/deviceManagement/managedDevices") && bundle.includes("/identityProtection/riskyUsers"));
+      check("the deployable bundle contains the gated resolver, so live-vs-fixture is decided in the image and not around it",
+        bundle.includes("SIGNALGRID_LIVE_INTEGRATIONS") && bundle.includes("GRAPH_ACCESS_TOKEN"));
     }
 
     // Below the floor: a typo meant as minutes must not become a two-second hammer.

@@ -868,6 +868,9 @@ importers:
 
   lib/persistence:
     dependencies:
+      '@workspace/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@workspace/signalgrid-core':
         specifier: workspace:*
         version: link:../signalgrid-core

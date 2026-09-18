@@ -80,6 +80,7 @@
     "proof:estate-core": "tsx ./src/estate-core-proof.ts",
     "proof:estate-refresh": "tsx ./src/estate-refresh-proof.ts",
     "proof:secrets": "tsx ./src/secrets-proof.ts",
+    "proof:data-lifecycle": "tsx ./src/data-lifecycle-proof.ts",
     "proof:grid-config": "tsx ./src/grid-config-proof.ts",
     "proof:grid-coverage": "tsx ./src/grid-coverage-proof.ts",
     "proof:grid-lifecycle": "tsx ./src/grid-lifecycle-proof.ts",

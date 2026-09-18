@@ -3535,6 +3535,31 @@ The last `gap` row in the ground-truth map becomes `modeled`, and the derived re
 headline moves **94% → 100%** — derived, never typed (DR-036). Outreach was already open at
 94%; what changes is that the goal figure is now met on measurement rather than intent.
 
+**Corrected on the 2026-09-18 replay, by running the deriver rather than quoting this
+paragraph.** The sentence above was true when written and is not true now, and the reason
+has nothing to do with this change. Measured on the replay branch:
+
+```
+(a) runbook ground truth      100%   17 modeled / 0 partial / 0 gap of 17
+(b) launch surface, evidence    0%   evidence covers manifest 4afa60cf2fd5, tree is 6906d8d9ecc5
+(c) end-to-end                100%   scenarios 22/22 · live operations proven 8/8
+HEADLINE 0%  → OUTREACH CLOSED
+```
+
+Dimension (b) fail-closes to 0 because `artifacts/live-evidence/mac-run.json` was minted
+2026-09-13 against manifest fingerprint `4afa60cf2fd5` and the tree has since moved to
+`6906d8d9ecc5`. That drift is **already true of mainline** — `git show
+origin/SignalGrid_Alpha:artifacts/sync/live-sync-manifest.json` reports the same
+`6906d8d9ecc5` — so this record neither causes it nor can repair it: only the Mac lane can
+re-mint, via `SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence`,
+which refuses on CI by design.
+
+So what this record actually moves is dimension **(a) 94% → 100%** and the end-to-end
+scenario count, and the HEADLINE stays whatever (b) allows until the Mac re-mints. The
+original paragraph is kept above rather than rewritten, because a decision record that
+quietly edits its own predictions to match the outcome is not a record. The prediction was
+sound; the evidence went stale underneath it.
+
 **What does not change.** The verdict enum, the determinism invariant, the Decision Envelope,
 golden rules 1–4, the launch profile, the launch-claims gate and the publication boundary.
 Building is not claiming (DR-021 §2): the deferred families this journey drives stay deferred,

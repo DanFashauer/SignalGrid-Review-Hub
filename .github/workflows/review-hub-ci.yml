@@ -352,6 +352,8 @@ jobs:
         run: pnpm run proof:mdm-profile
       - name: "Proof — graph-wire (throttling, 5xx, auth, malformed bodies fail closed)"
         run: pnpm run proof:graph-wire
+      - name: "Proof: estate-core (a customer estate boots a core; no allow on unread facts)"
+        run: pnpm run proof:estate-core
       - name: "Assessor package (links/commands an external reviewer follows)"
         run: node scripts/check-assessor-package.mjs
       - name: OpenAPI validity (the published contract parses as OpenAPI)

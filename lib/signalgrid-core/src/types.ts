@@ -121,7 +121,10 @@ export interface Workflow {
 // ── Connector (fixture-only, read-only) ──────────────────────────────────────
 
 export type ConnectorKind = "microsoft-entra-intune" | "dockbridge-custody" | "wfm-shift";
-export type ConnectorMode = "fixture";
+/** `fixture`: synthetic posture committed to the repo. `live`: posture a caller
+ *  fetched from a real read-only source and handed to the core — the core itself
+ *  never performs I/O, in either mode. */
+export type ConnectorMode = "fixture" | "live";
 export type ConnectorStatus = "healthy" | "degraded" | "never_synced";
 
 /**

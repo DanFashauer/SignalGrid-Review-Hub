@@ -328,16 +328,24 @@ itself.
 
 ## What this deployment decides about
 
-Be precise about the decision core this stack serves: the API boots the
-demo-seeded core (`artifacts/api-server/src/lib/core.ts:32` —
-`SignalGridCore.demo()`), whose only constructor path is the demo factory with
-a fixed clock (`lib/signalgrid-core/src/engine.ts:51,92`). The
-`shared-device-gateway` profile fences off the demo *surfaces* (credential
-dispenser, simulator, demo bearers), but the tenants, identities, and devices
-the core evaluates are still the seeded fixtures — a customer's own directory
-and fleet are not yet wired in. That gap is declared mechanically in
-`scripts/launch-profile.mjs` (GAPS: `non-demo-core-constructor`) and closes
-when the served core stops being `SignalGridCore.demo()`.
+Be precise about the decision core this stack serves. By default the API boots
+the demo-seeded core (`artifacts/api-server/src/lib/core.ts:80` —
+`SignalGridCore.demo()`, a fixed clock and the public-safe seed,
+`lib/signalgrid-core/src/engine.ts:111`). Set `SIGNALGRID_CORE=estate` and the
+same process instead boots `SignalGridCore.fromEstate()`
+(`lib/signalgrid-core/src/engine.ts:99`, `lib/signalgrid-core/src/estate.ts`):
+your own tenant (`SIGNALGRID_ESTATE_TENANT`), your own bearer tokens
+(`SIGNALGRID_ESTATE_OWNER_TOKEN`, optional `SIGNALGRID_ESTATE_OPERATOR_TOKEN`),
+and identities/devices read ONCE at boot through the read-only Graph posture
+connector — live only under the usual gate (beta/prod tier,
+`SIGNALGRID_LIVE_INTEGRATIONS=true`, a read-only `GRAPH_ACCESS_TOKEN`),
+otherwise the committed fixture dataset, with the connector's recorded mode
+saying which. Facts Graph does not read (encryption, OS support) stay unknown,
+so `allow` never fires on them; a malformed estate setting refuses to boot
+rather than falling back to the demo core. What remains open is declared
+mechanically in `scripts/launch-profile.mjs` (GAPS: `non-demo-core-constructor`):
+the demo core is still the default, there is no posture refresh loop, and the
+`shared-device-gateway` profile still fences the demo *surfaces*.
 
 ## How it's validated
 

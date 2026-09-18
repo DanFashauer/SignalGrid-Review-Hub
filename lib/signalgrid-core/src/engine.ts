@@ -1,5 +1,6 @@
 import { assertSameTenant, authenticate, authorize } from "./auth";
-import { runFixtureSync, type FixturePostureRecord } from "./connector";
+import { runFixtureSync, runPostureSync, type FixturePostureRecord } from "./connector";
+import { buildEstateStore, type EstateSpec } from "./estate";
 import { runDockSync, type DockCustodyRecord } from "./dock";
 import { runShiftSync, type ShiftContextRecord } from "./shift";
 import { evaluateDecision } from "./decision";
@@ -86,6 +87,24 @@ export class SignalGridCore {
     this.dockRecords = dockRecords;
     this.shiftRecords = shiftRecords;
     this.demoMode = demoMode;
+  }
+
+  /**
+   * Build a core around a CUSTOMER estate: its own tenant, its own principals,
+   * and subjects + posture the caller already read from a real source. The
+   * clock is the caller's too — a deployment passes wall time, a proof passes a
+   * fixed one — so the core stays a pure function of what it was handed. Not a
+   * demo core: `demoApiKeys()` refuses on it.
+   */
+  static fromEstate(clock: Clock, spec: EstateSpec, storeOptions?: { maxDecisionsPerTenant?: number }): SignalGridCore {
+    const built = buildEstateStore(clock, spec, storeOptions);
+    return new SignalGridCore(built.store, clock, { [built.connectorId]: built.postureRecords }, {}, {}, false);
+  }
+
+  /** Whether this core was built by `demo()`. Routes that publish demo bearers or
+   *  pre-mint demo decisions must ask this instead of assuming. */
+  isDemo(): boolean {
+    return this.demoMode;
   }
 
   /** Build a core preloaded with the deterministic public-safe demo seed. */
@@ -271,7 +290,12 @@ export class SignalGridCore {
       return runShiftSync(this.store, this.clock, connector, shift);
     }
     const records = this.fixtureRecords[connector.id] ?? [];
-    return runFixtureSync(this.store, this.clock, connector, records);
+    // A live-mode connector replays the posture it was BUILT with; nothing here
+    // reaches a network. `runFixtureSync` keeps refusing non-fixture modes for
+    // the public-safe demo core, where every connector is a fixture anyway.
+    return connector.mode === "live"
+      ? runPostureSync(this.store, this.clock, connector, records)
+      : runFixtureSync(this.store, this.clock, connector, records);
   }
 
   /**

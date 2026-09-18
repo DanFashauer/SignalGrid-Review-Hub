@@ -337,6 +337,10 @@ const STEPS = [
   // Sibling of NaN fail-open: guards the BOUND, not the timestamp.
   { name: "Posed-bound self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-posed-bounds.mjs", "--self-test"] },
   { name: "Posed bounds (a caller-posed numeric bound is never read with ??)", cmd: ["node", "scripts/check-posed-bounds.mjs"] },
+  // A workspace dependency cycle is an infinite symlink loop on disk; the Mac's
+  // recursive readdir followed one until ENAMETOOLONG (#819). Refused at the manifest.
+  { name: "Workspace-cycles self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-workspace-cycles.mjs", "--self-test"] },
+  { name: "Workspace cycles (no workspace package depends on itself through any chain)", cmd: ["node", "scripts/check-workspace-cycles.mjs"] },
   // Third sibling: NaN fail-open guards the TIMESTAMP, posed-bounds guards the BOUND,
   // this one guards the RULE — that only one body decides whether a future sighting
   // is evidence of freshness, and that every copy that stays local says why.

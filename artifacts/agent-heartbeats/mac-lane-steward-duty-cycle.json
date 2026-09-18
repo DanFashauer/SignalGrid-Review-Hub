@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-18T14:25:09.087Z",
-  "result": "acted: readiness reads 0% because live evidence is 5.5d old (minted 2026-09-13T02:55Z) and both cloud->mac refresh asks are unread; the Mac tick heartbeats 'quiet' every ~25 min (last firedAt 2026-09-18T14:22Z) and never acks or re-mints by design, so the re-mint was queued as a sim request the tick executes unattended (PR #842, artifacts/sim-requests/2026-09-18-evidence-remint-readiness-zero.json, merges on green). No new mac/* branch, no new sim result, no cloud-addressed mail. Owner NOT escalated (tick is live)."
+  "firedAt": "2026-09-18T15:29:22.741Z",
+  "result": "acted: the queued evidence re-mint ran unattended on the Mac tick (result on mac/tick-20260918T144215Z, evidence passed, mintedAt 2026-09-18T14:52Z, manifest 6906d8d9); its PR #844 went red on the surface-coverage gate (tick commits a result file without re-deriving the page) — fixed on the branch and merged at 47aee557; readiness headline 94% OUTREACH OPEN; #846 open (tick re-derives the page itself; shared surface scripts/mac/lane-tick.sh — send op follows once merged). Tick last firedAt 2026-09-18T15:11Z, live evidence 0d old, no cloud-addressed mail, owner NOT escalated."
 }

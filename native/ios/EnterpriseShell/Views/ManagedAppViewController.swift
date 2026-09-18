@@ -31,7 +31,10 @@ final class ManagedAppViewController: UIViewController {
     }()
     private let progress = UIActivityIndicatorView(style: .medium)
 
-    init(app: EnterpriseApp, url: URL, allowedDomains: [String]? = nil, allowCopyPaste: Bool = true) {
+    /// `allowCopyPaste` defaults to FALSE. It was `true`, so any call site that simply did not
+    /// pass the argument got the permissive answer — the restriction was opt-in at the very
+    /// place it is meant to be enforced. The restrictive default is the safe one to forget.
+    init(app: EnterpriseApp, url: URL, allowedDomains: [String]? = nil, allowCopyPaste: Bool = false) {
         self.app = app
         self.url = url
         self.allowedDomains = allowedDomains

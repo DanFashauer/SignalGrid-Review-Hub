@@ -134,7 +134,7 @@ lone repairs into unreachable code).
       optional on every carrier and Swift's decoder ignores unknown keys, so the current
       apps decode the new payload correctly today — they simply cannot yet SHOW the stamp. Lane: mobile-native-engineer.
 
-- [ ] **A webhook WRITE route and its validation are one change, not two.**
+- [x] **A webhook WRITE route and its validation are one change, not two.**
       Opened as "should `CreateWebhookSchema`/`UpdateWebhookSchema` be `.strict()`?" and
       deferred once as "a breaking client contract change". **Both halves of that framing
       were wrong, and measuring settled it.** There is no client contract to break:
@@ -160,6 +160,26 @@ lone repairs into unreachable code).
       proven by a proof and reachable by nothing, and it leaves the next reader believing
       a boundary is defended when the boundary does not exist yet. The trap is marked at
       both call sites and on both schemas instead. Lane: security-engineer.
+      **DONE 2026-09-18 (validation half; the ROUTE stays an owner decision).** The premise the
+      deferral rested on was re-measured and is false for one of the two functions:
+      `createWebhook` has NINE callers (`scripts/src/webhooks-proof.ts` x8,
+      `scripts/src/emit-gate-proof.ts` x1), every one casting `as never` — which is exactly
+      how a type-system URL becomes a runtime string — and the `url` they store is what the
+      delivery path POSTs to. So the boundary is live today and no longer waits on a route:
+      `CreateWebhookSchema.parse` / `UpdateWebhookSchema.parse` at the top of each function
+      (`lib/integrations/src/integrations/webhooks/store.ts`), THEN `.strict()` on both
+      schemas (`./types.ts`) — in that order, for the reason this row gives.
+      The ROUTE is left open deliberately, and not for the old reason: `artifacts/api-server`
+      serves `GET /v1/webhooks` from `core.listWebhookEndpoints`, which is
+      `lib/signalgrid-core`'s webhook store — a DIFFERENT store from this module. A
+      `POST /v1/webhooks` over this module would read and write different stores on one path;
+      over the core's store it would not reach these functions at all. Which store the write
+      surface belongs to, and its launch-profile classification, is a product-surface call for
+      the owner, not something to pick while closing a validation row.
+      Check: `pnpm run proof:webhooks` 5b-BOUNDARY — ten assertions covering the parse (non-URL,
+      empty name, empty events), strictness (`secrets` for `secret`, `state` for `status`,
+      misspelled `rotateSecret`), parse-before-lookup, and two positive controls; removing the
+      parse fails four, removing `.strict()` fails four others (both verified).
 
 - [ ] **Mirror `reconcileDecisions` into Swift (intake row 51 follow-through).**
       `lib/signalgrid-core/src/continuity.ts` answers which decision wins when a device

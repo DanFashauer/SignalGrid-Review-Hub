@@ -39,7 +39,7 @@ import {
   WEBHOOK_URL_REFUSAL_REASONS,
 } from "@workspace/integrations/webhooks";
 import { SIGNING_SECRET_MISSING } from "@workspace/integrations/emit-gate/signing";
-import { createWebhook, getDeliveryLogs } from "@workspace/integrations/webhooks/store";
+import { createWebhook, getDeliveryLogs, updateWebhook } from "@workspace/integrations/webhooks/store";
 import { MemoryStore, deliverEvent, fixedClock } from "@workspace/signalgrid-core";
 
 let passed = 0;
@@ -318,6 +318,63 @@ check(
   "not permanent: a 503 is still retried (the predicate is not always-true)",
   isPermanentDeliveryError({ success: false, statusCode: 503 }) === false,
 );
+
+// 5b-BOUNDARY. THE WRITE FUNCTIONS PARSE THEIR INPUT.
+//
+// `createWebhook`/`updateWebhook` took a typed argument and never parsed one, so
+// `url: z.string().url()` was a URL in the type system and an arbitrary string at
+// runtime — and whatever landed in the store is what the delivery path POSTs to. That
+// is the SSRF shape. It was left open on a measurement ("both functions have ZERO
+// callers"); re-measured, `createWebhook` has nine, every one of them casting `as
+// never`, which is precisely how a type-system URL becomes a runtime string.
+//
+// Both halves are asserted because either alone is half a boundary: the PARSE (a
+// non-URL is refused) and STRICTNESS (a misspelled key is refused rather than
+// silently stripped). The misspellings chosen are the two that matter — `secrets` for
+// `secret` is an unsigned webhook, `rotateSecret` misspelled is a compromised secret
+// still live.
+{
+  const savedRedis = process.env.REDIS_URL;
+  delete process.env.REDIS_URL; // in-memory store; no network, no database
+  const refuses = async (fn: () => Promise<unknown>): Promise<boolean> =>
+    fn().then(() => false).catch(() => true);
+  try {
+    check("createWebhook REFUSES a non-URL `url` — the type says URL, the runtime now agrees",
+      await refuses(() => createWebhook({ name: "bad", url: "not-a-url", events: ["session.start"] } as never)));
+    check("createWebhook REFUSES an empty `name`",
+      await refuses(() => createWebhook({ name: "", url: "https://hooks.example.test/x", events: ["session.start"] } as never)));
+    check("createWebhook REFUSES an empty `events` list — a webhook subscribed to nothing is a stored URL and no more",
+      await refuses(() => createWebhook({ name: "n", url: "https://hooks.example.test/x", events: [] } as never)));
+    check("createWebhook REFUSES `secrets` for `secret` — stripped, it would have minted an UNSIGNED webhook",
+      await refuses(() => createWebhook({
+        name: "n", url: "https://hooks.example.test/x", events: ["session.start"], secrets: "s".repeat(40),
+      } as never)));
+    // The positive control: a well-formed create still succeeds, so the four above are
+    // not passing because the function refuses everything.
+    const good = await createWebhook({ name: "boundary-control", url: "https://hooks.example.test/ok", events: ["session.start"] } as never);
+    check("...and a well-formed create still SUCCEEDS (the four refusals above are not vacuous)", typeof good?.id === "string");
+
+    check("updateWebhook REFUSES a misspelled `rotateSecret` — stripped, the operator believes a compromised secret was retired",
+      await refuses(() => updateWebhook(good.id, { rotateSecrets: true } as never)));
+    check("updateWebhook REFUSES `state` for `status` — stripped, a webhook the operator disabled stays ENABLED",
+      await refuses(() => updateWebhook(good.id, { state: "disabled" } as never)));
+    // A NON-URL, not a bad SCHEME: zod's `.url()` is `new URL()`, which accepts
+    // `javascript:` happily. The scheme is the delivery path's job and it does it —
+    // `validateWebhookUrl` refuses anything but https and is driven above — so this
+    // assertion stays on what the schema is actually for, and does not pretend the
+    // parse is a second URL guard it is not.
+    check("updateWebhook REFUSES a non-URL `url`",
+      await refuses(() => updateWebhook(good.id, { url: "not a url at all" } as never)));
+    // The parse runs BEFORE the existence lookup: a malformed update must not answer
+    // `null` ("no such webhook") for an input that was never valid.
+    check("updateWebhook parses BEFORE looking the webhook up — a malformed update on an unknown id REFUSES, it does not answer null",
+      await refuses(() => updateWebhook("no-such-webhook", { rotateSecrets: true } as never)));
+    const updated = await updateWebhook(good.id, { status: "disabled" });
+    check("...and a well-formed update still SUCCEEDS", updated?.status === "disabled");
+  } finally {
+    if (savedRedis === undefined) delete process.env.REDIS_URL; else process.env.REDIS_URL = savedRedis;
+  }
+}
 
 // 5c. END TO END at dev tier, against the real in-memory store. This is the
 //     before-state above, measured.

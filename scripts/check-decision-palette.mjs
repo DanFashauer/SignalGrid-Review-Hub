@@ -132,11 +132,32 @@ function dsDeclarations(src) {
   });
   return out;
 }
+/**
+ * The operator theme, in BOTH appearances.
+ *
+ * It used to be flat `Color(red:green:blue:)` literals and dark-only, behind a
+ * `.preferredColorScheme(.dark)` pin (BUILD_BACKLOG review row 103). Now it declares
+ * light/dark pairs the way `DesignSystem.swift` does, so both notations are read: a
+ * flat literal is recorded as the SAME value in both modes, which is exactly what a
+ * flat literal means once the pin is gone — it renders that color on a light phone
+ * too, and is therefore measured against the light grounds and fails there. Dropping
+ * the old shape from this extractor instead would have made a regression to dark-only
+ * literals invisible.
+ */
 function themeDeclarations(src) {
   const out = [];
+  const TOKEN = "(Allow|StepUp|Restrict|Deny|Background|Panel|Card)(OnTint)?";
   src.split("\n").forEach((line, i) => {
-    const m = /static let sg(Allow|StepUp|Restrict|Deny|Background|Panel|Card)(OnTint)?\s*=\s*Color\(red:\s*([\d.]+),\s*green:\s*([\d.]+),\s*blue:\s*([\d.]+)\)/.exec(line);
-    if (m) out.push({ token: m[1] + (m[2] ?? ""), hex: swiftRgbToHex(+m[3], +m[4], +m[5]), line: i + 1 });
+    const pair = new RegExp(`static let sg${TOKEN}\\s*=\\s*dynamic\\(light:\\s*"([0-9A-Fa-f]{6})",\\s*dark:\\s*"([0-9A-Fa-f]{6})"\\)`).exec(line);
+    if (pair) {
+      out.push({ token: pair[1] + (pair[2] ?? ""), light: pair[3].toUpperCase(), dark: pair[4].toUpperCase(), line: i + 1 });
+      return;
+    }
+    const flat = new RegExp(`static let sg${TOKEN}\\s*=\\s*Color\\(red:\\s*([\\d.]+),\\s*green:\\s*([\\d.]+),\\s*blue:\\s*([\\d.]+)\\)`).exec(line);
+    if (flat) {
+      const hex = swiftRgbToHex(+flat[3], +flat[4], +flat[5]);
+      out.push({ token: flat[1] + (flat[2] ?? ""), light: hex, dark: hex, line: i + 1 });
+    }
   });
   return out;
 }
@@ -253,7 +274,8 @@ export function audit(files) {
 
   // iOS operator: flat colors vs ALL THREE rendered grounds + badge composite
   const th = themeDeclarations(files[IOS_OPERATOR] ?? "");
-  const thTok = (n) => th.find((x) => x.token === n)?.hex;
+  const MODES = ["dark", "light"];
+  const thTok = (n, mode) => th.find((x) => x.token === n)?.[mode];
   const thMap = { Allow: "allow", StepUp: "review", Deny: "deny", Restrict: "deny" };
   const onTintMap = { AllowOnTint: "allow", StepUpOnTint: "review", DenyOnTint: "deny" };
   let sawTheme = false;
@@ -261,15 +283,17 @@ export function audit(files) {
     const state = thMap[d.token];
     if (!state) continue;
     sawTheme = true;
-    if (!hexClose(d.hex, CANON.dark[state])) {
-      problems.push(`${IOS_OPERATOR}:${d.line} sg${d.token} is #${d.hex}, canonical dark ${state} is #${CANON.dark[state]}`);
-    }
-    for (const g of ["Background", "Panel", "Card"]) {
-      const gh = thTok(g);
-      if (!gh) continue;
-      const r = contrast(d.hex, gh);
-      table.push({ tree: IOS_OPERATOR, state: `${state} (sg${d.token})`, ground: g.toLowerCase(), ratio: r });
-      if (r < 4.5) problems.push(`${IOS_OPERATOR}:${d.line} sg${d.token} #${d.hex} vs sg${g} #${gh} measures ${r.toFixed(2)}:1 — below AA on a rendered ground`);
+    for (const mode of MODES) {
+      if (!hexClose(d[mode], CANON[mode][state])) {
+        problems.push(`${IOS_OPERATOR}:${d.line} sg${d.token} ${mode} is #${d[mode]}, canonical ${mode} ${state} is #${CANON[mode][state]}`);
+      }
+      for (const g of ["Background", "Panel", "Card"]) {
+        const gh = thTok(g, mode);
+        if (!gh) continue;
+        const r = contrast(d[mode], gh);
+        table.push({ tree: `${IOS_OPERATOR} (${mode})`, state: `${state} (sg${d.token})`, ground: g.toLowerCase(), ratio: r });
+        if (r < 4.5) problems.push(`${IOS_OPERATOR}:${d.line} sg${d.token} ${mode} #${d[mode]} vs sg${g} #${gh} measures ${r.toFixed(2)}:1 — below AA on a rendered ground`);
+      }
     }
   }
   // OutcomeBadge: fg = OnTint over 0.12 tint of the flat color, on every ground
@@ -279,15 +303,17 @@ export function audit(files) {
   })();
   if (badgeAlpha !== null) {
     for (const [tok, state] of Object.entries(onTintMap)) {
-      const fg = thTok(tok);
-      const base = thTok(tok.replace("OnTint", ""));
-      if (!fg || !base) { problems.push(`${IOS_OPERATOR}: missing sg${tok} — the tinted badge has no measured foreground for ${state}`); continue; }
-      for (const g of ["Background", "Panel", "Card"]) {
-        const gh = thTok(g);
-        if (!gh) continue;
-        const r = contrast(fg, composite(base, badgeAlpha, gh));
-        table.push({ tree: IOS_OPERATOR, state: `badge ${state}`, ground: `${Math.round(badgeAlpha * 100)}% tint over ${g.toLowerCase()}`, ratio: r });
-        if (r < 4.5) problems.push(`${IOS_OPERATOR}: badge ${state} on-tint over ${badgeAlpha} tint on sg${g} measures ${r.toFixed(2)}:1 — below AA`);
+      for (const mode of MODES) {
+        const fg = thTok(tok, mode);
+        const base = thTok(tok.replace("OnTint", ""), mode);
+        if (!fg || !base) { problems.push(`${IOS_OPERATOR}: missing sg${tok} — the tinted badge has no measured foreground for ${state}`); continue; }
+        for (const g of ["Background", "Panel", "Card"]) {
+          const gh = thTok(g, mode);
+          if (!gh) continue;
+          const r = contrast(fg, composite(base, badgeAlpha, gh));
+          table.push({ tree: `${IOS_OPERATOR} (${mode})`, state: `badge ${state}`, ground: `${Math.round(badgeAlpha * 100)}% tint over ${g.toLowerCase()}`, ratio: r });
+          if (r < 4.5) problems.push(`${IOS_OPERATOR}: badge ${state} ${mode} on-tint over ${badgeAlpha} tint on sg${g} measures ${r.toFixed(2)}:1 — below AA`);
+        }
       }
     }
   } else if (sawTheme) {
@@ -428,6 +454,32 @@ function selfTest() {
   strayCss[CSS_TREES[4]] = files[CSS_TREES[4]] + "\n.text-deny { color: #ef4444; }\n";
   r = audit(strayCss);
   checks.push(["a verdict-named css class outside the token set fails", r.problems.some((x) => x.includes("second palette"))]);
+  // The operator theme went ADAPTIVE (BUILD_BACKLOG review row 103, 2026-09-18): the
+  // `.preferredColorScheme(.dark)` pin is gone, so a dark-only literal now renders on a
+  // light phone. These two anchor the shape that regression would take, not the regex.
+  {
+    const darkOnly = { ...files };
+    darkOnly[IOS_OPERATOR] = files[IOS_OPERATOR].replace(
+      'static let sgAllow = dynamic(light: "3F6B52", dark: "639779")',
+      "static let sgAllow = Color(red: 0.388, green: 0.592, blue: 0.475)",
+    );
+    const r1 = audit(darkOnly);
+    checks.push([
+      "a dark-only flat literal in the operator theme fails against the LIGHT grounds",
+      r1.problems.some((x) => x.includes("sgAllow") && x.includes("light")),
+    ]);
+    const forked = { ...files };
+    forked[IOS_OPERATOR] = files[IOS_OPERATOR].replace(
+      'static let sgDeny = dynamic(light: "8A3F3F", dark: "C67070")',
+      'static let sgDeny = dynamic(light: "A05A5A", dark: "C67070")',
+    );
+    const r2 = audit(forked);
+    checks.push([
+      "a LIGHT-side fork of deny (#A05A5A) is caught — parity is measured in both modes",
+      r2.problems.some((x) => x.includes("A05A5A")),
+    ]);
+  }
+
   // The ENTRY GUARD itself (F12, 2026-09-06). The suffix form ran this gate from any
   // entry whose filename ended with this one's — including a script that only imports
   // it. Needles are escaped, so this assertion is not itself a match.

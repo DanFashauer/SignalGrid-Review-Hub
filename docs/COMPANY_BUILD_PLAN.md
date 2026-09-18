@@ -691,7 +691,7 @@ earlier — that is the loop working, not a reason to soften the record.
     `:640`, `:682` and `:745` (`/v1/step-up/enroll/options`, `/enroll/verify`,
     `/challenge`, `/v1/app-workflows/complete-step-up`), with coverage beside
     them, LIVE UNDER REVIEW-DEMO AND NOT ON THE LIMITED GA FENCE — `GA_ALLOWED_ROUTES`
-    in `artifacts/api-server/src/lib/profile.ts(201)` lists no `/v1/step-up` path, and
+    in `artifacts/api-server/src/lib/profile.ts` lists no `/v1/step-up` path, and
     `lib/assurance.ts:52-55` reports `stepUpAnswerable` from exactly that fact. So
     the family ships as a demo surface and is not claimable as GA; building and
     claiming are different acts. What was unportable was the ENDPOINT SHAPE, not
@@ -990,7 +990,7 @@ earlier — that is the loop working, not a reason to soften the record.
     was wrong, for a reason worth keeping.
     `location-services` is a DEFERRED CONNECTOR FAMILY, and `location` and
     `location_certainty` are DEFERRED SIGNAL KINDS — all three verified in the
-    `deferred:` lists of `scripts/launch-profile.mjs(766)`, not inferred. **Zero
+    `deferred:` lists of `scripts/launch-profile.mjs`, not inferred. **Zero
     importers is the EXPECTED state of a deferred family's implementation**, not
     evidence that it is dead. It is unwired because the family has not shipped,
     which is the plan, not a defect.
@@ -2512,7 +2512,7 @@ earlier — that is the loop working, not a reason to soften the record.
     unguarded over a `Record<DecisionOutcome, number>`, and
     `lib/signalgrid-core/src/types.ts:557` documents that durable snapshot rows are
     cast with an unchecked `as`. `SignalGridCore.metrics()`
-    (`lib/signalgrid-core/src/engine.ts(633):418`) is the only caller and
+    (`lib/signalgrid-core/src/engine.ts:418`) is the only caller and
     `GET /v1/metrics` (`artifacts/api-server/src/routes/v1.ts:348`) is the served
     surface, so the result reaches an operator.
     MEASURED 2026-09-02 rather than reasoned, and the earlier wording overstated it:
@@ -2626,7 +2626,7 @@ earlier — that is the loop working, not a reason to soften the record.
 94. **The global limiter throttles `/healthz`, `/readyz` and `/metrics`.** — FIXED
     2026-08-25, api-contract-architect. Reproduced first, with
     `SIGNALGRID_GLOBAL_RATE_LIMIT=5`: `/api/healthz`, `/api/readyz` and `/metrics`
-    all returned 429 inside twelve requests. `artifacts/api-server/src/lib/profile.ts(201)` already keeps the two
+    all returned 429 inside twelve requests. `artifacts/api-server/src/lib/profile.ts` already keeps the two
     probes outside the GA fence on the reasoning that an orchestrator "would treat a
     fenced 404 as a dead instance and restart a working server" — a 429 lands in the
     same place, and it lands under load, which is when a false unhealthy verdict is
@@ -3454,7 +3454,7 @@ earlier — that is the loop working, not a reason to soften the record.
         literal address in the URL. A hostname that RESOLVES to an internal address
         still passes. The next paragraph says what closing that would cost.
     WHY THE DNS HALF IS STILL NOT BEING FIXED: `webhooks` sits in the DEFERRED list in
-    `scripts/launch-profile.mjs(766)`. The URL is set by a tenant admin rather than an
+    `scripts/launch-profile.mjs`. The URL is set by a tenant admin rather than an
     anonymous caller, which bounds who can aim it — it does not make the answer
     unreadable, and this entry used to claim it did.
     WHAT WOULD ACTUALLY CLOSE IT, so the next person does not re-derive it: resolve
@@ -4466,7 +4466,7 @@ earlier — that is the loop working, not a reason to soften the record.
     with nothing failing. The daily mutation sweep noticed on 2026-08-24 and
     reported four survivors. `check-ci-liveness.mjs` is deliberately fatal in CI and
     reported-only off it, so once the last successful sweep aged past 48 hours every
-    CI run went red — while `node scripts/preflight.mjs(745)` stayed green locally,
+    CI run went red — while `node scripts/preflight.mjs` stayed green locally,
     because that is precisely the asymmetry the gate is built on.
     THE GATES ALL WORKED. The sweep caught unfalsifiable guards; the liveness gate
     caught the sweep going dark; the liveness gate's local-versus-CI split is why a
@@ -4528,7 +4528,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 171. **The daily rot check watches a hand-picked tenth of the gate suite, and its
     own header called that the full suite.** — OPEN, sre. Found by reading
-    `.github/` rather than by a gate. `scripts/preflight.mjs(745)` registers the gates `node scripts/check-preflight-ci-parity.mjs` counts (327 on 2026-09-06)
+    `.github/` rather than by a gate. `scripts/preflight.mjs` registers the gates `node scripts/check-preflight-ci-parity.mjs` counts (327 on 2026-09-06)
     and `review-hub-ci.yml` runs every one per PR, kept in step by
     `check-preflight-ci-parity.mjs`. `scheduled-verification.yml` — the only thing
     watching the default branch BETWEEN pull requests — runs about ten named
@@ -4539,7 +4539,7 @@ earlier — that is the loop working, not a reason to soften the record.
     the prose four lines above the rename outlived it. The visible label got
     corrected and the comment did not.
     THE SELECTION ITSELF IS THE OPEN PART, and the obvious fix is wrong twice over.
-    Adding `node scripts/preflight.mjs(745)` to the daily job would fail every night:
+    Adding `node scripts/preflight.mjs` to the daily job would fail every night:
     `check-ci-liveness.mjs` is deliberately FATAL in CI when it cannot reach the
     Actions API, and this workflow's permissions are `contents: read` and
     `issues: write` with no `actions: read` — so the change would open a fresh
@@ -4762,7 +4762,7 @@ Runner-up: **benchmark-selection** (10 references, day-one-quiet 'unverified →
 
 ## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v5)
 
-Every claim below is checked against the `launch` class in scripts/launch-profile.mjs(766). Nothing deferred appears — which is why location, badges, custody, network, and threat signals are absent: they are real and proven in this repository, and they are not Limited GA.
+Every claim below is checked against the `launch` class in scripts/launch-profile.mjs. Nothing deferred appears — which is why location, badges, custody, network, and threat signals are absent: they are real and proven in this repository, and they are not Limited GA.
 
 ### 1. The one sentence
 

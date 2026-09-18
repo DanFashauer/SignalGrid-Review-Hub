@@ -4868,12 +4868,12 @@ Decision core (the verdict mechanism):
 4. lib/signalgrid-core/src/resolution.ts (576) — signal-to-assurance resolution; the file where 'unknown raises assurance, never lowers it' must hold.
 5. lib/signalgrid-core/src/evidence.ts (790) — mints the WHY behind /v1/decisions/{id}/evidence; the product's entire claim is that its answers are explainable.
 6. lib/signalgrid-core/src/store.ts (525) — in-memory store semantics behind every tenant-scoped read; a cross-tenant leak would live here.
-7. lib/signalgrid-simulator/src/decisionEngine.ts (336) — parity source the iOS port is byte-faithful to; a defect here ships on two platforms at once.
+7. lib/signalgrid-simulator/src/decisionEngine.ts (361) — parity source the iOS port is byte-faithful to; a defect here ships on two platforms at once.
 8. lib/posture-composition/src/compose.ts (80) — composes signal kinds into posture; tiny, but every launch signal passes through it.
 9. lib/posture-composition/src/adapters.ts (591) — maps connector output into composition; a silent mis-map fails open.
 
 Auth chain (bearer token to tenant principal):
-10. artifacts/api-server/src/middlewares/context.ts (198) — THE /v1 auth middleware; OIDC/demo-key fork; unread while neighbor rateLimit.ts was audited.
+10. artifacts/api-server/src/middlewares/context.ts (222) — THE /v1 auth middleware; OIDC/demo-key fork; unread while neighbor rateLimit.ts was audited.
 11. lib/enterprise-auth/src/jwt.ts (205) — token verification.
 12. lib/enterprise-auth/src/claims.ts (99) — claims-to-principal mapping; tenant derivation lives here.
 13. lib/enterprise-auth/src/jwks.ts (90) — key fetch/cache; wrong caching means accepting rotated-out keys.
@@ -4888,7 +4888,7 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (742) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (744) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (764) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (188) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

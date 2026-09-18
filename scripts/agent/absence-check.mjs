@@ -88,7 +88,10 @@ const trackedFiles = () => gitLines(["ls-files"]);
 /** Shape every probe returns, so a caller can never mistake "could not look" for "looked". */
 const probeResult = (hits, failed = false, why = null) => ({ hits, failed, why });
 
-function workflowFilesMentioning(needle) {
+/** `needles` is every spelling of the topic (see spellingVariants) — a workflow that
+ *  runs `check-decision-record-format.mjs` must answer a caller who typed it with
+ *  spaces. */
+function workflowFilesMentioning(needles) {
   const dir = join(REPO, ".github/workflows");
   // An absent workflow directory is not an absent workflow: this repository has 14 of
   // them, so "no directory" means we could not look, not that nothing builds the topic.
@@ -99,7 +102,8 @@ function workflowFilesMentioning(needle) {
   for (const f of readdirSync(dir)) {
     if (!/\.ya?ml$/.test(f)) continue;
     try {
-      if (readFileSync(join(dir, f), "utf8").toLowerCase().includes(needle)) hits.push(`.github/workflows/${f}`);
+      const body = readFileSync(join(dir, f), "utf8").toLowerCase();
+      if (needles.some((n) => body.includes(n))) hits.push(`.github/workflows/${f}`);
     } catch (err) {
       // An unreadable workflow is not evidence either way — which is exactly why it may
       // not be silently dropped into the "found nothing" pile.
@@ -123,8 +127,54 @@ export function excludedDir(pathspec) {
   return String(pathspec).replace(/^:!/, "").replace(/\/\*{1,2}$/, "").replace(/\/$/, "").toLowerCase();
 }
 
+/**
+ * Every SPELLING of one topic, because a probe that tries one spelling is the same bug
+ * this file exists to prevent, wearing its third mask.
+ *
+ * THE FAILURE, reproduced 2026-09-14. `check:absence "decision record format"` returned
+ * CORROBORATED across all four probes — "Safe to claim" — while
+ * `scripts/check-decision-record-format.mjs` sat in the tree and the CI workflow ran it.
+ * The same query hyphenated, `check:absence "decision-record-format"`, returns REFUTED.
+ * Nothing about the repository differed; only how the caller typed the topic. A human
+ * asks for "decision record format" and a filename spells it decision-record-format, so
+ * the natural phrasing was the one that could not match.
+ *
+ * That is this file's own thesis turned against it. The header says "presence needs one
+ * hit; absence needs exhaustion" and "One empty grep is evidence about that grep" — and
+ * then every probe passed the topic through as a single literal substring. Exhaustion
+ * over four probe SHAPES is not exhaustion if all four are blind to the same spelling.
+ *
+ * So the topic is expanded to its separator variants (space / hyphen / underscore / dot
+ * / concatenated), and camelCase is split into words first, so `decisionRecordFormat`,
+ * `decision_record_format` and `decision record format` are one query. A probe hits if
+ * ANY variant hits.
+ */
+export function spellingVariants(topic) {
+  const raw = String(topic).trim().toLowerCase();
+  // camelCase and PascalCase are word boundaries: decisionRecordFormat -> three words.
+  const words = String(topic)
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[\s\-_.\/]+/)
+    .filter(Boolean);
+  const out = new Set([raw]);
+  if (words.length > 1) {
+    for (const sep of [" ", "-", "_", "."]) out.add(words.join(sep));
+    // The CONCATENATED form only when it is long enough to be a real name. "a b" -> "ab"
+    // would match a substring of half the tree, and a probe that matches everything is
+    // as useless as one that matches nothing — it would turn every absence query into a
+    // refusal. Five characters is the shortest identifier worth calling a name here.
+    const glued = words.join("");
+    if (glued.length >= 5) out.add(glued);
+  }
+  return [...out].filter(Boolean);
+}
+
 export function probeSpecs(topic) {
+  const variants = spellingVariants(topic);
   const t = String(topic).toLowerCase();
+  const anyVariant = (hay) => variants.some((v) => hay.includes(v));
   return [
     {
       id: "filename",
@@ -132,7 +182,7 @@ export function probeSpecs(topic) {
       how: "a tracked FILE OR DIRECTORY named for it",
       run: () => {
         const r = trackedFiles();
-        return probeResult(r.lines.filter((f) => f.toLowerCase().includes(t)), r.failed, r.why);
+        return probeResult(r.lines.filter((f) => anyVariant(f.toLowerCase())), r.failed, r.why);
       },
     },
     {
@@ -141,14 +191,18 @@ export function probeSpecs(topic) {
       how: `a tracked file whose EXTENSION is it (.${t})`,
       run: () => {
         const r = trackedFiles();
-        return probeResult(r.lines.filter((f) => f.toLowerCase().endsWith(`.${t}`)), r.failed, r.why);
+        return probeResult(
+          r.lines.filter((f) => variants.some((v) => f.toLowerCase().endsWith(`.${v}`))),
+          r.failed,
+          r.why,
+        );
       },
     },
     {
       id: "ci",
       strength: "strong",
       how: "a CI WORKFLOW that builds or tests it",
-      run: () => workflowFilesMentioning(t),
+      run: () => workflowFilesMentioning(variants),
     },
     {
       id: "content",
@@ -187,7 +241,8 @@ export function probeSpecs(topic) {
       // Any other non-zero exit (or a git that will not spawn) is a probe that could
       // not run, and must push the verdict toward inconclusive.
       run: () => {
-        const r = gitLines(["grep", "-lIi", "-e", String(topic), "--", ...CONTENT_EXCLUSIONS], { emptyStatus: 1 });
+        const patternArgs = variants.flatMap((v) => ["-e", v]);
+        const r = gitLines(["grep", "-lIi", ...patternArgs, "--", ...CONTENT_EXCLUSIONS], { emptyStatus: 1 });
         return probeResult(r.lines, r.failed, r.why);
       },
     },
@@ -279,11 +334,54 @@ function selfTest() {
       !contentSpec.exclusions.some((e) => ["docs", "doc", "documentation"].includes(excludedDir(e))),
   ]);
 
-  const prose = probeSpecs("retired label").map((sp) => ({ ...sp, ...sp.run() }));
+  // THE TOPIC HERE CHANGED FROM "retired label" TO "phantom custody" ON 2026-09-14,
+  // and the reason belongs next to the assertion rather than in a commit message.
+  // Spelling-variant expansion (see spellingVariants) made "retired label" match
+  // `docs/agent/launch-claims-retired-labels-ceiling.json` through the variant
+  // `retired-label`, so the verdict escalated inconclusive -> refuted and this case
+  // went red. That hit is CORRECT — a file named for retired labels is a file about
+  // retired labels, and the old miss was the substring blindness this expansion fixes.
+  // But the case exists to guard a property that is still live and still worth
+  // guarding: a topic that exists ONLY in prose must reach INCONCLUSIVE, never
+  // CORROBORATED, and its evidence must come from docs/. So the property is kept
+  // verbatim and the topic is replaced with one that is genuinely prose-only under
+  // every variant. Weakening the assertion to fit the new behaviour would have been
+  // the test rewriting itself to agree with the change it was there to catch.
+  const prose = probeSpecs("phantom custody").map((sp) => ({ ...sp, ...sp.run() }));
   const contentHits = prose.find((r) => r.id === "content").hits;
   checks.push([
     "LIVE: a prose topic is INCONCLUSIVE, and the evidence comes from docs/ — not from this file quoting itself",
     classify(prose) === "inconclusive" && contentHits.some((f) => String(f).startsWith("docs/")),
+  ]);
+
+  // SPELLING VARIANTS — the fail-open this expansion closes, asserted live.
+  //
+  // Reproduced 2026-09-14: `check:absence "decision record format"` returned
+  // CORROBORATED ("Safe to claim") while scripts/check-decision-record-format.mjs was
+  // tracked and a workflow ran it. Hyphenated, the same query returned REFUTED. The
+  // repository did not differ; only the caller's spelling did, and the natural human
+  // phrasing was the one that could not match.
+  const vars = spellingVariants("decision record format");
+  checks.push([
+    "spellingVariants joins the words with every separator, and concatenated",
+    ["decision record format", "decision-record-format", "decision_record_format", "decisionrecordformat"].every((v) =>
+      vars.includes(v),
+    ),
+  ]);
+  checks.push([
+    "camelCase is split into words, so decisionRecordFormat is the same query",
+    spellingVariants("decisionRecordFormat").includes("decision-record-format"),
+  ]);
+  checks.push([
+    "LIVE: the spaced spelling of a tracked, hyphenated filename is REFUTED, not corroborated",
+    classify(probeSpecs("decision record format").map((sp) => ({ ...sp, ...sp.run() }))) === "refuted",
+  ]);
+  // …and the expansion must not become a rubber stamp. Gluing two short words would
+  // make a substring that matches half the tree, so the concatenated form is only
+  // offered when it is long enough to be a real name.
+  checks.push([
+    "a short topic is NOT concatenated into a promiscuous substring",
+    !spellingVariants("a b").includes("ab") && spellingVariants("a b").includes("a-b"),
   ]);
 
   const fed = probeSpecs("fedramp").map((s) => ({ ...s, ...s.run() }));

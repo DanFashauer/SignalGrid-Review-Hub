@@ -52,7 +52,42 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-14 21:20Z (mac lane, latest) - DR-043 ITEM (d) IS COMPLETE: BOTH POLICY ROWS
+LAST TOUCHED: 2026-09-17 21:20Z (cloud lane, latest) - A LONG MERGE-AND-BUILD SESSION.
+              MEASURED, not recalled: `29` pull requests merged on 2026-09-17 and `27` still open.
+              The open count barely moved (30 -> 27) and that is the honest shape of it: much of what
+              merged was lane mail and heartbeats opened and landed in the same breath, and the OLDER
+              backlog (#724, #730, #745, #782, #729, #723, #758, #755, #686, #531, #725, #753, and
+              eight dependabot bumps) is still sitting there, most of it now conflicted because
+              mainline moved. What actually matters out of the session:
+              THE MAC COLUMN WAS NEVER A MAC PROBLEM. `PR — Mac-only checks` had been red on
+              essentially every PR for days and was blamed first on a firewall, then on Node drift.
+              Both wrong, both retracted. #791's drop legibility made the gate name itself:
+              `dropped=144/300, first: ECONNRESET`. The load harness opened all 300 connections at
+              once, so the kernel's accept queue reset 144 of them before Express saw them - the
+              limiter never ran (`429s=0`), and `allowed=156` is exactly `300 - 144`. One failure
+              read as five. Fixed in #804 by bounding the burst to 32 in flight, which is what the
+              assertion was always named for; CONFIRMED GREEN on the real macOS runner, twice.
+              The somaxconn=128 mechanism remains INFERENCE - no macOS host here - and a passing
+              check does not turn an inference into a measurement.
+              CASCADE JOINS 2, 3 AND 4 ARE IN. Join 4 (#807, `lib/signalgrid-core/src/verification.ts`)
+              answers "monitor the fix or jump in": `unobserved` is NOT `cleared`, an unapproved
+              remediation cannot have landed whatever the evidence says, and `dismissed` holds the
+              restriction without escalating. proof:remediation-verification 51/51, falsified by three
+              planted defects. The third falsification CORRECTED THE PROOF ITSELF - a self-test
+              asserted on a case its defect could not reach and passed WITH the defect planted.
+              THE SEAM HAD FOUR HOLES OF ONE SHAPE, all now documented in loop-state.mjs: worktree
+              naming, squash merges, hub aliases (#805), and mainline moving past a landed branch
+              (#810). Reported-unpushed went 13 -> 1, and the one that remains is correctly
+              unprovable: a squash applies the branch's DIFF, so a concurrently-edited file never
+              matches verbatim. Both fixes were falsified before being trusted.
+              OWNER-ONLY AND STILL OPEN: the "Default" ruleset targets `~ALL` branches with one rule,
+              copilot_code_review. That single scope both marks every branch protected - branch-prune's
+              dry run refuses all 72, `63 keep — branch protection` - and spawns the
+              github-advanced-security check that failed 7 of 9 times today with
+              `CAPIError: 400 The requested model is not supported`, thrown before any diff is read.
+              An earlier claim that this was a static misconfiguration was RETRACTED on #803: it
+              passes intermittently, which a wrong model cannot do.
+              PREVIOUSLY (2026-09-14 21:20Z, mac lane): DR-043 ITEM (d) IS COMPLETE: BOTH POLICY ROWS
               ARE IN THE CORE. Row 1 (removal suspends the session, CUSTODY_EXCEPTION) landed in #748.
               Row 2 - a legacy read for a strong-enrolled worker DENIES with CREDENTIAL_DOWNGRADE - is
               on #753 (head 8c7bcb80), carried by two new signal domains, enrollment_strength and
@@ -1173,7 +1208,7 @@ NEXT ACTION: cloud: (0) NOTHING ELSE IS THE BOTTLENECK - the eleven owner-gated 
    frozen" until 2026-09-02 — two days after this file's own STATE section
    recorded DR-021 — which is the contradiction a doc can hold against itself
    when no gate reads English.*
-3. **Nobody has used the product.** 144 proof gates and four native surfaces do
+3. **Nobody has used the product.** 147 proof gates and four native surfaces do
    not change that number. Only a conversation does.
 
 ---

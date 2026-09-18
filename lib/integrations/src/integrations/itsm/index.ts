@@ -7,3 +7,4 @@
 // deployment would inject.
 export * from "./resolve";
 export * from "./adapter";
+export * from "./change-draft";

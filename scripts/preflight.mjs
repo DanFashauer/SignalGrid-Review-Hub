@@ -612,6 +612,13 @@ const STEPS = [
   { name: "CycloneDX SBOM committed in sync", cmd: ["bash", "-c", "pnpm run sbom && git diff --exit-code -- artifacts/sbom/cyclonedx.json"] },
   { name: "Licence policy self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-licence-policy.mjs", "--self-test"] },
   { name: "Licence policy (every component's licence resolves to a declared class)", cmd: ["node", "scripts/check-licence-policy.mjs"] },
+  // BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a report-only
+  // watcher, cheaper than fetching every vendor page — pure date arithmetic
+  // against a committed manifest, no network call. REPORT-ONLY: the check
+  // itself always exits 0; only the self-test can fail (a broken comparison,
+  // never a stale link) a pull request.
+  { name: "Vendor-doc drift watch self-test (the comparison logic must actually work)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs", "--self-test"] },
+  { name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs"] },
 ];
 
 // Is the native web build structurally impossible here? Derived from the committed

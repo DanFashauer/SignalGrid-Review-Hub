@@ -616,6 +616,15 @@ jobs:
         run: node scripts/check-doc-line-counts.mjs --self-test
       - name: "Doc line counts (every path (N) figure matches the file it names)"
         run: node scripts/check-doc-line-counts.mjs
+      # BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a
+      # report-only watcher, cheaper than fetching every vendor page —
+      # pure date arithmetic against a committed manifest
+      # (docs/agent/VENDOR_DOC_MANIFEST.json), no network call. REPORT-ONLY:
+      # the check itself always exits 0; only the self-test can fail this job.
+      - name: "Vendor-doc drift watch self-test (the comparison logic must actually work)"
+        run: node scripts/check-vendor-doc-drift.mjs --self-test
+      - name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)"
+        run: node scripts/check-vendor-doc-drift.mjs
       # The review compose had no healthcheck on any service; "Up" meant the
       # process existed, not that the server answered.
       - name: "Compose healthcheck self-test (a planted port without a healthcheck must fail)"

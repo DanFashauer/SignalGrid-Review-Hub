@@ -93,6 +93,17 @@ export function authorize(input) {
 
   if (!Array.isArray(files)) return refuse("changed-file list is missing or not an array");
   if (files.length === 0) return refuse("changed-file list is empty — nothing to authorize, and an empty list would classify autonomous");
+  // A path this function cannot read literally is a path classifyDiff cannot match, and an
+  // unmatched path classifies AUTONOMOUS — unknown loosening the answer. `changedFiles`
+  // now passes `-z` so git never quotes, but authorize() is exported and pure, so it
+  // refuses the shape itself rather than trusting its only caller to keep the flag.
+  const unreadable = files.filter((f) => typeof f !== "string" || f === "" || f.startsWith('"') || f.includes("\\"));
+  if (unreadable.length > 0) {
+    return refuse(
+      "a changed-file path is quoted or escaped, so it cannot be matched against the owner-gated rules",
+      unreadable.map(String),
+    );
+  }
   if (typeof headSha !== "string" || !/^[0-9a-f]{7,40}$/i.test(headSha)) return refuse("headSha is missing or not a commit sha");
   if (typeof remoteTipSha !== "string" || !/^[0-9a-f]{7,40}$/i.test(remoteTipSha)) return refuse("the remote branch tip could not be read — refusing rather than assuming it has not moved");
   if (!Array.isArray(checks)) return refuse("check-run list is missing or not an array");
@@ -142,8 +153,17 @@ export function authorize(input) {
 
 function changedFiles(base, head) {
   // Three-dot: what THIS branch changed since it diverged, not what mainline moved on to.
-  const out = execFileSync("git", ["diff", "--name-only", `${base}...${head}`], { encoding: "utf8" });
-  return out.split("\n").map((s) => s.trim()).filter(Boolean);
+  //
+  // `-z` is load-bearing, not tidiness. WITHOUT it git QUOTES any path it considers
+  // unusual — a non-ASCII character, a quote, a backslash, a tab — and emits
+  // `"lib/signalgrid-core/src/d\303\251cision.ts"` instead of the path. classifyDiff
+  // prefix-matches, `"lib/...` does not start with `lib/`, and the diff classified
+  // AUTONOMOUS. Measured on this exact file before the fix: that path, the decision core
+  // itself, came back tier=autonomous and authorize() returned true. The one gate written
+  // so #719 could not happen again would have waved through a rename away from ASCII.
+  // With `-z` git emits raw NUL-separated paths and never quotes.
+  const out = execFileSync("git", ["diff", "-z", "--name-only", `${base}...${head}`], { encoding: "utf8" });
+  return out.split("\0").map((s) => s.trim()).filter(Boolean);
 }
 
 function remoteTip(branch) {
@@ -173,6 +193,23 @@ function selfTest() {
   t("a lib/ change is REFUSED (DECISION_PATH)",
     authorize({ ...ok, files: ["lib/signalgrid-core/src/decision.ts"] }).authorized === false);
   t("LICENSE is REFUSED (OWNER_RESERVED)", authorize({ ...ok, files: ["LICENSE"] }).authorized === false);
+
+  // L1b — the quoted-path fail-open, found by running the gate rather than reading it.
+  // `git diff --name-only` QUOTES a path it considers unusual, so the decision core under
+  // a non-ASCII name arrived as `"lib/.../d\303\251cision.ts"`, matched no owner-gated
+  // rule, classified AUTONOMOUS, and authorize() returned TRUE. Both halves are asserted:
+  // classifyDiff still cannot read the quoted form (that is git's job to not produce, now
+  // fixed with `-z`), and authorize REFUSES the shape regardless of how it was obtained.
+  const QUOTED_CORE = '"lib/signalgrid-core/src/d\\303\\251cision.ts"';
+  t("a QUOTED decision-core path is REFUSED, though classifyDiff calls it autonomous",
+    classifyDiff([QUOTED_CORE]).tier === "autonomous" &&
+      authorize({ ...ok, files: [QUOTED_CORE] }).authorized === false);
+  t("a QUOTED scripts/ path is REFUSED",
+    authorize({ ...ok, files: ['"scripts/caf\\303\\251.mjs"'] }).authorized === false);
+  t("a path containing a backslash is REFUSED (it cannot be matched literally)",
+    authorize({ ...ok, files: ["docs/od\\303\\251.md"] }).authorized === false);
+  t("an unquoted non-ASCII path is NOT refused by the quoting guard — the guard reads shape, not charset",
+    authorize({ ...ok, files: ["docs/café.md"] }).authorized === true);
   t("one owner-gated file taints an otherwise-clean diff",
     authorize({ ...ok, files: ["docs/GLOSSARY.md", "scripts/preflight.mjs"] }).authorized === false);
   t("a path-shape dodge does not launder scripts/ past the lock",

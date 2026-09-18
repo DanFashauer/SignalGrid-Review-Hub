@@ -1,9 +1,9 @@
 {
   "schema": "signalgrid-live-evidence/v1",
-  "manifestFingerprint": "4afa60cf2fd5551d7754c70a1b0a6e46df579bf0f1d89dcfd8a0bd53a8d936f9",
-  "manifestVersion": 78,
+  "manifestFingerprint": "6906d8d9ecc50ccd47322326ad67af4df62d2acae259eaa195c356c0059ec93b",
+  "manifestVersion": 79,
   "platform": "darwin",
-  "mintedAt": "2026-09-13T02:55:42.188Z",
+  "mintedAt": "2026-09-18T15:36:39.909Z",
   "preflightCoverage": {
     "nativeBuildExcluded": true,
     "target": "darwin-arm64",

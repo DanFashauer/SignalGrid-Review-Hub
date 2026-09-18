@@ -896,6 +896,9 @@ jobs:
       - name: API integration test
         run: pnpm run test:api
 
+      - name: Console unit tests (policyTests, facilityGraphLayout)
+        run: pnpm run test:console
+
       # The MCP server's own node:test suite — wire-visible tool/resource contract
       # and read-only annotations (incl. the deliberately not-read-only
       # bruno_collection_run). It was executed by no lane until 2026-09-02;

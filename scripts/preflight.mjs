@@ -503,6 +503,9 @@ const STEPS = [
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
   { name: "Proof: api-client-react (the web client's fetch boundary refuses what it cannot vouch for)", cmd: ["pnpm", "run", "proof:api-client-react"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
+  // The review console's own node:test suite (policy-test-set status, facility-graph layout);
+  // the test-execution gate refused these files while nothing reached them.
+  { name: "Console unit tests (policyTests, facilityGraphLayout)", cmd: ["pnpm", "run", "test:console"] },
   // The MCP server's own node:test suite (wire-visible tool/resource contract +
   // read-only annotations, incl. the not-read-only bruno_collection_run). It sat
   // executed by no lane until 2026-09-02; wired here and in CI beside the

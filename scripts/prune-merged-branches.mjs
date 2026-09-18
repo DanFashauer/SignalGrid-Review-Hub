@@ -36,6 +36,11 @@
 //   · any branch whose PR lookup ERRORED. A failed read is not an empty result.
 //     Deleting on a lookup failure would be the read-error-swallowing defect with
 //     an irreversible consequence.
+//   · any branch whose NAME is outside the ref grammar below. The API's strings
+//     reach the console and the job summary; a name carrying a control character,
+//     a quote or a markdown fragment would ride the escaping to the file. Such a
+//     name is refused UNREAD — not compared, not rendered, not deleted — and the
+//     report names it by length and tip sha instead.
 //
 // MERGED-NESS IS RE-DERIVED AT RUN TIME, never read from the committed snapshot.
 // `artifacts/sync/merged-branches-to-prune.txt` is a dated capture; branches move.
@@ -146,6 +151,16 @@ const isSameApiOrigin = (u) => {
  *  character that would otherwise be read as the start of a percent-escape. */
 const encodeRefPath = (ref) => ref.split("/").map(encodeURIComponent).join("/");
 
+/** The branch-name grammar this script will handle at all. git's own is wider; this
+ *  is the subset every branch this repository has ever carried (85 of 85 on
+ *  2026-09-18), and it excludes everything the escapers below exist to neutralise —
+ *  control characters, quotes, backticks, angle brackets, spaces — so an untrusted
+ *  name is refused at the door rather than escaped at the window. Also refuses what
+ *  git refuses: `..`, a component starting with `.`, a `.lock` suffix. */
+const REF_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._/+-]*[A-Za-z0-9])?$/;
+export const isRefName = (s) =>
+  typeof s === "string" && s.length <= 255 && REF_NAME.test(s) && !s.includes("..") && !s.includes("/.") && !s.endsWith(".lock");
+
 // The helpers are checked against the adversarial cases before they are used, for
 // the same reason the text-safety gate tests itself: an escaper that has quietly
 // stopped escaping produces output that looks exactly like correct output.
@@ -172,6 +187,25 @@ const encodeRefPath = (ref) => ref.split("/").map(encodeURIComponent).join("/");
     [oneLine("a\nb"), "a b"],
     [oneLine("a\r\n### Result\r\n- deleted: 0"), "a ### Result - deleted: 0"],
     [oneLine("plain"), "plain"],
+    // The name grammar: every shape this repository's branches take is accepted, and
+    // every shape the escapers exist for is refused before they are needed.
+    [isRefName("claude/check-workspace-cycles"), true],
+    [isRefName("lane/cloud-mail-20260918-052636Z"), true],
+    [isRefName("dependabot/npm_and_yarn/types/node-25.3.3"), true],
+    [isRefName("mac/native-ledger-2026-09-02"), true],
+    [isRefName("v1.2+build"), true],
+    [isRefName("a b"), false],
+    [isRefName("a\u001bb"), false], // an ANSI escape would reach the console log
+    [isRefName("a`b"), false],
+    [isRefName("it's"), false],
+    [isRefName("<b>"), false],
+    [isRefName("a..b"), false],
+    [isRefName("a/.b"), false],
+    [isRefName("x.lock"), false],
+    [isRefName("-lead"), false],
+    [isRefName("trail/"), false],
+    [isRefName(""), false],
+    [isRefName(undefined), false],
   ];
   const bad = cases.filter(([got, want]) => got !== want);
   if (bad.length > 0) {
@@ -232,6 +266,17 @@ const kept = []; // {branch, reason}
 
 for (const b of branches) {
   const name = b.name;
+  if (!isRefName(name)) {
+    // Refused UNREAD. The name itself is never rendered or compared; its length and
+    // tip sha identify it in the report. A grammar that has quietly widened is caught
+    // by the self-test above, not here.
+    const tip = typeof b.commit?.sha === "string" ? b.commit.sha.slice(0, 12) : "unknown";
+    kept.push({
+      name: `[name outside the ref grammar: ${String(name ?? "").length} chars, tip ${tip}]`,
+      reason: "name outside the accepted ref grammar — refused unread: not compared, not rendered, not deleted",
+    });
+    continue;
+  }
   // NOT `?? ""`. An empty sha renders the restore line as
   // `git push origin :refs/heads/'x'` — an empty SOURCE refspec, which git reads as
   // DELETE. The "paste this to undo the deletion" line would have deleted the branch

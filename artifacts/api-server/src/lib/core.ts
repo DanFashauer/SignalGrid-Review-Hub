@@ -33,7 +33,7 @@ function maxDecisionsPerTenantFromEnv(): number | undefined {
 /**
  * `SIGNALGRID_CORE` — which core this process serves.
  *
- *   - unset / "demo": the seeded public-safe demo core on a fixed clock (default,
+ *   - unset / empty / "demo": the seeded public-safe demo core on a fixed clock (default,
  *     unchanged).
  *   - "estate": a core built around THIS deployment's tenant, with subjects and
  *     posture read at boot through the Graph posture connector —
@@ -76,7 +76,11 @@ function estateSpecFromEnv(): Omit<EstateSpec, "subjects" | "connector"> {
 
 async function buildCore(): Promise<SignalGridCore> {
   const storeOptions = { maxDecisionsPerTenant: maxDecisionsPerTenantFromEnv() };
-  const mode = (process.env["SIGNALGRID_CORE"] ?? "demo").trim().toLowerCase();
+  // Unset AND empty both mean the default: the compose file passes every knob
+  // through as `${SIGNALGRID_CORE:-}`, so an operator who never set it hands the
+  // container "" — refusing that booted nothing at all (deploy-stack, 2026-09-18).
+  // Anything else non-empty that is not a known mode still refuses.
+  const mode = (process.env["SIGNALGRID_CORE"] ?? "").trim().toLowerCase() || "demo";
   if (mode === "demo") return SignalGridCore.demo(undefined, storeOptions);
   if (mode !== "estate") {
     throw new Error(`SIGNALGRID_CORE must be "demo" or "estate", got "${mode}" — refusing to start.`);

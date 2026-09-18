@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-18T16:24:43.986Z",
-  "result": "acted: a person on the Mac acked all seven cloud->mac messages (incl. the lane-tick.sh shared-surface notice) and sent mac-821-measures-100 — answered: mainline merged into #821 (f14bc058), coverage page re-derived, its duplicate sim request dropped, readiness re-measured 100% on the branch, PR body corrected; ack on #851 (merges on green). #846 (tick re-derives coverage page) merged 7ff0e520; duplicate tick result PRs #845/#849 closed as superseded, branches mac/tick-20260918T145718Z and mac/tick-20260918T151645Z on the prune list (deletion is the Mac's). Tick last firedAt 2026-09-18T16:22Z 'quiet'; live evidence 0d old (14:52Z, manifest 6906d8d9); no sync-manifest drift; no pending sim requests; owner NOT escalated."
+  "firedAt": "2026-09-18T17:25:27.248Z",
+  "result": "quiet: no new or moved mac/* branch, no new sim result, no cloud-addressed mail, no pending sim request, no sync-manifest drift. Tick last firedAt 2026-09-18T17:12Z 'quiet'; live evidence 0d old (14:52Z, manifest 6906d8d9); owner NOT escalated. Prune list unchanged: mac/tick-20260918T145718Z, mac/tick-20260918T151645Z (superseded results, PRs #845/#849 closed)."
 }

@@ -3,7 +3,7 @@
 //
 // WHAT THIS EXISTS TO PIN. `lib/incident-playbook` decided a ticket was warranted
 // and had no way to say so; the eight ITSM adapters could open one and had nothing
-// telling them to. `itsm/dispatch.ts` joins them. The join is only worth having if
+// telling them to. `incident-playbook/src/dispatch.ts` joins them. The join is only worth having if
 // it is honest about the case that actually occurs in this tree — the gate is shut,
 // so nothing is dispatched — and about the case that would occur in a deployment
 // where it is open and the vendor answers with nothing useful.
@@ -34,8 +34,10 @@ import {
   ITSM_DISPATCH_REFUSALS,
   dispatchIncident,
   incidentToTicketRequest,
-} from "@workspace/integrations/itsm";
-import type { Incident, IncidentCategory, Priority } from "@workspace/incident-playbook";
+  type Incident,
+  type IncidentCategory,
+  type Priority,
+} from "@workspace/incident-playbook";
 import type { ITSMFullConfig } from "@workspace/integrations/itsm/store";
 import type { ITSMAdapter, ITSMTicketResponse } from "@workspace/integrations/adapters/types";
 

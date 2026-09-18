@@ -75,7 +75,6 @@
   },
   "dependencies": {
     "@workspace/audit": "workspace:*",
-    "@workspace/incident-playbook": "workspace:*",
     "ioredis": "^5.4.1",
     "zod": "catalog:"
   },

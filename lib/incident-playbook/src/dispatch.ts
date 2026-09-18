@@ -38,11 +38,11 @@
  * incident's, which the playbook derives from the decision id.
  */
 
-import type { Incident, Priority } from "@workspace/incident-playbook";
-import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from "../adapters/types";
-import { resolveEmission } from "../adapters/emit-gate";
-import { createITSMAdapter, requiredCredential } from "./adapter";
-import type { ITSMFullConfig, ITSMVendor } from "./store";
+import type { Incident, Priority } from "./types";
+import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from "@workspace/integrations/adapters/types";
+import { resolveEmission } from "@workspace/integrations/emit-gate";
+import { createITSMAdapter, requiredCredential } from "@workspace/integrations/itsm";
+import type { ITSMFullConfig, ITSMVendor } from "@workspace/integrations/itsm/store";
 
 /**
  * Priority → the adapters' severity vocabulary.

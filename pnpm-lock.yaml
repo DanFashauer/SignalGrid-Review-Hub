@@ -797,6 +797,9 @@ importers:
       '@workspace/event-contract':
         specifier: workspace:*
         version: link:../event-contract
+      '@workspace/integrations':
+        specifier: workspace:*
+        version: link:../integrations
       '@workspace/posture-composition':
         specifier: workspace:*
         version: link:../posture-composition
@@ -826,9 +829,6 @@ importers:
       '@workspace/audit':
         specifier: workspace:*
         version: link:../audit
-      '@workspace/incident-playbook':
-        specifier: workspace:*
-        version: link:../incident-playbook
       ioredis:
         specifier: ^5.4.1
         version: 5.11.1

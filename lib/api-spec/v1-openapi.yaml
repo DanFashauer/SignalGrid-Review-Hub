@@ -510,6 +510,57 @@ paths:
         "200": { description: "Audit events + chain verification; `source` names the ledger that answered. `chain.truncated`/`chain.evictedCount` report eviction by the per-tenant memory bound: a truncated `chain.valid: true` covers the RETAINED window only, never the whole history." }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /v1/launch-status:
+    get:
+      operationId: getLaunchStatus
+      tags: [monitoring]
+      summary: What this process actually does, per signal family
+      description: >-
+        Answers, at RUNTIME, the question a governance file cannot: for each signal
+        family this process holds, is the behaviour `enforced`, `observed` or
+        `simulated`? Every field is DERIVED from the connectors the core holds — never
+        from an environment flag, because SIGNALGRID_LIVE_INTEGRATIONS caused exactly
+        that defect once (it PERMITS live calls, and the context route read it as
+        "signals are live" while every verdict came from fixture records). `enforced`
+        is reported UNREACHABLE with its reason: no verdict this service returns is
+        applied by this service, and an enum value nothing can produce is an overclaim
+        unless the report itself retires it. Aggregate and anonymous — counts and modes
+        only, no connector id, subject, ref or tenant.
+      responses:
+        "200":
+          description: Per-family runtime status plus this process's assurance posture
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      process: { $ref: "#/components/schemas/Assurance" }
+                      families:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            category: { type: string, description: A core signal category this process holds signals for }
+                            status:
+                              type: string
+                              enum: [enforced, observed, simulated]
+                            signalsHeld: { type: integer }
+                            connectorModes:
+                              type: array
+                              items: { type: string }
+                            note: { type: string }
+                          required: [category, status, signalsHeld, connectorModes, note]
+                      enforced:
+                        type: object
+                        properties:
+                          reachable: { type: boolean }
+                          because: { type: string }
+                        required: [reachable, because]
+                    required: [process, families, enforced]
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   /v1/metrics:
     get:
       operationId: getMetrics

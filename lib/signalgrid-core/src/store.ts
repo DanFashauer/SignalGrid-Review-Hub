@@ -12,6 +12,8 @@ import type {
   Policy,
   PolicyTest,
   PolicyVersion,
+  ConnectorMode,
+  SignalCategory,
   RemediationAction,
   StepUpAnswer,
   ResolutionConfig,
@@ -242,6 +244,36 @@ export class MemoryStore {
    */
   hasNonFixtureConnector(): boolean {
     return [...this.connectors.values()].some((row) => (row.mode as string) !== "fixture");
+  }
+
+  /**
+   * Per signal CATEGORY: how many signals this process holds and which connector
+   * modes produced them. A deployment fact, like `hasNonFixtureConnector`, so
+   * deliberately unscoped by tenant — and deliberately carrying no id, ref, subject
+   * or tenant, only category names, counts and modes. Nothing here can identify a
+   * device, a person or a customer, which is what lets an unscoped aggregate be
+   * served at all (the same rule /metrics already follows).
+   */
+  signalInventory(): Array<{ category: SignalCategory; signalsHeld: number; modes: ConnectorMode[] }> {
+    const byConnector = new Map<string, ConnectorMode>();
+    for (const connector of this.connectors.values()) byConnector.set(connector.id, connector.mode);
+    const acc = new Map<SignalCategory, { signalsHeld: number; modes: Set<ConnectorMode> }>();
+    for (const signal of this.signals.values()) {
+      let row = acc.get(signal.category);
+      if (!row) {
+        row = { signalsHeld: 0, modes: new Set() };
+        acc.set(signal.category, row);
+      }
+      row.signalsHeld += 1;
+      const mode = byConnector.get(signal.connectorId);
+      // A signal whose connector is GONE keeps its count and contributes no mode:
+      // the category still reports what is held, and an unknown provenance must not
+      // be read as a fixture one.
+      if (mode) row.modes.add(mode);
+    }
+    return [...acc.entries()]
+      .map(([category, row]) => ({ category, signalsHeld: row.signalsHeld, modes: [...row.modes].sort() }))
+      .sort((a, b) => cmpCodepoint(a.category, b.category));
   }
 
   putSyncRun(run: ConnectorSyncRun): void {

@@ -424,6 +424,21 @@ export class SignalGridCore {
     return this.store.hasNonFixtureConnector() ? "live" : "fixtures";
   }
 
+  /**
+   * What this process's signals ARE, per category: how many are held and which
+   * connector modes produced them. No token, for the same reason `signalSource()`
+   * takes none — it is a fact about the PROCESS, not about a tenant — and it carries
+   * no id, subject, ref or tenant, only category names, counts and modes.
+   *
+   * This is what a runtime enforced-vs-observed-vs-simulated report must be derived
+   * FROM. Deriving such a report from an environment flag would let a deployment
+   * assert a posture its connectors do not have, which is the defect
+   * SIGNALGRID_LIVE_INTEGRATIONS already caused once.
+   */
+  signalInventory(): ReturnType<MemoryStore["signalInventory"]> {
+    return this.store.signalInventory();
+  }
+
   listSyncRuns(token: string, connectorId: string): ConnectorSyncRun[] {
     const principal = authenticate(this.store, token);
     authorize(principal, "connector:read");

@@ -11,6 +11,7 @@
  */
 import { spawn } from "node:child_process";
 import { createServer as netCreateServer } from "node:net";
+import { createServer as netCreateHttpServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -1333,6 +1334,44 @@ async function run() {
   });
   check("step-up credentials are tenant-scoped (other tenant → 409)", stepUpCrossTenant.status === 409);
 
+  // ── RUNTIME launch status: what this process is actually doing ───────────
+  // Blocker 10 at runtime. The three labels lived only in scripts/launch-profile.mjs,
+  // so an operator could read the INTENT and never ask the server. These assertions
+  // pin the two properties that make the route worth serving: every field tracks the
+  // connectors the core holds, and `enforced` is reported unreachable rather than
+  // left to be inferred from an enum that lists it.
+  {
+    const ls = await req("GET", "/v1/launch-status", { token: KEYS.operator });
+    check("launch-status → 200 with per-family rows", ls.status === 200 && Array.isArray(ls.json?.families) && ls.json.families.length > 0);
+    check("launch-status: every family carries one of the three labels and a real count",
+      ls.json.families.every((f) => ["enforced", "observed", "simulated"].includes(f.status) &&
+        typeof f.category === "string" && Number.isInteger(f.signalsHeld) && f.signalsHeld > 0));
+    check("launch-status: on the fixture demo core EVERY family reads simulated — the label tracks the connectors, not a wish",
+      ls.json.families.every((f) => f.status === "simulated" && f.connectorModes.every((m) => m === "fixture")));
+    check("launch-status: the three LAUNCH families are among the ones reported (the report is not scanning nothing)",
+      ["device_compliance", "posture_freshness", "device_management_health"].every((c) => ls.json.families.some((f) => f.category === c)));
+    check("launch-status: `enforced` is reported UNREACHABLE, with the reason, rather than left to be inferred",
+      ls.json?.enforced?.reachable === false && typeof ls.json?.enforced?.because === "string" &&
+      ls.json.enforced.because.length > 40 && !ls.json.families.some((f) => f.status === "enforced"));
+    const lsCtx = await req("GET", "/v1/context", { token: KEYS.operator });
+    check("launch-status: it agrees with the assurance posture it is derived from",
+      ls.json?.process?.signalSource === lsCtx.json?.assurance?.signalSource &&
+      ls.json?.process?.verdictEffect === "advisory");
+    // AGGREGATE AND ANONYMOUS: no id, ref, subject or tenant may cross this surface.
+    const lsText = JSON.stringify(ls.json);
+    check("launch-status: the report carries no connector id, subject ref or tenant id",
+      !/conn_|tenant_|dev_|id_|ipad-ward|nurse\./.test(lsText));
+    // The permission is `connector:read`, which owner/operator/auditor/connector all
+    // hold — so this route is readable by every seeded role, deliberately: an
+    // auditor who cannot ask what the deployment is doing is an auditor who has to
+    // take the answer on trust. Asserted rather than assumed, because "authorized"
+    // with no assertion is indistinguishable from "unauthorized and nobody looked".
+    // The anonymous case is covered by the derived 401 sweep further down.
+    const lsAuditor = await req("GET", "/v1/launch-status", { token: KEYS.auditor });
+    check("launch-status is readable by a read-only auditor (connector:read) — the operability answer is not owner-only",
+      lsAuditor.status === 200 && Array.isArray(lsAuditor.json?.families));
+  }
+
   // ── ANSWERING a step_up DECISION (the launch route, end to end) ──────────
   // The gate returns four words; until 2026-09-18 only three could be acted on. This
   // is the whole ceremony against the wire: evaluate → a step_up decision → a
@@ -2363,7 +2402,12 @@ async function run() {
   // sleeping past the 30s floor, and a gate that sleeps is a gate people switch off.
   {
     const PORT12 = 5325;
+    const PORT13 = 5326;
+    const STUB_PORT = 5327;
     const BASE12 = `http://localhost:${PORT12}/api`;
+    // What the live transport actually put on the wire, recorded by the stub below.
+    const graphStubSaw = [];
+    const graphStubAuth = [];
     const ESTATE_OWNER = "estate-owner-token-for-the-api-suite";
     const estateEnv = (extra = {}) => ({
       ...process.env,
@@ -2411,6 +2455,86 @@ async function run() {
     } finally {
       estate.kill("SIGTERM");
       await exitOf(estate);
+    }
+
+    // ── The SAME server, reading LIVE, against a stub Graph ──────────────────
+    //
+    // Everything above runs the estate core in FIXTURE mode, so every launch-status
+    // family reads `simulated`. A label that can only ever print one word is a
+    // constant, and this repo has shipped one of those before (`stepUpAnswerable` was
+    // the literal `true`). So the other arm is exercised for real: the live transport
+    // in the BUILT image is pointed at a stub Graph on localhost — a genuine HTTP
+    // round trip through `GraphPostureConnector`'s own paging, auth header and
+    // normalization, with no tenant and nothing leaving the machine.
+    //
+    // It also proves the deployable image CAN run live at all: before this, the live
+    // path existed in lib/ and nothing asserted the bundle contained it.
+    const graphStub = netCreateHttpServer((httpReq, httpRes) => {
+      const url = new URL(httpReq.url, "http://localhost");
+      // The read-only guard is the connector's; this asserts the wire it produced.
+      graphStubSaw.push(`${httpReq.method} ${url.pathname}`);
+      graphStubAuth.push(httpReq.headers["authorization"] ?? "");
+      const body =
+        url.pathname === "/users"
+          ? { value: [
+              { id: "live-user-001", userPrincipalName: "live-user-001@stub.invalid", accountEnabled: true },
+              { id: "live-user-002", userPrincipalName: "live-user-002@stub.invalid", accountEnabled: false },
+            ] }
+          : url.pathname === "/deviceManagement/managedDevices"
+            ? { value: [
+                { id: "live-device-001", userId: "live-user-001", deviceName: "Stub 001", complianceState: "compliant",
+                  managementState: "managed", deviceRegistrationState: "registered", lastSyncDateTime: "2026-09-18T09:00:00.000Z" },
+                { id: "live-device-002", userId: "live-user-002", deviceName: "Stub 002", complianceState: "noncompliant",
+                  managementState: "managed", deviceRegistrationState: "registered", lastSyncDateTime: "2026-09-18T09:00:00.000Z" },
+              ] }
+            : url.pathname === "/identityProtection/riskyUsers"
+              ? { value: [] }
+              : null;
+      if (body === null) { httpRes.writeHead(404).end("{}"); return; }
+      httpRes.writeHead(200, { "content-type": "application/json" });
+      httpRes.end(JSON.stringify(body));
+    });
+    await new Promise((r) => graphStub.listen(STUB_PORT, "127.0.0.1", r));
+
+    const liveServer = spawn("node", [serverEntry], {
+      env: estateEnv({
+        PORT: String(PORT13),
+        SIGNALGRID_TIER: "beta",
+        SIGNALGRID_LIVE_INTEGRATIONS: "true",
+        GRAPH_ACCESS_TOKEN: "stub-graph-token-not-a-secret",
+        GRAPH_BASE_URL: `http://127.0.0.1:${STUB_PORT}`,
+      }),
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    try {
+      check("estate core reading LIVE through the built image came up", await waitReady(PORT13));
+      const asOwner13 = async (path) => {
+        const res = await fetch(`http://localhost:${PORT13}/api${path}`, { headers: { authorization: `Bearer ${ESTATE_OWNER}` } });
+        return { status: res.status, json: await res.json().catch(() => null) };
+      };
+      check("the deployable image ACTUALLY issued the live Graph reads (the transport is in the bundle, not just in lib/)",
+        graphStubSaw.includes("GET /users") && graphStubSaw.includes("GET /deviceManagement/managedDevices"));
+      check("every live Graph request was a GET — the connector is read-only on the wire, not only in its docstring",
+        graphStubSaw.length > 0 && graphStubSaw.every((r) => r.startsWith("GET ")));
+      check("the live reads carried the configured bearer",
+        graphStubAuth.length > 0 && graphStubAuth.every((a) => a === "Bearer stub-graph-token-not-a-secret"));
+      const liveConnectors = await asOwner13("/v1/connectors");
+      check("the connector RECORDS mode live — the mode is what the resolver decided, not what the env asked for",
+        liveConnectors.json?.connectors?.[0]?.mode === "live");
+      const liveCtx = await asOwner13("/v1/context");
+      check("assurance signalSource reads live, derived from the connector the core holds",
+        liveCtx.json?.assurance?.signalSource === "live");
+      const liveStatus = await asOwner13("/v1/launch-status");
+      check("launch-status: with a LIVE connector every family reads observed — the label tracks the connectors, so it is a measurement and not a constant",
+        liveStatus.status === 200 && liveStatus.json?.families?.length > 0 &&
+        liveStatus.json.families.every((f) => f.status === "observed" && f.connectorModes.includes("live")));
+      check("launch-status: `enforced` stays unreachable even on a live deployment — reading a real device is not enforcing on one",
+        liveStatus.json?.enforced?.reachable === false &&
+        !liveStatus.json.families.some((f) => f.status === "enforced"));
+    } finally {
+      liveServer.kill("SIGTERM");
+      await exitOf(liveServer);
+      await new Promise((r) => graphStub.close(r));
     }
 
     // Below the floor: a typo meant as minutes must not become a two-second hammer.

@@ -4760,7 +4760,7 @@ Runner-up: **benchmark-selection** (10 references, day-one-quiet 'unverified →
 
 ### From the positioning-messaging lens
 
-## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v6)
+## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v7)
 
 Every claim below is checked against the `launch` class in scripts/launch-profile.mjs. Nothing deferred appears — which is why location, badges, custody, network, and threat signals are absent: they are real and proven in this repository, and they are not Limited GA.
 
@@ -4862,12 +4862,12 @@ TIERED READ-LIST — SignalGrid-Review-Hub (all listed files verified UNREAD aga
 == TIER 1 — 25 files, ~7,900 lines. An unread defect here costs the most. Target: 25/25 at depth >= audited within 5 shift-days. ==
 
 Decision core (the verdict mechanism):
-1. lib/signalgrid-core/src/engine.ts (763) — SignalGridCore itself; every /v1 decision flows through it via api-server lib/core.ts.
+1. lib/signalgrid-core/src/engine.ts (778) — SignalGridCore itself; every /v1 decision flows through it via api-server lib/core.ts.
 2. lib/signalgrid-core/src/decision.ts (216) — where allow/step_up/restrict/deny is actually computed.
 3. lib/signalgrid-core/src/policy.ts (764) — policy resolution feeding the verdict; the largest logic file in the core.
 4. lib/signalgrid-core/src/resolution.ts (576) — signal-to-assurance resolution; the file where 'unknown raises assurance, never lowers it' must hold.
 5. lib/signalgrid-core/src/evidence.ts (790) — mints the WHY behind /v1/decisions/{id}/evidence; the product's entire claim is that its answers are explainable.
-6. lib/signalgrid-core/src/store.ts (542) — in-memory store semantics behind every tenant-scoped read; a cross-tenant leak would live here.
+6. lib/signalgrid-core/src/store.ts (574) — in-memory store semantics behind every tenant-scoped read; a cross-tenant leak would live here.
 7. lib/signalgrid-simulator/src/decisionEngine.ts (361) — parity source the iOS port is byte-faithful to; a defect here ships on two platforms at once.
 8. lib/posture-composition/src/compose.ts (80) — composes signal kinds into posture; tiny, but every launch signal passes through it.
 9. lib/posture-composition/src/adapters.ts (591) — maps connector output into composition; a silent mis-map fails open.
@@ -4877,19 +4877,19 @@ Auth chain (bearer token to tenant principal):
 11. lib/enterprise-auth/src/jwt.ts (205) — token verification.
 12. lib/enterprise-auth/src/claims.ts (99) — claims-to-principal mapping; tenant derivation lives here.
 13. lib/enterprise-auth/src/jwks.ts (90) — key fetch/cache; wrong caching means accepting rotated-out keys.
-14. artifacts/api-server/src/lib/profile.ts (205) — the review-demo vs shared-device-gateway fence; a classification bug mounts demo surfaces in production.
+14. artifacts/api-server/src/lib/profile.ts (210) — the review-demo vs shared-device-gateway fence; a classification bug mounts demo surfaces in production.
 15. artifacts/api-server/src/lib/core.ts (300) — the seam where HTTP hands to the decision core.
 16. artifacts/api-server/src/middlewares/idempotency.ts (109) — durable-write dedupe on the decision path.
 
 Served surface and durable path:
-17. artifacts/api-server/src/routes/v1.ts (1168) — every served /v1 route including evaluate and the release-path re-evaluation; the spec was audited, the implementation was not.
+17. artifacts/api-server/src/routes/v1.ts (1250) — every served /v1 route including evaluate and the release-path re-evaluation; the spec was audited, the implementation was not.
 18. lib/audit/src/backend.ts (318) — the Postgres ledger WRITE path; the audited verify path is provably blind to tail truncation, so append guarantees live only here.
 19. lib/persistence/src/decision-store.ts (288) — durable decision writes.
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
 21. scripts/preflight.mjs (746) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
-22. scripts/launch-profile.mjs (793) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
+22. scripts/launch-profile.mjs (794) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (188) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.
 25. lib/integrations/src/integrations/device-management-health/evaluate.ts (290) — launch family; grades whether a compliance answer is CURRENT — the anti-unearned-affirmative connector, which had better not contain one.

@@ -75,11 +75,19 @@
 
 /** Bumped whenever a status changes. Not a semver — a serial number, so a doc or a
  *  review can name the exact revision of the scope it was written against. */
-export const LAUNCH_PROFILE_VERSION = 6;
+export const LAUNCH_PROFILE_VERSION = 7;
 
 // VERSION HISTORY, kept because a scope decision that changes silently is not a
 // decision anyone can hold you to.
 //
+//   7  BLOCKER 10, AT RUNTIME (2026-09-18). The `runtime-launch-status` gap said the
+//      enforced/observed/simulated labels existed only here, in a governance file, so
+//      an operator could read what the product intends and never ask the running
+//      server what it is doing. GET /v1/launch-status now answers it per signal
+//      family, derived from the connectors the core holds and from nothing
+//      configurable — and it reports `enforced` UNREACHABLE with its reason, which is
+//      the half this file kept implicit. One launch path added; nothing reclassified.
+//      The gap is REMOVED because its closedWhen condition is met in code.
 //   6  STEP-UP BECOMES ANSWERABLE (2026-09-18). The `step-up-answerability` gap said
 //      Limited GA ships in SHADOW mode: the gate returns step_up and no launch route
 //      can answer one. That was true and it was a hole in the product, not a scope
@@ -369,6 +377,15 @@ export const SURFACES = [
       "false claim and is the kind this file exists to prevent.",
   },
   { id: "/v1/metrics", reason: "Operability. A service nobody can watch cannot be run." },
+  {
+    id: "/v1/launch-status",
+    reason:
+      "Blocker 10, answered by the RUNNING server instead of by this file. Per signal " +
+      "family: enforced, observed or simulated — every field derived from the connectors " +
+      "the core holds, never from an environment flag (SIGNALGRID_LIVE_INTEGRATIONS " +
+      "caused precisely that defect once). It also reports `enforced` UNREACHABLE with " +
+      "its reason, which is the half a governance file kept implicit.",
+  },
   {
     id: "/v1/connectors",
     reason:
@@ -750,22 +767,6 @@ export const GAPS = [
         file: "lib/integrations/src/integrations/device-management-health/index.ts",
         absent: 'toLowerCase() || "bridge"',
       },
-    ],
-  },
-  {
-    id: "runtime-launch-status",
-    surface: "published-api-paths",
-    whatIsMissing:
-      "A runtime report of enforced-vs-observed-vs-simulated per signal kind. The labels " +
-      "exist here, in a governance file; nothing serves them, so an operator cannot ask the " +
-      "running server what it is actually enforcing. It would close Blocker 10 more " +
-      "completely than a governance file can, and it is deliberately not built here: it " +
-      "widens the API surface and adds diff to a pull request Blocker 1 says is already too " +
-      "large to review.",
-    // Closed when some route file carries all three labels — the shape a served
-    // report must have. Verified against today's tree: no routes file has all three.
-    closedWhen: [
-      { dir: "artifacts/api-server/src/routes", anyFileContainsAll: ['"enforced"', '"observed"', '"simulated"'] },
     ],
   },
   {

@@ -33,7 +33,7 @@ Any document asserting a coined category label as SignalGrid's name is wrong
 and gets fixed to this rule. (The 2026-08 category name is superseded, DR-019 —
 named here only as the retired form this rule exists to catch.)
 
-## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v6)
+## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v7)
 
 Every claim below is checked against the `launch` class in scripts/launch-profile.mjs. Nothing deferred appears — which is why location, badges, custody, network, and threat signals are absent: they are real and proven in this repository, and they are not Limited GA.
 

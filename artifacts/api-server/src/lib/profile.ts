@@ -156,6 +156,11 @@ export const GA_ALLOWED_ROUTES: readonly { method: string; path: string }[] = [
   { method: "POST", path: "/v1/decisions/:id/step-up/challenge" },
   { method: "POST", path: "/v1/decisions/:id/step-up" },
   { method: "GET", path: "/v1/metrics" },
+  // Blocker 10 at runtime: what this process is actually doing, per signal family.
+  // A customer deployment that cannot ask the running server whether its signals are
+  // observed or simulated is a deployment whose autonomy claims live only in a
+  // document — which is the blocker, not a symptom of it.
+  { method: "GET", path: "/v1/launch-status" },
   // Launch wireframe screen 2 (connector setup/health) — read + fixture-sync
   // only. POST /sync runs the core's fixture pipeline; runFixtureSync throws on
   // any non-fixture connector, so no route here can touch a source system.

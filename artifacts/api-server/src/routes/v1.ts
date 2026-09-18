@@ -845,6 +845,88 @@ router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Resp
   }
 });
 
+// ── WHAT THIS PROCESS ACTUALLY DOES, PER SIGNAL FAMILY ───────────────────────
+//
+// Blocker 10 is "mixed autonomy claims": nothing states, per deployment, whether
+// behaviour is ENFORCED, merely OBSERVED, or SIMULATED. The labels existed only in
+// `scripts/launch-profile.mjs` — a governance file — so an operator could read what
+// the product INTENDS and never ask the running server what it is doing. That was
+// the `runtime-launch-status` gap.
+//
+// EVERY FIELD IS DERIVED FROM THE CONNECTORS THE CORE HOLDS. Not one is configured.
+// `SIGNALGRID_LIVE_INTEGRATIONS` already caused this exact defect once — it PERMITS
+// live calls, and /v1/context once read it as "signals are live" while every verdict
+// came from fixture records. A status route that could be told what to say would be
+// worse than none, because it would be believed.
+//
+// THE THREE LABELS, and what each one is allowed to mean here:
+//
+//   "simulated"  the signals in this family come from committed fixture data. The
+//                verdict is reproducible and is NOT a statement about any real
+//                device. This is what a review deployment reports.
+//   "observed"   the signals come from a live read of a real source, and the verdict
+//                is advisory: SignalGrid answers, the host app acts.
+//   "enforced"   the verdict is APPLIED by something this service controls.
+//
+// The third is UNREACHABLE in this product and the route says so rather than leaving
+// the reader to notice. `verdictEffect` is "advisory" as a product law, not a current
+// limitation: under the embedded-UX rule SignalGrid is invisible to the worker, who
+// uses their own host app, and this service actuates nothing on any device and has no
+// path to. So the response carries `enforced: { reachable: false, because: … }` — an
+// enum value nothing can produce is an overclaim by implication unless the report
+// itself retires it, and retiring it is the honest half of answering Blocker 10.
+//
+// AGGREGATE AND ANONYMOUS. Counts and modes only: no connector id, no subject, no
+// ref, no tenant. That is what lets an unscoped process fact be served from a
+// tenant-scoped surface at all — the same rule /metrics already follows.
+router.get("/v1/launch-status", (req: Request, res: Response) => {
+  // Authenticated (it sits below the /v1 guard) and authorized as a connector read:
+  // it describes the connector estate, so the role that may read connectors may read
+  // this. It returns no tenant's rows, so it needs nothing stronger.
+  authorize(core.context(token(req)).principal, "connector:read");
+  const posture = resolveAssurancePosture(req.app);
+  const families = core.signalInventory().map((family) => {
+    // A family whose signals came from ANY live connector is observed; only a family
+    // sourced entirely from fixtures is simulated. A family with NO resolvable
+    // connector mode reports `simulated` too: an unknown provenance must never be
+    // read as a live one, which is the fail-closed direction for a claim about how
+    // real the data is.
+    const live = family.modes.includes("live");
+    const status: "enforced" | "observed" | "simulated" = live ? "observed" : "simulated";
+    return {
+      category: family.category,
+      status,
+      signalsHeld: family.signalsHeld,
+      connectorModes: family.modes,
+      note:
+        status === "observed"
+          ? "Read live from a real source. The verdict is advisory: SignalGrid answers, the host app acts."
+          : "Committed fixture data. Reproducible, and NOT a statement about any real device.",
+    };
+  });
+  res.json(
+    envelope(req, {
+      process: {
+        profile: posture.profile,
+        tier: posture.tier,
+        signalSource: posture.signalSource,
+        verdictEffect: posture.verdictEffect,
+        stepUpAnswerable: posture.stepUpAnswerable,
+      },
+      families,
+      enforced: {
+        reachable: false,
+        because:
+          "No verdict this service returns is applied by this service. Under the embedded-UX rule " +
+          "SignalGrid is invisible to the worker, who uses their own host app; the gate answers and " +
+          "the host app acts. Enforcement on a device is an MDM/OS capability on a supervised device, " +
+          "which this service neither has nor claims. `enforced` is listed so the vocabulary is " +
+          "complete, and reported unreachable so it is never inferred.",
+      },
+    }),
+  );
+});
+
 // ── ANSWERING A step_up, AT LAUNCH ────────────────────────────────────────────
 //
 // The gate returns one of four words, and until these two routes existed only three

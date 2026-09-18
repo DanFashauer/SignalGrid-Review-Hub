@@ -1252,7 +1252,11 @@ export const ALLOWED = [
 
 // ── runner ────────────────────────────────────────────────────────────────────
 
-function runProof(proof) {
+// Exported so the per-PR falsification gate (check-pr-gate-falsification.mjs) drives the
+// EXACT same proof runner this sweep uses, rather than a second copy that could drift.
+// NOTE for any caller authorizing a merge: this returns "killed" for a crashed proof and
+// "hung" for a timeout. A merge authorizer must treat "hung" as INCONCLUSIVE, never a kill.
+export function runProof(proof) {
   const run = spawnSync("pnpm", ["run", proof], {
     cwd: repoRoot,
     encoding: "utf8",

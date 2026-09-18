@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-18T02:09:41.057Z",
-  "result": "acted: sent the live-evidence refresh ask (mac-run.json minted 2026-09-12, 5d old, manifest 4afa60cf2fd5 vs tree 6906d8d9ecc5; readiness (b)=0%). Tick heartbeat firedAt 2026-09-18T01:44:12Z, well inside 3h, so the Mac is ticking and the owner was NOT escalated. No mail addressed to cloud, so nothing to ack. No new or moved origin/mac/* branches. Note for the next cycle: the sim request for this re-mint sits on unmerged branch #821, so the tick cannot see it - that is why this went as mail."
+  "firedAt": "2026-09-18T15:29:22.741Z",
+  "result": "acted: the queued evidence re-mint ran unattended on the Mac tick (result on mac/tick-20260918T144215Z, evidence passed, mintedAt 2026-09-18T14:52Z, manifest 6906d8d9); its PR #844 went red on the surface-coverage gate (tick commits a result file without re-deriving the page) — fixed on the branch and merged at 47aee557; readiness headline 94% OUTREACH OPEN; #846 open (tick re-derives the page itself; shared surface scripts/mac/lane-tick.sh — send op follows once merged). Tick last firedAt 2026-09-18T15:11Z, live evidence 0d old, no cloud-addressed mail, owner NOT escalated."
 }

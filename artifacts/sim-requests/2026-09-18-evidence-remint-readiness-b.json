@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-09-18-evidence-remint-readiness-b",
+  "requestedAt": "2026-09-18T01:05:00Z",
+  "requestedBy": "cloud lane (DR-036 readiness dimension (b) is fail-closed to 0 and only this machine can lift it)",
+  "reason": "artifacts/live-evidence/mac-run.json was minted 2026-09-13T02:55:42Z against sync-manifest fingerprint 4afa60cf2fd5; mainline's artifacts/sync/live-sync-manifest.json now reports 6906d8d9ecc5. check-readiness-figure.mjs therefore reports dimension (b) at 0% and the HEADLINE at 0% — OUTREACH CLOSED — while (a) and (c) both read 100%. This is NOT a defect in either dimension and no branch causes it: the evidence simply predates the tree. The cloud lane cannot repair it, because `verify:all --require-mcp --emit-evidence` is macOS-only and refuses on CI by design. Until this runs, the company headline figure is 0 and every readiness claim anywhere in the tree is false by derivation.",
+  "runs": [
+    "evidence"
+  ],
+  "notes": [
+    "The operation refuses unless BOTH halves are green, which is the point — a re-mint over a partial run would bind fresh evidence to an unproven tree.",
+    "SIGNALGRID_MCP_PATH must point at the signalgrid-mcp checkout; without it the run refuses rather than minting evidence with the MCP half unproven.",
+    "Committed BEFORE the run so provenance.commit resolves in a fresh clone (the orphan-provenance defect of 2026-09-10).",
+    "After the result lands, `node scripts/check-readiness-figure.mjs` should report (b) at 100% and the headline at the lowest of the three — expected 100% once #820 and the custody journey have landed, since (a) reaches 17/17 only with the journey merged."
+  ]
+}

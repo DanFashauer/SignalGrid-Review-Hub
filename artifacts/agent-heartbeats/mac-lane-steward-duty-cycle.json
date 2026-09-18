@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-18T02:09:41.057Z",
-  "result": "acted: sent the live-evidence refresh ask (mac-run.json minted 2026-09-12, 5d old, manifest 4afa60cf2fd5 vs tree 6906d8d9ecc5; readiness (b)=0%). Tick heartbeat firedAt 2026-09-18T01:44:12Z, well inside 3h, so the Mac is ticking and the owner was NOT escalated. No mail addressed to cloud, so nothing to ack. No new or moved origin/mac/* branches. Note for the next cycle: the sim request for this re-mint sits on unmerged branch #821, so the tick cannot see it - that is why this went as mail."
+  "firedAt": "2026-09-18T04:20:36.629Z",
+  "result": "quiet. Tick heartbeat firedAt 2026-09-18T04:15:26Z (quiet), inside 3h - Mac is ticking, owner NOT escalated. Live evidence still minted 2026-09-12 (5d): the 02:09Z send asking for the re-mint is on mainline and unacknowledged; not re-sent - one ask per cycle rule, and the sim request for it sits on unmerged #821. No mail addressed to cloud. No new or moved origin/mac/* since 03:00Z. 0 merges into SignalGrid_Alpha since f79af1df (heartbeat commits only). Note: the 02:24Z cycle's heartbeat was skipped deliberately (delivered 15 min earlier); this is the 03:24Z cycle's."
 }

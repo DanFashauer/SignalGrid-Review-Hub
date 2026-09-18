@@ -226,6 +226,88 @@ try {
   jwksServer.close();
 }
 
+// 4 — A BROKEN OIDC CONFIG MUST REFUSE TO BOOT, NOT FALL BACK TO DEMO KEYS.
+//
+// `loadEnterpriseAuthConfig` returns `invalid` ONLY when OIDC_ISSUER is set (an
+// unset issuer is `disabled`, the untouched demo default), so `invalid` always
+// means an operator reached for enterprise auth and got part of it wrong. That
+// used to log at WARN and return null, which under the DEFAULT profile accepts
+// the published `sgk_demo_*` bearers and lets `/v1/keys` hand them to anonymous
+// callers — an unusable configuration value LOOSENING the answer, which golden
+// rule 2 forbids, while `/readyz` still reported ready because its auth-config
+// check is gated on `!demoSurfacesEnabled()`.
+//
+// Both shapes below are asserted because they fail for different reasons and an
+// earlier reading of this code assumed only the first existed: a MISSING
+// audience/JWKS, and a COMPLETE config whose tenant map is empty `{}` — every
+// variable set, nothing that can ever match.
+for (const [label, extraEnv] of [
+  ["missing audience and JWKS URI", { OIDC_ISSUER: ISSUER }],
+  [
+    "complete config with an EMPTY tenant map",
+    {
+      OIDC_ISSUER: ISSUER,
+      OIDC_AUDIENCE: AUDIENCE,
+      OIDC_JWKS_URI: `${ISSUER}/jwks`,
+      OIDC_TENANT_MAP: "{}",
+      OIDC_ROLE_MAP: JSON.stringify({ "sg-operator": "operator" }),
+    },
+  ],
+]) {
+  const brokenPort = PORT + 40 + (extraEnv.OIDC_TENANT_MAP ? 1 : 0);
+  const env = { ...process.env, PORT: String(brokenPort), LOG_LEVEL: "silent" };
+  // Start from a clean slate so a variable set in the ambient environment cannot
+  // accidentally COMPLETE the config this case needs to be broken.
+  for (const k of ["OIDC_ISSUER", "OIDC_AUDIENCE", "OIDC_JWKS_URI", "OIDC_TENANT_MAP", "OIDC_ROLE_MAP"]) {
+    delete env[k];
+  }
+  Object.assign(env, extraEnv);
+
+  const broken = spawn("node", [serverEntry], { env, stdio: ["ignore", "ignore", "ignore"] });
+
+  // Wait for the process to exit, but DO NOT kill it on timeout yet — the probe
+  // below has to run while it is still alive, or it can only ever observe a dead
+  // port and would pass whatever the server did. (It did exactly that in the
+  // first draft of this test: the SIGKILL ran first, so the credential assertion
+  // was green against the unfixed code. An assertion that cannot fail is worse
+  // than no assertion, because it reads as coverage.)
+  let exitCode = await new Promise((resolve) => {
+    let settled = false;
+    broken.on("exit", (code) => { if (!settled) { settled = true; resolve(code); } });
+    setTimeout(() => { if (!settled) { settled = true; resolve(undefined); } }, 15000);
+  });
+  const stillRunning = exitCode === undefined;
+
+  // The property that actually matters, probed while the process is STILL UP if
+  // it refused to exit: had it fallen back to demo auth, /v1/keys would publish a
+  // tenant-owner bearer to an anonymous caller.
+  let served = null;
+  let servedBody = "";
+  try {
+    const res = await fetch(`http://localhost:${brokenPort}/api/v1/keys`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    served = res.status;
+    servedBody = (await res.text()).slice(0, 120);
+  } catch { /* nothing listening — the expected outcome */ }
+
+  if (stillRunning) {
+    broken.kill("SIGKILL");
+    await new Promise((r) => broken.on("exit", r));
+  }
+
+  check(
+    `a broken OIDC config (${label}) refuses to start instead of serving demo keys`,
+    !stillRunning && exitCode !== 0,
+    stillRunning ? "it kept running — it is serving something" : `exited ${exitCode}`,
+  );
+  check(
+    `a broken OIDC config (${label}) publishes NO demo credential`,
+    served === null,
+    `/v1/keys answered ${served}: ${servedBody}`,
+  );
+}
+
 console.log(`\nOIDC middleware test: ${passed}/${passed + failed} assertions passed`);
 if (failed > 0) {
   console.error("\nThe production auth path is not behaving as the middleware claims.");

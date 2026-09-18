@@ -30,7 +30,7 @@ Harness: `validate-sim-macos.sh`. Result **as recorded at the time of this run:
 
 | Group | Gates | Result |
 |---|---|---|
-| Real-life simulator | `proof:signalgrid-simulator` (11 scenarios / 51 assertions at that time — 73/73 on 2026-09-06, `pnpm run proof:signalgrid-simulator`; the scenario count still holds), `proof:room-sim`, `proof:signalgrid-core`, `proof:signalgrid-grid` | PASS |
+| Real-life simulator | `proof:signalgrid-simulator` (11 scenarios / 51 assertions at that time — 73/73 on 2026-09-06, `pnpm run proof:signalgrid-simulator`; re-measured 2026-09-14 on this branch: **13 scenarios / 82 assertions**, the two custody-removal scenarios having joined (custody remains a deferred family — this row counts proofs, not shipped capability). The row used to end "the scenario count still holds" — it did not, and a sentence asserting a count still holds is the one shape that cannot go stale quietly), `proof:room-sim`, `proof:signalgrid-core`, `proof:signalgrid-grid` | PASS |
 | CI-mirror proof suite | the remaining `proof:*` gates at that time — 24 then; derive the current count with the command above (incl. `-pg` gates via in-memory fallback) | PASS |
 | Non-proof gates | `typecheck`, `build`, `test:api`, `safety:check`, `docs:sanity`, `review:invariants` | PASS |
 | Hygiene | `git diff --check` | clean |

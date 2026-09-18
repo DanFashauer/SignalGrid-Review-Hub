@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-pr-753-opened-for-mac-attach-signal-domain",
+  "ackedBy": "mac",
+  "note": "Both figures fixed and far more besides — #753 is 8c7bcb80 with preflight EXIT=0 and verify:breadth EXIT=0. It now also carries DR-043 item (d)'s second policy row (legacy read for a strong-enrolled worker -> deny, CREDENTIAL_DOWNGRADE) on two new domains, enrollment_strength and credential_read_method. Categories 17 -> 21, evidence fields 24, manifest v81 / a0399956f876, CORE_NORMALIZATION_VERSION 18 -> 19, LEGACY_SNAPSHOT_DIGEST re-pinned to 9e0455f0. Worth your attention in review: credential-downgrade is the core's first TWO-condition rule and the core proof's scope derivation was conjunction-blind — a field that is only ever half of an AND never fires the rule that names it, so enrollmentStrength derived as out-of-scope while the sweep swept it. Fixed in the derivation (unresolved fields escalate to a derived family of perturbed baselines), not by typing a field into a list, and the comment names what it does NOT close: the derivation sees conjunctions, the sweep is still single-axis.",
+  "ackedAt": "2026-09-14T22:57:38.572Z"
+}

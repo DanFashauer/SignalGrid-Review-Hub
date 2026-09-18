@@ -57,6 +57,11 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `SIGNALGRID_V1_RATE_LIMIT` | Requests/min/bearer on `/v1`. Malformed values fall back — never to "unlimited". | `240` |
 | `SIGNALGRID_GLOBAL_RATE_LIMIT` | Requests/min/IP across the server. `/api/healthz`, `/api/readyz`, and — only when `METRICS_TOKEN` is set — `/metrics` are exempt. | `600` |
 | `SIGNALGRID_MAX_DECISIONS_PER_TENANT` | In-memory decisions retained per tenant (FIFO), with the audit/webhook/remediation collections derived from it. Older rows are served by the durable store when `DATABASE_URL` is set. `GET /v1/metrics` reports `metrics.window.capped` once the bound has evicted anything, so a truncated aggregate is never read as a full one. Must be a positive integer — **an invalid value refuses at boot rather than silently using the default**. | `5000` |
+| `SIGNALGRID_CORE` | Which core this process serves: unset or `demo` boots the seeded public-safe demo core; `estate` boots `SignalGridCore.fromEstate()` around this deployment's own tenant, with posture read once at boot through the read-only Graph posture connector (fixture dataset unless the live gate opens). Anything else refuses to boot. | unset (`demo`) |
+| `SIGNALGRID_ESTATE_TENANT` | The estate tenant slug (lowercase letters, digits, hyphens; 3–40 chars). Required by `SIGNALGRID_CORE=estate`; a malformed value refuses to boot rather than falling back to the demo core. | unset |
+| `SIGNALGRID_ESTATE_OWNER_TOKEN` | The estate owner's bearer token (≥24 characters, never a demo key). Required by `SIGNALGRID_CORE=estate`. Key-only in the compose file: passed through only when the host sets it. | unset |
+| `SIGNALGRID_ESTATE_OPERATOR_TOKEN` | Optional estate operator bearer token, same rules as the owner token. | unset |
+| `GRAPH_BASE_URL` | Graph base URL for the posture connector; only read when the live gate opens. | `https://graph.microsoft.com/v1.0` |
 | `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. **Required** once OIDC is on — without both, the config is invalid and every request is 401. | unset |
 | `OIDC_SUBJECT_CLAIM` | Claim used as the caller's subject id. | `sub` |
 | `OIDC_CLOCK_TOLERANCE_SEC` | Allowed clock skew when validating token times. | `60` |

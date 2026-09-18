@@ -1609,11 +1609,25 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       partner cannot learn `plan.outcome` exists. The api tests already pin the shape
       — the schema can be written from them. `API_CONTRACT_AUDIT.md` lists response
       shapes as unchecked; this is the highest-consequence instance. Lane: api-contract-architect.
-- [ ] **Small contract-name drift. 2026-09-01 (contract-drift sweep, LOW).**
+- [x] **Small contract-name drift. 2026-09-01 (contract-drift sweep, LOW).**
       `LAUNCH_CONSOLE_WIREFRAMES.md` names `GET /v1/connectors/:id/syncs`; the served
       path is `/sync-runs`. The SDKs and vectors read an optional `obligations` array
       that `AssistResult` and the handler never emit (tolerated, but an SDK-documented
       field no server sends — either emit it on step_up or drop it from the SDK docs). Lane: api-contract-architect.
+      **DONE 2026-09-18.** Half (a) was already repaired upstream and is verified gone:
+      `grep -rn 'connectors/{id}/sync' docs/LAUNCH_CONSOLE_WIREFRAMES.md` prints `sync-runs` at
+      :72 and :194, and a repo-wide `grep -rn '/syncs'` (excluding node_modules and this file)
+      returns nothing — no code change was needed and none was invented.
+      Half (b) was closed by KEEPING the field unemitted and GATING the pairing, rather than
+      emitting an obligation nobody asked for: both SDK READMEs already say the spec "declares no
+      `obligations` field", and the shared vectors already pin that absent means not-stated
+      (never nothing-required), which is a safety rule and is untouched. What was missing was
+      anything watching the pairing. `scripts/check-assist-wire-served.mjs` now reads the
+      `AssistResult` SCHEMA BLOCK (not the whole document — `obligations` appears in prose and
+      near the reason-code list) and fails in BOTH directions: the spec adding the field while a
+      README still says it declares none, and a README dropping the sentence while the spec still
+      declares none — which is the SDK-documented-field-no-server-sends drift itself. A block it
+      cannot FIND is fatal, never silent agreement. `--self-test` 15/15, four of them new.
 - [ ] Census figures in `docs/PRODUCT_COMPLETION_PLAN.md` read as a dated
       point-in-time analysis but risk drifting from live counts. 2026-09-01
       (security/adversarial scan, fail-closed auditor): the doc's "48 deferred

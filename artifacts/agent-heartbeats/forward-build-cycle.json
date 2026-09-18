@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-18T15:27:27.318Z",
-  "result": "acted: opened PR #846 (tick re-derives the surface coverage page before committing sim results) — the unattended Mac tick's first result PR #844 went red on that gate and needed a hand commit; #844 merged at 47aee557 with fresh live evidence (2026-09-18T14:52Z, manifest 6906d8d9), readiness headline back to 94% OUTREACH OPEN."
+  "firedAt": "2026-09-18T18:59:07.285Z",
+  "result": "acted: pushed claude/build-estate-core (da7dea6c) and opened its PR — SignalGridCore.fromEstate(), the non-demo core constructor (first item on the distance-to-customer list); proof:estate-core 13/13, test:api 409/409, preflight + breadth green; owner-merged. Runbook gate now scans boot-reads by import graph. Intake branch claude/intake-2026-09-18 (google/artemis, apple/device-management, awesome-mcp-servers) in its gate chain."
 }

@@ -31,6 +31,29 @@
  * and it is named in `docs/COMPANY_BUILD_PLAN.md`. What it DOES now cover that it
  * did not before: the redirect hop, because no emitter follows one any more
  * (`adapters/redirect.ts`).
+ *
+ * THE LITERAL HOST HAS MORE THAN ONE SPELLING, AND EVERY RULE ABOVE WAS COMPARING
+ * AGAINST ONLY ONE OF THEM. `[::ffff:127.0.0.1]`, `[::ffff:169.254.169.254]` and
+ * `[::ffff:10.0.0.7]` are the SAME loopback/metadata/private addresses as their plain
+ * IPv4 spellings — IPv4-mapped IPv6 — and `[::127.0.0.1]` (IPv4-compatible, deprecated
+ * but still parses) is the same address again. `new URL(...)` accepts every one of
+ * these, and every equivalent respelling of them (hex groups, fully expanded, mixed
+ * case) canonicalizes to exactly one of two textual shapes — confirmed against the
+ * platform URL parser, not assumed: `::ffff:<hex16>:<hex16>` (mapped) or
+ * `::<hex16>:<hex16>` (compatible) — so `validateWebhookUrl` decodes those two shapes
+ * back to dotted-decimal BEFORE running the checks below, and every existing rule
+ * then applies to the decoded address exactly as it already applied to the plain
+ * spelling. Nothing else changes: a genuinely different IPv6 address (`2001:db8::1`,
+ * `fe80::1`, `fc00::1`) never matches either shape, because both require the leading
+ * ~96 bits to be all zero, which no routable IPv6 prefix is.
+ *
+ * A DIFFERENT EMBEDDING IS DELIBERATELY LEFT ALONE: the NAT64 well-known prefix
+ * `64:ff9b::/96` (e.g. `64:ff9b::7f00:1` for 127.0.0.1) is a THIRD way to spell an
+ * IPv4 address inside IPv6, is not in the reported bypass, and decoding it is a
+ * bigger change than this fix — a NAT64 resolver on an actual deployment's network
+ * can legitimately hand back addresses in that block for otherwise-ordinary public
+ * IPv4 hosts, and this file's job today is closing the reported bypass, not widening
+ * the rule. Named here so it is not mistaken for closed.
  */
 
 /**
@@ -106,6 +129,28 @@ export const WEBHOOK_URL_REFUSALS = {
  *  retried six times over ~31 seconds instead of being refused once. */
 export const WEBHOOK_URL_REFUSAL_REASONS: readonly string[] = Object.values(WEBHOOK_URL_REFUSALS);
 
+/**
+ * `new URL()` canonicalizes every IPv4-mapped (`::ffff:a.b.c.d`) or IPv4-compatible
+ * (`::a.b.c.d`) IPv6 literal — however the caller spelled it, dotted or hex, padded
+ * or not, upper- or lower-case — to one of exactly two lowercase shapes:
+ * `::ffff:<hex16>:<hex16>` or `::<hex16>:<hex16>`. Both mean the same thing: the
+ * trailing 32 bits ARE an IPv4 address. Decode them back to dotted-decimal so the
+ * rules in {@link validateWebhookUrl} see the same literal regardless of spelling.
+ *
+ * Anchored full-string match on purpose: `::1`, `::`, `fe80::1`, `fc00::1` and every
+ * ordinary global-unicast address have EITHER a nonzero leading group (fails the
+ * required `::` prefix) or fewer than two explicit trailing groups (fails the
+ * `<hex16>:<hex16>` requirement), so none of them match here and each still falls
+ * through to its own existing check unchanged.
+ */
+function decodeIPv4InIPv6(hostname: string): string | null {
+  const match = /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(hostname);
+  if (!match) return null;
+  const hi = parseInt(match[1], 16);
+  const lo = parseInt(match[2], 16);
+  return `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+}
+
 export function validateWebhookUrl(
   url: string,
   opts: { live: boolean },
@@ -117,7 +162,11 @@ export function validateWebhookUrl(
       return { valid: false, error: WEBHOOK_URL_REFUSALS.httpsRequired };
     }
 
-    const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    // Zone ids (`[fe80::1%eth0]`) are refused by `new URL()` itself for the
+    // http/https schemes this guard validates — confirmed above, not assumed —
+    // so a zone id never reaches here; it is already caught below as invalidUrl.
+    const bracketless = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    const hostname = decodeIPv4InIPv6(bracketless) ?? bracketless;
 
     // Loopback and unspecified, in both families.
     if (

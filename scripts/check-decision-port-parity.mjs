@@ -200,6 +200,19 @@ function checkEnginesAndWorkflows() {
     }
   }
 
+  // ── 2b. declared trigger drift ─────────────────────────────────────────────
+  for (const f of compareTriggers({ tsSrc, swiftSrc, declared: DECLARED_TRIGGER_DRIFT })) {
+    console.error(`  ✗ ${f}`);
+    problems += 1;
+  }
+  if (DECLARED_TRIGGER_DRIFT.length > 0) {
+    say(
+      `  declared trigger drift: ${DECLARED_TRIGGER_DRIFT.length} entry(ies) still holding — ` +
+        DECLARED_TRIGGER_DRIFT.map((d) => `${d.code}/${d.marker} (${d.side} only)`).join(", ") +
+        `. REPORTED every run: a declared divergence that nobody is reminded of is an undeclared one.`,
+    );
+  }
+
   say(`decision-port parity: ${ts.size} TS rules vs ${swift.size} Swift rules, ${problems} divergence(s)`);
 
   // ── 3. AppWorkflows: the OTHER ported file ─────────────────────────────────
@@ -371,6 +384,70 @@ const MIN_SHAPE_FIELDS = 5;
  * let the plain comparison govern). Repairing the port is the Mac lane's, with Xcode
  * (CLAUDE.md golden rule 1: the Swift is never edited for behaviour from here).
  */
+/**
+ * SECTION 2b — DECLARED TRIGGER DRIFT (2026-09-14).
+ *
+ * Sections 1 and 2 compare the reason-code VOCABULARY and the OUTCOME WIRING. Neither
+ * can see a difference in what makes a shared code FIRE, and that gap is not theoretical:
+ * `CUSTODY_EXCEPTION` exists on both sides with identical outcomes, so a removal rule
+ * added to the TS engine alone passes both sections green while an unclaimed lift from
+ * the dock is a custody exception in the fabric and `allow` on the phone — nothing going
+ * red anywhere. That is the exact failure this file's header says it exists to catch, and
+ * it reached a review rather than a gate.
+ *
+ * WHAT THIS SECTION DOES, and it is narrower than it looks: it cannot DETECT an
+ * undeclared predicate drift. Deciding whether two predicates agree is not something a
+ * text comparison can do, and pretending otherwise would be worse than the gap. What it
+ * does is make a DECLARED one impossible to forget — the marker must still be present on
+ * the declaring side (else the rule was removed and the entry is stale) and still absent
+ * on the other (else the port landed and the entry is hiding finished work). Either way
+ * the gate fails until the declaration is deleted, so a drift cannot outlive its reason.
+ *
+ * Repairing the port is the Mac lane's, with Xcode — CLAUDE.md golden rule 1 means the
+ * Swift is never edited for behaviour to satisfy this gate.
+ */
+const DECLARED_TRIGGER_DRIFT = [
+  {
+    code: "CUSTODY_EXCEPTION",
+    marker: "hasUnauthorizedRemoval",
+    side: "ts",
+    why:
+      "removal suspends the session (DR-043 item (b), PR #748): the TS engine raises " +
+      "CUSTODY_EXCEPTION when a dock.device_undocked arrives with no active session. The " +
+      "Swift port's mirror of that block has no removal predicate, so the same lift is a " +
+      "custody exception in the fabric and `allow` on the phone. The two sides agree on " +
+      "the code and on its outcomes, which is why sections 1 and 2 stay green. /v1 is the " +
+      "decision authority (CLAUDE.md golden rule 4 — on-device evaluation is a demo, not " +
+      "enforcement), so the divergence is bounded; it is declared rather than tolerated.",
+  },
+];
+
+/**
+ * Pure, so the self-tests below can plant every arm. `tsSrc`/`swiftSrc` are the
+ * COMMENT-STRIPPED sources, so a marker named only in a comment does not count as a
+ * rule — which is what makes "still absent on the other side" mean anything.
+ */
+function compareTriggers({ tsSrc, swiftSrc, declared }) {
+  const findings = [];
+  for (const d of declared) {
+    const onDeclaring = (d.side === "ts" ? tsSrc : swiftSrc).includes(d.marker);
+    const onOther = (d.side === "ts" ? swiftSrc : tsSrc).includes(d.marker);
+    const other = d.side === "ts" ? "Swift" : "TS";
+    if (!onDeclaring) {
+      findings.push(
+        `${d.code}: stale declaration — the ${d.side.toUpperCase()} trigger \`${d.marker}\` is GONE, ` +
+          `so this entry describes a drift that no longer exists. Delete it.`,
+      );
+    } else if (onOther) {
+      findings.push(
+        `${d.code}: the port landed — \`${d.marker}\` is now present in ${other} too, ` +
+          `so this entry is hiding finished work. Delete it and let the comparison govern.`,
+      );
+    }
+  }
+  return findings;
+}
+
 const DECLARED_WORKFLOW_DRIFT = [
   {
     shape: "AppPlanInput",
@@ -740,6 +817,24 @@ function runSelfTests() {
     Boolean(coreRulesSlice) && !coreRulesSlice.includes("SHARED_DEVICE_RULES_V2"),
     coreRulesSlice ? `${coreRulesSlice.split("\n").length} line(s) scoped` : "no slice",
   );
+
+  // ── 2b: the trigger-drift comparison must be able to fail, in every direction ──
+  const TD = [{ code: "C", marker: "hasThing", side: "ts", why: "planted" }];
+  const tdHold = compareTriggers({ tsSrc: "if (hasThing) {}", swiftSrc: "let x = 1", declared: TD });
+  t("trigger: a declared TS-only drift is accepted while it holds", tdHold.length === 0, `${tdHold.length} finding(s)`);
+  const tdLanded = compareTriggers({ tsSrc: "if (hasThing) {}", swiftSrc: "if hasThing {}", declared: TD });
+  t("trigger: a declared drift whose port has LANDED is flagged (remove the declaration)", tdLanded.length === 1 && tdLanded[0].includes("port landed"), `${tdLanded.length} finding(s)`);
+  const tdStale = compareTriggers({ tsSrc: "let y = 2", swiftSrc: "let x = 1", declared: TD });
+  t("trigger: a declared drift whose TS rule is GONE is flagged (stale declaration)", tdStale.length === 1 && tdStale[0].includes("stale declaration"), `${tdStale.length} finding(s)`);
+  const tdSwiftSide = compareTriggers({ tsSrc: "let y = 2", swiftSrc: "if hasThing {}", declared: [{ ...TD[0], side: "swift" }] });
+  t("trigger: the swift-side arm holds symmetrically", tdSwiftSide.length === 0, `${tdSwiftSide.length} finding(s)`);
+  // A marker that survives only in a COMMENT must not read as a live rule — otherwise a
+  // ported rule later deleted down to its comment would keep this gate green forever.
+  const tdCommentOnly = compareTriggers({ tsSrc: "if (hasThing) {}", swiftSrc: code("// hasThing was here\nlet x = 1"), declared: TD });
+  t("trigger: a marker surviving only in a COMMENT does not count as the port landing", tdCommentOnly.length === 0, `${tdCommentOnly.length} finding(s)`);
+  // …and the REAL declaration must hold right now, or the gate is green about a lie.
+  const tdLive = compareTriggers({ tsSrc, swiftSrc, declared: DECLARED_TRIGGER_DRIFT });
+  t("trigger: every LIVE declaration still describes a real, still-open drift", tdLive.length === 0, `${tdLive.length} finding(s)`);
 
   // ── 3b: the shape comparison must be able to fail, in every direction ──────
   const S = (...xs) => new Set(xs);

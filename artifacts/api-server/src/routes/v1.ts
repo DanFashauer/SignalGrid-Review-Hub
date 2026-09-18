@@ -685,6 +685,33 @@ router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, nex
   }
 });
 
+// 2b) Revoke — the missing half of enrollment (BUILD_BACKLOG.md, "Credential
+//     revocation has storage but no semantics" / security roster row 82).
+//     `removeCredential` has carried the same per-user lock as `addCredential`
+//     and a proven add/remove concurrency guarantee (proof:enrollment-race)
+//     since the row before this one landed; nothing exposed the route. Same
+//     privilege as enrolling — an owner/operator ceremony, gated the same way
+//     (role + the out-of-band secret when one is configured) — because
+//     revoking someone else's step-up credential is exactly as consequential
+//     as enrolling one. Fail-closed by construction: `removeCredential` never
+//     reports a revocation that did not happen, so `revoked: false` (no such
+//     credential on this identity, or no enrollment at all) is a normal,
+//     idempotent 200 — never a 404 that would let a caller distinguish
+//     "wrong id" from "already revoked" and turn that into an oracle.
+router.post("/v1/step-up/enroll/revoke", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    requireEnrollmentPrincipal(req);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const identityRef = requireString(body, "identityRef");
+    const credentialId = requireString(body, "credentialId");
+    const userId = webauthnUserId(req, identityRef);
+    const revoked = await webauthnStore.removeCredential(userId, credentialId);
+    res.json(envelope(req, { revoked, identityRef, credentialId }));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 3) Authentication challenge for a pending step-up. The challenge is BOUND to the
 //    exact pending action at mint time (tenant + identity + integration + device +
 //    the SELECTED ACTION KEY), and the completion route verifies that binding — so a

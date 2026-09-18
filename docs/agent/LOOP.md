@@ -52,7 +52,77 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-14 16:36Z (cloud lane, latest) - THE QUEUE IS THE BOTTLENECK, MEASURED, NOT
+LAST TOUCHED: 2026-09-17 21:20Z (cloud lane, latest) - A LONG MERGE-AND-BUILD SESSION.
+              MEASURED, not recalled: `29` pull requests merged on 2026-09-17 and `27` still open.
+              The open count barely moved (30 -> 27) and that is the honest shape of it: much of what
+              merged was lane mail and heartbeats opened and landed in the same breath, and the OLDER
+              backlog (#724, #730, #745, #782, #729, #723, #758, #755, #686, #531, #725, #753, and
+              eight dependabot bumps) is still sitting there, most of it now conflicted because
+              mainline moved. What actually matters out of the session:
+              THE MAC COLUMN WAS NEVER A MAC PROBLEM. `PR — Mac-only checks` had been red on
+              essentially every PR for days and was blamed first on a firewall, then on Node drift.
+              Both wrong, both retracted. #791's drop legibility made the gate name itself:
+              `dropped=144/300, first: ECONNRESET`. The load harness opened all 300 connections at
+              once, so the kernel's accept queue reset 144 of them before Express saw them - the
+              limiter never ran (`429s=0`), and `allowed=156` is exactly `300 - 144`. One failure
+              read as five. Fixed in #804 by bounding the burst to 32 in flight, which is what the
+              assertion was always named for; CONFIRMED GREEN on the real macOS runner, twice.
+              The somaxconn=128 mechanism remains INFERENCE - no macOS host here - and a passing
+              check does not turn an inference into a measurement.
+              CASCADE JOINS 2, 3 AND 4 ARE IN. Join 4 (#807, `lib/signalgrid-core/src/verification.ts`)
+              answers "monitor the fix or jump in": `unobserved` is NOT `cleared`, an unapproved
+              remediation cannot have landed whatever the evidence says, and `dismissed` holds the
+              restriction without escalating. proof:remediation-verification 51/51, falsified by three
+              planted defects. The third falsification CORRECTED THE PROOF ITSELF - a self-test
+              asserted on a case its defect could not reach and passed WITH the defect planted.
+              THE SEAM HAD FOUR HOLES OF ONE SHAPE, all now documented in loop-state.mjs: worktree
+              naming, squash merges, hub aliases (#805), and mainline moving past a landed branch
+              (#810). Reported-unpushed went 13 -> 1, and the one that remains is correctly
+              unprovable: a squash applies the branch's DIFF, so a concurrently-edited file never
+              matches verbatim. Both fixes were falsified before being trusted.
+              OWNER-ONLY AND STILL OPEN: the "Default" ruleset targets `~ALL` branches with one rule,
+              copilot_code_review. That single scope both marks every branch protected - branch-prune's
+              dry run refuses all 72, `63 keep — branch protection` - and spawns the
+              github-advanced-security check that failed 7 of 9 times today with
+              `CAPIError: 400 The requested model is not supported`, thrown before any diff is read.
+              An earlier claim that this was a static misconfiguration was RETRACTED on #803: it
+              passes intermittently, which a wrong model cannot do.
+              PREVIOUSLY (2026-09-14 21:20Z, mac lane): DR-043 ITEM (d) IS COMPLETE: BOTH POLICY ROWS
+              ARE IN THE CORE. Row 1 (removal suspends the session, CUSTODY_EXCEPTION) landed in #748.
+              Row 2 - a legacy read for a strong-enrolled worker DENIES with CREDENTIAL_DOWNGRADE - is
+              on #753 (head 8c7bcb80), carried by two new signal domains, enrollment_strength and
+              credential_read_method, alongside attach_state and presence_state. On that branch,
+              `21` signal categories and `24` evidence fields — quoted from #753's own run, NOT
+              mainline's, which still measures 17 and 20 until it lands. (The earlier version of this
+              line said `25` evidence fields; proof:signalgrid-core on 8c7bcb80 prints
+              evidenceFields=24, which the quoted-green block below had right and this sentence had
+              wrong.) The distinction the family rests on: not_applicable (no such
+              credential is in play) is NOT unknown (a read attempted and failed); collapsing them
+              would step up every puck-less deployment on day one.
+              WHAT THE PROOF CAUGHT, and it is wider than one rule: credential-downgrade is the core's
+              FIRST two-condition rule, and the core proof's scope derivation could not see it. It
+              probes one field at a time from one healthy baseline, so a field that is only ever half
+              of an AND never fires the rule that names it. enrollmentStrength derived as out-of-scope
+              while the sweep swept it, and the exact-equality scope check refused the mismatch rather
+              than quietly shrinking coverage. Fixed IN THE DERIVATION - unresolved fields escalate to
+              a derived family of bases (healthy plus every single-field perturbation) - not by typing
+              a field into a list. The escalation's comment names what it does NOT close: the
+              derivation sees conjunctions, the sweep is still single-axis.
+              AUTO-MERGE IS ON AND #753 IS DELIBERATELY NOT ELIGIBLE. classifyDiff returns
+              owner-gated: DECISION_PATH on lib/* and the /v1 server, OWNER_RESERVED on the
+              buyer-facing site. That is the machinery working, not a blocker - the cloud review board
+              merges it per DR-037.
+              Green, quoted FROM #753 (head 8c7bcb80), not from mainline: preflight EXIT=0,
+              verify:breadth 56 proofs EXIT=0, proof:signalgrid-core
+              `assertions=526 categories=21 evidenceFields=24`, proof:evidence-coverage `30/30 axes=25`,
+              proof:signal-radar 22/22, test:api 409/409, room-console sigClass 176 vectors + 10 pins,
+              manifest v81, CORE_NORMALIZATION_VERSION 18 -> 19.
+              STILL OWED BY CLOUD: the skill-instruction-conflicts gate hangs preflight forever
+              (askHook spawns .claude/hooks/block-dangerous.sh with no timeout; traced to cloud's
+              DR-047 skill commits). Also: scripts/mac/gh-pr.mjs is still only on
+              mac/gh-pr-rest-helper, and its `open` exited 0 WITHOUT patching the PR body - the body
+              had to land via `gh api -X PATCH`. Both are real defects, neither is fixed.
+2026-09-14 16:36Z (cloud lane) - THE QUEUE IS THE BOTTLENECK, MEASURED, NOT
               GUESSED. Ran scripts/check-merge-authorization.mjs (from #729's worktree; it is not on
               mainline yet, which is itself the loop) against all eleven open PRs. Every one REFUSED
               as owner-gated: #727, #730, #729, #723, #737, #732, #741, #742, #744, #745, #748 all
@@ -1138,7 +1208,7 @@ NEXT ACTION: cloud: (0) NOTHING ELSE IS THE BOTTLENECK - the eleven owner-gated 
    frozen" until 2026-09-02 — two days after this file's own STATE section
    recorded DR-021 — which is the contradiction a doc can hold against itself
    when no gate reads English.*
-3. **Nobody has used the product.** 144 proof gates and four native surfaces do
+3. **Nobody has used the product.** 147 proof gates and four native surfaces do
    not change that number. Only a conversation does.
 
 ---

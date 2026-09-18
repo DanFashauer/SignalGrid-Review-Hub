@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-14T17:32:14.187Z",
-  "result": "acted: new Mac branch mac/attach-signal-domain (ad3b8a57, DR-043 item (a)) had no PR — opened #753 draft, subscribed, reviewed. Design approved and falsified (core proof 503/503; removing attach-unknown gives 502/503); blocked on docs/architecture.html:177 saying 17 where SIGNAL_CATEGORIES is now 18, plus a types.ts field comment that says the default is \"unknown\" when it measures not_applicable. One recorded finding: a malformed emitted attach value normalizes to not_applicable (allow), so garbage reads like a puck-free site. Tick firedAt 2026-09-14T17:23:20.839Z (quiet, healthy); live-evidence 2026-09-12 22:56 (under 3d); sync manifest v79 unchanged; sim requests all bound; no owner escalation."
+  "firedAt": "2026-09-18T02:09:41.057Z",
+  "result": "acted: sent the live-evidence refresh ask (mac-run.json minted 2026-09-12, 5d old, manifest 4afa60cf2fd5 vs tree 6906d8d9ecc5; readiness (b)=0%). Tick heartbeat firedAt 2026-09-18T01:44:12Z, well inside 3h, so the Mac is ticking and the owner was NOT escalated. No mail addressed to cloud, so nothing to ack. No new or moved origin/mac/* branches. Note for the next cycle: the sim request for this re-mint sits on unmerged branch #821, so the tick cannot see it - that is why this went as mail."
 }

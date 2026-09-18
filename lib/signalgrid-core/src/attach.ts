@@ -122,7 +122,9 @@ export function normalizeAttachRecord(
   const referenceMs = parse(referenceInstant);
   if (observedMs === null) return unknown("the observation instant is unparseable");
   if (referenceMs === null) return unknown("the reference instant is unparseable — no window to judge within");
+  // freshness: local-by-design — same rule as utils/freshness (tolerance 0, future reads `unknown`); signalgrid-core is the BASE package with zero dependencies and cannot import @workspace/integrations, the same reason util.ts's classifyFreshness carries this marker
   if (observedMs > referenceMs) return unknown("the observation postdates the reference instant");
+  // freshness: local-by-design — the age arithmetic guarded by the future check immediately above; same local-by-design reason
   if (referenceMs - observedMs > Math.max(0, freshnessBoundSeconds) * 1000) {
     return unknown(`the observation is older than the caller's ${freshnessBoundSeconds}s bound`);
   }

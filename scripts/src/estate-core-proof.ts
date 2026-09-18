@@ -141,6 +141,8 @@ async function main(): Promise<void> {
   ok("two builds on the same clock and read mint the same decision ids", first.every((id, i) => id === second[i]));
 
   console.log(`\nestate-core proof: ${checks - failed}/${checks} checks passed (${mapped.subjects.length} subjects from ${signals.length} Graph signals, ${mapped.skippedOwnerless} ownerless skipped)`);
+  // The line check-proof-counts.mjs reads to hold "(N checks)" in the docs against the proof.
+  console.log(`summary=${failed === 0 ? "pass" : "fail"} (${checks - failed}/${checks})`);
   if (SELF_TEST) {
     if (failed > 0) {
       console.log("self-test: the planted loosening (unknown compliance read as compliant) was CAUGHT — the proof can fail.");

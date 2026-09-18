@@ -91,9 +91,33 @@ function initEnterpriseAuth(): EnterpriseAuthenticator | null {
     return createEnterpriseAuthenticator(result.config, defaultJwksFetch);
   }
   if (result.status === "invalid") {
-    logger.warn(
-      { reason: result.reason },
-      "Enterprise OIDC config is incomplete — staying on demo-key auth (fail-closed).",
+    // REFUSE TO BOOT. `invalid` is only ever returned when OIDC_ISSUER IS SET
+    // (an unset issuer is `disabled`, the untouched demo/fixture default), so it
+    // means exactly one thing: an operator reached for enterprise authentication
+    // and got some part of it wrong — a missing audience or JWKS URI, an
+    // unparseable or empty tenant/role map, a role value that is not a role.
+    //
+    // The previous behaviour logged this at WARN and returned null, which under
+    // the DEFAULT profile falls through to the demo-key branch below: the
+    // published `sgk_demo_*` bearers are accepted, and `/v1/keys` hands them to
+    // anonymous callers. So a single mistyped variable turned "OIDC is on" into
+    // an open credential dispenser, while `/readyz` still reported ready
+    // (routes/health.ts gates its auth-config check on `!demoSurfacesEnabled()`)
+    // and the only trace was a warn line. The old message called that
+    // "fail-closed"; it was the opposite, and an unusable configuration value
+    // LOOSENING the answer is what golden rule 2 forbids.
+    //
+    // This mirrors, on the authentication knob itself, the boot-time refusals the
+    // server already applies to lesser ones: METRICS_TOKEN present-but-blank
+    // (app.ts), SIGNALGRID_MAX_DECISIONS_PER_TENANT (lib/core.ts), and an
+    // unrecognised SIGNALGRID_PRODUCT_PROFILE (lib/profile.ts) — "a configuration
+    // error on a security knob is answered by not serving, never by serving less
+    // safely". Unset OIDC_ISSUER to serve the demo surface deliberately.
+    throw new Error(
+      `Enterprise OIDC is configured but invalid: ${result.reason} ` +
+        "Refusing to start rather than silently accepting demo bearer tokens on a deployment " +
+        "whose operator believes OIDC is enforcing. Fix the OIDC_* variables (docs/DEPLOYMENT.md), " +
+        "or unset OIDC_ISSUER to serve the demo credential surface deliberately.",
     );
   }
   return null;

@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 81,
-  "fingerprint": "a0399956f876ee17a2a217100f03e1cef07205736d811dc70062a03033680728",
+  "manifestVersion": 80,
+  "fingerprint": "567c1090cfb1db0d6775dbdb2076521518d8ddea86bdd3d57419a91fe9de8bfa",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -163,7 +163,7 @@
       "uem": 76,
       "unsafe-claim": 50,
       "verdict-attestation": 98,
-      "webhooks": 206,
+      "webhooks": 229,
       "work-context": 58
     },
     "mcpTools": [

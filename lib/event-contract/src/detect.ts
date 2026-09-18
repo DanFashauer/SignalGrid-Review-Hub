@@ -18,7 +18,8 @@ export type DetectionCode =
   | "REMOVED_WITHOUT_BADGE_ACCESS"
   | "LEFT_PREMISES_WITHOUT_RETURN"
   | "DOCK_TAMPER_WITH_NETWORK_LOSS"
-  | "INACTIVE_MDM_BUT_ACTIVE_ELSEWHERE";
+  | "INACTIVE_MDM_BUT_ACTIVE_ELSEWHERE"
+  | "CUSTODY_STALE_OR_CONTESTED";
 
 export interface Detection {
   code: DetectionCode;
@@ -109,6 +110,48 @@ export function detectCrossDomain(events: readonly SignalGridEvent[]): Detection
       reason: "The device is unmanaged/unknown in MDM but is still active on cellular or badging in.",
       correlationId,
       evidenceEventIds: [...darkInMdm, ...aliveElsewhere],
+    });
+  }
+
+  // 6. Custody is STALE or CONTESTED — the dock, MAM (checkout) and posture planes
+  //    disagree about who holds the device or whether it is seated. The founder's
+  //    "phantom custody": a device still checked out to a prior holder, or sitting
+  //    unpaired in a slot the console shows as present. Three shapes, all fail-closed
+  //    (an unresolved / unknown custody fact FIRES this detection; it never suppresses
+  //    one, and an absent return is read as "still out", never as "cleared"):
+  //      (a) STALE at dock — the bay re-locked around a device (dock plane: seated /
+  //          present) while a checkout is still open: granted and never returned (MAM
+  //          plane: still out to a holder).
+  //      (b) CONTESTED — more than one checkout was granted on this one custody
+  //          timeline with no clearing return: the device was handed out again while
+  //          a prior holder's custody was never cleared.
+  //      (c) UNPAIRED but present — the dock shows a seated device while posture
+  //          reports it unmanaged/unknown: a slot the console shows occupied by a
+  //          device that is not paired/managed.
+  const seatedAtDock = idsWhere((e) => e.eventType === "dock_relocked");
+  const custodyReturned = has((e) => e.eventType === "device_returned");
+  const unpairedPosture = idsWhere((e) => e.mdmDeviceState === "unmanaged" || e.mdmDeviceState === "unknown");
+  const staleAtDock = seatedAtDock.length > 0 && grants.length > 0 && !custodyReturned;
+  const contestedGrants = grants.length > 1 && !custodyReturned;
+  const unpairedButSeated = seatedAtDock.length > 0 && unpairedPosture.length > 0;
+  if (staleAtDock || contestedGrants || unpairedButSeated) {
+    const evidence = new Set<string>();
+    if (staleAtDock) {
+      for (const id of seatedAtDock) evidence.add(id);
+      for (const id of grants) evidence.add(id);
+    }
+    if (contestedGrants) for (const id of grants) evidence.add(id);
+    if (unpairedButSeated) {
+      for (const id of seatedAtDock) evidence.add(id);
+      for (const id of unpairedPosture) evidence.add(id);
+    }
+    detections.push({
+      code: "CUSTODY_STALE_OR_CONTESTED",
+      severity: "high",
+      reason:
+        "Custody is stale or contested: the dock, checkout and posture planes disagree on who holds the device or whether it is seated.",
+      correlationId,
+      evidenceEventIds: [...evidence],
     });
   }
 

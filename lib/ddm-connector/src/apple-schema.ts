@@ -2,12 +2,14 @@
 // ddm-connector.
 //
 // The sibling of macos-posture's apple-schema.ts: it pins the subset of Apple's
-// apple/device-management (MIT, schema v26.4) DDM `declarative/status/` items this
+// apple/device-management (MIT, schema v27.0) DDM `declarative/status/` items this
 // connector's inputs correspond to, and maps each substantive DdmDeviceReport
 // field to its canonical Apple provenance. DDM status is the authoritative,
 // push/subscription-based channel for macOS device state — aligning to its names
-// keeps the connector's vocabulary honest and lets a schema change on a new OS
-// release surface as a failing check instead of silent drift.
+// keeps the connector's vocabulary honest. No proof reads Apple's YAML: the checks
+// compare against the pinned catalog below, so moving the pin to a new OS release
+// is a manual re-verification against upstream (27.0 was re-verified item by item
+// on 2026-09-18: all 28 references across both alignments unchanged from 26.4).
 //
 // Naming / provenance alignment only: it changes no normalization logic and adds
 // no runtime dependency. Fields that DDM does not expose as a status item (a
@@ -23,7 +25,7 @@
 
 /** The apple/device-management schema release this alignment is pinned to. Must
  *  match the macos-posture alignment's pinned version. */
-export const DDM_APPLE_SCHEMA_VERSION = "26.4";
+export const DDM_APPLE_SCHEMA_VERSION = "27.0";
 
 /** Canonical DDM `declarative/status/` item types the connector aligns to (pinned
  *  subset). */

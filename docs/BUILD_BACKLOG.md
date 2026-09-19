@@ -1585,13 +1585,19 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       (`DecisionService.swift:74`). Fix: document `/api/v1/authorize` and have
       `check-assist-wire-served.mjs` assert the prefix, or make `validate()`
       append `/api`. Lane: api-contract-architect.
-- [ ] **`/v1/app-workflows/evaluate` — the one route a shipping native client binds —
+- [x] **`/v1/app-workflows/evaluate` — the one route a shipping native client binds —
       has no response schema and omits 401/403 in the spec. 2026-09-01
       (contract-drift sweep, MEDIUM).** iOS decodes `{decision:{outcome,reasonCodes,
       explanation}, plan:{outcome,mode}}`; the spec's 200 is description-only, so a
       partner cannot learn `plan.outcome` exists. The api tests already pin the shape
       — the schema can be written from them. `API_CONTRACT_AUDIT.md` lists response
       shapes as unchecked; this is the highest-consequence instance. Lane: api-contract-architect.
+      **Response schema BUILT 2026-09-19 (#888):** the 200 is `Envelope + { decision:
+      EvaluateResult, plan: AppSessionPlan }`, with `AppSessionPlan`/`AppActionPlan`
+      written from `lib/app-workflows/src/index.ts` and the api tests. The 401/403
+      half rides #863 (`check-v1-refusal-coverage`), which already edits this block;
+      the row closes when both are on mainline. Still unchecked by any gate: the
+      schema against the handler (`API_CONTRACT_AUDIT.md`, "What is still not checked").
 - [ ] **Small contract-name drift. 2026-09-01 (contract-drift sweep, LOW).**
       `LAUNCH_CONSOLE_WIREFRAMES.md` names `GET /v1/connectors/:id/syncs`; the served
       path is `/sync-runs`. The SDKs and vectors read an optional `obligations` array

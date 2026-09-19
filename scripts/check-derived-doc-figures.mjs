@@ -657,6 +657,26 @@ export const SWEEP = [
 // Keep short: an exemption nobody can explain is a hole somebody will widen.
 export const SWEEP_EXEMPT = [
   {
+    doc: "docs/CLAIM_INVENTORY.md",
+    near: /proofs check"\) \|\s*\| 148/,
+    count: 1,
+    reason:
+      "not a proof count at all — the inventory's own ROW NUMBER. Row 148 begins `| 148 |` on the line after " +
+      "a row whose note ends '…not the catalogue the proofs check'), so the sweep's 30-char window spans the row " +
+      "break and reads a table index as a figure. It became visible only when the proof count reached 148 " +
+      "(2026-09-18) and will go invisible again on the next proof; the entry is kept so the next person does not " +
+      "re-derive the same false positive from scratch.",
+  },
+  {
+    doc: "docs/agent/LOOP.md",
+    near: /proofs 148/,
+    count: 1,
+    reason:
+      "a QUOTED historical measurement — the assertion counts two modules moved through during round seven of the " +
+      "2026-09-11 adversarial review ('proofs 148 -> 154 and 161 -> 167'). It records what happened on a day, not " +
+      "a property of the tree, and rewriting it to track the proof count would falsify the record.",
+  },
+  {
     doc: "docs/STATUS.md",
     near: /proof gates: \*\*\d+/,
     count: 1,

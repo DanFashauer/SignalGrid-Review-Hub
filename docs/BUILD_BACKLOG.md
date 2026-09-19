@@ -23,8 +23,49 @@ Swift edit is invisible until a human opens Xcode); `ReleaseLedger.holds` and
 the webhook write-route stay recorded-not-fixed by their own stated rule (no
 lone repairs into unreachable code).
 
-- [ ] **Align the new 27.0 `mdm.*` status items to the custody model (DDM connector, HIGH).** The 26.4 → 27.0 re-pin of both `apple-schema.ts` files landed in #856 (Mac lane, 2026-09-18; all 28 pinned references verified unchanged). What 27.0 ADDS is still unmodelled: `declarative/status/mdm.is-return-to-service.yaml`, `mdm.enrollment-type.yaml`, `mdm.is-shared-ipad.yaml`, `mdm.is-awaiting-configuration.yaml`, `security.lockdown-mode.yaml`, `device.system.health.yaml` (Apple `09f249a06e7e3289930bf6d05f38fb562f748ebf`). The first two are exactly the facts the custody model and the Return-to-Service row need: a device reporting `is-return-to-service` is the `device_returned` signal, and `enrollment-type` is the supervised/unsupervised truth golden rule 4 asks for. Align them in the DDM connector as read-only status items with unknown-tightens semantics; cite `app.settings.yaml` from `native/ios/mdm/README.md`. Discovered 2026-09-18 from the owner's apple.com intake. Lane: principal-engineer.
-- [ ] **Hold the DDM/macOS-posture schema pins against Apple's YAML (gate, MEDIUM).** `apple-schema.ts` promises that a schema change "surfaces as a failing check", but no proof reads Apple's YAML: `proof:ddm-connector` checks the version string shape and that the item list agrees with itself. Vendor the pinned status-item YAML subset under `third_party/apple-device-management/` (MIT-style license, sha-pinned, publication-boundary declared) and have the proof assert each pinned item resolves to a vendored file whose `title`/keys match what the connector reads. Discovered 2026-09-18. Lane: qa-engineer.
+- [x] **Align the new 27.0 `mdm.*` status items to the custody model (DDM connector, HIGH).**
+      *(Row opened by the 2026-09-18 intake (#858). What 27.0 ADDS was unmodelled: `mdm.is-return-to-service`, `mdm.enrollment-type`,
+      `mdm.is-shared-ipad`, `mdm.is-awaiting-configuration`, `security.lockdown-mode`,
+      `device.system.health` — Apple `09f249a06e7e3289930bf6d05f38fb562f748ebf`. The first
+      two are the facts the custody model and the Return-to-Service row need.)*
+      **DONE 2026-09-18** — `lib/ddm-connector/src/index.ts` reads both as read-only status
+      items with unknown-tightens semantics: `enrollmentTypeOf` accepts only Apple's own
+      rangelist and treats an unpublished wire value as `unknown`, and `supervised` is true
+      for the exact value `supervised` and nothing else, because golden rule 4's
+      captive-device claim rests on supervision alone; `custodyPostureOf` reads
+      `return_to_service` as custody IN TRANSIT and treats an absent field as `unknown`,
+      since only an explicit `false` says a device is in ordinary service. Both raise
+      assurance and neither can lower it. The other four are named in `apple-schema.ts` as
+      known-and-unmodelled rather than silently skipped — a pin no code consumes is a pin
+      nobody re-verifies. Two fixtures were added (`mac-noc-11` user-enrolled, `mac-noc-12`
+      in return-to-service) and every other fixture now carries `enrollmentType:
+      "supervised"` + `returnToService: false`, so each older assertion still isolates the
+      arm it names instead of passing for the new reason. NOTE: the 26.4 → 27.0 version
+      constants overlap PR #856, which is unmerged; #856 also rewrote both headers to say
+      no proof reads Apple's YAML, and the row below makes that sentence false. How you'd
+      check: `pnpm run proof:ddm-connector` → `summary=pass (131/131)`.
+
+- [x] **Hold the DDM/macOS-posture schema pins against Apple's YAML (gate, MEDIUM).**
+      *(Opened by the same intake, #858.)* **DONE 2026-09-18** — the ten status items the
+      two catalogs pin (`DDM_APPLE_STATUS_ITEMS` ∪ `APPLE_DDM_STATUS_ITEMS`) are vendored
+      verbatim under `third_party/apple-device-management/declarative/status/` at
+      `09f249a06e7e3289930bf6d05f38fb562f748ebf` with Apple's MIT `LICENSE.txt` and a
+      `VENDORED.md`, declared as a `third_party_intake` area in
+      `scripts/publication-boundary.mjs` beside the other three vendored trees.
+      `proof:ddm-connector` now resolves every pinned item to a vendored file and asserts
+      its `payload.statusitemtype` equals the pinned name, that the value key the connector
+      reads is declared, and — for `mdm.enrollment-type` — that Apple's `rangelist` EQUALS
+      the connector's own value list. The header's promise that "a schema change surfaces
+      as a failing check" was previously kept by nothing: the checks compared the catalog
+      to itself, and a self-consistent catalog survives any upstream change. Only the
+      pinned subset is vendored; Apple's whole vocabulary would be somebody else's work
+      republished for no check. FALSIFIED by removing one vendored file (five assertions
+      red). The rangelist self-test was itself wrong on its first run — a plain first-match
+      replace hit the `allowed-enrollments` list higher up the file and left the rangelist
+      intact, so it passed while proving nothing. How you'd check: `pnpm run
+      proof:ddm-connector` → `summary=pass (131/131)`; `node
+      scripts/check-publication-boundary.mjs` passes with the new area.
+
 - [x] **27a — Normalization-version stamping on evidence (intake row 27). BUILT.**
       An adversarially-verified audit of the owner's canonical endpoint signal set found
       that nothing in the fabric recorded which version of the code produced a normalized
@@ -436,6 +477,16 @@ caller-supplied), and each names the clause of his sentence it serves.
       no wall clock — the correlation id derives from the decision id, as the playbook's
       already does. Proof: the mapper's full priority × category matrix, and one refusal
       per refusal reason. Lane: itsm-ops-domain.
+      **STILL OPEN, and deliberately not built twice (2026-09-18):** PR #819
+      (`origin/claude/itsm-dispatch-v2`) already implements this row in full —
+      a `dispatch.ts` in `lib/incident-playbook/src/` (path deliberately not backticked as a
+      citation — it does not exist on mainline yet) with `incidentToTicketRequest`,
+      `dispatchIncident`, `ITSM_DISPATCH_REFUSALS` and `proof:itsm-dispatch` — and it is
+      unmerged, so a second seam on mainline would fork the join rather than close it.
+      `proof:decision-cascade` (join 6) therefore asserts the ticket hop through the
+      durable queue instead, which is the property that holds either way; when #819 lands,
+      `dispatchIncident` becomes the sender behind that hop and nothing in the cascade
+      proof moves. This row closes when #819 merges.
 
 - [x] **Cascade join 2 — a change record is OPENED, not only read.** *(2026-09-17 —
       `lib/integrations/src/integrations/itsm/change-draft.ts`, `proof:change-draft`
@@ -520,7 +571,7 @@ caller-supplied), and each names the clause of his sentence it serves.
       to `0` → 2 fail). The third run corrected the proof itself: a self-test asserted on
       a case the defect could not reach and passed WITH it planted.)
 
-- [ ] **Cascade join 5 — a durable outbound queue for the cascade emitters.**
+- [x] **Cascade join 5 — a durable outbound queue for the cascade emitters.**
       Serves *"notify the proper protocol and teams that are assign to that resource"*.
       The retry, backoff-with-jitter and dead-letter shapes exist
       (`lib/integrations/src/integrations/webhooks/retry.ts`, `dispatch.ts`, `store.ts`,
@@ -534,8 +585,19 @@ caller-supplied), and each names the clause of his sentence it serves.
       **Deterministic:** the backoff schedule is computed and recorded; any path a proof
       drives never awaits it. No broker dependency — the point is one durable view, not
       Kafka. Lane: sre.
+      **DONE 2026-09-18** — `lib/signalgrid-core/src/outbound-queue.ts`: one queue over four
+      channels (`ticket` / `change_draft` / `notice` / `suspend`), one dead-letter view,
+      one summary. Pure and clockless — the id is a digest of the request, the backoff is
+      computed and recorded (1s, 2s, 4s) and nothing awaits it. Three fail-closed arms the
+      row did not ask for by name and the design needed: a claimed success with a BLANK
+      receipt is a refusal (the 2xx-shaped non-answer is the only failure that looks like
+      the good outcome); a terminal row is never re-graded by a late answer, so a second
+      "ok" cannot resurrect something already dead-lettered; and `allDelivered` is FALSE
+      for an empty queue, because `[].every()` answering true is the vacuous pass this
+      repository has been bitten by before. How you'd check: `pnpm run
+      proof:decision-cascade` → `summary=pass (92/92)`, hops 4–6.
 
-- [ ] **Cascade join 6 — `proof:decision-cascade`: the whole chain, and every refusal in it.**
+- [x] **Cascade join 6 — `proof:decision-cascade`: the whole chain, and every refusal in it.**
       Serves the sentence end to end. Each stage above will land with its own proof; what
       none of them covers is the chain, and the chain is the product claim — CLAUDE.md's
       *"a decision is the trigger for a cascade, not the end of it."* Build one proof that
@@ -547,6 +609,21 @@ caller-supplied), and each names the clause of his sentence it serves.
       passes on a tree with the joins removed is a restatement, not a proof — and it
       registers in `package.json` as a `proof:*` script so the Mac harness enumerates it
       automatically. Lane: devex-tooling-engineer.
+      **DONE 2026-09-18** — `scripts/src/decision-cascade-proof.ts`, registered in
+      `package.json`, `scripts/package.json`, `scripts/preflight.mjs`,
+      `.github/workflows/review-hub-ci.yml` and the figure guard's PROOFS registry. It
+      walks a `restrict` fixture through plan → resolution path → incident → queued ticket
+      request → change draft → audience routing → verification, then through the puck
+      lifecycle (attached → session → removed → suspend requested → suspend verified), and
+      asserts the fail-closed arm at each hop. IT FAILS WITHOUT THE FIX: `cascadeGaps()`
+      grades a cascade record for missing hops and the self-test drives it against records
+      with each of eight joins REMOVED — plus a vacuity control, since an `allow` has no
+      cascade and must not be graded as a broken one. The ticket hop deliberately does NOT
+      import PR #819's `dispatchIncident` (not on mainline): it asserts the property that
+      survives either way — an unreachable backend leaves the request QUEUED, then
+      dead-letters it, and the incident stays open. How you'd check: `pnpm run
+      proof:decision-cascade` → `summary=pass (92/92)`, `--self-test` for the nine planted
+      defects alone.
 
 **Proposed join order (cloud lane note, 2026-09-12):** join 1 first, because ITSM dispatch has the shortest path to an existing consumer (`lib/incident-playbook`) and gives every later join something real to hang off; join 5 second, so joins 2–4 emit through the one durable queue from the start instead of being retrofitted onto it; join 2 third, because it reuses join 1's gate-and-mapper shape almost verbatim; join 3 fourth, because it has no dependency on the ITSM or change planes and can proceed once the queue exists; join 4 fifth, because a post-execution verifier needs a remediation already dispatched by joins 1–3 to have anything to observe; join 6 last, because a chain proof written before every join lands cannot fail without the fix, which is the one property it exists to have.
 
@@ -564,7 +641,7 @@ a decision path; every reference instant caller-supplied). Dock and custody inpu
 remain a deferred family in the launch profile: building is not claiming, and every
 item below is a design target until its proof is green and named.
 
-- [ ] **Puck 1 — a dock/attach signal domain: `attached` | `removed` | `unknown`, fixture-backed, with a proof.**
+- [x] **Puck 1 — a dock/attach signal domain: `attached` | `removed` | `unknown`, fixture-backed, with a proof.**
       The change: a connector-style input in the deferred dock/custody family that
       normalizes a receiver's attach record (credential identifier, device identifier,
       observed-at, the receiver's own identity) into one of three states, beside the
@@ -587,8 +664,21 @@ item below is a design target until its proof is green and named.
       that would fail without it. The proof pins exactly one attach state as
       non-raising and sweeps every other combination; it fails on a tree where
       `unknown` is treated as `attached`. Cloud lane. Lane: principal-engineer.
+      **DONE 2026-09-18** — `lib/signalgrid-core/src/attach.ts`: `normalizeAttachRecord`
+      is pure and total (an unreadable record is an ANSWER, not an exception the cascade
+      must survive) and resolves to `unknown` on a wire value outside the two positive
+      states, an unparseable or absent instant, a MISSING RECEIVER IDENTITY — an anonymous
+      assertion that a credential is seated is exactly the assertion an attacker would
+      like to make — an observation older than the caller's bound, and one from the
+      future. `unknown` is `step_up` and never a grant, and the proof PINS the divergence
+      from `badgeBinding`/`dockState`, which pin `unknown` to `allow` in `seed.ts`:
+      inheriting the sibling rule is the silent, plausible mistake here. `attached` alone
+      grants nothing — with identity unconfirmed it is `step_up`. NO signal kind,
+      connector directory or API path was added, so `scripts/check-launch-profile.mjs` has
+      nothing to classify; the row's own condition is written as an if, and it does not
+      fire. How you'd check: `pnpm run proof:decision-cascade` → hop 8 and the matrix.
 
-- [ ] **Puck 2 — removal → suspend, as a rule in the post-decision cascade (joins DR-042's six joins; adds no seventh).**
+- [x] **Puck 2 — removal → suspend, as a rule in the post-decision cascade (joins DR-042's six joins; adds no seventh).**
       The change: the `removed` transition on a live session is a cascade input that
       requests suspension through the same seam the six cascade-join items above build
       — the resolution path, the audience routing of join 3 (the host app is told,
@@ -604,8 +694,19 @@ item below is a design target until its proof is green and named.
       **Deterministic:** N is policy, the instants are arguments. The check that fails
       without it: join 6's proof on a tree where a `removed` transition leaves the
       session open. Deferred family; design target. Cloud lane. Lane: principal-engineer.
+      **DONE 2026-09-18** — `requestSessionSuspend` in the same file mints the SAME
+      `RemediationAction` the rest of the cascade carries (approval-required,
+      simulated-only, no executed status), so `verifyRemediation` grades the suspend
+      exactly as it grades a remediation: unobserved is NOT a suspended session, the
+      restriction holds, and the second miss escalates. It adds no seventh join; it lands
+      as hop 8 of `proof:decision-cascade`, as the row asked. `request_session_suspend` is
+      a new `RemediationKind` rather than a reuse of `request_custody_check` — a custody
+      check asks somebody to go and look, a suspend asks the host app to stop a session,
+      and folding them together would have made "did the suspend land" unanswerable.
+      `redockWithinWindow` answers only whether a re-dock was quick, and `puckVerdict`
+      with `redockPendingReevaluation` is `step_up` however quick it was.
 
-- [ ] **Puck 3 — the puck lifecycle's audit events, in the Decision Envelope's ledger vocabulary.**
+- [x] **Puck 3 — the puck lifecycle's audit events, in the Decision Envelope's ledger vocabulary.**
       The change: extend `AuditEventType` in
       [`lib/signalgrid-core/src/types.ts`](../lib/signalgrid-core/src/types.ts) (today six
       members: `decision.evaluated`, `connector.synced`, `policy.version_activated`,
@@ -622,8 +723,21 @@ item below is a design target until its proof is green and named.
       refuse a fifteenth that is not in the union; and `proof:decision-cascade`, whose
       suspend hop asserts a `session.suspended` event exists in the chain. Design
       target; no shipped-audit claim moves. Cloud lane. Lane: principal-engineer.
+      **DONE 2026-09-18** — `AuditEventType` is now DERIVED from a runtime array
+      (`AUDIT_EVENT_TYPES`, 14 members) in `lib/signalgrid-core/src/types.ts`, because a
+      bare type union is erased at runtime: nothing could count it and nothing could
+      refuse a string outside it, so a caller could append `session.hijacked` and the
+      ledger would record it tamper-evidently as a member of a vocabulary it is not in.
+      `appendAudit` is the one writer into the chain and now refuses there — an unknown
+      type, a blank subject, and a puck-lifecycle event with no `decisionId` — and a
+      refused event consumes no sequence number and leaves no blank row. The decision id
+      rides in `references` rather than in the digested body on purpose: adding a field to
+      the canonical body would move every committed event's digest. The original six keep
+      their old admission rule. How you'd check: `pnpm run proof:signalgrid-core` →
+      `509` assertions including the 14-type census and the fifteenth's refusal; `pnpm run
+      proof:decision-cascade` hop 8 asserts a `session.suspended` event is in the chain.
 
-- [ ] **Puck 4 — a simulator scenario: dock, session, undock, re-dock within N seconds, with the policy matrix as rows.**
+- [x] **Puck 4 — a simulator scenario: dock, session, undock, re-dock within N seconds, with the policy matrix as rows.**
       The change: one scenario in
       [`lib/signalgrid-simulator/src/scenarios.ts`](../lib/signalgrid-simulator/src/scenarios.ts)
       beside the existing `dock.device_undocked` signal, whose steps are the document's
@@ -642,6 +756,20 @@ item below is a design target until its proof is green and named.
       to the TS simulator and the Swift port's fixture set together, or the parity
       proof drifts. Design target; deferred family. Cloud lane for the TS half, Mac lane
       for the Swift twin. Lane: qa-engineer.
+      **DONE 2026-09-18** — the scenario is `puck-session-lifecycle` in
+      `lib/signalgrid-simulator/src/scenarios.ts` (dock → session → undock → re-dock at
+      12s, resolving to `step_up` + the custody cascade, never `allow`, because the only
+      posture read on file predates the removal). The POLICY MATRIX is eleven rows in
+      `proof:decision-cascade` over `puckVerdict`, not in the simulator: the simulator's
+      engine is a byte-faithful twin of the Swift port (golden rule 1) and must not grow
+      branches, and it cannot emit `deny` at all. Two rows are argued in the code rather
+      than left to be discovered — a legacy 125 kHz read for a strong-enrolled worker is
+      `deny` and not `step_up` (stepping up asks the attacker to try again), and "radio
+      says gone, puck seated" is `step_up`: not `allow`, because an unknown raises, and
+      not `restrict`, because a dropped packet must not end a live session. NO Swift twin
+      was needed: no scenario id is mirrored in `native/ios/` (verified by grep), so the
+      parity rule has nothing to drift. How you'd check: `pnpm run
+      proof:signalgrid-simulator` → `102/102`, 15 scenarios.
 
 - [x] **Puck 5 — the hardware gate itself: a tally column in `docs/agent/DISCOVERY_LOG.md` that the go/no-go table reads from.**
       LANDED — `scripts/check-discovery-log.mjs` derives Rh/Ch/Ph from the Running tally's marks (canonical `X` only; any other nonempty value fails), enforces the base-mark invariant, and cross-checks `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`'s go/no-go table by name; 26/26 self-test, wired into preflight and CI (today's honest tally: 0 of 15 on Rh/Ch/Ph, per `docs/agent/EVIDENCE.md`).
@@ -1459,7 +1587,23 @@ reviewable PR with a deterministic proof. Public-safe and fixture-first.
 - [x] **Checkout-cap contradiction surfaced as a decision, not a mystery beep (custody ground truth, MEDIUM). MODELED 2026-09-11** in the same surface: the cap axis is COMPUTED from the requester's open-checkout count, the tenant cap and the count of those checkouts physically docked — a cap hit only by returns that never cleared holds with `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN`, a cap genuinely reached is contained with `CUSTODY_CAP_REACHED`, a missing count is unknown and raises, contradictory counts are malformed. No decision record was needed: it is a read-only evaluator in an integration family, not a decision-core change. Original text kept for the record: (deferred design target).** A per-user checkout cap that blocks a clinician because a prior return never cleared is a fabric-visible condition today only as a dock beep code. Model the cap state and emit a legible reason when it blocks, with a fixture. Small state addition; DR first. Cloud lane.
 - [x] **`CUSTODY_STALE_OR_CONTESTED` as a cross-domain DETECTION over the event timeline (custody ground truth follow-up, MEDIUM; decision-core, DR first). BUILT 2026-09-13 — PROPOSED via PR #720 (DR-051), owner-gated (SAFETY_MACHINERY: decision-core + DR + fixtures/proof); not merged.** Added a sixth detection `CUSTODY_STALE_OR_CONTESTED` (severity `high`) to [`lib/event-contract/src/detect.ts`](../lib/event-contract/src/detect.ts) beside `CHECKOUT_WITHOUT_COMPLIANCE`: fires on any of three custody contradictions from the pure event stream (no ledger read) — a bay re-locked around a still-checked-out device (`dock_relocked` + open grant, no return), more than one grant with no clearing return (contested), or a seated device unpaired/unknown in posture (phantom slot). Fail-closed and deterministic: only adds a detection, an absent return is read as "still out", an unknown posture fires. Proven by five assertions ADDED to the existing `proof:event-contract` (three positive shapes, a severity+evidence check, and a negative control that a properly returned-and-racked device does NOT fire it). See DR-051. Original text kept for the record: The custody-ledger evaluator grades one reconciliation report; the timeline form — a `device_returned` / `dock_relocked` sequence with no matching ledger clear, seen in [`lib/event-contract/src/detect.ts`](../lib/event-contract/src/detect.ts) beside `CHECKOUT_WITHOUT_COMPLIANCE` — would catch the same phantom from the event stream without a ledger read. Decision core (DR-020 territory): a decision record first, then fixtures and an assertion that fails if it stops firing. Cloud lane. Lane: principal-engineer.
 - [ ] **Brace-less guards join the mutation sweep, family by family (gate infrastructure, HIGH; ratchet opened 2026-09-11).** `scripts/mutation-guard.mjs` gained the `oneline-cond-false` mutator (`if (...) return x;` → `if (false) return x;`), the guard shape three reviews had found invisible to the sweep. Measured over every registered file before it landed: 1732 mutations, 117 new survivors across 41 files (plus 4 break-glass disjuncts a separate PR fixes). A gate that goes red over 117 unpinned guards gets switched off, so the mutator applies only to targets that opt in (`oneLine: true`) after their one-line guards are pinned by checks that fail without them or documented inert with a reason, and every run prints the census of targets that have not joined. Joined at the opening: rtls-custody, device-attestation, verdict-attestation (11 guards pinned — two of them the alg-membership and key/alg-mismatch refusals in signature verification, which no input had ever exercised), app-update (two shadowed guards deleted, three pinned). Pending, by survivors measured 2026-09-11: facility-trust-graph 22 · dual-control 7 · benchmark-selection 7 · bootstrap-credential 6 · macos-posture 5 · sse-egress, shift-context, pacs-access, nac, change-window 4 each · uem, service-lifecycle, pim-activation, passkey-assurance, challenge-capability 3 each · vuln-scan, task-exception, agent-behavior 2 each · sso-session, policy-binding, platform-sso, observability-integrity, network-nac, local-authority, entitlement-binding, device-management-health, decision-continuity, custody-beacon, credential-rotation, caep-events, agent-identity, access-governance 1 each. When `nac` joins, re-register `nac/cisco-ise.ts` and `nac/aruba-clearpass.ts` (de-registered 2026-08-25 for exactly this shape). Cloud lane. Lane: devex-tooling-engineer.
-- [ ] **A faithful end-to-end smart-charging simulator scenario (custody ground truth, MEDIUM; deferred design target).** The simulator carries no scenario shaped like the real workflow (badge → dock → provision → in-use → check-in) with its real failure branches (unpaired / network-down / cap-hit / dock-fault). Add one so proofs exercise the real thing rather than abstractions. Builds on the remediation-allow cascade ([`lib/signalgrid-simulator/src/remediation-allow.ts`](../lib/signalgrid-simulator/src/remediation-allow.ts)). Cloud lane. Lane: qa-engineer.
+- [x] **A faithful end-to-end smart-charging simulator scenario (custody ground truth, MEDIUM; deferred design target).** The simulator carries no scenario shaped like the real workflow (badge → dock → provision → in-use → check-in) with its real failure branches (unpaired / network-down / cap-hit / dock-fault). Add one so proofs exercise the real thing rather than abstractions. Builds on the remediation-allow cascade ([`lib/signalgrid-simulator/src/remediation-allow.ts`](../lib/signalgrid-simulator/src/remediation-allow.ts)). Cloud lane. Lane: qa-engineer.
+      **DONE 2026-09-18** — `smart-charging-checkout-to-checkin` in
+      [`lib/signalgrid-simulator/src/scenarios.ts`](../lib/signalgrid-simulator/src/scenarios.ts):
+      badge at the cabinet, seated and charging to the cap, provisioned, in use, taken by
+      the holder the assignment names. The four failure branches are DERIVED from that same
+      fixture in [`scripts/src/signalgrid-simulator-proof.ts`](../scripts/src/signalgrid-simulator-proof.ts)
+      — unpaired (no assignment claims the checkout), network-down (the cabinet controller
+      is unreachable), cap-hit (the charge cap held it at 22% for a full round), dock-fault
+      (returned to a bay the assignment does not name) — so each branch differs from the
+      green run by exactly the fact it names; a branch built from scratch could differ in
+      ten ways and prove nothing about which. The load-bearing assertion is that the happy
+      path is the ONLY one of the five that allows. Falsified: flipping the unpaired
+      branch's `active` back to true turns three assertions red. The last `gap` row in
+      `docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md` is now `modeled`, and
+      `node scripts/check-readiness-figure.mjs` prints `(a) runbook ground truth 100% — 17
+      modeled / 0 partial / 0 gap`. How you'd check: `pnpm run proof:signalgrid-simulator`
+      → `102/102`.
 
 ### ECC-role review findings (2026-09-01) — the ones not fixed in the same pass
 

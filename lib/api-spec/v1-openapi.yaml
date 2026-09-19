@@ -1251,7 +1251,12 @@ components:
         sensitive: { type: boolean }
         disposition:
           type: string
-          enum: [auto, assist, step_up, blocked, applied]
+          # The library's fifth disposition, `applied`, is deliberately ABSENT: it is
+          # emitted only after `confirmAppActions`, which no /v1 route calls, and this
+          # route is invoked without `confirmedActionKeys` — it plans, it performs
+          # nothing. Advertising `applied` here would let a generated client treat an
+          # already-applied action as a valid evaluate result (Codex review, #888).
+          enum: [auto, assist, step_up, blocked]
         requiresConfirmation: { type: boolean }
         reason: { type: string }
       required: [key, label, riskTier, sensitive, disposition, requiresConfirmation, reason]

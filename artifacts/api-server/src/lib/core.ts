@@ -33,6 +33,21 @@ export const core: SignalGridCore = SignalGridCore.demo(undefined, {
   maxDecisionsPerTenant: maxDecisionsPerTenantFromEnv(),
 });
 
+// NO LIVE CONNECTOR IS ARMED HERE, and that is deliberate (DR-053).
+//
+// The core exposes `registerLiveConnector`, and `@workspace/integration-bridge`
+// exposes `resolveLivePostureSource(env)` — the dark edge that returns null
+// unless beta/prod tier AND SIGNALGRID_LIVE_INTEGRATIONS === "true" AND
+// FLEETDM_API_TOKEN AND a named tenant are all present (the destination is
+// checked separately, at the moment it is fetched, against the config object the
+// transport is handed). This server calls NEITHER. Wiring them would make this package depend
+// on `@workspace/integrations`, which widens the server's boot-read environment
+// surface from 29 variables to 170 — a large, permanent change to the deployed
+// surface in exchange for a path nothing in this repository configures. So the
+// seam ships as a library: a deployment that wants live posture arms it at its
+// own process edge, and in THIS repository there is no call site at all, which
+// is a stronger statement than a guarded one.
+
 /**
  * Mint a small, deterministic set of REAL decisions at boot so the console's
  * /v1 list/detail/evidence/audit views have something to show before anyone

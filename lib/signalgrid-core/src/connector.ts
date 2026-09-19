@@ -25,12 +25,23 @@ export const STALE_WINDOW_HOURS = 72;
  */
 export interface FixturePostureRecord {
   deviceRef: string;
-  identityRef: string;
-  identityEnabled: boolean;
+  /**
+   * The identity this posture read also speaks for. OPTIONAL because a
+   * device-posture source (Fleet/osquery, for one) answers nothing about an
+   * identity, and naming one anyway would be an identity fact nobody read.
+   * Absent = the record carries device posture only; the identity signal is not
+   * written and the evidence readers turn that silence into unknown.
+   */
+  identityRef?: string;
+  /** Absent = the source did not answer. Silence, never a synthesized enabled/disabled. */
+  identityEnabled?: boolean;
   managed: boolean;
   compliance: "compliant" | "non_compliant" | "unknown";
-  encrypted: boolean;
-  osSupported: boolean;
+  /** Absent = the source did not answer; emits nothing rather than an unearned
+   *  `false` (the unearned NEGATIVE, as forbidden as the unearned affirmative). */
+  encrypted?: boolean;
+  /** Absent = the source did not answer. Same rule. */
+  osSupported?: boolean;
   /** Last Intune sync time; drives posture freshness. */
   lastSyncAt: string | null;
   /**
@@ -73,7 +84,22 @@ export function runFixtureSync(
       503,
     );
   }
+  return applyPostureRecords(store, clock, connector, records);
+}
 
+/**
+ * Normalize posture records into signals + a sync run. ONE normalizer, shared by
+ * the fixture entry guard above and by the live entry guard in `live-sync.ts` —
+ * the alternative is a second copy of this normalization in the live path, which
+ * is how two copies drift. It carries NO mode check of its own: the two callers
+ * are the guards.
+ */
+export function applyPostureRecords(
+  store: MemoryStore,
+  clock: Clock,
+  connector: Connector,
+  records: FixturePostureRecord[],
+): ConnectorSyncRun {
   const startedAt = clock.now().toISOString();
   const nowIso = startedAt;
   let signalsNormalized = 0;
@@ -85,11 +111,14 @@ export function runFixtureSync(
 
   for (const record of records) {
     const device = store.findDeviceByRef(connector.tenantId, record.deviceRef);
-    const identity = store.findIdentityByRef(
-      connector.tenantId,
-      record.identityRef,
-    );
-    if (!device || !identity) {
+    // The identity is looked up only when the record NAMES one. A record that
+    // carries device posture alone is not "missing" an identity — it never
+    // claimed one — so it is not skipped for the absence.
+    const identity =
+      record.identityRef === undefined
+        ? undefined
+        : store.findIdentityByRef(connector.tenantId, record.identityRef);
+    if (!device || (record.identityRef !== undefined && !identity)) {
       // A record referencing an unknown subject is skipped, not trusted.
       recordsSkipped += 1;
       continue;
@@ -108,8 +137,19 @@ export function runFixtureSync(
     }> = [
       { category: "device_compliance", value: record.compliance },
       { category: "device_management", value: record.managed },
-      { category: "device_encryption", value: record.encrypted },
-      { category: "os_support", value: record.osSupported },
+      // Encryption and OS support only when the source answered. Same rule the
+      // three optional families below already follow: silence normalizes to
+      // unknown, which RAISES the assurance bar; a synthesized `false` would be
+      // an affirmative bad state nobody read. Their POSITION in this list is
+      // load-bearing — signals land in the store in insertion order and an
+      // evidence snapshot digests that order, so moving them re-digests every
+      // durable snapshot ever written.
+      ...(record.encrypted !== undefined
+        ? [{ category: "device_encryption" as SignalCategory, value: record.encrypted }]
+        : []),
+      ...(record.osSupported !== undefined
+        ? [{ category: "os_support" as SignalCategory, value: record.osSupported }]
+        : []),
       { category: "posture_freshness", value: postureFreshness },
     ];
 
@@ -153,21 +193,23 @@ export function runFixtureSync(
       signalsNormalized += 1;
     }
 
-    store.putSignal(
-      buildSignal(
-        connector,
-        "identity",
-        identity.id,
-        "identity_state",
-        record.identityEnabled,
-        nowIso,
-        // Identity state is read live from the directory in the model, so it is
-        // treated as fresh at evaluation time in the fixture.
-        "fresh",
-        record.sourceReference,
-      ),
-    );
-    signalsNormalized += 1;
+    if (identity !== undefined && record.identityEnabled !== undefined) {
+      store.putSignal(
+        buildSignal(
+          connector,
+          "identity",
+          identity.id,
+          "identity_state",
+          record.identityEnabled,
+          nowIso,
+          // Identity state is read live from the directory in the model, so it is
+          // treated as fresh at evaluation time in the fixture.
+          "fresh",
+          record.sourceReference,
+        ),
+      );
+      signalsNormalized += 1;
+    }
   }
 
   const completedAt = clock.now().toISOString();
@@ -180,10 +222,16 @@ export function runFixtureSync(
     status: recordsSkipped === 0 ? "success" : "partial",
     recordsProcessed: records.length - recordsSkipped,
     signalsNormalized,
+    // The note names the MODE it actually ran in. It used to say "Fixture sync"
+    // unconditionally, which the live entry guard would have turned into a
+    // false statement on every live run.
     note:
-      recordsSkipped === 0
+      (connector.mode === "fixture"
         ? "Fixture sync: synthetic posture only, read-only, no Graph call."
-        : `Fixture sync: synthetic posture only, read-only, no Graph call. ${recordsSkipped} of ${records.length} record(s) named a device or identity this tenant does not hold and were skipped.`,
+        : "Live sync: read-only posture from the connector's registered source.") +
+      (recordsSkipped === 0
+        ? ""
+        : ` ${recordsSkipped} of ${records.length} record(s) named a device or identity this tenant does not hold and were skipped.`),
   };
   store.putSyncRun(run);
 

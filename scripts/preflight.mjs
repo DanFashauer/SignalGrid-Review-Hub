@@ -432,6 +432,7 @@ const STEPS = [
   { name: "Proof: local-authority (may this device act on its own authority now)", cmd: ["pnpm", "run", "proof:local-authority"] },
   { name: "Proof: launch-profile (the declared Limited GA scope is coherent and its figures are published)", cmd: ["pnpm", "run", "proof:launch-profile"] },
   { name: "Proof: launch-seam (fixture connector → bridge → core decision → evidence, all 3 launch families, offline)", cmd: ["pnpm", "run", "proof:launch-seam"] },
+  { name: "Proof: live-connector-sync (the seam is dark by default; every fail-closed arm over a loopback mock)", cmd: ["pnpm", "run", "proof:live-connector-sync"] },
   { name: "Proof: evidence-adapter (source-agnostic — swap fleet/headwind/intune, the decision must not change)", cmd: ["pnpm", "run", "proof:evidence-adapter"] },
   { name: "Proof: mobile-app-catalog (hardened scanner — leak/symlink/determinism/cap; needs python3, FAILS without it)", cmd: ["pnpm", "run", "proof:mobile-app-catalog"] },
   { name: "Proof: sim-requests (the cloud↔Mac loop — a request cannot carry a command, an unrun run is never green)", cmd: ["pnpm", "run", "proof:sim-requests"] },

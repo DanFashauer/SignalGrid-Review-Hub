@@ -426,6 +426,12 @@ jobs:
       # evidence carries the family facts — with fetch() disabled for the run.
       - name: Proof — launch seam (fixture connector → bridge → decision, offline)
         run: pnpm run proof:launch-seam
+      # The live-capable sync seam, proven INERT: dark by default, the three
+      # previously-untestable mode guards armed, and every failure arm
+      # (unreachable / timeout / 401 / 403 / malformed / unknown management)
+      # landing on UNKNOWN over a 127.0.0.1 mock. No vendor endpoint, no credential.
+      - name: Proof — live-connector-sync (dark by default; every fail-closed arm over a loopback mock)
+        run: pnpm run proof:live-connector-sync
       - name: Proof — evidence adapter (source-agnostic swap, fleet/headwind/intune)
         run: pnpm run proof:evidence-adapter
       - name: Proof — mobile-app-catalog scanner (hardening delta over the filed original)

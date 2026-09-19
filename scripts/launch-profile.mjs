@@ -387,7 +387,9 @@ export const SURFACES = [
   {
     id: "/v1/connectors/{id}/sync",
     reason:
-      "Trigger a FIXTURE sync (the core refuses non-fixture connectors by construction) — " +
+      "Trigger a sync, dispatched by connector mode (a live-mode connector exists only where a " +
+      "process calls core.registerLiveConnector, which nothing in this server does, so every " +
+      "connector here is fixture-mode) — " +
       "how the setup screen demonstrates the pipeline without a tenant. No write to any " +
       "source system exists on this route.",
   },

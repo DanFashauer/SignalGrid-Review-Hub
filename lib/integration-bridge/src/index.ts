@@ -27,6 +27,10 @@ export interface PostureSignalDraft {
 // (Fleet, Headwind-shaped Android lab) — see ./evidence.ts.
 export * from "./evidence";
 
+// The dark edge: the only place a live-mode connector can come into existence.
+// Returns null with no configuration — see ./live-posture.ts.
+export * from "./live-posture";
+
 const FRESH_HOURS = 24;
 const STALE_HOURS = 72;
 // The future-skew tolerance is NOT redeclared here. This file carried its own

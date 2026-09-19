@@ -10,6 +10,7 @@ import {
   FleetDMPostureSignal,
   FleetDMQueryResult,
 } from './types';
+import { boundedText } from '../adapters/bounded-text';
 import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
 import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
 import { getFleetDMConfig, setPostureForHost } from './store';
@@ -18,8 +19,19 @@ import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
 export class FleetDMAdapter {
   private config: FleetDMConfig | null = null;
 
-  async initialize(): Promise<void> {
-    this.config = await getFleetDMConfig();
+  /**
+   * Resolve the config this adapter will fetch with.
+   *
+   * `config` may be supplied by a caller that has ALREADY resolved it through
+   * `getFleetDMConfig()` and checked something about it — the destination, say.
+   * Without that parameter such a caller has to resolve once to check and then
+   * let this method resolve a SECOND time to fetch, and the two resolutions are
+   * two different reads of Redis: whatever was checked is not provably what is
+   * fetched. Passing the same object through closes that gap. Omitted, the
+   * behaviour is exactly what it was.
+   */
+  async initialize(config?: FleetDMConfig | null): Promise<void> {
+    this.config = config !== undefined ? config : await getFleetDMConfig();
   }
 
   /** The credential this adapter holds, named so the gate's refusal names it back.
@@ -86,8 +98,16 @@ export class FleetDMAdapter {
     }
 
     if (!response.ok) {
+      // The body is BOUNDED (a vendor/proxy 400 has been measured at 5MB — see
+      // ../adapters/bounded-text.ts) and the STATUS is carried as a property, not
+      // left for a reader to scrape back out of the message. A caller that wants
+      // to tell an auth refusal from a gateway error reads `status`; matching on
+      // the message text mislabels a 502 whose body happens to mention 403.
       const error = await response.text();
-      throw new Error(`FleetDM getHosts failed: ${response.status} ${error}`);
+      throw Object.assign(
+        new Error(`FleetDM getHosts failed: ${response.status} ${boundedText(error)}`),
+        { status: response.status },
+      );
     }
 
     const data = await response.json() as { hosts: FleetDMHost[] };

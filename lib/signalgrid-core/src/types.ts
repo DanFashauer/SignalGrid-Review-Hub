@@ -118,10 +118,17 @@ export interface Workflow {
   riskTier: RiskTier;
 }
 
-// ── Connector (fixture-only, read-only) ──────────────────────────────────────
+// ── Connector (read-only; fixture by default, live only when a process explicitly registers one) ──
 
 export type ConnectorKind = "microsoft-entra-intune" | "dockbridge-custody" | "wfm-shift";
-export type ConnectorMode = "fixture";
+/**
+ * "live" is DARK by construction — nothing in the seeded demo store mints one,
+ * and no route creates one. It exists so the three `mode !== "fixture"` guards
+ * (in connector.ts, dock.ts and shift.ts — line numbers deliberately omitted,
+ * they drift) are reachable and therefore provable; until it was added they were
+ * dead code asserting a property nothing could test.
+ */
+export type ConnectorMode = "fixture" | "live";
 export type ConnectorStatus = "healthy" | "degraded" | "never_synced";
 
 /**

@@ -50,16 +50,24 @@ shiftContextState, managementHealthState, localAuthorityState were missing) unti
 the eighth audit round on 2026-09-05 — the union could not be counted, the array
 can.
 
-### The 17 normalized signal categories
+### The 21 normalized signal categories
 
-The connector layer normalizes source data into exactly **17 signal categories**
+The connector layer normalizes source data into exactly **21 signal categories**
 that feed the evidence above:
 
 `identity_state`, `device_compliance`, `device_management`, `device_encryption`,
 `os_support`, `posture_freshness`, `custody_state`, `charge_state`,
 `battery_health`, `tamper_state`, `dock_state`, `security_baseline`,
-`benchmark_selection`, `shift_context`, `badge_binding`,
+`benchmark_selection`, `shift_context`, `badge_binding`, `attach_state`,
+`presence_state`, `enrollment_strength`, `credential_read_method`,
 `device_management_health`, `local_authority`.
+
+The four credential categories are DR-043's software half: whether the worker's
+credential is still attached to its device, whether the worker is present,
+how strongly they were enrolled, and by what method the credential was actually
+read. Only `attach_state` is not day-one quiet — an attach reading that EXISTS
+but cannot be interpreted steps up, while a deployment with no such credential
+at all resolves to `not_applicable` and stays silent.
 
 The last two were added when the 2026-08-10 full-repo scan found the core could
 not represent two of its three LAUNCH families — they existed as connectors,
@@ -185,7 +193,7 @@ dimensions above.
 
 ## How to verify
 
-- `pnpm run proof:signalgrid-core` — 495 assertions over the real core: outcomes,
+- `pnpm run proof:signalgrid-core` — 526 assertions over the real core: outcomes,
   fail-closed, tenant isolation, RBAC, tamper-evidence, determinism, the
   security-baseline dimension, the badge-binding (reader case) dimension, the
   dock/SmartDock hardware-state dimension, and untrusted-input hardening.

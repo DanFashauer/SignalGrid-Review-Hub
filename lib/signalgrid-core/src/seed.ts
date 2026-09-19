@@ -451,6 +451,10 @@ function seedPolicyTests(
     tamperState: "none",
     dockEvidenceFreshness: "missing",
     dockState: "occupied",
+    attachState: "attached",
+    presenceState: "present",
+    enrollmentStrength: "strong",
+    credentialReadMethod: "strong",
     baselineCompliance: "aligned",
     benchmarkSelection: "confirmed",
     shiftContext: "confirmed",
@@ -482,6 +486,15 @@ function seedPolicyTests(
     { name: "SmartDock faulted → restrict", evidence: { ...base, dockState: "faulted" }, expectedOutcome: "restrict", expectedReasonCode: "DOCK_FAULTED" },
     { name: "SmartDock offline → step-up", evidence: { ...base, dockState: "offline" }, expectedOutcome: "step_up", expectedReasonCode: "DOCK_OFFLINE" },
     { name: "dock state unknown → still allow (no fabricated block)", evidence: { ...base, dockState: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "credential removed → restrict (the key is out of the ignition)", evidence: { ...base, attachState: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "ATTACH_REMOVED" },
+    { name: "attach unknown → step-up, NEVER a grant (the deliberate divergence from badgeBinding/dockState unknown above, which stay allow under day-one-quiet)", evidence: { ...base, attachState: "unknown" }, expectedOutcome: "step_up", expectedReasonCode: "ATTACH_UNKNOWN" },
+    { name: "credential seated → allow (the attach domain does not block the ordinary case)", evidence: { ...base, attachState: "attached" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "radio says gone AND the credential is not seated → step-up", evidence: { ...base, presenceState: "absent", attachState: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "ATTACH_REMOVED" },
+    { name: "radio says gone, puck SEATED → do NOT assume gone (the seated credential vetoes radio absence; DR-043 policy matrix)", evidence: { ...base, presenceState: "absent", attachState: "attached" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "radio says gone with no credential in play → step-up (nothing vetoes the radio)", evidence: { ...base, presenceState: "absent", attachState: "not_applicable" }, expectedOutcome: "step_up", expectedReasonCode: "PRESENCE_ABSENT_UNSEATED" },
+    { name: "legacy read for a STRONG-enrolled worker → deny (the downgrade attack; DR-043 policy matrix)", evidence: { ...base, enrollmentStrength: "strong", credentialReadMethod: "legacy" }, expectedOutcome: "deny", expectedReasonCode: "CREDENTIAL_DOWNGRADE" },
+    { name: "legacy read for a LEGACY-enrolled worker → allow (no downgrade: it is the only credential they hold)", evidence: { ...base, enrollmentStrength: "legacy", credentialReadMethod: "legacy" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "strong read for a strong-enrolled worker → allow (the rule punishes the downgrade, never the strong credential)", evidence: { ...base, enrollmentStrength: "strong", credentialReadMethod: "strong" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "tamper sensor unavailable → step-up (no fail-open)", evidence: { ...base, tamperState: "sensor_unavailable" }, expectedOutcome: "step_up", expectedReasonCode: "TAMPER_SENSOR_UNAVAILABLE" },
   ];
   for (const [index, spec] of cases.entries()) {
@@ -625,6 +638,7 @@ function benignDock(deviceRef: string, index: number): DockCustodyRecord {
     bayId: `bay-${String(index).padStart(2, "0")}`,
     chargeState: "charged",
     dockState: "occupied",
+    attachState: "attached",
     custodyState: "checked_out",
     tamperState: "none",
     badgeBinding: "present",
@@ -647,6 +661,11 @@ function northwindDockCustody(): DockCustodyRecord[] {
     ...benignDock("ipad-loan-01", 11),
     custodyState: "overdue",
     dockState: "empty",
+    // An empty BAY is the device being checked out; the credential travels WITH it
+    // and stays seated. Bay-occupancy and credential-seating are different questions
+    // — conflating them (an earlier cut of this change did) turns every ordinary
+    // checkout into a removal restrict.
+    attachState: "attached",
   });
   records.push({
     ...benignDock("ipad-loan-02", 12),
@@ -656,6 +675,7 @@ function northwindDockCustody(): DockCustodyRecord[] {
     ...benignDock("ipad-loan-03", 13),
     chargeState: "critical",
     dockState: "empty",
+    attachState: "attached",
   });
   // Deliberately FULLY CHARGED with a failing battery. If `batteryHealth` were
   // merely a proxy for `chargeState`, this record would produce no finding at
@@ -996,6 +1016,27 @@ function runDockConnector(
     references: [connector.id, run.id],
     recordedAt: run.completedAt,
   });
+  // The credential/puck custody lifecycle in the ledger (DR-043 item (c)). Emitted
+  // from what the dock OBSERVED — a record that carries no attach read produces no
+  // event, because silence is not a transition. A removal the dock itself flags as a
+  // custody exception is named as one; an ordinary lift is just a removal.
+  for (const record of records) {
+    if (record.attachState === undefined) continue;
+    const type =
+      record.attachState === "attached" ? "credential.attached" : "credential.removed";
+    appendAudit(store, {
+      tenantId,
+      type,
+      actor: "dockbridge-fixture",
+      subject: record.deviceRef,
+      summary:
+        type === "credential.attached"
+          ? `Credential seated in ${record.deviceRef} at ${record.dockId}/${record.bayId} (observed, not commanded).`
+          : `Credential lifted from ${record.deviceRef} at ${record.dockId}/${record.bayId} (custody state: ${record.custodyState}).`,
+      references: [connector.id, run.id, record.sourceReference],
+      recordedAt: record.observedAt,
+    });
+  }
   return connector.id;
 }
 

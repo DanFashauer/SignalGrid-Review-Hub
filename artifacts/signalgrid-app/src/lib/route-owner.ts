@@ -60,6 +60,12 @@ export const ROUTE_OWNER_BY_REASON_CODE: Record<string, string> = {
   DOCK_OFFLINE: "facilities_operations_owner",
   BADGE_REMOVED: "facilities_operations_owner",
   BADGE_FORCED_REMOVAL: "security_operations_owner",
+  ATTACH_REMOVED: "facilities_operations_owner",
+  ATTACH_UNKNOWN: "facilities_operations_owner",
+  PRESENCE_ABSENT_UNSEATED: "facilities_operations_owner",
+  // A downgrade is an attack shape, not a maintenance ticket — same split as the
+  // BADGE_REMOVED / BADGE_FORCED_REMOVAL pair directly above.
+  CREDENTIAL_DOWNGRADE: "security_operations_owner",
   SHIFT_CONTEXT_MISFIT: "application_owner",
   SHIFT_CONTEXT_UNESTABLISHED_STRICT: "application_owner",
   TRUST_ESTABLISHED: "it_governance_owner",

@@ -1,6 +1,7 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { EVIDENCE_AXES, buildCoverageReport } from "@workspace/flows";
 
 /**
  * docs/evidence-coverage.html — the standalone, self-contained Evidence Coverage page.
@@ -24,6 +25,33 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PAGE_URL = `file://${path.resolve(here, "../../../docs/evidence-coverage.html")}`;
+
+// THE FIGURES ARE DERIVED FROM THE MODEL THE PAGE BUNDLES, not typed here.
+//
+// They used to be literals — 21 axes, 12 answerable, 6 silent holes — and adding four
+// evidence axes in one branch broke five specs across two files at once, every one of
+// them on a number rather than on a behaviour. The two specs that assert SHAPE rather
+// than COUNT passed untouched, which is the tell (cloud lane, reviewing #753).
+//
+// This does NOT weaken the suite, and it is worth being precise about why. The model's
+// own numbers are pinned BY EQUALITY elsewhere — `proof:evidence-coverage` and
+// `api.test.mjs` both assert them, and that is where a wrong model is caught. What this
+// file is for is whether the PAGE renders what the model says, and a page built from a
+// stale bundle now fails here exactly as it should: the derivation reads the live model,
+// the assertions read the shipped HTML, and drift between them is the finding.
+const AXES = EVIDENCE_AXES.length;
+const darkOf = (r: ReturnType<typeof buildCoverageReport>) =>
+  r.findings.filter((f) => f.coverage === "needs_instrumentation").length;
+const notSourcedOf = (r: ReturnType<typeof buildCoverageReport>) =>
+  r.findings.filter((f) => f.coverage === "not_sourced").length;
+/** The estate the page opens on. */
+const WEDGE = buildCoverageReport(["identity", "device_management"]);
+/** …plus the one plane the toggle test turns on. */
+const WEDGE_WFM = buildCoverageReport(["identity", "device_management", "workforce_management"]);
+/** The honest opening position: nothing declared. */
+const EMPTY = buildCoverageReport([]);
+const denominator = (r: ReturnType<typeof buildCoverageReport>, rows: number) =>
+  `${r.answerable} + ${darkOf(r)} + ${notSourcedOf(r)} = ${rows} evidence axes`;
 
 /** Every non-file request the page attempted. Must stay empty — see the first test. */
 let offPageRequests: string[] = [];
@@ -67,15 +95,15 @@ test("the standalone page renders the real model, not an empty shell", async ({ 
   // The axis rows and plane toggles prove the bundled model was linked in and iterated;
   // the two assertions below carry the counts. A build that resolved the import to
   // nothing produces a valid, blank page.
-  await expect(page.locator("tbody tr")).toHaveCount(21);
+  await expect(page.locator("tbody tr")).toHaveCount(AXES);
   await expect(page.locator("button.p")).toHaveCount(7);
 
   // Opens on the wedge, with the figures pinned by equality in proof:evidence-coverage
   // and api.test.mjs. Three surfaces, one set of numbers.
-  expect(await stat(page, "stat-answerable")).toBe(12);
-  expect(await stat(page, "stat-dark")).toBe(6);
-  expect(await stat(page, "stat-not-sourced")).toBe(3);
-  expect(await stat(page, "stat-silent-holes")).toBe(6);
+  expect(await stat(page, "stat-answerable")).toBe(WEDGE.answerable);
+  expect(await stat(page, "stat-dark")).toBe(darkOf(WEDGE));
+  expect(await stat(page, "stat-not-sourced")).toBe(notSourcedOf(WEDGE));
+  expect(await stat(page, "stat-silent-holes")).toBe(WEDGE.silentHoles);
 
   // Each value sits with ITS OWN caption. Swapping two captions leaves every number and
   // every test id correct and tells the reader "10 dark, 6 answerable".
@@ -83,12 +111,10 @@ test("the standalone page renders the real model, not an empty shell", async ({ 
   await expect(statCard(page, "stat-dark")).toContainText("dark");
   await expect(statCard(page, "stat-not-sourced")).toContainText("not sourced");
 
-  // The denominator is tied to what is actually on screen, not to a literal: a hardcoded
-  // "21" here would print "12 + 7 + 3 = 21" the day a twenty-second axis is added.
+  // The denominator is tied to what is actually on screen AND to the live model, so it
+  // cannot print a sum that does not add up in either direction.
   const rows = await page.locator("tbody tr").count();
-  await expect(page.getByTestId("coverage-denominator")).toContainText(
-    `12 + 6 + 3 = ${rows} evidence axes`,
-  );
+  await expect(page.getByTestId("coverage-denominator")).toContainText(denominator(WEDGE, rows));
 
   // The toggles must agree with the report they produced.
   await expect(planeToggle(page, "Identity")).toHaveAttribute("aria-pressed", "true");
@@ -120,7 +146,7 @@ test("silent holes rank first, say what they are, and name what would answer the
   page,
 }) => {
   const holes = page.locator('tr[data-silent-hole="true"]');
-  await expect(holes).toHaveCount(6);
+  await expect(holes).toHaveCount(WEDGE.silentHoles);
   await expect(page.locator("tbody tr").first()).toHaveAttribute("data-silent-hole", "true");
   await expect(page.locator("tbody tr").last()).toHaveAttribute("data-coverage", "not_sourced");
   await expect(holes.first()).toContainText("the active rules grant when this is unknown");
@@ -143,7 +169,7 @@ test("silent holes rank first, say what they are, and name what would answer the
   );
 
   // The headline states the subset relation against the real dark count.
-  await expect(page.locator(".headline")).toContainText("silent holes — of the 6 dark axes");
+  await expect(page.locator(".headline")).toContainText(`silent holes — of the ${darkOf(WEDGE)} dark axes`);
 
   // Posed by the calling app — must stay NOT SOURCED rather than inflating the gap count.
   const posed = page.locator('tr[data-axis="workflowRiskTier"]');
@@ -160,19 +186,20 @@ test("declaring and undeclaring planes moves the report, down to the empty estat
   await planeToggle(page, "Workforce Management").click();
   await expect(shift).toHaveAttribute("data-coverage", "answerable");
   await expect(planeToggle(page, "Workforce Management")).toHaveAttribute("aria-pressed", "true");
-  expect(await stat(page, "stat-silent-holes")).toBe(5);
+  expect(await stat(page, "stat-silent-holes")).toBe(WEDGE_WFM.silentHoles);
 
   // Strip the estate to nothing: the honest opening position, and proof the page cannot
   // flatter — the numbers only get worse as the estate thins.
   for (const plane of ["Workforce Management", "Identity", "Device Management"]) {
     await planeToggle(page, plane).click();
   }
-  expect(await stat(page, "stat-answerable")).toBe(0);
-  expect(await stat(page, "stat-silent-holes")).toBe(13);
-  expect(await stat(page, "stat-dark")).toBe(18);
-  await expect(page.getByTestId("coverage-denominator")).toContainText(
-    "0 + 18 + 3 = 21 evidence axes",
-  );
+  expect(await stat(page, "stat-answerable")).toBe(EMPTY.answerable);
+  expect(await stat(page, "stat-silent-holes")).toBe(EMPTY.silentHoles);
+  expect(await stat(page, "stat-dark")).toBe(darkOf(EMPTY));
+  await expect(page.getByTestId("coverage-denominator")).toContainText(denominator(EMPTY, AXES));
+  // NON-VACUITY: an empty estate must answer NOTHING, or every derivation above could be
+  // reading a report that quietly agrees with any page.
+  expect(EMPTY.answerable).toBe(0);
 });
 
 test("a keyboard user can work the toggles without losing their place", async ({ page }) => {

@@ -346,7 +346,7 @@ export function seedDemoStore(clock: Clock, storeOptions?: { maxDecisionsPerTena
   };
 }
 
-function seedTenant(
+export function seedTenant(
   store: MemoryStore,
   input: { tenantId: string; slug: string; name: string; createdAt: string },
 ): void {
@@ -358,7 +358,7 @@ function seedTenant(
   });
 }
 
-function seedWorkflows(
+export function seedWorkflows(
   store: MemoryStore,
   tenantId: string,
   specs: Array<Pick<Workflow, "key" | "name" | "riskTier">>,
@@ -374,7 +374,7 @@ function seedWorkflows(
   }
 }
 
-function seedPolicy(
+export function seedPolicy(
   store: MemoryStore,
   tenantId: string,
   createdAt: string,

@@ -57,6 +57,11 @@ in-memory (the fixture-safe default used by the public build and CI).
 | `SIGNALGRID_V1_RATE_LIMIT` | Requests/min/bearer on `/v1`. Malformed values fall back — never to "unlimited". | `240` |
 | `SIGNALGRID_GLOBAL_RATE_LIMIT` | Requests/min/IP across the server. `/api/healthz`, `/api/readyz`, and — only when `METRICS_TOKEN` is set — `/metrics` are exempt. | `600` |
 | `SIGNALGRID_MAX_DECISIONS_PER_TENANT` | In-memory decisions retained per tenant (FIFO), with the audit/webhook/remediation collections derived from it. Older rows are served by the durable store when `DATABASE_URL` is set. `GET /v1/metrics` reports `metrics.window.capped` once the bound has evicted anything, so a truncated aggregate is never read as a full one. Must be a positive integer — **an invalid value refuses at boot rather than silently using the default**. | `5000` |
+| `SIGNALGRID_CORE` | Which core this process serves: unset or `demo` boots the seeded public-safe demo core; `estate` boots `SignalGridCore.fromEstate()` around this deployment's own tenant, with posture read once at boot through the read-only Graph posture connector (fixture dataset unless the live gate opens). Anything else refuses to boot. | unset (`demo`) |
+| `SIGNALGRID_ESTATE_TENANT` | The estate tenant slug (lowercase letters, digits, hyphens; 3–40 chars). Required by `SIGNALGRID_CORE=estate`; a malformed value refuses to boot rather than falling back to the demo core. | unset |
+| `SIGNALGRID_ESTATE_OWNER_TOKEN` | The estate owner's bearer token (≥24 characters, never a demo key). Required by `SIGNALGRID_CORE=estate`. Key-only in the compose file: passed through only when the host sets it. | unset |
+| `SIGNALGRID_ESTATE_OPERATOR_TOKEN` | Optional estate operator bearer token, same rules as the owner token. | unset |
+| `GRAPH_BASE_URL` | Graph base URL for the posture connector; only read when the live gate opens. | `https://graph.microsoft.com/v1.0` |
 | `OIDC_TENANT_MAP` / `OIDC_ROLE_MAP` | JSON maps: IdP value → internal tenant id / role. **Required** once OIDC is on — without both, the config is invalid and every request is 401. | unset |
 | `OIDC_SUBJECT_CLAIM` | Claim used as the caller's subject id. | `sub` |
 | `OIDC_CLOCK_TOLERANCE_SEC` | Allowed clock skew when validating token times. | `60` |
@@ -328,16 +333,24 @@ itself.
 
 ## What this deployment decides about
 
-Be precise about the decision core this stack serves: the API boots the
-demo-seeded core (`artifacts/api-server/src/lib/core.ts:32` —
-`SignalGridCore.demo()`), whose only constructor path is the demo factory with
-a fixed clock (`lib/signalgrid-core/src/engine.ts:51,92`). The
-`shared-device-gateway` profile fences off the demo *surfaces* (credential
-dispenser, simulator, demo bearers), but the tenants, identities, and devices
-the core evaluates are still the seeded fixtures — a customer's own directory
-and fleet are not yet wired in. That gap is declared mechanically in
-`scripts/launch-profile.mjs` (GAPS: `non-demo-core-constructor`) and closes
-when the served core stops being `SignalGridCore.demo()`.
+Be precise about the decision core this stack serves. By default the API boots
+the demo-seeded core (`artifacts/api-server/src/lib/core.ts:80` —
+`SignalGridCore.demo()`, a fixed clock and the public-safe seed,
+`lib/signalgrid-core/src/engine.ts:111`). Set `SIGNALGRID_CORE=estate` and the
+same process instead boots `SignalGridCore.fromEstate()`
+(`lib/signalgrid-core/src/engine.ts:99`, `lib/signalgrid-core/src/estate.ts`):
+your own tenant (`SIGNALGRID_ESTATE_TENANT`), your own bearer tokens
+(`SIGNALGRID_ESTATE_OWNER_TOKEN`, optional `SIGNALGRID_ESTATE_OPERATOR_TOKEN`),
+and identities/devices read ONCE at boot through the read-only Graph posture
+connector — live only under the usual gate (beta/prod tier,
+`SIGNALGRID_LIVE_INTEGRATIONS=true`, a read-only `GRAPH_ACCESS_TOKEN`),
+otherwise the committed fixture dataset, with the connector's recorded mode
+saying which. Facts Graph does not read (encryption, OS support) stay unknown,
+so `allow` never fires on them; a malformed estate setting refuses to boot
+rather than falling back to the demo core. What remains open is declared
+mechanically in `scripts/launch-profile.mjs` (GAPS: `non-demo-core-constructor`):
+the demo core is still the default, there is no posture refresh loop, and the
+`shared-device-gateway` profile still fences the demo *surfaces*.
 
 ## How it's validated
 

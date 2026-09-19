@@ -39,7 +39,8 @@
     "@workspace/ddm-connector": "workspace:*",
     "@workspace/signal-discovery": "workspace:*",
     "@workspace/fleet-connector": "workspace:*",
-    "@workspace/webauthn": "workspace:*"
+    "@workspace/webauthn": "workspace:*",
+    "@workspace/secrets": "workspace:*"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

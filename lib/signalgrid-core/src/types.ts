@@ -708,6 +708,32 @@ export interface RemediationAction {
   note: string;
 }
 
+/**
+ * The ANSWER to a `step_up` verdict, recorded against the decision that raised it.
+ *
+ * The gate can return `step_up`; until this record existed nothing served could say
+ * one had been SATISFIED, so a deployment in shadow mode returned a verdict the host
+ * app had no way to resolve. One answer per decision, minted only after a
+ * cryptographic verification the caller could not fake, and it carries a MASKED
+ * credential reference — never the credential.
+ *
+ * It does not change the decision. A `step_up` stays a `step_up` forever: the
+ * evidence it was computed from is immutable, and rewriting a stored verdict because
+ * a gesture arrived later would make the audit chain describe something that never
+ * happened. The host app reads the answer beside the decision and proceeds.
+ */
+export interface StepUpAnswer {
+  id: string;
+  tenantId: string;
+  decisionId: string;
+  /** The identity the decision was about — never one named by the request. */
+  identityId: string;
+  method: "webauthn";
+  /** A masked reference to the credential that signed. Never the credential. */
+  credentialReference: string;
+  answeredAt: string;
+}
+
 // ── Resolution Assistant (deterministic, approval-gated, simulated) ──────────
 
 export type ResolutionAudience = "worker" | "operator" | "admin" | "system";
@@ -828,7 +854,8 @@ export type AuditEventType =
   | "policy.version_activated"
   | "evidence.captured"
   | "remediation.requested"
-  | "remediation.approved";
+  | "remediation.approved"
+  | "decision.step_up_answered";
 
 export interface AuditEvent {
   id: string;

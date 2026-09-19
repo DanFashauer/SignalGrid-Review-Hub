@@ -196,6 +196,9 @@ importers:
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../../lib/room-sim
+      '@workspace/secrets':
+        specifier: workspace:*
+        version: link:../../lib/secret-model
       '@workspace/self-audit':
         specifier: workspace:*
         version: link:../../lib/self-audit
@@ -865,6 +868,9 @@ importers:
 
   lib/persistence:
     dependencies:
+      '@workspace/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@workspace/signalgrid-core':
         specifier: workspace:*
         version: link:../signalgrid-core
@@ -929,6 +935,12 @@ importers:
       '@workspace/signalgrid-core':
         specifier: workspace:*
         version: link:../signalgrid-core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
+  lib/secret-model:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1073,6 +1085,9 @@ importers:
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../lib/room-sim
+      '@workspace/secrets':
+        specifier: workspace:*
+        version: link:../lib/secret-model
       '@workspace/self-audit':
         specifier: workspace:*
         version: link:../lib/self-audit

@@ -75,11 +75,32 @@
 
 /** Bumped whenever a status changes. Not a semver — a serial number, so a doc or a
  *  review can name the exact revision of the scope it was written against. */
-export const LAUNCH_PROFILE_VERSION = 5;
+export const LAUNCH_PROFILE_VERSION = 7;
 
 // VERSION HISTORY, kept because a scope decision that changes silently is not a
 // decision anyone can hold you to.
 //
+//   7  BLOCKER 10, AT RUNTIME (2026-09-18). The `runtime-launch-status` gap said the
+//      enforced/observed/simulated labels existed only here, in a governance file, so
+//      an operator could read what the product intends and never ask the running
+//      server what it is doing. GET /v1/launch-status now answers it per signal
+//      family, derived from the connectors the core holds and from nothing
+//      configurable — and it reports `enforced` UNREACHABLE with its reason, which is
+//      the half this file kept implicit. One launch path added; nothing reclassified.
+//      The gap is REMOVED because its closedWhen condition is met in code.
+//   6  STEP-UP BECOMES ANSWERABLE (2026-09-18). The `step-up-answerability` gap said
+//      Limited GA ships in SHADOW mode: the gate returns step_up and no launch route
+//      can answer one. That was true and it was a hole in the product, not a scope
+//      decision — three of the four words the gate can say were actionable and the
+//      fourth was not. Four paths move onto the fence: the two enrollment routes
+//      (deferred → launch; they are the prerequisite, and an answer route without
+//      enrollment is a ceremony nobody can start) and two new decision-scoped routes,
+//      POST /v1/decisions/{id}/step-up/challenge and POST /v1/decisions/{id}/step-up.
+//      The app-workflows variants stay deferred with the integration catalog they
+//      belong to. Nothing about the criterion moves: same one product, same one host
+//      app, same gate — it is the gate finishing a sentence it could already start.
+//      The gap is REMOVED because its closedWhen condition is now met in code, which
+//      is the only reason this list ever loses an entry.
 //   4  THE FREEZE EXTENSION (2026-08-16). The app-surfaces derivation read
 //      artifacts/, tools/ and the two iOS project files — and nothing else. An
 //      ENTIRE ANDROID PORT (native/android: Compose shell + :assist-core, unit-
@@ -357,6 +378,15 @@ export const SURFACES = [
   },
   { id: "/v1/metrics", reason: "Operability. A service nobody can watch cannot be run." },
   {
+    id: "/v1/launch-status",
+    reason:
+      "Blocker 10, answered by the RUNNING server instead of by this file. Per signal " +
+      "family: enforced, observed or simulated — every field derived from the connectors " +
+      "the core holds, never from an environment flag (SIGNALGRID_LIVE_INTEGRATIONS " +
+      "caused precisely that defect once). It also reports `enforced` UNREACHABLE with " +
+      "its reason, which is the half a governance file kept implicit.",
+  },
+  {
     id: "/v1/connectors",
     reason:
       "Read-only connector inventory: the setup/health screen (launch wireframe 2) renders " +
@@ -383,6 +413,38 @@ export const SURFACES = [
     reason:
       "Runs the pinned policy tests against a version and reports pass/fail — evidence the " +
       "active rule set still behaves, on demand, read-only.",
+  },
+  {
+    id: "/v1/decisions/{id}/step-up/challenge",
+    reason:
+      "ANSWERING the verdict. The gate returns four words and Limited GA could act on " +
+      "three: nothing served could carry a completed challenge back, so a deployment " +
+      "shipped in shadow mode by omission rather than by decision. This mints the " +
+      "single-use WebAuthn challenge bound to ONE step_up decision — the subjects come " +
+      "from the decision, never from the request.",
+  },
+  {
+    id: "/v1/decisions/{id}/step-up",
+    reason:
+      "The answer itself: a verified, user-verifying WebAuthn assertion, checked against " +
+      "the credential enrolled for the identity the DECISION was about and against the " +
+      "challenge's stored binding. It records the answer beside the decision and does " +
+      "NOT rewrite it — a step_up stays a step_up, because it was computed from digested, " +
+      "immutable evidence.",
+  },
+  {
+    id: "/v1/step-up/enroll/options",
+    reason:
+      "Enrollment is the prerequisite of the answer above: no enrolled credential, no " +
+      "challenge, nothing to sign. Moved deferred → launch at v6 with the answer route; " +
+      "shipping the answer without enrollment would be a ceremony nobody can start.",
+  },
+  {
+    id: "/v1/step-up/enroll/verify",
+    reason:
+      "The other half of enrollment — the attestation is verified before a credential is " +
+      "stored, and the ceremony must be completed by the same operator/owner principal " +
+      "that started it.",
   },
   {
     id: "/v1/connectors/{id}/sync",
@@ -416,8 +478,6 @@ export const SURFACES = [
       "/v1/remediation/{id}/approve",
       "/v1/app-workflows/integrations",
       "/v1/app-workflows/evaluate",
-      "/v1/step-up/enroll/options",
-      "/v1/step-up/enroll/verify",
       "/v1/step-up/challenge",
       "/v1/app-workflows/complete-step-up",
       "/cp/v1/tenants",
@@ -707,38 +767,6 @@ export const GAPS = [
         file: "lib/integrations/src/integrations/device-management-health/index.ts",
         absent: 'toLowerCase() || "bridge"',
       },
-    ],
-  },
-  {
-    id: "step-up-answerability",
-    surface: "published-api-paths",
-    whatIsMissing:
-      "Limited GA ships in SHADOW mode: the gate returns step_up, and no launch route can " +
-      "answer one. /v1/step-up/* exists and is deferred on purpose — enabling bounded " +
-      "enforcement is a later phase of the owner's plan, not this one. Stated here so " +
-      "\"returns step_up\" is never read as \"performs step-up\".",
-    // Closed when the GA allowlist admits a step-up path — i.e. a served route can
-    // answer the verdict the gate returns. Deliberate today, so this is the one gap
-    // expected to stay open longest; it still gets a condition, because "deliberate"
-    // and "permanent" are different and only the second needs no check.
-    closedWhen: [
-      { file: "artifacts/api-server/src/lib/profile.ts", contains: "/v1/step-up" },
-    ],
-  },
-  {
-    id: "runtime-launch-status",
-    surface: "published-api-paths",
-    whatIsMissing:
-      "A runtime report of enforced-vs-observed-vs-simulated per signal kind. The labels " +
-      "exist here, in a governance file; nothing serves them, so an operator cannot ask the " +
-      "running server what it is actually enforcing. It would close Blocker 10 more " +
-      "completely than a governance file can, and it is deliberately not built here: it " +
-      "widens the API surface and adds diff to a pull request Blocker 1 says is already too " +
-      "large to review.",
-    // Closed when some route file carries all three labels — the shape a served
-    // report must have. Verified against today's tree: no routes file has all three.
-    closedWhen: [
-      { dir: "artifacts/api-server/src/routes", anyFileContainsAll: ['"enforced"', '"observed"', '"simulated"'] },
     ],
   },
   {

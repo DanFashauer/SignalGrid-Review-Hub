@@ -105,7 +105,7 @@ Caveats that will burn you:
 
 ## 4. Apple device management
 
-**Do this first:** keep exercising the signalgrid-mcp Mac lane ([RUN_ON_MAC.md](RUN_ON_MAC.md)) — it already collects real posture from real hardware at $0. In parallel, build the NanoMDM + KMFDDM rig now (free OSS; server, DB, enrollment profile, declarations authored against the `apple/device-management` v26.4 items the repo pins) and enroll a UTM macOS VM the moment the owner's ABM enrollment yields a push certificate. That combination is the only zero-cost path that speaks the REAL Apple MDM + DDM protocol end-to-end into lib/ddm-connector's pinned status items.
+**Do this first:** keep exercising the signalgrid-mcp Mac lane ([RUN_ON_MAC.md](RUN_ON_MAC.md)) — it already collects real posture from real hardware at $0. In parallel, build the NanoMDM + KMFDDM rig now (free OSS; server, DB, enrollment profile, declarations authored against the `apple/device-management` v27.0 items the repo pins) and enroll a UTM macOS VM the moment the owner's ABM enrollment yields a push certificate. That combination is the only zero-cost path that speaks the REAL Apple MDM + DDM protocol end-to-end into lib/ddm-connector's pinned status items.
 
 | Option | Exercises | Cost | Effort | Confidence |
 | --- | --- | --- | --- | --- |

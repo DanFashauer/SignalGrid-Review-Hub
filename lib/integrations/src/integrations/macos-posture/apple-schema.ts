@@ -1,6 +1,6 @@
 // Apple canonical device-management schema alignment for the macOS posture path.
 //
-// apple/device-management (MIT-licensed, schema version 26.4) is Apple's
+// apple/device-management (MIT-licensed, schema version 27.0) is Apple's
 // authoritative, machine-readable vocabulary for macOS security state: the MDM
 // `SecurityInfo` command response, the Declarative Device Management (DDM) status
 // items, and the Managed Device Attestation leaf-certificate OIDs. SignalGrid's
@@ -9,8 +9,9 @@
 //
 // This module pins that vocabulary and maps each NormalizedMacosPosture field to
 // its canonical Apple key, so every posture fact is traceable to Apple's own
-// schema and a schema change on a new OS release surfaces as a failing check
-// instead of silent drift. It is a NAMING / PROVENANCE alignment only: it changes
+// schema. No proof reads Apple's YAML — a new OS release is re-verified against
+// upstream by hand when the pin moves (see ddm-connector's apple-schema.ts). It is
+// a NAMING / PROVENANCE alignment only: it changes
 // no verdict logic and adds no runtime dependency.
 //
 // Source (pinned, do not track HEAD): https://github.com/apple/device-management
@@ -21,7 +22,7 @@
 
 /** The apple/device-management schema release this alignment is pinned to. Bump
  *  deliberately when re-reconciling against a newer OS schema. */
-export const APPLE_DEVICE_MANAGEMENT_SCHEMA_VERSION = "26.4";
+export const APPLE_DEVICE_MANAGEMENT_SCHEMA_VERSION = "27.0";
 
 /** Canonical MDM `SecurityInfo` response keys we align to (pinned subset of
  *  mdm/commands/information.security.yaml). A dotted key denotes a nested-

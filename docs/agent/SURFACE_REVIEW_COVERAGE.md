@@ -99,7 +99,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/recommendations` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/recommendations/src/index.ts | 4 | 2 |
 | `lib/reliability` | package | 5 | read | 1 | 2026-09-04 | cloud lane | lib/reliability/src/summarize.ts | 1 | 1 |
 | `lib/room-sim` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/room-sim/src/index.ts | 0 | 7 |
-| `lib/secrets` | package | 3 | read | 1 | 2026-09-18 | cloud lane | docs/SECRET_MODEL.md | 0 | 0 |
+| `lib/secret-model` | package | 3 | read | 1 | 2026-09-18 | cloud lane | docs/SECRET_MODEL.md | 0 | 0 |
 | `lib/self-audit` | package | 8 | read | 1 | 2026-09-04 | cloud lane | lib/self-audit/src/audit.ts | 1 | 1 |
 | `lib/signal-discovery` | package | 4 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
 | `lib/signal-radar` | package | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 0 |

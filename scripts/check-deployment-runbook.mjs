@@ -168,7 +168,7 @@ export function collectBootEnvVars(root = SRC) {
  * compose file cannot rotate anything.
  */
 export function collectRegisteredSecrets(source) {
-  const src = source ?? readFileSync("lib/secrets/src/index.ts", "utf8");
+  const src = source ?? readFileSync("lib/secret-model/src/index.ts", "utf8");
   const block = src.match(/export const REGISTRY[^=]*=\s*\[([\s\S]*?)\n\];/);
   if (!block) return new Set();
   const out = new Set();

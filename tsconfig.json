@@ -15,7 +15,7 @@
     { "path": "./lib/location" },
     { "path": "./lib/webauthn" },
     { "path": "./lib/audit" },
-    { "path": "./lib/secrets" },
+    { "path": "./lib/secret-model" },
     { "path": "./lib/integrations" },
     {
       "path": "./lib/api-client-react"

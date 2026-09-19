@@ -198,7 +198,7 @@ importers:
         version: link:../../lib/room-sim
       '@workspace/secrets':
         specifier: workspace:*
-        version: link:../../lib/secrets
+        version: link:../../lib/secret-model
       '@workspace/self-audit':
         specifier: workspace:*
         version: link:../../lib/self-audit
@@ -940,7 +940,7 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
-  lib/secrets:
+  lib/secret-model:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1087,7 +1087,7 @@ importers:
         version: link:../lib/room-sim
       '@workspace/secrets':
         specifier: workspace:*
-        version: link:../lib/secrets
+        version: link:../lib/secret-model
       '@workspace/self-audit':
         specifier: workspace:*
         version: link:../lib/self-audit

@@ -2012,8 +2012,8 @@
         }
       ]
     },
-    "lib/secrets": {
-      "path": "lib/secrets",
+    "lib/secret-model": {
+      "path": "lib/secret-model",
       "reads": [
         {
           "date": "2026-09-18",

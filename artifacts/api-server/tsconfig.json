@@ -27,7 +27,7 @@
       "path": "../../lib/signal-radar"
     },
     {
-      "path": "../../lib/secrets"
+      "path": "../../lib/secret-model"
     }
   ]
 }

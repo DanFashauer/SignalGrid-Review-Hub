@@ -94,7 +94,7 @@ function requireRegistered(name: string): SecretSpec {
     // A secret nobody declared is a secret nobody reviewed. Refusing here is what
     // keeps the registry honest: adding a read means adding a row.
     throw new Error(
-      `secrets: "${name}" is not in the registry (lib/secrets/src/index.ts). ` +
+      `secrets: "${name}" is not in the registry (lib/secret-model/src/index.ts). ` +
         "Declare it there — an undeclared secret is one no rotation plan covers.",
     );
   }

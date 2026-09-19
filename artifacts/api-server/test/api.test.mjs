@@ -2362,7 +2362,7 @@ async function run() {
     }
 
     // ── THE ROTATION WINDOW, on the wire (DR-010 rule 4) ───────────────────
-    // `lib/secrets` gives every secret a `_NEXT` successor, accepted alongside the
+    // `lib/secret-model` gives every secret a `_NEXT` successor, accepted alongside the
     // current value while both are set. proof:secrets pins the accessor; this pins
     // that a RUNNING server honours it, because a rotation window that exists only
     // in a library is a rotation nobody can perform. The blank-but-set refusal above

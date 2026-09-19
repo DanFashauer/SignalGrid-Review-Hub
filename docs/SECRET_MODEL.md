@@ -74,7 +74,7 @@ follows the same path. The boundary must exist before that day.
 The model above is unchanged. What changed is that one piece of it is now code,
 and the piece was chosen because without it none of the rest could start.
 
-**Implemented — `lib/secrets` ([`lib/secrets/src/index.ts`](../lib/secrets/src/index.ts)),
+**Implemented — `lib/secret-model` ([`lib/secret-model/src/index.ts`](../lib/secret-model/src/index.ts)),
 proven by `pnpm run proof:secrets` (28 checks; `--self-test` plants an
 unconfigured secret that accepts anything and the proof catches it):**
 
@@ -123,7 +123,7 @@ unconfigured secret that accepts anything and the proof catches it):**
   path exists, because nothing stores anything. The registry names *variables*, not
   vault paths.
 - **Service identities (rule 2), leases and TTLs (rule 4's other half), and sealed
-  storage (rule 5) are entirely unbuilt.** `lib/secrets` fetches nothing, leases
+  storage (rule 5) are entirely unbuilt.** `lib/secret-model` fetches nothing, leases
   nothing, renews nothing and stores nothing. It is an environment reader with one
   door and a successor, and calling it a secret manager would be exactly the kind
   of claim this document exists to prevent.

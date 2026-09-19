@@ -24,6 +24,7 @@ import {
   computeMetrics,
   runDockSync,
   runFixtureSync,
+  runShiftSync,
   foldIdentityEnabled,
   deriveCriticalSignalsPresent,
   FRESHNESS_VALUES,
@@ -3655,6 +3656,68 @@ const monotonicityTable: string[] = [];
     if (knownConnector) {
       const clean = runFixtureSync(known.store, fixedClock("2026-07-13T15:00:00.000Z"), knownConnector, knownRecords);
       check("sync: a run that skipped nothing still reports success and healthy (the assertions above can fail)", clean.status === "success" && clean.recordsProcessed === knownRecords.length);
+    }
+  }
+
+  // (b2) THE OTHER TWO FIXTURE-SYNC PATHS. `runFixtureSync` above is one of THREE
+  // functions carrying the identical "a record whose subject the store does not know
+  // is SKIPPED, not trusted" branch — `runDockSync` (dock.ts) and `runShiftSync`
+  // (shift.ts) carry the same counter, the same partial/degraded verdict and the
+  // same note, and neither branch was ever driven. `runShiftSync` had no caller in
+  // any proof at all. A copied fail-safe with no test is how one copy quietly stops
+  // matching the others.
+  //
+  // Both are asserted the same way as (b): an all-orphan run must report `partial`
+  // with zero processed, must NAME the skip count, and must leave the connector
+  // `degraded` — plus a known-subject control run, so a function that refused
+  // everything could not pass.
+  {
+    const seeded = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+    const clk = fixedClock("2026-07-13T15:00:00.000Z");
+
+    const dockConnector = seeded.store
+      .listConnectors(seeded.tenants.northwind)
+      .find((c) => c.kind === "dockbridge-custody");
+    const dockRecords = dockConnector ? (seeded.dockRecords[dockConnector.id] ?? []) : [];
+    check("dock sync: a dockbridge connector and its records are seeded", dockConnector !== undefined && dockRecords.length > 0);
+    if (dockConnector && dockRecords[0]) {
+      const orphan = { ...dockRecords[0], deviceRef: "no-such-device" };
+      const run = runDockSync(seeded.store, clk, dockConnector, [orphan, orphan]);
+      check("dock sync: a run that skipped EVERY record reports partial, not success",
+        run.status === "partial" && run.recordsProcessed === 0 && run.signalsNormalized === 0);
+      check("dock sync: ...names the skip count in its note", /2 of 2 record/.test(run.note));
+      check("dock sync: ...and leaves the connector degraded, not healthy",
+        seeded.store.listConnectors(seeded.tenants.northwind).find((c) => c.id === dockConnector.id)?.status === "degraded");
+      const control = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+      const controlConnector = control.store.listConnectors(control.tenants.northwind).find((c) => c.id === dockConnector.id);
+      if (controlConnector) {
+        const clean = runDockSync(control.store, clk, controlConnector, control.dockRecords[controlConnector.id] ?? []);
+        check("dock sync: a run that skipped nothing still reports success (the assertions above can fail)",
+          clean.status === "success" && clean.recordsProcessed === (control.dockRecords[controlConnector.id] ?? []).length);
+      }
+    }
+
+    const shiftSeed = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+    const shiftConnector = shiftSeed.store
+      .listConnectors(shiftSeed.tenants.northwind)
+      .find((c) => c.kind === "wfm-shift");
+    const shiftRecords = shiftConnector ? (shiftSeed.shiftRecords[shiftConnector.id] ?? []) : [];
+    check("shift sync: a wfm-shift connector and its records are seeded", shiftConnector !== undefined && shiftRecords.length > 0);
+    if (shiftConnector && shiftRecords[0]) {
+      const orphan = { ...shiftRecords[0], deviceRef: "no-such-device" };
+      const run = runShiftSync(shiftSeed.store, clk, shiftConnector, [orphan, orphan, orphan]);
+      check("shift sync: a run that skipped EVERY record reports partial, not success",
+        run.status === "partial" && run.recordsProcessed === 0 && run.signalsNormalized === 0);
+      check("shift sync: ...names the skip count in its note", /3 of 3 record/.test(run.note));
+      check("shift sync: ...and leaves the connector degraded, not healthy",
+        shiftSeed.store.listConnectors(shiftSeed.tenants.northwind).find((c) => c.id === shiftConnector.id)?.status === "degraded");
+      const control = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+      const controlConnector = control.store.listConnectors(control.tenants.northwind).find((c) => c.id === shiftConnector.id);
+      if (controlConnector) {
+        const clean = runShiftSync(control.store, clk, controlConnector, control.shiftRecords[controlConnector.id] ?? []);
+        check("shift sync: a run that skipped nothing still reports success (the assertions above can fail)",
+          clean.status === "success" && clean.recordsProcessed === (control.shiftRecords[controlConnector.id] ?? []).length);
+      }
     }
   }
 

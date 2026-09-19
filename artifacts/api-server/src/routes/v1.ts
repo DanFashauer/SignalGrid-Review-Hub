@@ -891,14 +891,24 @@ function parseEvaluate(body: unknown): EvaluateRequest {
   const identityRef = record["identityRef"];
   const deviceRef = record["deviceRef"];
   const workflowKey = record["workflowKey"];
+  // TRIMMED-EMPTY IS NOT A BINDING. The core's `validateRequest` already rejects
+  // `""` (`decision.ts`, `.trim().length === 0` → 400), so this is defence in depth
+  // rather than a live fail-open — and it is the same lesson as "an empty scope is
+  // not a wildcard" (control-plane Finding 3): a boundary that accepts a shape it
+  // cannot bind to anything relies on the next layer still checking, and the next
+  // layer is one refactor away from not. Both /v1/decisions/evaluate and
+  // /v1/authorize parse through here, so the guard lands once for both.
   if (
     typeof identityRef !== "string" ||
     typeof deviceRef !== "string" ||
-    typeof workflowKey !== "string"
+    typeof workflowKey !== "string" ||
+    identityRef.trim().length === 0 ||
+    deviceRef.trim().length === 0 ||
+    workflowKey.trim().length === 0
   ) {
     throw new CoreError(
       "validation",
-      "identityRef, deviceRef, and workflowKey are required strings.",
+      "identityRef, deviceRef, and workflowKey are required non-empty strings.",
       400,
     );
   }

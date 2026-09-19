@@ -539,7 +539,7 @@
    "claim": "\"the measured constraint is the per-key rate limit (240 requests/minute default, operator-tunable)\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "artifacts/api-server/src/middlewares/rateLimit.ts:56 — limit: limitFromEnv(\"SIGNALGRID_V1_RATE_LIMIT\", 240), documented at :37 as \"240 requests per minute\"; env-tunable, so \"operator-tunable\" holds. Throughput lane: pnpm run test:load",
+   "evidence": "artifacts/api-server/src/middlewares/rateLimit.ts:68 — limit: limitFromEnv(\"SIGNALGRID_V1_RATE_LIMIT\", 240), documented at :37 as \"240 requests per minute\"; env-tunable, so \"operator-tunable\" holds. Throughput lane: pnpm run test:load",
    "action": "keep"
   },
   {

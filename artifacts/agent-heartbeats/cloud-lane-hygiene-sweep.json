@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-18T09:54:37.210Z",
-  "result": "quiet, 16G free | freed 13M (560 scratchpad files >24h) + 44M (old scratch dirs, none a worktree) + pnpm store prune (60 files, 1 package); no docker daemon and no /var/lib/docker cache; 11 older registered worktrees left in place (may hold unsaved work); the live gate worktree wt725 untouched"
+  "firedAt": "2026-09-19T09:41:13.597Z",
+  "result": "freed ~300MB (scratchpad files older than 24h outside the worktrees, 838MB nominal of mostly hard-linked pnpm files, plus pnpm store prune: 60 files, 1 package) | 11G free of 252G (71% used); no dockerd and no /var/lib/docker cache; worktrees untouched; owner not escalated"
 }

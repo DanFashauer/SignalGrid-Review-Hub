@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-19T02:25:12.408Z",
-  "result": "quiet: tick firedAt 2026-09-19T02:02:47Z (fresh, quiet); live evidence minted 2026-09-18T14:52Z (0 days old, manifest 6906d8d9, no drift); no mac/* branch new or moved since the 01:28Z cycle (#856 remedy from that cycle still unread by the Mac lane, 56m); no message addressed to cloud; no new sim results; owner not escalated. Cloud side this hour: #868 #860 #863 refreshed on green chains with mainline merged in so CI builds their merge refs; two CodeQL findings on #863 fixed locally, pushing on the next green chain."
+  "firedAt": "2026-09-19T03:25:44.100Z",
+  "result": "quiet: tick firedAt 2026-09-19T03:18:34Z (fresh, quiet); live evidence minted 2026-09-18T14:52Z (0 days old, manifest 6906d8d9, no drift); no mac/* branch new or moved since the 02:25Z cycle; #856 remedy (sent 01:28Z) still unread by the Mac lane after 1.9h; no message addressed to cloud; no new sim results; owner not escalated. Cloud side this hour: LOOP STATE 01:00Z landed (#872); #863 and #866 refreshed with their CodeQL findings fixed and threads resolved; #869 no longer conflicts with its base and its phase-gate failure (a lib/secrets/ path) is fixed locally by renaming the package to lib/secret-model, pushing on its green chain."
 }

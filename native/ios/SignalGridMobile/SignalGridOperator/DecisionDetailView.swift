@@ -116,6 +116,16 @@ struct DecisionDetailView: View {
                     KeyValueRow(key: "Digest", value: evidence.snapshot.digest)
                     KeyValueRow(key: "Digest check", value: evidence.verified ? "recomputed by the server" : "FAILED — the stored snapshot does not match its digest")
                     KeyValueRow(key: "Policy version", value: "v\(evidence.snapshot.policyVersion)")
+                    // Provenance is its own row, not folded into the digest seal: a snapshot
+                    // minted before stamping existed is not tampered, it is unstamped, and
+                    // the seal is a boolean that cannot say so. Absence renders as absence —
+                    // never coerced to 0, never back-dated. Mirrors the web console's
+                    // "Core normalization" row (OperatorConsoleSection.tsx).
+                    KeyValueRow(
+                        key: "Core normalization",
+                        value: evidence.snapshot.coreNormalizationVersion.map { "v\($0)" }
+                            ?? "unstamped (pre-provenance)"
+                    )
                     Divider().overlay(Color.sgBorder)
                     evidenceGrid(evidence.snapshot.evidence)
                     Divider().overlay(Color.sgBorder)

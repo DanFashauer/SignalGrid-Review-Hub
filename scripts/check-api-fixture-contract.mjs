@@ -121,7 +121,7 @@ export function operationBlock(spec, operationId) {
 
 /** Pure. operationId for a served method+path, read out of the document. */
 export function operationIdOf(spec, method, path) {
-  const block = blockAfter(spec.slice(Math.max(0, spec.indexOf(`\n  ${path}:`))), new RegExp(String.raw`^\s{2}${path.replace(/[{}]/g, "\\$&")}:\s*$`));
+  const block = blockAfter(spec.slice(Math.max(0, spec.indexOf(`\n  ${path}:`))), new RegExp(String.raw`^\s{2}${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\s*$`));
   const m = new RegExp(String.raw`^\s{4}${method.toLowerCase()}:\s*$[\s\S]*?operationId:\s*(\w+)`, "m").exec(block);
   return m ? m[1] : null;
 }

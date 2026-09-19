@@ -26,7 +26,7 @@
 //
 //   node scripts/check-api-zod-wiring.mjs
 //   node scripts/check-api-zod-wiring.mjs --self-test
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -118,9 +118,9 @@ function routeSources() {
   const dir = join(repo, ROUTES_DIR);
   const out = [];
   const walk = (d) => {
-    for (const e of readdirSync(d)) {
-      const p = join(d, e);
-      if (statSync(p).isDirectory()) walk(p);
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) walk(p);
       else if (p.endsWith(".ts")) out.push(readFileSync(p, "utf8"));
     }
   };

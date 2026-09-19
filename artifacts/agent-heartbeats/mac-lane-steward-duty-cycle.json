@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-19T12:26:36.351Z",
-  "result": "quiet: tick firedAt 2026-09-19T12:08:17Z (fresh, quiet); live evidence minted 2026-09-18T14:52Z (0 days old, manifest 6906d8d9, no drift); no mac/* branch new or moved since the 11:27Z cycle; #856 remedy (sent 01:28Z) still unread by the Mac lane after 10.9h; no message addressed to cloud; no new sim results; owner not escalated. Cloud side unchanged: seven sweep branches on the hub on green chains awaiting owner merge."
+  "firedAt": "2026-09-19T13:28:30.589Z",
+  "result": "quiet: tick firedAt 2026-09-19T13:23:57Z (fresh, quiet); live evidence minted 2026-09-18T14:52Z (0 days old, manifest 6906d8d9, no drift); no mac/* branch new or moved since the 12:27Z cycle; #856 remedy (sent 01:28Z) still unread by the Mac lane after 12.0h; no message addressed to cloud; no new sim results; owner not escalated. Cloud side unchanged: seven sweep branches on the hub on green chains awaiting owner merge."
 }

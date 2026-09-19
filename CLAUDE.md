@@ -122,11 +122,13 @@ Vite 8's bundler, win32 bindings deliberately kept for the windows desktop CI), 
   present and the api-server is built (both handled by `validate-sim-macos.sh`).
 - `pnpm run build` (the vite web build) only runs natively on linux-x64 / in CI. Don't
   try to "fix" a native web-build failure here — it's expected off linux-x64. On
-  the Mac it DOES run inside an amd64 Linux VM with Apple's `container` (measured
-  2026-09-18: `container run --arch amd64 node:22 …` → `pnpm install
-  --frozen-lockfile && pnpm run build` exit 0 in ~55 s). `--arch arm64` fails on
-  the rolldown binding by design. Details: `docs/agent/RESOURCE_INTAKE.md`, the
-  2026-09-18 Apple row.
+  the Mac it DOES run inside an amd64 Linux VM with Apple's `container`, installed
+  user-level (no admin step) under `~/.local/container`:
+  `bash scripts/mac/linux-web-build.sh` starts the service if it is down and runs
+  `pnpm install --frozen-lockfile && pnpm run build` against a read-only copy
+  (measured 2026-09-18 from a stopped service: exit 0 in 51 s, all five vite apps).
+  `--arch arm64` fails on the rolldown binding by design. Details:
+  `docs/agent/RESOURCE_INTAKE.md`, the 2026-09-18 Apple row.
 - **Shell scripts run under bash 3.2** — the only `bash` on a stock Mac, and 20
   years behind the one on your Linux CI box. Under `set -u` it treats an EMPTY
   array's `"${a[@]}"` as *unbound* and aborts (bash 4.4+ expands it to nothing).

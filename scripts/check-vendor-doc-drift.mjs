@@ -28,13 +28,22 @@
 // FATAL — an operator reads the report and decides whether to re-verify a
 // link by hand, exactly the "look at it" outcome the row asked for, minus
 // the machine.
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CATALOG_PATH = join(repo, "docs/inspiration/ENDPOINT_MANAGEMENT_API_CATALOG.md");
 const MANIFEST_PATH = join(repo, "docs/agent/VENDOR_DOC_MANIFEST.json");
+/** One read, no check-then-open: a manifest that is not there yet is an empty ledger; any other failure is real. */
+function readManifestOrEmpty() {
+  try {
+    return loadManifest(readFileSync(MANIFEST_PATH, "utf8"));
+  } catch (e) {
+    if (e && e.code === "ENOENT") return new Map();
+    throw e;
+  }
+}
 const STALE_DAYS = 90;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -110,12 +119,12 @@ function selfTest() {
 
   // A URL the catalog cites but the manifest has never seen: unverified, not stale.
   d = computeDrift(new Map([["https://new.example/", "2026-09-01"]]), new Map(), T0);
-  checks.push(["a URL missing from the manifest is reported unverified", d.unverified.includes("https://new.example/")]);
+  checks.push(["a URL missing from the manifest is reported unverified", d.unverified.some((u) => u === "https://new.example/")]);
   checks.push(["…and never double-counted as stale", d.stale.length === 0]);
 
   // A URL the manifest has but the catalog no longer cites.
   d = computeDrift(new Map(), new Map([["https://gone.example/", "2026-01-01"]]), T0);
-  checks.push(["a manifest URL absent from the catalog is reported removed", d.removed.includes("https://gone.example/")]);
+  checks.push(["a manifest URL absent from the catalog is reported removed", d.removed.some((u) => u === "https://gone.example/")]);
 
   // An unparseable manifest date reads as stale, never as fresh — same law
   // check-lane-messages.mjs applies to sentAt: absent/corrupt evidence is
@@ -140,7 +149,7 @@ const catalogText = readFileSync(CATALOG_PATH, "utf8");
 const catalogUrls = extractCatalogUrls(catalogText);
 
 if (process.argv.includes("--write")) {
-  const manifestUrls = existsSync(MANIFEST_PATH) ? loadManifest(readFileSync(MANIFEST_PATH, "utf8")) : new Map();
+  const manifestUrls = readManifestOrEmpty();
   let added = 0;
   for (const [url, verifiedDate] of catalogUrls) {
     if (!manifestUrls.has(url)) {
@@ -160,7 +169,7 @@ if (process.argv.includes("--write")) {
   process.exit(0);
 }
 
-const manifestUrls = existsSync(MANIFEST_PATH) ? loadManifest(readFileSync(MANIFEST_PATH, "utf8")) : new Map();
+const manifestUrls = readManifestOrEmpty();
 const { unverified, stale, removed } = computeDrift(catalogUrls, manifestUrls, Date.now());
 
 console.log(`Vendor-doc drift watch (report-only) — ${catalogUrls.size} URL(s) cited, ${manifestUrls.size} in the manifest.`);

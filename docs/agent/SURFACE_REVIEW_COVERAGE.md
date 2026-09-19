@@ -6,9 +6,9 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**102 of 102 surfaces have been read. 0 are partially read. 0 have not been read at all.**
+**103 of 103 surfaces have been read. 0 are partially read. 0 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2888 of 2888 in-scope tracked files** belong to a surface on this page (79 more are in declared out-of-scope trees). A file belonging to no surface fails the gate. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`) are surfaces like any other and every record in them is claimed, but their counts are not printed and are left out of the figures above: every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.
+Coverage of the tree is asserted, not assumed: **2899 of 2899 in-scope tracked files** belong to a surface on this page (79 more are in declared out-of-scope trees). A file belonging to no surface fails the gate. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`) are surfaces like any other and every record in them is claimed, but their counts are not printed and are left out of the figures above: every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -32,7 +32,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `.github/workflows` | tree | 16 | read | 2 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 13 | 0 |
 | `(root)` | loose files | 26 | read | 2 | 2026-09-06 | cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 10 | 2 |
 | `artifacts/agent-heartbeats` | tree | mailbox | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
-| `artifacts/api-collection` | tree | 111 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
+| `artifacts/api-collection` | tree | 114 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/api-server` | package | 34 | read | 3 | 2026-09-06 | cloud lane (six independent fail-closed-auditor reads in parallel, seven fix agents, every edit site and every gate run read firsthand) | docs/agent/EVIDENCE.md | 16 | 0 |
 | `artifacts/build-loop` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/connector-emulator` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
@@ -49,7 +49,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/signalgrid-mobile-pwa` | package | 24 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 1 |
 | `artifacts/signalgrid-review` | package | 45 | read | 3 | 2026-09-06 | cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match) | docs/agent/EVIDENCE.md | 19 | 14 |
 | `artifacts/signalgrid-web` | package | 32 | read | 4 | 2026-09-06 | cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match) | docs/agent/EVIDENCE.md | 48 | 43 |
-| `artifacts/sim-requests` | tree | 18 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
+| `artifacts/sim-requests` | tree | 19 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/sim-results` | tree | 49 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/sync` | tree | 5 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `config` | tree | 5 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
@@ -93,12 +93,13 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `lib/integrations` | package | 284 | read | 5 | 2026-09-06 | cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 36 | 1 |
 | `lib/location` | package | 8 | read | 1 | 2026-09-05 | cloud lane | lib/location/src/radius-dhcp.ts | 1 | 3 |
 | `lib/orchestration` | package | 3 | read | 1 | 2026-09-05 | cloud lane | lib/orchestration/src/index.ts | 3 | 0 |
-| `lib/persistence` | package | 8 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 6 | 1 |
+| `lib/persistence` | package | 9 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 6 | 1 |
 | `lib/pim-activation` | package | 6 | read | 1 | 2026-09-05 | cloud lane | lib/pim-activation/src/from-posture.ts | 2 | 0 |
 | `lib/posture-composition` | package | 5 | read | 1 | 2026-09-04 | cloud lane | lib/posture-composition/src/compose.ts | 1 | 1 |
 | `lib/recommendations` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/recommendations/src/index.ts | 4 | 2 |
 | `lib/reliability` | package | 5 | read | 1 | 2026-09-04 | cloud lane | lib/reliability/src/summarize.ts | 1 | 1 |
 | `lib/room-sim` | package | 4 | read | 1 | 2026-09-05 | cloud lane | lib/room-sim/src/index.ts | 0 | 7 |
+| `lib/secrets` | package | 3 | read | 1 | 2026-09-18 | cloud lane | docs/SECRET_MODEL.md | 0 | 0 |
 | `lib/self-audit` | package | 8 | read | 1 | 2026-09-04 | cloud lane | lib/self-audit/src/audit.ts | 1 | 1 |
 | `lib/signal-discovery` | package | 4 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
 | `lib/signal-radar` | package | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 0 |
@@ -116,7 +117,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 8 | 1 |
 | `native/shared` | native | 3 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 438 | read | 9 | 2026-09-12 | cloud lane | e97951b967ce3688c0c441a2a1586f682b680b15 | 100 | 4 |
+| `scripts` | package | 441 | read | 9 | 2026-09-12 | cloud lane | e97951b967ce3688c0c441a2a1586f682b680b15 | 100 | 4 |
 | `site` | tree | 2 | read | 2 | 2026-09-05 | cloud lane (firsthand read of every edit site; fixes + gates) | docs/agent/EVIDENCE.md | 2 | 3 |
 | `tests` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 1 |
 | `tools` | tree | 2 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |

@@ -611,6 +611,42 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "403": { description: "Attestation failed verification, role not operator/owner, or out-of-band authorization absent/wrong — fail closed, nothing stored" }
 
+  /v1/step-up/enroll/revoke:
+    post:
+      operationId: stepUpEnrollRevoke
+      tags: [decisions]
+      summary: Revoke one enrolled WebAuthn step-up credential
+      description: >-
+        The missing half of enrollment: `removeCredential` has always existed in
+        the store with the same per-user lock as `addCredential` and a proven
+        add/remove concurrency guarantee, but no route exposed it. Same
+        privilege as enrolling (owner/operator, gated the same way) — revoking
+        someone else's step-up credential is exactly as consequential as
+        enrolling one. Fail-closed and idempotent: a credential id that does not
+        exist on this identity (or an identity with no enrollment at all) is a
+        normal 200 with revoked:false, never a 404 that would let a caller
+        distinguish "wrong id" from "already revoked".
+      parameters:
+        - in: header
+          name: x-enrollment-authorization
+          required: false
+          schema: { type: string }
+          description: Out-of-band enrollment authorization (see stepUpEnrollOptions).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identityRef, credentialId]
+              properties:
+                identityRef: { type: string }
+                credentialId: { type: string, description: The credential id returned by stepUpEnrollVerify at enrollment time }
+      responses:
+        "200": { description: "revoked: true if a credential was removed, false if there was nothing to remove (fail-closed, never reported as a removal that did not happen)" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { description: "Role not operator/owner, or the configured out-of-band authorization header is absent/wrong — fail closed" }
+
   /v1/step-up/challenge:
     post:
       operationId: stepUpChallenge

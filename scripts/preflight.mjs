@@ -503,6 +503,9 @@ const STEPS = [
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
   { name: "Proof: api-client-react (the web client's fetch boundary refuses what it cannot vouch for)", cmd: ["pnpm", "run", "proof:api-client-react"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
+  // The review console's own node:test suite (policy-test-set status, facility-graph layout);
+  // the test-execution gate refused these files while nothing reached them.
+  { name: "Console unit tests (policyTests, facilityGraphLayout)", cmd: ["pnpm", "run", "test:console"] },
   // The MCP server's own node:test suite (wire-visible tool/resource contract +
   // read-only annotations, incl. the not-read-only bruno_collection_run). It sat
   // executed by no lane until 2026-09-02; wired here and in CI beside the
@@ -612,6 +615,13 @@ const STEPS = [
   { name: "CycloneDX SBOM committed in sync", cmd: ["bash", "-c", "pnpm run sbom && git diff --exit-code -- artifacts/sbom/cyclonedx.json"] },
   { name: "Licence policy self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-licence-policy.mjs", "--self-test"] },
   { name: "Licence policy (every component's licence resolves to a declared class)", cmd: ["node", "scripts/check-licence-policy.mjs"] },
+  // BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a report-only
+  // watcher, cheaper than fetching every vendor page — pure date arithmetic
+  // against a committed manifest, no network call. REPORT-ONLY: the check
+  // itself always exits 0; only the self-test can fail (a broken comparison,
+  // never a stale link) a pull request.
+  { name: "Vendor-doc drift watch self-test (the comparison logic must actually work)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs", "--self-test"] },
+  { name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs"] },
 ];
 
 // Is the native web build structurally impossible here? Derived from the committed

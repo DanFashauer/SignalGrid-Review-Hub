@@ -233,6 +233,7 @@
     "sync": "node scripts/sync.mjs",
     "sync:manifest": "node scripts/generate-sync-manifest.mjs",
     "test:api": "pnpm --filter @workspace/api-server run test:api",
+    "test:console": "pnpm --filter @workspace/signalgrid-app run test",
     "test:e2e": "pnpm --filter @workspace/scripts run test:e2e",
     "test:load": "pnpm --filter @workspace/api-server run test:load",
     "test:stress": "pnpm --filter @workspace/api-server run test:stress",

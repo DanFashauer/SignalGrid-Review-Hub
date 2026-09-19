@@ -1020,6 +1020,34 @@
           }
         },
         {
+          "name": "Step-up: revoke enrolled credential",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identityRef\": \"nurse.baseline_drift\",\n  \"credentialId\": \"{{credentialId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/step-up/enroll/revoke",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "step-up",
+                "enroll",
+                "revoke"
+              ]
+            }
+          }
+        },
+        {
           "name": "Step-up: auth challenge (action-bound)",
           "request": {
             "method": "POST",

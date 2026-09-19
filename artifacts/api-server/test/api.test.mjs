@@ -1207,6 +1207,59 @@ async function run() {
     check("re-enrolling an already-enrolled credential id → 200 with enrolled:false, alreadyEnrolled:true", again.status === 200 && again.json?.enrolled === false && again.json?.alreadyEnrolled === true);
   }
 
+  // ── revocation: the missing half of enrollment (BUILD_BACKLOG.md / security
+  // roster row 82) — its own identity, so revoking here cannot disturb suIdentity's
+  // credential, which the challenge/verify tests below still need enrolled.
+  {
+    const revokeIdentity = "nurse.revoke_target";
+    const rOpts = await req("POST", "/v1/step-up/enroll/options", { token: KEYS.operator, body: { identityRef: revokeIdentity } });
+    const rVerify = await req("POST", "/v1/step-up/enroll/verify", {
+      token: KEYS.operator,
+      body: { identityRef: revokeIdentity, challengeId: rOpts.json?.challengeId, response: authenticator.registration(rOpts.json?.publicKey?.challenge) },
+    });
+    const credentialId = rVerify.json?.credentialId;
+    check("revoke fixture enrolled a credential to revoke", rVerify.status === 200 && typeof credentialId === "string");
+
+    // NEGATIVE CONTROL (revocation RBAC): same privilege as enrolling — an auditor
+    // key must be refused before any store work happens.
+    const auditorRevoke = await req("POST", "/v1/step-up/enroll/revoke", {
+      token: KEYS.auditor, body: { identityRef: revokeIdentity, credentialId },
+    });
+    check("auditor key cannot revoke a step-up credential (403)", auditorRevoke.status === 403);
+
+    // Validation: both fields are required.
+    const missingField = await req("POST", "/v1/step-up/enroll/revoke", { token: KEYS.operator, body: { identityRef: revokeIdentity } });
+    check("revoke without credentialId → 400 (validation)", missingField.status === 400);
+
+    // Revoking a credential id that was never enrolled is fail-closed and idempotent:
+    // a normal 200 with revoked:false, never a 404 that would let a caller
+    // distinguish "wrong id" from "already revoked".
+    const unknownCred = await req("POST", "/v1/step-up/enroll/revoke", {
+      token: KEYS.operator, body: { identityRef: revokeIdentity, credentialId: "cred-never-enrolled" },
+    });
+    check("revoking an unknown credential id → 200 with revoked:false (fail-closed, not a 404 oracle)", unknownCred.status === 200 && unknownCred.json?.revoked === false);
+
+    // The real revoke.
+    const revoke = await req("POST", "/v1/step-up/enroll/revoke", {
+      token: KEYS.operator, body: { identityRef: revokeIdentity, credentialId },
+    });
+    check("revoking the enrolled credential → 200 with revoked:true", revoke.status === 200 && revoke.json?.revoked === true);
+
+    // Effect proven end to end: a step-up challenge for this identity now fails
+    // closed exactly like an identity that was never enrolled at all.
+    const challengeAfterRevoke = await req("POST", "/v1/step-up/challenge", {
+      token: KEYS.operator, body: { identityRef: revokeIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" },
+    });
+    check("step-up challenge after revocation → 409, same as never enrolled (fail closed)", challengeAfterRevoke.status === 409);
+
+    // Revoking the same credential a second time: nothing left to remove, still
+    // a fail-closed 200, never an error over an already-completed revocation.
+    const revokeAgain = await req("POST", "/v1/step-up/enroll/revoke", {
+      token: KEYS.operator, body: { identityRef: revokeIdentity, credentialId },
+    });
+    check("revoking an already-revoked credential id → 200 with revoked:false", revokeAgain.status === 200 && revokeAgain.json?.revoked === false);
+  }
+
   // The evaluate route must NEVER release from a request flag, even enrolled.
   const flagSmuggled = await req("POST", "/v1/app-workflows/evaluate", {
     token: KEYS.operator,

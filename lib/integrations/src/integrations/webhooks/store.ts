@@ -394,7 +394,3 @@ function parseWebhookFromRedis(data: Record<string, string>): WebhookConfig {
   });
 }
 
-// Type for response that includes new secret
-export interface WebhookWithNewSecret extends Omit<WebhookConfig, '_newSecret'> {
-  _newSecret?: string;
-}

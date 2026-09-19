@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-19T17:25:28.027Z",
-  "result": "quiet: tick firedAt 2026-09-19T17:11:05Z (fresh, quiet); live evidence minted 2026-09-18T14:52Z (1 day old, manifest 6906d8d9, no drift); no mac/* branch new or moved since the 16:25Z cycle; #856 remedy (sent 01:28Z) still unread by the Mac lane after 15.9h; no message addressed to cloud; no new sim results; sim-request loop clean; no shared surface changed; owner not escalated"
+  "firedAt": "2026-09-19T18:26:09.449Z",
+  "result": "quiet: tick firedAt 2026-09-19T18:01:32Z (fresh, quiet); live evidence minted 2026-09-18T14:52Z (1 day old, manifest 6906d8d9, no drift); no mac/* branch new or moved since the 17:25Z cycle; #856 remedy (sent 01:28Z) still unread by the Mac lane after 17.0h; no message addressed to cloud; no new sim results; sim-request loop clean; no shared surface changed; owner not escalated"
 }

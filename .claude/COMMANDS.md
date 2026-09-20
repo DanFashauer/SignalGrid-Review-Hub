@@ -17,7 +17,7 @@ different kind: repeatable multi-agent *passes*, documented in
 ```
 messy idea
     ↓
-/prompt-master     brain dump in, clean task spec out
+/brain-dump-spec   brain dump in, clean task spec out (was /prompt-master until 2026-09-20; the name now belongs to the vendored nidhinjs/prompt-master skill)
     ↓
 /grill-me          asks questions until nothing is vague
 /how-to            maps the steps you don't know yet

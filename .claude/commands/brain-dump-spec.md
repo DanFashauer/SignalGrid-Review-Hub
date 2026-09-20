@@ -38,3 +38,12 @@ Rules:
 - Do not add scope I did not ask for. If you think something is missing, put it in
   Open questions — never silently in Done looks like.
 - Preserve my words for anything that is a decision I have already made.
+
+Before you emit the spec, check it (adapted from the vendored `prompt-master` skill's
+verification lock, 2026-09-20):
+- Is every "Done looks like" condition binary — checkable by a stranger without me?
+- Are the hardest constraints in the first third of the spec, not buried under context?
+- Does every rule use the strongest word it means — MUST, NEVER — never "should" or "try"?
+- Is every sentence load-bearing? Delete the ones that are not.
+- Would a competent stranger start the first concrete step without asking me anything
+  that is not already under Open questions?

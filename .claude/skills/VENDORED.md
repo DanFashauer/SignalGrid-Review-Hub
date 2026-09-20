@@ -5,16 +5,16 @@ Third-party work, copied in unmodified. **Not ours.**
 > **SEVENTEEN exceptions in this directory — read this before any re-vendor.** These are
 > FIRST-PARTY, written in this repository and NOT part of the upstream set. They live
 > here because the harness loads skills from this directory. Everything else below
-> describes the other 100, from THIRTEEN upstreams — 14 from obra/superpowers, `watch/`
+> describes the other 101, from FOURTEEN upstreams — 14 from obra/superpowers, `watch/`
 > from bradautomates/claude-video (2026-09-12, DR-040), and, the same day, 85 more from
 > eleven collections the owner's bar admitted in one pass: mattpocock/skills (25),
 > addyosmani/agent-skills (24), K-Dense-AI/scientific-agent-skills (13),
 > mcollina/skills (4), google/skills (5), NVIDIA/skills (4),
 > raintree-technology/hig-doctor (3), Neeeophytee/finding-unknowns-skills (3),
 > rainmanjam/poka-yoke (2), oliver-zehentleitner/keep-the-why (1),
-> and conorluddy/ios-simulator-skill (1) — 14 + 1 + 85 = 100. Each has its own section
+> and conorluddy/ios-simulator-skill (1), and, on 2026-09-20, nidhinjs/prompt-master (1) — 14 + 1 + 85 + 1 = 101. Each has its own section
 > at the end of this file. Counted, not remembered: `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`
-> lists 117 tracked directories = 100 upstream + the 17 in the table (tracked, because only
+> lists 118 tracked directories = 101 upstream + the 17 in the table (tracked, because only
 > tracked paths publish; section E of `scripts/check-publication-boundary.mjs` holds this
 > table, this count and the carve-outs to one another since 2026-09-02). This line said SEVEN until 2026-09-02,
 > then TEN, then ELEVEN on 2026-09-03 when `research-ops/` was authored, then TWELVE on
@@ -474,3 +474,21 @@ Third-party work, copied in unmodified. **Not ours.**
 | How its scripts are treated | Exactly as the `watch/` skill's Python is: a PERSON runs them, on the Mac lane, against a booted simulator. Nothing in this tree auto-runs them, and no hook or `SessionStart` was taken. They are simulator drivers — `xcrun simctl` wrappers — so they cannot and do not claim on-device enforcement (CLAUDE.md, platform honesty: a simulator cannot be MDM-enrolled). |
 | Why it is here | CLAUDE.md already requires verifying EnterpriseShell at `accessibility-extra-large`, not just the default. `appearance.py` and `accessibility_audit.py` are that check with a handle on it. |
 | Overrides | None needed. |
+
+# Vendored: nidhinjs/prompt-master — 1 skill
+
+Third-party work, copied in unmodified. **Not ours.**
+
+| | |
+|---|---|
+| Upstream | https://github.com/nidhinjs/prompt-master |
+| Author | Nidhin Joseph Nelson |
+| Licence | MIT © 2026 Nidhin Joseph Nelson (`LICENSE` in the vendored directory) |
+| Commit | `2bd92518e26bf659e21e3d9ab90573fcf3ddeccb` |
+| Committed upstream | 2026-08-24T13:00:40+05:30 |
+| Vendored | 2026-09-20 (DR-052 row in `docs/agent/RESOURCE_INTAKE.md`; owner: *"this will be extremely helpful"*) |
+| Contents | 1 skill (`prompt-master`, front-matter version 1.8.0): `SKILL.md`, `references/patterns.md`, `references/templates.md`, `LICENSE` — 4 files, byte-identical to the repository root at the pin (sha256 `651e5490…`, `246073…`, `5a678b8e…`, `29e8ba0b…`). |
+| NOT taken | `README.md` (badges that load third-party images). No scripts, hooks or manifests exist upstream to leave out. |
+| Name | This directory took the `prompt-master` name; the first-party slash command that held it since PR #215 was renamed to `/brain-dump-spec` the same day (`.claude/commands/brain-dump-spec.md`, `.claude/COMMANDS.md`). The two do different jobs: the command turns a brain dump into a task spec, the skill turns an idea into a prompt for a named AI tool. |
+| Why it is here | The independent scan measured its method by hand on this repository's own `owner-comms` instruction block: 9 intent dimensions, a 37-pattern diagnostic scan (37 rows counted), 13 templates (13 counted), a 6-point verification lock; no step needs a network, a key or a specific model. The verification lock is folded into `/brain-dump-spec` as an output self-check. |
+| Overrides | **Model Recency Gate (SKILL.md lines 68–75) runs in its OFFLINE branch here.** Step 1 says to verify models and controls in the provider's documentation "when browsing or retrieval is available"; in this tree no live call is made from a skill (AGENTS.md scope), so step 4 applies: model-specific details are stated as unverified and the closest durable route is used. Its named model slugs are the upstream author's claims at the pin, not this repository's. |

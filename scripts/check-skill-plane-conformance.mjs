@@ -50,6 +50,8 @@ import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SKILLS_DIR = ".claude/skills";
 const AGENTS_DIR = ".claude/agents";
+/** The tiers DR-047 lets an agent name. Fable and Mythos are deliberately absent. */
+const AGENT_MODELS = new Set(["haiku", "sonnet", "opus"]);
 
 // Floors below today's real counts (26 skills, 13 agents on 2026-09-06 — the comment
 // said 24 while the tree held 26, which is why the summary line, not this sentence, is
@@ -134,6 +136,15 @@ export function auditPlane(io) {
     if (!fm.description || fm.description.trim() === "") {
       problems.push(`${rel}: frontmatter has no non-empty \`description\` — an agent whose job nobody wrote down cannot be selected for it`);
     }
+    // DR-047: every agent names its own tier, and only an engineering tier.
+    // The record's own Consequences paragraph called this gate a follow-up;
+    // it landed 2026-09-19 (the "five weekend projects" intake row).
+    const model = (fm.model ?? "").trim();
+    if (model === "") {
+      problems.push(`${rel}: frontmatter has no \`model\` — DR-047 says a spawn names its tier, never inherits the coordinator's`);
+    } else if (!AGENT_MODELS.has(model)) {
+      problems.push(`${rel}: frontmatter \`model: ${model}\` is not one of ${[...AGENT_MODELS].join("|")} — DR-047 keeps Fable/Mythos off every engineering and review stage`);
+    }
   }
 
   return { problems, skills: skillDirs.length, agents: agentFiles.length };
@@ -162,6 +173,7 @@ function selfTest() {
   // One COMPLETE fixture; every negative is this minus exactly the field under
   // test, so the negatives stay negative as the shape grows.
   const good = "---\nname: good\ndescription: does a thing\n---\nbody";
+  const goodAgent = "---\nname: good\ndescription: does a thing\nmodel: sonnet\n---\nbody";
   const skills = new Map([
     [`${SKILLS_DIR}/good/SKILL.md`, good],
     [`${SKILLS_DIR}/nodesc/SKILL.md`, "---\nname: nodesc\n---\nbody"],
@@ -169,12 +181,14 @@ function selfTest() {
     [`${SKILLS_DIR}/nofm/SKILL.md`, "no frontmatter here"],
   ]);
   const agents = new Map([
-    [`${AGENTS_DIR}/good.md`, good],
-    [`${AGENTS_DIR}/noname.md`, "---\ndescription: d\n---\nbody"],
+    [`${AGENTS_DIR}/good.md`, goodAgent],
+    [`${AGENTS_DIR}/noname.md`, "---\ndescription: d\nmodel: sonnet\n---\nbody"],
+    [`${AGENTS_DIR}/nomodel.md`, "---\nname: nomodel\ndescription: d\n---\nbody"],
+    [`${AGENTS_DIR}/fable.md`, "---\nname: fable\ndescription: d\nmodel: fable\n---\nbody"],
   ]);
   const fio = {
     listSkills: () => ["good", "nodesc", "mismatch", "nofm"],
-    listAgents: () => ["good.md", "noname.md"],
+    listAgents: () => ["good.md", "noname.md", "nomodel.md", "fable.md"],
     read: (rel) => {
       if (skills.has(rel)) return skills.get(rel);
       if (agents.has(rel)) return agents.get(rel);
@@ -191,8 +205,10 @@ function selfTest() {
   checks.push(["a skill with no frontmatter is RED", has("nofm/SKILL.md") && has("no YAML frontmatter")]);
   checks.push(["a well-formed agent raises no problem", !r.problems.some((p) => p.includes("good.md"))]);
   checks.push(["an agent missing `name` is RED", has("noname.md") && has("no non-empty `name`")]);
+  checks.push(["an agent missing `model` is RED (DR-047)", has("nomodel.md") && has("has no `model`")]);
+  checks.push(["an agent naming a non-engineering tier is RED (DR-047)", has("fable.md") && has("is not one of")]);
   // The counts the floors are checked against are the walked counts, not a guess.
-  checks.push(["the audit reports how many it actually walked", r.skills === 4 && r.agents === 2]);
+  checks.push(["the audit reports how many it actually walked", r.skills === 4 && r.agents === 4]);
 
   // FLOORS against the REAL tree: a walk that resolved nothing would make every
   // per-member check vacuous, which is the pass this gate exists to refuse.

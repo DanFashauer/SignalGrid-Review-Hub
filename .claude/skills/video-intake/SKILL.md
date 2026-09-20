@@ -57,6 +57,19 @@ Keyless, the report ends with `Transcript: none available` and a hint to run its
 installer for the Whisper fallback. Do not follow that hint (rule 2). Read every frame
 the report lists with the `Read` tool.
 
+**If it fails with `Unrecognized option 'vsync'`** — ffmpeg 8 removed that flag, the
+Mac's Homebrew build is 9.x, and upstream has not merged its fix (three open reports;
+`VENDORED.md` Overrides row for `watch/scripts/frames.py`) — extract the sample
+yourself, one frame every four seconds, into the same scratch directory, and say so in
+the answer (rule 4 — this is a fixed-interval sample, not scene-aware):
+
+```bash
+ffmpeg -v error -i "<video path>" -vf "fps=1/4,scale=640:-1" "<scratch dir>/%03d.jpg"
+```
+
+Measured 2026-09-19: a 62 s clip → 16 frames, a 93 s clip → 23 frames, both in
+under two seconds.
+
 **Step 2 — transcript, locally.** Once per machine, create a virtual environment
 OUTSIDE the repository and install the two wheels; the first run downloads the model
 (one network fetch of a model file, nothing of the owner's leaves the machine):

@@ -56,14 +56,24 @@ final class ManagedAppViewController: UIViewController {
         title.font = SG.sans(17, .semibold)
         title.adjustsFontForContentSizeCategory = true
         title.textAlignment = .center
+        // Same defect, same fix as HostAppViewController's top bar: a scaling label in a
+        // fixed 48pt bar truncates at accessibility text sizes. The sibling bar was left
+        // behind once already (CLAUDE.md, the bash-3.2 idiom that did not generalize).
+        title.numberOfLines = 0
         title.translatesAutoresizingMaskIntoConstraints = false
 
         let done = UIButton(type: .system)
         done.setTitle("Done", for: .normal)
         done.titleLabel?.font = SG.sans(17, .semibold)
         done.titleLabel?.adjustsFontForContentSizeCategory = true
+        done.titleLabel?.numberOfLines = 1
+        done.titleLabel?.adjustsFontSizeToFitWidth = true
+        done.titleLabel?.minimumScaleFactor = 0.7
         done.addTarget(self, action: #selector(close), for: .touchUpInside)
         done.translatesAutoresizingMaskIntoConstraints = false
+        // The title yields before the exit control does.
+        done.setContentCompressionResistancePriority(.required, for: .horizontal)
+        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.navigationDelegate = self
@@ -80,12 +90,18 @@ final class ManagedAppViewController: UIViewController {
             bar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             bar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            bar.heightAnchor.constraint(equalToConstant: 48),
+            bar.heightAnchor.constraint(greaterThanOrEqualToConstant: 48),
 
             title.centerXAnchor.constraint(equalTo: bar.centerXAnchor),
             title.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            title.topAnchor.constraint(greaterThanOrEqualTo: bar.topAnchor, constant: 6),
+            title.bottomAnchor.constraint(lessThanOrEqualTo: bar.bottomAnchor, constant: -6),
+            title.leadingAnchor.constraint(greaterThanOrEqualTo: bar.leadingAnchor, constant: 16),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: done.leadingAnchor, constant: -8),
             done.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -16),
             done.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            done.topAnchor.constraint(greaterThanOrEqualTo: bar.topAnchor, constant: 4),
+            done.bottomAnchor.constraint(lessThanOrEqualTo: bar.bottomAnchor, constant: -4),
 
             webView.topAnchor.constraint(equalTo: bar.bottomAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),

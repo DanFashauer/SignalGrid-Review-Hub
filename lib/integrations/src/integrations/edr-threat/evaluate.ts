@@ -1,3 +1,4 @@
+import { deriveFreshness, type Freshness } from "../../utils/freshness";
 import { posedBound } from "../../utils/posed-bound";
 import type {
   NormalizedEndpointThreat,
@@ -45,11 +46,36 @@ const ACTION_SEVERITY: Record<ThreatAction, number> = {
 
 const STALE_SIGNATURE_HOURS_DEFAULT = 72;
 
+/**
+ * How long an endpoint may go unseen before its whole report is stale.
+ *
+ * `signatureAgeHours` is an AGE the source computes for us; `lastSeen` is a SIGHTING,
+ * and a sighting needs a reference instant to mean anything. 24h is a day: an EDR agent
+ * that has not checked in for a day is not reporting the machine's current state, and
+ * "healthy as of some time last week" is not a reading anyone should grant on.
+ */
+const STALE_LAST_SEEN_HOURS_DEFAULT = 24;
+
 export interface EvaluateThreatOptions {
   /** False when the device has no EDR/EPP record at all. Default true. */
   reporting?: boolean;
   /** Signature/definition age (hours) at/above which protection is stale. Default 72. */
   staleSignatureHours?: number;
+  /**
+   * The reference instant this endpoint's `lastSeen` is judged against. POSED BY THE
+   * CALLER — this evaluator reads no clock (golden rule 2), so without it the sighting
+   * cannot be graded and is reported `"ungraded"` rather than silently treated as fresh.
+   *
+   * Omitting it leaves the verdict exactly as it was before `lastSeen` was graded at
+   * all, which is deliberate: the alternative — inventing a concern for every caller
+   * that has not asked for one — is the failure mode the segment-policy branch in
+   * `network-nac/evaluate.ts` names ("stop CLAIMING trust, not invent a concern nobody
+   * asked for"). What is NOT deliberate any more is claiming `protected` while carrying
+   * an ungraded sighting: `lastSeenFreshness` now says which of the two happened.
+   */
+  nowMs?: number;
+  /** Hours after which an endpoint sighting is stale. Default 24. */
+  staleLastSeenHours?: number;
 }
 
 interface Candidate {
@@ -66,6 +92,25 @@ export function evaluateThreatPosture(
   // posedBound: NaN/Infinity/<=0 → null (see utils/posed-bound.ts); null is treated like an
   // unreported age below — stale. An unguarded `??` once graded decade-old signatures protected.
   const staleHours = posedBound(options.staleSignatureHours, STALE_SIGNATURE_HOURS_DEFAULT);
+
+  // THE SIGHTING. `lastSeen` was carried through the normalizer and read by NOTHING —
+  // an endpoint whose agent last checked in years ago, still claiming an installed,
+  // running agent with fresh signatures, graded `protected` / action `none`. The record
+  // was not wrong; it was old, and nothing here could tell the difference.
+  //
+  // Graded only when the caller poses a reference instant, because this evaluator has
+  // no clock. `deriveFreshness` is the shared body (future-dated sighting → `unknown`,
+  // never `fresh`); `"ungraded"` is the fourth state and means the question was not
+  // asked, which is not the same as asking it and learning nothing.
+  const lastSeenStaleHours = posedBound(options.staleLastSeenHours, STALE_LAST_SEEN_HOURS_DEFAULT);
+  const lastSeenFreshness: Freshness | "ungraded" =
+    typeof options.nowMs === "number"
+      ? deriveFreshness(
+          endpoint.lastSeen,
+          options.nowMs,
+          lastSeenStaleHours === null ? null : lastSeenStaleHours * 3_600_000,
+        )
+      : "ungraded";
 
   // `null` means the source never reported a detection feed; `[]` means it did and
   // found nothing. Counting treats both as zero — which is correct arithmetic and
@@ -104,7 +149,7 @@ export function evaluateThreatPosture(
   // No EDR record for this device → unknown (a blind spot to investigate), NOT
   // protected. Mirrors "unscanned ≠ clean" in the vulnerability dimension.
   if (!reporting) {
-    return verdict("unknown", "NOT_REPORTING", "monitor", highestThreatSeverity, threatCount, activeThreatCount, protectionHealthy);
+    return verdict("unknown", "NOT_REPORTING", "monitor", highestThreatSeverity, threatCount, activeThreatCount, protectionHealthy, lastSeenFreshness);
   }
 
   // Collect every applicable risk factor as a candidate, then let the STRONGEST
@@ -131,6 +176,15 @@ export function evaluateThreatPosture(
     // Not installed or not running: we can't trust any "no threats" reading.
     candidates.push({ posture: "unprotected", action: "alert", reason: "AGENT_ABSENT" });
   }
+  if (lastSeenFreshness === "stale" || lastSeenFreshness === "unknown") {
+    // A report we cannot date is a report we cannot rely on, and BOTH unreadable
+    // members raise: `stale` means the agent stopped checking in, `unknown` means the
+    // sighting was absent, unparseable, or dated in the future. Neither is evidence of
+    // a healthy endpoint, and golden rule 2 forbids resolving either downward. Graded
+    // at the same rung as PROTECTION_DEGRADED — the protection may well be fine, we
+    // simply cannot say it is CURRENT — so a real active threat still outranks it.
+    candidates.push({ posture: "degraded_protection", action: "step_up", reason: "ENDPOINT_NOT_RECENTLY_SEEN" });
+  }
   if (activeThreatCount > 0) {
     if (highestActiveSeverity === "critical" || highestActiveSeverity === "high") {
       candidates.push({ posture: "critical_compromise", action: "escalate", reason: "CRITICAL_ACTIVE_THREAT" });
@@ -152,6 +206,7 @@ export function evaluateThreatPosture(
     threatCount,
     activeThreatCount,
     protectionHealthy,
+    lastSeenFreshness,
   );
 }
 
@@ -163,6 +218,7 @@ function verdict(
   threatCount: number,
   activeThreatCount: number,
   protectionHealthy: boolean,
+  lastSeenFreshness: Freshness | "ungraded",
 ): ThreatVerdict {
-  return { posture, highestThreatSeverity, threatCount, activeThreatCount, protectionHealthy, reasonCode, recommendedAction };
+  return { posture, highestThreatSeverity, threatCount, activeThreatCount, protectionHealthy, reasonCode, recommendedAction, lastSeenFreshness };
 }

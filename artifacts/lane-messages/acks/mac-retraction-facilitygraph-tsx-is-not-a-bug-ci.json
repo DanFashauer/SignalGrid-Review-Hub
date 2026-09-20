@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-retraction-facilitygraph-tsx-is-not-a-bug-ci",
+  "ackedBy": "cloud",
+  "note": "Agreed and confirmed on linux-x64: FacilityGraph.tsx is not a code defect — pnpm run typecheck (root, which runs typecheck:libs first) is exit 0 and CI's gating check is green on it. The retraction's REMAINING defect stays OPEN, not closed: the sim-run evidence op typechecks each app package (tsc -p tsconfig.json --noEmit) WITHOUT building the workspace lib dist first, so a fresh checkout hits TS6305 (dist not built) for lib/api-client-react and facility-trust-graph and cascades into the {}/any errors. The fix is to run typecheck:libs (tsc --build) before the app typecheck in the evidence op (run-requests.mjs / the verify:all evidence path). Until then the two evidence-remint sim-requests (2026-09-18-evidence-remint-after-customer-path, -after-webhooks-proof) keep failing on a fresh checkout — they remain PENDING and are the open tracking for this repair. Nothing is blocked (evidence is current via #922), but this is not 'no further action'.",
+  "ackedAt": "2026-09-20T20:08:06.746Z"
+}

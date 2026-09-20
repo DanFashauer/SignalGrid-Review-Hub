@@ -195,8 +195,25 @@ assertions:
 - **No proof a backup is ever taken.** This proves the mechanism, not its use. A
   schedule is an operator's job, and an unattended `db:backup` that has been failing
   for a month looks exactly like one that has been working.
-- **No encryption at rest, and no opinion about where archives live.** A dump contains
-  everything the database contains. Treat the archive as you would treat the database.
+- **No encryption at rest, and no opinion about where archives live — here is
+  one, in operator terms.** `db:backup`'s output is a plain logical dump: it
+  contains everything the database contains, in the clear, and nothing in
+  this tree encrypts it or ships it anywhere. Neither is a dependency of this
+  repo — nothing here requires them, and neither is installed by anything in
+  this tree — but both close the gap with tools already built for exactly
+  this: `rclone crypt` wraps a destination remote (S3, GCS, a bare disk, an
+  SSH host, anything rclone supports) with client-side AES-256-CTR encryption,
+  so the archive is encrypted before it leaves the machine that ran the dump
+  and the remote never holds a plaintext copy or the key; `rclone hashsum`
+  (or the manifest's own SHA-256, already asserted in `db:restore`) re-checks
+  the archive after a copy, catching corruption or truncation in transit
+  independent of the storage backend. Neither is a compliance claim: `crypt`
+  is client-side confidentiality for the blob at rest and in transit, not an
+  audited key-management system, and an operator in a regulated vertical
+  still needs the human compliance review CLAUDE.md requires before treating
+  either as satisfying HIPAA/SOC 2. Treat the archive as you would treat the
+  database it came from — a decrypted restore target is exactly as sensitive
+  as the running system.
 - **No application-version compatibility check.** Restoring an old dump into a newer
   schema is not handled here; migrate after restoring, not before.
 

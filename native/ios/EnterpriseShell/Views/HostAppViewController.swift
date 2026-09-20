@@ -400,25 +400,43 @@ final class HostAppViewController: UIViewController {
         title.text = config.appName
         title.font = SG.sans(17, .semibold)
         title.adjustsFontForContentSizeCategory = true
+        // Scaling text needs somewhere to go (CLAUDE.md, iOS specifics): the label may
+        // wrap, and the bar below is a FLOOR rather than a fixed height so it grows to
+        // hold it. At `accessibility-extra-large` the fixed 48pt bar truncated this.
+        title.numberOfLines = 0
+        title.textAlignment = .center
         title.translatesAutoresizingMaskIntoConstraints = false
 
         let done = UIButton(type: .system)
         done.setTitle("Done", for: .normal)
         done.titleLabel?.font = SG.sans(17, .semibold)
         done.titleLabel?.adjustsFontForContentSizeCategory = true
+        done.titleLabel?.numberOfLines = 1
+        done.titleLabel?.adjustsFontSizeToFitWidth = true
+        done.titleLabel?.minimumScaleFactor = 0.7
         done.addTarget(self, action: #selector(close), for: .touchUpInside)
         done.translatesAutoresizingMaskIntoConstraints = false
+        // The title yields before the Done control does — a bar that drops its exit is
+        // a kiosk with no way out.
+        done.setContentCompressionResistancePriority(.required, for: .horizontal)
+        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         bar.addSubview(title); bar.addSubview(done)
         NSLayoutConstraint.activate([
             bar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             bar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            bar.heightAnchor.constraint(equalToConstant: 48),
+            bar.heightAnchor.constraint(greaterThanOrEqualToConstant: 48),
             title.centerXAnchor.constraint(equalTo: bar.centerXAnchor),
             title.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            title.topAnchor.constraint(greaterThanOrEqualTo: bar.topAnchor, constant: 6),
+            title.bottomAnchor.constraint(lessThanOrEqualTo: bar.bottomAnchor, constant: -6),
+            title.leadingAnchor.constraint(greaterThanOrEqualTo: bar.leadingAnchor, constant: 16),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: done.leadingAnchor, constant: -8),
             done.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -16),
             done.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            done.topAnchor.constraint(greaterThanOrEqualTo: bar.topAnchor, constant: 4),
+            done.bottomAnchor.constraint(lessThanOrEqualTo: bar.bottomAnchor, constant: -4),
         ])
 
         // The "behind the glass" operator instrumentation is a SIMULATOR-ONLY demo
@@ -434,6 +452,10 @@ final class HostAppViewController: UIViewController {
         NSLayoutConstraint.activate([
             eye.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 16),
             eye.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            // The title's leading floor above is bar+16 — the eye's own position — so a
+            // title wide enough to reach it would sit on top of the toggle once the
+            // label is allowed to grow. Simulator-only, like the toggle.
+            title.leadingAnchor.constraint(greaterThanOrEqualTo: eye.trailingAnchor, constant: 8),
         ])
         #endif
 
@@ -452,6 +474,10 @@ final class HostAppViewController: UIViewController {
         logo.font = SG.sans(15, .heavy)
         logo.adjustsFontForContentSizeCategory = true
         logo.textAlignment = .center
+        // A 28pt chip is a graphic, not a row: the initial shrinks to stay inside it
+        // rather than the chip growing and deforming the bar.
+        logo.adjustsFontSizeToFitWidth = true
+        logo.minimumScaleFactor = 0.5
         logo.backgroundColor = UIColor.white.withAlphaComponent(0.22)
         logo.layer.cornerRadius = 6
         logo.clipsToBounds = true
@@ -462,6 +488,7 @@ final class HostAppViewController: UIViewController {
         name.textColor = .white
         name.font = SG.sans(16, .bold)
         name.adjustsFontForContentSizeCategory = true
+        name.numberOfLines = 0
         name.translatesAutoresizingMaskIntoConstraints = false
 
         let who = UILabel()
@@ -469,22 +496,31 @@ final class HostAppViewController: UIViewController {
         who.textColor = UIColor.white.withAlphaComponent(0.85)
         who.font = SG.sans(12, .regular)
         who.adjustsFontForContentSizeCategory = true
+        who.numberOfLines = 0
         who.translatesAutoresizingMaskIntoConstraints = false
+        // `who` is the identity line; it wins the horizontal squeeze, `name` wraps.
+        who.setContentCompressionResistancePriority(.required, for: .horizontal)
+        name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         appBar.addSubview(logo); appBar.addSubview(name); appBar.addSubview(who)
         NSLayoutConstraint.activate([
             appBar.topAnchor.constraint(equalTo: topBarBottom),
             appBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             appBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            appBar.heightAnchor.constraint(equalToConstant: 52),
+            appBar.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
             logo.leadingAnchor.constraint(equalTo: appBar.leadingAnchor, constant: 16),
             logo.centerYAnchor.constraint(equalTo: appBar.centerYAnchor),
             logo.widthAnchor.constraint(equalToConstant: 28),
             logo.heightAnchor.constraint(equalToConstant: 28),
             name.leadingAnchor.constraint(equalTo: logo.trailingAnchor, constant: 10),
             name.centerYAnchor.constraint(equalTo: appBar.centerYAnchor),
+            name.topAnchor.constraint(greaterThanOrEqualTo: appBar.topAnchor, constant: 6),
+            name.bottomAnchor.constraint(lessThanOrEqualTo: appBar.bottomAnchor, constant: -6),
+            name.trailingAnchor.constraint(lessThanOrEqualTo: who.leadingAnchor, constant: -8),
             who.trailingAnchor.constraint(equalTo: appBar.trailingAnchor, constant: -16),
             who.centerYAnchor.constraint(equalTo: appBar.centerYAnchor),
+            who.topAnchor.constraint(greaterThanOrEqualTo: appBar.topAnchor, constant: 6),
+            who.bottomAnchor.constraint(lessThanOrEqualTo: appBar.bottomAnchor, constant: -6),
         ])
         appBarBottom = appBar.bottomAnchor
     }
@@ -550,9 +586,16 @@ final class HostAppViewController: UIViewController {
         primaryButton.setTitleColor(.white, for: .normal)
         primaryButton.titleLabel?.font = SG.sans(15, .bold)
         primaryButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        // Two lines plus a scale floor — the narrow-button form CLAUDE.md sanctions —
+        // over a fixed 48pt row, which mid-word-broke the step label at AX sizes.
+        primaryButton.titleLabel?.numberOfLines = 2
+        primaryButton.titleLabel?.lineBreakMode = .byWordWrapping
+        primaryButton.titleLabel?.textAlignment = .center
+        primaryButton.titleLabel?.adjustsFontSizeToFitWidth = true
+        primaryButton.titleLabel?.minimumScaleFactor = 0.7
         primaryButton.layer.cornerRadius = 10
         primaryButton.addTarget(self, action: #selector(primaryTapped), for: .touchUpInside)
-        primaryButton.heightAnchor.constraint(equalToConstant: 48).isActive = true
+        primaryButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
         stack.addArrangedSubview(primaryButton)
     }
 
@@ -821,19 +864,26 @@ final class HostAppViewController: UIViewController {
         row.layer.borderWidth = 1
         row.layer.borderColor = UIColor.separator.withAlphaComponent(0.4).cgColor
         row.translatesAutoresizingMaskIntoConstraints = false
-        row.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        // A FLOOR, not a fixed height: the two labels below scale, and a 40pt row
+        // truncated them, then overlapped them, at accessibility text sizes.
+        row.heightAnchor.constraint(greaterThanOrEqualToConstant: 40).isActive = true
 
         let lbl = UILabel()
         lbl.text = label
         lbl.font = SG.sans(13, .semibold)
         lbl.adjustsFontForContentSizeCategory = true
+        lbl.numberOfLines = 0
         lbl.translatesAutoresizingMaskIntoConstraints = false
 
         let status = UILabel()
         status.tag = 1
         status.font = SG.sans(11, .heavy)
         status.adjustsFontForContentSizeCategory = true
+        status.numberOfLines = 0
         status.translatesAutoresizingMaskIntoConstraints = false
+        // DONE / HELD / BLOCKED is the verdict; it never yields to the step label.
+        status.setContentCompressionResistancePriority(.required, for: .horizontal)
+        lbl.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         switch state {
         case .done:    status.text = "DONE";    status.textColor = .systemGreen
         case .held:    status.text = "HELD";    status.textColor = .systemOrange
@@ -844,8 +894,13 @@ final class HostAppViewController: UIViewController {
         NSLayoutConstraint.activate([
             lbl.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 12),
             lbl.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+            lbl.topAnchor.constraint(greaterThanOrEqualTo: row.topAnchor, constant: 8),
+            lbl.bottomAnchor.constraint(lessThanOrEqualTo: row.bottomAnchor, constant: -8),
+            lbl.trailingAnchor.constraint(lessThanOrEqualTo: status.leadingAnchor, constant: -8),
             status.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -12),
             status.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+            status.topAnchor.constraint(greaterThanOrEqualTo: row.topAnchor, constant: 8),
+            status.bottomAnchor.constraint(lessThanOrEqualTo: row.bottomAnchor, constant: -8),
         ])
         rowsStack.addArrangedSubview(row)
     }

@@ -52,7 +52,40 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-19 01:00Z (cloud lane, latest) - THE BACKLOG SWEEP, SIX LANES AT ONCE.
+LAST TOUCHED: 2026-09-20 10:50Z (cloud lane, latest) - THE EIGHT LANDINGS, ONE AT A TIME; THE RECORD; THE SEAM.
+              10:50Z addendum: the landing record landed as #911 (bac640b5) after three Codex rounds
+              (eleven findings, all verified and fixed); the loop:state seam fix landed as #917
+              (f7f6a64e): a squash of a merge tree now clears by exact hunks (verbatim patch-id,
+              re-applied to the squash's parent), a same-named branch is compared by sha against
+              the Hub tip, and the seam has an 8-shape self-test in preflight and CI - the two
+              branches the stop hook had named every turn since #860/#900 now clear. #905 (DR-052)
+              is green, thread-free and waits on the OWNER's merge (publication-boundary file).
+              Codex hit its review usage limit at 09:33Z; later PRs today had no Codex pass.
+              08:00Z entry follows.
+              The owner: "Merge the eight open PRs … you don't have to wait for me you can do this
+              yourself." Done on that direction, under DR-037 WITH FIVE RECORDED EXCEPTIONS (condition 2 on
+              #863: local pass after the push; the OWNER-GATED clause on #854, #869, #864, #866: launch-
+              profile or publication-boundary files in the merged diff, merged by this session with the
+              owner's credential - found by Codex on #911, verified, owner decisions still owed a decision
+              record; see EVIDENCE), in this order, each merged with its
+              head's full sha after the gating run on THAT head: #854 21221b1a (02:05Z), #869 93da3e28, #860 c7dc6610, #863 4df66f2a,
+              #864 5df039f7, #866 e32bb885, #868 9018a8bc, #888 9fb4bc08 (07:39Z). Mainline merged INTO
+              each branch in a scratch worktree, frozen install after the merge, manifest + coverage page
+              regenerated on top of the previous landing, preflight + breadth on the merged tree on one
+              shared port before the push - for SEVEN of the eight; #863's local pass came AFTER its
+              push (a stale status file fired it), a DR-037 condition-2 exception recorded as such. Record with commands and output: docs/agent/EVIDENCE.md, the
+              2026-09-20 entry (gating run ids, chain lines, the #863 early-push deviation, the derived
+              figures each chain caught). Final manifest v82, fingerprint 6cc9a0eef68e5ca0; the ONE re-mint
+              request to the Mac went AFTER the last landing (PR #910). Also landed today: #900 (video
+              intake), #902/#904/#906/#907/#908/#909 (steward mail), and DR-052 (PR #905, the independent
+              evaluation stage for every intake) is pushed at 2afcf8fa with two Codex rounds answered and
+              its gating check running. Mac PRs #901 and #903 each carry one blocker comment from this lane
+              (nine verified Codex findings); nothing was pushed to their branches. THE MAC TICK HAS BEEN
+              SILENT since 02:26Z - owner escalated once at 06:25Z; readiness dimension (b) reads 0 until
+              the Mac re-mints. One detector gap filed as a BUILD_BACKLOG row: loop:state reads squash-landed
+              branches as unpushed (local patch-id proof, bound to the tip; no live API in the hook). A second draft row, "run-requests
+              has no supersession field", was FALSE (supersededBy exists) and was struck before landing.
+              PREVIOUSLY (2026-09-19 01:00Z, cloud lane): THE BACKLOG SWEEP, SIX LANES AT ONCE.
               MEASURED, not recalled (UTC, repo-scoped pulls endpoint, three pages): `29` pull requests
               merged on 2026-09-18, `49` opened, `48` open now; `33` had merged on 2026-09-17 by the
               same count (the `29` recorded below for that day was a local-day count).
@@ -98,10 +131,91 @@ LAST TOUCHED: 2026-09-19 01:00Z (cloud lane, latest) - THE BACKLOG SWEEP, SIX LA
               families left; each survivor so far was a tsc-load-bearing guard, not a fixture);
               security roster row 82 item 2 (the `verify.ts` attestation comment); the webhook WRITE
               route (owner call: which store); the three decided deletions and Ponytail native cuts
-              part 2 (Mac, Xcode); DecisionEngine/AppWorkflows re-port (owner, DR-020 for row 5);
+              part 2 (Mac, Xcode); DecisionEngine/AppWorkflows re-port (backlog row five; owner call under DR-020);
               Android AMAPI (needs a rig, not Kotlin); data-lifecycle SQL against a live Postgres
               (Mac lab); the lifecycle admin job's invocation. One container restart at ~00:00Z killed
               two running chains; worktrees and commits survived, both relaunched, nothing lost.
+              PREVIOUSLY (2026-09-18 08:40Z, cloud lane): THE MAC RED THAT WAS A CYCLE, AND THE GATE THAT NOW REFUSES IT.
+              MEASURED, not recalled: `5` pull requests merged on 2026-09-18 so far (all lane mail) and `38` open
+              (8 dependabot, 4 drafts); 2026-09-17 closed at `33` merged, not the 29 the previous entry counted at 21:20Z.
+              #819's Mac column read "0 files found under lib/" and nothing more. #825 kept the errno, and the Mac then
+              said ENAMETOOLONG under lib/integration-bridge/node_modules/@workspace/integrations/node_modules/
+              @workspace/incident-playbook/node_modules/... - #819 had added integrations -> incident-playbook for one
+              type-only import, incident-playbook already reached integrations through posture-composition, and pnpm
+              links a workspace cycle into node_modules as an infinite symlink loop. macOS's recursive readdir follows
+              it until the path overflows; Linux does not, so every Linux lane was green. Thirty-three gates walk lib/
+              that way. Three fixes, all green on both lanes, all owner-gated: #819 moves the dispatch seam UP into
+              incident-playbook (it reads every field of Incident; a structural copy would have duplicated the type)
+              and drops the dependency; #825's walker now PRUNES node_modules before descent and never follows a
+              symlink; #832 is a new gate, check-workspace-cycles, deriving the graph from pnpm-workspace.yaml and
+              every package.json (43 packages, 90 workspace edges, 0 cycles on mainline) - run against #819's
+              original manifest it names the cycle in order.
+              #828 (a heartbeat) reddened at CI liveness on a GitHub 403 rate limit, the same line as #654 on 09-12:
+              the gate retried a rate limit with six seconds of backoff and named neither the limit nor its reset.
+              #829 waits it out by the response's own retry-after / x-ratelimit-reset up to a 120 s cap, fails at
+              once naming the instant when that is past the cap, and prints the limit headers. What spent the token
+              this time is NOT known - 31 workflow runs in the 75 minutes before, none of them the throttled Mac
+              tick - and the next occurrence will say.
+              Mainline merged into #772, #774, #742 (green, pushed, commented). #742's new CodeQL medium - branch
+              names from the API written to the job summary - answered with an ingestion-time ref grammar: a name
+              outside it is refused unread, 17-case self-test, falsified twice. #686, #723, #758, #753 merged the same
+              way with their derived documents re-derived; their gates were running as this was written.
+              Readiness measured on mainline: (a) 94% (16 of 17), (b) 0% (evidence minted 2026-09-12 against
+              manifest 4afa60cf; the tree is 6906d8d9), (c) 100%; HEADLINE 0%. (b) needs a person at the Mac:
+              SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence. Two asks sit on mainline
+              unacknowledged; #821 carries the sim request for it and (a)'s last gap.
+              OWNED DEFECTS THIS SESSION, all in the cloud lane's own process, none in the product: a worktree run
+              without its install read a missing tsx as a gate failure; a gate loop that dropped the .mjs suffix
+              printed nine Node banners and was read as nine passes until re-run; and TWICE a chain waited on
+              pgrep -f 'node scripts/preflight.mjs' and matched that text inside its own bash -c wrapper - a script
+              that waits on its own name waits forever. Same shape the repo keeps finding: a signal that cannot tell
+              "could not look" from "looked".
+              (Earlier 2026-09-17 21:20Z, cloud lane:) A LONG MERGE-AND-BUILD SESSION.
+              PREVIOUSLY (2026-09-18 02:05Z, cloud lane): THE CONFLICTED BACKLOG, REPLAYED.
+              Seven old PRs rebuilt on current mainline: #815 (replays #745), #817 (#732),
+              #818 (#724), #819 (#782), #820 (#729), #821 (#730), #822 (the four defect fixes
+              from #531). Cherry-picked with authorship preserved - no history rewritten, no
+              force-push, nothing merged that the owner gates.
+              EVERY ONE FOUND A DEFECT THE ORIGINAL BRANCH COULD NOT HAVE SEEN, and they are
+              the same defect wearing different clothes - a signal that cannot tell "I could
+              not look" from "I looked and found nothing", or an unknown that LOOSENS:
+                #820 - `git diff --name-only` QUOTES an unusual path, so
+                       `"lib/signalgrid-core/src/d\303\251cision.ts"` did not start with `lib/`,
+                       classified AUTONOMOUS, and the merge authorizer returned TRUE. The one
+                       gate written so #719 could not recur would have waved through the
+                       decision core. A rename away from ASCII was all it took.
+                #818 - the cap-block detection reused a whole-timeline `returned` boolean, so
+                       ONE device coming back silenced a cap block held by a DIFFERENT device
+                       still out - the exact false negative DR-051 was written to catch
+                       [this entry said DR-052 when written on 2026-09-18; DR-051 is the custody
+                       timeline detection, DR-052 is now the 2026-09-20 intake rule].
+                #818 - four positive assertions were driving the detector with `undefined`
+                       eventTypes (`ev` gained a required id on mainline). They read GREEN on
+                       the original branch. Green against events that could match no rule.
+                #822 - the fabricated-status detector required `healthy` BEFORE `status`, so
+                       `{ status: 200, healthy: true }` passed. Object key order means nothing
+                       in JavaScript; the detector was reading a promise the language does not
+                       make. Also: an absent plugin-manifest key SKIPPED invariant 3 rather
+                       than failing it, CORS omitted the `idempotency-key` the server reads and
+                       the contract documents, and three iOS DLP sites defaulted to PERMITTED
+                       on a nil session - including an `init` default parameter, so every call
+                       site that forgot the argument got the loose answer.
+                #815 - the CI-liveness gate called a rate-limited sweep DARK.
+              READINESS IS 0%, NOT 94%, AND NOT BECAUSE OF ANY OF THIS. Measured with
+              `node scripts/check-readiness-figure.mjs`: (a) 100%, (b) 0%, (c) 100%, headline 0
+              - OUTREACH CLOSED. artifacts/live-evidence/mac-run.json was minted 2026-09-13
+              against manifest fingerprint 4afa60cf2fd5; the tree is 6906d8d9ecc5. The drift is
+              ALREADY TRUE OF MAINLINE, and the cloud lane cannot repair it - `verify:all
+              --require-mcp --emit-evidence` is macOS-only and refuses on CI. Sim request
+              2026-09-18-evidence-remint-readiness-b is queued for the Mac. Until it runs,
+              every readiness claim in this tree is false by derivation.
+              MY OWN CONFLICT RESOLUTION WAS THE LEADING SOURCE OF DEFECTS in this work: it
+              dropped DR-051's reversal clause, spliced DR-051's sections into DR-052, and ate
+              a closing brace in detect.ts. Each was caught by a GATE, none by re-reading the
+              diff. Resolve, then run the gates - reading it again is not a check.
+              STILL OWNER-ONLY: narrow the `~ALL` ruleset (it marks all 72 branches protected
+              and spawns the intermittent github-advanced-security check), and delete
+              claude/build-affected-audience-v2 - the seam's last honest entry.
               PREVIOUSLY (2026-09-17 21:20Z, cloud lane): A LONG MERGE-AND-BUILD SESSION.
               MEASURED, not recalled: `29` pull requests merged on 2026-09-17 and `27` still open.
               The open count barely moved (30 -> 27) and that is the honest shape of it: much of what
@@ -1217,38 +1331,29 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (0) THE BOTTLENECK IS THE OWNER'S MERGE QUEUE - #854 first, then #869 (stacked
-              on it), then #860 #863 #864 #866 #868 in any order (#864 and the Mac's #856 overlap on
-              both apple-schema.ts files; the #864 side is the one to keep). Until they land: keep
-              every one green against mainline (merge mainline in, regenerate the coverage page AFTER
-              the merge commits), answer the security-runner refusal once per PR and never twice, and
-              land nothing on the Mac's branch. (1) After #868/#869 land, confirm the tick re-minted
-              the evidence and dimension (b) is back to 100%; if the tick reports no MCP sibling, that
-              is the finding. (2) The three owner decisions the sweep surfaced, each recorded in its PR:
-              LAUNCH_PROFILE_VERSION 5->7 and two GAP removals with no decision record (#869); the
-              positioning sentence the launch-profile gate forced (#869); the webhook write route's
-              store (#868). (3) Then the rows still open by lane above - the brace-less ratchet gets
-              its own sessions, one family at a time. PREVIOUS cloud list, still valid where not done:
-              watch #748 for the Mac lane's (336)->(361) fix and land nothing on
-              their branch; file the DecisionEngine.swift removal-rule drift as a decision record or
-              a declared drift once the owner picks; (1) stamp a lane on every lane-less
-              BUILD_BACKLOG row and extend
-              scripts/check-backlog-ownership.mjs to read BUILD_BACKLOG rows so a lane-less row fails;
-              (2) file and build the DR-036 proof-bindings row so readiness dimension (b) becomes a
-              ratio instead of a binary that reads 0 after every manifest move; (3) give the roster a
-              clock (nextActionDate + a REPORTED >7d line) and mark the seven done nextActions; (4)
-              the record-hygiene items the self-evaluation lists (SOLUTION_READINESS_ASSESSMENT DR-033
-              paragraph, DR-043 cites, NOTICE reconciliation, CONTINUITY.md, the Level 10 matrix);
-              (5) the mis-filed owner items that are engineering (AppWorkflows parity re-port, the
-              three decided deletions, the three safety defaults - propose, owner vetoes); (6) PR #531
-              merge-or-close; (7) then build: Puck 5, Puck 1, the smart-charging scenario behind a DR.
-              Mac: DONE 2026-09-12 - needle DR-044 + the two self-eval closures (Graphify drop, Crucible
-              lens) + both benches re-run; the RELIABILITY_SLO re-date is ROUTED TO THE CLOUD as a coordinated
-              single-machine job (benches + test:load together, one machine, one commit) rather than a partial
-              cross-machine overwrite. REMAINING Mac: Fleet Premium on the owner's word; Ponytail native cuts
-              part 2 + row 103 in an Xcode session; delete tests/load, .agents metadata and site/index.html once
-              the cloud opens the row; read the inbox BEFORE any long measurement (a manifest move outranks a
-              measurement). Owner: the BLOCKED ON list.
+NEXT ACTION: cloud: (0) PR #905 (DR-052) is the OWNER's merge - it touches scripts/publication-boundary.mjs,
+              which DR-037's owner-gated clause keeps out of the lane's hands; the lane keeps it green
+              and conflict-free, never presses merge. Once it is on mainline, apply DR-052's three
+              stages to the two resources the owner named on
+              2026-09-20 (upstash/context7, nidhinjs/prompt-master): the independent scan and evaluation
+              FIRST, the confirmation second, the coordinator's choice third, each recorded in
+              docs/agent/RESOURCE_INTAKE.md; the prompt-master by-use trial is an open BUILD_BACKLOG row.
+              (1) When the Mac tick returns: confirm mac-run.json re-minted against fingerprint
+              6cc9a0eef68e5ca0 (v82) and readiness dimension (b) back to 100%; if the tick stays silent past
+              the 24h escalation window, escalate the owner ONCE more with the same command. (2) DONE 10:45Z - the
+              loop:state seam fix landed as #917 (f7f6a64e) with its 8-shape self-test. (3) The rows still open by lane in docs/BUILD_BACKLOG.md; the
+              brace-less mutation ratchet one family per session. (4) The owner decisions the sweep
+              surfaced and the lane MERGED on the owner's direction without a per-change decision record
+              (exceptions to DR-037's owner-gated clause, EVIDENCE 2026-09-20): LAUNCH_PROFILE_VERSION 5->7 and two
+              GAP removals (#869); the /v1/step-up/enroll/revoke classification (#866); the
+              third_party/apple-device-management publication-boundary area (#864); the launch-profile
+              edit in #854; plus the positioning sentence the launch-profile gate forced (#869) and the
+              webhook write route's store (#868) - each needs a decision record the owner ratifies; the DecisionEngine/AppWorkflows re-port (backlog rows,
+              owner call under DR-020). Then build: Puck 5, Puck 1, the smart-charging scenario behind a DR.
+              Mac: reply to the blocker comments on #901 and #903 before pushing more to those branches;
+              run the two queued 2026-09-18 sim requests (each re-mints evidence against the checkout at run
+              time, so against v82; #910 names the fingerprint the result must carry - not a third request);
+              read the inbox BEFORE any long measurement. Owner: the BLOCKED ON list, and the launchd tick.
 ## The three things that are true right now
 
 1. **The doctrine is `docs/PURPOSE.md` v2 (DR-020).** SignalGrid is an
@@ -1269,7 +1374,7 @@ NEXT ACTION: cloud: (0) THE BOTTLENECK IS THE OWNER'S MERGE QUEUE - #854 first, 
    frozen" until 2026-09-02 — two days after this file's own STATE section
    recorded DR-021 — which is the contradiction a doc can hold against itself
    when no gate reads English.*
-3. **Nobody has used the product.** 147 proof gates and four native surfaces do
+3. **Nobody has used the product.** 152 proof gates and four native surfaces do
    not change that number. Only a conversation does.
 
 ---

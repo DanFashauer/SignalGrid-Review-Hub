@@ -148,6 +148,49 @@ const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const API_ATTEMPTS = 4;
 const API_BACKOFF_MS = [500, 1500, 4000];
 
+// A RATE LIMIT SAYS WHEN IT CLEARS, AND SECONDS OF BACKOFF CANNOT REACH IT. The
+// retry above recovers a 504; it cannot recover a rate limit, because GitHub's
+// windows are measured in minutes to an hour and the four attempts here span
+// about six seconds. #828 (2026-09-18) and #654 (2026-09-12) both reddened on
+// "403 rate limit exceeded (rate limited) (unchanged after 4 attempts)" — a
+// retry that was never going to succeed, and a failure that named neither the
+// limit it hit nor when it would clear, so nothing in the log said which token,
+// which resource, or what was spending it.
+//
+// So a rate-limited response is waited out by ITS OWN clock — `retry-after`, or
+// `x-ratelimit-reset` — up to a cap, and when the clock is past the cap the gate
+// fails AT ONCE naming the instant, rather than spending three pointless retries
+// first. Fail-closed is unchanged either way; what changes is that the failure is
+// legible, and the recoverable case actually recovers. The cap is a bound on
+// runner minutes, not a claim about the limit.
+const RATE_LIMIT_WAIT_CAP_MS = 120_000;
+
+const headerOf = (headers, k) =>
+  headers && typeof headers.get === "function" ? headers.get(k) : undefined;
+
+/** ms to wait per the response's own headers; null when they say nothing. */
+export function rateLimitWaitMs(headers, nowMs) {
+  const retryAfter = Number(headerOf(headers, "retry-after"));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) return retryAfter * 1000;
+  const reset = Number(headerOf(headers, "x-ratelimit-reset"));
+  if (Number.isFinite(reset) && reset > 0) return Math.max(0, reset * 1000 - nowMs);
+  return null;
+}
+
+/** The limit headers, so a failure names WHICH limit and WHEN it clears. */
+export function describeRateLimit(headers) {
+  const parts = [];
+  for (const k of ["x-ratelimit-resource", "x-ratelimit-limit", "x-ratelimit-used", "x-ratelimit-remaining"]) {
+    const v = headerOf(headers, k);
+    if (v !== undefined && v !== null) parts.push(`${k.slice("x-ratelimit-".length)}=${v}`);
+  }
+  const reset = Number(headerOf(headers, "x-ratelimit-reset"));
+  if (Number.isFinite(reset) && reset > 0) parts.push(`reset=${new Date(reset * 1000).toISOString()}`);
+  const ra = headerOf(headers, "retry-after");
+  if (ra !== undefined && ra !== null) parts.push(`retry-after=${ra}s`);
+  return parts.length > 0 ? ` [${parts.join(" ")}]` : "";
+}
+
 export function isRetryableStatus(status) {
   return RETRYABLE_STATUS.has(Number(status));
 }
@@ -171,12 +214,18 @@ export function isRateLimited403(status, body, headers) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Injectable for the self-test; the real one is global fetch. */
-export async function apiWith(fetchImpl, path, { attempts = API_ATTEMPTS, backoff = API_BACKOFF_MS, wait = sleep } = {}) {
+export async function apiWith(
+  fetchImpl,
+  path,
+  { attempts = API_ATTEMPTS, backoff = API_BACKOFF_MS, wait = sleep, now = Date.now, rateLimitCapMs = RATE_LIMIT_WAIT_CAP_MS } = {},
+) {
   const headers = { Accept: "application/vnd.github+json", "User-Agent": "signalgrid-ci-liveness" };
   if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
   let last = null;
+  let headerWait = null; // set by a response that says when its limit clears
   for (let i = 0; i < attempts; i += 1) {
-    if (i > 0) await wait(backoff[i - 1] ?? backoff[backoff.length - 1] ?? 0);
+    if (i > 0) await wait(headerWait ?? backoff[i - 1] ?? backoff[backoff.length - 1] ?? 0);
+    headerWait = null;
     let res;
     try {
       res = await fetchImpl(`https://api.github.com${path}`, { headers });
@@ -196,9 +245,18 @@ export async function apiWith(fetchImpl, path, { attempts = API_ATTEMPTS, backof
     const rateLimited = isRateLimited403(res.status, body, res.headers);
     last = {
       retryable: isRetryableStatus(res.status) || rateLimited,
-      message: `GET ${path} -> ${res.status} ${res.statusText}${rateLimited ? " (rate limited)" : ""}`,
+      message: `GET ${path} -> ${res.status} ${res.statusText}${rateLimited ? " (rate limited)" : ""}${describeRateLimit(res.headers)}`,
     };
     if (!last.retryable) break;
+    const waitMs = rateLimitWaitMs(res.headers, now());
+    if (waitMs !== null && waitMs > rateLimitCapMs) {
+      // The response said when it clears and that is past what this gate will
+      // wait: fail now, naming it, instead of retrying into the same window.
+      last.retryable = false;
+      last.message += ` — clears in ${Math.ceil(waitMs / 1000)}s, beyond the ${rateLimitCapMs / 1000}s this gate will wait; not retried`;
+      break;
+    }
+    if (waitMs !== null) headerWait = waitMs + 1000;
   }
   throw new Error(last.retryable ? `${last.message} (unchanged after ${attempts} attempts)` : last.message);
 }
@@ -260,6 +318,48 @@ async function api(path) {
     const got = await apiWith(c.f, "/x", { wait: noWait });
     if (!got.recovered) throw new Error("expected recovery after rate-limited 403s");
     if (c.calls() !== 3) throw new Error(`expected 3 attempts, made ${c.calls()}`);
+  });
+
+  const limitedWith = (entries) => {
+    const h = new Map(entries); h.get = Map.prototype.get.bind(h);
+    return { ok: false, status: 403, statusText: "Forbidden", text: async () => '{"message":"API rate limit exceeded"}', headers: h };
+  };
+  const recordingWait = () => { const waits = []; return { waits, wait: async (ms) => { waits.push(ms); } }; };
+  const T0 = 1_700_000_000_000;
+
+  await t("a rate-limited 403 with x-ratelimit-reset 30s out waits for the RESET, not the backoff, then recovers", async () => {
+    const c = counting([limitedWith([["x-ratelimit-remaining", "0"], ["x-ratelimit-reset", String(T0 / 1000 + 30)]]), ok({ recovered: 1 })]);
+    const r = recordingWait();
+    const got = await apiWith(c.f, "/x", { wait: r.wait, now: () => T0 });
+    if (!got.recovered || c.calls() !== 2) throw new Error(`calls=${c.calls()}`);
+    if (r.waits.length !== 1 || r.waits[0] !== 31_000) throw new Error(`waited ${JSON.stringify(r.waits)}, expected [31000]`);
+  });
+  await t("retry-after WINS over the reset header and over the backoff", async () => {
+    const c = counting([limitedWith([["retry-after", "7"], ["x-ratelimit-reset", String(T0 / 1000 + 90)]]), ok({ recovered: 1 })]);
+    const r = recordingWait();
+    await apiWith(c.f, "/x", { wait: r.wait, now: () => T0 });
+    if (r.waits[0] !== 8_000) throw new Error(`waited ${JSON.stringify(r.waits)}, expected [8000]`);
+  });
+  await t("a reset BEYOND the cap fails AT ONCE, names the instant, and is not retried", async () => {
+    const c = counting([limitedWith([["x-ratelimit-resource", "core"], ["x-ratelimit-limit", "1000"], ["x-ratelimit-remaining", "0"], ["x-ratelimit-reset", String(T0 / 1000 + 3600)]])]);
+    const r = recordingWait();
+    let threw = null;
+    try { await apiWith(c.f, "/x", { wait: r.wait, now: () => T0 }); } catch (e) { threw = e; }
+    if (!threw) throw new Error("did not throw");
+    if (c.calls() !== 1 || r.waits.length !== 0) throw new Error(`calls=${c.calls()} waits=${JSON.stringify(r.waits)}`);
+    for (const must of [/resource=core/, /limit=1000/, /reset=2023-11-14T23:13:20\.000Z/, /clears in 3600s, beyond the 120s/]) {
+      if (!must.test(threw.message)) throw new Error(`message lacks ${must}: ${threw.message}`);
+    }
+    if (/unchanged after/.test(threw.message)) throw new Error(`still reads as a retry exhaustion: ${threw.message}`);
+  });
+  await t("a rate-limited 403 with NO clock headers still takes the plain backoff path", async () => {
+    const c = counting([limitedWith([["x-ratelimit-remaining", "0"]]), ok({ recovered: 1 })]);
+    const r = recordingWait();
+    await apiWith(c.f, "/x", { wait: r.wait, now: () => T0 });
+    if (r.waits[0] !== API_BACKOFF_MS[0]) throw new Error(`waited ${JSON.stringify(r.waits)}, expected [${API_BACKOFF_MS[0]}]`);
+  });
+  await t("describeRateLimit: no headers, no note", () => {
+    if (describeRateLimit(null) !== "" || describeRateLimit(new Map()) !== "") throw new Error("note on nothing");
   });
 
   await t("classifier: a rate-limit BODY marks a 403 retryable", () => {
@@ -345,6 +445,20 @@ export function latestSweepSuccessInRun(jobs, prefix = SWEEP_JOB_PREFIX) {
     ["no sweep job at all → not present (silence is not evidence)", latestSweepSuccessInRun([other]), { present: false, iso: null, succeeded: 0, total: 0 }],
     ["a success with no timestamp does not count", latestSweepSuccessInRun([shard(0, "success", undefined)]), { present: true, iso: null, succeeded: 0, total: 1 }],
     ["empty / missing jobs → not present", latestSweepSuccessInRun(undefined), { present: false, iso: null, succeeded: 0, total: 0 }],
+    // THE 2026-09-14 FALSE RED, pinned. An empty or unmatched payload must read as
+    // "could not look", never as "the sweep is dark": different causes, different
+    // fixes, and only one of them is this gate's finding.
+    ["no runs returned → could-not-look, NOT dark", classifyScan({ runsInspected: 0, runsWithSweep: 0 }).status, "could-not-look"],
+    ["runs inspected, NONE carried a sweep job → could-not-look (the live failure)", classifyScan({ runsInspected: 10, runsWithSweep: 0 }).status, "could-not-look"],
+    ["the sweep ran and no shard succeeded → dark, which IS the finding", classifyScan({ runsInspected: 10, runsWithSweep: 3 }).status, "dark"],
+    [
+      "a could-not-look verdict names WHICH of the two it was",
+      [
+        classifyScan({ runsInspected: 0, runsWithSweep: 0 }).why.includes("NO completed runs"),
+        classifyScan({ runsInspected: 10, runsWithSweep: 0 }).why.includes("NOT ONE carried a job"),
+      ],
+      [true, true],
+    ],
   ];
   const bad = cases.filter(([, got, want]) => JSON.stringify(got) !== JSON.stringify(want));
   if (bad.length > 0) {
@@ -356,6 +470,36 @@ export function latestSweepSuccessInRun(jobs, prefix = SWEEP_JOB_PREFIX) {
   }
 }
 
+/**
+ * WHY THIS RETURNS A SHAPE AND NOT `null` (fixed 2026-09-14, from a live false red).
+ *
+ * On PR #742 this gate failed the gating job with "the mutation sweep is not
+ * demonstrably alive" at 14:32:48Z — while scheduled-verification run 34853811860
+ * had all FOUR sweep shards green between 14:14:33Z and 14:20:54Z, twelve minutes
+ * earlier and well inside the 48h threshold. The identical commit passed on re-run
+ * with nothing changed, so the payload, not the repository, was what differed.
+ *
+ * The old code could not tell three situations apart, because all three returned
+ * `null`:
+ *   (a) the API returned no runs at all — we could not look;
+ *   (b) runs came back but none carried a sweep job — the job was renamed, or the
+ *       payload was empty/partial — we still could not look;
+ *   (c) the sweep job ran and every shard failed — the sweep really is dark.
+ * Only (c) is the finding this gate exists to report. (a) and (b) were reported as
+ * (c), which is a gate crying wolf on the repository's most load-bearing claim and
+ * failing the gating job on EVERY open PR while it lasts.
+ *
+ * This file's own header states the rule it broke: "A PROBE THAT COULD NOT RUN IS
+ * NOT A PROBE THAT FOUND NOTHING." The same sentence is written above `gitLines`
+ * in absence-check.mjs, and it was already the fix for a previous bug here. It is
+ * applied to the OUTER loop now, not just the inner fetch.
+ *
+ * The diagnostic line also moved ABOVE the `continue`. It used to print only for
+ * runs that already carried a sweep job, so the one shape that most needed a trace
+ * — every run inspected, none matching — produced a red verdict with an empty log
+ * and nothing to read back. That silence is what made the live failure take an API
+ * cross-check to diagnose instead of a glance at the log.
+ */
 async function lastSweepSuccess() {
   const runs = await api(
     `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=${RUNS_TO_INSPECT}&status=completed`,
@@ -376,34 +520,53 @@ async function lastSweepSuccess() {
   // reasoning from outside could recover, and it is the difference between the next
   // occurrence being another dead end and being a diagnosis. A gate that can fail
   // for a reason its own output cannot express is a gate nobody can repair.
-  const window = runs.workflow_runs ?? [];
+  const list = runs.workflow_runs ?? [];
+  let runsWithSweep = 0;
   console.log(
-    `  window: ${window.length} completed run(s) of ${WORKFLOW_FILE} — ` +
-      (window.length === 0
+    `  window: ${list.length} completed run(s) of ${WORKFLOW_FILE} — ` +
+      (list.length === 0
         ? "EMPTY (the API returned no runs at all)"
-        : window.map((r) => `${r.id}@${String(r.created_at ?? "?").slice(0, 16)}Z`).join(", ")),
+        : list.map((r) => `${r.id}@${String(r.created_at ?? "?").slice(0, 16)}Z`).join(", ")),
   );
 
-  for (const run of window) {
+  for (const run of list) {
     const jobs = await api(`/repos/${REPO}/actions/runs/${run.id}/jobs?per_page=30`);
     const sweep = latestSweepSuccessInRun(jobs.jobs);
+    // One line per INSPECTED run — including the ones carrying no sweep job, which
+    // is precisely the case a red verdict most needs evidence for.
+    console.log(
+      `  · run ${run.id} (${String(run.created_at ?? "").slice(0, 16)}Z): ` +
+        (sweep.present ? `${sweep.succeeded}/${sweep.total} sweep shard(s) succeeded` : "no sweep job in this run"),
+    );
     // A run with no such job is not evidence either way — the job may have been
     // added later, or renamed. Keep looking rather than concluding from silence.
-    // But SAY SO: silence that is not evidence still has to be visible, or a run
-    // skipped for a bad reason looks exactly like a run that was never there.
-    if (!sweep.present) {
-      console.log(
-        `  · run ${run.id} (${String(run.created_at ?? "").slice(0, 16)}Z): no "${SWEEP_JOB_PREFIX}" job among ${(jobs.jobs ?? []).length} job(s) — skipped, not counted either way`,
-      );
-      continue;
-    }
-    // One line per inspected run so a red verdict can be read back later.
-    console.log(`  · run ${run.id} (${String(run.created_at ?? "").slice(0, 16)}Z): ${sweep.succeeded}/${sweep.total} sweep shard(s) succeeded`);
+    if (!sweep.present) continue;
+    runsWithSweep += 1;
     if (sweep.iso) {
-      return { iso: sweep.iso, runUrl: run.html_url, runConclusion: run.conclusion };
+      return { status: "found", iso: sweep.iso, runUrl: run.html_url, runConclusion: run.conclusion };
     }
   }
-  return null;
+  return classifyScan({ runsInspected: list.length, runsWithSweep });
+}
+
+/**
+ * The pure half of the outer loop's verdict, exported so the self-test can exercise it
+ * without a network. Only the THIRD case is "the sweep is dark"; the first two are
+ * "this gate could not see", and conflating them produced the 2026-09-14 false red.
+ */
+export function classifyScan({ runsInspected, runsWithSweep }) {
+  if (runsInspected === 0) {
+    return { status: "could-not-look", why: `the Actions API returned NO completed runs for ${WORKFLOW_FILE}` };
+  }
+  if (runsWithSweep === 0) {
+    return {
+      status: "could-not-look",
+      why:
+        `${runsInspected} completed run(s) were inspected and NOT ONE carried a job starting ` +
+        `"${SWEEP_JOB_PREFIX}" — the job was renamed, or the jobs payload came back empty`,
+    };
+  }
+  return { status: "dark", why: `the sweep job ran in ${runsWithSweep} inspected run(s) and no shard succeeded` };
 }
 
 // Importing this file must not perform a network call. The pure decision above
@@ -443,8 +606,33 @@ try {
   process.exit(0);
 }
 
+// COULD NOT LOOK is its own outcome, and in CI it is fatal for a DIFFERENT reason
+// than a dark sweep. Treating it as "dark" is the fail-open-wearing-a-mask this gate
+// was built to refuse: it makes an unreadable payload indistinguishable from the
+// repository's mutation harness having actually stopped. Off CI it is reported and
+// not fatal, matching the API-unreachable arm above — a developer without an API
+// token must not have their preflight reddened by GitHub's response shape.
+if (found?.status === "could-not-look") {
+  const msg = `could not determine whether the sweep is alive — ${found.why}`;
+  if (IN_CI) {
+    console.error(
+      `  ✗ ${msg}\n` +
+        `      Workflow: ${WORKFLOW_FILE}, job starting "${SWEEP_JOB_PREFIX}"\n` +
+        "      This is NOT the same finding as a dark sweep, and it is deliberately\n" +
+        "      not reported as one. The sweep may be perfectly healthy; what failed is\n" +
+        "      this gate's ability to see it. Check the per-run lines above, then the\n" +
+        "      job name in scheduled-verification.yml against SWEEP_JOB_PREFIX here.",
+    );
+    console.error("\nCI-liveness gate FAILED — the sweep's state could not be read, which is not the same as dark.");
+    process.exit(1);
+  }
+  console.log(`  · NOT CHECKED — ${msg}\n      Reported, not fatal, off CI.`);
+  console.log("\nci-liveness: not checked locally (sweep state unreadable); self-test green");
+  process.exit(0);
+}
+
 const verdict = evaluateLiveness({
-  lastSuccessIso: found?.iso ?? null,
+  lastSuccessIso: found?.status === "found" ? found.iso : null,
   nowMs: Date.now(),
   staleAfterHours: STALE_AFTER_HOURS,
 });

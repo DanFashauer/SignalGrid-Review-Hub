@@ -4882,14 +4882,14 @@ Auth chain (bearer token to tenant principal):
 16. artifacts/api-server/src/middlewares/idempotency.ts (109) — durable-write dedupe on the decision path.
 
 Served surface and durable path:
-17. artifacts/api-server/src/routes/v1.ts (1257) — every served /v1 route including evaluate and the release-path re-evaluation; the spec was audited, the implementation was not.
+17. artifacts/api-server/src/routes/v1.ts (1284) — every served /v1 route including evaluate and the release-path re-evaluation; the spec was audited, the implementation was not.
 18. lib/audit/src/backend.ts (318) — the Postgres ledger WRITE path; the audited verify path is provably blind to tail truncation, so append guarantees live only here.
 19. lib/persistence/src/decision-store.ts (288) — durable decision writes.
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (770) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
-22. scripts/launch-profile.mjs (794) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
+21. scripts/preflight.mjs (780) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+22. scripts/launch-profile.mjs (795) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (188) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.
 25. lib/integrations/src/integrations/device-management-health/evaluate.ts (290) — launch family; grades whether a compliance answer is CURRENT — the anti-unearned-affirmative connector, which had better not contain one.

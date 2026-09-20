@@ -624,6 +624,15 @@ jobs:
         run: node scripts/check-doc-line-counts.mjs --self-test
       - name: "Doc line counts (every path (N) figure matches the file it names)"
         run: node scripts/check-doc-line-counts.mjs
+      # BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a
+      # report-only watcher, cheaper than fetching every vendor page —
+      # pure date arithmetic against a committed manifest
+      # (docs/agent/VENDOR_DOC_MANIFEST.json), no network call. REPORT-ONLY:
+      # the check itself always exits 0; only the self-test can fail this job.
+      - name: "Vendor-doc drift watch self-test (the comparison logic must actually work)"
+        run: node scripts/check-vendor-doc-drift.mjs --self-test
+      - name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)"
+        run: node scripts/check-vendor-doc-drift.mjs
       # The four capacity figures RELIABILITY_SLO.md owns, wherever a document restates
       # them. COMPANY_BUILD_PLAN.md carried the superseded 5,128 for twelve days while
       # every figure gate stayed green, because none of them reads a bare 240 or 585.
@@ -922,6 +931,9 @@ jobs:
 
       - name: API integration test
         run: pnpm run test:api
+
+      - name: Console unit tests (policyTests, facilityGraphLayout)
+        run: pnpm run test:console
 
       # The MCP server's own node:test suite — wire-visible tool/resource contract
       # and read-only annotations (incl. the deliberately not-read-only

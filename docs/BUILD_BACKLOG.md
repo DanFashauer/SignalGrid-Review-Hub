@@ -1816,8 +1816,10 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       written from `lib/app-workflows/src/index.ts` and the api tests. The 401/403
       half rides #863 (`check-v1-refusal-coverage`), which already edits this block;
       **DONE 2026-09-20:** both halves are on mainline — the 401/403 half landed with #863
-      (4df66f2a) and the schema half lands with this merge (the box was ticked early on #888;
-      Codex caught it; it is ticked again now that the condition holds). Still unchecked by any gate: the
+      (4df66f2a) and the schema half lands with this merge, together with the `403` the core's
+      `authorize(principal, "decision:evaluate")` throws on this route, which neither half had
+      documented (the box was ticked early on #888; Codex caught it twice; it is ticked now that
+      every refusal the route returns is in the document). Still unchecked by any gate: the
       schema against the handler (`API_CONTRACT_AUDIT.md`, "What is still not checked").
 - [x] **Small contract-name drift. 2026-09-01 (contract-drift sweep, LOW).**
       `LAUNCH_CONSOLE_WIREFRAMES.md` names `GET /v1/connectors/:id/syncs`; the served

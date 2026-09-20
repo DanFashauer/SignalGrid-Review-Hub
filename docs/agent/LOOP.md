@@ -59,7 +59,8 @@ LAST TOUCHED: 2026-09-20 08:00Z (cloud lane, latest) - THE EIGHT LANDINGS, ONE A
               #864 5df039f7, #866 e32bb885, #868 9018a8bc, #888 9fb4bc08 (07:39Z). Mainline merged INTO
               each branch in a scratch worktree, frozen install after the merge, manifest + coverage page
               regenerated on top of the previous landing, preflight + breadth on the merged tree on one
-              shared port before the push. Record with commands and output: docs/agent/EVIDENCE.md, the
+              shared port before the push - for SEVEN of the eight; #863's local pass came AFTER its
+              push (a stale status file fired it), a DR-037 condition-2 exception recorded as such. Record with commands and output: docs/agent/EVIDENCE.md, the
               2026-09-20 entry (gating run ids, chain lines, the #863 early-push deviation, the derived
               figures each chain caught). Final manifest v82, fingerprint 6cc9a0eef68e5ca0; the ONE re-mint
               request to the Mac went AFTER the last landing (PR #910). Also landed today: #900 (video
@@ -68,8 +69,9 @@ LAST TOUCHED: 2026-09-20 08:00Z (cloud lane, latest) - THE EIGHT LANDINGS, ONE A
               its gating check running. Mac PRs #901 and #903 each carry one blocker comment from this lane
               (nine verified Codex findings); nothing was pushed to their branches. THE MAC TICK HAS BEEN
               SILENT since 02:26Z - owner escalated once at 06:25Z; readiness dimension (b) reads 0 until
-              the Mac re-mints. Two detector gaps filed as BUILD_BACKLOG rows: loop:state reads squash-landed
-              branches as unpushed; run-requests cannot defer or supersede a queued sim request.
+              the Mac re-mints. One detector gap filed as a BUILD_BACKLOG row: loop:state reads squash-landed
+              branches as unpushed (fallback must bind to the tip sha). A second draft row, "run-requests
+              has no supersession field", was FALSE (supersededBy exists) and was struck before landing.
               PREVIOUSLY (2026-09-19 01:00Z, cloud lane): THE BACKLOG SWEEP, SIX LANES AT ONCE.
               MEASURED, not recalled (UTC, repo-scoped pulls endpoint, three pages): `29` pull requests
               merged on 2026-09-18, `49` opened, `48` open now; `33` had merged on 2026-09-17 by the
@@ -1243,7 +1245,7 @@ NEXT ACTION: cloud: (0) Land PR #905 (DR-052) on its green gating check - no lau
               (1) When the Mac tick returns: confirm mac-run.json re-minted against fingerprint
               6cc9a0eef68e5ca0 (v82) and readiness dimension (b) back to 100%; if the tick stays silent past
               the 24h escalation window, escalate the owner ONCE more with the same command. (2) Fix the two
-              detector gaps filed today (squash-landed branches; sim-request deferral) - each is a small
+              detector gap filed today (the squash-landed branch check, fallback bound to the tip sha) - a small
               gate change with a self-test. (3) The rows still open by lane in docs/BUILD_BACKLOG.md; the
               brace-less mutation ratchet one family per session. (4) The owner decisions the sweep
               surfaced, each recorded in its PR: LAUNCH_PROFILE_VERSION 5->7 and two GAP removals with no
@@ -1251,7 +1253,8 @@ NEXT ACTION: cloud: (0) Land PR #905 (DR-052) on its green gating check - no lau
               webhook write route's store (#868); the DecisionEngine/AppWorkflows re-port (backlog rows,
               owner call under DR-020). Then build: Puck 5, Puck 1, the smart-charging scenario behind a DR.
               Mac: reply to the blocker comments on #901 and #903 before pushing more to those branches;
-              run the three queued sim requests (two from 2026-09-18, the v82 re-mint from #910) in order;
+              run the two queued 2026-09-18 sim requests (each re-mints evidence against the checkout at run
+              time, so against v82; #910 names the fingerprint the result must carry - not a third request);
               read the inbox BEFORE any long measurement. Owner: the BLOCKED ON list, and the launchd tick.
 ## The three things that are true right now
 

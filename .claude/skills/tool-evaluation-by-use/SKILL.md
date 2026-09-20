@@ -9,6 +9,17 @@ A shared resource is answered with a measurement or a named blocker, never with 
 memo of reasons (`docs/agent/RESOURCE_INTAKE.md`, "Rules for a new row"; DR-021).
 The row is logged the day it arrives; the verdict lands after the tool has run.
 
+## 0 — Who runs this (DR-052, 2026-09-20)
+
+Steps 2–5 are run by a SEPARATE agent in its own context (Opus tier, DR-047): the
+resource and the tree are its inputs, the coordinator's current task is not. It
+returns facts, measurements, the one landing place, the one gap, and up to three
+candidate tasks with owning roles — and decides nothing. The coordinator then
+cross-confirms each candidate against the tree, the backlog, the decision records,
+prior intake rows and the Mac lane's evidence (CONFIRMED / DUPLICATE / REFUTED),
+and only then writes the disposition in step 6. The row names which stage each
+sentence came from.
+
 ## 1 — Log the row first, evaluate second
 
 Append to the intake log in `docs/agent/RESOURCE_INTAKE.md`: Date | Resource |

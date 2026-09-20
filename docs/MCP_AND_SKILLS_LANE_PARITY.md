@@ -41,7 +41,7 @@ cloud and Mac, writing no secret to any tracked file:
 
 | Server | How `pnpm run mcp:setup` handles it | Env key the lane supplies |
 | --- | --- | --- |
-| Context7 | Registers `scripts/install-context7.mjs` — pinned `@upstash/context7-mcp@4.0.4`, user scope, keyless | none (keyless) |
+| Context7 | Registers `scripts/install-context7.mjs` — pinned `@upstash/context7-mcp@4.0.4`, user scope, keyless. **Two channels, not one (measured 2026-09-20, DR-052 re-scan):** the Mac reaches it through this installer; the cloud sessions reach it through a hosted claude.ai connector (`mcp__Context7__resolve-library-id`, `mcp__Context7__query-docs`) that the installer neither creates nor sees. Reference only, never on the decision path: keyless, the same query returned a 98 B quota error and then 1,556 B of docs on consecutive runs (shared-egress rate limit), and it cannot answer offline — its output is never cited in a gate, a proof, a fixture or a doc figure. Upstream is at 4.1.1; the pin bump is a backlog row. | none (keyless); a per-machine `CONTEXT7_API_KEY` is the owner's decision, outside the tree (DR-029) |
 | Neural Memory | Runs `scripts/install-neural-memory.mjs` when `uv` + `claude` are present; skips cleanly otherwise (DR-026) | `NEURALMEMORY_DIR` (a path, not a secret; defaults to `~/.neuralmemory`, must be outside the repo) |
 | Firecrawl | Runs `scripts/install-firecrawl.mjs` when `FIRECRAWL_API_KEY` is set; skips cleanly otherwise (DR-022) | `FIRECRAWL_API_KEY` (secret) |
 | GitHub | **Documented, not auto-registered** — the correct command depends on the transport (hosted HTTP vs a local server image), and guessing wrong is worse than documenting | `GITHUB_PERSONAL_ACCESS_TOKEN` (secret) |

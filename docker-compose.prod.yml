@@ -91,11 +91,26 @@ services:
       # to boot rather than falling back to demo.
       SIGNALGRID_CORE: ${SIGNALGRID_CORE:-}
       SIGNALGRID_ESTATE_TENANT: ${SIGNALGRID_ESTATE_TENANT:-}
+      # The posture REFRESH interval (seconds, >= 30). Empty ⇒ the boot read stands
+      # and no loop runs. Set on a non-estate core ⇒ the API refuses to start, so a
+      # refresh nobody configured a core for is a failed deploy, not a quiet no-op.
+      SIGNALGRID_ESTATE_REFRESH_SECONDS: ${SIGNALGRID_ESTATE_REFRESH_SECONDS:-}
       # Key-only: passed through only when the host sets them (a bearer token
       # handed an empty string would be a failed boot, not a silent one).
       SIGNALGRID_ESTATE_OWNER_TOKEN:
       SIGNALGRID_ESTATE_OPERATOR_TOKEN:
       GRAPH_ACCESS_TOKEN:
+      # ROTATION SUCCESSORS (DR-010, docs/SECRET_MODEL.md). Key-only for the same
+      # reason their base variables are: an empty string is a misconfiguration the
+      # server refuses, not a value. While a base variable and its _NEXT are BOTH set
+      # the server accepts either — which is the only reason a rotation can happen
+      # without a window in which a legitimate caller is refused. A successor that
+      # cannot be set through this file is a rotation that cannot be performed.
+      METRICS_TOKEN_NEXT:
+      SIGNALGRID_ENROLLMENT_SECRET_NEXT:
+      SIGNALGRID_ESTATE_OWNER_TOKEN_NEXT:
+      SIGNALGRID_ESTATE_OPERATOR_TOKEN_NEXT:
+      GRAPH_ACCESS_TOKEN_NEXT:
       GRAPH_BASE_URL: ${GRAPH_BASE_URL:-}
       STEPUP_TTL_SECONDS: ${STEPUP_TTL_SECONDS:-}
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}

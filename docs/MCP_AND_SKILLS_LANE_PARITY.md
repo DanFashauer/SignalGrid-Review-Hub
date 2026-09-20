@@ -15,7 +15,7 @@ either lane.**
 - **Skills** — everything under `.claude/skills/` is tracked, so a pull gives a
   lane every skill. The count is derived, not hardcoded:
   `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`
-  (117 tracked skill directories as of 2026-09-12 — 100 vendored (14 obra/superpowers, 1 bradautomates/claude-video, 85 from eleven collections)
+  (118 tracked skill directories as of 2026-09-20 — 101 vendored (14 obra/superpowers, 1 bradautomates/claude-video, 85 from eleven collections, 1 nidhinjs/prompt-master)
   skills plus 17 first-party, per `.claude/skills/VENDORED.md`; the command above is
   the derivation, and this said 26 = 14 + 12 before that date). Nothing needs
   installing; a pull is the whole mechanism.

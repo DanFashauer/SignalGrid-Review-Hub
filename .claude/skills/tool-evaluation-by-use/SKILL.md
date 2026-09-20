@@ -20,6 +20,13 @@ prior intake rows and the Mac lane's evidence (CONFIRMED / DUPLICATE / REFUTED),
 and only then writes the disposition in step 6. The row names which stage each
 sentence came from.
 
+A resource that cannot be run — an article, a video, an image, a list — takes the
+same three stages with a different stage 1: the separate agent READS or WATCHES it
+(the article check in step 2; the `video-intake` skill for footage) and returns what
+was read — passages, timestamps, counts, the claims it makes and which of them the
+tree already answers. Steps 4 and 5 do not apply and the row says so; nothing is
+measured that was not there to measure.
+
 ## 1 — Log the row first, evaluate second
 
 Append to the intake log in `docs/agent/RESOURCE_INTAKE.md`: Date | Resource |

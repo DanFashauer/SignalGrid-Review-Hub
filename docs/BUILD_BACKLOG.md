@@ -1090,6 +1090,30 @@ _(see `docs/APP_WORKFLOWS_OPPORTUNITY_MAP.md` for the full app-workflow roadmap)
 
 ## Done (recent)
 
+- [x] **`check-ci-liveness.mjs` told the truth about a dark sweep and a blind gate in the same words.** **DONE 2026-09-14**
+      — Found by being hit: on PR #742 the gating job failed with "the mutation sweep is
+      not demonstrably alive" at 14:32:48Z, while `scheduled-verification` run
+      34853811860 had all FOUR sweep shards green between 14:14:33Z and 14:20:54Z —
+      twelve minutes earlier, inside the 48h threshold. The identical commit passed on
+      re-run with nothing changed, so the payload differed, not the repository.
+      Three situations all returned `null` and were reported as the third: the API
+      returning no runs, runs carrying no sweep job (renamed, or an empty payload), and
+      the sweep genuinely failing every shard. Only the last is this gate's finding, and
+      the first two are "could not look" — the distinction this file's own header
+      already demands ("a probe that could not run is not a probe that found nothing")
+      and had applied to its inner fetch but not its outer loop.
+      The per-run diagnostic line also sat *after* `if (!sweep.present) continue`, so the
+      one shape needing evidence most — every run inspected, none matching — produced a
+      red verdict with an empty log. That silence is why diagnosing it took an API
+      cross-check instead of a glance.
+      Fixed in PR #745: `classifyScan` separates could-not-look from dark, the
+      could-not-look arm is fatal in CI with its own message and reported-not-fatal off
+      CI, and the diagnostic prints for every inspected run. Four self-test cases,
+      falsified by planting the old conflation. This gate has form — its previous fix
+      (run 69) addressed shard-ORDER flakiness and its own commit called it "a flaky
+      gate, in the gate that warns about flaky gates"; empty-payload flakiness is the
+      same class, untouched until now.
+
 *Re-filed out of **Owner-gated** on 2026-08-19 by the virtual team's PM shift: every one of these was already complete, so that section was implying decisions were still owed when none were. Original-entry records travel with their resolution, which is why some arrive as pairs — the historical reasoning is the point, not clutter.*
 
 - [x] **Run the Mac lane → `liveEvidence` goes `none` → `fresh`.** **DONE 2026-08-07**

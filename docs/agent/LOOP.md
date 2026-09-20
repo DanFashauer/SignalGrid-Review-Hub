@@ -135,6 +135,85 @@ LAST TOUCHED: 2026-09-20 10:50Z (cloud lane, latest) - THE EIGHT LANDINGS, ONE A
               Android AMAPI (needs a rig, not Kotlin); data-lifecycle SQL against a live Postgres
               (Mac lab); the lifecycle admin job's invocation. One container restart at ~00:00Z killed
               two running chains; worktrees and commits survived, both relaunched, nothing lost.
+              PREVIOUSLY (2026-09-18 08:40Z, cloud lane): THE MAC RED THAT WAS A CYCLE, AND THE GATE THAT NOW REFUSES IT.
+              MEASURED, not recalled: `5` pull requests merged on 2026-09-18 so far (all lane mail) and `38` open
+              (8 dependabot, 4 drafts); 2026-09-17 closed at `33` merged, not the 29 the previous entry counted at 21:20Z.
+              #819's Mac column read "0 files found under lib/" and nothing more. #825 kept the errno, and the Mac then
+              said ENAMETOOLONG under lib/integration-bridge/node_modules/@workspace/integrations/node_modules/
+              @workspace/incident-playbook/node_modules/... - #819 had added integrations -> incident-playbook for one
+              type-only import, incident-playbook already reached integrations through posture-composition, and pnpm
+              links a workspace cycle into node_modules as an infinite symlink loop. macOS's recursive readdir follows
+              it until the path overflows; Linux does not, so every Linux lane was green. Thirty-three gates walk lib/
+              that way. Three fixes, all green on both lanes, all owner-gated: #819 moves the dispatch seam UP into
+              incident-playbook (it reads every field of Incident; a structural copy would have duplicated the type)
+              and drops the dependency; #825's walker now PRUNES node_modules before descent and never follows a
+              symlink; #832 is a new gate, check-workspace-cycles, deriving the graph from pnpm-workspace.yaml and
+              every package.json (43 packages, 90 workspace edges, 0 cycles on mainline) - run against #819's
+              original manifest it names the cycle in order.
+              #828 (a heartbeat) reddened at CI liveness on a GitHub 403 rate limit, the same line as #654 on 09-12:
+              the gate retried a rate limit with six seconds of backoff and named neither the limit nor its reset.
+              #829 waits it out by the response's own retry-after / x-ratelimit-reset up to a 120 s cap, fails at
+              once naming the instant when that is past the cap, and prints the limit headers. What spent the token
+              this time is NOT known - 31 workflow runs in the 75 minutes before, none of them the throttled Mac
+              tick - and the next occurrence will say.
+              Mainline merged into #772, #774, #742 (green, pushed, commented). #742's new CodeQL medium - branch
+              names from the API written to the job summary - answered with an ingestion-time ref grammar: a name
+              outside it is refused unread, 17-case self-test, falsified twice. #686, #723, #758, #753 merged the same
+              way with their derived documents re-derived; their gates were running as this was written.
+              Readiness measured on mainline: (a) 94% (16 of 17), (b) 0% (evidence minted 2026-09-12 against
+              manifest 4afa60cf; the tree is 6906d8d9), (c) 100%; HEADLINE 0%. (b) needs a person at the Mac:
+              SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence. Two asks sit on mainline
+              unacknowledged; #821 carries the sim request for it and (a)'s last gap.
+              OWNED DEFECTS THIS SESSION, all in the cloud lane's own process, none in the product: a worktree run
+              without its install read a missing tsx as a gate failure; a gate loop that dropped the .mjs suffix
+              printed nine Node banners and was read as nine passes until re-run; and TWICE a chain waited on
+              pgrep -f 'node scripts/preflight.mjs' and matched that text inside its own bash -c wrapper - a script
+              that waits on its own name waits forever. Same shape the repo keeps finding: a signal that cannot tell
+              "could not look" from "looked".
+              (Earlier 2026-09-17 21:20Z, cloud lane:) A LONG MERGE-AND-BUILD SESSION.
+              PREVIOUSLY (2026-09-18 02:05Z, cloud lane): THE CONFLICTED BACKLOG, REPLAYED.
+              Seven old PRs rebuilt on current mainline: #815 (replays #745), #817 (#732),
+              #818 (#724), #819 (#782), #820 (#729), #821 (#730), #822 (the four defect fixes
+              from #531). Cherry-picked with authorship preserved - no history rewritten, no
+              force-push, nothing merged that the owner gates.
+              EVERY ONE FOUND A DEFECT THE ORIGINAL BRANCH COULD NOT HAVE SEEN, and they are
+              the same defect wearing different clothes - a signal that cannot tell "I could
+              not look" from "I looked and found nothing", or an unknown that LOOSENS:
+                #820 - `git diff --name-only` QUOTES an unusual path, so
+                       `"lib/signalgrid-core/src/d\303\251cision.ts"` did not start with `lib/`,
+                       classified AUTONOMOUS, and the merge authorizer returned TRUE. The one
+                       gate written so #719 could not recur would have waved through the
+                       decision core. A rename away from ASCII was all it took.
+                #818 - the cap-block detection reused a whole-timeline `returned` boolean, so
+                       ONE device coming back silenced a cap block held by a DIFFERENT device
+                       still out - the exact false negative DR-052 was written to catch.
+                #818 - four positive assertions were driving the detector with `undefined`
+                       eventTypes (`ev` gained a required id on mainline). They read GREEN on
+                       the original branch. Green against events that could match no rule.
+                #822 - the fabricated-status detector required `healthy` BEFORE `status`, so
+                       `{ status: 200, healthy: true }` passed. Object key order means nothing
+                       in JavaScript; the detector was reading a promise the language does not
+                       make. Also: an absent plugin-manifest key SKIPPED invariant 3 rather
+                       than failing it, CORS omitted the `idempotency-key` the server reads and
+                       the contract documents, and three iOS DLP sites defaulted to PERMITTED
+                       on a nil session - including an `init` default parameter, so every call
+                       site that forgot the argument got the loose answer.
+                #815 - the CI-liveness gate called a rate-limited sweep DARK.
+              READINESS IS 0%, NOT 94%, AND NOT BECAUSE OF ANY OF THIS. Measured with
+              `node scripts/check-readiness-figure.mjs`: (a) 100%, (b) 0%, (c) 100%, headline 0
+              - OUTREACH CLOSED. artifacts/live-evidence/mac-run.json was minted 2026-09-13
+              against manifest fingerprint 4afa60cf2fd5; the tree is 6906d8d9ecc5. The drift is
+              ALREADY TRUE OF MAINLINE, and the cloud lane cannot repair it - `verify:all
+              --require-mcp --emit-evidence` is macOS-only and refuses on CI. Sim request
+              2026-09-18-evidence-remint-readiness-b is queued for the Mac. Until it runs,
+              every readiness claim in this tree is false by derivation.
+              MY OWN CONFLICT RESOLUTION WAS THE LEADING SOURCE OF DEFECTS in this work: it
+              dropped DR-051's reversal clause, spliced DR-051's sections into DR-052, and ate
+              a closing brace in detect.ts. Each was caught by a GATE, none by re-reading the
+              diff. Resolve, then run the gates - reading it again is not a check.
+              STILL OWNER-ONLY: narrow the `~ALL` ruleset (it marks all 72 branches protected
+              and spawns the intermittent github-advanced-security check), and delete
+              claude/build-affected-audience-v2 - the seam's last honest entry.
               PREVIOUSLY (2026-09-17 21:20Z, cloud lane): A LONG MERGE-AND-BUILD SESSION.
               MEASURED, not recalled: `29` pull requests merged on 2026-09-17 and `27` still open.
               The open count barely moved (30 -> 27) and that is the honest shape of it: much of what

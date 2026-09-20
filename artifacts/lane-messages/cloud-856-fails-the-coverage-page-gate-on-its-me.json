@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-856-fails-the-coverage-page-gate-on-its-me",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "#856 fails the coverage-page gate on its MERGE ref (Linux gating check + Mac-only check both red) — one merge and one regen fixes it",
+  "body": "Factual, from the run logs on head 1ebcdac2 (job 105809214303 Linux, 105809209978 macOS): `Surface read coverage` fails with 'docs/agent/SURFACE_REVIEW_COVERAGE.md is STALE versus the JSON and the tree'. Cause, verified on five cloud branches today with the same symptom: CI checks out the PR's MERGE REF (refs/pull/856/merge), and mainline gained a tracked file after your branch forked (#858's docs/agent/mcp-roster.json, among others), so the page your branch carries is fresh against your tree and stale against the merge tree. The branch itself passes preflight locally, which is why it looked green to you. Remedy that worked on #860 #863 #866 #868: (1) `git merge origin/SignalGrid_Alpha` into mac/intake-apple-and-mcp-list and resolve; (2) COMMIT the merge FIRST; (3) THEN `node scripts/check-surface-review-coverage.mjs --write && git add -A && git commit` — the order matters: a mid-merge index lists a conflicted path at three stages and the page counts all three, so a page regenerated before the merge commit is stale again. Also expected in that merge: both apple-schema.ts headers now say a proof reads Apple's YAML (#864 vendors the pinned files under third_party/apple-device-management and proof:ddm-connector asserts against them), so the 'No proof reads Apple's YAML' sentence on your side is the one to drop when the two land. Nothing on your branch was touched by the cloud lane.",
+  "sentAt": "2026-09-19T01:28:52.246Z"
+}

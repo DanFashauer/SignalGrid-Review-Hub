@@ -9,6 +9,17 @@ import type { SignalGridEvent } from "./types";
  * (e.g. "inactive in MDM but still showing cellular or badge activity"). Pure and
  * deterministic: set-based reasoning over the events, no clock, no randomness, so
  * the same timeline always yields the same detections — evidence-grade.
+ *
+ * A NOTE ON THE LAYOUT. Each alternative of a predicate below sits on its own
+ * line. That is not house style, it is falsifiability: this file is registered
+ * with `scripts/mutation-guard.mjs`, whose operand mutators are line-oriented, so
+ * a clause sharing a line with its neighbour can never be deleted on its own and
+ * the sweep can only delete the whole predicate. Two adversarial reviews planted
+ * clause drops here — and in the detector's reason strings and evidence sets —
+ * against a fully green `proof:event-contract`, and 10 of 12 survived. The proof
+ * now pins the exact detections, severities, evidence ids and reason TEXT of
+ * every fixture timeline; keep new clauses on their own lines and add the
+ * timeline that fails without them.
  */
 
 export type DetectionSeverity = "info" | "medium" | "high" | "critical";
@@ -67,9 +78,15 @@ export function detectCrossDomain(events: readonly SignalGridEvent[]): Detection
 
   // 3. The device went dark or its custody lapsed, and it was never returned.
   const wentOffline = idsWhere(
-    (e) => e.eventType === "reachability_changed" && e.carrierConnectivityState === "offline",
+    (e) =>
+      e.eventType === "reachability_changed" &&
+      e.carrierConnectivityState === "offline",
   );
-  const lapsed = idsWhere((e) => e.eventType === "non_return" || e.eventType === "custody_expired");
+  const lapsed = idsWhere(
+    (e) =>
+      e.eventType === "non_return" ||
+      e.eventType === "custody_expired",
+  );
   const returned = has((e) => e.eventType === "device_returned");
   const exitEvidence = [...wentOffline, ...lapsed];
   if (exitEvidence.length > 0 && !returned) {
@@ -84,7 +101,11 @@ export function detectCrossDomain(events: readonly SignalGridEvent[]): Detection
 
   // 4. Tamper plus loss of connectivity — the classic "someone's working on it
   //    where we can't see it" signal. Critical.
-  const tamper = idsWhere((e) => e.tamperState === "suspected" || e.tamperState === "confirmed");
+  const tamper = idsWhere(
+    (e) =>
+      e.tamperState === "suspected" ||
+      e.tamperState === "confirmed",
+  );
   if (tamper.length > 0 && wentOffline.length > 0) {
     detections.push({
       code: "DOCK_TAMPER_WITH_NETWORK_LOSS",
@@ -97,11 +118,25 @@ export function detectCrossDomain(events: readonly SignalGridEvent[]): Detection
 
   // 5. The device is dark in MDM (unmanaged/unknown) yet demonstrably alive
   //    elsewhere — on cellular or badging in. Only visible on a shared fabric.
-  const darkInMdm = idsWhere((e) => e.mdmDeviceState === "unmanaged" || e.mdmDeviceState === "unknown");
+  const darkInMdm = idsWhere(
+    (e) =>
+      e.mdmDeviceState === "unmanaged" ||
+      e.mdmDeviceState === "unknown",
+  );
+  // Only a reachability_changed event asserts connectivity: an event of another
+  // kind that happens to carry a carrierConnectivityState is not evidence the
+  // device is alive.
+  const reachableNow = (e: SignalGridEvent): boolean => {
+    if (e.eventType !== "reachability_changed") return false;
+    return (
+      e.carrierConnectivityState === "online" ||
+      e.carrierConnectivityState === "idle"
+    );
+  };
   const aliveElsewhere = idsWhere(
     (e) =>
       e.eventType === "badge_access" ||
-      (e.eventType === "reachability_changed" && (e.carrierConnectivityState === "online" || e.carrierConnectivityState === "idle")),
+      reachableNow(e),
   );
   if (darkInMdm.length > 0 && aliveElsewhere.length > 0) {
     detections.push({

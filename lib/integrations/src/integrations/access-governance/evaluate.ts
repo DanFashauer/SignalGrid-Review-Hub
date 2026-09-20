@@ -87,6 +87,13 @@ export function deriveGovernanceReadFreshness(
   }
   const observedMs = instantMs(observedAt);
   const referenceMs = instantMs(referenceTime);
+  // INERT, and labelled rather than deleted. `ageMs` below returns null for both of
+  // these states — a null `seenAt`, and a `nowMs` that is not a finite number — so the
+  // `age === null` line already answers "unknown" for each, which is why the brace-less
+  // mutation sweep found this clause surviving `if (false)`. Kept because it states the
+  // two distinct causes at the point of use and fails in the SAFE direction if `ageMs`
+  // (a shared util this family does not own) ever stops returning null for them.
+  // Registered in `scripts/mutation-guard.mjs`'s ALLOWED with the same reason.
   if (observedMs === null || referenceMs === null) return "unknown";
   // Tolerance 0, NOT the shared FUTURE_SKEW_TOLERANCE_MS: this family's reference
   // instant is POSED BY THE CALLER, not read from a clock, so there is no second

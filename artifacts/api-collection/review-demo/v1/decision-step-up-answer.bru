@@ -1,0 +1,31 @@
+meta {
+  name: Decision step-up - answer
+  type: http
+  seq: 18
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/{{decisionId}}/step-up
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "challengeId": "{{stepUpChallengeId}}",
+    "assertion": {
+      "id": "{{credentialId}}",
+      "rawId": "{{credentialId}}",
+      "type": "public-key",
+      "response": {
+        "clientDataJSON": "…",
+        "authenticatorData": "…",
+        "signature": "…"
+      }
+    }
+  }
+}
+
+docs {
+  Answers a step_up verdict with a verified, user-verifying WebAuthn assertion bound to the challenge minted for that decision. The decision is NOT rewritten - a step_up stays a step_up; the answer is recorded beside it (GET /v1/decisions/{id} carries stepUp). As sent (placeholder assertion), the fixture demo core answers 403: an assertion it cannot verify is refused and the decision stays unanswered.
+}

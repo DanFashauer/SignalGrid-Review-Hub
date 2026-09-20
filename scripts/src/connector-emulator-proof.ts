@@ -240,8 +240,10 @@ for (const scenario of selected) {
   if (
     scenario.remediation.proposed &&
     scenario.remediation.highRisk &&
-    (!scenario.remediation.approvalRequired ||
-      !scenario.remediation.simulatedFirst)
+    // Strict: the fixtures are JSON cast without validation, so a string
+    // "false" is truthy and would pass a truthiness read as "required".
+    (scenario.remediation.approvalRequired !== true ||
+      scenario.remediation.simulatedFirst !== true)
   ) {
     failures.push(
       `${scenario.id} high-risk remediation is not approval-required and simulated-first`,

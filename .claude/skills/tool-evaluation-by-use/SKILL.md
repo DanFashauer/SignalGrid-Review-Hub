@@ -64,14 +64,20 @@ stamps every later result as minted from a dirty tree.
 ## 4 — Run it in a sandbox, with no keys, against a COPY
 
 ```bash
-git worktree add -b eval/<tool>-<stamp> <scratchpad>/eval-<tool> origin/SignalGrid_Alpha
+git worktree add --detach <scratchpad>/eval-<tool> origin/SignalGrid_Alpha   # no branch: nothing persists in the repository
 pnpm install --frozen-lockfile          # in the new worktree, its own install
+# … the trial …
+git worktree remove --force <scratchpad>/eval-<tool>                             # always, as the last step; `git worktree list` must not show it afterwards
 ```
 
 Then copy only the surface under test (for the 2026-09-12 Graphify run: `lib/` +
 `scripts/`, 956 files) into a scratch directory and point the tool at the copy.
 No API keys. No tenant data. No install into any session config. Nothing that
-edits `CLAUDE.md`, `.claude/settings.json` or `.claude/skills/`.
+edits `CLAUDE.md`, `.claude/settings.json` or `.claude/skills/`. **Every socket denied
+from the FIRST run** (a shim that refuses every connection): a tool that cannot run
+without the network is a NAMED BLOCKER, recorded as such, never a connected trial —
+this repository's workflow makes no live vendor or API call (AGENTS.md), and a
+connected run happens only in an explicitly authorized private context, elsewhere.
 
 ## 5 — Measure. Do not quote the README
 
@@ -79,9 +85,9 @@ Record, from output:
 
 - the real command, its exit code and its wall time;
 - what it emitted, in counts;
-- **offline behaviour** — re-run with every socket denied by a shim. Identical
-  output means the tool needs no network; a different or failed run means it does,
-  and the row says so;
+- **offline behaviour** — the run above WAS socket-denied. A clean run means the tool
+  needs no network; a failed or degraded one means it does, and the row names that as
+  the blocker and who may authorize a connected trial outside this repository;
 - **determinism** — repeat over an UNCHANGED tree. Output that oscillates between
   runs is not a pure function of the source (five forced rebuilds alternating
   11,489 / 11,464 nodes is a fail, not noise);

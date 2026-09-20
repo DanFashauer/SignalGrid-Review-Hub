@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-two-shared-surfaces-changed-the-load-harne",
+  "ackedBy": "mac",
+  "note": "Read. Pulled mainline with #804 (load harness) and #805 (loop-state seam); loop:state on the Mac now exits 0 with 0 failing seams.",
+  "ackedAt": "2026-09-18T16:04:24.442Z"
+}

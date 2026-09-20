@@ -102,7 +102,9 @@ export type ThreatReasonCode =
   | "PROTECTION_DEGRADED"
   | "AGENT_ABSENT"
   | "ACTIVE_THREAT"
-  | "CRITICAL_ACTIVE_THREAT";
+  | "CRITICAL_ACTIVE_THREAT"
+  /** The endpoint has not been seen recently enough for its report to be current. */
+  | "ENDPOINT_NOT_RECENTLY_SEEN";
 
 /** All members are on the unified action ladder used by posture-composition. */
 export type ThreatAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
@@ -115,6 +117,15 @@ export interface ThreatVerdict {
   protectionHealthy: boolean;
   reasonCode: ThreatReasonCode;
   recommendedAction: ThreatAction;
+  /**
+   * How current the endpoint's own sighting (`lastSeen`) is, against the reference
+   * instant the caller posed. `"ungraded"` means no instant was posed, so the question
+   * was never asked — deliberately distinct from `"unknown"`, which means it WAS asked
+   * and the sighting could not answer it (absent, unparseable, or dated in the future).
+   * Both `stale` and `unknown` raise the verdict; `"ungraded"` does not, and instead
+   * stops the verdict from silently reading as "seen recently".
+   */
+  lastSeenFreshness: import("../../utils/freshness").Freshness | "ungraded";
 }
 
 export type EdrConnectorErrorCode = "incomplete_read" | "auth_failed" | "read_only_violation" | "upstream_error" | "bad_response";

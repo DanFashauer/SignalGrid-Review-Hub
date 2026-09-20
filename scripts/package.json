@@ -52,6 +52,7 @@
     "proof:custody-beacon": "tsx ./src/custody-beacon-proof.ts",
     "proof:data-protection": "tsx ./src/data-protection-proof.ts",
     "proof:ddm-connector": "tsx ./src/ddm-connector-proof.ts",
+    "proof:decision-cascade": "tsx ./src/decision-cascade-proof.ts",
     "proof:decision-continuity": "tsx ./src/decision-continuity-proof.ts",
     "proof:decision-store-pg": "tsx ./src/decision-store-pg-proof.ts",
     "proof:device-attestation": "tsx ./src/device-attestation-proof.ts",

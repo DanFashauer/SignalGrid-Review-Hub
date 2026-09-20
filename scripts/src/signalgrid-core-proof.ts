@@ -42,6 +42,11 @@ import {
   seedDemoStore,
   verifySnapshot,
   CORE_NORMALIZATION_VERSION,
+  AUDIT_EVENT_TYPES,
+  PUCK_LIFECYCLE_EVENT_TYPES,
+  isAuditEventType,
+  appendAudit,
+  verifyAuditChain,
   SignalGridCore,
   SHARED_DEVICE_RULES_V1,
   SHARED_DEVICE_RULES_V2,
@@ -411,6 +416,47 @@ check(
   tamperedChain.valid === false && tamperedChain.brokenAtSeq !== null,
   `brokenAtSeq=${tamperedChain.brokenAtSeq}`,
 );
+
+// ── 6b. THE EVENT-TYPE CENSUS (DR-043, Puck 3) ───────────────────────────────
+//
+// `AuditEventType` was a bare type union: erased at runtime, so nothing could count
+// it and nothing could refuse a string that was not in it. A caller could append
+// "session.hijacked" and the ledger would record it, tamper-evidently, as a member of
+// a vocabulary it is not in. The union is now derived FROM a runtime array, and this
+// is the census that holds the two in step.
+//
+// It must count FOURTEEN — the original six plus the eight the puck lifecycle needs —
+// and it must REFUSE a fifteenth. Both halves: a census that only counts would pass on
+// a tree where any string is admitted.
+check(`audit vocabulary: the ledger names exactly 15 event types (found ${AUDIT_EVENT_TYPES.length})`, AUDIT_EVENT_TYPES.length === 15);
+check("audit vocabulary: no type is named twice", new Set(AUDIT_EVENT_TYPES).size === AUDIT_EVENT_TYPES.length);
+check("audit vocabulary: every member passes its own membership test", AUDIT_EVENT_TYPES.every((t) => isAuditEventType(t)));
+check(`audit vocabulary: the eight puck-lifecycle types are all members (found ${PUCK_LIFECYCLE_EVENT_TYPES.length})`,
+  PUCK_LIFECYCLE_EVENT_TYPES.length === 8 && PUCK_LIFECYCLE_EVENT_TYPES.every((t) => isAuditEventType(t)));
+check("audit vocabulary: the original six survive the extension",
+  ["decision.evaluated", "connector.synced", "policy.version_activated", "evidence.captured", "remediation.requested", "remediation.approved"].every((t) => isAuditEventType(t)));
+check("audit vocabulary: a FIFTEENTH type is not a member", !isAuditEventType("session.hijacked"));
+
+// …and the refusal is not merely advisory: the one writer into the chain enforces it.
+const censusStore = new MemoryStore();
+const censusBase = { tenantId: "t-census", actor: "system", subject: "sub-1", summary: "s", references: [], recordedAt: "2026-06-09T14:00:00.000Z" };
+expectError("audit admission: a type outside the union is refused, not recorded", "validation", () =>
+  appendAudit(censusStore, { ...censusBase, type: "session.hijacked" as never }));
+expectError("audit admission: an event with no subject is refused, not recorded blank", "validation", () =>
+  appendAudit(censusStore, { ...censusBase, type: "decision.evaluated", subject: "   " }));
+expectError("audit admission: a puck-lifecycle event with no decisionId is refused", "validation", () =>
+  appendAudit(censusStore, { ...censusBase, type: "session.suspended" }));
+check("audit admission: three refusals left NOTHING in the chain (a refused event is not a blank row)",
+  censusStore.listAudit("t-census").length === 0);
+const suspended = appendAudit(censusStore, { ...censusBase, type: "session.suspended", decisionId: "dec-census-1" });
+check("audit admission: a puck-lifecycle event WITH a decision is recorded", suspended.type === "session.suspended");
+check("audit admission: the decision it evidences is carried in the chain", suspended.references.includes("dec-census-1"));
+check("audit admission: the chain still verifies after the puck event", verifyAuditChain(censusStore, "t-census").valid === true);
+// The original six must NOT have acquired the stricter rule — their callers carry the
+// decision in `references` already, and a new requirement on them would break chains
+// that are committed.
+const legacyEvent = appendAudit(censusStore, { ...censusBase, type: "connector.synced", references: ["sync-1"] });
+check("audit admission: the original six still admit without a decisionId", legacyEvent.seq === 2);
 
 // ── 7. Determinism ────────────────────────────────────────────────────────────
 

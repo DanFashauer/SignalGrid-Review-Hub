@@ -1081,6 +1081,9 @@ jobs:
       - name: Edge-sync (config-down integrity) proof
         run: pnpm run proof:edge-sync
 
+      - name: Decision-cascade (the whole chain, and every refusal in it) proof
+        run: pnpm run proof:decision-cascade
+
       - name: Decision-continuity (which decision wins across a partition) proof
         run: pnpm run proof:decision-continuity
 

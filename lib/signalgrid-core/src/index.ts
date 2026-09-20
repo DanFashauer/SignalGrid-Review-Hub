@@ -6,6 +6,8 @@ export * from "./auth";
 export * from "./connector";
 export * from "./estate";
 export * from "./dock";
+export * from "./attach";
+export * from "./outbound-queue";
 export * from "./policy";
 export * from "./evidence";
 export * from "./audit";

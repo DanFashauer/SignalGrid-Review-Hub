@@ -591,6 +591,7 @@ const STEPS = [
   { name: "Proof: signal-radar", cmd: ["pnpm", "run", "proof:signal-radar"] },
   { name: "Proof: control-plane", cmd: ["pnpm", "run", "proof:control-plane"] },
   { name: "Proof: edge-sync", cmd: ["pnpm", "run", "proof:edge-sync"] },
+  { name: "Proof: decision-cascade (the whole chain, and every refusal in it)", cmd: ["pnpm", "run", "proof:decision-cascade"] },
   { name: "Proof: decision-continuity (which decision wins across a partition)", cmd: ["pnpm", "run", "proof:decision-continuity"] },
   { name: "Safety gate (guardrails)", cmd: ["pnpm", "run", "safety:check"] },
   // Mirrors the CI "Postman collection is committed in sync" step: regenerate,

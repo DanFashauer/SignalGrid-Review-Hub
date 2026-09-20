@@ -26,6 +26,7 @@ import type { PolicyBindingVerdict } from "@workspace/integrations/policy-bindin
 import type { BenchmarkSelectionVerdict } from "@workspace/integrations/benchmark-selection";
 import type { ShiftContextVerdict } from "@workspace/integrations/shift-context";
 import type { ChangeWindowVerdict } from "@workspace/integrations/change-window";
+import type { AppProtectionVerdict } from "@workspace/integrations/app-protection";
 import type { BootstrapCredentialVerdict } from "@workspace/integrations/bootstrap-credential";
 import type { ChallengeCapabilityVerdict } from "@workspace/integrations/challenge-capability";
 import type { SseEgressVerdict } from "@workspace/integrations/sse-egress";
@@ -311,6 +312,21 @@ export function fromChangeWindow(v: ChangeWindowVerdict): ComposableSignal {
   // is carried as evidence for the human answering the step-up and is never read
   // by the gate.
   return { kind: "change_window", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
+}
+
+export function fromAppProtection(v: AppProtectionVerdict): ComposableSignal {
+  // App-protection / MAM — is a mobile-application-management protection policy
+  // applied, clean and current for the app the worker is using? The management plane
+  // (Intune App Protection, Graph managedAppRegistrations) is the system of record; a
+  // missing or flagged policy on a SENSITIVE app restricts (corporate data with no
+  // MAM containment, the same class the connector emulator scripts as
+  // MISSING_MAM_POLICY_SENSITIVE_APP), everything else that fails steps up, and an
+  // app affirmatively out of MAM scope grants `none`.
+  //
+  // NOTE THE ASYMMETRY, which is the whole design: this adapter can only RAISE. There
+  // is no "a policy is applied, so relax" rung, and there is no wipe — selective wipe
+  // is a deliberate non-feature, kept out of the tree by construction.
+  return { kind: "app_protection", posture: v.posture, action: v.recommendedAction as UnifiedAction, reason: v.reasonCode };
 }
 
 export function fromBootstrapCredential(v: BootstrapCredentialVerdict): ComposableSignal {

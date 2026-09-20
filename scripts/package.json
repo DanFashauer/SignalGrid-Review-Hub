@@ -43,6 +43,7 @@
     "proof:affected-audience": "tsx ./src/affected-audience-proof.ts",
     "proof:remediation-verification": "tsx ./src/remediation-verification-proof.ts",
     "proof:change-draft": "tsx ./src/change-draft-proof.ts",
+    "proof:app-protection": "tsx ./src/app-protection-proof.ts",
     "proof:change-window": "tsx ./src/change-window-proof.ts",
     "proof:config-scope": "tsx ./src/config-scope-proof.ts",
     "proof:connector-emulator": "tsx ./src/connector-emulator-proof.ts",

@@ -9,6 +9,7 @@
     "./adapters/types": "./src/integrations/adapters/types.ts",
     "./agent-behavior": "./src/integrations/agent-behavior/index.ts",
     "./agent-identity": "./src/integrations/agent-identity/index.ts",
+    "./app-protection": "./src/integrations/app-protection/index.ts",
     "./app-update": "./src/integrations/app-update/index.ts",
     "./benchmark-selection": "./src/integrations/benchmark-selection/index.ts",
     "./bootstrap-credential": "./src/integrations/bootstrap-credential/index.ts",

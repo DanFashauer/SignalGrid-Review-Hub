@@ -367,7 +367,7 @@ lone repairs into unreachable code).
       [inspiration/MOBILE_CONFIG_RECORDER_CONTRACT.md](inspiration/MOBILE_CONFIG_RECORDER_CONTRACT.md)
       — sequenced AFTER normalization-version stamping, and its recorder
       write-plane stays out of the public tree. Lane: endpoint-uem-domain.
-- [ ] **App Protection / MAM state as a decision dimension (intake row 33,
+- [x] **App Protection / MAM state as a decision dimension (intake row 33,
       verified candidate gap; SIGNAL_SOURCE_CATALOG's own
       "documentation-only roadmap" row).** No lib family models MAM
       (repo-wide grep: zero matches); device-management-health's header
@@ -380,6 +380,21 @@ lone repairs into unreachable code).
       raises; MAM non-applicability is an asserted positive; the emulator
       expectation and the SIGNAL_SOURCE_CATALOG row status reconcile in the
       same change; Intune App Protection first, other MAM vendors deferred. Lane: endpoint-uem-domain.
+      **DONE 2026-09-20** — the `app-protection` family (`@workspace/integrations/app-protection`:
+      types/evaluate/connector/mock-transport/index), read-only from birth (the read-only guard
+      refuses every non-GET; selective wipe is a documented non-feature), fused as the new
+      `app_protection` signal kind via `fromAppProtection`, proven by `proof:app-protection` in
+      the breadth lane (deferred family per `launch-profile.mjs`). The management plane anchors
+      the affirmative: a sensitive app with no applied policy → restrict (MISSING_MAM_POLICY_SENSITIVE_APP,
+      the exact reason the connector emulator scripts, now produced by the real dimension); a
+      flagged registration on a sensitive app → restrict; standard/unassessed → step_up; unknown
+      or stale → step_up; MAM non-applicability is an asserted positive (`not_applicable` → none).
+      The proof enumerates all 864 normalized states (exactly 120 grant) and 96 raw wire records
+      (exactly 1 grants), and asserts by composition that the family can only raise. The
+      SIGNAL_SOURCE_CATALOG row flipped out of "Documentation-only roadmap" in the same change;
+      the emulator's scripted expectation is left stable and grounded by the proof rather than
+      rewritten (its deterministic hash is untouched). How you'd check: `pnpm run proof:app-protection`
+      → `summary=pass`.
 
 _Derived from repo data, not memory: `check-connector-discipline` reports 51/51 (2026-09-06; it said 36/36 here from 2026-08-21, flagged by the role-lens review the same day and left standing)
 families with KNOWN_GAPS empty. The live-evidence status is NOT restated here —

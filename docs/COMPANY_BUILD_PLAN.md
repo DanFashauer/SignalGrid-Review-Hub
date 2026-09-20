@@ -4836,7 +4836,7 @@ COST MODEL SKELETON (draft for docs/COST_MODEL.md — every figure below is repo
 
 1. SERVING ONE TENANT — deferred architecture (docker-compose.prod.yml)
    Stack: 1x postgres:16 (durable volume sg_pgdata) + 1x node:22 api container (2.2MB bundle, /api/healthz liveness). Web is a static build behind nginx (dev compose only; no gate builds it). NO Redis in the product — Redis appears only inside Fleet's own stack.
-   Capacity: limiter-bound, not compute-bound. Default 240 req/min per key (rateLimit.ts:56, SIGNALGRID_V1_RATE_LIMIT); decision core p95 1.27ms, 5,128 decisions/sec on 4 workers (RELIABILITY_SLO.md). One small VM (2 vCPU / 4GB class) over-serves a tenant by orders of magnitude; marginal compute per added tenant ~= $0 until the limiter is deliberately raised.
+   Capacity: limiter-bound, not compute-bound. Default 240 req/min per key (rateLimit.ts:56, SIGNALGRID_V1_RATE_LIMIT); decision core p95 1.0458 ms, 5,370 decisions/sec on 4 workers — the 2026-08-24 column of RELIABILITY_SLO.md (this draft quoted the superseded 2026-08-19 column, 1.27 ms / 5,128, until 2026-09-18; the two runs were on different hardware and are not a trend). One small VM (2 vCPU / 4GB class) over-serves a tenant by orders of magnitude; marginal compute per added tenant ~= $0 until the limiter is deliberately raised.
    Line items: VM hosting — TBD (public price list, agent-computable). Backup storage for sg_pgdata — TBD. TLS/domain — optional (OWNER_ACTIONS.md:197).
 
 2. MDM / DEVICE LINES (per deployment)
@@ -4888,7 +4888,7 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (748) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (769) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (794) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (188) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

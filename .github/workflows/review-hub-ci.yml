@@ -466,6 +466,8 @@ jobs:
         run: node scripts/check-backlog-ownership.mjs
       - name: Backlog ownership self-test (the gate can fail)
         run: node scripts/check-backlog-ownership.mjs --self-test
+      - name: Loop-state seam self-test
+        run: node scripts/loop-state.mjs --self-test
       - name: Backlog evidence (a row that says DONE says how you'd check)
         run: node scripts/check-backlog-evidence.mjs
       - name: Backlog evidence self-test (the gate can fail)

@@ -98,7 +98,7 @@ LAST TOUCHED: 2026-09-19 01:00Z (cloud lane, latest) - THE BACKLOG SWEEP, SIX LA
               families left; each survivor so far was a tsc-load-bearing guard, not a fixture);
               security roster row 82 item 2 (the `verify.ts` attestation comment); the webhook WRITE
               route (owner call: which store); the three decided deletions and Ponytail native cuts
-              part 2 (Mac, Xcode); DecisionEngine/AppWorkflows re-port (owner, DR-020 for row 5);
+              part 2 (Mac, Xcode); DecisionEngine/AppWorkflows re-port (backlog row five; owner call under DR-020);
               Android AMAPI (needs a rig, not Kotlin); data-lifecycle SQL against a live Postgres
               (Mac lab); the lifecycle admin job's invocation. One container restart at ~00:00Z killed
               two running chains; worktrees and commits survived, both relaunched, nothing lost.

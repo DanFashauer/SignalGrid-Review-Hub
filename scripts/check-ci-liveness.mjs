@@ -445,6 +445,20 @@ export function latestSweepSuccessInRun(jobs, prefix = SWEEP_JOB_PREFIX) {
     ["no sweep job at all → not present (silence is not evidence)", latestSweepSuccessInRun([other]), { present: false, iso: null, succeeded: 0, total: 0 }],
     ["a success with no timestamp does not count", latestSweepSuccessInRun([shard(0, "success", undefined)]), { present: true, iso: null, succeeded: 0, total: 1 }],
     ["empty / missing jobs → not present", latestSweepSuccessInRun(undefined), { present: false, iso: null, succeeded: 0, total: 0 }],
+    // THE 2026-09-14 FALSE RED, pinned. An empty or unmatched payload must read as
+    // "could not look", never as "the sweep is dark": different causes, different
+    // fixes, and only one of them is this gate's finding.
+    ["no runs returned → could-not-look, NOT dark", classifyScan({ runsInspected: 0, runsWithSweep: 0 }).status, "could-not-look"],
+    ["runs inspected, NONE carried a sweep job → could-not-look (the live failure)", classifyScan({ runsInspected: 10, runsWithSweep: 0 }).status, "could-not-look"],
+    ["the sweep ran and no shard succeeded → dark, which IS the finding", classifyScan({ runsInspected: 10, runsWithSweep: 3 }).status, "dark"],
+    [
+      "a could-not-look verdict names WHICH of the two it was",
+      [
+        classifyScan({ runsInspected: 0, runsWithSweep: 0 }).why.includes("NO completed runs"),
+        classifyScan({ runsInspected: 10, runsWithSweep: 0 }).why.includes("NOT ONE carried a job"),
+      ],
+      [true, true],
+    ],
   ];
   const bad = cases.filter(([, got, want]) => JSON.stringify(got) !== JSON.stringify(want));
   if (bad.length > 0) {
@@ -456,6 +470,36 @@ export function latestSweepSuccessInRun(jobs, prefix = SWEEP_JOB_PREFIX) {
   }
 }
 
+/**
+ * WHY THIS RETURNS A SHAPE AND NOT `null` (fixed 2026-09-14, from a live false red).
+ *
+ * On PR #742 this gate failed the gating job with "the mutation sweep is not
+ * demonstrably alive" at 14:32:48Z — while scheduled-verification run 34853811860
+ * had all FOUR sweep shards green between 14:14:33Z and 14:20:54Z, twelve minutes
+ * earlier and well inside the 48h threshold. The identical commit passed on re-run
+ * with nothing changed, so the payload, not the repository, was what differed.
+ *
+ * The old code could not tell three situations apart, because all three returned
+ * `null`:
+ *   (a) the API returned no runs at all — we could not look;
+ *   (b) runs came back but none carried a sweep job — the job was renamed, or the
+ *       payload was empty/partial — we still could not look;
+ *   (c) the sweep job ran and every shard failed — the sweep really is dark.
+ * Only (c) is the finding this gate exists to report. (a) and (b) were reported as
+ * (c), which is a gate crying wolf on the repository's most load-bearing claim and
+ * failing the gating job on EVERY open PR while it lasts.
+ *
+ * This file's own header states the rule it broke: "A PROBE THAT COULD NOT RUN IS
+ * NOT A PROBE THAT FOUND NOTHING." The same sentence is written above `gitLines`
+ * in absence-check.mjs, and it was already the fix for a previous bug here. It is
+ * applied to the OUTER loop now, not just the inner fetch.
+ *
+ * The diagnostic line also moved ABOVE the `continue`. It used to print only for
+ * runs that already carried a sweep job, so the one shape that most needed a trace
+ * — every run inspected, none matching — produced a red verdict with an empty log
+ * and nothing to read back. That silence is what made the live failure take an API
+ * cross-check to diagnose instead of a glance at the log.
+ */
 async function lastSweepSuccess() {
   const runs = await api(
     `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=${RUNS_TO_INSPECT}&status=completed`,
@@ -476,34 +520,53 @@ async function lastSweepSuccess() {
   // reasoning from outside could recover, and it is the difference between the next
   // occurrence being another dead end and being a diagnosis. A gate that can fail
   // for a reason its own output cannot express is a gate nobody can repair.
-  const window = runs.workflow_runs ?? [];
+  const list = runs.workflow_runs ?? [];
+  let runsWithSweep = 0;
   console.log(
-    `  window: ${window.length} completed run(s) of ${WORKFLOW_FILE} — ` +
-      (window.length === 0
+    `  window: ${list.length} completed run(s) of ${WORKFLOW_FILE} — ` +
+      (list.length === 0
         ? "EMPTY (the API returned no runs at all)"
-        : window.map((r) => `${r.id}@${String(r.created_at ?? "?").slice(0, 16)}Z`).join(", ")),
+        : list.map((r) => `${r.id}@${String(r.created_at ?? "?").slice(0, 16)}Z`).join(", ")),
   );
 
-  for (const run of window) {
+  for (const run of list) {
     const jobs = await api(`/repos/${REPO}/actions/runs/${run.id}/jobs?per_page=30`);
     const sweep = latestSweepSuccessInRun(jobs.jobs);
+    // One line per INSPECTED run — including the ones carrying no sweep job, which
+    // is precisely the case a red verdict most needs evidence for.
+    console.log(
+      `  · run ${run.id} (${String(run.created_at ?? "").slice(0, 16)}Z): ` +
+        (sweep.present ? `${sweep.succeeded}/${sweep.total} sweep shard(s) succeeded` : "no sweep job in this run"),
+    );
     // A run with no such job is not evidence either way — the job may have been
     // added later, or renamed. Keep looking rather than concluding from silence.
-    // But SAY SO: silence that is not evidence still has to be visible, or a run
-    // skipped for a bad reason looks exactly like a run that was never there.
-    if (!sweep.present) {
-      console.log(
-        `  · run ${run.id} (${String(run.created_at ?? "").slice(0, 16)}Z): no "${SWEEP_JOB_PREFIX}" job among ${(jobs.jobs ?? []).length} job(s) — skipped, not counted either way`,
-      );
-      continue;
-    }
-    // One line per inspected run so a red verdict can be read back later.
-    console.log(`  · run ${run.id} (${String(run.created_at ?? "").slice(0, 16)}Z): ${sweep.succeeded}/${sweep.total} sweep shard(s) succeeded`);
+    if (!sweep.present) continue;
+    runsWithSweep += 1;
     if (sweep.iso) {
-      return { iso: sweep.iso, runUrl: run.html_url, runConclusion: run.conclusion };
+      return { status: "found", iso: sweep.iso, runUrl: run.html_url, runConclusion: run.conclusion };
     }
   }
-  return null;
+  return classifyScan({ runsInspected: list.length, runsWithSweep });
+}
+
+/**
+ * The pure half of the outer loop's verdict, exported so the self-test can exercise it
+ * without a network. Only the THIRD case is "the sweep is dark"; the first two are
+ * "this gate could not see", and conflating them produced the 2026-09-14 false red.
+ */
+export function classifyScan({ runsInspected, runsWithSweep }) {
+  if (runsInspected === 0) {
+    return { status: "could-not-look", why: `the Actions API returned NO completed runs for ${WORKFLOW_FILE}` };
+  }
+  if (runsWithSweep === 0) {
+    return {
+      status: "could-not-look",
+      why:
+        `${runsInspected} completed run(s) were inspected and NOT ONE carried a job starting ` +
+        `"${SWEEP_JOB_PREFIX}" — the job was renamed, or the jobs payload came back empty`,
+    };
+  }
+  return { status: "dark", why: `the sweep job ran in ${runsWithSweep} inspected run(s) and no shard succeeded` };
 }
 
 // Importing this file must not perform a network call. The pure decision above
@@ -543,8 +606,33 @@ try {
   process.exit(0);
 }
 
+// COULD NOT LOOK is its own outcome, and in CI it is fatal for a DIFFERENT reason
+// than a dark sweep. Treating it as "dark" is the fail-open-wearing-a-mask this gate
+// was built to refuse: it makes an unreadable payload indistinguishable from the
+// repository's mutation harness having actually stopped. Off CI it is reported and
+// not fatal, matching the API-unreachable arm above — a developer without an API
+// token must not have their preflight reddened by GitHub's response shape.
+if (found?.status === "could-not-look") {
+  const msg = `could not determine whether the sweep is alive — ${found.why}`;
+  if (IN_CI) {
+    console.error(
+      `  ✗ ${msg}\n` +
+        `      Workflow: ${WORKFLOW_FILE}, job starting "${SWEEP_JOB_PREFIX}"\n` +
+        "      This is NOT the same finding as a dark sweep, and it is deliberately\n" +
+        "      not reported as one. The sweep may be perfectly healthy; what failed is\n" +
+        "      this gate's ability to see it. Check the per-run lines above, then the\n" +
+        "      job name in scheduled-verification.yml against SWEEP_JOB_PREFIX here.",
+    );
+    console.error("\nCI-liveness gate FAILED — the sweep's state could not be read, which is not the same as dark.");
+    process.exit(1);
+  }
+  console.log(`  · NOT CHECKED — ${msg}\n      Reported, not fatal, off CI.`);
+  console.log("\nci-liveness: not checked locally (sweep state unreadable); self-test green");
+  process.exit(0);
+}
+
 const verdict = evaluateLiveness({
-  lastSuccessIso: found?.iso ?? null,
+  lastSuccessIso: found?.status === "found" ? found.iso : null,
   nowMs: Date.now(),
   staleAfterHours: STALE_AFTER_HOURS,
 });

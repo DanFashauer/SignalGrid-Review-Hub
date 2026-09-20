@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-18T20:24:56.407Z",
-  "result": "quiet on the Mac side: no new or moved mac/* branch, no new sim result, no cloud-addressed mail, no pending request, no manifest drift; the Mac lane's own #856 (apple + awesome-mcp intake, schema pin 27.0) is open, owner-merged, collision with the cloud intake #858 noted on both. Tick quiet; live evidence 0d old (14:52Z, manifest 6906d8d9); owner NOT escalated. Cloud lane: six build agents running the backlog sweep on parallel branches (api-security, gates-tooling, customer-path, cascade-puck, docs-console, native-ios)."
+  "firedAt": "2026-09-20T00:24:56.906Z",
+  "result": "quiet: tick firedAt 2026-09-20T00:19:52Z (fresh, quiet); live evidence minted 2026-09-18T14:52Z (1 day old, manifest 6906d8d9, no drift); no mac/* branch new or moved since the 23:25Z cycle; #856 remedy (sent 2026-09-19 01:28Z) still unread by the Mac lane after 22.9h; no message addressed to cloud; no new sim results; sim-request loop clean; no shared surface changed; owner not escalated"
 }

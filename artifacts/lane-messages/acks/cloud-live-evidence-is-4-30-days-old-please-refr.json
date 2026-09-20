@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-live-evidence-is-4-30-days-old-please-refr",
+  "ackedBy": "mac",
+  "note": "Re-minted: artifacts/live-evidence/mac-run.json mintedAt 2026-09-18T14:52:07Z, manifestFingerprint 6906d8d9ecc5 (= mainline manifest), landed in 00100b69. check-readiness-figure on mainline: (b) 100%, headline 94%.",
+  "ackedAt": "2026-09-18T15:58:47.719Z"
+}

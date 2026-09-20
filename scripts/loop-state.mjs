@@ -19,7 +19,9 @@
 
 import { spawnSync } from "node:child_process";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,13 +39,28 @@ const rows = [];
 // on EVERY outcome, so the hook's gate arm could never fire at all.
 const add = (state, what, detail, gated = true) => rows.push({ state, what, detail, gated });
 
-const git = (...a) => {
+const gitIn = (cwd) => (...a) => {
   try {
-    return execFileSync("git", a, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch {
     return "";
   }
 };
+const git = gitIn(repo);
+// Untrimmed output (a diff's trailing newline is part of the patch) and a stdin feed.
+const gitRaw = (cwd, args) => {
+  try { return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 }); } catch { return ""; }
+};
+const gitFeed = (cwd, args, input, env) => {
+  try { return execFileSync("git", args, { cwd, encoding: "utf8", input, env, stdio: ["pipe", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 }).trim(); } catch { return ""; }
+};
+const MAINLINE = "origin/SignalGrid_Alpha";
+// Bounded walk of mainline history for the landed checks: an unbounded walk is a check
+// nobody waits for, and a check nobody waits for gets switched off. Exhausting the bound
+// without a match returns FALSE — reported, never cleared.
+const MAX_HISTORY = 400;
+
+if (process.argv.includes("--self-test")) process.exit(selfTest());
 
 console.log(`\n${B}Loop check${X} ${D}— reality, not notes${X}\n`);
 
@@ -51,10 +68,13 @@ console.log(`\n${B}Loop check${X} ${D}— reality, not notes${X}\n`);
 // This is the check that would have caught the lost week.
 const localBranches = git("branch", "--format=%(refname:short)").split("\n").filter(Boolean);
 let hubBranches = [];
+const hubSha = new Map();
 let hubListed = false;
 try {
-  hubBranches = execFileSync("git", ["ls-remote", "--heads", HUB], { encoding: "utf8", timeout: 60000 })
-    .split("\n").filter(Boolean).map((l) => l.split("refs/heads/")[1]).filter(Boolean);
+  const heads = execFileSync("git", ["ls-remote", "--heads", HUB], { encoding: "utf8", timeout: 60000 })
+    .split("\n").filter(Boolean).map((l) => l.split(/\s+/)).filter((p) => p[1] && p[1].startsWith("refs/heads/"));
+  for (const [sha, ref] of heads) hubSha.set(ref.slice("refs/heads/".length), sha);
+  hubBranches = [...hubSha.keys()];
   hubListed = true;
 } catch {
   // FAIL, not warn. An unreachable Hub means the unpushed-work check below did
@@ -123,8 +143,9 @@ if (hubListed && hubBranches.length === 0) {
  * as unpushed. The only way to pass is for mainline to already carry every byte the
  * branch would add — which is precisely what "already on the Review Hub" means.
  */
-function hasLandedByContent(branch) {
-  const names = git("diff", "--name-only", `origin/SignalGrid_Alpha...${branch}`);
+function hasLandedByContent(branch, mainline = MAINLINE, cwd = repo) {
+  const git = gitIn(cwd);
+  const names = git("diff", "--name-only", `${mainline}...${branch}`);
   if (!names) return false;
   const files = names.split("\n").map((f) => f.trim()).filter(Boolean);
   // A branch that touches nothing is not evidence of landing — it is an unreadable
@@ -132,9 +153,9 @@ function hasLandedByContent(branch) {
   if (files.length === 0) return false;
   for (const file of files) {
     const mine = git("show", `${branch}:${file}`);
-    const theirs = git("show", `origin/SignalGrid_Alpha:${file}`);
+    const theirs = git("show", `${mainline}:${file}`);
     if (mine === null || theirs === null || mine === undefined || theirs === undefined) return false;
-    if (mine !== theirs && !fileEverMatchedMainline(branch, file)) return false;
+    if (mine !== theirs && !fileEverMatchedMainline(branch, file, mainline, cwd)) return false;
   }
   return true;
 }
@@ -163,16 +184,96 @@ function hasLandedByContent(branch) {
 // waits for, and a check nobody waits for gets switched off. Exhausting the bound
 // without a match returns FALSE — reported, never cleared — so the failure mode of
 // looking too little is a branch that stays named, never one that vanishes quietly.
-const MAX_HISTORY = 400;
-function fileEverMatchedMainline(branch, file) {
+function fileEverMatchedMainline(branch, file, mainline = MAINLINE, cwd = repo) {
+  const git = gitIn(cwd);
   const mine = git("rev-parse", `${branch}:${file}`);
   if (!mine) return false;
-  const hist = git("log", `--max-count=${MAX_HISTORY}`, "--format=%H", "origin/SignalGrid_Alpha", "--", file);
+  const hist = git("log", `--max-count=${MAX_HISTORY}`, "--format=%H", mainline, "--", file);
   if (!hist) return false;
   for (const commit of hist.split("\n").map((c) => c.trim()).filter(Boolean)) {
     if (git("rev-parse", `${commit}:${file}`) === mine) return true;
   }
   return false;
+}
+
+// THE SQUASH-OF-A-MERGE-TREE HOLE (2026-09-20), the fifth shape in this one check. The
+// byte check above needs every changed file to match SOME mainline blob. A squash merge
+// lands the pull request's MERGE tree, not the branch tip's tree, so a shared file that
+// mainline also moved between the branch's base and the squash (docs/BUILD_BACKLOG.md, on
+// both #860 and #900) lands as a three-way merge result that never equals the branch's
+// blob — and the branch is reported as unpushed on every turn, forever. Measured: one file
+// per branch, history depth 111, every other file matching.
+//
+// So the second question is about HUNKS, not blobs: does the branch's whole diff against
+// its merge-base carry the same patch-id as some single-parent commit's own diff on
+// mainline? A squash of a clean merge carries exactly the branch's hunks whatever mainline
+// did elsewhere in the same file. Two rules keep it honest, both learned on PR #911:
+//   · `--verbatim`, never `--stable`: --stable strips whitespace, so two different
+//     whitespace-only edits collide and a never-landed tip would read LANDED;
+//   · a patch-id match is a CANDIDATE, not a verdict: the branch's hunks re-applied to the
+//     squash's parent must reproduce the squash's tree exactly, or the branch stays reported.
+// Bound to the CURRENT tip by construction — a branch extended after its merge has a
+// different whole-diff patch-id. Purely local: no network, no GitHub call from a hook
+// (AGENTS.md: no live API calls); confirming a landing against GitHub by hand is an
+// operator step outside this path. Fail-closed like its siblings: no diff, no merge-base,
+// no history, a git error, a matched id that does not re-apply — all FALSE, all reported.
+function landedByPatchId(branch, mainline = MAINLINE, cwd = repo) {
+  const git = gitIn(cwd);
+  const base = git("merge-base", mainline, branch);
+  const tip = git("rev-parse", "--verify", `${branch}^{commit}`);
+  if (!base || !tip || base === tip) return false;
+  const patch = gitRaw(cwd, ["diff", base, tip]);
+  if (!patch) return false;
+  const want = patchIdOf(cwd, patch);
+  if (!want) return false;
+  const hist = git("log", `--max-count=${MAX_HISTORY}`, "--format=%H %P", mainline);
+  if (!hist) return false;
+  for (const line of hist.split("\n")) {
+    const [commit, ...parents] = line.trim().split(" ");
+    if (!commit || parents.length !== 1) continue; // a squash has exactly one parent
+    const own = gitRaw(cwd, ["diff", parents[0], commit]);
+    if (!own || patchIdOf(cwd, own) !== want) continue;
+    return reappliesExactly(cwd, parents[0], patch, commit);
+  }
+  return false;
+}
+function patchIdOf(cwd, patch) {
+  const out = gitFeed(cwd, ["patch-id", "--verbatim"], patch);
+  return out ? out.split(" ")[0] : "";
+}
+// The exact follow-up: read the squash's parent tree into a throwaway index, apply the
+// branch's patch to that index, and compare the written tree with the squash's own tree.
+function reappliesExactly(cwd, parent, patch, commit) {
+  const idx = join(tmpdir(), `loop-state-idx-${process.pid}-${Date.now()}`);
+  const env = { ...process.env, GIT_INDEX_FILE: idx };
+  try {
+    if (gitFeed(cwd, ["read-tree", parent], "", env) === "" && !existsSync(idx)) return false;
+    const applied = execFileSync("git", ["apply", "--cached", "-"], { cwd, env, input: patch, stdio: ["pipe", "ignore", "ignore"] });
+    void applied;
+    const tree = gitFeed(cwd, ["write-tree"], "", env);
+    const want = gitIn(cwd)("rev-parse", `${commit}^{tree}`);
+    return Boolean(tree) && tree === want;
+  } catch {
+    return false;
+  } finally {
+    try { unlinkSync(idx); } catch { /* never existed */ }
+  }
+}
+
+// THE SAME-NAME HOLE (2026-09-20), the sixth. `noRemote` below drops any branch whose NAME
+// exists on the Hub before the seam looks at it, and the "carrying commits" warning covers
+// only agent-worktree branches with no Hub name — so a local tip one commit AHEAD of its
+// same-named remote was named by nothing. Measured on the branch that carried this very
+// finding (claude/landing-record-2026-09-20 at d29bf79f, one ahead of origin). The Hub's
+// tip sha comes from the same ls-remote; when that object is not in the local store the
+// answer is UNKNOWN and is reported as such, never counted clean and never counted as work.
+function aheadOfHub(branch, hubSha, cwd = repo) {
+  const git = gitIn(cwd);
+  if (!hubSha) return { state: "unknown" };
+  if (git("cat-file", "-t", hubSha) !== "commit") return { state: "unknown" };
+  const n = git("rev-list", "--count", `${hubSha}..${branch}`);
+  if (n === "") return { state: "unknown" };
+  return { state: Number(n) > 0 ? "ahead" : "same", ahead: Number(n) };
 }
 
 // THE ALIAS HOLE, and it is the third of exactly this shape. Membership was derived
@@ -260,11 +361,15 @@ if (hubBranches.length) {
   // name, or its content is in mainline (squash), or neither — and then it is work.
   const onHub = noRemote.filter((b) => isOnHubBySha(b));
   const offHub = noRemote.filter((b) => !onHub.includes(b));
-  const landed = offHub.filter((b) => hasLandedByContent(b));
+  const landedByBytes = offHub.filter((b) => hasLandedByContent(b));
+  const landedByHunks = offHub.filter((b) => !landedByBytes.includes(b) && landedByPatchId(b));
+  const landed = [...landedByBytes, ...landedByHunks];
   const unpushed = offHub.filter((b) => !landed.includes(b));
   const ephemeralNote = ephemeral.length ? ` (${ephemeral.length} ephemeral agent-worktree branch(es) not counted)` : "";
   const onHubNote = onHub.length ? ` (${onHub.length} on the hub under another name: ${onHub.join(", ")})` : "";
-  const landedNote = landed.length ? ` (${landed.length} squash-landed, content already on mainline: ${landed.join(", ")})` : "";
+  const landedNote =
+    (landedByBytes.length ? ` (${landedByBytes.length} squash-landed, every file byte-identical to a mainline blob: ${landedByBytes.join(", ")})` : "") +
+    (landedByHunks.length ? ` (${landedByHunks.length} squash-landed, exact hunks found in a mainline squash: ${landedByHunks.join(", ")})` : "");
   if (unpushed.length) {
     add("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}${onHubNote}${landedNote}`);
   } else {
@@ -273,6 +378,22 @@ if (hubBranches.length) {
 
   // REPORTED, never fatal — the lane-message rule, for the same reason. The work
   // is not lost (the worktree belongs to a live agent, and anything real is pushed
+  // A branch whose NAME is on the Hub is not thereby ON the Hub: the local tip may be ahead.
+  const sameNamed = localBranches.filter((b) => hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b));
+  const aheadRows = [], unknownRows = [];
+  for (const b of sameNamed) {
+    const r = aheadOfHub(b, hubSha.get(b));
+    if (r.state === "ahead") aheadRows.push(`${b} (+${r.ahead})`);
+    else if (r.state === "unknown") unknownRows.push(b);
+  }
+  if (aheadRows.length) {
+    add("fail", "Local tip ahead of its same-named Hub branch", `${aheadRows.join(", ")} — push, or confirm the remote; a name on the Hub is not the tip on the Hub`);
+  } else {
+    add("ok", "Same-named branches at or behind their Hub tip", `${sameNamed.length - unknownRows.length} branch(es) compared by sha`);
+  }
+  if (unknownRows.length) {
+    add("warn", "Same-named branches whose Hub tip is not fetched locally", `${unknownRows.join(", ")} — cannot tell ahead from behind; reported, not counted clean`, false);
+  }
   // from it), but an agent branch carrying commits beyond mainline is still worth
   // a session's eyes, so it is named rather than swallowed by the exclusion above.
   const carrying = ephemeral
@@ -426,3 +547,65 @@ console.log(
     `the discovery rows are reported here and do not.${X}\n`,
 );
 process.exitCode = gatedFails.length ? 1 : 0;
+
+
+// ── Self-test: the landed and ahead checks can actually fail ────────────────
+// Builds a throwaway repository under the system temp dir (never inside this checkout —
+// an untracked file here flips provenance.workingTreeClean on every later sim result),
+// with a bare "hub" remote, and proves each shape the seam must catch or clear.
+function selfTest() {
+  const root = mkdtempSync(join(tmpdir(), "loop-state-selftest-"));
+  const work = join(root, "work"), hub = join(root, "hub.git");
+  const g = gitIn(work);
+  const sh = (...a) => execFileSync("git", a, { cwd: work, stdio: "ignore", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
+  const put = (f, s) => writeFileSync(join(work, f), s);
+  const checks = [];
+  const check = (name, ok) => { checks.push([name, ok]); console.log(`  ${ok ? "ok  " : "FAIL"} — self-test: ${name}`); };
+  try {
+    execFileSync("git", ["init", "-q", "--bare", hub]);
+    execFileSync("git", ["init", "-q", "-b", "main", work]);
+    sh("remote", "add", "origin", hub);
+    put("a.txt", "one\ntwo\nthree\n"); put("shared.md", "- row 1\n- row 2\n- row 3\n- row 4\n- row 5\n- row 6\n");
+    sh("add", "-A"); sh("commit", "-q", "-m", "base");
+    sh("push", "-q", "origin", "main");
+    // feat: changes a.txt and appends to shared.md
+    sh("checkout", "-q", "-b", "feat");
+    put("a.txt", "one\nTWO\nthree\n"); put("shared.md", "- row 1\n- row 2\n- row 3\n- row 4\n- row 5\n- row 6\n- row 7 (feat)\n");
+    sh("add", "-A"); sh("commit", "-q", "-m", "feat");
+    // mainline moves the SAME shared file elsewhere, then squash-merges feat
+    sh("checkout", "-q", "main");
+    put("shared.md", "- row 1\n- row 2 (main moved)\n- row 3\n- row 4\n- row 5\n- row 6\n");
+    sh("add", "-A"); sh("commit", "-q", "-m", "main moves shared");
+    sh("merge", "-q", "--squash", "feat"); sh("commit", "-q", "-m", "squash feat");
+    sh("push", "-q", "origin", "main");
+    const M = "origin/main";
+    // (a) the byte check cannot clear it (shared.md never byte-matches); the hunk check can
+    check("byte check does NOT clear a squash whose shared file mainline also moved (the gap)", hasLandedByContent("feat", M, work) === false);
+    check("exact-hunk check clears the same branch (a)", landedByPatchId("feat", M, work) === true);
+    // (b) one more local commit after the merge → stays reported
+    sh("checkout", "-q", "feat"); put("b.txt", "new\n"); sh("add", "-A"); sh("commit", "-q", "-m", "feat extended");
+    check("the same branch with one more local commit stays reported (b)", landedByPatchId("feat", M, work) === false);
+    // (c) whitespace-only twin of a landed change → stays reported
+    sh("checkout", "-q", "-b", "feat-ws", "main~2");
+    put("a.txt", "one\nTWO \nthree\n"); put("shared.md", "- row 1\n- row 2\n- row 3\n- row 4\n- row 5\n- row 6\n- row 7 (feat)\n");
+    sh("add", "-A"); sh("commit", "-q", "-m", "feat but whitespace differs");
+    check("a whitespace-only twin of a landed change stays reported (c)", landedByPatchId("feat-ws", M, work) === false);
+    // (d) same-named remote, local tip one ahead → ahead=1; at the tip → same; unknown sha → unknown
+    sh("checkout", "-q", "-b", "same", "main"); sh("push", "-q", "origin", "same");
+    const hubTip = g("rev-parse", "origin/same");
+    check("a same-named branch at its Hub tip reads same (d0)", aheadOfHub("same", hubTip, work).state === "same");
+    put("c.txt", "ahead\n"); sh("add", "-A"); sh("commit", "-q", "-m", "ahead of hub");
+    const r = aheadOfHub("same", hubTip, work);
+    check("a same-named branch one commit ahead of its Hub tip is reported with the count (d)", r.state === "ahead" && r.ahead === 1);
+    check("a Hub tip not in the local store reads unknown, never clean (d-unknown)", aheadOfHub("same", "0123456789abcdef0123456789abcdef01234567", work).state === "unknown");
+    // fail-closed: a branch identical to mainline proves nothing
+    check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
+  } catch (e) {
+    check(`self-test harness ran without throwing (${e && e.message ? e.message.split("\n")[0] : e})`, false);
+  } finally {
+    try { rmSync(root, { recursive: true, force: true }); } catch { /* temp dir */ }
+  }
+  const failed = checks.filter(([, ok]) => !ok).length;
+  console.log(failed ? `self-test FAILED (${checks.length - failed}/${checks.length})` : `self-test passed (${checks.length}/${checks.length})`);
+  return failed ? 1 : 0;
+}

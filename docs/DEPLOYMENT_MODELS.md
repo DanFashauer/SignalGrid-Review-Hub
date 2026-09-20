@@ -179,7 +179,7 @@ date so a re-measurement there is visibly a drift here.
    concurrency 32 (measured 2026-08-24), transport and middleware included;
    the worked example's peak uses about one percent of it.
 3. **The core binds last.** 1,529 decisions per second on one core in process
-   and 5,370 across four workers at 88 percent of linear (measured 2026-08-24),
+   (measured 2026-08-24) and 5,370 across four workers at 88 percent of linear,
    identical verdicts on every worker. Sizing never reaches this number before
    it reaches the other two.
 

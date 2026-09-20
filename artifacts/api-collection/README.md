@@ -31,10 +31,10 @@ exposes raw tokens (`demoApiKeys()` throws off demo mode).
 ## Coverage
 
 **Every registered route has at least one request, and a gate enforces it in
-both directions.** As of 2026-09-18 that is 79 distinct method+path pairs
-across 98 request files (evaluate carries three scenario variants; four
+both directions.** As of 2026-09-20 that is 82 distinct method+path pairs
+across 101 request files (evaluate carries three scenario variants; four
 requests are deliberate negative tests and thirteen are the
-`adversarial-trust/` attacks), with zero declared exceptions. All 98 are
+`adversarial-trust/` attacks), with zero declared exceptions. All 101 are
 live-verified on every push by `scripts/run-bruno-collection.mjs`.
 
 - `health/` — liveness + readiness probes (no auth).

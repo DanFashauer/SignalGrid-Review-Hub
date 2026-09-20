@@ -137,6 +137,27 @@ const STEPS = [
   // quoted forever — 20 of 29 were wrong on 2026-09-05, three by 100+ lines.
   { name: "Doc line-count self-test (a planted drift must fail; the real tree must be clean)", cmd: ["node", "scripts/check-doc-line-counts.mjs", "--self-test"] },
   { name: "Doc line counts (every `path (N)` figure matches the file it names)", cmd: ["node", "scripts/check-doc-line-counts.mjs"] },
+  // The four capacity figures RELIABILITY_SLO.md owns, wherever a document restates
+  // them. `check-derived-doc-figures` sweeps tree-derived values and never read a bare
+  // `240` or `585`; COMPANY_BUILD_PLAN.md carried the superseded 5,128 for twelve days.
+  { name: "Performance-figure self-test (a drifted or undated restatement must fail)", cmd: ["node", "scripts/check-performance-figures.mjs", "--self-test"] },
+  { name: "Performance figures (every restatement matches RELIABILITY_SLO.md and carries its date)", cmd: ["node", "scripts/check-performance-figures.mjs"] },
+  // A sim result is an attestation; `provenance.commit` is the only thing tying it to
+  // code. One stamped a sha `git cat-file -e` could not resolve on Alpha.
+  { name: "Sim-result provenance self-test (an unresolvable sha is reported; a non-ancestor and later evidence must fail)", cmd: ["node", "scripts/check-sim-result-provenance.mjs", "--self-test"] },
+  { name: "Sim-result provenance (every result names a checkable commit and cites evidence no newer than itself)", cmd: ["node", "scripts/check-sim-result-provenance.mjs"] },
+  // A generated input validator nobody parses reads exactly like coverage. One of the
+  // thirteen in lib/api-zod is invoked; the rest are declared client/type-only.
+  { name: "api-zod wiring self-test (an orphan schema and a stale declaration must fail)", cmd: ["node", "scripts/check-api-zod-wiring.mjs", "--self-test"] },
+  { name: "api-zod wiring (every generated input schema is invoked or declared client/type-only)", cmd: ["node", "scripts/check-api-zod-wiring.mjs"] },
+  // The /api document against the fixtures it serves — `lastSync: null` against a
+  // `string`, `avgLatencyMs: 11.4` against an `integer`, both `limit` defaults crossed.
+  { name: "/api fixture-contract self-test (each of the four rules must be able to fail)", cmd: ["node", "scripts/check-api-fixture-contract.mjs", "--self-test"] },
+  { name: "/api fixture contract (the document describes what the fixtures answer)", cmd: ["node", "scripts/check-api-fixture-contract.mjs"] },
+  // The /v1 document against the refusals the served source returns: 401 was on no
+  // protected operation and 429 was nowhere, while every /v1 route can answer both.
+  { name: "/v1 refusal-coverage self-test (a missing 401/429/400/404 must fail; the floors must fire)", cmd: ["node", "scripts/check-v1-refusal-coverage.mjs", "--self-test"] },
+  { name: "/v1 refusal coverage (every refusal the server returns is documented)", cmd: ["node", "scripts/check-v1-refusal-coverage.mjs"] },
   // docker-compose.prod.yml explained at length why `api` needs a healthcheck and
   // added one — there. The review topology had none on any service.
   { name: "Compose healthcheck self-test (a planted port without a healthcheck must fail)", cmd: ["node", "scripts/check-compose-healthchecks.mjs", "--self-test"] },
@@ -389,6 +410,10 @@ const STEPS = [
   // would have passed preflight and every PR check.
   { name: "Proof: isolation-scope (no tenant can read another's row)", cmd: ["pnpm", "run", "proof:isolation-scope"] },
   { name: "Proof: graph-wire (throttling, 5xx, auth and malformed bodies fail closed)", cmd: ["pnpm", "run", "proof:graph-wire"] },
+  { name: "Proof: estate-core (a customer estate boots a core; no allow on unread facts)", cmd: ["pnpm", "run", "proof:estate-core"] },
+  { name: "Proof: estate-refresh (a scheduled posture re-read re-decides, and fails closed)", cmd: ["pnpm", "run", "proof:estate-refresh"] },
+  { name: "Proof: secrets (one read site, fail-closed, and a rotation that actually rotates)", cmd: ["pnpm", "run", "proof:secrets"] },
+  { name: "Proof: data-lifecycle (retention, erasure and DSAR leave the audit chain verifiable)", cmd: ["pnpm", "run", "proof:data-lifecycle"] },
   { name: "Figure-guard self-test (the baseline-age report must be able to fail)", cmd: ["node", "scripts/check-proof-figures.mjs", "--self-test"] },
   { name: "Docs\u2194proof FIGURE guard (a measured number must still be one)", cmd: ["node", "scripts/check-proof-figures.mjs"] },
   { name: "Proof-count self-test (a zeroed claim scan fails via the floor)", cmd: ["node", "scripts/check-proof-counts.mjs", "--self-test"] },
@@ -569,6 +594,7 @@ const STEPS = [
   { name: "Proof: signal-radar", cmd: ["pnpm", "run", "proof:signal-radar"] },
   { name: "Proof: control-plane", cmd: ["pnpm", "run", "proof:control-plane"] },
   { name: "Proof: edge-sync", cmd: ["pnpm", "run", "proof:edge-sync"] },
+  { name: "Proof: decision-cascade (the whole chain, and every refusal in it)", cmd: ["pnpm", "run", "proof:decision-cascade"] },
   { name: "Proof: decision-continuity (which decision wins across a partition)", cmd: ["pnpm", "run", "proof:decision-continuity"] },
   { name: "Safety gate (guardrails)", cmd: ["pnpm", "run", "safety:check"] },
   // Mirrors the CI "Postman collection is committed in sync" step: regenerate,

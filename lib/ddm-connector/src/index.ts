@@ -39,6 +39,47 @@ export type DdmHealth = "healthy" | "degraded" | "unreporting" | "unknown";
 export type UpdateEnforcement = "declarative" | "legacy" | "none" | "unknown";
 
 /**
+ * How the device is enrolled, verbatim from Apple's `mdm.enrollment-type` status item
+ * (rangelist: none | supervised | device | user), plus `unknown` for absent/unrecognized.
+ *
+ * Golden rule 4 rests on SUPERVISION specifically — a supervised device is the only one
+ * an MDM can actually hold — so `supervised` is the single value that reads as supervised.
+ * Every other value, including a wire value Apple has not published, reads as unknown.
+ */
+export type EnrollmentType = "none" | "supervised" | "device" | "user" | "unknown";
+
+/**
+ * Whether the device is in Apple's return-to-service flow (`mdm.is-return-to-service`).
+ *
+ *   • in_service        — not in return-to-service; ordinary custody.
+ *   • return_to_service — the device is being wiped and handed on. Custody is in
+ *                         TRANSIT: nobody's session owns it, and it is never the ground
+ *                         for a grant.
+ *   • unknown           — not reported. Tightens, like every other unknown here.
+ */
+export type CustodyPosture = "in_service" | "return_to_service" | "unknown";
+
+/** Apple's published rangelist for `mdm.enrollment-type`, plus nothing. A wire value
+ *  outside it is not silently accepted — it normalizes to `unknown`, which tightens. */
+export const DDM_ENROLLMENT_TYPES = ["none", "supervised", "device", "user"] as const;
+
+/** Normalize the `mdm.enrollment-type` status value. Absent or unrecognized → unknown. */
+export function enrollmentTypeOf(report: DdmDeviceReport): EnrollmentType {
+  const raw = report.enrollmentType;
+  return typeof raw === "string" && (DDM_ENROLLMENT_TYPES as readonly string[]).includes(raw)
+    ? (raw as EnrollmentType)
+    : "unknown";
+}
+
+/** Normalize the `mdm.is-return-to-service` status value. Absent → unknown (tightens);
+ *  only an explicit `false` says the device is in ordinary service. */
+export function custodyPostureOf(report: DdmDeviceReport): CustodyPosture {
+  if (report.returnToService === true) return "return_to_service";
+  if (report.returnToService === false) return "in_service";
+  return "unknown";
+}
+
+/**
  * Whether a device's update enforcement is actually in force — the OS-27 cutover
  * turned "looks managed" into "silently not enforcing" for legacy configs.
  *   • current — declarative enforcement, live.
@@ -66,6 +107,10 @@ export interface DdmDeviceReport {
   osMajor?: number;
   /** How software-update enforcement is delivered. Absent → unknown (fail-safe). */
   updateEnforcement?: UpdateEnforcement;
+  /** `mdm.enrollment-type` (27.0). Absent → unknown, which raises assurance. */
+  enrollmentType?: EnrollmentType;
+  /** `mdm.is-return-to-service` (27.0). Absent → unknown, which raises assurance. */
+  returnToService?: boolean;
   sourceReference?: string;
 }
 
@@ -81,6 +126,12 @@ export interface DdmSignal {
   postureFreshness: Freshness;
   /** Whether software-update enforcement is actually in force (OS-27 cutover aware). */
   enforcementCurrency: EnforcementCurrency;
+  /** Apple-reported enrollment type; `supervised` is the only supervised answer. */
+  enrollmentType: EnrollmentType;
+  /** True ONLY for an explicit `supervised`. An unknown enrollment is not supervision. */
+  supervised: boolean;
+  /** Whether the device is in Apple's return-to-service flow. */
+  custodyPosture: CustodyPosture;
   /** Advisory: raise a sensitive action auto → step-up when the posture is weak. */
   assurance: AssuranceHint;
   rationale: string;
@@ -160,6 +211,9 @@ export function normalizeDdmReport(report: DdmDeviceReport, nowIso: string): Ddm
 
   const postureFreshness = freshnessOf(report.lastCheckInAt, nowMs);
   const enforcementCurrency = enforcementCurrencyOf(report);
+  const enrollmentType = enrollmentTypeOf(report);
+  const supervised = enrollmentType === "supervised";
+  const custodyPosture = custodyPostureOf(report);
 
   // Any of these weak-posture conditions raises the assurance bar. This can only
   // make a sensitive action MORE gated (auto → step-up), never less.
@@ -178,7 +232,12 @@ export function normalizeDdmReport(report: DdmDeviceReport, nowIso: string): Ddm
     // OS-27 cutover fail-safe: a device can report healthy/compliant while its
     // legacy update enforcement is silently a no-op — the "compliant" is not
     // trustworthy, so gate the sensitive action rather than assume it's patched.
-    enforcementCurrency !== "current";
+    enforcementCurrency !== "current" ||
+    // 27.0 status items, both unknown-tightens. An unsupervised or unreported
+    // enrollment cannot carry a supervision claim, and a device in return-to-service
+    // (or one that will not say) is in transit — neither is ground for a grant.
+    !supervised ||
+    custodyPosture !== "in_service";
   const assurance: AssuranceHint = weak ? "raise_step_up" : "standard";
 
   const reasons: string[] = [];
@@ -190,7 +249,9 @@ export function normalizeDdmReport(report: DdmDeviceReport, nowIso: string): Ddm
   if (enforcementCurrency === "dead") reasons.push("update enforcement dead (legacy on OS 27+ / none — not enforcing)");
   else if (enforcementCurrency === "at_risk") reasons.push("update enforcement at risk (legacy — dies on OS 27)");
   else if (enforcementCurrency === "unknown") reasons.push("update enforcement unverified");
-  const rationale = reasons.length ? reasons.join(", ") : "DDM posture healthy — enforced, declared, fresh, update enforcement current";
+  const rationale = reasons.length
+    ? reasons.join(", ")
+    : "DDM posture healthy — enforced, declared, fresh, update enforcement current, supervised, in service";
 
   return {
     deviceRef: report.deviceRef,
@@ -199,6 +260,9 @@ export function normalizeDdmReport(report: DdmDeviceReport, nowIso: string): Ddm
     baselineCompliance,
     postureFreshness,
     enforcementCurrency,
+    enrollmentType,
+    supervised,
+    custodyPosture,
     assurance,
     rationale,
     sourceReference: report.sourceReference ?? `fixture:ddm:reports#${report.deviceRef}`,
@@ -219,6 +283,10 @@ export interface DdmSummary {
   enforcementDead: number;
   /** Devices whose legacy enforcement still works but dies on the OS-27 upgrade. */
   enforcementAtRisk: number;
+  /** Devices Apple reports as SUPERVISED. An unknown enrollment is not counted here. */
+  supervised: number;
+  /** Devices in Apple's return-to-service flow — custody in transit, never a grant. */
+  returnToService: number;
   raiseStepUp: number;
 }
 
@@ -230,6 +298,8 @@ export function ddmSummary(signals: DdmSignal[], reports: DdmDeviceReport[]): Dd
     privacyDeclared: reports.filter((r) => r.privacy === "declared").length,
     enforcementDead: signals.filter((s) => s.enforcementCurrency === "dead").length,
     enforcementAtRisk: signals.filter((s) => s.enforcementCurrency === "at_risk").length,
+    supervised: signals.filter((s) => s.supervised).length,
+    returnToService: signals.filter((s) => s.custodyPosture === "return_to_service").length,
     raiseStepUp: signals.filter((s) => s.assurance === "raise_step_up").length,
   };
 }

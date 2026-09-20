@@ -181,6 +181,9 @@ importers:
       '@workspace/iac':
         specifier: workspace:*
         version: link:../../lib/iac
+      '@workspace/integrations':
+        specifier: workspace:*
+        version: link:../../lib/integrations
       '@workspace/persistence':
         specifier: workspace:*
         version: link:../../lib/persistence
@@ -193,6 +196,9 @@ importers:
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../../lib/room-sim
+      '@workspace/secrets':
+        specifier: workspace:*
+        version: link:../../lib/secret-model
       '@workspace/self-audit':
         specifier: workspace:*
         version: link:../../lib/self-audit
@@ -829,6 +835,9 @@ importers:
       '@workspace/audit':
         specifier: workspace:*
         version: link:../audit
+      '@workspace/signalgrid-core':
+        specifier: workspace:*
+        version: link:../signalgrid-core
       ioredis:
         specifier: ^5.4.1
         version: 5.11.1
@@ -862,6 +871,9 @@ importers:
 
   lib/persistence:
     dependencies:
+      '@workspace/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@workspace/signalgrid-core':
         specifier: workspace:*
         version: link:../signalgrid-core
@@ -926,6 +938,12 @@ importers:
       '@workspace/signalgrid-core':
         specifier: workspace:*
         version: link:../signalgrid-core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
+  lib/secret-model:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1070,6 +1088,9 @@ importers:
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../lib/room-sim
+      '@workspace/secrets':
+        specifier: workspace:*
+        version: link:../lib/secret-model
       '@workspace/self-audit':
         specifier: workspace:*
         version: link:../lib/self-audit

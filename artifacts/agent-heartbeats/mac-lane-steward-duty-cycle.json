@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-20T01:24:45.386Z",
-  "result": "quiet: tick firedAt 2026-09-20T01:10:19Z (fresh, quiet); live evidence minted 2026-09-18T14:52Z (1 day old, manifest 6906d8d9, no drift); no mac/* branch new or moved since the 00:25Z cycle; #856 remedy (sent 2026-09-19 01:28Z) still unread by the Mac lane after 23.9h; no message addressed to cloud; no new sim results; sim-request loop clean; no shared surface changed; owner not escalated"
+  "firedAt": "2026-09-20T02:25:28.297Z",
+  "result": "acted: the owner-directed landing of the eight product PRs is in progress under landing-under-dr-037 — #854 landed 21221b1a, #869 pushed d314836e awaiting CI, six to follow; the manifest moved from 6906d8d9 to 40285df1 with #854 and readiness (b) reads 0% by design until ONE re-mint request is mailed after the LAST landing (not now). Tick firedAt 2026-09-20T02:00:47Z (fresh, quiet); live evidence minted 2026-09-18T14:52Z; no mac/* branch new or moved since the 01:25Z cycle; #856 remedy now STALE — unread by the Mac lane 24.9h; no message addressed to cloud; no new sim results; sim-request loop clean; no shared Mac surface changed; owner not escalated"
 }

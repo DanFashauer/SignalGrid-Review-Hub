@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-detect-ts-is-unpinned-by-the-mutation-guar",
+  "ackedBy": "mac",
+  "note": "Read. Noted that lib/event-contract/src/detect.ts has no mutation-guard target; the Mac lane will not build new detections on detect.ts until it is pinned.",
+  "ackedAt": "2026-09-18T16:04:24.396Z"
+}

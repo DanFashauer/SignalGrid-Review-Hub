@@ -24,6 +24,7 @@ import {
   computeMetrics,
   runDockSync,
   runFixtureSync,
+  runShiftSync,
   foldIdentityEnabled,
   deriveCriticalSignalsPresent,
   FRESHNESS_VALUES,
@@ -42,6 +43,11 @@ import {
   seedDemoStore,
   verifySnapshot,
   CORE_NORMALIZATION_VERSION,
+  AUDIT_EVENT_TYPES,
+  PUCK_LIFECYCLE_EVENT_TYPES,
+  isAuditEventType,
+  appendAudit,
+  verifyAuditChain,
   SignalGridCore,
   SHARED_DEVICE_RULES_V1,
   SHARED_DEVICE_RULES_V2,
@@ -411,6 +417,47 @@ check(
   tamperedChain.valid === false && tamperedChain.brokenAtSeq !== null,
   `brokenAtSeq=${tamperedChain.brokenAtSeq}`,
 );
+
+// ── 6b. THE EVENT-TYPE CENSUS (DR-043, Puck 3) ───────────────────────────────
+//
+// `AuditEventType` was a bare type union: erased at runtime, so nothing could count
+// it and nothing could refuse a string that was not in it. A caller could append
+// "session.hijacked" and the ledger would record it, tamper-evidently, as a member of
+// a vocabulary it is not in. The union is now derived FROM a runtime array, and this
+// is the census that holds the two in step.
+//
+// It must count FOURTEEN — the original six plus the eight the puck lifecycle needs —
+// and it must REFUSE a fifteenth. Both halves: a census that only counts would pass on
+// a tree where any string is admitted.
+check(`audit vocabulary: the ledger names exactly 15 event types (found ${AUDIT_EVENT_TYPES.length})`, AUDIT_EVENT_TYPES.length === 15);
+check("audit vocabulary: no type is named twice", new Set(AUDIT_EVENT_TYPES).size === AUDIT_EVENT_TYPES.length);
+check("audit vocabulary: every member passes its own membership test", AUDIT_EVENT_TYPES.every((t) => isAuditEventType(t)));
+check(`audit vocabulary: the eight puck-lifecycle types are all members (found ${PUCK_LIFECYCLE_EVENT_TYPES.length})`,
+  PUCK_LIFECYCLE_EVENT_TYPES.length === 8 && PUCK_LIFECYCLE_EVENT_TYPES.every((t) => isAuditEventType(t)));
+check("audit vocabulary: the original six survive the extension",
+  ["decision.evaluated", "connector.synced", "policy.version_activated", "evidence.captured", "remediation.requested", "remediation.approved"].every((t) => isAuditEventType(t)));
+check("audit vocabulary: a FIFTEENTH type is not a member", !isAuditEventType("session.hijacked"));
+
+// …and the refusal is not merely advisory: the one writer into the chain enforces it.
+const censusStore = new MemoryStore();
+const censusBase = { tenantId: "t-census", actor: "system", subject: "sub-1", summary: "s", references: [], recordedAt: "2026-06-09T14:00:00.000Z" };
+expectError("audit admission: a type outside the union is refused, not recorded", "validation", () =>
+  appendAudit(censusStore, { ...censusBase, type: "session.hijacked" as never }));
+expectError("audit admission: an event with no subject is refused, not recorded blank", "validation", () =>
+  appendAudit(censusStore, { ...censusBase, type: "decision.evaluated", subject: "   " }));
+expectError("audit admission: a puck-lifecycle event with no decisionId is refused", "validation", () =>
+  appendAudit(censusStore, { ...censusBase, type: "session.suspended" }));
+check("audit admission: three refusals left NOTHING in the chain (a refused event is not a blank row)",
+  censusStore.listAudit("t-census").length === 0);
+const suspended = appendAudit(censusStore, { ...censusBase, type: "session.suspended", decisionId: "dec-census-1" });
+check("audit admission: a puck-lifecycle event WITH a decision is recorded", suspended.type === "session.suspended");
+check("audit admission: the decision it evidences is carried in the chain", suspended.references.includes("dec-census-1"));
+check("audit admission: the chain still verifies after the puck event", verifyAuditChain(censusStore, "t-census").valid === true);
+// The original six must NOT have acquired the stricter rule — their callers carry the
+// decision in `references` already, and a new requirement on them would break chains
+// that are committed.
+const legacyEvent = appendAudit(censusStore, { ...censusBase, type: "connector.synced", references: ["sync-1"] });
+check("audit admission: the original six still admit without a decisionId", legacyEvent.seq === 2);
 
 // ── 7. Determinism ────────────────────────────────────────────────────────────
 
@@ -3655,6 +3702,68 @@ const monotonicityTable: string[] = [];
     if (knownConnector) {
       const clean = runFixtureSync(known.store, fixedClock("2026-07-13T15:00:00.000Z"), knownConnector, knownRecords);
       check("sync: a run that skipped nothing still reports success and healthy (the assertions above can fail)", clean.status === "success" && clean.recordsProcessed === knownRecords.length);
+    }
+  }
+
+  // (b2) THE OTHER TWO FIXTURE-SYNC PATHS. `runFixtureSync` above is one of THREE
+  // functions carrying the identical "a record whose subject the store does not know
+  // is SKIPPED, not trusted" branch — `runDockSync` (dock.ts) and `runShiftSync`
+  // (shift.ts) carry the same counter, the same partial/degraded verdict and the
+  // same note, and neither branch was ever driven. `runShiftSync` had no caller in
+  // any proof at all. A copied fail-safe with no test is how one copy quietly stops
+  // matching the others.
+  //
+  // Both are asserted the same way as (b): an all-orphan run must report `partial`
+  // with zero processed, must NAME the skip count, and must leave the connector
+  // `degraded` — plus a known-subject control run, so a function that refused
+  // everything could not pass.
+  {
+    const seeded = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+    const clk = fixedClock("2026-07-13T15:00:00.000Z");
+
+    const dockConnector = seeded.store
+      .listConnectors(seeded.tenants.northwind)
+      .find((c) => c.kind === "dockbridge-custody");
+    const dockRecords = dockConnector ? (seeded.dockRecords[dockConnector.id] ?? []) : [];
+    check("dock sync: a dockbridge connector and its records are seeded", dockConnector !== undefined && dockRecords.length > 0);
+    if (dockConnector && dockRecords[0]) {
+      const orphan = { ...dockRecords[0], deviceRef: "no-such-device" };
+      const run = runDockSync(seeded.store, clk, dockConnector, [orphan, orphan]);
+      check("dock sync: a run that skipped EVERY record reports partial, not success",
+        run.status === "partial" && run.recordsProcessed === 0 && run.signalsNormalized === 0);
+      check("dock sync: ...names the skip count in its note", /2 of 2 record/.test(run.note));
+      check("dock sync: ...and leaves the connector degraded, not healthy",
+        seeded.store.listConnectors(seeded.tenants.northwind).find((c) => c.id === dockConnector.id)?.status === "degraded");
+      const control = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+      const controlConnector = control.store.listConnectors(control.tenants.northwind).find((c) => c.id === dockConnector.id);
+      if (controlConnector) {
+        const clean = runDockSync(control.store, clk, controlConnector, control.dockRecords[controlConnector.id] ?? []);
+        check("dock sync: a run that skipped nothing still reports success (the assertions above can fail)",
+          clean.status === "success" && clean.recordsProcessed === (control.dockRecords[controlConnector.id] ?? []).length);
+      }
+    }
+
+    const shiftSeed = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+    const shiftConnector = shiftSeed.store
+      .listConnectors(shiftSeed.tenants.northwind)
+      .find((c) => c.kind === "wfm-shift");
+    const shiftRecords = shiftConnector ? (shiftSeed.shiftRecords[shiftConnector.id] ?? []) : [];
+    check("shift sync: a wfm-shift connector and its records are seeded", shiftConnector !== undefined && shiftRecords.length > 0);
+    if (shiftConnector && shiftRecords[0]) {
+      const orphan = { ...shiftRecords[0], deviceRef: "no-such-device" };
+      const run = runShiftSync(shiftSeed.store, clk, shiftConnector, [orphan, orphan, orphan]);
+      check("shift sync: a run that skipped EVERY record reports partial, not success",
+        run.status === "partial" && run.recordsProcessed === 0 && run.signalsNormalized === 0);
+      check("shift sync: ...names the skip count in its note", /3 of 3 record/.test(run.note));
+      check("shift sync: ...and leaves the connector degraded, not healthy",
+        shiftSeed.store.listConnectors(shiftSeed.tenants.northwind).find((c) => c.id === shiftConnector.id)?.status === "degraded");
+      const control = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+      const controlConnector = control.store.listConnectors(control.tenants.northwind).find((c) => c.id === shiftConnector.id);
+      if (controlConnector) {
+        const clean = runShiftSync(control.store, clk, controlConnector, control.shiftRecords[controlConnector.id] ?? []);
+        check("shift sync: a run that skipped nothing still reports success (the assertions above can fail)",
+          clean.status === "success" && clean.recordsProcessed === (control.shiftRecords[controlConnector.id] ?? []).length);
+      }
     }
   }
 

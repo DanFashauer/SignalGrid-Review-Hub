@@ -58,10 +58,23 @@ final class SessionStateManager: ObservableObject, BadgeReaderProviderDelegate, 
         
         identityProvider = configService.getIdentityProvider()
         
-        AuditLogger.shared.log(event: .providersInitialized, metadata: [
+        // "none" used to cover two different facts: nothing was configured, and a
+        // reader WAS configured that this build cannot construct (`.nfc`/`.serial`).
+        // The shell is already fail-closed on the second — no provider means no badge
+        // means no session, and `LockedIdleView` shows the reason — but the audit
+        // record could not tell them apart, which is the half of fail-closed that gets
+        // read after the fact. Both unavailability reasons are now stated.
+        var metadata = [
             "badgeReader": badgeReaderProvider?.displayName ?? "none",
             "identityProvider": identityProvider?.displayName ?? "none"
-        ])
+        ]
+        if let reason = configService.badgeReaderUnavailableReason {
+            metadata["badgeReaderUnavailableReason"] = reason
+        }
+        if let reason = configService.identityProviderUnavailableReason {
+            metadata["identityProviderUnavailableReason"] = reason
+        }
+        AuditLogger.shared.log(event: .providersInitialized, metadata: metadata)
     }
     
     // MARK: - State Transitions

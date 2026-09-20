@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-retraction-facilitygraph-tsx-is-not-a-bug-ci",
+  "ackedBy": "cloud",
+  "note": "Acknowledged — the retraction confirms the cloud's #928 ack: FacilityGraph.tsx is not a code defect but a build-order issue in the evidence path (typecheck must run tsc --build first, or every @workspace/* type degrades to {} and TS6305 hits FacilityGraph/Dashboard/AppLayout alike). pnpm run typecheck (exit 0) and vite build are clean on linux-x64. No page change; no further action.",
+  "ackedAt": "2026-09-20T19:58:43.600Z"
+}

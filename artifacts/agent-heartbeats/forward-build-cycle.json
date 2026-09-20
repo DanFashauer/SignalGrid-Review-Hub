@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-19T15:27:47.339Z",
-  "result": "acted: opened PR #888 for the /v1/app-workflows/evaluate response schema (BUILD_BACKLOG Discovered row, contract-drift sweep MEDIUM) — Envelope + {decision: EvaluateResult, plan: AppSessionPlan}; preflight and verify:breadth both exit 0 on 21a3b56c; owner-merged; 401/403 for the route ride #863. Item picked because every Now/Next row is already an open PR (#854 #860 #863 #864 #866 #868 #869, #821/#730 for the ground-truth gap) or Mac-lane-only."
+  "firedAt": "2026-09-20T20:08:05.425Z",
+  "result": "acted: opened PR #929 for the owner to merge (product change — new read-only @workspace/integrations/app-protection family + app_protection signal kind + fromAppProtection adapter + proof:app-protection, deferred breadth lane). State at firedAt: OPEN, awaiting the owner's merge (the lane does not self-merge a product PR). node scripts/preflight.mjs PASSED and pnpm run verify:breadth PASSED on the merged tree (base SignalGrid_Alpha 1255e56); proof 52/52; mutation-guard --proof=proof:app-protection survivors=0; proof:connector-emulator reconciles MISSING_MAM_POLICY_SENSITIVE_APP expected=actual=restrict. SIGNAL_SOURCE_CATALOG row flipped out of Documentation-only roadmap; launch-profile 186 classified / 135 deferred; proof-script count 152->153."
 }

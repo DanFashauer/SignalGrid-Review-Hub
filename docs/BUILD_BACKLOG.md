@@ -388,8 +388,10 @@ lone repairs into unreachable code).
       the affirmative: a sensitive app with no applied policy → restrict (MISSING_MAM_POLICY_SENSITIVE_APP,
       the exact reason the connector emulator scripts, now produced by the real dimension); a
       flagged registration on a sensitive app → restrict; standard/unassessed → step_up; unknown
-      or stale → step_up; MAM non-applicability is an asserted positive (`not_applicable` → none).
-      The proof enumerates all 864 normalized states (exactly 84 grant) and 96 raw wire records
+      or stale → step_up; MAM non-applicability is an asserted positive that grants only on a
+      positively clean compliance read (`not_applicable` + clean → none; `not_applicable` +
+      flagged/unknown → raise).
+      The proof enumerates all 864 normalized states (exactly 48 grant) and 96 raw wire records
       (exactly 1 grants), and asserts by composition that the family can only raise. The
       SIGNAL_SOURCE_CATALOG row flipped out of "Documentation-only roadmap" in the same change;
       the emulator's scripted expectation is left stable and grounded by the proof rather than

@@ -141,6 +141,23 @@ export function evaluateAppProtection(
             appProtected: false,
           };
     }
+    // Out of scope grants only on a POSITIVELY clean compliance read. An UNKNOWN
+    // flagged state (the plane never posed flagged_reasons) is not proof the
+    // registration is un-flagged, and — because a flagged registration overrides the
+    // out-of-scope declaration above — an unreadable flagged state must raise for the
+    // same reason rather than be treated like a confirmed-clean one. (Codex P1.)
+    if (report.complianceState !== "clean") {
+      unknownSignals.push("compliance_state");
+      return {
+        ...base,
+        posture: "app_protection_unverified",
+        reasonCode: "COMPLIANCE_UNKNOWN",
+        recommendedAction: "step_up",
+        criticalFindings,
+        unknownSignals,
+        appProtected: false,
+      };
+    }
     return {
       ...base,
       posture: "app_protection_not_applicable",

@@ -254,6 +254,11 @@ export function normalizeAppProtectionReport(
   const appRefAsserted = appRefRaw !== undefined && appRefRaw !== null;
   const reportedAppRef = textOf(appRefRaw);
   const appRefMismatch = appRefAsserted && (reportedAppRef === null || reportedAppRef !== appRef.trim());
+  // The REQUESTED binding must itself name an app. A blank/whitespace `appRef` means
+  // the record is not bound to any identified app, so an otherwise applied+clean report
+  // must not grant `APP_PROTECTED` for an unidentified app — the appRefMismatch check
+  // above cannot catch it when the source omits its optional echo. Fail closed. (Codex P1.)
+  const requestAppRefBlank = appRef.trim().length === 0;
   // "applied" with no corroborating policy references is a contradiction: an applied
   // app-protection policy always names at least one policy. Fail closed on the ambiguity
   // rather than trusting the bare `applied` claim.
@@ -263,6 +268,7 @@ export function normalizeAppProtectionReport(
     readThrew ||
     !plain ||
     instantShapeBad ||
+    requestAppRefBlank ||
     appRefMismatch ||
     appliedWithoutPolicies ||
     arrayMalformed(raw["flagged_reasons"]) ||

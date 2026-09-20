@@ -232,6 +232,18 @@ check("malformed-isolation: an asserted NON-STRING app_ref (42) → malformed �
 check("malformed-isolation: an asserted BLANK app_ref (\" \") → malformed",
   normalizeAppProtectionReport(APP, clean({ app_ref: " " }), { source: "mut" }).reportIntegrity === "malformed");
 
+// blank REQUESTED appRef (Codex P1): the requested binding must itself name an app. A
+// blank/whitespace appRef with a source that OMITS its optional app_ref would otherwise
+// normalize an applied+clean report and grant APP_PROTECTED for an UNIDENTIFIED app —
+// appRefMismatch cannot catch it (nothing was asserted to mismatch). Fail closed.
+const blankReq = (req: string) =>
+  evaluateAppProtection(normalizeAppProtectionReport(req, clean({ app_ref: undefined }), { source: "mut" }));
+check("a BLANK requested appRef (\"\") with a source that omits app_ref → malformed → step_up, never a grant for an unidentified app",
+  normalizeAppProtectionReport("", clean({ app_ref: undefined }), { source: "mut" }).reportIntegrity === "malformed" &&
+  blankReq("").recommendedAction === "step_up" && blankReq("").reasonCode === "REPORT_MALFORMED" && blankReq("").appProtected === false);
+check("a WHITESPACE requested appRef (\"   \") is likewise blank → malformed → step_up (REPORT_MALFORMED)",
+  blankReq("   ").recommendedAction === "step_up" && blankReq("   ").reasonCode === "REPORT_MALFORMED");
+
 // hasUnrecognizedKey catch: a report whose KEY enumeration throws (a hostile proxy)
 // fails closed via the catch — the only term that can catch an un-introspectable object.
 const hostileKeys = new Proxy({} as AppProtectionReportRaw, { ownKeys() { throw new Error("hostile ownKeys"); } });
@@ -263,6 +275,15 @@ const naClean = ev(clean({ policy_state: "not_applied", applied_policies: [] }),
 check("a NOT_APPLICABLE app with a clean, un-flagged source still grants (APP_PROTECTION_NOT_APPLICABLE) — the asserted positive is intact",
   naClean.recommendedAction === "none" && naClean.reasonCode === "APP_PROTECTION_NOT_APPLICABLE" && naClean.appProtected === true);
 
+// not_applicable with an UNKNOWN flagged state (Codex P1): the plane never posed
+// flagged_reasons, so compliance is unknown — NOT proof the registration is un-flagged.
+// Because a flagged registration overrides the out-of-scope declaration (above), an
+// unreadable flagged state must raise for the same reason rather than granting.
+const naUnknownCompliance = ev(clean({ flagged_reasons: undefined, policy_state: "not_applied", applied_policies: [] }), "standard", "not_applicable");
+check("a NOT_APPLICABLE app whose flagged state is UNKNOWN (source omits flagged_reasons) → step_up (COMPLIANCE_UNKNOWN), never an out-of-scope grant",
+  naUnknownCompliance.recommendedAction === "step_up" && naUnknownCompliance.reasonCode === "COMPLIANCE_UNKNOWN" &&
+  naUnknownCompliance.appProtected === false && naUnknownCompliance.unknownSignals.includes("compliance_state"));
+
 // ── exhaustive (normalized): grant only on the full conjunction ─────────────────
 const normDomains = {
   policyState: ["applied", "not_applied", "unknown"],
@@ -291,20 +312,21 @@ const normRes = enumerateGrantSafety({
   confirmedWhenNone: (v) => v.appProtected === true && v.criticalFindings.length === 0 && v.unknownSignals.length === 0,
   positivelyClean: (c) =>
     c.reportIntegrity === "clean" &&
-    // out-of-scope grants only when the source is NOT positively flagged — a flagged
-    // registration is device-integrity evidence the out-of-scope declaration cannot hide.
-    ((c.mamApplicability === "not_applicable" && c.complianceState !== "flagged") ||
+    // out-of-scope grants only on a POSITIVELY clean compliance read — a flagged
+    // registration is device-integrity evidence the out-of-scope declaration cannot
+    // hide, and an UNKNOWN flagged state is not proof the registration is un-flagged.
+    ((c.mamApplicability === "not_applicable" && c.complianceState === "clean") ||
       ((c.mamApplicability === "applicable" || c.mamApplicability === "unassessed") &&
         c.policyState === "applied" &&
         c.complianceState === "clean" &&
         (c.registrationFreshness === "fresh" || c.registrationFreshness === "unassessed"))),
 });
 check(
-  `exhaustive (normalized): over all ${normRes.combos} states, an app is protected ONLY on a clean report that is either out-of-scope (and not flagged) or an applied+clean policy on a current read (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
+  `exhaustive (normalized): over all ${normRes.combos} states, an app is protected ONLY on a clean report that is either out-of-scope (and positively clean) or an applied+clean policy on a current read (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
   normRes.mismatches === 0 && normRes.combos === productOf(normDomains) && normRes.combos === 864,
 );
-check("exhaustive (normalized): exactly 84 states grant — 72 out-of-scope (clean, not flagged) + 12 applied+clean+current",
-  normRes.noneCount === 84);
+check("exhaustive (normalized): exactly 48 states grant — 36 out-of-scope (clean) + 12 applied+clean+current",
+  normRes.noneCount === 48);
 
 // ── exhaustive (raw wire): normalizer + evaluator on hostile input ──────────────
 const rawDomains = {

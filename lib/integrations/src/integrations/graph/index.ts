@@ -8,6 +8,7 @@ import {
 
 export * from "./types";
 export * from "./posture-connector";
+export { toEstateSubjects, type GraphEstateMapping } from "./estate";
 export { createMockGraphTransport, type MockGraphOptions } from "./mock-transport";
 export {
   createFixtureGraphPostureConnector,

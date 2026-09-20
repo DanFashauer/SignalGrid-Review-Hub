@@ -78,7 +78,7 @@ premises:
 | Deterministic remediation cascade (what the L1/L2 ladder does by hand) | [`lib/signalgrid-simulator/src/remediation-allow.ts`](../../lib/signalgrid-simulator/src/remediation-allow.ts), proven by [`scripts/src/remediation-allow-proof.ts`](../../scripts/src/remediation-allow-proof.ts) | modeled |
 | Custody integrity: a returned device still checked out to a prior holder / "unpaired" but occupying a slot | [`rtls-custody`](../../lib/integrations/src/integrations/rtls-custody) family — the custody-ledger RECONCILIATION as a distinct fixture corpus + evaluator in [`custody-ledger.ts`](../../lib/integrations/src/integrations/rtls-custody/custody-ledger.ts) (what the ledger says vs what the bay sees: a seated device the ledger still assigns to a prior holder is a hold with the contradiction named; an unpaired device in a bay is contained; a clear ledger over an empty bay escalates; any unknown axis holds; fail-closed), proven by [`scripts/src/rtls-custody-proof.ts`](../../scripts/src/rtls-custody-proof.ts) | modeled |
 | Per-user checkout cap (a hard limit silently blocking a clinician when a prior return did not clear) | the same surface — the cap axis is COMPUTED from the requester's open-checkout count, the tenant cap, and how many of those checkouts are physically docked (never asserted by the wire): a cap hit only by returns that never cleared is a hold with the reason `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN`; a cap genuinely reached is contained with `CUSTODY_CAP_REACHED`; a missing count is unknown and raises; contradictory counts are a malformed report | modeled |
-| **A faithful end-to-end "smart-charging" simulator scenario (badge → dock → provision → in-use → check-in, with the real failure branches)** | — | **gap** |
+| A faithful end-to-end "smart-charging" simulator scenario (badge → dock → provision → in-use → check-in, with the real failure branches) | `smart-charging-checkout-to-checkin` in [`lib/signalgrid-simulator/src/scenarios.ts`](../../lib/signalgrid-simulator/src/scenarios.ts) — the happy path as one scenario, with its four failure branches (unpaired / network-down / cap-hit / dock-fault) DERIVED from that same fixture in [`scripts/src/signalgrid-simulator-proof.ts`](../../scripts/src/signalgrid-simulator-proof.ts), so each branch differs from the green run by exactly the fact it names. The happy path is the only one of the five that allows. | modeled |
 
 ## The three gaps, and why they are worth filing
 
@@ -90,7 +90,10 @@ evaluator in the `rtls-custody` family (`custody-ledger.ts`, proven by `proof:rt
 — the same pattern the two partial rows took, touching neither the decision core nor the
 simulator: the contradiction is graded as a checkout decision with a legible reason, and a
 person reconciles it. The timeline-level detection in `detect.ts` that item 1 proposed is
-still a design target (decision core), recorded on the backlog. The third remains a gap.
+still a design target (decision core), recorded on the backlog. **The third was modeled on
+2026-09-18**: the smart-charging workflow is now a scenario the simulator runs, and its four
+failure branches are asserted beside it rather than described. All seventeen rows are
+modeled; none of that is a claim that a customer has used any of it.
 
 1. **The "phantom custody" detection.** The single most-cited operational pain is a device
    that reads as checked-out to someone who already walked away, or occupies a dock slot

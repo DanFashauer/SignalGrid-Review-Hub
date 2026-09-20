@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import rateLimit, { ipKeyGenerator, type RateLimitRequestHandler } from "express-rate-limit";
 import type { Request, Response } from "express";
 import { peekJwtCallerRef } from "@workspace/enterprise-auth";
+import { readSecret } from "@workspace/secrets";
 
 /**
  * 429 body in the SAME flat envelope every other error uses ({requestId, error,
@@ -121,7 +122,10 @@ function skipGlobalLimit(req: Request): boolean {
   if (UNTHROTTLED_PROBES.has(req.path)) {
     return true;
   }
-  return req.path === "/metrics" && (process.env.METRICS_TOKEN?.trim() ?? "") !== "";
+  // Through the ONE read site (DR-010): the exemption must turn on the SAME notion of
+  // "configured" the handler enforces, or the two drift and a blank value exempts a
+  // route it does not protect.
+  return req.path === "/metrics" && readSecret("METRICS_TOKEN").value !== undefined;
 }
 
 export const globalRateLimiter: RateLimitRequestHandler = rateLimit({

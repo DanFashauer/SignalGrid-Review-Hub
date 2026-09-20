@@ -64,11 +64,16 @@ yourself, one frame every four seconds, into the same scratch directory, and say
 the answer (rule 4 — this is a fixed-interval sample, not scene-aware):
 
 ```bash
-ffmpeg -v error -i "<video path>" -vf "fps=1/4,scale=640:-1" "<scratch dir>/%03d.jpg"
+dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "<video path>")
+# one frame every 4 s, but CAPPED at 100 frames over the whole clip so a long
+# video does not blow up the frame set (this is what /watch balanced does: target
+# ~60, cap 100). Above ~400 s the interval stretches to keep the total ≤ 100.
+fps=$(awk -v d="$dur" 'BEGIN{print (d/4>100)?100/d:0.25}')
+ffmpeg -v error -i "<video path>" -vf "fps=${fps},scale=640:-1" "<scratch dir>/%03d.jpg"
 ```
 
 Measured 2026-09-19: a 62 s clip → 16 frames, a 93 s clip → 23 frames, both in
-under two seconds.
+under two seconds. The cap only bites past ~400 s; below it the interval stays 1/4.
 
 **Step 2 — transcript, locally.** Once per machine, create a virtual environment
 OUTSIDE the repository and install the two wheels; the first run downloads the model

@@ -804,6 +804,15 @@
           "scope": "surface",
           "open": 0,
           "closed": 13
+        },
+        {
+          "date": "2026-09-20",
+          "read": "docs/agent/resource-scans/2026-09-19-two-videos.json \u2014 the first machine-written scan record under the 2026-09-19 intake rule (tool-evaluation-by-use \u00a75b): proposals, one confirm per roster perspective, the coordinator decision. It is a record of an execution, not prose; authored and cross-confirmed this session by the four perspectives plus the coordinator, and reviewed here for shape and honesty. The docs/agent whole-read of 2026-09-06 predates the file, so it is covered explicitly here rather than by that stale whole-read.",
+          "reviewer": "mac lane (author + four-perspective confirm)",
+          "record": "docs/agent/resource-scans/2026-09-19-two-videos.json",
+          "scope": "partial: docs/agent/resource-scans/2026-09-19-two-videos.json (the new machine-written scan record)",
+          "open": 0,
+          "closed": 0
         }
       ]
     },

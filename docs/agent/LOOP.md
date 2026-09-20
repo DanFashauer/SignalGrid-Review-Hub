@@ -52,7 +52,16 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-20 08:00Z (cloud lane, latest) - THE EIGHT LANDINGS, ONE AT A TIME.
+LAST TOUCHED: 2026-09-20 10:50Z (cloud lane, latest) - THE EIGHT LANDINGS, ONE AT A TIME; THE RECORD; THE SEAM.
+              10:50Z addendum: the landing record landed as #911 (bac640b5) after three Codex rounds
+              (eleven findings, all verified and fixed); the loop:state seam fix landed as #917
+              (f7f6a64e): a squash of a merge tree now clears by exact hunks (verbatim patch-id,
+              re-applied to the squash's parent), a same-named branch is compared by sha against
+              the Hub tip, and the seam has an 8-shape self-test in preflight and CI - the two
+              branches the stop hook had named every turn since #860/#900 now clear. #905 (DR-052)
+              is green, thread-free and waits on the OWNER's merge (publication-boundary file).
+              Codex hit its review usage limit at 09:33Z; later PRs today had no Codex pass.
+              08:00Z entry follows.
               The owner: "Merge the eight open PRs … you don't have to wait for me you can do this
               yourself." Done on that direction, under DR-037 WITH FIVE RECORDED EXCEPTIONS (condition 2 on
               #863: local pass after the push; the OWNER-GATED clause on #854, #869, #864, #866: launch-
@@ -1248,9 +1257,8 @@ NEXT ACTION: cloud: (0) Land PR #905 (DR-052) on its green gating check - no lau
               docs/agent/RESOURCE_INTAKE.md; the prompt-master by-use trial is an open BUILD_BACKLOG row.
               (1) When the Mac tick returns: confirm mac-run.json re-minted against fingerprint
               6cc9a0eef68e5ca0 (v82) and readiness dimension (b) back to 100%; if the tick stays silent past
-              the 24h escalation window, escalate the owner ONCE more with the same command. (2) Fix the two
-              detector gap filed today (the squash-landed branch check: local patch-id proof, tip-bound, offline) - a small
-              gate change with a self-test. (3) The rows still open by lane in docs/BUILD_BACKLOG.md; the
+              the 24h escalation window, escalate the owner ONCE more with the same command. (2) DONE 10:45Z - the
+              loop:state seam fix landed as #917 (f7f6a64e) with its 8-shape self-test. (3) The rows still open by lane in docs/BUILD_BACKLOG.md; the
               brace-less mutation ratchet one family per session. (4) The owner decisions the sweep
               surfaced and the lane MERGED on the owner's direction without a per-change decision record
               (exceptions to DR-037's owner-gated clause, EVIDENCE 2026-09-20): LAUNCH_PROFILE_VERSION 5->7 and two

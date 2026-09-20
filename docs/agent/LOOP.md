@@ -55,9 +55,10 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
 LAST TOUCHED: 2026-09-20 08:00Z (cloud lane, latest) - THE EIGHT LANDINGS, ONE AT A TIME.
               The owner: "Merge the eight open PRs … you don't have to wait for me you can do this
               yourself." Done on that direction, under DR-037 WITH FIVE RECORDED EXCEPTIONS (condition 2 on
-              #863: local pass after the push; condition 5 on #854, #869, #864, #866: launch-profile or
-              publication-boundary files in the merged diff - found by Codex on #911, verified, owner
-              decisions still owed a decision record; see EVIDENCE), in this order, each merged with its
+              #863: local pass after the push; the OWNER-GATED clause on #854, #869, #864, #866: launch-
+              profile or publication-boundary files in the merged diff, merged by this session with the
+              owner's credential - found by Codex on #911, verified, owner decisions still owed a decision
+              record; see EVIDENCE), in this order, each merged with its
               head's full sha after the gating run on THAT head: #854 21221b1a (02:05Z), #869 93da3e28, #860 c7dc6610, #863 4df66f2a,
               #864 5df039f7, #866 e32bb885, #868 9018a8bc, #888 9fb4bc08 (07:39Z). Mainline merged INTO
               each branch in a scratch worktree, frozen install after the merge, manifest + coverage page
@@ -1252,7 +1253,7 @@ NEXT ACTION: cloud: (0) Land PR #905 (DR-052) on its green gating check - no lau
               gate change with a self-test. (3) The rows still open by lane in docs/BUILD_BACKLOG.md; the
               brace-less mutation ratchet one family per session. (4) The owner decisions the sweep
               surfaced and the lane MERGED on the owner's direction without a per-change decision record
-              (DR-037 condition-5 exceptions, EVIDENCE 2026-09-20): LAUNCH_PROFILE_VERSION 5->7 and two
+              (exceptions to DR-037's owner-gated clause, EVIDENCE 2026-09-20): LAUNCH_PROFILE_VERSION 5->7 and two
               GAP removals (#869); the /v1/step-up/enroll/revoke classification (#866); the
               third_party/apple-device-management publication-boundary area (#864); the launch-profile
               edit in #854; plus the positioning sentence the launch-profile gate forced (#869) and the

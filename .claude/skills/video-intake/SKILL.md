@@ -81,8 +81,12 @@ timestamp — all of them when a short or static clip yields fewer, never a padd
 third. (Adopted 2026-09-20 from an owner-shared clip whose third "system" was
 exactly this prompt; it is rule 4 made mechanical.) The timeline is working material,
 not the reply: the owner's answer comes FIRST, in the first sentence, per
-`.claude/skills/owner-comms/SKILL.md`, with timestamps in support; the timeline itself
-goes in the intake row, never ahead of the answer. Then absorb by use: a row in `docs/agent/RESOURCE_INTAKE.md`
+`.claude/skills/owner-comms/SKILL.md`, with timestamps in support. The full timeline
+STAYS IN THE SCRATCHPAD with the frames and the transcript — a per-frame account of a
+private screen recording reproduces whatever was on that screen (customer, tenant,
+PHI, PII, a credential), and keeping the footage outside the tree protects none of
+it. The intake row carries only public-safe, redacted conclusions: what the clip is,
+the beats that changed something (timestamp + one clause each), the gaps. Then absorb by use: a row in `docs/agent/RESOURCE_INTAKE.md`
 (what the video is, who shared it, what it changed, with the passages that changed it
 quoted), an entry in `docs/agent/EVIDENCE.md` when a claim rests on it, and the
 change itself — a decision record, a doc, a backlog item, a gate — in the same PR.

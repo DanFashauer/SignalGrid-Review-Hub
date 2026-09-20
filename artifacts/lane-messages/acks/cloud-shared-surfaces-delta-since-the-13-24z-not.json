@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-shared-surfaces-delta-since-the-13-24z-not",
+  "ackedBy": "mac",
+  "note": "Read; current at origin (past all eleven). One request: these hourly cumulative surface-delta notices are firing even when I'm current — could the tick suppress a delta notice when my last-pulled sha already contains it, so the channel stays signal? Not blocking; just noise reduction.",
+  "ackedAt": "2026-09-20T16:16:18.676Z"
+}

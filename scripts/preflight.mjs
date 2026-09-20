@@ -480,6 +480,7 @@ const STEPS = [
   { name: "Org roster self-test (the gate can actually fail)", cmd: ["node", "scripts/check-org-roster.mjs", "--self-test"] },
   { name: "Backlog ownership (a row with work left in it names the role that owns it)", cmd: ["node", "scripts/check-backlog-ownership.mjs"] },
   { name: "Backlog ownership self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-ownership.mjs", "--self-test"] },
+  { name: "Loop-state seam self-test (squash-of-a-merge-tree, whitespace twin and same-name-ahead fixtures can fail)", cmd: ["node", "scripts/loop-state.mjs", "--self-test"] },
   { name: "Backlog evidence (a row that says DONE says how you'd check)", cmd: ["node", "scripts/check-backlog-evidence.mjs"] },
   { name: "Backlog evidence self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-evidence.mjs", "--self-test"] },
   { name: "Surface-ownership self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-surface-ownership.mjs", "--self-test"] },

@@ -6,7 +6,7 @@ import { CONSOLE_HTML } from "./console-html";
 import { logger } from "./lib/logger";
 import { requestContext } from "./middlewares/context";
 import { demoSurfacesEnabled } from "./lib/profile";
-import { constantTimeEquals } from "@workspace/signalgrid-core";
+import { readSecret, secretMatches } from "@workspace/secrets";
 import { errorHandler } from "./middlewares/errors";
 import { globalRateLimiter } from "./middlewares/rateLimit";
 import { deprecationHeaders } from "./middlewares/deprecation";
@@ -115,21 +115,28 @@ if (demoSurfacesEnabled()) {
  * `lib/core.ts` already applies to SIGNALGRID_MAX_DECISIONS_PER_TENANT and
  * `lib/profile.ts` to an unrecognised profile: a configuration error on a security
  * knob is answered by not serving, never by serving less safely.
+ *
+ * The VALUE now comes from `@workspace/secrets`, the one read site (DR-010,
+ * docs/SECRET_MODEL.md). Two things follow. The blank check is the accessor's
+ * `presentButBlank`, so the same rule covers the successor variable too — a blank
+ * METRICS_TOKEN_NEXT is as much a misconfiguration as a blank METRICS_TOKEN. And the
+ * comparison below accepts EITHER value while both are set, which is what makes a
+ * rotation possible at all: publish the successor, move the scrapers, promote it,
+ * delete it. Before this there was no window — the instant the variable changed,
+ * every scraper still holding the old value was 401.
  */
-function metricsTokenFromEnv(): string | undefined {
-  const raw = process.env["METRICS_TOKEN"];
-  if (raw === undefined) return undefined;
-  const trimmed = raw.trim();
-  if (trimmed === "") {
+function metricsSecretAtBoot(): { enabled: boolean } {
+  const reading = readSecret("METRICS_TOKEN");
+  if (reading.presentButBlank) {
     throw new Error(
-      'METRICS_TOKEN is set but blank (""/whitespace) — refusing to start rather than ' +
+      'METRICS_TOKEN (or METRICS_TOKEN_NEXT) is set but blank (""/whitespace) — refusing to start rather than ' +
         "serving /metrics unauthenticated to an operator who believes it is protected. " +
         "Unset the variable to serve metrics openly, or give it a value.",
     );
   }
-  return trimmed;
+  return { enabled: reading.value !== undefined };
 }
-const METRICS_BEARER = metricsTokenFromEnv();
+const METRICS_BEARER_REQUIRED = metricsSecretAtBoot().enabled;
 
 // Prometheus scrape endpoint (operational metrics). Global AGGREGATE only —
 // counters/latencies with no tenant label and no request payloads, so the
@@ -137,12 +144,16 @@ const METRICS_BEARER = metricsTokenFromEnv();
 // Prometheus convention; setting METRICS_TOKEN requires scrapers to present it
 // as a bearer, without breaking deployments that never set it.
 app.get("/metrics", (req, res) => {
-  // constantTimeEquals, not `!==`: an early-exit string compare on the one
-  // static secret an operator actually sets leaks it character by character,
-  // and the core already protects even its PUBLIC demo keys this way
-  // (store.ts:128). The weaker guard sat on the stronger secret.
+  // `secretMatches` compares in constant time, not with `!==`: an early-exit string
+  // compare on the one static secret an operator actually sets leaks it character by
+  // character, and the core already protects even its PUBLIC demo keys this way
+  // (store.ts:128). The weaker guard sat on the stronger secret. It also accepts the
+  // staged successor while one is set, and it can never return true for an
+  // unconfigured secret — which is why the `enabled` flag is still consulted first
+  // rather than inferred from a failed match.
   const presented = typeof req.headers.authorization === "string" ? req.headers.authorization : "";
-  if (METRICS_BEARER !== undefined && !constantTimeEquals(presented, `Bearer ${METRICS_BEARER}`)) {
+  const offered = presented.startsWith("Bearer ") ? presented.slice("Bearer ".length) : "";
+  if (METRICS_BEARER_REQUIRED && !secretMatches("METRICS_TOKEN", offered)) {
     res.status(401).type("text/plain").send("metrics: bearer token required");
     return;
   }

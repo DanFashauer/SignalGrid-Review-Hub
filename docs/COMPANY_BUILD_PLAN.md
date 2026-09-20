@@ -4760,7 +4760,7 @@ Runner-up: **benchmark-selection** (10 references, day-one-quiet 'unverified →
 
 ### From the positioning-messaging lens
 
-## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v5)
+## SignalGrid — buyer-legible positioning (Limited GA scope, launch-profile v7)
 
 Every claim below is checked against the `launch` class in scripts/launch-profile.mjs. Nothing deferred appears — which is why location, badges, custody, network, and threat signals are absent: they are real and proven in this repository, and they are not Limited GA.
 
@@ -4774,7 +4774,7 @@ SignalGrid is an access-decision service embedded invisibly in the apps your sta
 
 ### 3. The boundary paragraph — what SignalGrid is NOT
 
-SignalGrid is not an MDM: it never enrolls, configures, locks, or wipes a device, and it cannot enforce anything on the device itself — no app can restrict other apps or make itself non-removable; enforcement on the device is your MDM's job on a supervised device, and Fleet, Intune, or Jamf remain your management plane. SignalGrid reads their evidence, read-only. It is not an IdP: it does not authenticate users, hold identities, or run MFA — when it returns step_up, your app satisfies it with your existing authenticator and identity provider; at Limited GA SignalGrid conducts no challenge itself. It is not an EDR or a SIEM: it detects nothing and investigates nothing. It sits downstream of systems like these and consumes their evidence rather than replacing them — and at Limited GA it consumes exactly one source: your device-management evidence. Domain safety — patient lookup, clinical rules — stays in the host application; SignalGrid answers only whether this device, in its current state, should proceed.
+SignalGrid is not an MDM: it never enrolls, configures, locks, or wipes a device, and it cannot enforce anything on the device itself — no app can restrict other apps or make itself non-removable; enforcement on the device is your MDM's job on a supervised device, and Fleet, Intune, or Jamf remain your management plane. SignalGrid reads their evidence, read-only. It is not an IdP: it does not authenticate users, hold identities, or run MFA — when it returns step_up, your app satisfies it with your existing authenticator and identity provider. Since launch-profile v6 SignalGrid can also VERIFY a step-up: your app runs a passkey gesture on the worker's own device and posts the assertion, SignalGrid checks it cryptographically against the credential enrolled for that identity and records the answer beside the decision. It still mints no identity, issues no credential, and runs no MFA of its own — and the decision is never rewritten. It is not an EDR or a SIEM: it detects nothing and investigates nothing. It sits downstream of systems like these and consumes their evidence rather than replacing them — and at Limited GA it consumes exactly one source: your device-management evidence. Domain safety — patient lookup, clinical rules — stays in the host application; SignalGrid answers only whether this device, in its current state, should proceed.
 
 ### Claim-to-proof trace
 
@@ -4788,7 +4788,7 @@ SignalGrid is not an MDM: it never enrolls, configures, locks, or wipes a device
 | "tightens instead of waving through" / "never loosen" | lib/posture-composition/src/adapters.ts:543; enforced structurally by scripts/review-invariants.mjs:144-176, run in preflight (preflight.mjs:67) |
 | "reproducible evidence an operator can audit" | /v1/decisions/{id}/evidence launch (:317-321, "it is the claim"); operator console signalgrid-app launch (:444-451) |
 | "read-only from your device-management source" | criterion string (launch-profile.mjs:126-129); no write route to any source system (:362-367) |
-| "your app applies the verdict, including the step-up prompt" | GAPS step-up-answerability (:633-646): Limited GA is shadow mode — SignalGrid returns step_up, /v1/step-up/* is deferred; the host app's native authenticator answers it (EMBEDDED_UX_PRINCIPLE.md:34-37) |
+| "your app applies the verdict, including the step-up prompt" | The host app still runs the prompt and applies the verdict (EMBEDDED_UX_PRINCIPLE.md:34-37); since launch-profile v6 SignalGrid VERIFIES the result — POST /v1/decisions/{id}/step-up/challenge and POST /v1/decisions/{id}/step-up are `launch` and on the GA fence. The step-up-answerability gap was closed, not reworded. |
 | Deliberately omitted: location | 'location' and 'location_certainty' are deferred signal kinds (launch-profile.mjs:274-275) — say it in the roadmap, never in the present tense |
 
 ### From the proof-led content lens
@@ -4836,7 +4836,7 @@ COST MODEL SKELETON (draft for docs/COST_MODEL.md — every figure below is repo
 
 1. SERVING ONE TENANT — deferred architecture (docker-compose.prod.yml)
    Stack: 1x postgres:16 (durable volume sg_pgdata) + 1x node:22 api container (2.2MB bundle, /api/healthz liveness). Web is a static build behind nginx (dev compose only; no gate builds it). NO Redis in the product — Redis appears only inside Fleet's own stack.
-   Capacity: limiter-bound, not compute-bound. Default 240 req/min per key (rateLimit.ts:56, SIGNALGRID_V1_RATE_LIMIT); decision core p95 1.27ms, 5,128 decisions/sec on 4 workers (RELIABILITY_SLO.md). One small VM (2 vCPU / 4GB class) over-serves a tenant by orders of magnitude; marginal compute per added tenant ~= $0 until the limiter is deliberately raised.
+   Capacity: limiter-bound, not compute-bound. Default 240 req/min per key (rateLimit.ts:56, SIGNALGRID_V1_RATE_LIMIT); decision core p95 1.0458 ms, 5,370 decisions/sec on 4 workers — the 2026-08-24 column of RELIABILITY_SLO.md (this draft quoted the superseded 2026-08-19 column, 1.27 ms / 5,128, until 2026-09-18; the two runs were on different hardware and are not a trend). One small VM (2 vCPU / 4GB class) over-serves a tenant by orders of magnitude; marginal compute per added tenant ~= $0 until the limiter is deliberately raised.
    Line items: VM hosting — TBD (public price list, agent-computable). Backup storage for sg_pgdata — TBD. TLS/domain — optional (OWNER_ACTIONS.md:197).
 
 2. MDM / DEVICE LINES (per deployment)
@@ -4862,34 +4862,34 @@ TIERED READ-LIST — SignalGrid-Review-Hub (all listed files verified UNREAD aga
 == TIER 1 — 25 files, ~7,900 lines. An unread defect here costs the most. Target: 25/25 at depth >= audited within 5 shift-days. ==
 
 Decision core (the verdict mechanism):
-1. lib/signalgrid-core/src/engine.ts (578) — SignalGridCore itself; every /v1 decision flows through it via api-server lib/core.ts.
+1. lib/signalgrid-core/src/engine.ts (778) — SignalGridCore itself; every /v1 decision flows through it via api-server lib/core.ts.
 2. lib/signalgrid-core/src/decision.ts (216) — where allow/step_up/restrict/deny is actually computed.
 3. lib/signalgrid-core/src/policy.ts (764) — policy resolution feeding the verdict; the largest logic file in the core.
 4. lib/signalgrid-core/src/resolution.ts (576) — signal-to-assurance resolution; the file where 'unknown raises assurance, never lowers it' must hold.
 5. lib/signalgrid-core/src/evidence.ts (790) — mints the WHY behind /v1/decisions/{id}/evidence; the product's entire claim is that its answers are explainable.
-6. lib/signalgrid-core/src/store.ts (525) — in-memory store semantics behind every tenant-scoped read; a cross-tenant leak would live here.
+6. lib/signalgrid-core/src/store.ts (574) — in-memory store semantics behind every tenant-scoped read; a cross-tenant leak would live here.
 7. lib/signalgrid-simulator/src/decisionEngine.ts (361) — parity source the iOS port is byte-faithful to; a defect here ships on two platforms at once.
 8. lib/posture-composition/src/compose.ts (80) — composes signal kinds into posture; tiny, but every launch signal passes through it.
-9. lib/posture-composition/src/adapters.ts (591) — maps connector output into composition; a silent mis-map fails open.
+9. lib/posture-composition/src/adapters.ts (624) — maps connector output into composition; a silent mis-map fails open.
 
 Auth chain (bearer token to tenant principal):
 10. artifacts/api-server/src/middlewares/context.ts (222) — THE /v1 auth middleware; OIDC/demo-key fork; unread while neighbor rateLimit.ts was audited.
-11. lib/enterprise-auth/src/jwt.ts (205) — token verification.
+11. lib/enterprise-auth/src/jwt.ts (238) — token verification.
 12. lib/enterprise-auth/src/claims.ts (99) — claims-to-principal mapping; tenant derivation lives here.
 13. lib/enterprise-auth/src/jwks.ts (90) — key fetch/cache; wrong caching means accepting rotated-out keys.
-14. artifacts/api-server/src/lib/profile.ts (194) — the review-demo vs shared-device-gateway fence; a classification bug mounts demo surfaces in production.
-15. artifacts/api-server/src/lib/core.ts (105) — the seam where HTTP hands to the decision core.
+14. artifacts/api-server/src/lib/profile.ts (210) — the review-demo vs shared-device-gateway fence; a classification bug mounts demo surfaces in production.
+15. artifacts/api-server/src/lib/core.ts (344) — the seam where HTTP hands to the decision core.
 16. artifacts/api-server/src/middlewares/idempotency.ts (109) — durable-write dedupe on the decision path.
 
 Served surface and durable path:
-17. artifacts/api-server/src/routes/v1.ts (1028) — every served /v1 route including evaluate and the release-path re-evaluation; the spec was audited, the implementation was not.
+17. artifacts/api-server/src/routes/v1.ts (1294) — every served /v1 route including evaluate and the release-path re-evaluation; the spec was audited, the implementation was not.
 18. lib/audit/src/backend.ts (318) — the Postgres ledger WRITE path; the audited verify path is provably blind to tail truncation, so append guarantees live only here.
 19. lib/persistence/src/decision-store.ts (288) — durable decision writes.
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (744) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
-22. scripts/launch-profile.mjs (764) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
+21. scripts/preflight.mjs (781) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+22. scripts/launch-profile.mjs (795) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (188) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.
 25. lib/integrations/src/integrations/device-management-health/evaluate.ts (290) — launch family; grades whether a compliance answer is CURRENT — the anti-unearned-affirmative connector, which had better not contain one.
@@ -4898,7 +4898,7 @@ Meta-gates (what green means) and launch connectors:
 Rest of signalgrid-core: continuity.ts (409), seed.ts (1065), types.ts (840), connector.ts (218), remediation.ts (189), webhooks.ts (78), dock.ts (137), shift.ts (99), audit.ts (93), util.ts (129), metrics.ts (55), simulate.ts (35).
 Rest of simulator: routing.ts (211), scenarios.ts (186), types.ts (173), audit.ts (27).
 Rest of api-server: app.ts (123), routes/control-plane.ts (524), routes/integrations.ts (2042 — the largest unread file in artifacts), routes/monitoring.ts, health.ts, sim.ts, simulator.ts, radar.ts; middlewares/errors.ts (104 — error envelope, a leak and fail-open vector), deprecation.ts, metrics.ts; lib/assurance.ts, tier.ts, logger.ts, metrics.ts.
-Auth/step-up periphery: lib/enterprise-auth/src/config.ts, provider.ts, base64url.ts; lib/webauthn/src/stepUpStore.ts (312) + webauthn/; lib/verdict-attestation/src/attest.ts (277), canonical.ts, types.ts; lib/dual-control/src/evaluate.ts, normalize.ts, types.ts; lib/persistence/src/migrations.ts (175); lib/audit/src/types.ts.
+Auth/step-up periphery: lib/enterprise-auth/src/config.ts, provider.ts, base64url.ts; lib/webauthn/src/stepUpStore.ts (329) + webauthn/; lib/verdict-attestation/src/attest.ts (277), canonical.ts, types.ts; lib/dual-control/src/evaluate.ts, normalize.ts, types.ts; lib/persistence/src/migrations.ts (175); lib/audit/src/types.ts.
 Launch connector remainder: graph/posture-connector.ts (254), graph/types.ts, graph/mock-transport.ts; device-management-health/graph-transport.ts (199, the Blocker-5 gap), device-management-health-connector.ts; local-authority/normalize.ts (154).
 Native seam: SignalContext.swift (135), DemoMode.swift (291), plus read-verify of DecisionEngine.swift (190) and AppWorkflows.swift (332) against their TS sources.
 Meta-gate remainder: check-launch-profile.mjs (327), check-preflight-ci-parity.mjs (190), check-publication-boundary.mjs (232), check-decision-port-parity.mjs (298), check-connector-discipline.mjs; validate-sim-macos.sh; .githooks/pre-push; threat_model.md.

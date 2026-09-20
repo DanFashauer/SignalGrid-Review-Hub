@@ -52,7 +52,81 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-17 21:20Z (cloud lane, latest) - A LONG MERGE-AND-BUILD SESSION.
+LAST TOUCHED: 2026-09-20 08:00Z (cloud lane, latest) - THE EIGHT LANDINGS, ONE AT A TIME.
+              The owner: "Merge the eight open PRs … you don't have to wait for me you can do this
+              yourself." Done on that direction, under DR-037 WITH FIVE RECORDED EXCEPTIONS (condition 2 on
+              #863: local pass after the push; the OWNER-GATED clause on #854, #869, #864, #866: launch-
+              profile or publication-boundary files in the merged diff, merged by this session with the
+              owner's credential - found by Codex on #911, verified, owner decisions still owed a decision
+              record; see EVIDENCE), in this order, each merged with its
+              head's full sha after the gating run on THAT head: #854 21221b1a (02:05Z), #869 93da3e28, #860 c7dc6610, #863 4df66f2a,
+              #864 5df039f7, #866 e32bb885, #868 9018a8bc, #888 9fb4bc08 (07:39Z). Mainline merged INTO
+              each branch in a scratch worktree, frozen install after the merge, manifest + coverage page
+              regenerated on top of the previous landing, preflight + breadth on the merged tree on one
+              shared port before the push - for SEVEN of the eight; #863's local pass came AFTER its
+              push (a stale status file fired it), a DR-037 condition-2 exception recorded as such. Record with commands and output: docs/agent/EVIDENCE.md, the
+              2026-09-20 entry (gating run ids, chain lines, the #863 early-push deviation, the derived
+              figures each chain caught). Final manifest v82, fingerprint 6cc9a0eef68e5ca0; the ONE re-mint
+              request to the Mac went AFTER the last landing (PR #910). Also landed today: #900 (video
+              intake), #902/#904/#906/#907/#908/#909 (steward mail), and DR-052 (PR #905, the independent
+              evaluation stage for every intake) is pushed at 2afcf8fa with two Codex rounds answered and
+              its gating check running. Mac PRs #901 and #903 each carry one blocker comment from this lane
+              (nine verified Codex findings); nothing was pushed to their branches. THE MAC TICK HAS BEEN
+              SILENT since 02:26Z - owner escalated once at 06:25Z; readiness dimension (b) reads 0 until
+              the Mac re-mints. One detector gap filed as a BUILD_BACKLOG row: loop:state reads squash-landed
+              branches as unpushed (local patch-id proof, bound to the tip; no live API in the hook). A second draft row, "run-requests
+              has no supersession field", was FALSE (supersededBy exists) and was struck before landing.
+              PREVIOUSLY (2026-09-19 01:00Z, cloud lane): THE BACKLOG SWEEP, SIX LANES AT ONCE.
+              MEASURED, not recalled (UTC, repo-scoped pulls endpoint, three pages): `29` pull requests
+              merged on 2026-09-18, `49` opened, `48` open now; `33` had merged on 2026-09-17 by the
+              same count (the `29` recorded below for that day was a local-day count).
+              WHAT THE DAY WAS: the owner's directive ("all items cleared and backlog empty, then the
+              full build") was executed as six parallel agents on six worktree branches, each owning a
+              slice of docs/BUILD_BACKLOG.md, with the coordinator running every branch's
+              preflight + breadth chain SERIALLY (one shared port) before any push. Result: six product
+              PRs, all owner-merged under DR-037 - #860 (native iOS: coreNormalizationVersion and
+              reconcileDecisions Swift mirrors, Dynamic Type row floors, adaptive Operator theme),
+              #863 (five new gates over figures, provenance, api-zod wiring and both API documents;
+              68 refusal findings closed in v1-openapi.yaml), #864 (cascade joins 5+6, the puck domain,
+              proof:decision-cascade 92/92, 27.0 mdm.* items, Apple YAML pins held by a proof),
+              #866 (PolicyDetail 0/0 no longer green, credential revoke route, tile-less facility
+              graph, vendor-doc drift watcher), #868 (Redis-only step-up store, hashed session refs,
+              per-caller rate limiting, empty-binding refusal, webhook input parsing, dead_letter
+              terminal row, sighting freshness graded), #869 (stacked on #854: estate refresh loop,
+              decision-bound step-up answer, runtime launch-status, live-image Graph proof, secrets
+              seam, data lifecycle). #854 itself was refreshed with a mainline merge. Plus #858
+              (intake: artemis, apple/device-management 27.0, awesome-mcp-servers by use) and four
+              steward heartbeats, self-merged.
+              WHAT THE GATES CAUGHT: seventeen chain failures across the six branches and NOT ONE was
+              a code defect - every one was a derived figure (proof counts 148->151, route pairs,
+              Bruno/Postman request counts, LAUNCH_PROFILE totals), a hand-listed collection (the
+              Postman builder and the Bruno set both enumerate routes by hand; three new routes had
+              neither), a classification (the revoke route unclassified in the launch profile), an
+              env var instructed in a doc with no reader on that branch, a claim-inventory anchor moved
+              by a file growing, a manifest not republished after a proof count moved, or a coverage
+              page generated one step too early (before `git add`, or mid-merge - a conflicted index
+              lists a path at three stages and the page counts all three). Each was fixed at its
+              cause with the repo's own tool and re-queued at the tail; the record is in the commit
+              messages. THE FINDING WORTH KEEPING: CI checks out the PR's MERGE REF. A branch that
+              forked before mainline gained a file (#858's roster) carries a coverage page that is
+              fresh against its own tree and stale against the merge tree - #868's gating check went
+              red on exactly that, and #860/#863/#866, which CONFLICTED with mainline, had NO CI at
+              all, because GitHub builds no merge ref for a conflicting PR. Every branch now carries
+              mainline; the same defect is on the Mac lane's #856 and is theirs to fix.
+              READINESS: 94% on mainline (dimension (a) 16/17); 100% on #864's branch, where the
+              smart-charging scenario turns the last `gap` row `modeled`. Two sim requests ride #868
+              and #869 to re-mint the Mac evidence after their manifest moves (v80, v81) land -
+              dimension (b) will read stale for one tick after each merge, by design. The Mac tick was
+              healthy all day (every hour on the hour, heartbeats on mainline); evidence 14:52Z.
+              STILL OPEN, BY LANE, written into the rows: brace-less mutation ratchet (31 of 33
+              families left; each survivor so far was a tsc-load-bearing guard, not a fixture);
+              security roster row 82 item 2 (the `verify.ts` attestation comment); the webhook WRITE
+              route (owner call: which store); the three decided deletions and Ponytail native cuts
+              part 2 (Mac, Xcode); DecisionEngine/AppWorkflows re-port (backlog row five; owner call under DR-020);
+              Android AMAPI (needs a rig, not Kotlin); data-lifecycle SQL against a live Postgres
+              (Mac lab); the lifecycle admin job's invocation. One container restart at ~00:00Z killed
+              two running chains; worktrees and commits survived, both relaunched, nothing lost.
+              PREVIOUSLY (2026-09-17 21:20Z, cloud lane): A LONG MERGE-AND-BUILD SESSION.
               MEASURED, not recalled: `29` pull requests merged on 2026-09-17 and `27` still open.
               The open count barely moved (30 -> 27) and that is the honest shape of it: much of what
               merged was lane mail and heartbeats opened and landed in the same breath, and the OLDER
@@ -1167,27 +1241,28 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (0) NOTHING ELSE IS THE BOTTLENECK - the eleven owner-gated PRs above are.
-              While they sit: watch #748 for the Mac lane's (336)->(361) fix and land nothing on
-              their branch; file the DecisionEngine.swift removal-rule drift as a decision record or
-              a declared drift once the owner picks; (1) stamp a lane on every lane-less
-              BUILD_BACKLOG row and extend
-              scripts/check-backlog-ownership.mjs to read BUILD_BACKLOG rows so a lane-less row fails;
-              (2) file and build the DR-036 proof-bindings row so readiness dimension (b) becomes a
-              ratio instead of a binary that reads 0 after every manifest move; (3) give the roster a
-              clock (nextActionDate + a REPORTED >7d line) and mark the seven done nextActions; (4)
-              the record-hygiene items the self-evaluation lists (SOLUTION_READINESS_ASSESSMENT DR-033
-              paragraph, DR-043 cites, NOTICE reconciliation, CONTINUITY.md, the Level 10 matrix);
-              (5) the mis-filed owner items that are engineering (AppWorkflows parity re-port, the
-              three decided deletions, the three safety defaults - propose, owner vetoes); (6) PR #531
-              merge-or-close; (7) then build: Puck 5, Puck 1, the smart-charging scenario behind a DR.
-              Mac: DONE 2026-09-12 - needle DR-044 + the two self-eval closures (Graphify drop, Crucible
-              lens) + both benches re-run; the RELIABILITY_SLO re-date is ROUTED TO THE CLOUD as a coordinated
-              single-machine job (benches + test:load together, one machine, one commit) rather than a partial
-              cross-machine overwrite. REMAINING Mac: Fleet Premium on the owner's word; Ponytail native cuts
-              part 2 + row 103 in an Xcode session; delete tests/load, .agents metadata and site/index.html once
-              the cloud opens the row; read the inbox BEFORE any long measurement (a manifest move outranks a
-              measurement). Owner: the BLOCKED ON list.
+NEXT ACTION: cloud: (0) Land PR #905 (DR-052) on its green gating check - no launch-surface file, all
+              threads resolved - then apply DR-052's three stages to the two resources the owner named on
+              2026-09-20 (upstash/context7, nidhinjs/prompt-master): the independent scan and evaluation
+              FIRST, the confirmation second, the coordinator's choice third, each recorded in
+              docs/agent/RESOURCE_INTAKE.md; the prompt-master by-use trial is an open BUILD_BACKLOG row.
+              (1) When the Mac tick returns: confirm mac-run.json re-minted against fingerprint
+              6cc9a0eef68e5ca0 (v82) and readiness dimension (b) back to 100%; if the tick stays silent past
+              the 24h escalation window, escalate the owner ONCE more with the same command. (2) Fix the two
+              detector gap filed today (the squash-landed branch check: local patch-id proof, tip-bound, offline) - a small
+              gate change with a self-test. (3) The rows still open by lane in docs/BUILD_BACKLOG.md; the
+              brace-less mutation ratchet one family per session. (4) The owner decisions the sweep
+              surfaced and the lane MERGED on the owner's direction without a per-change decision record
+              (exceptions to DR-037's owner-gated clause, EVIDENCE 2026-09-20): LAUNCH_PROFILE_VERSION 5->7 and two
+              GAP removals (#869); the /v1/step-up/enroll/revoke classification (#866); the
+              third_party/apple-device-management publication-boundary area (#864); the launch-profile
+              edit in #854; plus the positioning sentence the launch-profile gate forced (#869) and the
+              webhook write route's store (#868) - each needs a decision record the owner ratifies; the DecisionEngine/AppWorkflows re-port (backlog rows,
+              owner call under DR-020). Then build: Puck 5, Puck 1, the smart-charging scenario behind a DR.
+              Mac: reply to the blocker comments on #901 and #903 before pushing more to those branches;
+              run the two queued 2026-09-18 sim requests (each re-mints evidence against the checkout at run
+              time, so against v82; #910 names the fingerprint the result must carry - not a third request);
+              read the inbox BEFORE any long measurement. Owner: the BLOCKED ON list, and the launchd tick.
 ## The three things that are true right now
 
 1. **The doctrine is `docs/PURPOSE.md` v2 (DR-020).** SignalGrid is an
@@ -1208,7 +1283,7 @@ NEXT ACTION: cloud: (0) NOTHING ELSE IS THE BOTTLENECK - the eleven owner-gated 
    frozen" until 2026-09-02 — two days after this file's own STATE section
    recorded DR-021 — which is the contradiction a doc can hold against itself
    when no gate reads English.*
-3. **Nobody has used the product.** 147 proof gates and four native surfaces do
+3. **Nobody has used the product.** 152 proof gates and four native surfaces do
    not change that number. Only a conversation does.
 
 ---

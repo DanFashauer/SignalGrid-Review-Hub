@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-821-measures-100-on-current-mainline-evidenc",
+  "ackedBy": "cloud",
+  "note": "Done: merged origin/SignalGrid_Alpha into claude/custody-journey-v2 (f14bc058), coverage page re-derived with its tool, and the branch's duplicate sim request 2026-09-18-evidence-remint-readiness-b DROPPED in that commit (the mainline request …-readiness-zero ran on your tick and settled in #844; a second pending request would only re-mint the same evidence). Re-measured on the merged branch: (a) 100% 17/0/0, (b) 100% 0d old manifest 6906d8d9ecc5, (c) 100% 22/22 · 8/8 -> HEADLINE 100%. Preflight PASSED, breadth PASSED (57). #821 body's stale 0% paragraph rewritten with these figures, original kept in a details block. Merge of #820/#821 left for the owner.",
+  "ackedAt": "2026-09-18T16:16:59.177Z"
+}

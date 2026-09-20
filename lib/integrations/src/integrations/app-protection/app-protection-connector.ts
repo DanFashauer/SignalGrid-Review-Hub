@@ -132,11 +132,19 @@ function stringList(v: unknown): string[] {
  *  carrying any element that is not a non-empty string. `null`/absent = silence, not
  *  malformed; an empty array is a valid "nothing" set. A junk element (a number, an
  *  object, an empty string) is an unreadable assertion, not a silently-empty set —
- *  dropping it to `clean` would let a malformed flagged/policy list grant. */
+ *  dropping it to `clean` would let a malformed flagged/policy list grant.
+ *  Iterated by INDEX, not `Array.prototype.some`, which SKIPS sparse holes: a hole
+ *  (`new Array(1)`, `[,]`) reads as `undefined` and must count as a junk element, or a
+ *  sparse list would pass here and then `stringList` would reduce it to an empty
+ *  "nothing" set and grant. (Codex P1.) */
 function arrayMalformed(v: unknown): boolean {
   if (v === undefined || v === null) return false;
   if (!Array.isArray(v)) return true;
-  return v.some((el) => typeof el !== "string" || el.trim().length === 0);
+  for (let i = 0; i < v.length; i++) {
+    const el = v[i];
+    if (typeof el !== "string" || el.trim().length === 0) return true;
+  }
+  return false;
 }
 
 const POLICY_STATES = ["applied", "not_applied", "unknown"] as const;

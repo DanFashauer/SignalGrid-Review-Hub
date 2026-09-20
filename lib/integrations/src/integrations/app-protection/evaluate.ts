@@ -108,17 +108,12 @@ export function evaluateAppProtection(
   // A missing/not_applied policy stays expected and non-restricting here. This is
   // distinct from `unknown` applicability (posed, unreadable), which raises below.
   if (report.mamApplicability === "not_applicable") {
-    if (report.reportIntegrity !== "clean") {
-      return {
-        ...base,
-        posture: "app_protection_unverified",
-        reasonCode: "REPORT_MALFORMED",
-        recommendedAction: "step_up",
-        criticalFindings,
-        unknownSignals: ["report_integrity"],
-        appProtected: false,
-      };
-    }
+    // Ordered by severity, because this branch short-circuits (it does not use the
+    // worst-concern-wins reducer below): the strongest concern must be checked first so
+    // a weaker raise cannot cap it. A positively FLAGGED registration is device-integrity
+    // evidence (jailbreak/root) that outranks BOTH the out-of-scope declaration AND report
+    // malformity — malformity may never DOWNGRADE a confirmed restrict — so it comes before
+    // the malformed check. (Codex P1.)
     if (report.complianceState === "flagged") {
       criticalFindings.push("mam_registration_flagged");
       return sensitive
@@ -141,6 +136,19 @@ export function evaluateAppProtection(
             appProtected: false,
           };
     }
+    // A report we could not parse is not evidence the caller's out-of-scope declaration
+    // is safe to act on → raise (but below a confirmed flag, above the grant).
+    if (report.reportIntegrity !== "clean") {
+      return {
+        ...base,
+        posture: "app_protection_unverified",
+        reasonCode: "REPORT_MALFORMED",
+        recommendedAction: "step_up",
+        criticalFindings,
+        unknownSignals: ["report_integrity"],
+        appProtected: false,
+      };
+    }
     // Out of scope grants only on a POSITIVELY clean compliance read. An UNKNOWN
     // flagged state (the plane never posed flagged_reasons) is not proof the
     // registration is un-flagged, and — because a flagged registration overrides the
@@ -152,6 +160,35 @@ export function evaluateAppProtection(
         ...base,
         posture: "app_protection_unverified",
         reasonCode: "COMPLIANCE_UNKNOWN",
+        recommendedAction: "step_up",
+        criticalFindings,
+        unknownSignals,
+        appProtected: false,
+      };
+    }
+    // The clean-compliance read must itself be CURRENT when the caller posed a maximum
+    // age: a jailbreak/root finding is device-integrity evidence, and a stale or
+    // timestamp-less read cannot establish the registration is unflagged NOW. `unassessed`
+    // (no bound posed) and `fresh` grant; `stale`/`unknown` raise, mirroring the applicable
+    // path's freshness rungs. (Codex P1.)
+    if (report.registrationFreshness === "stale") {
+      criticalFindings.push("mam_registration_stale");
+      return {
+        ...base,
+        posture: "app_protection_stale",
+        reasonCode: "APP_PROTECTION_STALE",
+        recommendedAction: "step_up",
+        criticalFindings,
+        unknownSignals,
+        appProtected: false,
+      };
+    }
+    if (report.registrationFreshness === "unknown") {
+      unknownSignals.push("registration_freshness");
+      return {
+        ...base,
+        posture: "app_protection_unverified",
+        reasonCode: "APP_PROTECTION_TIME_UNKNOWN",
         recommendedAction: "step_up",
         criticalFindings,
         unknownSignals,

@@ -232,6 +232,12 @@ check("malformed-isolation: an asserted NON-STRING app_ref (42) → malformed �
 check("malformed-isolation: an asserted BLANK app_ref (\" \") → malformed",
   normalizeAppProtectionReport(APP, clean({ app_ref: " " }), { source: "mut" }).reportIntegrity === "malformed");
 
+// sparse-hole array (Codex P1): Array.prototype.some SKIPS holes, so a sparse
+// flagged_reasons (new Array(1)) would pass element validation and then reduce to an
+// empty "nothing" set and grant. Index iteration reads the hole as a junk element.
+check("malformed-isolation: a SPARSE flagged_reasons (new Array(1), a hole) → malformed — a hole is a junk element, not a silently-empty set",
+  integrity({ policy_state: "applied", flagged_reasons: new Array(1) as unknown as string[], applied_policies: ["p"], registration_observed_at: FRESH }) === "malformed");
+
 // blank REQUESTED appRef (Codex P1): the requested binding must itself name an app. A
 // blank/whitespace appRef with a source that OMITS its optional app_ref would otherwise
 // normalize an applied+clean report and grant APP_PROTECTED for an UNIDENTIFIED app —
@@ -284,6 +290,25 @@ check("a NOT_APPLICABLE app whose flagged state is UNKNOWN (source omits flagged
   naUnknownCompliance.recommendedAction === "step_up" && naUnknownCompliance.reasonCode === "COMPLIANCE_UNKNOWN" &&
   naUnknownCompliance.appProtected === false && naUnknownCompliance.unknownSignals.includes("compliance_state"));
 
+// flagged OUTRANKS malformity in the not_applicable branch (Codex P1): the branch
+// short-circuits, so a weaker malformed raise must not cap a confirmed device-integrity
+// restrict. A sensitive, out-of-scope, FLAGGED registration that ALSO carries a malformed
+// field must still restrict, not downgrade to step_up REPORT_MALFORMED.
+const naFlaggedMalformed = ev(clean({ flagged_reasons: ["jailbroken"], selective_wipe: "pending" } as AppProtectionReportRaw), "sensitive", "not_applicable");
+check("a NOT_APPLICABLE sensitive app that is FLAGGED and ALSO malformed → restrict (MAM_FLAGGED_SENSITIVE_APP), never downgraded to REPORT_MALFORMED — flagged outranks malformity",
+  naFlaggedMalformed.recommendedAction === "restrict" && naFlaggedMalformed.reasonCode === "MAM_FLAGGED_SENSITIVE_APP" && naFlaggedMalformed.appProtected === false);
+
+// the out-of-scope grant requires a CURRENT compliance read when a max age is posed
+// (Codex P1): a stale or timestamp-less clean read is not proof the registration is
+// unflagged NOW. `unassessed` (no bound) and `fresh` grant; `stale`/`unknown` raise,
+// mirroring the applicable path's freshness rungs.
+const naStale = ev(clean({ registration_observed_at: STALE, policy_state: "not_applied", applied_policies: [] }), "standard", "not_applicable");
+check("a NOT_APPLICABLE app whose clean read is STALE (posed max age exceeded) → step_up (APP_PROTECTION_STALE), never an out-of-scope grant",
+  naStale.recommendedAction === "step_up" && naStale.reasonCode === "APP_PROTECTION_STALE" && naStale.appProtected === false);
+const naTimeUnknown = ev(clean({ registration_observed_at: undefined, policy_state: "not_applied", applied_policies: [] }), "standard", "not_applicable");
+check("a NOT_APPLICABLE app whose read carries NO timestamp while a max age is posed → step_up (APP_PROTECTION_TIME_UNKNOWN), never a grant",
+  naTimeUnknown.recommendedAction === "step_up" && naTimeUnknown.reasonCode === "APP_PROTECTION_TIME_UNKNOWN" && naTimeUnknown.appProtected === false);
+
 // ── exhaustive (normalized): grant only on the full conjunction ─────────────────
 const normDomains = {
   policyState: ["applied", "not_applied", "unknown"],
@@ -312,21 +337,22 @@ const normRes = enumerateGrantSafety({
   confirmedWhenNone: (v) => v.appProtected === true && v.criticalFindings.length === 0 && v.unknownSignals.length === 0,
   positivelyClean: (c) =>
     c.reportIntegrity === "clean" &&
-    // out-of-scope grants only on a POSITIVELY clean compliance read — a flagged
-    // registration is device-integrity evidence the out-of-scope declaration cannot
-    // hide, and an UNKNOWN flagged state is not proof the registration is un-flagged.
-    ((c.mamApplicability === "not_applicable" && c.complianceState === "clean") ||
+    c.complianceState === "clean" &&
+    (c.registrationFreshness === "fresh" || c.registrationFreshness === "unassessed") &&
+    // out-of-scope grants only on a POSITIVELY clean, CURRENT compliance read — a flagged
+    // registration is device-integrity evidence the out-of-scope declaration cannot hide,
+    // an UNKNOWN flagged state is not proof the registration is un-flagged, and a stale/
+    // timestamp-less clean read is not proof it is unflagged now.
+    (c.mamApplicability === "not_applicable" ||
       ((c.mamApplicability === "applicable" || c.mamApplicability === "unassessed") &&
-        c.policyState === "applied" &&
-        c.complianceState === "clean" &&
-        (c.registrationFreshness === "fresh" || c.registrationFreshness === "unassessed"))),
+        c.policyState === "applied")),
 });
 check(
-  `exhaustive (normalized): over all ${normRes.combos} states, an app is protected ONLY on a clean report that is either out-of-scope (and positively clean) or an applied+clean policy on a current read (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
+  `exhaustive (normalized): over all ${normRes.combos} states, an app is protected ONLY on a clean, current report that is either out-of-scope or an applied+clean policy (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
   normRes.mismatches === 0 && normRes.combos === productOf(normDomains) && normRes.combos === 864,
 );
-check("exhaustive (normalized): exactly 48 states grant — 36 out-of-scope (clean) + 12 applied+clean+current",
-  normRes.noneCount === 48);
+check("exhaustive (normalized): exactly 30 states grant — 18 out-of-scope (clean, current) + 12 applied+clean+current",
+  normRes.noneCount === 30);
 
 // ── exhaustive (raw wire): normalizer + evaluator on hostile input ──────────────
 const rawDomains = {

@@ -3089,7 +3089,7 @@ for row in "854 estate2 106002598224" "869 customer2 106006365401" "860 native6 
   gh api $R/check-runs/$run --jq '"  gating run \(.id) on \(.head_sha[0:8]) started \(.started_at) \(.conclusion)"'
 done
 git -C /home/user/SignalGrid-Review-Hub worktree list | grep -E "wt-(estate|customer|native|gates|cascade|docs|api-security|appwf) "   # worktree -> branch
-for m in 21221b1a 93da3e28 c7dc6610 4df66f2a 5df039f7 e32bb885 9018a8bc 9fb4bc08; do f=$(git show --stat --format= $m -- scripts/launch-profile.mjs scripts/publication-boundary.mjs scripts/check-launch-claims.mjs docs/LAUNCH_PROFILE.md | grep -E '\|' | awk '{print $1" "$3}' | tr '\n' ';'); echo "$m: ${f:-none}"; done   # DR-037 condition 5
+for m in 21221b1a 93da3e28 c7dc6610 4df66f2a 5df039f7 e32bb885 9018a8bc 9fb4bc08; do f=$(git show --stat --format= $m -- scripts/launch-profile.mjs scripts/publication-boundary.mjs scripts/check-launch-claims.mjs docs/LAUNCH_PROFILE.md | grep -E '\|' | awk '{print $1" "$3}' | tr '\n' ';'); echo "$m: ${f:-none}"; done   # DR-037, the owner-gated clause (launch profile / publication boundary)
 git show 93da3e28 -- scripts/launch-profile.mjs | grep -E '^[-+].*LAUNCH_PROFILE_VERSION'
 node scripts/check-live-sync.mjs | head -1
 ```

@@ -97,13 +97,23 @@ function textOf(v: unknown): string | null {
   return s.length > 0 ? s : null;
 }
 
-/** A strict ISO-8601 UTC (Zulu) instant → epoch ms, or null. */
+/** A strict ISO-8601 UTC (Zulu) instant → epoch ms, or null. Rejects an impossible
+ *  calendar date (2026-02-30) that `Date.parse` silently rolls over to a real one:
+ *  the parsed instant must reproduce the supplied UTC components, or an unreadable
+ *  date would masquerade as valid freshness evidence and could grant. */
 function instantOf(v: unknown): number | null {
   if (typeof v !== "string") return null;
   const s = v.trim();
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(s)) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?Z$/.exec(s);
+  if (m === null) return null;
   const ms = Date.parse(s);
-  return Number.isFinite(ms) ? ms : null;
+  if (!Number.isFinite(ms)) return null;
+  // The parsed instant must RE-SERIALIZE to the same second-precision UTC calendar it
+  // was given. An impossible date (2026-02-30) rolls over to a real one (Mar 2), whose
+  // ISO string differs from the input — one comparison, so one fixture can falsify it.
+  const canonical = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`;
+  if (new Date(ms).toISOString().slice(0, 19) !== canonical) return null;
+  return ms;
 }
 
 /** The list of trimmed non-empty strings in an array, or [] for a non-array. The
@@ -118,11 +128,15 @@ function stringList(v: unknown): string[] {
   return out;
 }
 
-/** An array field is malformed only when ASSERTED as a non-array. `null`/absent =
- *  silence, not malformed. */
+/** An array field is malformed when ASSERTED as a non-array, OR when it is an array
+ *  carrying any element that is not a non-empty string. `null`/absent = silence, not
+ *  malformed; an empty array is a valid "nothing" set. A junk element (a number, an
+ *  object, an empty string) is an unreadable assertion, not a silently-empty set —
+ *  dropping it to `clean` would let a malformed flagged/policy list grant. */
 function arrayMalformed(v: unknown): boolean {
   if (v === undefined || v === null) return false;
-  return !Array.isArray(v);
+  if (!Array.isArray(v)) return true;
+  return v.some((el) => typeof el !== "string" || el.trim().length === 0);
 }
 
 const POLICY_STATES = ["applied", "not_applied", "unknown"] as const;
@@ -231,10 +245,21 @@ export function normalizeAppProtectionReport(
   const observedMs = instantOf(observedRaw);
   const instantShapeBad = observedRaw !== undefined && observedRaw !== null && observedMs === null;
 
+  // A report that echoes a DIFFERENT app than the one requested is a substitution, not
+  // evidence about this app — it must not be relabeled and evaluated as protected.
+  const reportedAppRef = textOf(raw["app_ref"]);
+  const appRefMismatch = reportedAppRef !== null && reportedAppRef !== appRef.trim();
+  // "applied" with no corroborating policy references is a contradiction: an applied
+  // app-protection policy always names at least one policy. Fail closed on the ambiguity
+  // rather than trusting the bare `applied` claim.
+  const appliedWithoutPolicies = policyState === "applied" && stringList(raw["applied_policies"]).length === 0;
+
   const malformed =
     readThrew ||
     !plain ||
     instantShapeBad ||
+    appRefMismatch ||
+    appliedWithoutPolicies ||
     arrayMalformed(raw["flagged_reasons"]) ||
     arrayMalformed(raw["applied_policies"]) ||
     hasUnrecognizedKey(report, APP_PROTECTION_REPORT_KEYS) ||

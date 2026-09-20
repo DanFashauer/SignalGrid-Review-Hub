@@ -93,10 +93,24 @@ export function evaluateAppProtection(
     };
   }
 
-  // Defence in depth: a report we could not parse is never a grant — and it raises
-  // even for an app the caller declared out of MAM scope, because a malformed wire
-  // record is not evidence that the caller's declaration is safe to act on.
-  if (report.reportIntegrity !== "clean") {
+  // The caller's affirmative out-of-scope declaration. MAM facts are moot for an app
+  // legitimately outside MAM: a CLEAN out-of-scope report short-circuits to the grant,
+  // and a MALFORMED one raises (step_up) but never restricts — a not_applied policy is
+  // expected for an out-of-scope app, so it is not a restrict-worthy concern here. A
+  // malformed wire record is not evidence the caller's declaration is safe to act on.
+  // This is distinct from `unknown` applicability (posed, unreadable), which raises below.
+  if (report.mamApplicability === "not_applicable") {
+    if (report.reportIntegrity === "clean") {
+      return {
+        ...base,
+        posture: "app_protection_not_applicable",
+        reasonCode: "APP_PROTECTION_NOT_APPLICABLE",
+        recommendedAction: "none",
+        criticalFindings,
+        unknownSignals,
+        appProtected: true,
+      };
+    }
     return {
       ...base,
       posture: "app_protection_unverified",
@@ -105,21 +119,6 @@ export function evaluateAppProtection(
       criticalFindings,
       unknownSignals: ["report_integrity"],
       appProtected: false,
-    };
-  }
-
-  // The caller's affirmative out-of-scope declaration. MAM facts are moot for an app
-  // legitimately outside MAM, so a clean report short-circuits to the grant. This is
-  // distinct from `unknown` applicability (posed, unreadable), which raises below.
-  if (report.mamApplicability === "not_applicable") {
-    return {
-      ...base,
-      posture: "app_protection_not_applicable",
-      reasonCode: "APP_PROTECTION_NOT_APPLICABLE",
-      recommendedAction: "none",
-      criticalFindings,
-      unknownSignals,
-      appProtected: true,
     };
   }
 
@@ -132,6 +131,15 @@ export function evaluateAppProtection(
   if (report.registrationFreshness === "unknown") unknownSignals.push("registration_freshness");
 
   const candidates: Candidate[] = [];
+
+  // A report we could not parse never grants, and — worst-concern-wins — it must never
+  // LOWER a confirmed concern either: it is a raising CANDIDATE here, not an early return
+  // that would cap a sensitive missing/flagged policy at step_up. Pushed first so it wins
+  // step_up ties (a pure-malformed report still reads REPORT_MALFORMED). (Codex P1.)
+  if (report.reportIntegrity !== "clean") {
+    unknownSignals.push("report_integrity");
+    candidates.push({ posture: "app_protection_unverified", action: "step_up", reason: "REPORT_MALFORMED" });
+  }
 
   // ── the management plane's own state: is a policy applied? ───────────────────────
   if (report.policyState === "not_applied") {

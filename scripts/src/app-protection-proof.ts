@@ -50,10 +50,15 @@ const FRESH = "2026-07-31T22:25:00Z"; // read 5 minutes ago
 const STALE = "2026-07-31T21:00:00Z"; // read 90 minutes ago
 const MAX_AGE = 900; // the caller will act on a registration read up to 15 minutes old
 
+/** The app under evaluation. The report's own `app_ref` must echo it — a report for a
+ *  DIFFERENT app is a substitution, not evidence about this one (see the app_ref-mismatch
+ *  isolation below). Every fixture and the caller-supplied ref use this same value. */
+const APP = "com.hospital.epic";
+
 /** A fully-clean registration: a policy applied, an empty flagged set, read five
  *  minutes ago. Each targeted check below changes exactly ONE field of it. */
 const clean = (over: AppProtectionReportRaw = {}): AppProtectionReportRaw => ({
-  app_ref: "com.hospital.epic",
+  app_ref: APP,
   policy_state: "applied",
   applied_policies: ["ap-ios-clinical-v4"],
   flagged_reasons: [],
@@ -71,7 +76,7 @@ const ev = (
   maxRegistrationAgeSeconds: number | undefined = MAX_AGE,
 ) =>
   evaluateAppProtection(
-    normalizeAppProtectionReport("a-1", r, { appSensitivity, mamApplicability, referenceTime, maxRegistrationAgeSeconds }),
+    normalizeAppProtectionReport(APP, r, { appSensitivity, mamApplicability, referenceTime, maxRegistrationAgeSeconds }),
   );
 
 // ── the grant ───────────────────────────────────────────────────────────────────
@@ -141,7 +146,7 @@ check("a registration read 90 minutes ago against a 15-minute maximum → step_u
   stale.recommendedAction === "step_up" && stale.reasonCode === "APP_PROTECTION_STALE" &&
   stale.criticalFindings.includes("mam_registration_stale"));
 check("no maximum age posed → 'unassessed' and still granting; a caller with no recency opinion forecloses nothing",
-  normalizeAppProtectionReport("a", clean(), { appSensitivity: "standard", mamApplicability: "applicable", referenceTime: REF }).registrationFreshness === "unassessed" &&
+  normalizeAppProtectionReport(APP, clean(), { appSensitivity: "standard", mamApplicability: "applicable", referenceTime: REF }).registrationFreshness === "unassessed" &&
   ev(clean(), "standard", "applicable", REF, undefined).recommendedAction === "none");
 const noObserved = ev(clean({ registration_observed_at: undefined }));
 check("a maximum age POSED and no read instant reported → step_up (APP_PROTECTION_TIME_UNKNOWN)",
@@ -199,14 +204,43 @@ check("malformed-isolation: registration_observed_at present but not ISO-8601 Zu
 
 // arrayMalformed(applied_policies): applied_policies asserted as a non-array while
 // flagged_reasons is a well-formed array — isolates it from the flagged_reasons term.
-check("malformed-isolation: applied_policies asserted as a NON-ARRAY (flagged_reasons well-formed) → malformed — its array guard is load-bearing on its own",
-  integrity({ policy_state: "applied", flagged_reasons: [], applied_policies: 7 as unknown as string[], registration_observed_at: FRESH }) === "malformed");
+// policy_state is not_applied here so the applied-without-policies term below cannot
+// also fire and mask a mutation of this one.
+check("malformed-isolation: applied_policies asserted as a NON-ARRAY (flagged_reasons well-formed, policy not applied) → malformed — its array guard is load-bearing on its own",
+  integrity({ policy_state: "not_applied", flagged_reasons: [], applied_policies: 7 as unknown as string[], registration_observed_at: FRESH }) === "malformed");
+
+// arrayMalformed ELEMENT check (Codex P1): a present array whose element is not a
+// non-empty string is unreadable, not a silently-empty set. [5] must not drop to clean.
+check("malformed-isolation: flagged_reasons is an array with a NON-STRING element ([5]) → malformed, not clean — a junk flagged element cannot be dropped to an empty set that grants",
+  integrity({ policy_state: "not_applied", flagged_reasons: [5] as unknown as string[], applied_policies: ["p"], registration_observed_at: FRESH }) === "malformed");
+
+// appliedWithoutPolicies (Codex P1): policy_state=applied with no policy references is a
+// contradiction. Everything else clean, so this term alone decides.
+check("malformed-isolation: policy_state=applied with EMPTY applied_policies → malformed — an applied policy with no references is a contradiction, not a grant",
+  integrity({ policy_state: "applied", flagged_reasons: [], applied_policies: [], registration_observed_at: FRESH }) === "malformed");
+
+// appRefMismatch (Codex P1): a report echoing a DIFFERENT app than requested is a
+// substitution. Requested APP, report says another app; everything else clean.
+check("malformed-isolation: report app_ref echoes a DIFFERENT app than requested → malformed — a substituted response cannot be relabeled and granted",
+  normalizeAppProtectionReport(APP, clean({ app_ref: "com.other.app" }), { source: "mut" }).reportIntegrity === "malformed");
 
 // hasUnrecognizedKey catch: a report whose KEY enumeration throws (a hostile proxy)
 // fails closed via the catch — the only term that can catch an un-introspectable object.
 const hostileKeys = new Proxy({} as AppProtectionReportRaw, { ownKeys() { throw new Error("hostile ownKeys"); } });
 check("malformed-isolation: a report whose KEY enumeration throws → malformed (hasUnrecognizedKey catch) — an un-introspectable object cannot be certified clean",
   integrity(hostileKeys) === "malformed");
+
+// impossible calendar date (Codex P1): a well-shaped but non-existent date (Feb 30)
+// that Date.parse rolls over must not read as a valid instant and grant as fresh.
+check("a registration_observed_at with the ISO shape but an IMPOSSIBLE date (2026-02-30) → malformed, never a valid fresh instant",
+  integrity({ policy_state: "not_applied", flagged_reasons: [], applied_policies: ["p"], registration_observed_at: "2026-02-30T00:00:00Z" }) === "malformed");
+
+// worst-concern-wins under malformity (Codex P1): a sensitive app positively reported
+// not_applied but carrying an unrecognized key (malformed) must still RESTRICT — the
+// malformed raise is a candidate, never a cap that downgrades a confirmed restrict.
+const malformedRestrict = ev(clean({ policy_state: "not_applied", applied_policies: [], selective_wipe: "pending" } as AppProtectionReportRaw), "sensitive");
+check("a MALFORMED report that also confirms a sensitive missing policy → restrict, not step_up — malformity never lowers a confirmed high-risk verdict",
+  malformedRestrict.recommendedAction === "restrict" && malformedRestrict.reasonCode === "MISSING_MAM_POLICY_SENSITIVE_APP");
 
 // ── exhaustive (normalized): grant only on the full conjunction ─────────────────
 const normDomains = {
@@ -270,7 +304,7 @@ const buildRaw = (c: Record<string, unknown>): NormalizedAppProtection => {
   if (c.observed === "fresh") raw.registration_observed_at = FRESH;
   else if (c.observed === "stale") raw.registration_observed_at = STALE;
   if (c.__alias === "present") raw.selective_wipe = "pending";
-  return normalizeAppProtectionReport("enum", raw, {
+  return normalizeAppProtectionReport(APP, raw, {
     appSensitivity: "standard", mamApplicability: "applicable", referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE, source: "enum",
   });
 };

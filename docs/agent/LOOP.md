@@ -70,7 +70,7 @@ LAST TOUCHED: 2026-09-20 08:00Z (cloud lane, latest) - THE EIGHT LANDINGS, ONE A
               (nine verified Codex findings); nothing was pushed to their branches. THE MAC TICK HAS BEEN
               SILENT since 02:26Z - owner escalated once at 06:25Z; readiness dimension (b) reads 0 until
               the Mac re-mints. One detector gap filed as a BUILD_BACKLOG row: loop:state reads squash-landed
-              branches as unpushed (fallback must bind to the tip sha). A second draft row, "run-requests
+              branches as unpushed (local patch-id proof, bound to the tip; no live API in the hook). A second draft row, "run-requests
               has no supersession field", was FALSE (supersededBy exists) and was struck before landing.
               PREVIOUSLY (2026-09-19 01:00Z, cloud lane): THE BACKLOG SWEEP, SIX LANES AT ONCE.
               MEASURED, not recalled (UTC, repo-scoped pulls endpoint, three pages): `29` pull requests
@@ -1245,7 +1245,7 @@ NEXT ACTION: cloud: (0) Land PR #905 (DR-052) on its green gating check - no lau
               (1) When the Mac tick returns: confirm mac-run.json re-minted against fingerprint
               6cc9a0eef68e5ca0 (v82) and readiness dimension (b) back to 100%; if the tick stays silent past
               the 24h escalation window, escalate the owner ONCE more with the same command. (2) Fix the two
-              detector gap filed today (the squash-landed branch check, fallback bound to the tip sha) - a small
+              detector gap filed today (the squash-landed branch check: local patch-id proof, tip-bound, offline) - a small
               gate change with a self-test. (3) The rows still open by lane in docs/BUILD_BACKLOG.md; the
               brace-less mutation ratchet one family per session. (4) The owner decisions the sweep
               surfaced, each recorded in its PR: LAUNCH_PROFILE_VERSION 5->7 and two GAP removals with no

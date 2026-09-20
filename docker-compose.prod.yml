@@ -70,12 +70,13 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-}
       REDIS_URL: ${REDIS_URL:-}
       SIGNALGRID_DEPRECATED_ROUTES: ${SIGNALGRID_DEPRECATED_ROUTES:-}
-      # PINNED false, deliberately not a pass-through: this image has no
-      # @workspace/integrations wiring — the connector routes run the
-      # fixture-backed core — so a true here would only flip /healthz and
-      # /v1/context to CLAIM live signals the stack cannot produce. A
-      # deployment that actually wires live integrations changes the image,
-      # not this line.
+      # PINNED false, deliberately not a pass-through. Since 2026-09-18 the image
+      # wires ONE integration — the read-only Graph posture read behind
+      # SIGNALGRID_CORE=estate — but this stack keeps live calls off: with it
+      # false the estate core boots on the committed fixture dataset and its
+      # connector records mode "fixture", so /healthz and /v1/context cannot
+      # claim live signals the stack did not read. Opening it is a deliberate
+      # change to this line, with a real GRAPH_ACCESS_TOKEN, on the beta/prod tier.
       SIGNALGRID_LIVE_INTEGRATIONS: "false"
       SIGNALGRID_V1_RATE_LIMIT: ${SIGNALGRID_V1_RATE_LIMIT:-}
       SIGNALGRID_GLOBAL_RATE_LIMIT: ${SIGNALGRID_GLOBAL_RATE_LIMIT:-}
@@ -83,6 +84,19 @@ services:
       # a non-integer value makes the API refuse to start rather than quietly
       # revert to it, so a typo here is a failed deploy, not a silent one.
       SIGNALGRID_MAX_DECISIONS_PER_TENANT: ${SIGNALGRID_MAX_DECISIONS_PER_TENANT:-}
+      # Which core this process serves: unset/"demo" is the seeded demo core;
+      # "estate" boots SignalGridCore.fromEstate around THIS deployment's tenant,
+      # posture read once at boot through the read-only Graph posture connector
+      # (fixture dataset unless the live gate below opens). Malformed ⇒ refuses
+      # to boot rather than falling back to demo.
+      SIGNALGRID_CORE: ${SIGNALGRID_CORE:-}
+      SIGNALGRID_ESTATE_TENANT: ${SIGNALGRID_ESTATE_TENANT:-}
+      # Key-only: passed through only when the host sets them (a bearer token
+      # handed an empty string would be a failed boot, not a silent one).
+      SIGNALGRID_ESTATE_OWNER_TOKEN:
+      SIGNALGRID_ESTATE_OPERATOR_TOKEN:
+      GRAPH_ACCESS_TOKEN:
+      GRAPH_BASE_URL: ${GRAPH_BASE_URL:-}
       STEPUP_TTL_SECONDS: ${STEPUP_TTL_SECONDS:-}
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
       WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-}

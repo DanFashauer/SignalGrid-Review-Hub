@@ -30,7 +30,8 @@ export type DetectionCode =
   | "LEFT_PREMISES_WITHOUT_RETURN"
   | "DOCK_TAMPER_WITH_NETWORK_LOSS"
   | "INACTIVE_MDM_BUT_ACTIVE_ELSEWHERE"
-  | "CUSTODY_STALE_OR_CONTESTED";
+  | "CUSTODY_STALE_OR_CONTESTED"
+  | "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN";
 
 export interface Detection {
   code: DetectionCode;
@@ -187,6 +188,54 @@ export function detectCrossDomain(events: readonly SignalGridEvent[]): Detection
         "Custody is stale or contested: the dock, checkout and posture planes disagree on who holds the device or whether it is seated.",
       correlationId,
       evidenceEventIds: [...evidence],
+    });
+  }
+
+  // 7. Checkout CAP blocked by a STALE prior return — the per-user cap refused a new
+  //    checkout because a PRIOR custody against this requester never cleared, not because
+  //    the limit was genuinely reached. Today that is fabric-visible only as an opaque
+  //    dock beep; here it becomes a legible decision — a `checkout_denied` seen against a
+  //    prior custody that is still open. Fail-closed and deterministic: an ABSENT
+  //    `device_returned` is read as "still out" (never as "cleared"), and a `non_return`
+  //    / `custody_expired` is a stale record that a person must clear. The block is
+  //    SURFACED — assurance is raised, a grant is never manufactured. (A bare
+  //    `checkout_denied` with no prior open custody is NOT attributed here: the reason is
+  //    unproven, so no false legible cause is asserted.)
+  const denied = idsWhere((e) => e.eventType === "checkout_denied");
+  const staleRecords = idsWhere(
+    (e) => e.eventType === "non_return" || e.eventType === "custody_expired",
+  );
+  //    Scoped PER DEVICE, not over the whole timeline. Rule 3's `returned` is a single
+  //    boolean over every event, and reusing it here would have let ONE return silence a
+  //    cap block caused by a DIFFERENT device still out — unknown state loosening the
+  //    answer, which golden rule 2 forbids. Counting returns against opens is no better:
+  //    a `checkout_granted` and the `device_removed` that carries out that same checkout
+  //    are two events for ONE custody, so a normal returned loan would read 2 > 1 and fire.
+  //    The device is the axis that makes both cases right. A return whose deviceId is
+  //    absent clears only the equally-unidentified open — never a named one.
+  const deviceKey = (e: SignalGridEvent): string => e.deviceId ?? "(unidentified)";
+  const opensByDevice = new Map<string, string[]>();
+  for (const e of events) {
+    if (e.eventType !== "checkout_granted" && e.eventType !== "device_removed") continue;
+    const key = deviceKey(e);
+    opensByDevice.set(key, [...(opensByDevice.get(key) ?? []), e.eventId]);
+  }
+  const returnedDevices = new Set(
+    events.filter((e) => e.eventType === "device_returned").map(deviceKey),
+  );
+  const openCustody = [...opensByDevice]
+    .filter(([key]) => !returnedDevices.has(key))
+    .flatMap(([, ids]) => ids);
+  const priorUnreturned = openCustody.length > 0;
+  if (denied.length > 0 && (priorUnreturned || staleRecords.length > 0)) {
+    const evidence = [...denied, ...staleRecords, ...openCustody];
+    detections.push({
+      code: "CUSTODY_CAP_BLOCKED_BY_STALE_RETURN",
+      severity: "high",
+      reason:
+        "A checkout was blocked by the per-user cap because a prior custody never cleared: an unreturned or lapsed prior record still counts against the requester, not a genuine limit. A person must clear the stale record.",
+      correlationId,
+      evidenceEventIds: evidence,
     });
   }
 

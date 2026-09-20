@@ -148,6 +148,49 @@ const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const API_ATTEMPTS = 4;
 const API_BACKOFF_MS = [500, 1500, 4000];
 
+// A RATE LIMIT SAYS WHEN IT CLEARS, AND SECONDS OF BACKOFF CANNOT REACH IT. The
+// retry above recovers a 504; it cannot recover a rate limit, because GitHub's
+// windows are measured in minutes to an hour and the four attempts here span
+// about six seconds. #828 (2026-09-18) and #654 (2026-09-12) both reddened on
+// "403 rate limit exceeded (rate limited) (unchanged after 4 attempts)" — a
+// retry that was never going to succeed, and a failure that named neither the
+// limit it hit nor when it would clear, so nothing in the log said which token,
+// which resource, or what was spending it.
+//
+// So a rate-limited response is waited out by ITS OWN clock — `retry-after`, or
+// `x-ratelimit-reset` — up to a cap, and when the clock is past the cap the gate
+// fails AT ONCE naming the instant, rather than spending three pointless retries
+// first. Fail-closed is unchanged either way; what changes is that the failure is
+// legible, and the recoverable case actually recovers. The cap is a bound on
+// runner minutes, not a claim about the limit.
+const RATE_LIMIT_WAIT_CAP_MS = 120_000;
+
+const headerOf = (headers, k) =>
+  headers && typeof headers.get === "function" ? headers.get(k) : undefined;
+
+/** ms to wait per the response's own headers; null when they say nothing. */
+export function rateLimitWaitMs(headers, nowMs) {
+  const retryAfter = Number(headerOf(headers, "retry-after"));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) return retryAfter * 1000;
+  const reset = Number(headerOf(headers, "x-ratelimit-reset"));
+  if (Number.isFinite(reset) && reset > 0) return Math.max(0, reset * 1000 - nowMs);
+  return null;
+}
+
+/** The limit headers, so a failure names WHICH limit and WHEN it clears. */
+export function describeRateLimit(headers) {
+  const parts = [];
+  for (const k of ["x-ratelimit-resource", "x-ratelimit-limit", "x-ratelimit-used", "x-ratelimit-remaining"]) {
+    const v = headerOf(headers, k);
+    if (v !== undefined && v !== null) parts.push(`${k.slice("x-ratelimit-".length)}=${v}`);
+  }
+  const reset = Number(headerOf(headers, "x-ratelimit-reset"));
+  if (Number.isFinite(reset) && reset > 0) parts.push(`reset=${new Date(reset * 1000).toISOString()}`);
+  const ra = headerOf(headers, "retry-after");
+  if (ra !== undefined && ra !== null) parts.push(`retry-after=${ra}s`);
+  return parts.length > 0 ? ` [${parts.join(" ")}]` : "";
+}
+
 export function isRetryableStatus(status) {
   return RETRYABLE_STATUS.has(Number(status));
 }
@@ -171,12 +214,18 @@ export function isRateLimited403(status, body, headers) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Injectable for the self-test; the real one is global fetch. */
-export async function apiWith(fetchImpl, path, { attempts = API_ATTEMPTS, backoff = API_BACKOFF_MS, wait = sleep } = {}) {
+export async function apiWith(
+  fetchImpl,
+  path,
+  { attempts = API_ATTEMPTS, backoff = API_BACKOFF_MS, wait = sleep, now = Date.now, rateLimitCapMs = RATE_LIMIT_WAIT_CAP_MS } = {},
+) {
   const headers = { Accept: "application/vnd.github+json", "User-Agent": "signalgrid-ci-liveness" };
   if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
   let last = null;
+  let headerWait = null; // set by a response that says when its limit clears
   for (let i = 0; i < attempts; i += 1) {
-    if (i > 0) await wait(backoff[i - 1] ?? backoff[backoff.length - 1] ?? 0);
+    if (i > 0) await wait(headerWait ?? backoff[i - 1] ?? backoff[backoff.length - 1] ?? 0);
+    headerWait = null;
     let res;
     try {
       res = await fetchImpl(`https://api.github.com${path}`, { headers });
@@ -196,9 +245,18 @@ export async function apiWith(fetchImpl, path, { attempts = API_ATTEMPTS, backof
     const rateLimited = isRateLimited403(res.status, body, res.headers);
     last = {
       retryable: isRetryableStatus(res.status) || rateLimited,
-      message: `GET ${path} -> ${res.status} ${res.statusText}${rateLimited ? " (rate limited)" : ""}`,
+      message: `GET ${path} -> ${res.status} ${res.statusText}${rateLimited ? " (rate limited)" : ""}${describeRateLimit(res.headers)}`,
     };
     if (!last.retryable) break;
+    const waitMs = rateLimitWaitMs(res.headers, now());
+    if (waitMs !== null && waitMs > rateLimitCapMs) {
+      // The response said when it clears and that is past what this gate will
+      // wait: fail now, naming it, instead of retrying into the same window.
+      last.retryable = false;
+      last.message += ` — clears in ${Math.ceil(waitMs / 1000)}s, beyond the ${rateLimitCapMs / 1000}s this gate will wait; not retried`;
+      break;
+    }
+    if (waitMs !== null) headerWait = waitMs + 1000;
   }
   throw new Error(last.retryable ? `${last.message} (unchanged after ${attempts} attempts)` : last.message);
 }
@@ -260,6 +318,48 @@ async function api(path) {
     const got = await apiWith(c.f, "/x", { wait: noWait });
     if (!got.recovered) throw new Error("expected recovery after rate-limited 403s");
     if (c.calls() !== 3) throw new Error(`expected 3 attempts, made ${c.calls()}`);
+  });
+
+  const limitedWith = (entries) => {
+    const h = new Map(entries); h.get = Map.prototype.get.bind(h);
+    return { ok: false, status: 403, statusText: "Forbidden", text: async () => '{"message":"API rate limit exceeded"}', headers: h };
+  };
+  const recordingWait = () => { const waits = []; return { waits, wait: async (ms) => { waits.push(ms); } }; };
+  const T0 = 1_700_000_000_000;
+
+  await t("a rate-limited 403 with x-ratelimit-reset 30s out waits for the RESET, not the backoff, then recovers", async () => {
+    const c = counting([limitedWith([["x-ratelimit-remaining", "0"], ["x-ratelimit-reset", String(T0 / 1000 + 30)]]), ok({ recovered: 1 })]);
+    const r = recordingWait();
+    const got = await apiWith(c.f, "/x", { wait: r.wait, now: () => T0 });
+    if (!got.recovered || c.calls() !== 2) throw new Error(`calls=${c.calls()}`);
+    if (r.waits.length !== 1 || r.waits[0] !== 31_000) throw new Error(`waited ${JSON.stringify(r.waits)}, expected [31000]`);
+  });
+  await t("retry-after WINS over the reset header and over the backoff", async () => {
+    const c = counting([limitedWith([["retry-after", "7"], ["x-ratelimit-reset", String(T0 / 1000 + 90)]]), ok({ recovered: 1 })]);
+    const r = recordingWait();
+    await apiWith(c.f, "/x", { wait: r.wait, now: () => T0 });
+    if (r.waits[0] !== 8_000) throw new Error(`waited ${JSON.stringify(r.waits)}, expected [8000]`);
+  });
+  await t("a reset BEYOND the cap fails AT ONCE, names the instant, and is not retried", async () => {
+    const c = counting([limitedWith([["x-ratelimit-resource", "core"], ["x-ratelimit-limit", "1000"], ["x-ratelimit-remaining", "0"], ["x-ratelimit-reset", String(T0 / 1000 + 3600)]])]);
+    const r = recordingWait();
+    let threw = null;
+    try { await apiWith(c.f, "/x", { wait: r.wait, now: () => T0 }); } catch (e) { threw = e; }
+    if (!threw) throw new Error("did not throw");
+    if (c.calls() !== 1 || r.waits.length !== 0) throw new Error(`calls=${c.calls()} waits=${JSON.stringify(r.waits)}`);
+    for (const must of [/resource=core/, /limit=1000/, /reset=2023-11-14T23:13:20\.000Z/, /clears in 3600s, beyond the 120s/]) {
+      if (!must.test(threw.message)) throw new Error(`message lacks ${must}: ${threw.message}`);
+    }
+    if (/unchanged after/.test(threw.message)) throw new Error(`still reads as a retry exhaustion: ${threw.message}`);
+  });
+  await t("a rate-limited 403 with NO clock headers still takes the plain backoff path", async () => {
+    const c = counting([limitedWith([["x-ratelimit-remaining", "0"]]), ok({ recovered: 1 })]);
+    const r = recordingWait();
+    await apiWith(c.f, "/x", { wait: r.wait, now: () => T0 });
+    if (r.waits[0] !== API_BACKOFF_MS[0]) throw new Error(`waited ${JSON.stringify(r.waits)}, expected [${API_BACKOFF_MS[0]}]`);
+  });
+  await t("describeRateLimit: no headers, no note", () => {
+    if (describeRateLimit(null) !== "" || describeRateLimit(new Map()) !== "") throw new Error("note on nothing");
   });
 
   await t("classifier: a rate-limit BODY marks a 403 retryable", () => {

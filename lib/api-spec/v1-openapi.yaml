@@ -242,10 +242,12 @@ paths:
         (409), and on an identity with no enrolled credential (409 — enroll first).
       responses:
         "200": { description: challengeId + WebAuthn PublicKeyCredentialRequestOptions (userVerification required) }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: "Not a step_up decision, already answered, or no enrolled credential for its identity" }
 
+        "429": { $ref: "#/components/responses/TooManyRequests" }
   /v1/decisions/{id}/step-up:
     post:
       operationId: answerDecisionStepUp
@@ -285,10 +287,12 @@ paths:
                       stepUp: { $ref: "#/components/schemas/StepUpAnswer" }
                     required: [decision, stepUp]
         "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: "Unknown, expired or mis-bound challenge, or an assertion that did not verify — nothing is recorded" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: "Not a step_up decision, or already answered (replay)" }
 
+        "429": { $ref: "#/components/responses/TooManyRequests" }
   /v1/decisions/{id}/evidence:
     get:
       operationId: getDecisionEvidence
@@ -592,8 +596,12 @@ paths:
                           because: { type: string }
                         required: [reachable, because]
                     required: [process, families, enforced]
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
   /v1/metrics:
     get:
       operationId: getMetrics

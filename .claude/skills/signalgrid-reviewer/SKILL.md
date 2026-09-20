@@ -68,11 +68,15 @@ Work in this order. Stop and record as you go.
 "tests pass" is not evidence; `pnpm run preflight` output is.
 
 **2. Check the boundary.** Did the change stay inside its declared `FILES`? Diff
-the whole change, not the described change: `git add -A -N && git diff HEAD`,
-never plain `git diff` — a staged new file is invisible to the latter, which is how
-PR #366's `emitter.ts` and PR #367's `sanitize.mjs` were lost on 2026-09-01
-(CLAUDE.md, "Multiple Claude lanes"). Quote `git diff HEAD --stat`, and open the
-review with the starting state: `HEAD <sha>`, the branch, and
+the whole change, not the described change — and untracked new files are the ones a
+plain `git diff` misses (how PR #366's `emitter.ts` and PR #367's `sanitize.mjs`
+were lost on 2026-09-01; CLAUDE.md, "Multiple Claude lanes"). Read-only, since a
+reviewer never mutates the index: `git diff HEAD --stat` for tracked changes, then
+`git ls-files --others --exclude-standard` for the untracked additions the diff
+omits (read each directly). Do NOT use `git add -A -N` here — that stages
+intent-to-add entries into the shared index, which a read-only lens must not touch
+(the builder's patch idiom in CLAUDE.md is for the builder, not this review). Open
+the review with the starting state: `HEAD <sha>`, the branch, and
 `git status --porcelain | wc -l`. Neighbour regressions — adding a route beside
 others and dropping them — are a real defect class here.
 

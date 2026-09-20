@@ -21,12 +21,13 @@ One file `artifacts/brain-cycle/<sha>/<lens>.<lane>.json` matching BRAIN_CYCLE_D
 ## Constraints
 - `evidence` never quotes a secret, credential, tenant id, customer or patient data, or the output of a live vendor call — the same bar as the reviewer skill. Redact and say so.
 - `ran:true` ONLY if every command cited in `evidence` executed in this session; otherwise `ran:false` and the orchestrator HARD-NOs (BRAIN_CYCLE_DESIGN.md §6 rule 3).
-- Each finding needs `category, file, line, summary, failure_scenario, verdict(CONFIRMED|PLAUSIBLE), confidence(0-1), veto(bool), proposedRoute`. `veto:true` only if `<lens>` is in `docs/agent/brain-cycle-config.json` `vetoLenses`.
+- Each finding needs `category, file, line, summary, failure_scenario, verdict(CONFIRMED|PLAUSIBLE|BLOCK), confidence(0-1), veto(bool), proposedRoute`.
 - No CONFIRMED without a reproduced failure (command + output). A finding you did not try to break is PLAUSIBLE at most.
+- **To BLOCK a route, set that finding's `verdict: "BLOCK"` and its `file`** — and only a lens in `docs/agent/brain-cycle-config.json` `vetoLenses` (structurally `security-reviewer` and `fail-closed-auditor`, never removable) can. `scripts/brain-cycle-decide.mjs`'s `vetoedRoute` reads exactly this: a `verdict === "BLOCK"` finding from a veto lens touching a route's files opens nothing. A `CONFIRMED` or `PLAUSIBLE` finding does NOT block — it only builds or supports a route. The `veto(bool)` field is advisory provenance; the core keys off `verdict:"BLOCK"` + vetoLenses membership, not that bool, so a `veto:true` on a non-BLOCK finding blocks nothing. Set `veto:true` only alongside a `verdict:"BLOCK"` from a veto lens.
 
 ## Acceptance Criteria
-- [ ] `node scripts/brain-cycle.mjs --board artifacts/brain-cycle/<sha> --skip-freshness` parses your file without error (quote the line).
-- [ ] Every path in `findings[].file` exists at <sha> (`git cat-file -e <sha>:<path>`).
+- [ ] Your file is well-formed and complete WITHOUT running the orchestrator (running `brain-cycle.mjs` writes `decision.json` — that is the coordinator's step, not a lens's): `node -e "const r=require('./artifacts/brain-cycle/<sha>/<lens>.<lane>.json'); for (const k of ['cycle','lens','lane','auditedSha','verdict','findings','ran']) if(!(k in r)) throw new Error('missing '+k); JSON.stringify(r)"` exits 0.
+- [ ] Every path in `findings[].file` is in the audited diff — present at `<sha>` OR deleted by it (a removal is a legitimate finding): `git cat-file -e <sha>:<path> || git cat-file -e <sha>^:<path>`.
 - [ ] `_manifest.json` names `<lens>`; if it does not, STOP and report — do not add yourself.
 
 ## Action Boundaries

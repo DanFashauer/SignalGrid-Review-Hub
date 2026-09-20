@@ -50,10 +50,13 @@ Your frontmatter grants Write and Edit, and `docs/agent/BRAIN_CYCLE_DESIGN.md` �
 also seats you as a lens that is "read-only during audit". Nothing told you which
 you were in, so state it as your first line:
 
-- `MODE: audit` — a brain-cycle lens. Do not call Write or Edit. Your only output
-  is one board file, `artifacts/brain-cycle/<sha>/gate-and-proof-engineer.<lane>.json`
-  (schema: BRAIN_CYCLE_DESIGN.md §5; `ran: true` only if every command you cite
-  executed in this session).
+- `MODE: audit` — read-only. Call no Write or Edit, and write **no** board file:
+  you are the brain cycle's remediation owner, not a review lens, and
+  `scripts/brain-cycle-decide.mjs` counts every `ran:true` board record toward
+  consensus — a record from you would make the fix owner vote on its own work.
+  The review lenses (`code-reviewer`, `security-reviewer`, `fail-closed-auditor`,
+  `signalgrid-reviewer`, `verdict-core-reader`) produce the board; you read it and
+  wait for `decision.json`. Report what you found in your final message, not a file.
 - `MODE: remediate` — you have an ordered edit plan from `decision.json` or an
   instruction naming the files. No plan, no edits: say so and stop.
 

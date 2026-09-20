@@ -794,6 +794,32 @@ async function run() {
   const badBody = await req("POST", "/v1/decisions/evaluate", { token: KEYS.operator, body: { identityRef: "x" } });
   check("missing fields → 400", badBody.status === 400);
 
+  // AN EMPTY BINDING IS NOT A BINDING, and it is refused AT THE BOUNDARY — not only
+  // by the core behind it. `parseEvaluate` used to accept `""` for all three refs on
+  // a `typeof === "string"` test; the core's validateRequest still 400'd, so this was
+  // never a live fail-open, but a boundary that accepts a shape it cannot bind to
+  // anything is one refactor away from being the only check that was there.
+  // Whitespace counts as empty — a ref of " " names no identity, device or workflow.
+  //
+  // The assertion is on the BOUNDARY's message, not merely on 400: the core's
+  // validateRequest refuses the same bodies with `Field "identityRef" is required…`,
+  // so a status-only check passes with the boundary guard deleted and proves nothing
+  // about the layer this row is about.
+  const BOUNDARY_REFUSAL = /required non-empty strings/;
+  for (const [label, body] of [
+    ["identityRef", { identityRef: "", deviceRef: "dev_ward_01", workflowKey: "ehr_access" }],
+    ["deviceRef", { identityRef: "user_nurse_01", deviceRef: "", workflowKey: "ehr_access" }],
+    ["workflowKey", { identityRef: "user_nurse_01", deviceRef: "dev_ward_01", workflowKey: "" }],
+    ["whitespace identityRef", { identityRef: "   ", deviceRef: "dev_ward_01", workflowKey: "ehr_access" }],
+  ]) {
+    const ev = await req("POST", "/v1/decisions/evaluate", { token: KEYS.operator, body });
+    check(`evaluate with an empty ${label} → 400 AT THE BOUNDARY (an empty binding is not a binding)`,
+      ev.status === 400 && ev.json?.error === "validation" && BOUNDARY_REFUSAL.test(ev.json?.message ?? ""));
+    const az = await req("POST", "/v1/authorize", { token: KEYS.operator, body });
+    check(`authorize with an empty ${label} → 400 — the SAME parse, so both routes refuse`,
+      az.status === 400 && az.json?.error === "validation" && BOUNDARY_REFUSAL.test(az.json?.message ?? ""));
+  }
+
   // ── evidence + integrity ────────────────────────────────────────────────
   const evidence = await req("GET", `/v1/decisions/${allowId}/evidence`, { token: KEYS.operator });
   check("evidence fetch → 200", evidence.status === 200);
@@ -2227,6 +2253,45 @@ async function run() {
     } finally {
       tokenServer.kill("SIGTERM");
     }
+  }
+
+  // ── the /v1 limiter buckets by CALLER, not by the rotatable bearer ───────
+  //
+  // The limiter runs upstream of authentication (it must — a 429 has to be
+  // answerable before a JWKS fetch), so it keys off the bearer itself. Keying the
+  // RAW bearer meant a refreshed OIDC JWT, or two tokens minted concurrently for the
+  // same subject, each got a brand-new bucket: the window reset on the caller's
+  // schedule and the limit did not limit.
+  //
+  // Driven over the wire, because the defect is invisible in a unit call: TWO
+  // DIFFERENT tokens carrying the SAME iss/sub must share one bucket, and
+  // `ratelimit-remaining` is what says whether they did. A fresh `sub` per run keeps
+  // this independent of every other request this file has made.
+  {
+    const seg = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+    // Structurally a JWT, signed by nobody — it is REJECTED (401) by the auth
+    // middleware behind the limiter, which is the point: the bucket is charged
+    // before anyone knows whether the token is good.
+    const jwt = (claims) => `${seg({ alg: "RS256", typ: "JWT" })}.${seg(claims)}.${"c".repeat(16)}`;
+    const sub = `rate-probe-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const iss = "https://idp.example.test/";
+    const t1 = jwt({ iss, sub, iat: 1 });
+    const t2 = jwt({ iss, sub, iat: 2 });
+    check("the two probe tokens really are different bearers", t1 !== t2);
+    const r1 = await req("GET", "/v1/context", { token: t1 });
+    const r2 = await req("GET", "/v1/context", { token: t2 });
+    const rem1 = Number(r1.headers.get("ratelimit-remaining"));
+    const rem2 = Number(r2.headers.get("ratelimit-remaining"));
+    check("both probe requests are rejected by AUTH, behind the limiter (the limiter still charged them)", r1.status === 401 && r2.status === 401);
+    check("the limiter reports a remaining count for both (the assertion below is not vacuous)", Number.isFinite(rem1) && Number.isFinite(rem2));
+    check(
+      "a SECOND, different JWT with the same iss/sub counts against the SAME bucket — a token refresh does not reset the window",
+      rem2 === rem1 - 1,
+    );
+    // The other direction, so this cannot pass by bucketing everyone together: a
+    // DIFFERENT subject must get its own bucket, at the same remaining count t1 saw.
+    const other = await req("GET", "/v1/context", { token: jwt({ iss, sub: `${sub}-other`, iat: 1 }) });
+    check("a different subject gets its OWN bucket — per-caller, not one global bucket", Number(other.headers.get("ratelimit-remaining")) === rem1);
   }
 
   // ── transport hygiene ───────────────────────────────────────────────────

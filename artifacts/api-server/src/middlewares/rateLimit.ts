@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import rateLimit, { ipKeyGenerator, type RateLimitRequestHandler } from "express-rate-limit";
 import type { Request, Response } from "express";
+import { peekJwtCallerRef } from "@workspace/enterprise-auth";
 import { readSecret } from "@workspace/secrets";
 
 /**
@@ -22,11 +24,21 @@ function rateLimitHandler(req: Request, res: Response): void {
  * `express-rate-limit` middleware (a production deployment would back it with a
  * shared/distributed store).
  *
- * The limiter runs ahead of the authentication middleware, so it parses the
- * bearer token itself and keys by token — this gives per-key limiting instead
- * of per-IP, so a single caller behind shared NAT cannot exhaust the bucket for
- * every demo key from that address. Unauthenticated requests fall back to the
- * client address.
+ * The limiter runs ahead of the authentication middleware — deliberately, and the
+ * ordering must stay: a 429 has to be answerable before a JWKS fetch, and a limiter
+ * behind auth cannot throttle the unauthenticated flood it exists for. So it parses
+ * the bearer itself and keys per CALLER, not per IP, so a single caller behind
+ * shared NAT cannot exhaust the bucket for every key from that address.
+ *
+ * WHAT "PER CALLER" MEANS, and why it is no longer the raw bearer. Under enterprise
+ * OIDC the bearer is a short-lived, ROTATABLE JWT: a refresh — or two tokens minted
+ * concurrently for the same subject — produced a brand-new bucket, so the window
+ * reset itself on the caller's schedule and the limit did not limit. `idempotency.ts`
+ * had the same hazard for its cache and already solved it by keying on the principal;
+ * this is the same fix at a layer that has no verified principal to read. The key is
+ * an UNVERIFIED `iss`/`sub` peek (see `peekJwtCallerRef` for exactly what that costs
+ * and why it is bounded), falling back to a digest of the bearer for a non-JWT key
+ * and to the subnet-bucketed address for no bearer at all.
  */
 /**
  * Read a positive-integer limit from the environment, falling back to the
@@ -57,15 +69,7 @@ export const v1RateLimiter: RateLimitRequestHandler = rateLimit({
   limit: limitFromEnv("SIGNALGRID_V1_RATE_LIMIT", 240),
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: Request): string => {
-    const token = bearerToken(req);
-    // The unauthenticated fallback goes through the library's ipKeyGenerator,
-    // which buckets IPv6 callers by /56 subnet: keying raw IPv6 addresses
-    // per-address would let one caller rotate through a subnet's worth of
-    // addresses and dodge the limit (the library's ERR_ERL_KEY_GEN_IPV6
-    // validation exists to catch exactly this, and fired on the old code).
-    return token ? `tok:${token}` : req.ip ? `ip:${ipKeyGenerator(req.ip)}` : "ip:unknown";
-  },
+  keyGenerator: (req: Request): string => rateLimitKey(req),
   // Address validation is not relevant on the primary path — we key by token
   // first and only fall back to the (subnet-bucketed) address without one.
   validate: { ip: false },
@@ -132,6 +136,34 @@ export const globalRateLimiter: RateLimitRequestHandler = rateLimit({
   skip: skipGlobalLimit,
   handler: rateLimitHandler,
 });
+
+/**
+ * The bucket a request counts against. Exported so it can be driven directly —
+ * as a closure inside `rateLimit({...})` the only way to test it was to send 240
+ * requests, which is why the token-keying defect shipped unnoticed.
+ *
+ * Order: verified-shaped caller reference (unverified peek, see below) → digest of
+ * an opaque bearer → subnet-bucketed address. The address fallback goes through the
+ * library's `ipKeyGenerator`, which buckets IPv6 callers by /56 subnet: keying raw
+ * IPv6 addresses per-address would let one caller rotate through a subnet's worth of
+ * addresses and dodge the limit (the library's ERR_ERL_KEY_GEN_IPV6 validation exists
+ * to catch exactly this, and fired on the old code).
+ *
+ * The opaque-bearer branch is HASHED rather than carried verbatim: the raw key would
+ * otherwise sit in the limiter's in-memory store and in any dump of it. Truncation is
+ * deliberate and sufficient — this is a bucket label, not a credential.
+ */
+export function rateLimitKey(req: Request): string {
+  const token = bearerToken(req);
+  if (token) {
+    const callerRef = peekJwtCallerRef(token);
+    if (callerRef !== undefined) {
+      return `sub:${createHash("sha256").update(callerRef).digest("hex").slice(0, 32)}`;
+    }
+    return `tok:${createHash("sha256").update(token).digest("hex").slice(0, 32)}`;
+  }
+  return req.ip ? `ip:${ipKeyGenerator(req.ip)}` : "ip:unknown";
+}
 
 function bearerToken(req: Request): string | null {
   const header = req.headers.authorization;

@@ -70,16 +70,19 @@ python3 -m venv "$HOME/.cache/signalgrid-whisper"
 The script prints `wrote <path> duration=… segments=… lang=…`; the file holds one
 `[start-end] text` line per segment. Read it in full.
 
-**Step 3 — beat timeline, then answer and absorb.** Before concluding anything,
-merge the two streams into one timeline: one beat per frame or transcript turn —
-timestamp, what is on screen, what is said, what changed since the last beat — and
-read across it for structure (how it opens, how it holds attention, where it turns,
-how it closes). Report only what a frame or a segment actually shows; mark anything
-inferred as inference and anything the sampling could have missed as a gap; close
-with the three highest-signal observations, each with a timestamp. (Adopted
-2026-09-20 from an owner-shared clip whose third "system" was exactly this prompt;
-it is rule 4 made mechanical.) Then answer the owner's question from the timeline,
-naming timestamps. Then absorb by use: a row in `docs/agent/RESOURCE_INTAKE.md`
+**Step 3 — answer first, from a beat timeline built as internal analysis.** Before
+concluding anything, merge the two streams into one timeline in the scratchpad — one
+beat per frame or transcript turn: timestamp, what is on screen, what is said, what
+changed since the last beat — and read across it for structure (how it opens, how it
+holds attention, where it turns, how it closes). Report only what a frame or a segment
+actually shows; mark anything inferred as inference and anything the sampling could
+have missed as a gap; note up to three highest-signal observations, each with a
+timestamp — all of them when a short or static clip yields fewer, never a padded
+third. (Adopted 2026-09-20 from an owner-shared clip whose third "system" was
+exactly this prompt; it is rule 4 made mechanical.) The timeline is working material,
+not the reply: the owner's answer comes FIRST, in the first sentence, per
+`.claude/skills/owner-comms/SKILL.md`, with timestamps in support; the timeline itself
+goes in the intake row, never ahead of the answer. Then absorb by use: a row in `docs/agent/RESOURCE_INTAKE.md`
 (what the video is, who shared it, what it changed, with the passages that changed it
 quoted), an entry in `docs/agent/EVIDENCE.md` when a claim rests on it, and the
 change itself — a decision record, a doc, a backlog item, a gate — in the same PR.
@@ -119,8 +122,10 @@ memo) skips Step 1 and goes straight to Step 2.
 - It does not hand the video to a hosted multimodal model. A free Gemini key from
   Google AI Studio "because Gemini natively understands YouTube" (the same clip's
   second system) is an upload of owner media to a third party — the same per-machine
-  owner decision as a Whisper key (DR-040, DR-029). It is recorded as an owner-gated
-  option in `docs/BUILD_BACKLOG.md` for the YouTube-URL case `yt-dlp` cannot
-  download; it is never the default.
+  owner decision as a Whisper key (DR-040, DR-029), and a live vendor call has no
+  place in this public tree (AGENTS.md scope). If the owner ever takes it, it is
+  operator tooling OUTSIDE the tree, by reference — the transcript arrives as a file
+  this skill reads — recorded in `docs/BUILD_BACKLOG.md` for the YouTube-URL case
+  `yt-dlp` cannot download; it is never the default and never a script here.
 - It does not make the transcript authoritative. Where the video contradicts a doc,
   the doc changes only after the claim is checked the ordinary way.

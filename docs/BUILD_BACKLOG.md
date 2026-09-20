@@ -389,12 +389,19 @@ lone repairs into unreachable code).
       the exact reason the connector emulator scripts, now produced by the real dimension); a
       flagged registration on a sensitive app → restrict; standard/unassessed → step_up; unknown
       or stale → step_up; MAM non-applicability is an asserted positive (`not_applicable` → none).
-      The proof enumerates all 864 normalized states (exactly 120 grant) and 96 raw wire records
+      The proof enumerates all 864 normalized states (exactly 84 grant) and 96 raw wire records
       (exactly 1 grants), and asserts by composition that the family can only raise. The
       SIGNAL_SOURCE_CATALOG row flipped out of "Documentation-only roadmap" in the same change;
       the emulator's scripted expectation is left stable and grounded by the proof rather than
       rewritten (its deterministic hash is untouched). How you'd check: `pnpm run proof:app-protection`
       → `summary=pass`.
+      FOLLOW-UP before the live path is enabled (Codex P1, review of the fixture-backed
+      family): the connector keys a registration lookup by `appRef` only, but a MAM plane
+      keys managed-app state per (user, device, app). Thread a worker + device identifier
+      through the request and validate them against the returned evidence, so a clean
+      registration belonging to another user/device cannot be selected and granted. Deferred
+      with the live transport (gated off today); the fixture path evaluates a single supplied
+      record, so this is a live-query completeness requirement, not an exploitable path now.
 
 _Derived from repo data, not memory: `check-connector-discipline` reports 51/51 (2026-09-06; it said 36/36 here from 2026-08-21, flagged by the role-lens review the same day and left standing)
 families with KNOWN_GAPS empty. The live-evidence status is NOT restated here —

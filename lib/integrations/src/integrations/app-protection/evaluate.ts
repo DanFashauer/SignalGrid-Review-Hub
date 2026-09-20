@@ -93,36 +93,64 @@ export function evaluateAppProtection(
     };
   }
 
+  const sensitive = report.appSensitivity === "sensitive";
+
   // The caller's affirmative out-of-scope declaration. MAM facts are moot for an app
-  // legitimately outside MAM: a CLEAN out-of-scope report short-circuits to the grant,
-  // and a MALFORMED one raises (step_up) but never restricts — a not_applied policy is
-  // expected for an out-of-scope app, so it is not a restrict-worthy concern here. A
-  // malformed wire record is not evidence the caller's declaration is safe to act on.
-  // This is distinct from `unknown` applicability (posed, unreadable), which raises below.
+  // legitimately outside MAM, so a CLEAN, un-flagged out-of-scope report short-circuits
+  // to the grant. Two things override the declaration and are NOT suppressed by it:
+  //  - a MALFORMED report → step_up (an unparseable record is not evidence the caller's
+  //    declaration is safe to act on);
+  //  - a positively FLAGGED registration (jailbroken/rooted) → restrict on a sensitive
+  //    app, step_up otherwise. A flagged registration is device-integrity evidence that
+  //    exists regardless of MAM scope, and its very existence contradicts "out of scope"
+  //    (a flagged MAM registration means the app IS registered), so it must win rather
+  //    than be hidden by the applicability classification. (Codex P1.)
+  // A missing/not_applied policy stays expected and non-restricting here. This is
+  // distinct from `unknown` applicability (posed, unreadable), which raises below.
   if (report.mamApplicability === "not_applicable") {
-    if (report.reportIntegrity === "clean") {
+    if (report.reportIntegrity !== "clean") {
       return {
         ...base,
-        posture: "app_protection_not_applicable",
-        reasonCode: "APP_PROTECTION_NOT_APPLICABLE",
-        recommendedAction: "none",
+        posture: "app_protection_unverified",
+        reasonCode: "REPORT_MALFORMED",
+        recommendedAction: "step_up",
         criticalFindings,
-        unknownSignals,
-        appProtected: true,
+        unknownSignals: ["report_integrity"],
+        appProtected: false,
       };
+    }
+    if (report.complianceState === "flagged") {
+      criticalFindings.push("mam_registration_flagged");
+      return sensitive
+        ? {
+            ...base,
+            posture: "app_protection_flagged",
+            reasonCode: "MAM_FLAGGED_SENSITIVE_APP",
+            recommendedAction: "restrict",
+            criticalFindings,
+            unknownSignals,
+            appProtected: false,
+          }
+        : {
+            ...base,
+            posture: "app_protection_flagged",
+            reasonCode: "APP_PROTECTION_FLAGGED",
+            recommendedAction: "step_up",
+            criticalFindings,
+            unknownSignals,
+            appProtected: false,
+          };
     }
     return {
       ...base,
-      posture: "app_protection_unverified",
-      reasonCode: "REPORT_MALFORMED",
-      recommendedAction: "step_up",
+      posture: "app_protection_not_applicable",
+      reasonCode: "APP_PROTECTION_NOT_APPLICABLE",
+      recommendedAction: "none",
       criticalFindings,
-      unknownSignals: ["report_integrity"],
-      appProtected: false,
+      unknownSignals,
+      appProtected: true,
     };
   }
-
-  const sensitive = report.appSensitivity === "sensitive";
 
   // Track the unknown axes for evidence (they also foreclose the grant below).
   if (report.policyState === "unknown") unknownSignals.push("policy_state");

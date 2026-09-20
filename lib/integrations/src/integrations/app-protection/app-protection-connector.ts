@@ -246,9 +246,14 @@ export function normalizeAppProtectionReport(
   const instantShapeBad = observedRaw !== undefined && observedRaw !== null && observedMs === null;
 
   // A report that echoes a DIFFERENT app than the one requested is a substitution, not
-  // evidence about this app — it must not be relabeled and evaluated as protected.
-  const reportedAppRef = textOf(raw["app_ref"]);
-  const appRefMismatch = reportedAppRef !== null && reportedAppRef !== appRef.trim();
+  // evidence about this app — it must not be relabeled and evaluated as protected. A
+  // PRESENT-but-unreadable app_ref (a number, a blank string) is likewise not proof that
+  // the row is this app's, so an asserted app_ref must be a readable string naming THIS
+  // app; absent is fine (the fetch binding stands).
+  const appRefRaw = raw["app_ref"];
+  const appRefAsserted = appRefRaw !== undefined && appRefRaw !== null;
+  const reportedAppRef = textOf(appRefRaw);
+  const appRefMismatch = appRefAsserted && (reportedAppRef === null || reportedAppRef !== appRef.trim());
   // "applied" with no corroborating policy references is a contradiction: an applied
   // app-protection policy always names at least one policy. Fail closed on the ambiguity
   // rather than trusting the bare `applied` claim.

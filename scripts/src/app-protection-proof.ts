@@ -224,6 +224,14 @@ check("malformed-isolation: policy_state=applied with EMPTY applied_policies →
 check("malformed-isolation: report app_ref echoes a DIFFERENT app than requested → malformed — a substituted response cannot be relabeled and granted",
   normalizeAppProtectionReport(APP, clean({ app_ref: "com.other.app" }), { source: "mut" }).reportIntegrity === "malformed");
 
+// asserted-but-unreadable app_ref (Codex P1): a non-string (42) or blank (" ") app_ref
+// is asserted yet unreadable — it is not proof the row is this app's, so it fails closed
+// rather than being ignored while the record is relabeled with the requested app.
+check("malformed-isolation: an asserted NON-STRING app_ref (42) → malformed — an unreadable asserted reference is not evidence the row is this app's",
+  normalizeAppProtectionReport(APP, clean({ app_ref: 42 as unknown as string }), { source: "mut" }).reportIntegrity === "malformed");
+check("malformed-isolation: an asserted BLANK app_ref (\" \") → malformed",
+  normalizeAppProtectionReport(APP, clean({ app_ref: " " }), { source: "mut" }).reportIntegrity === "malformed");
+
 // hasUnrecognizedKey catch: a report whose KEY enumeration throws (a hostile proxy)
 // fails closed via the catch — the only term that can catch an un-introspectable object.
 const hostileKeys = new Proxy({} as AppProtectionReportRaw, { ownKeys() { throw new Error("hostile ownKeys"); } });
@@ -241,6 +249,19 @@ check("a registration_observed_at with the ISO shape but an IMPOSSIBLE date (202
 const malformedRestrict = ev(clean({ policy_state: "not_applied", applied_policies: [], selective_wipe: "pending" } as AppProtectionReportRaw), "sensitive");
 check("a MALFORMED report that also confirms a sensitive missing policy → restrict, not step_up — malformity never lowers a confirmed high-risk verdict",
   malformedRestrict.recommendedAction === "restrict" && malformedRestrict.reasonCode === "MISSING_MAM_POLICY_SENSITIVE_APP");
+
+// not_applicable does NOT suppress a flagged registration (Codex P1): an out-of-scope
+// declaration cannot hide a jailbroken/flagged registration — device-integrity evidence
+// that also contradicts the out-of-scope claim. Flagged wins over the applicability grant.
+const naFlaggedSensitive = ev(clean({ flagged_reasons: ["jailbroken"] }), "sensitive", "not_applicable");
+check("a NOT_APPLICABLE sensitive app whose source is FLAGGED → restrict (MAM_FLAGGED_SENSITIVE_APP), not a not-applicable grant — applicability cannot suppress a flagged registration",
+  naFlaggedSensitive.recommendedAction === "restrict" && naFlaggedSensitive.reasonCode === "MAM_FLAGGED_SENSITIVE_APP" && naFlaggedSensitive.appProtected === false);
+const naFlaggedStandard = ev(clean({ flagged_reasons: ["jailbroken"] }), "standard", "not_applicable");
+check("a NOT_APPLICABLE standard app whose source is FLAGGED → step_up (APP_PROTECTION_FLAGGED), never a grant",
+  naFlaggedStandard.recommendedAction === "step_up" && naFlaggedStandard.reasonCode === "APP_PROTECTION_FLAGGED");
+const naClean = ev(clean({ policy_state: "not_applied", applied_policies: [] }), "sensitive", "not_applicable");
+check("a NOT_APPLICABLE app with a clean, un-flagged source still grants (APP_PROTECTION_NOT_APPLICABLE) — the asserted positive is intact",
+  naClean.recommendedAction === "none" && naClean.reasonCode === "APP_PROTECTION_NOT_APPLICABLE" && naClean.appProtected === true);
 
 // ── exhaustive (normalized): grant only on the full conjunction ─────────────────
 const normDomains = {
@@ -270,18 +291,20 @@ const normRes = enumerateGrantSafety({
   confirmedWhenNone: (v) => v.appProtected === true && v.criticalFindings.length === 0 && v.unknownSignals.length === 0,
   positivelyClean: (c) =>
     c.reportIntegrity === "clean" &&
-    (c.mamApplicability === "not_applicable" ||
+    // out-of-scope grants only when the source is NOT positively flagged — a flagged
+    // registration is device-integrity evidence the out-of-scope declaration cannot hide.
+    ((c.mamApplicability === "not_applicable" && c.complianceState !== "flagged") ||
       ((c.mamApplicability === "applicable" || c.mamApplicability === "unassessed") &&
         c.policyState === "applied" &&
         c.complianceState === "clean" &&
         (c.registrationFreshness === "fresh" || c.registrationFreshness === "unassessed"))),
 });
 check(
-  `exhaustive (normalized): over all ${normRes.combos} states, an app is protected ONLY on a clean report that is either out-of-scope or an applied+clean policy on a current read (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
+  `exhaustive (normalized): over all ${normRes.combos} states, an app is protected ONLY on a clean report that is either out-of-scope (and not flagged) or an applied+clean policy on a current read (mismatches=${normRes.mismatches}${normRes.firstMismatch ? ", first=" + normRes.firstMismatch : ""})`,
   normRes.mismatches === 0 && normRes.combos === productOf(normDomains) && normRes.combos === 864,
 );
-check("exhaustive (normalized): exactly 120 states grant — 108 out-of-scope (clean report) + 12 applied+clean+current",
-  normRes.noneCount === 120);
+check("exhaustive (normalized): exactly 84 states grant — 72 out-of-scope (clean, not flagged) + 12 applied+clean+current",
+  normRes.noneCount === 84);
 
 // ── exhaustive (raw wire): normalizer + evaluator on hostile input ──────────────
 const rawDomains = {

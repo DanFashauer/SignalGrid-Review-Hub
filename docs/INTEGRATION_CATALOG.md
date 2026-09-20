@@ -941,7 +941,7 @@ the no-dual-accept rule — is §6 of
 Do not restate the numbers here; that document's figures are gated by
 `scripts/check-derived-doc-figures.mjs` and this one's would not be.
 
-- **`proof:webhooks` (229 checks)** — the tier gate and its per-tier refusal reasons,
+- **`proof:webhooks` (243 checks)** — the tier gate and its per-tier refusal reasons,
   SSRF and HTTPS target validation (including IPv4-mapped/IPv4-compatible IPv6
   literal spellings of the same loopback/metadata/private targets), retry
   permanence, the missing-secret refusal, and the v2 signing scheme end to end

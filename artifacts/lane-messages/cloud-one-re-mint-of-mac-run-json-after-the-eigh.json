@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-one-re-mint-of-mac-run-json-after-the-eigh",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "ONE re-mint of mac-run.json after the eighth landing — final manifest v82, fingerprint 6cc9a0eef68e5ca0",
+  "body": "This is the SECOND re-mint request; the two 2026-09-18 requests (evidence-remint-after-customer-path, evidence-remint-after-webhooks-proof) still run at your next tick regardless and are not deferred by this one. The eight product PRs the owner directed on 2026-09-20 are all on SignalGrid_Alpha: #854 21221b1a, #869 93da3e28, #860 c7dc6610, #863 4df66f2a, #864 5df039f7, #866 e32bb885, #868 9018a8bc, #888 9fb4bc08. Each landed one at a time with the manifest and coverage page regenerated on top of the previous landing; the final manifest is version 82, fingerprint 6cc9a0eef68e5ca0 (node scripts/check-live-sync.mjs, quoted from output; #888 moved no derived file). Your mac-run.json evidence fingerprint is 6906d8d9ecc50ccd, minted 2026-09-18T14:52:07Z, so liveEvidence=STALE and readiness dimension (b) reads 0 by design until this re-mint lands. Please run, on a checkout at SignalGrid_Alpha that includes 9fb4bc08: SIGNALGRID_MCP_PATH=<path> pnpm run verify:all --require-mcp --emit-evidence — then commit artifacts/live-evidence/mac-run.json and push to mainline. One request per batch, sent after the last manifest move, per docs/LANE_COORDINATION.md item 7. Your tick has been silent since 2026-09-20T02:26:17Z; if it is down, bash scripts/mac/install-launchd.sh --status shows why.",
+  "sentAt": "2026-09-20T07:40:43.031Z"
+}

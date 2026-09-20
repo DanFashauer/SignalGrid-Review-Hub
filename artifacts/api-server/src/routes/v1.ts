@@ -695,6 +695,33 @@ router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, nex
   }
 });
 
+// 2b) Revoke — the missing half of enrollment (BUILD_BACKLOG.md, "Credential
+//     revocation has storage but no semantics" / security roster row 82).
+//     `removeCredential` has carried the same per-user lock as `addCredential`
+//     and a proven add/remove concurrency guarantee (proof:enrollment-race)
+//     since the row before this one landed; nothing exposed the route. Same
+//     privilege as enrolling — an owner/operator ceremony, gated the same way
+//     (role + the out-of-band secret when one is configured) — because
+//     revoking someone else's step-up credential is exactly as consequential
+//     as enrolling one. Fail-closed by construction: `removeCredential` never
+//     reports a revocation that did not happen, so `revoked: false` (no such
+//     credential on this identity, or no enrollment at all) is a normal,
+//     idempotent 200 — never a 404 that would let a caller distinguish
+//     "wrong id" from "already revoked" and turn that into an oracle.
+router.post("/v1/step-up/enroll/revoke", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    requireEnrollmentPrincipal(req);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const identityRef = requireString(body, "identityRef");
+    const credentialId = requireString(body, "credentialId");
+    const userId = webauthnUserId(req, identityRef);
+    const revoked = await webauthnStore.removeCredential(userId, credentialId);
+    res.json(envelope(req, { revoked, identityRef, credentialId }));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 3) Authentication challenge for a pending step-up. The challenge is BOUND to the
 //    exact pending action at mint time (tenant + identity + integration + device +
 //    the SELECTED ACTION KEY), and the completion route verifies that binding — so a
@@ -1120,14 +1147,24 @@ function parseEvaluate(body: unknown): EvaluateRequest {
   const identityRef = record["identityRef"];
   const deviceRef = record["deviceRef"];
   const workflowKey = record["workflowKey"];
+  // TRIMMED-EMPTY IS NOT A BINDING. The core's `validateRequest` already rejects
+  // `""` (`decision.ts`, `.trim().length === 0` → 400), so this is defence in depth
+  // rather than a live fail-open — and it is the same lesson as "an empty scope is
+  // not a wildcard" (control-plane Finding 3): a boundary that accepts a shape it
+  // cannot bind to anything relies on the next layer still checking, and the next
+  // layer is one refactor away from not. Both /v1/decisions/evaluate and
+  // /v1/authorize parse through here, so the guard lands once for both.
   if (
     typeof identityRef !== "string" ||
     typeof deviceRef !== "string" ||
-    typeof workflowKey !== "string"
+    typeof workflowKey !== "string" ||
+    identityRef.trim().length === 0 ||
+    deviceRef.trim().length === 0 ||
+    workflowKey.trim().length === 0
   ) {
     throw new CoreError(
       "validation",
-      "identityRef, deviceRef, and workflowKey are required strings.",
+      "identityRef, deviceRef, and workflowKey are required non-empty strings.",
       400,
     );
   }

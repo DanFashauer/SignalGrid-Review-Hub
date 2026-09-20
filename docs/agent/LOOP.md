@@ -98,7 +98,7 @@ LAST TOUCHED: 2026-09-19 01:00Z (cloud lane, latest) - THE BACKLOG SWEEP, SIX LA
               families left; each survivor so far was a tsc-load-bearing guard, not a fixture);
               security roster row 82 item 2 (the `verify.ts` attestation comment); the webhook WRITE
               route (owner call: which store); the three decided deletions and Ponytail native cuts
-              part 2 (Mac, Xcode); DecisionEngine/AppWorkflows re-port (owner, DR-020 for row 5);
+              part 2 (Mac, Xcode); DecisionEngine/AppWorkflows re-port (backlog row five; owner call under DR-020);
               Android AMAPI (needs a rig, not Kotlin); data-lifecycle SQL against a live Postgres
               (Mac lab); the lifecycle admin job's invocation. One container restart at ~00:00Z killed
               two running chains; worktrees and commits survived, both relaunched, nothing lost.
@@ -1269,7 +1269,7 @@ NEXT ACTION: cloud: (0) THE BOTTLENECK IS THE OWNER'S MERGE QUEUE - #854 first, 
    frozen" until 2026-09-02 — two days after this file's own STATE section
    recorded DR-021 — which is the contradiction a doc can hold against itself
    when no gate reads English.*
-3. **Nobody has used the product.** 151 proof gates and four native surfaces do
+3. **Nobody has used the product.** 152 proof gates and four native surfaces do
    not change that number. Only a conversation does.
 
 ---

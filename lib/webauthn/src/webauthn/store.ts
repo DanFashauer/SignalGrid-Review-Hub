@@ -607,15 +607,28 @@ export async function createStepUpSession(session: StepUpSession): Promise<void>
   // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (null-maps the opposite way); its gate is check-nan-fail-open.mjs
   const ttlSeconds = Math.floor((expiresAtMs - Date.now()) / 1000);
 
+  // Redis configured ⇒ Redis is the SOLE store for this session, exactly as
+  // `saveChallenge` and `getUser` above state and follow. This used to write Redis
+  // inside a swallowing try/catch and then set the in-memory mirror
+  // UNCONDITIONALLY, outside the `if (redis)`, which loosened in two directions at
+  // once: a failed durable write read as a successful mint, and a session
+  // invalidated on the authoritative store still read live from the minting
+  // instance's own memory. Both are the fail-open direction golden rule 2 forbids.
+  // The failure PROPAGATES so the caller mints nothing rather than acknowledging a
+  // non-durable session; the mirror remains the store ONLY when no Redis is
+  // configured.
   if (redis) {
     try {
       await redis.connect();
       await redis.set(key, JSON.stringify(session), 'EX', ttlSeconds);
-    } catch {
-      // Fall through to in-memory
+    } catch (err) {
+      throw err instanceof Error ? err : new Error('Step-up session persistence failed');
     } finally {
-      await redis.quit();
+      // quit() on a broken connection can itself reject — never let that mask the
+      // real error of the write.
+      await redis.quit().catch(() => undefined);
     }
+    return;
   }
 
   inMemoryStepUps.set(session.sessionId, session);
@@ -633,10 +646,16 @@ export async function getStepUpSession(sessionId: string): Promise<StepUpSession
         return JSON.parse(data);
       }
     } catch {
-      // Fall through to in-memory
+      // A read failure is a MISS, which is the fail-closed answer here: `null`
+      // means "no valid step-up session", so the caller demands a fresh one.
     } finally {
-      await redis.quit();
+      await redis.quit().catch(() => undefined);
     }
+    // The same sole-store rule as the mint above: when Redis is configured it is
+    // authoritative, so a miss is a MISS. Falling through to the per-process mirror
+    // would resurrect a session the authoritative store no longer holds — the read
+    // half of the divergence the mint was fixed for.
+    return null;
   }
 
   return inMemoryStepUps.get(sessionId) ?? null;

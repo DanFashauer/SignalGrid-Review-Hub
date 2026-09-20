@@ -354,6 +354,12 @@ jobs:
         run: pnpm run proof:graph-wire
       - name: "Proof: estate-core (a customer estate boots a core; no allow on unread facts)"
         run: pnpm run proof:estate-core
+      - name: "Proof: estate-refresh (a scheduled posture re-read re-decides, and fails closed)"
+        run: pnpm run proof:estate-refresh
+      - name: "Proof: secrets (one read site, fail-closed, and a rotation that actually rotates)"
+        run: pnpm run proof:secrets
+      - name: "Proof: data-lifecycle (retention, erasure and DSAR leave the audit chain verifiable)"
+        run: pnpm run proof:data-lifecycle
       - name: "Assessor package (links/commands an external reviewer follows)"
         run: node scripts/check-assessor-package.mjs
       - name: OpenAPI validity (the published contract parses as OpenAPI)
@@ -460,6 +466,8 @@ jobs:
         run: node scripts/check-backlog-ownership.mjs
       - name: Backlog ownership self-test (the gate can fail)
         run: node scripts/check-backlog-ownership.mjs --self-test
+      - name: Loop-state seam self-test
+        run: node scripts/loop-state.mjs --self-test
       - name: Backlog evidence (a row that says DONE says how you'd check)
         run: node scripts/check-backlog-evidence.mjs
       - name: Backlog evidence self-test (the gate can fail)
@@ -618,6 +626,43 @@ jobs:
         run: node scripts/check-doc-line-counts.mjs --self-test
       - name: "Doc line counts (every path (N) figure matches the file it names)"
         run: node scripts/check-doc-line-counts.mjs
+      # BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a
+      # report-only watcher, cheaper than fetching every vendor page —
+      # pure date arithmetic against a committed manifest
+      # (docs/agent/VENDOR_DOC_MANIFEST.json), no network call. REPORT-ONLY:
+      # the check itself always exits 0; only the self-test can fail this job.
+      - name: "Vendor-doc drift watch self-test (the comparison logic must actually work)"
+        run: node scripts/check-vendor-doc-drift.mjs --self-test
+      - name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)"
+        run: node scripts/check-vendor-doc-drift.mjs
+      # The four capacity figures RELIABILITY_SLO.md owns, wherever a document restates
+      # them. COMPANY_BUILD_PLAN.md carried the superseded 5,128 for twelve days while
+      # every figure gate stayed green, because none of them reads a bare 240 or 585.
+      - name: "Performance-figure self-test (a drifted or undated restatement must fail)"
+        run: node scripts/check-performance-figures.mjs --self-test
+      - name: "Performance figures (every restatement matches RELIABILITY_SLO.md and carries its date)"
+        run: node scripts/check-performance-figures.mjs
+      # A sim result is an attestation and provenance.commit is the only thing tying it
+      # to code; one stamped a sha git cat-file -e could not resolve on Alpha.
+      - name: "Sim-result provenance self-test (the gate can actually fail)"
+        run: node scripts/check-sim-result-provenance.mjs --self-test
+      - name: "Sim-result provenance (a checkable commit; evidence no newer than the result)"
+        run: node scripts/check-sim-result-provenance.mjs
+      # A generated input validator nobody parses reads exactly like coverage.
+      - name: "api-zod wiring self-test (an orphan schema and a stale declaration must fail)"
+        run: node scripts/check-api-zod-wiring.mjs --self-test
+      - name: "api-zod wiring (every generated input schema is invoked or declared client/type-only)"
+        run: node scripts/check-api-zod-wiring.mjs
+      # The /api document against the fixtures it serves.
+      - name: "/api fixture-contract self-test (each of the four rules must be able to fail)"
+        run: node scripts/check-api-fixture-contract.mjs --self-test
+      - name: "/api fixture contract (the document describes what the fixtures answer)"
+        run: node scripts/check-api-fixture-contract.mjs
+      # The /v1 document against the refusals the served source returns.
+      - name: "/v1 refusal-coverage self-test (a missing 401/429/400/404 must fail)"
+        run: node scripts/check-v1-refusal-coverage.mjs --self-test
+      - name: "/v1 refusal coverage (every refusal the server returns is documented)"
+        run: node scripts/check-v1-refusal-coverage.mjs
       # The review compose had no healthcheck on any service; "Up" meant the
       # process existed, not that the server answered.
       - name: "Compose healthcheck self-test (a planted port without a healthcheck must fail)"
@@ -889,6 +934,9 @@ jobs:
       - name: API integration test
         run: pnpm run test:api
 
+      - name: Console unit tests (policyTests, facilityGraphLayout)
+        run: pnpm run test:console
+
       # The MCP server's own node:test suite — wire-visible tool/resource contract
       # and read-only annotations (incl. the deliberately not-read-only
       # bruno_collection_run). It was executed by no lane until 2026-09-02;
@@ -1046,6 +1094,9 @@ jobs:
 
       - name: Edge-sync (config-down integrity) proof
         run: pnpm run proof:edge-sync
+
+      - name: Decision-cascade (the whole chain, and every refusal in it) proof
+        run: pnpm run proof:decision-cascade
 
       - name: Decision-continuity (which decision wins across a partition) proof
         run: pnpm run proof:decision-continuity

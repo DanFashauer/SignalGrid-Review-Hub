@@ -679,7 +679,12 @@ export type RemediationKind =
   | "notify_identity_owner"
   | "notify_security"
   | "request_custody_check"
-  | "request_baseline_reapply";
+  | "request_baseline_reapply"
+  // DR-043 (Puck 2). A custody CHECK asks somebody to go and look; a session
+  // SUSPEND asks the host app to stop the session it is running. They are different
+  // requests with different verifications, so folding the second into the first
+  // would have made "the suspend landed" unanswerable.
+  | "request_session_suspend";
 
 export type RemediationStatus =
   | "requires_approval"
@@ -706,6 +711,32 @@ export interface RemediationAction {
   requestedAt: string;
   approvedAt: string | null;
   note: string;
+}
+
+/**
+ * The ANSWER to a `step_up` verdict, recorded against the decision that raised it.
+ *
+ * The gate can return `step_up`; until this record existed nothing served could say
+ * one had been SATISFIED, so a deployment in shadow mode returned a verdict the host
+ * app had no way to resolve. One answer per decision, minted only after a
+ * cryptographic verification the caller could not fake, and it carries a MASKED
+ * credential reference — never the credential.
+ *
+ * It does not change the decision. A `step_up` stays a `step_up` forever: the
+ * evidence it was computed from is immutable, and rewriting a stored verdict because
+ * a gesture arrived later would make the audit chain describe something that never
+ * happened. The host app reads the answer beside the decision and proceeds.
+ */
+export interface StepUpAnswer {
+  id: string;
+  tenantId: string;
+  decisionId: string;
+  /** The identity the decision was about — never one named by the request. */
+  identityId: string;
+  method: "webauthn";
+  /** A masked reference to the credential that signed. Never the credential. */
+  credentialReference: string;
+  answeredAt: string;
 }
 
 // ── Resolution Assistant (deterministic, approval-gated, simulated) ──────────
@@ -822,13 +853,60 @@ export interface WebhookDelivery {
 
 // ── Audit ledger ─────────────────────────────────────────────────────────────
 
-export type AuditEventType =
-  | "decision.evaluated"
-  | "connector.synced"
-  | "policy.version_activated"
-  | "evidence.captured"
-  | "remediation.requested"
-  | "remediation.approved";
+/**
+ * The ledger's whole vocabulary, as a RUNTIME array.
+ *
+ * It was a bare type union, which no census can count and no guard can check: a
+ * caller could append any string it liked and TypeScript's erasure meant nothing
+ * downstream could tell. The union is derived from this array instead, so the
+ * compile-time and run-time answers cannot disagree.
+ *
+ * The first seven are the original ledger plus the step_up answer (#869). The last eight are the session-puck
+ * lifecycle (DR-043): a credential presented, a dock seated, an identity proven, a
+ * posture read, a session opened, the dock broken, the session suspended, the
+ * credential revoked. Each is what the system KNEW at that instant, recorded once and
+ * never rewritten — the chain digest is over the canonical body, as it already was.
+ */
+export const AUDIT_EVENT_TYPES = [
+  "decision.evaluated",
+  "connector.synced",
+  "policy.version_activated",
+  "evidence.captured",
+  "remediation.requested",
+  "remediation.approved",
+  "decision.step_up_answered",
+  "credential.presented",
+  "dock.attached",
+  "identity.authenticated",
+  "posture.observed",
+  "session.opened",
+  "dock.removed",
+  "session.suspended",
+  "credential.revoked",
+] as const;
+
+export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
+
+/**
+ * The eight puck-lifecycle members. They carry a stricter admission rule than the
+ * original seven (see `appendAudit`): each must name the decision it evidences, because
+ * a lifecycle event with no decision behind it is a log line, not a ledger entry.
+ */
+export const PUCK_LIFECYCLE_EVENT_TYPES = [
+  "credential.presented",
+  "dock.attached",
+  "identity.authenticated",
+  "posture.observed",
+  "session.opened",
+  "dock.removed",
+  "session.suspended",
+  "credential.revoked",
+] as const;
+
+/** Runtime membership test. A string that is not in the union is not an event type. */
+export function isAuditEventType(value: string): value is AuditEventType {
+  return (AUDIT_EVENT_TYPES as readonly string[]).includes(value);
+}
 
 export interface AuditEvent {
   id: string;

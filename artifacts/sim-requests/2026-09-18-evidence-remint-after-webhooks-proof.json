@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-09-18-evidence-remint-after-webhooks-proof",
+  "requestedAt": "2026-09-18T22:30:00Z",
+  "requestedBy": "cloud lane",
+  "reason": "The security/API backlog sweep grew proof:webhooks from 229 to 243 assertions (parse/strict refusals on the webhook write functions and the terminal dead_letter row). That count is part of the live-sync manifest, so the manifest moved from v79 (6906d8d9ecc5) to v80 (0e18c467955656) on this branch. The committed live evidence (artifacts/live-evidence/mac-run.json) was minted against v79; once this lands, DR-036 dimension (b) reads the evidence as stale until the Mac re-mints it against v80. This request puts the re-mint on the channel the tick executes unattended, so the readiness headline recovers within one tick of the merge instead of waiting on a person.",
+  "runs": [
+    "evidence"
+  ],
+  "notes": [
+    "evidence (macOS-only): verify:all --require-mcp --emit-evidence, exactly as the 2026-09-18-evidence-remint-readiness-zero request ran it earlier today (that run succeeded via the sibling ../signalgrid-mcp checkout).",
+    "Do not substitute a weaker run: the artifact only counts when both halves are green against the CURRENT manifest. If other sweep branches land first and move the manifest again, the run against whatever mainline holds at tick time is the right one — the fingerprint is read from the tree, not from this file.",
+    "The tick commits results on a mac/tick-<stamp> branch; the cloud steward opens the PR within the hour."
+  ]
+}

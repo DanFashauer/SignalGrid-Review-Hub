@@ -52,6 +52,7 @@
     "proof:custody-beacon": "tsx ./src/custody-beacon-proof.ts",
     "proof:data-protection": "tsx ./src/data-protection-proof.ts",
     "proof:ddm-connector": "tsx ./src/ddm-connector-proof.ts",
+    "proof:decision-cascade": "tsx ./src/decision-cascade-proof.ts",
     "proof:decision-continuity": "tsx ./src/decision-continuity-proof.ts",
     "proof:decision-store-pg": "tsx ./src/decision-store-pg-proof.ts",
     "proof:device-attestation": "tsx ./src/device-attestation-proof.ts",
@@ -78,6 +79,9 @@
     "proof:graph-connector": "tsx ./src/graph-connector-proof.ts",
     "proof:graph-wire": "tsx ./src/graph-wire-proof.ts",
     "proof:estate-core": "tsx ./src/estate-core-proof.ts",
+    "proof:estate-refresh": "tsx ./src/estate-refresh-proof.ts",
+    "proof:secrets": "tsx ./src/secrets-proof.ts",
+    "proof:data-lifecycle": "tsx ./src/data-lifecycle-proof.ts",
     "proof:grid-config": "tsx ./src/grid-config-proof.ts",
     "proof:grid-coverage": "tsx ./src/grid-coverage-proof.ts",
     "proof:grid-lifecycle": "tsx ./src/grid-lifecycle-proof.ts",
@@ -209,7 +213,8 @@
     "@workspace/webauthn": "workspace:*",
     "@workspace/work-context": "workspace:*",
     "ioredis": "^5.4.1",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "@workspace/secrets": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-shared-surfaces-delta-since-the-09-33z-not",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Shared surfaces, delta since the 09:33Z notice: scripts/loop-state.mjs (+211) and one registered step in preflight.mjs / review-hub-ci.yml (#917)",
+  "body": "Protocol item 7. Measured with `git diff --stat 8fddbd1..origin/SignalGrid_Alpha` at 11:25Z: seven shared surfaces have changed since your last tick — the six named at 09:33Z (review-hub-ci.yml, live-sync-manifest v80->v82, package.json, pnpm-lock.yaml, mutation-guard.mjs, preflight.mjs) plus scripts/loop-state.mjs (+211 lines, PR #917 f7f6a64e: a squash of a merge tree now clears by exact hunks with a verbatim patch-id and a re-apply check, a same-named branch is compared by sha against the Hub tip and reported when ahead, and the seam has an 8-shape `--self-test` registered as the preflight/CI step \"Loop-state seam self-test\"). Your stop hook and `pnpm run loop:state` will read the new rows once you pull; a local branch that is ahead of its same-named remote is now a gated fail with the count, and an unfetched Hub tip reads UNKNOWN rather than clean. Pull SignalGrid_Alpha to at least f7f6a64e before touching any of the seven.",
+  "sentAt": "2026-09-20T11:25:57.106Z"
+}

@@ -36,7 +36,7 @@
 //   `step_up`  the ENGINE's verdict — VALID_OUTCOMES in
 //              lib/signalgrid-core/src/policy.ts and the DecisionOutcome union
 //              in lib/signalgrid-core/src/types.ts — and the spelling of all
-//              SEVEN outcome enums in the /v1 launch surface
+//              EIGHT outcome enums in the /v1 launch surface
 //              (lib/api-spec/v1-openapi.yaml).
 //   `step-up`  the spelling of the named `DecisionOutcome` schema in the OLDER
 //              published /api contract (lib/api-spec/openapi.yaml, info.version
@@ -108,14 +108,15 @@ const LEGACY_SPEC = "lib/api-spec/openapi.yaml";
 // Floors. A derivation that has drifted finds nothing and would otherwise report
 // "0 mismatches" — green about nothing. Both floors are MEASURED against the tree
 // as it stands: `VALID_OUTCOMES` holds four rungs, and lib/api-spec/v1-openapi.yaml
-// publishes SEVEN outcome-shaped enums. The v1 floor read 1 until 2026-09-02 while
+// publishes EIGHT outcome-shaped enums (seven until 2026-09-19, when
+// AppSessionPlan.outcome joined for /v1/app-workflows/evaluate). The v1 floor read 1 until 2026-09-02 while
 // this comment already claimed it was "what the tree holds today" — so six of the
 // seven enums could have been renamed out of recognition and the gate would still
 // have compared the surviving one and passed. A floor set below the measurement is
 // not a floor; it is a comment. Raise these when the tree grows, never lower them
 // to make a run go green.
 const ENGINE_FLOOR = 4;
-const V1_ENUM_FLOOR = 7;
+const V1_ENUM_FLOOR = 8;
 
 /** The engine's verdict vocabulary, read out of `VALID_OUTCOMES` in policy.ts. */
 function engineOutcomes(src) {
@@ -308,18 +309,18 @@ if (process.argv.includes("--self-test")) {
 
   // 4b. THE FLOOR ITSELF, at the value that matters. "Zero enums" above trips any
   //     floor >= 1 and therefore proved nothing about V1_ENUM_FLOOR being right.
-  //     This plants the real defect the floor exists to catch: six of the seven
+  //     This plants the real defect the floor exists to catch: all but one of the
   //     published enums renamed out of recognition, ONE left agreeing with the
   //     engine. Under the old floor of 1 that combination passed.
   const liveV1 = readRepoFile(V1_SPEC) ?? "";
-  const sixBlinded = blindAllButN(liveV1, 1);
+  const allButOneBlinded = blindAllButN(liveV1, 1);
   results.push([
     "the plant is real: blinding leaves exactly 1 of the live spec's outcome enums",
-    outcomeEnums(liveV1).length === V1_ENUM_FLOOR && outcomeEnums(sixBlinded).length === 1,
+    outcomeEnums(liveV1).length === V1_ENUM_FLOOR && outcomeEnums(allButOneBlinded).length === 1,
   ]);
-  const partlyBlind = (rel) => (rel === V1_SPEC ? sixBlinded : readRepoFile(rel));
+  const partlyBlind = (rel) => (rel === V1_SPEC ? allButOneBlinded : readRepoFile(rel));
   results.push([
-    `6 of the ${V1_ENUM_FLOOR} /v1 outcome enums made unrecognisable trips the floor`,
+    `${V1_ENUM_FLOOR - 1} of the ${V1_ENUM_FLOOR} /v1 outcome enums made unrecognisable trips the floor`,
     verdictSpelling(partlyBlind).problems.length > 0,
   ]);
 

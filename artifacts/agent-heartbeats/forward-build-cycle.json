@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-18T15:27:27.318Z",
-  "result": "acted: opened PR #846 (tick re-derives the surface coverage page before committing sim results) — the unattended Mac tick's first result PR #844 went red on that gate and needed a hand commit; #844 merged at 47aee557 with fresh live evidence (2026-09-18T14:52Z, manifest 6906d8d9), readiness headline back to 94% OUTREACH OPEN."
+  "firedAt": "2026-09-20T20:08:05.425Z",
+  "result": "acted: opened PR #929 for the owner to merge (product change — new read-only @workspace/integrations/app-protection family + app_protection signal kind + fromAppProtection adapter + proof:app-protection, deferred breadth lane). State at firedAt: OPEN, awaiting the owner's merge (the lane does not self-merge a product PR). node scripts/preflight.mjs PASSED and pnpm run verify:breadth PASSED on the merged tree (base SignalGrid_Alpha 1255e56); proof 52/52; mutation-guard --proof=proof:app-protection survivors=0; proof:connector-emulator reconciles MISSING_MAM_POLICY_SENSITIVE_APP expected=actual=restrict. SIGNAL_SOURCE_CATALOG row flipped out of Documentation-only roadmap; launch-profile 186 classified / 135 deferred; proof-script count 152->153."
 }

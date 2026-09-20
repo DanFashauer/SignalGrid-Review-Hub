@@ -5,7 +5,63 @@ finding compliance.1). This is the single surface every retention or personal-da
 claim must resolve to. `scripts/check-retention-claims.mjs` holds the buyer- and
 assessor-facing surfaces against it.
 
-## The one-paragraph truth
+## 2026-09-18 — a mechanism now exists; read this before the paragraph below
+
+The paragraph that follows was true when it was written and is now **partly
+superseded**. It is kept, unedited, because the correction is the useful part and
+because a position document that quietly rewrites itself is worth less than one that
+shows its own history.
+
+**What changed.** `lib/persistence/src/lifecycle.ts` implements retention, subject
+erasure and a DSAR export over the durable decision and evidence stores, proven by
+`pnpm run proof:data-lifecycle` (31 checks; `--self-test` plants a tombstone that
+names the erased subject and the proof catches it).
+
+- **A retention policy per tenant, with a default.** `retentionFor(tenantId,
+  overrides)` resolves it. Decisions and their evidence snapshots share one window;
+  the caller-supplied `requestContext` inside a decision has its own, **shorter** one,
+  because it is the only free-form field a durable row holds. An override that is not
+  a positive integer within bounds falls back to the DEFAULT — **never to unbounded**.
+  Retention is the one place in this codebase where the conservative direction is to
+  keep LESS, and the fallback is written that way on purpose.
+- **An erasure path.** `eraseSubject` removes every durable decision a tenant holds
+  for one subject, and their evidence snapshots with them. It is tenant-scoped like
+  every other path: the same subject id in another tenant is untouched.
+- **The audit chain is never edited.** The ledger is append-only by privilege and
+  erasure APPENDS a tombstone rather than removing anything, so `verifyLedgerFull()`
+  passes before and after. A deletion that broke the chain would destroy the evidence
+  that the deletion happened.
+- **The tombstone carries NO subject identifier**, and this is the rule that is
+  easiest to get backwards. Writing "erased all records for X" into a store you cannot
+  edit, in response to a request to erase X, creates a permanent new copy of the
+  identifier. A hash is no better — subject refs are low-entropy and a digest of one is
+  reversible by guessing. The row records the operator's own request id, the counts,
+  and the tenant. The proof asserts the subject's identifier appears **nowhere** in the
+  ledger.
+- **A DSAR export** returns the decisions held for a subject and **names what it does
+  not include** (the audit ledger, the in-memory core's decisions, normalized posture) with
+  the reason for each, rather than leaving a partial list to look complete. It appends
+  nothing: asking what is held must not create a new record naming you.
+
+**What has NOT changed, and must not be read as done:**
+
+- **No route serves any of this, and none should.** The API's `signalgrid_runtime`
+  role holds no DELETE on any table, by design — so the served process structurally
+  cannot run a lifecycle job, and `PostgresLifecycleStore` refuses with the real
+  remedy instead of reporting a run that removed nothing. This is an
+  **admin-credential job**, and the job's schedule, invocation and operator runbook
+  are still undesigned. That remains an open backlog row.
+- **The SQL is not exercised against a live database.** There is no database in CI.
+  The proof drives the same `LifecycleStore` interface through an in-memory
+  implementation and the **real** audit ledger, so every chain assertion is genuine
+  and every SQL statement is unexercised. Stated here rather than implied.
+- **Sessions, the audit ledger itself, and the in-memory core are untouched.** The
+  per-store inventory below still describes them correctly.
+- **DR-003's intended default is unchanged** and the window constants in
+  `lifecycle.ts` are the code's own; reconciling the two is a decision record, not an
+  edit here.
+
+## The one-paragraph truth (as of 2026-08-21 — see the correction above)
 
 **No retention, deletion, or purge mechanism is implemented in any durable store
 today.** The absence was probed four ways (`pnpm run check:absence retention` →

@@ -121,7 +121,10 @@ export interface Workflow {
 // ── Connector (fixture-only, read-only) ──────────────────────────────────────
 
 export type ConnectorKind = "microsoft-entra-intune" | "dockbridge-custody" | "wfm-shift";
-export type ConnectorMode = "fixture";
+/** `fixture`: synthetic posture committed to the repo. `live`: posture a caller
+ *  fetched from a real read-only source and handed to the core — the core itself
+ *  never performs I/O, in either mode. */
+export type ConnectorMode = "fixture" | "live";
 export type ConnectorStatus = "healthy" | "degraded" | "never_synced";
 
 /**
@@ -710,6 +713,32 @@ export interface RemediationAction {
   note: string;
 }
 
+/**
+ * The ANSWER to a `step_up` verdict, recorded against the decision that raised it.
+ *
+ * The gate can return `step_up`; until this record existed nothing served could say
+ * one had been SATISFIED, so a deployment in shadow mode returned a verdict the host
+ * app had no way to resolve. One answer per decision, minted only after a
+ * cryptographic verification the caller could not fake, and it carries a MASKED
+ * credential reference — never the credential.
+ *
+ * It does not change the decision. A `step_up` stays a `step_up` forever: the
+ * evidence it was computed from is immutable, and rewriting a stored verdict because
+ * a gesture arrived later would make the audit chain describe something that never
+ * happened. The host app reads the answer beside the decision and proceeds.
+ */
+export interface StepUpAnswer {
+  id: string;
+  tenantId: string;
+  decisionId: string;
+  /** The identity the decision was about — never one named by the request. */
+  identityId: string;
+  method: "webauthn";
+  /** A masked reference to the credential that signed. Never the credential. */
+  credentialReference: string;
+  answeredAt: string;
+}
+
 // ── Resolution Assistant (deterministic, approval-gated, simulated) ──────────
 
 export type ResolutionAudience = "worker" | "operator" | "admin" | "system";
@@ -832,7 +861,7 @@ export interface WebhookDelivery {
  * downstream could tell. The union is derived from this array instead, so the
  * compile-time and run-time answers cannot disagree.
  *
- * The first six are the original ledger. The last eight are the session-puck
+ * The first seven are the original ledger plus the step_up answer (#869). The last eight are the session-puck
  * lifecycle (DR-043): a credential presented, a dock seated, an identity proven, a
  * posture read, a session opened, the dock broken, the session suspended, the
  * credential revoked. Each is what the system KNEW at that instant, recorded once and
@@ -845,6 +874,7 @@ export const AUDIT_EVENT_TYPES = [
   "evidence.captured",
   "remediation.requested",
   "remediation.approved",
+  "decision.step_up_answered",
   "credential.presented",
   "dock.attached",
   "identity.authenticated",
@@ -859,7 +889,7 @@ export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
 /**
  * The eight puck-lifecycle members. They carry a stricter admission rule than the
- * original six (see `appendAudit`): each must name the decision it evidences, because
+ * original seven (see `appendAudit`): each must name the decision it evidences, because
  * a lifecycle event with no decision behind it is a log line, not a ledger entry.
  */
 export const PUCK_LIFECYCLE_EVENT_TYPES = [

@@ -428,7 +428,7 @@ check(
 // It must count FOURTEEN — the original six plus the eight the puck lifecycle needs —
 // and it must REFUSE a fifteenth. Both halves: a census that only counts would pass on
 // a tree where any string is admitted.
-check(`audit vocabulary: the ledger names exactly 14 event types (found ${AUDIT_EVENT_TYPES.length})`, AUDIT_EVENT_TYPES.length === 14);
+check(`audit vocabulary: the ledger names exactly 15 event types (found ${AUDIT_EVENT_TYPES.length})`, AUDIT_EVENT_TYPES.length === 15);
 check("audit vocabulary: no type is named twice", new Set(AUDIT_EVENT_TYPES).size === AUDIT_EVENT_TYPES.length);
 check("audit vocabulary: every member passes its own membership test", AUDIT_EVENT_TYPES.every((t) => isAuditEventType(t)));
 check(`audit vocabulary: the eight puck-lifecycle types are all members (found ${PUCK_LIFECYCLE_EVENT_TYPES.length})`,

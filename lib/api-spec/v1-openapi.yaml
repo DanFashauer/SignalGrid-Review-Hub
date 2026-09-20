@@ -727,9 +727,21 @@ paths:
                     pattern: "^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$"
                   additionalProperties: { type: string, maxLength: 256 }
       responses:
-        "200": { description: Decision + app-session plan (as decided; a step_up keeps its high-assurance actions held) }
+        "200":
+          description: Decision + app-session plan (as decided; a step_up keeps its high-assurance actions held)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      decision: { $ref: "#/components/schemas/EvaluateResult" }
+                      plan: { $ref: "#/components/schemas/AppSessionPlan" }
+                    required: [decision, plan]
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
@@ -1490,6 +1502,50 @@ components:
     # have learned tenantId, assurance, or signalsUsed existed. The field lists
     # mirror the served objects (core store records + routes/v1.ts envelopes);
     # the browser E2E suite pins the same fields end to end.
+    # The app-session plan a shipping native client decodes from
+    # POST /v1/app-workflows/evaluate (mirrors lib/app-workflows/src/index.ts:
+    # AppSessionPlan + AppActionPlan; the api tests pin `plan.actions[].disposition`).
+    # `outcome` is the decision's own verdict, repeated on the plan so a client that
+    # renders only the plan still sees the four-rung vocabulary. `mode` is the
+    # session posture derived from it; `disposition` is per action. A `step_up`
+    # decision arrives with its gated actions held — nothing in this response
+    # releases them (see /v1/app-workflows/complete-step-up).
+    AppSessionPlan:
+      type: object
+      properties:
+        integrationId: { type: string }
+        integrationName: { type: string }
+        outcome:
+          type: string
+          enum: [allow, step_up, restrict, deny]
+        mode:
+          type: string
+          enum: [proceed, assist, step_up, hold, deny]
+        summary: { type: string }
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/AppActionPlan" }
+      required: [integrationId, integrationName, outcome, mode, summary, actions]
+    AppActionPlan:
+      type: object
+      properties:
+        key: { type: string }
+        label: { type: string }
+        riskTier:
+          type: string
+          enum: [standard, elevated, critical]
+        sensitive: { type: boolean }
+        disposition:
+          type: string
+          # The library's fifth disposition, `applied`, is deliberately ABSENT: it is
+          # emitted only after `confirmAppActions`, which no /v1 route calls, and this
+          # route is invoked without `confirmedActionKeys` — it plans, it performs
+          # nothing. Advertising `applied` here would let a generated client treat an
+          # already-applied action as a valid evaluate result (Codex review, #888).
+          enum: [auto, assist, step_up, blocked]
+        requiresConfirmation: { type: boolean }
+        reason: { type: string }
+      required: [key, label, riskTier, sensitive, disposition, requiresConfirmation, reason]
     MatchedRule:
       type: object
       properties:

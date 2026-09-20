@@ -41,7 +41,7 @@ fi
 exec "$C" run --rm --arch amd64 -c 6 -m 12g \
   --mount "type=bind,source=$REPO,target=/src,readonly" \
   node:22 bash -c '
-    set -e
+    set -eo pipefail
     mkdir /tmp/w && cd /src
     tar --exclude=.git --exclude=node_modules -cf - . | tar -C /tmp/w -xf -
     cd /tmp/w && corepack enable

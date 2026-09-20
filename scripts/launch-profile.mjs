@@ -745,13 +745,15 @@ export const GAPS = [
     id: "non-demo-core-constructor",
     surface: "app-surfaces",
     whatIsMissing:
-      "A decision core a CUSTOMER deployment can boot. SignalGridCore has one public " +
-      "factory — demo(), a seeded core on a fixed clock — and the served API constructs " +
-      "exactly that (artifacts/api-server/src/lib/core.ts). The shared-device-gateway " +
-      "profile fences the demo SURFACES, and the database posture is real, but the " +
-      "evaluated tenants/identities/devices are still the demo seed: this deployment " +
-      "demonstrates in a customer environment and does not yet decide about the " +
-      "customer's own estate.",
+      "A served core that decides about a CUSTOMER estate by default. The constructor " +
+      "now exists — SignalGridCore.fromEstate() (lib/signalgrid-core/src/estate.ts), " +
+      "proven by proof:estate-core over the Graph fixture dataset — and the served API " +
+      "boots it under SIGNALGRID_CORE=estate (artifacts/api-server/src/lib/core.ts), " +
+      "reading posture once through the read-only Graph connector. What is still " +
+      "missing: the default boot is the demo factory, the posture is read once at boot " +
+      "with no refresh loop, and a live read needs the beta/prod tier gate plus a " +
+      "GRAPH_ACCESS_TOKEN — so an unconfigured deployment still demonstrates in a " +
+      "customer environment rather than deciding about its estate.",
     // Closed when the served core stops being the demo factory. Matched WITHOUT the
     // argument list: `SignalGridCore.demo()` read as CLOSED once a legitimate argument
     // was added, so `demo(` matches the call however it is parameterised.

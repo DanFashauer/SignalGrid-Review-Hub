@@ -389,6 +389,7 @@ const STEPS = [
   // would have passed preflight and every PR check.
   { name: "Proof: isolation-scope (no tenant can read another's row)", cmd: ["pnpm", "run", "proof:isolation-scope"] },
   { name: "Proof: graph-wire (throttling, 5xx, auth and malformed bodies fail closed)", cmd: ["pnpm", "run", "proof:graph-wire"] },
+  { name: "Proof: estate-core (a customer estate boots a core; no allow on unread facts)", cmd: ["pnpm", "run", "proof:estate-core"] },
   { name: "Figure-guard self-test (the baseline-age report must be able to fail)", cmd: ["node", "scripts/check-proof-figures.mjs", "--self-test"] },
   { name: "Docs\u2194proof FIGURE guard (a measured number must still be one)", cmd: ["node", "scripts/check-proof-figures.mjs"] },
   { name: "Proof-count self-test (a zeroed claim scan fails via the floor)", cmd: ["node", "scripts/check-proof-counts.mjs", "--self-test"] },

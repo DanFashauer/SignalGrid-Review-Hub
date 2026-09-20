@@ -186,7 +186,9 @@ LAST TOUCHED: 2026-09-20 10:50Z (cloud lane, latest) - THE EIGHT LANDINGS, ONE A
                        decision core. A rename away from ASCII was all it took.
                 #818 - the cap-block detection reused a whole-timeline `returned` boolean, so
                        ONE device coming back silenced a cap block held by a DIFFERENT device
-                       still out - the exact false negative DR-052 was written to catch.
+                       still out - the exact false negative DR-051 was written to catch
+                       [this entry said DR-052 when written on 2026-09-18; DR-051 is the custody
+                       timeline detection, DR-052 is now the 2026-09-20 intake rule].
                 #818 - four positive assertions were driving the detector with `undefined`
                        eventTypes (`ev` gained a required id on mainline). They read GREEN on
                        the original branch. Green against events that could match no rule.
@@ -1329,8 +1331,10 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (0) Land PR #905 (DR-052) on its green gating check - no launch-surface file, all
-              threads resolved - then apply DR-052's three stages to the two resources the owner named on
+NEXT ACTION: cloud: (0) PR #905 (DR-052) is the OWNER's merge - it touches scripts/publication-boundary.mjs,
+              which DR-037's owner-gated clause keeps out of the lane's hands; the lane keeps it green
+              and conflict-free, never presses merge. Once it is on mainline, apply DR-052's three
+              stages to the two resources the owner named on
               2026-09-20 (upstash/context7, nidhinjs/prompt-master): the independent scan and evaluation
               FIRST, the confirmation second, the coordinator's choice third, each recorded in
               docs/agent/RESOURCE_INTAKE.md; the prompt-master by-use trial is an open BUILD_BACKLOG row.

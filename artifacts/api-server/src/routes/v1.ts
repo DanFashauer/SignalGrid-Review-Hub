@@ -14,6 +14,7 @@ import { getDecisionStore, getSessionStore, type Session } from "@workspace/pers
 import { appendAuditRecord, getAuditBackend, getAuditRecordsForTenant, verifyLedger, type Target as AuditTarget } from "@workspace/audit";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { webauthn, webauthnStore } from "@workspace/webauthn";
+import { readSecret, secretMatches } from "@workspace/secrets";
 import { core, DEMO_KEYS } from "../lib/core";
 import { decisionsTotal, auditEventsTotal } from "../lib/metrics";
 import { requireTenantContext } from "../middlewares/context";
@@ -176,11 +177,14 @@ router.get("/v1/decisions/:id", async (req: Request, res: Response, next: NextFu
       // which we surface as the same 404 the in-memory path throws.
       const decision = await store.getDecision(tenantId, param(req, "id"));
       if (!decision) throw new CoreError("not_found", `Decision "${param(req, "id")}" not found.`, 404);
-      res.json(envelope(req, { decision }));
+      // The step-up answer lives in the core beside the decision; the durable store
+      // holds decisions and evidence only. Absent means UNANSWERED, which is what a
+      // host app must treat an unresolvable step_up as.
+      res.json(envelope(req, { decision, stepUp: core.getStepUpAnswer(token(req), param(req, "id")) ?? null }));
       return;
     }
     const decision = core.getDecision(token(req), param(req, "id"));
-    res.json(envelope(req, { decision }));
+    res.json(envelope(req, { decision, stepUp: core.getStepUpAnswer(token(req), param(req, "id")) ?? null }));
   } catch (err) {
     next(err);
   }
@@ -597,12 +601,18 @@ function requireEnrollmentPrincipal(req: Request): { subjectId: string } {
  *  testable; compared as SHA-256 digests so `timingSafeEqual` gets equal-length inputs
  *  and the comparison never throws or leaks length. Fail closed on absent or wrong. */
 function requireOutOfBandEnrollmentAuthorization(req: Request): void {
-  const secret = process.env.SIGNALGRID_ENROLLMENT_SECRET;
-  if (!secret) return; // fixture demo: self-service by design, labeled honestly
+  // Through the ONE read site (`@workspace/secrets`, DR-010). Reading it at request
+  // time rather than at module load is kept — both modes stay testable — and the
+  // accessor adds the rotation window: SIGNALGRID_ENROLLMENT_SECRET_NEXT is accepted
+  // alongside the current value while both are set, so the secret can be changed
+  // without a moment in which a legitimate enroller is refused.
+  if (readSecret("SIGNALGRID_ENROLLMENT_SECRET").value === undefined) {
+    return; // fixture demo: self-service by design, labeled honestly
+  }
   const presented = req.get("x-enrollment-authorization") ?? "";
-  const a = createHash("sha256").update(presented, "utf8").digest();
-  const b = createHash("sha256").update(secret, "utf8").digest();
-  if (!timingSafeEqual(a, b)) {
+  // Constant-time inside the accessor, and it can never return true for an
+  // unconfigured secret — so the guard above is a policy decision, not a fallback.
+  if (!secretMatches("SIGNALGRID_ENROLLMENT_SECRET", presented)) {
     throw new CoreError(
       "forbidden",
       "Enrollment requires out-of-band authorization (x-enrollment-authorization header).",
@@ -616,7 +626,7 @@ function requireOutOfBandEnrollmentAuthorization(req: Request): void {
  *  gate is satisfiable with the published demo keys and that completion releases only
  *  simulated fixture plans. Absent (undefined) once a real deployment sets the secret. */
 function demoEnrollmentNote(): string | undefined {
-  if (process.env.SIGNALGRID_ENROLLMENT_SECRET) return undefined;
+  if (readSecret("SIGNALGRID_ENROLLMENT_SECRET").value !== undefined) return undefined;
   return (
     "Self-service demo ceremony: the operator/owner role gate is satisfiable with the " +
     "demo keys published by the unauthenticated /v1/keys route, and a completed step-up " +
@@ -837,6 +847,225 @@ router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Resp
         },
       }),
     );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── WHAT THIS PROCESS ACTUALLY DOES, PER SIGNAL FAMILY ───────────────────────
+//
+// Blocker 10 is "mixed autonomy claims": nothing states, per deployment, whether
+// behaviour is ENFORCED, merely OBSERVED, or SIMULATED. The labels existed only in
+// `scripts/launch-profile.mjs` — a governance file — so an operator could read what
+// the product INTENDS and never ask the running server what it is doing. That was
+// the `runtime-launch-status` gap.
+//
+// EVERY FIELD IS DERIVED FROM THE CONNECTORS THE CORE HOLDS. Not one is configured.
+// `SIGNALGRID_LIVE_INTEGRATIONS` already caused this exact defect once — it PERMITS
+// live calls, and /v1/context once read it as "signals are live" while every verdict
+// came from fixture records. A status route that could be told what to say would be
+// worse than none, because it would be believed.
+//
+// THE THREE LABELS, and what each one is allowed to mean here:
+//
+//   "simulated"  the signals in this family come from committed fixture data. The
+//                verdict is reproducible and is NOT a statement about any real
+//                device. This is what a review deployment reports.
+//   "observed"   the signals come from a live read of a real source, and the verdict
+//                is advisory: SignalGrid answers, the host app acts.
+//   "enforced"   the verdict is APPLIED by something this service controls.
+//
+// The third is UNREACHABLE in this product and the route says so rather than leaving
+// the reader to notice. `verdictEffect` is "advisory" as a product law, not a current
+// limitation: under the embedded-UX rule SignalGrid is invisible to the worker, who
+// uses their own host app, and this service actuates nothing on any device and has no
+// path to. So the response carries `enforced: { reachable: false, because: … }` — an
+// enum value nothing can produce is an overclaim by implication unless the report
+// itself retires it, and retiring it is the honest half of answering Blocker 10.
+//
+// AGGREGATE AND ANONYMOUS. Counts and modes only: no connector id, no subject, no
+// ref, no tenant. That is what lets an unscoped process fact be served from a
+// tenant-scoped surface at all — the same rule /metrics already follows.
+router.get("/v1/launch-status", (req: Request, res: Response) => {
+  // Authenticated (it sits below the /v1 guard) and authorized as a connector read:
+  // it describes the connector estate, so the role that may read connectors may read
+  // this. It returns no tenant's rows, so it needs nothing stronger.
+  authorize(core.context(token(req)).principal, "connector:read");
+  const posture = resolveAssurancePosture(req.app);
+  const families = core.signalInventory().map((family) => {
+    // A family whose signals came from ANY live connector is observed; only a family
+    // sourced entirely from fixtures is simulated. A family with NO resolvable
+    // connector mode reports `simulated` too: an unknown provenance must never be
+    // read as a live one, which is the fail-closed direction for a claim about how
+    // real the data is.
+    const live = family.modes.includes("live");
+    const status: "enforced" | "observed" | "simulated" = live ? "observed" : "simulated";
+    return {
+      category: family.category,
+      status,
+      signalsHeld: family.signalsHeld,
+      connectorModes: family.modes,
+      note:
+        status === "observed"
+          ? "Read live from a real source. The verdict is advisory: SignalGrid answers, the host app acts."
+          : "Committed fixture data. Reproducible, and NOT a statement about any real device.",
+    };
+  });
+  res.json(
+    envelope(req, {
+      process: {
+        profile: posture.profile,
+        tier: posture.tier,
+        signalSource: posture.signalSource,
+        verdictEffect: posture.verdictEffect,
+        stepUpAnswerable: posture.stepUpAnswerable,
+      },
+      families,
+      enforced: {
+        reachable: false,
+        because:
+          "No verdict this service returns is applied by this service. Under the embedded-UX rule " +
+          "SignalGrid is invisible to the worker, who uses their own host app; the gate answers and " +
+          "the host app acts. Enforcement on a device is an MDM/OS capability on a supervised device, " +
+          "which this service neither has nor claims. `enforced` is listed so the vocabulary is " +
+          "complete, and reported unreachable so it is never inferred.",
+      },
+    }),
+  );
+});
+
+// ── ANSWERING A step_up, AT LAUNCH ────────────────────────────────────────────
+//
+// The gate returns one of four words, and until these two routes existed only three
+// of them could be acted on. `step_up` means "challenge this person"; the launch
+// surface had no route that could carry the challenge's ANSWER back, so a deployment
+// shipped in shadow mode by omission — the gate said step_up and the host app had
+// nowhere to say it had been satisfied. That is the `step-up-answerability` gap.
+//
+// The ceremony is the one already in this file, bound to a DECISION instead of to an
+// app integration:
+//
+//   1. the host app's gate call returns a decision with outcome `step_up`;
+//   2. POST /v1/decisions/:id/step-up/challenge mints a WebAuthn authentication
+//      challenge bound to THAT decision (tenant, decision id, and the subjects taken
+//      from the decision — never from the request body);
+//   3. the worker's own device signs it with a user-verifying gesture;
+//   4. POST /v1/decisions/:id/step-up carries the assertion back. It is verified
+//      cryptographically against the credential enrolled for that identity, and only
+//      then is the answer recorded against the decision.
+//
+// WHAT FAILS CLOSED, and each of these is a 4xx with nothing recorded:
+//   · a decision this tenant does not hold                            404
+//   · a decision whose outcome is not step_up                         409
+//   · an unknown, expired or already-consumed challenge               403
+//   · a challenge minted for a DIFFERENT decision or tenant           403
+//   · an identity with no enrolled credential                         409 (enroll first)
+//   · an assertion that does not verify, or was not user-verified     403
+//   · a second answer for the same decision (replay)                  409
+//
+// WHAT THIS DOES NOT DO. It does not rewrite the decision. A `step_up` stays a
+// `step_up`: it was computed from digested, immutable evidence, and editing a stored
+// verdict because a gesture arrived afterwards would make the audit chain describe
+// something that never happened. The host app reads `stepUp` beside the decision —
+// `GET /v1/decisions/:id` carries it — and proceeds on the answer, which is the
+// embedded-UX contract: SignalGrid answers, the host app acts.
+
+/** The decision-bound challenge context, all of it server-derived. */
+function decisionChallengeContext(tenantId: string, decisionId: string, refs: { identityRef: string; deviceRef: string }) {
+  return { tenantId, purpose: "decision-step-up", decisionId, identityRef: refs.identityRef, deviceRef: refs.deviceRef };
+}
+
+router.post("/v1/decisions/:id/step-up/challenge", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Authorize BEFORE anything is minted or probed — minting is part of the release
+    // flow, so it takes the same permission the answer ultimately enforces. Without
+    // it a read-only auditor could learn from 409-vs-200 whether an identity has an
+    // enrolled credential.
+    const ctx = core.context(token(req));
+    authorize(ctx.principal, "decision:evaluate");
+    const decisionId = param(req, "id");
+    const decision = core.getDecision(token(req), decisionId);
+    if (decision.outcome !== "step_up") {
+      throw new CoreError(
+        "validation",
+        `Decision "${decisionId}" answered "${decision.outcome}", not "step_up" — there is nothing to challenge.`,
+        409,
+      );
+    }
+    if (core.getStepUpAnswer(token(req), decisionId)) {
+      throw new CoreError("validation", `Decision "${decisionId}" has already been answered.`, 409);
+    }
+    // The subjects come from the DECISION. A body-supplied identityRef would let a
+    // caller mint a challenge against one identity's enrolled credential and spend it
+    // on another identity's decision.
+    const refs = core.decisionSubjectRefs(token(req), decisionId);
+    const userId = webauthnUserId(req, refs.identityRef);
+    // Fail closed: no enrolled credential ⇒ no challenge ⇒ nothing to sign. There is
+    // no weaker completion path to fall back to.
+    if (!(await webauthnStore.hasWebAuthnCredentials(userId))) {
+      throw new CoreError("forbidden", "No enrolled step-up credential for this identity. Enroll first.", 409);
+    }
+    const options = await webauthn.generateAuthenticationOptions(
+      userId,
+      decisionChallengeContext(ctx.tenant.id, decisionId, refs),
+    );
+    const { challengeId, ...publicKey } = options;
+    res.json(envelope(req, { challengeId, publicKey, decisionId }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/v1/decisions/:id/step-up", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const decisionId = param(req, "id");
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const challengeId = requireString(body, "challengeId");
+    const assertion = requireObject(body, "assertion", "WebAuthn authentication");
+    const ctx = core.context(token(req));
+    // 404 before anything else: a decision this tenant does not hold gets the same
+    // answer a nonexistent id gets.
+    const decision = core.getDecision(token(req), decisionId);
+
+    // THE BINDING GATE, checked BEFORE any cryptography. The guarded values come from
+    // the STORED challenge record; the request is only compared against it. A gesture
+    // signed for one decision can therefore never answer another, and a challenge
+    // minted by the app-workflows flow (a different `purpose`) cannot answer a
+    // decision at all. Mismatch leaves the challenge unconsumed and never reaches
+    // verify.
+    const stored = await webauthnStore.getChallengeContext(challengeId);
+    if (!stored || !stored.context) {
+      throw new CoreError("forbidden", "Unknown or expired step-up challenge.", 403);
+    }
+    const bound = stored.context;
+    if (bound.purpose !== "decision-step-up" || bound.tenantId !== ctx.tenant.id || bound.decisionId !== decisionId) {
+      throw new CoreError(
+        "forbidden",
+        "This step-up challenge was minted for a different decision; request a new challenge for this one.",
+        403,
+      );
+    }
+
+    // The cryptographic gate. Single-use challenge (fetched-and-deleted by the lib),
+    // purpose- and user-bound, signature verified against the enrolled public key,
+    // user-verification flag REQUIRED. The userId comes from the STORED binding.
+    const userId = webauthnUserId(req, bound.identityRef as string);
+    const verification = await webauthn.verifyAuthentication(userId, challengeId, assertion as never, ctx.tenant.id);
+    if (!verification.success) {
+      throw new CoreError("forbidden", `Step-up assertion rejected: ${verification.error ?? "verification failed"}.`, 403);
+    }
+
+    // Only now is anything recorded. The core re-checks the outcome and the
+    // one-answer-per-decision rule, so the invariants hold even if this handler is
+    // ever called from somewhere else.
+    const stepUp = core.answerStepUp(token(req), decisionId, {
+      // MASKED, never the credential: the id is the authenticator's handle and there
+      // is no reason for the audit chain to carry it whole.
+      credentialReference: `${String(verification.credentialId ?? "").slice(0, 8)}…`,
+    });
+    await audit(req, "security.webauthn.step_up.success", ctx.principal.subjectId, { type: "decision", id: decisionId },
+      { stepUpAnswerId: stepUp.id, method: stepUp.method });
+    res.json(envelope(req, { decision, stepUp }));
   } catch (err) {
     next(err);
   }

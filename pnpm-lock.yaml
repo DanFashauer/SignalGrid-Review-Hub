@@ -181,6 +181,9 @@ importers:
       '@workspace/iac':
         specifier: workspace:*
         version: link:../../lib/iac
+      '@workspace/integrations':
+        specifier: workspace:*
+        version: link:../../lib/integrations
       '@workspace/persistence':
         specifier: workspace:*
         version: link:../../lib/persistence
@@ -193,6 +196,9 @@ importers:
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../../lib/room-sim
+      '@workspace/secrets':
+        specifier: workspace:*
+        version: link:../../lib/secret-model
       '@workspace/self-audit':
         specifier: workspace:*
         version: link:../../lib/self-audit
@@ -256,7 +262,7 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
-        version: 1.30.0
+        version: 1.30.0(zod@3.25.76)
       '@workspace/facility-trust-graph':
         specifier: workspace:*
         version: link:../../lib/facility-trust-graph
@@ -826,6 +832,9 @@ importers:
       '@workspace/audit':
         specifier: workspace:*
         version: link:../audit
+      '@workspace/signalgrid-core':
+        specifier: workspace:*
+        version: link:../signalgrid-core
       ioredis:
         specifier: ^5.4.1
         version: 5.11.1
@@ -859,6 +868,9 @@ importers:
 
   lib/persistence:
     dependencies:
+      '@workspace/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@workspace/signalgrid-core':
         specifier: workspace:*
         version: link:../signalgrid-core
@@ -928,6 +940,12 @@ importers:
         specifier: 'catalog:'
         version: 25.6.2
 
+  lib/secret-model:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   lib/self-audit:
     devDependencies:
       '@types/node':
@@ -991,7 +1009,7 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
-        version: 1.30.0
+        version: 1.30.0(zod@3.25.76)
       '@workspace/adaptive-proposals':
         specifier: workspace:*
         version: link:../lib/adaptive-proposals
@@ -1067,6 +1085,9 @@ importers:
       '@workspace/room-sim':
         specifier: workspace:*
         version: link:../lib/room-sim
+      '@workspace/secrets':
+        specifier: workspace:*
+        version: link:../lib/secret-model
       '@workspace/self-audit':
         specifier: workspace:*
         version: link:../lib/self-audit
@@ -1700,6 +1721,7 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
+      zod: ^3.25 || ^4.0
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
@@ -5636,7 +5658,7 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@modelcontextprotocol/sdk@1.30.0':
+  '@modelcontextprotocol/sdk@1.30.0(zod@3.25.76)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.2)
       ajv: 8.20.0

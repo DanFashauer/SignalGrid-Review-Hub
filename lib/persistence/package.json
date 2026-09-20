@@ -3,10 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "dependencies": {
     "@workspace/signalgrid-core": "workspace:*",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "@workspace/audit": "workspace:*"
   },
-  "devDependencies": { "@types/node": "catalog:", "@types/pg": "^8.21.0" }
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/pg": "^8.21.0"
+  }
 }

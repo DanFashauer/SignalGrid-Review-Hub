@@ -213,10 +213,81 @@ paths:
                   - type: object
                     properties:
                       decision: { $ref: "#/components/schemas/DecisionRecord" }
-                    required: [decision]
+                      stepUp:
+                        description: >-
+                          The recorded answer to this decision's step_up challenge, or null
+                          when it is unanswered. NULL IS THE FAIL-CLOSED READING: a host app
+                          treats an unanswered step_up as unresolved. The decision itself is
+                          never rewritten by an answer.
+                        oneOf:
+                          - $ref: "#/components/schemas/StepUpAnswer"
+                          - type: "null"
+                    required: [decision, stepUp]
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/decisions/{id}/step-up/challenge:
+    post:
+      operationId: decisionStepUpChallenge
+      tags: [decisions]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: Mint a single-use authentication challenge BOUND to one step_up decision
+      description: >-
+        The challenge is bound at mint time to this tenant and this decision id, and the
+        subjects are read from the DECISION rather than from the request — so a challenge
+        can never be minted against one identity's enrolled credential and spent on
+        another identity's decision. Fails closed on a decision this tenant does not hold
+        (404), on a decision whose outcome is not step_up or which is already answered
+        (409), and on an identity with no enrolled credential (409 — enroll first).
+      responses:
+        "200": { description: challengeId + WebAuthn PublicKeyCredentialRequestOptions (userVerification required) }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "Not a step_up decision, already answered, or no enrolled credential for its identity" }
+
+  /v1/decisions/{id}/step-up:
+    post:
+      operationId: answerDecisionStepUp
+      tags: [decisions]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      summary: Answer a step_up verdict with a verified WebAuthn assertion
+      description: >-
+        The route that makes `step_up` actionable. The assertion is verified
+        cryptographically (single-use challenge, user-verification flag REQUIRED)
+        against the credential enrolled for the identity the DECISION was about, and the
+        challenge's stored binding must name this tenant and this decision — a gesture
+        signed for one decision can never answer another. Only then is the answer
+        recorded. The decision is NOT rewritten: a step_up stays a step_up, because it
+        was computed from digested, immutable evidence; the answer is a separate record
+        beside it and the host app proceeds on that.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeId, assertion]
+              properties:
+                challengeId: { type: string, description: "From POST /v1/decisions/{id}/step-up/challenge" }
+                assertion: { type: object, description: WebAuthn authentication response (clientDataJSON + authenticatorData + signature) }
+      responses:
+        "200":
+          description: The decision (unchanged) and the recorded step-up answer
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      decision: { $ref: "#/components/schemas/DecisionRecord" }
+                      stepUp: { $ref: "#/components/schemas/StepUpAnswer" }
+                    required: [decision, stepUp]
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { description: "Unknown, expired or mis-bound challenge, or an assertion that did not verify — nothing is recorded" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "Not a step_up decision, or already answered (replay)" }
 
   /v1/decisions/{id}/evidence:
     get:
@@ -471,6 +542,57 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/launch-status:
+    get:
+      operationId: getLaunchStatus
+      tags: [monitoring]
+      summary: What this process actually does, per signal family
+      description: >-
+        Answers, at RUNTIME, the question a governance file cannot: for each signal
+        family this process holds, is the behaviour `enforced`, `observed` or
+        `simulated`? Every field is DERIVED from the connectors the core holds — never
+        from an environment flag, because SIGNALGRID_LIVE_INTEGRATIONS caused exactly
+        that defect once (it PERMITS live calls, and the context route read it as
+        "signals are live" while every verdict came from fixture records). `enforced`
+        is reported UNREACHABLE with its reason: no verdict this service returns is
+        applied by this service, and an enum value nothing can produce is an overclaim
+        unless the report itself retires it. Aggregate and anonymous — counts and modes
+        only, no connector id, subject, ref or tenant.
+      responses:
+        "200":
+          description: Per-family runtime status plus this process's assurance posture
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      process: { $ref: "#/components/schemas/Assurance" }
+                      families:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            category: { type: string, description: A core signal category this process holds signals for }
+                            status:
+                              type: string
+                              enum: [enforced, observed, simulated]
+                            signalsHeld: { type: integer }
+                            connectorModes:
+                              type: array
+                              items: { type: string }
+                            note: { type: string }
+                          required: [category, status, signalsHeld, connectorModes, note]
+                      enforced:
+                        type: object
+                        properties:
+                          reachable: { type: boolean }
+                          because: { type: string }
+                        required: [reachable, because]
+                    required: [process, families, enforced]
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /v1/metrics:
     get:
@@ -1332,6 +1454,26 @@ components:
           enum: [allow, step_up, restrict, deny]
         severity: { type: string }
       required: [ruleId, reasonCode, outcome, severity]
+
+    StepUpAnswer:
+      type: object
+      description: >-
+        The recorded answer to a step_up verdict. Minted only after a WebAuthn assertion
+        verified against the credential enrolled for the identity the decision was about.
+        One per decision — a second ceremony must answer a fresh decision.
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        decisionId: { type: string }
+        identityId: { type: string, description: Taken from the DECISION, never from the request }
+        method:
+          type: string
+          enum: [webauthn]
+        credentialReference:
+          type: string
+          description: A MASKED reference to the credential that signed. Never the credential.
+        answeredAt: { type: string, format: date-time }
+      required: [id, tenantId, decisionId, identityId, method, credentialReference, answeredAt]
 
     DecisionRecord:
       type: object

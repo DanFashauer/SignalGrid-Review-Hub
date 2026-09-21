@@ -4866,7 +4866,7 @@ Decision core (the verdict mechanism):
 2. lib/signalgrid-core/src/decision.ts (216) — where allow/step_up/restrict/deny is actually computed.
 3. lib/signalgrid-core/src/policy.ts (833) — policy resolution feeding the verdict; the largest logic file in the core.
 4. lib/signalgrid-core/src/resolution.ts (576) — signal-to-assurance resolution; the file where 'unknown raises assurance, never lowers it' must hold.
-5. lib/signalgrid-core/src/evidence.ts (831) — mints the WHY behind /v1/decisions/{id}/evidence; the product's entire claim is that its answers are explainable.
+5. lib/signalgrid-core/src/evidence.ts (847) — mints the WHY behind /v1/decisions/{id}/evidence; the product's entire claim is that its answers are explainable.
 6. lib/signalgrid-core/src/store.ts (525) — in-memory store semantics behind every tenant-scoped read; a cross-tenant leak would live here.
 7. lib/signalgrid-simulator/src/decisionEngine.ts (361) — parity source the iOS port is byte-faithful to; a defect here ships on two platforms at once.
 8. lib/posture-composition/src/compose.ts (80) — composes signal kinds into posture; tiny, but every launch signal passes through it.

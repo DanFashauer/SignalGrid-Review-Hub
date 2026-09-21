@@ -761,22 +761,38 @@ function readDock(latestByCategory: LatestByCategory): DockState {
 /** No attach reading is "unknown", and unknown is NOT a grant here (see AttachState).
  *  The default is the same shape as its siblings; what differs is what the policy
  *  does with it. */
+// The four DR-043 credential readers share one fail-closed default. `readEnum`
+// returns `undefined` for BOTH "no reading present" AND "a reading is present but its
+// value is out-of-domain" (a firmware-skew label, a corrupted string, a non-string
+// type). Defaulting both to `not_applicable` would let a PRESENT-but-unreadable
+// credential signal ride the day-one-quiet grant — a garbled `removed`/`legacy`
+// silently dropping restrict/deny to allow, which golden rule 2 forbids. So each
+// reader floors an out-of-domain PRESENT reading to `unknown` (raise) and reserves
+// `not_applicable` for true absence (the category never appeared). `latestByCategory`
+// is a Map, so `.has()` tells the two apart. AttachState's own doc has the canonical
+// statement: "the strict arm fires on an EMITTED unknown, not on silence".
+// (Codex/fail-closed review, PR #753.)
 function readAttach(latestByCategory: LatestByCategory): AttachState {
-  return readEnum(latestByCategory, "attach_state", EVIDENCE_VALUE_DOMAINS.attach) ?? "not_applicable";
+  const v = readEnum(latestByCategory, "attach_state", EVIDENCE_VALUE_DOMAINS.attach);
+  return v ?? (latestByCategory.has("attach_state") ? "unknown" : "not_applicable");
 }
 
 /** No presence radio at all is "not_applicable"; a radio that answered "absent" is a
- *  hint the rules weigh only alongside the attach domain. */
+ *  hint the rules weigh only alongside the attach domain. A present-but-unreadable
+ *  radio floors to "unknown" (raise), not "not_applicable". */
 function readPresence(latestByCategory: LatestByCategory): PresenceState {
-  return readEnum(latestByCategory, "presence_state", EVIDENCE_VALUE_DOMAINS.presence) ?? "not_applicable";
+  const v = readEnum(latestByCategory, "presence_state", EVIDENCE_VALUE_DOMAINS.presence);
+  return v ?? (latestByCategory.has("presence_state") ? "unknown" : "not_applicable");
 }
 
 function readEnrollment(latestByCategory: LatestByCategory): EnrollmentStrength {
-  return readEnum(latestByCategory, "enrollment_strength", EVIDENCE_VALUE_DOMAINS.enrollment) ?? "not_applicable";
+  const v = readEnum(latestByCategory, "enrollment_strength", EVIDENCE_VALUE_DOMAINS.enrollment);
+  return v ?? (latestByCategory.has("enrollment_strength") ? "unknown" : "not_applicable");
 }
 
 function readReadMethod(latestByCategory: LatestByCategory): CredentialReadMethod {
-  return readEnum(latestByCategory, "credential_read_method", EVIDENCE_VALUE_DOMAINS.readMethod) ?? "not_applicable";
+  const v = readEnum(latestByCategory, "credential_read_method", EVIDENCE_VALUE_DOMAINS.readMethod);
+  return v ?? (latestByCategory.has("credential_read_method") ? "unknown" : "not_applicable");
 }
 
 function readEnum<T extends string>(

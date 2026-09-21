@@ -193,7 +193,7 @@ dimensions above.
 
 ## How to verify
 
-- `pnpm run proof:signalgrid-core` — 526 assertions over the real core: outcomes,
+- `pnpm run proof:signalgrid-core` — 538 assertions over the real core: outcomes,
   fail-closed, tenant isolation, RBAC, tamper-evidence, determinism, the
   security-baseline dimension, the badge-binding (reader case) dimension, the
   dock/SmartDock hardware-state dimension, and untrusted-input hardening.

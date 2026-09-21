@@ -3120,6 +3120,45 @@ const monotonicityTable: string[] = [];
     },
   ];
 
+  // ── DR-043 credential readers: a PRESENT-but-unreadable reading RAISES; it does
+  // not ride the day-one-quiet grant (Codex/fail-closed review, PR #753). `readEnum`
+  // returns undefined for BOTH true absence AND an out-of-domain PRESENT value (a
+  // firmware-skew label, a corrupted string, a non-string type), so the four readers
+  // must floor the present-garbage case to "unknown" and reserve "not_applicable" for
+  // silence only. The section-22 sweep below probes in-domain members and the "absent
+  // signal" mutation, so it never saw this cell; these targeted checks pin it directly.
+  // Falsifiable: revert any reader to `?? "not_applicable"` over the raw readEnum and
+  // the present-garbage assertions fail. (A broader "out-of-domain value" mutation for
+  // the sweep is filed for gate-and-proof-engineer.)
+  {
+    // Isolate each reader with a single-signal base so the assertion turns only on the
+    // reader under test (the healthy base carries its own strong enrollment/read-method
+    // signals, which would shadow a garbage peer by recency).
+    const absentAll = buildEvidence(identity, device, workflow, []);
+    const credentialReaders: [keyof DecisionEvidence, NormalizedSignal["category"]][] = [
+      ["attachState", "attach_state"],
+      ["presenceState", "presence_state"],
+      ["enrollmentStrength", "enrollment_strength"],
+      ["credentialReadMethod", "credential_read_method"],
+    ];
+    for (const [field, category] of credentialReaders) {
+      const badString = buildEvidence(identity, device, workflow, [sig(category, "not_a_real_member")]);
+      check(
+        `22 present-but-out-of-domain ${category} (string) → ${String(field)}='unknown', not 'not_applicable' — a garbled reading raises`,
+        badString[field] === "unknown",
+      );
+      const badType = buildEvidence(identity, device, workflow, [sig(category, 7 as unknown as string)]);
+      check(
+        `22 present-but-non-string ${category} → ${String(field)}='unknown', not 'not_applicable'`,
+        badType[field] === "unknown",
+      );
+      check(
+        `22 absent ${category} → ${String(field)}='not_applicable' (true silence stays quiet)`,
+        absentAll[field] === "not_applicable",
+      );
+    }
+  }
+
   // Scope for the VERDICT dimension is derived the same way, through the REAL
   // evaluator: any field whose substitution can change the outcome is in scope.
   // This is what pulled eleven rule-carrying families in that a backstop-only

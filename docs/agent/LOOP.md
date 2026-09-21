@@ -114,7 +114,7 @@ LAST TOUCHED: 2026-09-17 21:20Z (cloud lane, latest) - A LONG MERGE-AND-BUILD SE
               merges it per DR-037.
               Green, quoted FROM #753 (head 8c7bcb80), not from mainline: preflight EXIT=0,
               verify:breadth 56 proofs EXIT=0, proof:signalgrid-core
-              `assertions=526 categories=21 evidenceFields=24`, proof:evidence-coverage `30/30 axes=25`,
+              `assertions=538 categories=21 evidenceFields=24`, proof:evidence-coverage `30/30 axes=25`,
               proof:signal-radar 22/22, test:api 409/409, room-console sigClass 176 vectors + 10 pins,
               manifest v81, CORE_NORMALIZATION_VERSION 18 -> 19.
               STILL OWED BY CLOUD: the skill-instruction-conflicts gate hangs preflight forever

@@ -70,6 +70,8 @@ jobs:
       - name: Invariant review (fail-closed / determinism / Assist / truth)
         run: pnpm run review:invariants
 
+      - name: Lib-build heal self-test (an orphaned tsbuildinfo with no dist must be flagged)
+        run: node scripts/ensure-lib-build.mjs --self-test
       - name: Typecheck
         run: pnpm run typecheck
 

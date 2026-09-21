@@ -278,6 +278,18 @@ const statefulNorm = normalizeAppProtectionReport(
 check("a flagged_reasons array with a STATEFUL index accessor is snapshotted once → validation and extraction agree, never a clean grant",
   statefulNorm.reportIntegrity === "malformed" && evaluateAppProtection(statefulNorm).recommendedAction !== "none");
 
+// a THROWING index getter (Codex P2): snapshotting reads indices outside the field-read
+// try, so it must fail CLOSED to malformed rather than let the exception escape normalize.
+const throwingFlagged: string[] = ["seed"];
+Object.defineProperty(throwingFlagged, "0", { configurable: true, enumerable: true, get() { throw new Error("hostile index getter"); } });
+const throwingNorm = normalizeAppProtectionReport(
+  APP,
+  { policy_state: "applied", applied_policies: ["p"], flagged_reasons: throwingFlagged, registration_observed_at: FRESH, platform: "ios", source_system: "intune" },
+  { source: "mut" },
+);
+check("a flagged_reasons array whose index getter THROWS → malformed (snapshot fails closed), never an escaped exception or a grant",
+  throwingNorm.reportIntegrity === "malformed" && evaluateAppProtection(throwingNorm).recommendedAction !== "none");
+
 // blank REQUESTED appRef (Codex P1): the requested binding must itself name an app. A
 // blank/whitespace appRef with a source that OMITS its optional app_ref would otherwise
 // normalize an applied+clean report and grant APP_PROTECTED for an UNIDENTIFIED app —
@@ -300,6 +312,12 @@ check("malformed-isolation: a report whose KEY enumeration throws → malformed 
 // that Date.parse rolls over must not read as a valid instant and grant as fresh.
 check("a registration_observed_at with the ISO shape but an IMPOSSIBLE date (2026-02-30) → malformed, never a valid fresh instant",
   integrity({ policy_state: "not_applied", flagged_reasons: [], applied_policies: ["p"], registration_observed_at: "2026-02-30T00:00:00Z" }) === "malformed");
+// sub-millisecond ISO precision is VALID (Codex P2): the contract is ISO-8601 UTC, and
+// >3 fractional digits must not be rejected as malformed while the calendar round-trip holds.
+check("a registration_observed_at with >3 fractional digits (2026-07-31T22:25:00.1234567Z) → CLEAN, not malformed — arbitrary sub-ms precision is a valid instant",
+  integrity({ policy_state: "applied", flagged_reasons: [], applied_policies: ["p"], registration_observed_at: "2026-07-31T22:25:00.1234567Z" }) === "clean");
+check("...and an impossible date WITH sub-ms precision (2026-02-30T00:00:00.123456Z) is still malformed — the calendar round-trip survives the looser fractional match",
+  integrity({ policy_state: "not_applied", flagged_reasons: [], applied_policies: ["p"], registration_observed_at: "2026-02-30T00:00:00.123456Z" }) === "malformed");
 
 // worst-concern-wins under malformity (Codex P1): a sensitive app positively reported
 // not_applied but carrying an unrecognized key (malformed) must still RESTRICT — the
@@ -500,6 +518,11 @@ const connector = new AppProtectionConnector({ accessToken: "t", baseUrl: "https
 const roundTrip = await connector.fetchNormalized("com.hospital.epic", { appSensitivity: "sensitive", mamApplicability: "applicable", referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE });
 check("the connector fetches and normalizes a registration through an injected transport (no network)",
   roundTrip.policyState === "not_applied" && evaluateAppProtection(roundTrip).reasonCode === "MISSING_MAM_POLICY_SENSITIVE_APP");
+// a ref that only validates after trimming is dispatched in its CANONICAL (trimmed) form
+// (Codex P2): "  com.hospital.epic  " must reach the SAME record, not "%20com.hospital.epic%20".
+const whitespaceRef = await connector.fetchNormalized("  com.hospital.epic  ", { appSensitivity: "sensitive", referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE });
+check("a whitespace-padded appRef is canonicalized before dispatch → reaches the same record and binds the trimmed appRef, not a %20-padded miss",
+  whitespaceRef.appRef === "com.hospital.epic" && whitespaceRef.policyState === "not_applied");
 const unknownApp = await connector.fetchNormalized("com.unknown.app", { referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE });
 check("an unknown app yields an all-unknown record the evaluator fails closed on (never a fabricated grant)",
   evaluateAppProtection(unknownApp).recommendedAction !== "none");

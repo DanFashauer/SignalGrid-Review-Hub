@@ -104,7 +104,10 @@ function textOf(v: unknown): string | null {
 function instantOf(v: unknown): number | null {
   if (typeof v !== "string") return null;
   const s = v.trim();
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?Z$/.exec(s);
+  // Fractional seconds may be ANY precision — the contract is ISO-8601 UTC, and
+  // Date.parse reads arbitrary fractional digits; the calendar round-trip below only
+  // compares through whole seconds, so precision beyond ms is irrelevant. (Codex P2.)
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/.exec(s);
   if (m === null) return null;
   const ms = Date.parse(s);
   if (!Number.isFinite(ms)) return null;
@@ -267,9 +270,20 @@ export function normalizeAppProtectionReport(
   const policyState = oneOf<MamPolicyState>(raw["policy_state"], POLICY_STATES, "unknown");
   // Snapshot the array fields ONCE (see snapshotArray) so every consumer below —
   // deriveComplianceState, arrayMalformed, stringList — reads the SAME contents and a
-  // stateful index accessor cannot make them disagree. (Codex P1.)
-  const flaggedList = snapshotArray(raw["flagged_reasons"]);
-  const policiesList = snapshotArray(raw["applied_policies"]);
+  // stateful index accessor cannot make them disagree. (Codex P1.) The index reads can
+  // THROW (a hostile getter), and this runs after the field-read try above, so it is
+  // guarded here too: a throwing snapshot fails CLOSED to malformed, never escapes. (Codex P2.)
+  let flaggedList: unknown;
+  let policiesList: unknown;
+  let snapshotThrew = false;
+  try {
+    flaggedList = snapshotArray(raw["flagged_reasons"]);
+    policiesList = snapshotArray(raw["applied_policies"]);
+  } catch {
+    snapshotThrew = true;
+    flaggedList = undefined;
+    policiesList = undefined;
+  }
   const complianceState = deriveComplianceState(flaggedList);
 
   const observedRaw = raw["registration_observed_at"];
@@ -305,6 +319,7 @@ export function normalizeAppProtectionReport(
 
   const malformed =
     readThrew ||
+    snapshotThrew ||
     !plain ||
     instantShapeBad ||
     requestAppRefBlank ||
@@ -384,14 +399,19 @@ export class AppProtectionConnector {
     // (`""`/"." → the collection, ".." → the parent). `normalizeAppProtectionReport`
     // already fails such a reference CLOSED, but only after the call — the outbound
     // request is the harm, so it must never leave. Refuse before transport. (Codex P1.)
-    if (!isDispatchableAppRef(appRef)) {
+    // Canonicalize ONCE (trim) and use that value for validation, dispatch AND
+    // normalization — otherwise a ref that only validates after trimming (" com.x ")
+    // would be sent verbatim, requesting "%20com.x%20" and missing the intended row.
+    // (Codex P2.)
+    const canonicalRef = typeof appRef === "string" ? appRef.trim() : "";
+    if (!isDispatchableAppRef(canonicalRef)) {
       throw new AppProtectionConnectorError(
         "invalid_app_ref",
         `app-protection: refusing to fetch — '${appRef}' does not name a single app`,
       );
     }
-    const raw = await this.transport({ appRef, token: this.config.accessToken });
-    return normalizeAppProtectionReport(appRef, raw, {
+    const raw = await this.transport({ appRef: canonicalRef, token: this.config.accessToken });
+    return normalizeAppProtectionReport(canonicalRef, raw, {
       ...opts,
       source: opts.source ?? this.config.source ?? "app-protection-mam",
     });

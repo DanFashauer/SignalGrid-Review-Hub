@@ -82,6 +82,7 @@ const simFolder = {
 const v1Requests = [
   item("List demo keys", "GET", "/v1/keys", { auth: NOAUTH }),
   item("Context (principal + tenant)", "GET", "/v1/context"),
+  item("Launch status (enforced / observed / simulated, per signal family)", "GET", "/v1/launch-status"),
   item("Evaluate a decision", "POST", "/v1/decisions/evaluate", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" } }),
   // The Assist wire (DR-023): the same decision, in the {assist, reasons, decisionId} shape a host-app SDK obeys.
   item("Authorize (the Assist wire)", "POST", "/v1/authorize", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" } }),
@@ -90,6 +91,8 @@ const v1Requests = [
   item("Get decision evidence", "GET", "/v1/decisions/{{decisionId}}/evidence"),
   item("Simulate (replay) a decision", "POST", "/v1/decisions/{{decisionId}}/simulate", { body: { policyVersionId: "{{policyVersionId}}" } }),
   item("Get decision resolution", "GET", "/v1/decisions/{{decisionId}}/resolution"),
+  item("Mint a step-up challenge bound to one decision", "POST", "/v1/decisions/{{decisionId}}/step-up/challenge"),
+  item("Answer a step_up verdict (verified WebAuthn assertion)", "POST", "/v1/decisions/{{decisionId}}/step-up", { body: { challengeId: "{{stepUpChallengeId}}", assertion: { id: "{{credentialId}}", rawId: "{{credentialId}}", type: "public-key", response: { clientDataJSON: "…", authenticatorData: "…", signature: "…" } } } }),
   item("Resolve a decision", "POST", "/v1/decisions/{{decisionId}}/resolve", { body: {} }),
   item("Metrics", "GET", "/v1/metrics"),
   item("List policies", "GET", "/v1/policies"),
@@ -126,6 +129,7 @@ const v1Requests = [
   // the fail-closed paths (403/409), not mint a genuine release.
   item("Step-up: enrollment options", "POST", "/v1/step-up/enroll/options", { body: { identityRef: "nurse.baseline_drift" } }),
   item("Step-up: verify enrollment", "POST", "/v1/step-up/enroll/verify", { body: { identityRef: "nurse.baseline_drift", challengeId: "{{stepUpChallengeId}}", response: { id: "{{credentialId}}", rawId: "{{credentialId}}", type: "public-key", response: { clientDataJSON: "…", attestationObject: "…" } } } }),
+  item("Step-up: revoke enrolled credential", "POST", "/v1/step-up/enroll/revoke", { body: { identityRef: "nurse.baseline_drift", credentialId: "{{credentialId}}" } }),
   item("Step-up: auth challenge (action-bound)", "POST", "/v1/step-up/challenge", { body: { identityRef: "nurse.baseline_drift", integrationId: "bcma", deviceRef: "ipad-ward-06", actionKey: "controlled.administer" } }),
   item("Complete step-up (release held plan)", "POST", "/v1/app-workflows/complete-step-up", { body: { integrationId: "bcma", identityRef: "nurse.baseline_drift", deviceRef: "ipad-ward-06", actionKey: "controlled.administer", challengeId: "{{stepUpChallengeId}}", assertion: { id: "{{credentialId}}", rawId: "{{credentialId}}", type: "public-key", response: { clientDataJSON: "…", authenticatorData: "…", signature: "…" } } } }),
   item("Start a device session", "POST", "/v1/sessions/start", { body: { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session", ttlSeconds: 900 } }),

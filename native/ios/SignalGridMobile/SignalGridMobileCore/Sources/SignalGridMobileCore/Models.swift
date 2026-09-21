@@ -206,6 +206,12 @@ public struct Decision: Codable, Hashable, Identifiable, Sendable {
     public let reviewStatus: ReviewStatus
     public let reviewable: Bool
     public let explanation: String
+    /// Which build of the core decision path derived these facts.
+    ///
+    /// OPTIONAL on every carrier, mirroring `lib/signalgrid-core/src/types.ts`: absence
+    /// means "minted before the provenance stamp existed" and renders as `unstamped`,
+    /// never as version zero.
+    public let coreNormalizationVersion: Int?
 
     public init(
         id: String,
@@ -226,7 +232,8 @@ public struct Decision: Codable, Hashable, Identifiable, Sendable {
         createdAt: String,
         reviewStatus: ReviewStatus,
         reviewable: Bool,
-        explanation: String
+        explanation: String,
+        coreNormalizationVersion: Int? = nil
     ) {
         self.id = id
         self.tenantId = tenantId
@@ -247,6 +254,7 @@ public struct Decision: Codable, Hashable, Identifiable, Sendable {
         self.reviewStatus = reviewStatus
         self.reviewable = reviewable
         self.explanation = explanation
+        self.coreNormalizationVersion = coreNormalizationVersion
     }
 }
 
@@ -281,6 +289,12 @@ public struct EvaluateResult: Codable, Hashable, Sendable {
     public let reviewable: Bool
     public let latencyMs: Int
     public let explanation: String
+    /// Which build of the core decision path derived these facts.
+    ///
+    /// OPTIONAL on every carrier, mirroring `lib/signalgrid-core/src/types.ts`: absence
+    /// means "minted before the provenance stamp existed" and renders as `unstamped`,
+    /// never as version zero.
+    public let coreNormalizationVersion: Int?
 
     public init(
         decisionId: String,
@@ -293,7 +307,8 @@ public struct EvaluateResult: Codable, Hashable, Sendable {
         matchedRules: [MatchedRule],
         reviewable: Bool,
         latencyMs: Int,
-        explanation: String
+        explanation: String,
+        coreNormalizationVersion: Int? = nil
     ) {
         self.decisionId = decisionId
         self.outcome = outcome
@@ -306,6 +321,7 @@ public struct EvaluateResult: Codable, Hashable, Sendable {
         self.reviewable = reviewable
         self.latencyMs = latencyMs
         self.explanation = explanation
+        self.coreNormalizationVersion = coreNormalizationVersion
     }
 }
 
@@ -367,6 +383,38 @@ public struct EvidenceSnapshot: Codable, Hashable, Identifiable, Sendable {
     public let policyVersion: Int
     public let sourceReferences: [String]
     public let digest: String
+    /// Which build of the core decision path derived these facts.
+    ///
+    /// OPTIONAL on every carrier, mirroring `lib/signalgrid-core/src/types.ts`: absence
+    /// means "minted before the provenance stamp existed" and renders as `unstamped`,
+    /// never as version zero.
+    public let coreNormalizationVersion: Int?
+
+    public init(
+        id: String,
+        tenantId: String,
+        decisionId: String,
+        capturedAt: String,
+        evidence: DecisionEvidence,
+        signalsUsed: [NormalizedSignal],
+        policyVersionId: String,
+        policyVersion: Int,
+        sourceReferences: [String],
+        digest: String,
+        coreNormalizationVersion: Int? = nil
+    ) {
+        self.id = id
+        self.tenantId = tenantId
+        self.decisionId = decisionId
+        self.capturedAt = capturedAt
+        self.evidence = evidence
+        self.signalsUsed = signalsUsed
+        self.policyVersionId = policyVersionId
+        self.policyVersion = policyVersion
+        self.sourceReferences = sourceReferences
+        self.digest = digest
+        self.coreNormalizationVersion = coreNormalizationVersion
+    }
 }
 
 /// A snapshot together with the SERVER's verdict on its digest. `GET

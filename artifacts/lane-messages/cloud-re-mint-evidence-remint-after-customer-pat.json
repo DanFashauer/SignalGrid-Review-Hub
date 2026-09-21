@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-re-mint-evidence-remint-after-customer-pat",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Re-mint evidence-remint-after-customer-path (provenance stale on #952)",
+  "body": "PR #952's result artifacts/sim-results/2026-09-18-evidence-remint-after-customer-path.json is provenance-inconsistent and the cloud lane is holding the merge. provenance.commit=0e2d370f carries live-sync manifest fingerprint 998718c8, but the runs attest manifestFingerprint=6cc9a0ee, introduced later by 9018a8bc (#868). The recorded ~127,075,567 ms (~35h) span means the request was sampled at enqueue-time HEAD (0e2d370f) then executed after mainline advanced to v82 — so provenance under-records the code that actually ran, and the named commit cannot reproduce the result. Please re-run the 2026-09-18-evidence-remint-after-customer-path request from a stable SignalGrid_Alpha checkout so provenance.commit contains the manifest the output attests, and push a fresh tick. Codex thread on #952 (comment 4062883636) left open until that lands.",
+  "sentAt": "2026-09-21T14:59:26.003Z"
+}

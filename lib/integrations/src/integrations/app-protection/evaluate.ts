@@ -280,8 +280,14 @@ function evaluateCoveredReport(report: NormalizedAppProtection): AppProtectionVe
     candidates.push({ posture: "app_protection_unverified", action: "step_up", reason: "APP_PROTECTION_TIME_UNKNOWN" });
   }
 
-  // ── was MAM applicability posed but unreadable? ─────────────────────────────────
-  if (report.mamApplicability === "unknown") {
+  // ── was MAM applicability posed but unreadable, or off-enum? ─────────────────────
+  // `not_applicable` returned early above and `applicable`/`unassessed` are the only
+  // other affirmative values. ANYTHING else — the posed-but-unreadable `unknown`, or an
+  // off-enum value ("bogus"/undefined) that reached a directly-constructed or deserialized
+  // NormalizedAppProtection from an unchecked boundary — must RAISE: the grant requires a
+  // RECOGNIZED applicability, never a default-through. (Codex P1.)
+  if (report.mamApplicability !== "applicable" && report.mamApplicability !== "unassessed") {
+    if (!unknownSignals.includes("mam_applicability")) unknownSignals.push("mam_applicability");
     candidates.push({ posture: "app_protection_unverified", action: "step_up", reason: "APPLICABILITY_UNKNOWN" });
   }
 

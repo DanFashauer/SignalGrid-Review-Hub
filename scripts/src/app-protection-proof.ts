@@ -290,6 +290,53 @@ const throwingNorm = normalizeAppProtectionReport(
 check("a flagged_reasons array whose index getter THROWS → malformed (snapshot fails closed), never an escaped exception or a grant",
   throwingNorm.reportIntegrity === "malformed" && evaluateAppProtection(throwingNorm).recommendedAction !== "none");
 
+// length-trap array (Codex round-9): an exotic array whose `length` UNDER-reports its
+// own indexed entries — length 0 while index 0 holds "jailbroken". The snapshot sizes
+// `out` by the reported length and would DROP the concealed flag, reading a flagged
+// registration as a clean (empty) set and granting. The Object.keys cross-check catches
+// an own integer index at/beyond the reported length and fails closed. (A fully-trapping
+// Proxy is out of the JSON-wire threat model — the live transport returns parsed JSON.)
+const lengthTrap = new Proxy(["jailbroken"], {
+  get(t, p, r) { return p === "length" ? 0 : Reflect.get(t, p, r); },
+});
+const lengthTrapNorm = normalizeAppProtectionReport(
+  APP,
+  { policy_state: "applied", applied_policies: ["p"], flagged_reasons: lengthTrap as unknown as string[], registration_observed_at: FRESH, platform: "ios", source_system: "intune" },
+  { source: "mut" },
+);
+check("a flagged_reasons array whose length UNDER-reports its indices (length 0, index 0 = \"jailbroken\") → malformed, never a concealed flag dropped to a clean grant",
+  lengthTrapNorm.reportIntegrity === "malformed" && evaluateAppProtection(lengthTrapNorm).recommendedAction !== "none");
+
+// off-enum applicability on a DIRECTLY-CONSTRUCTED normalized report (Codex round-9):
+// the normalizer folds any unrecognized applicability to "unknown", so only a report
+// built past that boundary (a deserialized/hand-built NormalizedAppProtection) can carry
+// an off-enum value. Otherwise applied+clean+fresh — a granting shape on every other
+// axis — so the ONLY thing that may fire is the applicability raise. It must: the grant
+// requires a RECOGNIZED applicability, never a default-through of a bogus value.
+const cleanNormalized: NormalizedAppProtection = {
+  sourceSystem: "app-protection",
+  appRef: APP,
+  policyState: "applied",
+  complianceState: "clean",
+  appSensitivity: "standard",
+  mamApplicability: "applicable",
+  registrationFreshness: "fresh",
+  managedAppRef: APP,
+  appliedPolicyRefs: ["p"],
+  flaggedReasons: [],
+  platform: "ios",
+  registrationObservedAt: FRESH,
+  mamSource: "intune",
+  reportIntegrity: "clean",
+  source: "mut",
+};
+check("a directly-constructed applied+clean+fresh report GRANTS — the baseline the off-enum case is measured against",
+  evaluateAppProtection(cleanNormalized).recommendedAction === "none" && evaluateAppProtection(cleanNormalized).appProtected === true);
+const offEnumApplicability = evaluateAppProtection({ ...cleanNormalized, mamApplicability: "bogus" as NormalizedAppProtection["mamApplicability"] });
+check("an OFF-ENUM mamApplicability (\"bogus\") on an otherwise-granting report → step_up (APPLICABILITY_UNKNOWN), never a default-through grant — the raise widened beyond the literal \"unknown\"",
+  offEnumApplicability.recommendedAction === "step_up" && offEnumApplicability.reasonCode === "APPLICABILITY_UNKNOWN" &&
+  offEnumApplicability.appProtected === false && offEnumApplicability.unknownSignals.includes("mam_applicability"));
+
 // blank REQUESTED appRef (Codex P1): the requested binding must itself name an app. A
 // blank/whitespace appRef with a source that OMITS its optional app_ref would otherwise
 // normalize an applied+clean report and grant APP_PROTECTED for an UNIDENTIFIED app —

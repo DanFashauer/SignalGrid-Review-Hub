@@ -163,8 +163,22 @@ function arrayMalformed(v: unknown): boolean {
  *  materialize as undefined and are still caught by `arrayMalformed`. (Codex P1.) */
 function snapshotArray(v: unknown): unknown {
   if (!Array.isArray(v)) return v;
-  const out = new Array<unknown>(v.length);
-  for (let i = 0; i < v.length; i++) out[i] = v[i];
+  const len = v.length;
+  const out = new Array<unknown>(len);
+  for (let i = 0; i < len; i++) out[i] = v[i];
+  // A `length` that UNDER-reports its own indexed entries (an exotic/proxied array whose
+  // length hides elements: length 0 while index 0 holds "jailbroken") cannot be trusted —
+  // the snapshot would drop the concealed entry and read clean. If any OWN integer index
+  // sits at or beyond the reported length, fail closed (thrown → snapshotThrew → malformed).
+  // A fully-trapping Proxy (ownKeys too) is out of the JSON-wire threat model — the live
+  // transport returns parsed JSON, and a hostile in-process transport has trivial simpler
+  // attacks than this — but the length/index mismatch is caught here. (Codex.)
+  for (const k of Object.keys(v)) {
+    const idx = Number(k);
+    if (Number.isInteger(idx) && idx >= len) {
+      throw new Error("app-protection: array length conceals indexed entries");
+    }
+  }
   return out;
 }
 

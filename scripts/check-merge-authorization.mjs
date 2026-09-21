@@ -49,13 +49,43 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { classifyDiff } from "./check-owner-gated-surfaces.mjs";
 
 // The check that must be green for any self-merge, named exactly as CI names it (DR-037).
 // Non-empty by construction: an empty list would authorize on no evidence at all.
 export const REQUIRED_CHECKS = ["Typecheck, build, and proof scaffold"];
+
+// The base is DERIVED from the mainline, never taken from the caller. run() feeds
+// classifyDiff() the list from `git diff base...head`; a caller who could name a NARROWER
+// --base would shrink that diff and hide owner-gated files from the classification — the
+// #719 failure ("what does this diff touch") reintroduced through an argument. The header
+// says the file list is DERIVED, NOT SUPPLIED; that was true of the list and false of the
+// base it is diffed against until this constant fixed the base too. This is the one branch
+// the lane self-merges into under DR-037; nothing else is authorized.
+export const MAINLINE_REF = "origin/SignalGrid_Alpha";
+
+/** Reconcile a caller-supplied base against the derived mainline. Pure, so the self-test
+ *  exercises it without a repo: a base that AGREES (or is absent) is fine; a base naming a
+ *  DIFFERENT commit REFUSES, because run() diffs against the derived mainline regardless
+ *  and a disagreeing --base is either a mistake or an attempt to shrink the diff. sameCommit
+ *  handles abbreviation, so a 7-char --base that names the mainline still agrees. */
+export function reconcileBase(suppliedBaseSha, mainlineSha) {
+  if (!mainlineSha) return { ok: false, reason: `could not resolve the mainline ${MAINLINE_REF}`, detail: [] };
+  if (suppliedBaseSha && !sameCommit(suppliedBaseSha, mainlineSha)) {
+    return {
+      ok: false,
+      reason: "base disagreement — the authorizer derives the base, it is not supplied",
+      detail: [
+        `--base resolves to ${suppliedBaseSha}`,
+        `${MAINLINE_REF} resolves to ${mainlineSha}`,
+        "the diff must be taken against the mainline; a narrower base hides owner-gated files (#719)",
+      ],
+    };
+  }
+  return { ok: true };
+}
 
 // A conclusion that is not one of these refuses — including one GitHub adds later that
 // this file has never heard of. Unknown never means fine.
@@ -173,6 +203,17 @@ function remoteTip(branch) {
   return out.split(/\s+/)[0] ?? "";
 }
 
+function resolveSha(ref) {
+  // The commit a ref names, or "" if it does not resolve. Used only to compare a
+  // caller-supplied --base against the derived mainline; an unresolvable ref yields "",
+  // which reconcileBase treats as a refusal on the mainline side (fail-closed).
+  try {
+    return execFileSync("git", ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], { encoding: "utf8" }).trim();
+  } catch {
+    return "";
+  }
+}
+
 function selfTest() {
   const checks = [];
   const t = (name, ok) => checks.push([name, ok]);
@@ -260,6 +301,32 @@ function selfTest() {
   // Non-vacuity: the required list has a subject.
   t("REQUIRED_CHECKS is non-empty", REQUIRED_CHECKS.length > 0);
 
+  // The base is DERIVED, not supplied (#719 via an argument). reconcileBase is pure.
+  t("reconcileBase: an ABSENT --base is fine (base is derived)", reconcileBase(null, "a".repeat(40)).ok === true);
+  t("reconcileBase: a --base that AGREES is fine", reconcileBase("a".repeat(40), "a".repeat(40)).ok === true);
+  t("reconcileBase: a 7-char --base that abbreviates the mainline agrees", reconcileBase("a".repeat(7), "a".repeat(40)).ok === true);
+  t("reconcileBase: a DISAGREEING --base is REFUSED (would shrink the diff)",
+    reconcileBase("b".repeat(40), "a".repeat(40)).ok === false);
+  t("reconcileBase: an unresolvable mainline is REFUSED (fail-closed)",
+    reconcileBase("a".repeat(40), "").ok === false);
+
+  // End-to-end exit-code polarity. The pure authorize() cases above cannot catch a
+  // regression in run()'s exit mapping — a refusal that returns exit 0 would merge. Spawn
+  // the script in configurations that MUST refuse and assert a NON-ZERO exit. (Never spawn
+  // --self-test here: that would recurse.)
+  const scriptPath = fileURLToPath(import.meta.url);
+  const spawnExit = (args) => {
+    try {
+      execFileSync(process.execPath, [scriptPath, ...args], { stdio: "pipe" });
+      return 0;
+    } catch (e) {
+      return typeof e.status === "number" ? e.status : 1;
+    }
+  };
+  t("run(): no args exits non-zero (usage/refuse path is not exit 0)", spawnExit([]) !== 0);
+  t("run(): a missing --checks file exits non-zero (REFUSED maps to non-zero)",
+    spawnExit(["--head", "a".repeat(40), "--branch", "x", "--checks", `${scriptPath}.nonexistent.json`]) !== 0);
+
   const failed = checks.filter(([, o]) => !o);
   for (const [name, o] of checks) console.log(`  ${o ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -272,13 +339,15 @@ function arg(flag) {
 }
 
 function run() {
-  const base = arg("--base");
+  const suppliedBase = arg("--base");
   const head = arg("--head");
   const branch = arg("--branch");
   const checksPath = arg("--checks");
 
-  if (!base || !head || !branch || !checksPath) {
-    console.error("usage: node scripts/check-merge-authorization.mjs --base <ref> --head <sha> --branch <pr head branch> --checks <file.json>");
+  // --base is OPTIONAL and only cross-checked: the base is DERIVED from the mainline.
+  if (!head || !branch || !checksPath) {
+    console.error("usage: node scripts/check-merge-authorization.mjs --head <sha> --branch <pr head branch> --checks <file.json> [--base <ref>]");
+    console.error(`       the base is DERIVED from ${MAINLINE_REF}; a supplied --base is cross-checked and must agree`);
     console.error("       node scripts/check-merge-authorization.mjs --self-test");
     process.exit(1);
   }
@@ -292,12 +361,18 @@ function run() {
     const raw = JSON.parse(readFileSync(checksPath, "utf8"));
     // Accept either a bare array or the GitHub shape { check_runs: [...] }.
     const checks = Array.isArray(raw) ? raw : raw?.check_runs;
-    verdict = authorize({
-      files: changedFiles(base, head),
-      headSha: head,
-      remoteTipSha: remoteTip(branch),
-      checks,
-    });
+    // Derive the base from the mainline; never diff against a caller-named base (a narrower
+    // one hides owner-gated files — #719). A supplied --base is only cross-checked.
+    const base = MAINLINE_REF;
+    const baseCheck = reconcileBase(suppliedBase ? resolveSha(suppliedBase) : null, resolveSha(base));
+    verdict = baseCheck.ok
+      ? authorize({
+          files: changedFiles(base, head),
+          headSha: head,
+          remoteTipSha: remoteTip(branch),
+          checks,
+        })
+      : { authorized: false, reason: baseCheck.reason, detail: baseCheck.detail ?? [] };
   } catch (err) {
     // Fail-closed on anything at all: a bad ref, unreadable JSON, a git that is not there.
     console.error(`REFUSED — could not establish the facts: ${err.message}`);

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "requestId": "2026-09-18-evidence-remint-after-customer-path",
+  "completedAt": "2026-09-21T16:24:31.991Z",
+  "provenance": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "nodeVersion": "v24.18.0",
+    "macosVersion": "27.0",
+    "commit": "1a26a3257fc458198f10d031b91f0b8a8800279f",
+    "branch": "SignalGrid_Alpha",
+    "workingTreeClean": true
+  },
+  "runs": [
+    {
+      "operation": "evidence",
+      "status": "failed",
+      "exitCode": 1,
+      "durationMs": 589455,
+      "tail": [
+        "Exit status 1",
+        " ELIFECYCLE  Command failed with exit code 1.",
+        "node:internal/modules/run_main:107",
+        "    triggerUncaughtException(",
+        "    ^",
+        "",
+        "Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@workspace/integrations' imported from <HOME>/Public/Projects/SignalGrid/SignalGrid-Review-Hub/lib/posture-composition/src/adapters.ts",
+        "Did you mean to import \"<URL>\"?",
+        "    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:301:9)",
+        "    at packageResolve (node:internal/modules/esm/resolve:768:81)",
+        "    at moduleResolve (node:internal/modules/esm/resolve:859:18)",
+        "    at defaultResolve (node:internal/modules/esm/resolve:992:11)",
+        "    at #cachedDefaultResolve (node:internal/modules/esm/loader:701:20)",
+        "    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:721:38)",
+        "    at nextStep (node:internal/modules/customization_hooks:189:26)",
+        "    at resolveBaseSync (<URL>",
+        "    at resolveDirectorySync (<URL>",
+        "    at resolveTsPathsSync (<URL> {",
+        "  code: 'ERR_MODULE_NOT_FOUND'",
+        "}",
+        "",
+        "Node.js v24.18.0",
+        "",
+        "",
+        "Breadth lane FAILED at: Proof: fabric-scenario (end-to-end fusion → incident)."
+      ]
+    }
+  ]
+}

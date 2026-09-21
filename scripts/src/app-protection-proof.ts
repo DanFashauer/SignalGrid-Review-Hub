@@ -299,12 +299,16 @@ check("a flagged_reasons array whose index getter THROWS → malformed (snapshot
 const lengthTrap = new Proxy(["jailbroken"], {
   get(t, p, r) { return p === "length" ? 0 : Reflect.get(t, p, r); },
 });
+// policy_state=not_applied with EMPTY applied_policies so `appliedWithoutPolicies` does
+// NOT fire on the snapshot's undefined policiesList — `snapshotThrew` is then the SOLE
+// cause of the malformed verdict, which pins that term (mutating it to `false` flips this
+// fixture to clean and this check dies).
 const lengthTrapNorm = normalizeAppProtectionReport(
   APP,
-  { policy_state: "applied", applied_policies: ["p"], flagged_reasons: lengthTrap as unknown as string[], registration_observed_at: FRESH, platform: "ios", source_system: "intune" },
+  { policy_state: "not_applied", applied_policies: [], flagged_reasons: lengthTrap as unknown as string[], registration_observed_at: FRESH, platform: "ios", source_system: "intune" },
   { source: "mut" },
 );
-check("a flagged_reasons array whose length UNDER-reports its indices (length 0, index 0 = \"jailbroken\") → malformed, never a concealed flag dropped to a clean grant",
+check("a flagged_reasons array whose length UNDER-reports its indices (length 0, index 0 = \"jailbroken\") → malformed via snapshotThrew alone, never a concealed flag dropped to a clean grant",
   lengthTrapNorm.reportIntegrity === "malformed" && evaluateAppProtection(lengthTrapNorm).recommendedAction !== "none");
 
 // off-enum applicability on a DIRECTLY-CONSTRUCTED normalized report (Codex round-9):

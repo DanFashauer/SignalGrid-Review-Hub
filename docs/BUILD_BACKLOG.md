@@ -1885,10 +1885,28 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       routers, cross-checked by `scripts/check-launch-profile.mjs`. A real
       (non-review) deployment must set that variable — a deployment-checklist
       item, not an in-code bypass. Lane: security-engineer.
-- [ ] **`check-console-unknown-render` — the unknown-as-good-state gate for the
+- [x] **`check-console-unknown-render` — the unknown-as-good-state gate for the
       console (G2 from the 2026-09-02 console fix batch). SPEC ONLY, deferred: a
       deterministic version could not be built at acceptable precision in the
-      batch's time.** The intent: flag a `.tsx` in `artifacts/signalgrid-app/src`
+      batch's time.** **DONE 2026-09-21 (cloud lane)** — built as `scripts/check-console-unknown-render.mjs`,
+      an AST data-flow gate (the first script to use the TypeScript compiler API), not a
+      text scan. It collects each `.tsx`'s query-result identifiers (the `useQuery`/
+      generated-hook object, the destructured `data`/`isError`/`error`/`isLoading` bindings,
+      and vars DERIVED from query data to a fixpoint), then flags a good-state marker —
+      an `emerald`/`status-allow` class, or an affirmation phrase ("no stale", "all clear",
+      "healthy", "no … found", …) — only when it is NOT enclosed by a conditional whose test
+      references one of those identifiers AND its element renders a query-data value that is
+      not itself presence-gated. The naive version's own false positives were the calibration
+      target: it flagged 17 correct sites (a static emerald category colour over a
+      `s ? String(x) : "-"` value, an `accent={s ? "emerald" : x}` ternary the ancestor walk
+      missed) — the AST version reports ZERO on the current tree. Exempt a site with
+      `// unknown-ok: <reason>`. Registered in `scripts/preflight.mjs` and
+      `.github/workflows/review-hub-ci.yml` (parity gate green). Two-direction self-test
+      plus a PLANT that removes the presence guard from a real component
+      (`SignalSourcing.tsx`) and watches the gate fire: `node
+      scripts/check-console-unknown-render.mjs --self-test`. SAFETY_MACHINERY — merged under
+      DR-037.
+      ORIGINAL SPEC (kept for the record): The intent: flag a `.tsx` in `artifacts/signalgrid-app/src`
       that calls `useQuery`/a generated hook, has a `?? []`/`?? {}`/`?.` fallback
       flowing into a class containing `emerald`/`status-allow` or a phrase from
       {"all clear","No stale","no … found","healthy","operational"}, AND never

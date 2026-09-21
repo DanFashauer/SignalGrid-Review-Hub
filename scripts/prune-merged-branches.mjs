@@ -135,6 +135,20 @@ const mdCode = (s) => `<code>${escapeHtml(s)}</code>`;
  *  MEANT to be one line, so collapsing the breaks costs nothing and closes it. */
 const oneLine = (s) => String(s).replaceAll(/[\r\n\u2028\u2029]+/gu, " ");
 
+/** The fenced restore block, returned as summary ELEMENTS \u2014 one command per element,
+ *  never a single joined string. `appendSummary` runs every element through `oneLine`,
+ *  which collapses newlines; a multi-line element (the old `restore.join("\n")`) was
+ *  therefore flattened into ONE line \u2014 `git push \u2026b1 git push \u2026b2` \u2014 so a >=2-branch
+ *  prune printed a restore record that reversed only the first branch. Each command is
+ *  its own element so each survives intact. Every command is built from a hex sha and a
+ *  ref-grammar name (isRefName-gated at the door), so no element carries an injectable
+ *  newline of its own. */
+const restoreSection = (commands) => [
+  "```bash",
+  ...(commands.length > 0 ? commands : ["# nothing to restore \u2014 no branch qualified"]),
+  "```",
+];
+
 /** Is this URL on the SAME ORIGIN as the API we hold a token for? Used to refuse a
  *  rel="next" link that would carry the Actions bearer to another host. Anything
  *  unparseable, relative, or on another scheme/host/port is not. */
@@ -211,6 +225,28 @@ export const isRefName = (s) =>
   if (bad.length > 0) {
     console.error("✗ escaping self-test FAILED — refusing to render untrusted names.\n");
     for (const [got, want] of bad) console.error(`    got ${JSON.stringify(got)} want ${JSON.stringify(want)}`);
+    process.exit(1);
+  }
+}
+
+// The recovery record must survive appendSummary intact. appendSummary runs every
+// element through `oneLine` (collapses newlines), so the restore commands must reach
+// it as ONE ELEMENT PER BRANCH — a single joined multi-line element would flatten to
+// one broken line and reverse only the first branch. Render exactly as appendSummary
+// does and require every command to survive on its own line. Falsifiable: rejoin the
+// commands before restoreSection, or drop the array spread, and this fails.
+{
+  const commands = [
+    "git push origin " + "a".repeat(40) + ":refs/heads/claude/one",
+    "git push origin " + "b".repeat(40) + ":refs/heads/claude/two",
+  ];
+  const rendered = restoreSection(commands).map(oneLine).join("\n");
+  const survived = rendered.split("\n").filter((l) => l.startsWith("git push origin "));
+  if (survived.length !== commands.length) {
+    console.error(
+      `✗ restore self-test FAILED — a ${commands.length}-branch restore rendered ${survived.length} command line(s); ` +
+        "a multi-branch prune would print a restore record that reverses only the first branch.\n",
+    );
     process.exit(1);
   }
 }
@@ -378,13 +414,16 @@ for (const b of branches) {
 }
 
 // ── The recovery record, emitted BEFORE any deletion ──────────────────────────
-const restore = [
+// One command PER branch, kept as an array so each reaches the summary as its own
+// element (see restoreSection): a joined multi-line string would be flattened to a
+// single broken line by oneLine, and every branch after the first would go unrestored.
+const restoreLines = [
   ...doomed.map((d) => `git push origin ${d.sha}:refs/heads/${shellQuote(d.name)}`),
   // A forced branch restores from its archive tag, which is a real ref and therefore
   // survives indefinitely — unlike a bare SHA, which only works until the unreferenced
   // object is collected. These are the ones that actually need a durable anchor.
   ...forced.map((f) => `git push origin ${shellQuote(`archive/${f.name}`)}:refs/heads/${shellQuote(f.name)}`),
-].join("\n");
+];
 
 const summary = [
   `## Branch prune — ${APPLY ? "APPLIED" : "dry run"}`,
@@ -401,9 +440,7 @@ const summary = [
   "",
   "### Restore any of these",
   "",
-  "```bash",
-  restore || "# nothing to restore — no branch qualified",
-  "```",
+  ...restoreSection(restoreLines),
   "",
   "### Kept, and why",
   "",

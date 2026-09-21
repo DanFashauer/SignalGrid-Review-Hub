@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-21T15:40:26.054Z",
-  "result": "acted: ran 2 sim request(s); results on mac/tick-20260921T151753Z"
+  "firedAt": "2026-09-21T16:09:34.125Z",
+  "result": "failed: ran 2 sim request(s) and produced results, but the mac/tick-20260921T154540Z commit/push chain broke — the cloud lane CANNOT see them; they are still in this checkout"
 }

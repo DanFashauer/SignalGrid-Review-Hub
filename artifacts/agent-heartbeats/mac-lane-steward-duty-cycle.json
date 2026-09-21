@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-21T07:26:55.424Z",
-  "result": "07:24Z acted (owner escalated): tick firedAt 2026-09-20T02:26Z (~29h down). Owner ESCALATED via push at 2026-09-21T07:24Z (>24h since prior 06:25Z 09-20 escalation): 'Mac not ticked since 2026-09-20 02:26Z; run bash scripts/mac/install-launchd.sh'. Next escalation window 07:24Z 09-22. Otherwise quiet: no new/moved mac/* branch; no cloud-addressed mail; 2 sim remints pending (Mac-blocked). #929 (MAM, Codex round 10 complete, out of budget) and #936 await owner merge. Heartbeat PRs #939-#943 merged. Live-evidence fresh; manifest clean."
+  "firedAt": "2026-09-21T08:26:13.868Z",
+  "result": "08:24Z quiet: no new/moved mac/* branch; no cloud-addressed mail; 2 sim remints pending (Mac-blocked). Tick firedAt 2026-09-20T02:26Z (~30h down). Owner NOT re-escalated (already escalated via push 07:24Z 09-21; next window 07:24Z 09-22). #929 (MAM, Codex round 10 complete, out of budget) and #936 await owner merge. Heartbeat PRs #939-#944 merged. Live-evidence fresh; manifest clean."
 }

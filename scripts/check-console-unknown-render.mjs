@@ -51,8 +51,10 @@
 //
 // KNOWN, DELIBERATE LIMITATIONS (conservative — they UNDER-flag, never over-flag; the
 // widened doctrine review still covers them, and each has a BUILD_BACKLOG follow-up):
-//   - Per-query provenance is not tracked: on a multi-query page a presence guard on
-//     query A is accepted for a conclusion backed by query B. A false NEGATIVE, not a
+//   - Per-query provenance is not tracked, and provenance does not cross component/file
+//     boundaries: on a multi-query page a presence guard on query A is accepted for a
+//     conclusion backed by query B, and a value extracted into a child presentation
+//     component is analysed without its parent's query origin. A false NEGATIVE, not a
 //     false positive. (Codex P1 — deferred deliberately: naive origin-tracking risks the
 //     over-flag that would disqualify a mandatory gate.)
 //   - A good-state class stored in a constant (`const GOOD = "text-emerald-400"`) is not
@@ -91,6 +93,18 @@ const STRONG_AFFIRMATIONS = [
 const WEAK_CONCLUSIONS = [/\bhealthy\b/i, /\boperational\b/i, /\bnominal\b/i];
 
 const GOOD_CLASS = /\b(emerald|status-allow)\b/;
+
+// A negator immediately before an affirmation flips its meaning: "Not all healthy" and
+// "Not all systems are operational" REPORT a bad state, they do not paint an unknown one.
+// (Codex P2 — a false positive that would fail correct warning copy.)
+const NEGATION_BEFORE = /\b(not|never|no longer|isn't|aren't|wasn't|weren't|cannot|can't|without)\s*$/i;
+function unnegatedMatch(regexes, text) {
+  for (const re of regexes) {
+    const m = re.exec(text);
+    if (m && !NEGATION_BEFORE.test(text.slice(Math.max(0, m.index - 18), m.index))) return true;
+  }
+  return false;
+}
 
 const STATUS_MEMBERS = new Set([
   "isError", "error", "isLoading", "isPending", "isFetching", "isSuccess", "data", "status", "failureReason",
@@ -157,6 +171,12 @@ function analyzeSourceFile(relPath, text) {
     } else if (ts.isIdentifier(decl.name) && family) {
       usesQueryHook = true;
       queryObjVars.add(decl.name.text);
+    } else if (ts.isArrayBindingPattern(decl.name) && family) {
+      // `const [q] = useQueries(...)` — each element is a query-result object. (Codex P2.)
+      usesQueryHook = true;
+      for (const el of decl.name.elements) {
+        if (ts.isBindingElement(el) && ts.isIdentifier(el.name)) queryObjVars.add(el.name.text);
+      }
     }
   };
   const firstPass = (n) => { if (ts.isVariableDeclaration(n)) registerHookDecl(n); ts.forEachChild(n, firstPass); };
@@ -216,28 +236,42 @@ function analyzeSourceFile(relPath, text) {
     walk(n);
     return hit;
   };
-  const testPolarity = (testNode) => {
-    if (!testNode) return "unknown";
-    // error / loading term anywhere ⇒ absent-ish (the branch guarded by it is the failure path)
-    if (referencesErrorLoading(testNode)) return "absent";
-    // a top-level or nested `!<data>` ⇒ absent
-    let negatedData = false, nullTest = false;
-    const walk = (x) => {
-      if (!x) return;
-      if (ts.isPrefixUnaryExpression(x) && x.operator === ts.SyntaxKind.ExclamationToken && referencesQueryState(x.operand)) negatedData = true;
-      if (ts.isBinaryExpression(x) &&
-          (x.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken || x.operatorToken.kind === ts.SyntaxKind.EqualsEqualsToken) &&
-          (referencesQueryState(x.left) || referencesQueryState(x.right))) {
-        const other = referencesQueryState(x.left) ? x.right : x.left;
-        if ((ts.isIdentifier(other) && other.text === "undefined") || other.kind === ts.SyntaxKind.NullKeyword) nullTest = true;
+  // Structural, SIGN-AWARE polarity. `!<data>` ⇒ absent; `!<errorTerm>` ⇒ present (NOT
+  // errored); `data !== undefined` ⇒ present; `data === undefined` ⇒ absent. Compound
+  // &&/|| take the shared polarity of their query-referencing operands. Negation of an
+  // error term must FLIP — `!q.isError ? null : <All clear>` paints the conclusion on the
+  // error path, so its test is present-polarity and the marker is in the wrong (false) arm.
+  // (Codex P1.)
+  const invert = (p) => (p === "present" ? "absent" : p === "absent" ? "present" : "unknown");
+  const isNullish = (x) => (ts.isIdentifier(x) && x.text === "undefined") || x.kind === ts.SyntaxKind.NullKeyword;
+  const polarity = (n) => {
+    if (!n) return "unknown";
+    if (ts.isParenthesizedExpression(n)) return polarity(n.expression);
+    if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.ExclamationToken) return invert(polarity(n.operand));
+    if (ts.isBinaryExpression(n)) {
+      const op = n.operatorToken.kind;
+      const K = ts.SyntaxKind;
+      if (op === K.EqualsEqualsEqualsToken || op === K.EqualsEqualsToken || op === K.ExclamationEqualsEqualsToken || op === K.ExclamationEqualsToken) {
+        const qLeft = referencesQueryState(n.left), qRight = referencesQueryState(n.right);
+        if (qLeft || qRight) {
+          const other = qLeft ? n.right : n.left;
+          if (isNullish(other)) return (op === K.ExclamationEqualsEqualsToken || op === K.ExclamationEqualsToken) ? "present" : "absent";
+        }
+        return "unknown";
       }
-      ts.forEachChild(x, walk);
-    };
-    walk(testNode);
-    if (negatedData || nullTest) return "absent";
-    if (referencesQueryState(testNode)) return "present";
+      if (op === K.AmpersandAmpersandToken || op === K.BarBarToken) {
+        const parts = [polarity(n.left), polarity(n.right)].filter((p) => p !== "unknown");
+        if (parts.length === 0) return "unknown";
+        if (parts.every((p) => p === "present")) return "present";
+        if (parts.every((p) => p === "absent")) return "absent";
+        return "unknown";
+      }
+    }
+    if (referencesErrorLoading(n)) return "absent";
+    if (referencesQueryState(n)) return "present";
     return "unknown";
   };
+  const testPolarity = (testNode) => polarity(testNode);
 
   // Is `node` in the present-data branch of some enclosing conditional? (branch-aware)
   const contains = (parent, target) => {
@@ -246,7 +280,35 @@ function analyzeSourceFile(relPath, text) {
     walk(parent);
     return found;
   };
+  // Early-return guard: `if (!q.data) return <Loading/>;` before the successful render. The
+  // later JSX is a SIBLING of the `if`, not nested in it, so the ancestor walk misses it.
+  // A preceding sibling statement that returns when data is absent proves data is present
+  // for everything after it. (Codex P2 — a false positive on a common fail-closed pattern.)
+  const alwaysReturns = (stmt) => {
+    if (!stmt) return false;
+    if (ts.isReturnStatement(stmt) || ts.isThrowStatement(stmt)) return true;
+    if (ts.isBlock(stmt)) return stmt.statements.some(alwaysReturns);
+    return false;
+  };
+  const hasDominatingAbsentGuard = (node) => {
+    let cur = node.parent;
+    while (cur && !ts.isSourceFile(cur)) {
+      if (ts.isBlock(cur)) {
+        const stmts = cur.statements;
+        let idx = -1;
+        for (let i = 0; i < stmts.length; i++) { if (contains(stmts[i], node)) { idx = i; break; } }
+        for (let i = 0; i < idx; i++) {
+          const s = stmts[i];
+          if (ts.isIfStatement(s) && !s.elseStatement && referencesQueryState(s.expression) &&
+              testPolarity(s.expression) === "absent" && alwaysReturns(s.thenStatement)) return true;
+        }
+      }
+      cur = cur.parent;
+    }
+    return false;
+  };
   const isHandled = (node) => {
+    if (hasDominatingAbsentGuard(node)) return true;
     let cur = node.parent;
     while (cur && !ts.isSourceFile(cur)) {
       if (ts.isConditionalExpression(cur) && referencesQueryState(cur.condition)) {
@@ -267,6 +329,29 @@ function analyzeSourceFile(relPath, text) {
         const inElse = cur.elseStatement ? contains(cur.elseStatement, node) : false;
         if (pol === "present" && inThen) return true;
         if (pol === "absent" && inElse) return true;
+      }
+      cur = cur.parent;
+    }
+    return false;
+  };
+
+  // Is `node` in the DATA-ABSENT branch of a query guard — the arm that renders when data
+  // is missing/errored? A good-state class chosen there (`className={!q.data ? "emerald" :
+  // "red"}`) paints the unknown state green even with no separate data render. (Codex P1.)
+  const inAbsentDataBranch = (node) => {
+    let cur = node.parent;
+    while (cur && !ts.isSourceFile(cur)) {
+      if (ts.isConditionalExpression(cur) && referencesQueryState(cur.condition)) {
+        const pol = testPolarity(cur.condition);
+        if (pol === "present" && contains(cur.whenFalse, node)) return true;
+        if (pol === "absent" && contains(cur.whenTrue, node)) return true;
+      } else if (ts.isBinaryExpression(cur) && cur.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
+                 referencesQueryState(cur.left) && contains(cur.right, node)) {
+        if (testPolarity(cur.left) === "absent") return true;
+      } else if (ts.isIfStatement(cur) && referencesQueryState(cur.expression)) {
+        const pol = testPolarity(cur.expression);
+        if (pol === "present" && cur.elseStatement && contains(cur.elseStatement, node)) return true;
+        if (pol === "absent" && contains(cur.thenStatement, node)) return true;
       }
       cur = cur.parent;
     }
@@ -351,12 +436,15 @@ function analyzeSourceFile(relPath, text) {
   const p3 = (n) => {
     // Phrases in RENDERED text — JSX text, string/template content — but NOT inside an
     // attribute value (a className CSS token like `bg-signal-nominal` is not prose).
-    if ((ts.isJsxText(n) || ts.isStringLiteralLike(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateExpression(n)) && !inJsxAttribute(n)) {
+    if ((ts.isJsxText(n) || ts.isStringLiteralLike(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateExpression(n)) &&
+        !inJsxAttribute(n) && enclosingJsxElement(n)) {
+      // Must be RENDERED JSX: `console.log("All clear")` and non-rendered constants have no
+      // JSX-element ancestor and cannot paint the console. (Codex P2.)
       const t = textOfNode(n);
       if (t) {
-        if (STRONG_AFFIRMATIONS.some((re) => re.test(t)) && !isHandled(n)) {
+        if (unnegatedMatch(STRONG_AFFIRMATIONS, t) && !isHandled(n)) {
           report(n, "affirmation-phrase", t);
-        } else if (WEAK_CONCLUSIONS.some((re) => re.test(t)) && !isHandled(n)) {
+        } else if (unnegatedMatch(WEAK_CONCLUSIONS, t) && !isHandled(n)) {
           const el = enclosingJsxElement(n);
           if (el && elementHasUnguardedDataRender(el)) report(n, "weak-conclusion-on-unguarded-data", t);
         }
@@ -368,7 +456,11 @@ function analyzeSourceFile(relPath, text) {
       for (const strNode of goodClassStringNodes(n)) {
         if (isHandled(strNode)) continue;
         const el = enclosingJsxElement(n);
-        if (el && elementHasUnguardedDataRender(el)) report(strNode, "good-class-on-unguarded-data", strNode.text || "emerald");
+        // Report when the good class is chosen by the data-ABSENT branch (painted on
+        // unknown), OR when the element renders unguarded query data.
+        if (inAbsentDataBranch(strNode) || (el && elementHasUnguardedDataRender(el))) {
+          report(strNode, "good-class-on-unguarded-data", strNode.text || "emerald");
+        }
       }
     }
     ts.forEachChild(n, p3);
@@ -437,6 +529,46 @@ export function Plain() {
   const [n, setN] = useState(0);
   return <div className="text-emerald-400">All clear</div>;
 }`;
+// A good class chosen BY the data-absent branch, with no separate data render. Must flag. (P1)
+const BUG_ABSENTCLASS = `
+import { useQuery } from "@tanstack/react-query";
+export function AbsentClass() {
+  const q = useQuery({ queryKey: ["x"], queryFn: fetchThing });
+  return <div className={!q.data ? "text-emerald-400" : "text-red-400"}>Status</div>;
+}`;
+// A conclusion painted on the ERROR path via a negated error predicate. Must flag. (P1)
+const BUG_NEGERROR = `
+import { useQuery } from "@tanstack/react-query";
+export function NegError() {
+  const q = useQuery({ queryKey: ["x"], queryFn: fetchThing });
+  return <div>{!q.isError ? null : <span>Everything is fine</span>}</div>;
+}`;
+// useQueries consumed via array destructuring. Must flag. (P2)
+const BUG_USEQUERIES = `
+import { useQueries } from "@tanstack/react-query";
+export function MultiQ() {
+  const [q] = useQueries({ queries: [{ queryKey: ["x"], queryFn: fetchThing }] });
+  const items = q.data?.items ?? [];
+  return <span className="text-emerald-400">{items.length} up to date</span>;
+}`;
+// Correct fail-closed patterns that MUST NOT flag: early-return guards, a non-rendered
+// console.log affirmation, a negated warning phrase, and a negated-error present guard.
+const OK_GUARDS = `
+import { useQuery } from "@tanstack/react-query";
+export function Guarded() {
+  const q = useQuery({ queryKey: ["x"], queryFn: fetchThing });
+  console.log("All clear");
+  if (!q.data) return <div>Loading…</div>;
+  if (q.isError) return <div>unavailable</div>;
+  const items = q.data.items ?? [];
+  return (
+    <div>
+      <span className="text-emerald-400">{items.length} up to date</span>
+      <div>Not all systems are operational yet</div>
+      {!q.isError ? <span className="text-emerald-400">{items.length} ok</span> : null}
+    </div>
+  );
+}`;
 
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
@@ -453,9 +585,26 @@ function selfTest() {
   ];
   for (const [label, pass] of need) if (!pass()) { ok = false; console.error(`  FAIL — bug not caught: ${label}`); }
 
+  // Isolated bug shapes (each fixture's only finding), added for Codex round 2.
+  const absentClass = analyze(BUG_ABSENTCLASS, "ABSENTCLASS.tsx");
+  console.log(`  self-test ABSENT-CLASS.tsx → ${absentClass.length}: ${absentClass.map((v) => v.kind).join(" ")}`);
+  if (!absentClass.some((v) => v.kind === "good-class-on-unguarded-data")) { ok = false; console.error("  FAIL — emerald chosen by the data-absent branch was NOT caught (P1)"); }
+
+  const negError = analyze(BUG_NEGERROR, "NEGERROR.tsx");
+  console.log(`  self-test NEG-ERROR.tsx → ${negError.length}: ${negError.map((v) => v.kind).join(" ")}`);
+  if (!negError.some((v) => v.kind === "affirmation-phrase")) { ok = false; console.error("  FAIL — conclusion on the negated-error path was NOT caught (P1)"); }
+
+  const useQueriesBug = analyze(BUG_USEQUERIES, "USEQUERIES.tsx");
+  console.log(`  self-test USEQUERIES.tsx → ${useQueriesBug.length}: ${useQueriesBug.map((v) => v.kind).join(" ")}`);
+  if (!useQueriesBug.some((v) => v.kind === "good-class-on-unguarded-data")) { ok = false; console.error("  FAIL — useQueries array-destructured query was NOT registered (P2)"); }
+
   const fine = analyze(OK, "OK.tsx");
   console.log(`  self-test OK.tsx → ${fine.length} violation(s)`);
   if (fine.length !== 0) { ok = false; console.error("  FAIL — data-presence-gated component flagged (false positive):"); for (const v of fine) console.error(`    L${v.line} ${v.kind} ${v.snippet}`); }
+
+  const guards = analyze(OK_GUARDS, "OK_GUARDS.tsx");
+  console.log(`  self-test OK-GUARDS.tsx → ${guards.length} violation(s)`);
+  if (guards.length !== 0) { ok = false; console.error("  FAIL — a correctly guarded component flagged (false positive: early-return / non-JSX / negated phrase):"); for (const v of guards) console.error(`    L${v.line} ${v.kind} ${v.snippet}`); }
 
   const plain = analyze(NONQUERY, "PLAIN.tsx");
   console.log(`  self-test NON-QUERY.tsx → ${plain.length} violation(s)`);

@@ -1936,8 +1936,12 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       rate on a mandatory gate. (1) **Per-query provenance (P1-7):** the handled-check
       treats ANY query identifier in a guard test as covering ANY query-data render in
       that branch, so a file with two queries where the emerald branch is guarded on
-      query A but renders query B's data reads as handled. Fix: track which query each
-      `data`/derived var descends from and require the guard to test the SAME query.
+      query A but renders query B's data reads as handled. The same missing provenance
+      means a value extracted into a child presentation component (`<Panel items={items} />`)
+      is analysed in the child without the parent's query origin, bypassing the gate.
+      Fix: track which query each `data`/derived var descends from, require the guard to
+      test the SAME query, and carry provenance across component props (or enforce an
+      equivalent call-site contract).
       (2) **Const-class resolution (P2-5):** a good-state class assembled through a
       `const cls = "... emerald ..."` binding, or a `clsx`/template-literal join, is
       matched only when the literal is inline on the element — a class hoisted to a

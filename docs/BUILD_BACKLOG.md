@@ -1930,6 +1930,21 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       shape not) and a validation that plants an unknown-as-emerald into a real
       component and watches it fail. Cloud lane. Lane: devex-tooling-engineer.
 
+- [ ] **`check-console-unknown-render` — two conservative false-negatives to close
+      (Codex review of #953).** Both UNDER-flag (never over-flag), so the gate stays
+      sound; each is deferred because the naive fix would raise the false-positive
+      rate on a mandatory gate. (1) **Per-query provenance (P1-7):** the handled-check
+      treats ANY query identifier in a guard test as covering ANY query-data render in
+      that branch, so a file with two queries where the emerald branch is guarded on
+      query A but renders query B's data reads as handled. Fix: track which query each
+      `data`/derived var descends from and require the guard to test the SAME query.
+      (2) **Const-class resolution (P2-5):** a good-state class assembled through a
+      `const cls = "... emerald ..."` binding, or a `clsx`/template-literal join, is
+      matched only when the literal is inline on the element — a class hoisted to a
+      const is missed. Fix: resolve string-const bindings and template quasis before
+      the class match. Ships with a self-test extending each shape. Cloud lane.
+      Lane: devex-tooling-engineer.
+
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared
       `REMEDIATION_ALLOW_REASONS` as part of the simulator/iOS vocabulary (drift-guarded:

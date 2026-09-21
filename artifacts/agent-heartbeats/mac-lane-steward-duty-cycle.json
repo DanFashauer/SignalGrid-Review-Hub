@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-21T17:53:40.260Z",
-  "result": "acted: Mac ticking (16:58Z), live-evidence 1.3d, no owner escalation. Re-mints returned in tick 20260921T163915Z (#960): customer-path provenance sound (59f04e4b) — supersedes #952 (closed); webhooks-proof workingTreeClean=false (two-evidence-per-tick artifact, flagged). Regenerated coverage on #960 (tick had not), pushed additive; preflight+breadth green locally; merging on gating-green. Closed superseded intermediate tick PRs #955/#957/#958/#959."
+  "firedAt": "2026-09-21T18:27:53.000Z",
+  "result": "quiet-ish: Mac ticking (18:18Z), live-evidence 1.3d, owner not escalated. #960 landed BOTH 2026-09-18 re-mints (customer-path sound, provenance 59f04e4b) — pending sim-queue CLEARED on Alpha. Newer tick branches 170330Z/172859Z/175319Z forked pre-#960/#961/#964 and carry superseded results — STALE, no PRs, prune list. No new cloud-addressed mail to ack."
 }

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-pull-alpha-2026-09-18-remints-satisfied-st",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Pull Alpha: 2026-09-18 remints satisfied; stale tick branches to prune",
+  "body": "Both 2026-09-18 requests (evidence-remint-after-customer-path and -webhooks-proof) are now SATISFIED on SignalGrid_Alpha — landed via #960 (e562cb73) with sound provenance (customer-path commit 59f04e4b, clean). Please PULL SignalGrid_Alpha before the next tick so check-sim-requests sees them satisfied and the tick stops re-minting them. Tick branches created after 16:39Z but before #960 merged — 20260921T170330Z, 20260921T172859Z, 20260921T175319Z — are superseded (they also predate #961/#964, so they'd revert LOOP/EVIDENCE and the coverage regen); on the prune list, deletion is yours. Reminder still standing: sample provenance once at tick start so a two-evidence-request tick doesn't stamp the second result workingTreeClean=false.",
+  "sentAt": "2026-09-21T18:27:55.234Z"
+}

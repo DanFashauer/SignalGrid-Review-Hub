@@ -151,6 +151,20 @@ function arrayMalformed(v: unknown): boolean {
   return false;
 }
 
+/** Read an array field's contents ONCE, by index, into a plain array — so validation
+ *  and extraction operate on the SAME snapshot. A hostile array can define a stateful
+ *  index accessor (index 0 yields "" on the first read, "jailbroken" on the second):
+ *  without a snapshot, `deriveComplianceState` would read "" (clean) while a later
+ *  `arrayMalformed` re-reads "jailbroken" (valid), and the flagged list grants. Reading
+ *  each index exactly once here removes the double-read. Non-arrays pass through; holes
+ *  materialize as undefined and are still caught by `arrayMalformed`. (Codex P1.) */
+function snapshotArray(v: unknown): unknown {
+  if (!Array.isArray(v)) return v;
+  const out = new Array<unknown>(v.length);
+  for (let i = 0; i < v.length; i++) out[i] = v[i];
+  return out;
+}
+
 const POLICY_STATES = ["applied", "not_applied", "unknown"] as const;
 
 /**
@@ -251,7 +265,12 @@ export function normalizeAppProtectionReport(
   }
 
   const policyState = oneOf<MamPolicyState>(raw["policy_state"], POLICY_STATES, "unknown");
-  const complianceState = deriveComplianceState(raw["flagged_reasons"]);
+  // Snapshot the array fields ONCE (see snapshotArray) so every consumer below —
+  // deriveComplianceState, arrayMalformed, stringList — reads the SAME contents and a
+  // stateful index accessor cannot make them disagree. (Codex P1.)
+  const flaggedList = snapshotArray(raw["flagged_reasons"]);
+  const policiesList = snapshotArray(raw["applied_policies"]);
+  const complianceState = deriveComplianceState(flaggedList);
 
   const observedRaw = raw["registration_observed_at"];
   const observedMs = instantOf(observedRaw);
@@ -274,7 +293,15 @@ export function normalizeAppProtectionReport(
   // "applied" with no corroborating policy references is a contradiction: an applied
   // app-protection policy always names at least one policy. Fail closed on the ambiguity
   // rather than trusting the bare `applied` claim.
-  const appliedWithoutPolicies = policyState === "applied" && stringList(raw["applied_policies"]).length === 0;
+  const appliedWithoutPolicies = policyState === "applied" && stringList(policiesList).length === 0;
+  // A PRESENT-but-unreadable text field (a number, an object, a blank string) is a
+  // corrupt assertion, not silence — `MamReportIntegrity` defines present-but-unparseable
+  // as malformed. `textOf` quietly returns null for these, and platform/source_system did
+  // not otherwise reach the malformed check, so a report with `platform: 42` /
+  // `source_system: {}` read as a clean parse and granted. Fail closed. (Codex P1.)
+  const textFieldBad = (v: unknown): boolean => v !== undefined && v !== null && textOf(v) === null;
+  const platformBad = textFieldBad(raw["platform"]);
+  const sourceSystemBad = textFieldBad(raw["source_system"]);
 
   const malformed =
     readThrew ||
@@ -283,8 +310,10 @@ export function normalizeAppProtectionReport(
     requestAppRefBlank ||
     appRefMismatch ||
     appliedWithoutPolicies ||
-    arrayMalformed(raw["flagged_reasons"]) ||
-    arrayMalformed(raw["applied_policies"]) ||
+    platformBad ||
+    sourceSystemBad ||
+    arrayMalformed(flaggedList) ||
+    arrayMalformed(policiesList) ||
     hasUnrecognizedKey(report, APP_PROTECTION_REPORT_KEYS) ||
     enumMalformed(raw["policy_state"], POLICY_STATES);
   const reportIntegrity: MamReportIntegrity = malformed ? "malformed" : "clean";
@@ -304,8 +333,8 @@ export function normalizeAppProtectionReport(
       opts.referenceTime,
     ),
     managedAppRef: textOf(raw["app_ref"]),
-    appliedPolicyRefs: stringList(raw["applied_policies"]),
-    flaggedReasons: stringList(raw["flagged_reasons"]),
+    appliedPolicyRefs: stringList(policiesList),
+    flaggedReasons: stringList(flaggedList),
     platform: textOf(raw["platform"]),
     registrationObservedAt,
     mamSource: textOf(raw["source_system"]),

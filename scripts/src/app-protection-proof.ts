@@ -172,6 +172,16 @@ const uncovered = evaluateAppProtection(
 );
 check("an app with NO registration at all → step_up (NOT_COVERED): an honest hole, not a pass",
   uncovered.recommendedAction === "step_up" && uncovered.reasonCode === "NOT_COVERED");
+// covered:false is worst-concern-wins, never a CAP (Codex P1): contradictory metadata
+// (not covered, yet a report that still confirms a flagged sensitive registration) must
+// not downgrade the confirmed restrict to step_up.
+const uncoveredFlagged = evaluateAppProtection(
+  normalizeAppProtectionReport(APP, clean({ flagged_reasons: ["jailbroken"] }), { appSensitivity: "sensitive", referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE }),
+  { covered: false },
+);
+check("covered:false does NOT downgrade a confirmed flagged sensitive registration → restrict preserved (MAM_FLAGGED_SENSITIVE_APP), missing registration noted",
+  uncoveredFlagged.recommendedAction === "restrict" && uncoveredFlagged.reasonCode === "MAM_FLAGGED_SENSITIVE_APP" &&
+  uncoveredFlagged.unknownSignals.includes("app_registration"));
 
 // ── malformed-detection guards, each isolated (mutation-guard falsifiability) ─────
 // The `malformed` OR-chain in the normalizer is defence-in-depth: each term is the
@@ -237,6 +247,36 @@ check("malformed-isolation: an asserted BLANK app_ref (\" \") → malformed",
 // empty "nothing" set and grant. Index iteration reads the hole as a junk element.
 check("malformed-isolation: a SPARSE flagged_reasons (new Array(1), a hole) → malformed — a hole is a junk element, not a silently-empty set",
   integrity({ policy_state: "applied", flagged_reasons: new Array(1) as unknown as string[], applied_policies: ["p"], registration_observed_at: FRESH }) === "malformed");
+
+// present-but-unreadable TEXT fields (Codex P1): platform/source_system asserted as a
+// number/object/blank is a corrupt assertion (present-but-unparseable = malformed), not
+// silence, and must not read as a clean parse and grant.
+check("malformed-isolation: a present-but-unreadable platform (42) → malformed — corrupt provenance is not a clean parse",
+  integrity({ policy_state: "applied", flagged_reasons: [], applied_policies: ["p"], registration_observed_at: FRESH, platform: 42 as unknown as string }) === "malformed");
+check("malformed-isolation: a present-but-unreadable source_system ({}) → malformed",
+  integrity({ policy_state: "applied", flagged_reasons: [], applied_policies: ["p"], registration_observed_at: FRESH, source_system: {} as unknown as string }) === "malformed");
+check("malformed-isolation: a BLANK platform (\"\") → malformed — an asserted blank is unreadable, not absent",
+  integrity({ policy_state: "applied", flagged_reasons: [], applied_policies: ["p"], registration_observed_at: FRESH, platform: "" }) === "malformed");
+
+// stateful index accessor (Codex P1): index 0 yields "" on the first read, "jailbroken"
+// after. The snapshot reads each index ONCE, so validation and extraction see the same
+// value — no double-read discrepancy that would let a flagged list normalize to clean.
+const statefulFlagged: string[] = ["seed"];
+let statefulReads = 0;
+Object.defineProperty(statefulFlagged, "0", {
+  configurable: true,
+  enumerable: true,
+  get() {
+    return statefulReads++ === 0 ? "" : "jailbroken";
+  },
+});
+const statefulNorm = normalizeAppProtectionReport(
+  APP,
+  { policy_state: "applied", applied_policies: ["p"], flagged_reasons: statefulFlagged, registration_observed_at: FRESH, platform: "ios", source_system: "intune" },
+  { source: "mut" },
+);
+check("a flagged_reasons array with a STATEFUL index accessor is snapshotted once → validation and extraction agree, never a clean grant",
+  statefulNorm.reportIntegrity === "malformed" && evaluateAppProtection(statefulNorm).recommendedAction !== "none");
 
 // blank REQUESTED appRef (Codex P1): the requested binding must itself name an app. A
 // blank/whitespace appRef with a source that OMITS its optional app_ref would otherwise

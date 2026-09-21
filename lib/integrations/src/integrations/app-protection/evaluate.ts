@@ -77,21 +77,38 @@ export function evaluateAppProtection(
   opts: EvaluateAppProtectionOptions = {},
 ): AppProtectionVerdict {
   const covered = opts.covered ?? true;
+  const verdict = evaluateCoveredReport(report);
+  if (covered) return verdict;
+  // NOT COVERED — the MAM plane returned no registration for this app: an honest hole,
+  // normally step_up. But `covered: false` must be worst-concern-wins, never a CAP: if the
+  // report handed in still confirms a STRICTLY higher concern (a flagged sensitive
+  // registration → restrict), that confirmed fact is preserved rather than silently
+  // downgraded to step_up; only a would-be grant or a step_up is reported as NOT_COVERED.
+  // Either way it can never grant, and the missing registration is noted. (Codex P1.)
+  const withHole = (v: AppProtectionVerdict): AppProtectionVerdict => ({
+    ...v,
+    unknownSignals: v.unknownSignals.includes("app_registration")
+      ? v.unknownSignals
+      : [...v.unknownSignals, "app_registration"],
+  });
+  if (ACTION_SEVERITY[verdict.recommendedAction] > ACTION_SEVERITY.step_up) {
+    return withHole(verdict);
+  }
+  return withHole({
+    appRef: report.appRef,
+    posture: "app_protection_unverified",
+    reasonCode: "NOT_COVERED",
+    recommendedAction: "step_up",
+    criticalFindings: verdict.criticalFindings,
+    unknownSignals: verdict.unknownSignals,
+    appProtected: false,
+  });
+}
+
+function evaluateCoveredReport(report: NormalizedAppProtection): AppProtectionVerdict {
   const base = { appRef: report.appRef };
   const criticalFindings: string[] = [];
   const unknownSignals: string[] = [];
-
-  if (!covered) {
-    return {
-      ...base,
-      posture: "app_protection_unverified",
-      reasonCode: "NOT_COVERED",
-      recommendedAction: "step_up",
-      criticalFindings,
-      unknownSignals: ["app_registration"],
-      appProtected: false,
-    };
-  }
 
   const sensitive = report.appSensitivity === "sensitive";
 

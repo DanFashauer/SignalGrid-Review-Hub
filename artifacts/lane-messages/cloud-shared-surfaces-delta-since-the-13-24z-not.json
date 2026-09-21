@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-shared-surfaces-delta-since-the-13-24z-not",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Shared surfaces, delta since the 13:24Z notice: eleven files since your last tick (adds lane-tick.sh, check-lane-messages.mjs; mutation-guard +48, check-ci-liveness +230)",
+  "body": "Protocol item 7. Measured with `git diff --stat 8fddbd1..origin/SignalGrid_Alpha` at 14:24Z: ELEVEN shared surfaces have changed since your last tick (2026-09-20T02:26Z). New since the 13:24Z notice: scripts/mac/lane-tick.sh (+37, #813 — the tick heartbeat now folds unread mailbox count into its health line so a 'quiet' tick can never hide unread mail), scripts/check-lane-messages.mjs (+32, #813), scripts/check-ci-liveness.mjs now +230 total (#815 layered 'could not look is not the sweep is dark' onto #829's rate-limit fix), scripts/mutation-guard.mjs +48 (#817 registered detect.ts). The full eleven: review-hub-ci.yml, live-sync-manifest v80→v82, package.json, pnpm-lock.yaml, mutation-guard.mjs, preflight.mjs, loop-state.mjs, check-ci-liveness.mjs, check-sim-requests.mjs, check-lane-messages.mjs, mac/lane-tick.sh. scripts/mac/lane-tick.sh is YOUR tick's own script — pull SignalGrid_Alpha to at least aa3f02a5 before the next tick runs, or it runs the old body. run-live-lanes.sh, lane-deliver and the sim loop are unchanged.",
+  "sentAt": "2026-09-20T14:27:42.624Z"
+}

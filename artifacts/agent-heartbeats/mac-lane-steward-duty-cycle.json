@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-17T19:34:27.671Z",
-  "result": "acted: falsified my own earlier root cause and sent the correction. Mac IS ticking — mac-lane-tick firedAt 2026-09-17T19:00:41Z (24m, well inside 3h), so NO owner escalation. Sim loop clean: 17 requests / 17 results, every result bound. live-evidence 5.0d old (2026-09-12) but a cloud->mac ask about it is ALREADY unread (9.1h), so no second ask was sent, per the routine. No new or moved origin/mac/* branch without a PR: intake-airllm=#801, decision-path-classifier-gap=#758, attach-signal-domain=#753, gh-pr-rest-helper=#755; fleet-premium-proof and native-ledger-2026-09-02 are old and unmoved. Cloud inbox: nothing unread. Owner NOT escalated this cycle."
+  "firedAt": "2026-09-21T20:49:51.496Z",
+  "result": "acted: closed superseded tick PRs #962/#963/#965 (redundant remint pileup — SignalGrid_Alpha binds all 20 sim-requests, readiness 100%). mac-lane-tick firedAt 2026-09-21T20:25:05Z (fresh, quiet). live-evidence 1 day old, manifest 6cc9a0ee, readiness (b) 100%. owner NOT escalated. no cloud-addressed mail unread."
 }

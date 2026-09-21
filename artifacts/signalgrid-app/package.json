@@ -7,7 +7,8 @@
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test src/lib/policyTests.test.ts src/lib/facilityGraphLayout.test.ts"
   },
   "devDependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
@@ -30,6 +31,7 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "@workspace/api-client-react": "workspace:*",
+    "@workspace/facility-trust-graph": "workspace:*",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "date-fns": "^3.6.0",

@@ -422,6 +422,7 @@ const STEPS = [
   { name: "Live-sync evidence-kind self-test (unreadable is not hardware)", cmd: ["node", "scripts/check-live-sync.mjs", "--self-test"] },
   { name: "MCP surface self-test (coverage + resource parity must be able to fail)", cmd: ["node", "scripts/check-mcp-surface.mjs", "--self-test"] },
   { name: "MCP surface (chat connection must match the fabric)", cmd: ["node", "scripts/check-mcp-surface.mjs"] },
+  { name: "Lib-build heal self-test (an orphaned tsbuildinfo with no dist must be flagged)", cmd: ["node", "scripts/ensure-lib-build.mjs", "--self-test"] },
   { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"] },
   // needsNativeBuild: rollup/esbuild/lightningcss/oxide platform binaries. The
   // workspace strips every triple but linux-x64, so on other platforms this step

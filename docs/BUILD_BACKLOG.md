@@ -1885,10 +1885,31 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       routers, cross-checked by `scripts/check-launch-profile.mjs`. A real
       (non-review) deployment must set that variable — a deployment-checklist
       item, not an in-code bypass. Lane: security-engineer.
-- [ ] **`check-console-unknown-render` — the unknown-as-good-state gate for the
+- [x] **`check-console-unknown-render` — the unknown-as-good-state gate for the
       console (G2 from the 2026-09-02 console fix batch). SPEC ONLY, deferred: a
       deterministic version could not be built at acceptable precision in the
-      batch's time.** The intent: flag a `.tsx` in `artifacts/signalgrid-app/src`
+      batch's time.** **DONE 2026-09-21 (cloud lane)** — built as `scripts/check-console-unknown-render.mjs`,
+      an AST data-flow gate (the first script to use the TypeScript compiler API), not a
+      text scan. It collects each `.tsx`'s query-result identifiers (the `useQuery`/
+      generated-hook object, the destructured `data`/`isError`/`error`/`isLoading` bindings,
+      and vars DERIVED from query data to a fixpoint), then flags a good-state marker that a
+      per-branch boolean model finds is NOT proven to be reached with data present (directly,
+      or by ruling out both the error and loading flags). A STRONG affirmation phrase ("no
+      stale", "all clear", "all systems operational", …) is flagged whenever unhandled; a
+      good-state CLASS (`emerald`/`status-allow`) or a WEAK conclusion word ("healthy",
+      "operational", "nominal") is flagged only when it is chosen by the data-absent branch
+      OR its element also renders a query-data value that is not itself presence-gated. The
+      naive version's own false positives were the calibration
+      target: it flagged 17 correct sites (a static emerald category colour over a
+      `s ? String(x) : "-"` value, an `accent={s ? "emerald" : x}` ternary the ancestor walk
+      missed) — the AST version reports ZERO on the current tree. Exempt a site with
+      `// unknown-ok: <reason>`. Registered in `scripts/preflight.mjs` and
+      `.github/workflows/review-hub-ci.yml` (parity gate green). Two-direction self-test
+      plus a PLANT that removes the presence guard from a real component
+      (`SignalSourcing.tsx`) and watches the gate fire: `node
+      scripts/check-console-unknown-render.mjs --self-test`. SAFETY_MACHINERY — merged under
+      DR-037.
+      ORIGINAL SPEC (kept for the record): The intent: flag a `.tsx` in `artifacts/signalgrid-app/src`
       that calls `useQuery`/a generated hook, has a `?? []`/`?? {}`/`?.` fallback
       flowing into a class containing `emerald`/`status-allow` or a phrase from
       {"all clear","No stale","no … found","healthy","operational"}, AND never
@@ -1911,6 +1932,25 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       with a two-direction self-test (a bug shape flagged, a data-presence-gated
       shape not) and a validation that plants an unknown-as-emerald into a real
       component and watches it fail. Cloud lane. Lane: devex-tooling-engineer.
+
+- [ ] **`check-console-unknown-render` — two conservative false-negatives to close
+      (Codex review of #953).** Both UNDER-flag (never over-flag), so the gate stays
+      sound; each is deferred because the naive fix would raise the false-positive
+      rate on a mandatory gate. (1) **Per-query provenance (P1-7):** the handled-check
+      treats ANY query identifier in a guard test as covering ANY query-data render in
+      that branch, so a file with two queries where the emerald branch is guarded on
+      query A but renders query B's data reads as handled. The same missing provenance
+      means a value extracted into a child presentation component (`<Panel items={items} />`)
+      is analysed in the child without the parent's query origin, bypassing the gate.
+      Fix: track which query each `data`/derived var descends from, require the guard to
+      test the SAME query, and carry provenance across component props (or enforce an
+      equivalent call-site contract).
+      (2) **Const-class resolution (P2-5):** a good-state class assembled through a
+      `const cls = "... emerald ..."` binding, or a `clsx`/template-literal join, is
+      matched only when the literal is inline on the element — a class hoisted to a
+      const is missed. Fix: resolve string-const bindings and template quasis before
+      the class match. Ships with a self-test extending each shape. Cloud lane.
+      Lane: devex-tooling-engineer.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared

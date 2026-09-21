@@ -1819,7 +1819,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       by nothing, validated by no gate, sitting in the directory `REPO_LAYOUT.md`
       calls "The OpenAPI contract". Anyone importing it builds against phantom
       routes. Fix: delete it, or move under `docs/archive/` with a header. Lane: api-contract-architect.
-- [ ] **SDK docs say "append `/v1/authorize` to the base URL"; the server serves it
+- [x] **SDK docs say "append `/v1/authorize` to the base URL"; the server serves it
       at `/api/v1/authorize`. 2026-09-01 (contract-drift sweep, MEDIUM, latent).**
       `GateEndpoint.kt` and `endpoint.rs` trim a trailing slash "so callers can
       append /v1/authorize"; neither mentions `/api`; the spec's `servers` is `/api`
@@ -1828,7 +1828,20 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       neither native shell issues HTTP yet — but iOS hit exactly this trap
       (`DecisionService.swift:74`). Fix: document `/api/v1/authorize` and have
       `check-assist-wire-served.mjs` assert the prefix, or make `validate()`
-      append `/api`. Lane: api-contract-architect.
+      append `/api`. Lane: api-contract-architect. **DONE 2026-09-21 (cloud lane) —
+      both halves.** The DOC half was already repaired: both stubs now state "THE BASE
+      MUST BE THE `/api` MOUNT … a bare `https://host` appends to `https://host/v1/authorize`,
+      a 404 — and a 404 is a DENY", and `endpoint.rs` carries a unit test
+      (`the_api_mount_is_the_base_and_appending_the_route_reaches_authorize`) proving
+      `https://host/api` + `/v1/authorize` = `https://host/api/v1/authorize`. What was
+      missing was the GATE half this row named. `check-assist-wire-served.mjs` now asserts
+      the served base `/api` agrees across THREE sources — the OpenAPI `servers` url, the
+      api-server router mount (`app.use("/api", router)` in `app.ts:163`), and both SDK
+      stubs documenting the full served path `/api/v1/authorize` — so the drift that made a
+      partner POST to a bare-host 404 (DENY) cannot come back silently. Falsifiable: three
+      new self-test cases drift each source and confirm the gate fires (`--self-test` 19/19,
+      was 15). Already wired in preflight + CI; no `validate()` logic change (Rust/Kotlin
+      compilation is not a cloud-lane gate, and the doc route this row offers is complete).
 - [x] **`/v1/app-workflows/evaluate` — the one route a shipping native client binds —
       has no response schema and omits 401/403 in the spec. 2026-09-01
       (contract-drift sweep, MEDIUM).** iOS decodes `{decision:{outcome,reasonCodes,

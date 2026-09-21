@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-21T17:53:40.260Z",
-  "result": "acted: Mac ticking (16:58Z), live-evidence 1.3d, no owner escalation. Re-mints returned in tick 20260921T163915Z (#960): customer-path provenance sound (59f04e4b) — supersedes #952 (closed); webhooks-proof workingTreeClean=false (two-evidence-per-tick artifact, flagged). Regenerated coverage on #960 (tick had not), pushed additive; preflight+breadth green locally; merging on gating-green. Closed superseded intermediate tick PRs #955/#957/#958/#959."
+  "firedAt": "2026-09-21T21:35:55.949Z",
+  "result": "quiet. Both cloud-addressed Mac review messages already acked this session (PR #970, merging on green); #742 restore-P1 fix pushed (10c5b00e, PR merging on green under DR-037). No new mac/* branches since last cycle (tick treadmill ended — results on Alpha, run-requests skips them). mac-lane-tick firedAt 2026-09-21T21:30:45Z (fresh, quiet). live-evidence 2026-09-20, ~1.3d old. sync manifest v82 6cc9a0ee, no drift. owner NOT escalated."
 }

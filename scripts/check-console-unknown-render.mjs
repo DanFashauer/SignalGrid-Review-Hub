@@ -80,7 +80,7 @@ const STRONG_AFFIRMATIONS = [
   /\bup to date\b/i,
   /\ball healthy\b/i,
   /\ball operational\b/i,
-  /\ball systems\b/i,
+  /\ball systems (are )?(operational|healthy|ok|nominal|online|normal|go|green|up)\b/i,
   /\ball workable\b/i,
   /\ball have a safe path\b/i,
   /\bfully (protected|covered|compliant)\b/i,
@@ -93,6 +93,17 @@ const STRONG_AFFIRMATIONS = [
 const WEAK_CONCLUSIONS = [/\bhealthy\b/i, /\boperational\b/i, /\bnominal\b/i];
 
 const GOOD_CLASS = /\b(emerald|status-allow)\b/;
+
+// User-facing text attributes whose VALUE is read by a person or assistive tech — an
+// affirmation here paints the unknown state good just as rendered text does. Everything
+// else (className, data-*, key, …) is skipped for phrase scanning. (Codex P2.)
+const USER_FACING_ATTRS = new Set([
+  "aria-label", "aria-description", "aria-roledescription", "title", "alt", "label", "placeholder", "tooltip",
+]);
+
+// An identifier that is the MEMBER of a property access (`obj.status`) is not a variable
+// reference — it must never match a same-named tracked var. (Codex P2 false positive.)
+const isMemberName = (id) => ts.isPropertyAccessExpression(id.parent) && id.parent.name === id;
 
 // A negator immediately before an affirmation flips its meaning: "Not all healthy" and
 // "Not all systems are operational" REPORT a bad state, they do not paint an unknown one.
@@ -110,7 +121,9 @@ const STATUS_MEMBERS = new Set([
   "isError", "error", "isLoading", "isPending", "isFetching", "isSuccess", "data", "status", "failureReason",
 ]);
 const QUERY_DESTRUCTURE = new Set([...STATUS_MEMBERS]);
-const ERROR_LOADING = new Set(["isError", "error", "isLoading", "isPending", "isFetching", "failureReason"]);
+const LOADING_MEMBERS = new Set(["isLoading", "isPending", "isFetching"]);
+const ERROR_MEMBERS = new Set(["isError", "error", "failureReason"]);
+const ERROR_LOADING = new Set([...LOADING_MEMBERS, ...ERROR_MEMBERS]);
 const QUERY_HOOK_FAMILY = new Set(["useQuery", "useQueries", "useInfiniteQuery", "useSuspenseQuery"]);
 const HANDLER_ATTR = /^on[A-Z]/;
 
@@ -145,8 +158,29 @@ function analyzeSourceFile(relPath, text) {
   const dataVars = new Set();        // destructured `data`, and vars derived from query data
   const statusVars = new Set();      // destructured isError/error/isLoading/isSuccess/status/... vars
   const errorLoadingVars = new Set(); // the subset that means the query FAILED or is not ready
+  const errorVars = new Set();         // error flags specifically
+  const loadingVars = new Set();       // loading/pending/fetching flags specifically
   let usesQueryHook = false;
-  const noteStatusLocal = (prop, local) => { statusVars.add(local); if (ERROR_LOADING.has(prop)) errorLoadingVars.add(local); };
+  const noteStatusLocal = (prop, local) => {
+    statusVars.add(local);
+    if (ERROR_LOADING.has(prop)) errorLoadingVars.add(local);
+    if (ERROR_MEMBERS.has(prop)) errorVars.add(local);
+    if (LOADING_MEMBERS.has(prop)) loadingVars.add(local);
+  };
+
+  // Query-family hooks by their LOCAL name, resolving `import { useQuery as useRQ }`. A
+  // call spelled with the alias is still a query hook. (Codex P2.)
+  const queryHookLocals = new Set(QUERY_HOOK_FAMILY);
+  const collectImports = (n) => {
+    if (ts.isImportDeclaration(n) && n.importClause && n.importClause.namedBindings && ts.isNamedImports(n.importClause.namedBindings)) {
+      for (const spec of n.importClause.namedBindings.elements) {
+        const imported = (spec.propertyName ?? spec.name).text;
+        if (QUERY_HOOK_FAMILY.has(imported)) queryHookLocals.add(spec.name.text);
+      }
+    }
+    ts.forEachChild(n, collectImports);
+  };
+  collectImports(sf);
 
   // A declaration is a query binding when: the initializer is a query-hook CALL and either
   // it is the useQuery family, or the binding destructures a recognized query field. This
@@ -155,7 +189,7 @@ function analyzeSourceFile(relPath, text) {
     if (!decl.initializer || !ts.isCallExpression(decl.initializer)) return;
     const name = callName(decl.initializer);
     if (!name || !/^use[A-Z]/.test(name)) return;
-    const family = QUERY_HOOK_FAMILY.has(name);
+    const family = queryHookLocals.has(name);
     if (ts.isObjectBindingPattern(decl.name)) {
       const fields = decl.name.elements.map(propOf).filter(Boolean);
       const hasQueryField = fields.some((p) => QUERY_DESTRUCTURE.has(p));
@@ -189,7 +223,7 @@ function analyzeSourceFile(relPath, text) {
     let hit = false;
     const walk = (x) => {
       if (hit || !x) return;
-      if (ts.isIdentifier(x) && (queryObjVars.has(x.text) || dataVars.has(x.text) || statusVars.has(x.text))) { hit = true; return; }
+      if (ts.isIdentifier(x) && !isMemberName(x) && (queryObjVars.has(x.text) || dataVars.has(x.text) || statusVars.has(x.text))) { hit = true; return; }
       if (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression) &&
           queryObjVars.has(x.expression.text) && STATUS_MEMBERS.has(x.name.text)) { hit = true; return; }
       ts.forEachChild(x, walk);
@@ -221,14 +255,13 @@ function analyzeSourceFile(relPath, text) {
     p2(sf);
   }
 
-  // Test polarity: does this conditional test assert data PRESENT, or ABSENT/errored?
-  //   present  → references data/derived/`.data`, not negated, no error/loading term
-  //   absent   → a negation of a data ref, an error/loading term, or a null/undefined test
+  // referencesErrorLoading: subtree mentions an error/loading flag (`isError`, `isLoading`,
+  // …) of the query — a term whose truth means the query failed or is not yet ready.
   const referencesErrorLoading = (n) => {
     let hit = false;
     const walk = (x) => {
       if (hit || !x) return;
-      if (ts.isIdentifier(x) && errorLoadingVars.has(x.text)) { hit = true; return; }
+      if (ts.isIdentifier(x) && !isMemberName(x) && errorLoadingVars.has(x.text)) { hit = true; return; }
       if (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression) &&
           queryObjVars.has(x.expression.text) && ERROR_LOADING.has(x.name.text)) { hit = true; return; }
       ts.forEachChild(x, walk);
@@ -236,42 +269,75 @@ function analyzeSourceFile(relPath, text) {
     walk(n);
     return hit;
   };
-  // Structural, SIGN-AWARE polarity. `!<data>` ⇒ absent; `!<errorTerm>` ⇒ present (NOT
-  // errored); `data !== undefined` ⇒ present; `data === undefined` ⇒ absent. Compound
-  // &&/|| take the shared polarity of their query-referencing operands. Negation of an
-  // error term must FLIP — `!q.isError ? null : <All clear>` paints the conclusion on the
-  // error path, so its test is present-polarity and the marker is in the wrong (false) arm.
-  // (Codex P1.)
-  const invert = (p) => (p === "present" ? "absent" : p === "absent" ? "present" : "unknown");
-  const isNullish = (x) => (ts.isIdentifier(x) && x.text === "undefined") || x.kind === ts.SyntaxKind.NullKeyword;
-  const polarity = (n) => {
-    if (!n) return "unknown";
-    if (ts.isParenthesizedExpression(n)) return polarity(n.expression);
-    if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.ExclamationToken) return invert(polarity(n.operand));
-    if (ts.isBinaryExpression(n)) {
-      const op = n.operatorToken.kind;
-      const K = ts.SyntaxKind;
-      if (op === K.EqualsEqualsEqualsToken || op === K.EqualsEqualsToken || op === K.ExclamationEqualsEqualsToken || op === K.ExclamationEqualsToken) {
-        const qLeft = referencesQueryState(n.left), qRight = referencesQueryState(n.right);
-        if (qLeft || qRight) {
-          const other = qLeft ? n.right : n.left;
-          if (isNullish(other)) return (op === K.ExclamationEqualsEqualsToken || op === K.ExclamationEqualsToken) ? "present" : "absent";
-        }
-        return "unknown";
-      }
-      if (op === K.AmpersandAmpersandToken || op === K.BarBarToken) {
-        const parts = [polarity(n.left), polarity(n.right)].filter((p) => p !== "unknown");
-        if (parts.length === 0) return "unknown";
-        if (parts.every((p) => p === "present")) return "present";
-        if (parts.every((p) => p === "absent")) return "absent";
-        return "unknown";
-      }
-    }
-    if (referencesErrorLoading(n)) return "absent";
-    if (referencesQueryState(n)) return "present";
-    return "unknown";
+  // referencesFlag: subtree references a specific flag kind (error or loading) of the query.
+  const referencesFlag = (n, memberSet, varSet) => {
+    let hit = false;
+    const walk = (x) => {
+      if (hit || !x) return;
+      if (ts.isIdentifier(x) && !isMemberName(x) && varSet.has(x.text)) { hit = true; return; }
+      if (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression) &&
+          queryObjVars.has(x.expression.text) && memberSet.has(x.name.text)) { hit = true; return; }
+      ts.forEachChild(x, walk);
+    };
+    walk(n);
+    return hit;
   };
-  const testPolarity = (testNode) => polarity(testNode);
+  // referencesQueryData: subtree references the query's DATA specifically (a `data`/derived
+  // var, or `queryObj.data`) — NOT an error/loading flag, NOT a bare query object.
+  const referencesQueryData = (n) => {
+    let hit = false;
+    const walk = (x) => {
+      if (hit || !x) return;
+      if (ts.isIdentifier(x) && !isMemberName(x) && dataVars.has(x.text)) { hit = true; return; }
+      if (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression) &&
+          queryObjVars.has(x.expression.text) && x.name.text === "data") { hit = true; return; }
+      ts.forEachChild(x, walk);
+    };
+    walk(n);
+    return hit;
+  };
+  const isNullish = (x) => (ts.isIdentifier(x) && x.text === "undefined") || x.kind === ts.SyntaxKind.NullKeyword;
+  const isDataPresenceAtom = (n) => referencesQueryData(n) && !referencesErrorLoading(n);
+  const isErrorAtom = (n) => referencesErrorLoading(n) && !referencesQueryData(n);
+  const eqNullishDataSide = (n) =>
+    (referencesQueryData(n.left) && isNullish(n.right)) || (referencesQueryData(n.right) && isNullish(n.left));
+
+  // PER-BRANCH boolean model. One polarity per test cannot read `&&`/`||` correctly, and
+  // `!isError` is ALSO true while a query is still pending — so it is never proof of data.
+  // dataPresentWhen(test, branchValue): does `test` evaluating to branchValue GUARANTEE the
+  // data is present? dataAbsentWhen: does it guarantee absent/errored? (Codex P1/P2.)
+  const K = ts.SyntaxKind;
+  const dataPresentWhen = (test, bv) => {
+    if (!test) return false;
+    if (ts.isParenthesizedExpression(test)) return dataPresentWhen(test.expression, bv);
+    if (ts.isPrefixUnaryExpression(test) && test.operator === K.ExclamationToken) return dataPresentWhen(test.operand, !bv);
+    if (ts.isBinaryExpression(test)) {
+      const op = test.operatorToken.kind;
+      if (op === K.AmpersandAmpersandToken) return bv ? (dataPresentWhen(test.left, true) || dataPresentWhen(test.right, true)) : false;
+      if (op === K.BarBarToken) return !bv ? (dataPresentWhen(test.left, false) || dataPresentWhen(test.right, false)) : false;
+      if (op === K.EqualsEqualsEqualsToken || op === K.EqualsEqualsToken) return eqNullishDataSide(test) ? bv === false : false;
+      if (op === K.ExclamationEqualsEqualsToken || op === K.ExclamationEqualsToken) return eqNullishDataSide(test) ? bv === true : false;
+      return false;
+    }
+    if (isDataPresenceAtom(test)) return bv === true;
+    return false;
+  };
+  const dataAbsentWhen = (test, bv) => {
+    if (!test) return false;
+    if (ts.isParenthesizedExpression(test)) return dataAbsentWhen(test.expression, bv);
+    if (ts.isPrefixUnaryExpression(test) && test.operator === K.ExclamationToken) return dataAbsentWhen(test.operand, !bv);
+    if (ts.isBinaryExpression(test)) {
+      const op = test.operatorToken.kind;
+      if (op === K.AmpersandAmpersandToken) return bv ? (dataAbsentWhen(test.left, true) || dataAbsentWhen(test.right, true)) : false;
+      if (op === K.BarBarToken) return !bv ? (dataAbsentWhen(test.left, false) || dataAbsentWhen(test.right, false)) : false;
+      if (op === K.EqualsEqualsEqualsToken || op === K.EqualsEqualsToken) return eqNullishDataSide(test) ? bv === true : false;
+      if (op === K.ExclamationEqualsEqualsToken || op === K.ExclamationEqualsToken) return eqNullishDataSide(test) ? bv === false : false;
+      return false;
+    }
+    if (isDataPresenceAtom(test)) return bv === false;
+    if (isErrorAtom(test)) return bv === true;
+    return false;
+  };
 
   // Is `node` in the present-data branch of some enclosing conditional? (branch-aware)
   const contains = (parent, target) => {
@@ -280,59 +346,78 @@ function analyzeSourceFile(relPath, text) {
     walk(parent);
     return found;
   };
-  // Early-return guard: `if (!q.data) return <Loading/>;` before the successful render. The
-  // later JSX is a SIBLING of the `if`, not nested in it, so the ancestor walk misses it.
-  // A preceding sibling statement that returns when data is absent proves data is present
-  // for everything after it. (Codex P2 — a false positive on a common fail-closed pattern.)
+  // Which guard test governs `node` at this ancestor, and the branch value that reaches it.
+  const branchContaining = (cur, node) => {
+    if (ts.isConditionalExpression(cur)) {
+      if (contains(cur.whenTrue, node)) return { test: cur.condition, bv: true };
+      if (contains(cur.whenFalse, node)) return { test: cur.condition, bv: false };
+    } else if (ts.isIfStatement(cur)) {
+      if (contains(cur.thenStatement, node)) return { test: cur.expression, bv: true };
+      if (cur.elseStatement && contains(cur.elseStatement, node)) return { test: cur.expression, bv: false };
+    } else if (ts.isBinaryExpression(cur) && cur.operatorToken.kind === K.AmpersandAmpersandToken && contains(cur.right, node)) {
+      return { test: cur.left, bv: true };   // right renders when left is truthy
+    } else if (ts.isBinaryExpression(cur) && cur.operatorToken.kind === K.BarBarToken && contains(cur.right, node)) {
+      return { test: cur.left, bv: false };  // right renders when left is falsy
+    }
+    return null;
+  };
+  // flagFalseWhen(test, bv, …): does `test` evaluating to branchValue GUARANTEE a flag of
+  // this kind (error, or loading) is FALSE? Used to recognise the react-query success
+  // pattern `isLoading ? … : isError ? … : <content>` — content is reached only with BOTH
+  // flags false, i.e. data present. (Codex P2 — a false positive on the standard pattern.)
+  const flagFalseWhen = (test, bv, memberSet, varSet) => {
+    if (!test) return false;
+    if (ts.isParenthesizedExpression(test)) return flagFalseWhen(test.expression, bv, memberSet, varSet);
+    if (ts.isPrefixUnaryExpression(test) && test.operator === K.ExclamationToken) return flagFalseWhen(test.operand, !bv, memberSet, varSet);
+    if (ts.isBinaryExpression(test)) {
+      const op = test.operatorToken.kind;
+      if (op === K.AmpersandAmpersandToken) return bv ? (flagFalseWhen(test.left, true, memberSet, varSet) || flagFalseWhen(test.right, true, memberSet, varSet)) : false;
+      if (op === K.BarBarToken) return !bv ? (flagFalseWhen(test.left, false, memberSet, varSet) || flagFalseWhen(test.right, false, memberSet, varSet)) : false;
+      return false;
+    }
+    if (referencesFlag(test, memberSet, varSet) && !referencesQueryData(test)) return bv === false;
+    return false;
+  };
+
   const alwaysReturns = (stmt) => {
     if (!stmt) return false;
     if (ts.isReturnStatement(stmt) || ts.isThrowStatement(stmt)) return true;
     if (ts.isBlock(stmt)) return stmt.statements.some(alwaysReturns);
     return false;
   };
-  const hasDominatingAbsentGuard = (node) => {
-    let cur = node.parent;
+  // Every guard governing `node`: enclosing conditional/if/&&/|| branches, PLUS early-return
+  // guards — `if (cond) return …;` at a preceding sibling means the fall-through is reached
+  // only when cond is FALSE, so it governs `node` with bv=false.
+  const governingBranches = (node) => {
+    const out = [];
+    let cur = node.parent, prev = node;
     while (cur && !ts.isSourceFile(cur)) {
+      const b = branchContaining(cur, node);
+      if (b) out.push(b);
       if (ts.isBlock(cur)) {
         const stmts = cur.statements;
         let idx = -1;
         for (let i = 0; i < stmts.length; i++) { if (contains(stmts[i], node)) { idx = i; break; } }
         for (let i = 0; i < idx; i++) {
           const s = stmts[i];
-          if (ts.isIfStatement(s) && !s.elseStatement && referencesQueryState(s.expression) &&
-              testPolarity(s.expression) === "absent" && alwaysReturns(s.thenStatement)) return true;
+          if (ts.isIfStatement(s) && !s.elseStatement && alwaysReturns(s.thenStatement)) out.push({ test: s.expression, bv: false });
         }
       }
-      cur = cur.parent;
+      prev = cur; cur = cur.parent;
     }
-    return false;
+    return out;
   };
+  // A good render is HANDLED when the guards governing it prove data present — either
+  // directly, or by ruling out BOTH the error and loading flags (react-query: not-error and
+  // not-loading ⇒ data present).
   const isHandled = (node) => {
-    if (hasDominatingAbsentGuard(node)) return true;
-    let cur = node.parent;
-    while (cur && !ts.isSourceFile(cur)) {
-      if (ts.isConditionalExpression(cur) && referencesQueryState(cur.condition)) {
-        const pol = testPolarity(cur.condition);
-        const inTrue = contains(cur.whenTrue, node);
-        const inFalse = contains(cur.whenFalse, node);
-        if (pol === "present" && inTrue) return true;
-        if (pol === "absent" && inFalse) return true;
-      } else if (ts.isBinaryExpression(cur) && cur.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
-                 referencesQueryState(cur.left) && contains(cur.right, node)) {
-        if (testPolarity(cur.left) === "present") return true;
-      } else if (ts.isBinaryExpression(cur) && cur.operatorToken.kind === ts.SyntaxKind.BarBarToken &&
-                 referencesQueryState(cur.left) && contains(cur.right, node)) {
-        if (testPolarity(cur.left) === "absent") return true;
-      } else if (ts.isIfStatement(cur) && referencesQueryState(cur.expression)) {
-        const pol = testPolarity(cur.expression);
-        const inThen = contains(cur.thenStatement, node);
-        const inElse = cur.elseStatement ? contains(cur.elseStatement, node) : false;
-        if (pol === "present" && inThen) return true;
-        if (pol === "absent" && inElse) return true;
-      }
-      cur = cur.parent;
+    let present = false, notError = false, notLoading = false;
+    for (const b of governingBranches(node)) {
+      if (dataPresentWhen(b.test, b.bv)) present = true;
+      if (flagFalseWhen(b.test, b.bv, ERROR_MEMBERS, errorVars)) notError = true;
+      if (flagFalseWhen(b.test, b.bv, LOADING_MEMBERS, loadingVars)) notLoading = true;
     }
-    return false;
+    return present || (notError && notLoading);
   };
 
   // Is `node` in the DATA-ABSENT branch of a query guard — the arm that renders when data
@@ -341,18 +426,8 @@ function analyzeSourceFile(relPath, text) {
   const inAbsentDataBranch = (node) => {
     let cur = node.parent;
     while (cur && !ts.isSourceFile(cur)) {
-      if (ts.isConditionalExpression(cur) && referencesQueryState(cur.condition)) {
-        const pol = testPolarity(cur.condition);
-        if (pol === "present" && contains(cur.whenFalse, node)) return true;
-        if (pol === "absent" && contains(cur.whenTrue, node)) return true;
-      } else if (ts.isBinaryExpression(cur) && cur.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
-                 referencesQueryState(cur.left) && contains(cur.right, node)) {
-        if (testPolarity(cur.left) === "absent") return true;
-      } else if (ts.isIfStatement(cur) && referencesQueryState(cur.expression)) {
-        const pol = testPolarity(cur.expression);
-        if (pol === "present" && cur.elseStatement && contains(cur.elseStatement, node)) return true;
-        if (pol === "absent" && contains(cur.thenStatement, node)) return true;
-      }
+      const b = branchContaining(cur, node);
+      if (b && dataAbsentWhen(b.test, b.bv)) return true;
       cur = cur.parent;
     }
     return false;
@@ -373,17 +448,38 @@ function analyzeSourceFile(relPath, text) {
     }
     return false;
   };
+  // A name that is bound as a PARAMETER of an enclosing function is a prop, not the query's
+  // data — `function Child({ data }) { … }` shares the name but is a distinct binding, so
+  // its render must not be attributed to a query in the same file. (Codex P2 false positive.)
+  const boundAsParamInEnclosingFn = (node) => {
+    const name = ts.isIdentifier(node) ? node.text : null;
+    if (!name) return false;
+    let cur = node.parent;
+    while (cur && !ts.isSourceFile(cur)) {
+      if (ts.isFunctionDeclaration(cur) || ts.isFunctionExpression(cur) || ts.isArrowFunction(cur) || ts.isMethodDeclaration(cur)) {
+        for (const p of cur.parameters) {
+          if (ts.isIdentifier(p.name) && p.name.text === name) return true;
+          if (ts.isObjectBindingPattern(p.name)) {
+            for (const el of p.name.elements) { if (ts.isIdentifier(el.name) && el.name.text === name) return true; }
+          }
+        }
+      }
+      cur = cur.parent;
+    }
+    return false;
+  };
   // Does this element render query data that is not presence-gated? Counts a `.data`
   // member or a derived data var; NOT a bare query-object reference (`q.refetch()`), NOT a
-  // ref in a guard test, and NOT anything inside an event-handler attribute. (Codex P2.)
+  // ref in a guard test, NOT a same-named function parameter, and NOT anything inside an
+  // event-handler attribute. (Codex P2.)
   const elementHasUnguardedDataRender = (jsxElement) => {
     let hit = false;
     const walk = (x) => {
       if (hit || !x) return;
       if (ts.isJsxAttribute(x) && ts.isIdentifier(x.name) && HANDLER_ATTR.test(x.name.text)) return; // skip onClick/onChange/…
       if (ts.isBinaryExpression(x) && x.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
-          referencesQueryState(x.left) && !isHandled(x) && !inGuardTest(x)) { hit = true; return; }
-      if (ts.isIdentifier(x) && dataVars.has(x.text) && !isHandled(x) && !inGuardTest(x)) { hit = true; return; }
+          referencesQueryData(x.left) && !isHandled(x) && !inGuardTest(x)) { hit = true; return; }
+      if (ts.isIdentifier(x) && !isMemberName(x) && dataVars.has(x.text) && !boundAsParamInEnclosingFn(x) && !isHandled(x) && !inGuardTest(x)) { hit = true; return; }
       if (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression) &&
           queryObjVars.has(x.expression.text) && x.name.text === "data" && !isHandled(x) && !inGuardTest(x)) { hit = true; return; }
       ts.forEachChild(x, walk);
@@ -405,12 +501,29 @@ function analyzeSourceFile(relPath, text) {
   };
   const enclosingJsxElement = (node) => {
     let cur = node;
-    while (cur && !ts.isSourceFile(cur)) { if (ts.isJsxElement(cur) || ts.isJsxSelfClosingElement(cur)) return cur; cur = cur.parent; }
+    while (cur && !ts.isSourceFile(cur)) { if (ts.isJsxElement(cur) || ts.isJsxSelfClosingElement(cur) || ts.isJsxFragment(cur)) return cur; cur = cur.parent; }
     return undefined;
   };
 
-  const lines = text.split("\n");
-  const exemptLine = (i0) => /\/\/\s*unknown-ok:/.test(lines[i0] ?? "") || /\/\/\s*unknown-ok:/.test(lines[i0 - 1] ?? "");
+  // Exemptions come from REAL `// unknown-ok: <reason>` comment trivia (never a marker
+  // inside a string literal), and the reason is mandatory — a bare `// unknown-ok:` must
+  // not silently drop a finding from this gate. (Codex P2.)
+  const exemptCommentLines = new Set();
+  {
+    const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.JSX, text);
+    let tok;
+    while ((tok = scanner.scan()) !== ts.SyntaxKind.EndOfFileToken) {
+      if (tok === ts.SyntaxKind.SingleLineCommentTrivia || tok === ts.SyntaxKind.MultiLineCommentTrivia) {
+        const body = text.slice(scanner.getTokenPos(), scanner.getTextPos());
+        if (/unknown-ok:\s*\S/.test(body)) {
+          const ln = sf.getLineAndCharacterOfPosition(scanner.getTokenPos()).line;
+          exemptCommentLines.add(ln);       // trailing comment on the violation line
+          exemptCommentLines.add(ln + 1);   // comment on the line ABOVE the violation
+        }
+      }
+    }
+  }
+  const exemptLine = (i0) => exemptCommentLines.has(i0);
   const posLine = (node) => sf.getLineAndCharacterOfPosition(node.getStart(sf)).line;
   const violations = [];
   const seen = new Set();
@@ -428,18 +541,51 @@ function analyzeSourceFile(relPath, text) {
     return "";
   };
 
-  const inJsxAttribute = (node) => {
+  const enclosingAttrName = (node) => {
     let cur = node.parent;
-    while (cur && !ts.isSourceFile(cur)) { if (ts.isJsxAttribute(cur)) return true; if (ts.isJsxElement(cur) || ts.isJsxSelfClosingElement(cur)) return false; cur = cur.parent; }
+    while (cur && !ts.isSourceFile(cur)) {
+      if (ts.isJsxAttribute(cur)) return ts.isIdentifier(cur.name) ? cur.name.text : "";
+      if (ts.isJsxElement(cur) || ts.isJsxSelfClosingElement(cur)) return null;
+      cur = cur.parent;
+    }
+    return null;
+  };
+  // A string is RENDERED only when it reaches a JSX child expression or attribute value
+  // through render-transparent nodes (ternary arms, `&&`/`||` operands, parens, templates).
+  // A string used as a call argument or comparison operand — `s.status !== 'nominal'`,
+  // `console.log("All clear")` — is NOT rendered. (Codex P2 false positive.)
+  const renderTransparent = (parent, child) => {
+    if (ts.isParenthesizedExpression(parent)) return true;
+    if (ts.isConditionalExpression(parent)) return parent.whenTrue === child || parent.whenFalse === child;
+    if (ts.isBinaryExpression(parent)) {
+      const op = parent.operatorToken.kind;
+      if (op === K.AmpersandAmpersandToken) return parent.right === child;
+      if (op === K.BarBarToken || op === K.QuestionQuestionToken) return parent.left === child || parent.right === child;
+      return false;
+    }
+    if (ts.isTemplateExpression(parent) || ts.isTemplateSpan(parent)) return true;
+    return false;
+  };
+  const isRenderedText = (n) => {
+    if (ts.isJsxText(n)) return true;
+    let child = n, cur = n.parent;
+    while (cur && !ts.isSourceFile(cur)) {
+      if (ts.isJsxExpression(cur) || ts.isJsxAttribute(cur) || ts.isJsxElement(cur) || ts.isJsxSelfClosingElement(cur) || ts.isJsxFragment(cur)) return true;
+      if (!renderTransparent(cur, child)) return false;
+      child = cur; cur = cur.parent;
+    }
     return false;
   };
   const p3 = (n) => {
-    // Phrases in RENDERED text — JSX text, string/template content — but NOT inside an
-    // attribute value (a className CSS token like `bg-signal-nominal` is not prose).
+    // Phrases in RENDERED text — JSX text and string/template content — plus USER-FACING
+    // attribute values (aria-label, title, …). Skip styling attributes (a className CSS
+    // token like `bg-signal-nominal` is not prose), and require the text to be actually
+    // rendered so `console.log("All clear")` and `s.status !== 'nominal'` are ignored.
     if ((ts.isJsxText(n) || ts.isStringLiteralLike(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateExpression(n)) &&
-        !inJsxAttribute(n) && enclosingJsxElement(n)) {
-      // Must be RENDERED JSX: `console.log("All clear")` and non-rendered constants have no
-      // JSX-element ancestor and cannot paint the console. (Codex P2.)
+        isRenderedText(n)) {
+      const attr = enclosingAttrName(n);
+      const scannable = attr === null || USER_FACING_ATTRS.has(attr);
+      if (!scannable) { ts.forEachChild(n, p3); return; }
       const t = textOfNode(n);
       if (t) {
         if (unnegatedMatch(STRONG_AFFIRMATIONS, t) && !isHandled(n)) {
@@ -569,6 +715,74 @@ export function Guarded() {
     </div>
   );
 }`;
+// Round-3 bug shapes (must flag).
+const BUG_PENDING = `
+import { useQuery } from "@tanstack/react-query";
+export function Pending() {
+  const q = useQuery({ queryKey: ["x"], queryFn: fetchThing });
+  return <div>{!q.isError && <span>All clear</span>}</div>;   // isError false while pending
+}`;
+const BUG_COMPOUND = `
+import { useQuery } from "@tanstack/react-query";
+export function Compound({ flag }) {
+  const q = useQuery({ queryKey: ["x"], queryFn: fetchThing });
+  return <div>{(q.data || flag) ? <span>All clear</span> : null}</div>;   // flag can satisfy it
+}`;
+const BUG_FRAGMENT = `
+import { useQuery } from "@tanstack/react-query";
+export function Frag() {
+  const q = useQuery({ queryKey: ["x"], queryFn: fetchThing });
+  return <>All clear</>;
+}`;
+const BUG_ALIAS = `
+import { useQuery as useRQ } from "@tanstack/react-query";
+export function Aliased() {
+  const q = useRQ({ queryKey: ["x"], queryFn: fetchThing });
+  const items = q.data?.items ?? [];
+  return <span className="text-emerald-400">{items.length} up to date</span>;
+}`;
+const BUG_ARIA = `
+import { useQuery } from "@tanstack/react-query";
+export function Aria() {
+  const q = useQuery({ queryKey: ["x"], queryFn: fetchThing });
+  return <span role="status" aria-label="All clear" />;
+}`;
+const BUG_NOREASON = `
+import { useQuery } from "@tanstack/react-query";
+export function NoReason() {
+  const q = useQuery({ queryKey: ["x"], queryFn: fetchThing });
+  return <div>All clear</div>; // unknown-ok:
+}`;
+// Round-3 correct shapes (must NOT flag).
+const OK_NEGATIVE = `
+import { useQuery } from "@tanstack/react-query";
+export function Negative() {
+  const q = useQuery({ queryKey: ["x"], queryFn: fetchThing });
+  return <div><span>All systems are down</span><span>System not healthy</span></div>;
+}`;
+const OK_COMPOUND = `
+import { useQuery } from "@tanstack/react-query";
+export function OkCompound() {
+  const q = useQuery({ queryKey: ["x"], queryFn: fetchThing });
+  const items = q.data?.items ?? [];
+  return <div>{(!q.data || q.isError) ? <div>loading</div> : <span className="text-emerald-400">{items.length} ok</span>}</div>;
+}`;
+const OK_CHILDPROP = `
+import { useQuery } from "@tanstack/react-query";
+export function Parent() {
+  const { data } = useQuery({ queryKey: ["x"], queryFn: fetchThing });
+  if (!data) return null;
+  return <Child data={data} />;
+}
+function Child({ data }) {
+  return <span className="text-emerald-400">{data.length} rows</span>;
+}`;
+const OK_REASON = `
+import { useQuery } from "@tanstack/react-query";
+export function Reasoned() {
+  const q = useQuery({ queryKey: ["x"], queryFn: fetchThing });
+  return <div>All clear</div>; // unknown-ok: static legend, not a live status
+}`;
 
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
@@ -609,6 +823,33 @@ function selfTest() {
   const plain = analyze(NONQUERY, "PLAIN.tsx");
   console.log(`  self-test NON-QUERY.tsx → ${plain.length} violation(s)`);
   if (plain.length !== 0) { ok = false; console.error("  FAIL — a component with no query hook was flagged (useState false positive)"); }
+
+  // Round-3 bug shapes: each must produce at least one finding.
+  const round3Bugs = [
+    ["PENDING (!isError && All clear)", BUG_PENDING],
+    ["COMPOUND ((data||flag) ? All clear)", BUG_COMPOUND],
+    ["FRAGMENT (<>All clear</>)", BUG_FRAGMENT],
+    ["ALIAS (useQuery as useRQ)", BUG_ALIAS],
+    ["ARIA (aria-label='All clear')", BUG_ARIA],
+    ["NO-REASON (// unknown-ok: with no reason)", BUG_NOREASON],
+  ];
+  for (const [label, src] of round3Bugs) {
+    const v = analyze(src, "R3.tsx");
+    console.log(`  self-test R3 ${label} → ${v.length}: ${v.map((x) => x.kind).join(" ")}`);
+    if (v.length === 0) { ok = false; console.error(`  FAIL — round-3 bug not caught: ${label}`); }
+  }
+  // Round-3 correct shapes: each must produce zero findings.
+  const round3Ok = [
+    ["NEGATIVE (All systems are down / not healthy)", OK_NEGATIVE],
+    ["COMPOUND ((!data||isError) ? loading : good)", OK_COMPOUND],
+    ["CHILD-PROP (Child({data}))", OK_CHILDPROP],
+    ["REASON (// unknown-ok: <reason>)", OK_REASON],
+  ];
+  for (const [label, src] of round3Ok) {
+    const v = analyze(src, "R3OK.tsx");
+    console.log(`  self-test R3-OK ${label} → ${v.length} violation(s)`);
+    if (v.length !== 0) { ok = false; console.error(`  FAIL — round-3 false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
+  }
 
   // Plant into a REAL component: drop the `s ?` presence guard on a metric with a static
   // emerald accent, and confirm the gate fires; the unmutated file must stay clean.

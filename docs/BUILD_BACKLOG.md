@@ -1892,11 +1892,14 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       an AST data-flow gate (the first script to use the TypeScript compiler API), not a
       text scan. It collects each `.tsx`'s query-result identifiers (the `useQuery`/
       generated-hook object, the destructured `data`/`isError`/`error`/`isLoading` bindings,
-      and vars DERIVED from query data to a fixpoint), then flags a good-state marker —
-      an `emerald`/`status-allow` class, or an affirmation phrase ("no stale", "all clear",
-      "healthy", "no … found", …) — only when it is NOT enclosed by a conditional whose test
-      references one of those identifiers AND its element renders a query-data value that is
-      not itself presence-gated. The naive version's own false positives were the calibration
+      and vars DERIVED from query data to a fixpoint), then flags a good-state marker that a
+      per-branch boolean model finds is NOT proven to be reached with data present (directly,
+      or by ruling out both the error and loading flags). A STRONG affirmation phrase ("no
+      stale", "all clear", "all systems operational", …) is flagged whenever unhandled; a
+      good-state CLASS (`emerald`/`status-allow`) or a WEAK conclusion word ("healthy",
+      "operational", "nominal") is flagged only when it is chosen by the data-absent branch
+      OR its element also renders a query-data value that is not itself presence-gated. The
+      naive version's own false positives were the calibration
       target: it flagged 17 correct sites (a static emerald category colour over a
       `s ? String(x) : "-"` value, an `accent={s ? "emerald" : x}` ternary the ancestor walk
       missed) — the AST version reports ZERO on the current tree. Exempt a site with

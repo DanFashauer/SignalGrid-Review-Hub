@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-21T04:25:49.588Z",
-  "result": "04:24Z quiet: no new/moved mac/* branch since last cycle; no cloud-addressed mail unread; 2 sim remints still pending (Mac-blocked). Prior cycle's work landed: #929 rounds 9 & 10 pushed (c5ae1ebd..b8209af8, all Codex threads resolved, Codex now out of review budget), heartbeat PRs #939 and #940 merged. Tick firedAt 2026-09-20T02:26Z (~26h down; owner NOT re-escalated - inside 24h, next window 06:25Z 09-21). Live-evidence ~17h fresh. Manifest clean (v82 on Alpha). #929/#936 await owner merge; #753/#758 await owner decision."
+  "firedAt": "2026-09-21T05:25:53.719Z",
+  "result": "05:24Z quiet: no new/moved mac/* branch; no cloud-addressed mail; 2 sim remints still pending (Mac-blocked). #929 (MAM) complete through Codex round 10, all threads resolved, Codex out of review budget; awaits owner merge. #936 awaits owner merge. Heartbeat PRs #939/#940/#941 all merged. Tick firedAt 2026-09-20T02:26Z (~27h down; owner NOT re-escalated - inside 24h, next window 06:25Z 09-21). Live-evidence ~18h fresh. Manifest clean."
 }

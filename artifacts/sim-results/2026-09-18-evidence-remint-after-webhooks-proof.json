@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "requestId": "2026-09-18-evidence-remint-after-webhooks-proof",
+  "completedAt": "2026-09-21T14:37:49.842Z",
+  "provenance": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "nodeVersion": "v24.18.0",
+    "macosVersion": "27.0",
+    "commit": "9c5b35310f52777b467ef083304f30d180ee8d63",
+    "branch": "SignalGrid_Alpha",
+    "workingTreeClean": false
+  },
+  "runs": [
+    {
+      "operation": "evidence",
+      "status": "failed",
+      "exitCode": 1,
+      "durationMs": 786214,
+      "tail": [
+        "  proof:launch-seam — live figures: 3",
+        "  proof:operating-method — live figures: 12, 99",
+        "  proof:evidence-adapter — live figures: 2, 3",
+        "  proof:mobile-app-catalog — live figures: 6",
+        "  proof:lane-messages — live figures: 0, 148, 2",
+        "  proof:remediation-allow — live figures: 4, 40, 6, 8",
+        "  proof:posture-allow — live figures: 4, 52, 6",
+        "",
+        "figures checked in docs: 110 distinct (110 proof×figure pairs)",
+        "NOT checked — out of SCOPE: 279 of 389 comma-formatted figures sit outside any proof-named scope",
+        "NOT checked — out of SHAPE: ~3283 bare measurement-adjacent numbers (FIGURE_RE only matches comma-formatted values >= 1,000)",
+        "NOT checked — QUOTED: 11 figures sit inside backticks (exhibits a document writes down, not claims it makes)",
+        "NOT checked — ATTRIBUTED ELSEWHERE: 77 figures in multi-proof scopes bind to a nearer proof than the one being checked",
+        "  Partial coverage announced every run is a very different thing from partial",
+        "  coverage that looks complete. Widening either filter is tracked work, not a waiver.",
+        "✗ proof:sim-requests — FAILED (exit 1) — figures printed by a failing proof are not measurements.",
+        "",
+        "Figure guard FAILED: 1 problem.",
+        "",
+        "A number presented as a measurement has to still be one. Either re-measure and update",
+        "the doc, or — if the number is a deliberate reference to a past value — write it that",
+        "way (\"was 1,037,232\", \"down from 21,168\"), which is both clearer and recognised here.",
+        "",
+        "",
+        "Preflight FAILED at: Docs↔proof FIGURE guard (a measured number must still be one). Fix before pushing."
+      ]
+    }
+  ]
+}

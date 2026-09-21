@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-21T10:26:24.625Z",
-  "result": "10:24Z quiet: no new/moved mac/* branch; no cloud-addressed mail; 2 sim remints pending (Mac-blocked). Tick firedAt 2026-09-20T02:26Z (~32h down). Owner NOT re-escalated (escalated via push 07:24Z 09-21; next window 07:24Z 09-22). #929 (MAM) and #936 await owner merge. Heartbeat/hygiene PRs #939-#947 merged. Live-evidence fresh; manifest clean."
+  "firedAt": "2026-09-21T11:26:16.511Z",
+  "result": "11:24Z quiet: no new/moved mac/* branch; no cloud-addressed mail; 2 sim remints pending (Mac-blocked). Tick firedAt 2026-09-20T02:26Z (~33h down). Owner NOT re-escalated (escalated via push 07:24Z 09-21; next window 07:24Z 09-22). #929 (MAM) and #936 await owner merge. All lane heartbeat/hygiene PRs merged. Live-evidence fresh; manifest clean."
 }

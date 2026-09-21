@@ -121,8 +121,12 @@ function instantOf(v: unknown): number | null {
 function stringList(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
   const out: string[] = [];
-  for (const item of v) {
-    const t = textOf(item);
+  // Extract BY INDEX, not `for…of`, so a hostile array with an overridden
+  // `Symbol.iterator` (index 0 holds "jailbroken" but the iterator yields nothing)
+  // cannot make the extractor read a DIFFERENT set than `arrayMalformed` validated —
+  // which would let a flagged list normalize to `clean` and grant. (Codex P1.)
+  for (let i = 0; i < v.length; i++) {
+    const t = textOf(v[i]);
     if (t !== null) out.push(t);
   }
   return out;
@@ -323,6 +327,16 @@ export interface AppProtectionConnectorConfig {
   source?: string;
 }
 
+/** Does `appRef` name exactly ONE app, safely, for a transport GET? A fail-closed
+ *  allowlist: a nonblank reverse-DNS-shaped id (starts alphanumeric; only letters,
+ *  digits, dot, dash, underscore after). It rejects "", ".", "..", and anything
+ *  carrying a path/scheme separator or query/fragment char — the shapes that widen an
+ *  authenticated GET beyond one app or redirect it. (Codex P1.) */
+function isDispatchableAppRef(appRef: string): boolean {
+  const s = typeof appRef === "string" ? appRef.trim() : "";
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(s);
+}
+
 /** Read-only connector: fetches one managed-app registration and normalizes it. */
 export class AppProtectionConnector {
   constructor(
@@ -335,6 +349,18 @@ export class AppProtectionConnector {
     opts: AppProtectionNormalizeOptions = {},
   ): Promise<NormalizedAppProtection> {
     guardReadOnly("GET");
+    // Validate the requested reference BEFORE dispatching. A blank, a bare dot-segment
+    // ("." / ".."), or one carrying a path separator does not name one app: sent to the
+    // transport it widens the authenticated GET to the collection URL or the base origin
+    // (`""`/"." → the collection, ".." → the parent). `normalizeAppProtectionReport`
+    // already fails such a reference CLOSED, but only after the call — the outbound
+    // request is the harm, so it must never leave. Refuse before transport. (Codex P1.)
+    if (!isDispatchableAppRef(appRef)) {
+      throw new AppProtectionConnectorError(
+        "invalid_app_ref",
+        `app-protection: refusing to fetch — '${appRef}' does not name a single app`,
+      );
+    }
     const raw = await this.transport({ appRef, token: this.config.accessToken });
     return normalizeAppProtectionReport(appRef, raw, {
       ...opts,

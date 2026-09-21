@@ -472,6 +472,45 @@ try {
 check("the read-only guard refuses any non-GET method — SELECTIVE WIPE and every other write is structurally impossible",
   guardThrew);
 
+// iterator-lie array (Codex P1): a genuine array whose Symbol.iterator is overridden
+// to yield nothing, while index 0 holds "jailbroken". arrayMalformed validates BY INDEX
+// (sees the flag), so `stringList` must extract by index too or the two disagree and a
+// flagged registration reads `clean` and grants. Pinned to the index-extraction fix.
+const iterLie: string[] = ["jailbroken"];
+Object.defineProperty(iterLie, Symbol.iterator, { value: function* () {}, enumerable: false });
+check("a flagged_reasons array whose Symbol.iterator lies (yields nothing) still reads its INDEXED contents → flagged, never a silently-empty clean grant",
+  deriveComplianceState(iterLie) === "flagged");
+
+// fixture transport own-property lookup (Codex P1): an inherited/prototype-polluted
+// entry for the requested appRef must NOT be returned and rebound to an unknown app.
+const inheritedRecords = Object.create({ "com.hospital.epic": clean() }) as Record<string, AppProtectionReportRaw>;
+const inheritMock = createMockAppProtectionTransport({ records: inheritedRecords });
+const inheritRaw = await inheritMock({ appRef: "com.hospital.epic", token: "t" });
+check("the fixture transport returns ONLY own records — an INHERITED entry yields the empty unknown record, never a rebind to a fabricated grant",
+  Object.keys(inheritRaw).length === 0);
+
+// pre-dispatch appRef validation (Codex P1): an invalid reference is refused BEFORE the
+// transport GET, so it can never widen the authenticated request to the collection URL
+// ("" / ".") or the base origin ("..") or traverse ("a/b"). The transport must not fire.
+for (const badRef of ["", "   ", ".", "..", "a/b", "../secret", "com.x/../../etc"]) {
+  let dispatched = false;
+  const spy = async (): Promise<AppProtectionReportRaw> => {
+    dispatched = true;
+    return {};
+  };
+  const guardedConnector = new AppProtectionConnector({ accessToken: "t", baseUrl: "https://x.invalid" }, spy);
+  let code: string | undefined;
+  try {
+    await guardedConnector.fetchNormalized(badRef);
+  } catch (err) {
+    code = err instanceof AppProtectionConnectorError ? err.code : "other";
+  }
+  check(
+    `an invalid appRef ${JSON.stringify(badRef)} is refused BEFORE dispatch (invalid_app_ref) and the transport is never called`,
+    code === "invalid_app_ref" && dispatched === false,
+  );
+}
+
 checkLiveGateIsolated({
   check,
   family: "app-protection",

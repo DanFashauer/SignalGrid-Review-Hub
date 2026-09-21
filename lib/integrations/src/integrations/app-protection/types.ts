@@ -189,7 +189,7 @@ export interface AppProtectionVerdict {
 
 export class AppProtectionConnectorError extends Error {
   constructor(
-    public readonly code: "read_only_violation" | "auth_failed" | "upstream_error" | "bad_response",
+    public readonly code: "read_only_violation" | "auth_failed" | "upstream_error" | "bad_response" | "invalid_app_ref",
     message: string,
     public readonly status?: number,
   ) {

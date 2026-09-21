@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-21T19:26:55.336Z",
-  "result": "quiet: Mac ticking (19:09Z), live-evidence 1.35d, owner not escalated. No new tick-results branches since last cycle — the 2026-09-18 remint churn stopped (both satisfied on Alpha via #960). No new cloud-addressed mail. 10 old stale tick branches remain for Mac to prune; no manifest drift."
+  "firedAt": "2026-09-21T20:49:51.496Z",
+  "result": "acted: closed superseded tick PRs #962/#963/#965 (redundant remint pileup — SignalGrid_Alpha binds all 20 sim-requests, readiness 100%). mac-lane-tick firedAt 2026-09-21T20:25:05Z (fresh, quiet). live-evidence 1 day old, manifest 6cc9a0ee, readiness (b) 100%. owner NOT escalated. no cloud-addressed mail unread."
 }

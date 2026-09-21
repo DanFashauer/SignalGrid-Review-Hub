@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-21T13:26:09.526Z",
-  "result": "13:24Z quiet: no new/moved mac/* branch; no cloud-addressed mail; 2 sim remints pending (Mac-blocked). Tick firedAt 2026-09-20T02:26Z (~35h down). Owner NOT re-escalated (escalated via push 07:24Z 09-21; next window 07:24Z 09-22). #929 (MAM) and #936 await owner merge. All lane heartbeat PRs merged. Live-evidence fresh; manifest clean."
+  "firedAt": "2026-09-21T14:25:09.880Z",
+  "result": "14:24Z acted: MAC IS BACK — tick firedAt 2026-09-21T13:59Z (fresh); owner escalation no longer needed. Handling the Mac's tick-results PR #952 (mac/tick-20260920T024132Z: customer-path evidence remint + live-evidence re-mint): its gating check was red on stale SURFACE_REVIEW_COVERAGE and an EVIDENCE.md prose drift (customer-path still called pending though PASSED) — cloud fixed both (regen coverage on Alpha-merge; dated the record), proof:sim-requests 22/22; CI re-running, will merge when the gating check greens. webhooks-proof remint still queued for the Mac. Forward-build: built check-console-unknown-render (AST fail-closed console G2 gate) as PR #953 (SAFETY_MACHINERY, self-merge under DR-037 when green). #929/#936 await owner merge. No new mac/* branch besides the tick; no cloud-addressed mail unread."
 }

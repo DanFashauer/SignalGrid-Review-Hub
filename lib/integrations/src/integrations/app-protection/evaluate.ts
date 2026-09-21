@@ -200,7 +200,12 @@ function evaluateCoveredReport(report: NormalizedAppProtection): AppProtectionVe
         appProtected: false,
       };
     }
-    if (report.registrationFreshness === "unknown") {
+    // Anything that is not the posed-and-recognized `fresh`/`unassessed` — the posed
+    // `unknown`, or an off-enum value ("bogus"/undefined) on a directly-constructed or
+    // deserialized record — must RAISE: the out-of-scope grant requires a RECOGNIZED
+    // current read, never a default-through of a malformed freshness. `stale` returned
+    // its own code above. (Codex R10-1, mirroring the applicability widening R9-3.)
+    if (report.registrationFreshness !== "fresh" && report.registrationFreshness !== "unassessed") {
       unknownSignals.push("registration_freshness");
       return {
         ...base,
@@ -276,7 +281,10 @@ function evaluateCoveredReport(report: NormalizedAppProtection): AppProtectionVe
   if (report.registrationFreshness === "stale") {
     criticalFindings.push("mam_registration_stale");
     candidates.push({ posture: "app_protection_stale", action: "step_up", reason: "APP_PROTECTION_STALE" });
-  } else if (report.registrationFreshness === "unknown") {
+  } else if (report.registrationFreshness !== "fresh" && report.registrationFreshness !== "unassessed") {
+    // The posed `unknown`, or an off-enum value past the normalizer — raise explicitly
+    // here rather than leaning on the GRANT_BACKSTOP below, which must stay inert. (Codex
+    // R10-1 shape; the not_applicable branch is fixed in kind above.)
     candidates.push({ posture: "app_protection_unverified", action: "step_up", reason: "APP_PROTECTION_TIME_UNKNOWN" });
   }
 

@@ -273,31 +273,39 @@ export function normalizeAppProtectionReport(
   const source = opts.source ?? "app-protection-mam";
   const plain = isPlainReport(report);
   const raw: Record<string, unknown> = {};
+  // Read EACH field in its OWN guard, the array fields FIRST and SNAPSHOTTED at read time.
+  // Two fail-closed reasons, both proven:
+  //  - a throw in one field's getter must NOT erase the fields already read. A valid
+  //    flagged_reasons:["jailbroken"] survives a later THROWING getter (e.g. `platform`),
+  //    so the confirmed flag still reaches the evaluator — the throw raises malformed as
+  //    its own term below, and worst-concern-wins keeps the higher of flag-restrict vs
+  //    malformed-step_up. The single wrapping try this replaces wiped EVERY field on any
+  //    throw, downgrading a confirmed restrict to REPORT_MALFORMED/step_up. (Codex R10-4.)
+  //  - the array snapshot is taken the instant the field is read — BEFORE any later getter
+  //    (platform/source_system/registration_observed_at) can mutate the still-live array to
+  //    empty it and hide a flag; deriveComplianceState/arrayMalformed/stringList then all
+  //    read the SAME detached contents (also defeating a stateful index accessor). The
+  //    arrays are read FIRST so no sibling getter runs before them. An index/snapshot read
+  //    that throws fails CLOSED to malformed via readThrew, never escapes. (Codex R10-2/P1/P2.)
   let readThrew = false;
-  try {
-    if (plain) for (const k of APP_PROTECTION_REPORT_KEYS) raw[k] = ownValue(report, k);
-  } catch {
-    readThrew = true;
-    for (const k of APP_PROTECTION_REPORT_KEYS) raw[k] = undefined;
+  const readField = (k: string): unknown => {
+    if (!plain) return undefined;
+    try { return ownValue(report, k); } catch { readThrew = true; return undefined; }
+  };
+  const readArrayField = (k: string): unknown => {
+    if (!plain) return undefined;
+    try { return snapshotArray(ownValue(report, k)); } catch { readThrew = true; return undefined; }
+  };
+  raw["flagged_reasons"] = readArrayField("flagged_reasons");
+  raw["applied_policies"] = readArrayField("applied_policies");
+  for (const k of APP_PROTECTION_REPORT_KEYS) {
+    if (k === "flagged_reasons" || k === "applied_policies") continue;
+    raw[k] = readField(k);
   }
 
   const policyState = oneOf<MamPolicyState>(raw["policy_state"], POLICY_STATES, "unknown");
-  // Snapshot the array fields ONCE (see snapshotArray) so every consumer below —
-  // deriveComplianceState, arrayMalformed, stringList — reads the SAME contents and a
-  // stateful index accessor cannot make them disagree. (Codex P1.) The index reads can
-  // THROW (a hostile getter), and this runs after the field-read try above, so it is
-  // guarded here too: a throwing snapshot fails CLOSED to malformed, never escapes. (Codex P2.)
-  let flaggedList: unknown;
-  let policiesList: unknown;
-  let snapshotThrew = false;
-  try {
-    flaggedList = snapshotArray(raw["flagged_reasons"]);
-    policiesList = snapshotArray(raw["applied_policies"]);
-  } catch {
-    snapshotThrew = true;
-    flaggedList = undefined;
-    policiesList = undefined;
-  }
+  const flaggedList = raw["flagged_reasons"];
+  const policiesList = raw["applied_policies"];
   const complianceState = deriveComplianceState(flaggedList);
 
   const observedRaw = raw["registration_observed_at"];
@@ -333,7 +341,6 @@ export function normalizeAppProtectionReport(
 
   const malformed =
     readThrew ||
-    snapshotThrew ||
     !plain ||
     instantShapeBad ||
     requestAppRefBlank ||

@@ -300,9 +300,9 @@ const lengthTrap = new Proxy(["jailbroken"], {
   get(t, p, r) { return p === "length" ? 0 : Reflect.get(t, p, r); },
 });
 // policy_state=not_applied with EMPTY applied_policies so `appliedWithoutPolicies` does
-// NOT fire on the snapshot's undefined policiesList — `snapshotThrew` is then the SOLE
-// cause of the malformed verdict, which pins that term (mutating it to `false` flips this
-// fixture to clean and this check dies).
+// NOT fire on the throw's undefined flaggedList — `readThrew` (the array field's read
+// guard, which snapshots at read time) is then the SOLE cause of the malformed verdict,
+// which pins that term (mutating it to `false` flips this fixture to clean and this check dies).
 const lengthTrapNorm = normalizeAppProtectionReport(
   APP,
   { policy_state: "not_applied", applied_policies: [], flagged_reasons: lengthTrap as unknown as string[], registration_observed_at: FRESH, platform: "ios", source_system: "intune" },
@@ -340,6 +340,48 @@ const offEnumApplicability = evaluateAppProtection({ ...cleanNormalized, mamAppl
 check("an OFF-ENUM mamApplicability (\"bogus\") on an otherwise-granting report → step_up (APPLICABILITY_UNKNOWN), never a default-through grant — the raise widened beyond the literal \"unknown\"",
   offEnumApplicability.recommendedAction === "step_up" && offEnumApplicability.reasonCode === "APPLICABILITY_UNKNOWN" &&
   offEnumApplicability.appProtected === false && offEnumApplicability.unknownSignals.includes("mam_applicability"));
+
+// off-enum registrationFreshness (Codex round-10): the normalizer folds an unrecognized
+// freshness to "unknown", so — as with applicability — the reachable case is a
+// directly-constructed/deserialized record. In the NOT_APPLICABLE branch an off-enum
+// freshness matched neither the `stale` nor the `unknown` literal and fell through to the
+// out-of-scope grant; it must raise.
+const naOffEnumFreshness = evaluateAppProtection({ ...cleanNormalized, mamApplicability: "not_applicable", registrationFreshness: "bogus" as NormalizedAppProtection["registrationFreshness"] });
+check("a NOT_APPLICABLE report with an OFF-ENUM registrationFreshness (\"bogus\") → step_up (APP_PROTECTION_TIME_UNKNOWN), never a default-through out-of-scope grant",
+  naOffEnumFreshness.recommendedAction === "step_up" && naOffEnumFreshness.reasonCode === "APP_PROTECTION_TIME_UNKNOWN" && naOffEnumFreshness.appProtected === false);
+// the same off-enum freshness on the APPLICABLE/covered path must raise EXPLICITLY (its
+// own TIME_UNKNOWN candidate), not lean on GRANT_BACKSTOP — which must stay inert.
+const coveredOffEnumFreshness = evaluateAppProtection({ ...cleanNormalized, registrationFreshness: "bogus" as NormalizedAppProtection["registrationFreshness"] });
+check("an applicable/covered report with OFF-ENUM freshness → step_up (APP_PROTECTION_TIME_UNKNOWN), raised explicitly so GRANT_BACKSTOP stays inert",
+  coveredOffEnumFreshness.recommendedAction === "step_up" && coveredOffEnumFreshness.reasonCode === "APP_PROTECTION_TIME_UNKNOWN");
+
+// a LATER getter that EMPTIES the flagged array (Codex round-10): flagged_reasons is a
+// valid ["jailbroken"] when read, but a later recognized getter (platform) empties the
+// still-live array. Snapshotting at read time captures the flag before platform runs, so
+// the concealed jailbroken flag survives instead of normalizing to a clean (empty) grant.
+const emptyingReport = { policy_state: "not_applied", applied_policies: [], flagged_reasons: ["jailbroken"], registration_observed_at: FRESH, source_system: "intune" } as AppProtectionReportRaw;
+Object.defineProperty(emptyingReport, "platform", {
+  enumerable: true, configurable: true,
+  get() { (emptyingReport.flagged_reasons as string[]).length = 0; return "ios"; },
+});
+const emptyingNorm = normalizeAppProtectionReport(APP, emptyingReport, { appSensitivity: "sensitive", mamApplicability: "not_applicable", source: "mut" });
+check("a flagged_reasons emptied by a LATER getter (platform) is snapshotted at read time → the jailbroken flag survives → restrict, never a clean grant",
+  emptyingNorm.complianceState === "flagged" && evaluateAppProtection(emptyingNorm).recommendedAction === "restrict");
+
+// a THROWING later getter (Codex round-10): flagged_reasons is a valid ["jailbroken"] but
+// a later own-field getter (platform) throws. Per-field reads mean the throw raises
+// malformed WITHOUT erasing the already-read flag, so worst-concern-wins keeps the
+// confirmed restrict rather than downgrading it to REPORT_MALFORMED/step_up.
+const throwingPlatformReport = { policy_state: "not_applied", applied_policies: [], flagged_reasons: ["jailbroken"], registration_observed_at: FRESH, source_system: "intune" } as AppProtectionReportRaw;
+Object.defineProperty(throwingPlatformReport, "platform", {
+  enumerable: true, configurable: true,
+  get() { throw new Error("hostile platform getter"); },
+});
+const throwingPlatformNorm = normalizeAppProtectionReport(APP, throwingPlatformReport, { appSensitivity: "sensitive", mamApplicability: "not_applicable", source: "mut" });
+const throwingPlatformVerdict = evaluateAppProtection(throwingPlatformNorm);
+check("a THROWING later getter (platform) raises malformed but does NOT erase a confirmed flag → restrict (MAM_FLAGGED_SENSITIVE_APP), never downgraded to REPORT_MALFORMED/step_up",
+  throwingPlatformNorm.reportIntegrity === "malformed" && throwingPlatformNorm.complianceState === "flagged" &&
+  throwingPlatformVerdict.recommendedAction === "restrict" && throwingPlatformVerdict.reasonCode === "MAM_FLAGGED_SENSITIVE_APP");
 
 // blank REQUESTED appRef (Codex P1): the requested binding must itself name an app. A
 // blank/whitespace appRef with a source that OMITS its optional app_ref would otherwise

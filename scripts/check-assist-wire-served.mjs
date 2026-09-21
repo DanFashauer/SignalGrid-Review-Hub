@@ -32,6 +32,17 @@ const NO_OBLIGATIONS_SENTENCE = /declares no `obligations` field/;
 const GAP_ID = "assist-wire-unserved";
 const ROUTE_SHAPE = /^\/v1\/[a-z-]+(?:\/[a-z-]+)*$/;
 
+// The served base. The api-server mounts its whole router under this prefix, and the
+// OpenAPI `servers` url is the same string, so the route a partner must POST to is
+// MOUNT + boundRoute (e.g. `/api/v1/authorize`). The SDK stubs must document that full
+// path: a caller who appends the bare `/v1/authorize` to the host reaches a path the
+// server does not serve, gets an HTML 404, and AssistWire reads a 404 as DENY — the trap
+// iOS hit at DecisionService.swift:74 (BUILD_BACKLOG contract-drift sweep, 2026-09-01).
+const APP = "artifacts/api-server/src/app.ts";
+const MOUNT = "/api";
+const SERVER_URL_LINE = /^\s*-\s*url:\s*\/api\s*$/m;          // OpenAPI servers: - url: /api
+const ROUTER_MOUNT = /app\.use\(\s*["']\/api["']\s*,\s*router\s*\)/; // app.use("/api", router)
+
 /**
  * Does the spec's `AssistResult` declare an `obligations` property?
  *
@@ -46,7 +57,7 @@ export function specDeclaresObligations(specYaml) {
   return /^\s{8}obligations:/m.test(m[2]);
 }
 
-export function auditAssistWire({ vectorsJson, specYaml, gapsSrc, kotlinSrc, rustSrc, readmeSrcs = {} }) {
+export function auditAssistWire({ vectorsJson, specYaml, gapsSrc, kotlinSrc, rustSrc, appSrc = "", readmeSrcs = {} }) {
   const problems = [];
   let vectors;
   try {
@@ -72,6 +83,24 @@ export function auditAssistWire({ vectorsJson, specYaml, gapsSrc, kotlinSrc, rus
   for (const [name, src] of [["Kotlin GateEndpoint.kt", kotlinSrc], ["Rust endpoint.rs", rustSrc]]) {
     if (!src.includes(boundRoute)) {
       problems.push(`${name} never mentions ${boundRoute} — its documentation drifted from the shared vectors' bound route`);
+    }
+  }
+  // SERVED BASE: the partner POSTs to MOUNT + boundRoute, not to boundRoute on a bare
+  // host. Three sources must agree on the `/api` mount, or the SDK path guidance points
+  // at a path the server does not serve (a 404 that AssistWire reads as DENY):
+  //   · the OpenAPI `servers` url is the mount;
+  //   · the api-server actually mounts its router there;
+  //   · both SDK stubs document the FULL served path MOUNT + boundRoute.
+  const fullServedPath = `${MOUNT}${boundRoute}`; // e.g. /api/v1/authorize
+  if (!SERVER_URL_LINE.test(specYaml)) {
+    problems.push(`${SPEC} no longer declares \`- url: ${MOUNT}\` under servers — a partner reads the served base from here, and dropping it makes the SDK "append ${boundRoute}" guidance resolve to a path the server does not serve`);
+  }
+  if (!ROUTER_MOUNT.test(appSrc)) {
+    problems.push(`${APP} no longer mounts the router at \`${MOUNT}\` (\`app.use("${MOUNT}", router)\`) — the served base moved, so the spec servers and the SDK path guidance now name a prefix the server does not serve`);
+  }
+  for (const [name, src] of [["Kotlin GateEndpoint.kt", kotlinSrc], ["Rust endpoint.rs", rustSrc]]) {
+    if (!src.includes(fullServedPath)) {
+      problems.push(`${name} does not document the full served path \`${fullServedPath}\` — it must tell callers the \`${MOUNT}\` mount is the base, or a partner appends \`${boundRoute}\` to a bare host, gets a 404, and AssistWire denies (the trap iOS hit at DecisionService.swift:74)`);
     }
   }
   const served = specYaml.includes(`${boundRoute}:`);
@@ -122,6 +151,7 @@ function load() {
     gapsSrc: readFileSync(GAPS_FILE, "utf8"),
     kotlinSrc: readFileSync(KOTLIN, "utf8"),
     rustSrc: readFileSync(RUST, "utf8"),
+    appSrc: readFileSync(APP, "utf8"),
     readmeSrcs: Object.fromEntries(READMES.map((f) => [f, readFileSync(f, "utf8")])),
   };
 }
@@ -204,6 +234,16 @@ function selfTest() {
     r = auditAssistWire({ ...base, specYaml: base.specYaml.replace("    AssistResult:", "    AssistResultRenamed:") });
     checks.push(["an AssistResult block this check cannot FIND is fatal, never silent agreement", r.problems.some((x) => x.includes("anchor drifted"))]);
   }
+
+  // SERVED BASE (`/api` mount), all three sources. The committed tree agrees; each source
+  // is drifted against the real files so the exact partner-facing 404/DENY trap is caught.
+  checks.push(["the committed spec declares `- url: /api` and app.ts mounts the router there (premise for the three cases below)", SERVER_URL_LINE.test(base.specYaml) && ROUTER_MOUNT.test(base.appSrc)]);
+  r = auditAssistWire({ ...base, specYaml: base.specYaml.replace("- url: /api", "- url: /") });
+  checks.push(["the OpenAPI servers dropping the `/api` base FAILS", r.problems.some((x) => x.includes("under servers"))]);
+  r = auditAssistWire({ ...base, appSrc: base.appSrc.replace('app.use("/api", router)', 'app.use("/", router)') });
+  checks.push(["the api-server moving the router off `/api` FAILS", r.problems.some((x) => x.includes("no longer mounts the router"))]);
+  r = auditAssistWire({ ...base, kotlinSrc: base.kotlinSrc.replaceAll("/api/v1/authorize", "/v1/authorize") });
+  checks.push(["an SDK stub dropping the full `/api/v1/authorize` served-path doc FAILS", r.problems.some((x) => x.includes("full served path"))]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);

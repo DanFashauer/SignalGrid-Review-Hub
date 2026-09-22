@@ -322,6 +322,56 @@ check("signature age: ...while a finite non-negative age is preserved, 0 include
   check("...and a readable posed bound still grades fresh signatures protected (not over-tight)", fresh.posture === "protected");
 }
 
+// THE SIGHTING, which nothing read until 2026-09-18. `lastSeen` was normalized off the
+// vendor record and consulted by NO evaluator, so an endpoint whose agent last checked
+// in years ago — still claiming installed, running, real-time protection on, fresh
+// signatures — graded `protected` / action `none`. The record was not wrong; it was
+// OLD, and nothing here could tell the difference.
+//
+// The evaluator reads no clock (golden rule 2), so the reference instant is POSED. Four
+// things are asserted: a fresh sighting still grants; a stale one raises; an
+// absent/unparseable/future one raises the same way (unknown must never resolve
+// downward); and an UNPOSED instant leaves the verdict exactly as it was, saying
+// `ungraded` rather than pretending the endpoint was seen.
+{
+  const NOW = Date.parse("2026-07-20T12:00:00.000Z");
+  const healthy = (lastSeen: string | undefined) => normalizeEndpoint({
+    deviceId: "ep-seen", agentInstalled: true, agentRunning: true, realtimeProtection: true,
+    signatureAgeHours: 1, threats: [], ...(lastSeen === undefined ? {} : { lastSeen }),
+  });
+
+  const fresh = evaluateThreatPosture(healthy("2026-07-20T11:00:00.000Z"), { nowMs: NOW });
+  check("last seen: an endpoint seen an hour ago still grades protected (the assertions below are not over-tight)",
+    fresh.posture === "protected" && fresh.recommendedAction === "none" && fresh.lastSeenFreshness === "fresh");
+
+  const stale = evaluateThreatPosture(healthy("2019-01-01T00:00:00.000Z"), { nowMs: NOW });
+  check("last seen: an otherwise-perfect endpoint last seen in 2019 is NOT protected — a report we cannot date is one we cannot rely on",
+    stale.posture === "degraded_protection" && stale.recommendedAction === "step_up" && stale.reasonCode === "ENDPOINT_NOT_RECENTLY_SEEN");
+  check("last seen: ...and the verdict says the sighting is stale", stale.lastSeenFreshness === "stale");
+
+  for (const [label, seen] of [["absent", undefined], ["unparseable", "not-a-date"], ["future-dated", "2030-01-01T00:00:00.000Z"]] as const) {
+    const v = evaluateThreatPosture(healthy(seen), { nowMs: NOW });
+    check(`last seen: an ${label} sighting RAISES (unknown never resolves downward)`,
+      v.recommendedAction === "step_up" && v.reasonCode === "ENDPOINT_NOT_RECENTLY_SEEN" && v.lastSeenFreshness === "unknown");
+  }
+
+  const ungraded = evaluateThreatPosture(healthy("2019-01-01T00:00:00.000Z"));
+  check("last seen: with NO reference instant posed the sighting is UNGRADED, not silently fresh — the caller did not ask, so no concern is invented",
+    ungraded.posture === "protected" && ungraded.lastSeenFreshness === "ungraded");
+
+  // A real active threat still outranks a stale sighting — the ladder, not the order.
+  const compromisedAndStale = evaluateThreatPosture({
+    ...healthy("2019-01-01T00:00:00.000Z"),
+    threats: [{ threatId: "t", name: "n", severity: "critical", remediationState: "active", category: null, detectedAt: null, active: true }],
+  }, { nowMs: NOW });
+  check("last seen: a critical active threat still outranks a stale sighting (escalate, not step_up)",
+    compromisedAndStale.recommendedAction === "escalate");
+
+  // The BOUND is posed too, and a garbled one must raise like an unreadable sighting.
+  const garbled = evaluateThreatPosture(healthy("2026-07-20T11:00:00.000Z"), { nowMs: NOW, staleLastSeenHours: Number.NaN });
+  check("last seen: a garbled staleLastSeenHours raises — stale, never fresh", garbled.lastSeenFreshness === "stale");
+}
+
 const total = passed + failures.length;
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

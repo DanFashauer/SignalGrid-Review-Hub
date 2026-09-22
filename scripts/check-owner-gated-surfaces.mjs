@@ -75,8 +75,17 @@ export const DECISION_PATH = [
 function normalizePath(f) {
   let x = String(f).replace(/\\/g, "/"); // backslash -> forward slash
   x = x.replace(/^\.\//, "");             // strip leading ./
-  x = x.replace(/^[ab]\//, "");            // strip a git a/ or b/ diff prefix
   return x;
+}
+
+/** Both readings of a path: as given, and with a git a//b/ diff prefix removed. classifyDiff
+ *  tests BOTH and takes any match — fail-closed in both directions. A blind prefix strip
+ *  would mangle a legitimate top-level directory literally named `a` or `b`; matching only
+ *  the raw form would let `a/scripts/x.mjs` hide from the manifest. */
+function pathForms(f) {
+  const n = normalizePath(f);
+  const stripped = n.replace(/^[ab]\//, "");
+  return stripped === n ? [n] : [n, stripped];
 }
 
 /**
@@ -88,10 +97,12 @@ function normalizePath(f) {
 export function classifyDiff(files) {
   const matched = [];
   for (const raw of files) {
-    const f = normalizePath(raw);
-    for (const p of DECISION_PATH) if (p.re.test(f)) matched.push({ file: f, category: "DECISION_PATH", rule: p.rule });
-    for (const p of SAFETY_MACHINERY) if (p.re.test(f)) matched.push({ file: f, category: "SAFETY_MACHINERY", rule: p.rule });
-    for (const p of OWNER_RESERVED) if (p.re.test(f)) matched.push({ file: f, category: "OWNER_RESERVED", rule: p.rule });
+    const forms = pathForms(raw);
+    const hit = (p) => forms.some((f) => p.re.test(f));
+    const f = forms[0];
+    for (const p of DECISION_PATH) if (hit(p)) matched.push({ file: f, category: "DECISION_PATH", rule: p.rule });
+    for (const p of SAFETY_MACHINERY) if (hit(p)) matched.push({ file: f, category: "SAFETY_MACHINERY", rule: p.rule });
+    for (const p of OWNER_RESERVED) if (hit(p)) matched.push({ file: f, category: "OWNER_RESERVED", rule: p.rule });
   }
   return { tier: matched.length ? "owner-gated" : "autonomous", matched };
 }

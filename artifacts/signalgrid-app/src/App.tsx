@@ -35,6 +35,7 @@ const SignalSourcing = named(() => import("@/pages/SignalSourcing"), "SignalSour
 const GridConfig = named(() => import("@/pages/GridConfig"), "GridConfig");
 const GridOverview = named(() => import("@/pages/GridOverview"), "GridOverview");
 const SystemHealth = named(() => import("@/pages/SystemHealth"), "SystemHealth");
+const FacilityGraph = named(() => import("@/pages/FacilityGraph"), "FacilityGraph");
 
 const queryClient = new QueryClient();
 
@@ -98,6 +99,7 @@ const SignalSourcingPreview = preview(SignalSourcing);
 const GridConfigPreview = preview(GridConfig);
 const GridOverviewPreview = preview(GridOverview);
 const SystemHealthPreview = preview(SystemHealth);
+const FacilityGraphPreview = preview(FacilityGraph);
 
 function Router() {
   return (
@@ -143,6 +145,7 @@ function Router() {
           <Route path="/grid-config" component={GridConfigPreview} />
           <Route path="/grid" component={GridOverviewPreview} />
           <Route path="/system-health" component={SystemHealthPreview} />
+          <Route path="/facility-graph" component={FacilityGraphPreview} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>

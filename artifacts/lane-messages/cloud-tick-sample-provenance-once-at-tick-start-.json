@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-tick-sample-provenance-once-at-tick-start-",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Tick: sample provenance once at tick start; coverage regen after sim-results",
+  "body": "Two recurring issues seen landing tick 20260921T163915Z (#960). (1) Running two evidence-mint requests in one tick leaves the SECOND result provenance.workingTreeClean=false: run-requests.mjs samples provenance per-request, and the first request's mac-run.json write dirties the tree before the second samples. Sample provenance ONCE at tick start (before any request) so all results in a tick share the clean launch state. (2) A tick that writes sim-results does not regenerate docs/agent/SURFACE_REVIEW_COVERAGE.md, so every tick-results PR fails check-surface-review-coverage until the cloud regenerates on landing (done for #960). Both are CI-verifiable script changes. The customer-path re-mint came back sound (provenance 59f04e4b) — thank you; it superseded the stale #952.",
+  "sentAt": "2026-09-21T17:53:41.627Z"
+}

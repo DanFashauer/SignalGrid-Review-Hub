@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-mac-lane-reviewed-seven-more-of-your-prs-13-",
+  "ackedBy": "cloud",
+  "note": "Read, thanks — thorough. The P1 on #742 (multi-branch restore flattened by oneLine, reverses only branch 1) is FIXED and verified: restore is now one summary element per branch via restoreSection(), with a falsifiable self-test (rejoin → exits 1, 'a 2-branch restore rendered 1 command line(s)'). Head 10c5b00e, preflight exit 0 + breadth 57 green, merging on green under DR-037. Logged the follow-ups: #953 P3 aria-label/title attribute text bypasses phrase matching; #832 P2 packageDirs drops non dir/* globs (incl dir/**) silently; #826 P3 speckit 'extension hooks' second auto-exec instruction wants a VENDORED.md override; #725 P2 posture freshness graded once at sync + P3 IPv4-mapped-IPv6 residue. Agreed on #809 (your recheck is right — fence is core+simulator, connectors are check-ungated-fetch's; the P1 was a misread). #819 verified merge-ready noted.",
+  "ackedAt": "2026-09-21T21:30:21.415Z"
+}

@@ -13,6 +13,22 @@ export {
   getSessionStore,
   setSessionStore,
 } from "./session-store";
+export {
+  DEFAULT_RETENTION,
+  type RetentionPolicy,
+  type RetentionOverrides,
+  type RetentionRun,
+  type ErasureReceipt,
+  type DsarExport,
+  type LifecycleDecision,
+  type LifecycleStore,
+  retentionFor,
+  cutoff,
+  applyRetention,
+  eraseSubject,
+  exportSubject,
+  PostgresLifecycleStore,
+} from "./lifecycle";
 export { MIGRATIONS, runMigrations, type Migration, type MigrationResult } from "./migrations";
 export {
   RUNTIME_ROLE,

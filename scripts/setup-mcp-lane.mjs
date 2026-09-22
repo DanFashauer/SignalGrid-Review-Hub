@@ -17,7 +17,7 @@
 //   · Never writes a secret to a tracked file. It only READS env vars and shells
 //     out to `claude mcp add`; no key is printed, committed, or stored here.
 //   · USER scope for every registration — never the repo's committed .mcp.json.
-//   · PINNED clients where a version exists (Context7 4.0.4, Firecrawl 3.24.0,
+//   · PINNED clients where a version exists (Context7 4.1.1, Firecrawl 3.24.0,
 //     Neural Memory at its pinned commit).
 //   · SKIPS CLEANLY — a missing `claude`/`uv` CLI or a missing API key is a
 //     WARNING and a skip, never a hard failure, exactly like mac-kickoff.sh step 4.
@@ -30,6 +30,14 @@
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+
+// The pin lives in ONE place. install-context7.mjs registers on import, so the
+// literal is read from its source rather than imported (a second copy here said
+// 4.0.4 while the installer had moved — found 2026-09-19).
+const CONTEXT7_PINNED = /export const PINNED = "([^"]+)"/.exec(
+  readFileSync(new URL("./install-context7.mjs", import.meta.url), "utf8"),
+)?.[1] ?? "(pin not found in install-context7.mjs)";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const has = (bin) => spawnSync(bin, ["--version"], { stdio: "ignore" }).status === 0;
@@ -63,7 +71,7 @@ if (!claude) {
   warn("no `claude` CLI; not registered.");
   results.skipped.push("context7 (no claude CLI)");
 } else if (runInstaller("scripts/install-context7.mjs")) {
-  ok("Context7 registered (pinned @upstash/context7-mcp@4.0.4).");
+  ok(`Context7 registered (pinned ${CONTEXT7_PINNED}).`);
   results.registered.push("context7");
 } else {
   bad("Context7 registration failed — see the output above.");

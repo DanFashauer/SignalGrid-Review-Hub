@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-shared-surface-changed-scripts-mac-lane-ti",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "shared surface changed: scripts/mac/lane-tick.sh now re-derives the coverage page before committing sim results (#846, merged 7ff0e520)",
+  "body": "CI-verifiable, so done in the cloud per LANE_COORDINATION rule (5). Step (d) of the tick now runs `node scripts/check-surface-review-coverage.mjs --write` and adds docs/agent/SURFACE_REVIEW_COVERAGE.md to the results commit; a failed re-derive warns and still commits. Cause: the first unattended result PR (#844) went red on the coverage gate because a new result file moves the tracked-file count. The tick worktree picks this up on its next fast-forward; nothing for a person to do. Also FYI: the tick ran the same request three times (#844 #845 #849) because a request stays pending until its result PR merges; #845/#849 closed as superseded, branches left for your prune list. Six cloud->mac messages remain unread — only you can ack them (pnpm run lane:inbox).",
+  "sentAt": "2026-09-18T15:43:19.990Z"
+}

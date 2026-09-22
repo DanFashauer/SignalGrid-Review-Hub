@@ -58,14 +58,14 @@ Every figure in this section is published by `proof:launch-profile` and checked 
 docs↔proof figure guard on each run — stated here, beside the numbers, because scope
 is per-section and a proof named three sections away checks nothing.
 
-`scripts/launch-profile.mjs` classifies **180 classified items** across **4 profile
+`scripts/launch-profile.mjs` classifies **184 classified items** across **4 profile
 surfaces** — connector families, signal kinds, published API paths, and client/app
 surfaces. Every item carries exactly one status:
 
 | Status | Count | Meaning |
 |---|---|---|
-| `launch` | **23 launch items** | In the Limited GA surface. |
-| `deferred` | **134 deferred items** | Real, gated, proven, staying in the repository — not Limited GA. |
+| `launch` | **28 launch items** | In the Limited GA surface. |
+| `deferred` | **133 deferred items** | Real, gated, proven, staying in the repository — not Limited GA. |
 | `demo_only` | **8 demo-only items** | Exists to demonstrate or explain. Must never be presented as shipping product. |
 | `internal` | **15 internal items** | Harness, generator or evidence plumbing. Not a product surface at all. |
 
@@ -146,7 +146,14 @@ and only a future decision record re-opens one.
 
 ## The gaps — read these before reading the launch set as readiness
 
-There are **4 declared gaps**: work a `launch` entry needs that does not exist yet.
+There are **2 declared gaps**: work a `launch` entry needs that does not exist yet.
+(It read **4** on the morning of 2026-09-18. Two were CLOSED rather than reworded:
+`step-up-answerability`, because the gate's `step_up` verdict now has a launch route
+that answers it — `POST /v1/decisions/{id}/step-up`, a verified WebAuthn assertion
+bound to one decision — and `runtime-launch-status`, because `GET /v1/launch-status`
+now reports enforced-vs-observed-vs-simulated per signal family from the connectors
+the core holds. Both `closedWhen` conditions are met in code, which is the only way
+this list ever loses an entry.)
 They are held as data in `GAPS`, not as prose, so the proof can count them and no
 document can quietly describe the launch set as complete — and since 2026-09-02
 `check-launch-profile.mjs` fails the build when this number and `GAPS.length`

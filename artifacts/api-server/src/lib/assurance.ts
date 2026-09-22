@@ -35,9 +35,9 @@ export interface AssurancePosture {
   /** Can any route this deployment serves answer a `step_up`? Derived from the
    *  ROUTES THE RUNNING APP ACTUALLY MOUNTED, then passed through the same fence
    *  a request would meet, so it tracks what is served rather than a second
-   *  opinion about it. False under the gateway profile: Limited GA ships in
-   *  SHADOW mode, the gate can return `step_up`, and nothing served can resolve
-   *  one. Stated so "returns step_up" is never read as "performs step-up". */
+   *  opinion about it. It asks about the ANSWER specifically — a mounted
+   *  enrollment or challenge route resolves nothing on its own — so the field
+   *  keeps meaning "performs step-up", not "returns step_up". */
   stepUpAnswerable: boolean;
 }
 
@@ -103,10 +103,21 @@ export function mountedRoutes(servedApp: unknown): MountedRoute[] {
  * capability the process did not have, and the assertion pinning it passed either
  * way. Unknown answers `false`: claiming less capability than you have is the only
  * safe direction for a posture field.
+ *
+ * It matches a POST whose path ENDS in `/step-up` — the route that carries a
+ * completed challenge back — and deliberately not every path under `/v1/step-up`.
+ * Enrolling a credential and minting a challenge are both prerequisites that resolve
+ * nothing by themselves, and a deployment serving only those would have reported a
+ * capability it did not have. That distinction is the whole content of the field.
  */
+const ANSWERS_A_STEP_UP = /\/step-up$/;
+
 function stepUpAnswerable(servedApp: unknown): boolean {
   return mountedRoutes(servedApp).some(
-    (r) => r.path.startsWith("/v1/step-up") && (demoSurfacesEnabled() || routeServedByGateway(r.method, r.path)),
+    (r) =>
+      r.method === "POST" &&
+      ANSWERS_A_STEP_UP.test(r.path) &&
+      (demoSurfacesEnabled() || routeServedByGateway(r.method, r.path)),
   );
 }
 

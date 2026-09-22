@@ -7,6 +7,7 @@ import { OutcomeBadge } from "@/components/StatusBadge";
 import { AssuranceBadge } from "@/components/AssuranceBadge";
 import { formatDate } from "@/lib/format";
 import { listPoliciesV1, listPolicyVersionsV1, runPolicyTestsV1 } from "@/lib/v1";
+import { policyTestSetStatus } from "@/lib/policyTests";
 
 /**
  * "What decided this" (launch wireframe screen 5): one policy's versioned rule
@@ -111,9 +112,24 @@ export function PolicyDetail() {
               <CardTitle className="text-sm font-mono uppercase tracking-wider text-muted-foreground">
                 Policy tests against v{current?.version ?? "…"}{" "}
                 {tests.data ? (
-                  <Badge variant="outline" className={`ml-2 font-mono text-[10px] uppercase border-transparent ${tests.data.passed ? "bg-status-allow" : "bg-status-deny"}`}>
-                    {tests.data.results.filter((r) => r.passed).length}/{tests.data.results.length} {tests.data.passed ? "passed" : "FAILING"}
-                  </Badge>
+                  (() => {
+                    const status = policyTestSetStatus(tests.data.results);
+                    const label =
+                      status === "empty"
+                        ? "no tests pinned"
+                        : `${tests.data.results.filter((r) => r.passed).length}/${tests.data.results.length} ${status === "passed" ? "passed" : "FAILING"}`;
+                    return (
+                      <Badge
+                        variant="outline"
+                        className={`ml-2 font-mono text-[10px] uppercase border-transparent ${
+                          status === "passed" ? "bg-status-allow" : status === "failing" ? "bg-status-deny" : "bg-signal-unknown"
+                        }`}
+                        title={status === "empty" ? "This version has zero pinned tests — nothing ran, so this is not a pass." : undefined}
+                      >
+                        {label}
+                      </Badge>
+                    );
+                  })()
                 ) : tests.isError ? (
                   <Badge
                     variant="outline"

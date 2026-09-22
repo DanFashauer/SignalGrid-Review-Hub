@@ -11,7 +11,8 @@ import {
   HeartPulse,
   Radio,
   FileCode,
-  LayoutGrid
+  LayoutGrid,
+  Network
 } from "lucide-react";
 import {
   Sidebar,
@@ -90,6 +91,7 @@ const GRID_NAV: NavEntry[] = [
   { href: "/signal-sourcing", label: "Signal sourcing", icon: Radio, match: "/signal-sourcing" },
   { href: "/grid-config", label: "Grid config", icon: FileCode, match: "/grid-config" },
   { href: "/system-health", label: "System health", icon: Activity, match: "/system-health" },
+  { href: "/facility-graph", label: "Facility graph", icon: Network, match: "/facility-graph" },
 ];
 
 function NavSection({ entries, location }: { entries: NavEntry[]; location: string }) {

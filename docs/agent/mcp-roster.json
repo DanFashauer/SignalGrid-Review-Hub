@@ -1,8 +1,31 @@
 {
-  "$comment": "Third-party MCP servers evaluated BY USE for SignalGrid (docs/agent/RESOURCE_INTAKE.md rules). Every entry was cloned at the pinned sha, read for what it reads/writes/sends/hooks, built, and probed over stdio with every socket denied. None runs in this repository's sessions (.mcp.json carries only signalgrid-mcp) and none may enter the decision path: they are aids for the Mac lane's live-lane rehearsal, added to a PERSON'S user-level MCP config by hand, never to a hook. Measured 2026-09-18 on the cloud lane.",
+  "$comment": "Third-party MCP servers evaluated BY USE for SignalGrid (docs/agent/RESOURCE_INTAKE.md rules). Every entry was cloned at the pinned sha, read for what it reads/writes/sends/hooks, built, and probed over stdio with every socket denied. None runs from this repository's .mcp.json (it carries only signalgrid-mcp) and none may enter the decision path. The four live-lane servers are aids for the Mac lane's rehearsal, added to a PERSON'S user-level MCP config by hand, never to a hook; context7 is the one exception in kind — a dev-docs aid both lanes register at user scope through `pnpm run mcp:setup` (scripts/install-context7.mjs), still never .mcp.json and never a hook. Measured 2026-09-18 on the cloud lane; context7 row measured 2026-09-19 on the Mac.",
   "measuredAt": "2026-09-18",
   "landing": "Documented, registered by hand at USER scope on the machine that needs it (`claude mcp add … --scope user`), the same way the parity doc treats GitHub; never .mcp.json, never a hook, never the decision path. No installer script: an automated registration into a session config was refused by the harness on 2026-09-18, and the manual command is one line.",
   "servers": [
+    {
+      "id": "context7",
+      "upstream": "https://github.com/upstash/context7",
+      "sha": "12db78ea043954de047277960fda7e1d28f1d420",
+      "license": "MIT",
+      "language": "typescript",
+      "packageName": "@upstash/context7-mcp",
+      "packageVersion": "4.1.1",
+      "packageShasum": "c19d746c5c8b3341dd57a24174e7f3a597e05003",
+      "matches": "dependency work on both lanes — current library docs before a version or API change (signalgrid-master, Supply chain and dependencies)",
+      "reads": "nothing on disk; the library name, pinned version and question the agent sends",
+      "writes": "nothing on disk",
+      "network": "context7.com over HTTPS, keyless (CONTEXT7_API_KEY optional, never set here); a failed or 429 fetch is returned as an error string, the tool never throws (packages/mcp/src/lib/api.ts)",
+      "hooks": "none",
+      "build": "npm i @upstash/context7-mcp@4.1.1, prebuilt dist; boots in under 1 s",
+      "tools": 2,
+      "readOnlyTools": 2,
+      "mutatingTools": 0,
+      "offline": "boots and lists both tools (resolve-library-id, query-docs; readOnlyHint true on each) with sockets denied via sandbox-exec; identical to the online run",
+      "disposition": "adopted",
+      "reason": "keyless, read-only, pinned; the only doc-lookup both lanes share. Unreachable means 'docs not checked', never a loosened claim — the skill line says so.",
+      "config": "pnpm run mcp:setup  (runs scripts/install-context7.mjs: claude mcp add context7 --scope user -- npx -y @upstash/context7-mcp@4.1.1)"
+    },
     {
       "id": "wazuh",
       "upstream": "https://github.com/gbrigandi/mcp-server-wazuh",

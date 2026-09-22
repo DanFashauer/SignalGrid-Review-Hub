@@ -41,7 +41,7 @@ cloud and Mac, writing no secret to any tracked file:
 
 | Server | How `pnpm run mcp:setup` handles it | Env key the lane supplies |
 | --- | --- | --- |
-| Context7 | Registers `scripts/install-context7.mjs` — pinned `@upstash/context7-mcp@4.0.4`, user scope, keyless | none (keyless) |
+| Context7 | Registers `scripts/install-context7.mjs` — pinned `@upstash/context7-mcp@4.1.1`, user scope, keyless | none (keyless) |
 | Neural Memory | Runs `scripts/install-neural-memory.mjs` when `uv` + `claude` are present; skips cleanly otherwise (DR-026) | `NEURALMEMORY_DIR` (a path, not a secret; defaults to `~/.neuralmemory`, must be outside the repo) |
 | Firecrawl | Runs `scripts/install-firecrawl.mjs` when `FIRECRAWL_API_KEY` is set; skips cleanly otherwise (DR-022) | `FIRECRAWL_API_KEY` (secret) |
 | GitHub | **Documented, not auto-registered** — the correct command depends on the transport (hosted HTTP vs a local server image), and guessing wrong is worse than documenting | `GITHUB_PERSONAL_ACCESS_TOKEN` (secret) |

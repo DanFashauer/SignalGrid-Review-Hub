@@ -46,7 +46,13 @@ const corsOptions: CorsOptions = {
   // here, a browser console on an allowed cross-origin deployment with
   // SIGNALGRID_ENROLLMENT_SECRET set would have every correctly-authorized enrollment
   // request blocked at CORS preflight, before the server-side check could even run.
-  allowedHeaders: ["authorization", "content-type", "x-request-id", "x-enrollment-authorization"],
+  // idempotency-key: the same defect as the line above, one header along. The server
+  // READS it (middlewares/idempotency.ts) and lib/api-spec/v1-openapi.yaml DOCUMENTS it as
+  // the opt-in exactly-once mechanism for POST /v1 — but it was absent here, so a browser
+  // on an allowed cross-origin deployment had every retry-safe POST rejected at preflight,
+  // before a single line of the idempotency middleware could run. The documented safe way
+  // to retry was the one way that could not be used from a browser.
+  allowedHeaders: ["authorization", "content-type", "x-request-id", "x-enrollment-authorization", "idempotency-key"],
   maxAge: 600,
 };
 

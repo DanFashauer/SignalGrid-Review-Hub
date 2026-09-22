@@ -41,8 +41,34 @@ import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const FAMILY_DIR = join(repo, "lib/integrations/src/integrations");
 
-/** A success return that hard-codes a numeric status — the defect. */
-const FABRICATED = /return\s*\{[^}]*\bhealthy:\s*true\b[^}]*\bstatus:\s*(\d+)/;
+/**
+ * A success return that hard-codes a numeric status — the defect.
+ *
+ * ORDER-INDEPENDENT, and it has to be. The original was a single regex requiring
+ * `healthy: true` to appear BEFORE `status:`, so the same defect written the other way
+ * round — `return { status: 200, healthy: true }` — walked straight past a gate whose
+ * whole job is to catch it. Object literal key order carries no meaning in JavaScript, so
+ * a detector that depends on it is reading something the language does not promise.
+ *
+ * Scoped to ONE return object by construction (`[^}]*` cannot cross a `}`), so it can
+ * never pair a `healthy` in one return with a `status` in the next. It now walks EVERY
+ * return in the file rather than stopping at the first match, which is strictly wider:
+ * an honest early return no longer hides a fabricated later one.
+ */
+const RETURN_OBJECT = /return\s*\{([^}]*)\}/g;
+const HEALTHY_TRUE = /\bhealthy:\s*true\b/;
+const STATUS_LITERAL = /\bstatus:\s*(\d+)\b/;
+
+/** @returns {string|null} the fabricated status code, or null when the source is honest. */
+function fabricatedStatusIn(src) {
+  for (const m of src.matchAll(RETURN_OBJECT)) {
+    const body = m[1];
+    if (!HEALTHY_TRUE.test(body)) continue;
+    const hit = body.match(STATUS_LITERAL);
+    if (hit) return hit[1];
+  }
+  return null;
+}
 /**
  * A status read off an HTTP response, which is a measurement rather than a claim.
  *
@@ -89,8 +115,8 @@ function main() {
   for (const path of files) {
     const src = stripComments(readFileSync(path, "utf8"));
     const rel = path.slice(repo.length + 1);
-    const m = src.match(FABRICATED);
-    if (m) offenders.push({ rel, status: m[1] });
+    const fabricated = fabricatedStatusIn(src);
+    if (fabricated !== null) offenders.push({ rel, status: fabricated });
     if (OBSERVED.test(src)) observedCount += 1;
   }
 
@@ -147,19 +173,40 @@ function selfTest() {
   const controls = [
     {
       name: "a hard-coded success status is caught",
-      run: () => FABRICATED.test("return { healthy: true, status: 200 };"),
+      run: () => fabricatedStatusIn("return { healthy: true, status: 200 };") === "200",
     },
     {
       name: "…at any status number, not just 200",
-      run: () => FABRICATED.test("return { healthy: true, status: 204 };"),
+      run: () => fabricatedStatusIn("return { healthy: true, status: 204 };") === "204",
+    },
+    {
+      // THE DEFECT THIS DETECTOR WAS REWRITTEN FOR. The original regex required
+      // `healthy: true` to appear BEFORE `status:`, so this — the same claim, the same
+      // invented 200, written with the keys the other way round — passed the gate.
+      // Object key order means nothing in JavaScript; a detector that depends on it is
+      // reading a promise the language does not make.
+      name: "…and with the keys REVERSED, which the order-dependent detector let through",
+      run: () => fabricatedStatusIn("return { status: 200, healthy: true };") === "200",
+    },
+    {
+      // Scoping control: `[^}]*` cannot cross a `}`, so an honest return and a separate
+      // fabricated-looking one must not be paired into a false positive.
+      name: "a healthy return and a LATER unrelated status object are not paired",
+      run: () => fabricatedStatusIn("return { healthy: true, status: null };\nreturn { status: 200 };") === null,
+    },
+    {
+      // Widening control: the original stopped at the first match, so an honest early
+      // return hid a fabricated later one. Every return is now walked.
+      name: "a fabricated LATER return is caught behind an honest earlier one",
+      run: () => fabricatedStatusIn("return { healthy: true, status: null };\nreturn { healthy: true, status: 201 };") === "201",
     },
     {
       name: "a null success status is NOT flagged (the honest form)",
-      run: () => !FABRICATED.test("return { healthy: true, status: null };"),
+      run: () => fabricatedStatusIn("return { healthy: true, status: null };") === null,
     },
     {
       name: "a FAILURE path with a real number is not flagged (the error carries one)",
-      run: () => !FABRICATED.test("return { healthy: false, status: 401 };"),
+      run: () => fabricatedStatusIn("return { healthy: false, status: 401 };") === null,
     },
     {
       name: "a status read off a response counts as observed",
@@ -184,7 +231,7 @@ function selfTest() {
     },
     {
       name: "comments are stripped, so prose about status: 200 is not a finding",
-      run: () => !FABRICATED.test(stripComments("// return { healthy: true, status: 200 };")),
+      run: () => fabricatedStatusIn(stripComments("// return { healthy: true, status: 200 };")) === null,
     },
     {
       name: "the scan finds connector files at all (an empty sweep would pass vacuously)",

@@ -3164,3 +3164,88 @@ e32bb885: docs/LAUNCH_PROFILE.md 4;scripts/launch-profile.mjs 1;
 ✓ live-sync manifest matches the repo (version 82, fingerprint 6cc9a0eef68e5ca0…)
 ```
 Verdict: **holds as a record of what happened, and what happened includes five DR-037 exceptions (one to condition 2, four to the owner-gated clause) — eight merged, eight gating runs green on the exact merged heads, the final manifest is version 82 at fingerprint 6cc9a0eef68e5ca0, and the fingerprint-bearing mail went to the Mac AFTER the last landing (PR #910, lane/cloud-mail-20260920-074042Z; the queued re-mint work is the two 2026-09-18 request files, `2026-09-18-evidence-remint-after-customer-path` and `2026-09-18-evidence-remint-after-webhooks-proof`, and #910 asks for no run of its own).** The owner's 2026-09-20 direction was "Merge the eight open PRs … you don't have to wait for me"; the authority is DR-037's, conditional on the five conditions in `.claude/skills/landing-under-dr-037/SKILL.md`, and each landing was checked against them on the head named above before `merge_pull_request` was called with that head's full 40-character sha. Order: #854 → #869 (stacked) → #860 → #863 → #864 → #866 → #868 → #888, mainline merged INTO each branch in a scratch worktree, `pnpm install --frozen-lockfile` after the merge (the DR-052 branch's typecheck had resolved a foreign copy of `@workspace/signalgrid-core` from a pre-merge install), the manifest and the coverage page regenerated on a clean index on top of the previous landing, then `node scripts/preflight.mjs` and `pnpm run verify:breadth` on the merged tree on ONE shared port, serially. Read the Output per landing. What the tree-visible evidence PROVES: each worktree's HEAD became the pushed sha at the reflog instant shown and never moved again, so the chain in that worktree ran on exactly the tree that was pushed and merged. What it ATTESTS but cannot prove from timestamps alone: the order "local pass, then push". The breadth log write precedes CI start by 20–30 seconds in every compliant case, and CI starts seconds after a push, so a pass between push and CI start would have needed the push to land in that gap; the session transcript (not in the tree) shows each push command issued after the status file read `done`, and this entry says "attested" for that ordering rather than "proven". For seven of the eight the breadth log was written BEFORE CI started on the pushed head (estate2 01:50:58Z vs 01:51:23Z; customer2 02:22:18Z vs 02:22:38Z; native6 03:18:05Z vs 03:18:23Z; cascade6 04:54:58Z vs 04:55:20Z; docs6 05:45:35Z vs 05:46:06Z; apisec4 06:19:05Z vs 06:19:31Z; appwf5 07:21:14Z vs 07:21:49Z), each chain in the worktree that holds that PR's branch; for #863, gates7 was written at 04:15:59Z, AFTER CI started on 6c197072 at 03:49:05Z — the exception below. A chain that failed leaves neither pass line, and a chain name is reused with a suffix per rerun, so the name alone proves nothing; the write instant against the CI start does. What the chains caught was again derived state, not code: the core-normalization version (21 on mainline + a branch bump → 22, derived by its generator), proof counts 148 → 152 in four documents, the launch-profile totals 184/28/133, the Postman request count and the method+path pair count (both gated by their own scripts, so not restated here), the 39-route pin in the API integration test, a claim-inventory ratchet fall recorded with `--write` (evidence fragments absent 3 → 2), two dead `SWEEP_EXEMPT` entries in `scripts/check-derived-doc-figures.mjs` that absorbed zero hits after the merge, and a LOOP.md sentence ("DR-020 for row") that the proof-figures noun regex read as a matrixRows figure. Refusal-coverage findings closed on the way: 401/429 on both step-up routes and the revoke route, 400/401/409/429 on `GET /v1/launch-status`, and the 403 the core's `authorize(principal, "decision:evaluate")` throws on `/v1/app-workflows/evaluate` (#888, after its Codex finding). **One DR-037 condition-2 EXCEPTION, for #863 — recorded here and in its merge record, not excused:** a stale `chain-gates5.status` file from 03:09Z still read `done` when the next runner started, and #863's push at 6c197072 fired BEFORE its own chain (gates6) had finished; gates6 then failed on e2e ports held by two `vite preview` servers a killed concurrent chain had left behind, and the clean rerun gates7 passed on the same tree. Condition 2 requires the local pass BEFORE the push that produced the reviewed head; for #863 it came after, so that landing did not meet the condition. It was merged on a head whose CI gate had passed and whose local suites passed on the identical tree afterwards, and this entry records it as the violation it is rather than as a late pass. **Four exceptions to DR-037's OWNER-GATED clause, found by Codex on PR #911 after the fact and verified against the merged diffs above.** The clause is the paragraph "What stays owner-gated" in `docs/DECISION_RECORDS.md` under DR-037 — the lane still does not "merge anything that changes the launch profile, the launch-claims gate or the publication boundary (DR-021 §2 — those remain the owner's)". It is NOT the record's numbered condition 5, which governs approval and whose PRs the lane may merge; `.claude/skills/landing-under-dr-037/SKILL.md` folds both into its own item 5, which is why the first two drafts of this entry miscited the clause (Codex, PR #913). Four of the eight merged diffs contain such a change — #854 (21221b1a: `scripts/launch-profile.mjs`), #869 (93da3e28: `LAUNCH_PROFILE_VERSION` 5 → 7, two GAP rows removed as met-in-code, routes moved from deferred to launch, `docs/LAUNCH_PROFILE.md`), #864 (5df039f7: a new `third_party_intake` area for `third_party/apple-device-management` in `scripts/publication-boundary.mjs`) and #866 (e32bb885: `/v1/step-up/enroll/revoke` classified in `scripts/launch-profile.mjs`). The lane did not check those four diffs for the protected files before merging; it checked #888 and #905 (and refused #905 on exactly this ground). The merges were made on the owner's explicit direction of 2026-09-20 naming these eight PRs — "Merge the eight open PRs … you don't have to wait for me you can do this yourself" — which is the owner exercising the authority the owner-gated clause reserves to the owner, but through the lane's hands and without the per-change decision the condition exists to force. So each is recorded here as an exception to the owner-gated clause, not as compliance. Who performed the merges: GitHub records `merged_by=DanFashauer` on all eight (`gh api …/pulls/N --jq .merged_by.login`) because the lane acts with the owner's credential; every merge call was made by the cloud lane's session (`session_01D3GJ2Fs8sVppPgzuJdnNLn`), not by the owner's hand, on the owner's written direction. The owner decisions those diffs embody are still owed a decision record: the LAUNCH_PROFILE_VERSION bump and the two GAP removals (#869), the revoke-route classification (#866), the third-party intake area (#864). They are listed in LOOP.md NEXT ACTION (4). Going forward the lane greps every candidate merge for `launch-profile`, `check-launch-claims`, `publication-boundary` and `LAUNCH_PROFILE` before the merge call, as it did for #888 and #905. The runner template now truncates its own status file at start, and a stopped chain's `vite preview`/playwright processes are swept by `/proc/PID/cwd` before the next one starts. **Two detector gaps found, filed as backlog rows in this commit:** (1) `pnpm run loop:state` and the stop hook report `claude/build-native-ios` and `claude/video-intake-beat-timeline` as "not on the hub" although #860 and #900 squash-landed them and GitHub removed the remote branches — the detector's content check (`hasLandedByContent`) needs every changed file to byte-match some mainline blob, but a squash lands the PR's MERGE tree, so `docs/BUILD_BACKLOG.md`, which mainline also moved, never matches (measured: one file per branch, history depth 111); the row names a LOCAL proof that closes it (the whole-branch patch-id against each commit in bounded mainline history) — never a live GitHub call from the hook or from `loop:state`, which AGENTS.md forbids; an operator may confirm a landing against GitHub by hand, outside the automatic path; the same row records a third shape found while this entry was being corrected — a branch whose same-named remote exists is dropped from the seam by name at `scripts/loop-state.mjs:242`, so a local tip one commit ahead of its remote is named by nothing; (2) — STRUCK before landing. The first draft of this entry, of the #910 mail and of a backlog row said `scripts/mac/run-requests.mjs` had no deferral or supersession field. The tree refutes it: `scripts/mac/run-requests.mjs:200` honours `supersededBy` with a reciprocal `supersedes` check, and `scripts/check-sim-requests.mjs` audits the link with self-tests. The sentence was written without `pnpm run check:absence` — the exact failure that rule exists for — and Codex caught it on PR #911. The row is removed; what remains true is that no third request is wanted: the two pending 2026-09-18 requests run `evidence` against the checkout at run time and so re-mint against v82, and #910 names the fingerprint their result must carry. The Mac tick has been silent since 2026-09-20T02:26:17Z (owner escalated once, 06:25Z, with `bash scripts/mac/install-launchd.sh --status`); until it runs, `liveEvidence=stale` and readiness dimension (b) reads 0 by design.
+
+---
+
+## 2026-09-21 — check-console-unknown-render landed (#953, squash 59f04e4b) under DR-037
+
+The G2 "unknown-as-good-state" gate the 2026-09-02 console fix batch left spec-only
+(BUILD_BACKLOG, "a deterministic version could not be built at acceptable precision") is
+built and merged: `scripts/check-console-unknown-render.mjs`, an AST data-flow gate (the
+first script on the TypeScript compiler API), registered in `scripts/preflight.mjs` and
+`.github/workflows/review-hub-ci.yml` (preflight↔CI parity green). It flags a good-state
+render — an `emerald`/`status-allow` class, a strong affirmation phrase, or a weak
+conclusion word decorating query data — that a **per-branch boolean guard model** cannot
+prove is reached with data present. `dataPresentWhen`/`dataAbsentWhen`/`flagFalseWhen` read
+`&&`/`||` per branch; `!isError` is never proof of data (it is also true while pending); the
+react-query success pattern `isLoading ? _ : isError ? _ : content` is recognised by ruling
+out BOTH flags; early-return guards fold into the same fact set.
+
+Command:
+```
+node scripts/check-console-unknown-render.mjs
+node scripts/check-console-unknown-render.mjs --self-test
+node scripts/preflight.mjs
+pnpm run verify:breadth
+git ls-remote origin refs/heads/SignalGrid_Alpha   # after the squash merge
+```
+
+Output:
+```
+✓ console unknown-render: no positive conclusion renders on unguarded query data.  (0 on the tree)
+self-test → BUG.tsx 7, ABSENT-CLASS 1, NEG-ERROR 1, USEQUERIES 2, OK 0, OK-GUARDS 0,
+  NON-QUERY 0, R3 PENDING/COMPOUND/FRAGMENT/ALIAS/ARIA/NO-REASON each ≥1,
+  R3-OK NEGATIVE/COMPOUND/CHILD-PROP/REASON each 0, PLANT (real SignalSourcing.tsx,
+  presence guard removed) 1 — SELFTEST_EXIT=0
+Preflight PASSED — everything it runs is green.  (PF7_EXIT=0)
+Breadth lane PASSED — 57 breadth proofs green.  (VB7_EXIT=0)
+59f04e4b44fea0dfd3194f96074c03831b6879d7  refs/heads/SignalGrid_Alpha
+```
+CI gating check "Typecheck, build, and proof scaffold" was green on c95165e6 before the merge.
+
+Twenty-five Codex findings across three adversarial rounds, every one verified firsthand and
+either FIXED with a plant→red self-test or DEFERRED as a documented conservative under-flag.
+Round 1 (8): branch polarity, useState mis-detection, destructure propagation, template
+affirmations, standalone healthy/operational, refetch/control refs — fixed; per-query
+provenance and const-class — deferred. Round 2 (7): early-return guards, non-JSX phrases,
+negated phrases (false positives), `!isError`-error-path and absent-branch class (P1 false
+negatives), useQueries array — fixed; cross-component provenance — deferred. Round 3 (10):
+the member-name collision (`v.status` vs a same-named var `status`, which was the sole real
+false positive on the live tree, at PolicyDetail.tsx:73), the react-query success pattern,
+rendered-text detection (`s.status !== 'nominal'` is a comparison operand, not rendered),
+`All systems are down`, pending `!isError`, compound `||`, import aliases, JSX fragments,
+user-facing attributes, and the `// unknown-ok:` exemption (now real trivia + mandatory
+reason) — all fixed; plus the BUILD_BACKLOG wording and a coverage read record for the new
+script (page regenerated by its tool, 103 read / 0 partial / 0 not read). Two limitations
+remain deferred and documented (they UNDER-flag, never over): per-query provenance including
+cross-component extraction, and const-class resolution.
+
+Merged under DR-037 as SAFETY_MACHINERY (`scripts/**`, `.github/workflows/**`): the five
+conditions were met on head c95165e6 — gating check green on that head, preflight + breadth
+green locally before the push that produced it, all 25 threads resolved, no conflict with
+SignalGrid_Alpha, and no launch-profile / launch-claims / publication-boundary file in the
+diff. The owner was asked directly whether a self-authored gate should be self-merged or
+routed to them, and confirmed self-merge under DR-037 is the standing rule for gate PRs.
+`merge_pull_request` was called with the full 40-character head sha; GitHub records
+`merged_by=DanFashauer` (the lane acts with the owner's credential); the merge call was made
+by the cloud lane's session `session_01D3GJ2Fs8sVppPgzuJdnNLn`. The live-sync manifest is
+unchanged (version 82, fingerprint 6cc9a0eef68e5ca0…) — a new gate script is not a
+cross-surface contract, so no manifest move and no re-mint request follows this landing.
+
+Same cycle, recorded for completeness: #954 (steward heartbeat) merged (37757d7c). #956 (a
+cloud→Mac re-mint lane mail) WITHDRAWN as redundant — Codex showed the request has no result
+on SignalGrid_Alpha, so it is pending and `lane-tick.sh` re-mints it unattended, and that the
+provenance mismatch is a mid-run checkout/clock change (`run-requests.mjs` samples provenance
+immediately before the op), not enqueue-time sampling as first stated. As of 2026-09-21, #952
+(Mac tick sim-results) is HELD: `provenance.commit` 0e2d370f carries manifest fingerprint
+998718c8 but the result attests 6cc9a0ee (introduced later by 9018a8bc), so the named commit
+cannot reproduce it; the Mac lane is asked to re-mint the
+`2026-09-18-evidence-remint-after-customer-path` request from a stable checkout, and that
+Codex thread stays open until a fresh tick lands with matching provenance.
+
+Verdict: **the console fail-closed gate is live on mainline, precise enough to be mandatory
+(zero on the tree, no known false positive after three adversarial rounds), and its self-test
+proves it can fail.** The two deferred limitations are the honest ceiling: they miss some
+cross-query and const-class shapes, which the widened doctrine review still covers, and the
+`// unknown-ok: <reason>` escape hatch handles any residual false positive without weakening
+the gate for everyone.

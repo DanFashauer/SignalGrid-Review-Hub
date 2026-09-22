@@ -964,6 +964,35 @@ item below is a design target until its proof is green and named.
 
 ## Owner-gated (needs a decision before an agent builds it)
 
+- [ ] **OWNER DECISION — adopt an on-premises inference runtime (AirLLM or a peer), or decline it.**
+      Raised 2026-09-17 when the owner pointed at `github.com/lyogavin/airllm` and said it
+      should be part of the system. What it provides that this repository needs is real and
+      specific: **inference inside the building with no data egress, on modest hardware** —
+      a 70B model on ~4 GB of VRAM by streaming layers from disk. That is the constraint
+      that actually binds in the regulated verticals SignalGrid targets.
+      **The decision path is already fenced off and that part is done** —
+      `scripts/check-decision-path-purity.mjs` (preflight + CI) proves no verdict is
+      fetched, spawned or sampled, so adopting a runtime cannot quietly reach the core.
+      **What needs the owner, per the DR-020 rule DR-021 leaves standing:** a new inference
+      platform is a decision record before it is a dependency. The three questions a DR
+      would have to answer, none of which the README does: (a) WHICH surface — an
+      explanation/Assist path or offline evidence summarisation, never a verdict; (b) at
+      what LATENCY — **ANSWERED 2026-09-17, by the Mac lane RUNNING it rather than reading
+      it** (`mac/intake-airllm`, PR #801): `TinyLlama-1.1B` produced 20 tokens in 207.1 s
+      and again in 205.7 s = **0.1 tok/s**, while `qwen3:8b` under the Ollama already
+      installed on that same Mac measures **12.7 tok/s** — roughly 100x faster on a model
+      about 7x larger. Peak footprint was 2.44 GB for a 2.2 GB model, so the layering saved
+      almost nothing, and `Llama-3.2-1B-Instruct` failed outright because the macOS backend
+      cannot load a tied-embedding model. The README's 70B-on-4GB claim is about MEMORY and
+      holds by construction; the cost it omits is TIME, which scales with layer count and
+      size, so a 70B on that hardware would be minutes per token. This does not retire the
+      want, it redirects it: the route to local inference with no egress is a quantized
+      model under the Ollama already installed, not this;
+      (c) who OPERATES the model, since a model in a customer's building is a thing that
+      needs patching, and this repository has been careful never to claim on-device
+      enforcement it does not have. Nothing is in `package.json` or any build today.
+      Lane: solutions-architect (to draft the DR once the owner rules on whether to adopt at all).
+
 - [ ] **A REACHABLE dual-control surface — OWNER-GATED, and NOT the defect the
       row-45 audit first described.** A three-seam design pass with adversarial
       critique (and independent re-verification by hand) established facts that
@@ -1844,7 +1873,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       by nothing, validated by no gate, sitting in the directory `REPO_LAYOUT.md`
       calls "The OpenAPI contract". Anyone importing it builds against phantom
       routes. Fix: delete it, or move under `docs/archive/` with a header. Lane: api-contract-architect.
-- [ ] **SDK docs say "append `/v1/authorize` to the base URL"; the server serves it
+- [x] **SDK docs say "append `/v1/authorize` to the base URL"; the server serves it
       at `/api/v1/authorize`. 2026-09-01 (contract-drift sweep, MEDIUM, latent).**
       `GateEndpoint.kt` and `endpoint.rs` trim a trailing slash "so callers can
       append /v1/authorize"; neither mentions `/api`; the spec's `servers` is `/api`
@@ -1853,7 +1882,20 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       neither native shell issues HTTP yet — but iOS hit exactly this trap
       (`DecisionService.swift:74`). Fix: document `/api/v1/authorize` and have
       `check-assist-wire-served.mjs` assert the prefix, or make `validate()`
-      append `/api`. Lane: api-contract-architect.
+      append `/api`. Lane: api-contract-architect. **DONE 2026-09-21 (cloud lane) —
+      both halves.** The DOC half was already repaired: both stubs now state "THE BASE
+      MUST BE THE `/api` MOUNT … a bare `https://host` appends to `https://host/v1/authorize`,
+      a 404 — and a 404 is a DENY", and `endpoint.rs` carries a unit test
+      (`the_api_mount_is_the_base_and_appending_the_route_reaches_authorize`) proving
+      `https://host/api` + `/v1/authorize` = `https://host/api/v1/authorize`. What was
+      missing was the GATE half this row named. `check-assist-wire-served.mjs` now asserts
+      the served base `/api` agrees across THREE sources — the OpenAPI `servers` url, the
+      api-server router mount (`app.use("/api", router)` in `app.ts:163`), and both SDK
+      stubs documenting the full served path `/api/v1/authorize` — so the drift that made a
+      partner POST to a bare-host 404 (DENY) cannot come back silently. Falsifiable: three
+      new self-test cases drift each source and confirm the gate fires (`--self-test` 19/19,
+      was 15). Already wired in preflight + CI; no `validate()` logic change (Rust/Kotlin
+      compilation is not a cloud-lane gate, and the doc route this row offers is complete).
 - [x] **`/v1/app-workflows/evaluate` — the one route a shipping native client binds —
       has no response schema and omits 401/403 in the spec. 2026-09-01
       (contract-drift sweep, MEDIUM).** iOS decodes `{decision:{outcome,reasonCodes,
@@ -1910,10 +1952,31 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       routers, cross-checked by `scripts/check-launch-profile.mjs`. A real
       (non-review) deployment must set that variable — a deployment-checklist
       item, not an in-code bypass. Lane: security-engineer.
-- [ ] **`check-console-unknown-render` — the unknown-as-good-state gate for the
+- [x] **`check-console-unknown-render` — the unknown-as-good-state gate for the
       console (G2 from the 2026-09-02 console fix batch). SPEC ONLY, deferred: a
       deterministic version could not be built at acceptable precision in the
-      batch's time.** The intent: flag a `.tsx` in `artifacts/signalgrid-app/src`
+      batch's time.** **DONE 2026-09-21 (cloud lane)** — built as `scripts/check-console-unknown-render.mjs`,
+      an AST data-flow gate (the first script to use the TypeScript compiler API), not a
+      text scan. It collects each `.tsx`'s query-result identifiers (the `useQuery`/
+      generated-hook object, the destructured `data`/`isError`/`error`/`isLoading` bindings,
+      and vars DERIVED from query data to a fixpoint), then flags a good-state marker that a
+      per-branch boolean model finds is NOT proven to be reached with data present (directly,
+      or by ruling out both the error and loading flags). A STRONG affirmation phrase ("no
+      stale", "all clear", "all systems operational", …) is flagged whenever unhandled; a
+      good-state CLASS (`emerald`/`status-allow`) or a WEAK conclusion word ("healthy",
+      "operational", "nominal") is flagged only when it is chosen by the data-absent branch
+      OR its element also renders a query-data value that is not itself presence-gated. The
+      naive version's own false positives were the calibration
+      target: it flagged 17 correct sites (a static emerald category colour over a
+      `s ? String(x) : "-"` value, an `accent={s ? "emerald" : x}` ternary the ancestor walk
+      missed) — the AST version reports ZERO on the current tree. Exempt a site with
+      `// unknown-ok: <reason>`. Registered in `scripts/preflight.mjs` and
+      `.github/workflows/review-hub-ci.yml` (parity gate green). Two-direction self-test
+      plus a PLANT that removes the presence guard from a real component
+      (`SignalSourcing.tsx`) and watches the gate fire: `node
+      scripts/check-console-unknown-render.mjs --self-test`. SAFETY_MACHINERY — merged under
+      DR-037.
+      ORIGINAL SPEC (kept for the record): The intent: flag a `.tsx` in `artifacts/signalgrid-app/src`
       that calls `useQuery`/a generated hook, has a `?? []`/`?? {}`/`?.` fallback
       flowing into a class containing `emerald`/`status-allow` or a phrase from
       {"all clear","No stale","no … found","healthy","operational"}, AND never
@@ -1936,6 +1999,25 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       with a two-direction self-test (a bug shape flagged, a data-presence-gated
       shape not) and a validation that plants an unknown-as-emerald into a real
       component and watches it fail. Cloud lane. Lane: devex-tooling-engineer.
+
+- [ ] **`check-console-unknown-render` — two conservative false-negatives to close
+      (Codex review of #953).** Both UNDER-flag (never over-flag), so the gate stays
+      sound; each is deferred because the naive fix would raise the false-positive
+      rate on a mandatory gate. (1) **Per-query provenance (P1-7):** the handled-check
+      treats ANY query identifier in a guard test as covering ANY query-data render in
+      that branch, so a file with two queries where the emerald branch is guarded on
+      query A but renders query B's data reads as handled. The same missing provenance
+      means a value extracted into a child presentation component (`<Panel items={items} />`)
+      is analysed in the child without the parent's query origin, bypassing the gate.
+      Fix: track which query each `data`/derived var descends from, require the guard to
+      test the SAME query, and carry provenance across component props (or enforce an
+      equivalent call-site contract).
+      (2) **Const-class resolution (P2-5):** a good-state class assembled through a
+      `const cls = "... emerald ..."` binding, or a `clsx`/template-literal join, is
+      matched only when the literal is inline on the element — a class hoisted to a
+      const is missed. Fix: resolve string-const bindings and template quasis before
+      the class match. Ships with a self-test extending each shape. Cloud lane.
+      Lane: devex-tooling-engineer.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared
@@ -1996,3 +2078,9 @@ integration or endorsement with any of the projects named.** Public-safe and fix
 ### Agent tooling — detector gaps in the lane's own seams (2026-09-20, measured on this lane's branches; not part of the Trending snapshot above)
 
 - [x] **`pnpm run loop:state` and the stop hook read a squash-landed branch as "not on the hub" when mainline ALSO moved a file the branch touched (2026-09-20, cloud lane; devex-tooling-engineer).** `scripts/loop-state.mjs` `hasLandedByContent` clears a squash-merged branch only when every file it changed is byte-identical to SOME blob in mainline's history of that path. A squash merge lands the pull request's MERGE tree, not the branch tip's tree, so a shared file that mainline changed between the branch's last mainline merge and the squash lands as a three-way merge result that never equals the branch's blob. Measured 2026-09-20 on the two branches the stop hook has named every turn since their PRs merged: `claude/build-native-ios` (#860, c7dc6610) and `claude/video-intake-beat-timeline` (#900, f7148343) each fail on exactly one file, `docs/BUILD_BACKLOG.md`, NEVER-MATCHED at history depth 111; every other file matches. Change — LOCAL, no network (AGENTS.md: no live API calls; the stop hook and `loop:state` run on every turn and must never depend on GitHub): compute the patch-id of the branch's whole diff against its merge-base with whitespace PRESERVED (`git diff <base> <tip> | git patch-id --verbatim` — `--stable` strips whitespace, so two different whitespace-only edits collide and a never-landed tip would read LANDED) and compare it with the same verbatim patch-id of each squash commit's own diff in the bounded mainline history the byte check already walks; on a match, confirm with an exact follow-up comparison (the branch's hunks re-applied to the squash's parent must reproduce the squash tree for every touched file) before clearing; a squash of a clean merge carries exactly the branch's hunks even when mainline moved the same file, so a confirmed match is content that landed and anything else stays reported. Bind it to the CURRENT tip: a branch reused or extended after its merge has a different whole-diff patch-id and must stay reported. Keep the byte check as the first path and say which of the two cleared the branch. A by-hand `gh api …/pulls?state=closed&head=<owner>:<branch>` confirmation stays an operator step outside the automatic path, never in the hook. The checks that fail without it, all offline against fixture commits: (a) a fixture branch whose one changed file was also moved on mainline after the merge-base, squash-landed at exactly its tip, must be reported LANDED; (b) the same branch with one more local commit must stay reported as unpushed; (c) a branch whose only difference from a squash-landed twin is a whitespace-only edit must stay reported (the `--stable` collision fixture). A THIRD shape, measured the same day on this very branch: `noRemote` at `scripts/loop-state.mjs:242` drops any branch whose NAME exists on the hub, so a local tip AHEAD of its same-named remote is never examined by either the unpushed seam or the "carrying commits" warning (that one covers only worktree branches with no hub name) — `claude/landing-record-2026-09-20` sat at d29bf79f, one commit ahead of `origin/claude/landing-record-2026-09-20`, and the seam named nothing. Check (c): a fixture branch whose same-named remote exists and whose tip is one commit ahead of it must be reported, with the count. Lane: devex-tooling-engineer. **DONE 2026-09-20 (cloud lane, PR on `claude/loop-state-squash-seam`):** `scripts/loop-state.mjs` gained `landedByPatchId` (whole-branch `git patch-id --verbatim` against every single-parent commit in the bounded mainline walk, then the exact follow-up: the branch's hunks applied to the squash's parent in a throwaway index must write the squash's own tree) and `aheadOfHub` (a same-named branch is compared by sha against the ls-remote tip; ahead is a gated fail with the count, an unfetched tip is reported UNKNOWN and never counted clean). Evidence: `node scripts/loop-state.mjs --self-test` → `self-test passed (8/8)` — the byte check still cannot clear the fixture (the gap, kept as the positive control), the hunk check clears it (a), one more commit stays reported (b), the whitespace twin stays reported (c), same-name ahead reads `+1` (d), an unknown Hub sha reads unknown; registered in preflight and CI ("Loop-state seam self-test"). Live: `pnpm run loop:state` now reads "Local branches all present on the Review Hub" with `claude/build-native-ios` and `claude/video-intake-beat-timeline` listed under "squash-landed, exact hunks found in a mainline squash", and "Same-named branches at or behind their Hub tip". No network added: the hook still makes only the ls-remote it always made.
+- [ ] **Lift the workspace `esbuild` override 0.27.3 → 0.28.2, or record why not (supply chain, LOW; owner: release-engineer).** `pnpm audit` on 2026-09-19 reports one LOW advisory on `esbuild >=0.27.3 <0.28.1`, and the `pnpm-workspace.yaml` override pins the whole workspace at 0.27.3 (it began as a drizzle-kit transitive fix; the three package.json declarations that said 0.28.2 were dead text and now say 0.27.3). Lifting it changes the bundler under `artifacts/api-server`, `artifacts/mcp-server` and every proof, so it is its own change: read esbuild's 0.28.0 CHANGELOG entry (Context7 could not answer it), `pnpm install --lockfile-only`, commit the lockfile, `pnpm --filter @workspace/api-server run test:api` N/N, then `./validate-sim-macos.sh` and preflight. Source: the Context7 self-scan row in `docs/agent/RESOURCE_INTAKE.md` (2026-09-19).
+- [ ] **Gate: a `pnpm-workspace.yaml` override must match every package's own declaration (gates, LOW; owner: devex-tooling-engineer).** Three package.json files declared `esbuild` 0.28.2 while the override resolved 0.27.3, and nothing noticed. Derive the set from the overrides table intersected with each workspace package.json's dependency blocks; a declared version that differs from the override fails, offline, in preflight AND CI (parity gate). Proposed by the gate-and-proof-engineer and fail-closed-auditor perspectives on the Context7 self-scan, 2026-09-19; filed rather than landed in the same change.
+- [ ] **Brain-cycle dispatch stage: a lens-file writer contract and a stale-input guard, so a board can exist (agent plane, MEDIUM; owner: principal-engineer).** `git ls-files artifacts/brain-cycle | wc -l` → 0 on every ref, against `docs/agent/BRAIN_CYCLE_DESIGN.md:99` "one committed directory per cycle"; 0 of 13 `.claude/agents/*.md` on mainline name a board file, and the four true lens agents (`code-reviewer`, `security-reviewer`, `fail-closed-auditor`, `verdict-core-reader`) have no write scope for `artifacts/brain-cycle/**` — that write-power decision is the precondition. Then: (a) `_manifest.json` gains `cycle` (the audited sha, non-empty or throw) and `readBoard()` treats a lens whose `auditedSha` differs, or is absent, as `ran:false`, with a planted stale lens in the existing `--self-test` (fixture-only until a real writer exists — say so); `scripts/brain-cycle.mjs` is owner-gated safety machinery (`scripts/check-owner-gated-surfaces.mjs`), so this lands by owner-reviewed PR. (b) one shared audit paragraph in the four lens agents and `signalgrid-reviewer`: one board file, `ran:true` only for commands that executed, `UNVERIFIED` never omitted (the lens dispatch prompt PR #901 adds under docs/agent — cite its path once that PR is on mainline). From the ICM clip's self-scan, 2026-09-19 (`docs/agent/resource-scans/2026-09-19-two-videos.json`, ICM-1).
+- [ ] **Gate: an intake row that cites a `docs/agent/resource-scans/` file must be backed by it (gates, LOW; owner: devex-tooling-engineer).** Copy `scripts/check-sim-requests.mjs`'s binding shape: for every `RESOURCE_INTAKE.md` row that cites a scan file, the file must exist and hold `proposals[].tasks`, ≥1 `confirms[]` and a `decision` whose task ids ⊆ the proposal's; a decision `landed` names a path that exists. Trigger on the citation, not on the word "Self-scan" (a row can describe the process without a file, and that must read as "no scan file", never as a match). Report the count walked; 0 rows is reported, never silently green. Preflight + CI, parity-gated. Fails without it: a row claiming N confirmed tasks with no confirm record. ICM-3, 2026-09-19.
+- [ ] **loop:state: warn when the LOOP.md STATE date trails mainline's newest commit by more than a week (loop, LOW; owner: docs-writer).** `grep -rn "LAST TOUCHED" scripts/*.mjs .claude/hooks/*.sh` → only a comment; nothing reads the STATE block's date, and `docs/agent/LOOP.md:1268-1270` records a prior two-day STATE↔body contradiction. One `add()` in `scripts/loop-state.mjs`: parse LAST TOUCHED, compare with `git log -1 --format=%cI origin/SignalGrid_Alpha` (two git dates, no wall clock), warn — `gated: false`, like the Discovery rows — past 7 days. An unparseable date or an unfetched remote produces the warn row itself, never a silent skip. Self-test with a fixture block older than a fixture commit. ICM-5, 2026-09-19.
+- [ ] **Decide whether a report-only `claude plugin eval` run belongs beside the shape gates for first-party skills (agent plane, MEDIUM; owner: qa-engineer).** `pnpm run check:absence "prompt regression"` → CORROBORATED: nothing tests a first-party skill's BEHAVIOUR when its `SKILL.md` changes; `scripts/check-skill-plane-conformance.mjs` gates name, description and (since 2026-09-19) model only. The CLI ships `claude plugin eval` (verified with `--help`: `case.yaml` or `prompt.md` + `graders/*.md`, a no-plugin baseline arm). The row: one eval case per high-stakes first-party behaviour (start with `video-intake` — "a transcript is model output, never a fixture" — and `signalgrid-reviewer`), run BY HAND on the Mac when that skill changes, results REPORTED into `docs/agent/EVIDENCE.md`; a run that did not happen is written "not evaluated" and never reads as "no regression". It needs a model, so intake rule 3 and CI's no-model runner keep it off preflight; graders are model output, so a flaky grader is a flaky gate and stays a report. Where `evals/` directories sit under `.claude/skills/<skill>/` they need a publication-boundary class. From the "five weekend projects" clip's self-scan (V-2), 2026-09-19.

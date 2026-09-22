@@ -1,22 +1,23 @@
 {
   "$comment": "Config for the Standing Brain Cycle (DR-032, docs/agent/BRAIN_CYCLE_DESIGN.md). The deterministic decision core (scripts/brain-cycle-decide.mjs) and the orchestrator read this file so the cycle's behaviour is declared, not buried in code. Owner-directed 2026-09-09 (standing recurring cycle, full autonomous tier, daily target, auto-OPEN gated by a security+code validation gauntlet, auto-MERGE off).",
   "routineId": "brain-cycle",
-  "cadenceTarget": "35 8 * * * (daily) — declared in docs/agent/scheduled-routines.json; activation PENDS the registry-first bootstrap: land the active row on SignalGrid_Alpha and prove a Slice-2 dry run, THEN create the trigger (a same-session activation 2026-09-13 was created out of order and reverted, Codex #705). auto-MERGE remains OFF (autoMergeGreenSwitch:false); auto-OPEN draft is the ceiling.",
+  "cadenceTarget": "35 8 * * * (daily) — declared in docs/agent/scheduled-routines.json; activation PENDS the registry-first bootstrap: land the active row on SignalGrid_Alpha and prove a Slice-2 dry run, THEN create the trigger (a same-session activation 2026-09-13 was created out of order and reverted, Codex #705). auto-MERGE is now GREEN (autoMergeGreenSwitch:true, owner-directed 2026-09-13) and authorized solely by scripts/brain-cycle-merge-decide.mjs's affirmative-green allowlist; the DECISION PATH is refused outright and remains owner-gated.",
   "scope": "full autonomous tier — any route whose classifyDiff() tier is 'autonomous' is eligible; owner-gated surfaces (SAFETY_MACHINERY / OWNER_RESERVED) ESCALATE and are never auto-opened",
   "vetoLenses": ["security-reviewer", "fail-closed-auditor"],
   "minConfidence": 0.7,
   "maxAgentsPerCycle": 12,
   "autoOpen": true,
   "autoOpenAsDraft": true,
-  "autoMergeGreenSwitch": false,
-  "autoMergeNote": "The cycle NEVER auto-merges. Auto-MERGE sits behind this explicit owner GREEN switch (default false) AND classifyDiff==autonomous AND every gauntlet stage green — and even then only once per-PR gate falsification exists. Slice 1 ships auto-OPEN (draft) only.",
+  "autoMergeGreenSwitch": true,
+  "autoMergeNote": "GREEN — owner-directed 2026-09-13. Auto-MERGE is authorized by scripts/brain-cycle-merge-decide.mjs and by NOTHING else: an AFFIRMATIVE-GREEN allowlist, never a not-failed denylist. Every conjunct must be positively green — this switch true AND the re-classified REAL head diff is tier 'autonomous' AND NOT DECISION_PATH AND preflight exit 0 with EVERY step status 'ok' (exit 0 alone is a false green: 'unavailable' and 'skipped-db' steps let preflight exit 0 with gates that never ran) AND verify:breadth AND preflight-CI parity AND a UNANIMOUS panel with every expected lens actually run, zero CONFIRMED critical, zero fail-open, no veto BLOCK AND bugHunt AND per-PR gate falsification AND publication-boundary AND launch-claims. Anything red, skipped, unavailable, inconclusive, timed-out or ABSENT means NO MERGE, escalate. THE DECISION PATH IS REFUSED OUTRIGHT (lib/*, /v1, connectors, native decision ports) — golden rule 2: a change to how SignalGrid DECIDES is never auto-merged however green it is. No model output is ever an authorizer; a model may BLOCK or ESCALATE only. This file and every script above are SAFETY_MACHINERY, so the cycle can never merge its own machinery nor flip this switch itself. Setting this false returns to draft-only immediately — it is the stop button.",
   "gauntlet": {
     "mechanical": ["node scripts/preflight.mjs (FULL, verdict read separately)", "pnpm run verify:breadth", "node scripts/check-preflight-ci-parity.mjs", "node scripts/check-ci-preflight-sync.mjs"],
     "adversarial": "the routed touched-surface lens panel, re-run on the winner's diff; pass condition is UNANIMOUS with zero CONFIRMED critical / fail-open findings; security-reviewer and fail-closed-auditor are vetoes",
     "bugHunt": "/code-review at high/max + gate-and-proof-engineer planted-defect-both-directions on any new/changed gate",
+    "falsification": "node scripts/check-pr-gate-falsification.mjs --base <base> --head <head> — DR-050's named precondition: per-PR proof that a gate can still go RED on the lines THIS diff changed. A green suite proves nothing if nothing can fail on the code it touched. Fail-closed: a changed file with no covering gate, zero applicable mutations, all-mutations-survived, a hung/timed-out proof, or an empty diff are each NOT GREEN.",
     "publication": ["node scripts/check-publication-boundary.mjs", "node scripts/check-launch-claims.mjs"],
-    "classify": "classifyDiff(winner.files).tier must be 'autonomous'; anything else escalates",
-    "haltsAutoOpen": "any mechanical gate red or skipped; any CONFIRMED critical / fail-open finding; any veto BLOCK; any expected lens absent / ran:false / UNVERIFIED on a depended surface; a publication-boundary violation"
+    "classify": "classifyDiff over the REAL head diff (git diff --name-only --no-renames, normalized) must be tier 'autonomous' AND category != DECISION_PATH; never the cached tier from decision.json, which was computed on the winner's CLAIMED files and can drift from what was implemented",
+    "haltsAutoOpen": "any mechanical gate red or skipped; any CONFIRMED critical / fail-open finding; any veto BLOCK; any expected lens absent / ran:false / UNVERIFIED on a depended surface; a publication-boundary violation; per-PR gate falsification not GREEN; any merge conjunct not affirmatively green per scripts/brain-cycle-merge-decide.mjs"
   },
   "boardRoot": "artifacts/brain-cycle",
   "heartbeatRoutine": "brain-cycle"

@@ -244,7 +244,7 @@
     "test:load": "pnpm --filter @workspace/api-server run test:load",
     "test:stress": "pnpm --filter @workspace/api-server run test:stress",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "typecheck:libs": "tsc --build",
+    "typecheck:libs": "node scripts/ensure-lib-build.mjs && tsc --build",
     "verify:all": "node scripts/verify-all.mjs",
     "verify:breadth": "node scripts/verify-breadth.mjs",
     "verify:docker": "node scripts/docker-verify.mjs",

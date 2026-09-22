@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-20T23:25:45.877Z",
-  "result": "23:24Z quiet: no mac/* branch moved since 22:24Z, no unread cloud-addressed messages (mac-leaving + corrected-root-cause both acked; latter on Alpha via #933). Tick firedAt still 2026-09-20T02:26:17Z (down ~21h; Mac by hand); owner NOT re-escalated (inside 24h window since 06:25Z #908; next allowed 06:25Z 2026-09-21). Live-evidence fresh. IN FLIGHT (not this cycle): landing Mac PR #755 (gh-pr.mjs) — merged Alpha into mac/gh-pr-rest-helper + regenerated coverage (idempotent, 103 surfaces), preflight+breadth validating, push+merge on green. #753/#758 still to review (green, drafts)."
+  "firedAt": "2026-09-22T00:44:15.578Z",
+  "result": "acted: coordinated with the Mac lane's owner-granted queue clear; taking the 3 code-conflict PRs (#819/#753/#723). mac-lane-tick firedAt 2026-09-22T00:27Z (fresh). live-evidence 2026-09-20 ~2d. cloud mail: acked the handoff. owner NOT escalated. NOTE: accidental branch mac/decision-path-classifier-gap@079e907e needs deletion (cloud destructive-git guard blocks me)."
 }

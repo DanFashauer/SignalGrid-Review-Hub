@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-21T17:53:40.260Z",
-  "result": "acted: #953 check-console-unknown-render (AST fail-closed console-unknown-as-good gate) merged to Alpha 59f04e4b after 3 Codex rounds (25 findings resolved); landing record #961 merged."
+  "firedAt": "2026-09-22T15:25:59.072Z",
+  "result": "acted: landed backlog PR #832 (squash cea57e9a) — check-workspace-cycles gate + self-test, refuses the workspace dependency cycle that caused #819's Mac ENAMETOOLONG disk-loop; wired into preflight and CI. Also landed #976 (#314 mutation survivor fixed+closed) this window. Merged Alpha in, regenerated coverage (2930 in-scope), preflight+breadth green, gating check green on 737aeb30."
 }

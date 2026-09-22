@@ -74,6 +74,7 @@
     "./adapters/payload-fields": "./src/integrations/adapters/payload-fields.ts"
   },
   "dependencies": {
+    "@workspace/signalgrid-core": "workspace:*",
     "ioredis": "^5.4.1",
     "zod": "catalog:",
     "@workspace/audit": "workspace:*"

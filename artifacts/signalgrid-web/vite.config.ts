@@ -66,7 +66,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         // Split stable vendor code into long-term-cacheable chunks so an app
         // change does not bust React / animation library caches, and the
@@ -77,7 +77,11 @@ export default defineConfig({
         // outright with "TypeError: manualChunks is not a function". The function
         // works under both bundlers, so this is not a migration so much as a
         // correction: the other four artifacts in this repo already write it this
-        // way, and signalgrid-web was the odd one out.
+        // way, and signalgrid-web was the odd one out. The key itself is
+        // `rolldownOptions` since 2026-09-19: Vite 8 deprecates `rollupOptions`
+        // (docs/guide/migration.md) and proxies it SILENTLY — vite 8.2.1 warns at
+        // runtime only for optimizeDeps.rollupOptions — so the old name would
+        // have kept building until the day it was removed.
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
           if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/")) return "react-vendor";

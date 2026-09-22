@@ -494,6 +494,14 @@ jobs:
         run: node scripts/check-owner-gated-surfaces.mjs
       - name: Owner-gated surfaces self-test (classify routes owner-gated diffs to the owner)
         run: node scripts/check-owner-gated-surfaces.mjs --self-test
+      - name: PR gate-falsification (a green suite proves nothing if no gate can fail on the changed lines)
+        run: node scripts/check-pr-gate-falsification.mjs
+      - name: PR gate-falsification self-test (every fail-closed arm, both directions)
+        run: node scripts/check-pr-gate-falsification.mjs --self-test
+      - name: Brain-cycle merge authorizer (affirmative-green allowlist)
+        run: node scripts/brain-cycle-merge-decide.mjs
+      - name: Merge-authorizer self-test (every conjunct falsified both directions)
+        run: node scripts/brain-cycle-merge-decide.mjs --self-test
       - name: Cited commands (documents may not promise a command that is gone)
         run: node scripts/check-cited-commands.mjs
       - name: Cited-command self-test (the gate can fail)

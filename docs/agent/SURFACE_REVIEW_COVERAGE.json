@@ -807,7 +807,7 @@
         },
         {
           "date": "2026-09-20",
-          "read": "docs/agent/resource-scans/2026-09-19-two-videos.json \u2014 the first machine-written scan record under the 2026-09-19 intake rule (tool-evaluation-by-use \u00a75b): proposals, one confirm per roster perspective, the coordinator decision. It is a record of an execution, not prose; authored and cross-confirmed this session by the four perspectives plus the coordinator, and reviewed here for shape and honesty. The docs/agent whole-read of 2026-09-06 predates the file, so it is covered explicitly here rather than by that stale whole-read.",
+          "read": "docs/agent/resource-scans/2026-09-19-two-videos.json \u2014 the first machine-written scan record under the 2026-09-19 intake rule (tool-evaluation-by-use \u00a75b): proposals, one confirm per roster perspective, the coordinator decision. Authored and cross-confirmed this session by the four perspectives plus the coordinator, reviewed here for shape and honesty; the docs/agent whole-read of 2026-09-06 predates the file, so it is covered explicitly here.",
           "reviewer": "mac lane (author + four-perspective confirm)",
           "record": "docs/agent/resource-scans/2026-09-19-two-videos.json",
           "scope": "partial: docs/agent/resource-scans/2026-09-19-two-videos.json (the new machine-written scan record)",
@@ -1966,6 +1966,15 @@
           "scope": "partial: the one new script scripts/mac/free-test-port.sh; no other script re-read here.",
           "open": 0,
           "closed": 1
+        },
+        {
+          "date": "2026-09-21",
+          "read": "scripts/check-console-unknown-render.mjs (new, added to the surface after the twenty-fourth round's 2026-09-06 whole-surface read): the unknown-as-good-state gate for the admin console. Read firsthand by its author across three Codex adversarial review rounds this session \u2014 the per-branch boolean guard model (dataPresentWhen/dataAbsentWhen/flagFalseWhen; !isError is not proof of data while pending; loading?_:error?_:content \u21d2 present), import-alias resolution, useQueries array-destructure registration, JSX-fragment and user-facing-attribute (aria-label/title) scanning, negation-aware phrase matching, rendered-text detection (a comparison operand like s.status !== 'nominal' is not rendered), member-name and function-parameter exclusion (a child's {data} prop is not the parent's query data), and trivia-based // unknown-ok:<reason> exemptions requiring a reason. Every fixed shape has a self-test that fails against the pre-fix code; the live tree reports zero.",
+          "reviewer": "cloud lane (firsthand author; PR #953 reviewed by Codex across three rounds, every finding re-run firsthand and self-tested)",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "partial: scripts/check-console-unknown-render.mjs only, one file added to the surface after the 2026-09-06 whole-surface read.",
+          "open": 0,
+          "closed": 0
         }
       ]
     },

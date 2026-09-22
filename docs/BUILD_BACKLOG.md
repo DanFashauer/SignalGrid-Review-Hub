@@ -939,6 +939,35 @@ item below is a design target until its proof is green and named.
 
 ## Owner-gated (needs a decision before an agent builds it)
 
+- [ ] **OWNER DECISION — adopt an on-premises inference runtime (AirLLM or a peer), or decline it.**
+      Raised 2026-09-17 when the owner pointed at `github.com/lyogavin/airllm` and said it
+      should be part of the system. What it provides that this repository needs is real and
+      specific: **inference inside the building with no data egress, on modest hardware** —
+      a 70B model on ~4 GB of VRAM by streaming layers from disk. That is the constraint
+      that actually binds in the regulated verticals SignalGrid targets.
+      **The decision path is already fenced off and that part is done** —
+      `scripts/check-decision-path-purity.mjs` (preflight + CI) proves no verdict is
+      fetched, spawned or sampled, so adopting a runtime cannot quietly reach the core.
+      **What needs the owner, per the DR-020 rule DR-021 leaves standing:** a new inference
+      platform is a decision record before it is a dependency. The three questions a DR
+      would have to answer, none of which the README does: (a) WHICH surface — an
+      explanation/Assist path or offline evidence summarisation, never a verdict; (b) at
+      what LATENCY — **ANSWERED 2026-09-17, by the Mac lane RUNNING it rather than reading
+      it** (`mac/intake-airllm`, PR #801): `TinyLlama-1.1B` produced 20 tokens in 207.1 s
+      and again in 205.7 s = **0.1 tok/s**, while `qwen3:8b` under the Ollama already
+      installed on that same Mac measures **12.7 tok/s** — roughly 100x faster on a model
+      about 7x larger. Peak footprint was 2.44 GB for a 2.2 GB model, so the layering saved
+      almost nothing, and `Llama-3.2-1B-Instruct` failed outright because the macOS backend
+      cannot load a tied-embedding model. The README's 70B-on-4GB claim is about MEMORY and
+      holds by construction; the cost it omits is TIME, which scales with layer count and
+      size, so a 70B on that hardware would be minutes per token. This does not retire the
+      want, it redirects it: the route to local inference with no egress is a quantized
+      model under the Ollama already installed, not this;
+      (c) who OPERATES the model, since a model in a customer's building is a thing that
+      needs patching, and this repository has been careful never to claim on-device
+      enforcement it does not have. Nothing is in `package.json` or any build today.
+      Lane: solutions-architect (to draft the DR once the owner rules on whether to adopt at all).
+
 - [ ] **A REACHABLE dual-control surface — OWNER-GATED, and NOT the defect the
       row-45 audit first described.** A three-seam design pass with adversarial
       critique (and independent re-verification by hand) established facts that
@@ -1819,7 +1848,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       by nothing, validated by no gate, sitting in the directory `REPO_LAYOUT.md`
       calls "The OpenAPI contract". Anyone importing it builds against phantom
       routes. Fix: delete it, or move under `docs/archive/` with a header. Lane: api-contract-architect.
-- [ ] **SDK docs say "append `/v1/authorize` to the base URL"; the server serves it
+- [x] **SDK docs say "append `/v1/authorize` to the base URL"; the server serves it
       at `/api/v1/authorize`. 2026-09-01 (contract-drift sweep, MEDIUM, latent).**
       `GateEndpoint.kt` and `endpoint.rs` trim a trailing slash "so callers can
       append /v1/authorize"; neither mentions `/api`; the spec's `servers` is `/api`
@@ -1828,7 +1857,20 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       neither native shell issues HTTP yet — but iOS hit exactly this trap
       (`DecisionService.swift:74`). Fix: document `/api/v1/authorize` and have
       `check-assist-wire-served.mjs` assert the prefix, or make `validate()`
-      append `/api`. Lane: api-contract-architect.
+      append `/api`. Lane: api-contract-architect. **DONE 2026-09-21 (cloud lane) —
+      both halves.** The DOC half was already repaired: both stubs now state "THE BASE
+      MUST BE THE `/api` MOUNT … a bare `https://host` appends to `https://host/v1/authorize`,
+      a 404 — and a 404 is a DENY", and `endpoint.rs` carries a unit test
+      (`the_api_mount_is_the_base_and_appending_the_route_reaches_authorize`) proving
+      `https://host/api` + `/v1/authorize` = `https://host/api/v1/authorize`. What was
+      missing was the GATE half this row named. `check-assist-wire-served.mjs` now asserts
+      the served base `/api` agrees across THREE sources — the OpenAPI `servers` url, the
+      api-server router mount (`app.use("/api", router)` in `app.ts:163`), and both SDK
+      stubs documenting the full served path `/api/v1/authorize` — so the drift that made a
+      partner POST to a bare-host 404 (DENY) cannot come back silently. Falsifiable: three
+      new self-test cases drift each source and confirm the gate fires (`--self-test` 19/19,
+      was 15). Already wired in preflight + CI; no `validate()` logic change (Rust/Kotlin
+      compilation is not a cloud-lane gate, and the doc route this row offers is complete).
 - [x] **`/v1/app-workflows/evaluate` — the one route a shipping native client binds —
       has no response schema and omits 401/403 in the spec. 2026-09-01
       (contract-drift sweep, MEDIUM).** iOS decodes `{decision:{outcome,reasonCodes,
@@ -1885,10 +1927,31 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       routers, cross-checked by `scripts/check-launch-profile.mjs`. A real
       (non-review) deployment must set that variable — a deployment-checklist
       item, not an in-code bypass. Lane: security-engineer.
-- [ ] **`check-console-unknown-render` — the unknown-as-good-state gate for the
+- [x] **`check-console-unknown-render` — the unknown-as-good-state gate for the
       console (G2 from the 2026-09-02 console fix batch). SPEC ONLY, deferred: a
       deterministic version could not be built at acceptable precision in the
-      batch's time.** The intent: flag a `.tsx` in `artifacts/signalgrid-app/src`
+      batch's time.** **DONE 2026-09-21 (cloud lane)** — built as `scripts/check-console-unknown-render.mjs`,
+      an AST data-flow gate (the first script to use the TypeScript compiler API), not a
+      text scan. It collects each `.tsx`'s query-result identifiers (the `useQuery`/
+      generated-hook object, the destructured `data`/`isError`/`error`/`isLoading` bindings,
+      and vars DERIVED from query data to a fixpoint), then flags a good-state marker that a
+      per-branch boolean model finds is NOT proven to be reached with data present (directly,
+      or by ruling out both the error and loading flags). A STRONG affirmation phrase ("no
+      stale", "all clear", "all systems operational", …) is flagged whenever unhandled; a
+      good-state CLASS (`emerald`/`status-allow`) or a WEAK conclusion word ("healthy",
+      "operational", "nominal") is flagged only when it is chosen by the data-absent branch
+      OR its element also renders a query-data value that is not itself presence-gated. The
+      naive version's own false positives were the calibration
+      target: it flagged 17 correct sites (a static emerald category colour over a
+      `s ? String(x) : "-"` value, an `accent={s ? "emerald" : x}` ternary the ancestor walk
+      missed) — the AST version reports ZERO on the current tree. Exempt a site with
+      `// unknown-ok: <reason>`. Registered in `scripts/preflight.mjs` and
+      `.github/workflows/review-hub-ci.yml` (parity gate green). Two-direction self-test
+      plus a PLANT that removes the presence guard from a real component
+      (`SignalSourcing.tsx`) and watches the gate fire: `node
+      scripts/check-console-unknown-render.mjs --self-test`. SAFETY_MACHINERY — merged under
+      DR-037.
+      ORIGINAL SPEC (kept for the record): The intent: flag a `.tsx` in `artifacts/signalgrid-app/src`
       that calls `useQuery`/a generated hook, has a `?? []`/`?? {}`/`?.` fallback
       flowing into a class containing `emerald`/`status-allow` or a phrase from
       {"all clear","No stale","no … found","healthy","operational"}, AND never
@@ -1911,6 +1974,25 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       with a two-direction self-test (a bug shape flagged, a data-presence-gated
       shape not) and a validation that plants an unknown-as-emerald into a real
       component and watches it fail. Cloud lane. Lane: devex-tooling-engineer.
+
+- [ ] **`check-console-unknown-render` — two conservative false-negatives to close
+      (Codex review of #953).** Both UNDER-flag (never over-flag), so the gate stays
+      sound; each is deferred because the naive fix would raise the false-positive
+      rate on a mandatory gate. (1) **Per-query provenance (P1-7):** the handled-check
+      treats ANY query identifier in a guard test as covering ANY query-data render in
+      that branch, so a file with two queries where the emerald branch is guarded on
+      query A but renders query B's data reads as handled. The same missing provenance
+      means a value extracted into a child presentation component (`<Panel items={items} />`)
+      is analysed in the child without the parent's query origin, bypassing the gate.
+      Fix: track which query each `data`/derived var descends from, require the guard to
+      test the SAME query, and carry provenance across component props (or enforce an
+      equivalent call-site contract).
+      (2) **Const-class resolution (P2-5):** a good-state class assembled through a
+      `const cls = "... emerald ..."` binding, or a `clsx`/template-literal join, is
+      matched only when the literal is inline on the element — a class hoisted to a
+      const is missed. Fix: resolve string-const bindings and template quasis before
+      the class match. Ships with a self-test extending each shape. Cloud lane.
+      Lane: devex-tooling-engineer.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared

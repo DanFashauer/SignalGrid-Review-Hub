@@ -261,6 +261,8 @@ const STEPS = [
   { name: "Console launch families self-test (the check can actually fail)", cmd: ["node", "scripts/check-console-launch-families.mjs", "--self-test"] },
   { name: "Cost figures (every currency amount resolves to docs/COST_MODEL.md's register; no owner-only billing figure is published as our own spend)", cmd: ["node", "scripts/check-cost-figures.mjs"] },
   { name: "Cost figures self-test (the check can actually fail)", cmd: ["node", "scripts/check-cost-figures.mjs", "--self-test"] },
+  { name: "Decision-path purity (a verdict may not be fetched, spawned, or sampled from a model)", cmd: ["node", "scripts/check-decision-path-purity.mjs"] },
+  { name: "Decision-path purity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-decision-path-purity.mjs", "--self-test"] },
   { name: "Guard-registry drift (coverage lists derived, not trusted)", cmd: ["node", "scripts/check-guard-registries.mjs"] },
   { name: "CI\u2194preflight drift (every proof runs in both places)", cmd: ["node", "scripts/check-ci-preflight-sync.mjs"] },
   // Pure static analysis of the Dockerfiles against pnpm-workspace.yaml — no
@@ -286,6 +288,8 @@ const STEPS = [
   { name: "iOS dead stored properties (a field nothing assigns makes every read of it dead)", cmd: ["node", "scripts/check-ios-dead-stored-properties.mjs"] },
   { name: "iOS policy defaults self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-policy-defaults.mjs", "--self-test"] },
   { name: "iOS policy defaults (no managed-config default derived from the absence of policy)", cmd: ["node", "scripts/check-ios-policy-defaults.mjs"] },
+  { name: "Console unknown-render self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-console-unknown-render.mjs", "--self-test"] },
+  { name: "Console unknown-render (no good-state render on unguarded query data)", cmd: ["node", "scripts/check-console-unknown-render.mjs"] },
   { name: "Sim-script self-check self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs", "--self-test"] },
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },
@@ -422,6 +426,7 @@ const STEPS = [
   { name: "Live-sync evidence-kind self-test (unreadable is not hardware)", cmd: ["node", "scripts/check-live-sync.mjs", "--self-test"] },
   { name: "MCP surface self-test (coverage + resource parity must be able to fail)", cmd: ["node", "scripts/check-mcp-surface.mjs", "--self-test"] },
   { name: "MCP surface (chat connection must match the fabric)", cmd: ["node", "scripts/check-mcp-surface.mjs"] },
+  { name: "Lib-build heal self-test (an orphaned tsbuildinfo with no dist must be flagged)", cmd: ["node", "scripts/ensure-lib-build.mjs", "--self-test"] },
   { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"] },
   // needsNativeBuild: rollup/esbuild/lightningcss/oxide platform binaries. The
   // workspace strips every triple but linux-x64, so on other platforms this step

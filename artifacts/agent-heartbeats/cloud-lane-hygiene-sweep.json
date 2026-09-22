@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-21T09:43:04.568Z",
-  "result": "09:40Z swept: removed 226 stale scratchpad loose files (>24h logs/status/json; worktrees untouched) + pnpm store prune (61 files, 1 pkg). No docker daemon and /var/lib/docker absent — nothing to reclaim there. 8.2G free on / (78% used) — well above the 1GB floor; no owner escalation."
+  "firedAt": "2026-09-22T09:44:49.279Z",
+  "result": "freed ~4.8G (removed 35 stale scratchpad worktrees + pnpm store prune 15 pkgs/190 files + 185 old temp files); 12G free (was 7.2G). no docker cache. quiet otherwise."
 }

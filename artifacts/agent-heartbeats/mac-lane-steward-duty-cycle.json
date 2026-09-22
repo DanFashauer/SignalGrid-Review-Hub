@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-22T00:44:15.578Z",
-  "result": "acted: coordinated with the Mac lane's owner-granted queue clear; taking the 3 code-conflict PRs (#819/#753/#723). mac-lane-tick firedAt 2026-09-22T00:27Z (fresh). live-evidence 2026-09-20 ~2d. cloud mail: acked the handoff. owner NOT escalated. NOTE: accidental branch mac/decision-path-classifier-gap@079e907e needs deletion (cloud destructive-git guard blocks me)."
+  "firedAt": "2026-09-22T14:43:51.927Z",
+  "result": "acted: landed #976 (proof:event-contract phantom-slot guard now falsifiable; fixes+closes #314 mutation survivor, mutation-guard survivors=0). #929 (MAM) pushed Alpha-merged+revalidated, owner-gated (launch-profile). mac tick fresh (firedAt 13:04Z, later heartbeats to 88e9f60, <3h). live-evidence mac-run.json 2026-09-20 (~2d, <3d; remint note already pending to mac). no owner escalation. no cloud-addressed mail unread; sim 20/20 bound. shared-surface note: event-contract proof (run by the daily sweep) changed."
 }

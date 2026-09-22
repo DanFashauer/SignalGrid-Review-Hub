@@ -318,6 +318,24 @@ check(
     ev("cs6", { eventType: "posture_changed", mdmDeviceState: "unknown" }),
   ])).has("CUSTODY_STALE_OR_CONTESTED"),
 );
+// Evidence-pinned companion to the phantom-slot membership check above. The three
+// membership checks only ask whether the CODE appears, so they cannot see the
+// evidence set being gutted — and the phantom-slot branch (rule 6c,
+// `unpairedButSeated`) is the ONLY one no expectExactly pinned alone: every prior
+// exact fixture that produces this code also trips staleAtDock or contestedGrants,
+// which add the same ids and mask a dead 6c branch. The daily mutation sweep proved
+// it, `if (unpairedButSeated)` at detect.ts:180 → `if (false)` survived. This is the
+// pure 6c timeline (a dock re-lock around a device unmanaged in posture, with NO
+// open checkout, so staleAtDock and contestedGrants are both false), so its evidence
+// comes from the 6c branch alone and an emptied branch fails here.
+expectExactly(
+  "a seated device unpaired/unknown in posture with no open checkout → CUSTODY_STALE_OR_CONTESTED, evidence = seated + unpaired (pins rule 6c's evidence branch)",
+  [
+    ev("ps1", { eventType: "dock_relocked", deviceId: "dev-a" }),
+    ev("ps2", { eventType: "posture_changed", mdmDeviceState: "unknown", deviceId: "dev-a" }),
+  ],
+  [["CUSTODY_STALE_OR_CONTESTED", "high", ["ps1", "ps2"]]],
+);
 {
   const contested = detectCrossDomain([
     ev("cs7", { eventType: "checkout_granted" }),

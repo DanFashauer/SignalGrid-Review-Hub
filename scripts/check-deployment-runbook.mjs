@@ -54,10 +54,80 @@ export function resolveWorkspaceSrcRoots(pkgDir = "artifacts/api-server") {
   return [join(pkgDir, "src"), ...roots];
 }
 
+// Package-level roots over-collect the moment a dependency is a LIBRARY of
+// families: on 2026-09-18 the server gained `@workspace/integrations` for one
+// subpath (`./graph`, the posture read behind SIGNALGRID_CORE=estate) and the
+// whole-package scan reported 25 env vars — RTLS_*, MDE_*, FLEETDM_*, … — that
+// the served bundle never contains. Passing them through compose to satisfy
+// this gate would have created exactly the dead knobs it exists to catch. So
+// the scan follows the server's OWN import specifiers: `@workspace/<pkg>[/sub]`
+// resolves through that package's `exports` map to a source file, and the
+// relative imports beneath it are walked transitively. Type-only imports
+// (`import type`) carry no code and are not followed.
+function workspacePackages() {
+  const byName = new Map();
+  for (const base of ["lib", "artifacts"]) {
+    for (const n of readdirSync(base)) {
+      const dir = join(base, n);
+      try {
+        const pj = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+        byName.set(pj.name, { dir, exports: pj.exports });
+      } catch { /* not a package dir */ }
+    }
+  }
+  return byName;
+}
+function exportTarget(exportsMap, subpath) {
+  if (!exportsMap) return subpath === "." ? "./src/index.ts" : null;
+  if (typeof exportsMap === "string") return subpath === "." ? exportsMap : null;
+  const entry = exportsMap[subpath];
+  if (entry === undefined) return null;
+  if (typeof entry === "string") return entry;
+  return entry.import ?? entry.default ?? null;
+}
+function resolveRelative(fromFile, spec) {
+  const base = join(fromFile, "..", spec).replace(/\.js$/, "");
+  for (const cand of [base, `${base}.ts`, join(base, "index.ts")]) {
+    try {
+      if (statSync(cand).isFile() && cand.endsWith(".ts")) return cand;
+    } catch { /* try the next shape */ }
+  }
+  return null;
+}
+const IMPORT_RX = /(?:^|\n)\s*(?:import|export)\s+(type\s+)?[^"'\n]*?from\s*["']([^"']+)["']|(?:^|\n)\s*import\s*["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g;
+export function resolveReachableSources(pkgDir = "artifacts/api-server") {
+  const packages = workspacePackages();
+  const reached = new Set();
+  const queue = walk(join(pkgDir, "src")).filter((f) => f.endsWith(".ts"));
+  while (queue.length > 0) {
+    const file = queue.pop();
+    if (reached.has(file)) continue;
+    reached.add(file);
+    const src = readFileSync(file, "utf8");
+    for (const m of src.matchAll(IMPORT_RX)) {
+      if (m[1]) continue; // `import type … from` — no code, nothing to boot-read
+      const spec = m[2] ?? m[3] ?? m[4];
+      let target = null;
+      if (spec.startsWith("@workspace/")) {
+        const [, name, ...rest] = spec.split("/");
+        const pkg = packages.get(`@workspace/${name}`);
+        if (!pkg) continue;
+        const subpath = rest.length === 0 ? "." : `./${rest.join("/")}`;
+        const rel = exportTarget(pkg.exports, subpath);
+        if (rel) target = join(pkg.dir, rel);
+      } else if (spec.startsWith(".")) {
+        target = resolveRelative(file, spec);
+      }
+      if (target && !reached.has(target)) queue.push(target);
+    }
+  }
+  return [...reached].sort();
+}
 export function collectBootEnvVars(root = SRC) {
   const roots = Array.isArray(root) ? root : [root];
   const vars = new Set();
-  for (const f of roots.flatMap((r) => walk(r)).filter((f) => f.endsWith(".ts"))) {
+  const files = roots.flatMap((r) => (r.endsWith(".ts") ? [r] : walk(r))).filter((f) => f.endsWith(".ts"));
+  for (const f of files) {
     const src = readFileSync(f, "utf8");
     for (const m of src.matchAll(/process\.env(?:\.([A-Z_]{3,})|\[\s*"([A-Z_]{3,})"\s*\])/g)) {
       vars.add(m[1] ?? m[2]);
@@ -80,6 +150,33 @@ export function collectBootEnvVars(root = SRC) {
     }
   }
   return vars;
+}
+
+/**
+ * The SECRETS REGISTRY is a second source of boot-read names, and it had to become
+ * one the moment the reads moved behind an accessor.
+ *
+ * `@workspace/secrets` (DR-010) reads every registered secret as `env[name]` through a
+ * parameter, so the literal patterns above see NOTHING — and that is exactly how
+ * SIGNALGRID_ENROLLMENT_SECRET and the two estate bearer tokens dropped out of this
+ * gate's collected set the day they were routed through it: still boot-read, still
+ * documented, and silently no longer HELD to being documented. A gate that gets
+ * quieter when the code gets tidier is the failure mode this file was written about.
+ *
+ * Each registered name also implies its `_NEXT` successor, which is a real knob: it is
+ * what makes a rotation window exist, and an operator who cannot set it through the
+ * compose file cannot rotate anything.
+ */
+export function collectRegisteredSecrets(source) {
+  const src = source ?? readFileSync("lib/secret-model/src/index.ts", "utf8");
+  const block = src.match(/export const REGISTRY[^=]*=\s*\[([\s\S]*?)\n\];/);
+  if (!block) return new Set();
+  const out = new Set();
+  for (const m of block[1].matchAll(/name:\s*"([A-Z][A-Z0-9_]{2,})"/g)) {
+    out.add(m[1]);
+    out.add(`${m[1]}_NEXT`);
+  }
+  return out;
 }
 
 /** The api service's environment block, or null when it cannot be found —
@@ -222,6 +319,35 @@ function selfTest() {
     "parameter-mediated env.NAME reads are collected (OIDC_TENANT_MAP found)",
     memberVars.has("OIDC_TENANT_MAP") && memberVars.has("OIDC_ROLE_MAP"),
   ]);
+  const reachable = resolveReachableSources();
+  checks.push([
+    "the reachable scan follows a root import into its package (enterprise-auth reached)",
+    reachable.some((f) => f.startsWith("lib/enterprise-auth/src/")),
+  ]);
+  checks.push([
+    "…and a SUBPATH import reaches only that subpath (integrations/graph reached, rtls-custody not)",
+    reachable.some((f) => f.startsWith("lib/integrations/src/integrations/graph/")) &&
+      !reachable.some((f) => f.includes("/rtls-custody/")),
+  ]);
+  const reachableVars = collectBootEnvVars(reachable);
+  checks.push([
+    "the reachable scan still collects the OIDC and Graph knobs (OIDC_TENANT_MAP, GRAPH_ACCESS_TOKEN) and not a library family's (RTLS_ACCESS_TOKEN)",
+    reachableVars.has("OIDC_TENANT_MAP") && reachableVars.has("GRAPH_ACCESS_TOKEN") && !reachableVars.has("RTLS_ACCESS_TOKEN"),
+  ]);
+  const regSrc = 'export const REGISTRY = [\n  { name: "A_TOKEN", direction: "inbound", purpose: "x" },\n  { name: "B_SECRET", direction: "outbound", purpose: "y" },\n];\n';
+  const reg = collectRegisteredSecrets(regSrc);
+  checks.push([
+    "the secrets registry yields each name AND its _NEXT successor",
+    reg.has("A_TOKEN") && reg.has("A_TOKEN_NEXT") && reg.has("B_SECRET") && reg.has("B_SECRET_NEXT") && reg.size === 4,
+  ]);
+  checks.push([
+    "a registry the parser cannot find yields nothing (so the vacuity check fires rather than a false pass)",
+    collectRegisteredSecrets("const SOMETHING_ELSE = [];").size === 0,
+  ]);
+  checks.push([
+    "the REAL registry is non-empty and carries the accessor's own secrets",
+    collectRegisteredSecrets().has("METRICS_TOKEN") && collectRegisteredSecrets().has("METRICS_TOKEN_NEXT"),
+  ]);
   let bp = auditMigrationBanners({ "lib/persistence/migrations/001_decisions.sql": "-- NON-AUTHORITATIVE reference\nCREATE TABLE x ();" });
   checks.push(["a bannered reference schema passes", bp.length === 0]);
   bp = auditMigrationBanners({ "lib/persistence/migrations/001_decisions.sql": "-- canonical schema for migration tooling\nCREATE TABLE x ();" });
@@ -234,8 +360,12 @@ function selfTest() {
 
 if (process.argv.includes("--self-test")) process.exit(selfTest());
 
-const srcRoots = resolveWorkspaceSrcRoots();
-const envVars = collectBootEnvVars(srcRoots);
+const registeredSecrets = collectRegisteredSecrets();
+if (registeredSecrets.size === 0) {
+  console.error("✗ the secrets registry parsed to zero entries — the parser drifted, not the registry.");
+  process.exit(1);
+}
+const envVars = new Set([...collectBootEnvVars(resolveReachableSources()), ...registeredSecrets]);
 const SQL_REFS = [
   "lib/persistence/migrations/001_decisions.sql",
   "lib/persistence/migrations/002_sessions.sql",
@@ -249,7 +379,10 @@ const problems = [
   }),
   ...auditMigrationBanners(Object.fromEntries(SQL_REFS.map((f) => [f, readFileSync(f, "utf8")]))),
 ];
-console.log(`Deployment-runbook check — ${envVars.size} boot-read env vars held against the runbook`);
+console.log(
+  `Deployment-runbook check — ${envVars.size} boot-read env vars held against the runbook ` +
+    `(${registeredSecrets.size} of them from the secrets registry, successors included)`,
+);
 if (problems.length > 0) {
   console.error(`Deployment-runbook check FAILED: ${problems.length} problem(s).`);
   for (const p of problems) console.error(`  ✗ ${p}`);

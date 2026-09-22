@@ -29,8 +29,15 @@ export interface FixturePostureRecord {
   identityEnabled: boolean;
   managed: boolean;
   compliance: "compliant" | "non_compliant" | "unknown";
-  encrypted: boolean;
-  osSupported: boolean;
+  /**
+   * Optional: a source that did not read encryption (Graph's managedDevices list
+   * without `isEncrypted`) leaves it ABSENT, and an absent signal evaluates as
+   * "unknown" — `criticalSignalsPresent` then fails closed, so allow can never
+   * fire on a fact nobody read. Never default it to true or false.
+   */
+  encrypted?: boolean;
+  /** Optional, same rule as `encrypted`. */
+  osSupported?: boolean;
   /** Last Intune sync time; drives posture freshness. */
   lastSyncAt: string | null;
   /**
@@ -73,6 +80,22 @@ export function runFixtureSync(
       503,
     );
   }
+  return runPostureSync(store, clock, connector, records);
+}
+
+/**
+ * Apply already-fetched posture records to the store, in either mode. The
+ * records are the caller's: a fixture connector's committed dataset, or what an
+ * estate deployment read from its real source BEFORE constructing the core. The
+ * core performs no I/O here either way — same normalization, same freshness
+ * windows, same skip-and-count rule for an unknown subject.
+ */
+export function runPostureSync(
+  store: MemoryStore,
+  clock: Clock,
+  connector: Connector,
+  records: FixturePostureRecord[],
+): ConnectorSyncRun {
 
   const startedAt = clock.now().toISOString();
   const nowIso = startedAt;
@@ -108,10 +131,18 @@ export function runFixtureSync(
     }> = [
       { category: "device_compliance", value: record.compliance },
       { category: "device_management", value: record.managed },
-      { category: "device_encryption", value: record.encrypted },
-      { category: "os_support", value: record.osSupported },
-      { category: "posture_freshness", value: postureFreshness },
     ];
+    // A fact the source did not read is NOT emitted: evidence reads the absent
+    // category as "unknown" and the allow path refuses on it. Emission ORDER is
+    // part of the snapshot digest the migration proof pins, so the two optional
+    // facts keep their original slots between management and freshness.
+    if (record.encrypted !== undefined) {
+      deviceSignals.push({ category: "device_encryption", value: record.encrypted });
+    }
+    if (record.osSupported !== undefined) {
+      deviceSignals.push({ category: "os_support", value: record.osSupported });
+    }
+    deviceSignals.push({ category: "posture_freshness", value: postureFreshness });
 
     // Security-baseline (CIS/hardening) alignment, when the source reports it.
     if (record.baseline !== undefined) {

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-corrected-root-cause-for-the-evidence-op-typ",
+  "ackedBy": "cloud",
+  "note": "Correct and actionable — thank you for the precise trace. Root cause (external .tsbuildinfo surviving a dist/ clear) fixed at the source in PR #932: tsBuildInfoFile=${configDir}/dist/tsconfig.tsbuildinfo in tsconfig.base.json, so buildinfo now lives inside dist/ and any actor that clears dist/ clears the cache atomically. Verified: after wiping a lib's dist/, tsc --build rebuilds index.d.ts (was: silently skipped). Preflight+breadth green on the branch; left for owner merge (tsconfig, not scripts/**). Chose co-location over per-run --force so the normal typecheck path stays incremental/fast. Residual you should know about: a surgical delete of just dist/index.d.ts while its now-in-dist buildinfo survives still mis-skips — not your reported wholesale-clear case; if you want the unattended tick fully belt-and-braces, a 'tsc --build --force' (or rm dist+*.tsbuildinfo) before the evidence typecheck in the tick path closes it, your call since that's the Mac-owned script.",
+  "ackedAt": "2026-09-20T21:55:44.313Z"
+}

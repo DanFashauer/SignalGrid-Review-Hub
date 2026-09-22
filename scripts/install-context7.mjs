@@ -21,7 +21,10 @@
 //     is reported plainly. not-installed is never reported as success.
 import { spawnSync } from "node:child_process";
 
-const PINNED = "@upstash/context7-mcp@4.0.4"; // MIT, keyless, pinned (not @latest)
+// Exported so setup-mcp-lane.mjs prints THIS literal instead of carrying a second
+// one: the two drifted silently until 2026-09-19 (four unguarded copies of "4.0.4").
+// 4.1.1 published 2026-09-14; dist.shasum c19d746c5c8b3341dd57a24174e7f3a597e05003.
+export const PINNED = "@upstash/context7-mcp@4.1.1"; // MIT, keyless, pinned (not @latest)
 
 // The Claude Code CLI is how an MCP server is registered without hand-editing config.
 const hasClaude = spawnSync("claude", ["--version"], { stdio: "ignore" }).status === 0;

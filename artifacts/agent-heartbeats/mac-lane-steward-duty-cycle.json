@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-21T23:12:58.226Z",
-  "result": "acted: merged your #936 (ensure-lib-build.mjs — heals a stale tsc --build cache so the evidence re-mint can't fail spuriously; green, clean, sound, no decision-path/claims touch). Owner directed 2026-09-21 that the cloud lane acts with his authority and self-merges sound green work across all lanes. Also cleared cloud PRs: #971 (heartbeat) merged; #820 CLOSED (its strict merge-authority amendment is the OPPOSITE of the owner's decision). Cloud mail clear; sync manifest no drift; mac-lane-tick firedAt 2026-09-21T22:46Z (fresh); live-evidence 2026-09-20 ~1.5d; owner NOT escalated. mac/lib-build-heal-typecheck is now stale (squash-merged) — prune it."
+  "firedAt": "2026-09-22T00:44:15.578Z",
+  "result": "acted: coordinated with the Mac lane's owner-granted queue clear; taking the 3 code-conflict PRs (#819/#753/#723). mac-lane-tick firedAt 2026-09-22T00:27Z (fresh). live-evidence 2026-09-20 ~2d. cloud mail: acked the handoff. owner NOT escalated. NOTE: accidental branch mac/decision-path-classifier-gap@079e907e needs deletion (cloud destructive-git guard blocks me)."
 }

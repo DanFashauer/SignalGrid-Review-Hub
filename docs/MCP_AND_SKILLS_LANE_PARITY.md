@@ -41,11 +41,12 @@ cloud and Mac, writing no secret to any tracked file:
 
 | Server | How `pnpm run mcp:setup` handles it | Env key the lane supplies |
 | --- | --- | --- |
-| Context7 | Registers `scripts/install-context7.mjs` — pinned `@upstash/context7-mcp@4.0.4`, user scope, keyless | none (keyless) |
+| Context7 | Registers `scripts/install-context7.mjs` — pinned `@upstash/context7-mcp@4.1.1`, user scope, keyless | none (keyless) |
 | Neural Memory | Runs `scripts/install-neural-memory.mjs` when `uv` + `claude` are present; skips cleanly otherwise (DR-026) | `NEURALMEMORY_DIR` (a path, not a secret; defaults to `~/.neuralmemory`, must be outside the repo) |
 | Firecrawl | Runs `scripts/install-firecrawl.mjs` when `FIRECRAWL_API_KEY` is set; skips cleanly otherwise (DR-022) | `FIRECRAWL_API_KEY` (secret) |
 | GitHub | **Documented, not auto-registered** — the correct command depends on the transport (hosted HTTP vs a local server image), and guessing wrong is worse than documenting | `GITHUB_PERSONAL_ACCESS_TOKEN` (secret) |
-| Playwright | **Documented, not auto-registered** — keyless, but a clean setup needs both a pinned client and a browser install (`npx playwright install chromium`), more than one registration | none (keyless) |
+| Playwright | **Documented, not auto-registered** — keyless; evaluated by use 2026-09-18 (`docs/agent/mcp-roster.json`: 26 tools, no env, no writes, boots offline). Register the pinned client by hand at user scope once a Chromium is present: `claude mcp add playwright --scope user -- npx -y @playwright/mcp@0.0.81 --headless --browser chromium` (the cloud lane adds `--executable-path /opt/pw-browsers/chromium`; a Mac runs `npx playwright install chromium` first). Local pages only, never a tenant's console. | none (keyless) |
+| Wazuh | **Documented, not auto-registered** — `gbrigandi/mcp-server-wazuh` at the pinned commit in the roster; all 14 tools are reads, credentials env-only. Build it under `~/.cache/signalgrid/` (never in the tree) and register by hand at user scope with the eight `WAZUH_*` variables passed as `--env`. For the Mac lane's live-edr rehearsal only. | `WAZUH_API_HOST/PORT`, `WAZUH_INDEXER_HOST/PORT`, `WAZUH_API_USERNAME/PASSWORD`, `WAZUH_INDEXER_USERNAME/PASSWORD` (secrets) |
 
 The setup script prints this same per-lane env map on every run, so a lane always
 knows what it must supply. A missing CLI (`claude`, `uv`) or a missing key is a
@@ -55,6 +56,14 @@ were met but which then errors *does* fail the run: not-installed is never repor
 as success.
 
 ## The honest boundary
+
+Every third-party server this repository names was **evaluated by use** before it
+was named: cloned at a pinned sha, read for what it reads, writes, sends and
+hooks, built, and probed over stdio with every socket denied, twice. The
+measurements, tool counts and dispositions live in `docs/agent/mcp-roster.json`;
+the ones not adopted (Keycloak admin: 31 of 56 tools mutate the realm; the
+hardened Postgres server: refuses to serve without a live database, re-measure
+there) are recorded with the reason, so the next person does not re-run the trial.
 
 - **Each lane supplies its own keys.** A secret (`FIRECRAWL_API_KEY`,
   `GITHUB_PERSONAL_ACCESS_TOKEN`) is read from the environment on the machine that

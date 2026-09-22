@@ -94,6 +94,38 @@ if (process.argv.includes("--self-test")) process.exit(selfTest());
 const messages = loadMessages();
 const { problems, reported, unread, stale, superseded } = auditLaneMessages(messages, loadAcks());
 
+// MACHINE-READABLE SUMMARY, for the unattended Mac tick.
+//
+// The tick reported `quiet` while five cloud->mac messages sat unread, the oldest
+// four days. That was true about the tick and SILENT about the mailbox: it runs sim
+// requests and heartbeats and does those correctly, but nothing in it reads the
+// inbox, so "nothing happened" and "nobody looked" produced the same word. This is
+// the smallest honest fix — the tick cannot ACKNOWLEDGE mail (an ack says what was
+// done, and a script has done nothing), but it can stop the state being invisible.
+//
+// COARSE ON PURPOSE. The age is whole days, not the 4.3d the prose carries, because
+// the tick throttles a heartbeat whose result is IDENTICAL to the last one. A figure
+// that ticks up continuously would differ on every run and push a heartbeat commit
+// to Alpha every five minutes — trading a silent mailbox for a flooded mainline.
+// Whole days change when something actually changes.
+if (process.argv.includes("--unread-summary")) {
+  const to = (process.argv[process.argv.indexOf("--unread-summary") + 1] ?? "").trim();
+  const mine = to === "" || to.startsWith("--") ? unread : unread.filter((u) => u.includes(`\u2192 ${to} `));
+  let oldestDays = 0;
+  for (const u of mine) {
+    // MINUTES, hours and days — the prose uses all three, and the first draft of
+    // this matched only [hd], so a message "unread for 50m" fell into the
+    // unknown-age arm and reported 99d. Caught by running it, not by reading it.
+    const m = /unread for ([0-9.]+)([mhd])/.exec(u);
+    if (!m) { oldestDays = Math.max(oldestDays, 99); continue; } // unknown age is never fresh
+    const perDay = { m: 1440, h: 24, d: 1 }[m[2]];
+    const days = Number(m[1]) / perDay;
+    if (Number.isFinite(days)) oldestDays = Math.max(oldestDays, Math.floor(days));
+  }
+  console.log(mine.length === 0 ? "unread=0" : `unread=${mine.length} oldest=${oldestDays}d`);
+  process.exit(0);
+}
+
 console.log(`Lane messages — ${messages.length} sent, ${messages.length - unread.length} acknowledged${superseded.size > 0 ? `, ${superseded.size} superseded by a later message` : ""}`);
 if (reported.length > 0) {
   console.log("\n  REPORTED — accepted as records, not as evidence:");

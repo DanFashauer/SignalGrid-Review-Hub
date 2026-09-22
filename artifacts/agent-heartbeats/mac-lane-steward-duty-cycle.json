@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-22T15:31:28.382Z",
-  "result": "quiet — mac tick fresh (firedAt 15:12Z, <3h); live-evidence mac-run.json 2026-09-20 (~2d, <3d, remint note already pending to mac); no cloud-addressed mail unread (3 cloud→mac still pending on mac's read); merged branches auto-pruned; no new mac/* branch. no owner escalation. cloud landed #976 (#314 closed) + #832 (workspace-cycles gate) this hour."
+  "firedAt": "2026-09-22T16:27:17.572Z",
+  "result": "quiet — mac tick fresh (firedAt 16:02Z, <3h); live-evidence 2026-09-20 (~2d, <3d, remint note pending to mac); manifest no drift; no cloud-addressed mail; sim 20/20 bound; merged branches auto-pruned; no new mac/* branch; no owner escalation. Cloud landed #822 (four verified defects + gates incl iOS DLP restriction-defaults) since last cycle; manually triggered the daily mutation sweep on Alpha post-#976 -> 4/4 green (confirms #314 closed and resets the CI-liveness clock, which had been false-failing PRs on stale GitHub API pages)."
 }

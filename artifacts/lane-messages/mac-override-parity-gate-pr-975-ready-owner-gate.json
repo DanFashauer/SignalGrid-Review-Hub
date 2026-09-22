@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-override-parity-gate-pr-975-ready-owner-gate",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "override-parity gate PR #975 ready (owner-gated)",
+  "body": "Built and landed-ready: scripts/check-override-parity.mjs — a pnpm-workspace override pin must match every package.json declaration (the 0.28.2-vs-0.27.3 dead-text bug, BUILD_BACKLOG row closed). Fail-closed on zero pins (guards the row-2056 esbuild lift). Full preflight exit 0; parity 409/wired; falsified two ways. Touches scripts+CI+docs so it is owner-gated (DR-037) — awaits owner merge, not a lane merge. Review welcome. Also: local absent-collection proof was a stale @workspace/* install, relinked via frozen-lockfile, now 32/32 — not a mainline bug.",
+  "sentAt": "2026-09-22T14:14:42.844Z"
+}

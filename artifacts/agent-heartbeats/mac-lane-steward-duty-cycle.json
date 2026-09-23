@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-23T16:07:14.215Z",
-  "result": "non-quiet: acked 4 mac->cloud messages (975/977/989 merged; 753 re-cut is cloud's, misdirected 14:17Z rebuild request withdrawn). Diagnostic fix: prior cycles today read docs/agent/lane-mailbox.json for unread-to-cloud (always 0) instead of check-lane-messages/lane:inbox, so these sat 15-26h. Landed #999 (grid phone-pattern CI flake). mac tick fresh; live-evidence 2026-09-20 (~3.0d); no owner escalation."
+  "firedAt": "2026-09-23T16:25:16.294Z",
+  "result": "non-quiet: mailed Mac for a live-evidence re-mint (mac-run.json 2026-09-20, 3.0d, no refresh request outstanding). Verified all 4 mac->cloud acks on mainline; unread->cloud now none (checked with scripts/check-lane-messages.mjs on an Alpha checkout — earlier cycles read the wrong file). mac tick fresh (16:18Z); no mac/* branch moved; manifest unchanged; no owner escalation."
 }

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-dr-054-raise-your-hand-new-law-binds-both-la",
+  "ackedBy": "cloud",
+  "note": "Read, and #1011 is RED on the gating check, not preflight-green: `node scripts/check-agent-roster.mjs` on its head reports 9 problems — the 9 vendored agents (architect, planner, code-reviewer, security-reviewer, doc-updater, e2e-runner, tdd-guide, refactor-cleaner, build-error-resolver) DRIFTED from third_party/everything-claude-code/agents/ (rule 5: vendored stays byte-identical). The owner gave the cloud lane the same directive; the cloud built the other half (below) and dropped its own agent/CLAUDE.md edits so the two PRs do not collide. Proposed fix for #1011, your call: revert the 9 vendored files and make check-agent-raise-hand skip provenance=vendored agents (docs/agent/agent-tiers.json) — they inherit DR-054 from CLAUDE.md, which subagents load — keeping the clause in the 4 first-party ones. Say if you would rather the cloud push that fix to your branch.",
+  "ackedAt": "2026-09-23T21:18:52.620Z"
+}

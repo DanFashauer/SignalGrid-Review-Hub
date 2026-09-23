@@ -26,7 +26,12 @@ iOS device ◀──config profiles/commands── Fleet ◀──┘ (allow/ste
 ```
 
 1. Fleet enrolls + supervises the device (ADE via Apple Business Manager for
-   supervision; ASAM needs supervision).
+   supervision; ASAM needs supervision). Automated Device Enrollment supervises
+   automatically (iPhone since iOS 13); a pilot device with no Apple Business
+   Manager can be supervised by hand with Apple Configurator for Mac — and adding
+   it to ABM later wipes it (`docs/ZERO_COST_LIVE_TEST_MATRIX.md`). Source: the
+   Apple Platform Deployment guide, "About Apple device supervision" (2026-09-17
+   edition).
 2. SignalGrid reads posture from Fleet (osquery) as signals → decision.
 3. On the decision, SignalGrid calls the Fleet API to apply/relax the profiles
    below (tighten on restrict/deny, release on allow).
@@ -67,6 +72,26 @@ supervised) — lets the shell self-lock the idle device:
   </array>
 </dict>
 ```
+On supervised iOS 27 / iPadOS 27 devices the same allow-or-deny rule also exists
+as a **declarative configuration** — the deployment guide's *App settings*
+configuration, which additionally sets default privacy permissions (camera,
+microphone, location, Bluetooth, local network) with an organization
+justification string, and whose page lists Automated Device Enrollment as its
+supported enrollment. A declaration travels the MDM's declarative channel, not
+a `.mobileconfig`; (c) stays the profile form until the Fleet connector speaks
+DDM. Source: "App settings declarative configuration" and "Allow and deny apps
+and binaries" (2026-09-17 edition).
+
+**d) Intelligence off on a shared clinical device** — two declarative
+configurations, both supervised-only, iOS / iPadOS 26.4 and later: *External
+intelligence* (turn off external intelligence integrations and their sign-in;
+optionally one allowed workspace ID) and *Apple Intelligence* (Writing Tools,
+Genmoji, Image Playground, Image Wand, Visual Intelligence, the per-app Mail /
+Notes / Safari / Calendar features; force on-device-only dictation and
+translation). A device that passes between clinicians must not carry a prior
+holder's AI session or send text to an external model; these are the switches,
+and this repository had no row for them until the guide was read (2026-09-18).
+Declarations, not `.mobileconfig` — delivered by the MDM's declarative channel.
 
 **d) Non-removable install** — the shell must NOT be uninstallable by the worker;
 only MDM (Fleet) or the SignalGrid admin console (driving Fleet) may remove it.
@@ -139,6 +164,16 @@ not a substitute for it.
 5. Enroll a real iPhone/iPad in Fleet (APNs cert required).
 6. Supervise via ADE/ABM → the ASAM authorization + app allowlist actually engage
    (the app-controlled kiosk-until-auth lock, verified on-device).
+7. **Return to Service** — the device-side half of the custody ground truth's
+   "returns to any dock where it checks itself back in, re-provisions": one MDM
+   erase command carrying a Wi-Fi profile and the enrollment to return to; the
+   device erases, re-enrolls, keeps its supervision, language and region, and
+   lands on the Home Screen with no Setup Assistant. iOS / iPadOS 26 and later
+   (app preservation, which needs Automated Device Enrollment and a bootstrap
+   token); iOS / iPadOS 27 adds retry and timeout options. Not available on
+   Shared iPad. Nothing in this repository binds `device_returned` to it yet —
+   that is a `docs/BUILD_BACKLOG.md` row, not a claim. Source: "Use Return to
+   Service for Apple devices" (2026-09-17 edition).
 
 ## Partnership note
 Fleet manages + observes the device (open source, osquery, GitOps); SignalGrid

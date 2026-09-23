@@ -29,7 +29,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         // Split heavy, stable vendor code into cacheable chunks so the app
         // shell is small and a code change does not bust the vendor cache.

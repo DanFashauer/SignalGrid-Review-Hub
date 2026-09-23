@@ -1,0 +1,21 @@
+meta {
+  name: Decision step-up - challenge
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/v1/decisions/{{decisionId}}/step-up/challenge
+  body: none
+  auth: inherit
+}
+
+docs {
+  Mints a single-use WebAuthn authentication challenge bound to ONE step_up decision. The subjects are read from the decision itself, never from the body. Fail-closed: a decision this tenant does not hold answers 404; a decision that is not a step_up, or is already answered, answers 409; an identity with no enrolled credential answers 409 - nothing to sign.
+}
+
+script:post-response {
+  if (res.body && res.body.challengeId) {
+    bru.setVar("stepUpChallengeId", res.body.challengeId);
+  }
+}

@@ -416,6 +416,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:agent-identity",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/agent-identity/evaluate.ts",
       "lib/integrations/src/integrations/agent-identity/agent-identity-connector.ts",
@@ -442,6 +443,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:access-governance",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/access-governance/evaluate.ts",
       // access-governance-connector.ts dropped 2026-09-03: its normalize/transport is
@@ -589,6 +591,22 @@ export const TARGETS = [
     ],
   },
   {
+    // NOT a connector — a detector, and registered for the same reason
+    // `decision-continuity` is: `check-guard-registries.mjs` derives its requirement from
+    // `enumerateGrantSafety`, which this file never calls, so nothing was ever going to
+    // ask for it. Two independent adversarial reviews planted mutants in `detect.ts` —
+    // dropped `&&` clauses, a widened event-type match, the evidence set gutted to
+    // `[events[0].eventId]`, the reason string replaced with "Everything is fine." — and
+    // 10 of 12 SURVIVED a fully green `proof:event-contract`, because the proof only
+    // asked whether a detection CODE appeared. A detection's reason and evidence are the
+    // whole operator-facing deliverable; the proof now pins the exact detection list,
+    // severity, correlation id, evidence ids and reason text of every timeline, and the
+    // silence of every timeline that must produce none.
+    proof: "proof:event-contract",
+    oneLine: true,
+    files: ["lib/event-contract/src/detect.ts"],
+  },
+  {
     proof: "proof:identity-risk",
     files: [
       "lib/integrations/src/integrations/identity-risk/evaluate.ts",
@@ -680,6 +698,36 @@ export const TARGETS = [
 // a probe, without a sweep. A registry checkable only by the thing that consumes it
 // is a registry nobody checks.
 export const ALLOWED = [
+  {
+    file: "lib/integrations/src/integrations/access-governance/evaluate.ts",
+    line: 'if (observedMs === null || referenceMs === null) return "unknown";',
+    reason:
+      "REDUNDANT BY EFFECT, and checkable by reading one function: `ageMs(observedMs, " +
+      "referenceMs, 0)` on the next line returns null when `seenAt` is null (observedMs) " +
+      "and when `nowMs` is not a finite number (referenceMs), and the `age === null` line " +
+      "immediately after answers \"unknown\" for both — the same verdict this clause gives. " +
+      "That is why the brace-less sweep found it surviving `if (false)` with " +
+      "proof:access-governance green. Kept rather than deleted because it names the two " +
+      "distinct causes at the point of use, and because `ageMs` lives in " +
+      "lib/integrations/src/utils/freshness.ts — a shared util this family does not own, " +
+      "so relying on its null contract is a coupling this clause makes safe to change: " +
+      "if that contract ever narrows, this guard still refuses instead of falling through " +
+      "to an age computed from a null. Labelled inert in the source.",
+  },
+  {
+    file: "lib/integrations/src/integrations/agent-identity/agent-identity-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER — and the second half is why it is " +
+      "kept rather than deleted. `known` is a `readonly string[]`, so `known.includes(k)` on " +
+      "the very next line can never match a symbol and returns true for exactly the states " +
+      "this clause catches; that is why the brace-less sweep found it surviving `if (false)` " +
+      "with proof:agent-identity at 152/152. It was DELETED on 2026-09-18 and the delete did " +
+      "not survive `tsc --build`: TS2345 on the next line, because this is the type guard " +
+      "that narrows `k` from `string | symbol` to `string`. Verified in that order — " +
+      "mutated, then deleted, then restored — rather than argued. Labelled inert in the " +
+      "source with the same reason.",
+  },
   {
     file: "lib/integrations/src/integrations/edr-threat/edr-connector.ts",
     line: 'typeof endpoint.signatureAgeHours === "number" &&',
@@ -1252,7 +1300,11 @@ export const ALLOWED = [
 
 // ── runner ────────────────────────────────────────────────────────────────────
 
-function runProof(proof) {
+// Exported so the per-PR falsification gate (check-pr-gate-falsification.mjs) drives the
+// EXACT same proof runner this sweep uses, rather than a second copy that could drift.
+// NOTE for any caller authorizing a merge: this returns "killed" for a crashed proof and
+// "hung" for a timeout. A merge authorizer must treat "hung" as INCONCLUSIVE, never a kill.
+export function runProof(proof) {
   const run = spawnSync("pnpm", ["run", proof], {
     cwd: repoRoot,
     encoding: "utf8",

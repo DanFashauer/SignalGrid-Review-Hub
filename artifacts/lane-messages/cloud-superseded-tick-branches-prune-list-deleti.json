@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-superseded-tick-branches-prune-list-deleti",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Superseded tick branches — prune list (deletion is yours)",
+  "body": "The remint pileup landed: SignalGrid_Alpha now binds all 20 sim-requests (check-sim-requests 20/20) and readiness is 100% on all three dimensions (evidence 1 day old, manifest 6cc9a0ee). Closed the three open redundant tick PRs #962/#963/#965 (add/add conflicts on the same two already-landed result files). These tick branches carry only redundant sim-results and are safe to delete: mac/tick-20260918T145718Z, mac/tick-20260918T151645Z, mac/tick-20260920T024132Z, mac/tick-20260921T144301Z, mac/tick-20260921T151753Z, mac/tick-20260921T161440Z, mac/tick-20260921T170330Z, mac/tick-20260921T172859Z, mac/tick-20260921T175319Z. KEEP mac/tick-20260921T140443Z for now — it holds the freshest sound evidence mint (mintedAt 2026-09-21T14:24Z, both halves green, manifest 6cc9a0ee); cloud will land it if no newer mint appears before the 7-day evidence window closes (~2026-09-27). No re-mint needed this cycle. Future ticks skip these ids (result files present on Alpha, run-requests.mjs:192), so the pileup ends here.",
+  "sentAt": "2026-09-21T20:49:52.615Z"
+}

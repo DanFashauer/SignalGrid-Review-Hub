@@ -137,6 +137,27 @@ const STEPS = [
   // quoted forever — 20 of 29 were wrong on 2026-09-05, three by 100+ lines.
   { name: "Doc line-count self-test (a planted drift must fail; the real tree must be clean)", cmd: ["node", "scripts/check-doc-line-counts.mjs", "--self-test"] },
   { name: "Doc line counts (every `path (N)` figure matches the file it names)", cmd: ["node", "scripts/check-doc-line-counts.mjs"] },
+  // The four capacity figures RELIABILITY_SLO.md owns, wherever a document restates
+  // them. `check-derived-doc-figures` sweeps tree-derived values and never read a bare
+  // `240` or `585`; COMPANY_BUILD_PLAN.md carried the superseded 5,128 for twelve days.
+  { name: "Performance-figure self-test (a drifted or undated restatement must fail)", cmd: ["node", "scripts/check-performance-figures.mjs", "--self-test"] },
+  { name: "Performance figures (every restatement matches RELIABILITY_SLO.md and carries its date)", cmd: ["node", "scripts/check-performance-figures.mjs"] },
+  // A sim result is an attestation; `provenance.commit` is the only thing tying it to
+  // code. One stamped a sha `git cat-file -e` could not resolve on Alpha.
+  { name: "Sim-result provenance self-test (an unresolvable sha is reported; a non-ancestor and later evidence must fail)", cmd: ["node", "scripts/check-sim-result-provenance.mjs", "--self-test"] },
+  { name: "Sim-result provenance (every result names a checkable commit and cites evidence no newer than itself)", cmd: ["node", "scripts/check-sim-result-provenance.mjs"] },
+  // A generated input validator nobody parses reads exactly like coverage. One of the
+  // thirteen in lib/api-zod is invoked; the rest are declared client/type-only.
+  { name: "api-zod wiring self-test (an orphan schema and a stale declaration must fail)", cmd: ["node", "scripts/check-api-zod-wiring.mjs", "--self-test"] },
+  { name: "api-zod wiring (every generated input schema is invoked or declared client/type-only)", cmd: ["node", "scripts/check-api-zod-wiring.mjs"] },
+  // The /api document against the fixtures it serves — `lastSync: null` against a
+  // `string`, `avgLatencyMs: 11.4` against an `integer`, both `limit` defaults crossed.
+  { name: "/api fixture-contract self-test (each of the four rules must be able to fail)", cmd: ["node", "scripts/check-api-fixture-contract.mjs", "--self-test"] },
+  { name: "/api fixture contract (the document describes what the fixtures answer)", cmd: ["node", "scripts/check-api-fixture-contract.mjs"] },
+  // The /v1 document against the refusals the served source returns: 401 was on no
+  // protected operation and 429 was nowhere, while every /v1 route can answer both.
+  { name: "/v1 refusal-coverage self-test (a missing 401/429/400/404 must fail; the floors must fire)", cmd: ["node", "scripts/check-v1-refusal-coverage.mjs", "--self-test"] },
+  { name: "/v1 refusal coverage (every refusal the server returns is documented)", cmd: ["node", "scripts/check-v1-refusal-coverage.mjs"] },
   // docker-compose.prod.yml explained at length why `api` needs a healthcheck and
   // added one — there. The review topology had none on any service.
   { name: "Compose healthcheck self-test (a planted port without a healthcheck must fail)", cmd: ["node", "scripts/check-compose-healthchecks.mjs", "--self-test"] },
@@ -240,6 +261,8 @@ const STEPS = [
   { name: "Console launch families self-test (the check can actually fail)", cmd: ["node", "scripts/check-console-launch-families.mjs", "--self-test"] },
   { name: "Cost figures (every currency amount resolves to docs/COST_MODEL.md's register; no owner-only billing figure is published as our own spend)", cmd: ["node", "scripts/check-cost-figures.mjs"] },
   { name: "Cost figures self-test (the check can actually fail)", cmd: ["node", "scripts/check-cost-figures.mjs", "--self-test"] },
+  { name: "Decision-path purity (a verdict may not be fetched, spawned, or sampled from a model)", cmd: ["node", "scripts/check-decision-path-purity.mjs"] },
+  { name: "Decision-path purity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-decision-path-purity.mjs", "--self-test"] },
   { name: "Guard-registry drift (coverage lists derived, not trusted)", cmd: ["node", "scripts/check-guard-registries.mjs"] },
   { name: "CI\u2194preflight drift (every proof runs in both places)", cmd: ["node", "scripts/check-ci-preflight-sync.mjs"] },
   // Pure static analysis of the Dockerfiles against pnpm-workspace.yaml — no
@@ -265,6 +288,10 @@ const STEPS = [
   { name: "iOS dead stored properties (a field nothing assigns makes every read of it dead)", cmd: ["node", "scripts/check-ios-dead-stored-properties.mjs"] },
   { name: "iOS policy defaults self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-policy-defaults.mjs", "--self-test"] },
   { name: "iOS policy defaults (no managed-config default derived from the absence of policy)", cmd: ["node", "scripts/check-ios-policy-defaults.mjs"] },
+  { name: "Console unknown-render self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-console-unknown-render.mjs", "--self-test"] },
+  { name: "Console unknown-render (no good-state render on unguarded query data)", cmd: ["node", "scripts/check-console-unknown-render.mjs"] },
+  { name: "iOS restriction defaults self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs", "--self-test"] },
+  { name: "iOS restriction defaults (a DLP restriction may not default to permitted on an unknown session)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs"] },
   { name: "Sim-script self-check self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs", "--self-test"] },
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },
@@ -337,6 +364,10 @@ const STEPS = [
   // Sibling of NaN fail-open: guards the BOUND, not the timestamp.
   { name: "Posed-bound self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-posed-bounds.mjs", "--self-test"] },
   { name: "Posed bounds (a caller-posed numeric bound is never read with ??)", cmd: ["node", "scripts/check-posed-bounds.mjs"] },
+  // A workspace dependency cycle is an infinite symlink loop on disk; the Mac's
+  // recursive readdir followed one until ENAMETOOLONG (#819). Refused at the manifest.
+  { name: "Workspace-cycles self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-workspace-cycles.mjs", "--self-test"] },
+  { name: "Workspace cycles (no workspace package depends on itself through any chain)", cmd: ["node", "scripts/check-workspace-cycles.mjs"] },
   // Third sibling: NaN fail-open guards the TIMESTAMP, posed-bounds guards the BOUND,
   // this one guards the RULE — that only one body decides whether a future sighting
   // is evidence of freshness, and that every copy that stays local says why.
@@ -389,6 +420,10 @@ const STEPS = [
   // would have passed preflight and every PR check.
   { name: "Proof: isolation-scope (no tenant can read another's row)", cmd: ["pnpm", "run", "proof:isolation-scope"] },
   { name: "Proof: graph-wire (throttling, 5xx, auth and malformed bodies fail closed)", cmd: ["pnpm", "run", "proof:graph-wire"] },
+  { name: "Proof: estate-core (a customer estate boots a core; no allow on unread facts)", cmd: ["pnpm", "run", "proof:estate-core"] },
+  { name: "Proof: estate-refresh (a scheduled posture re-read re-decides, and fails closed)", cmd: ["pnpm", "run", "proof:estate-refresh"] },
+  { name: "Proof: secrets (one read site, fail-closed, and a rotation that actually rotates)", cmd: ["pnpm", "run", "proof:secrets"] },
+  { name: "Proof: data-lifecycle (retention, erasure and DSAR leave the audit chain verifiable)", cmd: ["pnpm", "run", "proof:data-lifecycle"] },
   { name: "Figure-guard self-test (the baseline-age report must be able to fail)", cmd: ["node", "scripts/check-proof-figures.mjs", "--self-test"] },
   { name: "Docs\u2194proof FIGURE guard (a measured number must still be one)", cmd: ["node", "scripts/check-proof-figures.mjs"] },
   { name: "Proof-count self-test (a zeroed claim scan fails via the floor)", cmd: ["node", "scripts/check-proof-counts.mjs", "--self-test"] },
@@ -397,6 +432,7 @@ const STEPS = [
   { name: "Live-sync evidence-kind self-test (unreadable is not hardware)", cmd: ["node", "scripts/check-live-sync.mjs", "--self-test"] },
   { name: "MCP surface self-test (coverage + resource parity must be able to fail)", cmd: ["node", "scripts/check-mcp-surface.mjs", "--self-test"] },
   { name: "MCP surface (chat connection must match the fabric)", cmd: ["node", "scripts/check-mcp-surface.mjs"] },
+  { name: "Lib-build heal self-test (an orphaned tsbuildinfo with no dist must be flagged)", cmd: ["node", "scripts/ensure-lib-build.mjs", "--self-test"] },
   { name: "Typecheck (all packages)", cmd: ["pnpm", "run", "typecheck"] },
   // needsNativeBuild: rollup/esbuild/lightningcss/oxide platform binaries. The
   // workspace strips every triple but linux-x64, so on other platforms this step
@@ -455,6 +491,7 @@ const STEPS = [
   { name: "Org roster self-test (the gate can actually fail)", cmd: ["node", "scripts/check-org-roster.mjs", "--self-test"] },
   { name: "Backlog ownership (a row with work left in it names the role that owns it)", cmd: ["node", "scripts/check-backlog-ownership.mjs"] },
   { name: "Backlog ownership self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-ownership.mjs", "--self-test"] },
+  { name: "Loop-state seam self-test (squash-of-a-merge-tree, whitespace twin and same-name-ahead fixtures can fail)", cmd: ["node", "scripts/loop-state.mjs", "--self-test"] },
   { name: "Backlog evidence (a row that says DONE says how you'd check)", cmd: ["node", "scripts/check-backlog-evidence.mjs"] },
   { name: "Backlog evidence self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-evidence.mjs", "--self-test"] },
   { name: "Surface-ownership self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-surface-ownership.mjs", "--self-test"] },
@@ -463,6 +500,10 @@ const STEPS = [
   { name: "Role-coverage self-test (the gate can actually fail)", cmd: ["node", "scripts/check-role-coverage.mjs", "--self-test"] },
   { name: "Owner-gated surfaces manifest (the autonomous-merge escalation line is non-empty and well-formed)", cmd: ["node", "scripts/check-owner-gated-surfaces.mjs"] },
   { name: "Owner-gated surfaces self-test (classify routes safety-machinery + owner-reserved diffs to the owner)", cmd: ["node", "scripts/check-owner-gated-surfaces.mjs", "--self-test"] },
+  { name: "PR gate-falsification (a green suite proves nothing if no gate can fail on the changed lines)", cmd: ["node", "scripts/check-pr-gate-falsification.mjs"] },
+  { name: "PR gate-falsification self-test (every fail-closed arm, both directions)", cmd: ["node", "scripts/check-pr-gate-falsification.mjs", "--self-test"] },
+  { name: "Brain-cycle merge authorizer (affirmative-green allowlist; an empty context is refused)", cmd: ["node", "scripts/brain-cycle-merge-decide.mjs"] },
+  { name: "Merge-authorizer self-test (every conjunct falsified in both directions)", cmd: ["node", "scripts/brain-cycle-merge-decide.mjs", "--self-test"] },
   { name: "Cited commands (a command a document promises must still exist)", cmd: ["node", "scripts/check-cited-commands.mjs"] },
   { name: "Cited-command self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-commands.mjs", "--self-test"] },
   { name: "Review coverage (a green gate suite is not a reviewed codebase)", cmd: ["node", "scripts/check-review-coverage.mjs"] },
@@ -503,6 +544,9 @@ const STEPS = [
   { name: "OpenAPI contract check (proof:api-contract)", cmd: ["pnpm", "run", "proof:api-contract"] },
   { name: "Proof: api-client-react (the web client's fetch boundary refuses what it cannot vouch for)", cmd: ["pnpm", "run", "proof:api-client-react"] },
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
+  // The review console's own node:test suite (policy-test-set status, facility-graph layout);
+  // the test-execution gate refused these files while nothing reached them.
+  { name: "Console unit tests (policyTests, facilityGraphLayout)", cmd: ["pnpm", "run", "test:console"] },
   // The MCP server's own node:test suite (wire-visible tool/resource contract +
   // read-only annotations, incl. the not-read-only bruno_collection_run). It sat
   // executed by no lane until 2026-09-02; wired here and in CI beside the
@@ -547,6 +591,7 @@ const STEPS = [
   { name: "Proof: itsm-credential-crypto (a weak key is refused, not stretched)", cmd: ["pnpm", "run", "proof:itsm-credential-crypto"] },
   { name: "Proof: telemetry-posture-cache (stale posture is never served as current)", cmd: ["pnpm", "run", "proof:telemetry-posture-cache"] },
   { name: "Proof: itsm-template (evidence text cannot rewrite itself on the way into a ticket)", cmd: ["pnpm", "run", "proof:itsm-template"] },
+  { name: "Proof: itsm-dispatch (cascade join 1 — the mapper is total; every way the ticket fails to open refuses by name)", cmd: ["pnpm", "run", "proof:itsm-dispatch"] },
   { name: "Proof: session-store", cmd: ["pnpm", "run", "proof:session-store"] },
   { name: "Proof: orchestration", cmd: ["pnpm", "run", "proof:orchestration"] },
   { name: "Proof: room-sim", cmd: ["pnpm", "run", "proof:room-sim"] },
@@ -566,6 +611,7 @@ const STEPS = [
   { name: "Proof: signal-radar", cmd: ["pnpm", "run", "proof:signal-radar"] },
   { name: "Proof: control-plane", cmd: ["pnpm", "run", "proof:control-plane"] },
   { name: "Proof: edge-sync", cmd: ["pnpm", "run", "proof:edge-sync"] },
+  { name: "Proof: decision-cascade (the whole chain, and every refusal in it)", cmd: ["pnpm", "run", "proof:decision-cascade"] },
   { name: "Proof: decision-continuity (which decision wins across a partition)", cmd: ["pnpm", "run", "proof:decision-continuity"] },
   { name: "Safety gate (guardrails)", cmd: ["pnpm", "run", "safety:check"] },
   // Mirrors the CI "Postman collection is committed in sync" step: regenerate,
@@ -612,6 +658,13 @@ const STEPS = [
   { name: "CycloneDX SBOM committed in sync", cmd: ["bash", "-c", "pnpm run sbom && git diff --exit-code -- artifacts/sbom/cyclonedx.json"] },
   { name: "Licence policy self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-licence-policy.mjs", "--self-test"] },
   { name: "Licence policy (every component's licence resolves to a declared class)", cmd: ["node", "scripts/check-licence-policy.mjs"] },
+  // BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a report-only
+  // watcher, cheaper than fetching every vendor page — pure date arithmetic
+  // against a committed manifest, no network call. REPORT-ONLY: the check
+  // itself always exits 0; only the self-test can fail (a broken comparison,
+  // never a stale link) a pull request.
+  { name: "Vendor-doc drift watch self-test (the comparison logic must actually work)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs", "--self-test"] },
+  { name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs"] },
 ];
 
 // Is the native web build structurally impossible here? Derived from the committed

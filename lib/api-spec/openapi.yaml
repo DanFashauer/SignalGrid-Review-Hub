@@ -58,16 +58,26 @@ paths:
       parameters:
         - in: query
           name: limit
+          description: >-
+            Clamped by the server: a non-numeric, zero or negative value falls back to
+            the default, and anything above the maximum is capped to it.
           schema:
             type: integer
-            default: 50
+            default: 20
+            minimum: 1
+            maximum: 200
         - in: query
           name: outcome
+          description: >-
+            Filter only. The server does NOT reject an unlisted value — it filters with
+            it and returns an empty list, so this enum is the vocabulary, not a promise
+            of a 400.
           schema:
             type: string
             enum: [allow, step-up, restrict, deny]
         - in: query
           name: integrationId
+          description: Filter only; an unknown id returns an empty list rather than a 404.
           schema:
             type: string
       responses:
@@ -168,14 +178,23 @@ paths:
       parameters:
         - in: query
           name: signalType
+          description: >-
+            Filter only. The server does NOT reject an unlisted value — it filters with
+            it and returns an empty list, so this enum is the vocabulary, not a promise
+            of a 400.
           schema:
             type: string
             enum: [identity, device-posture, session-context, operational-signals, physical-access, network-posture]
         - in: query
           name: limit
+          description: >-
+            Clamped by the server: a non-numeric, zero or negative value falls back to
+            the default, and anything above the maximum is capped to it.
           schema:
             type: integer
-            default: 20
+            default: 50
+            minimum: 1
+            maximum: 200
       responses:
         "200":
           description: Recent signals
@@ -358,13 +377,9 @@ paths:
       operationId: getDashboardMetrics
       tags: [metrics]
       summary: Aggregated metrics for the operator dashboard
-      parameters:
-        - in: query
-          name: window
-          schema:
-            type: string
-            enum: [1h, 24h, 7d, 30d]
-            default: 24h
+      description: >-
+        Takes no parameters. A `window` query was documented here and the handler never
+        read it — the fixture is a fixed 24h aggregate, and `window` in the response says so.
       responses:
         "200":
           description: Dashboard metrics
@@ -378,19 +393,9 @@ paths:
       operationId: getDecisionSeries
       tags: [metrics]
       summary: Time-series decision counts for charting
-      parameters:
-        - in: query
-          name: window
-          schema:
-            type: string
-            enum: [1h, 24h, 7d, 30d]
-            default: 24h
-        - in: query
-          name: granularity
-          schema:
-            type: string
-            enum: [minute, hour, day]
-            default: hour
+      description: >-
+        Takes no parameters. `window` and `granularity` were documented here and the
+        handler never read either — the fixture is a fixed 24-point hourly series.
       responses:
         "200":
           description: Time-series data
@@ -480,30 +485,6 @@ components:
           additionalProperties: true
       required: [id, identityId, deviceId, workflowId, outcome, signals, evaluatedAt, latencyMs]
 
-    DecisionRequest:
-      type: object
-      properties:
-        identityId:
-          type: string
-        deviceId:
-          type: string
-        workflowId:
-          type: string
-        integrationContext:
-          type: object
-          properties:
-            mdmPlatform:
-              type: string
-            identityProvider:
-              type: string
-            itsmPlatform:
-              type: string
-          additionalProperties: true
-        metadata:
-          type: object
-          additionalProperties: true
-      required: [identityId, deviceId, workflowId]
-
     IntegrationHealth:
       type: object
       properties:
@@ -523,7 +504,8 @@ components:
           type: string
           enum: [connected, degraded, disconnected, not-configured]
         lastSync:
-          type: string
+          # NULL in the served catalog for every integration that has never synced.
+          type: [string, "null"]
           format: date-time
         signalsIngested24h:
           type: integer
@@ -554,23 +536,6 @@ components:
           type: string
           format: date-time
       required: [id, signalType, platform, deviceId, value, status, receivedAt]
-
-    SignalIngestionRequest:
-      type: object
-      properties:
-        signalType:
-          $ref: "#/components/schemas/SignalType"
-        platform:
-          type: string
-        deviceId:
-          type: string
-        value:
-          type: object
-          additionalProperties: true
-        sourceTimestamp:
-          type: string
-          format: date-time
-      required: [signalType, platform, deviceId, value]
 
     PolicyRule:
       type: object
@@ -614,26 +579,6 @@ components:
           format: date-time
       required: [id, name, workflowPattern, rules, failMode, active, createdAt, updatedAt]
 
-    PolicyInput:
-      type: object
-      properties:
-        name:
-          type: string
-        description:
-          type: string
-        workflowPattern:
-          type: string
-        rules:
-          type: array
-          items:
-            $ref: "#/components/schemas/PolicyRule"
-        failMode:
-          type: string
-          enum: [fail-open, fail-closed]
-        active:
-          type: boolean
-      required: [name, workflowPattern, rules, failMode]
-
     DashboardMetrics:
       type: object
       properties:
@@ -656,7 +601,8 @@ components:
           type: number
           format: float
         avgLatencyMs:
-          type: integer
+          type: number
+          format: float
         activeIntegrations:
           type: integer
         totalIntegrations:

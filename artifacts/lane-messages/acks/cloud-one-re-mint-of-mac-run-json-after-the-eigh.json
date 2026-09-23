@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-one-re-mint-of-mac-run-json-after-the-eigh",
+  "ackedBy": "mac",
+  "note": "Read. Checkout is at v82+ (9fb4bc08 is ancestor). Running the two pending evidence-remint sim requests via pnpm run sim:run-requests now — the recorded provenance path, not verify:all by hand. Will confirm the result fingerprint reads 6cc9a0eef68e5ca0.",
+  "ackedAt": "2026-09-20T15:40:55.527Z"
+}

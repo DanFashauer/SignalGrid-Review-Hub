@@ -415,6 +415,10 @@ jobs:
         run: node scripts/check-skill-plane-conformance.mjs --self-test
       - name: Skill-plane conformance (every skill/agent carries the name+description the harness selects it by)
         run: node scripts/check-skill-plane-conformance.mjs
+      - name: Agent raise-your-hand self-test (the gate must be able to fail)
+        run: node scripts/check-agent-raise-hand.mjs --self-test
+      - name: Agent raise-your-hand (every subagent definition carries the surface-when-stuck contract)
+        run: node scripts/check-agent-raise-hand.mjs
       - name: Positioning trace (every ratified claim resolves by id in the launch profile)
         run: node scripts/check-positioning-trace.mjs
       - name: Module init order (a const read before it is initialised)

@@ -219,3 +219,15 @@ Each phase should be mergeable independently. Avoid plans that require all phase
 - Phases that cannot be delivered independently
 
 **Remember**: A great plan is specific, actionable, and considers both the happy path and edge cases. The best plans enable confident, incremental implementation.
+
+## When you're stuck, raise your hand
+
+Be fail-closed about your own progress, not only the code you inspect. If you hit a wall
+you cannot clear alone — a tool or permission you lack, a dependency you cannot reach, an
+input that is missing or self-contradictory, an ambiguous call that is the owner's to
+make, a usage limit, or a refusal — STOP and say so plainly. Report it the way you report
+a finding: what you were doing, what blocked you, exactly what you need to continue, and
+who can unblock it (the owner, the other lane, a named tool). Never hand back an empty,
+partial, or best-guess result as if it were complete; never silently drop a step; never
+narrate past the blocker. A raised hand is the job done right — a silent stall is the one failure this system
+will not tolerate.

@@ -51,6 +51,14 @@ const FILE_FLOOR = 40;
 
 const PERMISSIVE_COALESCE = /\.restrictions\.(allow[A-Za-z]*)\s*\?\?\s*true\b/;
 const PERMISSIVE_PARAM = /\b(allow[A-Za-z]*)\s*:\s*Bool\s*=\s*true\b/;
+// A guard/if on `allowedDomains` being nil/empty whose fallback PERMITS — the shape that
+// let an unconfigured persona get an uncontained managed browser (absent allowlist ⇒
+// unrestricted). Fixed by containing to the launch origin instead; this catches its
+// re-introduction. Matches across the else block so the permissive body is required —
+// a fail-closed guard (whose else refuses/dismisses) is not flagged. Source-level, since
+// the else body is on the following lines.
+const PERMISSIVE_ALLOWLIST_GUARD =
+  /allowedDomains\b[^\n]*?\.isEmpty\s+else\s*\{[\s\S]{0,160}?(?:decisionHandler\(\s*\.allow\s*\)|\.load\(\s*URLRequest)/;
 
 function stripComments(s) {
   return s
@@ -60,13 +68,19 @@ function stripComments(s) {
 
 export function findViolations(src) {
   const out = [];
-  const lines = stripComments(src).split("\n");
+  const stripped = stripComments(src);
+  const lines = stripped.split("\n");
   lines.forEach((line, i) => {
     const c = line.match(PERMISSIVE_COALESCE);
     if (c) out.push({ line: i + 1, name: c[1], kind: "nil-coalescing default", why: "an unreadable session is not a permissive persona" });
     const p = line.match(PERMISSIVE_PARAM);
     if (p) out.push({ line: i + 1, name: p[1], kind: "default parameter", why: "a call site that omits the argument gets the permissive answer" });
   });
+  const g = stripped.match(PERMISSIVE_ALLOWLIST_GUARD);
+  if (g) {
+    const line = stripped.slice(0, g.index).split("\n").length;
+    out.push({ line, name: "allowedDomains", kind: "permissive allowlist guard", why: "an absent/empty allowlist must contain to the launch origin, never load or allow unrestricted" });
+  }
   return out;
 }
 
@@ -113,6 +127,18 @@ function selfTest() {
   // A commented-out defect is documentation, not code.
   t("a commented-out violation is not flagged",
     findViolations("// allowCopyPaste: session?.persona.restrictions.allowCopyPaste ?? true").length === 0);
+
+  // The permissive-allowlist-guard shape, in both forms it took in ManagedAppViewController.
+  t("a nav-delegate allowlist guard whose else ALLOWS is flagged",
+    findViolations("guard let allow = allowedDomains, !allow.isEmpty else {\n    decisionHandler(.allow)\n    return\n}").length === 1);
+  t("a content-rule allowlist guard whose else LOADS unrestricted is flagged",
+    findViolations("guard let allow = allowedDomains, !allow.isEmpty else {\n    webView.load(URLRequest(url: url))\n    return\n}").length === 1);
+  // A guard on allowedDomains whose else FAILS CLOSED (refuses/dismisses) must NOT be flagged.
+  t("an allowlist guard whose else fails closed is clean",
+    findViolations("guard let allow = allowedDomains, !allow.isEmpty else {\n    dismiss(animated: true)\n    return\n}").length === 0);
+  // The fixed form — containment always applied, no allowedDomains-keyed bypass — is clean.
+  t("the fail-closed containment form (no bypass guard) is clean",
+    findViolations("let permitted = permittedHosts()\nlet ok = permitted.contains { host == $0 }\ndecisionHandler(ok ? .allow : .cancel)").length === 0);
 
   // Coverage honesty: a restriction not spelled allowX is out of scope, and saying so
   // here keeps a green from being read as total coverage.

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-23T17:48:52.570Z",
-  "result": "non-quiet: acked mac-exclusive real-hardware message (re-mint not needed: evidence binds v82; signalgrid-mcp#14 + build-Mac firewall-off/not-enrolled surfaced to owner; updates-dimension design answered: proxy keys only with Apple documentation, both=1 -> enabled else unknown). mac tick fresh; no owner escalation from this lane beyond those items."
+  "firedAt": "2026-09-23T18:15:23.476Z",
+  "result": "non-quiet: acked mac signalgrid-mcp#14 screen-lock message (fallback-to-unknown check requested); build-Mac hygiene items surfaced to owner. mac tick fresh; no owner escalation from the lane beyond those."
 }

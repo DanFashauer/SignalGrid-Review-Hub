@@ -1,5 +1,5 @@
 {
-  "$comment": "Who answers a raised hand. Every stall kind scripts/raised-hands.mjs can auto-detect MUST have a route here, and every named responder must exist (an agent in .claude/agents, a skill in .claude/skills, a lane, or the owner) — `node scripts/raised-hands.mjs --check` fails otherwise, so a new detector cannot ship without somebody who answers it. The hand-dispatcher agent (.claude/agents/hand-dispatcher.md) follows .claude/skills/raised-hands/SKILL.md and reads this table. Owner, 2026-09-23: 'build something that monitors the raise your hand function then apply what is needed for the agents to address or create new agent and or skill to fill that gap.'",
+  "$comment": "Who answers a raised hand. Every stall kind scripts/raised-hands.mjs can auto-detect MUST have a route here, and every named responder must exist (an agent in .claude/agents, a skill in .claude/skills, a lane, or the owner) — `node scripts/raised-hands.mjs --check` fails otherwise, so a new detector cannot ship without somebody who answers it. This table routes the AUTO-detected stall kinds; an explicit raised hand in artifacts/raised-hands/ routes by its domain through scripts/check-raised-hands.mjs (DOMAIN_TO_ROLE → org-roster). The blocker-dispatcher agent follows .claude/skills/raised-hands/SKILL.md and reads both. Owner, 2026-09-23: 'build something that monitors the raise your hand function then apply what is needed for the agents to address or create new agent and or skill to fill that gap.'",
   "version": 1,
   "routes": {
     "mail": {
@@ -35,7 +35,8 @@
       "action": "Never act for the owner. Put every open owner hand into one short bundled message (owner-comms): what is stuck, the one thing he needs to do, where. The hourly raised-hands issue already notifies him of NEW hands; the bundle is for hands he has not acted on in 48h (OVERDUE)."
     },
     "capability-gap": {
-      "responder": { "agent": "agent-platform-steward" },
+      "responder": { "agent": "blocker-dispatcher" },
+      "alternates": [{ "agent": "agent-platform-steward", "when": "the dispatcher's spec is ready — the steward creates and registers the agent or skill" }],
       "skills": ["writing-skills"],
       "action": "A hand no route above can answer, or one that keeps coming back, is a missing capability. Name the recurring pattern; then either write a skill (the pattern is a procedure a session can follow) or hire an agent under DR-016 (a registered tier, charter and disjoint write scope in docs/agent/agent-tiers.json), and add its route to this file in the same PR."
     }

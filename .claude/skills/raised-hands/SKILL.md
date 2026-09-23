@@ -12,9 +12,12 @@ needed for the agents to address it, or create a new agent or skill to fill that
 Three parts already exist, and this skill is the fourth:
 
 - **Raising a hand** (DR-054, `scripts/check-agent-raise-hand.mjs`) — every agent is told to stop and say so.
-- **The register and the detector** (`scripts/raised-hands.mjs`, `docs/agent/RAISED_HANDS.json`) — a hand has somewhere to go, and stalls nobody reported are raised automatically.
+- **The ledger and the router** (`scripts/raise-hand.mjs`, `artifacts/raised-hands/`, `scripts/check-raised-hands.mjs`) — one file per hand, routed to its org-roster role or named a GAP.
+- **The detector and the gate** (`scripts/raised-hands.mjs`) — stalls nobody reported are raised automatically, and one left past its limit with no hand fails CI.
 - **The owner's page** (`.github/workflows/raised-hands.yml`) — one issue, refreshed hourly.
-- **The answer** (this skill, `docs/agent/hand-routing.json`, the `hand-dispatcher` agent) — a raised hand that nobody picks up is a silent stall with extra steps.
+- **The answer** (this skill, `docs/agent/hand-routing.json`, the `blocker-dispatcher` agent) — a raised hand that nobody picks up is a silent stall with extra steps.
+
+The Mac lane (#1011, #1014) and the cloud lane built these from the same owner directive; the owner merged them into this one system on 2026-09-23.
 
 ## The loop, every time
 
@@ -26,21 +29,25 @@ Three parts already exist, and this skill is the fourth:
    work one hand: `pnpm run hand:take -- <id>`. For an auto hand (`mail:`, `sim:`,
    `heartbeat:`, `pr-red:`, `pr-idle:`) that belongs to your lane, act on it directly. If
    it cannot be finished this cycle, raise a covering hand that says what is left:
-   `pnpm run hand:raise -- --clears <who> --covers <auto-id> --what "…" --needs "…"`.
-3. **Route** by `docs/agent/hand-routing.json`: the route's `responder` does the work,
-   its `skills` say how, and its `action` is the instruction. Dispatch agents by the tier
+   `pnpm run hand:raise -- --who <owner|"mac lane"|"cloud lane"> --covers <auto-id> --doing "…" --blocked "…" --need "…"`.
+3. **Route**: an explicit hand goes to the role `node scripts/check-raised-hands.mjs` names
+   (its executor is in `docs/agent/org-roster.json`); an auto stall goes by
+   `docs/agent/hand-routing.json`, whose `responder` does the work, whose `skills` say how,
+   and whose `action` is the instruction. Dispatch agents by the tier
    DR-047 names for the work (never inherit the coordinator's model). Tell every
    dispatched agent to start its report with `BLOCKED: …` if it cannot finish. A BLOCKED
    report becomes a new raised hand. Never summarise it away.
-4. **Clear** with evidence: `pnpm run hand:clear -- <id> --resolution "<what was done, with the PR/commit/sha>"`.
-   "Done" without what was done does not clear. The gate refuses an empty resolution.
+4. **Clear** with evidence: `pnpm run hand:clear -- <id> "<what was done, with the PR/commit/sha>"`.
+   "Done" without what was done does not clear. The writer and the gate both refuse an
+   empty resolution.
 5. **Owner hands**: never act for the owner. Every owner hand that is OVERDUE (48h) goes
    into ONE bundled message per `owner-comms`: what is stuck, the one thing he does,
    where. New owner hands already notify him through the issue. Do not send a second
    ping for the same hand in the same day.
 6. **Deliver** the register change the way mail is delivered: a `raise` / `clear` op in
-   the cycle's single `pnpm run lane:deliver batch` (fields: `clears, what, needs, where?,
-   covers?[]` / `id, resolution`). Never commit it on a code branch.
+   the cycle's single `pnpm run lane:deliver batch` (`raise`: `doing, blocked, need, who,
+   domain?, where?, covers?[]`; `take`: `id`; `clear`: `id, resolution`). Never commit it
+   on a code branch.
 
 ## Watching the watcher
 
@@ -65,14 +72,17 @@ depend on any session being awake.
 
 A hand is a **capability gap** when no route in `hand-routing.json` fits it, or when the
 same kind of hand comes back three times in a week after being cleared. Route it to
-`capability-gap` (the `agent-platform-steward` owns the agent and skill plane), and:
+`capability-gap`: the `blocker-dispatcher` writes the spec, and the `agent-platform-steward`
+(who owns the agent and skill plane) creates it. Then:
 
 - **Write a skill** when the fix is a procedure any session can follow (`writing-skills`
   covers the format; `docs/agent/SKILL_AUTHORING_STANDARD.md` covers the house rules).
 - **Hire an agent** under DR-016 when the fix needs a standing role: a tier, a charter,
   and a write scope that overlaps no one else's, all in `docs/agent/agent-tiers.json`.
   The definition carries DR-054's canonical raise-your-hand clause.
-- **Add the route** in the same PR, so the next hand of that kind has somebody who
+- **Add the route** in the same PR: a new domain goes into `DOMAIN_TO_ROLE` in
+  `scripts/check-raised-hands.mjs`, and a new auto-stall kind goes into
+  `docs/agent/hand-routing.json`. That way the next hand of that kind has somebody who
   answers it. `raised-hands.mjs --check` fails when a route names an agent or skill
   that does not exist.
 

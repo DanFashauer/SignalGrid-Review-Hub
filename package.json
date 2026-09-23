@@ -273,9 +273,9 @@
     "docs:retrieve": "node scripts/docs-retrieval.mjs",
     "mcp:setup": "node scripts/setup-mcp-lane.mjs",
     "hands": "node scripts/raised-hands.mjs",
-    "hand:raise": "node scripts/raised-hands.mjs raise",
-    "hand:clear": "node scripts/raised-hands.mjs clear",
-    "hand:take": "node scripts/raised-hands.mjs take"
+    "hand:raise": "node scripts/raise-hand.mjs",
+    "hand:clear": "node scripts/raise-hand.mjs --resolve",
+    "hand:take": "node scripts/raise-hand.mjs --take"
   },
   "private": true,
   "devDependencies": {

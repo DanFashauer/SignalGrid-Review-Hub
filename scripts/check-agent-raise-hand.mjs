@@ -58,6 +58,22 @@ export function isCompliant(body) {
   return body.includes(HEADING) && body.includes(SENTINEL);
 }
 
+// VENDORED agents (docs/agent/agent-tiers.json provenance "vendored") stay byte-identical
+// to third_party/everything-claude-code/agents/ — check-agent-roster.mjs rule 5 — so the
+// clause cannot be pasted into them. They inherit DR-054 from CLAUDE.md, which every
+// subagent loads; this gate asserts CLAUDE.md still carries it. An agent the registry does
+// not mark vendored (including an UNREGISTERED one) must carry the clause: unknown
+// provenance tightens, never loosens.
+function vendoredIds() {
+  try {
+    const reg = JSON.parse(readFileSync(join(repo, "docs/agent/agent-tiers.json"), "utf8"));
+    return new Set((reg.agents ?? []).filter((a) => a.provenance === "vendored").map((a) => a.id));
+  } catch { return new Set(); } // an unreadable registry exempts nobody
+}
+export function needsClause(file, vendored) {
+  return !vendored.has(file.replace(/^.*[\\/]/, "").replace(/\.md$/, ""));
+}
+
 function agentFiles() {
   return readdirSync(AGENTS_DIR)
     .filter((f) => f.endsWith(".md"))
@@ -76,6 +92,9 @@ function selfTest() {
   // Coverage honesty: the real tree must have enough agent files to be worth gating.
   const n = agentFiles().length;
   t(`at least ${FILE_FLOOR} agent files are present (found ${n})`, n >= FILE_FLOOR);
+  t("a vendored agent is exempt from pasting the clause", needsClause("/x/.claude/agents/planner.md", new Set(["planner"])) === false);
+  t("an agent the registry does not mark vendored MUST carry it (unknown provenance tightens)", needsClause("/x/.claude/agents/new-hire.md", new Set(["planner"])) === true);
+  t("an unreadable registry exempts nobody", needsClause("/x/.claude/agents/planner.md", new Set()) === true);
   if (fail.length) { for (const f of fail) console.error(`self-test FAIL: ${f}`); process.exit(1); }
   console.log("check-agent-raise-hand self-test: ok");
   return 0;
@@ -88,14 +107,20 @@ function main() {
     console.error(`check-agent-raise-hand FAIL — only ${files.length} agent file(s) found under .claude/agents (floor ${FILE_FLOOR}); the walk is wrong or the plane shrank.`);
     process.exit(1);
   }
-  const missing = files.filter((f) => !isCompliant(readFileSync(f, "utf8"))).map((f) => f.slice(repo.length + 1));
+  const vendored = vendoredIds();
+  if (!readFileSync(join(repo, "CLAUDE.md"), "utf8").includes("Raise your hand when stuck (DR-054)")) {
+    console.error("check-agent-raise-hand FAIL — CLAUDE.md no longer carries the DR-054 'Raise your hand when stuck' rule, so the vendored agents inherit nothing.");
+    process.exit(1);
+  }
+  const missing = files.filter((f) => needsClause(f, vendored) && !isCompliant(readFileSync(f, "utf8"))).map((f) => f.slice(repo.length + 1));
   if (missing.length) {
     console.error(`check-agent-raise-hand FAIL — ${missing.length} agent definition(s) lack the raise-your-hand contract:\n`);
     for (const m of missing) console.error(`  ${m}`);
     console.error(`\nPaste this section (verbatim) into each:\n\n${CLAUSE}\n`);
     process.exit(1);
   }
-  console.log(`check-agent-raise-hand: ok — all ${files.length} agent definition(s) carry the raise-your-hand contract`);
+  const own = files.filter((f) => needsClause(f, vendored)).length;
+  console.log(`check-agent-raise-hand: ok — ${own} first-party agent definition(s) carry the raise-your-hand contract; ${files.length - own} vendored inherit it from CLAUDE.md (DR-054)`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

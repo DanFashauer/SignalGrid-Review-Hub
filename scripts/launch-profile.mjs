@@ -641,6 +641,15 @@ export const SURFACES = [
       "and no customer ever sees it.",
   },
   {
+    id: "raised-hands",
+    reason:
+      "DR-054's ledger of raised hands: one {doing, blockedBy, need, whoCanUnblock, " +
+      "domain} JSON per blocker an agent, lane or routine could not clear alone, written " +
+      "by scripts/raise-hand.mjs and routed by scripts/check-raised-hands.mjs. Agent-ops " +
+      "plumbing gated by scripts/raised-hands.mjs --check; no tenant, no worker and no " +
+      "customer ever sees it.",
+  },
+  {
     id: "sim-requests",
     reason:
       "The cloud→Mac half of the simulation request loop: committed JSON asking the " +

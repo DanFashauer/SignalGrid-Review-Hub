@@ -1,8 +1,8 @@
 // raised-hands.mjs — a stuck agent that says nothing looks exactly like a busy one.
 //
 //   pnpm run hands                                   # everything stuck, grouped by who can clear it
-//   pnpm run hand:raise -- --clears owner --what "…" --needs "…" [--where "PR #1"] [--covers mail:<id>]
-//   pnpm run hand:clear -- <id> --resolution "what unblocked it"
+//   pnpm run hand:raise -- --doing "…" --blocked "…" --need "…" --who owner|"mac lane"|"cloud lane" [--domain d] [--covers mail:<id>]
+//   pnpm run hand:take -- <id>   ·   pnpm run hand:clear -- <id> "what unblocked it"   (scripts/raise-hand.mjs)
 //   node scripts/raised-hands.mjs --check            # the gate (preflight + CI)
 //   node scripts/raised-hands.mjs --coherence        # schema only (lane-deliver's gate)
 //   node scripts/raised-hands.mjs --markdown [--github]   # the owner's issue body
@@ -20,10 +20,12 @@
 // stale within minutes of being written).
 //
 // TWO HALVES.
-//   1. A HAND is a row in docs/agent/RAISED_HANDS.json: what is stuck, what one
-//      thing unblocks it, who can clear it (owner | cloud | mac), since when. Any
-//      agent writes one the moment it is stuck — twice-failed, permission- or
-//      classifier-denied, owner-gated, or waiting on the other lane.
+//   1. A HAND is one record in artifacts/raised-hands/<id>.json, written by
+//      scripts/raise-hand.mjs (the Mac lane's #1014 ledger, merged 2026-09-23): what
+//      the raiser was doing, what blocked it, what it needs, who can unblock it —
+//      DR-054's four. scripts/check-raised-hands.mjs routes each to an org-roster role,
+//      the owner, a lane or a tool, or names it a capability GAP; this file groups by
+//      that route. One file per hand, so two lanes raising at once never conflict.
 //   2. The system raises hands FOR agents that do not: mail unread past 24h, a sim
 //      request pending past 48h, an active routine's heartbeat past its declared
 //      tolerance, and (with --github) a PR red or idle-and-green too long. These
@@ -39,16 +41,17 @@
 // UNKNOWN IS NEVER FRESH. An unparseable instant ages as infinitely old, exactly as
 // check-lane-messages treats an unparseable sentAt.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repo = process.env.SIGNALGRID_LANE_REPO
   ? resolve(process.env.SIGNALGRID_LANE_REPO)
   : resolve(dirname(fileURLToPath(import.meta.url)), "..");
-export const HANDS_FILE = "docs/agent/RAISED_HANDS.json";
+export const LEDGER_DIR = "artifacts/raised-hands";
 export const ROUTING_FILE = "docs/agent/hand-routing.json";
-export const CLEARERS = ["owner", "cloud", "mac"];
+/** Group order on the owner's page: him first, then the lanes, then roles, tools and gaps. */
+export const GROUP_ORDER = ["owner", "cloud", "mac", "role", "tool", "gap"];
 const H = 3_600_000;
 
 /** Soft limit per source: past it the hand is on the list; past HARD_MULTIPLE× it the gate fails unless covered. */
@@ -60,7 +63,7 @@ export const REQUIRED_ROUTES = [...AUTO_KINDS, "owner", "capability-gap"];
 /** A lane hand nobody has taken (`hand:take`) for this long is reported as unanswered. */
 export const UNTAKEN_LIMIT_H = 2;
 /** How long a RAISED hand may stay open before it is OVERDUE on the owner's issue. */
-export const RAISED_LIMIT_H = { owner: 48, cloud: 24, mac: 48 };
+export const RAISED_LIMIT_H = { owner: 48, cloud: 24, mac: 48, role: 48, tool: 48, gap: 24 };
 
 const age = (iso, nowMs) => {
   const t = Date.parse(String(iso ?? ""));
@@ -68,34 +71,50 @@ const age = (iso, nowMs) => {
 };
 export const fmtAge = (h) => (!Number.isFinite(h) ? "unknown age" : h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${h.toFixed(1)}h` : `${(h / 24).toFixed(1)}d`);
 
-// ── the explicit register ────────────────────────────────────────────────────
-export function loadHands(root = repo) {
-  const p = join(root, HANDS_FILE);
-  if (!existsSync(p)) return { schemaVersion: 1, hands: [] };
-  return JSON.parse(readFileSync(p, "utf8"));
+// ── the explicit ledger (artifacts/raised-hands/*.json) ──────────────────────
+export function loadLedger(root = repo) {
+  const dir = join(root, LEDGER_DIR);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((f) => f.endsWith(".json")).sort().map((f) => {
+    try { return { ...JSON.parse(readFileSync(join(dir, f), "utf8")), __file: f }; }
+    catch (e) { return { __file: f, __unreadable: e instanceof Error ? e.message : String(e) }; } // never dropped
+  });
 }
 
-/** Schema problems — every one fatal. Pure, for the self-test. */
-export function auditHands(doc) {
+/** Coherence problems — every one fatal. Pure, for the self-test. */
+export function auditHands(records) {
   const problems = [];
-  if (!doc || !Array.isArray(doc.hands)) return ["RAISED_HANDS.json has no `hands` array"];
   const seen = new Set();
-  for (const h of doc.hands) {
-    const id = h?.id ?? "(no id)";
-    if (!h?.id || !/^[a-z0-9][a-z0-9-]*$/.test(h.id)) problems.push(`hand ${id}: id must be lower-kebab-case`);
-    if (seen.has(h?.id)) problems.push(`hand ${id}: duplicate id`);
-    seen.add(h?.id);
-    for (const f of ["raisedBy", "what", "needs"]) if (!String(h?.[f] ?? "").trim()) problems.push(`hand ${id}: no ${f} — a hand that does not say ${f === "needs" ? "what unblocks it" : f === "what" ? "what is stuck" : "who raised it"} cannot be acted on`);
-    if (!CLEARERS.includes(h?.clears)) problems.push(`hand ${id}: clears "${h?.clears}" is not one of ${CLEARERS.join(", ")}`);
-    if (!Number.isFinite(Date.parse(String(h?.raisedAt ?? "")))) problems.push(`hand ${id}: raisedAt is not an ISO instant`);
-    if (h?.covers !== undefined && !(Array.isArray(h.covers) && h.covers.every((c) => typeof c === "string" && /^[a-z-]+:.+/.test(c)))) problems.push(`hand ${id}: covers must be a list of auto-hand ids like "mail:<message-id>"`);
-    if (h?.assignedTo !== undefined && (!String(h.assignedTo).trim() || !Number.isFinite(Date.parse(String(h.takenAt ?? ""))))) problems.push(`hand ${id}: assignedTo needs a name and an ISO takenAt`);
-    if (h?.status === "cleared") {
-      if (!String(h.resolution ?? "").trim()) problems.push(`hand ${id}: cleared with no resolution — "done" without what was done is not evidence`);
-      if (!Number.isFinite(Date.parse(String(h.clearedAt ?? "")))) problems.push(`hand ${id}: cleared with no ISO clearedAt`);
-    } else if (h?.status !== "open") problems.push(`hand ${id}: status "${h?.status}" is not open or cleared`);
+  for (const h of records) {
+    const id = h.id ?? h.__file;
+    if (h.__unreadable) { problems.push(`raised hand ${h.__file}: does not parse (${h.__unreadable}) — an unreadable blocker is a lost one`); continue; }
+    if (!h.id || `${h.id}.json` !== h.__file) problems.push(`raised hand ${h.__file}: id "${h.id}" does not match its filename`);
+    if (seen.has(h.id)) problems.push(`raised hand ${id}: duplicate id`);
+    seen.add(h.id);
+    for (const [f, why] of [["doing", "what the raiser was doing"], ["blockedBy", "what blocked it"], ["need", "what unblocks it"]]) if (!String(h[f] ?? "").trim()) problems.push(`raised hand ${id}: no ${f} — DR-054 needs ${why}`);
+    if (!Number.isFinite(Date.parse(String(h.raisedAt ?? "")))) problems.push(`raised hand ${id}: raisedAt is not an ISO instant`);
+    if (h.covers !== undefined && !(Array.isArray(h.covers) && h.covers.every((c) => typeof c === "string" && /^[a-z-]+:.+/.test(c)))) problems.push(`raised hand ${id}: covers must be a list of auto-hand ids like "mail:<message-id>"`);
+    if (h.takenBy !== undefined && (!String(h.takenBy).trim() || !Number.isFinite(Date.parse(String(h.takenAt ?? ""))))) problems.push(`raised hand ${id}: takenBy needs a name and an ISO takenAt`);
+    if (h.status === "resolved") {
+      if (!String(h.resolution ?? "").trim()) problems.push(`raised hand ${id}: resolved with no resolution — "done" without what was done is not evidence`);
+      if (!Number.isFinite(Date.parse(String(h.resolvedAt ?? "")))) problems.push(`raised hand ${id}: resolved with no ISO resolvedAt`);
+    } else if (h.status !== "open") problems.push(`raised hand ${id}: status "${h.status}" is not open or resolved`);
   }
   return problems;
+}
+
+/** Which group a hand sits in, from check-raised-hands.mjs's route. */
+export function groupOf(h, route) {
+  if (route.kind === "human") return { group: "owner", label: "owner" };
+  if (route.kind === "lane") {
+    const who = String(h.whoCanUnblock ?? "").toLowerCase();
+    const origin = String(h.origin ?? "").toLowerCase();
+    const l = who.includes("mac") ? "mac" : who.includes("cloud") ? "cloud" : origin.includes("mac") ? "cloud" : "mac"; // "the other lane"
+    return { group: l, label: l };
+  }
+  if (route.kind === "tool") return { group: "tool", label: route.owner };
+  if (route.kind === "role") return { group: "role", label: route.owner };
+  return { group: "gap", label: "GAP — no agent or skill owns this" };
 }
 
 // ── routing: every stall kind has somebody who answers it ────────────────────
@@ -151,14 +170,15 @@ export function autoHands({ messages = [], acks = [], simPending = [], routines 
 }
 
 /** The whole picture: open raised hands (with OVERDUE) + auto hands (with covered/uncovered). */
-export function evaluate(doc, autos, nowMs = Date.now()) {
-  const open = (doc.hands ?? []).filter((h) => h.status === "open").map((h) => {
+export function evaluate(records, autos, nowMs = Date.now(), route = () => ({ kind: "gap" })) {
+  const open = records.filter((h) => !h.__unreadable && h.status !== "resolved").map((h) => {
     const ageH = age(h.raisedAt, nowMs);
-    return { ...h, ageH, overdue: ageH > (RAISED_LIMIT_H[h.clears] ?? 24) };
+    const { group, label } = groupOf(h, route(h));
+    return { ...h, ageH, group, label, overdue: ageH > (RAISED_LIMIT_H[group] ?? 24) };
   });
   const covered = new Set(open.flatMap((h) => h.covers ?? []));
   const auto = autos.map((a) => ({ ...a, covered: covered.has(a.id), hard: a.ageH > a.softH * HARD_MULTIPLE }));
-  const fatal = auto.filter((a) => a.hard && !a.covered).map((a) => `${a.id}: ${a.what} — ${fmtAge(a.ageH)}, past the ${a.softH * HARD_MULTIPLE}h limit and NO hand raised. Act, or: pnpm run hand:raise -- --clears ${a.clears} --covers ${a.id} --what "…" --needs "…"`);
+  const fatal = auto.filter((a) => a.hard && !a.covered).map((a) => `${a.id}: ${a.what} — ${fmtAge(a.ageH)}, past the ${a.softH * HARD_MULTIPLE}h limit and NO hand raised. Act, or: pnpm run hand:raise -- --who ${a.clears === "owner" ? "owner" : `"${a.clears} lane"`} --covers ${a.id} --doing "…" --blocked "…" --need "…"`);
   const staleCovers = [...covered].filter((c) => !autos.some((a) => a.id === c)).map((c) => `a hand covers ${c}, which is no longer stuck — clear that hand`);
   // THE MONITOR ON HAND-RAISING ITSELF (owner, 2026-09-23: "build something that
   // monitors the raise your hand function"). Two numbers: how much stuck work the
@@ -167,24 +187,24 @@ export function evaluate(doc, autos, nowMs = Date.now()) {
   const health = {
     systemFound: auto.filter((a) => !a.covered).length,
     agentRaised: open.length,
-    untaken: open.filter((h) => h.clears !== "owner" && !h.assignedTo && h.ageH > UNTAKEN_LIMIT_H).map((h) => h.id),
+    untaken: open.filter((h) => h.group !== "owner" && !h.takenBy && h.ageH > UNTAKEN_LIMIT_H).map((h) => h.id),
   };
   return { open, auto, fatal, staleCovers, health };
 }
 
 // ── rendering ────────────────────────────────────────────────────────────────
-const WHO = { owner: "Needs you (Dan)", cloud: "Needs the cloud lane", mac: "Needs the Mac lane" };
+const WHO = { owner: "Needs you (Dan)", cloud: "Needs the cloud lane", mac: "Needs the Mac lane", role: "Routed to a role", tool: "Needs a tool", gap: "Capability GAP — the blocker-dispatcher must route or create" };
 export function render({ open, auto }, { markdown = false, prsChecked = false } = {}) {
   const rows = [
-    ...open.map((h) => ({ clears: h.clears, ageH: h.ageH, text: `${h.overdue ? "OVERDUE " : ""}${h.what} — needs: ${h.needs}${h.where ? ` — ${h.where}` : ""} (raised by ${h.raisedBy}${h.assignedTo ? `; taken by ${h.assignedTo}` : ""}; \`${h.id}\`)` })),
-    ...auto.filter((a) => !a.covered).map((a) => ({ clears: a.clears, ageH: a.ageH, text: `${a.hard ? "PAST LIMIT " : ""}${a.what} — needs: ${a.needs}${a.where ? ` — ${a.where}` : ""} (auto; nobody raised a hand; \`${a.id}\`)` })),
+    ...open.map((h) => ({ group: h.group, ageH: h.ageH, text: `${h.overdue ? "OVERDUE " : ""}${h.group === "role" || h.group === "tool" ? `[${h.label}] ` : ""}${h.doing} — blocked by: ${h.blockedBy} — needs: ${h.need}${h.where ? ` — ${h.where}` : ""} (raised by ${h.origin ?? "?"}${h.takenBy ? `; taken by ${h.takenBy}` : ""}; \`${h.id}\`)` })),
+    ...auto.filter((a) => !a.covered).map((a) => ({ group: a.clears, ageH: a.ageH, text: `${a.hard ? "PAST LIMIT " : ""}${a.what} — needs: ${a.needs}${a.where ? ` — ${a.where}` : ""} (auto; nobody raised a hand; \`${a.id}\`)` })),
   ];
   const lines = [];
   const total = rows.length;
   lines.push(markdown ? `# Raised hands — ${total} open` : `Raised hands — ${total} open${prsChecked ? "" : " (PRs NOT CHECKED here — the hourly issue job checks them)"}`);
   if (markdown) lines.push("", `Oldest first. Anything marked OVERDUE or PAST LIMIT has waited too long.${prsChecked ? "" : " PRs were NOT checked on this run."}`);
-  for (const who of CLEARERS) {
-    const mine = rows.filter((r) => r.clears === who).sort((a, b) => b.ageH - a.ageH);
+  for (const who of GROUP_ORDER) {
+    const mine = rows.filter((r) => r.group === who).sort((a, b) => b.ageH - a.ageH);
     if (mine.length === 0) continue;
     lines.push("", markdown ? `## ${WHO[who]} — ${mine.length}` : `  ${WHO[who]} — ${mine.length}`);
     for (const r of mine) lines.push(markdown ? `- **${fmtAge(r.ageH)}** ${r.text}` : `    · [${fmtAge(r.ageH)}] ${r.text}`);
@@ -257,65 +277,22 @@ async function loadPrs() {
   return prs;
 }
 
-// ── writers ──────────────────────────────────────────────────────────────────
-function arg(name) {
-  const i = process.argv.indexOf(name);
-  return i >= 0 ? process.argv[i + 1] : undefined;
-}
-function save(doc) {
-  const problems = auditHands(doc);
-  if (problems.length > 0) {
-    for (const p of problems) console.error(`  ✗ ${p}`);
-    process.exit(1);
-  }
-  writeFileSync(join(repo, HANDS_FILE), `${JSON.stringify(doc, null, 2)}\n`, "utf8");
-}
-function raise() {
-  const doc = loadHands();
-  const what = arg("--what");
-  const now = new Date();
-  const slug = String(what ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
-  const id = arg("--id") ?? `${now.toISOString().slice(0, 10)}-${slug}`;
-  const covers = process.argv.flatMap((a, i) => (a === "--covers" ? [process.argv[i + 1]] : []));
-  const hand = { id, raisedAt: now.toISOString(), raisedBy: arg("--by") ?? process.env.SIGNALGRID_LANE ?? (process.platform === "darwin" ? "mac" : "cloud"), clears: arg("--clears"), what, needs: arg("--needs"), status: "open" };
-  if (arg("--where")) hand.where = arg("--where");
-  if (covers.length > 0) hand.covers = covers;
-  doc.hands.push(hand);
-  save(doc);
-  console.log(`raised ${id} — ${HANDS_FILE}`);
-}
-function take() {
-  const doc = loadHands();
-  const id = process.argv.slice(process.argv.indexOf("take") + 1).find((a) => a !== "--");
-  const hand = doc.hands.find((h) => h.id === id && h.status === "open");
-  if (!hand) { console.error(`no open hand "${id}"`); process.exit(1); }
-  Object.assign(hand, { assignedTo: arg("--by") ?? process.env.SIGNALGRID_LANE ?? (process.platform === "darwin" ? "mac" : "cloud"), takenAt: new Date().toISOString() });
-  save(doc);
-  console.log(`taken ${id} by ${hand.assignedTo}`);
-}
-function clear() {
-  const doc = loadHands();
-  const id = process.argv.slice(process.argv.indexOf("clear") + 1).find((a) => a !== "--"); // `pnpm run hand:clear -- <id>` may pass the "--" through
-  const hand = doc.hands.find((h) => h.id === id);
-  if (!hand) { console.error(`no hand "${id}"`); process.exit(1); }
-  Object.assign(hand, { status: "cleared", clearedAt: new Date().toISOString(), clearedBy: arg("--by") ?? process.env.SIGNALGRID_LANE ?? (process.platform === "darwin" ? "mac" : "cloud"), resolution: arg("--resolution") });
-  save(doc);
-  console.log(`cleared ${id}`);
-}
-
 // ── self-test ────────────────────────────────────────────────────────────────
 function selfTest() {
   const T = Date.parse("2026-09-23T12:00:00Z");
   const ago = (h) => new Date(T - h * H).toISOString();
   const checks = [];
-  const hand = (x = {}) => ({ id: "h1", raisedAt: ago(1), raisedBy: "cloud", clears: "owner", what: "w", needs: "n", status: "open", ...x });
+  const hand = (x = {}) => ({ id: "h1", __file: "h1.json", raisedAt: ago(1), origin: "cloud", doing: "d", blockedBy: "b", need: "n", whoCanUnblock: "owner", status: "open", ...x });
+  const route = (h) => (String(h.whoCanUnblock).startsWith("owner") ? { kind: "human" } : String(h.whoCanUnblock).includes("lane") ? { kind: "lane" } : { kind: "gap" });
 
-  checks.push(["a well-formed hand is coherent", auditHands({ hands: [hand()] }).length === 0]);
-  checks.push(["a hand with no `needs` is fatal — it cannot be acted on", auditHands({ hands: [hand({ needs: " " })] }).some((p) => p.includes("no needs"))]);
-  checks.push(["an unknown clearer is fatal", auditHands({ hands: [hand({ clears: "someone" })] }).some((p) => p.includes("clears"))]);
-  checks.push(["an unparseable raisedAt is fatal", auditHands({ hands: [hand({ raisedAt: "soon" })] }).some((p) => p.includes("raisedAt"))]);
-  checks.push(["a cleared hand with no resolution is fatal", auditHands({ hands: [hand({ status: "cleared", clearedAt: ago(0) })] }).some((p) => p.includes("no resolution"))]);
-  checks.push(["duplicate ids are fatal", auditHands({ hands: [hand(), hand()] }).some((p) => p.includes("duplicate"))]);
+  checks.push(["a well-formed hand is coherent", auditHands([hand()]).length === 0]);
+  checks.push(["a hand with no `need` is fatal — it cannot be acted on", auditHands([hand({ need: " " })]).some((p) => p.includes("no need"))]);
+  checks.push(["an UNREADABLE ledger file is fatal — never dropped", auditHands([{ __file: "x.json", __unreadable: "bad json" }]).some((p) => p.includes("does not parse"))]);
+  checks.push(["an id that disagrees with its filename is fatal", auditHands([hand({ __file: "other.json" })]).some((p) => p.includes("filename"))]);
+  checks.push(["an unparseable raisedAt is fatal", auditHands([hand({ raisedAt: "soon" })]).some((p) => p.includes("raisedAt"))]);
+  checks.push(["a resolved hand with no resolution is fatal", auditHands([hand({ status: "resolved", resolvedAt: ago(0) })]).some((p) => p.includes("no resolution"))]);
+  checks.push(["duplicate ids are fatal", auditHands([hand(), hand()]).some((p) => p.includes("duplicate"))]);
+  checks.push(["'the other lane' raised by the Mac is the cloud's", groupOf(hand({ whoCanUnblock: "the other lane", origin: "mac-lane" }), { kind: "lane" }).group === "cloud"]);
 
   const msg = (h, extra = {}) => ({ id: "m1", from: "cloud", to: "mac", subject: "s", sentAt: ago(h), ...extra });
   let a = autoHands({ messages: [msg(10)] }, T);
@@ -326,15 +303,15 @@ function selfTest() {
   checks.push(["…superseded mail is not", autoHands({ messages: [msg(30), { id: "m2", from: "cloud", to: "mac", subject: "s", sentAt: ago(1), supersedes: "m1" }] }, T).length === 0]);
   checks.push(["UNKNOWN IS NEVER FRESH — mail with no instant at all is a hand", autoHands({ messages: [msg(0, { sentAt: undefined })] }, T).length === 1]);
 
-  let e = evaluate({ hands: [] }, autoHands({ messages: [msg(80)] }, T), T);
+  let e = evaluate([], autoHands({ messages: [msg(80)] }, T), T, route);
   checks.push(["mail silent past 3×24h with NO hand raised FAILS the gate", e.fatal.length === 1 && e.fatal[0].startsWith("mail:m1")]);
-  e = evaluate({ hands: [hand({ clears: "mac", covers: ["mail:m1"] })] }, autoHands({ messages: [msg(80)] }, T), T);
+  e = evaluate([hand({ whoCanUnblock: "mac lane", covers: ["mail:m1"] })], autoHands({ messages: [msg(80)] }, T), T, route);
   checks.push(["…and one raised hand covering it clears the gate (the cure is to say so)", e.fatal.length === 0 && e.auto[0].covered]);
-  e = evaluate({ hands: [hand({ status: "cleared", clearedAt: ago(0), resolution: "r", covers: ["mail:m1"] })] }, autoHands({ messages: [msg(80)] }, T), T);
+  e = evaluate([hand({ status: "resolved", resolvedAt: ago(0), resolution: "r", covers: ["mail:m1"] })], autoHands({ messages: [msg(80)] }, T), T, route);
   checks.push(["…but a CLEARED hand covers nothing", e.fatal.length === 1]);
-  e = evaluate({ hands: [hand({ raisedAt: ago(60) })] }, [], T);
+  e = evaluate([hand({ raisedAt: ago(60) })], [], T, route);
   checks.push(["an owner hand open 60h is OVERDUE, and overdue is not fatal", e.open[0].overdue && e.fatal.length === 0]);
-  e = evaluate({ hands: [hand({ covers: ["mail:gone"] })] }, [], T);
+  e = evaluate([hand({ covers: ["mail:gone"] })], [], T, route);
   checks.push(["a hand covering a stall that resolved is reported for clearing", e.staleCovers.length === 1]);
 
   a = autoHands({ simPending: [{ id: "r1", ageDays: 3 }, { id: "r2", ageDays: NaN }, { id: "r3", ageDays: 1 }] }, T);
@@ -355,9 +332,9 @@ function selfTest() {
   const simLine = (tail) => /(\d+) day\(s\) old/.test(tail);
   checks.push(["every sim pending shape the sim gate prints carries an age (a missing age reads as infinitely old)", ["api (result exists but this operation has no row: NOT run; 0 day(s) old)", "api (refused_platform on linux: attempted, NOT run — still needs a machine that can; 2 day(s) old)", "every run still queued (no result yet; 1 day(s) old)"].every(simLine)]);
 
-  const text = render(evaluate({ hands: [hand()] }, autoHands({ messages: [msg(30)] }, T), T), { markdown: true, prsChecked: true });
+  const text = render(evaluate([hand()], autoHands({ messages: [msg(30)] }, T), T, route), { markdown: true, prsChecked: true });
   checks.push(["the owner's page groups by who clears it and names both kinds", text.includes("## Needs you (Dan) — 1") && text.includes("## Needs the Mac lane — 1") && text.includes("(auto; nobody raised a hand")]);
-  checks.push(["a run that did not check PRs SAYS so", render(evaluate({ hands: [] }, [], T), { markdown: true }).includes("PRs were NOT checked")]);
+  checks.push(["a run that did not check PRs SAYS so", render(evaluate([], [], T, route), { markdown: true }).includes("PRs were NOT checked")]);
 
   // routing
   const allExist = () => true;
@@ -369,14 +346,14 @@ function selfTest() {
   checks.push(["a route naming a skill that does not exist is fatal", auditRouting({ routes: { ...full.routes, owner: { responder: { owner: true }, skills: ["nope"], action: "a" } } }, (k, n) => n !== "nope").some((p) => p.includes("nope"))]);
   checks.push(["a route with no action is fatal", auditRouting({ routes: { ...full.routes, mail: { responder: { lane: "addressee" }, action: " " } } }, allExist).some((p) => p.includes("no action"))]);
   // the monitor on hand-raising itself
-  e = evaluate({ hands: [hand({ clears: "cloud", raisedAt: ago(3) })] }, autoHands({ messages: [msg(30)] }, T), T);
+  e = evaluate([hand({ whoCanUnblock: "cloud lane", raisedAt: ago(3) })], autoHands({ messages: [msg(30)] }, T), T, route);
   checks.push(["health counts what the SYSTEM found with no hand raised", e.health.systemFound === 1 && e.health.agentRaised === 1]);
   checks.push(["health names a lane hand nobody has taken for 2h+", e.health.untaken.join() === "h1"]);
-  e = evaluate({ hands: [hand({ clears: "cloud", raisedAt: ago(3), assignedTo: "hand-dispatcher", takenAt: ago(1) })] }, [], T);
+  e = evaluate([hand({ whoCanUnblock: "cloud lane", raisedAt: ago(3), takenBy: "blocker-dispatcher", takenAt: ago(1) })], [], T, route);
   checks.push(["…and a taken hand is not untaken", e.health.untaken.length === 0]);
-  checks.push(["an owner hand is never 'untaken' — only the owner can take it", evaluate({ hands: [hand({ raisedAt: ago(5) })] }, [], T).health.untaken.length === 0]);
-  checks.push(["assignedTo with no takenAt is incoherent", auditHands({ hands: [hand({ assignedTo: "x" })] }).some((p) => p.includes("takenAt"))]);
-  checks.push(["the owner's page carries the health line", render(evaluate({ hands: [] }, [], T), { markdown: true }).includes("Hand-raising health:")]);
+  checks.push(["an owner hand is never 'untaken' — only the owner can take it", evaluate([hand({ raisedAt: ago(5) })], [], T, route).health.untaken.length === 0]);
+  checks.push(["takenBy with no takenAt is incoherent", auditHands([hand({ takenBy: "x" })]).some((p) => p.includes("takenAt"))]);
+  checks.push(["the owner's page carries the health line", render(evaluate([], [], T, route), { markdown: true }).includes("Hand-raising health:")]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
@@ -388,20 +365,20 @@ function selfTest() {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   if (argv.includes("--self-test")) process.exit(selfTest());
-  if (argv[0] === "raise") { raise(); process.exit(0); }
-  if (argv[0] === "clear") { clear(); process.exit(0); }
-  if (argv[0] === "take") { take(); process.exit(0); }
-  const doc = loadHands();
+  const records = loadLedger();
   const exists = (kind, name) => existsSync(join(repo, kind === "agent" ? `.claude/agents/${name}.md` : `.claude/skills/${name}/SKILL.md`));
   const routingPath = join(repo, ROUTING_FILE);
-  const problems = [...auditHands(doc), ...(existsSync(routingPath) ? auditRouting(JSON.parse(readFileSync(routingPath, "utf8")), exists) : [`${ROUTING_FILE} is missing — no stall kind has a responder`])];
+  const problems = [...auditHands(records), ...(existsSync(routingPath) ? auditRouting(JSON.parse(readFileSync(routingPath, "utf8")), exists) : [`${ROUTING_FILE} is missing — no stall kind has a responder`])];
   if (argv.includes("--coherence")) {
     for (const p of problems) console.error(`  ✗ ${p}`);
     console.log(problems.length === 0 ? "Raised hands register is coherent." : `Raised hands register FAILED: ${problems.length} problem(s).`);
     process.exit(problems.length === 0 ? 0 : 1);
   }
   const github = argv.includes("--github");
-  const view = evaluate(doc, autoHands(await loadInputs({ github })));
+  const { routeHand } = await import(pathToFileURL(join(repo, "scripts/check-raised-hands.mjs")).href);
+  let roleIds = new Set();
+  try { const r = JSON.parse(readFileSync(join(repo, "docs/agent/org-roster.json"), "utf8")); roleIds = new Set((Array.isArray(r) ? r : r.roles ?? []).map((x) => x.id)); } catch { /* an unreadable roster routes every domain hand to GAP — loud, never quiet */ }
+  const view = evaluate(records, autoHands(await loadInputs({ github })), Date.now(), (h) => routeHand(h, roleIds));
   if (argv.includes("--markdown")) {
     console.log(render(view, { markdown: true, prsChecked: github }));
     const ids = [...view.open.map((h) => h.id), ...view.auto.filter((a) => !a.covered).map((a) => a.id)].sort();

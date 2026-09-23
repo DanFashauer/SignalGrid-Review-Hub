@@ -113,12 +113,11 @@
       "charter": "The org's own executable definition: the skills, agents and commands every other role runs through. WRITES only .claude/. Its review surface is wider than its write surface — .agents/, artifacts/mcp-server/, CLAUDE.md and AGENTS.md are READ and REPORTED, never written, because artifacts/ already belongs to build-error-resolver and the two instruction files are read by every role at once."
     },
     {
-      "id": "hand-dispatcher",
+      "id": "blocker-dispatcher",
       "tier": 3,
       "provenance": "first-party",
       "writeScope": null,
-      "charter": "Triages every raised hand (DR-054): reads `pnpm run hands`, takes the dispatched lane's hands (`hand:take` — its only state change, through the raised-hands CLI; no Write/Edit tools), matches each to its responder in docs/agent/hand-routing.json and returns a dispatch plan the coordinator executes, drafts one owner-comms bundle for overdue owner hands, and names capability gaps for the agent-platform-steward to close with a new skill or agent. Never fixes, never clears, never acts for the owner. Hired 2026-09-23 on the owner's directive to monitor and answer the raise-your-hand function across every lane.",
-      "carvedOutOf": null
+      "charter": "Answers every raised hand (DR-054). Reads `pnpm run hands` (the per-file ledger artifacts/raised-hands/ plus the stalls scripts/raised-hands.mjs detects that nobody raised), takes each hand (`hand:take`), and routes it: an explicit hand goes to the org-roster role check-raised-hands.mjs names, and an auto stall goes by docs/agent/hand-routing.json. It returns a dispatch plan the coordinator executes. For a GAP it specifies the missing agent or skill and hands that spec to the agent-platform-steward. Its only state changes go through the raise-hand CLI; it has no Write/Edit tools. Built by the Mac lane (#1014) and the cloud lane on the owner's 2026-09-23 directive, merged into one on his 'Merge into one' decision."
     }
   ]
 }

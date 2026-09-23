@@ -591,6 +591,7 @@ const STEPS = [
   { name: "Proof: itsm-credential-crypto (a weak key is refused, not stretched)", cmd: ["pnpm", "run", "proof:itsm-credential-crypto"] },
   { name: "Proof: telemetry-posture-cache (stale posture is never served as current)", cmd: ["pnpm", "run", "proof:telemetry-posture-cache"] },
   { name: "Proof: itsm-template (evidence text cannot rewrite itself on the way into a ticket)", cmd: ["pnpm", "run", "proof:itsm-template"] },
+  { name: "Proof: itsm-dispatch (cascade join 1 — the mapper is total; every way the ticket fails to open refuses by name)", cmd: ["pnpm", "run", "proof:itsm-dispatch"] },
   { name: "Proof: session-store", cmd: ["pnpm", "run", "proof:session-store"] },
   { name: "Proof: orchestration", cmd: ["pnpm", "run", "proof:orchestration"] },
   { name: "Proof: room-sim", cmd: ["pnpm", "run", "proof:room-sim"] },

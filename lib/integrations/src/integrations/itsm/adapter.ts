@@ -50,7 +50,7 @@ import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate'
  * silently inheriting "no credential required". proof:emit-gate derives the
  * vendor list from the schema, so the omission fails a proof, not a customer.
  */
-function requiredCredential(vendor: ITSMVendor, config: ITSMFullConfig): EmissionCredential {
+export function requiredCredential(vendor: ITSMVendor, config: ITSMFullConfig): EmissionCredential {
   const c = config.credentials;
   switch (vendor) {
     case 'servicenow':

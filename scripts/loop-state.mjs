@@ -568,6 +568,28 @@ function stateFreshness(lastTouchedISO, newestCommitISO) {
   return { kind: days > 7 ? "stale" : "fresh", days };
 }
 
+// ── 5c. Raised hands (DR-054) — is any blocker sitting unaddressed? ──────────
+// The other half of the raise-your-hand reflex: a raised hand must be SEEN. This folds
+// the monitor's count in so an open blocker is surfaced every session, never lost. gated:
+// false — a blocker to address, not a code defect that should block a push.
+{
+  try {
+    const out = execFileSync("node", [resolve(repo, "scripts/check-raised-hands.mjs"), "--json"], { cwd: repo, encoding: "utf8" });
+    const s = JSON.parse(out);
+    if (s.open === 0) {
+      add("ok", "Raised hands", "none open — every blocker resolved (DR-054)", false);
+    } else {
+      const bits = [`${s.open} open`];
+      if (s.gaps) bits.push(`${s.gaps} with NO owner (capability GAP)`);
+      if (s.stale) bits.push(`${s.stale} overdue (>3d)`);
+      add("warn", "Raised hands", `${bits.join(", ")} — dispatch them (node scripts/check-raised-hands.mjs; the blocker-dispatcher agent addresses each)`, false);
+    }
+  } catch (e) {
+    // DR-054: the monitor failing to run is itself surfaced, never swallowed.
+    add("warn", "Raised hands", `monitor could not run: ${e.message}`, false);
+  }
+}
+
 // ── report ──────────────────────────────────────────────────────────────────
 const icon = { ok: `${G}✓${X}`, warn: `${Y}!${X}`, fail: `${R}✗${X}` };
 for (const r of rows) console.log(`  ${icon[r.state]} ${r.what.padEnd(42)} ${D}${r.detail}${X}`);

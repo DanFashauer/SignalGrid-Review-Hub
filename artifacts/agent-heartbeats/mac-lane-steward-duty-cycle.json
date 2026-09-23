@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-23T22:52:47.528Z",
-  "result": "keepalive + acted: merged #1013 (DR-054 ack) and #1015 (HOLD #1011/#1014 — owner chose one merged raise-your-hand system); opened #1019 (the merged system, owner-gated). No unread mail to cloud; no new/moved mac/* branches; manifest clean. Mac tick last firedAt 2026-09-23T22:43:53Z. Live evidence 2026-09-20T11:40:55-04:00 (>3d; refresh request to mac already unread). Owner not escalated by the lane."
+  "firedAt": "2026-09-23T23:38:29.072Z",
+  "result": "non-quiet: Mac acked all 7 cloud messages and re-minted live evidence (d0ed0362, 0 days old); cloud superseded the stale #753 rebuild request (the owner closed #753; its useful half is #1005). No mac mail unread to cloud; no new/moved mac/* branches; manifest clean. Mac tick last firedAt 23:10Z. Owner not escalated."
 }

@@ -30,6 +30,7 @@
     "./.claude/agents/fail-closed-auditor.md",
     "./.claude/agents/gate-and-proof-engineer.md",
     "./.claude/agents/planner.md",
+    "./.claude/agents/project-manager.md",
     "./.claude/agents/refactor-cleaner.md",
     "./.claude/agents/security-reviewer.md",
     "./.claude/agents/tdd-guide.md",

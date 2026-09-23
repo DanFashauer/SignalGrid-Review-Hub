@@ -43,6 +43,14 @@ const STALE_DAYS = 3; // an open raised hand older than this is overdue — repo
 // first keyword the domain contains wins. Roles are validated against the roster at load,
 // so a typo here becomes a GAP (surfaced), never a silent misroute.
 export const DOMAIN_TO_ROLE = [
+  // Direction / prioritization / queue blockers go to the PROJECT MANAGER, never to the
+  // human owner (owner 2026-09-23: "should be part of project management handling these
+  // tasks; issues get reported to them for direction"). "What next / which priority / how
+  // do these fit" is the brain's to answer, via product-manager's executor.
+  ["priorit", "product-manager"], ["queue", "product-manager"], ["backlog", "product-manager"],
+  ["what-next", "product-manager"], ["next", "product-manager"], ["direction", "product-manager"],
+  ["rank", "product-manager"], ["groom", "product-manager"],
+  ["cadence", "program-manager"], ["coordinat", "program-manager"], ["shift", "program-manager"], ["schedul", "program-manager"],
   ["decision", "principal-engineer"], ["core", "principal-engineer"],
   ["gate", "devex-tooling-engineer"], ["tooling", "devex-tooling-engineer"], ["ci", "devex-tooling-engineer"], ["lint", "devex-tooling-engineer"],
   ["ios", "mobile-native-engineer"], ["swift", "mobile-native-engineer"], ["mobile", "mobile-native-engineer"],
@@ -120,8 +128,10 @@ export function summarize(hands, roleIds, nowMs) {
 function selfTest() {
   const fail = [];
   const t = (n, ok) => { if (!ok) fail.push(n); };
-  const roles = new Set(["devex-tooling-engineer", "mobile-native-engineer", "principal-engineer"]);
+  const roles = new Set(["devex-tooling-engineer", "mobile-native-engineer", "principal-engineer", "product-manager"]);
   t("a gate blocker routes to devex-tooling-engineer", routeHand({ domain: "gates" }, roles).owner === "devex-tooling-engineer");
+  t("a PRIORITY/direction blocker routes to the project manager, NOT the owner", routeHand({ domain: "priority-which-next" }, roles).owner === "product-manager");
+  t("a 'what next' blocker with no explicit unblocker routes to product-manager (brain self-directs)", routeHand({ domain: "next" }, roles).owner === "product-manager");
   t("an ios blocker routes to mobile-native-engineer", routeHand({ domain: "ios-swift" }, roles).owner === "mobile-native-engineer");
   t("whoCanUnblock=owner resolves to the human owner", routeHand({ whoCanUnblock: "owner (a design call)" }, roles).kind === "human");
   t("whoCanUnblock=other-lane resolves to a lane", routeHand({ whoCanUnblock: "the other lane" }, roles).kind === "lane");

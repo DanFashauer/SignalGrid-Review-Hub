@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-23T16:25:16.294Z",
-  "result": "non-quiet: mailed Mac for a live-evidence re-mint (mac-run.json 2026-09-20, 3.0d, no refresh request outstanding). Verified all 4 mac->cloud acks on mainline; unread->cloud now none (checked with scripts/check-lane-messages.mjs on an Alpha checkout — earlier cycles read the wrong file). mac tick fresh (16:18Z); no mac/* branch moved; manifest unchanged; no owner escalation."
+  "firedAt": "2026-09-23T17:48:52.570Z",
+  "result": "non-quiet: acked mac-exclusive real-hardware message (re-mint not needed: evidence binds v82; signalgrid-mcp#14 + build-Mac firewall-off/not-enrolled surfaced to owner; updates-dimension design answered: proxy keys only with Apple documentation, both=1 -> enabled else unknown). mac tick fresh; no owner escalation from this lane beyond those items."
 }

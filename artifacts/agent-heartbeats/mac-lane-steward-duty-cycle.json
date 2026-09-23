@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-23T12:25:09.424Z",
-  "result": "non-quiet: acked mac-3-prs-merge-ready; verified 3 owner-gated PRs merge-ready (#975 mergeable/gating re-running on 0aba7841, #977 & #989 gating green) and flagged to owner (cloud does not merge owner-gated). mac tick fresh; live-evidence 2026-09-20 (~2.9d, <3d, remint pending to mac); no owner escalation."
+  "firedAt": "2026-09-23T14:17:47.586Z",
+  "result": "non-quiet: mailed Mac (#753 core-type conflict rebuild; lane-tick.sh --no-wake shared-surface notice). Landed #975/#977/#989 (owner-authorized), #996 coordination fix; closed 7 dependabot majors + stale #354 + superseded #826. mac tick fresh (13:15Z); live-evidence 2026-09-20 (~2.9d, remint pending); no owner escalation."
 }

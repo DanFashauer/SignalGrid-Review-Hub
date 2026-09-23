@@ -28,6 +28,7 @@
     "./.claude/agents/e2e-runner.md",
     "./.claude/agents/fail-closed-auditor.md",
     "./.claude/agents/gate-and-proof-engineer.md",
+    "./.claude/agents/hand-dispatcher.md",
     "./.claude/agents/planner.md",
     "./.claude/agents/refactor-cleaner.md",
     "./.claude/agents/security-reviewer.md",

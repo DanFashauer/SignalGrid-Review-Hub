@@ -15,8 +15,9 @@ the truth; what this page owes you is the shape:
   `breadth` (the deferred connector families and doctrine proofs),
   `docs-sanity`, `durable-persistence` (the Postgres-backed gates),
   `podman-stack` and `deploy-stack` (the compose smokes).
-- **Sixteen workflow files total** — the Apple lane, Android, supply-chain
+- **Seventeen workflow files total** — the Apple lane, Android, supply-chain
   (SBOM + image evidence + keyless signing), CodeQL, scheduled verification,
+  raised hands (`raised-hands.yml`, hourly: the owner's one issue of everything stuck — 2026-09-23),
   windows desktop, the self-hosted Mac runner (`mac-runner-harness.yml` on
   demand, `mac-runner-auto.yml` on every PR and nightly — 2026-09-10), and the rest.
 - **The guarantee that keeps this page honest**:

@@ -1,0 +1,43 @@
+{
+  "$comment": "Who answers a raised hand. Every stall kind scripts/raised-hands.mjs can auto-detect MUST have a route here, and every named responder must exist (an agent in .claude/agents, a skill in .claude/skills, a lane, or the owner) — `node scripts/raised-hands.mjs --check` fails otherwise, so a new detector cannot ship without somebody who answers it. The hand-dispatcher agent (.claude/agents/hand-dispatcher.md) follows .claude/skills/raised-hands/SKILL.md and reads this table. Owner, 2026-09-23: 'build something that monitors the raise your hand function then apply what is needed for the agents to address or create new agent and or skill to fill that gap.'",
+  "version": 1,
+  "routes": {
+    "mail": {
+      "responder": { "lane": "addressee" },
+      "skills": ["raised-hands"],
+      "action": "The addressed lane runs `pnpm run lane:inbox`, does what each message asks, and acks it with what was done (`pnpm run lane:deliver ack <id> \"…\"`). A cloud-addressed message is the steward cycle's; a mac-addressed one waits for a Mac session — the cloud raises a covering hand naming what is unread, it never acks for the Mac."
+    },
+    "sim": {
+      "responder": { "lane": "mac" },
+      "skills": ["raised-hands"],
+      "action": "The Mac tick runs queued requests every 5 minutes; a request still pending past 48h means the tick is not running or the operation cannot run on this machine. Check the tick heartbeat first; if it is fresh, the Mac session reads the request and either runs it (`pnpm run sim:run-requests --id <id>`) or supersedes it with the reason."
+    },
+    "heartbeat": {
+      "responder": { "lane": "routine-owner" },
+      "skills": ["raised-hands"],
+      "action": "A launchd routine (the Mac tick) that went silent is a physical Mac: escalate ONCE per 24h to the owner with the one command (`bash scripts/mac/install-launchd.sh`, then `--status`). A cloud trigger that went silent: read list_triggers for its last_run; a FAILED or missing run is re-fired or repaired by the cloud lane, never waited out."
+    },
+    "pr-red": {
+      "responder": { "agent": "build-error-resolver" },
+      "alternates": [{ "agent": "gate-and-proof-engineer", "when": "the failing step is a gate, proof or self-test under scripts/" }],
+      "skills": ["debugging-and-error-recovery"],
+      "action": "Read the failing check run's log, root-cause it on the PR's branch, push a fix with the full local gates run first (CLAUDE.md, 'Before you push'). A failure that is not the PR's own gets one comment naming the failing check and why."
+    },
+    "pr-idle": {
+      "responder": { "owner": true },
+      "alternates": [{ "lane": "cloud", "when": "the PR is the cloud lane's own and not owner-gated — land it under DR-037 (.claude/skills/landing-under-dr-037)" }],
+      "skills": ["owner-comms", "landing-under-dr-037"],
+      "action": "A green PR idle 48h is waiting on a merge decision. If DR-037 lets the cloud land it, land it. Otherwise it goes into the owner's ONE bundled message (owner-comms): the PR, what it does in one line, merge or close."
+    },
+    "owner": {
+      "responder": { "owner": true },
+      "skills": ["owner-comms"],
+      "action": "Never act for the owner. Put every open owner hand into one short bundled message (owner-comms): what is stuck, the one thing he needs to do, where. The hourly raised-hands issue already notifies him of NEW hands; the bundle is for hands he has not acted on in 48h (OVERDUE)."
+    },
+    "capability-gap": {
+      "responder": { "agent": "agent-platform-steward" },
+      "skills": ["writing-skills"],
+      "action": "A hand no route above can answer, or one that keeps coming back, is a missing capability. Name the recurring pattern; then either write a skill (the pattern is a procedure a session can follow) or hire an agent under DR-016 (a registered tier, charter and disjoint write scope in docs/agent/agent-tiers.json), and add its route to this file in the same PR."
+    }
+  }
+}

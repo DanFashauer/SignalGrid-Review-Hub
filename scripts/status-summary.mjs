@@ -180,6 +180,16 @@ L.push(`- pushed: ${
       : "**unknown — could not read the remote ref (offline, no remote credentials, detached HEAD, or no matching remote branch)**"
 }`);
 L.push("");
+// Owner, 2026-09-23: a status page could read all-green over a stuck org. What is
+// stuck, and who can clear it, sits above the gates — never below them.
+{
+  const hands = spawnSync("node", [path.join(repoRoot, "scripts/raised-hands.mjs")], { cwd: repoRoot, encoding: "utf8" });
+  L.push(`## Raised hands — what is stuck, and who can clear it`);
+  L.push("");
+  if (hands.status !== 0) L.push("**UNKNOWN — `scripts/raised-hands.mjs` failed; run `pnpm run hands`. Unknown is not \"nothing stuck\".**");
+  else L.push("```", hands.stdout.trim(), "```");
+  L.push("");
+}
 L.push(`## Gates`);
 L.push("");
 L.push(`| Gate | Result |`);

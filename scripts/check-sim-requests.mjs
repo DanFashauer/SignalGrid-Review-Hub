@@ -36,6 +36,13 @@ const RES_DIR = join(repo, "artifacts/sim-results");
 const listJson = (dir) =>
   existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".json")).sort() : [];
 
+/** How long a request has been owed, for every pending line — raised-hands.mjs
+ *  ages the stall from this, and a line with no age would read as infinitely old. */
+const requestAge = (req) => {
+  const asked = Date.parse(req?.requestedAt ?? "");
+  return Number.isNaN(asked) ? "age unknown" : `${Math.max(0, Math.floor((Date.now() - asked) / 86_400_000))} day(s) old`;
+};
+
 /** Pure over the two directories' PARSED contents, so the self-test can drive it
  *  with synthetic input and prove the same code path fails. */
 export function auditSimRequests(requests, results, commitExists = null, shallow = true) {
@@ -181,10 +188,10 @@ export function auditSimRequests(requests, results, commitExists = null, shallow
       for (const key of req.runs) {
         const row = (res.runs ?? []).find((r) => r.operation === key);
         if (!row) {
-          pending.push(`${res.requestId} → ${key} (result exists but this operation has no row: NOT run)`);
+          pending.push(`${res.requestId} → ${key} (result exists but this operation has no row: NOT run; ${requestAge(req)})`);
         } else if (!EXECUTED_STATUSES.includes(row.status)) {
           pending.push(
-            `${res.requestId} → ${key} (${row.status} on ${res.provenance?.platform ?? "unknown platform"}: attempted, NOT run — still needs a machine that can)`,
+            `${res.requestId} → ${key} (${row.status} on ${res.provenance?.platform ?? "unknown platform"}: attempted, NOT run — still needs a machine that can; ${requestAge(req)})`,
           );
         }
       }
@@ -193,9 +200,7 @@ export function auditSimRequests(requests, results, commitExists = null, shallow
 
   for (const req of requests) {
     if (!resById.has(req.id) && !supersededIds.has(req.id)) {
-      const asked = Date.parse(req.requestedAt ?? "");
-      const age = Number.isNaN(asked) ? "age unknown" : `${Math.max(0, Math.floor((Date.now() - asked) / 86_400_000))} day(s) old`;
-      pending.push(`${req.id} → every run still queued (no result yet; ${age})`);
+      pending.push(`${req.id} → every run still queued (no result yet; ${requestAge(req)})`);
     }
   }
 

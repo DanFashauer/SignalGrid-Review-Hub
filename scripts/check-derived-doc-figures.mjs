@@ -674,6 +674,23 @@ export const SWEEP_EXEMPT = [
   },
   {
     doc: "docs/CLAIM_INVENTORY.md",
+    near: /review-hub-ci\.yml:63\s*\|\s*\|\s*17/,
+    count: 1,
+    reason:
+      "a claim-inventory ROW ID (17), not a count of workflow files: the preceding row's evidence cell ends in a " +
+      "workflows/ citation, so the sweep window sees 'workflow' beside the next row's id. Collided when the " +
+      "raised-hands workflow (2026-09-23) moved the derived workflow count to 17. `\\s*` for the raw-document reader.",
+  },
+  {
+    doc: "docs/company/ROLE_LENS_REVIEW_2026-08-21.md",
+    near: /desktop\.yml:17(?![0-9])/,
+    count: 1,
+    reason:
+      "a LINE-NUMBER citation (desktop.yml lines 17-31) in a dated 2026-08-21 review, not a count of workflow files. " +
+      "Collided when the raised-hands workflow (2026-09-23) moved the derived workflow count to 17.",
+  },
+  {
+    doc: "docs/CLAIM_INVENTORY.md",
     near: /proofs check"\)\s*\|\s*\|\s*148/,
     count: 0,
     reason:

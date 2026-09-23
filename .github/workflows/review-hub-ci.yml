@@ -542,6 +542,10 @@ jobs:
         run: node scripts/check-lane-messages.mjs
       - name: Lane message self-test (the gate can fail)
         run: node scripts/check-lane-messages.mjs --self-test
+      - name: Raised hands (nothing stuck past its limit without a hand raised)
+        run: node scripts/raised-hands.mjs --check
+      - name: Raised hands self-test (the gate can fail)
+        run: node scripts/raised-hands.mjs --self-test
       - name: Proof — operating method (the handbook is a gate, not a memory)
         run: pnpm run proof:operating-method
 

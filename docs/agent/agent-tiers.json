@@ -111,6 +111,14 @@
       "writeScope": ".claude/",
       "carvedOutOf": null,
       "charter": "The org's own executable definition: the skills, agents and commands every other role runs through. WRITES only .claude/. Its review surface is wider than its write surface — .agents/, artifacts/mcp-server/, CLAUDE.md and AGENTS.md are READ and REPORTED, never written, because artifacts/ already belongs to build-error-resolver and the two instruction files are read by every role at once."
+    },
+    {
+      "id": "hand-dispatcher",
+      "tier": 3,
+      "provenance": "first-party",
+      "writeScope": null,
+      "charter": "Triages every raised hand (DR-054): reads `pnpm run hands`, takes the dispatched lane's hands (`hand:take` — its only state change, through the raised-hands CLI; no Write/Edit tools), matches each to its responder in docs/agent/hand-routing.json and returns a dispatch plan the coordinator executes, drafts one owner-comms bundle for overdue owner hands, and names capability gaps for the agent-platform-steward to close with a new skill or agent. Never fixes, never clears, never acts for the owner. Hired 2026-09-23 on the owner's directive to monitor and answer the raise-your-hand function across every lane.",
+      "carvedOutOf": null
     }
   ]
 }

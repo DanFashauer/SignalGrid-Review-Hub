@@ -262,6 +262,10 @@ jobs:
         run: node scripts/check-ios-policy-defaults.mjs --self-test
       - name: iOS policy defaults (no managed-config default derived from the absence of policy)
         run: node scripts/check-ios-policy-defaults.mjs
+      - name: Override parity self-test (the gate must be able to fail)
+        run: node scripts/check-override-parity.mjs --self-test
+      - name: Override parity (a package.json version that the workspace override overrides is dead text)
+        run: node scripts/check-override-parity.mjs
       - name: Console unknown-render self-test (the gate must be able to fail)
         run: node scripts/check-console-unknown-render.mjs --self-test
       - name: Console unknown-render (no good-state render on unguarded query data)

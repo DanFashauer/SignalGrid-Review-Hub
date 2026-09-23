@@ -288,6 +288,8 @@ const STEPS = [
   { name: "iOS dead stored properties (a field nothing assigns makes every read of it dead)", cmd: ["node", "scripts/check-ios-dead-stored-properties.mjs"] },
   { name: "iOS policy defaults self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-policy-defaults.mjs", "--self-test"] },
   { name: "iOS policy defaults (no managed-config default derived from the absence of policy)", cmd: ["node", "scripts/check-ios-policy-defaults.mjs"] },
+  { name: "Override parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-override-parity.mjs", "--self-test"] },
+  { name: "Override parity (a package.json version that the workspace override overrides is dead text)", cmd: ["node", "scripts/check-override-parity.mjs"] },
   { name: "Console unknown-render self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-console-unknown-render.mjs", "--self-test"] },
   { name: "Console unknown-render (no good-state render on unguarded query data)", cmd: ["node", "scripts/check-console-unknown-render.mjs"] },
   { name: "iOS restriction defaults self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs", "--self-test"] },

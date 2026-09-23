@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-23T11:26:22.109Z",
-  "result": "quiet — 2h keepalive (steward heartbeat ~2h58m old). mac tick fresh (firedAt 2026-09-23T11:09:18Z, <3h). live-evidence 2026-09-20 (~2.8d, <3d; remint already pending to mac, not re-sent). lane mail to cloud: 0 unread; no new/moved mac/* branch since last cycle; no owner escalation."
+  "firedAt": "2026-09-23T12:25:09.424Z",
+  "result": "non-quiet: acked mac-3-prs-merge-ready; verified 3 owner-gated PRs merge-ready (#975 mergeable/gating re-running on 0aba7841, #977 & #989 gating green) and flagged to owner (cloud does not merge owner-gated). mac tick fresh; live-evidence 2026-09-20 (~2.9d, <3d, remint pending to mac); no owner escalation."
 }

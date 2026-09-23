@@ -358,6 +358,8 @@ const STEPS = [
   { name: "Agent roster (DR-016 — tier, charter, disjoint write boundary, vendor drift; self-tested)", cmd: ["node", "scripts/check-agent-roster.mjs"] },
   { name: "Skill-plane conformance self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-skill-plane-conformance.mjs", "--self-test"] },
   { name: "Skill-plane conformance (every skill/agent carries the name+description the harness selects it by)", cmd: ["node", "scripts/check-skill-plane-conformance.mjs"] },
+  { name: "Agent raise-your-hand self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-agent-raise-hand.mjs", "--self-test"] },
+  { name: "Agent raise-your-hand (every subagent definition carries the surface-when-stuck contract)", cmd: ["node", "scripts/check-agent-raise-hand.mjs"] },
   { name: "Positioning trace (every ratified claim resolves by id in the launch profile; self-tested)", cmd: ["node", "scripts/check-positioning-trace.mjs"] },
   { name: "Module init order (a const read before it is initialised; self-tested)", cmd: ["node", "scripts/check-module-init-order.mjs"] },
   { name: "Walker-floor self-test (a floorless roots-array walk must fail)", cmd: ["node", "scripts/check-walker-floors.mjs", "--self-test"] },

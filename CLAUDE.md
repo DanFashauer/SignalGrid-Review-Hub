@@ -261,6 +261,7 @@ HIPAA/SOC 2 — a human compliance review is required, not optional.
 - Done = tests/gates pass with quoted output AND the commit is confirmed on origin via `git ls-remote`. Local-only is not done.
 - Never bypass a check: no `--no-verify`, no stash-to-dodge, no quiet flags, no force-push. Report the failure and fix the cause.
 - Session ritual: START — read `docs/agent/LOOP.md`, run `pnpm run loop:state`, quote output. END — update the LOOP.md STATE block, push, confirm on remote.
+- **Raise your hand when stuck (DR-054).** Be fail-closed about your OWN progress, not only the code. If you hit a wall you cannot clear — a tool/permission you lack, a dependency you cannot reach, a missing or contradictory input, an owner-only decision, a usage limit, a refusal — STOP and surface it: what you were doing, what blocked you, exactly what you need, and who can unblock it. Never return an empty/partial/best-guess result as if complete, never silently drop a step, never narrate past the blocker. This binds every lane and every subagent (`scripts/check-agent-raise-hand.mjs` enforces it for `.claude/agents/*.md`); a stuck lane writes the blocker to the mailbox (`lane:deliver`), a workflow surfaces a dead/`null` agent instead of filtering it away. A raised hand is the job done right; a silent stall is the one failure this system will not tolerate.
 
 ## Scope (current phase — DR-021, 2026-08-31)
 - Engineering is UNFROZEN across every lane (DR-021). Build what strengthens the solution; new verticals/platforms/hardware still get a decision record first (DR-020 rule).

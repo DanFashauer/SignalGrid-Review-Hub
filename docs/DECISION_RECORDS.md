@@ -3441,3 +3441,58 @@ This deferred detection does not duplicate the `rtls-custody` ledger evaluator: 
 Proven by ADDING assertions to the existing, already-registered `scripts/src/event-contract-proof.ts` (`proof:event-contract`): three positive shapes (prior grant never returned, prior `non_return`, prior `custody_expired`), a severity+evidence check, two negative controls (a properly returned prior does NOT fire it; a bare denial with no prior open checkout does NOT fire it), and two device-axis assertions that fail if the amendment above is reverted (another device returned while this one is still out must STILL fire; a grant+removal+return for one device must STAY silent). No new proof script, so no new preflight/CI/guard registration. The verdict enum, the Decision Envelope, and every launch-claim surface are untouched; no launch claim is made or implied.
 
 **Reversal / amendment.** The owner vetoes by not merging, or reverses a merged form by reverting the one PR with the reversal date added here.
+
+## DR-054 — Raise your hand when stuck: every autonomous unit surfaces a blocker, none fails silently (owner-directed 2026-09-23)
+
+### 1. The decision
+
+The owner, 2026-09-23: *"All agents will never raise their hand when they get stuck."*
+This is a founding operating law, effective across the whole company and product,
+every lane: **an autonomous unit that cannot resolve its task MUST surface a structured
+BLOCKED signal — never fail silently, drop a step, or hand back an empty/partial/best-guess
+result as if it were complete, and never narrate past the blocker.**
+
+It is the fail-closed rule (golden rule 2) applied to an actor's OWN PROGRESS, not only
+to the data it reads: an unknown or blocked STATE must **tighten** (stop, surface) not
+**loosen** (guess, proceed). A raised hand is the job done right; a silent stall is the
+one failure this system will not tolerate.
+
+### 2. What "raise your hand" means, concretely
+
+When blocked — a tool or permission it lacks, a dependency it cannot reach, an input that
+is missing or self-contradictory, an ambiguous call that is the owner's to make, a usage
+limit, or a refusal — the unit reports four things: **what it was doing, what blocked it,
+exactly what it needs to continue, and who can unblock it** (the owner, the other lane, a
+named tool). The blocker goes where a human or the other lane will see it, not only into a
+return value the caller may discard.
+
+### 3. Where it binds, and how it is enforced
+
+- **Subagents** (`.claude/agents/*.md`): each carries the canonical clause verbatim,
+  enforced by `scripts/check-agent-raise-hand.mjs` (preflight + CI, with a self-test).
+  This is the direct fix for the owner's words — 8 of 13 defs had no escalation language.
+- **Coordinators / this session**: the START/END ritual and the stop hook already refuse
+  a silent "done"; this law adds that a *blocked* state is reported the same way, in plain
+  terms, to the owner or the other lane — not swallowed.
+- **Workflows**: a `null` from `agent()` (a skipped or dead sub-agent) must be SURFACED
+  (logged/reported as BLOCKED), never silently `.filter(Boolean)`'d into nothing. The
+  author owns this; the doctrine names it so a dropped agent is a defect, not a shrug.
+- **Lanes**: a stuck lane writes a blocker into the lane mailbox (an unacknowledged message
+  is already PENDING and surfaced by `lane:inbox` / `loop:state`), generalizing DR-047's
+  "a usage-limited spawn is logged pending and re-issued, never silently dropped" to every
+  kind of blocker.
+- **Gates / routines**: "could not run / could not determine" is reported distinctly from
+  pass/fail (the existing fail-closed contract) — a check that cannot answer raises its
+  hand, it does not quietly pass.
+
+### 4. Proof and scope
+
+Proven by `scripts/check-agent-raise-hand.mjs` (self-test: the canonical clause passes, a
+reworded/weaker section and an empty body fail, a file floor guards an empty walk) plus the
+clause landed in all 13 agent definitions. Cross-surface work (workflow surfacing helper,
+a lane blocked-signal row in `loop:state`, and the system-wide sweep for other silent-stall
+sites) is tracked from this record. No decision-core verdict, Decision Envelope, or launch
+claim is touched.
+
+**Reversal / amendment.** The owner vetoes DR-054 by not merging, or reverses a merged form
+by reverting the PR with the reversal date added here.

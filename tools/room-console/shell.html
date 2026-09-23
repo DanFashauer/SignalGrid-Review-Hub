@@ -147,6 +147,9 @@
   const U_BADGE    = {present:'ok', removed:'bad', forced:'bad', absent:'warn', unknown:'warn'};
   const U_MGMT     = {healthy:'ok', degraded:'warn', broken:'bad', unknown:'warn'};
   const U_AUTH     = {verified:'ok', withheld:'bad', unverified:'warn'};
+  // DR-043. A legacy credential is weaker, not a fault; the downgrade is the pair.
+  const U_ATTACH   = {attached:'ok', removed:'bad', unknown:'warn', not_applicable:'warn'};
+  const U_CRED     = {strong:'ok', legacy_125khz:'warn', unknown:'warn', not_applicable:'warn'};
   // Keys are `DecisionEvidence` field names, exactly as `Object.entries(d.signals)` yields
   // them. The build gate asserts this key set EQUALS the interface's field set.
   const SIG_FIELDS = {
@@ -170,6 +173,9 @@
     badgeBinding: U_BADGE,
     managementHealthState: U_MGMT,
     localAuthorityState: U_AUTH,
+    attachState: U_ATTACH,
+    enrollmentStrength: U_CRED,
+    credentialReadMethod: U_CRED,
     criticalSignalsPresent: U_BOOL,
   };
   function sigClass(field, v){

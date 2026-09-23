@@ -39,27 +39,37 @@ test today:
 | Badge binding (reader case) | present / removed / forced / absent / unknown — who is bound to the shared device right now |
 | Management health | healthy / degraded / broken / unknown — is the management plane itself vouching for the device right now |
 | Local authority | verified / withheld / unverified — may this shared device act on its own authority (offline lease live, clock trusted) |
+| Attach state (DR-043) | attached / removed / unknown / not_applicable — is the credential still seated in its receiver; a present-but-unreadable reading steps up, silence is not_applicable |
+| Enrollment strength (DR-043) | strong / legacy_125khz / unknown / not_applicable — how the worker's credential was enrolled |
+| Credential read method (DR-043) | strong / legacy_125khz / unknown / not_applicable — how this read arrived; a legacy read for a strong-enrolled worker is denied |
 | Critical signals present | derived fail-closed gate — `allow` is suppressed when a critical input is degraded |
 
-Twenty rows, and the count is not typed here: `EVIDENCE_FIELDS` in
+Twenty-three rows, and the count is not typed here: `EVIDENCE_FIELDS` in
 `lib/signalgrid-core/src/types.ts` is the runtime list, `proof:signalgrid-core`
-prints its length on every run (`figures=…,evidenceFields=20`), and
+prints its length on every run (`figures=…,evidenceFields=23`), and
 `scripts/check-proof-figures.mjs` holds the two together. This table listed 15
 while the array held 20 (batteryHealth, benchmarkSelectionState,
 shiftContextState, managementHealthState, localAuthorityState were missing) until
 the eighth audit round on 2026-09-05 — the union could not be counted, the array
 can.
 
-### The 17 normalized signal categories
+### The 20 normalized signal categories
 
-The connector layer normalizes source data into exactly **17 signal categories**
+The connector layer normalizes source data into exactly **20 signal categories**
 that feed the evidence above:
 
 `identity_state`, `device_compliance`, `device_management`, `device_encryption`,
 `os_support`, `posture_freshness`, `custody_state`, `charge_state`,
 `battery_health`, `tamper_state`, `dock_state`, `security_baseline`,
-`benchmark_selection`, `shift_context`, `badge_binding`,
-`device_management_health`, `local_authority`.
+`benchmark_selection`, `shift_context`, `badge_binding`, `attach_state`,
+`enrollment_strength`, `credential_read_method`, `device_management_health`,
+`local_authority`.
+
+The three credential categories (DR-043, 2026-09-23) carry the attach matrix's
+rows onto the live gate: removed → restrict, unknown → step-up, and a legacy
+125 kHz read for a strong-enrolled worker → deny. Fixture-backed only: no puck,
+dock or reader hardware exists, and no connector emits these categories yet.
+They share the declared divergence below.
 
 The last two were added when the 2026-08-10 full-repo scan found the core could
 not represent two of its three LAUNCH families — they existed as connectors,
@@ -67,7 +77,7 @@ proofs and doctrine while the engine had no vocabulary for them. Both ship with
 active v1 rules that match only the AFFIRMATIVE bad state (`broken`, `withheld`);
 silence stays quiet, so a fleet not yet emitting either signal sees no change.
 
-**Declared divergence:** these two categories are evaluated by the SERVED core
+**Declared divergence:** these categories are evaluated by the SERVED core
 (`/v1`) only. The demo simulator engine and its byte-faithful iOS port have no
 vocabulary for them yet, so a device affirmatively reporting a broken management
 plane is restricted by `/v1` while an on-device demo evaluation would not react.
@@ -154,7 +164,7 @@ decision inputs in the core today, and any surface that shows them must say so:
 - **RTLS / precise indoor location** — candidate.
 - The **broader integration catalog** (~149 candidate sources across ~16
   categories in the catalog taxonomy) — these are *candidate signal-source
-  categories*, distinct from the 17 categories the core normalizes today, and
+  categories*, distinct from the 20 categories the core normalizes today, and
   none is a live integration.
 - **Cross-platform app shells** (React Native / Expo, Tauri / Electron) — not
   built; responsive web + PWA is the cross-platform delivery. This is NOT a
@@ -171,7 +181,7 @@ The repo intentionally has two surfaces that must not be conflated:
 
 1. **Product-core lineage** — `@workspace/signalgrid-core` and the Review Hub's
    Operator Console / Worker Self-Service run the real, deterministic decision
-   loop with the 17 categories and 4 outcomes above. This is the truth.
+   loop with the 20 categories and 4 outcomes above. This is the truth.
 2. **Catalog / app-shell lineage** — the `/api/integrations` catalog (~149
    candidate sources, ~16 taxonomy categories) and the platform app shells
    (`signalgrid-app`, `-desktop`, `-mobile-pwa`) illustrate the broader vision
@@ -179,13 +189,13 @@ The repo intentionally has two surfaces that must not be conflated:
    what the core evaluates.
 
 When a surface shows "16 categories" or "~149 sources," it means the candidate
-catalog taxonomy — not the 17 categories the core evaluates. When it shows the
+catalog taxonomy — not the 20 categories the core evaluates. When it shows the
 signal dimensions a decision actually uses, it means the five evaluated-today
 dimensions above.
 
 ## How to verify
 
-- `pnpm run proof:signalgrid-core` — 519 assertions over the real core: outcomes,
+- `pnpm run proof:signalgrid-core` — 570 assertions over the real core: outcomes,
   fail-closed, tenant isolation, RBAC, tamper-evidence, determinism, the
   security-baseline dimension, the badge-binding (reader case) dimension, the
   dock/SmartDock hardware-state dimension, and untrusted-input hardening.

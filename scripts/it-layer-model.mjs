@@ -278,6 +278,12 @@ export const REASON_CODE_LAYERS = [
   // purpose. This is the one pair in the table where two neighbouring codes route to
   // different desks, and it is the clearest illustration of why the model is useful.
   { code: "BADGE_FORCED_REMOVAL", layer: "it_security_risk_management", domain: "Threat Detection & Response", systemOfRecord: "badge reader case", evidenceType: "duress / forced-removal event", owner: "security_operations_owner" },
+  // DR-043: the credential's own seat, and its strength. Removed/unknown follow
+  // BADGE_REMOVED's routing (a physical binding question); a downgrade is a
+  // suspected clone, so it routes with the forced removal to security operations.
+  { code: "CUSTODY_REMOVED", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "credential receiver / dock", evidenceType: "credential attach state", owner: "facilities_operations_owner" },
+  { code: "CUSTODY_UNKNOWN", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "credential receiver / dock", evidenceType: "credential attach state", owner: "facilities_operations_owner" },
+  { code: "CREDENTIAL_DOWNGRADE", layer: "it_security_risk_management", domain: "Threat Detection & Response", systemOfRecord: "credential reader + IdP enrollment", evidenceType: "credential read method vs enrollment strength", owner: "security_operations_owner" },
 
   // ── Business / labour plane ───────────────────────────────────────────────
   { code: "SHIFT_CONTEXT_MISFIT", layer: "software_development_applications", domain: "Enterprise Applications", systemOfRecord: "workforce management", evidenceType: "shift / punch state", owner: "application_owner" },

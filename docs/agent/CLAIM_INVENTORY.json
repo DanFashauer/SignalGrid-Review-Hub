@@ -10366,7 +10366,7 @@
    "claim": "\"Source unreachable or late → the decision tightens\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "lib/signalgrid-core/src/evidence.ts:573 \"this classification can only ever RAISE assurance, never lower it\"; lib/signalgrid-core/src/continuity.ts:42 \"an unreachable signal raises assurance\"; `pnpm run review:invariants` in CI (.github/workflows/review-hub-ci.yml:63; scripts/review-invariants.mjs:12-17)",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:587 \"this classification can only ever RAISE assurance, never lower it\"; lib/signalgrid-core/src/continuity.ts:42 \"an unreachable signal raises assurance\"; `pnpm run review:invariants` in CI (.github/workflows/review-hub-ci.yml:63; scripts/review-invariants.mjs:12-17)",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },
@@ -10720,7 +10720,7 @@
    "claim": "\"it tightens the verdict instead of passing as green\" — a stale compliant",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "lib/signalgrid-core/src/evidence.ts:573 (\"can only ever RAISE assurance, never lower it\"); `pnpm run proof:device-management-health` (package.json:100)",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:587 (\"can only ever RAISE assurance, never lower it\"); `pnpm run proof:device-management-health` (package.json:100)",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },
@@ -10760,7 +10760,7 @@
    "claim": "\"There is no configuration in which absence reads as fine.\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "lib/signalgrid-core/src/evidence.ts:573 — the classification \"can only ever RAISE assurance, never lower it\" is structural, not a setting; lib/posture-composition/src/adapters.ts:221-269 every dimension \"never lowers what any other dimension says\"; scripts/check-ios-policy-defaults.mjs (CLAUDE.md iOS specifics) gates the managed-config default on the host side",
+   "evidence": "lib/signalgrid-core/src/evidence.ts:587 — the classification \"can only ever RAISE assurance, never lower it\" is structural, not a setting; lib/posture-composition/src/adapters.ts:221-269 every dimension \"never lowers what any other dimension says\"; scripts/check-ios-policy-defaults.mjs (CLAUDE.md iOS specifics) gates the managed-config default on the host side",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },

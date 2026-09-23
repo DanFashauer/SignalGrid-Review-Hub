@@ -101,7 +101,7 @@ test("the standalone page renders the real model, not an empty shell", async ({ 
 });
 
 test("the visible coverage labels say what the data attributes say", async ({ page }) => {
-  // Inverting COVERAGE_LABEL renders all 21 badges backwards and changes no attribute.
+  // Inverting COVERAGE_LABEL renders all 24 badges backwards and changes no attribute.
   for (const [coverage, label] of [
     ["answerable", "answerable"],
     ["needs_instrumentation", "dark"],
@@ -143,7 +143,7 @@ test("silent holes rank first, say what they are, and name what would answer the
   );
 
   // The headline states the subset relation against the real dark count.
-  await expect(page.locator(".headline")).toContainText("silent holes — of the 6 dark axes");
+  await expect(page.locator(".headline")).toContainText("silent holes — of the 8 dark axes");
 
   // Posed by the calling app — must stay NOT SOURCED rather than inflating the gap count.
   const posed = page.locator('tr[data-axis="workflowRiskTier"]');

@@ -1,0 +1,30 @@
+title: Status Disk Management File Vault Enabled
+description: The status item that reports whether FileVault is enabled.
+payload:
+  statusitemtype: diskmanagement.filevault.enabled
+  supportedOS:
+    iOS:
+      introduced: n/a
+    macOS:
+      introduced: '14.0'
+      allowed-enrollments:
+      - supervised
+      - local
+      allowed-scopes:
+      - system
+    tvOS:
+      introduced: n/a
+    visionOS:
+      introduced: n/a
+    watchOS:
+      introduced: n/a
+payloadkeys:
+- key: diskmanagement.filevault.enabled
+  title: Status item value.
+  type: <boolean>
+  presence: required
+  content: A Boolean value that specifies the File Vault enabled status on the device.
+examples:
+- title: Status item example
+  files:
+  - file: examples/declarative/status/diskmanagement.filevault.enabled/example1.json

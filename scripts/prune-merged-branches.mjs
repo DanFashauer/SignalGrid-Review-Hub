@@ -36,6 +36,11 @@
 //   · any branch whose PR lookup ERRORED. A failed read is not an empty result.
 //     Deleting on a lookup failure would be the read-error-swallowing defect with
 //     an irreversible consequence.
+//   · any branch whose NAME is outside the ref grammar below. The API's strings
+//     reach the console and the job summary; a name carrying a control character,
+//     a quote or a markdown fragment would ride the escaping to the file. Such a
+//     name is refused UNREAD — not compared, not rendered, not deleted — and the
+//     report names it by length and tip sha instead.
 //
 // MERGED-NESS IS RE-DERIVED AT RUN TIME, never read from the committed snapshot.
 // `artifacts/sync/merged-branches-to-prune.txt` is a dated capture; branches move.
@@ -119,10 +124,56 @@ const escapeHtml = (s) =>
   s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 const mdCode = (s) => `<code>${escapeHtml(s)}</code>`;
 
+/** One rendered line, forced onto ONE line.
+ *
+ *  `escapeHtml` neutralises MARKUP but not LINE STRUCTURE, and the audit record is a
+ *  line-structured document. `k.reason` embeds `err.message`, which splices in
+ *  `body.slice(0, 200)` — the raw text of whatever answered the request. A JSON error
+ *  body is one line; a 502 HTML page from an edge proxy is not, so a single kept entry
+ *  could expand into several lines and forge a `### Result` block inside the record
+ *  that is the only evidence of what the run did. Every element of these arrays is
+ *  MEANT to be one line, so collapsing the breaks costs nothing and closes it. */
+const oneLine = (s) => String(s).replaceAll(/[\r\n\u2028\u2029]+/gu, " ");
+
+/** The fenced restore block, returned as summary ELEMENTS \u2014 one command per element,
+ *  never a single joined string. `appendSummary` runs every element through `oneLine`,
+ *  which collapses newlines; a multi-line element (the old `restore.join("\n")`) was
+ *  therefore flattened into ONE line \u2014 `git push \u2026b1 git push \u2026b2` \u2014 so a >=2-branch
+ *  prune printed a restore record that reversed only the first branch. Each command is
+ *  its own element so each survives intact. Every command is built from a hex sha and a
+ *  ref-grammar name (isRefName-gated at the door), so no element carries an injectable
+ *  newline of its own. */
+const restoreSection = (commands) => [
+  "```bash",
+  ...(commands.length > 0 ? commands : ["# nothing to restore \u2014 no branch qualified"]),
+  "```",
+];
+
+/** Is this URL on the SAME ORIGIN as the API we hold a token for? Used to refuse a
+ *  rel="next" link that would carry the Actions bearer to another host. Anything
+ *  unparseable, relative, or on another scheme/host/port is not. */
+const isSameApiOrigin = (u) => {
+  try {
+    return new URL(u).origin === new URL(API).origin;
+  } catch {
+    return false; // unparseable is not this origin
+  }
+};
+
 /** Encode a ref for a URL path WITHOUT destroying its slashes — `claude/foo` is
  *  two path segments and must stay two, but a `%` inside a segment is a legal ref
  *  character that would otherwise be read as the start of a percent-escape. */
 const encodeRefPath = (ref) => ref.split("/").map(encodeURIComponent).join("/");
+
+/** The branch-name grammar this script will handle at all. git's own is wider; this
+ *  is the subset every branch this repository has ever carried (85 of 85 on
+ *  2026-09-18), and it excludes everything the escapers below exist to neutralise —
+ *  control characters, quotes, backticks, angle brackets, spaces — so an untrusted
+ *  name is refused at the door rather than escaped at the window. Also refuses what
+ *  git refuses: `..`, a component starting with `.`, a `.lock` suffix. */
+const REF_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._/+-]*[A-Za-z0-9])?$/;
+export const isRefName = (s) =>
+  typeof s === "string" && s.length <= 255 && REF_NAME.test(s) && !s.includes("..") && !s.includes("/.") && !s.endsWith(".lock");
 
 // The helpers are checked against the adversarial cases before they are used, for
 // the same reason the text-safety gate tests itself: an escaper that has quietly
@@ -135,11 +186,67 @@ const encodeRefPath = (ref) => ref.split("/").map(encodeURIComponent).join("/");
     [mdCode("<script>"), "<code>&lt;script&gt;</code>"],
     [encodeRefPath("claude/a b"), "claude/a%20b"],
     [encodeRefPath("claude/100%"), "claude/100%25"],
+    // The rel="next" origin pin. These are the shapes that would otherwise send the
+    // Actions token somewhere it was never issued for; an origin check that has
+    // quietly stopped checking looks exactly like one that works.
+    [isSameApiOrigin(`${API}/repositories/1/branches?page=2`), true],
+    [isSameApiOrigin("https://attacker.example/steal?p=2"), false],
+    [isSameApiOrigin("http://api.github.com/x"), false], // scheme differs
+    [isSameApiOrigin("https://api.github.com.evil.test/x"), false], // suffix, not the host
+    [isSameApiOrigin("https://api.github.com:8443/x"), false], // port differs
+    [isSameApiOrigin("/repositories/1/branches?page=2"), false], // relative is unparseable here
+    [isSameApiOrigin("not a url"), false],
+    // Line-structure collapse: a multi-line error body must not be able to forge a
+    // second block inside the audit record.
+    [oneLine("a\nb"), "a b"],
+    [oneLine("a\r\n### Result\r\n- deleted: 0"), "a ### Result - deleted: 0"],
+    [oneLine("plain"), "plain"],
+    // The name grammar: every shape this repository's branches take is accepted, and
+    // every shape the escapers exist for is refused before they are needed.
+    [isRefName("claude/check-workspace-cycles"), true],
+    [isRefName("lane/cloud-mail-20260918-052636Z"), true],
+    [isRefName("dependabot/npm_and_yarn/types/node-25.3.3"), true],
+    [isRefName("mac/native-ledger-2026-09-02"), true],
+    [isRefName("v1.2+build"), true],
+    [isRefName("a b"), false],
+    [isRefName("a\u001bb"), false], // an ANSI escape would reach the console log
+    [isRefName("a`b"), false],
+    [isRefName("it's"), false],
+    [isRefName("<b>"), false],
+    [isRefName("a..b"), false],
+    [isRefName("a/.b"), false],
+    [isRefName("x.lock"), false],
+    [isRefName("-lead"), false],
+    [isRefName("trail/"), false],
+    [isRefName(""), false],
+    [isRefName(undefined), false],
   ];
   const bad = cases.filter(([got, want]) => got !== want);
   if (bad.length > 0) {
     console.error("✗ escaping self-test FAILED — refusing to render untrusted names.\n");
     for (const [got, want] of bad) console.error(`    got ${JSON.stringify(got)} want ${JSON.stringify(want)}`);
+    process.exit(1);
+  }
+}
+
+// The recovery record must survive appendSummary intact. appendSummary runs every
+// element through `oneLine` (collapses newlines), so the restore commands must reach
+// it as ONE ELEMENT PER BRANCH — a single joined multi-line element would flatten to
+// one broken line and reverse only the first branch. Render exactly as appendSummary
+// does and require every command to survive on its own line. Falsifiable: rejoin the
+// commands before restoreSection, or drop the array spread, and this fails.
+{
+  const commands = [
+    "git push origin " + "a".repeat(40) + ":refs/heads/claude/one",
+    "git push origin " + "b".repeat(40) + ":refs/heads/claude/two",
+  ];
+  const rendered = restoreSection(commands).map(oneLine).join("\n");
+  const survived = rendered.split("\n").filter((l) => l.startsWith("git push origin "));
+  if (survived.length !== commands.length) {
+    console.error(
+      `✗ restore self-test FAILED — a ${commands.length}-branch restore rendered ${survived.length} command line(s); ` +
+        "a multi-branch prune would print a restore record that reverses only the first branch.\n",
+    );
     process.exit(1);
   }
 }
@@ -162,6 +269,20 @@ async function paginate(path) {
     if (!res.ok) throw new Error(`GET ${url} → ${res.status}`);
     out.push(...(await res.json()));
     const next = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get("link") ?? "");
+    // PIN THE NEXT PAGE TO THIS ORIGIN. `headers` carries the Actions token, and
+    // `next[1]` is a URL out of a RESPONSE HEADER — so following it unchecked sends
+    // a `contents: write` bearer to whatever host the header names. That is the same
+    // untrusted-network-data class CodeQL flags on the summary write below, with a
+    // worse sink than the file: the credential itself. Observed leaving for
+    // `https://attacker.example/steal?p=2` with the bearer attached when the header
+    // was crafted. A next-page link that is not on this API is not a next page.
+    if (next) {
+      if (!isSameApiOrigin(next[1])) {
+        throw new Error(
+          `GET ${url} returned a rel="next" link off this API (${next[1]}) — refusing to send the token there.`,
+        );
+      }
+    }
     url = next ? next[1] : null;
   }
   return out;
@@ -181,7 +302,22 @@ const kept = []; // {branch, reason}
 
 for (const b of branches) {
   const name = b.name;
-  const sha = b.commit?.sha ?? "";
+  if (!isRefName(name)) {
+    // Refused UNREAD. The name itself is never rendered or compared; its length and
+    // tip sha identify it in the report. A grammar that has quietly widened is caught
+    // by the self-test above, not here.
+    const tip = typeof b.commit?.sha === "string" ? b.commit.sha.slice(0, 12) : "unknown";
+    kept.push({
+      name: `[name outside the ref grammar: ${String(name ?? "").length} chars, tip ${tip}]`,
+      reason: "name outside the accepted ref grammar — refused unread: not compared, not rendered, not deleted",
+    });
+    continue;
+  }
+  // NOT `?? ""`. An empty sha renders the restore line as
+  // `git push origin :refs/heads/'x'` — an empty SOURCE refspec, which git reads as
+  // DELETE. The "paste this to undo the deletion" line would have deleted the branch
+  // instead, so a missing field would have produced the MORE destructive outcome.
+  const sha = typeof b.commit?.sha === "string" ? b.commit.sha.trim() : "";
 
   if (name === defaultBranch) {
     kept.push({ name, reason: "default branch" });
@@ -191,8 +327,22 @@ for (const b of branches) {
     kept.push({ name, reason: "dependabot-owned (deleting makes it reopen)" });
     continue;
   }
-  if (b.protected) {
-    kept.push({ name, reason: "branch protection" });
+  // `!== false`, not truthiness: an ABSENT `protected` field is unknown management
+  // state, and unknown must tighten. The old form deleted a branch whose protection
+  // the response never asserted — the server twin of the iOS `managedBool` rule in
+  // CLAUDE.md ("never derive a policy default from the ABSENCE of managed
+  // configuration"). GitHub always sends the field, so this is latent, not live.
+  if (b.protected !== false) {
+    kept.push({
+      name,
+      reason: b.protected === true ? "branch protection" : "protection state not reported — unknown is kept",
+    });
+    continue;
+  }
+  // Likewise a branch whose tip sha the API did not report: it cannot be restored,
+  // so it is not a deletion candidate.
+  if (!sha) {
+    kept.push({ name, reason: "no commit sha reported — unrestorable, so never deleted" });
     continue;
   }
 
@@ -264,13 +414,16 @@ for (const b of branches) {
 }
 
 // ── The recovery record, emitted BEFORE any deletion ──────────────────────────
-const restore = [
+// One command PER branch, kept as an array so each reaches the summary as its own
+// element (see restoreSection): a joined multi-line string would be flattened to a
+// single broken line by oneLine, and every branch after the first would go unrestored.
+const restoreLines = [
   ...doomed.map((d) => `git push origin ${d.sha}:refs/heads/${shellQuote(d.name)}`),
   // A forced branch restores from its archive tag, which is a real ref and therefore
   // survives indefinitely — unlike a bare SHA, which only works until the unreferenced
   // object is collected. These are the ones that actually need a durable anchor.
   ...forced.map((f) => `git push origin ${shellQuote(`archive/${f.name}`)}:refs/heads/${shellQuote(f.name)}`),
-].join("\n");
+];
 
 const summary = [
   `## Branch prune — ${APPLY ? "APPLIED" : "dry run"}`,
@@ -287,15 +440,37 @@ const summary = [
   "",
   "### Restore any of these",
   "",
-  "```bash",
-  restore || "# nothing to restore — no branch qualified",
-  "```",
+  ...restoreSection(restoreLines),
   "",
   "### Kept, and why",
   "",
   ...kept.map((k) => `- ${mdCode(k.name)} — ${escapeHtml(k.reason)}`),
   "",
 ];
+
+/** Append to the run's job summary. Split out because the recovery record and the
+ *  result are written at DIFFERENT MOMENTS, which is the whole safety property.
+ *
+ *  Every line is passed through `oneLine` HERE rather than at each call site: this is
+ *  the one place untrusted text reaches the file, so it is the one place that cannot
+ *  be forgotten by a future caller. */
+async function appendSummary(lines) {
+  if (!process.env.GITHUB_STEP_SUMMARY) return;
+  const { appendFileSync } = await import("node:fs");
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.map(oneLine).join("\n")}\n`);
+}
+
+// THE RECOVERY RECORD IS WRITTEN HERE, BEFORE THE DELETE LOOP.
+//
+// The header of this file says "REVERSIBILITY IS PRINTED BEFORE ANYTHING IS DELETED
+// … this is the only moment that record can be made", and the `summary` array above
+// says "emitted BEFORE any deletion". Both were true of when the array was BUILT and
+// false of when it was WRITTEN: the single appendFileSync sat after the entire delete
+// loop, so a run interrupted mid-loop — a cancelled job, a runner eviction, a throw
+// from the forced-branch path — deleted branches and wrote no restore record at all.
+// The file's central safety claim held only when nothing went wrong, which is the one
+// case it was not written for.
+await appendSummary(summary);
 
 for (const d of doomed) console.log(`  prune  ${d.name}  — ${d.why}  ${d.sha}`);
 for (const f of forced) {
@@ -358,16 +533,12 @@ if (APPLY) {
     }
   }
 
-  summary.push(`### Result`, "", `- deleted: ${deleted}`, `- failed: ${failed.length}`, "");
-  for (const f of failed) summary.push(`- ${mdCode(f)}`);
+  const result = [`### Result`, "", `- deleted: ${deleted}`, `- failed: ${failed.length}`, ""];
+  for (const f of failed) result.push(`- ${mdCode(f)}`);
+  await appendSummary(result);
   console.log(`\ndeleted=${deleted} failed=${failed.length}`);
 } else {
   console.log(`\nDRY RUN — nothing was deleted. Re-run with apply=true to act on this plan.`);
-}
-
-if (process.env.GITHUB_STEP_SUMMARY) {
-  const { appendFileSync } = await import("node:fs");
-  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary.join("\n")}\n`);
 }
 
 // A failed deletion is a failed run. Partial success reported as green is the

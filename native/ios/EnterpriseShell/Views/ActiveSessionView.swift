@@ -634,7 +634,11 @@ final class ActiveSessionModel: ObservableObject {
                     app: app,
                     url: url,
                     allowedDomains: session?.persona.restrictions.allowedDomains,
-                    allowCopyPaste: session?.persona.restrictions.allowCopyPaste ?? true
+                    // FAIL-CLOSED on an unknown session. `?? true` handed copy/paste OUT of a
+                    // managed webview whenever the session could not be read — the state in which
+                    // the shell knows least about what the persona permits. Golden rule 2: an
+                    // unknown signal raises assurance, never lowers it.
+                    allowCopyPaste: session?.persona.restrictions.allowCopyPaste ?? false
                 )
             )
             return

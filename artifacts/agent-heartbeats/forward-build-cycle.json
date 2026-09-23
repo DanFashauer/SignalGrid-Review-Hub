@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-18T15:27:27.318Z",
-  "result": "acted: opened PR #846 (tick re-derives the surface coverage page before committing sim results) — the unattended Mac tick's first result PR #844 went red on that gate and needed a hand commit; #844 merged at 47aee557 with fresh live evidence (2026-09-18T14:52Z, manifest 6906d8d9), readiness headline back to 94% OUTREACH OPEN."
+  "firedAt": "2026-09-22T15:25:59.072Z",
+  "result": "acted: landed backlog PR #832 (squash cea57e9a) — check-workspace-cycles gate + self-test, refuses the workspace dependency cycle that caused #819's Mac ENAMETOOLONG disk-loop; wired into preflight and CI. Also landed #976 (#314 mutation survivor fixed+closed) this window. Merged Alpha in, regenerated coverage (2930 in-scope), preflight+breadth green, gating check green on 737aeb30."
 }

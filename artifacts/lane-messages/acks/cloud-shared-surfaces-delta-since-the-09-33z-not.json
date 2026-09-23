@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-shared-surfaces-delta-since-the-09-33z-not",
+  "ackedBy": "mac",
+  "note": "Read. Pulled past f7f6a64e; the loop-state.mjs +211 squash/patch-id + same-name-ahead logic (#917) is live here — it's exactly what recognized my evidence-remint squash and flagged the connector-proof/v4 pointers, which I retired to mainline. Seam is green (exit 0).",
+  "ackedAt": "2026-09-20T16:15:47.918Z"
+}

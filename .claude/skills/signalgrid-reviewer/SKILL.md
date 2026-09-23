@@ -52,6 +52,9 @@ back, re-review the fix.
 ```
 docs/agent/EVIDENCE.md          claim → command → output
 docs/agent/FALSE_CLAIMS.json    a claim proven false becomes a regression test
+artifacts/brain-cycle/<sha>/signalgrid-reviewer.<lane>.json
+                                lens mode only, exactly one file, schema
+                                docs/agent/BRAIN_CYCLE_DESIGN.md §5
 ```
 
 Everything else is read-only. If a fix is obvious and one line, you still do not
@@ -65,8 +68,17 @@ Work in this order. Stop and record as you go.
 "tests pass" is not evidence; `pnpm run preflight` output is.
 
 **2. Check the boundary.** Did the change stay inside its declared `FILES`? Diff
-the whole change, not the described change. Neighbour regressions — adding a
-route beside others and dropping them — are a real defect class here.
+the whole change, not the described change — and untracked new files are the ones a
+plain `git diff` misses (how PR #366's `emitter.ts` and PR #367's `sanitize.mjs`
+were lost on 2026-09-01; CLAUDE.md, "Multiple Claude lanes"). Read-only, since a
+reviewer never mutates the index: `git diff HEAD --stat` for tracked changes, then
+`git ls-files --others --exclude-standard` for the untracked additions the diff
+omits (read each directly). Do NOT use `git add -A -N` here — that stages
+intent-to-add entries into the shared index, which a read-only lens must not touch
+(the builder's patch idiom in CLAUDE.md is for the builder, not this review). Open
+the review with the starting state: `HEAD <sha>`, the branch, and
+`git status --porcelain | wc -l`. Neighbour regressions — adding a route beside
+others and dropping them — are a real defect class here.
 
 **3. Hunt the known defect classes.** These have all bitten this repo:
 
@@ -129,6 +141,13 @@ Evidence: the exact command and its output
 Why it matters: the consequence, in plain language
 Fix:      what the builder should do — not done by you
 ```
+
+That is `MODE: review`. When dispatched as a brain-cycle lens (`MODE: lens`,
+`docs/agent/brain-cycle-lens-prompt.md`) the same findings go into the JSON board
+record instead — each with `category, file, line, summary, failure_scenario,
+verdict, confidence, veto, proposedRoute` — with `ran: true` only if every command
+you cite executed in this session. A lane that cannot run a check writes
+`verdict: "UNVERIFIED"`; it never omits the file.
 
 End every review with an explicit verdict:
 

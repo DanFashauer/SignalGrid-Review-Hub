@@ -5,6 +5,7 @@ import {
   listSimulatorScenarios,
   runScenario,
   type DecisionOutcome,
+  type SignalGridSignal,
   type SimulatorRunResult,
 } from "@workspace/signalgrid-simulator";
 
@@ -29,6 +30,8 @@ const expectedOutcomeSets: Record<string, DecisionOutcome[]> = {
   // fired on every legitimate checkout would still look green here.
   "custody-removal-without-session": ["alert_operator", "create_ticket", "route_to_owner", "record_audit"],
   "custody-removal-with-session": ["allow", "record_audit"],
+  "puck-session-lifecycle": ["step_up", "alert_operator", "create_ticket", "route_to_owner", "request_remediation", "record_audit"],
+  "smart-charging-checkout-to-checkin": ["allow", "record_audit"],
   "low-battery-workflow-impact": ["alert_operator", "route_to_owner", "record_audit"],
   "operational-health-degradation": ["create_ticket", "route_to_owner", "record_audit"],
   "edr-security-risk": ["restrict", "alert_operator", "route_to_owner", "record_audit"],
@@ -121,6 +124,76 @@ assertions.push(assertion(
     !remWithoutBaseTrust.decision.outcomes.includes("allow") &&
     remWithoutBaseTrust.decision.outcomes.includes("verify_remediation"),
 ));
+
+// ── THE SMART-CHARGING WORKFLOW'S FOUR FAILURE BRANCHES ──────────────────────
+//
+// The scenario above is the happy path, and a happy path alone is the abstraction the
+// custody ground-truth document complained about. The four branches that actually
+// happen in a charging cabinet are derived FROM that fixture — same device, same bay,
+// same shift — so each one differs from the green run by exactly the fact it names.
+// A branch built from scratch could differ in ten ways and prove nothing about which.
+const charging = listSimulatorScenarios().find((s) => s.id === "smart-charging-checkout-to-checkin");
+function chargingBranch(id: string, expected: DecisionOutcome[], mutate: (signals: SignalGridSignal[]) => SignalGridSignal[]): SimulatorRunResult | undefined {
+  if (!charging) return undefined;
+  return runScenario({ ...charging, id, expectedOutcomes: expected, startingSignals: mutate([...charging.startingSignals]) });
+}
+const withAttrs = (signal: SignalGridSignal, attributes: Record<string, string | number | boolean | null>): SignalGridSignal =>
+  ({ ...signal, attributes: { ...signal.attributes, ...attributes } });
+
+// UNPAIRED — the device leaves the cabinet and no assignment claims it. Fail-closed on
+// ABSENCE: the lack of an owning session is not permission for the lift.
+const unpaired = chargingBranch("smart-charging-unpaired", ["create_ticket", "alert_operator", "route_to_owner", "record_audit"], (sigs) =>
+  sigs.map((sig) => (sig.type === "workflow.assignment_changed" ? withAttrs(sig, { active: false }) : sig)));
+assertions.push(assertion("smart charging / unpaired: an unclaimed checkout raises a custody exception",
+  unpaired !== undefined && sameOutcomeSet(unpaired.decision.outcomes, ["create_ticket", "alert_operator", "route_to_owner", "record_audit"])));
+assertions.push(assertion("smart charging / unpaired: never allows", !hasOutcome(unpaired, "allow")));
+
+// NETWORK-DOWN — the cabinet's controller is unreachable. The route degrades and is
+// reported; it does not silently succeed, and it does not abort the shift either.
+const networkDown = chargingBranch("smart-charging-network-down", ["alert_operator", "route_to_owner", "record_audit"], (sigs) => [
+  ...sigs,
+  { id: "api.integration_failed:integration-charging-controller", type: "api.integration_failed", layer: "integration", source: "Integration health fixture", subject: "integration:charging-controller", observedAt: sigs[0].observedAt, severity: "high", summary: "The cabinet controller is unreachable; provisioning events are queued", attributes: { target: "charging-controller", state: "unavailable" } },
+]);
+assertions.push(assertion("smart charging / network-down: an unreachable controller degrades the route and is reported",
+  networkDown !== undefined && networkDown.decision.reasonCodes.includes("INTEGRATION_ROUTE_DEGRADED")));
+assertions.push(assertion("smart charging / network-down: never allows on an unreachable downstream", !hasOutcome(networkDown, "allow")));
+
+// CAP-HIT — the charge cap held the battery where policy asked, and the shift is
+// starting on what is left. A workflow risk to route, not a security event.
+const capHit = chargingBranch("smart-charging-cap-hit", ["route_to_owner", "alert_operator", "record_audit"], (sigs) => [
+  ...sigs,
+  { id: "device.low_battery:device-ios-shared-700", type: "device.low_battery", layer: "device", source: "Device telemetry fixture", subject: "device:ios-shared-700", observedAt: sigs[0].observedAt, severity: "high", summary: "Charge cap reached at 22% — the device goes out under-charged for a full round", attributes: { batteryPct: 22, chargeCapPct: 80, capHit: true } },
+]);
+assertions.push(assertion("smart charging / cap-hit: an under-charged checkout routes to the owner",
+  capHit !== undefined && capHit.decision.reasonCodes.includes("BATTERY_WORKFLOW_RISK")));
+assertions.push(assertion("smart charging / cap-hit: never allows while the workflow risk is open", !hasOutcome(capHit, "allow")));
+
+// DOCK-FAULT — the device came back to the wrong bay. The return is not a return until
+// the bay agrees, and a dock exception is a ticket rather than a shrug.
+const dockFault = chargingBranch("smart-charging-dock-fault", ["create_ticket", "alert_operator", "route_to_owner", "record_audit"], (sigs) => [
+  ...sigs,
+  { id: "dock.wrong_slot_return:device-ios-shared-700", type: "dock.wrong_slot_return", layer: "dockbridge", source: "DockBridge fixture", subject: "device:ios-shared-700", observedAt: sigs[0].observedAt, severity: "high", summary: "Device returned to a bay the assignment does not name", attributes: { dockId: "CAB-01", slot: "04", returnBay: "wrong" } },
+]);
+assertions.push(assertion("smart charging / dock-fault: a wrong-bay return raises a dock exception",
+  dockFault !== undefined && dockFault.decision.reasonCodes.includes("DOCK_EXCEPTION")));
+assertions.push(assertion("smart charging / dock-fault: never allows", !hasOutcome(dockFault, "allow")));
+
+// THE LOAD-BEARING NEGATIVE. All four branches would look identical on a tree where the
+// happy path also failed — so the happy path's allow is asserted HERE, beside them, as
+// the thing each branch is a departure from.
+assertions.push(assertion("smart charging: the happy path is the only one of the five that allows",
+  hasOutcome(byId["smart-charging-checkout-to-checkin"], "allow") &&
+    [unpaired, networkDown, capHit, dockFault].every((r) => r !== undefined && !r.decision.outcomes.includes("allow"))));
+
+// ── THE PUCK LIFECYCLE'S ONE LOAD-BEARING CLAIM ──────────────────────────────
+// A re-dock inside the window must not resume anything on its own. The scenario carries
+// the re-dock AND the removal; if a future engine change let a fresh `dock.device_docked`
+// cancel the removal, this goes red while the outcome-set row above would not notice a
+// step_up becoming an allow only if the set were also edited.
+assertions.push(assertion("puck lifecycle: a re-dock within N seconds does not resume — no allow",
+  !hasOutcome(byId["puck-session-lifecycle"], "allow")));
+assertions.push(assertion("puck lifecycle: the removal is still a custody exception after the re-dock",
+  byId["puck-session-lifecycle"]?.decision.reasonCodes.includes("CUSTODY_EXCEPTION") === true));
 
 // ── ORDER LIST ≡ DecisionOutcome UNION (verdict-core finding V1, 2026-09-02) ──
 //

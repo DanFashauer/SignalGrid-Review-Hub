@@ -70,6 +70,8 @@ jobs:
       - name: Invariant review (fail-closed / determinism / Assist / truth)
         run: pnpm run review:invariants
 
+      - name: Lib-build heal self-test (an orphaned tsbuildinfo with no dist must be flagged)
+        run: node scripts/ensure-lib-build.mjs --self-test
       - name: Typecheck
         run: pnpm run typecheck
 
@@ -222,6 +224,10 @@ jobs:
       - name: Proof — verdict attestation (forged verdicts degrade)
         run: pnpm run proof:verdict-attestation
 
+      - name: "Decision-path purity (a verdict may not be fetched, spawned, or sampled from a model)"
+        run: node scripts/check-decision-path-purity.mjs
+      - name: "Decision-path purity self-test (the gate must be able to fail)"
+        run: node scripts/check-decision-path-purity.mjs --self-test
       - name: Guard-registry drift check
         run: node scripts/check-guard-registries.mjs
       # Runs in the fast source-reading job on purpose: it guards the Docker build
@@ -258,6 +264,18 @@ jobs:
         run: node scripts/check-ios-policy-defaults.mjs --self-test
       - name: iOS policy defaults (no managed-config default derived from the absence of policy)
         run: node scripts/check-ios-policy-defaults.mjs
+      - name: Override parity self-test (the gate must be able to fail)
+        run: node scripts/check-override-parity.mjs --self-test
+      - name: Override parity (a package.json version that the workspace override overrides is dead text)
+        run: node scripts/check-override-parity.mjs
+      - name: Console unknown-render self-test (the gate must be able to fail)
+        run: node scripts/check-console-unknown-render.mjs --self-test
+      - name: Console unknown-render (no good-state render on unguarded query data)
+        run: node scripts/check-console-unknown-render.mjs
+      - name: iOS restriction defaults self-test (the gate must be able to fail)
+        run: node scripts/check-ios-restriction-defaults.mjs --self-test
+      - name: iOS restriction defaults (a DLP restriction may not default to permitted on an unknown session)
+        run: node scripts/check-ios-restriction-defaults.mjs
       - name: Sim-script self-check self-test (the gate must be able to fail)
         run: node scripts/check-sim-scripts-selfcheck.mjs --self-test
       - name: Sim-script self-check (a queued Mac operation must name a script that runs)
@@ -354,6 +372,14 @@ jobs:
         run: pnpm run proof:mdm-profile
       - name: "Proof — graph-wire (throttling, 5xx, auth, malformed bodies fail closed)"
         run: pnpm run proof:graph-wire
+      - name: "Proof: estate-core (a customer estate boots a core; no allow on unread facts)"
+        run: pnpm run proof:estate-core
+      - name: "Proof: estate-refresh (a scheduled posture re-read re-decides, and fails closed)"
+        run: pnpm run proof:estate-refresh
+      - name: "Proof: secrets (one read site, fail-closed, and a rotation that actually rotates)"
+        run: pnpm run proof:secrets
+      - name: "Proof: data-lifecycle (retention, erasure and DSAR leave the audit chain verifiable)"
+        run: pnpm run proof:data-lifecycle
       - name: "Assessor package (links/commands an external reviewer follows)"
         run: node scripts/check-assessor-package.mjs
       - name: OpenAPI validity (the published contract parses as OpenAPI)
@@ -405,6 +431,10 @@ jobs:
         run: node scripts/check-posed-bounds.mjs --self-test
       - name: Posed bounds (a caller-posed numeric bound is never read with ??)
         run: node scripts/check-posed-bounds.mjs
+      - name: Workspace-cycles self-test (the gate must be able to fail)
+        run: node scripts/check-workspace-cycles.mjs --self-test
+      - name: Workspace cycles (no workspace package depends on itself through any chain)
+        run: node scripts/check-workspace-cycles.mjs
       - name: Freshness-divergence self-test (the gate must be able to fail)
         run: node scripts/check-freshness-divergence.mjs --self-test
       - name: Freshness divergence (one future/age rule, one body; exemptions REPORTED)
@@ -460,6 +490,8 @@ jobs:
         run: node scripts/check-backlog-ownership.mjs
       - name: Backlog ownership self-test (the gate can fail)
         run: node scripts/check-backlog-ownership.mjs --self-test
+      - name: Loop-state seam self-test
+        run: node scripts/loop-state.mjs --self-test
       - name: Backlog evidence (a row that says DONE says how you'd check)
         run: node scripts/check-backlog-evidence.mjs
       - name: Backlog evidence self-test (the gate can fail)
@@ -478,6 +510,14 @@ jobs:
         run: node scripts/check-owner-gated-surfaces.mjs --self-test
       - name: Merge-authorization self-test (the lane cannot self-merge an owner-gated or stale-green PR)
         run: node scripts/check-merge-authorization.mjs --self-test
+      - name: PR gate-falsification (a green suite proves nothing if no gate can fail on the changed lines)
+        run: node scripts/check-pr-gate-falsification.mjs
+      - name: PR gate-falsification self-test (every fail-closed arm, both directions)
+        run: node scripts/check-pr-gate-falsification.mjs --self-test
+      - name: Brain-cycle merge authorizer (affirmative-green allowlist)
+        run: node scripts/brain-cycle-merge-decide.mjs
+      - name: Merge-authorizer self-test (every conjunct falsified both directions)
+        run: node scripts/brain-cycle-merge-decide.mjs --self-test
       - name: Cited commands (documents may not promise a command that is gone)
         run: node scripts/check-cited-commands.mjs
       - name: Cited-command self-test (the gate can fail)
@@ -620,6 +660,43 @@ jobs:
         run: node scripts/check-doc-line-counts.mjs --self-test
       - name: "Doc line counts (every path (N) figure matches the file it names)"
         run: node scripts/check-doc-line-counts.mjs
+      # BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a
+      # report-only watcher, cheaper than fetching every vendor page —
+      # pure date arithmetic against a committed manifest
+      # (docs/agent/VENDOR_DOC_MANIFEST.json), no network call. REPORT-ONLY:
+      # the check itself always exits 0; only the self-test can fail this job.
+      - name: "Vendor-doc drift watch self-test (the comparison logic must actually work)"
+        run: node scripts/check-vendor-doc-drift.mjs --self-test
+      - name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)"
+        run: node scripts/check-vendor-doc-drift.mjs
+      # The four capacity figures RELIABILITY_SLO.md owns, wherever a document restates
+      # them. COMPANY_BUILD_PLAN.md carried the superseded 5,128 for twelve days while
+      # every figure gate stayed green, because none of them reads a bare 240 or 585.
+      - name: "Performance-figure self-test (a drifted or undated restatement must fail)"
+        run: node scripts/check-performance-figures.mjs --self-test
+      - name: "Performance figures (every restatement matches RELIABILITY_SLO.md and carries its date)"
+        run: node scripts/check-performance-figures.mjs
+      # A sim result is an attestation and provenance.commit is the only thing tying it
+      # to code; one stamped a sha git cat-file -e could not resolve on Alpha.
+      - name: "Sim-result provenance self-test (the gate can actually fail)"
+        run: node scripts/check-sim-result-provenance.mjs --self-test
+      - name: "Sim-result provenance (a checkable commit; evidence no newer than the result)"
+        run: node scripts/check-sim-result-provenance.mjs
+      # A generated input validator nobody parses reads exactly like coverage.
+      - name: "api-zod wiring self-test (an orphan schema and a stale declaration must fail)"
+        run: node scripts/check-api-zod-wiring.mjs --self-test
+      - name: "api-zod wiring (every generated input schema is invoked or declared client/type-only)"
+        run: node scripts/check-api-zod-wiring.mjs
+      # The /api document against the fixtures it serves.
+      - name: "/api fixture-contract self-test (each of the four rules must be able to fail)"
+        run: node scripts/check-api-fixture-contract.mjs --self-test
+      - name: "/api fixture contract (the document describes what the fixtures answer)"
+        run: node scripts/check-api-fixture-contract.mjs
+      # The /v1 document against the refusals the served source returns.
+      - name: "/v1 refusal-coverage self-test (a missing 401/429/400/404 must fail)"
+        run: node scripts/check-v1-refusal-coverage.mjs --self-test
+      - name: "/v1 refusal coverage (every refusal the server returns is documented)"
+        run: node scripts/check-v1-refusal-coverage.mjs
       # The review compose had no healthcheck on any service; "Up" meant the
       # process existed, not that the server answered.
       - name: "Compose healthcheck self-test (a planted port without a healthcheck must fail)"
@@ -891,6 +968,9 @@ jobs:
       - name: API integration test
         run: pnpm run test:api
 
+      - name: Console unit tests (policyTests, facilityGraphLayout)
+        run: pnpm run test:console
+
       # The MCP server's own node:test suite — wire-visible tool/resource contract
       # and read-only annotations (incl. the deliberately not-read-only
       # bruno_collection_run). It was executed by no lane until 2026-09-02;
@@ -998,6 +1078,9 @@ jobs:
       - name: Proof — itsm-template (values verbatim, keys inert)
         run: pnpm run proof:itsm-template
 
+      - name: Proof — itsm-dispatch (cascade join 1 — the ticket actually opens, or refuses by name)
+        run: pnpm run proof:itsm-dispatch
+
       - name: Orchestration (Trust→Action) proof
         run: pnpm run proof:orchestration
 
@@ -1048,6 +1131,9 @@ jobs:
 
       - name: Edge-sync (config-down integrity) proof
         run: pnpm run proof:edge-sync
+
+      - name: Decision-cascade (the whole chain, and every refusal in it) proof
+        run: pnpm run proof:decision-cascade
 
       - name: Decision-continuity (which decision wins across a partition) proof
         run: pnpm run proof:decision-continuity

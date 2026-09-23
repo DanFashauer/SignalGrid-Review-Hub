@@ -23,10 +23,41 @@ const SPEC = "lib/api-spec/v1-openapi.yaml";
 const GAPS_FILE = "scripts/launch-profile.mjs";
 const KOTLIN = "native/android/core/src/main/kotlin/com/signalgrid/assist/core/GateEndpoint.kt";
 const RUST = "native/desktop/core/src/endpoint.rs";
+// The two SDK READMEs that tell a reader what the gate sends. Both currently say the
+// spec "declares no `obligations` field"; the contract-drift sweep (2026-09-01) flagged
+// that sentence as an unwatched pairing — every client PARSES `obligations`, no server
+// EMITS one, and whichever side moved first the other would go on claiming otherwise.
+const READMES = ["native/android/README.md", "native/desktop/README.md"];
+const NO_OBLIGATIONS_SENTENCE = /declares no `obligations` field/;
 const GAP_ID = "assist-wire-unserved";
 const ROUTE_SHAPE = /^\/v1\/[a-z-]+(?:\/[a-z-]+)*$/;
 
-export function auditAssistWire({ vectorsJson, specYaml, gapsSrc, kotlinSrc, rustSrc }) {
+// The served base. The api-server mounts its whole router under this prefix, and the
+// OpenAPI `servers` url is the same string, so the route a partner must POST to is
+// MOUNT + boundRoute (e.g. `/api/v1/authorize`). The SDK stubs must document that full
+// path: a caller who appends the bare `/v1/authorize` to the host reaches a path the
+// server does not serve, gets an HTML 404, and AssistWire reads a 404 as DENY — the trap
+// iOS hit at DecisionService.swift:74 (BUILD_BACKLOG contract-drift sweep, 2026-09-01).
+const APP = "artifacts/api-server/src/app.ts";
+const MOUNT = "/api";
+const SERVER_URL_LINE = /^\s*-\s*url:\s*\/api\s*$/m;          // OpenAPI servers: - url: /api
+const ROUTER_MOUNT = /app\.use\(\s*["']\/api["']\s*,\s*router\s*\)/; // app.use("/api", router)
+
+/**
+ * Does the spec's `AssistResult` declare an `obligations` property?
+ *
+ * Read from the SCHEMA BLOCK, not from the whole document: `obligations` appears in
+ * several `x-signalgrid-reason-codes` neighbourhoods and in prose, and a file-wide
+ * `includes` would answer yes for a schema that declares nothing of the kind. The block
+ * runs from `AssistResult:` to the next sibling schema key at the same indentation.
+ */
+export function specDeclaresObligations(specYaml) {
+  const m = specYaml.match(/^( {4})AssistResult:\n([\s\S]*?)(?=^\1\S)/m);
+  if (!m) return null; // anchor drifted — the caller must treat this as fatal
+  return /^\s{8}obligations:/m.test(m[2]);
+}
+
+export function auditAssistWire({ vectorsJson, specYaml, gapsSrc, kotlinSrc, rustSrc, appSrc = "", readmeSrcs = {} }) {
   const problems = [];
   let vectors;
   try {
@@ -54,6 +85,24 @@ export function auditAssistWire({ vectorsJson, specYaml, gapsSrc, kotlinSrc, rus
       problems.push(`${name} never mentions ${boundRoute} — its documentation drifted from the shared vectors' bound route`);
     }
   }
+  // SERVED BASE: the partner POSTs to MOUNT + boundRoute, not to boundRoute on a bare
+  // host. Three sources must agree on the `/api` mount, or the SDK path guidance points
+  // at a path the server does not serve (a 404 that AssistWire reads as DENY):
+  //   · the OpenAPI `servers` url is the mount;
+  //   · the api-server actually mounts its router there;
+  //   · both SDK stubs document the FULL served path MOUNT + boundRoute.
+  const fullServedPath = `${MOUNT}${boundRoute}`; // e.g. /api/v1/authorize
+  if (!SERVER_URL_LINE.test(specYaml)) {
+    problems.push(`${SPEC} no longer declares \`- url: ${MOUNT}\` under servers — a partner reads the served base from here, and dropping it makes the SDK "append ${boundRoute}" guidance resolve to a path the server does not serve`);
+  }
+  if (!ROUTER_MOUNT.test(appSrc)) {
+    problems.push(`${APP} no longer mounts the router at \`${MOUNT}\` (\`app.use("${MOUNT}", router)\`) — the served base moved, so the spec servers and the SDK path guidance now name a prefix the server does not serve`);
+  }
+  for (const [name, src] of [["Kotlin GateEndpoint.kt", kotlinSrc], ["Rust endpoint.rs", rustSrc]]) {
+    if (!src.includes(fullServedPath)) {
+      problems.push(`${name} does not document the full served path \`${fullServedPath}\` — it must tell callers the \`${MOUNT}\` mount is the base, or a partner appends \`${boundRoute}\` to a bare host, gets a 404, and AssistWire denies (the trap iOS hit at DecisionService.swift:74)`);
+    }
+  }
   const served = specYaml.includes(`${boundRoute}:`);
   const gapDeclared = gapsSrc.includes(`id: "${GAP_ID}"`);
   // Full metacharacter escape (CodeQL js/incomplete-sanitization): the route
@@ -67,6 +116,28 @@ export function auditAssistWire({ vectorsJson, specYaml, gapsSrc, kotlinSrc, rus
       problems.push(`the vectors bind ${boundRoute}, but the "${GAP_ID}" gap entry names a different route — a retargeted wire cannot shelter under a gap that does not cover it`);
     }
   }
+  // OBLIGATIONS: the spec and the SDK docs must agree about a field every client parses
+  // and no server sends. Today the spec declares none and both READMEs say so — which is
+  // an honest pairing and an unwatched one. Whichever side moves, this fires:
+  //   · spec adds `obligations` while a README still says it declares none → stale doc;
+  //   · a README drops the sentence while the spec still declares none → an
+  //     SDK-documented field no server sends, which is the drift the sweep found.
+  // The CLIENTS' tolerance of the field is not touched and must not be: `absent is
+  // not-stated, never nothing-required` is a safety rule, not a contract claim.
+  const declaresObligations = specDeclaresObligations(specYaml);
+  if (declaresObligations === null) {
+    problems.push(`could not locate the AssistResult schema block in ${SPEC} — the obligations check's anchor drifted, and a check that cannot find its subject must not read as agreement`);
+  } else {
+    for (const [name, src] of Object.entries(readmeSrcs)) {
+      const saysNone = NO_OBLIGATIONS_SENTENCE.test(src);
+      if (declaresObligations && saysNone) {
+        problems.push(`${name} still says the spec "declares no \`obligations\` field", but ${SPEC}'s AssistResult now declares one — the SDK doc is stale`);
+      } else if (!declaresObligations && !saysNone) {
+        problems.push(`${SPEC}'s AssistResult declares no \`obligations\` field and ${name} no longer says so — an SDK-documented field that no server sends is exactly the contract-name drift this row was opened for; either emit it or keep saying it is not emitted`);
+      }
+    }
+  }
+
   if (served && gapDeclared) {
     problems.push(`${boundRoute} is now SERVED but the "${GAP_ID}" gap entry still stands — remove the entry (its closedWhen should have fired; if it did not, the closedWhen predicate broke)`);
   }
@@ -80,6 +151,8 @@ function load() {
     gapsSrc: readFileSync(GAPS_FILE, "utf8"),
     kotlinSrc: readFileSync(KOTLIN, "utf8"),
     rustSrc: readFileSync(RUST, "utf8"),
+    appSrc: readFileSync(APP, "utf8"),
+    readmeSrcs: Object.fromEntries(READMES.map((f) => [f, readFileSync(f, "utf8")])),
   };
 }
 
@@ -137,6 +210,40 @@ function selfTest() {
         !/import\.meta\.url\.endsWith\(/.test(src),
     ]);
   }
+
+  // OBLIGATIONS, both directions. The committed tree is "spec declares none + both
+  // READMEs say so"; each half is inverted against the real files.
+  checks.push(["the committed spec's AssistResult declares NO obligations (premise for the two cases below)", specDeclaresObligations(base.specYaml) === false]);
+  {
+    const specWithObligations = base.specYaml.replace(
+      "        decisionId: { type: string }\n        reasons:",
+      "        decisionId: { type: string }\n        obligations:\n          type: array\n          items: { type: string }\n        reasons:",
+    );
+    checks.push(["planting `obligations` into the AssistResult schema is detected by the block reader", specDeclaresObligations(specWithObligations) === true]);
+    r = auditAssistWire({ ...base, specYaml: specWithObligations });
+    checks.push(["a spec that ADDS obligations while a README says it declares none FAILS (stale SDK doc)", r.problems.some((x) => x.includes("the SDK doc is stale"))]);
+  }
+  {
+    const stripped = Object.fromEntries(
+      Object.entries(base.readmeSrcs).map(([k, v]) => [k, v.replace(NO_OBLIGATIONS_SENTENCE, "declares a thing")]),
+    );
+    r = auditAssistWire({ ...base, readmeSrcs: stripped });
+    checks.push(["a README that DROPS the no-obligations sentence while the spec still declares none FAILS", r.problems.some((x) => x.includes("no longer says so"))]);
+  }
+  {
+    r = auditAssistWire({ ...base, specYaml: base.specYaml.replace("    AssistResult:", "    AssistResultRenamed:") });
+    checks.push(["an AssistResult block this check cannot FIND is fatal, never silent agreement", r.problems.some((x) => x.includes("anchor drifted"))]);
+  }
+
+  // SERVED BASE (`/api` mount), all three sources. The committed tree agrees; each source
+  // is drifted against the real files so the exact partner-facing 404/DENY trap is caught.
+  checks.push(["the committed spec declares `- url: /api` and app.ts mounts the router there (premise for the three cases below)", SERVER_URL_LINE.test(base.specYaml) && ROUTER_MOUNT.test(base.appSrc)]);
+  r = auditAssistWire({ ...base, specYaml: base.specYaml.replace("- url: /api", "- url: /") });
+  checks.push(["the OpenAPI servers dropping the `/api` base FAILS", r.problems.some((x) => x.includes("under servers"))]);
+  r = auditAssistWire({ ...base, appSrc: base.appSrc.replace('app.use("/api", router)', 'app.use("/", router)') });
+  checks.push(["the api-server moving the router off `/api` FAILS", r.problems.some((x) => x.includes("no longer mounts the router"))]);
+  r = auditAssistWire({ ...base, kotlinSrc: base.kotlinSrc.replaceAll("/api/v1/authorize", "/v1/authorize") });
+  checks.push(["an SDK stub dropping the full `/api/v1/authorize` served-path doc FAILS", r.problems.some((x) => x.includes("full served path"))]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);

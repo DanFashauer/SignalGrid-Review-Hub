@@ -675,14 +675,15 @@ export const SWEEP_EXEMPT = [
   {
     doc: "docs/CLAIM_INVENTORY.md",
     near: /proofs check"\)\s*\|\s*\|\s*148/,
-    count: 1,
+    count: 0,
     reason:
-      "a claim-inventory ROW ID, not a count of anything. The sweep matches it because the PRECEDING row's " +
+      "a claim-inventory ROW ID (148-152), not a count of anything. The sweep matched it because the PRECEDING row's " +
       "evidence cell happens to end in \"not the catalogue the proofs check\", putting the words within its " +
-      "window. The matcher must satisfy two readers: the sweep hands it a whitespace-NORMALISED snippet, while the " +
-      "stale-exemption self-test tests it against the RAW document, where a newline sits between the two table " +
-      "cells. Hence `\\s*` rather than literal spaces — the literal-space form passes the sweep and fails the " +
-      "self-test. Tightness comes from `count`, which is 1 and fatal on any divergence.",
+      "window. It collided with the derived figure only while that figure was 148; the live count is now 153, and " +
+      "the sweep looks only for the current figure, so this row id produces no hit — count 0. The matcher must satisfy " +
+      "two readers: the sweep hands it a whitespace-NORMALISED snippet, while the stale-exemption self-test tests it " +
+      "against the RAW document, where a newline sits between the two table cells. Hence `\\s*` rather than literal " +
+      "spaces. Kept as a trip-wire should the derived figure ever return to 148.",
   },
   {
     doc: "docs/agent/LOOP.md",
@@ -690,9 +691,19 @@ export const SWEEP_EXEMPT = [
     count: 1,
     reason:
       "a dated record of review round seven: the number of ASSERTIONS in two proof modules before and after " +
-      "that round, not the number of proof:* scripts. It collides with the derived figure only by coincidence, " +
-      "and rewriting it to today's count would falsify the history it records. The negative lookahead keeps it " +
-      "off this file's OTHER 148 — the live `148 proof gates` sentence, which a FIGURES row owns.",
+      "that round (148 -> 154), not the number of proof:* scripts. It collided with the derived figure while " +
+      "that figure was 148, went quiet at 153, and collides again now that proof:custody-journey makes the live " +
+      "count 154 — the AFTER half of the same historical pair, inside the same window — count 1. Rewriting it " +
+      "would falsify the history it records; the count moves with the figure and says so.",
+  },
+  {
+    doc: "docs/agent/ORG_SELF_EVALUATION_2026-09-12.md",
+    near: /154 `-- self-skipping proofs/,
+    count: 1,
+    reason:
+      "a LINE NUMBER in validate-sim-macos.sh (`:154`) cited by a dated self-evaluation, not a count of proof:* " +
+      "scripts. It collides with the derived figure only because the live count reached 154; rewriting a " +
+      "citation in a dated record to dodge a coincidence would falsify it.",
   },
   {
     doc: "docs/BUILD_BACKLOG.md",

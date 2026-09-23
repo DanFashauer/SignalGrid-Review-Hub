@@ -268,6 +268,12 @@ When dependencies change: regenerate the lockfile in the correct order, run lice
 policy, regenerate/check SBOM, run vulnerability evidence, keep platform metadata
 deterministic, verify pinned external binaries/actions, and keep signing isolated
 from untrusted dependency installation.
+Before changing a dependency's version or using one of its APIs in a new way, check
+the current docs through Context7 (`resolve-library-id`, then `query-docs`) against the
+pinned version. Send only the library name, the pinned version and a plain question —
+never repository content. If the tool is not registered, returns an error string, or is
+rate-limited, write "docs not checked" in the change and treat every version-sensitive
+claim in it as unverified; an unreachable lookup never loosens a claim.
 Do not hide a cross-platform fact merely to make a sync gate green.
 Use keyless release signing only under the ratified custody model. A signature proves
 signed bytes plus identity/time evidence; it does not prove security.

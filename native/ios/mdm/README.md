@@ -59,6 +59,19 @@ The shell reads these keys from Managed App Config (delivered under
 | `badge_reader_type` | String | `keyboard_wedge` | Which badge-reader provider the shell builds (`BadgeReaderType` raw value). A present managed dictionary answers only from itself; the environment fallback exists on the simulator or with no dictionary. |
 | `identity_provider_type` | String | — | `IdentityProviderType` raw value, same precedence as `badge_reader_type`; unset ⇒ the control-plane session provider. |
 
+## Not in this profile: declarative configurations
+
+Three controls a shared clinical device should carry are **declarations**, which
+the MDM delivers over its declarative channel — they cannot be expressed in this
+`.mobileconfig`. All three are supervised-only. From the Apple Platform
+Deployment guide, 2026-09-17 edition (`native/ios/FLEET_MDM.md` items c and d):
+
+| Declaration | Minimum OS | What it does here |
+| --- | --- | --- |
+| App settings | iOS / iPadOS 27 | The allow-list of (c) as a declaration, plus default privacy permissions for the shell (camera, Bluetooth, local network) with a justification string. |
+| External intelligence | iOS / iPadOS 26.4 | Turns off external intelligence integrations and their sign-in on a device that passes between clinicians. |
+| Apple Intelligence | iOS / iPadOS 26.4 | Turns off Writing Tools, Genmoji, Image Playground, Visual Intelligence and the per-app summaries; forces on-device dictation and translation. |
+
 ## What the simulator can and can't show
 
 - **Can**: the full session flow, the configured per-role workspace and its

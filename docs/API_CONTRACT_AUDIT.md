@@ -117,6 +117,12 @@ the handlers return. Two known gaps, recorded rather than smoothed:
   checkable one either.
 - Documented status codes (`400`, `403`, `404`, `429`) are not exercised against
   the routes that declare them.
+- One response shape IS now specified field-by-field: `POST /v1/app-workflows/evaluate`,
+  the one route a shipping native client binds, documents its 200 as
+  `Envelope + { decision: EvaluateResult, plan: AppSessionPlan }` (2026-09-19), written
+  from the api tests that pin `plan.actions[].disposition` and from
+  `lib/app-workflows/src/index.ts`. It is still not compared to the handler by a gate;
+  the same caveat as every other shape applies.
 
 `pnpm --filter @workspace/api-server run test:api` covers behaviour for the
 routes it names; it is not driven from the spec, so a documented status nobody

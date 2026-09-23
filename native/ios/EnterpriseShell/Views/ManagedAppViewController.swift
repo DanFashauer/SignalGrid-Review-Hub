@@ -143,7 +143,7 @@ final class ManagedAppViewController: UIViewController {
     /// unrestricted. Empty only when the launch URL is itself hostless (about:/data:),
     /// which then loads nothing rather than everything.
     private func permittedHosts() -> [String] {
-        ([url.host?.lowercased()].compactMap { $0 }) + (allowedDomains ?? []).map { $0.lowercased() }
+        ManagedAppContainment.permittedHosts(launchHost: url.host, allowedDomains: allowedDomains)
     }
 
     /// Enforce `permittedHosts()` on ALL web traffic, not just top-level navigation
@@ -218,8 +218,7 @@ extension ManagedAppViewController: WKNavigationDelegate {
             decisionHandler(.allow)
             return
         }
-        let permitted = permittedHosts()
-        let ok = permitted.contains { host == $0 || host.hasSuffix("." + $0) }
+        let ok = ManagedAppContainment.isPermitted(host: host, permitted: permittedHosts())
         decisionHandler(ok ? .allow : .cancel)
     }
 

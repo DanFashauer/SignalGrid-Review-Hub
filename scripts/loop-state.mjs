@@ -528,6 +528,46 @@ for (const [label, script] of [
   }
 }
 
+// ── 5b. Is the LOOP.md STATE block keeping pace with mainline? ───────────────
+// Two git dates, no wall clock (a session's clock is not the repo's): the STATE
+// block's LAST TOUCHED date vs the newest commit date on origin/SignalGrid_Alpha.
+// More than a week apart and the STATE block is trailing what the repo actually did
+// (docs/agent/LOOP.md once carried a two-day STATE↔body contradiction). gated:false —
+// a warn, not a seam. A missing line, an unparseable date, or an unfetched remote each
+// produce the warn row itself; fail-closed, never a silent skip.
+{
+  const loopPath = resolve(repo, "docs/agent/LOOP.md");
+  const touched = existsSync(loopPath)
+    ? (readFileSync(loopPath, "utf8").match(/LAST TOUCHED:\s*(\d{4}-\d{2}-\d{2})/) || [])[1]
+    : undefined;
+  let newest = "";
+  try {
+    newest = execFileSync("git", ["log", "-1", "--format=%cI", "origin/SignalGrid_Alpha"], { cwd: repo, encoding: "utf8" }).trim();
+  } catch { /* unfetched remote → stateFreshness returns no-remote */ }
+  const f = stateFreshness(touched, newest);
+  if (f.kind === "no-date") {
+    add("warn", "LOOP STATE date", 'no "LAST TOUCHED: YYYY-MM-DD" line in docs/agent/LOOP.md — cannot tell if STATE trails mainline', false);
+  } else if (f.kind === "no-remote") {
+    add("warn", "LOOP STATE date", "origin/SignalGrid_Alpha not fetched — cannot compare STATE date to mainline's newest commit", false);
+  } else if (f.kind === "stale") {
+    add("warn", "LOOP STATE date", `STATE (${touched}) trails mainline's newest commit by ${f.days} days — update the STATE block`, false);
+  } else {
+    add("ok", "LOOP STATE date", `STATE (${touched}) within ${Math.max(0, f.days)} day(s) of mainline's newest commit`, false);
+  }
+}
+
+// STATE freshness, pure and clock-free so the self-test is deterministic: two ISO
+// date strings in, a verdict out. Past 7 days apart is stale; a non-finite touched
+// or newest date is its own reported kind, never silently treated as fresh.
+function stateFreshness(lastTouchedISO, newestCommitISO) {
+  const touched = Date.parse(lastTouchedISO ?? "");
+  const newest = Date.parse(newestCommitISO ?? "");
+  if (!Number.isFinite(touched)) return { kind: "no-date" };
+  if (!Number.isFinite(newest)) return { kind: "no-remote" };
+  const days = Math.floor((newest - touched) / 86400000);
+  return { kind: days > 7 ? "stale" : "fresh", days };
+}
+
 // ── report ──────────────────────────────────────────────────────────────────
 const icon = { ok: `${G}✓${X}`, warn: `${Y}!${X}`, fail: `${R}✗${X}` };
 for (const r of rows) console.log(`  ${icon[r.state]} ${r.what.padEnd(42)} ${D}${r.detail}${X}`);
@@ -600,6 +640,11 @@ function selfTest() {
     check("a Hub tip not in the local store reads unknown, never clean (d-unknown)", aheadOfHub("same", "0123456789abcdef0123456789abcdef01234567", work).state === "unknown");
     // fail-closed: a branch identical to mainline proves nothing
     check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
+    // STATE freshness (pure, clock-free): a fixture date older than a fixture commit
+    check("STATE trailing mainline by >7 days is stale", stateFreshness("2026-09-01", "2026-09-22T10:00:00-04:00").kind === "stale");
+    check("STATE within a week reads fresh", stateFreshness("2026-09-20", "2026-09-22T10:00:00-04:00").kind === "fresh");
+    check("an unparseable STATE date reads no-date, never fresh", stateFreshness("not-a-date", "2026-09-22T10:00:00-04:00").kind === "no-date");
+    check("an unfetched remote reads no-remote, never fresh", stateFreshness("2026-09-20", "").kind === "no-remote");
   } catch (e) {
     check(`self-test harness ran without throwing (${e && e.message ? e.message.split("\n")[0] : e})`, false);
   } finally {

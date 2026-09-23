@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-19T15:27:47.339Z",
-  "result": "acted: opened PR #888 for the /v1/app-workflows/evaluate response schema (BUILD_BACKLOG Discovered row, contract-drift sweep MEDIUM) — Envelope + {decision: EvaluateResult, plan: AppSessionPlan}; preflight and verify:breadth both exit 0 on 21a3b56c; owner-merged; 401/403 for the route ride #863. Item picked because every Now/Next row is already an open PR (#854 #860 #863 #864 #866 #868 #869, #821/#730 for the ground-truth gap) or Mac-lane-only."
+  "firedAt": "2026-09-22T15:25:59.072Z",
+  "result": "acted: landed backlog PR #832 (squash cea57e9a) — check-workspace-cycles gate + self-test, refuses the workspace dependency cycle that caused #819's Mac ENAMETOOLONG disk-loop; wired into preflight and CI. Also landed #976 (#314 mutation survivor fixed+closed) this window. Merged Alpha in, regenerated coverage (2930 in-scope), preflight+breadth green, gating check green on 737aeb30."
 }

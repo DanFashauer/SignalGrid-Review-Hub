@@ -187,6 +187,8 @@ recorded here for the reader; no regex reads intent.
 
 | Site | What it says | What applies here instead |
 | --- | --- | --- |
+| `dispatching-parallel-agents/SKILL.md:112` and `:127` | "Return: Summary of what you found and what you fixed." / "Return summary of root cause and changes" | Return the PATH of a report file plus a one-line status; the orchestrator reads the file (`orchestrator-over-workers` §1, "where the result lands", added 2026-09-19 from the ICM clip). A summary in the chat return is the handoff that does not survive a session boundary. |
+| `watch/scripts/frames.py:256` and `:615` | `ffmpeg … -vsync vfr` for scene-aware and keyframe extraction | `-vsync` was removed in ffmpeg 8; this Mac runs ffmpeg 9.0.1 (Homebrew) and `/watch` fails with "Unrecognized option 'vsync'" before extracting a frame (measured 2026-09-19 on two owner clips; the cloud lane's pinned 7.0.2 static build still accepts it). Upstream has three open, unmerged reports (#117, #211, #219), so the vendored file stays as pinned; the video-intake skill's Step 1 carries the fallback: `ffmpeg -vf "fps=1/4,scale=640:-1"` straight to the scratch dir. Re-pin when upstream merges the `-fps_mode vfr` fix. |
 | `finishing-a-development-branch/SKILL.md:16` | "Run the project's full test suite (`npm test` …)" | There is no `test` script at the root. Green means BOTH `./validate-sim-macos.sh` (failures 0 AND the skipped count read) and `node scripts/preflight.mjs` — CLAUDE.md "Before you push", `loop-end/SKILL.md`. |
 | `finishing-a-development-branch/SKILL.md:96` | `git merge <feature-branch>` | Merging is the owner's decision or a reviewed PR; never a local merge into mainline (CLAUDE.md "Ask before"). |
 | `finishing-a-development-branch/SKILL.md:111` | `git branch -d <feature-branch>` | Branch deletion is an owner decision (CLAUDE.md "Ask before: … branch deletion"). |
@@ -289,7 +291,7 @@ directory (DR-040, owner-directed 2026-09-12); its licence file travels with it 
 | NOT taken | `hooks/` — a `SessionStart` hook that runs `hooks/scripts/check-setup.sh` on every session start (the hooks-off rule of DR-026); `tests/`; the Claude, Codex and agents marketplace manifests; `dev-sync.sh`. The skill runs from this directory exactly as it would from a plugin cache — its `SKILL_DIR` convention is the directory containing the SKILL.md you read. |
 | What it does here | Frames only, by default. Its transcript path POSTs the audio to Groq or OpenAI under a key; this repository's transcript comes from `video-intake/scripts/transcribe-local.py` instead, locally. A key in `~/.config/watch/.env` is the owner's per-machine decision (DR-029: never in the tree). |
 | Measured before adoption | Sandbox at the pin, no key, one of the owner's 70.61 s clips: `--detail balanced` exit 0 in 4.53 s, 58 frames, `Transcript: none available`; its suite `5 failed, 66 passed` (all five: `yt-dlp` absent). Intake row 2026-09-12. |
-| Overrides | Two rows in the table above: `watch/SKILL.md:193` and `watch/scripts/setup.py:201`. |
+| Overrides | Three rows in the table above: `watch/SKILL.md:193`, `watch/scripts/setup.py:201`, and `watch/scripts/frames.py:256`/`:615` (ffmpeg 9 removed `-vsync`; added 2026-09-19). |
 
 # Vendored: mattpocock/skills — 25 skills
 
@@ -500,7 +502,7 @@ Third-party work, copied in unmodified. **Not ours.**
 | Licence | MIT © 2026 Nidhin Joseph Nelson (`LICENSE` in the vendored directory) |
 | Commit | `2bd92518e26bf659e21e3d9ab90573fcf3ddeccb` |
 | Committed upstream | 2026-08-24T13:00:40+05:30 |
-| Vendored | 2026-09-20 (DR-052 row in `docs/agent/RESOURCE_INTAKE.md`; owner: *"this will be extremely helpful"*) |
+| Vendored | 2026-09-20 (DR-053 row in `docs/agent/RESOURCE_INTAKE.md`; owner: *"this will be extremely helpful"*) |
 | Contents | 1 skill (`prompt-master`, front-matter version 1.8.0): `SKILL.md`, `references/patterns.md`, `references/templates.md`, `LICENSE` — 4 files, byte-identical to the repository root at the pin (sha256 `651e5490…`, `246073…`, `5a678b8e…`, `29e8ba0b…`). |
 | NOT taken | `README.md` (badges that load third-party images). No scripts, hooks or manifests exist upstream to leave out. |
 | Name | This directory and the first-party slash command `.claude/commands/prompt-master.md` (held since PR #215) share the name. A command and a skill are different namespaces and both load (the `grill-me`/`handoff` precedent, "Name twins" below); the command was renamed to `/brain-dump-spec` on 2026-09-20 and renamed BACK the same day once that loader evidence was read (Codex on #905). Nothing in the tree answers to `/brain-dump-spec`. |

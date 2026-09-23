@@ -591,6 +591,22 @@ export const TARGETS = [
     ],
   },
   {
+    // NOT a connector — a detector, and registered for the same reason
+    // `decision-continuity` is: `check-guard-registries.mjs` derives its requirement from
+    // `enumerateGrantSafety`, which this file never calls, so nothing was ever going to
+    // ask for it. Two independent adversarial reviews planted mutants in `detect.ts` —
+    // dropped `&&` clauses, a widened event-type match, the evidence set gutted to
+    // `[events[0].eventId]`, the reason string replaced with "Everything is fine." — and
+    // 10 of 12 SURVIVED a fully green `proof:event-contract`, because the proof only
+    // asked whether a detection CODE appeared. A detection's reason and evidence are the
+    // whole operator-facing deliverable; the proof now pins the exact detection list,
+    // severity, correlation id, evidence ids and reason text of every timeline, and the
+    // silence of every timeline that must produce none.
+    proof: "proof:event-contract",
+    oneLine: true,
+    files: ["lib/event-contract/src/detect.ts"],
+  },
+  {
     proof: "proof:identity-risk",
     files: [
       "lib/integrations/src/integrations/identity-risk/evaluate.ts",
@@ -1284,7 +1300,11 @@ export const ALLOWED = [
 
 // ── runner ────────────────────────────────────────────────────────────────────
 
-function runProof(proof) {
+// Exported so the per-PR falsification gate (check-pr-gate-falsification.mjs) drives the
+// EXACT same proof runner this sweep uses, rather than a second copy that could drift.
+// NOTE for any caller authorizing a merge: this returns "killed" for a crashed proof and
+// "hung" for a timeout. A merge authorizer must treat "hung" as INCONCLUSIVE, never a kill.
+export function runProof(proof) {
   const run = spawnSync("pnpm", ["run", proof], {
     cwd: repoRoot,
     encoding: "utf8",

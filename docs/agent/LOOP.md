@@ -52,7 +52,25 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-20 10:50Z (cloud lane, latest) - THE EIGHT LANDINGS, ONE AT A TIME; THE RECORD; THE SEAM.
+LAST TOUCHED: 2026-09-21 (cloud lane, latest) - THE CONSOLE FAIL-CLOSED GATE, THREE CODEX ROUNDS.
+              check-console-unknown-render (the G2 unknown-as-good-state gate the 2026-09-02 console
+              batch left spec-only) landed as #953 (squash 59f04e4b) under DR-037 (SAFETY_MACHINERY;
+              owner confirmed self-merge of a self-authored gate is the standing rule). It is an AST
+              data-flow gate (first script on the TypeScript compiler API) with a per-branch boolean
+              guard model: dataPresentWhen/dataAbsentWhen/flagFalseWhen read &&/|| per branch, `!isError`
+              is never proof of data (pending), and the react-query `loading?_:error?_:content` success
+              pattern is recognised by ruling out both flags. Twenty-five Codex findings across three
+              adversarial rounds, every one verified firsthand and either fixed with a plant->red
+              self-test or deferred as a documented under-flag (cross-component provenance, const-class).
+              Zero on the tree; self-test proves it can fail (BUG/ABSENT-CLASS/NEG-ERROR/USEQUERIES/
+              PENDING/COMPOUND/FRAGMENT/ALIAS/ARIA/NO-REASON flag; OK/OK-GUARDS/NEGATIVE/CHILD-PROP/
+              REASON/NON-QUERY clean; PLANT on real SignalSourcing.tsx). Same cycle: #954 steward
+              heartbeat merged (37757d7c); #956 (a re-mint lane mail) WITHDRAWN as redundant after
+              Codex showed the request is pending and the unattended tick re-mints it, and that the
+              provenance mismatch is a mid-run tree/clock change, not enqueue-time sampling; #952 (Mac
+              tick sim-results) HELD - provenance.commit 0e2d370f (manifest 998718c8) cannot reproduce
+              the attested 6cc9a0ee, Mac lane asked to re-mint from a stable checkout (thread open).
+              2026-09-20 10:50Z entry follows.
               10:50Z addendum: the landing record landed as #911 (bac640b5) after three Codex rounds
               (eleven findings, all verified and fixed); the loop:state seam fix landed as #917
               (f7f6a64e): a squash of a merge tree now clears by exact hunks (verbatim patch-id,
@@ -1331,9 +1349,10 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (0) PR #905 (DR-052) is the OWNER's merge - it touches scripts/publication-boundary.mjs,
+NEXT ACTION: cloud: (0) PR #905 (DR-053, renumbered from DR-052 on the mainline merge - it collided
+              with mainline's own DR-052) is the OWNER's merge - it touches scripts/publication-boundary.mjs,
               which DR-037's owner-gated clause keeps out of the lane's hands; the lane keeps it green
-              and conflict-free, never presses merge. Once it is on mainline, apply DR-052's three
+              and conflict-free, never presses merge. Once it is on mainline, apply DR-053's three
               stages to the two resources the owner named on
               2026-09-20 (upstash/context7, nidhinjs/prompt-master): the independent scan and evaluation
               FIRST, the confirmation second, the coordinator's choice third, each recorded in
@@ -1374,7 +1393,7 @@ NEXT ACTION: cloud: (0) PR #905 (DR-052) is the OWNER's merge - it touches scrip
    frozen" until 2026-09-02 — two days after this file's own STATE section
    recorded DR-021 — which is the contradiction a doc can hold against itself
    when no gate reads English.*
-3. **Nobody has used the product.** 152 proof gates and four native surfaces do
+3. **Nobody has used the product.** 153 proof gates and four native surfaces do
    not change that number. Only a conversation does.
 
 ---

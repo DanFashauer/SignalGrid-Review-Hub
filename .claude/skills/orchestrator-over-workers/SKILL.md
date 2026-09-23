@@ -21,7 +21,13 @@ One spec per worker, and each one states, in this order:
 - **which check must FAIL without it** — a proof assertion, a gate, a mutation
   survivor count. If no check can fail, the work is not specified yet;
 - **which gates must stay green**, by command;
-- **which files the worker may touch**, and that everything else is out of scope.
+- **which files the worker may touch**, and that everything else is out of scope;
+- **where the result lands** — one file path per worker, under the run's scratch
+  directory or worktree. The worker returns that path and a one-line status; the
+  orchestrator reads the file. A chat return is the handoff that gets lost between
+  sessions (the ICM clip, 2026-09-19: "the artifact becomes the next stage's input,
+  not buried chat history"); `subagent-driven-development`'s brief → report files
+  already work this way.
 
 The orchestrator holds the census — the full list of pieces and who has which —
 because no worker can see its siblings.

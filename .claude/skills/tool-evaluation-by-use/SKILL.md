@@ -9,7 +9,7 @@ A shared resource is answered with a measurement or a named blocker, never with 
 memo of reasons (`docs/agent/RESOURCE_INTAKE.md`, "Rules for a new row"; DR-021).
 The row is logged the day it arrives; the verdict lands after the tool has run.
 
-## 0 — Who runs this (DR-052, 2026-09-20)
+## 0 — Who runs this (DR-053, 2026-09-20)
 
 Steps 2–5 are run by a SEPARATE agent in its own context (Opus tier, DR-047): the
 resource and the tree are its inputs, the coordinator's current task is not. It
@@ -94,6 +94,29 @@ Record, from output:
 - **the headline claim, recomputed** — find the denominator yourself. The
   "70x" figure was not in its README, and the tool's own benchmark printed 463.4x
   because it wrote the word count to one path and read it from another.
+
+## 5b — The resource proposes, the roster confirms, the brain decides (owner rule, 2026-09-19)
+
+The owner's words: *"any resource that gets added or even all must run their own
+independent scan and evaluation to determine their tasks and what needs to be
+assigned, then everything else confirms if that is what is needed or added, and then
+you aka the 🧠 makes those choices based off all other resources and data."* Three
+stages, each with one durable output, so the next stage loads a file and not chat
+memory (the ICM clip absorbed the same day: "state in files, not chat"):
+
+| Stage | Who | Reads | Writes (exactly one thing) |
+| --- | --- | --- | --- |
+| A — self-scan | one agent acting AS the resource | the tree, §2–§5 trials | `proposal`: pin, trials, tasks `[{id, title, evidence path:line, change, owner, risk}]` |
+| B — confirm | one agent per roster perspective, read-only, in parallel | the proposal, the tree | `confirm.<perspective>`: per task `confirm \| amend \| reject` + reason grounded in the tree, plus one "missing" task |
+| C — decide | the coordinating session | A, B, and everything else it can see (lane mail, memory, MCP tools) | `decision`: per task `landed \| filed \| rejected \| owner` and where; the intake row (§6) quotes it |
+
+The three outputs live together in `docs/agent/resource-scans/<YYYY-MM-DD>-<resource>.json`
+(first instance: `2026-09-19-two-videos.json`) and land in the same PR as the
+changes. A task with no measured evidence is not proposed; a task nobody confirmed
+is not landed; a task the roster rejected on reproduction is recorded as rejected
+with the reproduction — the first run of this shape caught a miscount that way.
+Perspectives are picked for the resource (gates, fail-closed, agent plane, native,
+security, scribe are the usual six); every stage names its model tier (DR-047).
 
 ## 6 — Disposition: one sentence, one landing place
 

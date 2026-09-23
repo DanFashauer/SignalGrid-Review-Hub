@@ -806,6 +806,9 @@ importers:
       '@workspace/event-contract':
         specifier: workspace:*
         version: link:../event-contract
+      '@workspace/integrations':
+        specifier: workspace:*
+        version: link:../integrations
       '@workspace/posture-composition':
         specifier: workspace:*
         version: link:../posture-composition

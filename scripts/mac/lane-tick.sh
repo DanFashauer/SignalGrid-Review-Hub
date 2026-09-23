@@ -139,7 +139,14 @@ heartbeat() {
     say "unchanged ($RESULT), last heartbeat <${QUIET_HEARTBEAT_MIN}m ago — tick ran, not re-pushing (avoids flooding Alpha)"
     return 0
   fi
-  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" >/dev/null 2>&1; then
+  # --no-wake: the tick heartbeat is a STALENESS record, read from the heartbeat
+  # FILE by the cloud steward's hourly cycle — it never carries cloud-addressed
+  # mail (append_unread_state reports THIS lane's inbox, mac's), so it must not
+  # post the mailbox-PR comment that wakes the cloud lane. Real cloud mail travels
+  # on a separate `lane-deliver send` (no --no-wake), which still wakes at once;
+  # new mac/* branches are reviewed by the steward within the hour. This ends the
+  # every-tick quiet wake that flooded the cloud session (owner decision 2026-09-23).
+  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" --no-wake >/dev/null 2>&1; then
     touch "$HB_STAMP" 2>/dev/null || true
     printf '%s' "$RESULT" > "$HB_LAST_RESULT" 2>/dev/null || true
     say "heartbeat delivered: $RESULT"

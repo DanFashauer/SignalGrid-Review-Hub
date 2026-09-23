@@ -1070,7 +1070,7 @@ jobs:
       - name: Proof — itsm-template (values verbatim, keys inert)
         run: pnpm run proof:itsm-template
 
-      - name: Proof — itsm-dispatch (cascade join 1: the ticket actually opens, or refuses by name)
+      - name: Proof — itsm-dispatch (cascade join 1 — the ticket actually opens, or refuses by name)
         run: pnpm run proof:itsm-dispatch
 
       - name: Orchestration (Trust→Action) proof

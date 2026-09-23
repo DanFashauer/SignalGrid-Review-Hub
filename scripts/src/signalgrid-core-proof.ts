@@ -52,6 +52,9 @@ import {
   SHARED_DEVICE_RULES_V1,
   SHARED_DEVICE_RULES_V2,
   validatePolicyRules,
+  puckVerdict,
+  type AttachState,
+  type PuckSituation,
   type Decision,
   type DecisionEvidence,
   type DecisionOutcome,
@@ -199,7 +202,12 @@ for (const scenario of scenarios) {
 // sample body moved; the digest function is unchanged. (seed.ts is outside the normalization
 // closure; the same change set bumped the version 9 -> 10 for store.ts, which is inside it.)
 // Was 9347fb8f9ad49d31.
-const LEGACY_SNAPSHOT_DIGEST = "621410dc07677bb2";
+// 2026-09-23 (DR-043 live attach rules): DecisionEvidence gained attachState,
+// enrollmentStrength and credentialReadMethod, so the pinned SAMPLE body moved; the
+// digest function is unchanged and real pre-stamp rows carry their own stored bytes.
+// Recomputed with the core's own digest()/verifySnapshot() over the unstamped body,
+// not hand-picked. Was 621410dc07677bb2.
+const LEGACY_SNAPSHOT_DIGEST = "43b8b1702ae630de";
 const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
 
 // The exact shape a pre-stamp row deserializes into: every field the same, no stamp.
@@ -2925,6 +2933,12 @@ const monotonicityTable: string[] = [];
     sig("device_encryption", true),
     sig("os_support", true),
     sig("posture_freshness", "fresh"),
+    // DR-043: a strong-enrolled worker read by their strong credential — the real
+    // happy path, and REQUIRED for scope: credential-downgrade is a TWO-condition
+    // rule, so a single-field probe can reach it only from a base that already
+    // holds the other half (see the conjunction escalation below).
+    sig("enrollment_strength", "strong"),
+    sig("credential_read_method", "strong"),
   ];
   const healthyEvidence = buildEvidence(identity, device, workflow, healthy);
   // The live v1 rule set, so the verdict dimension below is measured through the
@@ -3118,22 +3132,259 @@ const monotonicityTable: string[] = [];
       domain: EVIDENCE_VALUE_DOMAINS.localAuthority,
       reading: (m, at) => sig("local_authority", m as string, { observedAt: at }),
     },
+    {
+      field: "attachState",
+      category: "attach_state",
+      domain: EVIDENCE_VALUE_DOMAINS.attach,
+      reading: (m, at) => sig("attach_state", m as string, { observedAt: at }),
+    },
+    {
+      field: "enrollmentStrength",
+      category: "enrollment_strength",
+      domain: EVIDENCE_VALUE_DOMAINS.enrollment,
+      reading: (m, at) => sig("enrollment_strength", m as string, { observedAt: at }),
+    },
+    {
+      field: "credentialReadMethod",
+      category: "credential_read_method",
+      domain: EVIDENCE_VALUE_DOMAINS.readMethod,
+      reading: (m, at) => sig("credential_read_method", m as string, { observedAt: at }),
+    },
   ];
+
+  // ── DR-043 on the LIVE path: the attach matrix's rows, pinned by VERDICT ──────
+  //
+  // `puckVerdict` (attach.ts) grades the matrix; SHARED_DEVICE_RULES_V1 is what /v1
+  // runs. These pins hold the live half to the same answers, and the parity rows at
+  // the end hold the two matrices to EACH OTHER — two unconnected matrices is exactly
+  // how PR #753 and #864 drifted apart.
+  {
+    // (a) The three readers: silence is `not_applicable`, a present-but-unreadable
+    // reading is `unknown`. `readEnum` answers undefined for both, so `.has()` is
+    // what keeps a garbled reading from riding the day-one-quiet default.
+    const absentAll = buildEvidence(identity, device, workflow, []);
+    const credentialReaders: [keyof DecisionEvidence, SignalCategory][] = [
+      ["attachState", "attach_state"],
+      ["enrollmentStrength", "enrollment_strength"],
+      ["credentialReadMethod", "credential_read_method"],
+    ];
+    for (const [field, category] of credentialReaders) {
+      check(
+        `22 DR-043 present-but-out-of-domain ${category} (string) → ${String(field)}='unknown', not 'not_applicable' — a garbled reading raises`,
+        buildEvidence(identity, device, workflow, [sig(category, "not_a_real_member")])[field] === "unknown",
+      );
+      check(
+        `22 DR-043 present-but-non-string ${category} → ${String(field)}='unknown'`,
+        buildEvidence(identity, device, workflow, [sig(category, 7)])[field] === "unknown",
+      );
+      check(
+        `22 DR-043 absent ${category} → ${String(field)}='not_applicable' (true silence stays quiet)`,
+        absentAll[field] === "not_applicable",
+      );
+    }
+
+    // Posture only — no credential signals — so each pin states exactly its own.
+    const posture = healthy.filter(
+      (s) => !["attach_state", "enrollment_strength", "credential_read_method"].includes(s.category),
+    );
+    const live = (signals: NormalizedSignal[]) => {
+      const evidence = buildEvidence(identity, device, workflow, [...posture, ...signals]);
+      return { evidence, evaluation: evaluatePolicy(monoV1, evidence) };
+    };
+    const E = (value: string, at = VALID_AT) => sig("enrollment_strength", value, { observedAt: at });
+    const R = (value: string, at = VALID_AT) => sig("credential_read_method", value, { observedAt: at });
+    const A = (value: string, at = VALID_AT) => sig("attach_state", value, { observedAt: at });
+
+    // (b) The downgrade row.
+    const strongLegacy = live([E("strong"), R("legacy_125khz")]).evaluation;
+    check(
+      `22 DR-043 strong enrollment + legacy_125khz read → deny CREDENTIAL_DOWNGRADE (got ${strongLegacy.outcome})`,
+      strongLegacy.outcome === "deny" && strongLegacy.reasonCodes.includes("CREDENTIAL_DOWNGRADE"),
+    );
+    const legacyLegacy = live([E("legacy_125khz"), R("legacy_125khz")]).evaluation;
+    check(
+      `22 DR-043 legacy enrollment + legacy read → allow (no downgrade: it is the only credential they hold) (got ${legacyLegacy.outcome})`,
+      legacyLegacy.outcome === "allow",
+    );
+    const strongStrong = live([E("strong"), R("strong")]).evaluation;
+    check(
+      `22 DR-043 strong enrollment + strong read → allow (got ${strongStrong.outcome})`,
+      strongStrong.outcome === "allow",
+    );
+
+    // (c) THE ENROLLMENT-DOMAIN FIX over #753. Strong enrollment is the ACCUSING half
+    // of this rule, so it must survive worst-wins resolution. With #753's
+    // `good: ["strong"]` a same-instant strong+legacy pair resolved to legacy and a
+    // lone strong with an illegible stamp floored to unknown — both ALLOWED a
+    // downgrade. Both orders of the tie are pinned, so array order cannot pick it.
+    for (const [label, pair] of [
+      ["strong first", [E("strong"), E("legacy_125khz")]],
+      ["legacy first", [E("legacy_125khz"), E("strong")]],
+    ] as const) {
+      const tied = live([...pair, R("legacy_125khz")]);
+      check(
+        `22 DR-043 FIX: tied same-instant enrollment strong+legacy (${label}) with a legacy read → deny (got ${tied.evaluation.outcome}, enrollment=${tied.evidence.enrollmentStrength})`,
+        tied.evaluation.outcome === "deny" && tied.evidence.enrollmentStrength === "strong",
+      );
+    }
+    // Asserted as DENY, stronger than "not allow": only the enrollment reading is
+    // illegible here and enrollment is not dock-family, so no freshness backstop can
+    // make this pass for the wrong reason — the verdict turns on the domain alone.
+    const illegibleStrong = live([E("strong", ILLEGIBLE_AT), R("legacy_125khz")]);
+    check(
+      `22 DR-043 FIX: a lone strong enrollment with an illegible stamp + legacy read → NOT allow (deny; got ${illegibleStrong.evaluation.outcome}, enrollment=${illegibleStrong.evidence.enrollmentStrength})`,
+      illegibleStrong.evaluation.outcome === "deny",
+    );
+
+    // (d) The attach rows.
+    const removedRow = live([A("removed")]).evaluation;
+    check(
+      `22 DR-043 attach removed → restrict CUSTODY_REMOVED (got ${removedRow.outcome})`,
+      removedRow.outcome === "restrict" && removedRow.reasonCodes.includes("CUSTODY_REMOVED"),
+    );
+    const unknownRow = live([A("unknown")]).evaluation;
+    check(
+      `22 DR-043 attach unknown → step_up CUSTODY_UNKNOWN, never a grant (got ${unknownRow.outcome})`,
+      unknownRow.outcome === "step_up" && unknownRow.reasonCodes.includes("CUSTODY_UNKNOWN"),
+    );
+    const notApplicable = live([]);
+    check(
+      `22 DR-043 attach not_applicable (nothing sent) → allow (got ${notApplicable.evaluation.outcome}, attach=${notApplicable.evidence.attachState})`,
+      notApplicable.evaluation.outcome === "allow" && notApplicable.evidence.attachState === "not_applicable",
+    );
+    const garbled = live([A("seated-ish")]);
+    check(
+      `22 DR-043 present-but-garbled attach_state through buildEvidence→evaluatePolicy → step_up (got ${garbled.evaluation.outcome}, attach=${garbled.evidence.attachState})`,
+      garbled.evaluation.outcome === "step_up" && garbled.evidence.attachState === "unknown",
+    );
+    for (const [label, pair] of [
+      ["removed first", [A("removed"), A("unknown")]],
+      ["unknown first", [A("unknown"), A("removed")]],
+    ] as const) {
+      const tied = live([...pair]).evaluation;
+      check(
+        `22 DR-043 tied same-instant attach removed+unknown (${label}) → restrict whatever the order (got ${tied.outcome})`,
+        tied.outcome === "restrict",
+      );
+    }
+
+    // (e) CROSS-MATRIX PARITY. For every overlapping row, attach.ts's puckVerdict and
+    // the live SHARED_DEVICE_RULES_V1 give the same verdict (and the matrix's reason
+    // code is among the live ones). The situation is otherwise fully confirmed so the
+    // row under test is the only thing either matrix can see.
+    const confirmed: PuckSituation = {
+      attach: "attached",
+      forced: false,
+      identityConfirmed: true,
+      postureCompliant: true,
+      credentialStanding: "valid",
+      readStrength: "strong",
+      enrolledStrength: "strong",
+      higherRiskAction: false,
+      presenceRadioLost: false,
+      inactive: false,
+      redockPendingReevaluation: false,
+    };
+    const PARITY_ROWS: { row: string; puck: Partial<PuckSituation>; signals: NormalizedSignal[] }[] = [
+      { row: "downgrade", puck: { readStrength: "legacy_125khz" }, signals: [A("attached"), E("strong"), R("legacy_125khz")] },
+      { row: "removed", puck: { attach: "removed" }, signals: [A("removed"), E("strong"), R("strong")] },
+      { row: "unknown", puck: { attach: "unknown" }, signals: [A("unknown"), E("strong"), R("strong")] },
+      { row: "downgrade + removed", puck: { attach: "removed", readStrength: "legacy_125khz" }, signals: [A("removed"), E("strong"), R("legacy_125khz")] },
+      { row: "control: seated, strong/strong", puck: {}, signals: [A("attached"), E("strong"), R("strong")] },
+    ];
+    for (const { row, puck, signals } of PARITY_ROWS) {
+      const matrix = puckVerdict({ ...confirmed, ...puck });
+      const gate = live(signals).evaluation;
+      check(
+        `22 DR-043 PARITY ${row}: puckVerdict ${matrix.verdict}/${matrix.reasonCode} === live gate ${gate.outcome}/[${gate.reasonCodes.join(",")}]`,
+        matrix.verdict === gate.outcome &&
+          (matrix.verdict === "allow" || gate.reasonCodes.includes(matrix.reasonCode)),
+      );
+    }
+  }
+
+  // (f) END TO END through the dock connector: runDockSync → buildEvidence →
+  // evaluatePolicy. A removal reported by the dock restricts; a record that carries
+  // no attach read emits no attach_state signal at all (absence stays absent).
+  {
+    const clk = fixedClock("2026-07-13T15:00:00.000Z");
+    const throughDock = (attach: AttachState | undefined) => {
+      const seeded = seedDemoStore(clk);
+      const store = seeded.store;
+      const tenantId = seeded.tenants.northwind;
+      const conn = store.listConnectors(tenantId).find((c) => c.kind === "dockbridge-custody");
+      const rec = conn ? seeded.dockRecords[conn.id]?.find((r) => r.deviceRef === "ipad-ward-01") : undefined;
+      const dev = store.findDeviceByRef(tenantId, "ipad-ward-01");
+      const idn = store.findIdentityByRef(tenantId, "nurse.compliant");
+      const wf = store.findWorkflowByKey(tenantId, "clinical-session");
+      if (!conn || !rec || !dev || !idn || !wf) return undefined;
+      const { attachState: _seeded, ...bare } = rec;
+      runDockSync(store, clk, conn, [attach === undefined ? bare : { ...bare, attachState: attach }]);
+      const signals = [
+        ...store.listSignalsForSubject(tenantId, "identity", idn.id),
+        ...store.listSignalsForSubject(tenantId, "device", dev.id),
+      ];
+      const evidence = buildEvidence(idn, dev, wf, signals);
+      return { signals, evidence, evaluation: evaluatePolicy(monoV1, evidence) };
+    };
+    const removedE2E = throughDock("removed");
+    check(
+      `22 DR-043 e2e: a dock record reporting removed → runDockSync→buildEvidence→evaluatePolicy → restrict CUSTODY_REMOVED (got ${removedE2E?.evaluation.outcome})`,
+      removedE2E !== undefined &&
+        removedE2E.evidence.attachState === "removed" &&
+        removedE2E.evaluation.outcome === "restrict" &&
+        removedE2E.evaluation.reasonCodes.includes("CUSTODY_REMOVED"),
+    );
+    const silentE2E = throughDock(undefined);
+    check(
+      `22 DR-043 e2e: a dock record with no attachState emits NO attach_state signal and reads not_applicable (got ${silentE2E?.evidence.attachState}, ${silentE2E?.evaluation.outcome})`,
+      silentE2E !== undefined &&
+        !silentE2E.signals.some((s) => s.category === "attach_state") &&
+        silentE2E.evidence.attachState === "not_applicable" &&
+        silentE2E.evaluation.outcome === "allow",
+    );
+  }
 
   // Scope for the VERDICT dimension is derived the same way, through the REAL
   // evaluator: any field whose substitution can change the outcome is in scope.
   // This is what pulled eleven rule-carrying families in that a backstop-only
   // sweep never saw.
   const baselineOutcome = evaluatePolicy(monoV1, healthyEvidence).outcome;
-  const verdictFields = (Object.keys(healthyEvidence) as (keyof DecisionEvidence)[]).filter((key) =>
-    PROBES.some(
+  const allEvidenceFields = Object.keys(healthyEvidence) as (keyof DecisionEvidence)[];
+  /** Can substituting `key` change the answer FROM THIS BASE? The base's own outcome
+   *  is recomputed rather than closed over, or a perturbed base would be compared
+   *  against the healthy outcome and re-create the blindness fixed below. */
+  const changesOutcomeFrom = (base: DecisionEvidence, key: keyof DecisionEvidence): boolean => {
+    const baseOutcome = evaluatePolicy(monoV1, base).outcome;
+    return PROBES.some(
       (probe) =>
-        evaluatePolicy(monoV1, {
-          ...healthyEvidence,
-          [key]: probe,
-        } as unknown as DecisionEvidence).outcome !== baselineOutcome,
-    ),
-  );
+        evaluatePolicy(monoV1, { ...base, [key]: probe } as unknown as DecisionEvidence).outcome !== baseOutcome,
+    );
+  };
+  const singleBaselineFields = allEvidenceFields.filter((key) => changesOutcomeFrom(healthyEvidence, key));
+  // THE DERIVATION WAS CONJUNCTION-BLIND (carried from PR #753). A field that is only
+  // ever HALF of an AND cannot change the verdict from one baseline: the other half
+  // never holds there, so the rule never fires and the field reads as out of scope
+  // while a live deny rule names it. `credential-downgrade` (enrollmentStrength strong
+  // AND credentialReadMethod legacy_125khz) is the first such rule on signal-derived
+  // fields. So any field the single-baseline probe leaves unresolved is escalated to
+  // the healthy evidence plus every single-field perturbation of it, and counts as in
+  // scope if it can change the answer from ANY of them.
+  //
+  // What this does NOT close: the SWEEP below stays single-axis, so enrollmentStrength
+  // is swept with credentialReadMethod pinned at "strong" and no enrollment mutation
+  // there can fire the downgrade rule. That direction is pinned positively in the
+  // DR-043 block above (tied and illegible enrollment → deny).
+  const perturbedBases: DecisionEvidence[] = [healthyEvidence];
+  for (const axis of allEvidenceFields) {
+    for (const probe of PROBES) {
+      perturbedBases.push({ ...healthyEvidence, [axis]: probe } as unknown as DecisionEvidence);
+    }
+  }
+  const conjunctiveFields = allEvidenceFields
+    .filter((key) => !singleBaselineFields.includes(key))
+    .filter((key) => perturbedBases.some((base) => changesOutcomeFrom(base, key)));
+  const verdictFields = [...singleBaselineFields, ...conjunctiveFields];
   // Two fields are in that derived set but cannot be swept by these mutations,
   // and they are named rather than silently dropped: they are NOT read from a
   // signal at all — they come from the resolved device and workflow rows — so
@@ -3280,6 +3531,24 @@ const monotonicityTable: string[] = [];
     // quiet", because no tenant-level EXPECTATION of a category is modelled
     // anywhere — that is a real deferred capability, not a bug in this sweep, and
     // it is REPORTED here rather than gated.
+    {
+      name: "attach-absence-is-not-an-attach-answer",
+      field: "attachState",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["removed"],
+      reason:
+        "restrict→allow. The same shape as every row here: the attach reading carried the bad news, so with it gone the field is 'not_applicable' and no attach rule matches. A tenant with no pucks emits nothing, and the core cannot tell that from a dock that went quiet. NOT exempted, and pinned in the DR-043 block: an attach reading that EXISTS and is unreadable reads 'unknown' and steps up.",
+    },
+    {
+      name: "read-method-absence-is-not-a-downgrade",
+      field: "credentialReadMethod",
+      mutation: "absent signal",
+      dimension: "verdict",
+      members: ["legacy_125khz"],
+      reason:
+        "deny→allow, and it is half of an AND rather than a quiet family: deleting the read-method signal removes one condition of credential-downgrade while enrollmentStrength 'strong' still holds. The result is a real deployment — a strong-enrolled worker whose readers report no read method — which is 'not_applicable', not a downgrade. A read that EXISTS and says legacy_125khz still denies (DR-043 block).",
+    },
     {
       name: "identity-signal-absence-is-not-an-identity-answer",
       field: "identityEnabled",

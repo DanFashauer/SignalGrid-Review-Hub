@@ -457,6 +457,9 @@ function seedPolicyTests(
     badgeBinding: "present",
     managementHealthState: "healthy",
     localAuthorityState: "verified",
+    attachState: "attached",
+    enrollmentStrength: "strong",
+    credentialReadMethod: "strong",
     criticalSignalsPresent: true,
   };
   const cases: Array<Omit<PolicyTest, "id" | "tenantId" | "policyId">> = [
@@ -482,6 +485,12 @@ function seedPolicyTests(
     { name: "SmartDock faulted → restrict", evidence: { ...base, dockState: "faulted" }, expectedOutcome: "restrict", expectedReasonCode: "DOCK_FAULTED" },
     { name: "SmartDock offline → step-up", evidence: { ...base, dockState: "offline" }, expectedOutcome: "step_up", expectedReasonCode: "DOCK_OFFLINE" },
     { name: "dock state unknown → still allow (no fabricated block)", evidence: { ...base, dockState: "unknown" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "credential removed from its receiver → restrict (DR-043; the key is out of the ignition)", evidence: { ...base, attachState: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "CUSTODY_REMOVED" },
+    { name: "attach reading present but unreadable → step-up, never a grant (DR-043; deliberately stricter than badge/dock unknown above)", evidence: { ...base, attachState: "unknown" }, expectedOutcome: "step_up", expectedReasonCode: "CUSTODY_UNKNOWN" },
+    { name: "no attach reading at all → still allow (not_applicable: a tenant with no pucks is not stepped up)", evidence: { ...base, attachState: "not_applicable" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "legacy 125 kHz read for a STRONG-enrolled worker → deny (DR-043 credential downgrade)", evidence: { ...base, enrollmentStrength: "strong", credentialReadMethod: "legacy_125khz" }, expectedOutcome: "deny", expectedReasonCode: "CREDENTIAL_DOWNGRADE" },
+    { name: "legacy 125 kHz read for a LEGACY-enrolled worker → allow (no downgrade: it is the only credential they hold)", evidence: { ...base, enrollmentStrength: "legacy_125khz", credentialReadMethod: "legacy_125khz" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "strong read for a strong-enrolled worker → allow (the rule punishes the downgrade, never the strong credential)", evidence: { ...base, enrollmentStrength: "strong", credentialReadMethod: "strong" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "tamper sensor unavailable → step-up (no fail-open)", evidence: { ...base, tamperState: "sensor_unavailable" }, expectedOutcome: "step_up", expectedReasonCode: "TAMPER_SENSOR_UNAVAILABLE" },
   ];
   for (const [index, spec] of cases.entries()) {

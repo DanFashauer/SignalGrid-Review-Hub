@@ -384,7 +384,7 @@ async function run() {
 
   // ── Signal Radar: new-signal detection ───────────────────────────────────
   const catalog = await req("GET", "/signals/catalog");
-  check("signal catalog → 200 with 17 evaluated categories (15 + the two launch families the 2026-08-10 scan found unrepresented)", catalog.status === 200 && catalog.json?.evaluated?.length === 17);
+  check("signal catalog → 200 with 20 evaluated categories (15 + the two launch families the 2026-08-10 scan found unrepresented + the three DR-043 credential categories)", catalog.status === 200 && catalog.json?.evaluated?.length === 20);
   check(
     "signal catalog → shift_context is evaluated, not novel (the category the /v1 misfit rule reads)",
     (catalog.json?.evaluated ?? []).includes("shift_context"),
@@ -1098,8 +1098,8 @@ async function run() {
   // criticalSignalsPresent) have no source plane at all, so `answerable` can never
   // reach 18 for ANY input; the assertion could not fail even if silentHoles were
   // hardcoded to zero. Pin the real numbers against the engine instead.
-  check("evidence-coverage wedge pins the measured counts (12 answerable, 6 silent holes — 21 axes since the two launch-family axes and dockEvidenceFreshness joined on 2026-09-06)", covWedge.json?.report?.answerable === 12 && covWedge.json?.report?.silentHoles === 6);
-  check("evidence-coverage empty estate pins the measured hole count (13 of 21 axes)", covEmpty.json?.report?.silentHoles === 13);
+  check("evidence-coverage wedge pins the measured counts (13 answerable, 8 silent holes — 24 axes since the DR-043 attach/enrollment/read-method axes joined on 2026-09-23)", covWedge.json?.report?.answerable === 13 && covWedge.json?.report?.silentHoles === 8);
+  check("evidence-coverage empty estate pins the measured hole count (16 of 24 axes)", covEmpty.json?.report?.silentHoles === 16);
   // The `note` is prose the CLIENT receives, so a stale number in it is a published
   // contradiction, not an internal comment. It said "18" as a literal beside a
   // `totalAxes` that computes the same thing; a nineteenth axis would have shipped a

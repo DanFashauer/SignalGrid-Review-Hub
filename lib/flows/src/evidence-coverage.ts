@@ -241,6 +241,29 @@ export const EVIDENCE_AXES: readonly EvidenceAxis[] = [
     // only the affirmative `withheld` restricts. seed.ts pins both.
     dayOneQuiet: true,
   },
+  // ── DR-043: the credential's own custody and strength ─────────────────────
+  // All three are MEASURED quiet: an estate that cannot answer them emits nothing,
+  // which reads `not_applicable`, and no rule matches it. So each is a silent hole
+  // on an estate without the plane. (A PRESENT-but-unreadable attach reading reads
+  // `unknown` and steps up — that is illegibility, not ignorance.)
+  {
+    id: "attachState",
+    question: "Is the worker's credential still seated in the receiver it was issued to?",
+    answerableBy: ["dock_hardware"],
+    dayOneQuiet: true,
+  },
+  {
+    id: "enrollmentStrength",
+    question: "How strong is the credential this worker was actually enrolled with?",
+    answerableBy: ["identity"],
+    dayOneQuiet: true,
+  },
+  {
+    id: "credentialReadMethod",
+    question: "Was this credential read by the strong method it was enrolled for, or over a cloneable 125 kHz fallback?",
+    answerableBy: ["badge_custody", "physical_access"],
+    dayOneQuiet: true,
+  },
   {
     id: "dockEvidenceFreshness",
     question: "How old is the dock evidence the custody, charge and tamper answers rest on?",

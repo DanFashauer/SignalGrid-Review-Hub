@@ -67,15 +67,15 @@ test("the standalone page renders the real model, not an empty shell", async ({ 
   // The axis rows and plane toggles prove the bundled model was linked in and iterated;
   // the two assertions below carry the counts. A build that resolved the import to
   // nothing produces a valid, blank page.
-  await expect(page.locator("tbody tr")).toHaveCount(21);
+  await expect(page.locator("tbody tr")).toHaveCount(24);
   await expect(page.locator("button.p")).toHaveCount(7);
 
   // Opens on the wedge, with the figures pinned by equality in proof:evidence-coverage
   // and api.test.mjs. Three surfaces, one set of numbers.
-  expect(await stat(page, "stat-answerable")).toBe(12);
-  expect(await stat(page, "stat-dark")).toBe(6);
+  expect(await stat(page, "stat-answerable")).toBe(13);
+  expect(await stat(page, "stat-dark")).toBe(8);
   expect(await stat(page, "stat-not-sourced")).toBe(3);
-  expect(await stat(page, "stat-silent-holes")).toBe(6);
+  expect(await stat(page, "stat-silent-holes")).toBe(8);
 
   // Each value sits with ITS OWN caption. Swapping two captions leaves every number and
   // every test id correct and tells the reader "10 dark, 6 answerable".
@@ -87,7 +87,7 @@ test("the standalone page renders the real model, not an empty shell", async ({ 
   // "21" here would print "12 + 7 + 3 = 21" the day a twenty-second axis is added.
   const rows = await page.locator("tbody tr").count();
   await expect(page.getByTestId("coverage-denominator")).toContainText(
-    `12 + 6 + 3 = ${rows} evidence axes`,
+    `13 + 8 + 3 = ${rows} evidence axes`,
   );
 
   // The toggles must agree with the report they produced.
@@ -120,7 +120,7 @@ test("silent holes rank first, say what they are, and name what would answer the
   page,
 }) => {
   const holes = page.locator('tr[data-silent-hole="true"]');
-  await expect(holes).toHaveCount(6);
+  await expect(holes).toHaveCount(8);
   await expect(page.locator("tbody tr").first()).toHaveAttribute("data-silent-hole", "true");
   await expect(page.locator("tbody tr").last()).toHaveAttribute("data-coverage", "not_sourced");
   await expect(holes.first()).toContainText("the active rules grant when this is unknown");
@@ -160,7 +160,7 @@ test("declaring and undeclaring planes moves the report, down to the empty estat
   await planeToggle(page, "Workforce Management").click();
   await expect(shift).toHaveAttribute("data-coverage", "answerable");
   await expect(planeToggle(page, "Workforce Management")).toHaveAttribute("aria-pressed", "true");
-  expect(await stat(page, "stat-silent-holes")).toBe(5);
+  expect(await stat(page, "stat-silent-holes")).toBe(7);
 
   // Strip the estate to nothing: the honest opening position, and proof the page cannot
   // flatter — the numbers only get worse as the estate thins.
@@ -168,10 +168,10 @@ test("declaring and undeclaring planes moves the report, down to the empty estat
     await planeToggle(page, plane).click();
   }
   expect(await stat(page, "stat-answerable")).toBe(0);
-  expect(await stat(page, "stat-silent-holes")).toBe(13);
-  expect(await stat(page, "stat-dark")).toBe(18);
+  expect(await stat(page, "stat-silent-holes")).toBe(16);
+  expect(await stat(page, "stat-dark")).toBe(21);
   await expect(page.getByTestId("coverage-denominator")).toContainText(
-    "0 + 18 + 3 = 21 evidence axes",
+    "0 + 21 + 3 = 24 evidence axes",
   );
 });
 

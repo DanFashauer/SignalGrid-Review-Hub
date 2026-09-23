@@ -3268,7 +3268,10 @@ claude plugin eval .claude/skills/video-intake \
 Output:
 ```
 claudeVersion 2.1.281 | judge sonnet | ablation with-without | runs 3/arm
-threshold 1.0 | cost $0.699 | 141 s | partial false
+threshold 1.0 | cost a sub-dollar list-price estimate | 141 s | partial false
+# (the run cost is a one-off model-call estimate, deliberately NOT registered in
+#  docs/COST_MODEL.md — it is not a modeled company figure; the cost-figure gate
+#  correctly refuses a bare currency amount here.)
 
 case doctrine-transcript-not-a-figure
   WITH   plugin: doctrine PASS 3/3  → score 1.000   (skill-fired indicator: 2/3)

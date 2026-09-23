@@ -89,7 +89,44 @@ HB_LAST_RESULT="node_modules/.sg-last-heartbeat-result"
 # The heartbeat is the tick's ONLY obligation on every path, including failure
 # paths: a tick that died silently is exactly what this script exists to prevent.
 RESULT="quiet"
+
+# THE MAILBOX, FOLDED INTO THE HEALTH SIGNAL.
+#
+# This tick reported "quiet" on 2026-09-17 while FIVE cloud->mac messages sat
+# unread, the oldest nearly four days. That was true about the tick and silent
+# about the mailbox: it runs sim requests and heartbeats and does both correctly,
+# but nothing in it reads the inbox, so "nothing happened" and "nobody looked"
+# produced the same word.
+#
+# It deliberately does NOT acknowledge anything. An ack is supposed to say what was
+# done, and a script has done nothing; a tick that acked its own inbox would be
+# manufacturing exactly the false green this repo hunts. It only stops the state
+# being invisible, which is the part a script can honestly do.
+#
+# The figure is COARSE (whole days) because an identical result is throttled: an age
+# that ticks up continuously would differ every run and push a heartbeat commit to
+# Alpha every five minutes, trading a silent mailbox for a flooded mainline.
+# AND THE SAME DISTINCTION ONE LAYER DOWN, because the first draft of this function
+# got it wrong in exactly the way the function exists to fix. It left RESULT
+# untouched on a failed read — so an unreadable mailbox and an empty one both said
+# "quiet", which is "nothing happened" and "nobody looked" wearing the same word
+# again. An empty inbox is silence by design; a mailbox that could not be READ says
+# so.
+# This lane's own identity — the tick runs ON the Mac, so the inbox that matters is
+# the one addressed to it. Overridable the same way lane-message.mjs allows, so this
+# does not become a second, divergent notion of which lane you are.
+LANE_SELF="${SIGNALGRID_LANE:-mac}"
+append_unread_state() {
+  _u="$(node scripts/check-lane-messages.mjs --unread-summary "$LANE_SELF" 2>/dev/null || true)"
+  case "$_u" in
+    unread=0) : ;;                                    # genuinely empty; silence is honest here
+    unread=*) RESULT="$RESULT; $_u to $LANE_SELF" ;;  # e.g. "quiet; unread=5 oldest=3d to mac"
+    *) RESULT="$RESULT; mailbox UNREADABLE" ;;        # never mistaken for an empty inbox
+  esac
+}
+
 heartbeat() {
+  append_unread_state
   if [ "$DRY" = "1" ]; then say "dry-run: would heartbeat: $RESULT"; return 0; fi
   # Throttle a result IDENTICAL to the last delivered one ("quiet" again, the same
   # "skipped: …" again, the same failure again) inside the window; anything that
@@ -258,8 +295,14 @@ if [ -n "$(git status --porcelain -- artifacts/sim-results artifacts/live-eviden
     # cloud lane was told work had been delivered to a branch that does not exist on
     # origin. The claim now lives INSIDE the success arm, and the failure arm says
     # what actually happened.
+    # A new result file moves the tracked-file count, and the derived coverage
+    # page is gated against it (check-surface-review-coverage): the first tick PR
+    # (#844, 2026-09-18) went red on exactly that and needed a cloud commit to
+    # land. Re-derive the page here so the result lands on its own.
+    node scripts/check-surface-review-coverage.mjs --write >/dev/null 2>&1 \
+      || say "WARN could not re-derive docs/agent/SURFACE_REVIEW_COVERAGE.md — the PR will fail the coverage gate until it is"
     if git checkout -q -b "$TICK_BRANCH" \
-      && git add artifacts/sim-results artifacts/live-evidence 2>/dev/null \
+      && git add artifacts/sim-results artifacts/live-evidence docs/agent/SURFACE_REVIEW_COVERAGE.md 2>/dev/null \
       && git commit -q -m "Mac tick $STAMP: sim results ($PENDING request(s))" \
       && git push -q -u origin "$TICK_BRANCH"; then
       say "pushed $TICK_BRANCH (the cloud steward opens its PR within the hour)"

@@ -16,7 +16,7 @@
  * - STEPUP_TTL_SECONDS: Step-up session time-to-live (default: 5 minutes)
  */
 
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import Redis from 'ioredis';
 
 // ============================================================================
@@ -119,6 +119,23 @@ function generateId(): string {
   return `su_${Date.now()}_${randomBytes(16).toString('hex')}`;
 }
 
+/**
+ * A non-secret REFERENCE to a step-up session, for logs.
+ *
+ * Inside the 300 s TTL a `stepUpSessionId` is BEARER-EQUIVALENT for the operation it
+ * gates: `verifyStepUpSession` takes it by value, and anything that can read it out of
+ * a log line (an aggregator, a support bundle, a screen-share) holds the token for a
+ * webhook-secret rotation or a device unenrollment. Every branch in this module printed
+ * it in full. They now print this instead — the same shape as `keyReference` in
+ * `lib/enterprise-auth`: enough to correlate two lines about one session, never enough
+ * to replay it. SHA-256 truncated to 12 hex characters; the id is 32 random hex
+ * characters, so the digest is not reversible by guessing and a collision inside one
+ * five-minute window is not a thing anyone can arrange.
+ */
+function sessionRef(stepUpSessionId: string): string {
+  return `su#${createHash('sha256').update(stepUpSessionId).digest('hex').slice(0, 12)}`;
+}
+
 function nowISO(): string {
   return new Date().toISOString();
 }
@@ -158,13 +175,13 @@ export async function createStepUpSession(
       CONFIG.ttlSeconds,
       JSON.stringify(session)
     );
-    console.log(`[StepUpStore] Created step-up session ${session.stepUpSessionId} for user ${userId}`);
+    console.log(`[StepUpStore] Created step-up session ${sessionRef(session.stepUpSessionId)} for user ${userId}`);
   } else {
     memoryStore.set(session.stepUpSessionId, {
       session,
       expiresAt: now.getTime() + CONFIG.ttlSeconds * 1000,
     });
-    console.log(`[StepUpStore] Created step-up session ${session.stepUpSessionId} for user ${userId} (in-memory)`);
+    console.log(`[StepUpStore] Created step-up session ${sessionRef(session.stepUpSessionId)} for user ${userId} (in-memory)`);
   }
 
   return session;
@@ -194,7 +211,7 @@ export async function verifyStepUpSession(
   }
 
   if (!sessionData) {
-    console.log(`[StepUpStore] Step-up session ${stepUpSessionId} not found or expired`);
+    console.log(`[StepUpStore] Step-up session ${sessionRef(stepUpSessionId)} not found or expired`);
     return null;
   }
 
@@ -206,25 +223,25 @@ export async function verifyStepUpSession(
   const sessionExpiresAtMs = new Date(session.expiresAt).getTime();
   // freshness: local-by-design — not the sighting-freshness rule — an EXPIRY/TTL comparison, where an unreadable bound must read EXPIRED (null-maps the opposite way); its gate is check-nan-fail-open.mjs
   if (!Number.isFinite(sessionExpiresAtMs) || sessionExpiresAtMs < Date.now()) {
-    console.log(`[StepUpStore] Step-up session ${stepUpSessionId} expired`);
+    console.log(`[StepUpStore] Step-up session ${sessionRef(stepUpSessionId)} expired`);
     return null;
   }
 
   // Check user binding
   if (session.userId !== userId) {
-    console.log(`[StepUpStore] Step-up session ${stepUpSessionId} user mismatch: ${session.userId} != ${userId}`);
+    console.log(`[StepUpStore] Step-up session ${sessionRef(stepUpSessionId)} user mismatch: ${session.userId} != ${userId}`);
     return null;
   }
 
   // Check request binding (prevents session hijacking)
   if (session.requestId !== requestId) {
-    console.log(`[StepUpStore] Step-up session ${stepUpSessionId} request mismatch: ${session.requestId} != ${requestId}`);
+    console.log(`[StepUpStore] Step-up session ${sessionRef(stepUpSessionId)} request mismatch: ${session.requestId} != ${requestId}`);
     return null;
   }
 
   // Check challenge type if provided
   if (challenge && session.challenge !== challenge) {
-    console.log(`[StepUpStore] Step-up session ${stepUpSessionId} challenge mismatch: ${session.challenge} != ${challenge}`);
+    console.log(`[StepUpStore] Step-up session ${sessionRef(stepUpSessionId)} challenge mismatch: ${session.challenge} != ${challenge}`);
     return null;
   }
 

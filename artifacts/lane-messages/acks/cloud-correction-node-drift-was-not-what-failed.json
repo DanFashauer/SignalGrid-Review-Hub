@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-correction-node-drift-was-not-what-failed-",
+  "ackedBy": "mac",
+  "note": "Read and accepted: the /v1 concurrency failure was the 300-socket accept queue, not node drift; the bounded burst (#804) is on mainline and the runner confirmed it green. No local edits to load.test.mjs on the Mac.",
+  "ackedAt": "2026-09-18T16:04:24.347Z"
+}

@@ -75,6 +75,7 @@
   },
   "dependencies": {
     "@workspace/audit": "workspace:*",
+    "@workspace/signalgrid-core": "workspace:*",
     "ioredis": "^5.4.1",
     "zod": "catalog:"
   },

@@ -14,17 +14,17 @@ const old = "2026-07-12T09:00:00.000Z"; // ~4d old → expired
 export const DEMO_DDM_REPORTS: DdmDeviceReport[] = [
   // Fully healthy: enrolled, binary control enforced, privacy declared, fresh, and
   // update enforcement is declarative (current) → the only standard-assurance device.
-  { deviceRef: "mac-noc-01", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative" },
+  { deviceRef: "mac-noc-01", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised", returnToService: false },
   // Binary control permissive (unmanaged binaries allowed) → baseline drift, raise step-up.
-  { deviceRef: "mac-noc-02", enrolled: true, health: "healthy", binaryControl: "permissive", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative" },
+  { deviceRef: "mac-noc-02", enrolled: true, health: "healthy", binaryControl: "permissive", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised", returnToService: false },
   // Binary control disabled entirely → drift + raise step-up.
-  { deviceRef: "mac-noc-03", enrolled: true, health: "healthy", binaryControl: "disabled", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative" },
+  { deviceRef: "mac-noc-03", enrolled: true, health: "healthy", binaryControl: "disabled", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised", returnToService: false },
   // Privacy declaration only partial → raise step-up (posture incomplete).
-  { deviceRef: "mac-noc-04", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "partial", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative" },
+  { deviceRef: "mac-noc-04", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "partial", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised", returnToService: false },
   // Health degraded → non-compliant + raise step-up.
-  { deviceRef: "mac-noc-05", enrolled: true, health: "degraded", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative" },
+  { deviceRef: "mac-noc-05", enrolled: true, health: "degraded", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised", returnToService: false },
   // Stale check-in → freshness stale + raise step-up.
-  { deviceRef: "mac-noc-06", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: stale, osMajor: 27, updateEnforcement: "declarative" },
+  { deviceRef: "mac-noc-06", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: stale, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised", returnToService: false },
   // Never checked in → freshness missing + raise step-up (enforcement also unreported).
   { deviceRef: "mac-noc-07", enrolled: true, health: "unreporting", binaryControl: "unknown", privacy: "unknown", lastCheckInAt: null },
   // Not DDM-enrolled at all → not managed + raise step-up.
@@ -32,9 +32,16 @@ export const DEMO_DDM_REPORTS: DdmDeviceReport[] = [
   // THE OS-27 CUTOVER CASE: looks perfect — enrolled, enforced, declared, fresh —
   // but update enforcement is still on the LEGACY command model, which is a silent
   // no-op on OS 27. "Compliant" is not trustworthy → dead → raise step-up.
-  { deviceRef: "mac-noc-08", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "legacy" },
+  { deviceRef: "mac-noc-08", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "legacy", enrollmentType: "supervised", returnToService: false },
   // Legacy enforcement on a pre-27 device — works today, dies on the OS-27 upgrade.
-  { deviceRef: "mac-noc-09", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 26, updateEnforcement: "legacy" },
+  { deviceRef: "mac-noc-09", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 26, updateEnforcement: "legacy", enrollmentType: "supervised", returnToService: false },
   // No update enforcement configured at all → dead → raise step-up.
-  { deviceRef: "mac-noc-10", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "none" },
+  { deviceRef: "mac-noc-10", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "none", enrollmentType: "supervised", returnToService: false },
+  // 27.0 `mdm.enrollment-type`: otherwise perfect, but USER-enrolled rather than
+  // supervised. Golden rule 4's captive-device claim rests on supervision, so this is
+  // the device an org believes it holds and does not → raise step-up.
+  { deviceRef: "mac-noc-11", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "user", returnToService: false },
+  // 27.0 `mdm.is-return-to-service`: otherwise perfect, but the device is being wiped
+  // and handed on. Custody is in transit — nobody's session owns it → raise step-up.
+  { deviceRef: "mac-noc-12", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised", returnToService: true },
 ];

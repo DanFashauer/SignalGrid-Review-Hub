@@ -25,7 +25,7 @@ import {
   generateKeyPairSync,
   randomBytes,
 } from "crypto";
-import { webauthn, webauthnStore } from "@workspace/webauthn";
+import { stepUp, webauthn, webauthnStore } from "@workspace/webauthn";
 import { appendAuditRecord, getAuditRecords } from "@workspace/audit";
 
 // ── tiny CBOR encoder (only what these fixtures need) ───────────────────────
@@ -533,6 +533,81 @@ async function main() {
       refused = true;
     }
     check("step-up session with unparseable expiresAt is refused, not minted with a NaN TTL", refused);
+  }
+
+  // 9a-REDIS. When REDIS_URL is configured, Redis is the SOLE store for a step-up
+  //   session — the same rule `saveChallenge` and `getUser` state and follow. The
+  //   mint used to swallow the Redis error and then set the in-memory mirror
+  //   UNCONDITIONALLY, so a failed durable write read as a successful mint and a
+  //   session invalidated on the authoritative store still read live from the
+  //   minting instance's own memory.
+  //
+  //   Driven, not reasoned about, and with NO Redis needed: pointing REDIS_URL at a
+  //   closed port makes every command fail, which is exactly the swallowed branch.
+  //   Two assertions, because either alone passes with half the defect back — the
+  //   mint must THROW, and nothing may be readable afterwards.
+  {
+    const priorUrl = process.env.REDIS_URL;
+    // 127.0.0.1:1 — a port nothing listens on, so connect() rejects immediately.
+    process.env.REDIS_URL = "redis://127.0.0.1:1";
+    const sessionId = randomBytes(16).toString("base64url");
+    let propagated = false;
+    try {
+      await webauthnStore.createStepUpSession({
+        sessionId,
+        userId,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 300_000).toISOString(),
+      });
+    } catch {
+      propagated = true;
+    }
+    // Read with REDIS_URL CLEARED, so this reads the in-memory map directly rather
+    // than the (now Redis-authoritative) read path — otherwise the read-side fix
+    // would satisfy this assertion on its own and the mirror would go unmeasured.
+    if (priorUrl === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = priorUrl;
+    const readBack = await webauthnStore.getStepUpSession(sessionId);
+    check("an unreachable Redis makes createStepUpSession THROW — a failed durable write is not a minted session", propagated);
+    check("...and writes NO in-memory mirror: with Redis configured it is the SOLE store, so nothing survives the failed write", readBack === null);
+  }
+
+  // 9c-LOG. A step-up session id is BEARER-EQUIVALENT inside its TTL:
+  //   `verifyStepUpSession` takes it by value, so whatever can read it out of a log
+  //   line holds the token for the operation it gates. `lib/webauthn/src/stepUpStore.ts`
+  //   printed the full id on every one of its seven branches. It now prints a
+  //   truncated SHA-256 reference (the `keyReference` shape from lib/enterprise-auth).
+  //
+  //   DRIVEN, not grepped: console.log is captured around a real mint + a real verify
+  //   of every rejecting branch, and the assertion is that the id's own characters
+  //   never appear in what was written. A grep over source would pass the day someone
+  //   builds the id into a template a regex does not recognise.
+  {
+    const lines: string[] = [];
+    const realLog = console.log;
+    console.log = ((...args: unknown[]) => { lines.push(args.map(String).join(" ")); }) as typeof console.log;
+    let session: Awaited<ReturnType<typeof stepUp.createStepUpSession>> | undefined;
+    try {
+      session = await stepUp.createStepUpSession("user-stepup-log", "req-1", "policy_edit");
+      // Every rejecting branch that logs: not-found, user mismatch, request mismatch,
+      // challenge mismatch. (The expiry branch needs a clock the module does not take.)
+      await stepUp.verifyStepUpSession("su_0_deadbeef", "user-stepup-log", "req-1", "policy_edit");
+      await stepUp.verifyStepUpSession(session.stepUpSessionId, "someone-else", "req-1", "policy_edit");
+      await stepUp.verifyStepUpSession(session.stepUpSessionId, "user-stepup-log", "req-2", "policy_edit");
+      await stepUp.verifyStepUpSession(session.stepUpSessionId, "user-stepup-log", "req-1", "admin_delete");
+    } finally {
+      console.log = realLog;
+    }
+    const written = lines.join("\n");
+    check("the step-up branches under test actually logged (the assertion below is not vacuous)", lines.length >= 5);
+    check(
+      "no log line carries the step-up session id in cleartext — it is bearer-equivalent inside its TTL",
+      session !== undefined && !written.includes(session.stepUpSessionId),
+    );
+    check(
+      "...and the lines still carry a stable reference, so two lines about one session can be correlated",
+      session !== undefined && written.includes("su#"),
+    );
   }
 
   // 9b. Signature-counter clone reset: once a credential has ADVANCED (counter > 0), an

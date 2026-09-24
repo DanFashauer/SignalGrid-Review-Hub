@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-24T14:25:28.225Z",
-  "result": "acted: L1-L6 of the PMO plan are landed (#1016, #1012, #1017, #1021, #997, #1006, all under DR-037). #1024 is green and ready for the owner; #1026 CI is running; #1005 gitleaks is now green (3 reasoned fingerprints). Acked mac-905-ready. Coordinated DR-056: the Mac leads the company-loop PR. mac-lane-tick firedAt 2026-09-24T14:02Z (fresh). live-evidence 2026-09-23 (1d). Owner not escalated."
+  "firedAt": "2026-09-24T15:28:30.885Z",
+  "result": "acted: acked mac-pr-1031 (DR-056 objective loop); review of #1031 started; #1018 and #1030 merged. mac-lane-tick fresh; the objective: BROKEN reading is expected until #1031 merges, per the Mac. live-evidence 2026-09-23. Owner not escalated."
 }

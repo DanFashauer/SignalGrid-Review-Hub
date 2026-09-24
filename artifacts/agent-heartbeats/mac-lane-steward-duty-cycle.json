@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-23T20:24:32.941Z",
-  "result": "keepalive (last heartbeat 18:15Z, >2h). Cycle quiet: no unread mail to cloud (mcp#14/#15 and #1006 acked via #1008/#1009/#1007), no new/moved mac/* branches, sim loop bound, manifest clean. Mac tick last firedAt 2026-09-23T20:01:26Z. Live evidence 2026-09-20T11:40:55-04:00 (>3d; refresh request to mac already unread). Owner not escalated by the lane."
+  "firedAt": "2026-09-23T23:38:29.072Z",
+  "result": "non-quiet: Mac acked all 7 cloud messages and re-minted live evidence (d0ed0362, 0 days old); cloud superseded the stale #753 rebuild request (the owner closed #753; its useful half is #1005). No mac mail unread to cloud; no new/moved mac/* branches; manifest clean. Mac tick last firedAt 23:10Z. Owner not escalated."
 }

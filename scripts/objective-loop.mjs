@@ -92,7 +92,12 @@ function sortKeys(v) {
   if (v && typeof v === "object") return Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])]));
   return v;
 }
-const hoursBetween = (a, b) => (Date.parse(b) - Date.parse(a)) / 36e5;
+/** Age in hours — and an instant that cannot be parsed is INFINITELY old, never fresh (NaN would
+ *  compare false against every bound and read as "not yet stale": the fail-open the NaN gate hunts). */
+const hoursBetween = (a, b) => {
+  const from = Date.parse(a), to = Date.parse(b);
+  return Number.isFinite(from) && Number.isFinite(to) ? (to - from) / 36e5 : Infinity;
+};
 const isIso = (s) => typeof s === "string" && !Number.isNaN(Date.parse(s));
 /** Same shape as check-backlog-ownership.mjs's private matcher — a role id as a whole word. */
 export const roleNameRe = (id) => new RegExp(`(?<![\\w-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`);
@@ -435,9 +440,12 @@ export function checkState(state, { objectiveShaNow, rosterShaNow, headIsAncesto
   if (ids !== CRITERIA.map((c) => c.id).join(",")) fatal.push(`criteria ids [${ids}] differ from the declared set — state derived against another objective`);
   for (const c of state.criteria) if (!["met", "unmet", "unknown"].includes(c.state)) fatal.push(`criterion ${c.id}: state ${JSON.stringify(c.state)} is not met|unmet|unknown`);
   for (const e of state.escalations) if (!["mac", "cloud", "owner"].includes(e.clears)) fatal.push(`escalation ${e.id}: clears must be mac|cloud|owner`);
+  const nowMs = Date.parse(nowIso);
+  if (!Number.isFinite(nowMs)) fatal.push(`the gate's own instant ${JSON.stringify(nowIso)} is unparseable — no date can be judged`);
   for (const d of [state.derivedAt, ...state.escalations.map((e) => e.since), ...state.tasks.map((t) => t.firstRankedAt)]) {
-    if (!isIso(d)) fatal.push(`date ${JSON.stringify(d)} is not parseable ISO`);
-    else if (Date.parse(d) > Date.parse(nowIso) + 5 * 60e3) fatal.push(`date ${d} is in the future`);
+    const ms = Date.parse(d);
+    if (!Number.isFinite(ms)) fatal.push(`date ${JSON.stringify(d)} is not parseable ISO`);
+    else if (Number.isFinite(nowMs) && ms > nowMs + 5 * 60e3) fatal.push(`date ${d} is in the future`);
   }
   if (state.verdict === "replan" && state.tasks.length === 0) fatal.push("verdict replan with no task is a contradiction");
   if (state.verdict !== "goal_met" && state.tasks.length === 0 && state.needsExecutor.length === 0 && state.probeErrors.length === 0) fatal.push("no task, no unresolvable row, no probe error — a broken resolver, never a finished company");
@@ -568,6 +576,7 @@ function selfTest() {
   t("reader: a state older than staleAfterHours reads as unknown", readVerdict(st, T1).verdict === "unknown");
   t("reader: a fresh state reads as its verdict", readVerdict(st, "2026-09-24T13:00:00.000Z").verdict === "replan");
   t("reader: a malformed state reads as unknown", readVerdict({ verdict: "nope" }, T1).verdict === "unknown");
+  t("reader: an UNPARSEABLE derivedAt reads as unknown (infinitely old), never fresh", readVerdict({ verdict: "replan", derivedAt: "not-a-date", staleAfterHours: 3 }, T1).verdict === "unknown");
   // stalled top task escalates
   const prior = { tasks: [{ rowId: "5", firstRankedAt: "2026-09-01T00:00:00.000Z" }], escalations: [] };
   t("stall: the same top task for > STALLED_TOP_DAYS raises stalled-top-task", rank({ rows, openIds: plan.open, roster, roleIds, evaluation: e1, priorState: prior, envKeys: new Set(), nowIso: T0, simOps: ops, objective: goodObjective() }).escalations.some((e) => e.id === "stalled-top-task"));
@@ -585,6 +594,7 @@ function selfTest() {
   t("check: a stale state is REPORTED as STALE", chk(good, { nowIso: T1 }).reported.some((r) => /STALE/.test(r)));
   t("check: a future date fails", chk({ ...good, derivedAt: "2099-01-01T00:00:00.000Z" }).fatal.some((f) => /future/.test(f)));
   t("check: an escalate that names nothing fails", chk({ ...good, escalations: [], probeErrors: [], decisionAddress: decisionAddress({ ...good, escalations: [] }) }).fatal.some((f) => /DR-054/.test(f)));
+  t("check: an unparseable date is fatal, and an unparseable gate instant is fatal too", chk({ ...good, derivedAt: "nope" }).fatal.some((f) => /not parseable/.test(f)) && chk(good, { nowIso: "nope" }).fatal.some((f) => /own instant/.test(f)));
   // floor
   t("self-test floor: at least 40 assertions ran", checks.length >= 40);
 

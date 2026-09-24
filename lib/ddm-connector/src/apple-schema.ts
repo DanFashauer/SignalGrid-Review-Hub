@@ -28,6 +28,7 @@
 //   declarative/status/management.declarations.yaml
 //   declarative/status/softwareupdate.install-state.yaml (+ .failure-reason)
 //   declarative/status/device.operating-system.version.yaml
+//   declarative/status/device.operating-system.family.yaml
 //   declarative/status/management.client-capabilities.yaml
 //   declarative/status/mdm.enrollment-type.yaml            (new in 27.0)
 //   declarative/status/mdm.is-return-to-service.yaml       (new in 27.0)
@@ -59,7 +60,10 @@ export const DDM_APPLE_STATUS_ITEMS = [
   "softwareupdate.install-state",
   "softwareupdate.failure-reason",
   "device.operating-system.version",
-  // New in 27.0 — the two facts the custody model asks Apple for by name.
+  // Read to decide where a 27.0 item applies: Apple marks `mdm.is-return-to-service`
+  // n/a on macOS/tvOS/watchOS, so its absence there must not read as unknown.
+  "device.operating-system.family",
+  // New in 27.0.
   "mdm.enrollment-type",
   "mdm.is-return-to-service",
 ] as const;
@@ -75,6 +79,7 @@ export const DDM_REPORT_FIELDS = [
   "privacy",
   "lastCheckInAt",
   "osMajor",
+  "platform",
   "updateEnforcement",
   "enrollmentType",
   "returnToService",
@@ -112,13 +117,17 @@ export const DDM_REPORT_APPLE_ALIASES: Record<DdmReportField, DdmAppleAlias> = {
     note: "Check-in recency is a transport/control-plane fact, not a device-reported status item.",
   },
   osMajor: { ddmStatusItem: "device.operating-system.version" },
+  platform: {
+    ddmStatusItem: "device.operating-system.family",
+    note: "Apple's value is a free string (\"such as macOS or iOS\"), no rangelist; the connector accepts only the five supportedOS family names and reads anything else as unknown, which tightens.",
+  },
   enrollmentType: {
     ddmStatusItem: "mdm.enrollment-type",
     note: "Apple's rangelist is none | supervised | device | user. Golden rule 4 rests on SUPERVISED specifically, so only that exact value is read as supervised; absent or unrecognized is unknown, and unknown tightens.",
   },
   returnToService: {
     ddmStatusItem: "mdm.is-return-to-service",
-    note: "A device in return-to-service is being handed on, not held: custody is in transit, so it is never the ground for a grant. Absent is unknown, and unknown tightens.",
+    note: "Apple: \"If true, the device is using the return to service with app preservation mode\" — a standing shared-device configuration, not an erase in flight (that is MDM command status / a device_returned event). Reported on iOS and visionOS 27.0+ only; n/a on macOS, tvOS, watchOS, where absence is not_applicable. Absent where it applies, or an unknown platform/OS, is unknown, and unknown tightens.",
   },
   updateEnforcement: {
     ddmStatusItem: "softwareupdate.install-state",

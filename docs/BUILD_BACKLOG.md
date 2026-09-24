@@ -44,6 +44,21 @@ lone repairs into unreachable code).
       constants overlap PR #856, which is unmerged; #856 also rewrote both headers to say
       no proof reads Apple's YAML, and the row below makes that sentence false. How you'd
       check: `pnpm run proof:ddm-connector` → `summary=pass (131/131)`.
+      **CORRECTED 2026-09-24 — the return-to-service half above misread Apple.** Apple's
+      `mdm.is-return-to-service` says "If true, the device is using the return to service
+      with app preservation mode" — a standing shared-device configuration, not a device
+      being wiped and handed on — and it is reported on iOS and visionOS 27.0 only (macOS,
+      tvOS, watchOS: n/a). Reading `true` as custody in transit, and absence as unknown on
+      the Mac fixtures, stepped every Mac up forever for an item it can never send. Now
+      `returnToServiceStateOf` reads the platform (`device.operating-system.family`, vendored
+      beside the other pins): n/a platform or a pre-27 iOS/visionOS → `not_applicable`, no
+      raise; `true` → `rts_app_preservation`, no raise by itself; `false` → `in_service`;
+      absent where it applies, or an unknown platform/OS → `unknown`, which raises. Whether
+      an erase is in flight is not observable from this item — that is MDM command status or
+      the `device_returned` binding below. The Mac fixtures carry `platform: "macOS"` and no
+      key; three iOS 27 fixtures carry the three arms; the proof also holds the connector's
+      applicability table against Apple's vendored `supportedOS`. How you'd check: `pnpm run
+      proof:ddm-connector` → `summary=pass (158/158)`.
 
 - [x] **Hold the DDM/macOS-posture schema pins against Apple's YAML (gate, MEDIUM).**
       *(Opened by the same intake, #858.)* **DONE 2026-09-18** — the ten status items the

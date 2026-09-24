@@ -5,6 +5,9 @@
 //   • fail-closed — a weak posture (permissive/disabled binary control, partial/
 //     missing privacy, degraded health, stale/missing check-in, unenrolled) can
 //     only RAISE assurance (auto → step-up), never lower it;
+//   • `mdm.is-return-to-service` is read where Apple reports it (iOS/visionOS 27+):
+//     n/a on a Mac never raises, an unknown platform/OS always does, and `true`
+//     (app-preservation mode) is a configured mode, not an erase in flight;
 //   • deterministic — normalization is pure over an injected observation time;
 //   • the summary is one-glance correct.
 //
@@ -29,7 +32,10 @@ import {
   APPLE_SCHEMA_PIN_SHA,
   APPLE_SCHEMA_VENDOR_DIR,
   enrollmentTypeOf,
-  custodyPostureOf,
+  returnToServiceStateOf,
+  platformOf,
+  DDM_PLATFORMS,
+  RETURN_TO_SERVICE_INTRODUCED,
   type DdmDeviceReport,
 } from "@workspace/ddm-connector";
 
@@ -74,22 +80,46 @@ check("unenrolled → not managed", byRef("mac-byod-01").deviceManaged === false
 check("unenrolled → raise step-up", byRef("mac-byod-01").assurance === "raise_step_up");
 
 // ── 27.0 status items: mdm.enrollment-type / mdm.is-return-to-service ────────
-// Both are UNKNOWN-TIGHTENS. Every other fixture carries enrollmentType "supervised"
-// and returnToService false precisely so these two arms are the ONLY thing separating
-// mac-noc-11 / mac-noc-12 from the healthy device — otherwise each of the assertions
-// above would pass for the new reason rather than its own.
+// Every fixture but mac-noc-11 carries enrollmentType "supervised", so that arm is the
+// ONLY thing separating mac-noc-11 from the healthy device. The Macs carry no
+// returnToService key because Apple never sends it on macOS — which is itself the
+// not_applicable arm: if it raised, mac-noc-01 would stop being standard.
 check("user enrollment → not supervised", byRef("mac-noc-11").supervised === false);
 check("user enrollment → enrollmentType carried verbatim", byRef("mac-noc-11").enrollmentType === "user");
 check("SUPERVISION CASE: an otherwise-perfect user-enrolled device raises step-up", byRef("mac-noc-11").assurance === "raise_step_up");
-check("return-to-service → custody posture return_to_service", byRef("mac-noc-12").custodyPosture === "return_to_service");
-check("RETURN-TO-SERVICE CASE: an otherwise-perfect device in transit raises step-up", byRef("mac-noc-12").assurance === "raise_step_up");
-check("supervised + in service → the healthy device is the one that does not raise", byRef("mac-noc-01").supervised === true && byRef("mac-noc-01").custodyPosture === "in_service");
+check("user enrollment → the rationale names it (no 'healthy' text on a raise)", byRef("mac-noc-11").rationale.includes("not supervised"));
 // Absent is UNKNOWN, never a friendly default — the shape golden rule 2 forbids.
 check("absent enrollment-type → unknown (never supervised)", enrollmentTypeOf({ deviceRef: "x", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: null }) === "unknown");
 check("unpublished enrollment wire value → unknown (Apple's rangelist is the whole list)", enrollmentTypeOf({ deviceRef: "x", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: null, enrollmentType: "managed" as never }) === "unknown");
-check("absent return-to-service → unknown (only an explicit false says in service)", custodyPostureOf({ deviceRef: "x", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: null }) === "unknown");
-const unknownCustody: DdmDeviceReport = { deviceRef: "mac-rts-unknown", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: DEMO_DDM_REPORTS[0].lastCheckInAt, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised" };
-check("unreported return-to-service (otherwise perfect) → raise step-up (unknown tightens)", normalizeDdmReport(unknownCustody, DDM_OBSERVED_AT).assurance === "raise_step_up");
+
+// mdm.is-return-to-service — Apple: "If true, the device is using the return to service
+// with app preservation mode". iOS/visionOS 27.0; macOS, tvOS, watchOS n/a.
+const perfect = (over: Partial<DdmDeviceReport>): DdmDeviceReport => ({ deviceRef: "x", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: DEMO_DDM_REPORTS[0].lastCheckInAt, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised", ...over });
+const rts = (over: Partial<DdmDeviceReport>) => normalizeDdmReport(perfect(over), DDM_OBSERVED_AT);
+// macOS: n/a — the Mac fleet never reports it, and must not be stepped up forever for that.
+check("macOS, no key → return-to-service not_applicable", byRef("mac-noc-01").returnToService === "not_applicable");
+check("N/A CASE: an otherwise-perfect Mac with no key does NOT raise (Apple never sends it on macOS)", byRef("mac-noc-01").assurance === "standard");
+check("every Mac in the fleet reads not_applicable", signals.filter((s) => s.deviceRef.startsWith("mac-")).every((s) => s.returnToService === "not_applicable"));
+check("tvOS / watchOS, no key → not_applicable, no raise", rts({ platform: "tvOS" }).returnToService === "not_applicable" && rts({ platform: "watchOS" }).assurance === "standard");
+// iOS 27: the three arms, on otherwise-perfect shared iPhones.
+check("iOS 27, false → in_service", byRef("iphone-shared-01").returnToService === "in_service");
+check("iOS 27, false → standard", byRef("iphone-shared-01").assurance === "standard");
+check("iOS 27, true → rts_app_preservation", byRef("iphone-shared-02").returnToService === "rts_app_preservation");
+check("APP-PRESERVATION CASE: a configured return-to-service mode does NOT raise by itself", byRef("iphone-shared-02").assurance === "standard");
+check("iOS 27, absent → unknown (Apple marks the key required)", byRef("iphone-shared-03").returnToService === "unknown");
+check("iOS 27, absent → raise step-up (unknown tightens)", byRef("iphone-shared-03").assurance === "raise_step_up");
+check("iOS 27, absent → the rationale names it", byRef("iphone-shared-03").rationale.includes("return-to-service state unknown"));
+check("visionOS 27 is applicable too: absent → unknown, true → rts_app_preservation", rts({ platform: "visionOS" }).returnToService === "unknown" && rts({ platform: "visionOS", returnToService: true }).returnToService === "rts_app_preservation");
+// iOS 26: the item was not introduced, so its absence says nothing.
+check("iOS 26, no key → not_applicable", rts({ platform: "iOS", osMajor: 26 }).returnToService === "not_applicable");
+check("iOS 26, no key → does NOT raise because of it (item not introduced)", rts({ platform: "iOS", osMajor: 26 }).assurance === "standard");
+// Fail closed: what cannot be placed never reads not_applicable.
+check("unknown platform, no key → unknown", rts({}).returnToService === "unknown");
+check("UNKNOWN-PLATFORM CASE: an otherwise-perfect device with no platform and no key raises", rts({}).assurance === "raise_step_up");
+check("unrecognized platform wire value → platform unknown → raises", platformOf(perfect({ platform: "iPadOS" as never })) === "unknown" && rts({ platform: "iPadOS" as never }).assurance === "raise_step_up");
+check("iOS with unknown OS version, no key → unknown → raises", rts({ platform: "iOS", osMajor: undefined }).assurance === "raise_step_up");
+check("iOS with a NaN OS version → unknown", rts({ platform: "iOS", osMajor: Number.NaN }).returnToService === "unknown");
+check("a value where Apple sends none (macOS + true) → unknown, never silently ignored", returnToServiceStateOf(perfect({ platform: "macOS", returnToService: true })) === "unknown");
 
 // ── update-enforcement currency (OS-27 cutover, fail-safe) ────────────────────
 // THE core case: a device that looks perfect (enrolled, enforced, declared, fresh)
@@ -106,19 +136,19 @@ check("legacy + unknown OS → at_risk (cannot confirm pre-cutover, never curren
 check("unreported enforcement → currency unknown (fail-safe, raises)", byRef("mac-noc-07").enforcementCurrency === "unknown");
 
 // ── SAFETY: a weak posture NEVER yields assurance 'standard' ───────────────────
-check("SAFETY: only the fully-healthy device is assurance standard",
-  signals.filter((s) => s.assurance === "standard").length === 1);
+check("SAFETY: only the fully-healthy devices are assurance standard (mac-noc-01, iphone-shared-01, iphone-shared-02)",
+  signals.filter((s) => s.assurance === "standard").map((s) => s.deviceRef).join(",") === "mac-noc-01,iphone-shared-01,iphone-shared-02");
 
 // ── fail-closed on ambiguous health (unreporting/unknown) even if otherwise ok ─
-// Supervised + in service on purpose: the ONLY weak axis here is health, so the
-// assertion below still isolates the arm it names after the 27.0 fields landed.
-const unreporting: DdmDeviceReport = { deviceRef: "mac-unrep", enrolled: true, health: "unreporting", binaryControl: "enforced", privacy: "declared", lastCheckInAt: DEMO_DDM_REPORTS[0].lastCheckInAt, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised", returnToService: false };
+// Supervised macOS on purpose: the ONLY weak axis here is health, so the assertion
+// below still isolates the arm it names after the 27.0 fields landed.
+const unreporting: DdmDeviceReport = { deviceRef: "mac-unrep", platform: "macOS", enrolled: true, health: "unreporting", binaryControl: "enforced", privacy: "declared", lastCheckInAt: DEMO_DDM_REPORTS[0].lastCheckInAt, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised" };
 const ur = normalizeDdmReport(unreporting, DDM_OBSERVED_AT);
 check("unreporting health → compliance unknown", ur.deviceCompliance === "unknown");
 check("unreporting health (otherwise healthy posture) → raise step-up (fail closed)", ur.assurance === "raise_step_up");
 
 // ── fail-closed on a future-dated report (don't trust it) ─────────────────────
-const future: DdmDeviceReport = { deviceRef: "mac-future", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: "2099-01-01T00:00:00.000Z", osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised", returnToService: false };
+const future: DdmDeviceReport = { deviceRef: "mac-future", platform: "macOS", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: "2099-01-01T00:00:00.000Z", osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised" };
 const fs = normalizeDdmReport(future, DDM_OBSERVED_AT);
 check("future-dated check-in → freshness unknown (not fresh)", fs.postureFreshness === "unknown");
 check("future-dated check-in → raise step-up (fail closed)", fs.assurance === "raise_step_up");
@@ -209,6 +239,28 @@ check(
   `mdm.enrollment-type: the connector's value list EQUALS Apple's rangelist (apple: ${appleEnrollment.join("|")})`,
   appleEnrollment.length === ourEnrollment.length && appleEnrollment.every((v, i) => v === ourEnrollment[i]),
 );
+// The connector's return-to-service applicability table is copied OUT of Apple's
+// `supportedOS` block. If Apple ships the item on macOS, or moves its introduction, this
+// diverges instead of the connector silently stepping a fleet up or letting one through.
+/** `supportedOS:` → { family: introduced major | null for n/a }. */
+function supportedOs(yaml: string): Record<string, number | null> {
+  const block = yaml.slice(yaml.indexOf("supportedOS:"), yaml.indexOf("payloadkeys:"));
+  const out: Record<string, number | null> = {};
+  for (const m of block.matchAll(/^ {4}(\w+):\n {6}introduced:\s*'?([^'\s]+)'?\s*$/gm)) out[m[1]] = m[2] === "n/a" ? null : Number.parseInt(m[2], 10);
+  return out;
+}
+const rtsPath = resolve(vendorDir, "mdm.is-return-to-service.yaml");
+const rtsYaml = existsSync(rtsPath) ? readFileSync(rtsPath, "utf8") : "";
+const appleRts = supportedOs(rtsYaml);
+check(`mdm.is-return-to-service: Apple's supportedOS parsed (floor, found ${Object.keys(appleRts).length})`, Object.keys(appleRts).length === DDM_PLATFORMS.length);
+check(
+  `mdm.is-return-to-service: RETURN_TO_SERVICE_INTRODUCED EQUALS Apple's supportedOS (apple: ${JSON.stringify(appleRts)})`,
+  DDM_PLATFORMS.every((p) => p in appleRts && appleRts[p] === RETURN_TO_SERVICE_INTRODUCED[p]),
+);
+check("self-test: macOS flipped from n/a in a COPY diverges from the table", supportedOs(rtsYaml.replace("macOS:\n      introduced: n/a", "macOS:\n      introduced: '27.0'")).macOS !== RETURN_TO_SERVICE_INTRODUCED.macOS);
+const familyYaml = existsSync(resolve(vendorDir, "device.operating-system.family.yaml")) ? readFileSync(resolve(vendorDir, "device.operating-system.family.yaml"), "utf8") : "";
+check("device.operating-system.family: the connector's platform list EQUALS Apple's supportedOS families", Object.keys(supportedOs(familyYaml)).sort().join() === [...DDM_PLATFORMS].sort().join());
+
 // SELF-TEST: the readers must be able to disagree. A copy of the file with a renamed
 // statusitemtype and a dropped rangelist entry must be REPORTED, not absorbed.
 // Sliced at `rangelist:` on purpose. A plain first-match replace of "- supervised"
@@ -228,14 +280,14 @@ check("normalization is deterministic", JSON.stringify(normalizeDdmReports(DEMO_
 
 // ── summary ───────────────────────────────────────────────────────────────────
 const sum = ddmSummary(signals, DEMO_DDM_REPORTS);
-check("summary counts 13 devices", sum.devices === 13);
-check("summary counts managed devices", sum.managed === 12);
-check("summary counts binary-enforced devices", sum.binaryEnforced === 9);
+check("summary counts 15 devices", sum.devices === 15);
+check("summary counts managed devices", sum.managed === 14);
+check("summary counts binary-enforced devices", sum.binaryEnforced === 11);
 check("summary counts dead update enforcement (legacy-on-27 / none)", sum.enforcementDead === 2);
 check("summary counts at-risk update enforcement (legacy pre-27)", sum.enforcementAtRisk === 1);
-check("summary counts supervised devices (an unknown enrollment is NOT counted)", sum.supervised === 10);
-check("summary counts devices in return-to-service", sum.returnToService === 1);
-check("summary raiseStepUp = all but the one healthy+current device", sum.raiseStepUp === 12);
+check("summary counts supervised devices (an unknown enrollment is NOT counted)", sum.supervised === 12);
+check("summary counts devices configured for return to service with app preservation (true only)", sum.returnToService === 1);
+check("summary raiseStepUp = all but the three healthy devices", sum.raiseStepUp === 12);
 
 const total = passed + failures.length;
 console.log(`DDM-connector proof: ${passed}/${total} assertions passed`);

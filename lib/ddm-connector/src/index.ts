@@ -49,15 +49,47 @@ export type UpdateEnforcement = "declarative" | "legacy" | "none" | "unknown";
 export type EnrollmentType = "none" | "supervised" | "device" | "user" | "unknown";
 
 /**
- * Whether the device is in Apple's return-to-service flow (`mdm.is-return-to-service`).
- *
- *   • in_service        — not in return-to-service; ordinary custody.
- *   • return_to_service — the device is being wiped and handed on. Custody is in
- *                         TRANSIT: nobody's session owns it, and it is never the ground
- *                         for a grant.
- *   • unknown           — not reported. Tightens, like every other unknown here.
+ * The device's operating-system family, as Apple names it in every status item's
+ * `supportedOS` block and reports it in `device.operating-system.family`. iPadOS sits
+ * under Apple's `iOS` key. A family outside this list (including an `iPadOS` wire value,
+ * if a device ever sends one) normalizes to unknown, which tightens.
  */
-export type CustodyPosture = "in_service" | "return_to_service" | "unknown";
+export const DDM_PLATFORMS = ["iOS", "macOS", "tvOS", "visionOS", "watchOS"] as const;
+export type DevicePlatform = (typeof DDM_PLATFORMS)[number];
+
+/**
+ * Apple's `supportedOS` for `mdm.is-return-to-service` at the pin: the OS major the item
+ * was introduced in, or null where Apple marks it `n/a` (the device never reports it).
+ * `proof:ddm-connector` holds this table against the vendored YAML.
+ */
+export const RETURN_TO_SERVICE_INTRODUCED: Record<DevicePlatform, number | null> = {
+  iOS: 27,
+  macOS: null,
+  tvOS: null,
+  visionOS: 27,
+  watchOS: null,
+};
+
+/**
+ * Apple's `mdm.is-return-to-service` (27.0): "If true, the device is using the return to
+ * service with app preservation mode" — a standing shared-device configuration, NOT an
+ * erase in flight.
+ *
+ *   • in_service           — the item is reported `false`.
+ *   • rts_app_preservation — the item is reported `true`: the device is configured to
+ *                            erase and re-provision with its apps kept when it is returned.
+ *                            A configured mode; it does not raise assurance by itself.
+ *   • not_applicable       — Apple never reports this item here: macOS/tvOS/watchOS, or
+ *                            an iOS/visionOS release before 27. Its absence says nothing.
+ *   • unknown              — the item applies and was not reported, or the platform / OS
+ *                            version is unknown, or a value arrived where Apple sends none.
+ *                            Tightens, like every other unknown here.
+ *
+ * Whether a device is being erased and handed on RIGHT NOW is not observable from this
+ * item. That fact lives in the MDM command status of the EraseDevice-with-Return-to-Service
+ * command, or in a `device_returned` event (docs/BUILD_BACKLOG.md), not here.
+ */
+export type ReturnToServiceState = "in_service" | "rts_app_preservation" | "not_applicable" | "unknown";
 
 /** Apple's published rangelist for `mdm.enrollment-type`, plus nothing. A wire value
  *  outside it is not silently accepted — it normalizes to `unknown`, which tightens. */
@@ -71,10 +103,25 @@ export function enrollmentTypeOf(report: DdmDeviceReport): EnrollmentType {
     : "unknown";
 }
 
-/** Normalize the `mdm.is-return-to-service` status value. Absent → unknown (tightens);
- *  only an explicit `false` says the device is in ordinary service. */
-export function custodyPostureOf(report: DdmDeviceReport): CustodyPosture {
-  if (report.returnToService === true) return "return_to_service";
+/** Normalize the `device.operating-system.family` value. Absent or unrecognized → unknown. */
+export function platformOf(report: DdmDeviceReport): DevicePlatform | "unknown" {
+  return DDM_PLATFORMS.find((p) => p === report.platform) ?? "unknown";
+}
+
+/** Normalize `mdm.is-return-to-service` against where Apple actually reports it. Fail
+ *  closed: an unknown platform or OS version is unknown, never not_applicable. */
+export function returnToServiceStateOf(report: DdmDeviceReport): ReturnToServiceState {
+  const platform = platformOf(report);
+  if (platform === "unknown") return "unknown";
+  const introduced = RETURN_TO_SERVICE_INTRODUCED[platform];
+  const os = report.osMajor;
+  if (introduced !== null && !(typeof os === "number" && Number.isFinite(os))) return "unknown";
+  if (introduced === null || (os as number) < introduced) {
+    // Apple never sends the item here; a value that arrived anyway means the platform or
+    // the report is wrong, so it reads unknown rather than being ignored.
+    return report.returnToService === undefined ? "not_applicable" : "unknown";
+  }
+  if (report.returnToService === true) return "rts_app_preservation";
   if (report.returnToService === false) return "in_service";
   return "unknown";
 }
@@ -91,7 +138,7 @@ export function custodyPostureOf(report: DdmDeviceReport): CustodyPosture {
  */
 export type EnforcementCurrency = "current" | "at_risk" | "dead" | "unknown";
 
-/** A DDM device report — what a managed Mac declares back to the control plane. */
+/** A DDM device report — what a managed device declares back to the control plane. */
 export interface DdmDeviceReport {
   deviceRef: string;
   /** Enrolled in Declarative Device Management. */
@@ -109,7 +156,10 @@ export interface DdmDeviceReport {
   updateEnforcement?: UpdateEnforcement;
   /** `mdm.enrollment-type` (27.0). Absent → unknown, which raises assurance. */
   enrollmentType?: EnrollmentType;
-  /** `mdm.is-return-to-service` (27.0). Absent → unknown, which raises assurance. */
+  /** `device.operating-system.family`. Absent or unrecognized → unknown (fail-safe). */
+  platform?: DevicePlatform;
+  /** `mdm.is-return-to-service` (iOS/visionOS 27.0; n/a on macOS/tvOS/watchOS). Absent
+   *  where it applies → unknown, which raises assurance. */
   returnToService?: boolean;
   sourceReference?: string;
 }
@@ -130,8 +180,8 @@ export interface DdmSignal {
   enrollmentType: EnrollmentType;
   /** True ONLY for an explicit `supervised`. An unknown enrollment is not supervision. */
   supervised: boolean;
-  /** Whether the device is in Apple's return-to-service flow. */
-  custodyPosture: CustodyPosture;
+  /** Apple's return-to-service-with-app-preservation state, platform-aware. */
+  returnToService: ReturnToServiceState;
   /** Advisory: raise a sensitive action auto → step-up when the posture is weak. */
   assurance: AssuranceHint;
   rationale: string;
@@ -213,7 +263,7 @@ export function normalizeDdmReport(report: DdmDeviceReport, nowIso: string): Ddm
   const enforcementCurrency = enforcementCurrencyOf(report);
   const enrollmentType = enrollmentTypeOf(report);
   const supervised = enrollmentType === "supervised";
-  const custodyPosture = custodyPostureOf(report);
+  const returnToService = returnToServiceStateOf(report);
 
   // Any of these weak-posture conditions raises the assurance bar. This can only
   // make a sensitive action MORE gated (auto → step-up), never less.
@@ -234,10 +284,11 @@ export function normalizeDdmReport(report: DdmDeviceReport, nowIso: string): Ddm
     // trustworthy, so gate the sensitive action rather than assume it's patched.
     enforcementCurrency !== "current" ||
     // 27.0 status items, both unknown-tightens. An unsupervised or unreported
-    // enrollment cannot carry a supervision claim, and a device in return-to-service
-    // (or one that will not say) is in transit — neither is ground for a grant.
+    // enrollment cannot carry a supervision claim. For return-to-service only UNKNOWN
+    // raises: app preservation is a configured mode, and an item Apple never reports on
+    // this platform/OS cannot be missing.
     !supervised ||
-    custodyPosture !== "in_service";
+    returnToService === "unknown";
   const assurance: AssuranceHint = weak ? "raise_step_up" : "standard";
 
   const reasons: string[] = [];
@@ -249,9 +300,11 @@ export function normalizeDdmReport(report: DdmDeviceReport, nowIso: string): Ddm
   if (enforcementCurrency === "dead") reasons.push("update enforcement dead (legacy on OS 27+ / none — not enforcing)");
   else if (enforcementCurrency === "at_risk") reasons.push("update enforcement at risk (legacy — dies on OS 27)");
   else if (enforcementCurrency === "unknown") reasons.push("update enforcement unverified");
+  if (!supervised) reasons.push(`enrollment ${enrollmentType} (not supervised)`);
+  if (returnToService === "unknown") reasons.push("return-to-service state unknown");
   const rationale = reasons.length
     ? reasons.join(", ")
-    : "DDM posture healthy — enforced, declared, fresh, update enforcement current, supervised, in service";
+    : "DDM posture healthy — enforced, declared, fresh, update enforcement current, supervised";
 
   return {
     deviceRef: report.deviceRef,
@@ -262,7 +315,7 @@ export function normalizeDdmReport(report: DdmDeviceReport, nowIso: string): Ddm
     enforcementCurrency,
     enrollmentType,
     supervised,
-    custodyPosture,
+    returnToService,
     assurance,
     rationale,
     sourceReference: report.sourceReference ?? `fixture:ddm:reports#${report.deviceRef}`,
@@ -285,7 +338,8 @@ export interface DdmSummary {
   enforcementAtRisk: number;
   /** Devices Apple reports as SUPERVISED. An unknown enrollment is not counted here. */
   supervised: number;
-  /** Devices in Apple's return-to-service flow — custody in transit, never a grant. */
+  /** Devices reporting `mdm.is-return-to-service` true: configured for return to service
+   *  with app preservation. A standing mode, not an erase in flight. */
   returnToService: number;
   raiseStepUp: number;
 }
@@ -299,7 +353,7 @@ export function ddmSummary(signals: DdmSignal[], reports: DdmDeviceReport[]): Dd
     enforcementDead: signals.filter((s) => s.enforcementCurrency === "dead").length,
     enforcementAtRisk: signals.filter((s) => s.enforcementCurrency === "at_risk").length,
     supervised: signals.filter((s) => s.supervised).length,
-    returnToService: signals.filter((s) => s.custodyPosture === "return_to_service").length,
+    returnToService: signals.filter((s) => s.returnToService === "rts_app_preservation").length,
     raiseStepUp: signals.filter((s) => s.assurance === "raise_step_up").length,
   };
 }

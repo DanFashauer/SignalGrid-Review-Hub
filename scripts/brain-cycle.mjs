@@ -64,17 +64,34 @@ export function readBoard(dir) {
   catch (e) { throw new Error(`_manifest.json is unparsable (fail-closed): ${e.message}`); }
   const expected = Array.isArray(manifest.expected) ? manifest.expected : [];
   if (expected.length === 0) throw new Error("_manifest.json names no expected lenses (a board that requires no reviewer is a NO)");
+  // The CYCLE the board audits: the sha its lenses claim to have reviewed. Non-empty or
+  // throw — a board that cannot say WHICH surface its lenses looked at is untrustworthy, and
+  // it is what the stale-input guard below compares each lens's `auditedSha` against.
+  const cycle = typeof manifest.cycle === "string" ? manifest.cycle.trim() : "";
+  if (cycle.length === 0) throw new Error("_manifest.json names no `cycle` (the audited sha) — a board that cannot say which surface its lenses audited is untrustworthy (fail-closed)");
   const lenses = [];
   for (const f of files) {
     if (f === "_manifest.json" || f === "decision.json") continue;
+    const name = f.replace(/\.json$/, "");
+    let record;
     try {
-      lenses.push(JSON.parse(readFileSync(join(dir, f), "utf8")));
+      record = JSON.parse(readFileSync(join(dir, f), "utf8"));
     } catch {
       // a lens file that will not parse is an audit that did not really post
-      lenses.push({ lens: f.replace(/\.json$/, ""), ran: false, verdict: "UNVERIFIED", findings: [] });
+      lenses.push({ lens: name, ran: false, verdict: "UNVERIFIED", findings: [] });
+      continue;
     }
+    // STALE-INPUT GUARD: a lens whose `auditedSha` does not match this cycle (or is absent)
+    // reviewed a DIFFERENT or unknown surface — a leftover from a previous cycle must not
+    // count as having run now. ran:false, fail-closed (the same law as a missing lens).
+    const auditedSha = typeof record.auditedSha === "string" ? record.auditedSha.trim() : "";
+    if (auditedSha !== cycle) {
+      lenses.push({ lens: record.lens ?? name, ran: false, verdict: "UNVERIFIED", findings: [], staleReason: `auditedSha ${auditedSha || "(absent)"} != cycle ${cycle}` });
+      continue;
+    }
+    lenses.push(record);
   }
-  return { lenses, expected };
+  return { lenses, expected, cycle };
 }
 
 function freshnessOk() {
@@ -149,17 +166,35 @@ function selfTest() {
 
   // Fixture: two lenses confirm an autonomous route; expected set names BOTH veto lenses and
   // all of them ran (the expected set must include security-reviewer + fail-closed-auditor).
-  write("_manifest.json", { expected: ["code-reviewer", "signalgrid-reviewer", "security-reviewer", "fail-closed-auditor"] });
+  // Every lens carries the cycle's auditedSha; the manifest names that cycle.
+  const SHA = "cycle-sha-0001";
+  write("_manifest.json", { expected: ["code-reviewer", "signalgrid-reviewer", "security-reviewer", "fail-closed-auditor"], cycle: SHA });
   const conf = (file) => ({ file, category: "correctness", verdict: "CONFIRMED", confidence: 0.9, proposedRoute: "fix-fossil" });
-  write("code-reviewer.cloud.json", { lens: "code-reviewer", ran: true, verdict: "WARNING", findings: [conf("docs/GLOSSARY.md")] });
-  write("signalgrid-reviewer.cloud.json", { lens: "signalgrid-reviewer", ran: true, verdict: "WARNING", findings: [conf("docs/GLOSSARY.md")] });
-  write("security-reviewer.cloud.json", { lens: "security-reviewer", ran: true, verdict: "APPROVE", findings: [] });
-  write("fail-closed-auditor.cloud.json", { lens: "fail-closed-auditor", ran: true, verdict: "APPROVE", findings: [] });
+  write("code-reviewer.cloud.json", { lens: "code-reviewer", ran: true, auditedSha: SHA, verdict: "WARNING", findings: [conf("docs/GLOSSARY.md")] });
+  write("signalgrid-reviewer.cloud.json", { lens: "signalgrid-reviewer", ran: true, auditedSha: SHA, verdict: "WARNING", findings: [conf("docs/GLOSSARY.md")] });
+  write("security-reviewer.cloud.json", { lens: "security-reviewer", ran: true, auditedSha: SHA, verdict: "APPROVE", findings: [] });
+  write("fail-closed-auditor.cloud.json", { lens: "fail-closed-auditor", ran: true, auditedSha: SHA, verdict: "APPROVE", findings: [] });
 
   const b1 = readBoard(dir);
   check("readBoard finds 4 lenses + expected set", b1.lenses.length === 4 && b1.expected.length === 4);
+  check("readBoard returns the cycle it enforced", b1.cycle === SHA);
   const d1 = decide({ lenses: b1.lenses, expected: b1.expected, config: loadConfig() });
   check("fixture board picks the autonomous winner", d1.winner && d1.winner.key === "fix-fossil");
+
+  // STALE-INPUT GUARD: a lens left over from a PREVIOUS cycle (auditedSha != this cycle)
+  // must read as ran:false — it did not audit THIS surface, so it cannot count as a pass.
+  write("security-reviewer.cloud.json", { lens: "security-reviewer", ran: true, auditedSha: "cycle-sha-STALE", verdict: "APPROVE", findings: [] });
+  const bStale = readBoard(dir);
+  const staleLens = bStale.lenses.find((l) => (l.lens || "").startsWith("security-reviewer"));
+  check("a lens whose auditedSha != cycle reads as ran:false (stale)", staleLens && staleLens.ran === false);
+  const dStale = decide({ lenses: bStale.lenses, expected: bStale.expected, config: loadConfig() });
+  check("a stale veto-lens (security-reviewer did not audit THIS cycle) opens nothing", dStale.winner === null);
+  // A lens with NO auditedSha at all is also stale (absent != cycle).
+  write("security-reviewer.cloud.json", { lens: "security-reviewer", ran: true, verdict: "APPROVE", findings: [] });
+  const bNoSha = readBoard(dir);
+  check("a lens with no auditedSha reads as ran:false", bNoSha.lenses.find((l) => (l.lens || "").startsWith("security-reviewer"))?.ran === false);
+  // restore the fresh security-reviewer for the rest of the test
+  write("security-reviewer.cloud.json", { lens: "security-reviewer", ran: true, auditedSha: SHA, verdict: "APPROVE", findings: [] });
 
   // A malformed lens file is read as ran:false → HARD NO.
   writeFileSync(join(dir, "code-reviewer.cloud.json"), "{ this is not json");

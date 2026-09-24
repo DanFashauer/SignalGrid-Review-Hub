@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-23T23:38:29.072Z",
-  "result": "non-quiet: Mac acked all 7 cloud messages and re-minted live evidence (d0ed0362, 0 days old); cloud superseded the stale #753 rebuild request (the owner closed #753; its useful half is #1005). No mac mail unread to cloud; no new/moved mac/* branches; manifest clean. Mac tick last firedAt 23:10Z. Owner not escalated."
+  "firedAt": "2026-09-24T01:56:12.032Z",
+  "result": "acted: PMO plan for the Mac's closure sweep delivered (3 answers: #686 keep+refresh, #905 finish content no alpha merge, #929 revive; lane lands #1016 #1012 #1017 #1021 #997 #1006 one at a time under DR-037). Opened #1024 (ddm RTS fix). mac-lane-tick firedAt 2026-09-24T01:03Z (fresh). live-evidence 2026-09-23 (<1d). No cloud mail unread. Owner not escalated."
 }

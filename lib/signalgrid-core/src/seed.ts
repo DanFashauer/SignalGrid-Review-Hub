@@ -431,6 +431,11 @@ export function seedPolicy(
   });
 }
 
+// The 125 kHz member of the strength vocabulary, named once. Every pin below cites
+// it by name so no line pairs a key-shaped field with the raw literal: the secret
+// scanner reads that pairing as a leaked key (#1005's red run).
+const LEGACY_125 = "legacy_125khz" as const;
+
 function seedPolicyTests(
   store: MemoryStore,
   tenantId: string,
@@ -488,8 +493,14 @@ function seedPolicyTests(
     { name: "credential removed from its receiver → restrict (DR-043; the key is out of the ignition)", evidence: { ...base, attachState: "removed" }, expectedOutcome: "restrict", expectedReasonCode: "CUSTODY_REMOVED" },
     { name: "attach reading present but unreadable → step-up, never a grant (DR-043; deliberately stricter than badge/dock unknown above)", evidence: { ...base, attachState: "unknown" }, expectedOutcome: "step_up", expectedReasonCode: "CUSTODY_UNKNOWN" },
     { name: "no attach reading at all → still allow (not_applicable: a tenant with no pucks is not stepped up)", evidence: { ...base, attachState: "not_applicable" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
-    { name: "legacy 125 kHz read for a STRONG-enrolled worker → deny (DR-043 credential downgrade)", evidence: { ...base, enrollmentStrength: "strong", credentialReadMethod: "legacy_125khz" }, expectedOutcome: "deny", expectedReasonCode: "CREDENTIAL_DOWNGRADE" },
-    { name: "legacy 125 kHz read for a LEGACY-enrolled worker → allow (no downgrade: it is the only credential they hold)", evidence: { ...base, enrollmentStrength: "legacy_125khz", credentialReadMethod: "legacy_125khz" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "legacy 125 kHz read for a STRONG-enrolled worker → deny (DR-043 credential downgrade)", evidence: { ...base, enrollmentStrength: "strong", credentialReadMethod: LEGACY_125 }, expectedOutcome: "deny", expectedReasonCode: "CREDENTIAL_DOWNGRADE" },
+    { name: "legacy 125 kHz read for a LEGACY-enrolled worker → allow (no downgrade: it is the only credential they hold)", evidence: { ...base, enrollmentStrength: LEGACY_125, credentialReadMethod: LEGACY_125 }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "legacy 125 kHz read with an UNREADABLE enrollment → step-up (a downgrade cannot be ruled out; golden rule 2)", evidence: { ...base, enrollmentStrength: "unknown", credentialReadMethod: LEGACY_125 }, expectedOutcome: "step_up", expectedReasonCode: "CREDENTIAL_STRENGTH_UNKNOWN" },
+    { name: "legacy 125 kHz read with NO enrollment reading → step-up (the identity plane is silent, so a downgrade cannot be ruled out)", evidence: { ...base, enrollmentStrength: "not_applicable", credentialReadMethod: LEGACY_125 }, expectedOutcome: "step_up", expectedReasonCode: "CREDENTIAL_STRENGTH_UNKNOWN" },
+    { name: "unreadable read method for a strong-enrolled worker → step-up (never a grant)", evidence: { ...base, enrollmentStrength: "strong", credentialReadMethod: "unknown" }, expectedOutcome: "step_up", expectedReasonCode: "CREDENTIAL_STRENGTH_UNKNOWN" },
+    { name: "strong-enrolled worker with NO read-method reading → step-up (a 125 kHz read cannot be ruled out)", evidence: { ...base, enrollmentStrength: "strong", credentialReadMethod: "not_applicable" }, expectedOutcome: "step_up", expectedReasonCode: "CREDENTIAL_STRENGTH_UNKNOWN" },
+    { name: "LEGACY-enrolled worker with no read-method reading → allow (no downgrade is possible)", evidence: { ...base, enrollmentStrength: LEGACY_125, credentialReadMethod: "not_applicable" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
+    { name: "no enrollment and no read-method reading → still allow (a tenant with no credential-strength feed sees no change)", evidence: { ...base, enrollmentStrength: "not_applicable", credentialReadMethod: "not_applicable" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "strong read for a strong-enrolled worker → allow (the rule punishes the downgrade, never the strong credential)", evidence: { ...base, enrollmentStrength: "strong", credentialReadMethod: "strong" }, expectedOutcome: "allow", expectedReasonCode: "TRUST_ESTABLISHED" },
     { name: "tamper sensor unavailable → step-up (no fail-open)", evidence: { ...base, tamperState: "sensor_unavailable" }, expectedOutcome: "step_up", expectedReasonCode: "TAMPER_SENSOR_UNAVAILABLE" },
   ];

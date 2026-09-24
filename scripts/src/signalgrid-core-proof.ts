@@ -3212,6 +3212,69 @@ const monotonicityTable: string[] = [];
       strongStrong.outcome === "allow",
     );
 
+    // (b2) THE WHOLE GRID, 16 cells (owner call 4; golden rule 2). Enrollment and
+    // read method come from different planes, so either can be strong, legacy,
+    // present-but-unreadable (`unknown`) or silent (`not_applicable`) while the other
+    // speaks. Where a strong→legacy downgrade cannot be RULED OUT the gate steps up;
+    // only any×strong, legacy×legacy, legacy×n/a and n/a×n/a allow. `unknown` goes
+    // over the wire as a value outside the domain and n/a as NOTHING, so every cell
+    // is reached through buildEvidence, never written into the evidence by hand.
+    const LEGACY = "legacy_125khz" as const;
+    const NA = "not_applicable" as const;
+    type Strength = "strong" | typeof LEGACY | "unknown" | typeof NA;
+    const emit = (make: (value: string) => NormalizedSignal, value: Strength) => (value === NA ? [] : [make(value)]);
+    const UNKNOWN_CODE = "CREDENTIAL_STRENGTH_UNKNOWN";
+    const GRID: [Strength, Strength, DecisionOutcome, string][] = [
+      ["strong", "strong", "allow", "TRUST_ESTABLISHED"],
+      ["strong", LEGACY, "deny", "CREDENTIAL_DOWNGRADE"],
+      ["strong", "unknown", "step_up", UNKNOWN_CODE],
+      ["strong", NA, "step_up", UNKNOWN_CODE],
+      [LEGACY, "strong", "allow", "TRUST_ESTABLISHED"],
+      [LEGACY, LEGACY, "allow", "TRUST_ESTABLISHED"],
+      [LEGACY, "unknown", "step_up", UNKNOWN_CODE],
+      [LEGACY, NA, "allow", "TRUST_ESTABLISHED"],
+      ["unknown", "strong", "allow", "TRUST_ESTABLISHED"],
+      ["unknown", LEGACY, "step_up", UNKNOWN_CODE],
+      ["unknown", "unknown", "step_up", UNKNOWN_CODE],
+      ["unknown", NA, "step_up", UNKNOWN_CODE],
+      [NA, "strong", "allow", "TRUST_ESTABLISHED"],
+      [NA, LEGACY, "step_up", UNKNOWN_CODE],
+      [NA, "unknown", "step_up", UNKNOWN_CODE],
+      [NA, NA, "allow", "TRUST_ESTABLISHED"],
+    ];
+    check(
+      `22 DR-043 GRID covers the full 4×4 enrollment × read space, each cell once (${GRID.length} cells)`,
+      GRID.length === 16 && new Set(GRID.map(([e, r]) => `${e}|${r}`)).size === 16,
+    );
+    for (const [enrolled, read, outcome, code] of GRID) {
+      const cell = live([...emit(E, enrolled), ...emit(R, read)]);
+      check(
+        `22 DR-043 GRID enrollment=${enrolled} × read=${read} → ${outcome} ${code} (got ${cell.evaluation.outcome}/[${cell.evaluation.reasonCodes.join(",")}])`,
+        cell.evidence.enrollmentStrength === enrolled &&
+          cell.evidence.credentialReadMethod === read &&
+          cell.evaluation.outcome === outcome &&
+          cell.evaluation.reasonCodes.includes(code) &&
+          // The step-up code fires on its eight cells and NOWHERE else — not beside the
+          // deny, and never on a cell that allows.
+          cell.evaluation.reasonCodes.includes(UNKNOWN_CODE) === (code === UNKNOWN_CODE),
+      );
+    }
+    // Worst-wins still holds across multiple readings: a same-instant strong+legacy
+    // READ pair resolves to legacy whatever order it arrived in, so with an unreadable
+    // enrollment it steps up rather than riding the strong read to an allow.
+    for (const [label, pair] of [
+      ["strong first", [R("strong"), R(LEGACY)]],
+      ["legacy first", [R(LEGACY), R("strong")]],
+    ] as const) {
+      const tied = live([E("unknown"), ...pair]);
+      check(
+        `22 DR-043 tied same-instant read strong+legacy (${label}) with an unreadable enrollment → step_up ${UNKNOWN_CODE} (got ${tied.evaluation.outcome}, read=${tied.evidence.credentialReadMethod})`,
+        tied.evaluation.outcome === "step_up" &&
+          tied.evidence.credentialReadMethod === LEGACY &&
+          tied.evaluation.reasonCodes.includes(UNKNOWN_CODE),
+      );
+    }
+
     // (c) THE ENROLLMENT-DOMAIN FIX over #753. Strong enrollment is the ACCUSING half
     // of this rule, so it must survive worst-wins resolution. With #753's
     // `good: ["strong"]` a same-instant strong+legacy pair resolved to legacy and a
@@ -3291,7 +3354,21 @@ const monotonicityTable: string[] = [];
       { row: "unknown", puck: { attach: "unknown" }, signals: [A("unknown"), E("strong"), R("strong")] },
       { row: "downgrade + removed", puck: { attach: "removed", readStrength: "legacy_125khz" }, signals: [A("removed"), E("strong"), R("legacy_125khz")] },
       { row: "control: seated, strong/strong", puck: {}, signals: [A("attached"), E("strong"), R("strong")] },
+      // The rest of the 3×3 the two matrices share (puckVerdict has no not_applicable,
+      // so those seven cells are pinned by the GRID above only). Built from GRID so a
+      // cell cannot be pinned on one side and forgotten on the other.
+      ...GRID.filter(
+        ([e, r]) => e !== NA && r !== NA && !(e === "strong" && (r === "strong" || r === LEGACY)),
+      ).map(([e, r]) => ({
+        row: `grid enrollment=${e} × read=${r}`,
+        puck: { enrolledStrength: e, readStrength: r } as Partial<PuckSituation>,
+        signals: [A("attached"), E(e), R(r)],
+      })),
     ];
+    check(
+      `22 DR-043 PARITY covers every one of the 9 cells the two matrices share (${PARITY_ROWS.length - 3} grid rows + the 3 attach/compound rows)`,
+      PARITY_ROWS.length === 12,
+    );
     for (const { row, puck, signals } of PARITY_ROWS) {
       const matrix = puckVerdict({ ...confirmed, ...puck });
       const gate = live(signals).evaluation;
@@ -3547,7 +3624,7 @@ const monotonicityTable: string[] = [];
       dimension: "verdict",
       members: ["legacy_125khz"],
       reason:
-        "deny→allow, and it is half of an AND rather than a quiet family: deleting the read-method signal removes one condition of credential-downgrade while enrollmentStrength 'strong' still holds. The result is a real deployment — a strong-enrolled worker whose readers report no read method — which is 'not_applicable', not a downgrade. A read that EXISTS and says legacy_125khz still denies (DR-043 block).",
+        "deny→step_up, and it is half of an AND rather than a quiet family: deleting the read-method signal removes one condition of credential-downgrade while enrollmentStrength 'strong' still holds. The result is a real deployment — a strong-enrolled worker whose readers report no read method — which is 'not_applicable', not a downgrade, and since owner call 4 it no longer reaches allow: strong × not_applicable steps up with CREDENTIAL_STRENGTH_UNKNOWN (GRID in the DR-043 block). A read that EXISTS and says legacy_125khz still denies.",
     },
     {
       name: "identity-signal-absence-is-not-an-identity-answer",

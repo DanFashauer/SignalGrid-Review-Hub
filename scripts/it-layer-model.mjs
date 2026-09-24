@@ -284,6 +284,10 @@ export const REASON_CODE_LAYERS = [
   { code: "CUSTODY_REMOVED", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "credential receiver / dock", evidenceType: "credential attach state", owner: "facilities_operations_owner" },
   { code: "CUSTODY_UNKNOWN", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "credential receiver / dock", evidenceType: "credential attach state", owner: "facilities_operations_owner" },
   { code: "CREDENTIAL_DOWNGRADE", layer: "it_security_risk_management", domain: "Threat Detection & Response", systemOfRecord: "credential reader + IdP enrollment", evidenceType: "credential read method vs enrollment strength", owner: "security_operations_owner" },
+  // Owner call 4: the step-up when a downgrade cannot be ruled out is a feed gap
+  // (enrollment or read method unreadable or silent), not a suspected clone, so it
+  // routes with the identity plane rather than with the downgrade's deny.
+  { code: "CREDENTIAL_STRENGTH_UNKNOWN", layer: "it_security_risk_management", domain: "Identity & Access Management", systemOfRecord: "credential reader + IdP enrollment", evidenceType: "credential read method vs enrollment strength", owner: "identity_platform_owner" },
 
   // ── Business / labour plane ───────────────────────────────────────────────
   { code: "SHIFT_CONTEXT_MISFIT", layer: "software_development_applications", domain: "Enterprise Applications", systemOfRecord: "workforce management", evidenceType: "shift / punch state", owner: "application_owner" },

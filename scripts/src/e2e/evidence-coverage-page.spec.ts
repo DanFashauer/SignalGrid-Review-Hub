@@ -75,7 +75,7 @@ test("the standalone page renders the real model, not an empty shell", async ({ 
   expect(await stat(page, "stat-answerable")).toBe(13);
   expect(await stat(page, "stat-dark")).toBe(8);
   expect(await stat(page, "stat-not-sourced")).toBe(3);
-  expect(await stat(page, "stat-silent-holes")).toBe(8);
+  expect(await stat(page, "stat-silent-holes")).toBe(7);
 
   // Each value sits with ITS OWN caption. Swapping two captions leaves every number and
   // every test id correct and tells the reader "10 dark, 6 answerable".
@@ -120,7 +120,7 @@ test("silent holes rank first, say what they are, and name what would answer the
   page,
 }) => {
   const holes = page.locator('tr[data-silent-hole="true"]');
-  await expect(holes).toHaveCount(8);
+  await expect(holes).toHaveCount(7);
   await expect(page.locator("tbody tr").first()).toHaveAttribute("data-silent-hole", "true");
   await expect(page.locator("tbody tr").last()).toHaveAttribute("data-coverage", "not_sourced");
   await expect(holes.first()).toContainText("the active rules grant when this is unknown");
@@ -160,7 +160,7 @@ test("declaring and undeclaring planes moves the report, down to the empty estat
   await planeToggle(page, "Workforce Management").click();
   await expect(shift).toHaveAttribute("data-coverage", "answerable");
   await expect(planeToggle(page, "Workforce Management")).toHaveAttribute("aria-pressed", "true");
-  expect(await stat(page, "stat-silent-holes")).toBe(7);
+  expect(await stat(page, "stat-silent-holes")).toBe(6);
 
   // Strip the estate to nothing: the honest opening position, and proof the page cannot
   // flatter — the numbers only get worse as the estate thins.
@@ -168,7 +168,7 @@ test("declaring and undeclaring planes moves the report, down to the empty estat
     await planeToggle(page, plane).click();
   }
   expect(await stat(page, "stat-answerable")).toBe(0);
-  expect(await stat(page, "stat-silent-holes")).toBe(16);
+  expect(await stat(page, "stat-silent-holes")).toBe(15);
   expect(await stat(page, "stat-dark")).toBe(21);
   await expect(page.getByTestId("coverage-denominator")).toContainText(
     "0 + 21 + 3 = 24 evidence axes",

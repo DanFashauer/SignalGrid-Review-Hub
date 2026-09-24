@@ -11,7 +11,7 @@ Under the embedded-UX law the verdict plus its reason codes ARE the product
 surface: the host app renders the worker's message from them, so this catalog
 is the contract a host-app developer builds against.
 
-**43 codes** the decision core can emit: 31 reachable
+**44 codes** the decision core can emit: 32 reachable
 through the launch evaluate surface, 5 only via the draft-policy
 test route, 7 only through deferred routes. Worker/operator
 language comes from the engine's own resolution descriptors; a code without a
@@ -37,6 +37,7 @@ falsify the contract for every tenant with a custom rule.
 | `BATTERY_FAILING` | restrict | manual_only | This device's battery can no longer hold a shift — charging will not fix it. Use a different device and hand this one in. | Pull the device for battery replacement; it will keep failing on charge. Do not clear this by re-docking. | — |
 | `BENCHMARK_SELECTION_MISFIT` | step_up | requires_approval | This device's hardening result was measured against the wrong benchmark. It needs a security owner — nothing you can do on the device changes it. | Assign the benchmark that matches this device's platform and this workflow's requirement, re-run the assessment, then re-evaluate. | `benchmark misfit → step-up (an 'aligned' answer from the wro` |
 | `CREDENTIAL_DOWNGRADE` | deny | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `legacy 125 kHz read for a STRONG-enrolled worker → deny (DR-` |
+| `CREDENTIAL_STRENGTH_UNKNOWN` | step_up | *(none)* | *(no resolution descriptor — no step; the plan carries it in `unresolvedCodes` and escalates, see the note below)* | — | `legacy 125 kHz read with an UNREADABLE enrollment → step-up ` |
 | `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` | deny | manual_only | This high-risk workflow requires a managed, trusted device — switch to one to continue. | Advise the worker to use a managed shared device; do not grant this workflow on an untrusted device. | — |
 | `CUSTODY_EXCEPTION` | restrict | requires_approval | A custody issue was flagged — an operator is reviewing the device's dock/bay status. | Review the custody exception (removed without a session?) and clear or route it. | — |
 | `CUSTODY_MAINTENANCE` | restrict | requires_approval | This device is in maintenance — use a different device; an operator can release it from maintenance. | Confirm the device has completed maintenance and release it (check it back in), then re-evaluate. | `custody maintenance → restrict` |
@@ -96,7 +97,7 @@ them as launch surface.
 
 ## The descriptor gap, stated
 
-13 of 43 codes have no resolution descriptor, so
+14 of 44 codes have no resolution descriptor, so
 `buildResolutionPlan` has no STEP to offer for them. What changed on
 2026-09-02 (verdict-core finding V9) is that it no longer stays quiet about it.
 

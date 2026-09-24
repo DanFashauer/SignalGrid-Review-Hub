@@ -242,10 +242,13 @@ export const EVIDENCE_AXES: readonly EvidenceAxis[] = [
     dayOneQuiet: true,
   },
   // ── DR-043: the credential's own custody and strength ─────────────────────
-  // All three are MEASURED quiet: an estate that cannot answer them emits nothing,
-  // which reads `not_applicable`, and no rule matches it. So each is a silent hole
-  // on an estate without the plane. (A PRESENT-but-unreadable attach reading reads
-  // `unknown` and steps up — that is illegibility, not ignorance.)
+  // attachState and enrollmentStrength are MEASURED quiet: an estate that cannot
+  // answer them emits nothing, which reads `not_applicable`, and against an
+  // otherwise-answered base no rule matches it. So each is a silent hole on an estate
+  // without the plane. (A PRESENT-but-unreadable attach reading reads `unknown` and
+  // steps up — that is illegibility, not ignorance.) credentialReadMethod is NOT quiet
+  // since owner call 4: a strong enrollment with no read method steps up
+  // (CREDENTIAL_STRENGTH_UNKNOWN), because a 125 kHz read cannot be ruled out.
   {
     id: "attachState",
     question: "Is the worker's credential still seated in the receiver it was issued to?",
@@ -262,7 +265,11 @@ export const EVIDENCE_AXES: readonly EvidenceAxis[] = [
     id: "credentialReadMethod",
     question: "Was this credential read by the strong method it was enrolled for, or over a cloneable 125 kHz fallback?",
     answerableBy: ["badge_custody", "physical_access"],
-    dayOneQuiet: true,
+    // MEASURED, per axis like every flag here (probed against an otherwise-answered
+    // base, where enrollment is strong). ponytail: per-axis, so an estate with NO
+    // identity plane either (n/a × n/a, which allows) is still counted graded here;
+    // a joint probe is the upgrade if a report ever needs that conjunction.
+    dayOneQuiet: false,
   },
   {
     id: "dockEvidenceFreshness",

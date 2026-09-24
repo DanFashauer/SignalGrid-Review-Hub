@@ -67,7 +67,11 @@ that feed the evidence above:
 
 The three credential categories (DR-043, 2026-09-23) carry the attach matrix's
 rows onto the live gate: removed → restrict, unknown → step-up, and a legacy
-125 kHz read for a strong-enrolled worker → deny. Fixture-backed only: no puck,
+125 kHz read for a strong-enrolled worker → deny. Where that downgrade cannot be
+ruled out — the read method is unreadable, a legacy read arrives with no readable
+enrollment, or a strong enrollment arrives with no read method — the gate steps
+up (`CREDENTIAL_STRENGTH_UNKNOWN`). No enrollment and no read method at all
+changes nothing. Fixture-backed only: no puck,
 dock or reader hardware exists, and no connector emits these categories yet.
 They share the declared divergence below.
 
@@ -195,7 +199,7 @@ dimensions above.
 
 ## How to verify
 
-- `pnpm run proof:signalgrid-core` — 570 assertions over the real core: outcomes,
+- `pnpm run proof:signalgrid-core` — 597 assertions over the real core: outcomes,
   fail-closed, tenant isolation, RBAC, tamper-evidence, determinism, the
   security-baseline dimension, the badge-binding (reader case) dimension, the
   dock/SmartDock hardware-state dimension, and untrusted-input hardening.

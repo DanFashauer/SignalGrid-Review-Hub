@@ -1098,8 +1098,8 @@ async function run() {
   // criticalSignalsPresent) have no source plane at all, so `answerable` can never
   // reach 18 for ANY input; the assertion could not fail even if silentHoles were
   // hardcoded to zero. Pin the real numbers against the engine instead.
-  check("evidence-coverage wedge pins the measured counts (13 answerable, 8 silent holes — 24 axes since the DR-043 attach/enrollment/read-method axes joined on 2026-09-23)", covWedge.json?.report?.answerable === 13 && covWedge.json?.report?.silentHoles === 8);
-  check("evidence-coverage empty estate pins the measured hole count (16 of 24 axes)", covEmpty.json?.report?.silentHoles === 16);
+  check("evidence-coverage wedge pins the measured counts (13 answerable, 7 silent holes — 24 axes since the DR-043 attach/enrollment/read-method axes joined on 2026-09-23; 8 → 7 when owner call 4 made a silent read method beside a strong enrollment step up)", covWedge.json?.report?.answerable === 13 && covWedge.json?.report?.silentHoles === 7);
+  check("evidence-coverage empty estate pins the measured hole count (15 of 24 axes)", covEmpty.json?.report?.silentHoles === 15);
   // The `note` is prose the CLIENT receives, so a stale number in it is a published
   // contradiction, not an internal comment. It said "18" as a literal beside a
   // `totalAxes` that computes the same thing; a nineteenth axis would have shipped a

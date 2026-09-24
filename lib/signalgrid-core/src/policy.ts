@@ -699,9 +699,11 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
   // ── DR-043: the attach matrix's live rows ─────────────────────────────────
   // Same verdicts and reason codes as `puckVerdict` in attach.ts; the core proof
   // asserts the two matrices agree on every overlapping row, because two
-  // unconnected matrices is how they drift. Absence (`not_applicable`) matches
-  // nothing here — a tenant with no pucks is not stepped up on day one — but an
-  // EMITTED unknown attach state steps up, unlike badge/dock unknown.
+  // unconnected matrices is how they drift. An absent attach state
+  // (`not_applicable`) matches nothing — a tenant with no pucks is not stepped up
+  // on day one — but an EMITTED unknown attach state steps up, unlike badge/dock
+  // unknown. Enrollment and read method both absent is quiet too; one absent while
+  // the other speaks is not always (the credential-strength rows below).
   {
     id: "credential-downgrade",
     description:
@@ -730,6 +732,45 @@ export const SHARED_DEVICE_RULES_V1: PolicyRuleSpec[] = [
     match: [{ field: "attachState", in: ["unknown"] }],
     outcome: "step_up",
     reasonCode: "CUSTODY_UNKNOWN",
+    severity: "medium",
+  },
+  // Golden rule 2 on the downgrade row: enrollment and read method come from
+  // different planes, so either can be unreadable or silent while the other speaks.
+  // Where a strong→legacy downgrade cannot be RULED OUT, step up. Three rectangles
+  // cover the eight cells (enrollment × read): any × unknown; {unknown, n/a} ×
+  // legacy; {strong, unknown} × n/a. Allowed: any × strong, legacy × legacy,
+  // legacy × n/a, n/a × n/a (a tenant with no credential-strength feed sees nothing).
+  {
+    id: "credential-read-unknown",
+    description:
+      "The read method was present but unreadable, so nothing rules out a cloneable 125 kHz read. That raises the bar and never grants.",
+    match: [{ field: "credentialReadMethod", in: ["unknown"] }],
+    outcome: "step_up",
+    reasonCode: "CREDENTIAL_STRENGTH_UNKNOWN",
+    severity: "medium",
+  },
+  {
+    id: "credential-legacy-read-enrollment-unestablished",
+    description:
+      "A 125 kHz read arrived and nothing establishes that the worker was enrolled on a legacy credential, so a strong-to-legacy downgrade cannot be ruled out.",
+    match: [
+      { field: "enrollmentStrength", in: ["unknown", "not_applicable"] },
+      { field: "credentialReadMethod", in: ["legacy_125khz"] },
+    ],
+    outcome: "step_up",
+    reasonCode: "CREDENTIAL_STRENGTH_UNKNOWN",
+    severity: "medium",
+  },
+  {
+    id: "credential-read-silent-enrollment-may-be-strong",
+    description:
+      "The worker is (or may be) enrolled on a strong credential and no read method arrived, so a 125 kHz read cannot be ruled out.",
+    match: [
+      { field: "enrollmentStrength", in: ["strong", "unknown"] },
+      { field: "credentialReadMethod", in: ["not_applicable"] },
+    ],
+    outcome: "step_up",
+    reasonCode: "CREDENTIAL_STRENGTH_UNKNOWN",
     severity: "medium",
   },
   {

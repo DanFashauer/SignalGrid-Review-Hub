@@ -62,7 +62,7 @@ LAST TOUCHED: 2026-09-24 (Mac lane, latest) - THE OWNER'S AGENTIC LOOP IS BUILT:
               rank/finalize/readVerdict; content-addressed state; refuses to queue what the tick cannot run;
               one mail per NEW escalation; three-state --check; 62/62 self-test incl. a clock-scan of its own
               source), docs/agent/objective-state.json (first verdict ESCALATE: 3/4 met, owner-real-in-hand is
-              the owner's; tasks = plan rows 5/6/8; 10 rows need an executor), step c' in the Mac tick (lock,
+              the owner's; tasks = plan rows 5/6/8; ten plan rows still need an executor), step c' in the Mac tick (lock,
               SIGNALGRID_MCP_PATH from the sibling checkout, transactional rollback, verdict in the heartbeat),
               forward-build-cycle made the consumer (trusts the state only while the tick heartbeat is fresh AND
               names the verdict). Preflight PASSED, breadth 57/57. EXPECTED until #1031 merges: the live tick

@@ -197,7 +197,7 @@ router.get("/cp/v1/signal-discovery", (_req, res) => {
   });
 });
 
-// DDM / device-health signals (macOS 27): normalize Declarative Device Management
+// DDM / device-health signals (macOS / iOS 27): normalize Declarative Device Management
 // health reporting + binary-control + declarative-privacy posture into the
 // decision dimensions the core understands. Complementary to OS binary control;
 // a weak posture only RAISES the assurance a sensitive action demands. Fixture —

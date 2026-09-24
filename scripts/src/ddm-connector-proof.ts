@@ -6,8 +6,10 @@
 //     missing privacy, degraded health, stale/missing check-in, unenrolled) can
 //     only RAISE assurance (auto → step-up), never lower it;
 //   • `mdm.is-return-to-service` is read where Apple reports it (iOS/visionOS 27+):
-//     n/a on a Mac never raises, an unknown platform/OS always does, and `true`
-//     (app-preservation mode) is a configured mode, not an erase in flight;
+//     n/a on a Mac never raises, an unknown / pre-27 / garbage platform or OS always
+//     does, and `true` (app-preservation mode) is a configured mode, not an erase in
+//     flight — it raises only through update currency (Apple disables updates except
+//     at a reset);
 //   • deterministic — normalization is pure over an injected observation time;
 //   • the summary is one-glance correct.
 //
@@ -87,7 +89,8 @@ check("unenrolled → raise step-up", byRef("mac-byod-01").assurance === "raise_
 check("user enrollment → not supervised", byRef("mac-noc-11").supervised === false);
 check("user enrollment → enrollmentType carried verbatim", byRef("mac-noc-11").enrollmentType === "user");
 check("SUPERVISION CASE: an otherwise-perfect user-enrolled device raises step-up", byRef("mac-noc-11").assurance === "raise_step_up");
-check("user enrollment → the rationale names it (no 'healthy' text on a raise)", byRef("mac-noc-11").rationale.includes("not supervised"));
+check("user enrollment → the rationale names it", byRef("mac-noc-11").rationale.includes("not supervised"));
+check("no raised device carries the 'DDM posture healthy' rationale", signals.every((s) => s.assurance === "standard" || !s.rationale.startsWith("DDM posture healthy")));
 // Absent is UNKNOWN, never a friendly default — the shape golden rule 2 forbids.
 check("absent enrollment-type → unknown (never supervised)", enrollmentTypeOf({ deviceRef: "x", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: null }) === "unknown");
 check("unpublished enrollment wire value → unknown (Apple's rangelist is the whole list)", enrollmentTypeOf({ deviceRef: "x", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: null, enrollmentType: "managed" as never }) === "unknown");
@@ -105,14 +108,23 @@ check("tvOS / watchOS, no key → not_applicable, no raise", rts({ platform: "tv
 check("iOS 27, false → in_service", byRef("iphone-shared-01").returnToService === "in_service");
 check("iOS 27, false → standard", byRef("iphone-shared-01").assurance === "standard");
 check("iOS 27, true → rts_app_preservation", byRef("iphone-shared-02").returnToService === "rts_app_preservation");
-check("APP-PRESERVATION CASE: a configured return-to-service mode does NOT raise by itself", byRef("iphone-shared-02").assurance === "standard");
+check("APP-PRESERVATION CASE: the RTS axis itself does not raise (no 'return-to-service state unknown')", !byRef("iphone-shared-02").rationale.includes("return-to-service state unknown"));
+check("APP-PRESERVATION CASE: Apple disables updates except at reset → update currency unknown, never current", byRef("iphone-shared-02").enforcementCurrency === "unknown");
+check("APP-PRESERVATION CASE: raises step-up on the update-currency axis, and the rationale says reset-bound", byRef("iphone-shared-02").assurance === "raise_step_up" && byRef("iphone-shared-02").rationale.includes("update enforcement reset-bound"));
 check("iOS 27, absent → unknown (Apple marks the key required)", byRef("iphone-shared-03").returnToService === "unknown");
 check("iOS 27, absent → raise step-up (unknown tightens)", byRef("iphone-shared-03").assurance === "raise_step_up");
 check("iOS 27, absent → the rationale names it", byRef("iphone-shared-03").rationale.includes("return-to-service state unknown"));
 check("visionOS 27 is applicable too: absent → unknown, true → rts_app_preservation", rts({ platform: "visionOS" }).returnToService === "unknown" && rts({ platform: "visionOS", returnToService: true }).returnToService === "rts_app_preservation");
-// iOS 26: the item was not introduced, so its absence says nothing.
-check("iOS 26, no key → not_applicable", rts({ platform: "iOS", osMajor: 26 }).returnToService === "not_applicable");
-check("iOS 26, no key → does NOT raise because of it (item not introduced)", rts({ platform: "iOS", osMajor: 26 }).assurance === "standard");
+// iOS 26: Apple-correct would be not_applicable (the item arrived in 27.0), but that
+// loosening is not on the approved list, so pre-27 still reads unknown and raises.
+check("iOS 26, no key → unknown (pre-27 not_applicable not signed off)", rts({ platform: "iOS", osMajor: 26 }).returnToService === "unknown");
+check("iOS 26, no key → raises", rts({ platform: "iOS", osMajor: 26 }).assurance === "raise_step_up");
+// Garbage or impossible OS versions never loosen.
+for (const [platform, osMajor] of [["iOS", 0], ["iOS", -1], ["iOS", 26.9], ["iOS", 3], ["visionOS", 0], ["visionOS", 2]] as const) {
+  check(`${platform} osMajor ${osMajor}, no key → unknown → raises`, rts({ platform, osMajor }).returnToService === "unknown" && rts({ platform, osMajor }).assurance === "raise_step_up");
+}
+check("iOS osMajor 27.5 (not a whole major), false → unknown, never in_service", rts({ platform: "iOS", osMajor: 27.5, returnToService: false }).returnToService === "unknown");
+check("the applicability table is frozen (no runtime rewrite to n/a)", Object.isFrozen(RETURN_TO_SERVICE_INTRODUCED));
 // Fail closed: what cannot be placed never reads not_applicable.
 check("unknown platform, no key → unknown", rts({}).returnToService === "unknown");
 check("UNKNOWN-PLATFORM CASE: an otherwise-perfect device with no platform and no key raises", rts({}).assurance === "raise_step_up");
@@ -136,8 +148,8 @@ check("legacy + unknown OS → at_risk (cannot confirm pre-cutover, never curren
 check("unreported enforcement → currency unknown (fail-safe, raises)", byRef("mac-noc-07").enforcementCurrency === "unknown");
 
 // ── SAFETY: a weak posture NEVER yields assurance 'standard' ───────────────────
-check("SAFETY: only the fully-healthy devices are assurance standard (mac-noc-01, iphone-shared-01, iphone-shared-02)",
-  signals.filter((s) => s.assurance === "standard").map((s) => s.deviceRef).join(",") === "mac-noc-01,iphone-shared-01,iphone-shared-02");
+check("SAFETY: only the fully-healthy devices are assurance standard (mac-noc-01, iphone-shared-01)",
+  signals.filter((s) => s.assurance === "standard").map((s) => s.deviceRef).join(",") === "mac-noc-01,iphone-shared-01");
 
 // ── fail-closed on ambiguous health (unreporting/unknown) even if otherwise ok ─
 // Supervised macOS on purpose: the ONLY weak axis here is health, so the assertion
@@ -287,7 +299,7 @@ check("summary counts dead update enforcement (legacy-on-27 / none)", sum.enforc
 check("summary counts at-risk update enforcement (legacy pre-27)", sum.enforcementAtRisk === 1);
 check("summary counts supervised devices (an unknown enrollment is NOT counted)", sum.supervised === 12);
 check("summary counts devices configured for return to service with app preservation (true only)", sum.returnToService === 1);
-check("summary raiseStepUp = all but the three healthy devices", sum.raiseStepUp === 12);
+check("summary raiseStepUp = all but the two healthy devices", sum.raiseStepUp === 13);
 
 const total = passed + failures.length;
 console.log(`DDM-connector proof: ${passed}/${total} assertions passed`);

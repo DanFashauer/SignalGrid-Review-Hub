@@ -43,12 +43,16 @@ export const DEMO_DDM_REPORTS: DdmDeviceReport[] = [
   { deviceRef: "mac-noc-11", platform: "macOS", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "user" },
   // 27.0 `mdm.is-return-to-service` is reported on iOS/visionOS 27+ only (Apple marks it
   // n/a on macOS, which is why no Mac above carries the key). Three otherwise-perfect
-  // shared iPhones, one per arm. `binaryControl` here stands for the supervised app
-  // allow-list — iOS has no Endpoint Security.
+  // shared iPhones, one per arm. `binaryControl: "enforced"` and `privacy: "declared"` are
+  // STAND-INS so the return-to-service arm is isolated: iOS has no Endpoint Security or
+  // PPPC, no ingest path produces either value, and a real iPhone reads unknown on both
+  // and raises (docs/BUILD_BACKLOG.md).
   // Reported false → in_service → standard.
   { deviceRef: "iphone-shared-01", platform: "iOS", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised", returnToService: false },
   // Reported true → configured for return to service with app preservation. A standing
-  // shared-device mode, not an erase in flight → standard.
+  // shared-device mode, not an erase in flight, so the RTS axis itself does not raise —
+  // but Apple disables software updates in this mode except at a reset, so declarative
+  // update enforcement reads unknown (reset-bound) → raise step-up.
   { deviceRef: "iphone-shared-02", platform: "iOS", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised", returnToService: true },
   // Not reported where Apple says it is required → unknown → raise step-up.
   { deviceRef: "iphone-shared-03", platform: "iOS", enrolled: true, health: "healthy", binaryControl: "enforced", privacy: "declared", lastCheckInAt: fresh, osMajor: 27, updateEnforcement: "declarative", enrollmentType: "supervised" },

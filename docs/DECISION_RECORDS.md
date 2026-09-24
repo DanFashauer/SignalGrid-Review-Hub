@@ -3513,8 +3513,8 @@ combine them, he chose **"Merge into one."** One system now carries DR-054:
   the owner, a lane or a tool, or names it a GAP. It feeds `loop:state` and the Mac tick.
 - **The detector and gate:** `scripts/raised-hands.mjs` raises hands automatically for
   stalls nobody reported: mail unread past 24h, sim requests pending past 48h, silent
-  routines, and PRs red or idle. It fails preflight and CI when one sits past 3× its limit
-  with no hand covering it. It also counts, as a health line, how many stalls no agent
+  routines, and PRs red or idle. It fails preflight when one sits past 3× its limit
+  with no hand covering it (CI only warns, since 2026-09-24; see below). It also counts, as a health line, how many stalls no agent
   reported.
 - **The answer:** the `blocker-dispatcher` agent follows the `raised-hands` skill. It is
   read-only and returns a dispatch plan. Auto stalls route by `docs/agent/hand-routing.json`.
@@ -3523,3 +3523,15 @@ combine them, he chose **"Merge into one."** One system now carries DR-054:
 - **The owner's page:** `.github/workflows/raised-hands.yml` keeps one issue labelled
   `raised-hands` current every hour, and comments only when a hand is new. A daily
   `hands-watch` job in `scheduled-verification.yml` fails if that issue goes stale.
+
+**CI warns, preflight fails (2026-09-24).** The owner said "just get it done" and
+delegated the call; the cloud lane's recommendation was applied. In CI the stall half of
+`node scripts/raised-hands.mjs --check` now runs with `--warn`. It prints each stall as
+`WARN (would fail locally):` and exits 0. Why: a stall is another lane's clock. When the
+Mac sent no heartbeat for 9 hours, mainline and every later PR went red. Heartbeat pushes
+are paths-ignored, so the red stayed until someone pushed again. The register's own
+integrity still fails CI under `--warn`: an unreadable hand, a route naming a missing
+agent or skill, or a sim gate that printed nothing. Local `scripts/preflight.mjs` stays
+fatal on stalls. `scripts/check-preflight-ci-parity.mjs` records the weakening in
+`CI_WARN_ONLY` and fails on an undeclared or stale `--warn`. **Reversal:** delete `--warn`
+from the review-hub-ci.yml step and its `CI_WARN_ONLY` entry.

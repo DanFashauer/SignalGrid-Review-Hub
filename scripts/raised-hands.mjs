@@ -3,7 +3,8 @@
 //   pnpm run hands                                   # everything stuck, grouped by who can clear it
 //   pnpm run hand:raise -- --doing "…" --blocked "…" --need "…" --who owner|"mac lane"|"cloud lane" [--domain d] [--covers mail:<id>]
 //   pnpm run hand:take -- <id>   ·   pnpm run hand:clear -- <id> "what unblocked it"   (scripts/raise-hand.mjs)
-//   node scripts/raised-hands.mjs --check            # the gate (preflight + CI)
+//   node scripts/raised-hands.mjs --check            # the gate (preflight: fatal)
+//   node scripts/raised-hands.mjs --check --warn     # CI's form: stalls warn, integrity still fails
 //   node scripts/raised-hands.mjs --coherence        # schema only (lane-deliver's gate)
 //   node scripts/raised-hands.mjs --markdown [--github]   # the owner's issue body
 //   node scripts/raised-hands.mjs --self-test
@@ -38,6 +39,12 @@
 // owner's issue, never fatal — a gate cannot make a person act, only make the wait
 // impossible to miss. Incoherent rows are fatal.
 //
+// --warn (CI only, DR-054 §5, 2026-09-24). A stall is somebody else's clock: in CI a
+// Mac quiet for 9h turned mainline and every PR red until the next push. Under --warn
+// the stalls print as `WARN (would fail locally):` and do not fail; the register's
+// OWN integrity (an unreadable hand, a route naming a missing agent or skill, a sim
+// gate that printed nothing) still exits 1. Local preflight runs without --warn.
+//
 // UNKNOWN IS NEVER FRESH. An unparseable instant ages as infinitely old, exactly as
 // check-lane-messages treats an unparseable sentAt.
 import { spawnSync } from "node:child_process";
@@ -53,6 +60,8 @@ export const ROUTING_FILE = "docs/agent/hand-routing.json";
 /** Group order on the owner's page: him first, then the lanes, then roles, tools and gaps. */
 export const GROUP_ORDER = ["owner", "cloud", "mac", "role", "tool", "gap"];
 const H = 3_600_000;
+/** The sim gate printed nothing: our own loader failed, not a clock — fatal even under --warn. */
+export const SIM_UNREADABLE = "UNREADABLE-check-sim-requests-printed-nothing";
 
 /** Soft limit per source: past it the hand is on the list; past HARD_MULTIPLE× it the gate fails unless covered. */
 export const SOFT_LIMIT_H = { mail: 24, sim: 48, heartbeat: null /* the routine's own cadenceToleranceHours */, "pr-red": 24, "pr-idle": 48 };
@@ -192,6 +201,15 @@ export function evaluate(records, autos, nowMs = Date.now(), route = () => ({ ki
   return { open, auto, fatal, staleCovers, health };
 }
 
+/** Pure: the --check verdict. `problems` are integrity (always fatal); `stalls` are
+ *  view.fatal — other people's clocks, fatal unless `warn`. */
+export function checkOutcome(problems, stalls, { warn = false } = {}) {
+  const own = stalls.filter((f) => f.startsWith(`sim:${SIM_UNREADABLE}:`));
+  const fatal = [...problems, ...own, ...(warn ? [] : stalls.filter((f) => !own.includes(f)))];
+  const warned = warn ? stalls.filter((f) => !own.includes(f)) : [];
+  return { code: fatal.length > 0 ? 1 : 0, fatal, warned };
+}
+
 // ── rendering ────────────────────────────────────────────────────────────────
 const WHO = { owner: "Needs you (Dan)", cloud: "Needs the cloud lane", mac: "Needs the Mac lane", role: "Routed to a role", tool: "Needs a tool", gap: "Capability GAP — the blocker-dispatcher must route or create" };
 export function render({ open, auto }, { markdown = false, prsChecked = false } = {}) {
@@ -229,7 +247,7 @@ async function loadInputs({ github = false } = {}) {
   const simPending = [];
   // A sim gate that printed nothing is not a sim loop with nothing pending: say so,
   // aged as unknown (never fresh), so the stuck list cannot go quiet by crashing.
-  if (!/Simulation request loop —/.test(sim.stdout ?? "")) simPending.push({ id: "UNREADABLE-check-sim-requests-printed-nothing", ageDays: NaN });
+  if (!/Simulation request loop —/.test(sim.stdout ?? "")) simPending.push({ id: SIM_UNREADABLE, ageDays: NaN });
   for (const line of (sim.stdout ?? "").split("\n")) {
     const m = /^\s+· (\S+) → (.*)$/.exec(line);
     if (!m || !/still queued|NOT run/.test(m[2])) continue;
@@ -354,6 +372,16 @@ function selfTest() {
   checks.push(["an owner hand is never 'untaken' — only the owner can take it", evaluate([hand({ raisedAt: ago(5) })], [], T, route).health.untaken.length === 0]);
   checks.push(["takenBy with no takenAt is incoherent", auditHands([hand({ takenBy: "x" })]).some((p) => p.includes("takenAt"))]);
   checks.push(["the owner's page carries the health line", render(evaluate([], [], T, route), { markdown: true }).includes("Hand-raising health:")]);
+  // --warn: lenient on other people's clocks, never on the register's own integrity
+  const stall = evaluate([], autoHands({ messages: [msg(80)] }, T), T, route).fatal;
+  const broken = auditHands([{ __file: "x.json", __unreadable: "bad json" }]);
+  const noSim = evaluate([], autoHands({ simPending: [{ id: SIM_UNREADABLE, ageDays: NaN }] }, T), T, route).fatal;
+  checks.push(["a stalled auto hand exits 1 by default", stall.length === 1 && checkOutcome([], stall).code === 1]);
+  checks.push(["…and exits 0 under --warn, still printed as a warning", checkOutcome([], stall, { warn: true }).code === 0 && checkOutcome([], stall, { warn: true }).warned.length === 1]);
+  checks.push(["an integrity failure exits 1 by default", broken.length === 1 && checkOutcome(broken, []).code === 1]);
+  checks.push(["…and exits 1 under --warn too", checkOutcome(broken, [], { warn: true }).code === 1]);
+  checks.push(["a sim gate that printed nothing exits 1 under --warn (our loader, not a clock)", noSim.length === 1 && checkOutcome([], noSim, { warn: true }).code === 1]);
+  checks.push(["…and a route naming a missing agent exits 1 under --warn", checkOutcome(auditRouting({ routes: { ...full.routes, mail: { responder: { agent: "ghost" }, action: "a" } } }, (k, n) => n !== "ghost"), stall, { warn: true }).code === 1]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
@@ -388,12 +416,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   console.log(render(view, { prsChecked: github }));
   for (const s of view.staleCovers) console.log(`  · REPORTED: ${s}`);
   if (argv.includes("--check")) {
-    const fatal = [...problems, ...view.fatal];
-    if (fatal.length > 0) {
+    const { code, fatal, warned } = checkOutcome(problems, view.fatal, { warn: argv.includes("--warn") });
+    for (const w of warned) console.log(`  WARN (would fail locally): ${w}`);
+    if (code !== 0) {
       console.error(`\nRaised hands check FAILED: ${fatal.length} problem(s).`);
       for (const f of fatal) console.error(`  ✗ ${f}`);
       process.exit(1);
     }
-    console.log("\nRaised hands check passed — nothing is stuck past its limit without a hand raised.");
+    console.log(warned.length
+      ? `\nRaised hands check passed in --warn mode — ${warned.length} stall(s) past the limit WARNED above (fatal in local preflight); the register itself is coherent.`
+      : "\nRaised hands check passed — nothing is stuck past its limit without a hand raised.");
   }
 }

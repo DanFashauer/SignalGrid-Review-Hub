@@ -62,7 +62,9 @@ The system that reports stalls can stall too. On each steward cycle, check both:
 - **The gate still runs.** `node scripts/raised-hands.mjs --check` must be in both
   `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml`. The preflight↔CI
   parity gate enforces that. A check that stopped running reads exactly like a check
-  that passes.
+  that passes. CI runs it as `--check --warn` (DR-054 §5, 2026-09-24): stalls only warn
+  there, so read the `WARN (would fail locally):` lines in the CI log, because only
+  local preflight fails on them.
 
 The daily scheduled verification also fails, and opens its own issue, when the
 raised-hands issue is more than 3 hours old. That catch is mechanical and does not

@@ -9,3 +9,11 @@
 # standing as postgres:16's MYSQL/POSTGRES passwords already used across this
 # repo's CI service containers. Reviewed 2026-08-21.
 3481fcc9a8d1b487e2d02eb3bb430c6a8dfe6a30:scripts/run-live-lanes.sh:curl-auth-user:303
+
+# `credentialReadMethod: "legacy_125khz"` is the CredentialStrength enum word
+# (a 125 kHz proximity-card read method), not a secret: gitleaks'
+# generic-api-key rule matched the credential*-named key next to a quoted
+# literal in commit d868557e (PR #1005). The pins at head reference a named
+# constant instead, so no new occurrence exists. Reviewed 2026-09-24.
+d868557e00dae17f64f558389c5779e7b1ae7bb4:lib/signalgrid-core/src/seed.ts:generic-api-key:491
+d868557e00dae17f64f558389c5779e7b1ae7bb4:lib/signalgrid-core/src/seed.ts:generic-api-key:492

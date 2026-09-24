@@ -10,10 +10,16 @@
 # repo's CI service containers. Reviewed 2026-08-21.
 3481fcc9a8d1b487e2d02eb3bb430c6a8dfe6a30:scripts/run-live-lanes.sh:curl-auth-user:303
 
-# `credentialReadMethod: "legacy_125khz"` is the CredentialStrength enum word
-# (a 125 kHz proximity-card read method), not a secret: gitleaks'
-# generic-api-key rule matched the credential*-named key next to a quoted
-# literal in commit d868557e (PR #1005). The pins at head reference a named
-# constant instead, so no new occurrence exists. Reviewed 2026-09-24.
+# The read-method enum word legacy_125khz (a 125 kHz proximity-card read) is
+# not a secret: gitleaks' generic-api-key rule matched a credential*-named key
+# next to that quoted word in commit d868557e (PR #1005). The pins at head
+# reference a named constant instead, so no new occurrence exists.
+# Reviewed 2026-09-24.
 d868557e00dae17f64f558389c5779e7b1ae7bb4:lib/signalgrid-core/src/seed.ts:generic-api-key:491
 d868557e00dae17f64f558389c5779e7b1ae7bb4:lib/signalgrid-core/src/seed.ts:generic-api-key:492
+
+# The first version of the comment above quoted the key and the enum word
+# together, so gitleaks flagged this file itself at 872e80eb line 13. The
+# comment no longer pairs them; this pins that one historical finding only.
+# Reviewed 2026-09-24.
+872e80eb255d95be99f50fca3e919236597cba37:.gitleaksignore:generic-api-key:13

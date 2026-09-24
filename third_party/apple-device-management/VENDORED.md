@@ -8,14 +8,14 @@ Third-party work, copied in unmodified. **Not ours.**
 | Author | Apple Inc. |
 | Licence | MIT (`LICENSE.txt` in this directory, byte-identical to the upstream root `LICENSE.txt`) |
 | Commit | `09f249a06e7e3289930bf6d05f38fb562f748ebf` (tag `Release-v27.0`) |
-| Vendored | 2026-09-18 |
-| Contents | 10 files under `declarative/status/` plus `LICENSE.txt` and this note. Exactly the status items the two in-tree alignments pin — `DDM_APPLE_STATUS_ITEMS` in `lib/ddm-connector/src/apple-schema.ts` and `APPLE_DDM_STATUS_ITEMS` in `lib/integrations/src/integrations/macos-posture/apple-schema.ts`. Nothing here is imported at runtime; `proof:ddm-connector` READS these files. |
+| Vendored | 2026-09-18 (`device.operating-system.family.yaml` added 2026-09-24, same commit) |
+| Contents | 11 files under `declarative/status/` plus `LICENSE.txt` and this note. Exactly the status items the two in-tree alignments pin — `DDM_APPLE_STATUS_ITEMS` in `lib/ddm-connector/src/apple-schema.ts` and `APPLE_DDM_STATUS_ITEMS` in `lib/integrations/src/integrations/macos-posture/apple-schema.ts`. Nothing here is imported at runtime; `proof:ddm-connector` READS these files. |
 | Basis | `docs/BUILD_BACKLOG.md` — "Hold the DDM/macOS-posture schema pins against Apple's YAML". Apple accepts schema feedback via Feedback Assistant, not pull requests. |
 
 ## Why only this subset
 
 The upstream repository is Apple's whole device-management vocabulary — MDM commands,
-profile payloads, declarations, and ~60 status items. This tree pins ten of those status
+profile payloads, declarations, and ~60 status items. This tree pins eleven of those status
 items and reads nothing else, so vendoring the rest would republish a large body of
 somebody else's work for no check.
 

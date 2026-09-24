@@ -44,6 +44,44 @@ lone repairs into unreachable code).
       constants overlap PR #856, which is unmerged; #856 also rewrote both headers to say
       no proof reads Apple's YAML, and the row below makes that sentence false. How you'd
       check: `pnpm run proof:ddm-connector` → `summary=pass (131/131)`.
+      **CORRECTED 2026-09-24 — the return-to-service half above misread Apple.** Apple's
+      `mdm.is-return-to-service` says "If true, the device is using the return to service
+      with app preservation mode" — a standing shared-device configuration, not a device
+      being wiped and handed on — and it is reported on iOS and visionOS 27.0 only (macOS,
+      tvOS, watchOS: n/a). Reading `true` as custody in transit, and absence as unknown on
+      the Mac fixtures, stepped every Mac up forever for an item it can never send. Now
+      `returnToServiceStateOf` reads the platform (`device.operating-system.family`, vendored
+      beside the other pins): n/a platform → `not_applicable`, no raise; `false` →
+      `in_service`; `true` → `rts_app_preservation`, which does not raise on the RTS axis
+      but does on update currency, because Apple's Return to Service page says "If Return to
+      Service with app preservation is active, the device disables software updates—both
+      automatic and user-initiated" and updates apply only at a reset whose cadence the
+      connector cannot see — so declarative enforcement there reads `unknown`
+      ("reset-bound") and raises. Absent where it applies, a pre-27 iOS/visionOS, an OS major
+      that is not a whole number at or above 27, or an unknown platform → `unknown`, which
+      raises (pre-27 `not_applicable` is Apple-correct but not an approved loosening — the
+      open row below). The applicability table is frozen. Whether an erase is in flight is
+      not observable from this item — that is MDM command status or the `device_returned`
+      binding below. The Mac fixtures carry `platform: "macOS"` and no key; three iOS 27
+      fixtures carry the three arms; the proof also holds the connector's applicability
+      table against Apple's vendored `supportedOS`. How you'd check: `pnpm run
+      proof:ddm-connector` → `summary=pass (169/169)`.
+
+- [ ] **A real iPhone/iPad DDM report cannot read `standard` yet (DDM connector, MEDIUM; owner: endpoint-uem-domain).**
+      Three things are owed, each fail-closed today (it tightens, never loosens), each the
+      same "stepped up forever for something it can never send" shape the row above fixed
+      for the Mac. (1) `binaryControl` and `privacy` are macOS facts (Endpoint Security,
+      PPPC); the iOS fixtures carry `enforced`/`declared` as stand-ins and no ingest path
+      produces an iOS value, so a real iOS report reads unknown on both and raises —
+      define the iOS meaning or scope the two axes by platform. (2) Nobody has verified what
+      an iPad sends for `device.operating-system.family`: Apple publishes no rangelist, the
+      pinned example shows `"iOS"`, and a device sending `"iPadOS"` reads platform unknown
+      and raises. Verify against a real enrolled iPad (or KMFDDM on NanoMDM,
+      `docs/ZERO_COST_LIVE_TEST_MATRIX.md`) before mapping anything. (3) Owner sign-off on
+      reading an absent `mdm.is-return-to-service` on iOS/visionOS 15–26 as `not_applicable`
+      (Apple introduced the item in 27.0); if granted, bound it to a whole OS major at or
+      above Apple's `device.operating-system.version` floor, never just `< 27`. Source: the
+      2026-09-24 review of `claude/fix-ddm-return-to-service`.
 
 - [x] **Hold the DDM/macOS-posture schema pins against Apple's YAML (gate, MEDIUM).**
       *(Opened by the same intake, #858.)* **DONE 2026-09-18** — the ten status items the

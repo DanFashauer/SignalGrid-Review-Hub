@@ -5,7 +5,7 @@
 // apple/device-management (MIT, schema v27.0) DDM `declarative/status/` items this
 // connector's inputs correspond to, and maps each substantive DdmDeviceReport
 // field to its canonical Apple provenance. DDM status is the authoritative,
-// push/subscription-based channel for macOS device state — aligning to its names
+// push/subscription-based channel for Apple (macOS / iOS / visionOS) device state — aligning to its names
 // keeps the connector's vocabulary honest and lets a schema change on a new OS
 // release surface as a failing check instead of silent drift.
 //
@@ -28,6 +28,7 @@
 //   declarative/status/management.declarations.yaml
 //   declarative/status/softwareupdate.install-state.yaml (+ .failure-reason)
 //   declarative/status/device.operating-system.version.yaml
+//   declarative/status/device.operating-system.family.yaml
 //   declarative/status/management.client-capabilities.yaml
 //   declarative/status/mdm.enrollment-type.yaml            (new in 27.0)
 //   declarative/status/mdm.is-return-to-service.yaml       (new in 27.0)
@@ -59,7 +60,10 @@ export const DDM_APPLE_STATUS_ITEMS = [
   "softwareupdate.install-state",
   "softwareupdate.failure-reason",
   "device.operating-system.version",
-  // New in 27.0 — the two facts the custody model asks Apple for by name.
+  // Read to decide where a 27.0 item applies: Apple marks `mdm.is-return-to-service`
+  // n/a on macOS/tvOS/watchOS, so its absence there must not read as unknown.
+  "device.operating-system.family",
+  // New in 27.0.
   "mdm.enrollment-type",
   "mdm.is-return-to-service",
 ] as const;
@@ -75,6 +79,7 @@ export const DDM_REPORT_FIELDS = [
   "privacy",
   "lastCheckInAt",
   "osMajor",
+  "platform",
   "updateEnforcement",
   "enrollmentType",
   "returnToService",
@@ -103,22 +108,26 @@ export const DDM_REPORT_APPLE_ALIASES: Record<DdmReportField, DdmAppleAlias> = {
     note: "DDM health = the active/valid state of the device's declarations (management.declarations[].valid).",
   },
   binaryControl: {
-    note: "Endpoint Security binary allow/deny is a CONFIGURATION declaration, not a status item — no DDM status key. Reported out-of-band / on-device.",
+    note: "macOS: Endpoint Security binary allow/deny is a CONFIGURATION declaration, not a status item — no DDM status key. Reported out-of-band / on-device. iOS has no Endpoint Security: the iOS fixtures use `enforced` as a stand-in for the supervised app allow-list, no ingest path produces it, and a real iOS report reads unknown and raises (BUILD_BACKLOG).",
   },
   privacy: {
-    note: "The declarative privacy posture (PPPC replacement) is configuration-declared, not a status item — no DDM status key.",
+    note: "macOS: the declarative privacy posture (PPPC replacement) is configuration-declared, not a status item — no DDM status key. No iOS meaning is defined; the iOS fixtures carry `declared` as a stand-in only, and a real iOS report reads unknown and raises (BUILD_BACKLOG).",
   },
   lastCheckInAt: {
     note: "Check-in recency is a transport/control-plane fact, not a device-reported status item.",
   },
   osMajor: { ddmStatusItem: "device.operating-system.version" },
+  platform: {
+    ddmStatusItem: "device.operating-system.family",
+    note: "Apple's value is a free string (\"such as macOS or iOS\"), no rangelist; the connector accepts only the five supportedOS family names and reads anything else as unknown, which tightens.",
+  },
   enrollmentType: {
     ddmStatusItem: "mdm.enrollment-type",
     note: "Apple's rangelist is none | supervised | device | user. Golden rule 4 rests on SUPERVISED specifically, so only that exact value is read as supervised; absent or unrecognized is unknown, and unknown tightens.",
   },
   returnToService: {
     ddmStatusItem: "mdm.is-return-to-service",
-    note: "A device in return-to-service is being handed on, not held: custody is in transit, so it is never the ground for a grant. Absent is unknown, and unknown tightens.",
+    note: "Apple: \"If true, the device is using the return to service with app preservation mode\" — a standing shared-device configuration, not an erase in flight (that is MDM command status / a device_returned event). Reported on iOS and visionOS 27.0+ only; n/a on macOS, tvOS, watchOS, where absence is not_applicable. Absent where it applies, a pre-27 iOS/visionOS (Apple-correct n/a, not signed off as a loosening), or an unknown platform/OS/non-whole OS major, is unknown, and unknown tightens. `true` does not raise on this axis, but Apple: \"If Return to Service with app preservation is active, the device disables software updates—both automatic and user-initiated\" — updates apply only at a reset, so declarative update enforcement on such a device reads unknown (reset-bound) and raises.",
   },
   updateEnforcement: {
     ddmStatusItem: "softwareupdate.install-state",

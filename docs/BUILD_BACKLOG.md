@@ -1124,7 +1124,8 @@ item 6(v)), every row reads the workstation.
       `ASSIGNMENT_NOT_ENFORCED_LOCALLY`, `step_up` for high-risk workflows from that workstation
       only — not every decision, which would lock most tenants out on day one — plus an
       approval-gated MDM change REQUEST; a readable list that diverges from the confirmed assigned
-      user → a drift finding plus the same request. SignalGrid never writes the list. First task:
+      user → a drift finding, the same high-risk-only `step_up` (a confirmed wrong named user never
+      grades weaker than an unset list) and the same request. SignalGrid never writes the list. First task:
       source whether the EFFECTIVE user-rights list per device can be read back (unsourced today);
       unreadable → `unknown` → the finding, and `step_up` for high-risk workflows only.
       **Fail-closed:** unknown raises. **Deterministic:** fixture data only. The check that fails

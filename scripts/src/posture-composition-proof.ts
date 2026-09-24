@@ -136,6 +136,33 @@ check("registration not_registered must not grant → step_up",
   fromDevicePosture(posture({ deviceRegistrationState: "not_registered" })).action === "step_up");
 check("registration state UNKNOWN must not grant → step_up",
   fromDevicePosture(posture({ deviceRegistrationState: "unknown" })).action === "step_up");
+// THE FIELD THAT WAS NEVER READ AT ALL. `deviceLastSeenAt` rode the signal from the
+// connector's `lastSyncDateTime`, was normalized, and was consulted by nothing — so a
+// device whose MDM record was last synced years ago, still stating
+// compliant/managed/registered, composed to `COMPLIANT_MANAGED` and action `none`.
+// Every other input was confirmed; the one saying WHEN they were confirmed was not.
+//
+// No clock: the signal carries its own `observedAt`, so the age is internal to the
+// record and the adapter stays pure. STALE and UNKNOWN are separate reasons because
+// "the record is old" and "the record does not say when it was current" are different
+// things for whoever reads the evidence.
+check("a posture record last synced years before its own observedAt must not grant → step_up",
+  fromDevicePosture(posture({ deviceLastSeenAt: "2019-01-01T00:00:00Z" })).action === "step_up");
+check("...and the reason names the staleness rather than a state that was in fact confirmed",
+  fromDevicePosture(posture({ deviceLastSeenAt: "2019-01-01T00:00:00Z" })).reason === "DEVICE_POSTURE_STALE");
+check("a posture record with NO last-seen at all must not grant → step_up (absent is not recent)",
+  fromDevicePosture(posture({ deviceLastSeenAt: null })).action === "step_up");
+check("...and an unparseable one grades the same way, under its own reason",
+  fromDevicePosture(posture({ deviceLastSeenAt: "not-a-date" })).reason === "DEVICE_LAST_SEEN_UNKNOWN");
+check("a last-seen dated AFTER the read is a contradiction, not the freshest possible sighting → step_up",
+  fromDevicePosture(posture({ deviceLastSeenAt: "2030-01-01T00:00:00Z" })).action === "step_up");
+check("a staleness concern never DENIES — it forecloses the grant, it does not restrict",
+  fromDevicePosture(posture({ deviceLastSeenAt: "2019-01-01T00:00:00Z" })).action !== "restrict");
+check("NON-VACUITY: a device seen a minute before the read still grants (the six above are not over-tight)",
+  fromDevicePosture(posture({ deviceLastSeenAt: "2026-07-20T11:59:00Z" })).action === "none");
+check("...and a genuinely bad state still outranks a staleness concern",
+  fromDevicePosture(posture({ deviceLastSeenAt: "2019-01-01T00:00:00Z", identityStatus: "disabled" })).action === "escalate");
+
 check("an unknown input never DENIES — it forecloses the grant, it does not restrict",
   (["unknown"] as const).every((u) =>
     [
@@ -400,6 +427,7 @@ function threat(over: Partial<ThreatVerdict>): ThreatVerdict {
     protectionHealthy: true,
     reasonCode: "NO_THREATS_HEALTHY",
     recommendedAction: "none",
+    lastSeenFreshness: "fresh",
     ...over,
   };
 }

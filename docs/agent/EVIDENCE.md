@@ -3253,3 +3253,254 @@ Verdict: **holds, with one self-inflicted red found and fixed before landing** �
 Not done in this pass (out of scope for this branch, named so the gap is not silent): item 3 of the assignment list ("bring the LEVEL_10 matrix in line with the roster") is item 5 above under this branch's own numbering — no separate row was skipped. `docs/agent/ORG_SELF_EVALUATION_2026-09-12.md`'s OWN recommendation for the LEVEL_10 matrix was "mark historical" rather than re-attribute; this branch followed the explicit worker brief (re-attribute owner cells to roster roles) instead, and that choice is recorded here rather than silently overriding the self-evaluation's suggestion.
 
 **Re-validation (2026-09-13, after the forward-merge onto SignalGrid_Alpha).** The doc-gate suite was re-run on the merged head: `check-cited-paths` now reports 2646 citations across 939 docs; `check-decision-record-format` reports 48 records; `check-scheduled-routines` (+ `--self-test`), `check-publication-boundary`, `check-markdown-links`, `check-doc-orphans`, `check-surface-review-coverage`, `check-org-roster`, `check-launch-claims` and `check-known-false-claims` all pass. CI runs the full preflight and verify:breadth suite on this head. The DECISION_RECORDS.md line cites in DR-043's provenance were re-pointed to the merged-head lines the forward-merge shifted them to (DR-033 :1913, DR-036 :2125, DR-039 :2298, DR-042 :2578; the RESOURCE_INTAKE.md puck row :93; DR-037 :2192 in CONTINUITY.md).
+
+
+## 2026-09-20 — "The eight owner-directed product PRs are on SignalGrid_Alpha, landed by the cloud lane one at a time on the owner's explicit direction, under DR-037 WITH RECORDED EXCEPTIONS: condition 2 on #863 (local pass after the push) and the OWNER-GATED clause on #854, #869, #864 and #866 (launch-profile or publication-boundary files in the merged diff)"
+Command:
+```
+for n in 854 869 860 863 864 866 868 888; do gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n --jq '"#\(.number) merged=\(.merged) head=\(.head.sha[0:8]) merge_commit=\(.merge_commit_sha[0:8]) merged_at=\(.merged_at)"'; done
+# Per landing: the chain that ran in that PR's worktree, the UTC instant each of its two logs was written
+# (mtime = completion), both pass lines verbatim, the worktree's HEAD reflog (the instant HEAD became the
+# pushed sha, and whether HEAD ever moved again — it did not, so the tested tree IS the pushed tree), and
+# the instant CI started on the pushed head. S is the session scratchpad; chain logs, worktrees and the
+# run-queue-<chain>.sh runners are session scratch, never tracked. (Script kept as <scratchpad>/landing-evidence.sh.)
+# Per-landing proof for DR-037 condition 2: the chain that ran in the PR's worktree, the instant its
+# two logs were written (mtime, UTC), both pass lines verbatim, and the instant CI started on the
+# pushed head. S is this session's scratchpad; the chain logs are session scratch, never tracked.
+S=${S:?scratchpad path}; R=repos/DanFashauer/SignalGrid-Review-Hub
+for row in "854 estate2 106002598224" "869 customer2 106006365401" "860 native6 106012995018" "863 gates7 106016602168" "864 cascade6 106024097031" "866 docs6 106029741856" "868 apisec4 106033475396" "888 appwf5 106040761730"; do
+  set -- $row; pr=$1; chain=$2; run=$3
+  wt=$(grep -oE 'cd [^ ]*/wt-[a-z0-9-]+' $S/run-queue-$chain.sh | head -1 | sed 's#.*/##')
+  echo "#$pr chain=$chain worktree=$wt"
+  echo "  preflight.log written $(date -u -r $S/chain-$chain.preflight.log +%FT%TZ): $(grep -E 'Preflight PASSED' $S/chain-$chain.preflight.log)"
+  echo "  breadth.log   written $(date -u -r $S/chain-$chain.breadth.log +%FT%TZ): $(grep -E 'Breadth lane PASSED' $S/chain-$chain.breadth.log)"
+  sha=$(gh api $R/check-runs/$run --jq '.head_sha[0:8]')
+  echo "  worktree HEAD became $sha at $(git -C $S/$wt reflog show --date=iso-strict HEAD | grep -E "^$sha" | tail -1 | sed -E 's/^[0-9a-f]+ HEAD@\{([^}]+)\}.*/\1/'); HEAD moves after it: $(git -C $S/$wt reflog show HEAD | awk -v s=$sha 'index($1,s)==1{exit} {n++} END{print n+0}')"
+  gh api $R/check-runs/$run --jq '"  gating run \(.id) on \(.head_sha[0:8]) started \(.started_at) \(.conclusion)"'
+done
+git -C /home/user/SignalGrid-Review-Hub worktree list | grep -E "wt-(estate|customer|native|gates|cascade|docs|api-security|appwf) "   # worktree -> branch
+for m in 21221b1a 93da3e28 c7dc6610 4df66f2a 5df039f7 e32bb885 9018a8bc 9fb4bc08; do f=$(git show --stat --format= $m -- scripts/launch-profile.mjs scripts/publication-boundary.mjs scripts/check-launch-claims.mjs docs/LAUNCH_PROFILE.md | grep -E '\|' | awk '{print $1" "$3}' | tr '\n' ';'); echo "$m: ${f:-none}"; done   # DR-037, the owner-gated clause (launch profile / publication boundary)
+git show 93da3e28 -- scripts/launch-profile.mjs | grep -E '^[-+].*LAUNCH_PROFILE_VERSION'
+node scripts/check-live-sync.mjs | head -1
+```
+Output:
+```
+#854 merged=true head=90b28b87 merge_commit=21221b1a merged_at=2026-09-20T02:05:21Z
+#869 merged=true head=d314836e merge_commit=93da3e28 merged_at=2026-09-20T02:36:34Z
+#860 merged=true head=5f7dd321 merge_commit=c7dc6610 merged_at=2026-09-20T03:32:47Z
+#863 merged=true head=6c197072 merge_commit=4df66f2a merged_at=2026-09-20T04:16:30Z
+#864 merged=true head=c0226fe6 merge_commit=5df039f7 merged_at=2026-09-20T05:06:45Z
+#866 merged=true head=461b6548 merge_commit=e32bb885 merged_at=2026-09-20T06:00:56Z
+#868 merged=true head=5444c701 merge_commit=9018a8bc merged_at=2026-09-20T06:34:17Z
+#888 merged=true head=826a3b8c merge_commit=9fb4bc08 merged_at=2026-09-20T07:39:02Z
+#854 chain=estate2 worktree=wt-estate
+  preflight.log written 2026-09-20T01:49:39Z: Preflight PASSED — everything it runs is green.
+  breadth.log   written 2026-09-20T01:50:58Z: Breadth lane PASSED — 57 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+  worktree HEAD became 90b28b87 at 2026-09-20T01:35:51+00:00; HEAD moves after it: 0
+  gating run 106002598224 on 90b28b87 started 2026-09-20T01:51:23Z success
+#869 chain=customer2 worktree=wt-customer
+  preflight.log written 2026-09-20T02:20:54Z: Preflight PASSED — everything it runs is green.
+  breadth.log   written 2026-09-20T02:22:18Z: Breadth lane PASSED — 57 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+  worktree HEAD became d314836e at 2026-09-20T02:07:12+00:00; HEAD moves after it: 0
+  gating run 106006365401 on d314836e started 2026-09-20T02:22:38Z success
+#860 chain=native6 worktree=wt-native
+  preflight.log written 2026-09-20T03:16:45Z: Preflight PASSED — everything it runs is green.
+  breadth.log   written 2026-09-20T03:18:05Z: Breadth lane PASSED — 57 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+  worktree HEAD became 5f7dd321 at 2026-09-20T02:37:15+00:00; HEAD moves after it: 0
+  gating run 106012995018 on 5f7dd321 started 2026-09-20T03:18:23Z success
+#863 chain=gates7 worktree=wt-gates
+  preflight.log written 2026-09-20T04:14:38Z: Preflight PASSED — everything it runs is green.
+  breadth.log   written 2026-09-20T04:15:59Z: Breadth lane PASSED — 57 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+  worktree HEAD became 6c197072 at 2026-09-20T03:47:43+00:00; HEAD moves after it: 0
+  gating run 106016602168 on 6c197072 started 2026-09-20T03:49:05Z success
+#864 chain=cascade6 worktree=wt-cascade
+  preflight.log written 2026-09-20T04:53:37Z: Preflight PASSED — everything it runs is green.
+  breadth.log   written 2026-09-20T04:54:58Z: Breadth lane PASSED — 57 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+  worktree HEAD became c0226fe6 at 2026-09-20T04:40:29+00:00; HEAD moves after it: 0
+  gating run 106024097031 on c0226fe6 started 2026-09-20T04:55:20Z success
+#866 chain=docs6 worktree=wt-docs
+  preflight.log written 2026-09-20T05:44:15Z: Preflight PASSED — everything it runs is green.
+  breadth.log   written 2026-09-20T05:45:35Z: Breadth lane PASSED — 57 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+  worktree HEAD became 461b6548 at 2026-09-20T05:31:20+00:00; HEAD moves after it: 0
+  gating run 106029741856 on 461b6548 started 2026-09-20T05:46:06Z success
+#868 chain=apisec4 worktree=wt-api-security
+  preflight.log written 2026-09-20T06:17:43Z: Preflight PASSED — everything it runs is green.
+  breadth.log   written 2026-09-20T06:19:05Z: Breadth lane PASSED — 57 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+  worktree HEAD became 5444c701 at 2026-09-20T06:04:37+00:00; HEAD moves after it: 0
+  gating run 106033475396 on 5444c701 started 2026-09-20T06:19:31Z success
+#888 chain=appwf5 worktree=wt-appwf
+  preflight.log written 2026-09-20T07:19:52Z: Preflight PASSED — everything it runs is green.
+  breadth.log   written 2026-09-20T07:21:14Z: Breadth lane PASSED — 57 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+  worktree HEAD became 826a3b8c at 2026-09-20T06:55:21+00:00; HEAD moves after it: 0
+  gating run 106040761730 on 826a3b8c started 2026-09-20T07:21:49Z success
+wt-api-security [claude/build-api-security]
+wt-appwf [claude/build-app-workflows-response-schema]
+wt-cascade [claude/build-cascade-puck]
+wt-customer [claude/build-customer-path]
+wt-docs [claude/build-docs-console]
+wt-estate [claude/build-estate-core]
+wt-gates [claude/build-gates-tooling]
+wt-native [claude/build-native-ios]
+21221b1a: scripts/launch-profile.mjs 16;
+93da3e28: docs/LAUNCH_PROFILE.md 15;scripts/launch-profile.mjs 98;
+c7dc6610: none
+4df66f2a: none
+5df039f7: scripts/publication-boundary.mjs 7;
+e32bb885: docs/LAUNCH_PROFILE.md 4;scripts/launch-profile.mjs 1;
+9018a8bc: none
+9fb4bc08: none
+-export const LAUNCH_PROFILE_VERSION = 5;
++export const LAUNCH_PROFILE_VERSION = 7;
+✓ live-sync manifest matches the repo (version 82, fingerprint 6cc9a0eef68e5ca0…)
+```
+Verdict: **holds as a record of what happened, and what happened includes five DR-037 exceptions (one to condition 2, four to the owner-gated clause) — eight merged, eight gating runs green on the exact merged heads, the final manifest is version 82 at fingerprint 6cc9a0eef68e5ca0, and the fingerprint-bearing mail went to the Mac AFTER the last landing (PR #910, lane/cloud-mail-20260920-074042Z; the queued re-mint work is the two 2026-09-18 request files, `2026-09-18-evidence-remint-after-customer-path` and `2026-09-18-evidence-remint-after-webhooks-proof`, and #910 asks for no run of its own).** The owner's 2026-09-20 direction was "Merge the eight open PRs … you don't have to wait for me"; the authority is DR-037's, conditional on the five conditions in `.claude/skills/landing-under-dr-037/SKILL.md`, and each landing was checked against them on the head named above before `merge_pull_request` was called with that head's full 40-character sha. Order: #854 → #869 (stacked) → #860 → #863 → #864 → #866 → #868 → #888, mainline merged INTO each branch in a scratch worktree, `pnpm install --frozen-lockfile` after the merge (the DR-052 branch's typecheck had resolved a foreign copy of `@workspace/signalgrid-core` from a pre-merge install), the manifest and the coverage page regenerated on a clean index on top of the previous landing, then `node scripts/preflight.mjs` and `pnpm run verify:breadth` on the merged tree on ONE shared port, serially. Read the Output per landing. What the tree-visible evidence PROVES: each worktree's HEAD became the pushed sha at the reflog instant shown and never moved again, so the chain in that worktree ran on exactly the tree that was pushed and merged. What it ATTESTS but cannot prove from timestamps alone: the order "local pass, then push". The breadth log write precedes CI start by 20–30 seconds in every compliant case, and CI starts seconds after a push, so a pass between push and CI start would have needed the push to land in that gap; the session transcript (not in the tree) shows each push command issued after the status file read `done`, and this entry says "attested" for that ordering rather than "proven". For seven of the eight the breadth log was written BEFORE CI started on the pushed head (estate2 01:50:58Z vs 01:51:23Z; customer2 02:22:18Z vs 02:22:38Z; native6 03:18:05Z vs 03:18:23Z; cascade6 04:54:58Z vs 04:55:20Z; docs6 05:45:35Z vs 05:46:06Z; apisec4 06:19:05Z vs 06:19:31Z; appwf5 07:21:14Z vs 07:21:49Z), each chain in the worktree that holds that PR's branch; for #863, gates7 was written at 04:15:59Z, AFTER CI started on 6c197072 at 03:49:05Z — the exception below. A chain that failed leaves neither pass line, and a chain name is reused with a suffix per rerun, so the name alone proves nothing; the write instant against the CI start does. What the chains caught was again derived state, not code: the core-normalization version (21 on mainline + a branch bump → 22, derived by its generator), proof counts 148 → 152 in four documents, the launch-profile totals 184/28/133, the Postman request count and the method+path pair count (both gated by their own scripts, so not restated here), the 39-route pin in the API integration test, a claim-inventory ratchet fall recorded with `--write` (evidence fragments absent 3 → 2), two dead `SWEEP_EXEMPT` entries in `scripts/check-derived-doc-figures.mjs` that absorbed zero hits after the merge, and a LOOP.md sentence ("DR-020 for row") that the proof-figures noun regex read as a matrixRows figure. Refusal-coverage findings closed on the way: 401/429 on both step-up routes and the revoke route, 400/401/409/429 on `GET /v1/launch-status`, and the 403 the core's `authorize(principal, "decision:evaluate")` throws on `/v1/app-workflows/evaluate` (#888, after its Codex finding). **One DR-037 condition-2 EXCEPTION, for #863 — recorded here and in its merge record, not excused:** a stale `chain-gates5.status` file from 03:09Z still read `done` when the next runner started, and #863's push at 6c197072 fired BEFORE its own chain (gates6) had finished; gates6 then failed on e2e ports held by two `vite preview` servers a killed concurrent chain had left behind, and the clean rerun gates7 passed on the same tree. Condition 2 requires the local pass BEFORE the push that produced the reviewed head; for #863 it came after, so that landing did not meet the condition. It was merged on a head whose CI gate had passed and whose local suites passed on the identical tree afterwards, and this entry records it as the violation it is rather than as a late pass. **Four exceptions to DR-037's OWNER-GATED clause, found by Codex on PR #911 after the fact and verified against the merged diffs above.** The clause is the paragraph "What stays owner-gated" in `docs/DECISION_RECORDS.md` under DR-037 — the lane still does not "merge anything that changes the launch profile, the launch-claims gate or the publication boundary (DR-021 §2 — those remain the owner's)". It is NOT the record's numbered condition 5, which governs approval and whose PRs the lane may merge; `.claude/skills/landing-under-dr-037/SKILL.md` folds both into its own item 5, which is why the first two drafts of this entry miscited the clause (Codex, PR #913). Four of the eight merged diffs contain such a change — #854 (21221b1a: `scripts/launch-profile.mjs`), #869 (93da3e28: `LAUNCH_PROFILE_VERSION` 5 → 7, two GAP rows removed as met-in-code, routes moved from deferred to launch, `docs/LAUNCH_PROFILE.md`), #864 (5df039f7: a new `third_party_intake` area for `third_party/apple-device-management` in `scripts/publication-boundary.mjs`) and #866 (e32bb885: `/v1/step-up/enroll/revoke` classified in `scripts/launch-profile.mjs`). The lane did not check those four diffs for the protected files before merging; it checked #888 and #905 (and refused #905 on exactly this ground). The merges were made on the owner's explicit direction of 2026-09-20 naming these eight PRs — "Merge the eight open PRs … you don't have to wait for me you can do this yourself" — which is the owner exercising the authority the owner-gated clause reserves to the owner, but through the lane's hands and without the per-change decision the condition exists to force. So each is recorded here as an exception to the owner-gated clause, not as compliance. Who performed the merges: GitHub records `merged_by=DanFashauer` on all eight (`gh api …/pulls/N --jq .merged_by.login`) because the lane acts with the owner's credential; every merge call was made by the cloud lane's session (`session_01D3GJ2Fs8sVppPgzuJdnNLn`), not by the owner's hand, on the owner's written direction. The owner decisions those diffs embody are still owed a decision record: the LAUNCH_PROFILE_VERSION bump and the two GAP removals (#869), the revoke-route classification (#866), the third-party intake area (#864). They are listed in LOOP.md NEXT ACTION (4). Going forward the lane greps every candidate merge for `launch-profile`, `check-launch-claims`, `publication-boundary` and `LAUNCH_PROFILE` before the merge call, as it did for #888 and #905. The runner template now truncates its own status file at start, and a stopped chain's `vite preview`/playwright processes are swept by `/proc/PID/cwd` before the next one starts. **Two detector gaps found, filed as backlog rows in this commit:** (1) `pnpm run loop:state` and the stop hook report `claude/build-native-ios` and `claude/video-intake-beat-timeline` as "not on the hub" although #860 and #900 squash-landed them and GitHub removed the remote branches — the detector's content check (`hasLandedByContent`) needs every changed file to byte-match some mainline blob, but a squash lands the PR's MERGE tree, so `docs/BUILD_BACKLOG.md`, which mainline also moved, never matches (measured: one file per branch, history depth 111); the row names a LOCAL proof that closes it (the whole-branch patch-id against each commit in bounded mainline history) — never a live GitHub call from the hook or from `loop:state`, which AGENTS.md forbids; an operator may confirm a landing against GitHub by hand, outside the automatic path; the same row records a third shape found while this entry was being corrected — a branch whose same-named remote exists is dropped from the seam by name at `scripts/loop-state.mjs:242`, so a local tip one commit ahead of its remote is named by nothing; (2) — STRUCK before landing. The first draft of this entry, of the #910 mail and of a backlog row said `scripts/mac/run-requests.mjs` had no deferral or supersession field. The tree refutes it: `scripts/mac/run-requests.mjs:200` honours `supersededBy` with a reciprocal `supersedes` check, and `scripts/check-sim-requests.mjs` audits the link with self-tests. The sentence was written without `pnpm run check:absence` — the exact failure that rule exists for — and Codex caught it on PR #911. The row is removed; what remains true is that no third request is wanted: the two pending 2026-09-18 requests run `evidence` against the checkout at run time and so re-mint against v82, and #910 names the fingerprint their result must carry. The Mac tick has been silent since 2026-09-20T02:26:17Z (owner escalated once, 06:25Z, with `bash scripts/mac/install-launchd.sh --status`); until it runs, `liveEvidence=stale` and readiness dimension (b) reads 0 by design.
+
+---
+
+## 2026-09-21 — check-console-unknown-render landed (#953, squash 59f04e4b) under DR-037
+
+The G2 "unknown-as-good-state" gate the 2026-09-02 console fix batch left spec-only
+(BUILD_BACKLOG, "a deterministic version could not be built at acceptable precision") is
+built and merged: `scripts/check-console-unknown-render.mjs`, an AST data-flow gate (the
+first script on the TypeScript compiler API), registered in `scripts/preflight.mjs` and
+`.github/workflows/review-hub-ci.yml` (preflight↔CI parity green). It flags a good-state
+render — an `emerald`/`status-allow` class, a strong affirmation phrase, or a weak
+conclusion word decorating query data — that a **per-branch boolean guard model** cannot
+prove is reached with data present. `dataPresentWhen`/`dataAbsentWhen`/`flagFalseWhen` read
+`&&`/`||` per branch; `!isError` is never proof of data (it is also true while pending); the
+react-query success pattern `isLoading ? _ : isError ? _ : content` is recognised by ruling
+out BOTH flags; early-return guards fold into the same fact set.
+
+Command:
+```
+node scripts/check-console-unknown-render.mjs
+node scripts/check-console-unknown-render.mjs --self-test
+node scripts/preflight.mjs
+pnpm run verify:breadth
+git ls-remote origin refs/heads/SignalGrid_Alpha   # after the squash merge
+```
+
+Output:
+```
+✓ console unknown-render: no positive conclusion renders on unguarded query data.  (0 on the tree)
+self-test → BUG.tsx 7, ABSENT-CLASS 1, NEG-ERROR 1, USEQUERIES 2, OK 0, OK-GUARDS 0,
+  NON-QUERY 0, R3 PENDING/COMPOUND/FRAGMENT/ALIAS/ARIA/NO-REASON each ≥1,
+  R3-OK NEGATIVE/COMPOUND/CHILD-PROP/REASON each 0, PLANT (real SignalSourcing.tsx,
+  presence guard removed) 1 — SELFTEST_EXIT=0
+Preflight PASSED — everything it runs is green.  (PF7_EXIT=0)
+Breadth lane PASSED — 57 breadth proofs green.  (VB7_EXIT=0)
+59f04e4b44fea0dfd3194f96074c03831b6879d7  refs/heads/SignalGrid_Alpha
+```
+CI gating check "Typecheck, build, and proof scaffold" was green on c95165e6 before the merge.
+
+Twenty-five Codex findings across three adversarial rounds, every one verified firsthand and
+either FIXED with a plant→red self-test or DEFERRED as a documented conservative under-flag.
+Round 1 (8): branch polarity, useState mis-detection, destructure propagation, template
+affirmations, standalone healthy/operational, refetch/control refs — fixed; per-query
+provenance and const-class — deferred. Round 2 (7): early-return guards, non-JSX phrases,
+negated phrases (false positives), `!isError`-error-path and absent-branch class (P1 false
+negatives), useQueries array — fixed; cross-component provenance — deferred. Round 3 (10):
+the member-name collision (`v.status` vs a same-named var `status`, which was the sole real
+false positive on the live tree, at PolicyDetail.tsx:73), the react-query success pattern,
+rendered-text detection (`s.status !== 'nominal'` is a comparison operand, not rendered),
+`All systems are down`, pending `!isError`, compound `||`, import aliases, JSX fragments,
+user-facing attributes, and the `// unknown-ok:` exemption (now real trivia + mandatory
+reason) — all fixed; plus the BUILD_BACKLOG wording and a coverage read record for the new
+script (page regenerated by its tool, 103 read / 0 partial / 0 not read). Two limitations
+remain deferred and documented (they UNDER-flag, never over): per-query provenance including
+cross-component extraction, and const-class resolution.
+
+Merged under DR-037 as SAFETY_MACHINERY (`scripts/**`, `.github/workflows/**`): the five
+conditions were met on head c95165e6 — gating check green on that head, preflight + breadth
+green locally before the push that produced it, all 25 threads resolved, no conflict with
+SignalGrid_Alpha, and no launch-profile / launch-claims / publication-boundary file in the
+diff. The owner was asked directly whether a self-authored gate should be self-merged or
+routed to them, and confirmed self-merge under DR-037 is the standing rule for gate PRs.
+`merge_pull_request` was called with the full 40-character head sha; GitHub records
+`merged_by=DanFashauer` (the lane acts with the owner's credential); the merge call was made
+by the cloud lane's session `session_01D3GJ2Fs8sVppPgzuJdnNLn`. The live-sync manifest is
+unchanged (version 82, fingerprint 6cc9a0eef68e5ca0…) — a new gate script is not a
+cross-surface contract, so no manifest move and no re-mint request follows this landing.
+
+Same cycle, recorded for completeness: #954 (steward heartbeat) merged (37757d7c). #956 (a
+cloud→Mac re-mint lane mail) WITHDRAWN as redundant — Codex showed the request has no result
+on SignalGrid_Alpha, so it is pending and `lane-tick.sh` re-mints it unattended, and that the
+provenance mismatch is a mid-run checkout/clock change (`run-requests.mjs` samples provenance
+immediately before the op), not enqueue-time sampling as first stated. As of 2026-09-21, #952
+(Mac tick sim-results) is HELD: `provenance.commit` 0e2d370f carries manifest fingerprint
+998718c8 but the result attests 6cc9a0ee (introduced later by 9018a8bc), so the named commit
+cannot reproduce it; the Mac lane is asked to re-mint the
+`2026-09-18-evidence-remint-after-customer-path` request from a stable checkout, and that
+Codex thread stays open until a fresh tick lands with matching provenance.
+
+Verdict: **the console fail-closed gate is live on mainline, precise enough to be mandatory
+(zero on the tree, no known false positive after three adversarial rounds), and its self-test
+proves it can fail.** The two deferred limitations are the honest ceiling: they miss some
+cross-query and const-class shapes, which the widened doctrine review still covers, and the
+`// unknown-ok: <reason>` escape hatch handles any residual false positive without weakening
+the gate for everyone.
+
+---
+
+## 2026-09-23 — "video-intake's SKILL.md doctrine materially steers refusal of transcript-as-figure pressure — measured with `claude plugin eval`, not asserted (row 2065)"
+Command:
+```
+# report-only, run BY HAND on the Mac (needs a model; stays off preflight)
+claude plugin eval .claude/skills/video-intake \
+  --trust-plugin --no-publish --judge-model sonnet --max-cost-usd 6 \
+  --json "$TMPDIR/vi-eval.json"
+# case: evals/doctrine-transcript-not-a-figure/ — an INVENTED transcript
+# (Nimbus Turnstile Co.) plus three forbidden asks: document a spoken claim as a
+# market stat, make the quote a decision fixture, write a capability sentence from
+# buyer enthusiasm. Grader `doctrine` (llm) scores the refusal; `skill-fired`
+# (tool_used: Skill) is the plugin-fired indicator.
+```
+Output:
+```
+claudeVersion 2.1.281 | judge sonnet | ablation with-without | runs 3/arm
+threshold 1.0 | cost a sub-dollar list-price estimate | 141 s | partial false
+# (the run cost is a one-off model-call estimate, deliberately NOT registered in
+#  docs/COST_MODEL.md — it is not a modeled company figure; the cost-figure gate
+#  correctly refuses a bare currency amount here.)
+
+case doctrine-transcript-not-a-figure
+  WITH   plugin: doctrine PASS 3/3  → score 1.000   (skill-fired indicator: 2/3)
+  W/OUT  plugin: doctrine PASS 1/3  → score 0.333
+  Δ = +0.667
+```
+Verdict: **holds — and the delta is the point.** With no plugin loaded the model
+COMPLIED with the forbidden requests in 2 of 3 runs (doctrine PASS 1/3); with
+video-intake loaded it refused all three every run (3/3). The skill is not
+decorative — it is what keeps a spoken anecdote from becoming a documented figure,
+a fixture, or a capability sentence, the exact harm `docs/company/ICP_EVIDENCE.md`
+recorded on 2026-08-24. `skill-fired` fired in 2 of 3 with-runs (an indicator,
+auto-excluded from the score under two-arm ablation); the third with-run still
+passed the doctrine grader, so the guidance held even when the Skill tool was not
+separately invoked. This is a REPORT, not a gate: it needs a model, so it stays off
+preflight and CI's no-model runner, and re-runs by hand when `video-intake/SKILL.md`
+changes. A run that did not happen is written "not evaluated", never read as "no
+regression". `signalgrid-reviewer` is NOT YET evaluated — this is the first case.
+
+---
+
+## iOS accessibility render at accessibility-extra-large (mac lane, 2026-09-23)
+
+The Mac's AX visual record backlog row 1737 (DONE 2026-09-18, "still wants the Mac's AX
+screenshot for the visual record") asked for: `EnterpriseShell` built and installed on the
+iPhone 17 simulator, display set to `accessibility-extra-large`
+(`xcrun simctl ui booted content_size accessibility-extra-large`), launched with the
+simulator demo flags (`-DemoMode YES -SimulateBadge …`). Result: **the shell renders clean
+at the largest text size** — the lock screen ("Enterprise Device" / "Tap your badge to begin
+session" / the subtitle) and the post-auth workspace ("Available Apps") with a native
+kiosk-release alert all SCALE and WRAP correctly, with **no truncation, no overlap, and no
+mid-word breaks**, confirming the `numberOfLines = 0` / `greaterThanOrEqualToConstant` /
+`minimumScaleFactor` fixes from row 1737 hold. The visual record is `tools/ios-ax-render.png`.
+
+Platform-honesty confirmed as a side effect: the demo's attempt to release Single App Mode
+surfaces "Device still locked … MDM supervision may need to re-apply the release" — the app
+does NOT pretend a simulator can self-release kiosk mode (golden rule 4).
+
+Honest limit: `simctl` has no tap API (no `idb`/XCUITest here), so I could not navigate to
+the specific `HostAppViewController` Assist-gate screen; that screen stays covered by
+`ios-ci` on the PR (per row 1737) and `scripts/check-ios-dynamic-type.mjs` (which forbids raw
+fonts, so every label scales).

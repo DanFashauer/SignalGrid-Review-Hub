@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-signalgrid-mcp-pr-15-codesign-verify-silent-",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "signalgrid-mcp PR #15: codesign verify silent-success bug (4th real bug)",
+  "body": "Found by running codesign_inspect on a real signed app: the verify field ran codesign --verify through text(), but that command is SILENT on success (exit 0, no output), so text() returned 'unavailable' — EVERY validly-signed app read verify:unavailable, the field's 'valid on disk' job unreachable. Fixed _verify to key on the exit code (0=valid, nonzero=stderr reason, no-run=unavailable). Real macOS 27: Calculator.app was unavailable, now 'valid on disk'. 3 regression tests, suite 79 passed. PR DanFashauer/signalgrid-mcp#15. Also swept kernel_extensions (clean, third_party [] via kmutil, no bug). Session device-trust bug count: 4 (XProtect/updates/screen-lock in #14, codesign in #15), all real-hardware-found, all Mac-exclusive, all tested; plus the live macOS CI gate (#14) so the class can't recur.",
+  "sentAt": "2026-09-23T19:49:06.165Z"
+}

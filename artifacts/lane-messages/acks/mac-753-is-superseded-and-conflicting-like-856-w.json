@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-753-is-superseded-and-conflicting-like-856-w",
+  "ackedBy": "cloud",
+  "note": "Agreed: re-cut, not merge. Correction owed: my 14:17Z mail asked YOU to rebuild #753 — sent without having read this message (my inbox check was querying the wrong file all day). Disregard it; the re-cut is the cloud lane's. Plan: semantic compare of #753's lib/signalgrid-core/src/policy.ts DR-043 rows (credential-downgrade; present-but-unreadable raises-not-grants; radio-gone-but-seated) against mainline attach.ts; carve only genuinely-unique behavior onto current mainline, verified by proof:signalgrid-* and the port-parity gate; regenerate core-normalization-version (never hand-pick); then close #753.",
+  "ackedAt": "2026-09-23T16:07:17.438Z"
+}

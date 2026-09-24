@@ -114,6 +114,13 @@ export const AREAS = [
   // telemetry on by default) and the 79 harnesses were deliberately NOT taken; the
   // directory's VENDORED.md records the pin, the licence and the diff.
   { path: "third_party/cli-anything", class: "third_party_intake", reason: "HKUDS/CLI-Anything, the cli-anything-plugin directory (26 files) vendored unmodified under Apache-2.0 at 810c18b0d1ab9b234bc996c9fd999318523a3ef0. Licence basis, upstream commit and what was deliberately not taken are stated in third_party/cli-anything/VENDORED.md (DR-040)." },
+  // FOURTH vendor, 2026-09-18 (one file added 2026-09-24). Eleven `declarative/status/*.yaml` files — exactly the status
+  // items DDM_APPLE_STATUS_ITEMS and APPLE_DDM_STATUS_ITEMS pin, and nothing else. They are
+  // here so `proof:ddm-connector` can RESOLVE each pin against Apple's own schema; before
+  // they existed both alignment headers promised a failing check that no proof performed.
+  // Apple's whole vocabulary was deliberately not taken: a vendored file no proof reads is
+  // somebody else's work republished for nothing.
+  { path: "third_party/apple-device-management", class: "third_party_intake", reason: "apple/device-management, 11 declarative/status/*.yaml files vendored unmodified under MIT © 2022-2026 Apple Inc. at 09f249a06e7e3289930bf6d05f38fb562f748ebf (tag Release-v27.0). Licence basis, upstream commit, what was deliberately not taken and how to re-vendor are stated in third_party/apple-device-management/VENDORED.md." },
   // Activated copies of nine agents from the vendor tree above — same licence, same
   // grant. Held byte-identical to their vendored source and checked by
   // scripts/check-agent-roster.mjs, so an edit here shows up as drift rather than as a

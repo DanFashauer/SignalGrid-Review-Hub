@@ -289,7 +289,7 @@ async function derive() {
   const liveIds = ids.filter((i) => /^live-/.test(i));
   if (liveIds.length === 0) throw new Broken("sim-operations declares no live-* operations");
   const results = existsSync(join(repo, RESULTS))
-    ? readdirSync(join(repo, RESULTS)).filter((f) => f.endsWith(".json")).map((f) => { try { return JSON.parse(readFileSync(join(repo, RESULTS, f), "utf8")); } catch { return {}; } })
+    ? readdirSync(join(repo, RESULTS)).filter((f) => f.endsWith(".json")).map((f) => { try { return JSON.parse(readFileSync(join(repo, RESULTS, f), "utf8")); } catch (e) { console.warn(`check-readiness-figure: unreadable sim-result ${f}: ${e.message} — counted as no run (DR-054: the corruption is audible, not swallowed)`); return {}; } })
     : [];
   const live = liveDimension(liveIds, results, ops.GREEN_STATUSES || ["passed"]);
   const c = { scenarios: { ...scen, pct: pct(scen.ran, scen.declared) }, live, pct: Math.min(pct(scen.ran, scen.declared), live.pct) };

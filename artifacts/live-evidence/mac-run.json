@@ -1,9 +1,9 @@
 {
   "schema": "signalgrid-live-evidence/v1",
-  "manifestFingerprint": "4afa60cf2fd5551d7754c70a1b0a6e46df579bf0f1d89dcfd8a0bd53a8d936f9",
-  "manifestVersion": 78,
+  "manifestFingerprint": "6cc9a0eef68e5ca0385909cd9ed84dc03d1d9b8e760b05129e8837d220817dbc",
+  "manifestVersion": 82,
   "platform": "darwin",
-  "mintedAt": "2026-09-13T02:55:42.188Z",
+  "mintedAt": "2026-09-23T23:36:00.196Z",
   "preflightCoverage": {
     "nativeBuildExcluded": true,
     "target": "darwin-arm64",
@@ -27,6 +27,6 @@
     "taskExceptionReasonCodes": 13,
     "handoffSimRefusalCodes": 9,
     "mcpTools": 16,
-    "proofsDocumented": 60
+    "proofsDocumented": 63
   }
 }

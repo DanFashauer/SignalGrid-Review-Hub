@@ -36,7 +36,12 @@ final class ScreenCaptureGuard {
     }
 
     private var allowScreenCapture: Bool {
-        SessionStateManager.shared.currentSession?.persona.restrictions.allowScreenCapture ?? true
+        // FAIL-CLOSED: nil session means the persona is unknown, so screen capture is NOT
+        // permitted. This only changes behaviour in the contradictory state — currentState is
+        // .activeSession while currentSession is nil — because ScreenCapturePolicy.shouldRedact
+        // is `sessionActive && !allowScreenCapture && isCaptured`. That contradictory state is
+        // exactly where the old default granted.
+        SessionStateManager.shared.currentSession?.persona.restrictions.allowScreenCapture ?? false
     }
 
     private func refresh() {

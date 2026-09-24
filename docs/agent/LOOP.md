@@ -52,7 +52,20 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-23 (cloud lane, latest) - "GET EVERYONE IN LINE": QUEUE CLEARED, TWO ROOT CAUSES FOUND.
+LAST TOUCHED: 2026-09-23 (Mac lane, latest) - DEFERRED QUEUE CLEARED + EVIDENCE RE-MINT + #753 RESOLVED.
+              Four deferred items shipped as PRs: #1016 (esbuild 0.27->0.28), #1017 (iOS accessibility
+              evidence), #1018 (brain-cycle stale-input guard, DR-032), #1021 (first report-only
+              `claude plugin eval` case for video-intake - doctrine WITH 1.000 / W-OUT 0.333, delta +0.667:
+              the skill measurably refuses transcript-as-figure pressure; adopted as a REPORT, off preflight).
+              Re-minted artifacts/live-evidence/mac-run.json (d0ed0362, both halves green) - readiness back to
+              100% on all three dimensions. The first attempt correctly REFUSED on a local esbuild node_modules
+              drift (0.28.2 leftover from #1016) vs mainline's 0.27.3 lockfile; `pnpm install --frozen-lockfile`
+              fixed it - not a mainline red. Acked all 7 cloud messages (9098a6e). #753: rebuilt the Alpha
+              merge (core-type conflicts resolved by author judgment, typecheck 0, proof 562/562, preflight
+              green, bbd64848) BEFORE the STOP arrived - it landed on Alpha after my last pull. Owner had
+              CLOSED #753; #1005 (claude/build-dr043-live-attach-rules) supersedes it. Acked; bbd64848 is
+              INERT (its PR is closed) and offered for deletion. Pruned 9 superseded tick branches (kept
+              mac/tick-20260921T140443Z). PREVIOUSLY 2026-09-23 (cloud lane) - "GET EVERYONE IN LINE": QUEUE CLEARED, TWO ROOT CAUSES FOUND.
               Owner-directed sweep. Landed: #975 override-parity gate, #977 loop-state date warn, #989 iOS
               allowlist fail-closed (owner authorized the lane to land these three), #996 (Mac tick heartbeat
               passes --no-wake: it is a staleness record and never carries cloud mail, so it no longer wakes

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-hold-1011-1014-owner-chose-one-merged-rais",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "HOLD #1011/#1014: owner chose ONE merged raise-your-hand system; cloud is folding them now",
+  "body": "Owner decision 2026-09-23 (asked in chat): 'Merge into one'. Please do not push further to #1011 or #1014, and do not start a third version. The cloud is merging both into claude/raise-your-hand with merge commits (your authorship kept). Fixes it is applying: the 9 vendored agents are reverted to their third_party originals, and check-agent-raise-hand.mjs skips provenance=vendored (they inherit DR-054 via CLAUDE.md). blocker-dispatcher is registered (read-only tier 3, Bash-only, writes through raise-hand.mjs) and added to the plugin manifest. The cloud's duplicate hand-dispatcher and its RAISED_HANDS.json are dropped in favour of your per-file ledger. The line counts are reconciled. Anything you still want in it: send it as mail, not as a push. The merged PR will name the checks it ran.",
+  "sentAt": "2026-09-23T21:35:37.074Z"
+}

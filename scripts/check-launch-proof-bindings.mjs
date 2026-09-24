@@ -5,6 +5,20 @@
 //
 //   node scripts/check-launch-proof-bindings.mjs              # gate
 //   node scripts/check-launch-proof-bindings.mjs --self-test  # prove the gate can fail
+//   node scripts/check-launch-proof-bindings.mjs --write      # re-record the bindings ratchet (deliberate)
+//
+// THE RATCHET (2026-09-24, the Mac lane's P2 on #686). Every check below asks whether a
+// binding is REAL; none asked whether one had been QUIETLY DROPPED. Removing
+// `proof:webauthn-verify` from a step-up route leaves every rule satisfied (the route
+// still binds api-contract) and makes dimension (b) easier to reach — the gate behind the
+// number that opens outreach weakening in a one-word diff nobody is asked to justify.
+// So the per-item binding set is recorded in docs/agent/launch-proof-bindings-record.json
+// (the launch-claims-docs-ceiling.json pattern, read through scripts/lib/ratchet-read.mjs
+// so a deleted or corrupt record REFUSES instead of re-baselining). A binding the record
+// holds and the profile no longer does is FATAL unless the record changes in the same
+// diff (`--write`, committed) — the removal then shows up in review as a line in a file
+// named for it. A new binding the record lacks is fatal too, so the record never lags
+// the profile (an unrecorded binding would be removable in silence).
 //
 // WHY. DR-036 made readiness dimension (b) — "launch surface, evidence-bound" — BINARY:
 // 100 while the last Mac evidence run was green, fresh and covered the current manifest,
@@ -74,11 +88,12 @@
 // fingerprint the evidence records and the ones this gate (and the readiness
 // figure) require cannot come from two separate readings.
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { readRatchetFile, refusalLines } from "./lib/ratchet-read.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -433,6 +448,45 @@ export function proofSourceDigest(repoRoot, relPath, pkgDirs) {
   return sourceDigestOf(ownBlob, dirListings);
 }
 
+const RECORD_REL = "docs/agent/launch-proof-bindings-record.json";
+
+/** Pure: surface[id] -> sorted proof/step names, for every launch item that binds any. */
+export function bindingRecord(surfaces) {
+  const items = {};
+  for (const s of surfaces) {
+    for (const e of s.launch ?? []) {
+      if (typeof e === "object" && e !== null && Array.isArray(e.proofs)) items[`${s.key}[${e.id}]`] = [...e.proofs].sort();
+    }
+  }
+  return Object.fromEntries(Object.entries(items).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+/** Pure: the ratchet's problems — recorded bindings the profile dropped (the P2), and
+ *  current bindings the record lacks (so the record cannot lag and hide a later drop). */
+export function ratchetProblems(recorded, current) {
+  const problems = [];
+  const fix = `if deliberate, run \`node scripts/check-launch-proof-bindings.mjs --write\` and commit ${RECORD_REL} in the same diff`;
+  for (const [item, proofs] of Object.entries(recorded ?? {})) {
+    const now = new Set(current[item] ?? []);
+    for (const p of proofs) if (!now.has(p)) problems.push(`REMOVED binding: ${item} no longer binds ${p} — ${fix}`);
+  }
+  for (const [item, proofs] of Object.entries(current)) {
+    const was = new Set(recorded?.[item] ?? []);
+    for (const p of proofs) if (!was.has(p)) problems.push(`UNRECORDED binding: ${item} binds ${p}, which ${RECORD_REL} does not hold — run --write and commit it`);
+  }
+  return problems;
+}
+
+function writeRecord(items) {
+  const bindings = Object.values(items).reduce((n, a) => n + a.length, 0);
+  writeFileSync(join(repo, RECORD_REL), JSON.stringify({
+    note: "RATCHET for launch-proof bindings (scripts/check-launch-proof-bindings.mjs). Every (launch item, proof) pair the profile binds. A binding removed from scripts/launch-profile.mjs without this file changing in the same diff is FATAL. Never hand-edit; `node scripts/check-launch-proof-bindings.mjs --write` writes it.",
+    bindings,
+    items,
+  }, null, 2) + "\n");
+  return bindings;
+}
+
 function selfTest() {
   const checks = [];
   const lane = [
@@ -573,6 +627,20 @@ function selfTest() {
   checks.push(["sourceDigestOf: a changed OWN blob (the proof script itself changed) moves the digest", digestA !== sourceDigestOf("blobZ", new Map([["lib/x", ["a:1", "b:2"]]]))]);
   checks.push(["sourceDigestOf: deterministic with no imported dirs at all", sourceDigestOf("blobA", new Map()) === sourceDigestOf("blobA", new Map())]);
 
+  // ── the ratchet (the Mac's P2): a dropped binding fails unless the record changed. ──
+  const recSurfaces = [{ key: "api", launch: [{ id: "/v1/x", proofs: ["proof:b", "proof:a"] }, { id: "/v1/y", proofs: ["proof:a"] }] }];
+  const rec = bindingRecord(recSurfaces);
+  checks.push(["ratchet: the record is per item and sorted", JSON.stringify(rec) === '{"api[/v1/x]":["proof:a","proof:b"],"api[/v1/y]":["proof:a"]}']);
+  checks.push(["ratchet: an unchanged profile has no ratchet problems", ratchetProblems(rec, bindingRecord(recSurfaces)).length === 0]);
+  const dropped = ratchetProblems(rec, bindingRecord([{ key: "api", launch: [{ id: "/v1/x", proofs: ["proof:a"] }, { id: "/v1/y", proofs: ["proof:a"] }] }]));
+  checks.push(["planted: REMOVING a proof from an item (record unchanged) FAILS, naming item and proof", dropped.length === 1 && /REMOVED binding: api\[\/v1\/x\] no longer binds proof:b/.test(dropped[0])]);
+  const itemGone = ratchetProblems(rec, bindingRecord([{ key: "api", launch: [{ id: "/v1/x", proofs: ["proof:a", "proof:b"] }] }]));
+  checks.push(["planted: dropping a whole launch item (reclassified) FAILS the same way", itemGone.some((p) => /REMOVED binding: api\[\/v1\/y\]/.test(p))]);
+  const added = ratchetProblems(rec, bindingRecord([{ key: "api", launch: [{ id: "/v1/x", proofs: ["proof:a", "proof:b", "proof:c"] }, { id: "/v1/y", proofs: ["proof:a"] }] }]));
+  checks.push(["planted: a binding the record lacks is reported as UNRECORDED (the record cannot lag)", added.length === 1 && /UNRECORDED binding: api\[\/v1\/x\] binds proof:c/.test(added[0])]);
+  const rerecorded = bindingRecord([{ key: "api", launch: [{ id: "/v1/x", proofs: ["proof:a"] }, { id: "/v1/y", proofs: ["proof:a"] }] }]);
+  checks.push(["ratchet: the same removal WITH the record changed in the same diff passes", ratchetProblems(rerecorded, rerecorded).length === 0]);
+
   // ── LIVE smoke checks against the real repo — cheap, and the whole point
   // is that this derivation is read from the tree, not hand-maintained. ──
   const livePkgDirs = workspacePackageDirs(repo);
@@ -602,6 +670,19 @@ async function main() {
   if (preflightSteps.size === 0) { console.error("check-launch-proof-bindings: parsed zero STEPS names out of scripts/preflight.mjs — the STEPS shape changed; refusing to report green."); process.exit(1); }
   const selfSkipping = liveSelfSkipping(repo);
   const problems = checkBindings({ surfaces: lp.SURFACES, statuses: lp.STATUSES, proofScripts, preflightProofs, selfSkipping, preflightSteps });
+  const current = bindingRecord(lp.SURFACES);
+  if (process.argv.includes("--write")) {
+    if (problems.length) { for (const p of problems) console.error(`✗ ${p}`); console.error("\nRefusing to record bindings that fail the gate."); process.exit(1); }
+    console.log(`Recorded ${writeRecord(current)} binding(s) across ${Object.keys(current).length} launch item(s) in ${RECORD_REL}.`);
+    return;
+  }
+  const recordRead = readRatchetFile(join(repo, RECORD_REL), "bindings");
+  if (recordRead.action === "refuse") {
+    for (const line of refusalLines(RECORD_REL, recordRead.why, "node scripts/check-launch-proof-bindings.mjs --write")) console.error(line);
+    process.exit(1);
+  }
+  if (recordRead.action === "genesis") console.log(`  ratchet: ${RECORD_REL} baseline recorded at ${writeRecord(current)} binding(s)`);
+  else problems.push(...ratchetProblems(recordRead.value.items, current));
   const bound = boundProofs(lp.SURFACES);
   const launchItems = lp.SURFACES.reduce((n, s) => n + (s.launch ?? []).length, 0);
   console.log(`Launch-proof bindings — ${launchItems} launch items bind ${bound.size} distinct proof/step(s); preflight registers ${preflightProofs.size} proofs of ${proofScripts.size} in package.json and ${preflightSteps.size} STEPS entries\n`);
@@ -611,7 +692,7 @@ async function main() {
     console.error(`\nLaunch-proof bindings FAILED: ${problems.length} problem(s). A binding is a claim that a named proof or step certifies a launch item; every one must name a proof or step that exists and runs per push.`);
     process.exit(1);
   }
-  console.log("\nLaunch-proof bindings passed — every launch item names at least one proof or step, and every named one exists, runs in preflight, and never self-skips.");
+  console.log(`\nLaunch-proof bindings passed — every launch item names at least one proof or step, and every named one exists, runs in preflight, and never self-skips; no binding was dropped without ${RECORD_REL} changing.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

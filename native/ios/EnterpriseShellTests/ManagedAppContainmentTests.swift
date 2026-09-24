@@ -1,7 +1,12 @@
 import XCTest
 
-// ManagedAppContainment is compiled directly into this test bundle (see
+// In Xcode ManagedAppContainment is compiled directly into this test bundle (see
 // `EnterpriseShellTests` sources in ../project.yml), so there is no module to import.
+// Under SwiftPM (../Package.swift) it is part of the EnterpriseShellPort library, and
+// this brings it in, the same way the other port tests do.
+#if canImport(EnterpriseShellPort)
+@testable import EnterpriseShellPort
+#endif
 // These pin the fail-closed containment behavior landed in #989: an absent/empty
 // allowlist contains the managed browser to its launch origin only — never
 // unrestricted — and the host match cannot be fooled by a look-alike domain.

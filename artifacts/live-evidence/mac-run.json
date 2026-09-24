@@ -3,7 +3,7 @@
   "manifestFingerprint": "6cc9a0eef68e5ca0385909cd9ed84dc03d1d9b8e760b05129e8837d220817dbc",
   "manifestVersion": 82,
   "platform": "darwin",
-  "mintedAt": "2026-09-20T13:51:26.171Z",
+  "mintedAt": "2026-09-23T23:36:00.196Z",
   "preflightCoverage": {
     "nativeBuildExcluded": true,
     "target": "darwin-arm64",

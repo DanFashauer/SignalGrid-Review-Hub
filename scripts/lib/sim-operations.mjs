@@ -18,7 +18,11 @@
 // REFUSES them and records `refused_platform`; it never substitutes a weaker run
 // and reports the strong one.
 
-/** @typedef {{ argv: string[], platform: "any"|"macos", needs?: string, what: string }} SimOperation */
+/** @typedef {{ argv: string[], platform: "any"|"macos", needs?: string, needsEnv?: string[], what: string }} SimOperation */
+// `needsEnv` is the STRUCTURED half of `needs`: the environment variable names the operation
+// cannot run without. `needs` is prose for the operator; nothing may decide on prose. An
+// automated queuer (scripts/objective-loop.mjs, DR-056) refuses to queue an op that declares
+// `needs` without `needsEnv` — it cannot tell whether the unattended tick can run it.
 
 /** @type {Record<string, SimOperation>} */
 export const SIM_OPERATIONS = {
@@ -139,6 +143,7 @@ export const SIM_OPERATIONS = {
     argv: ["node", "scripts/verify-all.mjs", "--require-mcp", "--emit-evidence"],
     platform: "macos",
     needs: "SIGNALGRID_MCP_PATH pointing at the signalgrid-mcp checkout",
+    needsEnv: ["SIGNALGRID_MCP_PATH"],
     what: "both halves against the shared contract, minting artifacts/live-evidence/mac-run.json",
   },
 

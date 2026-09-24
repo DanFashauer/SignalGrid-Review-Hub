@@ -61,6 +61,14 @@ const ROUTINES_REL = "docs/agent/scheduled-routines.json";
 const REQ_DIR_REL = "artifacts/sim-requests";
 const RES_DIR_REL = "artifacts/sim-results";
 const EVIDENCE_REL = "artifacts/live-evidence/mac-run.json";
+/** The tick's liveness record, delivered straight to mainline by lane-deliver at least every ~25 min:
+ *  the FRESHNESS WITNESS every reader bounds on (the state itself is rewritten only on a decision). */
+const HEARTBEAT_REL = "artifacts/agent-heartbeats/mac-lane-tick.json";
+/** What this machine last DELIVERED (decision address + mailed escalation ids). Lives under the
+ *  gitignored node_modules/ like the tick's own heartbeat stamps, so it survives the tick returning
+ *  its worktree to origin/SignalGrid_Alpha — the tracked state file does not. The tick's failure arm
+ *  removes it, so a delivery that never reached origin is re-delivered on the next tick. */
+const STAMP_REL = "node_modules/.sg-objective-loop-last.json";
 
 // ── Declared in CODE, on purpose (scripts/** is SAFETY_MACHINERY) ────────────────────────
 /** The one objective this loop evaluates. Swapping it is a decision record + a PR to this line. */
@@ -247,7 +255,7 @@ export function rank({ rows = [], openIds = [], roster = {}, roleIds = [], evalu
     if (op.needs !== undefined && !Array.isArray(op.needsEnv)) { esc(`${c.id}-op-needs-unstructured`, "mac", `sim-operation "${entry.op}" declares a prose \`needs\` with no structured \`needsEnv\` — the loop cannot tell whether the tick can run it, so it does not queue it (fail-closed)`); continue; }
     const missing = (op.needsEnv ?? []).filter((k) => !envKeys.has(k));
     if (missing.length > 0) { esc(`${c.id}-op-unrunnable`, "mac", `sim-operation "${entry.op}" needs ${missing.join(", ")} in the tick's environment and the tick does not carry it — export it in scripts/mac/lane-tick.sh (guarded on the sibling checkout existing); not queued, because a request nobody can service sits PENDING forever`); continue; }
-    if (queue.length === 0) queue.push({ criterionId: c.id, op: entry.op, clears: entry.clears, id: `${REQUEST_PREFIX}${c.id}` });
+    if (queue.length === 0) queue.push({ criterionId: c.id, op: entry.op, clears: entry.clears, id: `${REQUEST_PREFIX}${c.id}-${String(nowIso).slice(0, 10)}` });
   }
   return { tasks, needsExecutor, escalations, queue };
 }
@@ -255,7 +263,7 @@ export function rank({ rows = [], openIds = [], roster = {}, roleIds = [], evalu
 /** The decision, and nothing else — what the content address covers. Pure. */
 export function decisionAddress(state) {
   return sha256(canonical({
-    objectiveId: state.objectiveId, objectiveSha: state.objectiveSha, verdict: state.verdict,
+    objectiveId: state.objectiveId, objectiveSha: state.objectiveSha, verdict: state.verdict, staleAfterHours: state.staleAfterHours,
     criteria: (state.criteria ?? []).map((c) => ({ id: c.id, state: c.state })),
     unmet: state.unmet ?? [], tasks: (state.tasks ?? []).map((t) => ({ rowId: t.rowId, role: t.role, executor: t.executor })),
     needsExecutor: (state.needsExecutor ?? []).map((n) => n.rowId),
@@ -283,12 +291,22 @@ export function finalize(evaluation, ranked) {
   return { verdict, brokenReasons: [...evaluation.objectiveProblems, ...reasons] };
 }
 
-/** How a READER must treat a committed state: older than its own bound → `unknown`. Pure. */
-export function readVerdict(state, nowIso) {
+/**
+ * How a READER must treat a committed state. The state file is rewritten only when the DECISION
+ * changes (quiet by design), so its own instant cannot say whether the Mac is still deriving it.
+ * The FRESHNESS WITNESS is the tick's heartbeat — delivered to mainline at least every ~25 min while
+ * the tick runs, and carrying the loop's verdict in its result string since DR-056. A state is
+ * current only when that witness is within the state's bound AND names the same verdict; anything
+ * else (no heartbeat, a stale one, one naming a different verdict, an unparseable instant) reads
+ * `unknown` — never the recorded verdict. Pure.
+ */
+export function readVerdict(state, { heartbeat = null, nowIso } = {}) {
   if (!state || typeof state !== "object" || !VERDICTS.includes(state.verdict)) return { verdict: "unknown", reason: "state absent or malformed" };
-  if (!isIso(state.derivedAt) || !Number.isFinite(state.staleAfterHours)) return { verdict: "unknown", reason: "state carries no usable derivedAt/staleAfterHours" };
-  const age = hoursBetween(state.derivedAt, nowIso);
-  if (age > state.staleAfterHours) return { verdict: "unknown", reason: `state is ${age.toFixed(1)}h old, past its ${state.staleAfterHours}h bound — treat as unknown, never as its recorded verdict` };
+  if (!Number.isFinite(state.staleAfterHours) || state.staleAfterHours <= 0) return { verdict: "unknown", reason: "state carries no usable staleAfterHours" };
+  if (!heartbeat || typeof heartbeat !== "object") return { verdict: "unknown", reason: "no tick heartbeat to witness the state — the Mac may not be deriving it" };
+  const age = hoursBetween(heartbeat.firedAt, nowIso);
+  if (age > state.staleAfterHours) return { verdict: "unknown", reason: `the tick heartbeat is ${Number.isFinite(age) ? age.toFixed(1) + "h" : "unparseably"} old, past the ${state.staleAfterHours}h bound — treat as unknown` };
+  if (typeof heartbeat.result !== "string" || !heartbeat.result.includes(`objective: ${state.verdict}`)) return { verdict: "unknown", reason: `the tick heartbeat does not name verdict "${state.verdict}" — this state is not what the Mac is deriving` };
   return { verdict: state.verdict, reason: null };
 }
 
@@ -340,13 +358,14 @@ export function collect() {
   const routines = readJson(ROUTINES_REL, [], "routines");
   const tickRow = routines?.routines?.find?.((r) => r?.id === "mac-lane-tick");
   const staleAfterHours = Number.isFinite(tickRow?.cadenceToleranceHours) ? tickRow.cadenceToleranceHours : 3;
+  const heartbeat = readJson(HEARTBEAT_REL, [], "heartbeat");
   let priorState = null;
   try { priorState = JSON.parse(readFileSync(join(ROOT, STATE_REL), "utf8")); } catch { priorState = null; }
   const head = git(["rev-parse", "HEAD"]);
   const status = git(["status", "--porcelain"]);
   const nowIso = new Date().toISOString(); // clock: the ONE sampling line (--self-test greps for it)
   return {
-    objective, objectiveSha, roster, rosterSha, roleIds, rows, priorState, nowIso, staleAfterHours,
+    objective, objectiveSha, roster, rosterSha, roleIds, rows, priorState, nowIso, staleAfterHours, heartbeat,
     probes: { readiness, plan, decisionRecords, errors },
     report: { pendingSimRequests: pending, badRequestFiles: requests.filter((r) => r.__bad).map((r) => r.__file) },
     git: { head: head.status === 0 ? head.out : null, workingTreeCleanAtEntry: status.status === 0 ? status.out === "" : null },
@@ -378,19 +397,36 @@ export function derive(c) {
 }
 
 // ── Emit: content-addressed write, one request, one mail per NEW escalation ───────────────
-function requestAlreadyQueued(id) {
-  // The queue mark must survive the tick worktree returning to origin/SignalGrid_Alpha: look at the
-  // working tree, at mainline, and at every unmerged mac/tick-* head. Any hit = already queued.
-  const rel = `${REQ_DIR_REL}/${id}.json`;
-  if (existsSync(join(ROOT, rel))) return "working tree";
+function requestAlreadyQueued(criterionId) {
+  // Dedup against work that is OUTSTANDING, never against history: a request that already has a
+  // result is done, and the criterion may decay again next week. The mark must survive the tick
+  // worktree returning to origin/SignalGrid_Alpha, so look in the working tree, on mainline, and
+  // on every unmerged mac/tick-* head. Any outstanding request for this criterion = already queued.
+  const prefix = `${REQUEST_PREFIX}${criterionId}-`;
+  const localResults = new Set(loadDir(RES_DIR_REL).map((r) => r.requestId).filter(Boolean));
+  for (const f of existsSync(join(ROOT, REQ_DIR_REL)) ? readdirSync(join(ROOT, REQ_DIR_REL)) : []) {
+    if (f.startsWith(prefix) && f.endsWith(".json") && !localResults.has(f.slice(0, -5))) return `working tree (${f})`;
+  }
   const refs = ["origin/SignalGrid_Alpha", ...git(["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin/mac/tick-*"]).out.split("\n").filter(Boolean)];
-  for (const ref of refs) if (git(["cat-file", "-e", `${ref}:${rel}`]).status === 0) return ref;
+  for (const ref of refs) {
+    const listed = git(["ls-tree", "--name-only", ref, `${REQ_DIR_REL}/`]).out.split("\n").map((l) => l.split("/").pop()).filter((f) => f && f.startsWith(prefix) && f.endsWith(".json"));
+    for (const f of listed) {
+      const id = f.slice(0, -5);
+      const done = localResults.has(id) || git(["cat-file", "-e", `${ref}:${RES_DIR_REL}/${id}.json`]).status === 0;
+      if (!done) return `${ref} (${f})`;
+    }
+  }
   return null;
 }
 
 function emit(state, { write, deliver }) {
   const prior = (() => { try { return JSON.parse(readFileSync(join(ROOT, STATE_REL), "utf8")); } catch { return null; } })();
-  const changed = prior?.decisionAddress !== state.decisionAddress;
+  const stamp = (() => { try { return JSON.parse(readFileSync(join(ROOT, STAMP_REL), "utf8")); } catch { return null; } })();
+  // "Changed" against BOTH the tracked state (what mainline knows) and the delivery stamp (what this
+  // machine already pushed on an unmerged tick branch): the tick returns its worktree to mainline
+  // after every push, so the tracked copy alone would re-cut a branch every five minutes.
+  const changed = prior?.decisionAddress !== state.decisionAddress && stamp?.decisionAddress !== state.decisionAddress;
+  const delivered = new Set([...(prior?.escalations ?? []).map((e) => e.id), ...(stamp?.deliveredEscalations ?? [])]);
   const lines = [];
   const wrote = [];
   if (write && changed) {
@@ -399,7 +435,7 @@ function emit(state, { write, deliver }) {
   }
   if (write) {
     for (const q of state.queue) {
-      const where = requestAlreadyQueued(q.id);
+      const where = requestAlreadyQueued(q.criterionId);
       if (where) { q.queuedAs = where; lines.push(`request ${q.id} already queued (${where}) — not re-queued`); continue; }
       const rel = `${REQ_DIR_REL}/${q.id}.json`;
       mkdirSync(join(ROOT, REQ_DIR_REL), { recursive: true });
@@ -416,12 +452,18 @@ function emit(state, { write, deliver }) {
     if (state.queue.some((q) => q.queuedAs) && changed) writeFileSync(join(ROOT, STATE_REL), JSON.stringify(state, null, 2) + "\n");
   }
   if (deliver) {
-    const priorIds = new Set((prior?.escalations ?? []).map((e) => e.id));
     for (const e of state.escalations) {
-      if (priorIds.has(e.id)) continue;
+      if (delivered.has(e.id)) continue;
       const r = spawnSync(process.execPath, [join(ROOT, "scripts/lane-deliver.mjs"), "send", `objective-loop: ${e.id} — needs ${e.clears}`, `${e.asks}\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict ${state.verdict}; state ${STATE_REL} @ ${state.derivedAtCommit ?? "?"}. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)`], { cwd: ROOT, encoding: "utf8" });
       lines.push(r.status === 0 ? `mailed new escalation ${e.id}` : `WARN could not mail escalation ${e.id} (lane-deliver exit ${r.status})`);
+      if (r.status === 0) delivered.add(e.id);
     }
+  }
+  if (write) {
+    try {
+      mkdirSync(dirname(join(ROOT, STAMP_REL)), { recursive: true });
+      writeFileSync(join(ROOT, STAMP_REL), JSON.stringify({ decisionAddress: state.decisionAddress, deliveredEscalations: [...delivered], at: state.derivedAt }) + "\n");
+    } catch (e) { lines.push(`WARN could not write the delivery stamp ${STAMP_REL} (${e.message.split("\n")[0]}) — the next tick may re-deliver`); }
   }
   const met = state.criteria.filter((c) => c.state === "met").length;
   lines.unshift(`objective-loop: ${state.verdict} — ${met}/${state.criteria.length} criteria met; next: ${state.tasks[0]?.title ?? "none"}; escalations: ${state.escalations.map((e) => e.id).join(", ") || "none"}; ${write ? (changed ? "state written" : "quiet (decision unchanged)") : "dry run"}`);
@@ -429,7 +471,7 @@ function emit(state, { write, deliver }) {
 }
 
 // ── --check: the contract gate over the committed state (three-state provenance) ──────────
-export function checkState(state, { objectiveShaNow, rosterShaNow, headIsAncestor, nowIso }) {
+export function checkState(state, { objectiveShaNow, rosterShaNow, headIsAncestor, nowIso, registryToleranceNow = null, heartbeat = null }) {
   const fatal = [], reported = [];
   if (!state || typeof state !== "object") return { fatal: [`${STATE_REL} absent or unparseable`], reported };
   if (state.schemaVersion !== 1) fatal.push("schemaVersion must be 1");
@@ -458,7 +500,9 @@ export function checkState(state, { objectiveShaNow, rosterShaNow, headIsAncesto
   else for (const t of state.tasks) if (!t.executor || t.executor === "lane") fatal.push(`ranked task row ${t.rowId} has no real executor (${t.executor ?? "∅"})`);
   if (headIsAncestor === null) reported.push("provenance: shallow clone or no git — derivedAtCommit ancestry cannot be judged (REPORTED, not fatal; fatal on a full clone)");
   else if (headIsAncestor === false) fatal.push(`derivedAtCommit ${state.derivedAtCommit} is not an ancestor of HEAD`);
-  const rv = readVerdict(state, nowIso);
+  if (!Number.isFinite(state.staleAfterHours) || state.staleAfterHours <= 0) fatal.push("staleAfterHours must be a positive number");
+  else if (Number.isFinite(registryToleranceNow) && registryToleranceNow !== state.staleAfterHours) reported.push(`staleAfterHours ${state.staleAfterHours} differs from the mac-lane-tick row's cadenceToleranceHours ${registryToleranceNow} — STALE, re-derive`);
+  const rv = readVerdict(state, { heartbeat, nowIso });
   if (rv.verdict === "unknown") reported.push(`STALE: ${rv.reason}`);
   return { fatal, reported };
 }
@@ -473,11 +517,14 @@ function runCheck() {
   let headIsAncestor = null;
   if (hasGit && !shallow && state?.derivedAtCommit) headIsAncestor = git(["merge-base", "--is-ancestor", state.derivedAtCommit, "HEAD"]).status === 0;
   const nowIso = new Date().toISOString(); // clock: the gate's own instant (age reporting), not the decision path
-  const { fatal, reported } = checkState(state, { objectiveShaNow, rosterShaNow, headIsAncestor, nowIso });
+  const routines = readJson(ROUTINES_REL, [], "routines");
+  const registryToleranceNow = routines?.routines?.find?.((r) => r?.id === "mac-lane-tick")?.cadenceToleranceHours ?? null;
+  const heartbeat = readJson(HEARTBEAT_REL, [], "heartbeat");
+  const { fatal, reported } = checkState(state, { objectiveShaNow, rosterShaNow, headIsAncestor, nowIso, registryToleranceNow, heartbeat });
   console.log(`objective-loop --check over ${STATE_REL}`);
   for (const r of reported) console.log(`  REPORTED — ${r}`);
   for (const f of fatal) console.log(`  ✗ ${f}`);
-  if (state) console.log(`  verdict ${state.verdict}; ${state.tasks.length} task(s), ${state.needsExecutor.length} need an executor, ${state.escalations.length} escalation(s); state age ${hoursBetween(state.derivedAt, nowIso).toFixed(1)}h (bound ${state.staleAfterHours}h)`);
+  if (state) console.log(`  verdict ${state.verdict}; ${state.tasks.length} task(s), ${state.needsExecutor.length} need an executor, ${state.escalations.length} escalation(s); decided ${hoursBetween(state.derivedAt, nowIso).toFixed(1)}h ago; reader verdict: ${readVerdict(state, { heartbeat, nowIso }).verdict}`);
   console.log(fatal.length ? `objective-loop --check FAILED: ${fatal.length} problem(s).` : "objective-loop --check passed — the committed state is well-formed, derived against the declared objective, every ranked task has a real executor, and nothing stalls silently.");
   return fatal.length ? 1 : 0;
 }
@@ -556,16 +603,18 @@ function selfTest() {
   const noEnv = rank({ rows, openIds: plan.open, roster, roleIds, evaluation: eStale, envKeys: new Set(), nowIso: T0, simOps: ops, objective: goodObjective() });
   t("needs: evidence unmet + SIGNALGRID_MCP_PATH absent → escalation, NO request queued", noEnv.queue.length === 0 && noEnv.escalations.some((e) => e.id === "evidence-fresh-op-unrunnable" && e.clears === "mac"));
   const withEnv = rank({ rows, openIds: plan.open, roster, roleIds, evaluation: eStale, envKeys: new Set(["SIGNALGRID_MCP_PATH"]), nowIso: T0, simOps: ops, objective: goodObjective() });
-  t("needs: with the env present exactly ONE request is queued for evidence-fresh", withEnv.queue.length === 1 && withEnv.queue[0].op === "evidence" && withEnv.queue[0].id === `${REQUEST_PREFIX}evidence-fresh`);
+  t("needs: with the env present exactly ONE request is queued for evidence-fresh, its id carrying the decision day", withEnv.queue.length === 1 && withEnv.queue[0].op === "evidence" && withEnv.queue[0].id === `${REQUEST_PREFIX}evidence-fresh-${T0.slice(0, 10)}`);
+  t("needs: a later decay (a different day) mints a DIFFERENT request id — the edge is not single-shot", rank({ rows, openIds: plan.open, roster, roleIds, evaluation: eStale, envKeys: new Set(["SIGNALGRID_MCP_PATH"]), nowIso: T1, simOps: ops, objective: goodObjective() }).queue[0].id !== withEnv.queue[0].id);
   const proseOnly = rank({ rows, openIds: plan.open, roster, roleIds, evaluation: eStale, envKeys: new Set(["SIGNALGRID_MCP_PATH"]), nowIso: T0, simOps: { evidence: { argv: ops.evidence.argv, needs: "some prose" } }, objective: goodObjective() });
   t("needs: a prose-only `needs` with no needsEnv → escalation, NO request (fail-closed on the unparseable case)", proseOnly.queue.length === 0 && proseOnly.escalations.some((e) => e.id === "evidence-fresh-op-needs-unstructured"));
   t("needs: a TASK_TABLE op missing from SIM_OPERATIONS → escalation", rank({ rows, openIds: plan.open, roster, roleIds, evaluation: eStale, envKeys: new Set(), nowIso: T0, simOps: {}, objective: goodObjective() }).escalations.some((e) => e.id === "evidence-fresh-op-missing"));
   // (j) content-addressing covers the DECISION only
-  const mk = (over) => ({ objectiveId: OBJECTIVE_ID, objectiveSha: "o", verdict: "escalate", criteria: e1.criteria, unmet: e1.unmet, tasks: r1.tasks, needsExecutor: r1.needsExecutor, escalations: r1.escalations, queue: [], derivedAt: T0, derivedAtCommit: "aaa", workingTreeCleanAtEntry: true, ...over });
+  const mk = (over) => ({ objectiveId: OBJECTIVE_ID, objectiveSha: "o", verdict: "escalate", staleAfterHours: 3, criteria: e1.criteria, unmet: e1.unmet, tasks: r1.tasks, needsExecutor: r1.needsExecutor, escalations: r1.escalations, queue: [], derivedAt: T0, derivedAtCommit: "aaa", workingTreeCleanAtEntry: true, ...over });
   t("address: a moved HEAD, a later derivedAt and a dirty tree do NOT change the decision address", decisionAddress(mk({})) === decisionAddress(mk({ derivedAt: T1, derivedAtCommit: "bbb", workingTreeCleanAtEntry: false })));
   t("address: escalation `since` and task `firstRankedAt` do NOT change the address", decisionAddress(mk({})) === decisionAddress(mk({ escalations: r1.escalations.map((e) => ({ ...e, since: T1 })), tasks: r1.tasks.map((x) => ({ ...x, firstRankedAt: T1 })) })));
   t("address: a changed verdict DOES change the address", decisionAddress(mk({})) !== decisionAddress(mk({ verdict: "replan" })));
   t("address: a changed top task DOES change the address", decisionAddress(mk({})) !== decisionAddress(mk({ tasks: r1.tasks.slice(1) })));
+  t("address: a changed staleAfterHours DOES change the address (it is a decision about the decision's lifetime)", decisionAddress(mk({})) !== decisionAddress(mk({ staleAfterHours: 1e9 })));
   // (l)/(m) finalize: non-vacuity and no silent stall
   t("finalize: escalate with no task, no needsExecutor and no probe error → broken", finalize({ ...e1, probeErrors: [] }, { tasks: [], needsExecutor: [], escalations: [], queue: [] }).verdict === "broken");
   t("finalize: escalate with nothing to escalate and no probe error → broken", finalize({ ...e1, probeErrors: [] }, { tasks: r1.tasks, needsExecutor: [], escalations: [], queue: [] }).verdict === "broken");
@@ -573,10 +622,15 @@ function selfTest() {
   t("finalize: a well-formed escalate keeps its verdict", finalize({ ...e1, probeErrors: [] }, r1).verdict === "escalate");
   // (n) stale state tightens for readers
   const st = { verdict: "replan", derivedAt: T0, staleAfterHours: 3 };
-  t("reader: a state older than staleAfterHours reads as unknown", readVerdict(st, T1).verdict === "unknown");
-  t("reader: a fresh state reads as its verdict", readVerdict(st, "2026-09-24T13:00:00.000Z").verdict === "replan");
-  t("reader: a malformed state reads as unknown", readVerdict({ verdict: "nope" }, T1).verdict === "unknown");
-  t("reader: an UNPARSEABLE derivedAt reads as unknown (infinitely old), never fresh", readVerdict({ verdict: "replan", derivedAt: "not-a-date", staleAfterHours: 3 }, T1).verdict === "unknown");
+  const hbFresh = { firedAt: "2026-09-24T12:30:00.000Z", result: "quiet; objective: replan" };
+  const T0h = "2026-09-24T13:00:00.000Z";
+  t("reader: a fresh heartbeat naming the same verdict → the recorded verdict", readVerdict(st, { heartbeat: hbFresh, nowIso: T0h }).verdict === "replan");
+  t("reader: a heartbeat older than staleAfterHours → unknown, even though the state file is untouched", readVerdict(st, { heartbeat: hbFresh, nowIso: T1 }).verdict === "unknown");
+  t("reader: NO heartbeat → unknown", readVerdict(st, { heartbeat: null, nowIso: T0h }).verdict === "unknown");
+  t("reader: a fresh heartbeat naming a DIFFERENT verdict → unknown (this state is not what the Mac derives)", readVerdict(st, { heartbeat: { ...hbFresh, result: "quiet; objective: escalate" }, nowIso: T0h }).verdict === "unknown");
+  t("reader: an UNPARSEABLE heartbeat instant reads as infinitely old → unknown", readVerdict(st, { heartbeat: { ...hbFresh, firedAt: "not-a-date" }, nowIso: T0h }).verdict === "unknown");
+  t("reader: a malformed state reads as unknown", readVerdict({ verdict: "nope" }, { heartbeat: hbFresh, nowIso: T0h }).verdict === "unknown");
+  t("reader: a state with no usable staleAfterHours reads as unknown", readVerdict({ verdict: "replan", derivedAt: T0 }, { heartbeat: hbFresh, nowIso: T0h }).verdict === "unknown");
   // stalled top task escalates
   const prior = { tasks: [{ rowId: "5", firstRankedAt: "2026-09-01T00:00:00.000Z" }], escalations: [] };
   t("stall: the same top task for > STALLED_TOP_DAYS raises stalled-top-task", rank({ rows, openIds: plan.open, roster, roleIds, evaluation: e1, priorState: prior, envKeys: new Set(), nowIso: T0, simOps: ops, objective: goodObjective() }).escalations.some((e) => e.id === "stalled-top-task"));
@@ -584,14 +638,25 @@ function selfTest() {
   // --check gate, both directions
   const good = { schemaVersion: 1, objectiveId: OBJECTIVE_ID, objectiveSha: "o", rosterSha: "r", verdict: "escalate", criteria: e1.criteria, unmet: e1.unmet, unknown: [], tasks: r1.tasks, needsExecutor: r1.needsExecutor, escalations: r1.escalations, queue: [], probeErrors: [], brokenReasons: [], staleAfterHours: 3, derivedAt: T0, derivedAtCommit: "abc" };
   good.decisionAddress = decisionAddress(good);
-  const chk = (s, o = {}) => checkState(s, { objectiveShaNow: "o", rosterShaNow: "r", headIsAncestor: true, nowIso: "2026-09-24T13:00:00.000Z", ...o });
+  const hbGood = { firedAt: "2026-09-24T12:50:00.000Z", result: "quiet; objective: escalate" };
+  const chk = (s, o = {}) => checkState(s, { objectiveShaNow: "o", rosterShaNow: "r", headIsAncestor: true, nowIso: "2026-09-24T13:00:00.000Z", registryToleranceNow: 3, heartbeat: hbGood, ...o });
   t("check: a well-formed state passes", chk(good).fatal.length === 0);
   t("check: a hand-edited decision (address mismatch) fails", chk({ ...good, verdict: "goal_met" }).fatal.some((f) => /hand-edited/.test(f)));
   t("check: a ranked task whose executor is lane fails when the roster is unchanged", chk({ ...good, tasks: [{ ...r1.tasks[0], executor: "lane" }], decisionAddress: decisionAddress({ ...good, tasks: [{ ...r1.tasks[0], executor: "lane" }] }) }).fatal.some((f) => /no real executor/.test(f)));
   t("check: the same defect is REPORTED, not fatal, when the roster moved", chk({ ...good, tasks: [{ ...r1.tasks[0], executor: "lane" }], decisionAddress: decisionAddress({ ...good, tasks: [{ ...r1.tasks[0], executor: "lane" }] }) }, { rosterShaNow: "moved" }).fatal.length === 0);
   t("check: ancestry is fatal on a full clone", chk(good, { headIsAncestor: false }).fatal.some((f) => /ancestor/.test(f)));
   t("check: ancestry is REPORTED on a shallow clone", chk(good, { headIsAncestor: null }).fatal.length === 0 && chk(good, { headIsAncestor: null }).reported.some((r) => /shallow/.test(r)));
-  t("check: a stale state is REPORTED as STALE", chk(good, { nowIso: T1 }).reported.some((r) => /STALE/.test(r)));
+  t("check: a stale heartbeat is REPORTED as STALE, never fatal (CI cannot re-derive)", chk(good, { nowIso: T1 }).reported.some((r) => /STALE/.test(r)) && chk(good, { nowIso: T1 }).fatal.length === 0);
+  t("check: a hand-edited staleAfterHours changes the address → FATAL", chk({ ...good, staleAfterHours: 1e9 }).fatal.some((f) => /hand-edited/.test(f)));
+  t("check: staleAfterHours drifting from the registry row is REPORTED", chk(good, { registryToleranceNow: 5 }).reported.some((r) => /cadenceToleranceHours/.test(r)));
+  t("check: a non-positive staleAfterHours is FATAL", chk({ ...good, staleAfterHours: 0, decisionAddress: decisionAddress({ ...good, staleAfterHours: 0 }) }).fatal.some((f) => /positive/.test(f)));
+  // The attestation token must not be reachable by documentation: no decision-record section on
+  // disk may carry it unless objective.json names that section. A record that QUOTES the token to
+  // explain the mechanism would satisfy the check — the defect the security lens found on this branch.
+  const recordsOnDisk = (() => { try { return readFileSync(join(ROOT, RECORDS_REL), "utf8"); } catch { return null; } })();
+  const objOnDisk = (() => { try { return JSON.parse(readFileSync(join(ROOT, OBJECTIVE_REL), "utf8")); } catch { return null; } })();
+  const carriers = recordsOnDisk === null ? null : recordsOnDisk.split(/\n## (?=DR-\d+)/).slice(1).filter((c) => c.includes(ATTESTATION_TOKEN)).map((c) => c.split(" ", 1)[0]);
+  t("attestation: the token appears in NO decision-record section other than the one objective.attestedIn names (a record that quotes it would satisfy the check)", carriers !== null && carriers.every((id) => id === objOnDisk?.attestedIn));
   t("check: a future date fails", chk({ ...good, derivedAt: "2099-01-01T00:00:00.000Z" }).fatal.some((f) => /future/.test(f)));
   t("check: an escalate that names nothing fails", chk({ ...good, escalations: [], probeErrors: [], decisionAddress: decisionAddress({ ...good, escalations: [] }) }).fatal.some((f) => /DR-054/.test(f)));
   t("check: an unparseable date is fatal, and an unparseable gate instant is fatal too", chk({ ...good, derivedAt: "nope" }).fatal.some((f) => /not parseable/.test(f)) && chk(good, { nowIso: "nope" }).fatal.some((f) => /own instant/.test(f)));

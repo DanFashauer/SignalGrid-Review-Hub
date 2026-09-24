@@ -336,11 +336,15 @@ if [ "$DRY" = "1" ]; then
 else
   LOOP_OUT="$(node scripts/objective-loop.mjs --write --deliver 2>&1)"
   LOOP_STATUS=$?
-  LOOP_LINE="$(printf '%s\n' "$LOOP_OUT" | head -1)"
-  say "$LOOP_LINE"
-  if [ "$LOOP_STATUS" = "0" ]; then
+  # Select the summary by its PREFIX, never by position: a node warning on stderr would
+  # otherwise become the verdict in the commit message and the heartbeat.
+  LOOP_LINE="$(printf '%s\n' "$LOOP_OUT" | grep -m1 '^objective-loop: ' || true)"
+  say "${LOOP_LINE:-objective-loop printed no summary line}"
+  if [ "$LOOP_STATUS" = "0" ] && [ -n "$LOOP_LINE" ]; then
     LOOP_VERDICT="${LOOP_LINE#objective-loop: }"
     LOOP_VERDICT="${LOOP_VERDICT%% —*}"
+  elif [ "$LOOP_STATUS" = "0" ]; then
+    LOOP_VERDICT="BROKEN (no summary line)"
   else
     LOOP_VERDICT="BROKEN (objective-loop exit $LOOP_STATUS)"
     printf '%s\n' "$LOOP_OUT" | tail -n +2 | while IFS= read -r _l; do say "  $_l"; done
@@ -379,12 +383,17 @@ if [ -n "$(git status --porcelain -- artifacts/sim-results artifacts/live-eviden
       # The loop's own writes are put back so the next tick does not find a dirty
       # worktree and skip forever (a latched-off executor is the silent stall DR-054
       # forbids). Sim RESULTS are deliberately left: they are evidence, not derivable.
+      # Reset the INDEX first: `git checkout -- <path>` restores from the index, and `git clean`
+      # skips a path the index holds, so after a failed `git commit` both would be no-ops.
+      git reset -q -- docs/agent/objective-state.json artifacts/sim-requests >/dev/null 2>&1 || true
       if git ls-files --error-unmatch docs/agent/objective-state.json >/dev/null 2>&1; then
         git checkout -q -- docs/agent/objective-state.json 2>/dev/null || true
       else
         rm -f docs/agent/objective-state.json
       fi
       git clean -fq -- "artifacts/sim-requests/objective-loop-*.json" >/dev/null 2>&1 || true
+      # ...and forget the delivery stamp, so the next tick re-derives AND re-delivers.
+      rm -f node_modules/.sg-objective-loop-last.json
     fi
     if [ "$IN_TICK_WT" = "1" ]; then
       git checkout -q --detach origin/SignalGrid_Alpha || say "WARN could not return the tick worktree to origin/SignalGrid_Alpha"

@@ -194,8 +194,8 @@
     "openRows": 115
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-24T14:47:57.548Z",
-  "derivedAtCommit": "2b8cc0929bdf9833f3788def5143a7299948463d",
+  "derivedAt": "2026-09-24T15:11:32.314Z",
+  "derivedAtCommit": "5be4317fd3e33bd44c9cc5a19e085e55e2ed44db",
   "workingTreeCleanAtEntry": false,
-  "decisionAddress": "00fcae7c0be64ec1f25d1652ed6c066746f97b88e684a983bdcae77a8d4ffad9"
+  "decisionAddress": "cab31255e65e4c82fc041eb80ac7cd16d9d4cedaa38dda34dc5271df7534d055"
 }

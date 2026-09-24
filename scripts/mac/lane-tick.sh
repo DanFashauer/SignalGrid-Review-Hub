@@ -281,12 +281,16 @@ else
   if [ "$DRY" = "1" ]; then
     say "dry-run: would pnpm run sim:run-requests"
   else
-    # Results are written even when an operation fails; the exit status is
-    # recorded in the result file, so a failed run is still a delivered run.
-    if pnpm run sim:run-requests >/dev/null 2>&1; then
+    # A per-operation FAILURE writes a result with its status recorded — but a runner
+    # CRASH (a malformed request, a write error) writes NOTHING. Those two exit-1 cases
+    # were indistinguishable while stderr was thrown away, and the else-branch claimed
+    # "recorded in the results" even on the crash. Keep stderr (drop the inner 2>&1) so
+    # the trace reaches the launchd log, and let step d's `git status` on the results dir
+    # be the honest test of whether any result actually landed. (DR-054.)
+    if pnpm run sim:run-requests >/dev/null; then
       say "sim requests ran"
     else
-      say "sim requests ran with failures (recorded in the results)"
+      say "sim requests exited non-zero — see stderr in the log; whether any result landed is decided in step d"
     fi
   fi
 fi

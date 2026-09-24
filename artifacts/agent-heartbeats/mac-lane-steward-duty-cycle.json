@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-23T18:15:23.476Z",
-  "result": "non-quiet: acked mac signalgrid-mcp#14 screen-lock message (fallback-to-unknown check requested); build-Mac hygiene items surfaced to owner. mac tick fresh; no owner escalation from the lane beyond those."
+  "firedAt": "2026-09-23T23:38:29.072Z",
+  "result": "non-quiet: Mac acked all 7 cloud messages and re-minted live evidence (d0ed0362, 0 days old); cloud superseded the stale #753 rebuild request (the owner closed #753; its useful half is #1005). No mac mail unread to cloud; no new/moved mac/* branches; manifest clean. Mac tick last firedAt 23:10Z. Owner not escalated."
 }

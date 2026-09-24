@@ -9860,7 +9860,7 @@
    "claim": "\"The mobile PWA surface.\" — with line 47 \"`artifacts/signalgrid-web` | The public website source.\"",
    "kind": "surface",
    "classification": "demo-only",
-   "evidence": "Both demo_only in the profile: scripts/launch-profile.mjs:638 (signalgrid-mobile-pwa — \"A third client surface (fixture-fed)\") and :522-527 (signalgrid-web — \"The public explanation surface. It markets the product; it is not part of it\"). Neither row asserts shipping status.",
+   "evidence": "Both demo_only in the profile: scripts/launch-profile.mjs:638 (signalgrid-mobile-pwa — \"A third client surface (fixture-fed)\") and scripts/launch-profile.mjs:655-658 (signalgrid-web — \"The public explanation surface. It markets the product; it is not part of it\"). Neither row asserts shipping status.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },

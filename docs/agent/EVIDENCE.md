@@ -3249,3 +3249,25 @@ proves it can fail.** The two deferred limitations are the honest ceiling: they 
 cross-query and const-class shapes, which the widened doctrine review still covers, and the
 `// unknown-ok: <reason>` escape hatch handles any residual false positive without weakening
 the gate for everyone.
+
+## iOS accessibility render at accessibility-extra-large (mac lane, 2026-09-23)
+
+The Mac's AX visual record backlog row 1737 (DONE 2026-09-18, "still wants the Mac's AX
+screenshot for the visual record") asked for: `EnterpriseShell` built and installed on the
+iPhone 17 simulator, display set to `accessibility-extra-large`
+(`xcrun simctl ui booted content_size accessibility-extra-large`), launched with the
+simulator demo flags (`-DemoMode YES -SimulateBadge …`). Result: **the shell renders clean
+at the largest text size** — the lock screen ("Enterprise Device" / "Tap your badge to begin
+session" / the subtitle) and the post-auth workspace ("Available Apps") with a native
+kiosk-release alert all SCALE and WRAP correctly, with **no truncation, no overlap, and no
+mid-word breaks**, confirming the `numberOfLines = 0` / `greaterThanOrEqualToConstant` /
+`minimumScaleFactor` fixes from row 1737 hold. The visual record is `tools/ios-ax-render.png`.
+
+Platform-honesty confirmed as a side effect: the demo's attempt to release Single App Mode
+surfaces "Device still locked … MDM supervision may need to re-apply the release" — the app
+does NOT pretend a simulator can self-release kiosk mode (golden rule 4).
+
+Honest limit: `simctl` has no tap API (no `idb`/XCUITest here), so I could not navigate to
+the specific `HostAppViewController` Assist-gate screen; that screen stays covered by
+`ios-ci` on the PR (per row 1737) and `scripts/check-ios-dynamic-type.mjs` (which forbids raw
+fonts, so every label scales).

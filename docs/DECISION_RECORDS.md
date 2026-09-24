@@ -3479,10 +3479,14 @@ re-read from those sources on 2026-09-24 before being written here.
 **Call.**
 
 1. **Recorded as a refinement of DR-043, at DR-043's level of abstraction.** DR-043's three
-   functions, its division of authority, its gates and its do-not-claim list stand unchanged.
-   No latch, lock, phone-case or locker-release mechanism is described anywhere in the tree
-   until the owner decides the *IP / disclosure posture* row in `docs/BUILD_BACKLOG.md`, which
-   names *"phone-case/locker embodiments"* and says *"Do NOT commit a detailed provisional spec
+   functions, its division of authority, its gates and its do-not-claim list stand unchanged,
+   and so do its NFC/FIDO core and its development order (mechanical → NFC/FIDO → BLE only if
+   needed → UWB only if proven necessary), including the BLE and UWB presence rungs (families
+   D and E) and the privacy constraint on them; the C3 verdict below refuses a tracking or
+   locating beacon in the puck, not those rungs. No latch, lock, phone-case or locker-release
+   mechanism is described in this record or the pages it touches until the owner decides the
+   *IP / disclosure posture* row in `docs/BUILD_BACKLOG.md`, which names *"phone-case/locker
+   embodiments"* and says *"Do NOT commit a detailed provisional spec
    into a public repo."* The whole flow's verdict is **record only; no hardware moves.**
 2. **Each component, what it becomes, and whose part is whose.** The per-component map, with
    the page-level fit and the new policy rows, is in `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`
@@ -3491,19 +3495,23 @@ re-read from those sources on 2026-09-24 before being written here.
      reframed; the credential lock itself is not recommended. A worker credential locked to a
      shared device makes "stolen with the device" the normal case, so a thief gets both factors
      in one grab; it throws away the walk-away property (the credential leaving with the
-     worker); a back-mounted lock sits where healthcare handsets take their hot-swap battery;
-     and 21 CFR 1311.115(b) wants a hard token *"separate from the computer to which it is
-     gaining access"* (<https://www.law.cornell.edu/cfr/text/21/1311.115>). *Becomes:* at most
-     a case or sled with a magnetic seat (Qi2 Magnetic Power Profile geometry, no Apple marks)
-     and a seat/latch sensor that holds no identity. Docks charge by wire or pogo pins, because
-     Apple says *"Don't place credit cards, security badges, passports, or key fobs between your
-     iPhone and MagSafe Charger, because this might damage magnetic strips or RFID chips"*
-     (<https://support.apple.com/en-us/105047>). *SignalGrid:* the seat/latch reading as custody
-     evidence only; a latch state beside attached/removed/unknown, where "unlatched without the
-     holder's return" is forced (`deny`) and "device and puck missing together" is `deny` plus
-     an approval-gated revoke request. *Partners:* the case or sled maker (latch, sensor, a fit
-     per device model), the FIDO token vendor, the MDM (lost-device lock and erase); Apple MFi
-     only if the MagSafe name or badge were ever used, WPC only if Qi2 were ever claimed.
+     worker); on handsets or sleds with a rear hot-swap battery, a back-mounted lock sits where
+     that battery goes (the review's inference; not sourced); and 21 CFR 1311.115(b) wants a
+     hard token *"separate from the computer to which it is gaining access"*
+     (<https://www.law.cornell.edu/cfr/text/21/1311.115>). *Becomes:* at most
+     family A's receiver with a seat sensor that holds no identity, at DR-043's level of
+     abstraction (item 1). Magnetic wireless charging through a seated credential is ruled
+     out, because Apple says *"Don't place credit cards, security badges, passports, or key
+     fobs between your iPhone and MagSafe Charger, because this might damage magnetic strips or
+     RFID chips"* (<https://support.apple.com/en-us/105047>). *SignalGrid:* the seat reading as
+     custody evidence only. A seat release with no authorized release, or a tamper or
+     seat-break reading, is forced (`deny`, `CUSTODY_TORN`); an authorized release with no
+     return still restricts (`CUSTODY_REMOVED`, `lib/signalgrid-core/src/attach.ts:218`–`222`),
+     so an ordinary walk-away is not turned into `deny`; "device and puck missing together" is
+     `deny` plus an approval-gated revoke request. *Partners:* the receiver maker (the seat
+     sensor and a fit per device model), the FIDO token vendor, the MDM (lost-device lock and
+     erase); Apple MFi only if the MagSafe name or badge were ever used, WPC only if Qi2 were
+     ever claimed.
    - **C2 — the puck holds everything, including building access.** *Verdict:* feasible only if
      reframed. *Becomes:* keys only — an IdP-registered, attested FIDO2 key in a certified
      secure element (bought, not built), optionally a PACS-issued applet with legacy 125 kHz
@@ -3526,20 +3534,35 @@ re-read from those sources on 2026-09-24 before being written here.
      described.** Apple's Find My network is end-to-end encrypted to the owner (*"The device
      owner receives only the encrypted location information that's decrypted and displayed in
      the Find My app"*, <https://support.apple.com/guide/security/find-my-security-sec6cbc80fd0/web>),
-     has no third-party API, is unavailable to Managed Apple Accounts (*"The app appears, but the
-     user can't use it"*,
-     <https://support.apple.com/guide/business/service-access-with-managed-apple-accounts-axm171b3ee95/web>),
-     and an employer-owned tag moving with a worker raises an unwanted-tracking alert on the
-     worker's own phone (<https://support.apple.com/en-us/119874>). A tag in a worker-carried
+     has no third-party API — only person-to-person sharing: item sharing to up to five
+     borrowers, each on their own Apple Account
+     (<https://support.apple.com/guide/iphone/share-an-airtag-iph419cc5f28/ios>), and a
+     seven-day Share Item Location link — and is unavailable to Managed Apple Accounts (*"The
+     app appears, but the user can't use it"*,
+     <https://support.apple.com/guide/business/service-access-with-managed-apple-accounts-axm171b3ee95/web>).
+     A tag moving with a worker alerts the person it travels with once it is separated from its
+     owner, unless the owner has shared the item with that person in Find My, which needs that
+     person's own Apple Account (<https://support.apple.com/en-us/119874>); either way the
+     employer gets no feed. A tag in a worker-carried
      credential tracks the person, including off shift and at home, which is the case the
      hypothesis page's privacy paragraph and `docs/CUSTODY_BEACON.md` already refuse.
-     *Becomes:* no radio in the puck. Location stays tied to the device and at zone level
-     (enterprise RTLS, MDM Lost Mode, a cellular or LoRaWAN tracker in the case), is collected
-     only while the device is checked out, attached and the worker is on shift, carries a
-     declared purpose, and leaves a site only as a verdict. *SignalGrid:* fuse location
-     fail-closed, where location can only tighten a decision; refuse and never store a reading
-     taken outside a checkout or a shift; send only a coarse zone and a pseudonym through the
-     gateway projector (`lib/facility-trust-graph/src/gateway.ts`); correct
+     *Becomes:* no tracking or locating beacon (Find My or AirTag-class) in the puck; DR-043's
+     NFC/FIDO core and its BLE and UWB presence rungs, with their privacy constraint, are
+     unchanged (item 1). Location would stay tied to the device and at zone level — enterprise
+     RTLS or a cellular or LoRaWAN tracker in the case; MDM Lost Mode only in the lost or
+     recovery case, on a supervised device, because Apple's location command answers only a
+     device in Lost Mode (*"Request the location of a device when in Lost Mode"*,
+     <https://github.com/apple/device-management/blob/release/mdm/commands/device.lostmode.location.yaml>).
+     A reading that can be joined to a person — from anything the worker carries, or linked to
+     a holder through a checkout — would be collected only while the device is checked out,
+     attached and the worker is on shift, would carry a declared purpose, and would leave a
+     site only as a verdict, once a visibility and retention model exists (none does today;
+     see `docs/CUSTODY_BEACON.md`). A device-bound recovery reading for a device with no open
+     checkout — the custody beacon's removal case, *off-premises + dark → escalate* — would be
+     kept: coarse, zone-level, and carrying no identity. *SignalGrid:* fuse location
+     fail-closed, where location can only tighten a decision; refuse and never store a
+     person-joinable reading taken outside a checkout or a shift; send only a coarse zone and a
+     pseudonym through the gateway projector (`lib/facility-trust-graph/src/gateway.ts`); correct
      `docs/CUSTODY_BEACON.md` (done in this change). *Partners:* RTLS and tracker vendors, the
      MDM, and the customer's privacy officer (DPIA), unions (bargaining) and counsel — whether a
      state tracking statute reaches an employer's device is counsel's reading, not settled here.
@@ -3606,13 +3629,22 @@ re-read from those sources on 2026-09-24 before being written here.
      inside the app-preservation reset only, a Control Center or inactivity-timeout start after
      which the device checks in with the MDM
      (<https://support.apple.com/guide/deployment/use-return-to-service-for-apple-devices-dep17cb455a0/web>);
-     Activation Lock must be off. SignalGrid keeps the device out of the pool until every step
-     is observed. Cleaning is an attestation, never a claim. *SignalGrid:* a `returned` event
+     Activation Lock must be off; and the device's response to the erase *"doesn't retry if it
+     isn't successful the first time"* (the same YAML), so the MDM may never see the result of
+     an erase that did run. Under Puck 7, SignalGrid would keep the device out of the pool until
+     every step is observed. Cleaning is an attestation, never a claim, read as evidence from the
+     system that owns it — the locker or mobile-access-management vendor, the
+     environmental-services or cleaning-tracking app, or the host app — and never captured on a
+     SignalGrid surface (golden rule 3). *SignalGrid:* the existing `device_returned` custody
+     event (`lib/event-contract/src/types.ts:16`), bound to the holder's credential and kept
      distinct from `removed`; a readiness gate — sign-out observed, the Epic device assignment
-     removed so alerts stop, Return to Service acknowledged and re-enrolled, device prep done,
-     sso-session showing no session, cleaning attested — where anything unknown means not
-     ready; the fix to the ddm-connector's misreading of `mdm.is-return-to-service`
-     (`lib/ddm-connector/src/index.ts:52`–`78`); any erase request approval-gated and
+     removed (assumed Epic routing: that this stops alerts reaching the device is the review's
+     inference, not sourced), the device re-enrolled or checked in over DDM after Return to
+     Service (not the erase acknowledgement alone), device prep done, sso-session showing no
+     session, cleaning attested — where anything unknown means not ready; the fix to the
+     ddm-connector's likely misreading of `mdm.is-return-to-service` (the review's reading of
+     Apple's YAML, confirmed on a real supervised iOS 27 device before any verdict changes;
+     `lib/ddm-connector/src/index.ts:52`–`80`); any erase request approval-gated and
      rate-limited against the tenant's wipe cap (Intune: *"A tenant can submit up to 500 Wipe
      actions per day"*, <https://learn.microsoft.com/intune/device-management/actions/wipe>).
      *Partners:* the MDM (Fleet, Intune or Jamf, with Apple Business Manager, ADE and APNs), the
@@ -3620,7 +3652,9 @@ re-read from those sources on 2026-09-24 before being written here.
      association), the dock or locker vendor, and infection-control or cleaning staff.
 3. **Rules adopted for every later puck, dock, locker or tap-point surface.** (i) The puck
    carries keys only — an IdP-registered FIDO2 key, optionally a PACS-issued applet with legacy
-   Prox disabled — and never user data, PHI, biometrics, sessions or a location radio. (ii)
+   Prox disabled — and never user data, PHI, biometrics, sessions or a tracking or locating
+   beacon (Find My or AirTag-class); DR-043's NFC/FIDO core and its BLE and UWB presence rungs
+   are unchanged. (ii)
    Attach or check-out is custody evidence that may start a sign-in; the IdP grants access, with
    user verification; SignalGrid decides per action. (iii) Session continuity belongs to the OS,
    the IdP and the VDI broker; only a description of the work travels. (iv) Return means
@@ -3631,19 +3665,20 @@ re-read from those sources on 2026-09-24 before being written here.
    be verified stays NOT READY — fail closed per device — while a SignalGrid outage at a locker
    falls back to the locker or MAM's own authentication plus local-authority: never a blanket
    lockout, never an unauthenticated release. Secondary alarm-notification systems are FDA Class
-   II devices (product code MSX, 21 CFR 870.2300; for example K180566,
-   <https://api.fda.gov/device/classification.json?search=product_code:MSX>); whether a gate
+   II devices (product code MSX, 21 CFR 870.2300,
+   <https://api.fda.gov/device/classification.json?search=product_code:MSX>; for example
+   K180566, <https://api.fda.gov/device/510k.json?search=k_number:K180566>); whether a gate
    across that path changes SignalGrid's own regulatory status is a question for regulatory
    counsel, and this record claims nothing either way. (vi) Every hardware rung stays behind
    DR-043 item 4; the Hardware (DR-043) line in `docs/agent/DISCOVERY_LOG.md` read
    *Rh: 0 of 15 · Ch: 0 of 15 · Ph: 0 of 15* when this was written (2026-09-24).
 4. **Hardware-free work is filed, not built, in this change.** Rows *Puck 6*–*Puck 9* in the
-   DR-043 section of `docs/BUILD_BACKLOG.md`, a HIGH row for the ddm-connector misread, and the
-   Return to Service row reshaped into an approval-gated recommendation that keeps
+   DR-043 section of `docs/BUILD_BACKLOG.md`, a HIGH row for the likely ddm-connector misread,
+   and the Return to Service row reshaped into an approval-gated recommendation that keeps
    `lib/fleet-connector` read-only. They are filed under this record's authority the way DR-043
    item 3 filed Puck 1–5: fixture-first, deferred family, one PR each with its proof. A row that
-   changes a verdict the decision core returns (Puck 6, Puck 8) carries its own proposal record
-   in its PR, the DR-051 pattern, and the owner approves it by merging.
+   changes a verdict the decision core returns (Puck 6, Puck 8, Puck 9) carries its own proposal
+   record in its PR, the DR-051 pattern, and the owner approves it by merging.
 5. **The standing-approval question is the owner's, and this record does not answer it.**
    `docs/PURPOSE.md:72`–`74` says *"Nothing in the cascade may **execute** a change on a source
    system without a recorded human approval"*. An erase on every return, approved one at a time,
@@ -3675,7 +3710,8 @@ item 5:
   tap points).
 
 **Boundary.** Docs only: this record, `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`,
-`docs/CUSTODY_BEACON.md`, `native/ios/FLEET_MDM.md` (markdown), `docs/BUILD_BACKLOG.md`,
+`docs/CUSTODY_BEACON.md`, `docs/INDEX.md` (the recovery-beacon line),
+`native/ios/FLEET_MDM.md` (markdown), `docs/BUILD_BACKLOG.md`,
 `docs/agent/RESOURCE_INTAKE.md` and `docs/agent/DISCOVERY_LOG.md` (prompts only, no count).
 Nothing touches `lib/*`, `/v1`, a connector, a proof, the launch profile, the publication
 boundary, the claim inventory, the docs-sanity denylist or any Swift source. The review's

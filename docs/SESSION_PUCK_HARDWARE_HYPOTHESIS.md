@@ -423,13 +423,13 @@ count lives. Everything below is a design target, not a shipped surface.
 
 | # | The owner's component (his words where quoted) | Against this page | Review verdict | What it becomes |
 | --- | --- | --- | --- | --- |
-| C1 | A *"MagSafe-style"* magnetic puck that locks onto the back of the device | **Reframe.** A magnetic seat is family A's "click or magnetic receiver". The lock conflicts with the ergonomics line (one-handed, works with gloves) and changes what `removed` means; a seated credential rules out magnetic wireless charging, because Apple warns against a badge or key fob between the phone and its charger ([Apple 105047](https://support.apple.com/en-us/105047)) | Feasible only if reframed; the credential lock itself is not recommended | A case or sled seat with a latch sensor that holds no identity; wired or pogo charging |
+| C1 | A *"MagSafe-style"* magnetic puck that locks onto the back of the device | **Reframe.** A magnetic seat is family A's "click or magnetic receiver". The lock conflicts with the ergonomics line (one-handed, works with gloves) and changes what `removed` means; a seated credential rules out magnetic wireless charging, because Apple warns against a badge or key fob between the phone and its charger ([Apple 105047](https://support.apple.com/en-us/105047)) | Feasible only if reframed; the credential lock itself is not recommended | Family A's receiver with a seat sensor that holds no identity; no magnetic wireless charging through a seated credential |
 | C2 | *"All the user's info and auth info — everything"*, and building access where a site has no face or fingerprint reader | **Conflicts** as written with *"The radio credential must not broadcast PHI"* and DR-043 item 2; the go/no-go row for *"must use our existing badge"* already prefers family B | Feasible only if reframed | Keys only; a PACS-issued door applet with legacy Prox off; the worn or Wallet badge first |
-| C3 | An AirTag-like tag that *"other systems"* can use, inside and outside the office | **Conflicts** with the privacy paragraph (*"can become an employee-tracking system very quickly"*) and the threat row on broadcast identifiers; it jumps to rungs D and E | **Not feasible as described** | No radio in the puck; device-bound, zone-level recovery location, per [Custody beacon](CUSTODY_BEACON.md) |
+| C3 | An AirTag-like tag that *"other systems"* can use, inside and outside the office | **Conflicts** with the privacy paragraph (*"can become an employee-tracking system very quickly"*) and the threat row on broadcast identifiers; it jumps to rungs D and E | **Not feasible as described** | No tracking or locating beacon (Find My or AirTag-class) in the puck — DR-043's NFC/FIDO core and its BLE and UWB presence rungs are unchanged; device-bound, zone-level recovery location, per [Custody beacon](CUSTODY_BEACON.md) |
 | C4 | Docks and lockers running SignalGrid software *"that taps into all the systems"* | **Reframe.** The division of authority already makes any dock a source of evidence, never the policy engine | Feasible only if reframed | The locker vendor releases the bay; SignalGrid returns a per-device ready or hold; the dock holds no connector credentials |
 | C5 | Attaching the puck *"gives customer access to all systems"* | **Conflicts** with the do-not-claim line *"That a dock attach event identifies anyone"* and with `lib/signalgrid-core/src/attach.ts:22` | Feasible only if reframed | Attach may start a sign-in; the IdP grants it with user verification; SignalGrid decides per action |
 | C6 | A tap at a workstation or WOW for *"passthrough authentication"*, with the phone's session carried to the desktop | **Partly fits** the Windows platform note (FIDO2 sign-in; three separate integrations). The carry-over **conflicts** with platform facts and with `lib/work-context/src/types.ts:1` | Feasible only if reframed; the carry-over is not feasible | A fresh sign-in owned by that endpoint; VDI roaming for the desktop; only a description of the work travels |
-| C7 | Tap the puck on the dock to return; the device is *"cleared and sanitized for next user"* | **Reframe.** Clearing is the MDM's on a supervised device (golden rule 4); a cleaning claim meets the disinfectant do-not-claim line | Feasible only if reframed | Docking is the return; the MDM or IdP clears; SignalGrid gates readiness; cleaning is attested by a person |
+| C7 | Tap the puck on the dock to return; the device is *"cleared and sanitized for next user"* | **Reframe.** Clearing is the MDM's on a supervised device (golden rule 4); a cleaning claim meets the disinfectant do-not-claim line | Feasible only if reframed | Docking is the return; the MDM or IdP clears; SignalGrid gates readiness; cleaning is attested by a person, read as evidence from the system that owns it (the locker or mobile-access-management vendor, the cleaning-tracking app or the host app), never captured on a SignalGrid surface |
 
 ### New policy-matrix rows
 
@@ -439,7 +439,7 @@ shipped behaviour — on the same verdict ladder as the matrix above.
 | Situation | Verdict | Why, in this tree's terms | Backlog |
 | --- | --- | --- | --- |
 | The holder's own credential returns the device at a dock | Custody closed, session ended — **not** `CUSTODY_REMOVED` | A planned return is not a walk-away. Under PR #1005's live attach rules a return read as `removed` restricts, and that code has no resolution descriptor, so every shift change would escalate | Puck 6 |
-| The latch opens without the holder's return | `deny` — treated as forced | An unlatch nobody accounted for is the torn-removal case | Puck 6 |
+| The puck leaves its seat with no authorized release, or a tamper or seat-break reading arrives | `deny` — forced (`CUSTODY_TORN`) | An unauthorized release is the torn-removal case; an authorized release with no return still restricts (`CUSTODY_REMOVED`, `lib/signalgrid-core/src/attach.ts:218`–`222`), so an ordinary walk-away is not turned into `deny` | Puck 6 |
 | The device and the puck go missing together | `deny`, plus an approval-gated revoke request to the IdP and the PACS | When both are gone, possession is no evidence of anything | Puck 8 |
 | A presence-only assertion (no user verification) for a broad-scope session | Never `allow`; `step_up` | Presence is not verification; `identityConfirmed` is a plain yes/no today (`attach.ts:170`) | Puck 8 |
 | An attach reported only by a mechanical sensor, when deciding whether to keep a session open | Treated as `unknown` → `step_up` | A magnet or a dummy puck satisfies a microswitch, Hall or contact sensor | Puck 8 |
@@ -472,15 +472,18 @@ until one of them answers it in writing.
    compatibility matrix: *"NFC with FIPS 140-3 certified security keys isn't supported on iOS by
    Apple."* (<https://learn.microsoft.com/en-us/entra/identity/authentication/concept-fido2-compatibility>).
    The review reads a puck seated on the phone it signs into as not separate from it, and a
-   FIPS-grade key as unusable over NFC on that iPhone; controlled-substance signing would then
-   keep its own separate factor, which is what incumbents sell
+   FIPS 140-3 certified key as unsupported over NFC on iOS (Entra). The EPCS floor is the FIPS
+   140-2 Security Level 1 criteria, a different bar from a 140-3 certificate, so whether a key
+   that meets those criteria works over NFC on that iPhone is part of this open question. On the
+   separateness reading alone, controlled-substance signing would keep its own separate
+   factor, which is what incumbents sell
    ([`docs/research/COMPETITIVE_IMPRIVATA.md:14`](research/COMPETITIVE_IMPRIVATA.md)). Open for a
    human compliance review.
 3. **Medical-electrical safety on a WOW.** A powered receiver, reader or dock added to a
    workstation-on-wheels in the patient environment may bring in IEC 60601-1's rules for medical
    electrical systems and a clinical-engineering or EMC review. Not sourced: the standard was not
    read. Open for clinical engineering.
-4. **MRI zones.** A magnetic puck with a steel latch carried into an MRI suite's controlled zones
+4. **MRI zones.** A magnetic puck carried into an MRI suite's controlled zones
    could be a projectile risk. Not sourced: the ACR's MR-safety zone guidance would be the
    reference and was not fetched. Open, and a discovery question.
 5. **Implanted devices.** Apple: *"Most medical device manufacturers recommend keeping a source
@@ -490,14 +493,17 @@ until one of them answers it in writing.
    to patients adds a magnet near implants, the worker's own included. Not assessed. Open for
    clinical engineering.
 6. **The alarm path.** Secondary alarm-notification systems that deliver monitor alarms to
-   phones are FDA Class II devices (product code MSX, 21 CFR 870.2300; for example K180566,
-   <https://api.fda.gov/device/classification.json?search=product_code:MSX>). A gate that
+   phones are FDA Class II devices (product code MSX, 21 CFR 870.2300,
+   <https://api.fda.gov/device/classification.json?search=product_code:MSX>; for example
+   K180566, <https://api.fda.gov/device/510k.json?search=k_number:K180566>). A gate that
    suspends such a phone sits across that path. Whether that changes SignalGrid's own regulatory
    status is a question for regulatory counsel; the escalate-never-silently-suspend row above is
    the design answer, not a regulatory one.
-7. **A battery in the puck.** Only if a powered puck ever survives, which the C3 verdict says it
-   should not: coin-cell ingestion risk in paediatric and behavioural units was not researched,
-   and whether consumer button-battery rules reach an enterprise product is for counsel.
+7. **A battery in the puck.** Only if a powered puck is ever built — DR-043's BLE and UWB
+   rungs (families D and E) would be one, and they climb only on evidence; the C3 verdict
+   refuses a tracking or locating beacon, not those rungs: coin-cell ingestion risk in
+   paediatric and behavioural units was not researched, and whether consumer button-battery
+   rules reach an enterprise product is for counsel.
 
 ### Added to what this repository will not claim (DR-055)
 

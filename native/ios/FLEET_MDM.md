@@ -186,8 +186,12 @@ not a substitute for it.
      device checks in with the MDM to fetch its enrollment. It is not an iPhone
      trigger outside app preservation.
    - **Activation Lock must be off** — *"The user needs to deactivate all
-     activation locks for this feature to work correctly"* — and the erase command
-     *"doesn't retry if it isn't successful the first time."*
+     activation locks for this feature to work correctly"*.
+   - **The erase's acknowledgement is not retried.** *"The device sends a response to
+     the server, but it doesn't retry if it isn't successful the first time."* It is
+     the device's response to the server that is not retried, not the erase, so the MDM
+     may never see the result of an erase that did run; readiness after a return should
+     key off observed re-enrollment or a DDM check-in, not this acknowledgement alone.
 
    Nothing in this repository binds `device_returned` to it yet — that is a
    `docs/BUILD_BACKLOG.md` row, not a claim, and the row asks for an approval-gated

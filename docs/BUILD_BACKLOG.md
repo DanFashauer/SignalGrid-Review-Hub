@@ -45,25 +45,35 @@ lone repairs into unreachable code).
       no proof reads Apple's YAML, and the row below makes that sentence false. How you'd
       check: `pnpm run proof:ddm-connector` → `summary=pass (131/131)`.
 
-- [ ] **The ddm-connector misreads `mdm.is-return-to-service` — model it as standing configuration, not an erase in flight (DDM connector, HIGH).**
+- [ ] **The ddm-connector likely misreads `mdm.is-return-to-service` — model it as standing configuration, not an erase in flight, once a real device confirms the reading (DDM connector, HIGH).**
       *(Opened 2026-09-24 by the owner's puck-flow intake, DR-055.)* The row above made
-      `custodyPostureOf` in `lib/ddm-connector/src/index.ts` (lines 52–78) read `true` as "the
+      `custodyPostureOf` in `lib/ddm-connector/src/index.ts` (lines 52–80) read `true` as "the
       device is being wiped and handed on. Custody is in TRANSIT", which raises step-up.
       Apple's own status YAML, vendored at
       `third_party/apple-device-management/declarative/status/mdm.is-return-to-service.yaml`
-      (iOS 27.0), defines it differently: *"If `true`, the device is using the return to
-      service with app preservation mode."* That is a standing configuration, so a fleet set
-      up for Return to Service with app preservation reports `true` every day and this axis
-      never reaches allow. It fails closed, so it is not a security hole; it is a correctness
-      bug that blocks the return leg DR-055 records (C7). The change: model `true` as a
+      (iOS 27.0), says only *"The status item that reports the device's return to service
+      with app preservation state"* and *"If `true`, the device is using the return to
+      service with app preservation mode."* It does not say "standing", "setting" or that
+      the value is `true` every day. **The review reads it** as a standing configuration —
+      plausible, since Apple's guide lets iOS 27 users start Return to Service from Control
+      Center inside app preservation — and if that reading holds, a fleet set up for Return
+      to Service with app preservation reports `true` in ordinary service and this axis never
+      reaches allow: fail-closed, so not a security hole, but a correctness bug that blocks
+      the return leg DR-055 records (C7). **Precondition — nothing loosens on an unverified
+      reading:** before the verdict change lands, a Mac-lane sim request confirms on a real
+      supervised iOS 27 device configured for app-preservation Return to Service that it
+      reports `true` while in ordinary service, and the result is committed under
+      `artifacts/sim-results/`; until then today's fail-closed read stays. The change: model
+      `true` as a
       configuration fact that does not raise the verdict by itself; take "erase in flight"
       from separate evidence — the MDM's command status or the `device_returned` event; keep
       absent → `unknown` → tighten; update fixture `mac-noc-12` and its comment in
       `lib/ddm-connector/src/fixture.ts`. One PR with its proof. The check that fails without
       it: `proof:ddm-connector` (`scripts/src/ddm-connector-proof.ts`) gains an assertion that
       a device reporting `true` with no erase-in-flight evidence does not raise on this axis
-      alone, and one that the same device WITH erase-in-flight evidence still does; both fail
-      on today's tree. Lane: endpoint-uem-domain.
+      alone, which fails on today's tree, and one that the same device WITH erase-in-flight
+      evidence still does, which passes today and holds the tightening in place as a
+      regression guard. Lane: endpoint-uem-domain.
 
 - [x] **Hold the DDM/macOS-posture schema pins against Apple's YAML (gate, MEDIUM).**
       *(Opened by the same intake, #858.)* **DONE 2026-09-18** — the ten status items the
@@ -869,35 +879,60 @@ refinement of this hypothesis, not a product (the component map and the new poli
 the hypothesis page's *Owner refinement (2026-09-23, DR-055)* section). Four more hardware-free
 rows, on the same terms as Puck 1–5: fixture-first, fail-closed, deterministic, a deferred
 family, one PR each with its proof, and no hardware. A row that changes a verdict the decision
-core returns (Puck 6, Puck 8) carries its own proposal record in its PR — the DR-051 pattern —
-and the owner approves it by merging.
+core returns (Puck 6, Puck 8, Puck 9) carries its own proposal record in its PR — the DR-051
+pattern — and the owner approves it by merging.
 
-- [ ] **Puck 6 — a `returned` custody event distinct from `removed`, bound to the holder's credential.**
-      The change: a return at a dock, carried by the credential that checked the device out,
-      closes custody and ends the session without producing `CUSTODY_REMOVED`; a removal with
-      no return still restricts; a return with no device sensed in the bay is a custody
-      exception; a latch that opens without the holder's return is forced (`deny`); a torn
-      removal stays `deny`. Plus a resolution note for PR #1005: its live `CUSTODY_REMOVED`
+- [ ] **Puck 6 — bind the existing `device_returned` custody event to the holder's credential, distinct from `removed`.**
+      The change: the event contract already names `device_returned`
+      (`lib/event-contract/src/types.ts:16`, read by `lib/event-contract/src/detect.ts`), so no
+      new custody event is added. A return at a dock, carried by the credential that checked
+      the device out, closes custody and ends the session without producing
+      `CUSTODY_REMOVED`; an authorized release with no return still restricts
+      (`CUSTODY_REMOVED`); a return with no device sensed in the bay is a custody exception; a
+      seat release with no authorized release, or a tamper or seat-break reading, is forced
+      (`deny`, `CUSTODY_TORN`); a torn removal stays `deny`. **The pins that move, named:**
+      `ATTACH_STATES` (`lib/signalgrid-core/src/attach.ts:37`–`38`, *"The three states, and
+      only three"*) stays at three — a returned credential is no longer seated, so the return
+      reaches `puckVerdict` as its own input bound from `device_returned`, not as a fourth
+      attach state; the puck-lifecycle audit census (Puck 3: `AUDIT_EVENT_TYPES`, 14 members,
+      and the audit proof that refuses a fifteenth) moves to 15 with a `dock.returned` event
+      beside `dock.removed`, because recording a return as `dock.removed` is the conflation
+      this row removes — the census assertion moves in the same PR, never loosened. Plus a
+      resolution note for PR #1005: its live `CUSTODY_REMOVED`
       rule has no resolution descriptor and escalates, so once it merges every planned
       end-of-shift return would read as an incident until this row lands — the note says so on
       the rule. **Fail-closed:** only a return the ledger can bind to the holder's own
       credential closes anything; an unreadable return is `unknown`. **Deterministic:** the
       instants are arguments. The check that fails without it: new rows in
-      `proof:decision-cascade` — a holder's return must not yield `CUSTODY_REMOVED`, and an
-      unlatch without a return must yield `deny` — both fail on today's `puckVerdict`
-      (`lib/signalgrid-core/src/attach.ts`), which knows only attached, removed and unknown.
-      Decision-core behaviour, so its PR carries a proposal record. Lane: principal-engineer.
+      `proof:decision-cascade` — a holder's return must not yield `CUSTODY_REMOVED`, and a
+      seat release with no authorized release must yield `deny` — both fail on today's
+      `puckVerdict` (`lib/signalgrid-core/src/attach.ts`), which knows only attached, removed
+      and unknown and has no return or authorized-release input; plus a row that an authorized
+      release with no return stays `restrict` (`CUSTODY_REMOVED`), which passes today and
+      keeps the new rule from turning every walk-away into `deny`. Decision-core behaviour, so
+      its PR carries a proposal record. Lane: principal-engineer.
 
 - [ ] **Puck 7 — the return leg: a readiness scenario where every clearing step must be observed.**
-      The change: after `returned`, a device stays NOT READY until each step is positively
-      seen in the system that owns it — sign-out observed (Entra shared device mode or the
-      comms platform), the Epic user-to-device association removed so alerts stop reaching the
-      device, Return to Service acknowledged and the device re-enrolled (DDM status, after the
-      ddm-connector row above), device prep complete
+      The change: after `device_returned` (Puck 6), a device stays NOT READY until each step is
+      positively seen in the system that owns it — sign-out observed (Entra shared device mode
+      or the comms platform), the Epic user-to-device association removed (assumed Epic
+      routing: that removing it stops alerts reaching the device is the review's inference, not
+      sourced), the device re-enrolled or checked in over DDM after Return to Service (DDM
+      status, after the ddm-connector row above) — not the erase acknowledgement alone, because
+      Apple's `device.erase.yaml` says the device's response *"doesn't retry if it isn't
+      successful the first time"* — device prep complete
       (`lib/integrations/src/integrations/app-update/device-prep.ts`), `sso-session` showing no
-      live session, and cleaning attested by a named person. Anything unknown means not ready.
-      It reuses those dimensions rather than adding a family, and links to the Return to
-      Service row (*Bind `device_returned` to Apple's Return to Service*) rather than
+      live session, and cleaning attested by a named person, read as evidence from the system
+      that owns the attestation (the locker or mobile-access-management vendor, the
+      environmental-services or cleaning-tracking app, or the host app) and never captured on a
+      SignalGrid surface (golden rule 3). Anything unknown means not ready. **Scope, measured:**
+      three steps have a dimension today — device prep, `sso-session` and DDM status; three do
+      not — shared-device-mode or comms-platform sign-out, the Epic user-to-device association,
+      and cleaning attestation (`ls lib/integrations/src/integrations` has no such family, and
+      Epic appears in `lib` only as a break-glass audit plane). Those three enter as new
+      fixture inputs in this row's PR, deferred and classified in the launch profile
+      (`scripts/launch-profile.mjs`) in the same PR; no other family is added. It links to the
+      Return to Service row (*Bind `device_returned` to Apple's Return to Service*) rather than
       duplicating it. **Fail-closed:** readiness is positive evidence of each step, never the
       absence of a complaint; a cleaning step is an attestation, never inferred and never a
       claim. **Deterministic:** fixture data only. The check that fails without it: assertions
@@ -935,7 +970,9 @@ and the owner approves it by merging.
       missing dock feed tightens, per device. **Fail-closed:** both halves only tighten.
       The check that fails without it: `proof:rtls-custody` rows for a mismatched-puck return
       that must stay open, and a proof row where a dock-expected site with a missing feed is not
-      ready while a no-dock site is unchanged. Lane: physical-ot-domain.
+      ready while a no-dock site is unchanged. Decision-core behaviour — (a) adds a `deny` and
+      (b) edits `lib/signalgrid-core/src/evidence.ts` — so its PR carries a proposal record.
+      Lane: physical-ot-domain.
 
 - [x] **Both findings from the "status reported rather than measured" sweep — FIXED.**
       The sweep that produced the `itsm` tri-state health fix turned up two more instances of the

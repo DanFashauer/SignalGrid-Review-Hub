@@ -46,29 +46,6 @@ path, review of a read-only observe-mode pilot, a second working session.
 form of no, and logging it as interest is the single easiest way to fool
 yourself in this phase.
 
-### Hardware follow-up prompts (DR-043, DR-055)
-
-Asked only after Phase 1 has been answered in full and Phase 2 has been asked — never as
-an opener and never after a demo. They come from the owner's 2026-09-23 puck flow (DR-055)
-and exist so that a hardware-specific answer is recognised when it arrives. They change no
-count and no threshold: an answer earns a hardware mark only under the Running tally's own
-rules, and a prompt that was asked is not evidence of anything.
-
-- **Badge or puck.** *"When someone picks up a shared phone today, what do they tap or
-  present to get into it?"*
-- **The badge on its own.** *"Does your staff ever need their badge while the shared phone
-  is somewhere else — doors, parking, the time clock?"*
-- **Charging.** *"How do your shared devices charge between shifts — cables, cradles,
-  trays or wireless pads?"*
-- **Cleaning.** *"Who cleans a returned device, with what, and does anyone sign that it was
-  done?"*
-- **Check-out and return today.** *"What already handles check-out and return of shared
-  devices, and where does it fall short?"* Log the product they name verbatim; if it is a
-  badge-tap mobile access management product, ask what it misses rather than whether it is
-  good.
-- **Alarm continuity.** *"If a shared phone were locked or signed out in the middle of a
-  shift, what would happen to the alarms and calls routed to it?"*
-
 ---
 
 ## The record
@@ -203,3 +180,28 @@ table: this sentence cannot be advanced by editing it.
 Nothing in this file, the repository, the doctrine, the gates or the diagrams
 can produce a single row in that table. This phase cannot be prepared for
 further — it can only be done.
+
+---
+
+## Hardware follow-up prompts (DR-043, DR-055)
+
+Asked only after Phase 1 has been answered in full and Phase 2 has been asked — never as
+an opener and never after a demo. They come from the owner's 2026-09-23 puck flow (DR-055)
+and exist so that a hardware-specific answer is recognised when it arrives. They change no
+count and no threshold: an answer earns a hardware mark only under the Running tally's own
+rules, and a prompt that was asked is not evidence of anything.
+
+- **Badge or puck.** *"When someone picks up a shared phone today, what do they tap or
+  present to get into it?"*
+- **The badge on its own.** *"Does your staff ever need their badge while the shared phone
+  is somewhere else — doors, parking, the time clock?"*
+- **Charging.** *"How do your shared devices charge between shifts — cables, cradles,
+  trays or wireless pads?"*
+- **Cleaning.** *"Who cleans a returned device, with what, and does anyone sign that it was
+  done?"*
+- **Check-out and return today.** *"What already handles check-out and return of shared
+  devices, and where does it fall short?"* Log the product they name verbatim; if it is a
+  badge-tap mobile access management product, ask what it misses rather than whether it is
+  good.
+- **Alarm continuity.** *"If a shared phone were locked or signed out in the middle of a
+  shift, what would happen to the alarms and calls routed to it?"*

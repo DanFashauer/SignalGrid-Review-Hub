@@ -41,22 +41,29 @@ for a code change). No connector can ingest it — this deferred dimension or an
 - **It is end-to-end encrypted to the owner.** *"The device owner receives only the
   encrypted location information that's decrypted and displayed in the Find My app"*
   (<https://support.apple.com/guide/security/find-my-security-sec6cbc80fd0/web>).
-- **There is no third-party API.** The only sharing route, Share Item Location, is a
-  manual link for a few people that expires after seven days
-  (<https://www.apple.com/newsroom/2024/11/apples-find-my-enables-sharing-location-of-lost-items-with-third-parties/>)
-  — not a feed.
-- **An organization cannot own the tags.** For Managed Apple Accounts, Find My *"The app
-  appears, but the user can't use it"*
+- **There is no third-party API.** Two person-to-person routes exist and neither is a
+  feed: item sharing to up to five borrowers, each on their own Apple Account (iOS 17 or
+  later; *"up to five borrowers in addition to yourself, for a total of six users per
+  item"*, <https://support.apple.com/guide/iphone/share-an-airtag-iph419cc5f28/ios>), and
+  Share Item Location, a link for a small number of authenticated people that expires
+  after seven days
+  (<https://www.apple.com/newsroom/2024/11/apples-find-my-enables-sharing-location-of-lost-items-with-third-parties/>).
+- **An organization cannot hold them under a Managed Apple Account, and an ordinary
+  account caps at 32 items, shared items included.** For Managed Apple Accounts, Find My
+  *"The app appears, but the user can't use it"*
   (<https://support.apple.com/guide/business/service-access-with-managed-apple-accounts-axm171b3ee95/web>),
   and a personal account holds *"up to 32 items in Find My"*
   (<https://support.apple.com/en-us/101602>).
 - **The anti-stalking alert works against it.** A tracker *"separated from its owner and
-  seen moving with you over time"* notifies the person it travels with
-  (<https://support.apple.com/en-us/119874>) — so an employer-owned tag riding with a
-  worker would alert on the worker's own phone.
+  seen moving with you over time"* alerts the person it travels with
+  (<https://support.apple.com/en-us/119874>), unless the owner has shared the item with
+  that person in Find My, which needs that person's own Apple Account (*"People you're
+  sharing items with don't receive tracking notifications when the items are moving with
+  them"*, the item-sharing page above). Either way the employer gets no feed.
 
-The only honest Find My arrangement is a worker-owned pairing that lets a worker find
-their own lost item, and it gives the employer and SignalGrid nothing.
+Every Find My arrangement — a worker's own pairing, or an item held on an ordinary
+account and shared to a worker — is person-to-person, and none gives the employer or
+SignalGrid a feed.
 
 The decision value is the **fusion**. A dot on a map is commodity
 asset-tracking. The beacon is the out-of-band channel that breaks the tie the
@@ -93,11 +100,15 @@ This is an **asset-recovery** signal, and its honesty depends on staying that:
   visibility is governed by "the same who-can-see model as every other signal (see
   grid governance)"; `docs/GRID_GOVERNANCE.md` has no visibility section, and no
   durable store implements retention —
-  `docs/DATA_RETENTION_AND_PERSONAL_DATA.md:66`.) The one built minimization boundary
-  is the facility-trust-graph gateway projector
-  (`lib/facility-trust-graph/src/gateway.ts`): only an outcome, a coarse zone and a
-  pseudonym leave a site. Until a visibility and retention model is written and
-  built, nothing here may be described as governed.
+  `docs/DATA_RETENTION_AND_PERSONAL_DATA.md:66`.) Minimization boundaries are built —
+  one is the facility-trust-graph gateway projector
+  (`lib/facility-trust-graph/src/gateway.ts`), where only an outcome, a coarse zone and
+  a pseudonym leave a site; another is the location-services normalizer, whose signal
+  keeps geofence membership, drops latitude and longitude, and flags when precise
+  coordinates were used (`hasPreciseCoordinates`,
+  `lib/integrations/src/integrations/location-services/types.ts:35`–`47`). Minimization
+  is not visibility: until a visibility and retention model is written and built,
+  nothing here may be described as governed.
 - **Complements, never replaces, the online signals.** It is a recovery channel
   for after a device goes dark — a lagging backstop, not a prevention control.
 - **The beacon is hardware + firmware.** An app cannot power a tag, and SignalGrid
@@ -123,7 +134,9 @@ worker carries — the session puck of DR-043, or any badge — and it locates t
 person, off shift and at home included, rather than the device; it is the
 employee-tracking case the puck hypothesis's privacy constraint refuses
 ([`docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`](SESSION_PUCK_HARDWARE_HYPOTHESIS.md)),
-and the platforms' unwanted-tracking alert would fire on the worker's own phone.
+and the platforms' unwanted-tracking alert reaches the person it travels with once it is
+separated from its owner, unless the owner has shared the item with that person in Find
+My, which needs that person's own Apple Account. Either way the employer gets no feed.
 
 ## Proof
 

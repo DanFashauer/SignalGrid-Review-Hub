@@ -519,6 +519,220 @@ present-tense property of SignalGrid, a puck, a receiver, a dock, a locker or a 
 - That the puck stores user data, or that any puck can serve as an EPCS factor.
 - Any login-time saving or "faster login".
 
+## Assigned-device mode (owner note 2026-09-24, DR-055 amendment)
+
+On 2026-09-24 the owner added that the shared-device puck above is *"only one examples of shared
+use case"*, and that a one-to-one user — a knowledge worker or an executive — would be *"similar
+without the return to dock"*: the puck stays on the back of the user's own phone, signs them in to
+their *"assigned workstation"*, and *"if a device is not assigned to that user the puck workflow
+for authentication will not work"* — *"another security layer"* reaching devices and systems
+*"regardless if it physically or app or website"*. DR-055 item 6 records it. This section holds
+it against this page, at this page's level of abstraction and under the same disclosure limit as
+the section above. Everything here is a design target; nothing is built, and no hardware gate
+moves.
+
+### Two modes, one policy
+
+The mode is a declared input — `shared`, `assigned` or `unknown` — per device group, set by the
+tenant and approval-gated, never inferred from a missing primary user. It is not a hosting model
+(`docs/DEPLOYMENT_MODELS.md`) and not an ownership value. `unknown` raises in both modes, a mode
+change re-evaluates everything, and no custody or assignment state carries over.
+
+| Applies to | Rules |
+| --- | --- |
+| Shared mode only | PR #1005's attach semantics (`removed` → `restrict`, `CUSTODY_REMOVED`; a present but unreadable reading → `step_up`, `CUSTODY_UNKNOWN`); the `puckVerdict` ladder (`lib/signalgrid-core/src/attach.ts:211`–`250`), the custody ledger, dock readiness and return (C4, C7, Puck 6–9); checkout binding (Puck 9) |
+| Assigned mode only | Assignment coherence — provenance, read freshness, change history, sources that disagree, loaner, transition (Puck 11, Puck 12); the assigned phone's lifecycle — lost, not observable, swap versus loss; local-enforcement drift (Puck 15). A phone-mounted attach is never graded; a desk reader, where a site has one, uses the shared attach semantics for that reader only |
+| Both | Credential downgrade → `deny` (`lib/signalgrid-core/src/attach.ts:216`) and passkey attestation; the user-verified axis (Puck 8) — presence-only never reaches `allow` for a broad scope; `SESSION_SUBJECT_MISMATCH` — `escalate` while the session is active, `restrict` once it has expired (`lib/integrations/src/integrations/sso-session/evaluate.ts:64`–`72`); a revoked or lost key → correlated, approval-gated revocation requests to the IdP, the PACS and SignalGrid's session mappings; break-glass pinned in tenant config, every use alerting; SignalGrid unreachable → each surface's own rule stands; a declared *credential required* flag (Puck 13); outputs as `/v1` verdicts, CAEP claims sets and approval-gated requests, advisory at the login window |
+
+### The note's five claims against this page
+
+| # | The owner's claim | Against this page | Review verdict | What it becomes |
+| --- | --- | --- | --- | --- |
+| A1 | A one-to-one assigned mode; no return to a dock; the puck stays magnetically on the back of the user's own phone | **Reframe.** Family A's receiver is a seat on a shared device; here the seat is the user's own phone, which nothing can read (AccessorySetupKit discovers Bluetooth or Wi-Fi accessories, <https://developer.apple.com/documentation/accessorysetupkit>) | Feasible only if reframed: shared versus assigned is an industry-standard split, the magnet is a way to carry the puck and not a security layer, and it has a cost (below) | A declared mode input; phone-mounted attach readings never graded; the assigned phone's lost and swap state fused from the MDM, the IdP and ticketing, tightening only |
+| A2 | The puck signs the user in to their assigned workstation | **Fits** the Windows platform note (FIDO2 sign-in) and C6's fresh-sign-in reframe, unchanged | Already native elsewhere: Entra FIDO2 key sign-in on Entra joined and hybrid joined PCs, Platform SSO's smart-card method on a Mac, Windows Hello for Business on an assigned PC | SignalGrid judges the session a fresh, endpoint-owned sign-in produces; advisory at the login window |
+| A3 | Not assigned to that user → the puck sign-in does not work; *"another security layer"* | **New.** This page has no row comparing a credential with a device's assigned user | Feasible only if reframed: a policy check over existing records, not a factor; the enforcement stays native; the record itself can be attacked | Assignment coherence: a credential-agnostic decision input that only tightens; SignalGrid audits drift and requests changes, never writes |
+| A4 | That layer reaches physical access, apps and websites | **Fits** the division of authority above and `docs/PURPOSE.md:80`–`86` | Feasible only if reframed: "controls" is the wrong verb | One verdict, consumed by each surface with a different reach: apps and websites through the IdP or a `/v1` call; doors revoke-after at a reader, decide-first through an API; devices through the OS lists |
+| A5 | The 2026-09-23 flow is one shared-device example, not the product | **Fits**: DR-043 records the puck as one hardware hypothesis and `docs/PURPOSE.md:80`–`86` scopes the grid to every system the company runs | Feasible as stated, with cautions: the launch path stays one shared-device workflow (`docs/LAUNCH_PROFILE.md:5`); assigned mode needs its own fixtures and proofs, not a flag on the shared flow; a new persona gets decision coverage before any build and discovery evidence before any claim | Same engine and verdict vocabulary; the mode is an input, not a fork |
+
+### Assignment-coherence policy rows
+
+Candidate fixture rows for the backlog items named in the last column — a design target, not
+shipped behaviour — on the same verdict ladder as the matrix above. "Credential subject" is the
+user a credential is registered to: a FIDO2 assertion names that user, not whoever holds the key,
+so an assistant holding an executive's puck and PIN looks like the executive, and sharing shows
+only through contradicting presence. Until the owner answers which device *"not assigned"* means
+(open question 1), the rows read the workstation.
+
+| Situation | Verdict | Why, in this tree's terms | Backlog |
+| --- | --- | --- | --- |
+| A device group's mode is undeclared or `unknown`, on a workflow the tenant opted into assignment policy | `step_up`, `ASSIGNMENT_MODE_UNKNOWN` | Unknown raises; the opt-in is declared, never inferred from missing MDM data | Puck 10 |
+| A device group flips assigned → shared | Approval-gated (two-person), audited, then a `step_up` cooldown, `ASSIGNMENT_MODE_CHANGED` | A loosening, graded like policy-binding's *binding too WIDE* (`lib/integrations/src/integrations/policy-binding/types.ts:1`–`48`); shared → assigned tightens and needs no gate | Puck 10 |
+| A device declared shared carries an admin-set primary user | Drift finding | The declaration and the record disagree | Puck 10 |
+| Credential subject = the workstation's confirmed assigned user, every record freshly read, no recent unexplained change | `allow` — advisory post-logon; the OS list is the enforcement | SignalGrid has no login-window hook | Puck 11 |
+| Credential subject ≠ the confirmed assigned user, device declared assigned | `deny`, `ASSIGNMENT_MISMATCH` | Only against a confirmed assignment | Puck 11 |
+| Assignment set by first sign-in or by a device-enrollment-manager account, not yet confirmed by an admin event or a tenant roster | `step_up`, `ASSIGNMENT_UNCONFIRMED` | Intune sets the primary user automatically on those paths | Puck 11 |
+| Declared assigned, the source reports no assigned user | `step_up`, `ASSIGNMENT_MISSING` | Today an ownerless device is only counted (`lib/integrations/src/integrations/graph/estate.ts:8`–`10`) | Puck 11, Puck 12 |
+| The device is absent from the read, or more than one user is mapped to it | `step_up`, `ASSIGNMENT_UNKNOWN` — never `not_applicable` | A Fleet host's `end_users` is an array | Puck 11, Puck 12 |
+| The last successful read is older than the tenant's bound | `step_up`, `ASSIGNMENT_STALE` | Freshness is read age from an injected clock, never assignment age | Puck 11, Puck 12 |
+| The assignment changed inside the tenant's cooldown | `step_up`, `ASSIGNMENT_RECENTLY_CHANGED` | Intune's Help Desk Operator role and Fleet's device-mapping endpoint can both rewrite the record | Puck 11 |
+| The change's actor is the new assignee | `deny` plus an alert, `ASSIGNMENT_SELF_GRANTED` | A self-grant is the attack the record invites | Puck 11 |
+| A change with no linked ticket; change history unreadable | `step_up` plus an alert; unreadable history → `step_up` for high-risk actions | Unknown raises | Puck 11 |
+| An unassign or reassign seen in the audit feed but not yet in the device record | `step_up`, `ASSIGNMENT_IN_TRANSITION` | The two reads disagree for a while | Puck 11 |
+| The tenant's authoritative source and another source disagree | Drift finding, `ASSIGNMENT_SOURCES_DISAGREE`; `step_up` for high-risk actions only; no authoritative source declared → `step_up` | Intune primary user, Entra registered owner, Fleet end user and Jamf can each hold a different answer | Puck 11 |
+| A loaner corroborated by the MDM (primary user actually changed, or the device sits in a declared loaner group), the ticket's creator is not the loaner, inside its window | `step_up`, `LOANER_TEMPORARY_ASSIGNMENT`; a ticket alone leaves `ASSIGNMENT_MISMATCH` standing plus a finding; a missing or unparseable window counts as expired | A ticket alone never loosens a verdict | Puck 11 |
+| An assertion for an executive's credential while the executive's other presence contradicts it — a door read at another site, a concurrent session, `impossible_travel` (`lib/integrations/src/integrations/identity-risk/types.ts:39`) | `step_up` or escalate | A delegate uses their own credential under IdP or app delegation | Puck 11 |
+| A break-glass account (pinned in SignalGrid tenant config, approval-gated) on an assigned workstation | Excluded from the assignment rule; every sign-in raises a high-severity alert; unknown break-glass status is not excluded | The administrator break-glass is platform-sso's (`lib/integrations/src/integrations/platform-sso/evaluate.ts:168`–`173`), not the clinician break-glass family (`lib/integrations/src/integrations/break-glass/types.ts:7`–`11`) | Puck 11 |
+| The tenant configures "phone must be present" for a puck ceremony | Refused at setup, alert `POLICY_UNOBSERVABLE`; the previous policy stands | The phone takes no part in a puck sign-in | Puck 11 |
+| The assigned phone is in Lost Mode, or the IdP revoked the puck key, or a loss ticket is open | `deny` puck-backed sign-ins for that credential subject, `ASSIGNED_DEVICE_LOST`, plus an approval-gated key-revoke request | A lost phone carries its puck with it | Puck 11 |
+| The assigned phone cannot report Lost Mode (unsupervised or user-enrolled) | Lost state `not_observable`: puck-backed high-risk actions `step_up`, plus a tenant finding | Intune Lost Mode covers supervised iOS/iPadOS and ChromeOS only (<https://learn.microsoft.com/intune/device-management/actions/lost-mode>) | Puck 11 |
+| Lost Mode is turned off while the loss ticket is still open | Alert and re-evaluate; never a silent return to `allow` | | Puck 11 |
+| Retire or wipe with no recorded non-loss reason | Treated as `ASSIGNED_DEVICE_LOST` | | Puck 11 |
+| Retire or wipe with a recorded non-loss reason (upgrade, trade-in), the new phone not yet assigned | `step_up`, `ASSIGNMENT_IN_TRANSITION`, satisfied by a factor independent of both phones (for example an IdP Temporary Access Pass after identity proofing) | Never `allow` on the stale record | Puck 11 |
+| A Temporary Access Pass is issued to the credential subject | Re-evaluate; puck-backed high-risk actions `step_up` | Not a `deny`: a Temporary Access Pass is also routine onboarding | Puck 11 |
+| A door credential issued to a device that is not the holder's assigned device, where the PACS exposes that mapping | Advisory `deny` plus an approval-gated suspend request | The PACS decides at the reader; SignalGrid can only act afterwards. Where the mapping is not exposed the reading is unknown and the row does not fire | Puck 11 |
+| An app or website sign-in from a device Entra has no record of | Assignment unknown → `step_up` | Conditional Access treats every property of an unregistered device as null | Puck 11 |
+| A workstation declared credential-required, and no assertion or attach reading arrives | `step_up`, `REQUIRED_CREDENTIAL_UNOBSERVED` — never `not_applicable` | See Puck 13 for how this meets PR #1005's `not_applicable` | Puck 13 |
+| A declared-assigned workstation whose `AllowLocalLogOn` is unset or holds a broad group (Users, Authenticated Users, Guest) | Finding `ASSIGNMENT_NOT_ENFORCED_LOCALLY`; `step_up` for high-risk workflows from that workstation only; an approval-gated MDM change request | Stepping up every decision would lock most tenants out on day one and get the rule switched off | Puck 15 |
+| The local list is readable and diverges from the confirmed assigned user | Drift finding plus an approval-gated MDM change request | SignalGrid never writes the list | Puck 15 |
+| The target is RDP, VDI or a server | Not a puck path; grade the broker's own sign-in | Entra lists RDP, VDI and Citrix without WebAuthn redirection, and server sign-in, as unsupported for security keys (<https://learn.microsoft.com/entra/identity/authentication/howto-authentication-passwordless-security-key-windows>) | — |
+| Any surface, SignalGrid unreachable | That surface's own rule stands | Never grant by absence | — |
+
+### What the magnet costs
+
+- **Charging.** The charging warning quoted in the C1 row above ([Apple 105047](https://support.apple.com/en-us/105047))
+  applies to the user's own phone as much as to a shared one: an NFC puck comes off for every
+  wireless charge, so it is not always attached.
+- **NFC coexistence.** Apple's *Accessory Design Guidelines* (the edition dated 2026-09-21,
+  <https://developer.apple.com/accessories/Accessory-Design-Guidelines.pdf>) say accessories
+  *"shall not degrade a device's NFC transaction performance"* (4.9.5). The phone's own Wallet
+  badge and payment cards use the same NFC radio, so a phone-back puck carries that test burden.
+  Whether it passes is untested (open question 12).
+- **The carrier.** The same guidelines say a case claiming magnetic wireless-charging
+  compatibility shall *"Not have rear pockets or holders for credit cards, RFID cards, or other
+  similar items"* (5.1.4).
+- **Macs.** Platform SSO's methods are password, web, smart card, Secure Enclave-backed key and a
+  Wallet access key, and Tap to Login works only on a Mac configured for Authenticated Guest Mode,
+  with *"an attached NFC reader"*
+  (<https://support.apple.com/guide/deployment/platform-sso-for-mac-dep7bbb05313/web>). On a
+  one-to-one Mac a puck therefore presents as a smart card (the review's reading), which means a
+  reader at every assigned desk or a detach to plug it in, against Platform Credential at no added
+  hardware.
+- **Theft.** The phone and the puck are stolen together; the puck's PIN and the phone's own unlock
+  are the only barriers.
+
+### What a buyer already has
+
+The assigned-mode buyer is not starting from nothing. Each of these is native today, and each is
+a reason a buyer may not want a puck at all:
+
+- **Windows Hello for Business** on the assigned PC. Microsoft's persona guidance puts it first on
+  a dedicated PC and an NFC FIDO2 key built into the access badge for other devices
+  (<https://learn.microsoft.com/windows-365/enterprise/choosing-authentication-method>).
+  **Trusted signal unlock** adds a second signal such as a Bluetooth-paired phone in range, on a
+  Hello PIN, fingerprint or face (not a FIDO2 key); Microsoft tells organizations using it to turn
+  off non-Microsoft credential providers, and a lost, stolen or replaced signal device can lock
+  the user out until it is reconfigured
+  (<https://learn.microsoft.com/windows/security/identity-protection/hello-for-business/trusted-signal-unlock>).
+- **Platform SSO / Platform Credential** on the assigned Mac (the Secure Enclave-backed key method,
+  above).
+- **An attested passkey** on the assigned phone: Entra passkey profiles can enforce attestation at
+  registration
+  (<https://learn.microsoft.com/entra/identity/authentication/howto-authentication-passwordless-security-key-windows>).
+- **A Wallet employee badge** for doors. Apple: putting the device in Lost Mode *"turns off access
+  to Apple Wallet and temporarily removes your cards and passes, including your employee badge"*,
+  and turning it back on asks for the Apple Account password
+  (<https://support.apple.com/en-us/119901>).
+- **Per-user virtual desktops.** *"Each Cloud PC is assigned to an individual user"*
+  (<https://learn.microsoft.com/windows-365/enterprise/overview>); an Azure Virtual Desktop
+  personal host pool maps a single user to a single personal desktop by default
+  (<https://learn.microsoft.com/azure/virtual-desktop/configure-host-pool-personal-desktop-assignment-type>).
+- **Walk-away lock.** Dynamic Lock locks the PC when the paired phone leaves; its signal rule takes
+  configurable `rssiMin` and `rssiMaxDelta`, with the defaults recommended
+  (<https://learn.microsoft.com/windows/security/identity-protection/hello-for-business/hello-feature-dynamic-lock>).
+  It only locks. The Windows Hello companion device framework, the companion-unlock API the review
+  found, is deprecated since Windows 10, version 2004
+  (<https://learn.microsoft.com/windows/uwp/security/companion-device-unlock>).
+
+What is left for SignalGrid is narrow: an app or web sign-in on a managed device compared with
+the MDM's assigned user, and drift across the Intune primary user, the Entra registered owner, the
+Fleet end user, the local logon lists and Mac local accounts. In the review's reading of the
+products above, neither is offered as a built-in check; that reading is not exhaustive, and
+"SignalGrid-only" is on the do-not-claim list below.
+
+### Open questions — recorded, not answered
+
+1. **The owner's.** Does *"a device not assigned to that user"* mean the workstation, the phone,
+   or both? The workstation reading can be enforced by the OS today and checked by SignalGrid. The
+   phone reading cannot be proven at a puck tap, because the phone takes no part in that sign-in.
+2. **Android.** The note assumes an iPhone. Android phones, magnetic cases on them, and Android
+   fully managed passkeys and NFC were not researched. Unsourced.
+3. **Other workstations and brokers.** Linux and ChromeOS workstations, and VDI brokers beyond RDP
+   and Azure Virtual Desktop, were not researched. Unsourced.
+4. **Other IdPs.** Ping, Duo, Google Workspace and CyberArk were not researched. Okta Desktop
+   MFA's limits (no offline FIDO2 on Windows; no passkeys or biometric-only keys) came from one
+   skeptic and were not re-read. Unverified.
+5. **Jamf.** Jamf Pro's computer inventory has a *User and Location* category
+   (<https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Inventory_Information>);
+   its field list and how it is populated are unsourced.
+6. **Intune through Graph.** Whether Graph's `managedDevice.userId` equals the primary user the
+   portal shows (unsourced), and reading the Entra registered owner and the primary-user-change
+   audit event through Graph (skeptic-sourced, not re-read).
+7. **The effective local list.** Whether the EFFECTIVE `AllowLocalLogOn` list per device can be
+   read back from Intune or Graph. Unsourced; without it the drift auditor sees only intended
+   policy (Puck 15's first task).
+8. **Trusted signal unlock.** Whether its events name the paired phone, and whether that
+   relay-prone Bluetooth signal is mitigated. Unsourced.
+9. **A user's own lost report.** Whether marking a phone lost through Apple's consumer service
+   reaches the MDM. Unsourced.
+10. **Doors.** Whether a Wallet-badge door event tells the PACS, or an API over it, which device
+    presented it. Unsourced; until it does, a door row keyed on the presenting device does not
+    fire.
+11. **Apple-side one-to-one assignment.** Automated Device Enrollment with User Affinity and
+    Managed Apple Accounts as a readable assignment source for an iPhone. Not researched.
+12. **NFC coexistence** of a phone-back puck with the phone's own Wallet badge and payment cards at
+    readers (the 4.9.5 test burden above). Unsourced.
+13. **Unverified vendor facts.** A cloud unlock or access grant through an access-control API as
+    a decide-first point; the Primary Refresh Token behaviour when a device is disabled (tokens
+    end, an open local session continues); Entra's example of a device-bound, attestation-enforced
+    passkey profile for executives. Each came from one skeptic and was not re-read.
+14. **Buyer demand.** No discovery evidence of any buyer wanting a puck in one-to-one mode. The
+    prompts are in `docs/agent/DISCOVERY_LOG.md` (*Hardware follow-up prompts*).
+15. **Edge cases no row handles yet.** A user assigned to several devices (per the review, Intune gives a
+    device one primary user while one user can be primary on many; a Fleet host's `end_users` is
+    an array); a device assigned by day and a hot desk by night (mode per time window); a live
+    session when the assignment changes (re-evaluate and push a CAEP event); a leaver whose IdP
+    account is disabled while an assignment record still names them (the IdP disable must win);
+    offline workstations (per the review, not re-read, Windows Web sign-in needs the internet;
+    freshness bounds meet offline laptops); a stolen phone and puck plus a shoulder-surfed PIN (user verification is the only
+    barrier); rollout — declaring modes in bulk and importing a roster to confirm assignments
+    without mass step-ups; accessibility — a PIN on every tap for users with motor or reading
+    impairments; privacy — an assignment record plus presence contradictions about an executive is
+    personal data, whose purpose and retention need declaring (the DPIA is the customer's); an
+    executive abroad on a loaner with no MDM-corroborated temporary assignment; and multi-account
+    keys — Windows signs in the last-added account on a key holding several, so a puck with a
+    personal and an admin account needs a rule.
+
+### Added to what this repository will not claim (2026-09-24)
+
+In addition to both lists above, and recorded in DR-055 item 6:
+
+- "The puck knows it is on your phone", "detects removal from the phone", "makes the phone more
+  secure", "unlocks the phone".
+- "Always attached", "never needs to come off", or "no return needed" as a security feature.
+- "A second deployment model" in the `docs/DEPLOYMENT_MODELS.md` sense; "supports assigned-device
+  or executive deployments"; "executives and knowledge workers need a puck"; "one puck serves
+  both modes"; "the puck is the product".
+- "SignalGrid logs you into your PC", "tap your phone to log in to your Mac" for a one-to-one Mac,
+  "works on any workstation", "unlocks when you walk up", "your phone session follows you to the
+  desktop", "faster than Windows Hello", "works offline" for an Okta tenant.
+- "The puck only works on your devices", "SignalGrid blocks logons to unassigned PCs", "Entra or
+  Intune already enforce primary-user-only sign-in", "proves your phone was with you", "an extra
+  authentication factor", "detects a shared puck or PIN", or that assignment coherence across
+  door, device, app and web is SignalGrid-only.
+- "SignalGrid controls access to doors, devices and websites", "real-time veto of a
+  credential-at-reader door", "works with any website", "device-bound sessions for every web
+  app", "replaces Conditional Access or the PACS".
+
 ## A note on disclosure
 
 This tree is public. The concept above is now disclosed by being written here; the
@@ -545,4 +759,4 @@ claims, and none should be added here without that decision.
 - [Custody beacon](CUSTODY_BEACON.md) — the recovery-not-surveillance stance the
   privacy constraint above continues.
 - [Decision records](DECISION_RECORDS.md) — DR-043, and DR-055 for the owner's 2026-09-23
-  refinement.
+  refinement and its 2026-09-24 assigned-device amendment.

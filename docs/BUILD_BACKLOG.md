@@ -974,6 +974,164 @@ pattern — and the owner approves it by merging.
       (b) edits `lib/signalgrid-core/src/evidence.ts` — so its PR carries a proposal record.
       Lane: physical-ot-domain.
 
+**Added 2026-09-24 under DR-055 item 6** — the owner's 2026-09-24 note (the shared-device puck is
+one example; a one-to-one assigned mode for a knowledge worker or an executive sits beside it),
+recorded as an in-place amendment to DR-055 (the mode table, the claim map and the
+assignment-coherence rows are in the hypothesis page's *Assigned-device mode (owner note
+2026-09-24, DR-055 amendment)* section). Six more hardware-free rows, on the same terms as
+Puck 1–9. Puck 10 and Puck 13 change verdicts the decision core returns and carry their own
+proposal records in their PRs — the DR-051 pattern — and the owner approves by merging. Every
+reason code named below is a proposal: a `git grep -w` of `lib`, `scripts` and `artifacts` for
+each one returned nothing on 2026-09-24, and the nearest existing names —
+`ASSIGNMENT_BROKEN` and `ASSIGNMENT_LOCATION_MISMATCH` (clinical,
+`lib/facility-trust-graph/src/clinical.ts:365`–`366`) — mean something else, so the PR that adds
+them checks for a clash again. Until the owner answers which device *"not assigned"* means (DR-055
+item 6(v)), every row reads the workstation.
+
+- [ ] **Puck 10 — the device-assignment MODE as a declared tenant input: `shared | assigned | unknown`, per device group.**
+      The change: the tenant declares each device group's mode, approval-gated, reusing the
+      read-only policy-binding dimension for the declaration
+      (`lib/integrations/src/integrations/policy-binding/types.ts:1`–`48`, with its
+      `PolicyEnforcement` axis at `:87`). Assigned → shared is graded as a *binding too WIDE*
+      change: approval-gated, audited, then a `step_up` cooldown (`ASSIGNMENT_MODE_CHANGED`);
+      shared → assigned tightens and needs no gate. An undeclared or `unknown` mode, on a workflow
+      the tenant has opted into assignment policy, is `step_up` (`ASSIGNMENT_MODE_UNKNOWN`) and
+      never resolves to `shared`; the opt-in is itself declared configuration, never inferred from
+      missing MDM data (the same rule `CLAUDE.md` applies to `managedBool` defaults). A device
+      declared shared that carries an admin-set primary user is a drift finding. The mode is not
+      a hosting model (`docs/DEPLOYMENT_MODELS.md` is untouched) and not a fifth `OwnerType`
+      (`lib/signalgrid-core/src/types.ts:94`). **Fail-closed:** unknown raises; only a declared,
+      approved change loosens. **Deterministic:** the declaration and its approval are fixture
+      inputs. The check that fails without it: a proof fixture where an undeclared mode yields
+      `step_up` with `ASSIGNMENT_MODE_UNKNOWN` and an unapproved flip to shared yields
+      `ASSIGNMENT_MODE_CHANGED` — it cannot pass today, because no mode exists. Deferred family,
+      classified in `scripts/launch-profile.mjs` in the same PR. Decision-core behaviour, so its
+      PR carries a proposal record. Lane: endpoint-uem-domain.
+
+- [ ] **Puck 11 — an assignment-coherence signal domain: a new read-only integration family (working name `device-assignment`) with fixtures and its own proof.**
+      The change: compare the CREDENTIAL SUBJECT — the user the credential is registered to, never
+      "the holder" — with the device's CONFIRMED assigned user, credential-agnostic (a phone
+      passkey, a Wallet badge, Windows Hello for Business or a FIDO2 key all read the same), and
+      only ever tighten. Reason codes: `ASSIGNMENT_MISMATCH` (`deny`, against a confirmed
+      assignment only), `ASSIGNMENT_UNCONFIRMED`, `ASSIGNMENT_MISSING`, `ASSIGNMENT_UNKNOWN`,
+      `ASSIGNMENT_STALE`, `ASSIGNMENT_SOURCES_DISAGREE`, `ASSIGNMENT_RECENTLY_CHANGED`,
+      `ASSIGNMENT_SELF_GRANTED` (`deny` plus an alert), `ASSIGNMENT_IN_TRANSITION`,
+      `LOANER_TEMPORARY_ASSIGNMENT` and `ASSIGNED_DEVICE_LOST`; the finding
+      `ASSIGNMENT_NOT_ENFORCED_LOCALLY` (Puck 15); and a configuration-time alert,
+      `POLICY_UNOBSERVABLE`, that refuses a "phone must be present" rule for a puck ceremony so it
+      never becomes active (after platform-sso's `POLICY_INCOMPATIBLE_WITH_METHOD`,
+      `lib/integrations/src/integrations/platform-sso/evaluate.ts:21`–`24`). It is modelled on
+      pacs-access's `identityMatched` → `IDENTITY_MISMATCH`
+      (`lib/integrations/src/integrations/pacs-access/evaluate.ts:153`–`156`) and on sso-session's
+      subject binding, whose `SESSION_SUBJECT_MISMATCH` escalates an active session and restricts
+      an expired one and never denies
+      (`lib/integrations/src/integrations/sso-session/evaluate.ts:64`–`72`). Break-glass accounts
+      are pinned in SignalGrid tenant config (approval-gated), not read from a Conditional Access
+      exclusion group; the administrator break-glass this follows is platform-sso's
+      (`lib/integrations/src/integrations/platform-sso/evaluate.ts:168`–`173`), not the clinician
+      break-glass family (`lib/integrations/src/integrations/break-glass/types.ts:7`–`11`); every
+      break-glass sign-in on an assigned workstation alerts. Contradicting presence (a door read at
+      another site, a concurrent session, `impossible_travel` at
+      `lib/integrations/src/integrations/identity-risk/types.ts:39`) is how a shared credential
+      shows. The full row list is the hypothesis page's *Assignment-coherence policy rows*.
+      **Fail-closed:** no unknown, stale, disagreeing, auto-set or absent input reaches `allow`.
+      **Deterministic:** instants are arguments; no `Date.now()`. The check that fails without it:
+      a registered `proof:device-assignment` (so `validate-sim-macos.sh` picks it up) asserting
+      that no unknown, stale, disagreeing, auto-set or absent fixture returns `allow`, that a
+      mismatch against a first-sign-in assignment returns `step_up` and not `deny`, and that a
+      device missing from the read returns `ASSIGNMENT_UNKNOWN` and not `not_applicable`;
+      `pnpm run review:invariants` stays green. `pnpm run check:absence "primary user"` is
+      CORROBORATED absent today (2026-09-24). Deferred family, classified in
+      `scripts/launch-profile.mjs` in the same PR. Lane: iam-domain.
+
+- [ ] **Puck 12 — an MDM assigned-user field per device, read-only: who the MDM says the device belongs to, and how that came to be.**
+      The change: per device, `{deviceId, assignedUser | null, source, provenance, readAt,
+      changedAt, changedBy, ticketRef}`, where `source` is `intune_primary_user`,
+      `entra_registered_owner`, `fleet_end_user_idp` or `jamf_user_and_location` and `provenance`
+      is `admin_set`, `enrolling_user`, `first_sign_in`, `dem`, `api_override` or `unknown`.
+      Intune: the primary user and its audit event; Intune sets it by first sign-in for hybrid join
+      with the automatic-enrollment GPO and for co-management, to the enrolling device enrollment
+      manager for DEM, and to none for bulk token, Autopilot self-deploying, Automated Device
+      Enrollment without User Affinity and Android Dedicated
+      (<https://learn.microsoft.com/intune/device-management/inventory-and-status/find-primary-user>).
+      Fleet: each host's `end_users[].idp_username` with `idp_info_updated_at`; more than one
+      entry is ambiguous (`ASSIGNMENT_UNKNOWN`), and a write through Fleet's device-mapping
+      endpoint is `api_override`
+      (<https://github.com/fleetdm/fleet/blob/main/docs/REST%20API/rest-api.md>). Jamf: the
+      *User and Location* inventory category — its field list is unsourced, so sourcing it is this
+      row's first step for Jamf. Freshness is the time since the last successful read, from an
+      injected clock. It must NOT route through `toEstateSubjects`
+      (`lib/integrations/src/integrations/graph/estate.ts:8`–`10`, `:17`–`29`), which skips
+      ownerless devices and only counts them in `skippedOwnerless`, and must not inherit that
+      mapping's hard-coded `assignedRole: "unassigned"` (`:42`) or `ownerType: "unknown"` (`:49`).
+      The adapter is read-only and refused at injection if it exposes a write method (the
+      `actuatorMethodsOn` check, `lib/integrations/src/integrations/deviceResolver.ts:25`).
+      **Fail-closed:** null, missing and ambiguous never read as a match. **Deterministic:**
+      fixture data only. The check that fails without it: fixtures where a declared-assigned
+      device the Graph read reports with no owner yields `ASSIGNMENT_MISSING` (today it is only
+      counted in `skippedOwnerless`), a Fleet host with two `end_users` yields
+      `ASSIGNMENT_UNKNOWN`, and a stale `readAt` yields `ASSIGNMENT_STALE` with the clock injected.
+      Lane: endpoint-uem-domain.
+
+- [ ] **Puck 13 — a declared per-device or per-workflow *credential required* flag, so silence at a device that needs a credential tightens instead of reading `not_applicable`.**
+      The change: PR #1005 (open, branch `claude/build-dr043-live-attach-rules`, read 2026-09-24)
+      reads an attach category that never appears in a decision's evidence as `not_applicable`
+      and a present-but-unreadable one as `unknown` (`readPresentOrNotApplicable` in its
+      `lib/signalgrid-core/src/evidence.ts`), and its seed row *"no attach reading at all → still
+      allow (not_applicable: a tenant with no pucks is not stepped up)"* keeps silence at `allow`.
+      That is right where a credential is optional, and this row does not change what
+      `not_applicable` means. But nothing lets a tenant say a workstation or a workflow REQUIRES a
+      credential, so at such a workstation the same silence also allows; and a device declared
+      assigned whose assignment is missing reads like `badgeBinding: "unknown"`, which allows
+      today (`lib/signalgrid-core/src/seed.ts:480`, *"badge absent/unknown → no fabricated block
+      (allow)"*). Add a declared flag: where it is set, a missing assertion or attach reading is
+      `step_up` (`REQUIRED_CREDENTIAL_UNOBSERVED`) and a missing assignment on a declared-assigned
+      device is `step_up`; where it is not set, PR #1005's behaviour stands. **Fail-closed:** the
+      flag only tightens. **Deterministic:** the flag is a fixture input. The check that fails
+      without it: a seed row in the core policy matrix — *declared required, no feed → `step_up`*
+      — which fails today because the same input resolves to `allow` (and to `not_applicable`
+      once PR #1005 merges); `pnpm --filter @workspace/api-server run test:api` all green if `/v1`
+      evidence changes. Core surface: `docs/LANE_COORDINATION.md` applies before it is touched.
+      Decision-core behaviour, so its PR carries a proposal record. Lane: principal-engineer.
+
+- [ ] **Puck 14 — assigned-mode simulator scenarios, as rows in an existing registered proof.**
+      The change: scenarios for assigned mode, added as rows to an existing proof the way Puck 4's
+      matrix joined `proof:decision-cascade` — the simulator's engine is a byte-faithful twin and
+      must not grow branches (golden rule 1): a match → `allow`; a confirmed mismatch → `deny`; a
+      mismatch against a first-sign-in or DEM assignment → `step_up`; a loaner corroborated by the
+      MDM → `step_up`, an ITSM ticket alone → the mismatch stands; a delegate with the executive's
+      puck plus a contradicting door read or `impossible_travel` → `step_up` or escalate; a stale
+      read; sources that disagree; a reassignment inside the cooldown; a self-grant; the phone
+      lost, lost not observable, a swap with a recorded reason, a retire with none; break-glass on
+      an assigned workstation → alert; an assigned → shared flip; SignalGrid unreachable → the
+      local rule stands. **Fail-closed:** every row asserts its outcome AND its reason code.
+      **Deterministic:** fixture data and injected instants only. The check that fails without
+      it: each row's assertion; `pnpm run proof:signalgrid-simulator` fails until Puck 11's domain
+      exists. Lane: qa-engineer.
+
+- [ ] **Puck 15 — a local-enforcement drift auditor: does the OS actually restrict who can sign in to a declared-assigned workstation?**
+      The change: compare a declared-assigned workstation's Windows `AllowLocalLogOn` and
+      `DenyLocalLogOn` — device-scoped lists of users or groups
+      (<https://learn.microsoft.com/windows/client-management/mdm/policy-csp-userrights#allowlocallogon>)
+      — and, on a Mac, its local accounts and Platform SSO's `EnableCreateUserAtLogin` (false by
+      default,
+      <https://developer.apple.com/documentation/devicemanagement/extensiblesinglesignon/platformsso-data.dictionary>),
+      with the confirmed assigned user, reusing policy-binding's `PolicyEnforcement` axis
+      (`lib/integrations/src/integrations/policy-binding/types.ts:87`). `EnableCreateUserAtLogin`
+      false stops new accounts being created at the login window; it does not remove an existing
+      local account, which is why the Mac half reads the accounts too. A list that is unset or
+      holds a broad group (Users, Authenticated Users, Guest) → the finding
+      `ASSIGNMENT_NOT_ENFORCED_LOCALLY`, `step_up` for high-risk workflows from that workstation
+      only — not every decision, which would lock most tenants out on day one — plus an
+      approval-gated MDM change REQUEST; a readable list that diverges from the confirmed assigned
+      user → a drift finding plus the same request. SignalGrid never writes the list. First task:
+      source whether the EFFECTIVE user-rights list per device can be read back (unsourced today);
+      unreadable → `unknown` → the finding, and `step_up` for high-risk workflows only.
+      **Fail-closed:** unknown raises. **Deterministic:** fixture data only. The check that fails
+      without it: a fixture where a declared-assigned PC whose list holds `Users` yields
+      `ASSIGNMENT_NOT_ENFORCED_LOCALLY`, and a grep of `lib/` for a user-rights write call stays
+      empty. Lane: endpoint-uem-domain.
+
 - [x] **Both findings from the "status reported rather than measured" sweep — FIXED.**
       The sweep that produced the `itsm` tri-state health fix turned up two more instances of the
       same class. Both are now closed and both are pinned.

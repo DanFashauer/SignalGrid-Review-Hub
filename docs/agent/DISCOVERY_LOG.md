@@ -205,3 +205,26 @@ rules, and a prompt that was asked is not evidence of anything.
   good.
 - **Alarm continuity.** *"If a shared phone were locked or signed out in the middle of a
   shift, what would happen to the alarms and calls routed to it?"*
+
+Added 2026-09-24 from the owner's assigned-device note (DR-055 item 6), for a buyer whose
+knowledge workers or executives have their own PC and phone. Same rules as above: asked after
+Phase 1 and Phase 2, no count, no threshold. An answer that a Windows Hello for Business,
+Platform Credential, passkey, Wallet badge or badge-integrated key would also satisfy is not puck
+evidence; only an answer that needs the phone-mounted form factor can earn a hardware mark.
+
+- **Why a puck at all.** *"Why a puck when the phone is already a passkey and a badge?"*
+- **Against what they already have.** *"Why a key mounted on the phone rather than Windows Hello
+  for Business or Platform Credential on the assigned PC or Mac, an attested passkey on the
+  phone, a Wallet badge, or a keyring or badge FIDO2 key?"*
+- **Local logon today.** *"Do your executives' PCs restrict local sign-in to that person today,
+  or can any employee sign in?"*
+- **Who changes the record.** *"Who can change which user a device is assigned to, and would you
+  notice?"*
+- **Lost phones.** *"When an executive's phone is lost, how fast does IT hear, and is the phone
+  supervised?"*
+- **Delegation.** *"How do assistants act for executives today — delegation or shared
+  credentials?"*
+- **Wireless charging.** *"Do people charge their phones wirelessly?"*
+- **Shared or assigned.** *"Are hot desks and meeting-room PCs shared or assigned?"*
+- **Phone present.** *"Is 'my phone must be with me to unlock my PC' wanted?"* Windows trusted
+  signal unlock already does this without a puck; log whether they knew.

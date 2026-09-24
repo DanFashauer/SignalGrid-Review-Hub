@@ -3365,9 +3365,18 @@ const monotonicityTable: string[] = [];
         signals: [A("attached"), E(e), R(r)],
       })),
     ];
+    // Coverage is asserted on the cells themselves, not on a row count: every
+    // enrollment × read pair outside not_applicable appears in some PARITY row.
+    const sharedCells = GRID.filter(([e, r]) => e !== NA && r !== NA).map(([e, r]) => `${e}|${r}`);
+    const coveredCells = new Set(
+      PARITY_ROWS.map(({ puck }) => {
+        const s = { ...confirmed, ...puck };
+        return `${s.enrolledStrength}|${s.readStrength}`;
+      }),
+    );
     check(
-      `22 DR-043 PARITY covers every one of the 9 cells the two matrices share (${PARITY_ROWS.length - 3} grid rows + the 3 attach/compound rows)`,
-      PARITY_ROWS.length === 12,
+      `22 DR-043 PARITY covers every one of the ${sharedCells.length} cells the two matrices share (${PARITY_ROWS.length - 5} grid-derived rows + 5 hand-written rows: downgrade, removed, unknown, downgrade+removed, control)`,
+      sharedCells.length === 9 && sharedCells.every((c) => coveredCells.has(c)),
     );
     for (const { row, puck, signals } of PARITY_ROWS) {
       const matrix = puckVerdict({ ...confirmed, ...puck });

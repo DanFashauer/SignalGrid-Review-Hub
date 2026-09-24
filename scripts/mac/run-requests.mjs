@@ -191,7 +191,19 @@ function main() {
     if (onlyId && id !== onlyId) continue;
     if (!rerun && !onlyId && doneIds.has(id)) continue;
 
-    const req = readJson(join(REQ_DIR, file));
+    let req;
+    try {
+      req = readJson(join(REQ_DIR, file));
+    } catch (e) {
+      // DR-054: a single malformed request file must not throw out of the loop and
+      // silently drop every sibling request queued after it — in the unattended tick
+      // the trace is discarded, so the cloud lane's other work just never ran with
+      // nothing naming the culprit. Name it, keep it PENDING (write NO result), and
+      // fail the run so the exit code and the launchd log both show it.
+      console.error(`\n== request ${id} == does not parse: ${e.message} — skipped, still PENDING`);
+      anyFailed = true;
+      continue;
+    }
     // A superseded request is retired work — but only a VALIDATED retirement
     // skips: the successor must exist, name this request back, and itself be
     // active. Skipping on the field's mere presence let a dangling pointer

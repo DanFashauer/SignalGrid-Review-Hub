@@ -52,7 +52,30 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-23 (Mac lane, latest) - DEFERRED QUEUE CLEARED + EVIDENCE RE-MINT + #753 RESOLVED.
+LAST TOUCHED: 2026-09-24 (Mac lane, latest) - THE OWNER'S AGENTIC LOOP IS BUILT: PR #1031 (DR-056).
+              Owner shared the "Agentic AI system" diagram (Objective -> Orchestration -> Agents/Workflows ->
+              Evaluate -> Replan over ONE shared task state) and directed it as the brain's operating model.
+              Mapped box by box by 7 verified readers; 3 designs judged by 3 lenses; winner critiqued by 2
+              adversaries (every fix taken); then a 4-lens review of the diff (4 findings confirmed, all fixed).
+              Built: docs/agent/objective.json (DR-033 as four criteria; ids/scopes/attestation token live in
+              scripts/** so the json cannot reach goal_met alone), scripts/objective-loop.mjs (pure evaluate/
+              rank/finalize/readVerdict; content-addressed state; refuses to queue what the tick cannot run;
+              one mail per NEW escalation; three-state --check; 62/62 self-test incl. a clock-scan of its own
+              source), docs/agent/objective-state.json (first verdict ESCALATE: 3/4 met, owner-real-in-hand is
+              the owner's; tasks = plan rows 5/6/8; ten plan rows still need an executor), step c' in the Mac tick (lock,
+              SIGNALGRID_MCP_PATH from the sibling checkout, transactional rollback, verdict in the heartbeat),
+              forward-build-cycle made the consumer (trusts the state only while the tick heartbeat is fresh AND
+              names the verdict). Preflight PASSED, breadth 57/57. EXPECTED until #1031 merges: the live tick
+              heartbeats "objective: BROKEN" (it runs this branch's lane-tick.sh from the sibling worktree where
+              the script does not exist yet). Also this session: #905 content finished (cloud-directed, fefddc05,
+              hands off), mac-run.json re-minted (readiness 100%), 16 PRs triaged (cloud's PMO plan answered:
+              #686 stays, #929 revived, cloud lands the green batch), 9 tick branches + the superseded #753
+              rebuild deleted. INCIDENT: review-verifier agents staged fake ticks inside the shared checkout
+              (stray branches, a reverted file, a symlink) - stopped, cleaned, rule saved: any agent that may run
+              git or the tick gets worktree isolation. NEXT: cloud lands #1031 before #1019 (or rebases #1019);
+              then register `objective-loop --self-test --check` in preflight+CI in one PR; the owner's one open
+              decision is the attestation (a decision record carrying the token), never a priority question.
+              PREVIOUSLY 2026-09-23 (Mac lane) - DEFERRED QUEUE CLEARED + EVIDENCE RE-MINT + #753 RESOLVED.
               Four deferred items shipped as PRs: #1016 (esbuild 0.27->0.28), #1017 (iOS accessibility
               evidence), #1018 (brain-cycle stale-input guard, DR-032), #1021 (first report-only
               `claude plugin eval` case for video-intake - doctrine WITH 1.000 / W-OUT 0.333, delta +0.667:

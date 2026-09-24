@@ -128,10 +128,18 @@ export function summarize(hands, roleIds, nowMs) {
 function selfTest() {
   const fail = [];
   const t = (n, ok) => { if (!ok) fail.push(n); };
-  const roles = new Set(["devex-tooling-engineer", "mobile-native-engineer", "principal-engineer", "product-manager"]);
+  const roles = new Set(["devex-tooling-engineer", "mobile-native-engineer", "principal-engineer", "product-manager", "program-manager"]);
   t("a gate blocker routes to devex-tooling-engineer", routeHand({ domain: "gates" }, roles).owner === "devex-tooling-engineer");
   t("a PRIORITY/direction blocker routes to the project manager, NOT the owner", routeHand({ domain: "priority-which-next" }, roles).owner === "product-manager");
-  t("a 'what next' blocker with no explicit unblocker routes to product-manager (brain self-directs)", routeHand({ domain: "next" }, roles).owner === "product-manager");
+  // One case per direction/priority keyword (3654425f), each domain holding only its own
+  // keyword, so dropping or shadowing any one of them fails here.
+  for (const [domain, role] of [
+    ["priorities", "product-manager"], ["queue", "product-manager"], ["backlog", "product-manager"],
+    ["what-next", "product-manager"], ["next", "product-manager"], ["direction", "product-manager"],
+    ["ranking", "product-manager"], ["grooming", "product-manager"],
+    ["cadence", "program-manager"], ["coordination", "program-manager"], ["shift", "program-manager"], ["scheduling", "program-manager"],
+  ]) t(`a "${domain}" blocker with no explicit unblocker routes to ${role} (brain self-directs)`, routeHand({ domain }, roles).owner === role);
+  t("a direction blocker whose whoCanUnblock names the owner still goes to the owner", routeHand({ domain: "priority", whoCanUnblock: "owner" }, roles).kind === "human");
   t("an ios blocker routes to mobile-native-engineer", routeHand({ domain: "ios-swift" }, roles).owner === "mobile-native-engineer");
   t("whoCanUnblock=owner resolves to the human owner", routeHand({ whoCanUnblock: "owner (a design call)" }, roles).kind === "human");
   t("whoCanUnblock=other-lane resolves to a lane", routeHand({ whoCanUnblock: "the other lane" }, roles).kind === "lane");

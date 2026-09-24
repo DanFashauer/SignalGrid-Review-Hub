@@ -118,6 +118,13 @@
       "provenance": "first-party",
       "writeScope": null,
       "charter": "Answers every raised hand (DR-054). Reads `pnpm run hands` (the per-file ledger artifacts/raised-hands/ plus the stalls scripts/raised-hands.mjs detects that nobody raised), takes each hand (`hand:take`), and routes it: an explicit hand goes to the org-roster role check-raised-hands.mjs names, and an auto stall goes by docs/agent/hand-routing.json. It returns a dispatch plan the coordinator executes. For a GAP it specifies the missing agent or skill and hands that spec to the agent-platform-steward. Its only state changes go through the raise-hand CLI; it has no Write/Edit tools. Built by the Mac lane (#1014) and the cloud lane on the owner's 2026-09-23 directive, merged into one on his 'Merge into one' decision."
+    },
+    {
+      "id": "project-manager",
+      "tier": 3,
+      "provenance": "first-party",
+      "writeScope": null,
+      "charter": "The executor for the org-roster's product-manager and program-manager roles. Takes the raised hands and stalls that ask for direction (what next, which priority, how these fit), ranks the queue against the objective (DR-033; DR-036 readiness gates outreach), decides reversible calls within delegated authority, and routes the top item to the role that builds it. Escalates to the owner only what DR-037 and the OWNER_RESERVED / DECISION_PATH rules in scripts/check-owner-gated-surfaces.mjs keep with him, as a ranked recommendation. Read-only tools (Read, Grep, Glob, Bash): it directs, the domain roles write. Written by the Mac lane (3654425f, #1014) on the owner's 2026-09-23 direction and carried onto #1019."
     }
   ]
 }

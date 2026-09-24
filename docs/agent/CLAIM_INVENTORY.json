@@ -9749,7 +9749,7 @@
    "claim": "\"same normalised inputs and policy version, same verdict\" — deterministic and fail-closed: \"a missing, stale or unreachable signal raises the assurance required, never lowers it\" (lines 18-20)",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Grounded: scripts/review-invariants.mjs:15-17 (invariant 2, determinism — no Date.now()/Math.random() in the pure decision libs) and :12-14 (invariant 1, fail-closed control flow); lib/signalgrid-core/src/policy.ts:325-326 (an `allow` with critical signals absent becomes `step_up`) and :289 (evaluation takes a PolicyVersion); docs/WHAT_SIGNALGRID_DOES_TODAY.md:86-90 (\"takes the most-restrictive firing rule and fails closed\"); `pnpm run review:invariants` and `pnpm run proof:signalgrid-core` exist in package.json.",
+   "evidence": "Grounded: scripts/review-invariants.mjs:15-17 (invariant 2, determinism — no Date.now()/Math.random() in the pure decision libs) and :12-14 (invariant 1, fail-closed control flow); lib/signalgrid-core/src/policy.ts:325-326 (an `allow` with critical signals absent becomes `step_up`) and :289 (evaluation takes a PolicyVersion); docs/WHAT_SIGNALGRID_DOES_TODAY.md:102-103 (\"takes the most-restrictive firing rule and fails closed\"); `pnpm run review:invariants` and `pnpm run proof:signalgrid-core` exist in package.json.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9769,7 +9769,7 @@
    "claim": "\"An app cannot grant device access, restrict other apps, make\" — \"**Not an MDM.**\" bullet; \"Fleet is the MDM used in the lab (`fleet/`)\" (line 26)",
    "kind": "framework",
    "classification": "launch",
-   "evidence": "Accurate negative claim. Grounded: CLAUDE.md golden rule 4 (same sentence; supervised device + Fleet as the chosen MDM); docs/WHAT_SIGNALGRID_DOES_TODAY.md:125-127 (\"SignalGrid is not an MDM — it is the trust layer that reads MDM, identity, device, workflow, and local-authority evidence\"); scripts/launch-profile.mjs:98-112 (v3: Fleet is the open-source lab); `fleet/` exists (fleet/README.md, fleet/profiles/, fleet/teams/).",
+   "evidence": "Accurate negative claim. Grounded: CLAUDE.md golden rule 4 (same sentence; supervised device + Fleet as the chosen MDM); docs/WHAT_SIGNALGRID_DOES_TODAY.md:139-141 (\"SignalGrid is not an MDM — it is the trust layer that reads MDM, identity, device, workflow, and local-authority evidence\"); scripts/launch-profile.mjs:98-112 (v3: Fleet is the open-source lab); `fleet/` exists (fleet/README.md, fleet/profiles/, fleet/teams/).",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9799,7 +9799,7 @@
    "claim": "\"SignalGrid reads before it writes and delegates action.\" — \"**Not a system of record.** IAM, UEM, MDM, ITSM, SIEM and NAC stay authoritative\"",
    "kind": "framework",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:453-454 (/v1/connectors/{id}/sync — \"No write to any source system exists on this route\"); every other launch path at :324-385 is read-side or the gate itself; docs/WHAT_SIGNALGRID_DOES_TODAY.md:142 (high-risk actions \"approval-gated and simulated — recorded, never executed on a source system\"); docs/PILOT_PACKAGE.md:1,8-11 (pilot is \"shadow mode, read-only\" and \"blocks nothing\").",
+   "evidence": "Grounded: scripts/launch-profile.mjs:453-454 (/v1/connectors/{id}/sync — \"No write to any source system exists on this route\"); every other launch path at :324-385 is read-side or the gate itself; docs/WHAT_SIGNALGRID_DOES_TODAY.md:156 (high-risk actions \"approval-gated and simulated — recorded, never executed on a source system\"); docs/PILOT_PACKAGE.md:1,8-11 (pilot is \"shadow mode, read-only\" and \"blocks nothing\").",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -10284,7 +10284,7 @@
    "claim": "\"This is a public, pre-production review and validation surface.\" — Disclaimer: no compliance attestation, no vendor alliance, no on-device enforcement, not a system of record; \"Remediation is simulated, constrained or operator-approved unless separately validated.\"",
    "kind": "framework",
    "classification": "launch",
-   "evidence": "Grounded: docs/SECURITY_BASELINE_ALIGNMENT.md:107-109 (\"mappings, not certifications … does not assert it is STIG-hardened, CIS-certified, FedRAMP/CMMC-authorized\") and :123-128 (Non-claims: does not replace MDM/UEM, EDR, GRC; \"No compliance, certification, authorization, or partnership is claimed\"); docs/WHAT_SIGNALGRID_DOES_TODAY.md:142 (high-risk actions \"approval-gated and simulated — recorded, never executed on a source system\") and :206; scripts/launch-profile.mjs:703-717 (shadow mode, no enforcement). Consistent with README.md:30-33.",
+   "evidence": "Grounded: docs/SECURITY_BASELINE_ALIGNMENT.md:107-109 (\"mappings, not certifications … does not assert it is STIG-hardened, CIS-certified, FedRAMP/CMMC-authorized\") and :123-128 (Non-claims: does not replace MDM/UEM, EDR, GRC; \"No compliance, certification, authorization, or partnership is claimed\"); docs/WHAT_SIGNALGRID_DOES_TODAY.md:156 (high-risk actions \"approval-gated and simulated — recorded, never executed on a source system\") and :206; scripts/launch-profile.mjs:703-717 (shadow mode, no enforcement). Consistent with README.md:30-33.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },

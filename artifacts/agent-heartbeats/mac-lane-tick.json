@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-24T14:48:13.206Z",
-  "result": "quiet; objective: BROKEN (objective-loop exit 1)"
+  "firedAt": "2026-09-24T14:58:37.914Z",
+  "result": "quiet; objective: BROKEN (objective-loop exit 1); unread=1 oldest=0d to mac"
 }

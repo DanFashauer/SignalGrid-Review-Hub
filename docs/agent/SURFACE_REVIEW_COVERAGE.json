@@ -177,12 +177,12 @@
         },
         {
           "date": "2026-09-20",
-          "read": "Partial: the four nidhinjs/prompt-master files vendored this day (SKILL.md, references/patterns.md, references/templates.md, LICENSE) read in full before vendoring, against upstream 2bd92518. Found two upstream instructions that do not apply here — SKILL.md:72 directs a live fetch of provider documentation, SKILL.md:402 asks for two prompt blocks against its own single-block format — both recorded as Overrides in VENDORED.md; the file is byte-identical to the pin. The 117 other tracked skill directories (118 tracked in all, `git ls-files .claude/skills`) stand on the earlier reads.",
-          "reviewer": "cloud lane (DR-052 stage 1 by a separate Opus-tier agent, stage 2 firsthand)",
+          "read": "Partial: the four nidhinjs/prompt-master files vendored this day (SKILL.md, references/patterns.md, references/templates.md, LICENSE) read in full before vendoring, against upstream 2bd92518. Sixteen upstream instruction sites do not apply here: two found on the first read — SKILL.md:72 directs a live fetch of provider documentation, SKILL.md:402 asks for two prompt blocks against its own single-block format — and fourteen more named by Codex across six rounds on PR #905 (activation with no named tool, the memory block and the pasted-prompt sanitizer carrying private material, the owner's modality hardened, invented length, ComfyUI's two blocks, file deletion diff-and-go, the three reference-file restatements of those rules, the DALL-E 3 edit line, the image-edit setup note's position above the block, and the Prompt Decompiler's Split as N blocks). All sixteen are recorded as Overrides in VENDORED.md, one row per site with the repo rule that replaces it; the vendored files stay byte-identical to the pin. The 117 other tracked skill directories (118 tracked in all, `git ls-files .claude/skills`) stand on the earlier reads.",
+          "reviewer": "cloud lane (DR-053 stage 1 by a separate Opus-tier agent, stage 2 firsthand)",
           "record": "docs/agent/RESOURCE_INTAKE.md",
           "scope": "partial: the four vendored nidhinjs/prompt-master files",
           "open": 0,
-          "closed": 2
+          "closed": 16
         }
       ]
     },

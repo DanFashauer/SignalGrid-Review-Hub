@@ -1052,6 +1052,10 @@ function toEvidenceRecord(result: SimulatorRunResult) {
 }
 
 function assertPublicSafety(content: string): void {
+  // A phone number stands alone: not preceded or followed by a letter or digit,
+  // so ten digits inside a hex hash or an alphanumeric id are not mistaken for one.
+  const PHONE_NUMBER_PATTERN =
+    /(?<![0-9A-Za-z])(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(?![0-9A-Za-z])/;
   const checks = [
     {
       name: "secret-like strings",
@@ -1067,10 +1071,7 @@ function assertPublicSafety(content: string): void {
       name: "real-looking emails",
       pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
     },
-    {
-      name: "phone numbers",
-      pattern: /(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/,
-    },
+    { name: "phone numbers", pattern: PHONE_NUMBER_PATTERN },
     {
       name: "patient/customer-like data",
       pattern: /\b(patient|customer)\s*[:=]\s*[A-Z][a-z]+\s+[A-Z][a-z]+\b/,
@@ -1091,7 +1092,30 @@ function assertPublicSafety(content: string): void {
       assertion(`public safety: ${check.name}`, !check.pattern.test(content)),
     );
   }
+
+  // The phone check must still catch a real number in every common shape, and
+  // must NOT fire on decimal digits inside a longer token. The unbounded form
+  // matched any ten digits in a row, so the printed determinism hash (hex)
+  // tripped it on roughly 18% of scenario sets — e.g. the 2026-09-23 merged
+  // tree's hash 3f7b6f40eb7765781071408832… turned CI red with no phone
+  // number anywhere. Both directions are asserted so neither the strength nor
+  // the fix can regress silently.
+  const realPhones = ["555-123-4567", "(555) 123-4567", "+1 555 123 4567", "call 5551234567."];
+  const notPhones = ["3f7b6f40eb7765781071408832", "hash=ab12345678901cd"];
+  assertions.push(
+    assertion(
+      "public safety self-test: phone pattern still catches real numbers",
+      realPhones.every((s) => PHONE_NUMBER_PATTERN.test(s)),
+      realPhones.filter((s) => !PHONE_NUMBER_PATTERN.test(s)).join(", ") || "all caught",
+    ),
+    assertion(
+      "public safety self-test: phone pattern ignores digits inside a hash token",
+      notPhones.every((s) => !PHONE_NUMBER_PATTERN.test(s)),
+      notPhones.filter((s) => PHONE_NUMBER_PATTERN.test(s)).join(", ") || "none matched",
+    ),
+  );
 }
+
 
 function isPlainAllow(result: SimulatorRunResult): boolean {
   return (

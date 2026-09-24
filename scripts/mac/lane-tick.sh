@@ -139,7 +139,14 @@ heartbeat() {
     say "unchanged ($RESULT), last heartbeat <${QUIET_HEARTBEAT_MIN}m ago — tick ran, not re-pushing (avoids flooding Alpha)"
     return 0
   fi
-  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" >/dev/null 2>&1; then
+  # --no-wake: the tick heartbeat is a STALENESS record, read from the heartbeat
+  # FILE by the cloud steward's hourly cycle — it never carries cloud-addressed
+  # mail (append_unread_state reports THIS lane's inbox, mac's), so it must not
+  # post the mailbox-PR comment that wakes the cloud lane. Real cloud mail travels
+  # on a separate `lane-deliver send` (no --no-wake), which still wakes at once;
+  # new mac/* branches are reviewed by the steward within the hour. This ends the
+  # every-tick quiet wake that flooded the cloud session (owner decision 2026-09-23).
+  if node scripts/lane-deliver.mjs heartbeat mac-lane-tick "$RESULT" --no-wake >/dev/null 2>&1; then
     touch "$HB_STAMP" 2>/dev/null || true
     printf '%s' "$RESULT" > "$HB_LAST_RESULT" 2>/dev/null || true
     say "heartbeat delivered: $RESULT"
@@ -274,12 +281,16 @@ else
   if [ "$DRY" = "1" ]; then
     say "dry-run: would pnpm run sim:run-requests"
   else
-    # Results are written even when an operation fails; the exit status is
-    # recorded in the result file, so a failed run is still a delivered run.
-    if pnpm run sim:run-requests >/dev/null 2>&1; then
+    # A per-operation FAILURE writes a result with its status recorded — but a runner
+    # CRASH (a malformed request, a write error) writes NOTHING. Those two exit-1 cases
+    # were indistinguishable while stderr was thrown away, and the else-branch claimed
+    # "recorded in the results" even on the crash. Keep stderr (drop the inner 2>&1) so
+    # the trace reaches the launchd log, and let step d's `git status` on the results dir
+    # be the honest test of whether any result actually landed. (DR-054.)
+    if pnpm run sim:run-requests >/dev/null; then
       say "sim requests ran"
     else
-      say "sim requests ran with failures (recorded in the results)"
+      say "sim requests exited non-zero — see stderr in the log; whether any result landed is decided in step d"
     fi
   fi
 fi

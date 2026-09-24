@@ -166,6 +166,16 @@ if (process.argv.includes("--self-test")) {
 }
 
 const files = swiftFiles(IOS);
+// Non-vacuity floor (DR-054): readdirSync only fail-closes when native/ios is wholly
+// absent, so a rename/relocate of the Swift tree (a live risk during the approved
+// SwiftUI view-layer rebuild) leaves the dir present but the .swift set empty — and an
+// empty set scans clean and exits 0 over nothing. A floor well below the live count
+// (82 on 2026-09-23) turns that silent pass into a loud failure.
+const FILE_FLOOR = 40;
+if (files.length < FILE_FLOOR) {
+  console.error(`x only ${files.length} .swift file(s) found under native/ios (floor ${FILE_FLOOR}) — the walk is wrong or the tree moved; NOT a clean scan.`);
+  process.exit(1);
+}
 const dead = scan(files);
 if (dead.length) {
   console.error(`x ${dead.length} stored propert${dead.length === 1 ? "y" : "ies"} that nothing ever assigns:\n`);

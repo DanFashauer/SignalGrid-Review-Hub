@@ -83,35 +83,21 @@ lone repairs into unreachable code).
       above Apple's `device.operating-system.version` floor, never just `< 27`. Source: the
       2026-09-24 review of `claude/fix-ddm-return-to-service`.
 
-- [ ] **The ddm-connector likely misreads `mdm.is-return-to-service` — model it as standing configuration, not an erase in flight, once a real device confirms the reading (DDM connector, HIGH).**
-      *(Opened 2026-09-24 by the owner's puck-flow intake, DR-055.)* The row above made
-      `custodyPostureOf` in `lib/ddm-connector/src/index.ts` (lines 52–80) read `true` as "the
-      device is being wiped and handed on. Custody is in TRANSIT", which raises step-up.
-      Apple's own status YAML, vendored at
-      `third_party/apple-device-management/declarative/status/mdm.is-return-to-service.yaml`
-      (iOS 27.0), says only *"The status item that reports the device's return to service
-      with app preservation state"* and *"If `true`, the device is using the return to
-      service with app preservation mode."* It does not say "standing", "setting" or that
-      the value is `true` every day. **The review reads it** as a standing configuration —
-      plausible, since Apple's guide lets iOS 27 users start Return to Service from Control
-      Center inside app preservation — and if that reading holds, a fleet set up for Return
-      to Service with app preservation reports `true` in ordinary service and this axis never
-      reaches allow: fail-closed, so not a security hole, but a correctness bug that blocks
-      the return leg DR-055 records (C7). **Precondition — nothing loosens on an unverified
-      reading:** before the verdict change lands, a Mac-lane sim request confirms on a real
-      supervised iOS 27 device configured for app-preservation Return to Service that it
-      reports `true` while in ordinary service, and the result is committed under
-      `artifacts/sim-results/`; until then today's fail-closed read stays. The change: model
-      `true` as a
-      configuration fact that does not raise the verdict by itself; take "erase in flight"
-      from separate evidence — the MDM's command status or the `device_returned` event; keep
-      absent → `unknown` → tighten; update fixture `mac-noc-12` and its comment in
-      `lib/ddm-connector/src/fixture.ts`. One PR with its proof. The check that fails without
-      it: `proof:ddm-connector` (`scripts/src/ddm-connector-proof.ts`) gains an assertion that
-      a device reporting `true` with no erase-in-flight evidence does not raise on this axis
-      alone, which fails on today's tree, and one that the same device WITH erase-in-flight
-      evidence still does, which passes today and holds the tightening in place as a
-      regression guard. Lane: endpoint-uem-domain.
+- [x] **The ddm-connector likely misreads `mdm.is-return-to-service` — model it as standing configuration, not an erase in flight, once a real device confirms the reading (DDM connector, HIGH).**
+      *(Opened 2026-09-24 by the owner's puck-flow intake, DR-055; the review read Apple's
+      status YAML — *"If `true`, the device is using the return to service with app
+      preservation mode"* — as a standing configuration, not custody in transit.)*
+      **DONE 2026-09-24 in PR #1024 (mainline 0fd151a2), which landed before this row:** the
+      reader is now `returnToServiceStateOf` in `lib/ddm-connector/src/index.ts`. Apple's item
+      is read only where Apple publishes it (iOS/visionOS 27+); `true` is
+      `rts_app_preservation`, a configured mode that does not raise on its own; an absent
+      value there stays `unknown` and raises; macOS/tvOS/watchOS read `not_applicable`; and a
+      device reporting `true` with declarative update enforcement reads update currency
+      `unknown`, because updates in that mode apply only at reset. `pnpm run
+      proof:ddm-connector` went 131/131 → `summary=pass (169/169)`, with every new arm
+      falsified in #1024's body. The real-device precondition this row asked for was NOT run:
+      #1024 is fail-closed on every unknown instead, and the open row above keeps what a
+      real device still has to settle (the `iPadOS` family value and the pre-27 sign-off).
 
 - [x] **Hold the DDM/macOS-posture schema pins against Apple's YAML (gate, MEDIUM).**
       *(Opened by the same intake, #858.)* **DONE 2026-09-18** — the ten status items the
